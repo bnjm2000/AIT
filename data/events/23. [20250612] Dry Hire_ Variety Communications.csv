@@ -1,0 +1,2 @@
+EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State
+23,Dry Hire: Variety Communications,20250612,20250618,"[{'model_description': '[AX] EV EVOLVE 50 Portable column system', 'quantity': 2}]","[""EVOLVE50#05"", ""EVOLVE50#06""]",[],Ready

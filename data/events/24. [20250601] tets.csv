@@ -1,0 +1,2 @@
+EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State
+24,tets,20250601,20250601,"[{'model_description': '[AX] Turbosound IP1000 Powered Column Loudspeaker', 'quantity': 1}, {'model_description': '[LX] GrandMA3 Compact XT Console', 'quantity': 1}]","[""IP1000#01"", ""COMPACTXT#01""]",[],Ready
