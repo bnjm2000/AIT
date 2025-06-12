@@ -1,0 +1,2 @@
+EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State
+24,A 123,20250611,20250611,[],"[""4061#01"", ""4088#01""]",[],Planning
