@@ -825,3 +825,112 @@ Timestamp,User,Action
 2025/06/16 10:50:06,admin,User admin logged in via web interface
 2025/06/16 10:59:56,admin,User admin logged out from web interface
 2025/06/16 10:59:57,admin,User admin logged in via web interface
+2025/06/16 11:28:04,admin,User admin logged out from web interface
+2025/06/16 11:28:08,a,User a logged in via web interface
+2025/06/16 11:28:14,a,User a logged out from web interface
+2025/06/16 11:28:16,admin,User admin logged in via web interface
+2025/06/16 11:28:32,admin,Created event 24: event2 via web interface
+2025/06/16 12:40:55,admin,Deleted event 23: Dry Hire: Variety Communications via web interface
+2025/06/16 12:41:07,admin,Assigned asset EVOLVE50#01 to event 24 (unprepared)
+2025/06/16 12:41:14,admin,Assigned asset EVOLVE50#02 to event 24 (unprepared)
+2025/06/16 12:42:20,admin,Assigned asset AD1#01 to event 24 (unprepared)
+2025/06/16 12:44:16,admin,Assigned asset FURMAN#01 to event 24 (unprepared)
+2025/06/16 12:47:09,admin,Assigned asset AD1#03 to event 24 (unprepared)
+2025/06/16 12:47:13,admin,Assigned asset AD1#05 to event 24 (unprepared)
+2025/06/16 12:48:28,admin,Assigned asset AD1#06 to event 24 (unprepared)
+2025/06/16 12:52:13,admin,Removed asset AD1#01 from event 24
+2025/06/16 12:52:15,admin,Removed asset AD1#03 from event 24
+2025/06/16 12:52:20,admin,Assigned asset E904#01 to event 24 (unprepared)
+2025/06/16 12:52:21,admin,Assigned asset E904#02 to event 24 (unprepared)
+2025/06/16 12:52:22,admin,Assigned asset E904#03 to event 24 (unprepared)
+2025/06/16 12:52:29,admin,Removed asset AD1#05 from event 24
+2025/06/16 12:54:39,admin,Assigned asset ESPRITE#01 to event 24 (unprepared)
+2025/06/16 12:55:13,admin,Assigned asset ESPRITE#02 to event 24 (unprepared)
+2025/06/16 13:06:54,admin,Removed asset AD1#06 from event 24
+2025/06/16 13:06:55,admin,Removed asset E904#01 from event 24
+2025/06/16 13:06:57,admin,Removed asset E904#02 from event 24
+2025/06/16 13:06:59,admin,Removed asset E904#03 from event 24
+2025/06/16 13:07:02,admin,Removed asset EVOLVE50#01 from event 24
+2025/06/16 13:07:03,admin,Removed asset EVOLVE50#02 from event 24
+2025/06/16 13:07:05,admin,Removed asset FURMAN#01 from event 24
+2025/06/16 13:07:07,admin,Removed asset ESPRITE#01 from event 24
+2025/06/16 13:07:09,admin,Removed asset ESPRITE#02 from event 24
+2025/06/16 13:15:27,admin,Added 3x Shure AD1 to event 24
+2025/06/16 13:15:33,admin,Added 1x Shure P9RA to event 24
+2025/06/16 13:16:18,admin,Added 1x Shure AD1 to event 24
+2025/06/16 13:17:41,admin,Added 3x Shure AD1 model to event 24
+2025/06/16 13:17:52,admin,Deleted event 24: event2 via web interface
+2025/06/16 13:18:01,admin,Created event 23: shure via web interface
+2025/06/16 13:18:07,admin,Added 4x Shure AD1 model to event 23
+2025/06/16 13:18:13,admin,Added 4x Robe Robin LEDBeam 350 Wash model to event 23
+2025/06/16 13:18:19,admin,Added 1x Sennheiser E904 model to event 23
+2025/06/16 13:18:33,admin,Added 1x Shure AD1 model to event 23
+2025/06/16 13:22:28,admin,Removed asset [MODEL]AX|Sennheiser|E904|1|Dynamic cardioid instrument microphone from event 23
+2025/06/16 13:22:30,admin,Removed asset [MODEL]AX|Shure|AD1|1|Beltpack [G56] from event 23
+2025/06/16 13:22:31,admin,Removed asset [MODEL]AX|Shure|AD1|4|Beltpack [G56] from event 23
+2025/06/16 13:22:33,admin,Removed asset [MODEL]LX|Robe|Robin LEDBeam 350 Wash|4|Wash LED from event 23
+2025/06/16 13:22:41,admin,Added 1x Robe Robin LEDBeam 350 Wash model to event 23
+2025/06/16 13:22:48,admin,Added 3x Shure AD1 model to event 23
+2025/06/16 13:23:06,admin,Removed asset [MODEL]AX|Shure|AD1|3|Beltpack [G56] from event 23
+2025/06/16 13:23:07,admin,Removed asset [MODEL]LX|Robe|Robin LEDBeam 350 Wash|1|Wash LED from event 23
+2025/06/16 13:23:15,admin,Added 3x Shure SM58 model to event 23
+2025/06/16 13:23:23,admin,Added 1x Shure SM58 model to event 23
+2025/06/16 13:23:27,admin,Added 1x Shure SM58 model to event 23
+2025/06/16 13:38:16,admin,Removed asset [MODEL]AX|Shure|SM58|1|dynamic vocal microphone from event 23
+2025/06/16 13:38:18,admin,Removed asset [MODEL]AX|Shure|SM58|1|dynamic vocal microphone from event 23
+2025/06/16 13:38:20,admin,Removed asset [MODEL]AX|Shure|SM58|3|dynamic vocal microphone from event 23
+2025/06/16 13:38:30,admin,Added 1x Shure AD1 model to event 23 (total: 1)
+2025/06/16 13:38:31,admin,Added 1x Shure AD1 model to event 23 (total: 2)
+2025/06/16 13:38:36,admin,Added 5x Shure AD1 model to event 23 (total: 7)
+2025/06/16 13:42:57,admin,Added 1x Shure AD1 model to event 23 (total: 8)
+2025/06/16 13:43:00,admin,Removed Shure AD1 model from event 23
+2025/06/16 13:43:06,admin,Added 1x Shure AD1 model to event 23 (total: 1)
+2025/06/16 13:46:26,admin,Added 1x Shure AD1 model to event 23 (total: 2)
+2025/06/16 13:46:26,admin,Added 1x Shure AD1 model to event 23 (total: 3)
+2025/06/16 13:46:27,admin,Added 1x Shure AD2 model to event 23 (total: 1)
+2025/06/16 13:46:29,admin,Added 1x Shure AD2 model to event 23 (total: 2)
+2025/06/16 13:46:37,admin,Removed Shure AD2 model from event 23
+2025/06/16 13:47:07,admin,Removed Shure AD1 model from event 23
+2025/06/16 13:51:59,admin,Added 1x Shure AD1 model to event 23 (total: 1)
+2025/06/16 13:58:18,admin,Removed Shure AD1 model from event 23
+2025/06/16 13:58:18,admin,Added 10x Shure AD1 model to event 23 (total: 10)
+2025/06/16 13:58:33,admin,Removed Shure AD1 model from event 23
+2025/06/16 13:58:41,admin,Added 10x Shure AD1 model to event 23 (total: 10)
+2025/06/16 13:58:44,admin,Added 4x Shure AD1 model to event 23 (total: 14)
+2025/06/16 13:58:46,admin,Added 3x Shure AD1 model to event 23 (total: 17)
+2025/06/16 13:58:54,admin,Added 19x Shure AD2 model to event 23 (total: 19)
+2025/06/16 14:03:37,admin,Removed Shure AD2 model from event 23
+2025/06/16 14:03:49,admin,Added 10x Shure AD2 model to event 23 (total: 10)
+2025/06/16 14:04:00,admin,Removed Shure AD2 model from event 23
+2025/06/16 14:04:00,admin,Added 16x Shure AD2 model to event 23 (total: 16)
+2025/06/16 14:04:07,admin,Removed Shure AD2 model from event 23
+2025/06/16 14:04:07,admin,Added 1x Shure AD2 model to event 23 (total: 1)
+2025/06/16 14:04:09,admin,Removed Shure AD2 model from event 23
+2025/06/16 14:04:12,admin,Removed Shure AD1 model from event 23
+2025/06/16 15:40:28,admin,Added 10x Shure AD1 model to event 23 (total: 10)
+2025/06/16 15:41:18,admin,Removed Shure AD1 model from event 23
+2025/06/16 15:56:50,admin,Added 10x Shure AD1 model to event 23 (total: 10)
+2025/06/16 16:07:36,admin,Removed Shure AD1 model from event 23
+2025/06/16 16:07:39,admin,Added 3x Shure AD1 model to event 23 (total: 3)
+2025/06/16 16:11:41,admin,Assigned specific asset AD1#01 to event 23
+2025/06/16 16:11:43,admin,Assigned specific asset AD1#03 to event 23
+2025/06/16 16:11:44,admin,Assigned specific asset AD1#06 to event 23
+2025/06/16 16:12:17,admin,Removed Shure AD1 model from event 23
+2025/06/16 16:12:17,admin,Added 2x Shure AD1 model to event 23 (total: 2)
+2025/06/16 16:12:24,admin,Unassigned specific asset AD1#03 from event 23
+2025/06/16 16:12:26,admin,Unassigned specific asset AD1#06 from event 23
+2025/06/16 16:12:30,admin,Unassigned specific asset AD1#01 from event 23
+2025/06/16 16:12:31,admin,Assigned specific asset AD1#03 to event 23
+2025/06/16 16:12:33,admin,Assigned specific asset AD1#02 to event 23
+2025/06/16 16:21:57,admin,Assigned specific asset AD1#01 to event 23
+2025/06/16 16:21:59,admin,Assigned specific asset AD1#02 to event 23
+2025/06/16 16:24:54,admin,Assigned specific asset AD1#01 to event 23
+2025/06/16 16:24:55,admin,Assigned specific asset AD1#03 to event 23
+2025/06/16 16:25:25,admin,Removed Shure AD1 model from event 23
+2025/06/16 16:25:25,admin,Added 1x Shure AD1 model to event 23 (total: 1)
+2025/06/16 16:25:32,admin,Unassigned specific asset AD1#03 from event 23
+2025/06/16 16:46:24,admin,Removed Shure AD1 model from event 23
+2025/06/16 16:46:30,admin,Added 3x Shure AD2 model to event 23 (total: 3)
+2025/06/16 16:46:39,admin,Assigned specific asset AD2#01 to event 23
+2025/06/16 16:46:40,admin,Assigned specific asset AD2#03 to event 23
+2025/06/16 16:46:42,admin,Assigned specific asset AD2#06 to event 23

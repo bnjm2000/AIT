@@ -30,10 +30,13 @@ _cache = {
     'cache_timestamp': None
 }
 
+
 def invalidate_cache():
     """Invalidate the asset cache when data changes"""
     global _cache
-    _cache = {'assigned_assets': None, 'available_assets': None, 'cache_timestamp': None}
+    _cache = {'assigned_assets': None,
+              'available_assets': None, 'cache_timestamp': None}
+
 
 def require_auth(f):
     """Decorator to require authentication"""
@@ -43,6 +46,7 @@ def require_auth(f):
             return jsonify({'error': 'Not authenticated'}), 401
         return f(*args, **kwargs)
     return decorated_function
+
 
 def require_admin(f):
     """Decorator to require admin privileges"""
@@ -54,6 +58,7 @@ def require_admin(f):
             return jsonify({'error': 'Admin privileges required'}), 403
         return f(*args, **kwargs)
     return decorated_function
+
 
 def log_action(action):
     """Helper function to log actions"""
@@ -69,16 +74,17 @@ def log_action(action):
     except Exception as e:
         logger.error(f"Failed to log action: {e}")
 
+
 def validate_event_data(data):
     """Validate event data"""
     errors = []
-    
+
     if not data.get('name', '').strip():
         errors.append('Event name is required')
-    
+
     if len(data.get('name', '')) > 100:
         errors.append('Event name must be less than 100 characters')
-    
+
     try:
         start_date = datetime.strptime(data['startDate'], '%Y-%m-%d')
         end_date = datetime.strptime(data['endDate'], '%Y-%m-%d')
@@ -86,61 +92,123 @@ def validate_event_data(data):
             errors.append('End date must be after start date')
     except (KeyError, ValueError):
         errors.append('Invalid date format')
-    
+
     return errors
+
 
 def get_assigned_assets():
     """Get all assets currently assigned to events (with caching)"""
     global _cache
-    
+
     # Cache for 30 seconds
     now = datetime.now().timestamp()
-    if (_cache['assigned_assets'] is not None and 
-        _cache['cache_timestamp'] is not None and 
-        now - _cache['cache_timestamp'] < 30):
+    if (_cache['assigned_assets'] is not None and
+        _cache['cache_timestamp'] is not None and
+            now - _cache['cache_timestamp'] < 30):
         return _cache['assigned_assets']
-    
+
     assigned_assets = set()
     for event in data_manager.events.values():
         for asset_id in event.prepared_items:
-            if (asset_id not in event.returned_items and 
-                not (asset_id.startswith('[LOAN]') or asset_id.startswith('[MISC]'))):
+            if (asset_id not in event.returned_items and
+                    not (asset_id.startswith('[LOAN]') or asset_id.startswith('[MISC]'))):
                 assigned_assets.add(asset_id)
-    
+
     _cache['assigned_assets'] = assigned_assets
     _cache['cache_timestamp'] = now
     return assigned_assets
 
+
 def update_event_state(event):
     """Update the state of an event based on its prepared and returned items"""
     try:
-        total_assets = len(event.prepared_items)
-        returned_count = len(event.returned_items)
-        
         # Initialize actually_prepared if it doesn't exist
         if not hasattr(event, 'actually_prepared'):
             event.actually_prepared = []
         
-        prepared_count = len([asset_id for asset_id in event.actually_prepared 
-                            if asset_id in event.prepared_items])
+        # Count model requirements and assignments
+        total_model_requirements = 0
+        total_specific_assignments = 0
+        total_returned = 0
         
-        # Determine state based on asset counts
-        if total_assets == 0:
-            event.state = 'Added'
-        elif prepared_count == 0:
-            event.state = 'Planning'
-        elif prepared_count < total_assets and returned_count == 0:
-            event.state = 'Preparing'
-        elif prepared_count == total_assets and returned_count == 0:
-            event.state = 'Ready'
-        elif returned_count > 0 and returned_count < total_assets:
-            event.state = 'Returning'
-        elif returned_count == total_assets:
-            event.state = 'Closed'
+        has_model_assignments = False
+        
+        # Process model assignments
+        for item_id in event.prepared_items:
+            if item_id.startswith('[MODEL]'):
+                has_model_assignments = True
+                try:
+                    # Parse: [MODEL]DEPT|BRAND|MODEL|QUANTITY|DESCRIPTION
+                    parts = item_id[7:].split('|')
+                    if len(parts) >= 4:
+                        dept = parts[0]
+                        brand = parts[1]
+                        model = parts[2]
+                        required_quantity = int(parts[3])
+                        
+                        total_model_requirements += required_quantity
+                        
+                        # Count specific assets assigned to this model
+                        assigned_to_this_model = 0
+                        returned_for_this_model = 0
+                        
+                        for specific_asset_id in event.actually_prepared:
+                            specific_asset = data_manager.inventory.get(specific_asset_id)
+                            if (specific_asset and 
+                                specific_asset.brand == brand and 
+                                specific_asset.model_number == model and
+                                specific_asset.department_code == dept):
+                                
+                                assigned_to_this_model += 1
+                                if specific_asset_id in event.returned_items:
+                                    returned_for_this_model += 1
+                        
+                        total_specific_assignments += assigned_to_this_model
+                        total_returned += returned_for_this_model
+                        
+                except Exception as e:
+                    logger.error(f"Error parsing model assignment {item_id}: {e}")
+                    continue
+        
+        # If we have model assignments, use model-based logic
+        if has_model_assignments:
+            if total_model_requirements == 0:
+                event.state = 'Added'
+            elif total_specific_assignments == 0:
+                event.state = 'Planning'
+            elif total_specific_assignments < total_model_requirements and total_returned == 0:
+                event.state = 'Preparing'
+            elif total_specific_assignments == total_model_requirements and total_returned == 0:
+                event.state = 'Ready'
+            elif total_returned > 0 and total_returned < total_specific_assignments:
+                event.state = 'Returning'
+            elif total_returned == total_specific_assignments and total_returned == total_model_requirements:
+                event.state = 'Closed'
+            else:
+                event.state = 'Planning'
         else:
-            event.state = 'Planning'
+            # Fallback to old logic for non-model events
+            total_assets = len(event.prepared_items)
+            returned_count = len(event.returned_items)
+            prepared_count = len(event.actually_prepared)
             
-        logger.debug(f"Event {event.event_id} state updated to {event.state}")
+            if total_assets == 0:
+                event.state = 'Added'
+            elif prepared_count == 0:
+                event.state = 'Planning'
+            elif prepared_count < total_assets and returned_count == 0:
+                event.state = 'Preparing'
+            elif prepared_count == total_assets and returned_count == 0:
+                event.state = 'Ready'
+            elif returned_count > 0 and returned_count < total_assets:
+                event.state = 'Returning'
+            elif returned_count == total_assets:
+                event.state = 'Closed'
+            else:
+                event.state = 'Planning'
+                
+        logger.debug(f"Event {event.event_id} state updated to {event.state} (Model-based: {has_model_assignments}, Requirements: {total_model_requirements}, Assigned: {total_specific_assignments}, Returned: {total_returned})")
+        
     except Exception as e:
         logger.error(f"Failed to update event state: {e}")
         event.state = 'Planning'  # Safe fallback
@@ -148,7 +216,7 @@ def update_event_state(event):
 def init_data_manager():
     """Initialize the data manager with the configured data folder"""
     global data_manager
-    
+
     try:
         # Try to read data folder from config file
         if os.path.exists('data_folder.txt'):
@@ -161,7 +229,7 @@ def init_data_manager():
                 os.makedirs(data_folder)
             with open('data_folder.txt', 'w') as f:
                 f.write(data_folder)
-        
+
         data_manager = DataManager(data_folder)
         data_manager.setup_data_folder()
         data_manager.check_and_initialize_files()
@@ -173,43 +241,46 @@ def init_data_manager():
 
 # Routes
 
+
 @app.route('/')
 @require_auth
 def index():
     """Serve the main web interface"""
     return render_template('index.html')
 
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     """Handle user authentication"""
     if request.method == 'GET':
         return render_template('login.html')
-    
+
     try:
         data = request.get_json()
         username = data.get('username', '').strip()
         password = data.get('password', '')
-        
+
         if not username or not password:
             return jsonify({'success': False, 'message': 'Username and password required'}), 400
-        
+
         if username in data_manager.users:
             user = data_manager.users[username]
             hashed_input = hash_password(password, user.salt)
             if hashed_input == user.password_hash:
                 session['user'] = username
                 session['is_admin'] = user.is_admin
-                
+
                 log_action(f"User {username} logged in via web interface")
                 return jsonify({'success': True, 'message': 'Login successful'})
-        
+
         # Log failed attempt
         log_action(f"Failed login attempt for username: {username}")
         return jsonify({'success': False, 'message': 'Invalid credentials'}), 401
-        
+
     except Exception as e:
         logger.error(f"Login error: {e}")
         return jsonify({'success': False, 'message': 'Login failed'}), 500
+
 
 @app.route('/logout')
 def logout():
@@ -218,10 +289,11 @@ def logout():
         username = session['user']
         log_action(f"User {username} logged out from web interface")
         session.clear()
-    
+
     return redirect(url_for('login'))
 
 # API Routes
+
 
 @app.route('/api/events', methods=['GET'])
 @require_auth
@@ -233,7 +305,7 @@ def get_events():
             # Initialize actually_prepared if missing
             if not hasattr(event, 'actually_prepared'):
                 event.actually_prepared = []
-            
+
             events_data.append({
                 'id': event.event_id,
                 'name': event.name,
@@ -247,14 +319,15 @@ def get_events():
                 'preparedItems': event.prepared_items,
                 'returnedItems': event.returned_items
             })
-        
+
         # Sort by event ID descending
         events_data.sort(key=lambda x: x['id'], reverse=True)
-        
+
         return jsonify({'success': True, 'data': events_data})
     except Exception as e:
         logger.error(f"Error getting events: {e}")
         return jsonify({'error': 'Failed to retrieve events'}), 500
+
 
 @app.route('/api/events/<int:event_id>', methods=['GET'])
 @require_auth
@@ -264,20 +337,20 @@ def get_event(event_id):
         event = data_manager.events.get(event_id)
         if not event:
             return jsonify({'error': 'Event not found'}), 404
-        
+
         # Initialize actually_prepared if it doesn't exist
         if not hasattr(event, 'actually_prepared'):
             event.actually_prepared = []
-        
+
         # Get detailed asset information grouped by department
         assets_by_department = defaultdict(list)
         assigned_assets = []
         prepared_assets = []
         returned_assets = []
-        
+
         for asset_id in event.prepared_items:
             asset_info = None
-            
+
             if asset_id.startswith('[LOAN]') or asset_id.startswith('[MISC]'):
                 # Handle loan/misc items
                 dept = 'LOAN' if asset_id.startswith('[LOAN]') else 'MISC'
@@ -285,7 +358,7 @@ def get_event(event_id):
                 if ';' in name:
                     name, quantity = name.split(';', 1)
                     name = f"{name} (Qty: {quantity})"
-                
+
                 # Determine status for loan/misc items
                 if asset_id in event.returned_items:
                     status = 'returned'
@@ -293,19 +366,56 @@ def get_event(event_id):
                     status = 'prepared'
                 else:
                     status = 'assigned'
-                
+
                 asset_info = {
                     'id': asset_id,
                     'name': name,
                     'status': status,
                     'isLoanOrMisc': True
                 }
+            elif asset_id.startswith('[MODEL]'):
+                # Handle model assignments
+                try:
+                    # Parse: [MODEL]DEPT|BRAND|MODEL|QUANTITY|DESCRIPTION
+                    parts = asset_id[7:].split('|')
+                    if len(parts) >= 4:
+                        dept = parts[0]
+                        brand = parts[1]
+                        model = parts[2]
+                        quantity = parts[3]
+                        description = parts[4] if len(parts) > 4 else ''
+
+                        # Clean display name - just brand and model
+                        name = f"{quantity}x {brand} {model}"
+
+                        # Determine status for model assignments
+                        if asset_id in event.returned_items:
+                            status = 'returned'
+                        elif asset_id in event.actually_prepared:
+                            status = 'prepared'
+                        else:
+                            status = 'assigned'
+
+                        asset_info = {
+                            'id': asset_id,
+                            'name': name,
+                            'status': status,
+                            'isModel': True,
+                            'quantity': quantity,
+                            'brand': brand,
+                            'model': model,
+                            'description': description
+                        }
+                except Exception as e:
+                    logger.error(
+                        f"Error parsing model assignment {asset_id}: {e}")
+                    continue
             else:
                 # Handle regular assets
                 asset = data_manager.inventory.get(asset_id)
                 if asset:
                     dept = asset.department_code
-                    
+
                     # Determine status
                     if asset_id in event.returned_items:
                         status = 'returned'
@@ -313,7 +423,7 @@ def get_event(event_id):
                         status = 'prepared'
                     else:
                         status = 'assigned'
-                    
+
                     asset_info = {
                         'id': asset.asset_id,
                         'name': f"{asset.brand} {asset.model_number} - {asset.description}",
@@ -327,10 +437,10 @@ def get_event(event_id):
                         'isOOC': asset.is_ooc,
                         'isLoanOrMisc': False
                     }
-            
+
             if asset_info:
                 assets_by_department[dept].append(asset_info)
-                
+
                 # Categorize assets
                 if asset_info['status'] == 'returned':
                     returned_assets.append(asset_info)
@@ -338,12 +448,95 @@ def get_event(event_id):
                     prepared_assets.append(asset_info)
                 else:
                     assigned_assets.append(asset_info)
-        
+
         # Sort departments and assets within each department
         sorted_departments = {}
         for dept in sorted(assets_by_department.keys()):
-            sorted_departments[dept] = sorted(assets_by_department[dept], key=lambda x: x['id'])
+            sorted_departments[dept] = sorted(
+                assets_by_department[dept], key=lambda x: x['id'])
+
+        # Group assets by model for cleaner display
+        model_groups = {}
+        for asset_id in event.prepared_items:
+            if asset_id.startswith('[MODEL]'):
+                # Parse model assignment
+                try:
+                    parts = asset_id[7:].split('|')
+                    if len(parts) >= 4:
+                        dept = parts[0]
+                        brand = parts[1]
+                        model = parts[2]
+                        quantity = int(parts[3])
+                        description = parts[4] if len(parts) > 4 else ''
+
+                        model_key = f"{dept}|{brand}|{model}"
+
+                        if model_key not in model_groups:
+                            model_groups[model_key] = {
+                                'department': dept,
+                                'brand': brand,
+                                'model': model,
+                                'description': description,
+                                'requiredQuantity': quantity,
+                                'assignedAssets': [],
+                                'status': 'pending'
+                            }
+
+                        # Find assigned specific assets for this model
+                        if hasattr(event, 'actually_prepared'):
+                            for specific_asset_id in event.actually_prepared:
+                                specific_asset = data_manager.inventory.get(
+                                    specific_asset_id)
+                                if (specific_asset and
+                                    specific_asset.brand == brand and
+                                    specific_asset.model_number == model and
+                                        specific_asset.department_code == dept):
+
+                                    asset_status = 'returned' if specific_asset_id in event.returned_items else 'prepared'
+
+                                    model_groups[model_key]['assignedAssets'].append({
+                                        'id': specific_asset_id,
+                                        'serial': specific_asset.serial_number,
+                                        'status': asset_status,
+                                        'location': specific_asset.current_location
+                                    })
+
+                        # Determine overall model status
+                        assigned_count = len(
+                            model_groups[model_key]['assignedAssets'])
+                        returned_count = len(
+                            [a for a in model_groups[model_key]['assignedAssets'] if a['status'] == 'returned'])
+
+                        if returned_count == quantity:
+                            model_groups[model_key]['status'] = 'returned'
+                        elif assigned_count == quantity:
+                            model_groups[model_key]['status'] = 'ready'
+                        elif assigned_count > 0:
+                            model_groups[model_key]['status'] = 'partial'
+                        else:
+                            model_groups[model_key]['status'] = 'pending'
+
+                except Exception as e:
+                    logger.error(
+                        f"Error parsing model assignment {asset_id}: {e}")
+
+        # Calculate totals based on model requirements vs specific assignments
+        total_required = 0
+        total_prepared = 0
+        total_returned = 0
         
+        # Count from model groups for accurate totals
+        for model_group in model_groups.values():
+            total_required += model_group['requiredQuantity']
+            total_prepared += len(model_group['assignedAssets'])
+            total_returned += len([a for a in model_group['assignedAssets'] if a['status'] == 'returned'])
+        
+        # If no model groups, fall back to old counting
+        if total_required == 0:
+            total_required = len(event.prepared_items)
+            total_prepared = len(event.actually_prepared)
+            total_returned = len(event.returned_items)
+            
         event_data = {
             'id': event.event_id,
             'name': event.name,
@@ -358,15 +551,18 @@ def get_event(event_id):
             'assignedAssets': assigned_assets,
             'preparedAssets': prepared_assets,
             'returnedAssets': returned_assets,
-            'totalAssets': len(event.prepared_items),
-            'totalPrepared': len(event.actually_prepared),
-            'totalReturned': len(event.returned_items)
+            'totalAssets': total_required,
+            'totalPrepared': total_prepared,
+            'totalReturned': total_returned,
+            'modelGroups': model_groups
         }
-        
+
         return jsonify({'success': True, 'data': event_data})
+
     except Exception as e:
         logger.error(f"Error getting event {event_id}: {e}")
         return jsonify({'error': 'Failed to retrieve event'}), 500
+
 
 @app.route('/api/events', methods=['POST'])
 @require_auth
@@ -374,19 +570,21 @@ def create_event():
     """Create a new event"""
     try:
         data = request.get_json()
-        
+
         # Validate input data
         errors = validate_event_data(data)
         if errors:
             return jsonify({'success': False, 'errors': errors}), 400
-        
+
         # Generate new event ID
         event_id = max(data_manager.events.keys(), default=0) + 1
-        
+
         # Convert dates to internal format
-        start_date = datetime.strptime(data['startDate'], '%Y-%m-%d').strftime('%Y%m%d')
-        end_date = datetime.strptime(data['endDate'], '%Y-%m-%d').strftime('%Y%m%d')
-        
+        start_date = datetime.strptime(
+            data['startDate'], '%Y-%m-%d').strftime('%Y%m%d')
+        end_date = datetime.strptime(
+            data['endDate'], '%Y-%m-%d').strftime('%Y%m%d')
+
         # Create new event
         event = Event(
             event_id=event_id,
@@ -398,21 +596,23 @@ def create_event():
             state='Added',
             returned_items=[]
         )
-        event.actually_prepared = []  # Initialize the new attribute
-        
+        event.actually_prepared = []
+
         # Save event
         data_manager.events[event_id] = event
         data_manager.save_event(event)
-        
+
         # Invalidate cache
         invalidate_cache()
-        
-        log_action(f"Created event {event_id}: {data['name']} via web interface")
-        
+
+        log_action(
+            f"Created event {event_id}: {data['name']} via web interface")
+
         return jsonify({'success': True, 'message': 'Event created successfully', 'eventId': event_id})
     except Exception as e:
         logger.error(f"Error creating event: {e}")
         return jsonify({'error': 'Failed to create event'}), 500
+
 
 @app.route('/api/events/<int:event_id>', methods=['PUT'])
 @require_auth
@@ -422,23 +622,25 @@ def update_event(event_id):
         event = data_manager.events.get(event_id)
         if not event:
             return jsonify({'error': 'Event not found'}), 404
-        
+
         data = request.get_json()
-        
+
         # Validate input data
         errors = validate_event_data(data)
         if errors:
             return jsonify({'success': False, 'errors': errors}), 400
-        
+
         # Update event properties
         old_name = event.name
         if 'name' in data:
             event.name = data['name'].strip()
         if 'startDate' in data:
-            event.start_date = datetime.strptime(data['startDate'], '%Y-%m-%d').strftime('%Y%m%d')
+            event.start_date = datetime.strptime(
+                data['startDate'], '%Y-%m-%d').strftime('%Y%m%d')
         if 'endDate' in data:
-            event.end_date = datetime.strptime(data['endDate'], '%Y-%m-%d').strftime('%Y%m%d')
-        
+            event.end_date = datetime.strptime(
+                data['endDate'], '%Y-%m-%d').strftime('%Y%m%d')
+
         # Update asset locations if event name changed
         if old_name != event.name:
             for asset_id in event.prepared_items:
@@ -447,16 +649,17 @@ def update_event(event_id):
                     if asset and asset.current_location == old_name:
                         asset.current_location = event.name
             data_manager.save_inventory()
-        
+
         # Save event
         data_manager.save_event(event)
-        
+
         log_action(f"Updated event {event_id}: {event.name} via web interface")
-        
+
         return jsonify({'success': True, 'message': 'Event updated successfully'})
     except Exception as e:
         logger.error(f"Error updating event {event_id}: {e}")
         return jsonify({'error': 'Failed to update event'}), 500
+
 
 @app.route('/api/events/<int:event_id>', methods=['DELETE'])
 @require_admin
@@ -466,34 +669,35 @@ def delete_event(event_id):
         event = data_manager.events.get(event_id)
         if not event:
             return jsonify({'error': 'Event not found'}), 404
-        
+
         event_name = event.name
-        
+
         # Backup event file
         data_manager.backup_event_file(event_id)
-        
+
         # Return all assets to store
         for asset_id in event.prepared_items.copy():
             asset = data_manager.inventory.get(asset_id)
             if asset and not asset_id.startswith('[LOAN]') and not asset_id.startswith('[MISC]'):
                 asset.current_location = asset.default_location or ""
-        
+
         # Save inventory changes
         data_manager.save_inventory()
-        
+
         # Delete event
         del data_manager.events[event_id]
         data_manager.delete_event_file(event_id)
-        
+
         # Invalidate cache
         invalidate_cache()
-        
+
         log_action(f"Deleted event {event_id}: {event_name} via web interface")
-        
+
         return jsonify({'success': True, 'message': 'Event deleted successfully'})
     except Exception as e:
         logger.error(f"Error deleting event {event_id}: {e}")
         return jsonify({'error': f'Failed to delete event: {str(e)}'}), 500
+
 
 @app.route('/api/events/<int:event_id>/assets', methods=['POST'])
 @require_auth
@@ -503,66 +707,183 @@ def add_asset_to_event(event_id):
         event = data_manager.events.get(event_id)
         if not event:
             return jsonify({'error': 'Event not found'}), 404
-        
+
         data = request.get_json()
         asset_id = data.get('assetId', '').strip()
-        
+
         if not asset_id:
             return jsonify({'error': 'Asset ID is required'}), 400
-        
+
         # Initialize actually_prepared if it doesn't exist
         if not hasattr(event, 'actually_prepared'):
             event.actually_prepared = []
-        
+
         # Check if asset is already in this event
         if asset_id in event.prepared_items:
             return jsonify({'error': 'Asset is already assigned to this event'}), 400
-        
+
         # For regular assets, perform additional checks
         if not (asset_id.startswith('[LOAN]') or asset_id.startswith('[MISC]')):
             asset = data_manager.inventory.get(asset_id)
             if not asset:
                 return jsonify({'error': 'Asset not found'}), 404
-            
+
             if asset.is_missing:
                 return jsonify({'error': 'Cannot assign missing asset'}), 400
-            
+
             if asset.is_ooc:
                 return jsonify({'error': 'Cannot assign out-of-commission asset'}), 400
-            
+
             # Check if asset is assigned to another active event
             assigned_assets = get_assigned_assets()
             if asset_id in assigned_assets:
                 for other_event in data_manager.events.values():
-                    if (other_event.event_id != event_id and 
-                        asset_id in other_event.prepared_items and 
-                        asset_id not in other_event.returned_items):
+                    if (other_event.event_id != event_id and
+                        asset_id in other_event.prepared_items and
+                            asset_id not in other_event.returned_items):
                         return jsonify({
                             'error': f'Asset is currently assigned to Event {other_event.event_id}: {other_event.name}'
                         }), 400
-        
+
         # Add the asset as UNPREPARED (just assigned to event)
         event.prepared_items.append(asset_id)
-        
+
         # Remove from returned items if it was there
         if asset_id in event.returned_items:
             event.returned_items.remove(asset_id)
-        
+
         # Update event state
         update_event_state(event)
-        
+
         # Save changes
         data_manager.save_event(event)
-        
+
         # Invalidate cache
         invalidate_cache()
-        
-        log_action(f"Assigned asset {asset_id} to event {event_id} (unprepared)")
-        
+
+        log_action(
+            f"Assigned asset {asset_id} to event {event_id} (unprepared)")
+
         return jsonify({'success': True, 'message': f'Asset {asset_id} assigned to event (unprepared)'})
     except Exception as e:
         logger.error(f"Error adding asset to event {event_id}: {e}")
         return jsonify({'error': 'Failed to add asset to event'}), 500
+
+
+@app.route('/api/events/<int:event_id>/models', methods=['POST', 'DELETE'])
+@require_auth
+def manage_event_models(event_id):
+    """Add or remove model assignments to/from events"""
+    try:
+        event = data_manager.events.get(event_id)
+        if not event:
+            return jsonify({'error': 'Event not found'}), 404
+
+        data = request.get_json()
+
+        if request.method == 'POST':
+            # Add model assignment
+            brand = data.get('brand', '').strip()
+            model = data.get('model', '').strip()
+            department = data.get('department', '').strip()
+            description = data.get('description', '').strip()
+            quantity = int(data.get('quantity', 1))
+
+            if not brand or not model or not department:
+                return jsonify({'error': 'Brand, model, and department are required'}), 400
+
+            # Check if this model already exists in the event
+            existing_model_id = None
+            existing_quantity = 0
+
+            for item in event.prepared_items:
+                if (item.startswith('[MODEL]') and
+                    f"|{brand}|{model}|" in item and
+                        item.startswith(f"[MODEL]{department}|")):
+                    existing_model_id = item
+                    # Extract existing quantity
+                    parts = item[7:].split('|')
+                    if len(parts) >= 4:
+                        existing_quantity = int(parts[3])
+                    break
+
+            if existing_model_id:
+                # Update existing model with new total quantity
+                event.prepared_items.remove(existing_model_id)
+                new_quantity = existing_quantity + quantity
+            else:
+                new_quantity = quantity
+
+            # Create consolidated model assignment identifier
+            model_id = f"[MODEL]{department}|{brand}|{model}|{new_quantity}|{description}"
+            event.prepared_items.append(model_id)
+
+            # Initialize actually_prepared if it doesn't exist
+            if not hasattr(event, 'actually_prepared'):
+                event.actually_prepared = []
+
+            # Update event state if needed
+            update_event_state(event)
+
+            # Save changes
+            data_manager.save_event(event)
+
+            # Invalidate cache
+            invalidate_cache()
+
+            log_action(
+                f"Added {quantity}x {brand} {model} model to event {event_id} (total: {new_quantity})")
+
+            return jsonify({'success': True, 'message': f'Added {quantity}x {brand} {model} to event (total: {new_quantity})'})
+
+        elif request.method == 'DELETE':
+            # Remove model assignment completely
+            brand = data.get('brand', '').strip()
+            model = data.get('model', '').strip()
+            department = data.get('department', '').strip()
+
+            if not brand or not model or not department:
+                return jsonify({'error': 'Brand, model, and department are required'}), 400
+
+            # Find and remove matching model assignments
+            items_to_remove = []
+            for item in event.prepared_items:
+                if (item.startswith('[MODEL]') and
+                    f"|{brand}|{model}|" in item and
+                        item.startswith(f"[MODEL]{department}|")):
+                    items_to_remove.append(item)
+
+            if not items_to_remove:
+                return jsonify({'error': 'Model assignment not found'}), 404
+
+            # Remove the items
+            for item in items_to_remove:
+                event.prepared_items.remove(item)
+                if item in event.returned_items:
+                    event.returned_items.remove(item)
+                # Initialize actually_prepared if it doesn't exist
+                if not hasattr(event, 'actually_prepared'):
+                    event.actually_prepared = []
+                if item in event.actually_prepared:
+                    event.actually_prepared.remove(item)
+
+            # Update event state
+            update_event_state(event)
+
+            # Save changes
+            data_manager.save_event(event)
+
+            # Invalidate cache
+            invalidate_cache()
+
+            log_action(f"Removed {brand} {model} model from event {event_id}")
+
+            return jsonify({'success': True, 'message': f'Removed {brand} {model} from event'})
+
+    except Exception as e:
+        logger.error(f"Error managing event models: {e}")
+        return jsonify({'error': 'Failed to manage event models'}), 500
+
 
 @app.route('/api/events/<int:event_id>/prepare', methods=['POST'])
 @require_auth
@@ -572,59 +893,60 @@ def prepare_event_asset(event_id):
         event = data_manager.events.get(event_id)
         if not event:
             return jsonify({'error': 'Event not found'}), 404
-        
+
         data = request.get_json()
         asset_id = data.get('assetId', '').strip()
-        
+
         if not asset_id:
             return jsonify({'error': 'Asset ID is required'}), 400
-        
+
         # Initialize actually_prepared if it doesn't exist
         if not hasattr(event, 'actually_prepared'):
             event.actually_prepared = []
-        
+
         # Check if asset is assigned to this event
         if asset_id not in event.prepared_items:
             return jsonify({'error': 'Asset is not assigned to this event'}), 400
-        
+
         # Check if already prepared
         if asset_id in event.actually_prepared:
             return jsonify({'error': 'Asset is already prepared'}), 400
-        
+
         # For regular assets, perform additional checks
         if not (asset_id.startswith('[LOAN]') or asset_id.startswith('[MISC]')):
             asset = data_manager.inventory.get(asset_id)
             if not asset:
                 return jsonify({'error': 'Asset not found'}), 404
-            
+
             if asset.is_missing:
                 return jsonify({'error': 'Asset is marked as missing'}), 400
-            
+
             if asset.is_ooc:
                 return jsonify({'error': 'Asset is out of commission'}), 400
-            
+
             # Update asset location now that it's prepared
             asset.current_location = event.name
             data_manager.save_inventory()
-        
+
         # Mark as prepared
         event.actually_prepared.append(asset_id)
-        
+
         # Update event state
         update_event_state(event)
-        
+
         # Save changes
         data_manager.save_event(event)
-        
+
         # Invalidate cache
         invalidate_cache()
-        
+
         log_action(f"Prepared asset {asset_id} for event {event_id}")
-        
+
         return jsonify({'success': True, 'message': f'Asset {asset_id} prepared for event'})
     except Exception as e:
         logger.error(f"Error preparing asset for event {event_id}: {e}")
         return jsonify({'error': 'Failed to prepare asset'}), 500
+
 
 @app.route('/api/events/<int:event_id>/unprepare', methods=['POST'])
 @require_auth
@@ -634,46 +956,47 @@ def unprepare_event_asset(event_id):
         event = data_manager.events.get(event_id)
         if not event:
             return jsonify({'error': 'Event not found'}), 404
-        
+
         data = request.get_json()
         asset_id = data.get('assetId', '').strip()
-        
+
         if not asset_id:
             return jsonify({'error': 'Asset ID is required'}), 400
-        
+
         # Initialize actually_prepared if it doesn't exist
         if not hasattr(event, 'actually_prepared'):
             event.actually_prepared = []
-        
+
         # Check if asset is prepared
         if asset_id not in event.actually_prepared:
             return jsonify({'error': 'Asset is not prepared'}), 400
-        
+
         # Remove from prepared list
         event.actually_prepared.remove(asset_id)
-        
+
         # For regular assets, reset location
         if not (asset_id.startswith('[LOAN]') or asset_id.startswith('[MISC]')):
             asset = data_manager.inventory.get(asset_id)
             if asset:
                 asset.current_location = asset.default_location or ''
                 data_manager.save_inventory()
-        
+
         # Update event state
         update_event_state(event)
-        
+
         # Save changes
         data_manager.save_event(event)
-        
+
         # Invalidate cache
         invalidate_cache()
-        
+
         log_action(f"Unprepared asset {asset_id} from event {event_id}")
-        
+
         return jsonify({'success': True, 'message': f'Asset {asset_id} unprepared'})
     except Exception as e:
         logger.error(f"Error unpreparing asset from event {event_id}: {e}")
         return jsonify({'error': 'Failed to unprepare asset'}), 500
+
 
 @app.route('/api/events/<int:event_id>/return', methods=['POST'])
 @require_auth
@@ -683,39 +1006,108 @@ def return_event_asset(event_id):
         event = data_manager.events.get(event_id)
         if not event:
             return jsonify({'error': 'Event not found'}), 404
-        
+
         data = request.get_json()
         asset_id = data.get('assetId', '').strip()
-        
+
         if not asset_id:
             return jsonify({'error': 'Asset ID is required'}), 400
-        
+
         # Check if asset is prepared for this event
         if asset_id not in event.prepared_items:
             return jsonify({'error': 'Asset is not assigned to this event'}), 400
-        
+
         # Check if asset is already returned
         if asset_id in event.returned_items:
             return jsonify({'error': 'Asset is already returned'}), 400
-        
+
         # Return the asset
         event.returned_items.append(asset_id)
-        
+
         # Initialize actually_prepared if it doesn't exist
         if not hasattr(event, 'actually_prepared'):
             event.actually_prepared = []
-        
+
         # Remove from actually_prepared if it was there
         if asset_id in event.actually_prepared:
             event.actually_prepared.remove(asset_id)
-        
+
         # For regular assets, update location
         if not (asset_id.startswith('[LOAN]') or asset_id.startswith('[MISC]')):
             asset = data_manager.inventory.get(asset_id)
             if asset:
                 asset.current_location = asset.default_location or ''
                 data_manager.save_inventory()
-        
+
+        # Update event state
+        update_event_state(event)
+
+        # Save changes
+        data_manager.save_event(event)
+
+        # Invalidate cache
+        invalidate_cache()
+
+        log_action(f"Returned asset {asset_id} from event {event_id}")
+
+        return jsonify({'success': True, 'message': f'Asset {asset_id} returned from event'})
+    except Exception as e:
+        logger.error(f"Error returning asset from event {event_id}: {e}")
+        return jsonify({'error': 'Failed to return asset'}), 500
+
+
+@app.route('/api/events/<int:event_id>/assign-specific', methods=['POST'])
+@require_auth
+def assign_specific_asset_to_model(event_id):
+    """Assign a specific asset to fulfill a model requirement"""
+    try:
+        event = data_manager.events.get(event_id)
+        if not event:
+            return jsonify({'error': 'Event not found'}), 404
+
+        data = request.get_json()
+        asset_id = data.get('assetId', '').strip()
+
+        if not asset_id:
+            return jsonify({'error': 'Asset ID is required'}), 400
+
+        # Initialize actually_prepared if it doesn't exist
+        if not hasattr(event, 'actually_prepared'):
+            event.actually_prepared = []
+
+        # Check if asset is already assigned
+        if asset_id in event.actually_prepared:
+            return jsonify({'error': 'Asset is already assigned to this event'}), 400
+
+        # For regular assets, perform checks
+        if not (asset_id.startswith('[LOAN]') or asset_id.startswith('[MISC]')):
+            asset = data_manager.inventory.get(asset_id)
+            if not asset:
+                return jsonify({'error': 'Asset not found'}), 404
+
+            if asset.is_missing:
+                return jsonify({'error': 'Asset is marked as missing'}), 400
+
+            if asset.is_ooc:
+                return jsonify({'error': 'Asset is out of commission'}), 400
+
+            # Check if asset is assigned to another active event
+            assigned_assets = get_assigned_assets()
+            if asset_id in assigned_assets:
+                for other_event in data_manager.events.values():
+                    if (other_event.event_id != event_id and
+                            asset_id in other_event.actually_prepared):
+                        return jsonify({
+                            'error': f'Asset is currently assigned to Event {other_event.event_id}: {other_event.name}'
+                        }), 400
+
+            # Update asset location
+            asset.current_location = event.name
+            data_manager.save_inventory()
+
+        # Add to actually_prepared (specific assets assigned to models)
+        event.actually_prepared.append(asset_id)
+
         # Update event state
         update_event_state(event)
         
@@ -724,13 +1116,69 @@ def return_event_asset(event_id):
         
         # Invalidate cache
         invalidate_cache()
-        
-        log_action(f"Returned asset {asset_id} from event {event_id}")
-        
-        return jsonify({'success': True, 'message': f'Asset {asset_id} returned from event'})
+
+        log_action(f"Assigned specific asset {asset_id} to event {event_id}")
+
+        return jsonify({'success': True, 'message': f'Asset {asset_id} assigned to event'})
+
     except Exception as e:
-        logger.error(f"Error returning asset from event {event_id}: {e}")
-        return jsonify({'error': 'Failed to return asset'}), 500
+        logger.error(
+            f"Error assigning specific asset to event {event_id}: {e}")
+        return jsonify({'error': 'Failed to assign asset'}), 500
+
+
+@app.route('/api/events/<int:event_id>/unassign-specific', methods=['POST'])
+@require_auth
+def unassign_specific_asset_from_model(event_id):
+    """Unassign a specific asset from a model requirement"""
+    try:
+        event = data_manager.events.get(event_id)
+        if not event:
+            return jsonify({'error': 'Event not found'}), 404
+
+        data = request.get_json()
+        asset_id = data.get('assetId', '').strip()
+
+        if not asset_id:
+            return jsonify({'error': 'Asset ID is required'}), 400
+
+        # Initialize actually_prepared if it doesn't exist
+        if not hasattr(event, 'actually_prepared'):
+            event.actually_prepared = []
+
+        # Check if asset is assigned
+        if asset_id not in event.actually_prepared:
+            return jsonify({'error': 'Asset is not assigned to this event'}), 400
+
+        # Remove from actually_prepared
+        event.actually_prepared.remove(asset_id)
+
+        # For regular assets, reset location
+        if not (asset_id.startswith('[LOAN]') or asset_id.startswith('[MISC]')):
+            asset = data_manager.inventory.get(asset_id)
+            if asset:
+                asset.current_location = asset.default_location or ''
+                data_manager.save_inventory()
+
+        # Update event state
+        update_event_state(event)
+
+        # Save changes
+        data_manager.save_event(event)
+
+        # Invalidate cache
+        invalidate_cache()
+
+        log_action(
+            f"Unassigned specific asset {asset_id} from event {event_id}")
+
+        return jsonify({'success': True, 'message': f'Asset {asset_id} unassigned from event'})
+
+    except Exception as e:
+        logger.error(
+            f"Error unassigning specific asset from event {event_id}: {e}")
+        return jsonify({'error': 'Failed to unassign asset'}), 500
+
 
 @app.route('/api/events/<int:event_id>/assets/<asset_id>', methods=['DELETE'])
 @require_auth
@@ -740,48 +1188,49 @@ def remove_asset_from_event(event_id, asset_id):
         event = data_manager.events.get(event_id)
         if not event:
             return jsonify({'error': 'Event not found'}), 404
-        
+
         # Check if asset is in this event
         if asset_id not in event.prepared_items:
             return jsonify({'error': 'Asset is not assigned to this event'}), 400
-        
+
         # Remove the asset
         event.prepared_items.remove(asset_id)
-        
+
         # Also remove from returned items if it was there
         if asset_id in event.returned_items:
             event.returned_items.remove(asset_id)
-        
+
         # Initialize actually_prepared if it doesn't exist
         if not hasattr(event, 'actually_prepared'):
             event.actually_prepared = []
-        
+
         # Remove from actually_prepared if it was there
         if asset_id in event.actually_prepared:
             event.actually_prepared.remove(asset_id)
-        
+
         # For regular assets, update location
         if not (asset_id.startswith('[LOAN]') or asset_id.startswith('[MISC]')):
             asset = data_manager.inventory.get(asset_id)
             if asset:
                 asset.current_location = asset.default_location or ''
                 data_manager.save_inventory()
-        
+
         # Update event state
         update_event_state(event)
-        
+
         # Save changes
         data_manager.save_event(event)
-        
+
         # Invalidate cache
         invalidate_cache()
-        
+
         log_action(f"Removed asset {asset_id} from event {event_id}")
-        
+
         return jsonify({'success': True, 'message': f'Asset {asset_id} removed from event'})
     except Exception as e:
         logger.error(f"Error removing asset from event {event_id}: {e}")
         return jsonify({'error': 'Failed to remove asset from event'}), 500
+
 
 @app.route('/api/events/<int:event_id>/transfer', methods=['POST'])
 @require_auth
@@ -791,64 +1240,66 @@ def transfer_asset_between_events(event_id):
         data = request.get_json()
         from_event_id = data.get('fromEventId')
         asset_id = data.get('assetId', '').strip()
-        
+
         if not from_event_id or not asset_id:
             return jsonify({'error': 'From event ID and asset ID are required'}), 400
-        
+
         # Get events
         from_event = data_manager.events.get(from_event_id)
         to_event = data_manager.events.get(event_id)
-        
+
         if not from_event or not to_event:
             return jsonify({'error': 'Event not found'}), 404
-        
+
         # Initialize actually_prepared for both events if needed
         if not hasattr(from_event, 'actually_prepared'):
             from_event.actually_prepared = []
         if not hasattr(to_event, 'actually_prepared'):
             to_event.actually_prepared = []
-        
+
         # Check if asset is assigned to from_event
         if asset_id not in from_event.prepared_items or asset_id in from_event.returned_items:
             return jsonify({'error': 'Asset is not currently assigned to the source event'}), 400
-        
+
         # Transfer the asset
         from_event.returned_items.append(asset_id)
-        
+
         # Remove from actually_prepared in source event
         if asset_id in from_event.actually_prepared:
             from_event.actually_prepared.remove(asset_id)
-        
+
         # Add to destination event
         if asset_id in to_event.prepared_items and asset_id in to_event.returned_items:
             to_event.returned_items.remove(asset_id)
         elif asset_id not in to_event.prepared_items:
             to_event.prepared_items.append(asset_id)
-        
+
         # For regular assets, update location
         if not (asset_id.startswith('[LOAN]') or asset_id.startswith('[MISC]')):
             asset = data_manager.inventory.get(asset_id)
             if asset:
                 asset.current_location = to_event.name
                 data_manager.save_inventory()
-        
+
         # Update event states
         update_event_state(from_event)
         update_event_state(to_event)
-        
+
         # Save changes
         data_manager.save_event(from_event)
         data_manager.save_event(to_event)
-        
+
         # Invalidate cache
         invalidate_cache()
-        
-        log_action(f"Transferred asset {asset_id} from event {from_event_id} to event {event_id}")
-        
+
+        log_action(
+            f"Transferred asset {asset_id} from event {from_event_id} to event {event_id}")
+
         return jsonify({'success': True, 'message': f'Asset {asset_id} transferred successfully'})
     except Exception as e:
         logger.error(f"Error transferring asset: {e}")
         return jsonify({'error': 'Failed to transfer asset'}), 500
+
 
 @app.route('/api/assets', methods=['GET'])
 @require_auth
@@ -857,7 +1308,7 @@ def get_assets():
     try:
         assets_data = []
         assigned_assets = get_assigned_assets()
-        
+
         for asset in data_manager.inventory.values():
             # Determine current status
             status = 'available'
@@ -867,7 +1318,7 @@ def get_assets():
                 status = 'ooc'
             elif asset.asset_id in assigned_assets:
                 status = 'deployed'
-            
+
             assets_data.append({
                 'id': asset.asset_id,
                 'brand': asset.brand,
@@ -883,11 +1334,12 @@ def get_assets():
                 'currentLocation': asset.current_location,
                 'maintenanceLogs': asset.maintenance_logs[-5:]  # Last 5 logs
             })
-        
+
         return jsonify({'success': True, 'data': assets_data})
     except Exception as e:
         logger.error(f"Error getting assets: {e}")
         return jsonify({'error': 'Failed to retrieve assets'}), 500
+
 
 @app.route('/api/assets/available', methods=['GET'])
 @require_auth
@@ -895,14 +1347,14 @@ def get_available_assets():
     """Get all assets that are available for assignment"""
     try:
         assigned_assets = get_assigned_assets()
-        
+
         # Filter available assets
         available_assets = []
         for asset in data_manager.inventory.values():
-            if (asset.asset_id not in assigned_assets and 
-                not asset.is_missing and 
-                not asset.is_ooc):
-                
+            if (asset.asset_id not in assigned_assets and
+                not asset.is_missing and
+                    not asset.is_ooc):
+
                 available_assets.append({
                     'id': asset.asset_id,
                     'brand': asset.brand,
@@ -912,25 +1364,26 @@ def get_available_assets():
                     'department': asset.department_code,
                     'location': asset.current_location or asset.default_location
                 })
-        
+
         # Sort by department, then by asset ID
         available_assets.sort(key=lambda x: (x['department'], x['id']))
-        
+
         return jsonify({'success': True, 'data': available_assets})
     except Exception as e:
         logger.error(f"Error getting available assets: {e}")
         return jsonify({'error': 'Failed to retrieve available assets'}), 500
+
 
 @app.route('/api/events/<int:event_id>/assets', methods=['GET'])
 def get_event_assets(event_id):
     """Get all assets assigned to an event with their details"""
     if 'user' not in session:
         return jsonify({'error': 'Not authenticated'}), 401
-    
+
     event = data_manager.events.get(event_id)
     if not event:
         return jsonify({'error': 'Event not found'}), 404
-    
+
     event_assets = []
     for asset_id in event.prepared_items:
         if not (asset_id.startswith('[LOAN]') or asset_id.startswith('[MISC]')):
@@ -948,8 +1401,9 @@ def get_event_assets(event_id):
                     'isMissing': asset.is_missing,
                     'isOOC': asset.is_ooc
                 })
-    
+
     return jsonify({'success': True, 'data': event_assets})
+
 
 @app.route('/api/assets', methods=['POST'])
 @require_auth
@@ -957,19 +1411,21 @@ def create_asset():
     """Create a new asset"""
     try:
         data = request.get_json()
-        
+
         # Validate required fields
         required_fields = ['brand', 'model']
-        missing_fields = [field for field in required_fields if not data.get(field, '').strip()]
+        missing_fields = [
+            field for field in required_fields if not data.get(field, '').strip()]
         if missing_fields:
             return jsonify({'error': f'Missing required fields: {", ".join(missing_fields)}'}), 400
-        
+
         # Generate asset ID
         model_number = data['model'].upper().strip()
-        existing_items = [item for item in data_manager.inventory.values() if item.model_number == model_number]
+        existing_items = [item for item in data_manager.inventory.values(
+        ) if item.model_number == model_number]
         next_number = len(existing_items) + 1
         asset_id = f"{model_number}#{next_number:02d}"
-        
+
         # Create new asset
         asset = InventoryItem(
             asset_id=asset_id,
@@ -984,20 +1440,21 @@ def create_asset():
             default_location='Store',
             current_location=''
         )
-        
+
         # Save asset
         data_manager.inventory[asset_id] = asset
         data_manager.save_inventory()
-        
+
         # Invalidate cache
         invalidate_cache()
-        
+
         log_action(f"Added asset {asset_id} via web interface")
-        
+
         return jsonify({'success': True, 'message': 'Asset created successfully', 'assetId': asset_id})
     except Exception as e:
         logger.error(f"Error creating asset: {e}")
         return jsonify({'error': 'Failed to create asset'}), 500
+
 
 @app.route('/api/assets/<asset_id>', methods=['PUT'])
 @require_auth
@@ -1007,9 +1464,9 @@ def update_asset(asset_id):
         asset = data_manager.inventory.get(asset_id)
         if not asset:
             return jsonify({'error': 'Asset not found'}), 404
-        
+
         data = request.get_json()
-        
+
         # Update asset properties
         if 'brand' in data:
             asset.brand = data['brand'].strip()
@@ -1025,19 +1482,20 @@ def update_asset(asset_id):
             asset.is_missing = bool(data['isMissing'])
         if 'isOOC' in data:
             asset.is_ooc = bool(data['isOOC'])
-        
+
         # Save asset
         data_manager.save_inventory()
-        
+
         # Invalidate cache
         invalidate_cache()
-        
+
         log_action(f"Updated asset {asset_id} via web interface")
-        
+
         return jsonify({'success': True, 'message': 'Asset updated successfully'})
     except Exception as e:
         logger.error(f"Error updating asset {asset_id}: {e}")
         return jsonify({'error': 'Failed to update asset'}), 500
+
 
 @app.route('/api/assets/<asset_id>/maintain', methods=['POST'])
 @require_auth
@@ -1047,43 +1505,45 @@ def maintain_asset(asset_id):
         asset = data_manager.inventory.get(asset_id)
         if not asset:
             return jsonify({'error': 'Asset not found'}), 404
-        
+
         data = request.get_json()
         log_entry_text = data.get('logEntry', '').strip()
         new_location = data.get('newLocation', '').strip()
         mark_ooc = data.get('markOOC', False)
         unmark_ooc = data.get('unmarkOOC', False)
-        
+
         if not log_entry_text:
             return jsonify({'error': 'Log entry is required'}), 400
-        
+
         # Add maintenance log
         current_date = datetime.now().strftime("%Y/%m/%d")
         entry = f"{current_date}\t{session['user']}\t{log_entry_text}"
         asset.maintenance_logs.append(entry)
-        
+
         # Update location if provided
         if new_location:
             asset.current_location = new_location
-        
+
         # Update OOC status
         if mark_ooc:
             asset.is_ooc = True
         if unmark_ooc:
             asset.is_ooc = False
-        
+
         # Save changes
         data_manager.save_inventory()
-        
+
         # Invalidate cache
         invalidate_cache()
-        
-        log_action(f"Maintenance logged for asset {asset_id}: {log_entry_text}")
-        
+
+        log_action(
+            f"Maintenance logged for asset {asset_id}: {log_entry_text}")
+
         return jsonify({'success': True, 'message': 'Maintenance logged successfully'})
     except Exception as e:
         logger.error(f"Error maintaining asset {asset_id}: {e}")
         return jsonify({'error': 'Failed to log maintenance'}), 500
+
 
 @app.route('/api/search', methods=['GET'])
 @require_auth
@@ -1093,13 +1553,14 @@ def search_assets():
         query = request.args.get('q', '').lower().strip()
         if not query:
             return jsonify({'success': True, 'data': []})
-        
+
         keywords = query.split()
         results = []
         assigned_assets = get_assigned_assets()
-        
+
         for asset in data_manager.inventory.values():
-            searchable_text = f"{asset.brand} {asset.model_number} {asset.description} {asset.serial_number}".lower()
+            searchable_text = f"{asset.brand} {asset.model_number} {asset.description} {asset.serial_number}".lower(
+            )
             if any(keyword in searchable_text for keyword in keywords):
                 # Determine current status
                 status = 'available'
@@ -1109,7 +1570,7 @@ def search_assets():
                     status = 'ooc'
                 elif asset.asset_id in assigned_assets:
                     status = 'deployed'
-                
+
                 results.append({
                     'id': asset.asset_id,
                     'brand': asset.brand,
@@ -1122,18 +1583,21 @@ def search_assets():
                     'isMissing': asset.is_missing,
                     'isOOC': asset.is_ooc
                 })
-        
+
         # Sort by relevance (exact matches first, then partial)
         results.sort(key=lambda x: (
-            not any(keyword == x['model'].lower() for keyword in keywords),  # Exact model matches first
-            not any(keyword in x['brand'].lower() for keyword in keywords),  # Brand matches second
+            not any(keyword == x['model'].lower()
+                    for keyword in keywords),  # Exact model matches first
+            not any(keyword in x['brand'].lower()
+                    for keyword in keywords),  # Brand matches second
             x['id']  # Then by asset ID
         ))
-        
+
         return jsonify({'success': True, 'data': results})
     except Exception as e:
         logger.error(f"Error searching assets: {e}")
         return jsonify({'error': 'Failed to search assets'}), 500
+
 
 @app.route('/api/containers', methods=['GET'])
 @require_auth
@@ -1147,11 +1611,12 @@ def get_containers():
                 'assetIds': container.asset_ids,
                 'assetCount': len(container.asset_ids)
             })
-        
+
         return jsonify({'success': True, 'data': containers_data})
     except Exception as e:
         logger.error(f"Error getting containers: {e}")
         return jsonify({'error': 'Failed to retrieve containers'}), 500
+
 
 @app.route('/api/logs', methods=['GET'])
 @require_auth
@@ -1166,14 +1631,15 @@ def get_logs():
                 'user': log.user,
                 'action': log.action
             })
-        
+
         # Reverse to show most recent first
         logs_data.reverse()
-        
+
         return jsonify({'success': True, 'data': logs_data})
     except Exception as e:
         logger.error(f"Error getting logs: {e}")
         return jsonify({'error': 'Failed to retrieve logs'}), 500
+
 
 @app.route('/api/stats', methods=['GET'])
 @require_auth
@@ -1181,13 +1647,16 @@ def get_stats():
     """Get dashboard statistics"""
     try:
         total_events = len(data_manager.events)
-        active_events = len([e for e in data_manager.events.values() if e.state not in ['Closed']])
+        active_events = len(
+            [e for e in data_manager.events.values() if e.state not in ['Closed']])
         total_assets = len(data_manager.inventory)
         assigned_assets = get_assigned_assets()
         deployed_assets = len(assigned_assets)
-        missing_assets = len([a for a in data_manager.inventory.values() if a.is_missing])
-        ooc_assets = len([a for a in data_manager.inventory.values() if a.is_ooc])
-        
+        missing_assets = len(
+            [a for a in data_manager.inventory.values() if a.is_missing])
+        ooc_assets = len(
+            [a for a in data_manager.inventory.values() if a.is_ooc])
+
         return jsonify({
             'success': True,
             'data': {
@@ -1205,25 +1674,29 @@ def get_stats():
 
 # Error handlers
 
+
 @app.errorhandler(404)
 def not_found(error):
     return jsonify({'error': 'Not found'}), 404
+
 
 @app.errorhandler(500)
 def internal_error(error):
     logger.error(f"Internal server error: {error}")
     return jsonify({'error': 'Internal server error'}), 500
 
+
 @app.errorhandler(Exception)
 def handle_exception(e):
     logger.error(f"Unhandled exception: {e}")
     return jsonify({'error': 'An unexpected error occurred'}), 500
 
+
 if __name__ == '__main__':
     try:
         # Initialize data manager
         init_data_manager()
-        
+
         # Run the Flask app
         app.run(debug=True, host='127.0.0.1', port=5000)
     except Exception as e:

@@ -1,0 +1,2 @@
+EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State
+24,event2,20250619,20250620,[],"[""[MODEL]AX_Shure_AD1_3"", ""[MODEL]AX_Shure_P9RA_1"", ""[MODEL]AX_Shure_AD1_1"", ""[MODEL]AX|Shure|AD1|3|Beltpack [G56]""]",[],Planning
