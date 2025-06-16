@@ -1,477 +1,4 @@
-async function loadPrepareEvents() {
-    try {
-        const response = await apiCall('/api/events');
-        const preparableEvents = response.data.filter(event => 
-            event.state === 'Added' || event.state === 'Preparing'
-        );
-        
-        const container = document.getElementById('prepare-events');
-        container.innerHTML = '';
-        
-        if (preparableEvents.length === 0) {
-            container.innerHTML = '<p style="text-align: center; color: #666; padding: 40px;">No events available for preparation.</p>';
-            return;
-        }
-        
-        preparableEvents.forEach(event => {
-            const card = createPrepareEventCard(event);
-            container.appendChild(card);
-        });
-    } catch (error) {
-        document.getElementById('prepare-events').innerHTML = '<p style="color: red; text-align: center;">Error loading events</p>';
-    }
-}
-
-function createPrepareEventCard(event) {
-    const card = document.createElement('div');
-    card.className = `event-card state-${event.state.toLowerCase()}`;
-    
-    const formatDate = (dateStr) => {
-        return new Date(dateStr).toLocaleDateString('en-US', { 
-            month: 'short', 
-            day: 'numeric', 
-            year: 'numeric' 
-        });
-    };
-    
-    const dateRange = event.startDate === event.endDate 
-        ? formatDate(event.startDate)
-        : `${formatDate(event.startDate)} - ${formatDate(event.endDate)}`;
-    
-    card.innerHTML = `
-        <div class="event-header">
-            <div class="event-id">ID: ${event.id}</div>
-            <div class="event-state state-${event.state.toLowerCase()}">${event.state}</div>
-        </div>
-        <div class="event-title">${event.name}</div>
-        <div class="event-date">${dateRange}</div>
-        <div style="margin: 15px 0;">
-            <small style="color: #666;">${event.assetCount || 0} assets assigned</small>
-        </div>
-        <div class="event-actions">
-            <button class="btn btn-success" onclick="openPrepareAssetModal(${event.id})">Prepare Asset</button>
-            <button class="btn btn-primary" onclick="viewEvent(${event.id})">View Details</button>
-        </div>
-    `;
-    
-    return card;
-}
-
-async function loadReturnEvents() {
-    try {
-        const response = await apiCall('/api/events');
-        const returnableEvents = response.data.filter(event => 
-            event.state === 'Ready' || event.state === 'Returning'
-        );
-        
-        const container = document.getElementById('return-events');
-        container.innerHTML = '';
-        
-        if (returnableEvents.length === 0) {
-            container.innerHTML = '<p style="text-align: center; color: #666; padding: 40px;">No events with assets to return.</p>';
-            return;
-        }
-        
-        returnableEvents.forEach(event => {
-            const card = createReturnEventCard(event);
-            container.appendChild(card);
-        });
-    } catch (error) {
-        document.getElementById('return-events').innerHTML = '<p style="color: red; text-align: center;">Error loading events</p>';
-    }
-}
-
-function createReturnEventCard(event) {
-    const card = document.createElement('div');
-    card.className = `event-card state-${event.state.toLowerCase()}`;
-    
-    const formatDate = (dateStr) => {
-        return new Date(dateStr).toLocaleDateString('en-US', { 
-            month: 'short', 
-            day: 'numeric', 
-            year: 'numeric' 
-        });
-    };
-    
-    const dateRange = event.startDate === event.endDate 
-        ? formatDate(event.startDate)
-        : `${formatDate(event.startDate)} - ${formatDate(event.endDate)}`;
-    
-    const returnedCount = event.returnedItems?.length || 0;
-    const totalCount = event.assetCount || 0;
-    
-    card.innerHTML = `
-        <div class="event-header">
-            <div class="event-id">ID: ${event.id}</div>
-            <div class="event-state state-${event.state.toLowerCase()}">${event.state}</div>
-        </div>
-        <div class="event-title">${event.name}</div>
-        <div class="event-date">${dateRange}</div>
-        <div style="margin: 15px 0;">
-            <small style="color: #666;">${returnedCount}/${totalCount} assets returned</small>
-        </div>
-        <div class="event-actions">
-            <button class="btn btn-warning" onclick="openReturnAssetModal(${event.id})">Return Asset</button>
-            <button class="btn btn-primary" onclick="viewEvent(${event.id})">View Details</button>
-        </div>
-    `;
-    
-    return card;
-}
-
-async function loadTransferHistory() {
-    try {
-        const response = await apiCall('/api/events');
-        const activeEvents = response.data.filter(event => 
-            event.state !== 'Closed' && event.assetCount > 0
-        );
-        
-        const container = document.getElementById('transfer-history');
-        container.innerHTML = `
-            <h3 style="margin-bottom: 20px; color: #764ba2;">Active Events Available for Transfer</h3>
-            <div class="events-grid" id="transfer-events-list"></div>
-        `;
-        
-        const eventsList = document.getElementById('transfer-events-list');
-        
-        if (activeEvents.length === 0) {
-            eventsList.innerHTML = '<p style="text-align: center; color: #666; padding: 40px;">No active events with assets available for transfer.</p>';
-            return;
-        }
-        
-        activeEvents.forEach(event => {
-            const card = createTransferEventCard(event);
-            eventsList.appendChild(card);
-        });
-        
-        // Populate transfer modal dropdowns
-        populateTransferDropdowns(activeEvents);
-    } catch (error) {
-        document.getElementById('transfer-history').innerHTML = '<p style="color: red; text-align: center;">Error loading events</p>';
-    }
-}
-
-function createTransferEventCard(event) {
-    const card = document.createElement('div');
-    card.className = `event-card state-${event.state.toLowerCase()}`;
-    
-    const formatDate = (dateStr) => {
-        return new Date(dateStr).toLocaleDateString('en-US', { 
-            month: 'short', 
-            day: 'numeric', 
-            year: 'numeric' 
-        });
-    };
-    
-    const dateRange = event.startDate === event.endDate 
-        ? formatDate(event.startDate)
-        : `${formatDate(event.startDate)} - ${formatDate(event.endDate)}`;
-    
-    card.innerHTML = `
-        <div class="event-header">
-            <div class="event-id">ID: ${event.id}</div>
-            <div class="event-state state-${event.state.toLowerCase()}">${event.state}</div>
-        </div>
-        <div class="event-title">${event.name}</div>
-        <div class="event-date">${dateRange}</div>
-        <div style="margin: 15px 0;">
-            <small style="color: #666;">${event.assetCount || 0} assets assigned</small>
-        </div>
-        <div class="event-actions">
-            <button class="btn btn-primary" onclick="viewEvent(${event.id})">View Assets</button>
-        </div>
-    `;
-    
-    return card;
-}
-
-async function loadMaintenanceAssets() {
-    try {
-        const response = await apiCall('/api/assets');
-        displayMaintenanceAssets(response.data);
-    } catch (error) {
-        document.getElementById('maintenance-assets').innerHTML = '<p style="color: red; text-align: center;">Error loading assets</p>';
-    }
-}
-
-function displayMaintenanceAssets(assetsToShow) {
-    const container = document.getElementById('maintenance-assets');
-    
-    if (assetsToShow.length === 0) {
-        container.innerHTML = '<p style="text-align: center; color: #666; padding: 40px;">No assets found.</p>';
-        return;
-    }
-    
-    let tableHTML = `
-        <table class="table">
-            <thead>
-                <tr>
-                    <th>Asset ID</th>
-                    <th>Brand</th>
-                    <th>Model</th>
-                    <th>Status</th>
-                    <th>Location</th>
-                    <th>Last Maintenance</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-    `;
-    
-    assetsToShow.forEach(asset => {
-        const lastMaintenance = asset.maintenanceLogs && asset.maintenanceLogs.length > 0 
-            ? asset.maintenanceLogs[asset.maintenanceLogs.length - 1].split('\t')[0] 
-            : 'Never';
-        
-        tableHTML += `
-            <tr>
-                <td>${asset.id}</td>
-                <td>${asset.brand}</td>
-                <td>${asset.model}</td>
-                <td><span class="asset-badge status-${asset.status}">${asset.status}</span></td>
-                <td>${asset.location || 'Store'}</td>
-                <td>${lastMaintenance}</td>
-                <td>
-                    <button class="btn btn-primary" onclick="openMaintenanceModalForAsset('${asset.id}')">Log Maintenance</button>
-                </td>
-            </tr>
-        `;
-    });
-    
-    tableHTML += '</tbody></table>';
-    container.innerHTML = tableHTML;
-}
-
-function loadAssetCheck() {
-    const container = document.getElementById('asset-check-content');
-    container.innerHTML = `
-        <div style="text-align: center; padding: 20px;">
-            <h3>Asset Check Process</h3>
-            <p>Verify physical inventory by scanning or entering asset IDs.</p>
-            <button class="btn btn-success" onclick="startAssetCheck()" style="margin: 20px;">Start Asset Check</button>
-        </div>
-    `;
-}
-
-function loadSearchSection() {
-    // Initialize search functionality
-    const searchInput = document.getElementById('global-search');
-    if (searchInput) {
-        searchInput.addEventListener('input', performGlobalSearch);
-    }
-}
-
-function loadFindEventsSection() {
-    // Initialize find events functionality
-    const searchInput = document.getElementById('find-events-search');
-    if (searchInput) {
-        searchInput.addEventListener('input', performEventSearch);
-    }
-}
-
-// Event handler functions
-function openPrepareAssetModal(eventId) {
-    document.getElementById('prepareEventId').value = eventId;
-    document.getElementById('prepareAssetTitle').textContent = `Prepare Asset for Event ${eventId}`;
-    openModal('prepareAssetModal');
-}
-
-function openReturnAssetModal(eventId) {
-    document.getElementById('returnEventId').value = eventId;
-    document.getElementById('returnAssetTitle').textContent = `Return Asset from Event ${eventId}`;
-    openModal('returnAssetModal');
-}
-
-function openMaintenanceModalForAsset(assetId) {
-    document.getElementById('maintenanceAssetId').value = assetId;
-    openModal('maintenanceModal');
-}
-
-function populateTransferDropdowns(events) {
-    const fromSelect = document.getElementById('transferFromEvent');
-    const toSelect = document.getElementById('transferToEvent');
-    
-    // Clear existing options
-    fromSelect.innerHTML = '<option value="">Select source event...</option>';
-    toSelect.innerHTML = '<option value="">Select destination event...</option>';
-    
-    events.forEach(event => {
-        const option1 = document.createElement('option');
-        option1.value = event.id;
-        option1.textContent = `${event.id}: ${event.name}`;
-        fromSelect.appendChild(option1);
-        
-        const option2 = document.createElement('option');
-        option2.value = event.id;
-        option2.textContent = `${event.id}: ${event.name}`;
-        toSelect.appendChild(option2);
-    });
-}
-
-async function performGlobalSearch() {
-    const query = document.getElementById('global-search').value;
-    const container = document.getElementById('search-results');
-    
-    if (!query.trim()) {
-        container.innerHTML = '<p style="text-align: center; color: #666; padding: 40px;">Enter keywords above to search across all assets.</p>';
-        return;
-    }
-    
-    try {
-        const response = await apiCall(`/api/search?q=${encodeURIComponent(query)}`);
-        const results = response.data;
-        
-        if (results.length === 0) {
-            container.innerHTML = '<p style="text-align: center; color: #666; padding: 40px;">No assets found matching your search.</p>';
-            return;
-        }
-        
-        displayInventoryTableInContainer(results, container);
-    } catch (error) {
-        container.innerHTML = '<p style="color: red; text-align: center;">Error searching assets</p>';
-    }
-}
-
-async function performEventSearch() {
-    const query = document.getElementById('find-events-search').value.toLowerCase();
-    const container = document.getElementById('find-events-results');
-    
-    if (!query.trim()) {
-        container.innerHTML = '<p style="text-align: center; color: #666; padding: 40px;">Enter keywords above to search events.</p>';
-        return;
-    }
-    
-    try {
-        const response = await apiCall('/api/events');
-        const filteredEvents = response.data.filter(event => 
-            event.name.toLowerCase().includes(query)
-        );
-        
-        if (filteredEvents.length === 0) {
-            container.innerHTML = '<p style="text-align: center; color: #666; padding: 40px;">No events found matching your search.</p>';
-            return;
-        }
-        
-        container.innerHTML = '<div class="events-grid" id="found-events"></div>';
-        const eventsGrid = document.getElementById('found-events');
-        
-        filteredEvents.forEach(event => {
-            eventsGrid.appendChild(createEventCard(event));
-        });
-    } catch (error) {
-        container.innerHTML = '<p style="color: red; text-align: center;">Error searching events</p>';
-    }
-}
-
-function displayInventoryTableInContainer(assetsToShow, container) {
-    if (assetsToShow.length === 0) {
-        container.innerHTML = '<p style="text-align: center; color: #666; padding: 40px;">No assets found.</p>';
-        return;
-    }
-    
-    let tableHTML = `
-        <table class="table">
-            <thead>
-                <tr>
-                    <th>Asset ID</th>
-                    <th>Brand</th>
-                    <th>Model</th>
-                    <th>Serial</th>
-                    <th>Department</th>
-                    <th>Status</th>
-                    <th>Location</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-    `;
-    
-    assetsToShow.forEach(asset => {
-        tableHTML += `
-            <tr>
-                <td>${asset.id}</td>
-                <td>${asset.brand}</td>
-                <td>${asset.model}</td>
-                <td>${asset.serial || 'N/A'}</td>
-                <td><span class="asset-badge dept-${asset.department.toLowerCase()}">${asset.department}</span></td>
-                <td><span class="asset-badge status-${asset.status}">${asset.status}</span></td>
-                <td>${asset.location || 'Store'}</td>
-                <td>
-                    <button class="btn btn-primary" onclick="viewAsset('${asset.id}')">View</button>
-                </td>
-            </tr>
-        `;
-    });
-    
-    tableHTML += '</tbody></table>';
-    container.innerHTML = tableHTML;
-}
-
-function startAssetCheck() {
-    const container = document.getElementById('asset-check-content');
-    container.innerHTML = `
-        <div style="max-width: 600px; margin: 0 auto;">
-            <h3>Asset Check in Progress</h3>
-            <div class="form-group">
-                <label class="form-label">Enter Asset ID or Serial Number</label>
-                <input type="text" class="form-input" id="assetCheckInput" placeholder="Scan or type asset ID...">
-            </div>
-            <div class="form-group">
-                <button class="btn btn-success" onclick="checkAsset()">Check Asset</button>
-                <button class="btn btn-secondary" onclick="finishAssetCheck()">Finish Check</button>
-            </div>
-            <div id="assetCheckResults" style="margin-top: 20px;">
-                <h4>Checked Assets:</h4>
-                <ul id="checkedAssetsList" style="list-style: none; padding: 0;"></ul>
-            </div>
-        </div>
-    `;
-    
-    // Focus on input
-    document.getElementById('assetCheckInput').focus();
-    
-    // Add enter key listener
-    document.getElementById('assetCheckInput').addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') {
-            checkAsset();
-        }
-    });
-}
-
-function checkAsset() {
-    const input = document.getElementById('assetCheckInput');
-    const assetId = input.value.trim();
-    
-    if (!assetId) return;
-    
-    // Find asset in our loaded assets
-    const asset = assets.find(a => a.id === assetId || a.serial === assetId);
-    
-    const checkedList = document.getElementById('checkedAssetsList');
-    const listItem = document.createElement('li');
-    listItem.style.padding = '10px';
-    listItem.style.marginBottom = '5px';
-    listItem.style.borderRadius = '5px';
-    
-    if (asset) {
-        listItem.style.backgroundColor = '#d4edda';
-        listItem.style.color = '#155724';
-        listItem.innerHTML = `✅ ${asset.id} - ${asset.brand} ${asset.model} (Found)`;
-    } else {
-        listItem.style.backgroundColor = '#f8d7da';
-        listItem.style.color = '#721c24';
-        listItem.innerHTML = `❌ ${assetId} (Not found in inventory)`;
-    }
-    
-    checkedList.appendChild(listItem);
-    input.value = '';
-    input.focus();
-}
-
-function finishAssetCheck() {
-    showNotification('success', 'Asset check completed');
-    loadAssetCheck();
-}// Global variables
+// Global variables
 let currentUser = null;
 let events = [];
 let assets = [];
@@ -495,7 +22,12 @@ function showSection(sectionName) {
     document.getElementById(sectionName + '-section').classList.add('active');
     
     // Add active class to clicked nav item
-    event.target.classList.add('active');
+    if (event && event.target) {
+        event.target.classList.add('active');
+    } else {
+        // Fallback: find the nav item by section name
+        document.querySelector(`[onclick="showSection('${sectionName}')"]`)?.classList.add('active');
+    }
     
     // Load section data
     switch(sectionName) {
@@ -570,6 +102,140 @@ async function apiCall(endpoint, method = 'GET', data = null) {
     }
 }
 
+// Tab switching functionality
+function switchEventsTab(tabName) {
+    // Remove active class from all tabs and content
+    document.querySelectorAll('.events-tab').forEach(tab => {
+        tab.classList.remove('active');
+    });
+    document.querySelectorAll('.tab-content').forEach(content => {
+        content.classList.remove('active');
+        content.style.display = 'none';
+    });
+    
+    // Add active class to clicked tab
+    document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+    
+    // Show corresponding content
+    const contentDiv = document.getElementById(`${tabName}-events`);
+    contentDiv.classList.add('active');
+    contentDiv.style.display = 'block';
+    
+    // Load appropriate data
+    if (tabName === 'ongoing') {
+        loadOngoingEvents();
+    } else if (tabName === 'upcoming') {
+        loadUpcomingEvents();
+    }
+}
+
+// Load ongoing events (events that are currently active)
+async function loadOngoingEvents() {
+    try {
+        // STEP 1: Check if the container exists BEFORE doing API calls
+        const container = document.getElementById('ongoing-events');
+        if (!container) {
+            console.warn('ongoing-events container not found, retrying in 500ms...');
+            // Retry after 500ms to give the DOM more time to load
+            setTimeout(() => loadOngoingEvents(), 500);
+            return;
+        }
+        
+        // STEP 2: Show loading state while fetching data
+        container.innerHTML = '<p style="text-align: center; color: #666; padding: 40px;">Loading ongoing events...</p>';
+        
+        // STEP 3: Fetch the events data
+        const response = await apiCall('/api/events');
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        // STEP 4: Filter for ongoing events (events happening today)
+        const ongoingEvents = response.data.filter(event => {
+            const startDate = new Date(event.startDate);
+            const endDate = new Date(event.endDate);
+            startDate.setHours(0, 0, 0, 0);
+            endDate.setHours(23, 59, 59, 999);
+            
+            // Event is ongoing if today is between start and end date (inclusive)
+            return today >= startDate && today <= endDate;
+        });
+        
+        // STEP 5: Clear the loading message and display results
+        container.innerHTML = '';
+        
+        if (ongoingEvents.length === 0) {
+            container.innerHTML = '<p style="text-align: center; color: #666; padding: 40px;">No ongoing events at the moment.</p>';
+            return;
+        }
+        
+        // STEP 6: Create and append event cards
+        ongoingEvents.forEach(event => {
+            container.appendChild(createEventCard(event));
+        });
+        
+        console.log(`Loaded ${ongoingEvents.length} ongoing events`);
+        
+    } catch (error) {
+        console.error('Error loading ongoing events:', error);
+        // STEP 7: Handle errors gracefully
+        const container = document.getElementById('ongoing-events');
+        if (container) {
+            container.innerHTML = '<p style="color: red; text-align: center;">Error loading ongoing events. <button onclick="loadOngoingEvents()">Retry</button></p>';
+        }
+    }
+}
+
+// Load upcoming events (events that start in the future)
+async function loadUpcomingEvents() {
+    try {
+        // STEP 1: Check if the container exists BEFORE doing API calls
+        const container = document.getElementById('upcoming-events');
+        if (!container) {
+            console.warn('upcoming-events container not found, retrying in 500ms...');
+            // Retry after 500ms to give the DOM more time to load
+            setTimeout(() => loadUpcomingEvents(), 500);
+            return;
+        }
+        
+        // STEP 2: Show loading state while fetching data
+        container.innerHTML = '<p style="text-align: center; color: #666; padding: 40px;">Loading upcoming events...</p>';
+        
+        // STEP 3: Fetch the events data
+        const response = await apiCall('/api/events');
+        const today = new Date();
+        today.setHours(23, 59, 59, 999);
+        
+        // STEP 4: Filter for upcoming events (events starting after today)
+        const upcomingEvents = response.data.filter(event => {
+            const startDate = new Date(event.startDate);
+            return startDate > today;
+        }).sort((a, b) => new Date(a.startDate) - new Date(b.startDate)); // Sort by start date
+        
+        // STEP 5: Clear the loading message and display results
+        container.innerHTML = '';
+        
+        if (upcomingEvents.length === 0) {
+            container.innerHTML = '<p style="text-align: center; color: #666; padding: 40px;">No upcoming events scheduled.</p>';
+            return;
+        }
+        
+        // STEP 6: Create and append event cards (limit to first 6)
+        upcomingEvents.slice(0, 6).forEach(event => {
+            container.appendChild(createEventCard(event));
+        });
+        
+        console.log(`Loaded ${upcomingEvents.length} upcoming events (showing first 6)`);
+        
+    } catch (error) {
+        console.error('Error loading upcoming events:', error);
+        // STEP 7: Handle errors gracefully
+        const container = document.getElementById('upcoming-events');
+        if (container) {
+            container.innerHTML = '<p style="color: red; text-align: center;">Error loading upcoming events. <button onclick="loadUpcomingEvents()">Retry</button></p>';
+        }
+    }
+}
+
 // Data loading functions
 async function loadDashboard() {
     try {
@@ -577,37 +243,24 @@ async function loadDashboard() {
         const statsResponse = await apiCall('/api/stats');
         stats = statsResponse.data;
         
-        // Update statistics
-        document.getElementById('total-events').textContent = stats.totalEvents || 0;
-        document.getElementById('active-events').textContent = stats.activeEvents || 0;
-        document.getElementById('total-assets').textContent = stats.totalAssets || 0;
-        document.getElementById('deployed-assets').textContent = stats.deployedAssets || 0;
+        // Update statistics with element checking
+        const totalEventsEl = document.getElementById('total-events');
+        const activeEventsEl = document.getElementById('active-events');
+        const totalAssetsEl = document.getElementById('total-assets');
+        const deployedAssetsEl = document.getElementById('deployed-assets');
         
-        // Load recent events
-        await loadRecentEvents();
+        if (totalEventsEl) totalEventsEl.textContent = stats.totalEvents || 0;
+        if (activeEventsEl) activeEventsEl.textContent = stats.activeEvents || 0;
+        if (totalAssetsEl) totalAssetsEl.textContent = stats.totalAssets || 0;
+        if (deployedAssetsEl) deployedAssetsEl.textContent = stats.deployedAssets || 0;
+        
+        // Load ongoing events with a delay to ensure elements exist
+        setTimeout(async () => {
+            await loadOngoingEvents();
+        }, 300);
+        
     } catch (error) {
         console.error('Error loading dashboard:', error);
-    }
-}
-
-async function loadRecentEvents() {
-    try {
-        const response = await apiCall('/api/events');
-        events = response.data;
-        
-        const container = document.getElementById('recent-events');
-        container.innerHTML = '';
-        
-        if (events.length === 0) {
-            container.innerHTML = '<p style="text-align: center; color: #666; padding: 40px;">No events found. Create your first event!</p>';
-            return;
-        }
-        
-        events.slice(0, 6).forEach(event => {
-            container.appendChild(createEventCard(event));
-        });
-    } catch (error) {
-        document.getElementById('recent-events').innerHTML = '<p style="color: red; text-align: center;">Error loading events</p>';
     }
 }
 
@@ -892,7 +545,193 @@ async function loadLogs() {
     }
 }
 
-// Event handlers
+async function loadPrepareEvents() {
+    try {
+        const response = await apiCall('/api/events');
+        const preparableEvents = response.data.filter(event => 
+            event.state === 'Added' || event.state === 'Preparing'
+        );
+        
+        const container = document.getElementById('prepare-events');
+        container.innerHTML = '';
+        
+        if (preparableEvents.length === 0) {
+            container.innerHTML = '<p style="text-align: center; color: #666; padding: 40px;">No events available for preparation.</p>';
+            return;
+        }
+        
+        preparableEvents.forEach(event => {
+            const card = createPrepareEventCard(event);
+            container.appendChild(card);
+        });
+    } catch (error) {
+        document.getElementById('prepare-events').innerHTML = '<p style="color: red; text-align: center;">Error loading events</p>';
+    }
+}
+
+function createPrepareEventCard(event) {
+    const card = document.createElement('div');
+    card.className = `event-card state-${event.state.toLowerCase()}`;
+    
+    const formatDate = (dateStr) => {
+        return new Date(dateStr).toLocaleDateString('en-US', { 
+            month: 'short', 
+            day: 'numeric', 
+            year: 'numeric' 
+        });
+    };
+    
+    const dateRange = event.startDate === event.endDate 
+        ? formatDate(event.startDate)
+        : `${formatDate(event.startDate)} - ${formatDate(event.endDate)}`;
+    
+    card.innerHTML = `
+        <div class="event-header">
+            <div class="event-id">ID: ${event.id}</div>
+            <div class="event-state state-${event.state.toLowerCase()}">${event.state}</div>
+        </div>
+        <div class="event-title">${event.name}</div>
+        <div class="event-date">${dateRange}</div>
+        <div style="margin: 15px 0;">
+            <small style="color: #666;">${event.assetCount || 0} assets assigned</small>
+        </div>
+        <div class="event-actions">
+            <button class="btn btn-success" onclick="openPrepareAssetModal(${event.id})">Prepare Asset</button>
+            <button class="btn btn-primary" onclick="viewEvent(${event.id})">View Details</button>
+        </div>
+    `;
+    
+    return card;
+}
+
+async function loadReturnEvents() {
+    try {
+        const response = await apiCall('/api/events');
+        const returnableEvents = response.data.filter(event => 
+            event.state === 'Ready' || event.state === 'Returning'
+        );
+        
+        const container = document.getElementById('return-events');
+        container.innerHTML = '';
+        
+        if (returnableEvents.length === 0) {
+            container.innerHTML = '<p style="text-align: center; color: #666; padding: 40px;">No events with assets to return.</p>';
+            return;
+        }
+        
+        returnableEvents.forEach(event => {
+            const card = createReturnEventCard(event);
+            container.appendChild(card);
+        });
+    } catch (error) {
+        document.getElementById('return-events').innerHTML = '<p style="color: red; text-align: center;">Error loading events</p>';
+    }
+}
+
+function createReturnEventCard(event) {
+    const card = document.createElement('div');
+    card.className = `event-card state-${event.state.toLowerCase()}`;
+    
+    const formatDate = (dateStr) => {
+        return new Date(dateStr).toLocaleDateString('en-US', { 
+            month: 'short', 
+            day: 'numeric', 
+            year: 'numeric' 
+        });
+    };
+    
+    const dateRange = event.startDate === event.endDate 
+        ? formatDate(event.startDate)
+        : `${formatDate(event.startDate)} - ${formatDate(event.endDate)}`;
+    
+    const returnedCount = event.returnedItems?.length || 0;
+    const totalCount = event.assetCount || 0;
+    
+    card.innerHTML = `
+        <div class="event-header">
+            <div class="event-id">ID: ${event.id}</div>
+            <div class="event-state state-${event.state.toLowerCase()}">${event.state}</div>
+        </div>
+        <div class="event-title">${event.name}</div>
+        <div class="event-date">${dateRange}</div>
+        <div style="margin: 15px 0;">
+            <small style="color: #666;">${returnedCount}/${totalCount} assets returned</small>
+        </div>
+        <div class="event-actions">
+            <button class="btn btn-warning" onclick="openReturnAssetModal(${event.id})">Return Asset</button>
+            <button class="btn btn-primary" onclick="viewEvent(${event.id})">View Details</button>
+        </div>
+    `;
+    
+    return card;
+}
+
+async function loadTransferHistory() {
+    try {
+        const response = await apiCall('/api/events');
+        const activeEvents = response.data.filter(event => 
+            event.state !== 'Closed' && event.assetCount > 0
+        );
+        
+        const container = document.getElementById('transfer-history');
+        container.innerHTML = `
+            <h3 style="margin-bottom: 20px; color: #764ba2;">Active Events Available for Transfer</h3>
+            <div class="events-grid" id="transfer-events-list"></div>
+        `;
+        
+        const eventsList = document.getElementById('transfer-events-list');
+        
+        if (activeEvents.length === 0) {
+            eventsList.innerHTML = '<p style="text-align: center; color: #666; padding: 40px;">No active events with assets available for transfer.</p>';
+            return;
+        }
+        
+        activeEvents.forEach(event => {
+            const card = createTransferEventCard(event);
+            eventsList.appendChild(card);
+        });
+        
+        // Populate transfer modal dropdowns
+        populateTransferDropdowns(activeEvents);
+    } catch (error) {
+        document.getElementById('transfer-history').innerHTML = '<p style="color: red; text-align: center;">Error loading events</p>';
+    }
+}
+
+function createTransferEventCard(event) {
+    const card = document.createElement('div');
+    card.className = `event-card state-${event.state.toLowerCase()}`;
+    
+    const formatDate = (dateStr) => {
+        return new Date(dateStr).toLocaleDateString('en-US', { 
+            month: 'short', 
+            day: 'numeric', 
+            year: 'numeric' 
+        });
+    };
+    
+    const dateRange = event.startDate === event.endDate 
+        ? formatDate(event.startDate)
+        : `${formatDate(event.startDate)} - ${formatDate(event.endDate)}`;
+    
+    card.innerHTML = `
+        <div class="event-header">
+            <div class="event-id">ID: ${event.id}</div>
+            <div class="event-state state-${event.state.toLowerCase()}">${event.state}</div>
+        </div>
+        <div class="event-title">${event.name}</div>
+        <div class="event-date">${dateRange}</div>
+        <div style="margin: 15px 0;">
+            <small style="color: #666;">${event.assetCount || 0} assets assigned</small>
+        </div>
+        <div class="event-actions">
+            <button class="btn btn-primary" onclick="viewEvent(${event.id})">View Assets</button>
+        </div>
+    `;
+    
+    return card;
+}
+
 async function viewEvent(eventId) {
     try {
         const response = await apiCall(`/api/events/${eventId}`);
@@ -900,169 +739,196 @@ async function viewEvent(eventId) {
         
         document.getElementById('eventDetailsTitle').textContent = `Event ${event.id}: ${event.name}`;
         
-        // Build the detailed content with assets by department
-        let assetsByDeptHTML = '';
-        
-        if (Object.keys(event.assetsByDepartment).length > 0) {
-            assetsByDeptHTML = '<div class="assets-by-department" style="margin-top: 20px;">';
-            assetsByDeptHTML += '<h4 style="color: #764ba2; margin-bottom: 15px;">Assets by Department</h4>';
-            
-            // Define department colors and names
-            const deptInfo = {
-                'AX': { name: 'Audio', color: '#007bff', bgColor: '#cce5ff' },
-                'LX': { name: 'Lighting', color: '#28a745', bgColor: '#d4edda' },
-                'VX': { name: 'Video', color: '#6f42c1', bgColor: '#e2d9f3' },
-                'LOAN': { name: 'Loaned Items', color: '#dc3545', bgColor: '#f8d7da' },
-                'MISC': { name: 'Miscellaneous', color: '#ffc107', bgColor: '#fff3cd' },
-                'UN': { name: 'Unknown', color: '#6c757d', bgColor: '#e2e3e5' }
-            };
-            
-            Object.keys(event.assetsByDepartment).forEach(dept => {
-                const deptAssets = event.assetsByDepartment[dept];
-                const info = deptInfo[dept] || { name: dept, color: '#6c757d', bgColor: '#e2e3e5' };
-                
-                assetsByDeptHTML += `
-                    <div class="department-section" style="margin-bottom: 25px; border: 1px solid ${info.color}; border-radius: 8px; overflow: hidden;">
-                        <div class="department-header" style="background: ${info.bgColor}; color: ${info.color}; padding: 12px 15px; font-weight: bold; border-bottom: 1px solid ${info.color};">
-                            <div style="display: flex; justify-content: space-between; align-items: center;">
-                                <span>${dept} - ${info.name}</span>
-                                <span class="asset-count" style="background: ${info.color}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px;">
-                                    ${deptAssets.length} item${deptAssets.length !== 1 ? 's' : ''}
-                                </span>
-                            </div>
-                        </div>
-                        <div class="department-assets" style="padding: 0;">
-                `;
-                
-                deptAssets.forEach((asset, index) => {
-                    let statusIcon, statusColor, statusText;
-                    
-                    if (asset.status === 'returned') {
-                        statusIcon = '↩️';
-                        statusColor = '#6c757d';
-                        statusText = 'Returned';
-                    } else if (asset.status === 'prepared') {
-                        statusIcon = '✅';
-                        statusColor = '#28a745';
-                        statusText = 'Prepared';
-                    } else {
-                        statusIcon = '📋';
-                        statusColor = '#fd7e14';
-                        statusText = 'Assigned';
-                    }
-                    
-                    // Special handling for OOC and Missing assets
-                    let statusBadge = `<span style="color: ${statusColor}; font-size: 12px;">${statusIcon} ${statusText}</span>`;
-                    if (asset.isMissing) {
-                        statusBadge += ` <span style="color: #dc3545; font-size: 11px;">❌ MISSING</span>`;
-                    }
-                    if (asset.isOOC) {
-                        statusBadge += ` <span style="color: #dc3545; font-size: 11px;">🔧 OOC</span>`;
-                    }
-                    
-                    // Add action buttons for non-loan/misc items
-                    let actionButtons = '';
-                    if (!asset.isLoanOrMisc && asset.status !== 'returned') {
-                        if (asset.status === 'assigned') {
-                            actionButtons = `<button class="btn btn-success" style="padding: 4px 8px; font-size: 11px; margin-left: 10px;" onclick="prepareAsset(${eventId}, '${asset.id}')">Prepare</button>`;
-                        } else if (asset.status === 'prepared') {
-                            actionButtons = `<button class="btn btn-warning" style="padding: 4px 8px; font-size: 11px; margin-left: 10px;" onclick="unprepareAsset(${eventId}, '${asset.id}')">Unprepare</button>`;
-                        }
-                    }
-                    
-                    const borderBottom = index < deptAssets.length - 1 ? 'border-bottom: 1px solid #e9ecef;' : '';
-                    
-                    assetsByDeptHTML += `
-                        <div class="asset-row" style="padding: 12px 15px; display: flex; justify-content: space-between; align-items: center; ${borderBottom}">
-                            <div class="asset-info">
-                                <div style="font-weight: 500; margin-bottom: 2px;">
-                                    <span style="color: #495057;">${asset.id}</span>
-                                </div>
-                                <div style="color: #666; font-size: 14px;">
-                                    ${asset.name}
-                                </div>
-                                ${asset.serial ? `<div style="color: #999; font-size: 12px;">S/N: ${asset.serial}</div>` : ''}
-                            </div>
-                            <div class="asset-status" style="text-align: right; display: flex; align-items: center;">
-                                <div>
-                                    ${statusBadge}
-                                    ${asset.location ? `<div style="color: #999; font-size: 11px; margin-top: 2px;">📍 ${asset.location}</div>` : ''}
-                                </div>
-                                ${actionButtons}
-                            </div>
-                        </div>
-                    `;
-                });
-                
-                assetsByDeptHTML += '</div></div>';
+        const formatDate = (dateStr) => {
+            return new Date(dateStr).toLocaleDateString('en-US', { 
+                month: 'short', 
+                day: 'numeric', 
+                year: 'numeric' 
             });
-            
-            assetsByDeptHTML += '</div>';
-        } else {
-            assetsByDeptHTML = '<p style="color: #666; font-style: italic; margin-top: 20px;">No assets assigned to this event.</p>';
-        }
+        };
         
-        // Build summary statistics
-        const assignedCount = event.assignedAssets?.length || 0;
-        const preparedCount = event.preparedAssets?.length || 0;
-        const returnedCount = event.returnedAssets?.length || 0;
-        const totalCount = event.totalAssets || 0;
-        const progressPercent = totalCount > 0 ? Math.round((returnedCount / totalCount) * 100) : 0;
+        const dateRange = event.startDate === event.endDate 
+            ? formatDate(event.startDate)
+            : `${formatDate(event.startDate)} - ${formatDate(event.endDate)}`;
         
-        const content = `
-            <div class="event-details">
-                <div class="form-group">
-                    <strong>📅 Start Date:</strong> ${event.startDate}
-                </div>
-                <div class="form-group">
-                    <strong>📅 End Date:</strong> ${event.endDate}
-                </div>
-                <div class="form-group">
-                    <strong>📊 State:</strong> <span class="event-state state-${event.state.toLowerCase()}">${event.state}</span>
-                </div>
-                
-                <div class="asset-summary" style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin: 20px 0;">
-                    <h4 style="margin-bottom: 15px; color: #495057;">Asset Summary</h4>
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 15px;">
-                        <div style="text-align: center;">
-                            <div style="font-size: 24px; font-weight: bold; color: #007bff;">${totalCount}</div>
-                            <div style="color: #666; font-size: 14px;">Total Assets</div>
-                        </div>
-                        <div style="text-align: center;">
-                            <div style="font-size: 24px; font-weight: bold; color: #fd7e14;">${assignedCount}</div>
-                            <div style="color: #666; font-size: 14px;">Assigned</div>
-                        </div>
-                        <div style="text-align: center;">
-                            <div style="font-size: 24px; font-weight: bold; color: #28a745;">${preparedCount}</div>
-                            <div style="color: #666; font-size: 14px;">Prepared</div>
-                        </div>
-                        <div style="text-align: center;">
-                            <div style="font-size: 24px; font-weight: bold; color: #6c757d;">${returnedCount}</div>
-                            <div style="color: #666; font-size: 14px;">Returned</div>
-                        </div>
-                        <div style="text-align: center;">
-                            <div style="font-size: 24px; font-weight: bold; color: #17a2b8;">${progressPercent}%</div>
-                            <div style="color: #666; font-size: 14px;">Return Progress</div>
-                        </div>
-                    </div>
-                    ${totalCount > 0 ? `
-                        <div style="margin-top: 15px;">
-                            <div style="background: #e9ecef; height: 8px; border-radius: 4px; overflow: hidden;">
-                                <div style="background: #28a745; height: 100%; width: ${progressPercent}%; transition: width 0.3s ease;"></div>
-                            </div>
-                        </div>
-                    ` : ''}
-                </div>
-                
-                ${assetsByDeptHTML}
+        let content = `
+            <div class="form-group">
+                <strong>Date Range:</strong> ${dateRange}
+            </div>
+            <div class="form-group">
+                <strong>State:</strong> <span class="asset-badge status-${event.state.toLowerCase()}">${event.state}</span>
+            </div>
+            <div class="form-group">
+                <strong>Total Assets:</strong> ${event.totalAssets}
+            </div>
+            <div class="form-group">
+                <strong>Prepared Assets:</strong> ${event.totalPrepared}
+            </div>
+            <div class="form-group">
+                <strong>Returned Assets:</strong> ${event.totalReturned}
             </div>
         `;
+        
+        // Add assets by department
+        if (event.assetsByDepartment && Object.keys(event.assetsByDepartment).length > 0) {
+            content += '<div class="form-group"><strong>Assets by Department:</strong>';
+            Object.keys(event.assetsByDepartment).forEach(dept => {
+                const assets = event.assetsByDepartment[dept];
+                content += `<h4>${dept} (${assets.length} assets)</h4>`;
+                content += '<ul>';
+                assets.forEach(asset => {
+                    const statusIcon = asset.status === 'returned' ? '↩️' : 
+                                     asset.status === 'prepared' ? '✅' : '📋';
+                    content += `<li>${statusIcon} ${asset.id} - ${asset.name}</li>`;
+                });
+                content += '</ul>';
+            });
+            content += '</div>';
+        }
         
         document.getElementById('eventDetailsContent').innerHTML = content;
         openModal('eventDetailsModal');
     } catch (error) {
         showNotification('error', 'Failed to load event details');
     }
+}
+
+async function loadMaintenanceAssets() {
+    try {
+        const response = await apiCall('/api/assets');
+        displayMaintenanceAssets(response.data);
+    } catch (error) {
+        document.getElementById('maintenance-assets').innerHTML = '<p style="color: red; text-align: center;">Error loading assets</p>';
+    }
+}
+
+function displayMaintenanceAssets(assetsToShow) {
+    const container = document.getElementById('maintenance-assets');
+    
+    if (assetsToShow.length === 0) {
+        container.innerHTML = '<p style="text-align: center; color: #666; padding: 40px;">No assets found.</p>';
+        return;
+    }
+    
+    let tableHTML = `
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Asset ID</th>
+                    <th>Brand</th>
+                    <th>Model</th>
+                    <th>Status</th>
+                    <th>Location</th>
+                    <th>Last Maintenance</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+    
+    assetsToShow.forEach(asset => {
+        const lastMaintenance = asset.maintenanceLogs && asset.maintenanceLogs.length > 0 
+            ? asset.maintenanceLogs[asset.maintenanceLogs.length - 1].split('\t')[0] 
+            : 'Never';
+        
+        tableHTML += `
+            <tr>
+                <td>${asset.id}</td>
+                <td>${asset.brand}</td>
+                <td>${asset.model}</td>
+                <td><span class="asset-badge status-${asset.status}">${asset.status}</span></td>
+                <td>${asset.location || 'Store'}</td>
+                <td>${lastMaintenance}</td>
+                <td>
+                    <button class="btn btn-primary" onclick="openMaintenanceModalForAsset('${asset.id}')">Log Maintenance</button>
+                </td>
+            </tr>
+        `;
+    });
+    
+    tableHTML += '</tbody></table>';
+    container.innerHTML = tableHTML;
+}
+
+function loadAssetCheck() {
+    const container = document.getElementById('asset-check-content');
+    container.innerHTML = `
+        <div style="text-align: center; padding: 20px;">
+            <h3>Asset Check Process</h3>
+            <p>Verify physical inventory by scanning or entering asset IDs.</p>
+            <button class="btn btn-success" onclick="startAssetCheck()" style="margin: 20px;">Start Asset Check</button>
+        </div>
+    `;
+}
+
+// Event handler functions
+function openPrepareAssetModal(eventId) {
+    document.getElementById('prepareEventId').value = eventId;
+    document.getElementById('prepareAssetTitle').textContent = `Prepare Asset for Event ${eventId}`;
+    openModal('prepareAssetModal');
+}
+
+function openReturnAssetModal(eventId) {
+    document.getElementById('returnEventId').value = eventId;
+    document.getElementById('returnAssetTitle').textContent = `Return Asset from Event ${eventId}`;
+    openModal('returnAssetModal');
+}
+
+function openMaintenanceModalForAsset(assetId) {
+    document.getElementById('maintenanceAssetId').value = assetId;
+    openModal('maintenanceModal');
+}
+
+function populateTransferDropdowns(events) {
+    const fromSelect = document.getElementById('transferFromEvent');
+    const toSelect = document.getElementById('transferToEvent');
+    
+    // Clear existing options
+    fromSelect.innerHTML = '<option value="">Select source event...</option>';
+    toSelect.innerHTML = '<option value="">Select destination event...</option>';
+    
+    events.forEach(event => {
+        const option1 = document.createElement('option');
+        option1.value = event.id;
+        option1.textContent = `${event.id}: ${event.name}`;
+        fromSelect.appendChild(option1);
+        
+        const option2 = document.createElement('option');
+        option2.value = event.id;
+        option2.textContent = `${event.id}: ${event.name}`;
+        toSelect.appendChild(option2);
+    });
+}
+
+function startAssetCheck() {
+    const container = document.getElementById('asset-check-content');
+    container.innerHTML = `
+        <div style="max-width: 600px; margin: 0 auto;">
+            <h3>Asset Check in Progress</h3>
+            <div class="form-group">
+                <label class="form-label">Enter Asset ID or Serial Number</label>
+                <input type="text" class="form-input" id="assetCheckInput" placeholder="Scan or type asset ID...">
+            </div>
+            <div class="form-group">
+                <button class="btn btn-success" onclick="checkAsset()">Check Asset</button>
+                <button class="btn btn-secondary" onclick="finishAssetCheck()">Finish Check</button>
+            </div>
+            <div id="assetCheckResults" style="margin-top: 20px;">
+                <h4>Checked Assets:</h4>
+                <ul id="checkedAssetsList" style="list-style: none; padding: 0;"></ul>
+            </div>
+        </div>
+    `;
+    
+    // Focus on input
+    document.getElementById('assetCheckInput').focus();
+    
+    // Add enter key listener
+    document.getElementById('assetCheckInput').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            checkAsset();
+        }
+    });
 }
 
 async function prepareAsset(eventId, assetId) {
@@ -1323,12 +1189,12 @@ async function removeAssetFromEvent(eventId, assetId) {
 }
 
 function filterAvailableAssets() {
-    const searchTerm = document.getElementById('availableAssetsSearch').value.toLowerCase();
+    const searchTerm = document.getElementById('availableAssetsSearch')?.value.toLowerCase() || '';
     const availableAssets = window.currentAvailableAssets || [];
     
     if (!searchTerm) {
         // Show all assets
-        document.querySelectorAll('.available-asset-').forEach(el => {
+        document.querySelectorAll('[class*="available-asset-"]').forEach(el => {
             el.style.display = 'flex';
         });
         return;
@@ -1350,7 +1216,6 @@ function filterAvailableAssets() {
         }
     });
 }
-
 async function deleteEvent(eventId) {
     if (!confirm('Are you sure you want to delete this event? This action cannot be undone.')) {
         return;
@@ -1651,8 +1516,25 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Initialize application
-    initializeApp();
+    fetch('/api/stats')
+    .then(response => {
+        if (response.status === 401) {
+            window.location.href = '/login';
+            return;
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data && data.success) {
+            // Initialize application
+            initializeApp();
+        }
+    })
+    .catch(error => {
+        console.error('Authentication check failed:', error);
+        // Still try to initialize in case of network issues
+        initializeApp();
+    });
 });
 
 // Utility functions
@@ -1741,11 +1623,17 @@ async function initializeApp() {
         
         // Set today's date as default for event forms
         const today = new Date().toISOString().split('T')[0];
-        document.getElementById('eventStartDate').value = today;
-        document.getElementById('eventEndDate').value = today;
+        const startDateEl = document.getElementById('eventStartDate');
+        const endDateEl = document.getElementById('eventEndDate');
         
-        // Load initial data
-        await loadDashboard();
+        if (startDateEl) startDateEl.value = today;
+        if (endDateEl) endDateEl.value = today;
+        
+        // Add a small delay to ensure all DOM elements are ready
+        setTimeout(async () => {
+            // Load initial data
+            await loadDashboard();
+        }, 200);
         
     } catch (error) {
         console.error('Error initializing application:', error);

@@ -279,7 +279,7 @@
         .state-preparing { background: #fff3cd; color: #856404; }
         .state-ready { background: #d4edda; color: #155724; }
         .state-returning { background: #e2d9f3; color: #44297a; }
-        .state-closed { background: #e2e3e5; color: #383d41; }-closed { background: #e2e3e5; color: #383d41; }
+        .state-closed { background: #e2e3e5; color: #383d41; }
 
         .event-actions {
             margin-top: 15px;
@@ -529,7 +529,45 @@
             display: block;
         }
 
+        /* Tabs styling */
+        .events-tab.active {
+            color: #764ba2 !important;
+            border-bottom-color: #764ba2 !important;
+            background: rgba(118, 75, 162, 0.05) !important;
+        }
+
+        .events-tab:hover {
+            background: rgba(118, 75, 162, 0.1) !important;
+            color: #764ba2 !important;
+        }
+
+        .tab-content {
+            transition: opacity 0.3s ease;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* Logo responsive styling */
         @media (max-width: 768px) {
+            #company-logo {
+                height: 40px;
+            }
+            
+            .header h1 {
+                font-size: 1.8rem !important;
+            }
+            
+            .header {
+                padding: 15px !important;
+            }
+            
+            .header > div {
+                flex-direction: column !important;
+                gap: 10px !important;
+            }
+
             .main-content {
                 grid-template-columns: 1fr;
                 gap: 15px;
@@ -553,13 +591,39 @@
                 grid-template-columns: repeat(2, 1fr);
             }
         }
+
+        @media (max-width: 480px) {
+            .events-tabs {
+                flex-direction: column !important;
+            }
+            
+            .events-tab {
+                border-bottom: 1px solid #e9ecef !important;
+                border-right: none !important;
+            }
+            
+            .events-tab.active {
+                border-bottom: 3px solid #764ba2 !important;
+            }
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>AVEC Inventory Tracker</h1>
-            <div class="user-info">Welcome back, <span id="current-user">Loading...</span></div>
+            <div style="display: flex; align-items: center; justify-content: center; gap: 20px;">
+                <!-- Company Logo -->
+                <img src="/static/images/logo.png" alt="Company Logo" id="company-logo" 
+                     style="height: 60px; width: auto; object-fit: contain;" 
+                     onerror="this.style.display='none'">
+                
+                <div style="text-align: center;">
+                    <h1 style="color: #764ba2; font-size: 2.5rem; margin-bottom: 10px;">AVEC Inventory Tracker</h1>
+                    <div class="user-info" style="color: #666; font-size: 1.1rem;">
+                        Welcome back, <span id="current-user">Loading...</span>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <div class="main-content">
@@ -620,9 +684,27 @@
                         </div>
                     </div>
 
-                    <h3 style="margin-bottom: 20px; color: #764ba2;">Recent Events</h3>
-                    <div class="events-grid" id="recent-events">
-                        <div class="loading">Loading events...</div>
+                    <!-- Events Tabs -->
+                    <div class="events-tabs-container" style="margin-bottom: 20px;">
+                        <div class="events-tabs" style="display: flex; border-bottom: 2px solid #e9ecef; margin-bottom: 20px;">
+                            <button class="events-tab active" data-tab="ongoing" onclick="switchEventsTab('ongoing')" 
+                                    style="flex: 1; padding: 15px 20px; border: none; background: none; font-size: 16px; font-weight: 500; cursor: pointer; border-bottom: 3px solid transparent; transition: all 0.3s ease;">
+                                📅 Ongoing Events
+                            </button>
+                            <button class="events-tab" data-tab="upcoming" onclick="switchEventsTab('upcoming')"
+                                    style="flex: 1; padding: 15px 20px; border: none; background: none; font-size: 16px; font-weight: 500; cursor: pointer; border-bottom: 3px solid transparent; transition: all 0.3s ease;">
+                                🔮 Upcoming Events
+                            </button>
+                        </div>
+                        
+                        <div class="events-tab-content">
+                            <div id="ongoing-events" class="events-grid tab-content active">
+                                <div class="loading">Loading ongoing events...</div>
+                            </div>
+                            <div id="upcoming-events" class="events-grid tab-content" style="display: none;">
+                                <div class="loading">Loading upcoming events...</div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -854,14 +936,17 @@
     </div>
 
     <!-- Event Details Modal -->
-    <div id="eventDetailsModal" class="modal event-details-modal">
+    <div id="eventDetailsModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3 class="modal-title" id="eventDetailsTitle">Event Details</h3>
-                <button class="close-btn" onclick="closeModal('eventDetailsModal')">&times;</button>
+                <h2 id="eventDetailsTitle">Event Details</h2>
+                <span class="close" onclick="closeModal('eventDetailsModal')">&times;</span>
             </div>
-            <div id="eventDetailsContent">
-                <!-- Content will be populated dynamically -->
+            <div id="eventDetailsContent" class="modal-body">
+                <!-- Event details will be populated here -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('eventDetailsModal')">Close</button>
             </div>
         </div>
     </div>
@@ -994,18 +1079,19 @@
     </div>
 
     <!-- Edit Event Assets Modal -->
-    <div id="editEventAssetsModal" class="modal event-details-modal">
-        <div class="modal-content">
+    <div id="editEventAssetsModal" class="modal">
+        <div class="modal-content large">
             <div class="modal-header">
-                <h3 class="modal-title" id="editEventAssetsTitle">Edit Event Assets</h3>
-                <button class="close-btn" onclick="closeModal('editEventAssetsModal')">&times;</button>
+                <h2 id="editEventAssetsTitle">Edit Event Assets</h2>
+                <span class="close" onclick="closeModal('editEventAssetsModal')">&times;</span>
             </div>
-            <div id="editEventAssetsContent">
-                <div class="loading">Loading assets...</div>
+            <div id="editEventAssetsContent" class="modal-body">
+                <!-- Content will be populated by JavaScript -->
             </div>
         </div>
     </div>
 
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    
 </body>
 </html>
