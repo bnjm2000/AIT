@@ -383,13 +383,13 @@ def get_events():
                                         'location': specific_asset.current_location
                                     })
                             
-                            # Determine overall model status
+                            # Determine overall model status - FIXED LOGIC
                             assigned_count = len(model_groups[model_key]['assignedAssets'])
                             returned_count = len([a for a in model_groups[model_key]['assignedAssets'] if a['status'] == 'returned'])
                             
-                            if returned_count == quantity:
+                            if returned_count == assigned_count and returned_count == quantity:
                                 model_groups[model_key]['status'] = 'returned'
-                            elif assigned_count == quantity:
+                            elif assigned_count >= quantity:
                                 model_groups[model_key]['status'] = 'ready'
                             elif assigned_count > 0:
                                 model_groups[model_key]['status'] = 'partial'
@@ -549,8 +549,32 @@ def get_event(event_id):
                     else:
                         status = 'assigned'
 
-                    # Check if this is an extra asset - ONLY use the extra_assets list
+                    # Check if this is an extra asset
                     is_extra = asset_id in event.extra_assets
+                    
+                    # However, if this asset fulfills a model requirement, it should NOT be extra
+                    # regardless of what's in the extra_assets list
+                    if is_extra:
+                        for model_assignment in event.prepared_items:
+                            if model_assignment.startswith('[MODEL]'):
+                                try:
+                                    parts = model_assignment[7:].split('|')
+                                    if len(parts) >= 4:
+                                        req_dept = parts[0]
+                                        req_brand = parts[1]
+                                        req_model = parts[2]
+                                        
+                                        if (asset.department_code == req_dept and 
+                                            asset.brand == req_brand and 
+                                            asset.model_number == req_model):
+                                            is_extra = False
+                                            # Also clean up the extra_assets list
+                                            if asset_id in event.extra_assets:
+                                                event.extra_assets.remove(asset_id)
+                                            break
+                                except Exception as e:
+                                    logger.error(f"Error checking model fulfillment: {e}")
+                                    continue
 
                     asset_info = {
                         'id': asset.asset_id,
@@ -674,15 +698,13 @@ def get_event(event_id):
                                         'location': specific_asset.current_location
                                     })
 
-                        # Determine overall model status
-                        assigned_count = len(
-                            model_groups[model_key]['assignedAssets'])
-                        returned_count = len(
-                            [a for a in model_groups[model_key]['assignedAssets'] if a['status'] == 'returned'])
+                        # Determine overall model status - FIXED LOGIC
+                        assigned_count = len(model_groups[model_key]['assignedAssets'])
+                        returned_count = len([a for a in model_groups[model_key]['assignedAssets'] if a['status'] == 'returned'])
 
-                        if returned_count == quantity:
+                        if returned_count == assigned_count and returned_count == quantity:
                             model_groups[model_key]['status'] = 'returned'
-                        elif assigned_count == quantity:
+                        elif assigned_count >= quantity:
                             model_groups[model_key]['status'] = 'ready'
                         elif assigned_count > 0:
                             model_groups[model_key]['status'] = 'partial'
@@ -849,11 +871,29 @@ def delete_event(event_id):
         # Backup event file
         data_manager.backup_event_file(event_id)
 
-        # Return all assets to store
+        # Return all assets to their default locations
+        assets_reset = []
+        
+        # Reset assets from prepared_items
         for asset_id in event.prepared_items.copy():
-            asset = data_manager.inventory.get(asset_id)
-            if asset and not asset_id.startswith('[LOAN]') and not asset_id.startswith('[MISC]'):
-                asset.current_location = asset.default_location or ""
+            if not (asset_id.startswith('[LOAN]') or asset_id.startswith('[MISC]') or asset_id.startswith('[MODEL]')):
+                asset = data_manager.inventory.get(asset_id)
+                if asset:
+                    old_location = asset.current_location
+                    asset.current_location = asset.default_location or ""
+                    assets_reset.append(f"{asset_id} (from '{old_location}' to '{asset.current_location or 'Store'}')")
+                    log_action(f"Reset location for asset {asset_id} due to deletion of Event {event_id}")
+
+        # Reset assets from actually_prepared (in case there are any not in prepared_items)
+        if hasattr(event, 'actually_prepared'):
+            for asset_id in event.actually_prepared.copy():
+                if not (asset_id.startswith('[LOAN]') or asset_id.startswith('[MISC]')):
+                    asset = data_manager.inventory.get(asset_id)
+                    if asset and asset_id not in event.prepared_items:
+                        old_location = asset.current_location
+                        asset.current_location = asset.default_location or ""
+                        assets_reset.append(f"{asset_id} (from '{old_location}' to '{asset.current_location or 'Store'}')")
+                        log_action(f"Reset location for asset {asset_id} due to deletion of Event {event_id}")
 
         # Save inventory changes
         data_manager.save_inventory()
@@ -865,13 +905,16 @@ def delete_event(event_id):
         # Invalidate cache
         invalidate_cache()
 
-        log_action(f"Deleted event {event_id}: {event_name} via web interface")
+        # Log the deletion with details of reset assets
+        if assets_reset:
+            log_action(f"Deleted event {event_id}: {event_name} via web interface. Reset {len(assets_reset)} asset locations: {', '.join(assets_reset[:5])}{'...' if len(assets_reset) > 5 else ''}")
+        else:
+            log_action(f"Deleted event {event_id}: {event_name} via web interface. No asset locations to reset.")
 
-        return jsonify({'success': True, 'message': 'Event deleted successfully'})
+        return jsonify({'success': True, 'message': 'Event deleted successfully', 'assetsReset': len(assets_reset)})
     except Exception as e:
         logger.error(f"Error deleting event {event_id}: {e}")
         return jsonify({'error': f'Failed to delete event: {str(e)}'}), 500
-
 
 @app.route('/api/events/<int:event_id>/assets', methods=['POST'])
 @require_auth

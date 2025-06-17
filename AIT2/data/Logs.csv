@@ -1,58 +1,3 @@
-2024/11/11,bnjm2000,User bnjm2000 logged in.
-2024/11/11,bnjm2000,Added equipment AD4Q#01.
-2024/11/11,bnjm2000,Added equipment AD4Q#02.
-2024/11/11,bnjm2000,Added equipment AD4Q#03.
-2024/11/11,bnjm2000,Added equipment AD4Q#04.
-2024/11/11,bnjm2000,Added event 1: Wedding @ Ritz Carlton.
-2024/11/11,bnjm2000,User bnjm2000 logged out.
-2024/11/11,bnjm2000,User bnjm2000 logged in.
-2024/11/11,bnjm2000,User bnjm2000 logged in.
-2024/11/11,bnjm2000,User bnjm2000 logged in.
-2024/11/11,bnjm2000,User bnjm2000 logged in.
-2024/11/11,bnjm2000,User bnjm2000 logged in.
-2024/11/11,bnjm2000,Added event 1: Wedding @ Ritz Carlton.
-2024/11/11,bnjm2000,User bnjm2000 logged in.
-2024/11/11,bnjm2000,Added event 1: Wedding @ Ritz Carlton.
-2024/11/11,bnjm2000,Added event 2: Euan Kennedy Dinner (IP).
-2024/11/11,bnjm2000,User bnjm2000 logged in.
-2024/11/11,bnjm2000,Added event 3: event@venue.
-2024/11/11,admin,User admin logged in.
-2024/11/11,admin,User admin logged in.
-2024/11/11,admin,Added user bnjm2000.
-2024/11/11,bnjm2000,User bnjm2000 logged in.
-2024/11/11,bnjm2000,User bnjm2000 logged out.
-2024/11/12,bnjm2000,User bnjm2000 logged in.
-2024/11/12,bnjm2000,User bnjm2000 logged in.
-2024/11/12,bnjm2000,Added event 1: Wedding @ Ritz.
-2024/11/12,bnjm2000,User bnjm2000 logged in.
-2024/11/12,bnjm2000,Added event 2: Ritz.
-2024/11/12,bnjm2000,Edited event 1.
-2024/11/12,bnjm2000,Edited event 2.
-2024/11/12,bnjm2000,Deleted event 2.
-2024/11/12,bnjm2000,Deleted event 1.
-2024/11/12,bnjm2000,Added event 1: one.
-2024/11/12,bnjm2000,Added event 2: two.
-2024/11/12,bnjm2000,Deleted event 1.
-2024/11/12,bnjm2000,User bnjm2000 logged out.
-2024/11/12,bnjm2000,User bnjm2000 logged in.
-2024/11/12,bnjm2000,User bnjm2000 logged in.
-2024/11/12,bnjm2000,User bnjm2000 logged in.
-2024/11/12,bnjm2000,Added event 3: Wedding.
-2024/11/12,bnjm2000,User bnjm2000 logged in.
-2024/11/12,bnjm2000,Added event 1: one.
-2024/11/12,bnjm2000,User bnjm2000 logged out.
-2024/11/12,bnjm2000,User bnjm2000 logged in.
-2024/11/12,bnjm2000,User bnjm2000 logged in.
-2024/11/12,bnjm2000,Added event 1: wedding.
-2024/11/12,bnjm2000,User bnjm2000 logged out.
-2024/11/12,bnjm2000,User bnjm2000 logged in.
-2024/11/12,bnjm2000,User bnjm2000 logged in.
-2024/11/12,bnjm2000,User bnjm2000 logged in.
-2024/11/12,bnjm2000,User bnjm2000 logged out.
-2024/11/12,bnjm2000,User bnjm2000 logged in.
-2024/11/12,bnjm2000,User bnjm2000 logged in.
-2024/11/12,bnjm2000,Added event 2: ritz
-2024/11/12,bnjm2000,User bnjm2000 logged in.
 2024/11/12,bnjm2000,User bnjm2000 logged in.
 2024/11/12,bnjm2000,User bnjm2000 logged in.
 2024/11/12,bnjm2000,User bnjm2000 logged in.
@@ -998,3 +943,58 @@
 2025/06/17 15:06:35,admin,Assigned specific asset ESPRITE#04 to event 23
 2025/06/17 15:06:36,admin,Assigned specific asset ESPRITE#01 to event 23
 2025/06/17 15:06:48,admin,Assigned specific asset LEDBEAM#01 to event 23
+2025/06/17 15:15:17,admin,Deleted event 23: ro via web interface
+2025/06/17 15:15:40,admin,Created event 23: event123 via web interface
+2025/06/17 15:15:50,admin,Added 24x Robe Robin LEDBeam 350 Wash model to event 23 (total: 24)
+2025/06/17 15:15:55,admin,Assigned specific asset LEDBEAM#05 to event 23
+2025/06/17 15:15:56,admin,Assigned specific asset LEDBEAM#04 to event 23
+2025/06/17 15:15:57,admin,Assigned specific asset LEDBEAM#01 to event 23
+2025/06/17 15:15:57,admin,Assigned specific asset LEDBEAM#02 to event 23
+2025/06/17 15:15:58,admin,Assigned specific asset LEDBEAM#07 to event 23
+2025/06/17 15:15:59,admin,Assigned specific asset LEDBEAM#03 to event 23
+2025/06/17 15:16:07,admin,Deleted event 23: event123 via web interface
+2025/06/17 15:18:05,admin,Created event 23: wewwe via web interface
+2025/06/17 15:18:33,admin,Added 1x Robe ESPRITE model to event 23 (total: 1)
+2025/06/17 15:18:34,admin,Added 1x Robe Robin LEDBeam 350 Wash model to event 23 (total: 1)
+2025/06/17 15:18:41,admin,Assigned specific asset ESPRITE#01 to event 23
+2025/06/17 15:18:42,admin,Assigned specific asset LEDBEAM#01 to event 23
+2025/06/17 15:18:50,admin,Assigned specific asset ESPRITE#02 to event 23
+2025/06/17 15:20:56,admin,Assigned specific asset AD1#01 to event 23
+2025/06/17 15:30:13,admin,Reset location for asset ESPRITE#01 due to deletion of Event 23
+2025/06/17 15:30:13,admin,Reset location for asset LEDBEAM#01 due to deletion of Event 23
+2025/06/17 15:30:13,admin,Reset location for asset ESPRITE#02 due to deletion of Event 23
+2025/06/17 15:30:13,admin,Reset location for asset AD1#01 due to deletion of Event 23
+2025/06/17 15:30:13,admin,"Deleted event 23: wewwe via web interface. Reset 4 asset locations: ESPRITE#01 (from '' to 'Store'), LEDBEAM#01 (from '' to 'Store'), ESPRITE#02 (from '' to 'Store'), AD1#01 (from 'wewwe' to 'Store')"
+2025/06/17 15:30:18,admin,Created event 23: whywhy via web interface
+2025/06/17 15:30:25,admin,Added 4x Robe ESPRITE model to event 23 (total: 4)
+2025/06/17 15:30:27,admin,Added 3x Robe Robin LEDBeam 350 Wash model to event 23 (total: 3)
+2025/06/17 15:30:32,admin,Added 2x Shure AD1 model to event 23 (total: 2)
+2025/06/17 15:30:33,admin,Added 1x Shure AD1 model to event 23 (total: 3)
+2025/06/17 15:30:39,admin,Added 2x Shure AD3 model to event 23 (total: 2)
+2025/06/17 15:30:43,admin,Assigned specific asset LEDBEAM#01 to event 23
+2025/06/17 15:30:44,admin,Assigned specific asset LEDBEAM#02 to event 23
+2025/06/17 15:30:45,admin,Assigned specific asset LEDBEAM#03 to event 23
+2025/06/17 15:30:46,admin,Assigned specific asset ESPRITE#01 to event 23
+2025/06/17 15:30:48,admin,Assigned specific asset ESPRITE#02 to event 23
+2025/06/17 15:30:50,admin,Assigned specific asset AD3#01 to event 23
+2025/06/17 15:30:51,admin,Assigned specific asset AD3#03 to event 23
+2025/06/17 15:30:52,admin,Assigned specific asset AD3#02 to event 23
+2025/06/17 15:30:54,admin,Assigned specific asset AD1#01 to event 23
+2025/06/17 15:30:55,admin,Assigned specific asset AD1#02 to event 23
+2025/06/17 15:30:56,admin,Assigned specific asset AD1#04 to event 23
+2025/06/17 15:31:04,admin,Assigned specific asset MBAR#01 to event 23
+2025/06/17 15:31:09,admin,Assigned specific asset 4061#01 to event 23
+2025/06/17 15:31:29,admin,Reset location for asset LEDBEAM#01 due to deletion of Event 23
+2025/06/17 15:31:29,admin,Reset location for asset LEDBEAM#02 due to deletion of Event 23
+2025/06/17 15:31:29,admin,Reset location for asset LEDBEAM#03 due to deletion of Event 23
+2025/06/17 15:31:29,admin,Reset location for asset ESPRITE#01 due to deletion of Event 23
+2025/06/17 15:31:29,admin,Reset location for asset ESPRITE#02 due to deletion of Event 23
+2025/06/17 15:31:29,admin,Reset location for asset AD3#01 due to deletion of Event 23
+2025/06/17 15:31:29,admin,Reset location for asset AD3#03 due to deletion of Event 23
+2025/06/17 15:31:29,admin,Reset location for asset AD3#02 due to deletion of Event 23
+2025/06/17 15:31:29,admin,Reset location for asset AD1#01 due to deletion of Event 23
+2025/06/17 15:31:29,admin,Reset location for asset AD1#02 due to deletion of Event 23
+2025/06/17 15:31:29,admin,Reset location for asset AD1#04 due to deletion of Event 23
+2025/06/17 15:31:29,admin,Reset location for asset MBAR#01 due to deletion of Event 23
+2025/06/17 15:31:29,admin,Reset location for asset 4061#01 due to deletion of Event 23
+2025/06/17 15:31:29,admin,"Deleted event 23: whywhy via web interface. Reset 13 asset locations: LEDBEAM#01 (from 'whywhy' to 'Store'), LEDBEAM#02 (from 'whywhy' to 'Store'), LEDBEAM#03 (from 'whywhy' to 'Store'), ESPRITE#01 (from 'whywhy' to 'Store'), ESPRITE#02 (from 'whywhy' to 'Store')..."

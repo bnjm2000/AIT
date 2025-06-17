@@ -1315,40 +1315,169 @@ async function viewEvent(eventId) {
     };
 
     let content = `
-            <div class="form-group">
-                <strong>Date Range:</strong> ${dateRange}
+        <!-- Event Summary Card -->
+        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 12px; margin-bottom: 25px;">
+            <div style="display: grid; grid-template-columns: 1fr auto auto; gap: 20px; align-items: center;">
+                <div>
+                    <h3 style="margin: 0 0 8px 0; font-size: 1.4rem;">${escapeHtml(event.name)}</h3>
+                    <div style="opacity: 0.9; font-size: 14px;">📅 ${dateRange}</div>
+                </div>
+                <div style="text-align: center;">
+                    <div style="font-size: 24px; font-weight: bold; margin-bottom: 4px;">${event.totalPrepared}/${event.totalAssets}</div>
+                    <div style="font-size: 12px; opacity: 0.9;">Assets Ready</div>
+                </div>
+                <div style="text-align: center;">
+                    <span style="background: rgba(255,255,255,0.2); padding: 8px 16px; border-radius: 20px; font-size: 13px; font-weight: 500;">
+                        ${event.state}
+                    </span>
+                </div>
             </div>
-            <div class="form-group">
-                <strong>State:</strong> <span class="asset-badge status-${event.state.toLowerCase()}">${
-      event.state
-    }</span>
-            </div>
-            <div class="form-group">
-                <strong>Total Assets:</strong> ${event.totalAssets}
-            </div>
-            <div class="form-group">
-                <strong>Prepared Assets:</strong> ${event.totalPrepared}
-            </div>
-            <div class="form-group">
-                <strong>Returned Assets:</strong> ${event.totalReturned}
-            </div>
-        `;
+        </div>
 
-    // Add individual assets section
-    if (event.assetsByDepartment && Object.keys(event.assetsByDepartment).length > 0) {
-      content += '<div class="form-group"><strong>All Assets:</strong>';
+        <!-- Progress Overview -->
+        <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 25px;">
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; text-align: center;">
+                <div>
+                    <div style="font-size: 20px; font-weight: bold; color: #007bff;">${event.totalAssets}</div>
+                    <div style="font-size: 12px; color: #666;">Required</div>
+                </div>
+                <div>
+                    <div style="font-size: 20px; font-weight: bold; color: #28a745;">${event.totalPrepared}</div>
+                    <div style="font-size: 12px; color: #666;">Prepared</div>
+                </div>
+                <div>
+                    <div style="font-size: 20px; font-weight: bold; color: #dc3545;">${event.totalReturned}</div>
+                    <div style="font-size: 12px; color: #666;">Returned</div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Model Requirements Section (Compact)
+    if (event.modelGroups && Object.keys(event.modelGroups).length > 0) {
+      content += '<div style="margin-bottom: 25px;"><h4 style="color: #495057; margin-bottom: 15px; font-size: 16px;">📦 Model Requirements</h4>';
 
       // Group by department
-      Object.keys(event.assetsByDepartment)
-        .sort()
-        .forEach((dept) => {
-          const assets = event.assetsByDepartment[dept];
+      const modelsByDept = {};
+      Object.values(event.modelGroups).forEach((model) => {
+        if (!modelsByDept[model.department]) {
+          modelsByDept[model.department] = [];
+        }
+        modelsByDept[model.department].push(model);
+      });
+
+      Object.keys(modelsByDept).sort().forEach((dept) => {
+        const models = modelsByDept[dept];
+        
+        content += `
+            <div style="border: 1px solid #e9ecef; border-radius: 8px; margin-bottom: 15px; overflow: hidden;">
+                <div style="background: #f8f9fa; padding: 10px 15px; font-weight: 500; font-size: 14px; border-bottom: 1px solid #e9ecef;">
+                    ${escapeHtml(dept)} Department
+                </div>
+        `;
+
+        models.forEach((model, index) => {
+          const statusIcon = getModelStatusIcon(model.status);
+          const assignedCount = model.assignedAssets.length;
+          const modelId = `model-${dept}-${index}`;
+          const progressPercent = model.requiredQuantity > 0 ? Math.round((assignedCount / model.requiredQuantity) * 100) : 0;
           
-          // Filter out model assignments for this section
+          // Fix status determination - if we have enough or more assets, it should be READY
+          let statusColor = '#6c757d';
+          let displayStatus = model.status;
+          
+          if (assignedCount >= model.requiredQuantity && model.status !== 'returned') {
+            displayStatus = 'ready';
+            statusColor = '#28a745';
+          } else if (model.status === 'ready') {
+            statusColor = '#28a745';
+          } else if (model.status === 'partial') {
+            statusColor = '#ffc107';
+          } else if (model.status === 'returned') {
+            statusColor = '#dc3545';
+          }
+
+          content += `
+                <div style="padding: 12px 15px; border-bottom: 1px solid #f1f1f1; cursor: pointer; transition: background-color 0.2s;"
+                     class="model-toggle" data-model-id="${modelId}" 
+                     onmouseover="this.style.backgroundColor='#f8f9fa'" 
+                     onmouseout="this.style.backgroundColor='white'">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div style="flex: 1;">
+                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                                <span style="font-weight: 500; font-size: 14px;">${statusIcon} ${model.requiredQuantity}x ${escapeHtml(model.brand)} ${escapeHtml(model.model)}</span>
+                                <span style="color: ${statusColor}; font-size: 11px; font-weight: 500; text-transform: uppercase;">${displayStatus}</span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 15px;">
+                                <div style="flex: 1; max-width: 200px;">
+                                    <div style="background: #e9ecef; height: 4px; border-radius: 2px; overflow: hidden;">
+                                        <div style="background: ${statusColor}; height: 100%; width: ${Math.min(progressPercent, 100)}%; transition: width 0.3s ease;"></div>
+                                    </div>
+                                </div>
+                                <span style="font-size: 12px; color: #666; white-space: nowrap;">${assignedCount}/${model.requiredQuantity}</span>
+                            </div>
+                        </div>
+                        <div style="margin-left: 15px;">
+                            <span class="toggle-icon" data-model-id="${modelId}" style="font-size: 14px; color: #999; cursor: pointer; padding: 4px; border-radius: 3px; transition: background-color 0.2s;" onmouseover="this.style.backgroundColor='rgba(0,0,0,0.1)'" onmouseout="this.style.backgroundColor='transparent'">▼</span>
+                        </div>
+                    </div>
+                    
+                    <div id="${modelId}" class="model-details" style="display: none; margin-top: 12px; padding-top: 12px; border-top: 1px solid #f1f1f1;">
+          `;
+
+          if (model.assignedAssets.length > 0) {
+            content += '<div style="display: flex; flex-wrap: wrap; gap: 6px;">';
+            model.assignedAssets.forEach((asset) => {
+              const assetStatusIcon = asset.status === "returned" ? "↩️" : "✅";
+              const assetBgColor = asset.status === "returned" ? "#fff3cd" : "#d4edda";
+              const assetTextColor = asset.status === "returned" ? "#856404" : "#155724";
+
+              content += `
+                    <span style="background: ${assetBgColor}; color: ${assetTextColor}; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 500;">
+                        ${assetStatusIcon} ${escapeHtml(asset.id)}
+                    </span>
+              `;
+            });
+            content += '</div>';
+          } else {
+            content += '<div style="color: #999; font-style: italic; font-size: 12px;">No assets assigned yet</div>';
+          }
+
+          content += '</div></div>';
+        });
+
+        content += '</div>';
+      });
+
+      content += '</div>';
+    }
+
+    // Individual Assets Section (Compact)
+    if (event.assetsByDepartment && Object.keys(event.assetsByDepartment).length > 0) {
+      // Check if there are any individual assets (non-model)
+      let hasIndividualAssets = false;
+      Object.values(event.assetsByDepartment).forEach(assets => {
+        if (assets.some(asset => !asset.id.startsWith('[MODEL]'))) {
+          hasIndividualAssets = true;
+        }
+      });
+
+      if (hasIndividualAssets) {
+        content += '<div style="margin-bottom: 25px;"><h4 style="color: #495057; margin-bottom: 15px; font-size: 16px;">📋 Individual Assets</h4>';
+
+        Object.keys(event.assetsByDepartment).sort().forEach((dept) => {
+          const assets = event.assetsByDepartment[dept];
           const individualAssets = assets.filter(asset => !asset.id.startsWith('[MODEL]'));
           
           if (individualAssets.length > 0) {
-            content += `<h4 style="margin-top: 20px; margin-bottom: 10px; color: #495057;">${escapeHtml(dept)} Department</h4>`;
+            content += `
+                <div style="border: 1px solid #e9ecef; border-radius: 8px; margin-bottom: 15px; overflow: hidden;">
+                    <div style="background: #f8f9fa; padding: 8px 15px; font-weight: 500; font-size: 14px; border-bottom: 1px solid #e9ecef;">
+                        ${escapeHtml(dept)} Department (${individualAssets.length})
+                    </div>
+                    <div style="padding: 10px 15px;">
+                        <div style="display: grid; gap: 8px;">
+            `;
 
             individualAssets.forEach((asset) => {
               let statusIcon = '📋';
@@ -1365,117 +1494,48 @@ async function viewEvent(eventId) {
                 statusText = 'Prepared';
               }
 
-              // Add extra badge if it's an extra asset
               const extraBadge = asset.isExtra ? 
-                '<span style="background: #fff3cd; color: #856404; padding: 2px 6px; border-radius: 3px; font-size: 10px; margin-left: 10px;">EXTRA</span>' : '';
+                '<span style="background: #fff3cd; color: #856404; padding: 2px 6px; border-radius: 3px; font-size: 9px; margin-left: 8px; font-weight: 500;">EXTRA</span>' : '';
 
               content += `
-                <div style="border: 1px solid #e9ecef; border-radius: 8px; margin-bottom: 10px; padding: 12px; background: white;">
-                  <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <div>
-                      <span style="font-weight: 500;">${statusIcon} ${escapeHtml(asset.id)}</span>
-                      ${extraBadge}
-                      <div style="color: #666; font-size: 12px; margin-top: 2px;">${escapeHtml(asset.name || '')}</div>
-                      ${asset.serial ? `<div style="color: #999; font-size: 11px;">SN: ${escapeHtml(asset.serial)}</div>` : ''}
-                      ${asset.location ? `<div style="color: #999; font-size: 11px;">📍 ${escapeHtml(asset.location)}</div>` : ''}
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: #f8f9fa; border-radius: 6px;">
+                        <div style="flex: 1;">
+                            <div style="font-weight: 500; font-size: 13px; margin-bottom: 2px;">
+                                ${statusIcon} ${escapeHtml(asset.id)}${extraBadge}
+                            </div>
+                            <div style="color: #666; font-size: 11px;">${escapeHtml(asset.name || '')}</div>
+                            ${asset.serial ? `<div style="color: #999; font-size: 10px;">SN: ${escapeHtml(asset.serial)}</div>` : ''}
+                        </div>
+                        <div style="text-align: right;">
+                            <span style="color: ${statusColor}; font-size: 11px; font-weight: 500;">${statusText}</span>
+                            ${asset.location ? `<div style="color: #999; font-size: 10px;">📍 ${escapeHtml(asset.location)}</div>` : ''}
+                        </div>
                     </div>
-                    <div style="text-align: right;">
-                      <div style="color: ${statusColor}; font-size: 12px; font-weight: 500;">${statusText}</div>
-                    </div>
-                  </div>
-                </div>
               `;
             });
+
+            content += '</div></div></div>';
           }
         });
 
-      content += '</div>';
-    }
-
-    // Add model groups with expandable asset lists
-    if (event.modelGroups && Object.keys(event.modelGroups).length > 0) {
-      content += '<div class="form-group"><strong>Model Requirements:</strong>';
-
-      // Group by department
-      const modelsByDept = {};
-      Object.values(event.modelGroups).forEach((model) => {
-        if (!modelsByDept[model.department]) {
-          modelsByDept[model.department] = [];
-        }
-        modelsByDept[model.department].push(model);
-      });
-
-      Object.keys(modelsByDept)
-        .sort()
-        .forEach((dept) => {
-          const models = modelsByDept[dept];
-          content += `<h4 style="margin-top: 20px; margin-bottom: 10px; color: #495057;">${escapeHtml(dept)} Department - Model Requirements</h4>`;
-
-          models.forEach((model, index) => {
-            const statusIcon = getModelStatusIcon(model.status);
-            const assignedCount = model.assignedAssets.length;
-            const modelId = `model-${dept}-${index}`;
-
-            content += `
-                        <div style="border: 1px solid #e9ecef; border-radius: 8px; margin-bottom: 10px; overflow: hidden;">
-                            <div style="background: #f8f9fa; padding: 12px; cursor: pointer; display: flex; justify-content: space-between; align-items: center;"
-                                 class="model-toggle" data-model-id="${modelId}" onclick="toggleModelDetailsInView('${modelId}')">
-                                <div>
-                                    <span style="font-weight: 500;">${statusIcon} ${model.requiredQuantity}x ${escapeHtml(model.brand)} ${escapeHtml(model.model)}</span>
-                                    <div style="font-size: 11px; color: #666; margin-top: 2px;">${escapeHtml(model.description || '')}</div>
-                                </div>
-                                <div style="display: flex; align-items: center; gap: 10px;">
-                                    <span style="font-size: 12px; color: #666;">${assignedCount}/${model.requiredQuantity} assigned</span>
-                                    <span class="toggle-icon" data-model-id="${modelId}" style="font-size: 12px; cursor: pointer;">▼</span>
-                                </div>
-                            </div>
-                            <div id="${modelId}" class="model-details" style="display: none; padding: 12px; background: white;">
-                    `;
-
-            if (model.assignedAssets.length > 0) {
-              content +=
-                '<div style="margin-bottom: 8px;"><strong>Assigned Assets:</strong></div>';
-              model.assignedAssets.forEach((asset) => {
-                const assetStatusIcon =
-                  asset.status === "returned" ? "↩️" : "✅";
-
-                content += `
-                                <div style="padding: 6px 10px; margin: 4px 0; background: ${
-                                  asset.status === "returned"
-                                    ? "#fff3cd"
-                                    : "#d4edda"
-                                }; border-radius: 4px; font-size: 13px;">
-                                    ${assetStatusIcon} ${escapeHtml(asset.id)}
-                                    ${asset.serial ? `<span style="color: #666; margin-left: 10px;">SN: ${escapeHtml(asset.serial)}</span>` : ""}
-                                    ${asset.location ? `<span style="color: #999; margin-left: 10px;">📍 ${escapeHtml(asset.location)}</span>` : ""}
-                                </div>
-                            `;
-              });
-            } else {
-              content +=
-                '<div style="color: #999; font-style: italic; font-size: 13px;">No specific assets assigned yet</div>';
-            }
-
-            content += "</div></div>";
-          });
-        });
-
-      content += "</div>";
+        content += '</div>';
+      }
     }
 
     document.getElementById("eventDetailsContent").innerHTML = content;
 
-    // Add event listeners for model toggles using event delegation
-    document.getElementById("eventDetailsContent").addEventListener('click', function(e) {
-      // Check if clicked element or its parent has model-toggle class
-      let toggleElement = null;
-      
-      if (e.target.classList.contains('model-toggle')) {
-        toggleElement = e.target;
-      } else if (e.target.closest('.model-toggle')) {
-        toggleElement = e.target.closest('.model-toggle');
-      } else if (e.target.classList.contains('toggle-icon')) {
-        // Handle clicks directly on the toggle icon
+    // Add event listeners for model toggles with better event handling
+    const eventDetailsContent = document.getElementById("eventDetailsContent");
+    
+    // Remove any existing listeners to prevent duplicates
+    const existingListener = eventDetailsContent.handleModelToggle;
+    if (existingListener) {
+      eventDetailsContent.removeEventListener('click', existingListener);
+    }
+    
+    function handleModelToggle(e) {
+      // Check if clicked on toggle icon specifically
+      if (e.target.classList.contains('toggle-icon')) {
         const modelId = e.target.getAttribute('data-model-id');
         if (modelId) {
           e.preventDefault();
@@ -1483,6 +1543,14 @@ async function viewEvent(eventId) {
           toggleModelDetailsInView(modelId);
           return;
         }
+      }
+      
+      // Check if clicked on model toggle area
+      let toggleElement = null;
+      if (e.target.classList.contains('model-toggle')) {
+        toggleElement = e.target;
+      } else if (e.target.closest('.model-toggle')) {
+        toggleElement = e.target.closest('.model-toggle');
       }
       
       if (toggleElement) {
@@ -1493,7 +1561,11 @@ async function viewEvent(eventId) {
           toggleModelDetailsInView(modelId);
         }
       }
-    });
+    }
+    
+    // Store the listener reference for cleanup
+    eventDetailsContent.handleModelToggle = handleModelToggle;
+    eventDetailsContent.addEventListener('click', handleModelToggle);
 
     openModal("eventDetailsModal");
   } catch (error) {

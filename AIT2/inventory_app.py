@@ -454,19 +454,42 @@ class InventoryManagementApp:
         try:
             self.data_manager.backup_event_file(event_id)
 
+            assets_reset = []
+            
+            # Reset assets from prepared_items
             for asset_id in event.prepared_items.copy():
-                item = self.data_manager.inventory.get(asset_id)
-                if not item:
-                    print(f"Warning: Asset {asset_id} not found in inventory. Skipping...")
-                    continue
+                if not (asset_id.startswith('[LOAN]') or asset_id.startswith('[MISC]') or asset_id.startswith('[MODEL]')):
+                    item = self.data_manager.inventory.get(asset_id)
+                    if item:
+                        old_location = item.current_location
+                        item.current_location = item.default_location or ""
+                        assets_reset.append(f"{asset_id} (from '{old_location}' to '{item.current_location or 'Store'}')")
+                        self.log_action(f"Reset location for asset {asset_id} due to deletion of Event {event_id}.")
 
-                item.current_location = ""
-                self.log_action(f"Asset {asset_id} returned due to deletion of Event {event_id}.")
+            # Reset assets from actually_prepared (in case there are any not in prepared_items)
+            if hasattr(event, 'actually_prepared'):
+                for asset_id in event.actually_prepared.copy():
+                    if not (asset_id.startswith('[LOAN]') or asset_id.startswith('[MISC]')):
+                        item = self.data_manager.inventory.get(asset_id)
+                        if item and asset_id not in event.prepared_items:
+                            old_location = item.current_location
+                            item.current_location = item.default_location or ""
+                            assets_reset.append(f"{asset_id} (from '{old_location}' to '{item.current_location or 'Store'}')")
+                            self.log_action(f"Reset location for asset {asset_id} due to deletion of Event {event_id}.")
 
             self.data_manager.save_inventory()
             del self.data_manager.events[event_id]
             self.data_manager.delete_event_file(event_id)
-            self.log_action(f"Deleted Event {event_id}: {event.name}.")
+            
+            if assets_reset:
+                self.log_action(f"Deleted Event {event_id}: {event.name}. Reset {len(assets_reset)} asset locations.")
+                print(f"\nReset locations for {len(assets_reset)} assets:")
+                for reset_info in assets_reset[:10]:  # Show first 10
+                    print(f"  - {reset_info}")
+                if len(assets_reset) > 10:
+                    print(f"  ... and {len(assets_reset) - 10} more")
+            else:
+                self.log_action(f"Deleted Event {event_id}: {event.name}.")
 
             print(f"Event {event_id}: {event.name} has been deleted successfully.")
             play_sound(success=True)
