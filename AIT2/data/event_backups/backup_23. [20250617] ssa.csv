@@ -1,2 +1,0 @@
-EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets
-23,ssa,20250617,20250617,[],"[""[MODEL]AX|DPA|4061|1|Omni Submini Lavalier Microphone"", ""[MODEL]AX|DPA|4099|1|Instrument Microphone""]",[],Ready,"[""E904#01"", ""4099#01"", ""4061#01""]",[]

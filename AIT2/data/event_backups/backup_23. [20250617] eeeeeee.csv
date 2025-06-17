@@ -1,2 +1,0 @@
-EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets
-23,eeeeeee,20250617,20250617,[],"[""[MODEL]AX|EV|EVOLVE 50|1|Portable column system"", ""[MODEL]AX|Radial Engineering|Trim-two|1|Stereo DI with Level Control"", ""[MODEL]AX|Sennheiser|E904|1|Dynamic cardioid instrument microphone""]",[],Ready,"[""TRIM-TWO#01"", ""EVOLVE50#01"", ""E904#01""]","[""E904#01""]"

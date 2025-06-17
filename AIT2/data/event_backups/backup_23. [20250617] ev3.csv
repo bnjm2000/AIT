@@ -1,2 +1,0 @@
-EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets
-23,ev3,20250617,20250617,[],"[""[MODEL]AX|Pioneer|CDJ3000|1|Professional DJ multi player (Black)"", ""[MODEL]AX|Pioneer|CDJ2000NXS|2|Professional DJ multi player (Black)"", ""[MODEL]AX|Pioneer|CDJ2000NXS2|1|Professional DJ multi player (Black)"", ""[MODEL]AX|Sennheiser|MKE2|6|Lavalier microphone, black""]",[],Preparing,"[""CDJ3000#01"", ""CDJ3000#02"", ""ESPRITE#01"", ""MKE2#05""]","[""ESPRITE#01""]"

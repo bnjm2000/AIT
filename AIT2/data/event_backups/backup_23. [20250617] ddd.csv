@@ -1,2 +1,0 @@
-EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets
-23,ddd,20250617,20250617,[],"[""[MODEL]AX|Hollyland|Solidcom C1 (Pro) 8-Slot Battery Charging Case|1|8-Slot Battery Charging Case"", ""[MODEL]LX|Robe|ESPRITE|1|Profile LED"", ""[MODEL]AX|Shure|AD1|2|Beltpack [G56]"", ""[MODEL]AX|Shure|AD2|1|Handheld Microphone [G56]""]",[],Planning,"[""ESPRITE#01"", ""C1ProCharger#01"", ""AD1#02"", ""AD1#07"", ""AD2#01"", ""AD1#03"", ""AD2#03"", ""E904#01"", ""E904#04"", ""ME36#02""]","[""AD1#01"", ""E904#01"", ""E904#04"", ""ME36#02""]"

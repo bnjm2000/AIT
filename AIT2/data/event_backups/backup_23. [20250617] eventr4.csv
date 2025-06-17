@@ -1,2 +1,0 @@
-EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets
-23,eventr4,20250617,20250617,[],"[""[MODEL]AX|Sennheiser|E904|1|Dynamic cardioid instrument microphone"", ""[MODEL]AX|Sennheiser|E906|1|super-cardioid, dynamic instrument microphone""]",[],Ready,"[""E904#01"", ""ESPRITE#01"", ""E906#02"", ""AD1#01"", ""ESPRITE#02"", ""ESPRITE#06""]",[]
