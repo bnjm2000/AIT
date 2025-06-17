@@ -1,0 +1,2 @@
+EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State
+23,event2,20250617,20250617,[],"[""[MODEL]AX|Shure|AD1|1|Beltpack [G56]"", ""[MODEL]LX|Robe|ESPRITE|4|Profile LED"", ""[MODEL]LX|Robe|Robin LEDBeam 350 Wash|1|Wash LED"", ""[MODEL]AX|Sennheiser|E904|1|Dynamic cardioid instrument microphone"", ""[MODEL]AX|Sennheiser|E906|1|super-cardioid, dynamic instrument microphone"", ""[MODEL]AX|Sennheiser|ME36|1|Gooseneck mic""]",[],Ready

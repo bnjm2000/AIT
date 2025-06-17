@@ -1,0 +1,2 @@
+EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State
+23,event4,20250617,20250617,[],"[""[MODEL]AX|Shure|AD1|1|Beltpack [G56]"", ""[MODEL]AX|Shure|AD2|1|Handheld Microphone [G56]"", ""[MODEL]AX|Shure|AD3|1|Plug-on Transmitter""]",[],Ready

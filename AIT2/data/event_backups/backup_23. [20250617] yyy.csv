@@ -1,0 +1,2 @@
+EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets
+23,yyy,20250617,20250617,[],"[""[MODEL]AX|L-Acoustics|KARAII|1|Long Throw Concert Sound Loudspeaker"", ""[MODEL]AX|L-Acoustics|M-BUMP|1|Bumper for flying or stacking KARA (II)/SB18""]",[],Ready,"[""X-UL8#01"", ""KARAII#01"", ""MBUMP#01"", ""ESPRITE#01""]",[]

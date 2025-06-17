@@ -14,7 +14,7 @@ AT8668#09,Audio Tecnica,AT8668,,Microphone Desk Stand,False,False,,AX,Store,
 AT8668#10,Audio Tecnica,AT8668,,Microphone Desk Stand,False,False,,AX,Store,
 4088#01,DPA,4088,,"Directional Headset, beige",False,False,,AX,Store,Store
 4088#02,DPA,4088,,"Directional Headset, beige",False,False,,AX,Store,
-4099#01,DPA,4099,19_00642EC3606,Instrument Microphone,False,False,,AX,Store,
+4099#01,DPA,4099,19_00642EC3606,Instrument Microphone,False,False,,AX,Store,ssa
 4099#02,DPA,4099,,Instrument Microphone,False,False,,AX,Store,
 4099#03,DPA,4099,,Instrument Microphone,False,False,,AX,Store,
 4099#04,DPA,4099,,Instrument Microphone,False,False,,AX,Store,
@@ -52,7 +52,7 @@ AT8668#10,Audio Tecnica,AT8668,,Microphone Desk Stand,False,False,,AX,Store,
 6061#10,DPA,6061,R317531,Omni Submini Lavalier Microphone,False,False,,AX,Store,
 6061#11,DPA,6061,R317534,Omni Submini Lavalier Microphone,False,False,,AX,Store,
 6061#12,DPA,6061,R317535,Omni Submini Lavalier Microphone,False,False,,AX,Store,
-4061#01,DPA,4061,R238770,Omni Submini Lavalier Microphone,False,False,,AX,Store,Store
+4061#01,DPA,4061,R238770,Omni Submini Lavalier Microphone,False,False,,AX,Store,hihi
 4061#02,DPA,4061,R238785,Omni Submini Lavalier Microphone,False,False,,AX,Store,Store
 DAD6010#01,DPA,DAD 6010,,MicroDot to TA4F Adapter,False,False,,AX,Store,
 DAD6010#02,DPA,DAD 6010,,MicroDot to TA4F Adapter,False,False,,AX,Store,
@@ -76,7 +76,7 @@ DAD6010#19,DPA,DAD 6010,,MicroDot to TA4F Adapter,False,False,,AX,Store,
 DAD6010#20,DPA,DAD 6010,,MicroDot to TA4F Adapter,False,False,,AX,Store,
 DAD6010#21,DPA,DAD 6010,,MicroDot to TA4F Adapter,False,False,,AX,Store,
 DAD6010#22,DPA,DAD 6010,,MicroDot to TA4F Adapter,False,False,,AX,Store,
-EVOLVE50#01,EV,EVOLVE 50,405294781901280231,Portable column system,False,False,,AX,Store,Store
+EVOLVE50#01,EV,EVOLVE 50,405294781901280231,Portable column system,False,False,,AX,Store,wwwwww
 EVOLVE50#02,EV,EVOLVE 50,405294795501160390,Portable column system,False,False,,AX,Store,Store
 EVOLVE50#03,EV,EVOLVE 50,405294795501160383,Portable column system,False,False,,AX,Store,
 EVOLVE50#04,EV,EVOLVE 50,405294795501160374,Portable column system,False,False,,AX,Store,
@@ -98,7 +98,7 @@ HLBatt#13,Hollyland,HL-BAT700,23061206791,Solidcom C1 (Pro) Battery,False,False,
 HLBatt#14,Hollyland,HL-BAT700,23061206889,Solidcom C1 (Pro) Battery,False,False,,AX,Store,
 HLBatt#15,Hollyland,HL-BAT700,23061207192,Solidcom C1 (Pro) Battery,False,False,,AX,Store,
 HLBatt#16,Hollyland,HL-BAT700,23061207991,Solidcom C1 (Pro) Battery,False,False,,AX,Store,
-C1ProCharger#01,Hollyland,Solidcom C1 (Pro) 8-Slot Battery Charging Case,0223350C C001989,8-Slot Battery Charging Case,False,False,,AX,Store,
+C1ProCharger#01,Hollyland,Solidcom C1 (Pro) 8-Slot Battery Charging Case,0223350C C001989,8-Slot Battery Charging Case,False,False,,AX,Store,ddd
 C1ProHub#01,Hollyland,Solidcom C1 Pro Hub,0223350R C002984,,False,False,,AX,Store,
 C1ProRHS#01,Hollyland,Solidcom C1 Pro Remote Headset,222322OTXC00784E,,False,False,,AX,Store,
 C1ProRHS#02,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC008783,,False,False,,AX,Store,
@@ -148,7 +148,7 @@ K&M ACC #04,K&M,21441-000-55,,Adapter sleeve ring lock,False,False,,AX,Store,
 5XTW#15,L-Acoustics,5XTW,,"5"" passive coaxial enclosure, white",False,False,,AX,Store,
 5XTW#16,L-Acoustics,5XTW,,"5"" passive coaxial enclosure, white",False,False,,AX,Store,
 ETRW5#01,L-Acoustics,ETRW5,,Adjustable U-bracket: 5XTW,False,False,,AX,Store,
-ETRW5#02,L-Acoustics,ETRW5,,Adjustable U-bracket: 5XTW,False,False,,AX,Store,
+ETRW5#02,L-Acoustics,ETRW5,,Adjustable U-bracket: 5XTW,False,False,,AX,Store,ui
 ETRW5#03,L-Acoustics,ETRW5,,Adjustable U-bracket: 5XTW,False,False,,AX,Store,
 ETRW5#04,L-Acoustics,ETRW5,,Adjustable U-bracket: 5XTW,False,False,,AX,Store,
 ETRW5#05,L-Acoustics,ETRW5,,Adjustable U-bracket: 5XTW,False,False,,AX,Store,
@@ -180,7 +180,7 @@ ETRW5#16,L-Acoustics,ETRW5,,Adjustable U-bracket: 5XTW,False,False,,AX,Store,
 5XT#15,L-Acoustics,5XT,,"5"" passive coaxial enclosure, black",False,False,,AX,Store,
 5XT#16,L-Acoustics,5XT,,"5"" passive coaxial enclosure, black",False,False,,AX,Store,
 ETR5#01,L-Acoustics,ETR5,440032643,Adjustable U-bracket: 5XT,False,False,,AX,Store,
-ETR5#02,L-Acoustics,ETR5,440032585,Adjustable U-bracket: 5XT,False,False,,AX,Store,
+ETR5#02,L-Acoustics,ETR5,440032585,Adjustable U-bracket: 5XT,False,False,,AX,Store,ui
 ETR5#03,L-Acoustics,ETR5,440031851,Adjustable U-bracket: 5XT,False,False,,AX,Store,
 ETR5#04,L-Acoustics,ETR5,440031349,Adjustable U-bracket: 5XT,False,False,,AX,Store,
 ETR5#05,L-Acoustics,ETR5,440027215,Adjustable U-bracket: 5XT,False,False,,AX,Store,
@@ -213,7 +213,7 @@ LA12X#05,L-Acoustics,LA12X,1140037870,Amplified controller,False,False,,AX,Store
 LA12X#06,L-Acoustics,LA12X,1140037871,Amplified controller,False,False,,AX,Store,
 LA12X#07,L-Acoustics,LA12X,1140039534,Amplified controller,False,False,,AX,Store,
 LA12X#08,L-Acoustics,LA12X,1140039542,Amplified controller,False,False,,AX,Store,
-KARAII#01,L-Acoustics,KARAII,2190019410,Long Throw Concert Sound Loudspeaker ,False,False,,AX,Store,
+KARAII#01,L-Acoustics,KARAII,2190019410,Long Throw Concert Sound Loudspeaker ,False,False,,AX,Store,yyy
 KARAII#02,L-Acoustics,KARAII,2190019417,Long Throw Concert Sound Loudspeaker ,False,False,,AX,Store,
 KARAII#03,L-Acoustics,KARAII,2190019468,Long Throw Concert Sound Loudspeaker ,False,False,,AX,Store,
 KARAII#04,L-Acoustics,KARAII,2190019475,Long Throw Concert Sound Loudspeaker ,False,False,,AX,Store,
@@ -255,7 +255,7 @@ LS10#03,L-Acoustics,LS10,1670010373,"10-port Ethernet AVB Switch, Avnu-certified
 LS10#04,L-Acoustics,LS10,1670010374,"10-port Ethernet AVB Switch, Avnu-certified",False,False,,AX,Store,
 LS10#05,L-Acoustics,LS10,1670010391,"10-port Ethernet AVB Switch, Avnu-certified",False,False,,AX,Store,
 LS10#06,L-Acoustics,LS10,1670010429,"10-port Ethernet AVB Switch, Avnu-certified",False,False,,AX,Store,
-MBUMP#01,L-Acoustics,M-BUMP,890009396,Bumper for flying or stacking KARA (II)/SB18,False,False,,AX,Store,
+MBUMP#01,L-Acoustics,M-BUMP,890009396,Bumper for flying or stacking KARA (II)/SB18,False,False,,AX,Store,yyy
 MBUMP#02,L-Acoustics,M-BUMP,890009399,Bumper for flying or stacking KARA (II)/SB18,False,False,,AX,Store,
 MBUMP#03,L-Acoustics,M-BUMP,,Bumper for flying or stacking KARA (II)/SB18,False,False,,AX,Store,
 MBUMP#04,L-Acoustics,M-BUMP,,Bumper for flying or stacking KARA (II)/SB18,False,False,,AX,Store,
@@ -265,7 +265,7 @@ MBAR#03,L-Acoustics,M-BAR,900009093,Extension bar for rigging frame,False,False,
 MBAR#04,L-Acoustics,M-BAR,900009095,Extension bar for rigging frame,False,False,,AX,Store,
 MJACK#01,L-Acoustics,M-JACK,,,False,False,,AX,Store,
 MJACK#02,L-Acoustics,M-JACK,,,False,False,,AX,Store,
-P1#01,L-Acoustics,P1,1400004120,Digital audio processor and measurement platform: 20x 18 mic/line AES/EBU and AVB. CE version.,False,False,,AX,Store,
+P1#01,L-Acoustics,P1,1400004120,Digital audio processor and measurement platform: 20x 18 mic/line AES/EBU and AVB. CE version.,False,False,,AX,Store,Store
 X-UL12#01,L-Acoustics,X-UL12,1210008838,Long U-bracket for X12,False,False,,AX,Store,
 X-UL12#02,L-Acoustics,X-UL12,1210008583,Long U-bracket for X12,False,False,,AX,Store,
 X-UL12#03,L-Acoustics,X-UL12,1210008859,Long U-bracket for X12,False,False,,AX,Store,
@@ -282,7 +282,7 @@ X-UL12#13,L-Acoustics,X-UL12,1210008839,Long U-bracket for X12,False,False,,AX,S
 X-UL12#14,L-Acoustics,X-UL12,1210008587,Long U-bracket for X12,False,False,,AX,Store,
 X-UL12#15,L-Acoustics,X-UL12,1210008588,Long U-bracket for X12,False,False,,AX,Store,
 X-UL12#16,L-Acoustics,X-UL12,1210008840,Long U-bracket for X12,False,False,,AX,Store,
-X-UL8#01,L-Acoustics,X-UL8,1270021091,Long U-bracket for X8,False,False,,AX,Store,
+X-UL8#01,L-Acoustics,X-UL8,1270021091,Long U-bracket for X8,False,False,,AX,Store,yyy
 X-UL8#02,L-Acoustics,X-UL8,1270021095,Long U-bracket for X8,False,False,,AX,Store,
 X-UL8#03,L-Acoustics,X-UL8,1270021089,Long U-bracket for X8,False,False,,AX,Store,
 X-UL8#04,L-Acoustics,X-UL8,1270021072,Long U-bracket for X8,False,False,,AX,Store,
@@ -368,51 +368,51 @@ GSM4212P#01,Netgear,GSM4212P,6VB52B51A0392,Managed Switch,False,False,,AX,Store,
 GSM4212P#02,Netgear,GSM4212P,6VB52B5AA039B,Managed Switch,False,False,,AX,Store,
 GSM4212P#03,Netgear,GSM4212P,6VB52B5CA03B9,Managed Switch,False,False,,AX,Store,
 GSM4212P#04,Netgear,GSM4212P,6VB52B52A0393,Managed Switch,False,False,,AX,Store,
-CDJ1000MK2#01,Pioneer,CDJ1000MKII,,Professional DJ multi player (Black),False,False,,AX,Store,
+CDJ1000MK2#01,Pioneer,CDJ1000MKII,,Professional DJ multi player (Black),False,False,,AX,Store,Store
 CDJ1000MK2#02,Pioneer,CDJ1000MKII,,Professional DJ multi player (Black),False,False,,AX,Store,
 CDJ2000NXS#01,Pioneer,CDJ2000NXS,,Professional DJ multi player (Black),False,False,,AX,Store,
 CDJ2000NXS#02,Pioneer,CDJ2000NXS,,Professional DJ multi player (Black),False,False,,AX,Store,
 CDJ2000NXS2#01,Pioneer,CDJ2000NXS2,,Professional DJ multi player (Black),False,False,,AX,Store,
 CDJ2000NXS2#02,Pioneer,CDJ2000NXS2,,Professional DJ multi player (Black),False,False,,AX,Store,
-CDJ3000#01,Pioneer,CDJ3000,CDMP038151EH,Professional DJ multi player (Black),False,False,2024/11/11	bnjm2000	22/09/2024 - Buttons and jog wheel melted under sun (F1 @ ShowCo)|2024/11/11	bnjm2000	03/10/2024 - Received spare from ShowCo while repairs underway (S/N: BHMP026156EH),AX,Store,
-CDJ3000#02,Pioneer,CDJ3000,CDMP038159EH,Professional DJ multi player (Black),False,False,2024/11/11	bnjm2000	22/09/2024 - Buttons and jog wheel melted under sun (F1 @ ShowCo)|2024/11/11	bnjm2000	03/10/2024 - Received spare from ShowCo while repairs underway (S/N: BHMP026170EH),AX,Store,
+CDJ3000#01,Pioneer,CDJ3000,CDMP038151EH,Professional DJ multi player (Black),False,False,2024/11/11	bnjm2000	22/09/2024 - Buttons and jog wheel melted under sun (F1 @ ShowCo)|2024/11/11	bnjm2000	03/10/2024 - Received spare from ShowCo while repairs underway (S/N: BHMP026156EH),AX,Store,ev3
+CDJ3000#02,Pioneer,CDJ3000,CDMP038159EH,Professional DJ multi player (Black),False,False,2024/11/11	bnjm2000	22/09/2024 - Buttons and jog wheel melted under sun (F1 @ ShowCo)|2024/11/11	bnjm2000	03/10/2024 - Received spare from ShowCo while repairs underway (S/N: BHMP026170EH),AX,Store,ev3
 DJM900NXS#01,Pioneer,DJM-900NXS,,DJ Mixer,False,False,,AX,Store,
 DJM900NXS2#01,Pioneer,DJM-900NXS2,,4-channel pro-DJ mixer,False,False,,AX,Store,
 DJMA9#01,Pioneer,DJM-A9,,4-channel pro-DJ mixer,False,False,,AX,Store,
-E904#01,Sennheiser,E904,,Dynamic cardioid instrument microphone,False,False,,AX,Store,Store
+E904#01,Sennheiser,E904,,Dynamic cardioid instrument microphone,False,False,,AX,Store,eeeeeee
 E904#02,Sennheiser,E904,,Dynamic cardioid instrument microphone,False,False,,AX,Store,Store
 E904#03,Sennheiser,E904,,Dynamic cardioid instrument microphone,False,False,,AX,Store,Store
-E904#04,Sennheiser,E904,,Dynamic cardioid instrument microphone,False,False,,AX,Store,
-E906#01,Sennheiser,E906,,"super-cardioid, dynamic instrument microphone",False,False,,AX,Store,
-E906#02,Sennheiser,E906,,"super-cardioid, dynamic instrument microphone",False,False,,AX,Store,
-ME36#01,Sennheiser,ME36,,Gooseneck mic,False,False,,AX,Store,
-ME36#02,Sennheiser,ME36,,Gooseneck mic,False,False,,AX,Store,
+E904#04,Sennheiser,E904,,Dynamic cardioid instrument microphone,False,False,,AX,Store,ddd
+E906#01,Sennheiser,E906,,"super-cardioid, dynamic instrument microphone",False,False,,AX,Store,Store
+E906#02,Sennheiser,E906,,"super-cardioid, dynamic instrument microphone",False,False,,AX,Store,eventr4
+ME36#01,Sennheiser,ME36,,Gooseneck mic,False,False,,AX,Store,event2
+ME36#02,Sennheiser,ME36,,Gooseneck mic,False,False,,AX,Store,ddd
 MKE2#01,Sennheiser,MKE2,086827,"Lavalier microphone, black",False,False,,AX,Store,
 MKE2#02,Sennheiser,MKE2,086825,"Lavalier microphone, black",False,False,,AX,Store,
 MKE2#03,Sennheiser,MKE2,,"Lavalier microphone, beige",False,False,,AX,Store,
 MKE2#04,Sennheiser,MKE2,,"Lavalier microphone, beige",False,False,,AX,Store,
-MKE2#05,Sennheiser,MKE2,,"Lavalier microphone, beige",False,False,,AX,Store,
+MKE2#05,Sennheiser,MKE2,,"Lavalier microphone, beige",False,False,,AX,Store,ev3
 MKE2#06,Sennheiser,MKE2,,"Lavalier microphone, beige",False,False,,AX,Store,
-AD1#01,Shure,AD1,2BI13281704,Beltpack [G56],False,False,,AX,Store,shure
-AD1#02,Shure,AD1,2CA26063354,Beltpack [G56],False,False,,AX,Store,shure
-AD1#03,Shure,AD1,2CA26063431,Beltpack [G56],False,False,,AX,Store,Store
+AD1#01,Shure,AD1,2BI13281704,Beltpack [G56],False,False,,AX,Store,asdf
+AD1#02,Shure,AD1,2CA26063354,Beltpack [G56],False,False,,AX,Store,ddd
+AD1#03,Shure,AD1,2CA26063431,Beltpack [G56],False,False,,AX,Store,ddd
 AD1#04,Shure,AD1,2CA26063455,Beltpack [G56],False,False,,AX,Store,
 AD1#05,Shure,AD1,2CS26063556,Beltpack [G56],False,False,,AX,Store,Store
 AD1#06,Shure,AD1,2SI13339508,Beltpack [G56],False,False,,AX,Store,Store
-AD1#07,Shure,AD1,2SI13340955,Beltpack [G56],False,False,,AX,Store,
+AD1#07,Shure,AD1,2SI13340955,Beltpack [G56],False,False,,AX,Store,ddd
 AD1#08,Shure,AD1,2SI13340979,Beltpack [G56],False,False,,AX,Store,
 AD1#09,Shure,AD1,2SI13341033,Beltpack [G56],False,False,,AX,Store,
-AD1#10,Shure,AD1,2SI13341095,Beltpack [G56],False,False,,AX,Store,
+AD1#10,Shure,AD1,2SI13341095,Beltpack [G56],False,False,,AX,Store,Store
 AD1#11,Shure,AD1,2SI13341122,Beltpack [G56],False,False,,AX,Store,
-AD1#12,Shure,AD1,2SI13341463,Beltpack [G56],False,False,,AX,Store,
+AD1#12,Shure,AD1,2SI13341463,Beltpack [G56],False,False,,AX,Store,event4
 AD1#13,Shure,AD1,2SI13341552,Beltpack [G56],False,False,,AX,Store,
 AD1#14,Shure,AD1,2SI25669222,Beltpack [G56],False,False,,AX,Store,
 AD1#15,Shure,AD1,2SI25669246,Beltpack [G56],False,False,,AX,Store,
 AD1#16,Shure,AD1,2SI25669599,Beltpack [G56],False,False,,AX,Store,
-AD2#01,Shure,AD2,2SC0752114,Handheld Microphone [G56],False,False,,AX,Store,shure
+AD2#01,Shure,AD2,2SC0752114,Handheld Microphone [G56],False,False,,AX,Store,ddd
 AD2#02,Shure,AD2,2SD04117237,Handheld Microphone [G56],False,False,,AX,Store,
-AD2#03,Shure,AD2,2CC22174166,Handheld Microphone [G56],False,False,,AX,Store,shure
-AD2#04,Shure,AD2,2CC22174279,Handheld Microphone [G56],False,False,,AX,Store,
+AD2#03,Shure,AD2,2CC22174166,Handheld Microphone [G56],False,False,,AX,Store,ddd
+AD2#04,Shure,AD2,2CC22174279,Handheld Microphone [G56],False,False,,AX,Store,event4
 AD2#05,Shure,AD2,2SD04117263,Handheld Microphone [G56],False,False,,AX,Store,
 AD2#06,Shure,AD2,2SD04117249,Handheld Microphone [G56],False,False,,AX,Store,shure
 AD2#07,Shure,AD2,2SD04117504,Handheld Microphone [G56],False,False,,AX,Store,
@@ -420,14 +420,14 @@ AD2#08,Shure,AD2,2CC22174281,Handheld Microphone [G56],False,False,,AX,Store,
 AD2#09,Shure,AD2,2CC22174116,Handheld Microphone [G56],False,False,,AX,Store,
 AD2#10,Shure,AD2,2CC22174130,Handheld Microphone [G56],False,False,,AX,Store,
 AD2#11,Shure,AD2,2SD04117302,Handheld Microphone [G56],False,False,,AX,Store,
-AD2#12,Shure,AD2,2SC0752118,Handheld Microphone [G56],False,False,,AX,Store,
+AD2#12,Shure,AD2,2SC0752118,Handheld Microphone [G56],False,False,,AX,Store,Store
 AD2#13,Shure,AD2,2CC22174217,Handheld Microphone [G56],False,False,,AX,Store,
 AD2#14,Shure,AD2,2CC22173949,Handheld Microphone [G56],False,False,,AX,Store,
 AD2#15,Shure,AD2,2CC22174180,Handheld Microphone [G56],False,False,,AX,Store,
 AD2#16,Shure,AD2,2SC0752116,Handheld Microphone [G56],False,False,,AX,Store,
 AD3#01,Shure,AD3,3CE17731585,Plug-on Transmitter,False,False,,AX,Store,
-AD3#02,Shure,AD3,3CB24309820,Plug-on Transmitter,False,False,,AX,Store,
-AD3#03,Shure,AD3,,Plug-on Transmitter,False,False,,AX,Store,
+AD3#02,Shure,AD3,3CB24309820,Plug-on Transmitter,False,False,,AX,Store,event4
+AD3#03,Shure,AD3,,Plug-on Transmitter,False,False,,AX,Store,event4
 AD3#04,Shure,AD3,,Plug-on Transmitter,False,False,,AX,Store,
 AD4D#01,Shure,AD4D,,Two-Channel Digital Wireless Receiver,False,False,,AX,Store,
 AD4Q#01,Shure,AD4Q,,Four-Channel Digital Wireless Receiver,False,False,,AX,Store,
@@ -453,14 +453,14 @@ SM57#02,Shure,SM57,,dynamic instrument microphone,False,False,,AX,Store,
 SM57#03,Shure,SM57,,dynamic instrument microphone,False,False,,AX,Store,
 SM57#04,Shure,SM57,,dynamic instrument microphone,False,False,,AX,Store,
 SM57#05,Shure,SM57,,dynamic instrument microphone,False,False,,AX,Store,
-SM58#01,Shure,SM58,,dynamic vocal microphone,False,False,,AX,Store,
+SM58#01,Shure,SM58,,dynamic vocal microphone,False,False,,AX,Store,event 1
 SM58#02,Shure,SM58,,dynamic vocal microphone,False,False,,AX,Store,
 SM58#03,Shure,SM58,,dynamic vocal microphone,False,False,,AX,Store,
-SM58#04,Shure,SM58,,dynamic vocal microphone,False,False,,AX,Store,
+SM58#04,Shure,SM58,,dynamic vocal microphone,False,False,,AX,Store,event 1
 SM58#05,Shure,SM58,,dynamic vocal microphone,False,False,,AX,Store,
-SM58#06,Shure,SM58,,dynamic vocal microphone,False,False,,AX,Store,
+SM58#06,Shure,SM58,,dynamic vocal microphone,False,False,,AX,Store,event 1
 SM58#07,Shure,SM58,,dynamic vocal microphone,False,False,,AX,Store,
-SM58#08,Shure,SM58,,dynamic vocal microphone,False,False,,AX,Store,
+SM58#08,Shure,SM58,,dynamic vocal microphone,False,False,,AX,Store,event 1
 SM58#09,Shure,SM58,,dynamic vocal microphone,False,False,,AX,Store,
 SM58#10,Shure,SM58,,dynamic vocal microphone,False,False,,AX,Store,
 SM58S#01,Shure,SM58S,,cardioid dynamic w/ switch,False,False,,AX,Store,
@@ -601,17 +601,17 @@ PEARLl2010#01,Avolites,Pearl 2010,,Console,False,False,,LX,Store 2,
 TIGERTOUCH2#01,Avolites,Tiger Touch 2,,Console,False,False,,LX,Store 1,
 QUARTZ#01,Avolites,Quartz,QTZHS23122602C,Console,False,False,,LX,Store 1,
 QUARTZ#02,Avolites,Quartz,QTZHS23122701C,Console,False,False,,LX,Store 1,
-ESPRITE#01,Robe,ESPRITE,,Profile LED,False,False,,LX,Store 2,Store 2
-ESPRITE#02,Robe,ESPRITE,,Profile LED,False,False,,LX,Store 2,Store 2
-ESPRITE#03,Robe,ESPRITE,,Profile LED,False,False,,LX,Store 2,
-ESPRITE#04,Robe,ESPRITE,,Profile LED,False,False,,LX,Store 2,
-ESPRITE#05,Robe,ESPRITE,,Profile LED,False,False,,LX,Store 2,
-ESPRITE#06,Robe,ESPRITE,,Profile LED,False,False,,LX,Store 2,
-ESPRITE#07,Robe,ESPRITE,,Profile LED,False,False,,LX,Store 2,
+ESPRITE#01,Robe,ESPRITE,,Profile LED,False,False,,LX,Store 2,ro
+ESPRITE#02,Robe,ESPRITE,,Profile LED,False,False,,LX,Store 2,eventr4
+ESPRITE#03,Robe,ESPRITE,,Profile LED,False,False,,LX,Store 2,Store 2
+ESPRITE#04,Robe,ESPRITE,,Profile LED,False,False,,LX,Store 2,ro
+ESPRITE#05,Robe,ESPRITE,,Profile LED,False,False,,LX,Store 2,ro
+ESPRITE#06,Robe,ESPRITE,,Profile LED,False,False,,LX,Store 2,eventr4
+ESPRITE#07,Robe,ESPRITE,,Profile LED,False,False,,LX,Store 2,event2
 ESPRITE#08,Robe,ESPRITE,,Profile LED,False,False,,LX,Store 2,
 ESPRITE#09,Robe,ESPRITE,,Profile LED,False,False,,LX,Store 2,
 ESPRITE#10,Robe,ESPRITE,,Profile LED,False,False,,LX,Store 2,
-ESPRITE#11,Robe,ESPRITE,,Profile LED,False,False,,LX,Store 2,
+ESPRITE#11,Robe,ESPRITE,,Profile LED,False,False,,LX,Store 2,Store 2
 ESPRITE#12,Robe,ESPRITE,,Profile LED,False,False,,LX,Store 2,
 ESPRITE#13,Robe,ESPRITE,,Profile LED,False,False,,LX,Store 2,
 ESPRITE#14,Robe,ESPRITE,,Profile LED,False,False,,LX,Store 2,
@@ -625,15 +625,15 @@ ESPRITE#21,Robe,ESPRITE,,Profile LED,False,False,,LX,Store 2,
 ESPRITE#22,Robe,ESPRITE,,Profile LED,False,False,,LX,Store 2,
 ESPRITE#23,Robe,ESPRITE,,Profile LED,False,False,,LX,Store 2,
 ESPRITE#24,Robe,ESPRITE,,Profile LED,False,False,,LX,Store 2,
-LEDBEAM#01,Robe,Robin LEDBeam 350 Wash,2300840058,Wash LED,False,False,,LX,Store 1,
-LEDBEAM#02,Robe,Robin LEDBeam 350 Wash,2300840052,Wash LED,False,False,,LX,Store 1,
+LEDBEAM#01,Robe,Robin LEDBeam 350 Wash,2300840058,Wash LED,False,False,,LX,Store 1,ro
+LEDBEAM#02,Robe,Robin LEDBeam 350 Wash,2300840052,Wash LED,False,False,,LX,Store 1,ee
 LEDBEAM#03,Robe,Robin LEDBeam 350 Wash,2300840055,Wash LED,False,False,,LX,Store 1,
-LEDBEAM#04,Robe,Robin LEDBeam 350 Wash,2300877279,Wash LED,False,False,,LX,Store 1,
+LEDBEAM#04,Robe,Robin LEDBeam 350 Wash,2300877279,Wash LED,False,False,,LX,Store 1,event 1
 LEDBEAM#05,Robe,Robin LEDBeam 350 Wash,2300877292,Wash LED,False,False,,LX,Store 1,
 LEDBEAM#06,Robe,Robin LEDBeam 350 Wash,2300840057,Wash LED,False,False,,LX,Store 1,
 LEDBEAM#07,Robe,Robin LEDBeam 350 Wash,2300840405,Wash LED,False,False,,LX,Store 1,
 LEDBEAM#08,Robe,Robin LEDBeam 350 Wash,2300840053,Wash LED,False,False,,LX,Store 1,
-LEDBEAM#09,Robe,Robin LEDBeam 350 Wash,2300840065,Wash LED,False,False,,LX,Store 1,
+LEDBEAM#09,Robe,Robin LEDBeam 350 Wash,2300840065,Wash LED,False,False,,LX,Store 1,event 1
 LEDBEAM#10,Robe,Robin LEDBeam 350 Wash,2300840399,Wash LED,False,False,,LX,Store 1,
 LEDBEAM#11,Robe,Robin LEDBeam 350 Wash,2300840404,Wash LED,False,False,,LX,Store 1,
 LEDBEAM#12,Robe,Robin LEDBeam 350 Wash,2300840401,Wash LED,False,False,,LX,Store 1,
@@ -649,10 +649,10 @@ LEDBEAM#21,Robe,Robin LEDBeam 350 Wash,2300840400,Wash LED,False,False,,LX,Store
 LEDBEAM#22,Robe,Robin LEDBeam 350 Wash,2300840398,Wash LED,False,False,,LX,Store 1,
 LEDBEAM#23,Robe,Robin LEDBeam 350 Wash,2300077264,Wash LED,False,False,,LX,Store 1,
 LEDBEAM#24,Robe,Robin LEDBeam 350 Wash,2300840397,Wash LED,False,False,,LX,Store 1,
-DIABLOTC#01,Ayrton,Diablo (W.DMX),DB2935040,Profile LED,False,False,,LX,Store 1,
+DIABLOTC#01,Ayrton,Diablo (W.DMX),DB2935040,Profile LED,False,False,,LX,Store 1,event4
 DIABLOTC#02,Ayrton,Diablo (W.DMX),DB2935047,Profile LED,False,False,,LX,Store 1,
 DIABLOTC#03,Ayrton,Diablo (W.DMX),DB2935098,Profile LED,False,False,,LX,Store 1,
-DIABLOTC#04,Ayrton,Diablo (W.DMX),DB2935016,Profile LED,False,False,,LX,Store 1,
+DIABLOTC#04,Ayrton,Diablo (W.DMX),DB2935016,Profile LED,False,False,,LX,Store 1,Store 1
 DIABLOTC#05,Ayrton,Diablo (W.DMX),DB2953048,Profile LED,False,False,,LX,Store 1,
 DIABLOTC#06,Ayrton,Diablo (W.DMX),DB2935001,Profile LED,False,False,,LX,Store 1,
 DIABLOTC#07,Ayrton,Diablo (W.DMX),DB2935033,Profile LED,False,False,,LX,Store 1,
@@ -783,7 +783,7 @@ KM184#01,Neumann,KM184,,,False,False,,AX,Store,
 KM184#02,Neumann,KM184,,,False,False,,AX,Store,
 KM184#03,Neumann,KM184,,,False,False,,AX,Store,
 KM184#04,Neumann,KM184,,,False,False,,AX,Store,
-TRIM-TWO#01,Radial Engineering,Trim-two,,Stereo DI with Level Control,False,False,,AX,Store,
+TRIM-TWO#01,Radial Engineering,Trim-two,,Stereo DI with Level Control,False,False,,AX,Store,eeeeeee
 TRIM-TWO#02,Radial Engineering,Trim-two,,Stereo DI with Level Control,False,False,,AX,Store,
 J48M#01,Radial Engineering,J48 Mono,,Phantom Powered Active Direct Box,False,False,,AX,Store,
 J48M#02,Radial Engineering,J48 Mono,,Phantom Powered Active Direct Box,False,False,,AX,Store,

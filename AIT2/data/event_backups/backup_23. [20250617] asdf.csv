@@ -1,0 +1,2 @@
+EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets
+23,asdf,20250617,20250618,[],"[""[MODEL]AX|DPA|4061|1|Omni Submini Lavalier Microphone"", ""[MODEL]AX|Pioneer|CDJ1000MKII|1|Professional DJ multi player (Black)""]",[],Planning,"[""AD1#01""]","[""AD1#01""]"

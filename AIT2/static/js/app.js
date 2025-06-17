@@ -140,117 +140,92 @@ function switchEventsTab(tabName) {
 
 // Load ongoing events (events that are currently active)
 async function loadOngoingEvents() {
-  try {
-    // STEP 1: Check if the container exists BEFORE doing API calls
-    const container = document.getElementById("ongoing-events");
-    if (!container) {
-      console.warn("ongoing-events container not found, retrying in 500ms...");
-      // Retry after 500ms to give the DOM more time to load
-      setTimeout(() => loadOngoingEvents(), 500);
-      return;
+    try {
+        const container = document.getElementById('ongoing-events');
+        if (!container) {
+            console.warn('ongoing-events container not found, retrying in 500ms...');
+            setTimeout(() => loadOngoingEvents(), 500);
+            return;
+        }
+        
+        container.innerHTML = '<p style="text-align: center; color: #666; padding: 40px;">Loading ongoing events...</p>';
+        
+        const response = await apiCall('/api/events');
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        const ongoingEvents = response.data.filter(event => {
+            const startDate = new Date(event.startDate);
+            const endDate = new Date(event.endDate);
+            startDate.setHours(0, 0, 0, 0);
+            endDate.setHours(23, 59, 59, 999);
+            
+            return today >= startDate && today <= endDate;
+        });
+        
+        container.innerHTML = '';
+        
+        if (ongoingEvents.length === 0) {
+            container.innerHTML = '<p style="text-align: center; color: #666; padding: 40px;">No ongoing events at the moment.</p>';
+            return;
+        }
+        
+        ongoingEvents.forEach(event => {
+            container.appendChild(createEventCard(event));
+        });
+        
+        console.log(`Loaded ${ongoingEvents.length} ongoing events`);
+    } catch (error) {
+        console.error('Error loading ongoing events:', error);
+        const container = document.getElementById('ongoing-events');
+        if (container) {
+            container.innerHTML = '<p style="color: red; text-align: center;">Error loading ongoing events. <button onclick="loadOngoingEvents()">Retry</button></p>';
+        }
     }
-
-    // STEP 2: Show loading state while fetching data
-    container.innerHTML =
-      '<p style="text-align: center; color: #666; padding: 40px;">Loading ongoing events...</p>';
-
-    // STEP 3: Fetch the events data
-    const response = await apiCall("/api/events");
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    // STEP 4: Filter for ongoing events (events happening today)
-    const ongoingEvents = response.data.filter((event) => {
-      const startDate = new Date(event.startDate);
-      const endDate = new Date(event.endDate);
-      startDate.setHours(0, 0, 0, 0);
-      endDate.setHours(23, 59, 59, 999);
-
-      // Event is ongoing if today is between start and end date (inclusive)
-      return today >= startDate && today <= endDate;
-    });
-
-    // STEP 5: Clear the loading message and display results
-    container.innerHTML = "";
-
-    if (ongoingEvents.length === 0) {
-      container.innerHTML =
-        '<p style="text-align: center; color: #666; padding: 40px;">No ongoing events at the moment.</p>';
-      return;
-    }
-
-    // STEP 6: Create and append event cards
-    ongoingEvents.forEach((event) => {
-      container.appendChild(createEventCard(event));
-    });
-
-    console.log(`Loaded ${ongoingEvents.length} ongoing events`);
-  } catch (error) {
-    console.error("Error loading ongoing events:", error);
-    // STEP 7: Handle errors gracefully
-    const container = document.getElementById("ongoing-events");
-    if (container) {
-      container.innerHTML =
-        '<p style="color: red; text-align: center;">Error loading ongoing events. <button onclick="loadOngoingEvents()">Retry</button></p>';
-    }
-  }
 }
 
 // Load upcoming events (events that start in the future)
 async function loadUpcomingEvents() {
-  try {
-    // STEP 1: Check if the container exists BEFORE doing API calls
-    const container = document.getElementById("upcoming-events");
-    if (!container) {
-      console.warn("upcoming-events container not found, retrying in 500ms...");
-      // Retry after 500ms to give the DOM more time to load
-      setTimeout(() => loadUpcomingEvents(), 500);
-      return;
+    try {
+        const container = document.getElementById('upcoming-events');
+        if (!container) {
+            console.warn('upcoming-events container not found, retrying in 500ms...');
+            setTimeout(() => loadUpcomingEvents(), 500);
+            return;
+        }
+        
+        container.innerHTML = '<p style="text-align: center; color: #666; padding: 40px;">Loading upcoming events...</p>';
+        
+        const response = await apiCall('/api/events');
+        const today = new Date();
+        today.setHours(23, 59, 59, 999);
+        
+        const upcomingEvents = response.data
+            .filter(event => {
+                const startDate = new Date(event.startDate);
+                return startDate > today;
+            })
+            .sort((a, b) => new Date(a.startDate) - new Date(b.startDate));
+        
+        container.innerHTML = '';
+        
+        if (upcomingEvents.length === 0) {
+            container.innerHTML = '<p style="text-align: center; color: #666; padding: 40px;">No upcoming events scheduled.</p>';
+            return;
+        }
+        
+        upcomingEvents.slice(0, 6).forEach(event => {
+            container.appendChild(createEventCard(event));
+        });
+        
+        console.log(`Loaded ${upcomingEvents.length} upcoming events (showing first 6)`);
+    } catch (error) {
+        console.error('Error loading upcoming events:', error);
+        const container = document.getElementById('upcoming-events');
+        if (container) {
+            container.innerHTML = '<p style="color: red; text-align: center;">Error loading upcoming events. <button onclick="loadUpcomingEvents()">Retry</button></p>';
+        }
     }
-
-    // STEP 2: Show loading state while fetching data
-    container.innerHTML =
-      '<p style="text-align: center; color: #666; padding: 40px;">Loading upcoming events...</p>';
-
-    // STEP 3: Fetch the events data
-    const response = await apiCall("/api/events");
-    const today = new Date();
-    today.setHours(23, 59, 59, 999);
-
-    // STEP 4: Filter for upcoming events (events starting after today)
-    const upcomingEvents = response.data
-      .filter((event) => {
-        const startDate = new Date(event.startDate);
-        return startDate > today;
-      })
-      .sort((a, b) => new Date(a.startDate) - new Date(b.startDate)); // Sort by start date
-
-    // STEP 5: Clear the loading message and display results
-    container.innerHTML = "";
-
-    if (upcomingEvents.length === 0) {
-      container.innerHTML =
-        '<p style="text-align: center; color: #666; padding: 40px;">No upcoming events scheduled.</p>';
-      return;
-    }
-
-    // STEP 6: Create and append event cards (limit to first 6)
-    upcomingEvents.slice(0, 6).forEach((event) => {
-      container.appendChild(createEventCard(event));
-    });
-
-    console.log(
-      `Loaded ${upcomingEvents.length} upcoming events (showing first 6)`
-    );
-  } catch (error) {
-    console.error("Error loading upcoming events:", error);
-    // STEP 7: Handle errors gracefully
-    const container = document.getElementById("upcoming-events");
-    if (container) {
-      container.innerHTML =
-        '<p style="color: red; text-align: center;">Error loading upcoming events. <button onclick="loadUpcomingEvents()">Retry</button></p>';
-    }
-  }
 }
 
 // Data loading functions
@@ -282,109 +257,76 @@ async function loadDashboard() {
 }
 
 async function loadAllEvents() {
-  try {
-    const response = await apiCall("/api/events");
-    events = response.data;
-
-    const container = document.getElementById("all-events");
-    container.innerHTML = "";
-
-    if (events.length === 0) {
-      container.innerHTML =
-        '<p style="text-align: center; color: #666; padding: 40px;">No events found. Create your first event!</p>';
-      return;
+    try {
+        const response = await apiCall('/api/events');
+        events = response.data;
+        
+        const container = document.getElementById('all-events');
+        container.innerHTML = '';
+        
+        if (events.length === 0) {
+            container.innerHTML = '<p style="text-align: center; color: #666; padding: 40px;">No events found. Create your first event!</p>';
+            return;
+        }
+        
+        events.forEach(event => {
+            container.appendChild(createEventCard(event));
+        });
+    } catch (error) {
+        document.getElementById('all-events').innerHTML = '<p style="color: red; text-align: center;">Error loading events</p>';
     }
-
-    events.forEach((event) => {
-      container.appendChild(createEventCard(event));
-    });
-  } catch (error) {
-    document.getElementById("all-events").innerHTML =
-      '<p style="color: red; text-align: center;">Error loading events</p>';
-  }
 }
 
 function createEventCard(event) {
-  const card = document.createElement("div");
-  card.className = `event-card state-${event.state.toLowerCase()}`;
-
-  const formatDate = (dateStr) => {
-    return new Date(dateStr).toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-  };
-
-  const dateRange =
-    event.startDate === event.endDate
-      ? formatDate(event.startDate)
-      : `${formatDate(event.startDate)} - ${formatDate(event.endDate)}`;
-
-  // Build model summary for preview
-  let modelSummary = "";
-  if (event.modelGroups && Object.keys(event.modelGroups).length > 0) {
-    const models = Object.values(event.modelGroups);
-    const firstThree = models.slice(0, 3);
-
-    modelSummary =
-      '<div style="margin: 10px 0; font-size: 12px; color: #666;">';
-    firstThree.forEach((model) => {
-      const statusIcon = getModelStatusIcon(model.status);
-      const assignedCount = model.assignedAssets.length;
-      modelSummary += `<div>${statusIcon} ${model.requiredQuantity}x ${model.brand} ${model.model} (${assignedCount}/${model.requiredQuantity})</div>`;
-    });
-
-    if (models.length > 3) {
-      modelSummary += `<div style="font-style: italic;">... and ${
-        models.length - 3
-      } more</div>`;
+    const card = document.createElement('div');
+    card.className = `event-card state-${event.state.toLowerCase()}`;
+    
+    const formatDate = (dateStr) => {
+        return new Date(dateStr).toLocaleDateString('en-US', { 
+            month: 'short', 
+            day: 'numeric', 
+            year: 'numeric' 
+        });
+    };
+    
+    const dateRange = event.startDate === event.endDate 
+        ? formatDate(event.startDate)
+        : `${formatDate(event.startDate)} - ${formatDate(event.endDate)}`;
+    
+    // Simple asset count display
+    let assetSummary = '';
+    if (event.assetCount > 0) {
+        assetSummary = `<div style="margin: 10px 0; font-size: 12px; color: #666;">${event.preparedCount}/${event.assetCount} assets prepared</div>`;
+    } else {
+        assetSummary = '<div style="margin: 10px 0; font-size: 12px; color: #999; font-style: italic;">No assets assigned</div>';
     }
-    modelSummary += "</div>";
-  } else {
-    modelSummary =
-      '<div style="margin: 10px 0; font-size: 12px; color: #999; font-style: italic;">No assets assigned</div>';
-  }
-
-  card.innerHTML = `
+    
+    card.innerHTML = `
         <div class="event-header">
             <div class="event-id">ID: ${event.id}</div>
-            <div class="event-state state-${event.state.toLowerCase()}">${
-    event.state
-  }</div>
+            <div class="event-state state-${event.state.toLowerCase()}">${event.state}</div>
         </div>
         <div class="event-title">${event.name}</div>
         <div class="event-date">${dateRange}</div>
-        ${modelSummary}
+        ${assetSummary}
         <div class="event-actions">
-            <button class="btn btn-primary" onclick="viewEvent(${
-              event.id
-            })">View</button>
-            <button class="btn btn-warning" onclick="editEvent(${
-              event.id
-            })">Edit</button>
-            <button class="btn btn-danger" onclick="deleteEvent(${
-              event.id
-            })">Delete</button>
+            <button class="btn btn-primary" onclick="viewEvent(${event.id})">View</button>
+            <button class="btn btn-warning" onclick="editEvent(${event.id})">Edit</button>
+            <button class="btn btn-danger" onclick="deleteEvent(${event.id})">Delete</button>
         </div>
     `;
-
-  return card;
+    
+    return card;
 }
 
 function getModelStatusIcon(status) {
-  switch (status) {
-    case "returned":
-      return "↩️";
-    case "ready":
-      return "✅";
-    case "partial":
-      return "🔄";
-    case "pending":
-      return "📋";
-    default:
-      return "📋";
-  }
+    switch(status) {
+        case 'returned': return '↩️';
+        case 'ready': return '✅';
+        case 'partial': return '🔄';
+        case 'pending': return '📋';
+        default: return '📋';
+    }
 }
 
 async function loadInventory() {
@@ -633,10 +575,8 @@ async function loadPrepareEvents() {
     const response = await apiCall("/api/events");
     const preparableEvents = response.data.filter(
       (event) =>
-        (event.state === "Added" ||
-          event.state === "Planning" ||
-          event.state === "Preparing") &&
-        event.assetCount > 0
+        event.state !== "Closed" && // Allow all events except closed ones
+        event.assetCount >= 0 // Include events with 0 assets too
     );
 
     const container = document.getElementById("prepare-events");
@@ -739,43 +679,36 @@ function createPrepareEventCard(event) {
 
   return card;
 }
+
 async function openPrepareEventModal(eventId) {
-  try {
-    const [eventResponse, availableAssetsResponse] = await Promise.all([
-      apiCall(`/api/events/${eventId}`),
-      apiCall("/api/assets/available"),
-    ]);
-
-    const event = eventResponse.data;
-    const availableAssets = availableAssetsResponse.data;
-
-    document.getElementById(
-      "prepareEventTitle"
-    ).textContent = `Prepare Assets - Event ${event.id}: ${event.name}`;
-
-    let content = `
+    try {
+        const [eventResponse, availableAssetsResponse] = await Promise.all([
+            apiCall(`/api/events/${eventId}`),
+            apiCall('/api/assets/available')
+        ]);
+        
+        const event = eventResponse.data;
+        const availableAssets = availableAssetsResponse.data;
+        
+        document.getElementById('prepareEventTitle').textContent = `Prepare Assets - Event ${event.id}: ${event.name}`;
+        
+        let content = `
             <div class="prepare-event-interface">
                 <!-- Event Summary -->
                 <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
                     <h4 style="margin-bottom: 10px; color: #495057;">Event Summary</h4>
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; text-align: center;">
                         <div>
-                            <div style="font-size: 20px; font-weight: bold; color: #007bff;">${
-                              event.totalAssets
-                            }</div>
-                            <div style="color: #666; font-size: 12px;">Total Required</div>
+                            <div style="font-size: 20px; font-weight: bold; color: #007bff;">${event.totalAssets}</div>
+                            <div style="color: #666; font-size: 12px;">Required</div>
                         </div>
                         <div>
-                            <div style="font-size: 20px; font-weight: bold; color: #28a745;">${
-                              event.totalPrepared
-                            }</div>
+                            <div style="font-size: 20px; font-weight: bold; color: #28a745;">${event.totalPrepared}</div>
                             <div style="color: #666; font-size: 12px;">Prepared</div>
                         </div>
                         <div>
-                            <div style="font-size: 20px; font-weight: bold; color: #dc3545;">${
-                              event.totalAssets - event.totalPrepared
-                            }</div>
-                            <div style="color: #666; font-size: 12px;">Remaining</div>
+                            <div style="font-size: 20px; font-weight: bold; color: #6c757d;">${event.totalPrepared - event.totalAssets > 0 ? event.totalPrepared - event.totalAssets : 0}</div>
+                            <div style="color: #666; font-size: 12px;">Extra</div>
                         </div>
                     </div>
                 </div>
@@ -783,83 +716,217 @@ async function openPrepareEventModal(eventId) {
                 <!-- Model Requirements -->
                 <div id="model-requirements">
         `;
+        
+        // Process model assignments and show preparation interface
+        if (event.modelGroups && Object.keys(event.modelGroups).length > 0) {
+            // Group model groups by department
+            const modelGroupsByDept = {};
+            Object.values(event.modelGroups).forEach(modelGroup => {
+                const dept = modelGroup.department;
+                if (!modelGroupsByDept[dept]) {
+                    modelGroupsByDept[dept] = [];
+                }
+                modelGroupsByDept[dept].push(modelGroup);
+            });
 
-    // Process model assignments and show preparation interface
-    if (
-      event.assetsByDepartment &&
-      Object.keys(event.assetsByDepartment).length > 0
-    ) {
-      Object.keys(event.assetsByDepartment).forEach((dept) => {
-        const assets = event.assetsByDepartment[dept];
-
-        content += `
+            Object.keys(modelGroupsByDept).forEach(dept => {
+                const modelGroups = modelGroupsByDept[dept];
+                
+                content += `
                     <div class="dept-section" style="margin-bottom: 30px;">
                         <h4 style="color: #495057; margin-bottom: 15px; padding: 10px; background: #f8f9fa; border-radius: 8px;">
                             ${dept} Department
                         </h4>
                 `;
+                
+                modelGroups.forEach(modelGroup => {
+                    // Find available assets of this model
+                    const modelAvailableAssets = availableAssets.filter(a => 
+                        a.brand === modelGroup.brand && 
+                        a.model === modelGroup.model && 
+                        a.department === modelGroup.department
+                    );
+                    
+                    // Get assigned assets for this model
+                    const assignedAssets = modelGroup.assignedAssets.map(a => a.id);
+                    
+                    content += createModelPreparationSection(
+                        eventId, modelGroup.brand, modelGroup.model, modelGroup.description, 
+                        modelGroup.requiredQuantity, modelAvailableAssets, assignedAssets
+                    );
+                });
+                
+                content += '</div>';
+            });
+        }
+        
+        // Also check for model assignments in prepared_items (fallback for older events)
+        if (event.assetsByDepartment && Object.keys(event.assetsByDepartment).length > 0) {
+            Object.keys(event.assetsByDepartment).forEach(dept => {
+                const assets = event.assetsByDepartment[dept];
+                
+                const modelAssets = assets.filter(asset => asset.id && asset.id.startsWith('[MODEL]'));
+                
+                if (modelAssets.length > 0) {
+                    let hasAddedDeptHeader = false;
+                    
+                    modelAssets.forEach(asset => {
+                        try {
+                            const parts = asset.id.substring(7).split('|');
+                            if (parts.length >= 4) {
+                                const brand = parts[1];
+                                const model = parts[2];
+                                const requiredQty = parseInt(parts[3]);
+                                const description = parts[4] || '';
+                                
+                                // Skip if already processed in modelGroups
+                                const modelKey = `${dept}|${brand}|${model}`;
+                                const alreadyProcessed = event.modelGroups && event.modelGroups[modelKey];
+                                
+                                if (!alreadyProcessed) {
+                                    if (!hasAddedDeptHeader) {
+                                        content += `
+                                            <div class="dept-section" style="margin-bottom: 30px;">
+                                                <h4 style="color: #495057; margin-bottom: 15px; padding: 10px; background: #f8f9fa; border-radius: 8px;">
+                                                    ${dept} Department
+                                                </h4>
+                                        `;
+                                        hasAddedDeptHeader = true;
+                                    }
+                                    
+                                    // Find available assets of this model
+                                    const modelAvailableAssets = availableAssets.filter(a => 
+                                        a.brand === brand && a.model === model && a.department === dept
+                                    );
+                                    
+                                    // Find already assigned specific assets
+                                    const assignedAssets = event.actuallyPrepared ? 
+                                        event.actuallyPrepared.filter(assetId => {
+                                            const availableAsset = availableAssets.find(a => a.id === assetId);
+                                            return availableAsset && availableAsset.brand === brand && availableAsset.model === model;
+                                        }) : [];
+                                    
+                                    content += createModelPreparationSection(
+                                        eventId, brand, model, description, requiredQty, 
+                                        modelAvailableAssets, assignedAssets
+                                    );
+                                }
+                            }
+                        } catch (e) {
+                            console.error('Error parsing model assignment:', e);
+                        }
+                    });
+                    
+                    if (hasAddedDeptHeader) {
+                        content += '</div>';
+                    }
+                }
+            });
+        }
+        
+        if (!event.modelGroups || Object.keys(event.modelGroups).length === 0) {
+            content += '<p style="text-align: center; color: #666; padding: 40px;">No model assignments found for this event.</p>';
+        }
+        
+        content += `
+                </div>
+                
+                <!-- Prepare Assigned Assets -->
+                <div style="margin-top: 30px; padding-top: 20px; border-top: 2px solid #e9ecef;">
+                    <h4 style="color: #495057; margin-bottom: 15px;">All Assigned Assets</h4>
+                    <p style="color: #666; font-size: 14px; margin-bottom: 15px;">Scan or enter any asset ID assigned to this event to mark as prepared</p>
+                    <div class="form-group">
+                        <input type="text" class="form-input" id="assignedAssetPrepare" 
+                               placeholder="Enter Asset ID or Serial Number..." 
+                               onkeypress="if(event.key==='Enter') prepareAssignedAsset(${eventId})">
+                        <button class="btn btn-success" style="margin-top: 10px;" onclick="prepareAssignedAsset(${eventId})">Mark as Prepared</button>
+                    </div>
+        `;
 
-        assets.forEach((asset) => {
-          if (asset.id && asset.id.startsWith("[MODEL]")) {
-            // Parse model assignment
-            try {
-              const parts = asset.id.substring(7).split("|");
-              if (parts.length >= 4) {
-                const brand = parts[1];
-                const model = parts[2];
-                const requiredQty = parseInt(parts[3]);
-                const description = parts[4] || "";
+        // Show all assigned assets with their preparation status
+        if (event.assetsByDepartment && Object.keys(event.assetsByDepartment).length > 0) {
+            content += `
+                        <div style="border: 1px solid #e9ecef; border-radius: 8px; max-height: 300px; overflow-y: auto; margin-top: 15px;">
+                            <div style="background: #f8f9fa; padding: 8px 12px; font-weight: bold; border-bottom: 1px solid #e9ecef;">
+                                All Assets Assigned to Event
+                            </div>
+            `;
+            
+            Object.keys(event.assetsByDepartment).forEach(dept => {
+                const assets = event.assetsByDepartment[dept];
+                
+                // Add department header if there are non-model assets
+                const nonModelAssets = assets.filter(asset => !asset.id.startsWith('[MODEL]'));
+                if (nonModelAssets.length > 0) {
+                    content += `
+                        <div style="background: #f1f3f4; padding: 6px 12px; font-weight: 500; font-size: 13px; border-bottom: 1px solid #e9ecef;">
+                            ${dept} Department
+                        </div>
+                    `;
+                }
+                
+                assets.forEach(asset => {
+                    if (!asset.id.startsWith('[MODEL]')) {
+                        const isPrepared = event.actuallyPrepared && event.actuallyPrepared.includes(asset.id);
+                        const isReturned = event.returnedItems && event.returnedItems.includes(asset.id);
+                        
+                        let statusIcon = '📋';
+                        let statusColor = '#6c757d';
+                        let statusText = 'Assigned';
+                        let actionButton = `<button class="btn btn-success" style="padding: 4px 8px; font-size: 11px;" onclick="prepareSpecificAsset(${eventId}, '${asset.id}')">Prepare</button>`;
+                        
+                        if (isReturned) {
+                            statusIcon = '↩️';
+                            statusColor = '#dc3545';
+                            statusText = 'Returned';
+                            actionButton = '<span style="color: #dc3545; font-size: 11px;">Returned</span>';
+                        } else if (isPrepared) {
+                            statusIcon = '✅';
+                            statusColor = '#28a745';
+                            statusText = 'Prepared';
+                            actionButton = `<button class="btn btn-warning" style="padding: 4px 8px; font-size: 11px;" onclick="unprepareSpecificAsset(${eventId}, '${asset.id}')">Unprepare</button>`;
+                        }
+                        
+                        // Add extra asset indicator
+                        const extraBadge = asset.isExtra ? '<span style="background: #fff3cd; color: #856404; padding: 2px 6px; border-radius: 3px; font-size: 10px; margin-left: 10px;">EXTRA</span>' : '';
+                        
+                        content += `
+                            <div style="padding: 8px 12px; border-bottom: 1px solid #f1f1f1; display: flex; justify-content: space-between; align-items: center;">
+                                <div>
+                                    <span style="font-weight: 500;">${statusIcon} ${asset.id}</span>
+                                    <span style="color: #666; font-size: 12px; margin-left: 10px;">${asset.name || ''}</span>
+                                    ${extraBadge}
+                                    <div style="color: ${statusColor}; font-size: 11px; margin-top: 2px;">${statusText}</div>
+                                </div>
+                                <div>
+                                    ${actionButton}
+                                </div>
+                            </div>
+                        `;
+                    }
+                });
+            });
+            
+            content += '</div>';
+        } else {
+            content += '<p style="text-align: center; color: #666; padding: 20px; border: 1px solid #e9ecef; border-radius: 8px; margin-top: 15px;">No individual assets assigned to this event.</p>';
+        }
 
-                // Find available assets of this model (exclude already assigned ones)
-                const modelAvailableAssets = availableAssets.filter(
-                  (a) =>
-                    a.brand === brand &&
-                    a.model === model &&
-                    a.department === dept &&
-                    !(
-                      event.actuallyPrepared &&
-                      event.actuallyPrepared.includes(a.id)
-                    )
-                );
-
-                // Find already assigned specific assets
-                const assignedAssets = event.actuallyPrepared
-                  ? event.actuallyPrepared.filter((assetId) => {
-                      // Check if this asset ID belongs to this model
-                      const asset = [
-                        ...availableAssets,
-                        ...modelAvailableAssets,
-                      ].find((a) => a.id === assetId);
-                      return (
-                        asset && asset.brand === brand && asset.model === model
-                      );
-                    })
-                  : [];
-
-                content += createModelPreparationSection(
-                  eventId,
-                  brand,
-                  model,
-                  description,
-                  requiredQty,
-                  modelAvailableAssets,
-                  assignedAssets
-                );
-              }
-            } catch (e) {
-              console.error("Error parsing model assignment:", e);
-            }
-          }
-        });
-
-        content += "</div>";
-      });
-    } else {
-      content +=
-        '<p style="text-align: center; color: #666; padding: 40px;">No model assignments found for this event.</p>';
-    }
-
-    content += `
+        content += `
+                </div>
+                
+                <!-- Assign Additional Assets -->
+                <div style="margin-top: 30px; padding-top: 20px; border-top: 2px solid #e9ecef;">
+                    <h4 style="color: #495057; margin-bottom: 15px;">Assign Additional Assets</h4>
+                    <p style="color: #666; font-size: 14px; margin-bottom: 15px;">Search and assign any available asset to this event (will be shown as extra assets)</p>
+                    <div class="form-group">
+                        <input type="text" class="form-input" id="additionalAssetSearch" 
+                               placeholder="Search any available asset..." 
+                               onkeyup="searchAdditionalAssets(${eventId})">
+                    </div>
+                    <div id="additional-assets-results" style="border: 1px solid #e9ecef; border-radius: 8px; max-height: 300px; overflow-y: auto; min-height: 50px;">
+                        <p style="text-align: center; color: #666; padding: 20px;">Type to search for any available asset...</p>
+                    </div>
                 </div>
                 
                 <!-- Actions -->
@@ -869,13 +936,140 @@ async function openPrepareEventModal(eventId) {
                 </div>
             </div>
         `;
+        
+        document.getElementById('prepareEventContent').innerHTML = content;
+        openModal('prepareEventModal');
+        
+        // Store available assets for the additional asset search
+        window.currentAdditionalAssets = availableAssets;
+        
+    } catch (error) {
+        showNotification('error', 'Failed to load event preparation interface');
+        console.error('Error loading prepare event modal:', error);
+    }
+}
 
-    document.getElementById("prepareEventContent").innerHTML = content;
-    openModal("prepareEventModal");
-  } catch (error) {
-    showNotification("error", "Failed to load event preparation interface");
-    console.error("Error loading prepare event modal:", error);
-  }
+function searchAdditionalAssets(eventId) {
+    const searchInput = document.getElementById('additionalAssetSearch');
+    const resultsContainer = document.getElementById('additional-assets-results');
+    const searchTerm = searchInput.value.toLowerCase().trim();
+    
+    if (!searchTerm || searchTerm.length < 2) {
+        resultsContainer.innerHTML = '<p style="text-align: center; color: #666; padding: 20px;">Type at least 2 characters to search...</p>';
+        return;
+    }
+    
+    const availableAssets = window.currentAdditionalAssets || [];
+    const filteredAssets = availableAssets.filter(asset => 
+        asset.id.toLowerCase().includes(searchTerm) ||
+        asset.brand.toLowerCase().includes(searchTerm) ||
+        asset.model.toLowerCase().includes(searchTerm) ||
+        (asset.description && asset.description.toLowerCase().includes(searchTerm))
+    );
+    
+    if (filteredAssets.length === 0) {
+        resultsContainer.innerHTML = '<p style="text-align: center; color: #666; padding: 20px;">No matching assets found.</p>';
+        return;
+    }
+    
+    let content = '';
+    filteredAssets.slice(0, 20).forEach(asset => { // Limit to 20 results
+        content += `
+            <div style="padding: 10px 12px; border-bottom: 1px solid #f1f1f1; display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <div style="font-weight: 500;">${asset.id}</div>
+                    <div style="color: #666; font-size: 12px;">${asset.brand} ${asset.model}</div>
+                    <div style="color: #999; font-size: 11px;">${asset.description || ''}</div>
+                    <span class="asset-badge dept-${asset.department.toLowerCase()}">${asset.department}</span>
+                </div>
+                <button class="btn btn-warning" style="padding: 4px 8px; font-size: 11px; background: #ff8c00;" onclick="assignAdditionalAsset(${eventId}, '${asset.id}')">Assign as Extra</button>
+            </div>
+        `;
+    });
+    
+    resultsContainer.innerHTML = content;
+}
+
+async function assignAdditionalAsset(eventId, assetId) {
+    try {
+        await apiCall(`/api/events/${eventId}/assign-specific`, 'POST', { assetId });
+        showNotification('success', `Assigned ${assetId} as additional asset`);
+        
+        // Remove from search results
+        const assetElement = document.querySelector(`[onclick*="assignAdditionalAsset(${eventId}, '${assetId}')"]`).closest('div');
+        if (assetElement) {
+            assetElement.remove();
+        }
+        
+        // Update available assets
+        if (window.currentAdditionalAssets) {
+            window.currentAdditionalAssets = window.currentAdditionalAssets.filter(a => a.id !== assetId);
+        }
+        
+        // Refresh the preparation modal
+        setTimeout(() => {
+            openPrepareEventModal(eventId);
+        }, 500);
+        
+    } catch (error) {
+        showNotification('error', `Failed to assign asset: ${error.message}`);
+    }
+}
+
+async function prepareAssignedAsset(eventId) {
+    const input = document.getElementById('assignedAssetPrepare');
+    const assetId = input.value.trim();
+    
+    if (!assetId) {
+        showNotification('warning', 'Please enter an asset ID');
+        return;
+    }
+    
+    try {
+        await apiCall(`/api/events/${eventId}/prepare`, 'POST', { assetId });
+        showNotification('success', `${assetId} marked as prepared`);
+        
+        // Clear input
+        input.value = '';
+        
+        // Refresh the preparation modal
+        setTimeout(() => {
+            openPrepareEventModal(eventId);
+        }, 500);
+        
+    } catch (error) {
+        showNotification('error', `Failed to prepare asset: ${error.message}`);
+    }
+}
+
+async function prepareSpecificAsset(eventId, assetId) {
+    try {
+        await apiCall(`/api/events/${eventId}/prepare`, 'POST', { assetId });
+        showNotification('success', `${assetId} marked as prepared`);
+        
+        // Refresh the preparation modal
+        setTimeout(() => {
+            openPrepareEventModal(eventId);
+        }, 500);
+        
+    } catch (error) {
+        showNotification('error', `Failed to prepare asset: ${error.message}`);
+    }
+}
+
+async function unprepareSpecificAsset(eventId, assetId) {
+    try {
+        await apiCall(`/api/events/${eventId}/unprepare`, 'POST', { assetId });
+        showNotification('success', `${assetId} unprepared`);
+        
+        // Refresh the preparation modal
+        setTimeout(() => {
+            openPrepareEventModal(eventId);
+        }, 500);
+        
+    } catch (error) {
+        showNotification('error', `Failed to unprepare asset: ${error.message}`);
+    }
 }
 
 async function assignSpecificAsset(eventId, assetId, brand, model) {
@@ -883,17 +1077,23 @@ async function assignSpecificAsset(eventId, assetId, brand, model) {
         await apiCall(`/api/events/${eventId}/assign-specific`, 'POST', { assetId });
         showNotification('success', `Assigned ${assetId} to event`);
         
-        // Refresh the preparation modal
+        // Force refresh the preparation modal to show updated status
         setTimeout(() => {
             openPrepareEventModal(eventId);
         }, 500);
         
-        // Also refresh the prepare events list if it's active
-        if (document.getElementById('prepare-section').classList.contains('active')) {
-            setTimeout(() => {
+        // Also refresh other views if they're active
+        setTimeout(() => {
+            if (document.getElementById('prepare-section').classList.contains('active')) {
                 loadPrepareEvents();
-            }, 700);
-        }
+            }
+            if (document.getElementById('dashboard-section').classList.contains('active')) {
+                loadDashboard();
+            }
+            if (document.getElementById('events-section').classList.contains('active')) {
+                loadAllEvents();
+            }
+        }, 700);
         
     } catch (error) {
         showNotification('error', `Failed to assign asset: ${error.message}`);
@@ -1106,6 +1306,14 @@ async function viewEvent(eventId) {
         ? formatDate(event.startDate)
         : `${formatDate(event.startDate)} - ${formatDate(event.endDate)}`;
 
+    // Helper function to escape HTML
+    const escapeHtml = (str) => {
+      if (!str) return '';
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    };
+
     let content = `
             <div class="form-group">
                 <strong>Date Range:</strong> ${dateRange}
@@ -1126,9 +1334,67 @@ async function viewEvent(eventId) {
             </div>
         `;
 
+    // Add individual assets section
+    if (event.assetsByDepartment && Object.keys(event.assetsByDepartment).length > 0) {
+      content += '<div class="form-group"><strong>All Assets:</strong>';
+
+      // Group by department
+      Object.keys(event.assetsByDepartment)
+        .sort()
+        .forEach((dept) => {
+          const assets = event.assetsByDepartment[dept];
+          
+          // Filter out model assignments for this section
+          const individualAssets = assets.filter(asset => !asset.id.startsWith('[MODEL]'));
+          
+          if (individualAssets.length > 0) {
+            content += `<h4 style="margin-top: 20px; margin-bottom: 10px; color: #495057;">${escapeHtml(dept)} Department</h4>`;
+
+            individualAssets.forEach((asset) => {
+              let statusIcon = '📋';
+              let statusColor = '#6c757d';
+              let statusText = 'Assigned';
+              
+              if (asset.status === 'returned') {
+                statusIcon = '↩️';
+                statusColor = '#dc3545';
+                statusText = 'Returned';
+              } else if (asset.status === 'prepared') {
+                statusIcon = '✅';
+                statusColor = '#28a745';
+                statusText = 'Prepared';
+              }
+
+              // Add extra badge if it's an extra asset
+              const extraBadge = asset.isExtra ? 
+                '<span style="background: #fff3cd; color: #856404; padding: 2px 6px; border-radius: 3px; font-size: 10px; margin-left: 10px;">EXTRA</span>' : '';
+
+              content += `
+                <div style="border: 1px solid #e9ecef; border-radius: 8px; margin-bottom: 10px; padding: 12px; background: white;">
+                  <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                      <span style="font-weight: 500;">${statusIcon} ${escapeHtml(asset.id)}</span>
+                      ${extraBadge}
+                      <div style="color: #666; font-size: 12px; margin-top: 2px;">${escapeHtml(asset.name || '')}</div>
+                      ${asset.serial ? `<div style="color: #999; font-size: 11px;">SN: ${escapeHtml(asset.serial)}</div>` : ''}
+                      ${asset.location ? `<div style="color: #999; font-size: 11px;">📍 ${escapeHtml(asset.location)}</div>` : ''}
+                    </div>
+                    <div style="text-align: right;">
+                      <div style="color: ${statusColor}; font-size: 12px; font-weight: 500;">${statusText}</div>
+                    </div>
+                  </div>
+                </div>
+              `;
+            });
+          }
+        });
+
+      content += '</div>';
+    }
+
     // Add model groups with expandable asset lists
     if (event.modelGroups && Object.keys(event.modelGroups).length > 0) {
-      content += '<div class="form-group"><strong>Asset Requirements:</strong>';
+      content += '<div class="form-group"><strong>Model Requirements:</strong>';
 
       // Group by department
       const modelsByDept = {};
@@ -1143,7 +1409,7 @@ async function viewEvent(eventId) {
         .sort()
         .forEach((dept) => {
           const models = modelsByDept[dept];
-          content += `<h4 style="margin-top: 20px; margin-bottom: 10px; color: #495057;">${dept} Department</h4>`;
+          content += `<h4 style="margin-top: 20px; margin-bottom: 10px; color: #495057;">${escapeHtml(dept)} Department - Model Requirements</h4>`;
 
           models.forEach((model, index) => {
             const statusIcon = getModelStatusIcon(model.status);
@@ -1153,17 +1419,17 @@ async function viewEvent(eventId) {
             content += `
                         <div style="border: 1px solid #e9ecef; border-radius: 8px; margin-bottom: 10px; overflow: hidden;">
                             <div style="background: #f8f9fa; padding: 12px; cursor: pointer; display: flex; justify-content: space-between; align-items: center;"
-                                 onclick="toggleModelDetails('${modelId}')">
+                                 class="model-toggle" data-model-id="${modelId}" onclick="toggleModelDetailsInView('${modelId}')">
                                 <div>
-                                    <span style="font-weight: 500;">${statusIcon} ${model.requiredQuantity}x ${model.brand} ${model.model}</span>
-                                    <div style="font-size: 11px; color: #666; margin-top: 2px;">${model.description}</div>
+                                    <span style="font-weight: 500;">${statusIcon} ${model.requiredQuantity}x ${escapeHtml(model.brand)} ${escapeHtml(model.model)}</span>
+                                    <div style="font-size: 11px; color: #666; margin-top: 2px;">${escapeHtml(model.description || '')}</div>
                                 </div>
                                 <div style="display: flex; align-items: center; gap: 10px;">
                                     <span style="font-size: 12px; color: #666;">${assignedCount}/${model.requiredQuantity} assigned</span>
-                                    <span id="toggle-${modelId}" style="font-size: 12px;">▼</span>
+                                    <span class="toggle-icon" data-model-id="${modelId}" style="font-size: 12px; cursor: pointer;">▼</span>
                                 </div>
                             </div>
-                            <div id="${modelId}" style="display: none; padding: 12px; background: white;">
+                            <div id="${modelId}" class="model-details" style="display: none; padding: 12px; background: white;">
                     `;
 
             if (model.assignedAssets.length > 0) {
@@ -1172,23 +1438,16 @@ async function viewEvent(eventId) {
               model.assignedAssets.forEach((asset) => {
                 const assetStatusIcon =
                   asset.status === "returned" ? "↩️" : "✅";
+
                 content += `
                                 <div style="padding: 6px 10px; margin: 4px 0; background: ${
                                   asset.status === "returned"
                                     ? "#fff3cd"
                                     : "#d4edda"
                                 }; border-radius: 4px; font-size: 13px;">
-                                    ${assetStatusIcon} ${asset.id}
-                                    ${
-                                      asset.serial
-                                        ? `<span style="color: #666; margin-left: 10px;">SN: ${asset.serial}</span>`
-                                        : ""
-                                    }
-                                    ${
-                                      asset.location
-                                        ? `<span style="color: #999; margin-left: 10px;">📍 ${asset.location}</span>`
-                                        : ""
-                                    }
+                                    ${assetStatusIcon} ${escapeHtml(asset.id)}
+                                    ${asset.serial ? `<span style="color: #666; margin-left: 10px;">SN: ${escapeHtml(asset.serial)}</span>` : ""}
+                                    ${asset.location ? `<span style="color: #999; margin-left: 10px;">📍 ${escapeHtml(asset.location)}</span>` : ""}
                                 </div>
                             `;
               });
@@ -1205,9 +1464,59 @@ async function viewEvent(eventId) {
     }
 
     document.getElementById("eventDetailsContent").innerHTML = content;
+
+    // Add event listeners for model toggles using event delegation
+    document.getElementById("eventDetailsContent").addEventListener('click', function(e) {
+      // Check if clicked element or its parent has model-toggle class
+      let toggleElement = null;
+      
+      if (e.target.classList.contains('model-toggle')) {
+        toggleElement = e.target;
+      } else if (e.target.closest('.model-toggle')) {
+        toggleElement = e.target.closest('.model-toggle');
+      } else if (e.target.classList.contains('toggle-icon')) {
+        // Handle clicks directly on the toggle icon
+        const modelId = e.target.getAttribute('data-model-id');
+        if (modelId) {
+          e.preventDefault();
+          e.stopPropagation();
+          toggleModelDetailsInView(modelId);
+          return;
+        }
+      }
+      
+      if (toggleElement) {
+        const modelId = toggleElement.getAttribute('data-model-id');
+        if (modelId) {
+          e.preventDefault();
+          e.stopPropagation();
+          toggleModelDetailsInView(modelId);
+        }
+      }
+    });
+
     openModal("eventDetailsModal");
   } catch (error) {
     showNotification("error", "Failed to load event details");
+  }
+}
+
+function toggleModelDetailsInView(modelId) {
+  const detailsDiv = document.getElementById(modelId);
+  const toggleIcon = document.querySelector(`[data-model-id="${modelId}"].toggle-icon`);
+
+  if (detailsDiv && toggleIcon) {
+    if (detailsDiv.style.display === "none" || detailsDiv.style.display === "") {
+      detailsDiv.style.display = "block";
+      toggleIcon.textContent = "▲";
+    } else {
+      detailsDiv.style.display = "none";
+      toggleIcon.textContent = "▼";
+    }
+  } else {
+    console.warn(`Could not find elements for modelId: ${modelId}`);
+    console.warn(`DetailsDiv:`, detailsDiv);
+    console.warn(`ToggleIcon:`, toggleIcon);
   }
 }
 
@@ -1427,6 +1736,14 @@ async function editEvent(eventId) {
         ? formatDate(event.startDate)
         : `${formatDate(event.startDate)} - ${formatDate(event.endDate)}`;
 
+    // Helper function to escape HTML
+    const escapeHtml = (str) => {
+      if (!str) return '';
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    };
+
     let content = `
             <!-- Edit Event Tabs -->
             <div class="edit-event-tabs" style="display: flex; border-bottom: 2px solid #e9ecef; margin-bottom: 20px;">
@@ -1446,7 +1763,7 @@ async function editEvent(eventId) {
                     <input type="hidden" id="editEventId" value="${event.id}">
                     <div class="form-group">
                         <label class="form-label">Event Name</label>
-                        <input type="text" class="form-input" id="editEventName" value="${event.name}" required>
+                        <input type="text" class="form-input" id="editEventName" value="${escapeHtml(event.name)}" required>
                     </div>
                     <div class="form-group">
                         <label class="form-label">Start Date</label>
@@ -1466,55 +1783,89 @@ async function editEvent(eventId) {
             <div id="edit-assets-tab" class="edit-tab-content" style="display: none;">
                 <div style="margin-bottom: 30px;">
                     <h4 style="color: #495057; margin-bottom: 15px;">Current Assets (${event.totalAssets})</h4>
-                    <div style="border: 1px solid #e9ecef; border-radius: 8px; max-height: 300px; overflow-y: auto;">
+                    <div id="current-assets-container" style="border: 1px solid #e9ecef; border-radius: 8px; min-height: 200px;">
         `;
 
-    // Show current assets
-    // Show current model assignments in the editEvent function
-    if (event.modelGroups && Object.keys(event.modelGroups).length > 0) {
-      const modelsByDept = {};
-      Object.values(event.modelGroups).forEach((model) => {
-        if (!modelsByDept[model.department]) {
-          modelsByDept[model.department] = [];
-        }
-        modelsByDept[model.department].push(model);
-      });
-
-      Object.keys(modelsByDept)
+    // Show current assets - including ALL assets (model assignments AND individual assets)
+    if (event.assetsByDepartment && Object.keys(event.assetsByDepartment).length > 0) {
+      Object.keys(event.assetsByDepartment)
         .sort()
         .forEach((dept) => {
-          const models = modelsByDept[dept];
-          content += `
-                    <div style="background: #f8f9fa; padding: 8px 12px; font-weight: bold; border-bottom: 1px solid #e9ecef;">
-                        ${dept} Department (${models.reduce(
-            (sum, m) => sum + m.requiredQuantity,
-            0
-          )} assets)
-                    </div>
-                `;
-
-          models.forEach((model) => {
-            const statusIcon = getModelStatusIcon(model.status);
-            const assignedCount = model.assignedAssets.length;
-
+          const assets = event.assetsByDepartment[dept];
+          
+          if (assets.length > 0) {
             content += `
-                        <div class="model-assignment" style="padding: 12px; border-bottom: 1px solid #f1f1f1; display: flex; justify-content: space-between; align-items: center; background: #f8f9fa;">
-                            <div>
-                                <span style="font-weight: 500; color: #495057;">${statusIcon} ${model.requiredQuantity}x ${model.brand} ${model.model}</span>
-                                <div style="color: #666; font-size: 11px; margin-top: 2px;">${model.description}</div>
-                                <div style="color: #28a745; font-size: 10px; margin-top: 2px;">${assignedCount}/${model.requiredQuantity} specific assets assigned</div>
-                            </div>
-                            <div style="display: flex; gap: 5px;">
-                                <button class="btn btn-warning" style="padding: 3px 6px; font-size: 10px;" onclick="editModelQuantity(${event.id}, '${model.brand}', '${model.model}', '${model.department}')">Edit Qty</button>
-                                <button class="btn btn-danger" style="padding: 3px 6px; font-size: 10px;" onclick="removeModelFromEvent(${event.id}, '${model.brand}', '${model.model}', '${model.department}')">Remove</button>
-                            </div>
+                        <div style="background: #f8f9fa; padding: 8px 12px; font-weight: bold; border-bottom: 1px solid #e9ecef;">
+                            ${escapeHtml(dept)} Department (${assets.length} items)
                         </div>
                     `;
-          });
+
+            assets.forEach((asset) => {
+              let statusIcon = '📋';
+              let statusColor = '#6c757d';
+              let statusText = 'Assigned';
+              
+              if (asset.status === 'returned') {
+                statusIcon = '↩️';
+                statusColor = '#dc3545';
+                statusText = 'Returned';
+              } else if (asset.status === 'prepared') {
+                statusIcon = '✅';
+                statusColor = '#28a745';
+                statusText = 'Prepared';
+              }
+
+              // Handle different asset types
+              if (asset.isModel) {
+                // Model assignment
+                content += `
+                            <div class="model-assignment" style="padding: 12px; border-bottom: 1px solid #f1f1f1; display: flex; justify-content: space-between; align-items: center; background: #f8f9fa;">
+                                <div>
+                                    <span style="font-weight: 500; color: #495057;">📦 ${asset.quantity}x ${escapeHtml(asset.brand)} ${escapeHtml(asset.model)}</span>
+                                    <div style="color: #666; font-size: 11px; margin-top: 2px;">${escapeHtml(asset.description || '')}</div>
+                                    <div style="color: #999; font-size: 10px; font-style: italic; margin-top: 2px;">Model requirement - assign specific assets during preparation</div>
+                                </div>
+                                <div style="display: flex; gap: 5px;">
+                                    <button class="btn btn-warning" style="padding: 3px 6px; font-size: 10px;" onclick="editModelQuantity(${event.id}, '${escapeHtml(asset.brand)}', '${escapeHtml(asset.model)}', '${escapeHtml(dept)}')">Edit Qty</button>
+                                    <button class="btn btn-danger" style="padding: 3px 6px; font-size: 10px;" onclick="removeModelFromEvent(${event.id}, '${escapeHtml(asset.brand)}', '${escapeHtml(asset.model)}', '${escapeHtml(dept)}')">Remove</button>
+                                </div>
+                            </div>
+                        `;
+              } else if (asset.isLoanOrMisc) {
+                // Loan/Misc item
+                const extraBadge = asset.isExtra ? '<span style="background: #fff3cd; color: #856404; padding: 2px 6px; border-radius: 3px; font-size: 10px; margin-left: 10px;">EXTRA</span>' : '';
+                
+                content += `
+                            <div style="padding: 10px 12px; border-bottom: 1px solid #f1f1f1; display: flex; justify-content: space-between; align-items: center;">
+                                <div>
+                                    <span>${statusIcon} ${escapeHtml(asset.id)}</span>
+                                    ${extraBadge}
+                                    <div style="color: ${statusColor}; font-size: 11px; margin-top: 2px;">${statusText}</div>
+                                </div>
+                                <button class="btn btn-danger" style="padding: 4px 8px; font-size: 11px;" onclick="removeAssetFromEvent(${event.id}, '${escapeHtml(asset.id)}')">Remove</button>
+                            </div>
+                        `;
+              } else {
+                // Regular asset
+                const extraBadge = asset.isExtra ? '<span style="background: #fff3cd; color: #856404; padding: 2px 6px; border-radius: 3px; font-size: 10px; margin-left: 10px;">EXTRA</span>' : '';
+                
+                content += `
+                            <div style="padding: 10px 12px; border-bottom: 1px solid #f1f1f1; display: flex; justify-content: space-between; align-items: center;">
+                                <div>
+                                    <span>${statusIcon} ${escapeHtml(asset.id)}</span>
+                                    <span style="color: #666; font-size: 12px; margin-left: 10px;">${escapeHtml(asset.name || '')}</span>
+                                    ${extraBadge}
+                                    <div style="color: ${statusColor}; font-size: 11px; margin-top: 2px;">${statusText}</div>
+                                </div>
+                                <button class="btn btn-danger" style="padding: 4px 8px; font-size: 11px;" onclick="removeAssetFromEvent(${event.id}, '${escapeHtml(asset.id)}')">Remove</button>
+                            </div>
+                        `;
+              }
+            });
+          }
         });
     } else {
-      content +=
-        '<p style="text-align: center; color: #666; padding: 40px;">No assets assigned to this event.</p>';
+      content += '<p style="text-align: center; color: #666; padding: 40px;">No assets assigned to this event.</p>';
     }
 
     content += `
@@ -1525,7 +1876,7 @@ async function editEvent(eventId) {
                     <h4 style="color: #495057; margin-bottom: 15px;">Add Assets</h4>
                     <div class="form-group">
                         <input type="text" class="form-input" placeholder="Search available assets..." 
-                               onkeyup="filterAvailableAssetsSimple(this.value)">
+                               onkeyup="filterAvailableAssetsSimple(this.value)" id="edit-asset-search">
                     </div>
                     <div id="available-assets-simple" style="border: 1px solid #e9ecef; border-radius: 8px; max-height: 300px; overflow-y: auto;">
                         <p style="text-align: center; color: #666; padding: 20px;">Type to search for available assets...</p>
@@ -2418,20 +2769,31 @@ async function addAssetToEventSimple(eventId, assetId) {
 }
 
 async function assignSpecificAsset(eventId, assetId, brand, model) {
-  try {
-    // Use the new assign-specific endpoint, not the prepare endpoint
-    await apiCall(`/api/events/${eventId}/assign-specific`, "POST", {
-      assetId,
-    });
-    showNotification("success", `Assigned ${assetId} to event`);
-
-    // Refresh the preparation modal
-    setTimeout(() => {
-      openPrepareEventModal(eventId);
-    }, 500);
-  } catch (error) {
-    showNotification("error", `Failed to assign asset: ${error.message}`);
-  }
+    try {
+        await apiCall(`/api/events/${eventId}/assign-specific`, 'POST', { assetId });
+        showNotification('success', `Assigned ${assetId} to event`);
+        
+        // Refresh the preparation modal
+        setTimeout(() => {
+            openPrepareEventModal(eventId);
+        }, 500);
+        
+        // Also refresh other views if they're active
+        setTimeout(() => {
+            if (document.getElementById('prepare-section').classList.contains('active')) {
+                loadPrepareEvents();
+            }
+            if (document.getElementById('dashboard-section').classList.contains('active')) {
+                loadDashboard();
+            }
+            if (document.getElementById('events-section').classList.contains('active')) {
+                loadAllEvents();
+            }
+        }, 700);
+        
+    } catch (error) {
+        showNotification('error', `Failed to assign asset: ${error.message}`);
+    }
 }
 
 async function unassignSpecificAsset(eventId, assetId, brand, model) {
@@ -2452,13 +2814,21 @@ async function unassignSpecificAsset(eventId, assetId, brand, model) {
 }
 
 function finishEventPreparation(eventId) {
-  closeModal("prepareEventModal");
-  showNotification("success", "Event preparation completed");
-
-  // Refresh the prepare events list
-  if (document.getElementById("prepare-section").classList.contains("active")) {
-    loadPrepareEvents();
-  }
+    closeModal('prepareEventModal');
+    showNotification('success', 'Event preparation completed');
+    
+    // Force refresh multiple views
+    setTimeout(() => {
+        if (document.getElementById('prepare-section').classList.contains('active')) {
+            loadPrepareEvents();
+        }
+        if (document.getElementById('dashboard-section').classList.contains('active')) {
+            loadDashboard();
+        }
+        if (document.getElementById('events-section').classList.contains('active')) {
+            loadAllEvents();
+        }
+    }, 500);
 }
 function getDepartmentInfo(dept) {
   const deptInfo = {
@@ -3160,20 +3530,11 @@ function showNotification(type, message) {
   }, 3000);
 }
 
-function createModelPreparationSection(
-  eventId,
-  brand,
-  model,
-  description,
-  requiredQty,
-  availableAssets,
-  assignedAssets
-) {
-  const assignedCount = assignedAssets.length;
-  const remainingNeeded = requiredQty - assignedCount;
-  const progressPercent = Math.round((assignedCount / requiredQty) * 100);
-
-  let section = `
+function createModelPreparationSection(eventId, brand, model, description, requiredQty, availableAssets, assignedAssets) {
+    const assignedCount = assignedAssets.length;
+    const progressPercent = Math.round((assignedCount / requiredQty) * 100);
+    
+    let section = `
         <div class="model-prep-section" style="border: 1px solid #e9ecef; border-radius: 8px; padding: 15px; margin-bottom: 15px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                 <div>
@@ -3181,86 +3542,89 @@ function createModelPreparationSection(
                     <div style="color: #666; font-size: 12px; margin-top: 2px;">${description}</div>
                 </div>
                 <div style="text-align: right;">
-                    <div style="font-size: 14px; font-weight: 500; color: ${
-                      assignedCount === requiredQty ? "#28a745" : "#ffc107"
-                    };">
+                    <div style="font-size: 14px; font-weight: 500; color: ${assignedCount >= requiredQty ? '#28a745' : '#ffc107'};">
                         ${assignedCount}/${requiredQty} assigned
+                        ${assignedCount > requiredQty ? ` (+${assignedCount - requiredQty} extra)` : ''}
                     </div>
                     <div style="background: #e9ecef; border-radius: 10px; height: 4px; width: 120px; overflow: hidden; margin-top: 4px;">
-                        <div style="background: ${
-                          assignedCount === requiredQty ? "#28a745" : "#ffc107"
-                        }; height: 100%; width: ${progressPercent}%; transition: width 0.3s ease;"></div>
+                        <div style="background: ${assignedCount >= requiredQty ? '#28a745' : '#ffc107'}; height: 100%; width: ${Math.min(progressPercent, 100)}%; transition: width 0.3s ease;"></div>
                     </div>
                 </div>
             </div>
     `;
-
-  if (assignedCount < requiredQty) {
-    // Show available assets for assignment
-    section += `
+    
+    // Show assigned assets first
+    if (assignedAssets.length > 0) {
+        section += `
             <div style="margin-bottom: 15px;">
-                <h6 style="color: #495057; margin-bottom: 10px;">Available ${brand} ${model} (${availableAssets.length} total):</h6>
-                <div style="max-height: 200px; overflow-y: auto; border: 1px solid #e9ecef; border-radius: 4px;">
-        `;
-
-    if (availableAssets.length === 0) {
-      section +=
-        '<p style="text-align: center; color: #666; padding: 20px;">No available assets of this model</p>';
-    } else {
-      availableAssets.forEach((asset) => {
-        const isAssigned = assignedAssets.includes(asset.id);
-        // Don't show assets that are already assigned to this event
-        if (!isAssigned) {
-          section += `
-                        <div style="padding: 8px 12px; border-bottom: 1px solid #f1f1f1; display: flex; justify-content: space-between; align-items: center;">
-                            <div>
-                                <span style="font-weight: 500;">${
-                                  asset.id
-                                }</span>
-                                <span style="color: #666; font-size: 12px; margin-left: 10px;">SN: ${
-                                  asset.serial || "N/A"
-                                }</span>
-                                <span style="color: #999; font-size: 11px; margin-left: 10px;">📍 ${
-                                  asset.location
-                                }</span>
-                            </div>
-                            <div>
-                                <button class="btn btn-success" style="padding: 4px 8px; font-size: 11px;" onclick="assignSpecificAsset(${eventId}, '${
-            asset.id
-          }', '${brand}', '${model}')">Assign</button>
-                            </div>
-                        </div>
-                    `;
-        }
-      });
-    }
-
-    section += "</div></div>";
-  }
-
-  // Show assigned assets
-  if (assignedAssets.length > 0) {
-    section += `
-            <div>
                 <h6 style="color: #495057; margin-bottom: 10px;">Assigned Assets:</h6>
                 <div style="background: #d4edda; border-radius: 4px; padding: 10px;">
         `;
-
-    assignedAssets.forEach((assetId) => {
-      // Look for the asset in both available and all assets
-      const allAssets = [...availableAssets];
-      // Also check the inventory for this asset
-      section += `
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
-                    <span>✅ ${assetId}</span>
-                    <button class="btn btn-warning" style="padding: 2px 6px; font-size: 10px;" onclick="unassignSpecificAsset(${eventId}, '${assetId}', '${brand}', '${model}')">Remove</button>
-                </div>
-            `;
-    });
-    section += "</div></div>";
-  }
-  section += "</div>";
-  return section;
+        
+        assignedAssets.forEach((assetId, index) => {
+            const asset = availableAssets.find(a => a.id === assetId);
+            const isExtra = index >= requiredQty;
+            const bgColor = isExtra ? '#fff3cd' : '#d4edda'; // Yellow for extra assets
+            const textColor = isExtra ? '#856404' : '#155724';
+            
+            if (asset) {
+                section += `
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; padding: 4px 8px; background: ${bgColor}; border-radius: 3px;">
+                        <span style="color: ${textColor};">
+                            ${isExtra ? '➕' : '✅'} ${asset.id} (SN: ${asset.serial || 'N/A'})
+                            ${isExtra ? ' <span style="font-size: 10px;">(EXTRA)</span>' : ''}
+                        </span>
+                        <button class="btn btn-warning" style="padding: 2px 6px; font-size: 10px;" onclick="unassignSpecificAsset(${eventId}, '${assetId}', '${brand}', '${model}')">Unprepare</button>
+                    </div>
+                `;
+            } else {
+                section += `
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; padding: 4px 8px; background: ${bgColor}; border-radius: 3px;">
+                        <span style="color: ${textColor};">
+                            ${isExtra ? '➕' : '✅'} ${assetId}
+                            ${isExtra ? ' <span style="font-size: 10px;">(EXTRA)</span>' : ''}
+                        </span>
+                        <button class="btn btn-warning" style="padding: 2px 6px; font-size: 10px;" onclick="unassignSpecificAsset(${eventId}, '${assetId}', '${brand}', '${model}')">Unprepare</button>
+                    </div>
+                `;
+            }
+        });
+        
+        section += '</div></div>';
+    }
+    
+    // Show available assets for assignment (always show, even if requirement is met)
+    section += `
+        <div style="margin-bottom: 15px;">
+            <h6 style="color: #495057; margin-bottom: 10px;">Available ${brand} ${model} (${availableAssets.length} total):</h6>
+            <div style="max-height: 200px; overflow-y: auto; border: 1px solid #e9ecef; border-radius: 4px;">
+    `;
+    
+    if (availableAssets.length === 0) {
+        section += '<p style="text-align: center; color: #666; padding: 20px;">No available assets of this model</p>';
+    } else {
+        availableAssets.forEach(asset => {
+            const isAssigned = assignedAssets.includes(asset.id);
+            if (!isAssigned) {
+                section += `
+                    <div style="padding: 8px 12px; border-bottom: 1px solid #f1f1f1; display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <span style="font-weight: 500;">${asset.id}</span>
+                            <span style="color: #666; font-size: 12px; margin-left: 10px;">SN: ${asset.serial || 'N/A'}</span>
+                            <span style="color: #999; font-size: 11px; margin-left: 10px;">📍 ${asset.location}</span>
+                        </div>
+                        <div>
+                            <button class="btn btn-success" style="padding: 4px 8px; font-size: 11px;" onclick="assignSpecificAsset(${eventId}, '${asset.id}', '${brand}', '${model}')">Assign</button>
+                        </div>
+                    </div>
+                `;
+            }
+        });
+    }
+    
+    section += '</div></div>';
+    section += '</div>';
+    return section;
 }
 
 function exportLogs() {

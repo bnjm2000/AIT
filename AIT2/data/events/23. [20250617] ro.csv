@@ -1,0 +1,2 @@
+EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets
+23,ro,20250617,20250617,[],"[""[MODEL]LX|Robe|ESPRITE|3|Profile LED"", ""ESPRITE#05"", ""ESPRITE#04"", ""ESPRITE#01"", ""LEDBEAM#01""]",[],Ready,"[""ESPRITE#05"", ""ESPRITE#04"", ""ESPRITE#01"", ""LEDBEAM#01""]","[""LEDBEAM#01""]"

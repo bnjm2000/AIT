@@ -54,7 +54,7 @@ class Container:
         self.asset_ids = asset_ids  # List of asset IDs
 
 class Event:
-    def __init__(self, event_id, name, start_date, end_date, asset_models, prepared_items=None, state='Added', returned_items=None):
+    def __init__(self, event_id, name, start_date, end_date, asset_models, prepared_items=None, state='Added', returned_items=None, actually_prepared=None, extra_assets=None):
         self.event_id = event_id
         self.name = name
         self.start_date = start_date
@@ -63,6 +63,8 @@ class Event:
         self.prepared_items = prepared_items if prepared_items is not None else []  # List of specific asset IDs or loan/misc items
         self.returned_items = returned_items if returned_items is not None else []  # List to track returned items
         self.state = state  # Event state
+        self.actually_prepared = actually_prepared if actually_prepared is not None else []  # List of actually prepared assets
+        self.extra_assets = extra_assets if extra_assets is not None else [] 
 
 class LogEntry:
     def __init__(self, timestamp, user, action):
