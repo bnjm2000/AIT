@@ -1,0 +1,2 @@
+EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets
+24,BBC,20250623,20250623,[],"[""[MODEL]AX|EV|EVOLVE 50|1|Portable column system"", ""[MODEL]LX|GrandMA3|Compact XT|1|Console"", ""EVOLVE50#01"", ""COMPACTXT#01""]","[""EVOLVE50#01"", ""COMPACTXT#01""]",Planning,[],[]
