@@ -831,22 +831,32 @@ async function openPrepareEventModal(eventId) {
         content += `
                 </div>
                 
-                <!-- Prepare Assigned Assets -->
+                <!-- Universal Asset Input -->
                 <div style="margin-top: 30px; padding-top: 20px; border-top: 2px solid #e9ecef;">
-                    <h4 style="color: #495057; margin-bottom: 15px;">All Assigned Assets</h4>
-                    <p style="color: #666; font-size: 14px; margin-bottom: 15px;">Scan or enter any asset ID assigned to this event to mark as prepared</p>
+                    <h4 style="color: #495057; margin-bottom: 15px;">Prepare or Assign Assets</h4>
+                    <p style="color: #666; font-size: 14px; margin-bottom: 15px;">Scan or enter any asset ID. If assigned to this event, it will be marked as prepared. If not assigned, you'll be prompted to assign it.</p>
                     <div class="form-group">
-                        <input type="text" class="form-input" id="assignedAssetPrepare" 
+                        <input type="text" class="form-input" id="universalAssetInput" 
                                placeholder="Enter Asset ID or Serial Number..." 
-                               onkeypress="if(event.key==='Enter') prepareAssignedAsset(${eventId})">
-                        <button class="btn btn-success" style="margin-top: 10px;" onclick="prepareAssignedAsset(${eventId})">Mark as Prepared</button>
+                               onkeypress="if(event.key==='Enter') processUniversalAsset(${eventId})"
+                               style="font-size: 16px; padding: 12px;">
+                        <button class="btn btn-success" style="margin-top: 10px; margin-right: 10px;" onclick="processUniversalAsset(${eventId})">Process Asset</button>
+                        <button class="btn btn-secondary" style="margin-top: 10px;" onclick="clearUniversalInput()">Clear</button>
                     </div>
+                    <div id="universal-asset-feedback" style="margin-top: 15px; min-height: 20px;">
+                        <!-- Feedback messages will appear here -->
+                    </div>
+                </div>
+                
+                <!-- All Assets Assigned to Event -->
+                <div style="margin-top: 30px; padding-top: 20px; border-top: 2px solid #e9ecef;">
+                    <h4 style="color: #495057; margin-bottom: 15px;">All Assets Assigned to Event</h4>
         `;
 
         // Show all assigned assets with their preparation status
         if (event.assetsByDepartment && Object.keys(event.assetsByDepartment).length > 0) {
             content += `
-                        <div style="border: 1px solid #e9ecef; border-radius: 8px; max-height: 300px; overflow-y: auto; margin-top: 15px;">
+                        <div style="border: 1px solid #e9ecef; border-radius: 8px; max-height: 400px; overflow-y: auto; margin-top: 15px;">
                             <div style="background: #f8f9fa; padding: 8px 12px; font-weight: bold; border-bottom: 1px solid #e9ecef;">
                                 All Assets Assigned to Event
                             </div>
@@ -913,20 +923,6 @@ async function openPrepareEventModal(eventId) {
         }
 
         content += `
-                </div>
-                
-                <!-- Assign Additional Assets -->
-                <div style="margin-top: 30px; padding-top: 20px; border-top: 2px solid #e9ecef;">
-                    <h4 style="color: #495057; margin-bottom: 15px;">Assign Additional Assets</h4>
-                    <p style="color: #666; font-size: 14px; margin-bottom: 15px;">Search and assign any available asset to this event (will be shown as extra assets)</p>
-                    <div class="form-group">
-                        <input type="text" class="form-input" id="additionalAssetSearch" 
-                               placeholder="Search any available asset..." 
-                               onkeyup="searchAdditionalAssets(${eventId})">
-                    </div>
-                    <div id="additional-assets-results" style="border: 1px solid #e9ecef; border-radius: 8px; max-height: 300px; overflow-y: auto; min-height: 50px;">
-                        <p style="text-align: center; color: #666; padding: 20px;">Type to search for any available asset...</p>
-                    </div>
                 </div>
                 
                 <!-- Actions -->
@@ -1138,12 +1134,395 @@ function finishEventPreparation(eventId) {
     }
 }
 
+async function processUniversalAsset(eventId) {
+    const input = document.getElementById('universalAssetInput');
+    const feedbackDiv = document.getElementById('universal-asset-feedback');
+    const assetId = input.value.trim();
+    
+    if (!assetId) {
+        showFeedback(feedbackDiv, 'warning', 'Please enter an asset ID');
+        return;
+    }
+    
+    try {
+        // Get event details and available assets to check asset existence and model matching
+        const [eventResponse, availableAssetsResponse] = await Promise.all([
+            apiCall(`/api/events/${eventId}`),
+            apiCall('/api/assets/available')
+        ]);
+        
+        const event = eventResponse.data;
+        const allAssets = availableAssetsResponse.data;
+        
+        // Find the asset in available assets or check if it exists in inventory
+        let assetDetails = allAssets.find(a => a.id === assetId);
+        
+        // If not in available assets, try to get asset details from the event's actually_prepared list
+        if (!assetDetails && event.actuallyPrepared && event.actuallyPrepared.includes(assetId)) {
+            // Asset might already be prepared, we need to check its details differently
+            // For now, we'll create a basic asset object
+            assetDetails = { id: assetId };
+        }
+        
+        let isDirectlyAssigned = false;
+        let isAlreadyPrepared = false;
+        let isReturned = false;
+        let fulfillsModelRequirement = false;
+        
+        // Check if asset is directly in prepared_items (assigned)
+        if (event.preparedItems && event.preparedItems.includes(assetId)) {
+            isDirectlyAssigned = true;
+        }
+        
+        // Check if asset is already prepared
+        if (event.actuallyPrepared && event.actuallyPrepared.includes(assetId)) {
+            isAlreadyPrepared = true;
+        }
+        
+        // Check if asset is returned
+        if (event.returnedItems && event.returnedItems.includes(assetId)) {
+            isReturned = true;
+        }
+        
+        // Check if asset fulfills any model requirement
+        if (assetDetails && event.preparedItems) {
+            for (const preparedItem of event.preparedItems) {
+                if (preparedItem.startsWith('[MODEL]')) {
+                    try {
+                        const parts = preparedItem.substring(7).split('|');
+                        if (parts.length >= 4) {
+                            const reqDept = parts[0];
+                            const reqBrand = parts[1];
+                            const reqModel = parts[2];
+                            
+                            // Check if this asset matches the model requirement
+                            if (assetDetails.department === reqDept && 
+                                assetDetails.brand === reqBrand && 
+                                assetDetails.model === reqModel) {
+                                fulfillsModelRequirement = true;
+                                break;
+                            }
+                        }
+                    } catch (e) {
+                        console.error('Error parsing model assignment:', e);
+                    }
+                }
+            }
+        }
+        
+        // Determine if asset is considered "assigned" (either directly or through model requirement)
+        const isAssigned = isDirectlyAssigned || fulfillsModelRequirement;
+        
+        if (isReturned) {
+            showFeedback(feedbackDiv, 'error', `${assetId} has already been returned from this event`);
+            return;
+        }
+        
+        if (isAssigned) {
+            if (isAlreadyPrepared) {
+                showFeedback(feedbackDiv, 'info', `${assetId} is already prepared for this event`);
+            } else {
+                // Asset is assigned but not prepared - prepare it
+                await apiCall(`/api/events/${eventId}/assign-specific`, 'POST', { assetId });
+                showFeedback(feedbackDiv, 'success', `✅ ${assetId} assigned and prepared`);
+                
+                // Clear input and focus back on it
+                input.value = '';
+                input.focus();
+                
+                // Update just the asset list section without full refresh
+                setTimeout(() => {
+                    updateAssetListSection(eventId);
+                }, 500);
+            }
+        } else {
+            // Asset is not assigned - ask if they want to assign it
+            if (!assetDetails) {
+                showFeedback(feedbackDiv, 'error', `${assetId} not found in inventory or not available`);
+                return;
+            }
+            
+            showFeedback(feedbackDiv, 'warning', 
+                `${assetId} is not assigned to this event. 
+                <button class="btn btn-warning" style="margin-left: 10px; padding: 4px 8px; font-size: 12px;" onclick="assignAndPrepareAsset(${eventId}, '${assetId}')">
+                    Assign & Prepare
+                </button>
+                <button class="btn btn-secondary" style="margin-left: 5px; padding: 4px 8px; font-size: 12px;" onclick="clearUniversalFeedback()">
+                    Cancel
+                </button>`
+            );
+        }
+        
+    } catch (error) {
+        showFeedback(feedbackDiv, 'error', `Failed to process asset: ${error.message}`);
+    }
+}
+
+async function assignAndPrepareAsset(eventId, assetId) {
+    const feedbackDiv = document.getElementById('universal-asset-feedback');
+    const input = document.getElementById('universalAssetInput');
+    
+    try {
+        // Just assign the asset to the event - it will be automatically prepared as an extra asset
+        await apiCall(`/api/events/${eventId}/assign-specific`, 'POST', { assetId });
+        
+        showFeedback(feedbackDiv, 'success', `✅ ${assetId} assigned and prepared as extra asset`);
+        
+        // Clear input and focus back on it
+        input.value = '';
+        input.focus();
+        
+        // Update just the asset list section without full refresh
+        setTimeout(() => {
+            updateAssetListSection(eventId);
+        }, 500);
+        
+    } catch (error) {
+        showFeedback(feedbackDiv, 'error', `Failed to assign asset: ${error.message}`);
+    }
+}
+
+function updateEventSummary(event) {
+    // Update the event summary numbers
+    const requiredEl = document.querySelector('.prepare-event-interface .stats-grid div:nth-child(1) .stat-number');
+    const preparedEl = document.querySelector('.prepare-event-interface .stats-grid div:nth-child(2) .stat-number');
+    const extraEl = document.querySelector('.prepare-event-interface .stats-grid div:nth-child(3) .stat-number');
+    
+    if (requiredEl) requiredEl.textContent = event.totalAssets;
+    if (preparedEl) preparedEl.textContent = event.totalPrepared;
+    if (extraEl) extraEl.textContent = Math.max(0, event.totalPrepared - event.totalAssets);
+}
+
+function updateModelGroupsSection(event, eventId) {
+    // Find all model requirement sections and update their status
+    const modelSections = document.querySelectorAll('.model-prep-section');
+    
+    modelSections.forEach(section => {
+        // Extract model info from the section
+        const titleElement = section.querySelector('h5');
+        if (!titleElement) return;
+        
+        const titleText = titleElement.textContent;
+        const match = titleText.match(/(\d+)x (.+)/);
+        if (!match) return;
+        
+        const requiredQty = parseInt(match[1]);
+        const modelName = match[2];
+        
+        // Find matching model group in event data
+        if (event.modelGroups) {
+            Object.values(event.modelGroups).forEach(modelGroup => {
+                const groupModelName = `${modelGroup.brand} ${modelGroup.model}`;
+                if (groupModelName === modelName) {
+                    updateModelSection(section, modelGroup, eventId);
+                }
+            });
+        }
+    });
+}
+
+function updateModelSection(section, modelGroup, eventId) {
+    const assignedCount = modelGroup.assignedAssets.length;
+    const requiredQty = modelGroup.requiredQuantity;
+    const progressPercent = Math.round((assignedCount / requiredQty) * 100);
+    
+    // Update the progress info
+    const statusDiv = section.querySelector('div[style*="text-align: right"] div:first-child');
+    if (statusDiv) {
+        const color = assignedCount >= requiredQty ? '#28a745' : '#ffc107';
+        statusDiv.innerHTML = `
+            <div style="font-size: 14px; font-weight: 500; color: ${color};">
+                ${assignedCount}/${requiredQty} assigned
+                ${assignedCount > requiredQty ? ` (+${assignedCount - requiredQty} extra)` : ''}
+            </div>
+        `;
+    }
+    
+    // Update the progress bar
+    const progressBar = section.querySelector('div[style*="background: #e9ecef"] div');
+    if (progressBar) {
+        const color = assignedCount >= requiredQty ? '#28a745' : '#ffc107';
+        progressBar.style.background = color;
+        progressBar.style.width = `${Math.min(progressPercent, 100)}%`;
+    }
+    
+    // Update assigned assets list
+    const assignedContainer = section.querySelector('div[style*="background: #d4edda"]');
+    if (assignedContainer && modelGroup.assignedAssets.length > 0) {
+        let content = '';
+        modelGroup.assignedAssets.forEach((asset, index) => {
+            const isExtra = index >= requiredQty;
+            const bgColor = isExtra ? '#fff3cd' : '#d4edda';
+            const textColor = isExtra ? '#856404' : '#155724';
+            
+            content += `
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; padding: 4px 8px; background: ${bgColor}; border-radius: 3px;">
+                    <span style="color: ${textColor};">
+                        ${isExtra ? '➕' : '✅'} ${asset.id} (SN: ${asset.serial || 'N/A'})
+                        ${isExtra ? ' <span style="font-size: 10px;">(EXTRA)</span>' : ''}
+                    </span>
+                    <button class="btn btn-warning" style="padding: 2px 6px; font-size: 10px;" onclick="unassignSpecificAsset(${eventId}, '${asset.id}', '${modelGroup.brand}', '${modelGroup.model}')">Unprepare</button>
+                </div>
+            `;
+        });
+        assignedContainer.innerHTML = content;
+    }
+}
+
+function updateAllAssetsSection(event, eventId) {
+    // Find the "All Assets Assigned to Event" container
+    const allAssetsContainer = document.querySelector('div[style*="All Assets Assigned to Event"]');
+    if (!allAssetsContainer) return;
+    
+    // Find the parent container that includes the border
+    const parentContainer = allAssetsContainer.closest('div[style*="border: 1px solid #e9ecef"]');
+    if (!parentContainer) return;
+    
+    let content = `
+        <div style="background: #f8f9fa; padding: 8px 12px; font-weight: bold; border-bottom: 1px solid #e9ecef;">
+            All Assets Assigned to Event
+        </div>
+    `;
+    
+    if (event.assetsByDepartment && Object.keys(event.assetsByDepartment).length > 0) {
+        Object.keys(event.assetsByDepartment).forEach(dept => {
+            const assets = event.assetsByDepartment[dept];
+            
+            // Add department header if there are non-model assets
+            const nonModelAssets = assets.filter(asset => !asset.id.startsWith('[MODEL]'));
+            if (nonModelAssets.length > 0) {
+                content += `
+                    <div style="background: #f1f3f4; padding: 6px 12px; font-weight: 500; font-size: 13px; border-bottom: 1px solid #e9ecef;">
+                        ${dept} Department
+                    </div>
+                `;
+            }
+            
+            assets.forEach(asset => {
+                if (!asset.id.startsWith('[MODEL]')) {
+                    const isPrepared = event.actuallyPrepared && event.actuallyPrepared.includes(asset.id);
+                    const isReturned = event.returnedItems && event.returnedItems.includes(asset.id);
+                    
+                    let statusIcon = '📋';
+                    let statusColor = '#6c757d';
+                    let statusText = 'Assigned';
+                    let actionButton = `<button class="btn btn-success" style="padding: 4px 8px; font-size: 11px;" onclick="prepareSpecificAsset(${eventId}, '${asset.id}')">Prepare</button>`;
+                    
+                    if (isReturned) {
+                        statusIcon = '↩️';
+                        statusColor = '#dc3545';
+                        statusText = 'Returned';
+                        actionButton = '<span style="color: #dc3545; font-size: 11px;">Returned</span>';
+                    } else if (isPrepared) {
+                        statusIcon = '✅';
+                        statusColor = '#28a745';
+                        statusText = 'Prepared';
+                        actionButton = `<button class="btn btn-warning" style="padding: 4px 8px; font-size: 11px;" onclick="unprepareSpecificAsset(${eventId}, '${asset.id}')">Unprepare</button>`;
+                    }
+                    
+                    // Add extra asset indicator
+                    const extraBadge = asset.isExtra ? '<span style="background: #fff3cd; color: #856404; padding: 2px 6px; border-radius: 3px; font-size: 10px; margin-left: 10px;">EXTRA</span>' : '';
+                    
+                    content += `
+                        <div style="padding: 8px 12px; border-bottom: 1px solid #f1f1f1; display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <span style="font-weight: 500;">${statusIcon} ${asset.id}</span>
+                                <span style="color: #666; font-size: 12px; margin-left: 10px;">${asset.name || ''}</span>
+                                ${extraBadge}
+                                <div style="color: ${statusColor}; font-size: 11px; margin-top: 2px;">${statusText}</div>
+                            </div>
+                            <div>
+                                ${actionButton}
+                            </div>
+                        </div>
+                    `;
+                }
+            });
+        });
+    } else {
+        content += '<p style="text-align: center; color: #666; padding: 20px;">No individual assets assigned to this event.</p>';
+    }
+    
+    parentContainer.innerHTML = content;
+}
+
+async function updateAssetListSection(eventId) {
+    try {
+        const response = await apiCall(`/api/events/${eventId}`);
+        const event = response.data;
+        
+        // Update Event Summary
+        updateEventSummary(event);
+        
+        // Update Model Groups sections
+        updateModelGroupsSection(event, eventId);
+        
+        // Update the "All Assets Assigned to Event" section
+        updateAllAssetsSection(event, eventId);
+        
+        // Ensure the input stays focused
+        const input = document.getElementById('universalAssetInput');
+        if (input) {
+            setTimeout(() => input.focus(), 100);
+        }
+        
+    } catch (error) {
+        console.error('Error updating asset list section:', error);
+    }
+}
+
+
+function showFeedback(feedbackDiv, type, message) {
+    const colors = {
+        'success': { bg: '#d4edda', color: '#155724', border: '#c3e6cb' },
+        'error': { bg: '#f8d7da', color: '#721c24', border: '#f5c6cb' },
+        'warning': { bg: '#fff3cd', color: '#856404', border: '#ffeaa7' },
+        'info': { bg: '#d1ecf1', color: '#0c5460', border: '#bee5eb' }
+    };
+    
+    const style = colors[type] || colors.info;
+    
+    feedbackDiv.innerHTML = `
+        <div style="
+            background: ${style.bg}; 
+            color: ${style.color}; 
+            border: 1px solid ${style.border}; 
+            padding: 10px; 
+            border-radius: 4px; 
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        ">
+            <span>${message}</span>
+        </div>
+    `;
+}
+
+function clearUniversalInput() {
+    const input = document.getElementById('universalAssetInput');
+    const feedbackDiv = document.getElementById('universal-asset-feedback');
+    
+    input.value = '';
+    feedbackDiv.innerHTML = '';
+    input.focus();
+}
+
+function clearUniversalFeedback() {
+    const feedbackDiv = document.getElementById('universal-asset-feedback');
+    feedbackDiv.innerHTML = '';
+}
+
 async function loadReturnEvents() {
   try {
     const response = await apiCall("/api/events");
-    const returnableEvents = response.data.filter(
-      (event) => event.state === "Ready" || event.state === "Returning"
-    );
+    const returnableEvents = response.data.filter((event) => {
+      const hasPreparedAssets = event.preparedCount > 0;
+      const hasUnreturnedAssets = event.preparedCount > event.returnedCount;
+      
+      // Include events that have assets that can be returned, regardless of state
+      return hasPreparedAssets && hasUnreturnedAssets && event.state !== 'Closed';
+    });
 
     const container = document.getElementById("return-events");
     container.innerHTML = "";
@@ -1181,8 +1560,8 @@ function createReturnEventCard(event) {
       ? formatDate(event.startDate)
       : `${formatDate(event.startDate)} - ${formatDate(event.endDate)}`;
 
-  const returnedCount = event.returnedItems?.length || 0;
-  const totalCount = event.assetCount || 0;
+  const returnedCount = event.returnedCount || 0;
+  const totalCount = event.preparedCount || 0;
 
   card.innerHTML = `
         <div class="event-header">
@@ -1197,9 +1576,9 @@ function createReturnEventCard(event) {
             <small style="color: #666;">${returnedCount}/${totalCount} assets returned</small>
         </div>
         <div class="event-actions">
-            <button class="btn btn-warning" onclick="openReturnAssetModal(${
+            <button class="btn btn-warning" onclick="openReturnAssetsModal(${
               event.id
-            })">Return Asset</button>
+            })">Return Assets</button>
             <button class="btn btn-primary" onclick="viewEvent(${
               event.id
             })">View Details</button>
@@ -1209,12 +1588,146 @@ function createReturnEventCard(event) {
   return card;
 }
 
+async function openReturnAssetsModal(eventId) {
+    try {
+        const response = await apiCall(`/api/events/${eventId}`);
+        const event = response.data;
+        
+        document.getElementById('returnAssetsEventTitle').textContent = `Return Assets - Event ${event.id}: ${event.name}`;
+        
+        let content = `
+            <div class="return-assets-interface">
+                <!-- Event Summary -->
+                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                    <h4 style="margin-bottom: 10px; color: #495057;">Event Summary</h4>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; text-align: center;">
+                        <div>
+                            <div style="font-size: 20px; font-weight: bold; color: #28a745;">${event.totalPrepared}</div>
+                            <div style="color: #666; font-size: 12px;">Prepared</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 20px; font-weight: bold; color: #dc3545;">${event.totalReturned}</div>
+                            <div style="color: #666; font-size: 12px;">Returned</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 20px; font-weight: bold; color: #ffc107;">${event.totalPrepared - event.totalReturned}</div>
+                            <div style="color: #666; font-size: 12px;">Still Out</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Assets to Return -->
+                <div id="assets-to-return">
+                    <h4 style="color: #495057; margin-bottom: 15px;">Assets Available for Return</h4>
+        `;
+        
+        if (event.assetsByDepartment && Object.keys(event.assetsByDepartment).length > 0) {
+            Object.keys(event.assetsByDepartment).sort().forEach(dept => {
+                const assets = event.assetsByDepartment[dept];
+                
+                const assetsToReturn = assets.filter(asset => 
+                    asset.status === 'prepared' && !asset.id.startsWith('[MODEL]')
+                );
+                
+                if (assetsToReturn.length > 0) {
+                    content += `
+                        <div class="dept-section" style="margin-bottom: 20px;">
+                            <h5 style="color: #495057; margin-bottom: 10px; padding: 8px; background: #f8f9fa; border-radius: 6px;">
+                                ${dept} Department (${assetsToReturn.length} assets)
+                            </h5>
+                            <div style="border: 1px solid #e9ecef; border-radius: 8px; overflow: hidden;">
+                    `;
+                    
+                    assetsToReturn.forEach(asset => {
+                        const extraBadge = asset.isExtra ? 
+                            '<span style="background: #fff3cd; color: #856404; padding: 2px 6px; border-radius: 3px; font-size: 10px; margin-left: 10px;">EXTRA</span>' : '';
+                        
+                        content += `
+                            <div class="return-asset-item" style="padding: 12px; border-bottom: 1px solid #f1f1f1; display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: background-color 0.2s;"
+                                 onmouseover="this.style.backgroundColor='#f8f9fa'" 
+                                 onmouseout="this.style.backgroundColor='white'"
+                                 onclick="returnSpecificAsset(${eventId}, '${asset.id}')">
+                                <div style="flex: 1;">
+                                    <div style="font-weight: 500; font-size: 14px;">
+                                        ✅ ${asset.id}${extraBadge}
+                                    </div>
+                                    <div style="color: #666; font-size: 12px; margin-top: 2px;">${asset.name || ''}</div>
+                                    ${asset.serial ? `<div style="color: #999; font-size: 11px;">SN: ${asset.serial}</div>` : ''}
+                                    ${asset.location ? `<div style="color: #007bff; font-size: 11px;">📍 ${asset.location}</div>` : ''}
+                                </div>
+                                <div style="margin-left: 15px;">
+                                    <button class="btn btn-warning" style="padding: 6px 12px; font-size: 12px;" onclick="event.stopPropagation(); returnSpecificAsset(${eventId}, '${asset.id}')">
+                                        Return
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    content += '</div></div>';
+                }
+            });
+        }
+        
+        if (!event.assetsByDepartment || Object.keys(event.assetsByDepartment).length === 0) {
+            content += '<p style="text-align: center; color: #666; padding: 40px;">No assets found for this event.</p>';
+        } else {
+            // Check for assets to return
+            let hasAssetsToReturn = false;
+            Object.values(event.assetsByDepartment).forEach(assets => {
+                if (assets.some(asset => asset.status === 'prepared' && !asset.id.startsWith('[MODEL]'))) {
+                    hasAssetsToReturn = true;
+                }
+            });
+            
+            if (!hasAssetsToReturn) {
+                content += '<p style="text-align: center; color: #666; padding: 40px;">All assets have already been returned for this event.</p>';
+            }
+        }
+        
+        content += `
+                </div>
+                <!-- Manual Return -->
+                <div style="margin-top: 30px; padding-top: 20px; border-top: 2px solid #e9ecef;">
+                    <h4 style="color: #495057; margin-bottom: 15px;">Manual Return</h4>
+                    <p style="color: #666; font-size: 14px; margin-bottom: 15px;">Scan or enter any asset ID to return it</p>
+                    <div class="form-group">
+                        <input type="text" class="form-input" id="manualReturnAssetId" 
+                               placeholder="Enter Asset ID or Serial Number..." 
+                               onkeypress="if(event.key==='Enter') returnManualAsset(${eventId})">
+                        <button class="btn btn-warning" style="margin-top: 10px;" onclick="returnManualAsset(${eventId})">Return Asset</button>
+                    </div>
+                </div>
+                
+                <!-- Actions -->
+                <div style="margin-top: 20px; text-align: right; padding-top: 20px; border-top: 2px solid #e9ecef;">
+                    <button class="btn btn-secondary" onclick="closeModal('returnAssetsModal')">Close</button>
+                    <button class="btn btn-primary" onclick="finishReturningAssets(${eventId})">Finish</button>
+                </div>
+            </div>
+        `;
+        
+        document.getElementById('returnAssetsContent').innerHTML = content;
+        openModal('returnAssetsModal');
+        
+    } catch (error) {
+        showNotification('error', 'Failed to load return assets interface');
+        console.error('Error loading return assets modal:', error);
+    }
+}
+
 async function loadTransferHistory() {
   try {
     const response = await apiCall("/api/events");
-    const activeEvents = response.data.filter(
-      (event) => event.state !== "Closed" && event.assetCount > 0
-    );
+    const activeEvents = response.data.filter((event) => {
+      // An event is transferable if:
+      // 1. It's not closed
+      // 2. It has assets assigned
+      // 3. It has unreturned assets (prepared but not returned)
+      const hasAssets = event.assetCount > 0;
+      const hasUnreturnedAssets = event.preparedCount > event.returnedCount;
+      
+      return event.state !== "Closed" && hasAssets && hasUnreturnedAssets;
+    });
 
     const container = document.getElementById("transfer-history");
     container.innerHTML = `
@@ -1226,7 +1739,7 @@ async function loadTransferHistory() {
 
     if (activeEvents.length === 0) {
       eventsList.innerHTML =
-        '<p style="text-align: center; color: #666; padding: 40px;">No active events with assets available for transfer.</p>';
+        '<p style="text-align: center; color: #666; padding: 40px;">No active events with unreturned assets available for transfer.</p>';
       return;
     }
 
@@ -1428,9 +1941,10 @@ async function viewEvent(eventId) {
           if (model.assignedAssets.length > 0) {
             content += '<div style="display: flex; flex-wrap: wrap; gap: 6px;">';
             model.assignedAssets.forEach((asset) => {
-              const assetStatusIcon = asset.status === "returned" ? "↩️" : "✅";
-              const assetBgColor = asset.status === "returned" ? "#fff3cd" : "#d4edda";
-              const assetTextColor = asset.status === "returned" ? "#856404" : "#155724";
+              // Check if this specific asset is returned
+              const assetStatusIcon = (asset.status === "returned" || (event.returnedItems && event.returnedItems.includes(asset.id))) ? "↩️" : "✅";
+              const assetBgColor = (asset.status === "returned" || (event.returnedItems && event.returnedItems.includes(asset.id))) ? "#fff3cd" : "#d4edda";
+              const assetTextColor = (asset.status === "returned" || (event.returnedItems && event.returnedItems.includes(asset.id))) ? "#856404" : "#155724";
 
               content += `
                     <span style="background: ${assetBgColor}; color: ${assetTextColor}; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 500;">
@@ -1484,11 +1998,12 @@ async function viewEvent(eventId) {
               let statusColor = '#6c757d';
               let statusText = 'Assigned';
               
-              if (asset.status === 'returned') {
+              // Check status in the correct order: returned first, then prepared
+              if (asset.status === 'returned' || (event.returnedItems && event.returnedItems.includes(asset.id))) {
                 statusIcon = '↩️';
                 statusColor = '#dc3545';
                 statusText = 'Returned';
-              } else if (asset.status === 'prepared') {
+              } else if (asset.status === 'prepared' || (event.actuallyPrepared && event.actuallyPrepared.includes(asset.id))) {
                 statusIcon = '✅';
                 statusColor = '#28a745';
                 statusText = 'Prepared';
@@ -1687,6 +2202,96 @@ function openReturnAssetModal(eventId) {
     "returnAssetTitle"
   ).textContent = `Return Asset from Event ${eventId}`;
   openModal("returnAssetModal");
+}
+
+async function returnSpecificAsset(eventId, assetId) {
+    try {
+        await apiCall(`/api/events/${eventId}/return`, 'POST', { assetId });
+        showNotification('success', `${assetId} returned successfully`);
+        
+        // Remove the asset from the return list
+        const assetElement = document.querySelector(`[onclick*="returnSpecificAsset(${eventId}, '${assetId}')"]`);
+        if (assetElement) {
+            assetElement.style.transition = 'opacity 0.3s ease';
+            assetElement.style.opacity = '0.5';
+            assetElement.style.pointerEvents = 'none';
+            
+            setTimeout(() => {
+                if (assetElement.parentNode) {
+                    assetElement.parentNode.removeChild(assetElement);
+                }
+            }, 300);
+        }
+        
+        // Refresh the return events list if it's active
+        if (document.getElementById('return-section').classList.contains('active')) {
+            setTimeout(() => {
+                loadReturnEvents();
+            }, 500);
+        }
+        
+    } catch (error) {
+        showNotification('error', `Failed to return asset: ${error.message}`);
+    }
+}
+
+async function returnManualAsset(eventId) {
+    const input = document.getElementById('manualReturnAssetId');
+    const assetId = input.value.trim();
+    
+    if (!assetId) {
+        showNotification('warning', 'Please enter an asset ID');
+        return;
+    }
+    
+    try {
+        await apiCall(`/api/events/${eventId}/return`, 'POST', { assetId });
+        showNotification('success', `${assetId} returned successfully`);
+        
+        // Clear input and focus back on it
+        input.value = '';
+        input.focus();
+        
+        // Remove the asset from the return list with animation
+        const assetElement = document.querySelector(`[onclick*="returnSpecificAsset(${eventId}, '${assetId}')"]`);
+        if (assetElement) {
+            assetElement.style.transition = 'opacity 0.3s ease';
+            assetElement.style.opacity = '0.5';
+            assetElement.style.pointerEvents = 'none';
+            
+            setTimeout(() => {
+                if (assetElement.parentNode) {
+                    assetElement.parentNode.removeChild(assetElement);
+                }
+            }, 300);
+        }
+        
+        // Refresh the return events list if it's active (but don't refresh modal)
+        if (document.getElementById('return-section').classList.contains('active')) {
+            setTimeout(() => {
+                loadReturnEvents();
+            }, 500);
+        }
+        
+    } catch (error) {
+        showNotification('error', `Failed to return asset: ${error.message}`);
+    }
+}
+
+function finishReturningAssets(eventId) {
+    closeModal('returnAssetsModal');
+    showNotification('success', 'Return process completed');
+    
+    // Refresh views
+    if (document.getElementById('return-section').classList.contains('active')) {
+        loadReturnEvents();
+    }
+    if (document.getElementById('dashboard-section').classList.contains('active')) {
+        loadDashboard();
+    }
+    if (document.getElementById('events-section').classList.contains('active')) {
+        loadAllEvents();
+    }
 }
 
 function openMaintenanceModalForAsset(assetId) {

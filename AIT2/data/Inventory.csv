@@ -69,19 +69,19 @@ DAD6010#12,DPA,DAD 6010,,MicroDot to TA4F Adapter,False,False,,AX,Store,
 DAD6010#13,DPA,DAD 6010,,MicroDot to TA4F Adapter,False,False,,AX,Store,
 DAD6010#14,DPA,DAD 6010,,MicroDot to TA4F Adapter,False,False,,AX,Store,
 DAD6010#15,DPA,DAD 6010,,MicroDot to TA4F Adapter,False,False,,AX,Store,
-DAD6010#16,DPA,DAD 6010,,MicroDot to TA4F Adapter,False,False,,AX,Store,
+DAD6010#16,DPA,DAD 6010,,MicroDot to TA4F Adapter,False,False,,AX,Store,Store
 DAD6010#17,DPA,DAD 6010,,MicroDot to TA4F Adapter,False,False,,AX,Store,
 DAD6010#18,DPA,DAD 6010,,MicroDot to TA4F Adapter,False,False,,AX,Store,
-DAD6010#19,DPA,DAD 6010,,MicroDot to TA4F Adapter,False,False,,AX,Store,
+DAD6010#19,DPA,DAD 6010,,MicroDot to TA4F Adapter,False,False,,AX,Store,Store
 DAD6010#20,DPA,DAD 6010,,MicroDot to TA4F Adapter,False,False,,AX,Store,
 DAD6010#21,DPA,DAD 6010,,MicroDot to TA4F Adapter,False,False,,AX,Store,
 DAD6010#22,DPA,DAD 6010,,MicroDot to TA4F Adapter,False,False,,AX,Store,
-EVOLVE50#01,EV,EVOLVE 50,405294781901280231,Portable column system,False,False,,AX,Store,
-EVOLVE50#02,EV,EVOLVE 50,405294795501160390,Portable column system,False,False,,AX,Store,
+EVOLVE50#01,EV,EVOLVE 50,405294781901280231,Portable column system,False,False,,AX,Store,Store
+EVOLVE50#02,EV,EVOLVE 50,405294795501160390,Portable column system,False,False,,AX,Store,Store
 EVOLVE50#03,EV,EVOLVE 50,405294795501160383,Portable column system,False,False,,AX,Store,
 EVOLVE50#04,EV,EVOLVE 50,405294795501160374,Portable column system,False,False,,AX,Store,
-EVOLVE50#05,EV,EVOLVE 50,405294795801150521,Portable column system,False,False,,AX,Store,Dry Hire: Variety Communications
-EVOLVE50#06,EV,EVOLVE 50,405294795501160310,Portable column system,False,False,,AX,Store,Dry Hire: Variety Communications
+EVOLVE50#05,EV,EVOLVE 50,405294795801150521,Portable column system,False,False,,AX,Store,Store
+EVOLVE50#06,EV,EVOLVE 50,405294795501160310,Portable column system,False,False,,AX,Store,Store
 HLBatt#01,Hollyland,HL-BAT700,23060502575,Solidcom C1 (Pro) Battery,False,False,,AX,Store,
 HLBatt#02,Hollyland,HL-BAT700,23060502934,Solidcom C1 (Pro) Battery,False,False,,AX,Store,
 HLBatt#03,Hollyland,HL-BAT700,23060502956,Solidcom C1 (Pro) Battery,False,False,,AX,Store,
@@ -109,7 +109,7 @@ C1ProRHS#06,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC00786C,,False,Fal
 C1ProRHS#07,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC008667,,False,False,,AX,Store,
 C1ProRHS#08,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC007AB4,,False,False,,AX,Store,
 C1ProWHS#01,Hollyland,Solidcom C1 Pro Wired Headset for Hub,2223170XX0D0036E,,False,False,,AX,Store,
-PCBB#01,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,
+PCBB#01,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,Store
 PCBB#02,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,
 PCBB#03,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,
 PCBB#04,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,
@@ -368,7 +368,7 @@ GSM4212P#01,Netgear,GSM4212P,6VB52B51A0392,Managed Switch,False,False,,AX,Store,
 GSM4212P#02,Netgear,GSM4212P,6VB52B5AA039B,Managed Switch,False,False,,AX,Store,
 GSM4212P#03,Netgear,GSM4212P,6VB52B5CA03B9,Managed Switch,False,False,,AX,Store,
 GSM4212P#04,Netgear,GSM4212P,6VB52B52A0393,Managed Switch,False,False,,AX,Store,
-CDJ1000MK2#01,Pioneer,CDJ1000MKII,,Professional DJ multi player (Black),False,False,,AX,Store,
+CDJ1000MK2#01,Pioneer,CDJ1000MKII,,Professional DJ multi player (Black),False,False,,AX,Store,Store
 CDJ1000MK2#02,Pioneer,CDJ1000MKII,,Professional DJ multi player (Black),False,False,,AX,Store,
 CDJ2000NXS#01,Pioneer,CDJ2000NXS,,Professional DJ multi player (Black),False,False,,AX,Store,
 CDJ2000NXS#02,Pioneer,CDJ2000NXS,,Professional DJ multi player (Black),False,False,,AX,Store,
@@ -395,15 +395,15 @@ MKE2#05,Sennheiser,MKE2,,"Lavalier microphone, beige",False,False,,AX,Store,
 MKE2#06,Sennheiser,MKE2,,"Lavalier microphone, beige",False,False,,AX,Store,
 AD1#01,Shure,AD1,2BI13281704,Beltpack [G56],False,False,,AX,Store,Store
 AD1#02,Shure,AD1,2CA26063354,Beltpack [G56],False,False,,AX,Store,Store
-AD1#03,Shure,AD1,2CA26063431,Beltpack [G56],False,False,,AX,Store,
+AD1#03,Shure,AD1,2CA26063431,Beltpack [G56],False,False,,AX,Store,Store
 AD1#04,Shure,AD1,2CA26063455,Beltpack [G56],False,False,,AX,Store,Store
-AD1#05,Shure,AD1,2CS26063556,Beltpack [G56],False,False,,AX,Store,
+AD1#05,Shure,AD1,2CS26063556,Beltpack [G56],False,False,,AX,Store,Store
 AD1#06,Shure,AD1,2SI13339508,Beltpack [G56],False,False,,AX,Store,
 AD1#07,Shure,AD1,2SI13340955,Beltpack [G56],False,False,,AX,Store,
 AD1#08,Shure,AD1,2SI13340979,Beltpack [G56],False,False,,AX,Store,
-AD1#09,Shure,AD1,2SI13341033,Beltpack [G56],False,False,,AX,Store,
+AD1#09,Shure,AD1,2SI13341033,Beltpack [G56],False,False,,AX,Store,Store
 AD1#10,Shure,AD1,2SI13341095,Beltpack [G56],False,False,,AX,Store,
-AD1#11,Shure,AD1,2SI13341122,Beltpack [G56],False,False,,AX,Store,
+AD1#11,Shure,AD1,2SI13341122,Beltpack [G56],False,False,,AX,Store,Store
 AD1#12,Shure,AD1,2SI13341463,Beltpack [G56],False,False,,AX,Store,
 AD1#13,Shure,AD1,2SI13341552,Beltpack [G56],False,False,,AX,Store,
 AD1#14,Shure,AD1,2SI25669222,Beltpack [G56],False,False,,AX,Store,
@@ -437,8 +437,8 @@ AD4Q#04,Shure,AD4Q,,Four-Channel Digital Wireless Receiver,False,False,,AX,Store
 P9R#01,Shure,P9R,,Bodypack Receiver [P7],False,False,,AX,Store,
 P9R#02,Shure,P9R,,Bodypack Receiver [P7],False,False,,AX,Store,
 P9R#03,Shure,P9R,,Bodypack Receiver [P7],False,False,,AX,Store,
-P9RA#01,Shure,P9RA,,Bodypack Receiver [P7],False,False,,AX,Store,
-P9RA#02,Shure,P9RA,,Bodypack Receiver [P7],False,False,,AX,Store,
+P9RA#01,Shure,P9RA,,Bodypack Receiver [P7],False,False,,AX,Store,Store
+P9RA#02,Shure,P9RA,,Bodypack Receiver [P7],False,False,,AX,Store,Store
 P9RA#03,Shure,P9RA,,Bodypack Receiver [P7],False,False,,AX,Store,
 P9RA#04,Shure,P9RA,,Bodypack Receiver [P7],False,False,,AX,Store,
 P9T#01,Shure,P9T,,Wireless Transmitter,False,False,,AX,Store,
@@ -453,15 +453,15 @@ SM57#02,Shure,SM57,,dynamic instrument microphone,False,False,,AX,Store,
 SM57#03,Shure,SM57,,dynamic instrument microphone,False,False,,AX,Store,
 SM57#04,Shure,SM57,,dynamic instrument microphone,False,False,,AX,Store,
 SM57#05,Shure,SM57,,dynamic instrument microphone,False,False,,AX,Store,
-SM58#01,Shure,SM58,,dynamic vocal microphone,False,False,,AX,Store,
-SM58#02,Shure,SM58,,dynamic vocal microphone,False,False,,AX,Store,
-SM58#03,Shure,SM58,,dynamic vocal microphone,False,False,,AX,Store,
-SM58#04,Shure,SM58,,dynamic vocal microphone,False,False,,AX,Store,
-SM58#05,Shure,SM58,,dynamic vocal microphone,False,False,,AX,Store,
-SM58#06,Shure,SM58,,dynamic vocal microphone,False,False,,AX,Store,
-SM58#07,Shure,SM58,,dynamic vocal microphone,False,False,,AX,Store,
-SM58#08,Shure,SM58,,dynamic vocal microphone,False,False,,AX,Store,
-SM58#09,Shure,SM58,,dynamic vocal microphone,False,False,,AX,Store,
+SM58#01,Shure,SM58,,dynamic vocal microphone,False,False,,AX,Store,Store
+SM58#02,Shure,SM58,,dynamic vocal microphone,False,False,,AX,Store,Store
+SM58#03,Shure,SM58,,dynamic vocal microphone,False,False,,AX,Store,Store
+SM58#04,Shure,SM58,,dynamic vocal microphone,False,False,,AX,Store,Store
+SM58#05,Shure,SM58,,dynamic vocal microphone,False,False,,AX,Store,Store
+SM58#06,Shure,SM58,,dynamic vocal microphone,False,False,,AX,Store,Store
+SM58#07,Shure,SM58,,dynamic vocal microphone,False,False,,AX,Store,Store
+SM58#08,Shure,SM58,,dynamic vocal microphone,False,False,,AX,Store,Store
+SM58#09,Shure,SM58,,dynamic vocal microphone,False,False,,AX,Store,Store
 SM58#10,Shure,SM58,,dynamic vocal microphone,False,False,,AX,Store,
 SM58S#01,Shure,SM58S,,cardioid dynamic w/ switch,False,False,,AX,Store,
 SM58S#02,Shure,SM58S,,cardioid dynamic w/ switch,False,False,,AX,Store,
@@ -571,7 +571,7 @@ MG12XU#02,Yamaha,MG12XU,,12-Channel Analog Mixing Console with FX,False,False,,A
 MG10#01,Yamaha,MG10,,10-Channel Analogue Mixer,False,False,,AX,Store,
 MG124CX#01,Yamaha,MG124CX,,12-Input Stereo Mixer with Compression and Effects,False,False,,AX,Store,
 MG124CX#02,Yamaha,MG124CX,,12-Input Stereo Mixer with Compression and Effects,False,False,,AX,Store,
-QL1#01,Yamaha,QL1,WTAUM01016,Digital Mixer,False,False,,AX,Store,
+QL1#01,Yamaha,QL1,WTAUM01016,Digital Mixer,False,False,,AX,Store,Store
 QL1#02,Yamaha,QL1,EAXP01044,Digital Mixer,False,False,,AX,Store,
 QL5#01,Yamaha,QL5,,Digital Mixer,False,False,,AX,Store,
 RIO1608-D #01,Yamaha,Rio1608-d,,High Performance I/O Rack,False,False,2024/11/13	bnjm2000	2024/11/13 - Updated firmware version to v5.80,AX,Store,
@@ -737,7 +737,7 @@ PB#61,Astera,Pixel Brick ,047-0312594,Batt LED Uplighters,False,False,2024/12/05
 PB#62,Astera,Pixel Brick ,047-0312735,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
 PB#63,Astera,Pixel Brick ,047-0312678,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
 PB#64,Astera,Pixel Brick ,047-0312730,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
-CAMEO#01,Cameo,Unicon Remote Control,CK01900822,DMX/RDM Controller,False,False,,LX,Store,
+CAMEO#01,Cameo,Unicon Remote Control,CK01900822,DMX/RDM Controller,False,False,,LX,Store,Store
 ECLIPSE#01,Silver Star,Eclipse 1000 RGBAL SS847XAL,MO18112100400034,,False,False,,LX,Store,
 ECLIPSE#02,Silver Star,Eclipse 1000 RGBAL SS847XAL,MO18112100400039,,False,False,,LX,Store,
 ECLIPSE#03,Silver Star,Eclipse 1000 RGBAL SS847XAL,MO18112100400030,,False,False,,LX,Store,

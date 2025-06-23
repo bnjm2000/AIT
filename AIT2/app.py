@@ -680,16 +680,30 @@ def get_event(event_id):
                             }
 
                         # Find assigned specific assets for this model
+                        # Check both actually_prepared and all inventory assets
+                        all_potential_assets = set()
                         if hasattr(event, 'actually_prepared'):
-                            for specific_asset_id in event.actually_prepared:
-                                specific_asset = data_manager.inventory.get(
-                                    specific_asset_id)
-                                if (specific_asset and
-                                    specific_asset.brand == brand and
+                            all_potential_assets.update(event.actually_prepared)
+                        
+                        # Also check returned items as they might have been assigned to this model
+                        all_potential_assets.update(event.returned_items)
+                        
+                        logger.info(f"Checking assets for model {brand} {model}: {all_potential_assets}")
+                        
+                        for specific_asset_id in all_potential_assets:
+                            specific_asset = data_manager.inventory.get(specific_asset_id)
+                            
+                            if specific_asset:
+                                logger.info(f"Asset {specific_asset_id}: brand={specific_asset.brand}, model={specific_asset.model_number}, dept={specific_asset.department_code}")
+                                logger.info(f"Looking for: brand={brand}, model={model}, dept={dept}")
+                                
+                                if (specific_asset.brand == brand and
                                     specific_asset.model_number == model and
-                                        specific_asset.department_code == dept):
+                                    specific_asset.department_code == dept):
 
+                                    # Check if this asset is returned
                                     asset_status = 'returned' if specific_asset_id in event.returned_items else 'prepared'
+                                    logger.info(f"Asset {specific_asset_id} matches model and has status: {asset_status}")
 
                                     model_groups[model_key]['assignedAssets'].append({
                                         'id': specific_asset_id,
@@ -701,38 +715,47 @@ def get_event(event_id):
                         # Determine overall model status - FIXED LOGIC
                         assigned_count = len(model_groups[model_key]['assignedAssets'])
                         returned_count = len([a for a in model_groups[model_key]['assignedAssets'] if a['status'] == 'returned'])
+                        prepared_count = assigned_count - returned_count
 
-                        if returned_count == assigned_count and returned_count == quantity:
+                        logger.info(f"Model {brand} {model}: assigned={assigned_count}, returned={returned_count}, prepared={prepared_count}, required={quantity}")
+
+                        if returned_count == assigned_count and assigned_count > 0:
                             model_groups[model_key]['status'] = 'returned'
-                        elif assigned_count >= quantity:
+                        elif prepared_count >= quantity:
                             model_groups[model_key]['status'] = 'ready'
-                        elif assigned_count > 0:
+                        elif prepared_count > 0:
                             model_groups[model_key]['status'] = 'partial'
                         else:
                             model_groups[model_key]['status'] = 'pending'
 
+                        logger.info(f"Model {brand} {model} final status: {model_groups[model_key]['status']}")
+
                 except Exception as e:
-                    logger.error(
-                        f"Error parsing model assignment {asset_id}: {e}")
+                    logger.error(f"Error parsing model assignment {asset_id}: {e}")
 
         # Calculate totals based on model requirements vs specific assignments
-        total_required = 0
-        total_prepared = 0
-        total_returned = 0
+        has_model_assignments = len(model_groups) > 0
         
-        # Count from model groups for accurate totals
-        for model_group in model_groups.values():
-            total_required += model_group['requiredQuantity']
-            total_prepared += len(model_group['assignedAssets'])
-            total_returned += len([a for a in model_group['assignedAssets'] if a['status'] == 'returned'])
-        
-        # If no model groups, fall back to old counting
-        if total_required == 0:
+        if has_model_assignments:
+            total_required = 0
+            total_prepared = 0
+            total_returned = 0
+            
+            # Count from model groups for accurate totals
+            for model_group in model_groups.values():
+                total_required += model_group['requiredQuantity']
+                # Count only non-returned assigned assets as prepared
+                prepared_assets_count = len([a for a in model_group['assignedAssets'] if a['status'] != 'returned'])
+                returned_assets_count = len([a for a in model_group['assignedAssets'] if a['status'] == 'returned'])
+                total_prepared += prepared_assets_count
+                total_returned += returned_assets_count
+        else:
+            # Use old logic for events without model assignments
             total_required = len([item for item in event.prepared_items if not item.startswith('[MODEL]')])
-            total_prepared = len(event.actually_prepared)
+            total_prepared = len([item for item in event.actually_prepared if item not in event.returned_items])
             total_returned = len(event.returned_items)
 
-        logger.info(f"Event {event_id} final asset counts - Required: {total_required}, Prepared: {total_prepared}, Extra assets in list: {len(event.extra_assets)}")
+        logger.info(f"Event {event_id} final asset counts - Required: {total_required}, Prepared: {total_prepared}, Returned: {total_returned}, Extra assets in list: {len(event.extra_assets)}")
             
         event_data = {
             'id': event.event_id,
@@ -759,7 +782,7 @@ def get_event(event_id):
     except Exception as e:
         logger.error(f"Error getting event {event_id}: {e}")
         return jsonify({'error': 'Failed to retrieve event'}), 500
-
+    
 @app.route('/api/events', methods=['POST'])
 @require_auth
 def create_event():
