@@ -2123,7 +2123,17 @@ function toggleModelDetails(modelId) {
 async function loadMaintenanceAssets() {
   try {
     const response = await apiCall("/api/assets");
-    displayMaintenanceAssets(response.data);
+    
+    // Update the global assets variable
+    assets = response.data;
+    
+    // Check which tab is active and load appropriate content
+    const activeTab = document.querySelector(".maintenance-tab.active");
+    if (activeTab && activeTab.getAttribute('data-tab') === 'ooc') {
+      loadOOCAssets();
+    } else {
+      displayMaintenanceAssets(response.data);
+    }
   } catch (error) {
     document.getElementById("maintenance-assets").innerHTML =
       '<p style="color: red; text-align: center;">Error loading assets</p>';
@@ -2172,9 +2182,9 @@ function displayMaintenanceAssets(assetsToShow) {
                 <td>${asset.location || "Store"}</td>
                 <td>${lastMaintenance}</td>
                 <td>
-                    <button class="btn btn-primary" onclick="openMaintenanceModalForAsset('${
+                    <button class="btn btn-primary" onclick="viewMaintenanceLog('${
                       asset.id
-                    }')">Log Maintenance</button>
+                    }')">View Log</button>
                 </td>
             </tr>
         `;
@@ -3981,44 +3991,163 @@ document.addEventListener("DOMContentLoaded", function () {
       }
     });
 
-  // Maintenance Form
+  // Bulk OOC Clear Form
   document
-    .getElementById("maintenanceForm")
+    .getElementById("bulkOOCForm")
     .addEventListener("submit", async function (e) {
       e.preventDefault();
 
-      const assetId = document.getElementById("maintenanceAssetId").value;
-      const logEntry = document.getElementById("maintenanceLogEntry").value;
-      const newLocation = document.getElementById(
-        "maintenanceNewLocation"
-      ).value;
-      const markOOC = document.getElementById("maintenanceMarkOOC").checked;
-      const unmarkOOC = document.getElementById("maintenanceUnmarkOOC").checked;
+      if (selectedOOCAssets.size === 0) {
+        showNotification("warning", "No assets selected");
+        return;
+      }
+
+      const logEntry = document.getElementById("bulkOOCLogEntry").value.trim();
+      const newLocation = document.getElementById("bulkOOCNewLocation").value.trim();
+
+      if (!logEntry) {
+        showNotification("warning", "Please enter a maintenance description");
+        return;
+      }
 
       try {
-        await apiCall(`/api/assets/${assetId}/maintain`, "POST", {
-          logEntry,
-          newLocation: newLocation || null,
-          markOOC,
-          unmarkOOC,
-        });
-        closeModal("maintenanceModal");
-        showNotification("success", "Maintenance logged successfully!");
-
-        // Refresh maintenance view
-        if (
-          document
-            .getElementById("maintenance-section")
-            .classList.contains("active")
-        ) {
-          loadMaintenanceAssets();
+        let successCount = 0;
+        let errorCount = 0;
+        
+        // Process each selected asset
+        for (const assetId of selectedOOCAssets) {
+          try {
+            await apiCall(`/api/assets/${encodeURIComponent(assetId)}/maintain`, "POST", {
+              logEntry,
+              newLocation: newLocation || "Store", // Default to Store if no location specified
+              markOOC: false,
+              unmarkOOC: true
+            });
+            successCount++;
+          } catch (error) {
+            console.error(`Failed to clear OOC for ${assetId}:`, error);
+            errorCount++;
+          }
         }
 
-        // Reset form
-        document.getElementById("maintenanceForm").reset();
+        closeModal("bulkOOCModal");
+        
+        if (successCount > 0) {
+          const locationText = newLocation ? `and moved to ${newLocation}` : "and moved to Store";
+          showNotification("success", `Cleared OOC status for ${successCount} asset${successCount > 1 ? 's' : ''} ${locationText}`);
+        }
+        
+        if (errorCount > 0) {
+          showNotification("error", `Failed to clear OOC status for ${errorCount} asset${errorCount > 1 ? 's' : ''}`);
+        }
+
+        // Refresh the OOC list
+        loadOOCAssets();
+        
+        // Clear selections
+        selectedOOCAssets.clear();
+        updateBulkOOCButton();
+
+        // Refresh other views if they're active
+        if (document.getElementById("inventory-section").classList.contains("active")) {
+          loadInventory();
+        }
+
       } catch (error) {
-        showNotification("error", "Failed to log maintenance");
+        showNotification("error", "Failed to clear OOC status");
+        console.error("Bulk OOC clear error:", error);
       }
+    });
+
+  // Maintenance Form
+  document
+  .getElementById("maintenanceForm")
+  .addEventListener("submit", async function (e) {
+    e.preventDefault();
+
+    if (selectedMaintenanceAssets.size === 0) {
+      showNotification("warning", "Please select at least one asset");
+      return;
+    }
+
+    const logEntry = document.getElementById("maintenanceLogEntry").value.trim();
+    const newLocation = document.getElementById("maintenanceNewLocation").value.trim();
+    const oocStatusEl = document.querySelector('input[name="oocStatus"]:checked');
+    
+    if (!oocStatusEl) {
+      showNotification("warning", "Please select an OOC status option");
+      return;
+    }
+    
+    const oocStatus = oocStatusEl.value;
+
+    if (!logEntry) {
+      showNotification("warning", "Please enter a maintenance log entry");
+      return;
+    }
+
+    try {
+      let successCount = 0;
+      let errorCount = 0;
+      const errors = [];
+      
+      // Process each selected asset
+      for (const assetId of selectedMaintenanceAssets) {
+        try {
+          const maintenanceData = {
+            logEntry,
+            newLocation: newLocation || null,
+            markOOC: oocStatus === 'mark',
+            unmarkOOC: oocStatus === 'unmark'
+          };
+          
+          // Encode the asset ID for the URL
+          const encodedAssetId = encodeURIComponent(assetId);
+          await apiCall(`/api/assets/${encodedAssetId}/maintain`, "POST", maintenanceData);
+          successCount++;
+        } catch (error) {
+          console.error(`Failed to log maintenance for ${assetId}:`, error);
+          errorCount++;
+          errors.push(`${assetId}: ${error.message}`);
+        }
+      }
+
+      closeModal("maintenanceModal");
+      
+      if (successCount > 0) {
+        showNotification("success", `Maintenance logged for ${successCount} asset${successCount > 1 ? 's' : ''}`);
+      }
+      
+      if (errorCount > 0) {
+        console.error('Maintenance errors:', errors);
+        showNotification("error", `Failed to log maintenance for ${errorCount} asset${errorCount > 1 ? 's' : ''}. Check console for details.`);
+      }
+
+      // Refresh maintenance view if it's active
+      if (document.getElementById("maintenance-section").classList.contains("active")) {
+        loadMaintenanceAssets();
+      }
+
+      // Refresh inventory view if it's active
+      if (document.getElementById("inventory-section").classList.contains("active")) {
+        loadInventory();
+      }
+
+      // Clear selections
+      selectedMaintenanceAssets.clear();
+
+    } catch (error) {
+      showNotification("error", "Failed to log maintenance");
+      console.error("Maintenance error:", error);
+    }
+  });
+
+  // Single OOC Clear Form
+  document
+    .getElementById("singleOOCForm")
+    .addEventListener("submit", async function (e) {
+      e.preventDefault();
+      await processSingleOOCClear();
     });
 
   // Maintenance search functionality
@@ -4184,6 +4313,851 @@ document.addEventListener("DOMContentLoaded", function () {
       }
     });
 });
+
+function openMaintenanceModalForAsset(assetId) {
+  // Ensure the modal is opened first
+  openMaintenanceModal();
+  
+  // Pre-select the asset after a short delay to ensure DOM is ready
+  setTimeout(() => {
+    if (assets && assets.length > 0) {
+      selectAssetForMaintenance(assetId);
+    } else {
+      console.warn('Assets not loaded yet, cannot pre-select asset');
+    }
+  }, 200);
+}
+
+// Global variable to store selected assets for maintenance
+let selectedMaintenanceAssets = new Set();
+
+function openMaintenanceModal() {
+  // Check if elements exist before trying to use them
+  const logEntryEl = document.getElementById('maintenanceLogEntry');
+  const newLocationEl = document.getElementById('maintenanceNewLocation');
+  const assetSearchEl = document.getElementById('maintenanceAssetSearch');
+  const availableAssetsEl = document.getElementById('availableMaintenanceAssets');
+  const noChangeRadio = document.querySelector('input[name="oocStatus"][value="nochange"]');
+  
+  if (!logEntryEl || !newLocationEl || !assetSearchEl || !availableAssetsEl) {
+    console.error('Maintenance modal elements not found');
+    showNotification('error', 'Maintenance modal not properly loaded');
+    return;
+  }
+  
+  // Clear previous selections
+  selectedMaintenanceAssets.clear();
+  updateSelectedAssetsDisplay();
+  
+  // Clear form
+  logEntryEl.value = '';
+  newLocationEl.value = '';
+  if (noChangeRadio) noChangeRadio.checked = true;
+  assetSearchEl.value = '';
+  
+  // Clear search results
+  availableAssetsEl.innerHTML = 
+    '<div style="padding: 20px; text-align: center; color: #666;">Type to search for assets...</div>';
+  
+  openModal('maintenanceModal');
+}
+
+function openMaintenanceModalForAsset(assetId) {
+  // Ensure the modal is opened first
+  openMaintenanceModal();
+  
+  // Pre-select the asset after a short delay to ensure DOM is ready
+  setTimeout(() => {
+    if (assets && assets.length > 0) {
+      selectAssetForMaintenance(assetId);
+    } else {
+      console.warn('Assets not loaded yet, cannot pre-select asset');
+    }
+  }, 200);
+}
+
+function searchMaintenanceAssets() {
+  const searchEl = document.getElementById('maintenanceAssetSearch');
+  const container = document.getElementById('availableMaintenanceAssets');
+  
+  if (!searchEl || !container) {
+    console.error('Search elements not found');
+    return;
+  }
+  
+  const searchTerm = searchEl.value.toLowerCase().trim();
+  
+  if (!searchTerm || searchTerm.length < 2) {
+    container.innerHTML = '<div style="padding: 20px; text-align: center; color: #666;">Type at least 2 characters to search...</div>';
+    return;
+  }
+  
+  if (!assets || assets.length === 0) {
+    container.innerHTML = '<div style="padding: 20px; text-align: center; color: #666;">No assets loaded. Please refresh the page.</div>';
+    return;
+  }
+  
+  // Filter assets based on search term
+  const filteredAssets = assets.filter(asset => {
+    const searchableText = `${asset.id} ${asset.brand} ${asset.model} ${asset.serial || ''} ${asset.description || ''}`.toLowerCase();
+    return searchableText.includes(searchTerm) && !selectedMaintenanceAssets.has(asset.id);
+  });
+  
+  if (filteredAssets.length === 0) {
+    container.innerHTML = '<div style="padding: 20px; text-align: center; color: #666;">No matching assets found.</div>';
+    return;
+  }
+  
+  let html = '';
+  filteredAssets.slice(0, 50).forEach(asset => { // Limit to 50 results
+    const statusBadge = getAssetStatusBadge(asset);
+    const locationText = asset.location || 'Store';
+    
+    html += `
+      <div style="padding: 12px; border-bottom: 1px solid #f1f1f1; display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: background-color 0.2s;"
+           onmouseover="this.style.backgroundColor='#f8f9fa'" 
+           onmouseout="this.style.backgroundColor='white'"
+           onclick="selectAssetForMaintenance('${asset.id}')">
+        <div style="flex: 1;">
+          <div style="font-weight: 500; margin-bottom: 4px;">${asset.id}</div>
+          <div style="color: #666; font-size: 13px; margin-bottom: 2px;">${asset.brand} ${asset.model}</div>
+          <div style="color: #999; font-size: 12px;">${asset.description || ''}</div>
+          <div style="margin-top: 4px;">
+            ${statusBadge}
+            <span style="color: #999; font-size: 11px; margin-left: 8px;">📍 ${locationText}</span>
+          </div>
+        </div>
+        <button class="btn btn-primary" style="padding: 6px 12px; font-size: 12px;" onclick="event.stopPropagation(); selectAssetForMaintenance('${asset.id}')">
+          Select
+        </button>
+      </div>
+    `;
+  });
+  
+  container.innerHTML = html;
+}
+
+function getAssetStatusBadge(asset) {
+  let statusClass = 'status-available';
+  let statusText = 'Available';
+  
+  if (asset.status === 'missing') {
+    statusClass = 'status-missing';
+    statusText = 'Missing';
+  } else if (asset.status === 'ooc') {
+    statusClass = 'status-ooc';
+    statusText = 'OOC';
+  } else if (asset.status === 'deployed') {
+    statusClass = 'status-deployed';
+    statusText = 'Deployed';
+  }
+  
+  return `<span class="asset-badge ${statusClass}">${statusText}</span>`;
+}
+
+function selectAssetForMaintenance(assetId) {
+  if (!assets || assets.length === 0) {
+    showNotification('error', 'Assets not loaded');
+    return;
+  }
+  
+  const asset = assets.find(a => a.id === assetId);
+  if (!asset) {
+    showNotification('error', `Asset ${assetId} not found`);
+    return;
+  }
+  
+  selectedMaintenanceAssets.add(assetId);
+  updateSelectedAssetsDisplay();
+  
+  // Remove from search results
+  searchMaintenanceAssets();
+  
+  showNotification('success', `Selected ${assetId} for maintenance`);
+}
+
+function removeAssetFromMaintenance(assetId) {
+  selectedMaintenanceAssets.delete(assetId);
+  updateSelectedAssetsDisplay();
+  
+  // Refresh search results
+  searchMaintenanceAssets();
+  
+  showNotification('info', `Removed ${assetId} from selection`);
+}
+
+function updateSelectedAssetsDisplay() {
+  const countElement = document.getElementById('selectedAssetsCount');
+  const listElement = document.getElementById('selectedAssetsList');
+  
+  if (!countElement || !listElement) {
+    console.error('Selected assets display elements not found');
+    return;
+  }
+  
+  countElement.textContent = selectedMaintenanceAssets.size;
+  
+  if (selectedMaintenanceAssets.size === 0) {
+    listElement.innerHTML = '<span style="color: #666; font-style: italic;">No assets selected</span>';
+    return;
+  }
+  
+  let html = '<div style="display: flex; flex-wrap: wrap; gap: 8px;">';
+  selectedMaintenanceAssets.forEach(assetId => {
+    const asset = assets ? assets.find(a => a.id === assetId) : null;
+    if (asset) {
+      html += `
+        <div style="background: #e7f3ff; border: 1px solid #b3d9ff; border-radius: 6px; padding: 6px 10px; display: flex; align-items: center; gap: 8px; font-size: 13px;">
+          <span style="font-weight: 500;">${assetId}</span>
+          <span style="color: #666;">- ${asset.brand} ${asset.model}</span>
+          <button onclick="removeAssetFromMaintenance('${assetId}')" style="background: none; border: none; color: #999; cursor: pointer; padding: 0; margin-left: 4px; font-size: 14px;" title="Remove">×</button>
+        </div>
+      `;
+    } else {
+      html += `
+        <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 6px; padding: 6px 10px; display: flex; align-items: center; gap: 8px; font-size: 13px;">
+          <span style="font-weight: 500;">${assetId}</span>
+          <span style="color: #666;">- Asset not found</span>
+          <button onclick="removeAssetFromMaintenance('${assetId}')" style="background: none; border: none; color: #999; cursor: pointer; padding: 0; margin-left: 4px; font-size: 14px;" title="Remove">×</button>
+        </div>
+      `;
+    }
+  });
+  html += '</div>';
+  
+  listElement.innerHTML = html;
+}
+
+function searchMaintenanceAssets() {
+  const searchEl = document.getElementById('maintenanceAssetSearch');
+  const container = document.getElementById('availableMaintenanceAssets');
+  
+  if (!searchEl || !container) {
+    console.error('Search elements not found');
+    return;
+  }
+  
+  const searchTerm = searchEl.value.toLowerCase().trim();
+  
+  if (!searchTerm || searchTerm.length < 2) {
+    container.innerHTML = '<div style="padding: 20px; text-align: center; color: #666;">Type at least 2 characters to search...</div>';
+    return;
+  }
+  
+  if (!assets || assets.length === 0) {
+    container.innerHTML = '<div style="padding: 20px; text-align: center; color: #666;">No assets loaded. Please refresh the page.</div>';
+    return;
+  }
+  
+  // Filter assets based on search term
+  const filteredAssets = assets.filter(asset => {
+    const searchableText = `${asset.id} ${asset.brand} ${asset.model} ${asset.serial || ''} ${asset.description || ''}`.toLowerCase();
+    return searchableText.includes(searchTerm) && !selectedMaintenanceAssets.has(asset.id);
+  });
+  
+  if (filteredAssets.length === 0) {
+    container.innerHTML = '<div style="padding: 20px; text-align: center; color: #666;">No matching assets found.</div>';
+    return;
+  }
+  
+  let html = '';
+  filteredAssets.slice(0, 50).forEach(asset => { // Limit to 50 results
+    const statusBadge = getAssetStatusBadge(asset);
+    const locationText = asset.location || 'Store';
+    
+    html += `
+      <div style="padding: 12px; border-bottom: 1px solid #f1f1f1; display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: background-color 0.2s;"
+           onmouseover="this.style.backgroundColor='#f8f9fa'" 
+           onmouseout="this.style.backgroundColor='white'"
+           onclick="selectAssetForMaintenance('${asset.id}')">
+        <div style="flex: 1;">
+          <div style="font-weight: 500; margin-bottom: 4px;">${asset.id}</div>
+          <div style="color: #666; font-size: 13px; margin-bottom: 2px;">${asset.brand} ${asset.model}</div>
+          <div style="color: #999; font-size: 12px;">${asset.description || ''}</div>
+          <div style="margin-top: 4px;">
+            ${statusBadge}
+            <span style="color: #999; font-size: 11px; margin-left: 8px;">📍 ${locationText}</span>
+          </div>
+        </div>
+        <button class="btn btn-primary" style="padding: 6px 12px; font-size: 12px;" onclick="event.stopPropagation(); selectAssetForMaintenance('${asset.id}')">
+          Select
+        </button>
+      </div>
+    `;
+  });
+  
+  container.innerHTML = html;
+}
+
+function getAssetStatusBadge(asset) {
+  let statusClass = 'status-available';
+  let statusText = 'Available';
+  
+  if (asset.status === 'missing') {
+    statusClass = 'status-missing';
+    statusText = 'Missing';
+  } else if (asset.status === 'ooc') {
+    statusClass = 'status-ooc';
+    statusText = 'OOC';
+  } else if (asset.status === 'deployed') {
+    statusClass = 'status-deployed';
+    statusText = 'Deployed';
+  }
+  
+  return `<span class="asset-badge ${statusClass}">${statusText}</span>`;
+}
+
+function selectAssetForMaintenance(assetId) {
+  if (!assets || assets.length === 0) {
+    showNotification('error', 'Assets not loaded');
+    return;
+  }
+  
+  const asset = assets.find(a => a.id === assetId);
+  if (!asset) {
+    showNotification('error', `Asset ${assetId} not found`);
+    return;
+  }
+  
+  selectedMaintenanceAssets.add(assetId);
+  updateSelectedAssetsDisplay();
+  
+  // Remove from search results
+  searchMaintenanceAssets();
+  
+  showNotification('success', `Selected ${assetId} for maintenance`);
+}
+
+function removeAssetFromMaintenance(assetId) {
+  selectedMaintenanceAssets.delete(assetId);
+  updateSelectedAssetsDisplay();
+  
+  // Refresh search results
+  searchMaintenanceAssets();
+  
+  showNotification('info', `Removed ${assetId} from selection`);
+}
+
+function updateSelectedAssetsDisplay() {
+  const countElement = document.getElementById('selectedAssetsCount');
+  const listElement = document.getElementById('selectedAssetsList');
+  
+  if (!countElement || !listElement) {
+    console.error('Selected assets display elements not found');
+    return;
+  }
+  
+  countElement.textContent = selectedMaintenanceAssets.size;
+  
+  if (selectedMaintenanceAssets.size === 0) {
+    listElement.innerHTML = '<span style="color: #666; font-style: italic;">No assets selected</span>';
+    return;
+  }
+  
+  let html = '<div style="display: flex; flex-wrap: wrap; gap: 8px;">';
+  selectedMaintenanceAssets.forEach(assetId => {
+    const asset = assets ? assets.find(a => a.id === assetId) : null;
+    if (asset) {
+      html += `
+        <div style="background: #e7f3ff; border: 1px solid #b3d9ff; border-radius: 6px; padding: 6px 10px; display: flex; align-items: center; gap: 8px; font-size: 13px;">
+          <span style="font-weight: 500;">${assetId}</span>
+          <span style="color: #666;">- ${asset.brand} ${asset.model}</span>
+          <button onclick="removeAssetFromMaintenance('${assetId}')" style="background: none; border: none; color: #999; cursor: pointer; padding: 0; margin-left: 4px; font-size: 14px;" title="Remove">×</button>
+        </div>
+      `;
+    } else {
+      html += `
+        <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 6px; padding: 6px 10px; display: flex; align-items: center; gap: 8px; font-size: 13px;">
+          <span style="font-weight: 500;">${assetId}</span>
+          <span style="color: #666;">- Asset not found</span>
+          <button onclick="removeAssetFromMaintenance('${assetId}')" style="background: none; border: none; color: #999; cursor: pointer; padding: 0; margin-left: 4px; font-size: 14px;" title="Remove">×</button>
+        </div>
+      `;
+    }
+  });
+  html += '</div>';
+  
+  listElement.innerHTML = html;
+}
+
+// Global variable for selected OOC assets
+let selectedOOCAssets = new Set();
+
+function switchMaintenanceTab(tabName) {
+  // Remove active class from all tabs
+  document.querySelectorAll(".maintenance-tab").forEach((tab) => {
+    tab.classList.remove("active");
+    tab.style.background = "none";
+    tab.style.borderBottomColor = "transparent";
+    tab.style.color = "#666";
+  });
+
+  // Remove active class from all content
+  document.querySelectorAll(".maintenance-content").forEach((content) => {
+    content.classList.remove("active");
+    content.style.display = "none";
+  });
+
+  // Add active class to clicked tab
+  const activeTab = document.querySelector(`[data-tab="${tabName}"]`);
+  if (activeTab) {
+    activeTab.classList.add("active");
+    activeTab.style.background = "rgba(118, 75, 162, 0.05)";
+    activeTab.style.borderBottomColor = "#764ba2";
+    activeTab.style.color = "#764ba2";
+  }
+
+  // Show corresponding content
+  const contentDiv = document.getElementById(`${tabName}-assets-maintenance`);
+  if (contentDiv) {
+    contentDiv.classList.add("active");
+    contentDiv.style.display = "block";
+  }
+
+  // Load appropriate data
+  if (tabName === "all") {
+    loadMaintenanceAssets();
+  } else if (tabName === "ooc") {
+    loadOOCAssets();
+  }
+}
+
+async function loadOOCAssets() {
+  try {
+    const response = await apiCall("/api/assets");
+    const oocAssets = response.data.filter(asset => asset.isOOC);
+    
+    displayOOCAssets(oocAssets);
+    
+    // Set up search functionality
+    const searchInput = document.getElementById("ooc-search");
+    if (searchInput) {
+      searchInput.removeEventListener("input", filterOOCAssets);
+      searchInput.addEventListener("input", filterOOCAssets);
+    }
+    
+  } catch (error) {
+    document.getElementById("ooc-assets-list").innerHTML =
+      '<p style="color: red; text-align: center;">Error loading OOC assets</p>';
+  }
+}
+
+function displayOOCAssets(oocAssets) {
+  const container = document.getElementById("ooc-assets-list");
+
+  if (oocAssets.length === 0) {
+    container.innerHTML =
+      '<p style="text-align: center; color: #666; padding: 40px;">🎉 No assets are currently marked as Out of Commission!</p>';
+    return;
+  }
+
+  let tableHTML = `
+    <div style="margin-bottom: 15px; padding: 10px; background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px;">
+      <strong>📋 Instructions:</strong> Select the assets that have been repaired/fixed and are ready to return to service. 
+      You can select multiple assets and clear their OOC status together.
+    </div>
+    <table class="table">
+      <thead>
+        <tr>
+          <th style="width: 40px;">
+            <input type="checkbox" id="selectAllOOC" onchange="toggleAllOOCSelection()" class="ooc-asset-checkbox">
+          </th>
+          <th>Asset ID</th>
+          <th>Brand</th>
+          <th>Model</th>
+          <th>Description</th>
+          <th>Location</th>
+          <th>Last Maintenance</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+  `;
+
+  oocAssets.forEach((asset) => {
+    const lastMaintenance =
+      asset.maintenanceLogs && asset.maintenanceLogs.length > 0
+        ? asset.maintenanceLogs[asset.maintenanceLogs.length - 1].split("\t")[0]
+        : "Never";
+
+    const isSelected = selectedOOCAssets.has(asset.id);
+
+    tableHTML += `
+      <tr class="ooc-asset-item ${isSelected ? 'selected' : ''}" onclick="toggleOOCAssetSelection('${asset.id}')">
+        <td>
+          <input type="checkbox" ${isSelected ? 'checked' : ''} onchange="toggleOOCAssetSelection('${asset.id}')" onclick="event.stopPropagation()" class="ooc-asset-checkbox">
+        </td>
+        <td style="font-weight: 500;">${asset.id}</td>
+        <td>${asset.brand}</td>
+        <td>${asset.model}</td>
+        <td>${asset.description || 'N/A'}</td>
+        <td>${asset.location || "Store"}</td>
+        <td style="font-size: 12px;">${lastMaintenance}</td>
+        <td>
+          <button class="btn btn-success" style="padding: 4px 8px; font-size: 11px;" onclick="event.stopPropagation(); clearSingleOOC('${asset.id}')">
+            Clear OOC
+          </button>
+        </td>
+      </tr>
+    `;
+  });
+
+  tableHTML += "</tbody></table>";
+  container.innerHTML = tableHTML;
+  
+  updateBulkOOCButton();
+}
+
+function toggleOOCAssetSelection(assetId) {
+  if (selectedOOCAssets.has(assetId)) {
+    selectedOOCAssets.delete(assetId);
+  } else {
+    selectedOOCAssets.add(assetId);
+  }
+  
+  updateOOCAssetDisplay();
+  updateBulkOOCButton();
+}
+
+function toggleAllOOCSelection() {
+  const selectAllCheckbox = document.getElementById("selectAllOOC");
+  const isChecked = selectAllCheckbox.checked;
+  
+  // Get all currently visible OOC assets
+  const oocAssetRows = document.querySelectorAll(".ooc-asset-item");
+  
+  if (isChecked) {
+    // Select all visible assets
+    oocAssetRows.forEach(row => {
+      const checkbox = row.querySelector('input[type="checkbox"]');
+      if (checkbox && !checkbox.checked) {
+        const assetId = checkbox.getAttribute('onchange').match(/'([^']+)'/)[1];
+        selectedOOCAssets.add(assetId);
+      }
+    });
+  } else {
+    // Deselect all
+    selectedOOCAssets.clear();
+  }
+  
+  updateOOCAssetDisplay();
+  updateBulkOOCButton();
+}
+
+function updateOOCAssetDisplay() {
+  // Update individual checkboxes and row styling
+  document.querySelectorAll(".ooc-asset-item").forEach(row => {
+    const checkbox = row.querySelector('input[type="checkbox"]');
+    if (checkbox) {
+      const assetId = checkbox.getAttribute('onchange').match(/'([^']+)'/)[1];
+      const isSelected = selectedOOCAssets.has(assetId);
+      
+      checkbox.checked = isSelected;
+      if (isSelected) {
+        row.classList.add('selected');
+      } else {
+        row.classList.remove('selected');
+      }
+    }
+  });
+  
+  // Update select all checkbox
+  const selectAllCheckbox = document.getElementById("selectAllOOC");
+  if (selectAllCheckbox) {
+    const totalVisible = document.querySelectorAll(".ooc-asset-item").length;
+    const totalSelected = selectedOOCAssets.size;
+    
+    selectAllCheckbox.checked = totalSelected > 0 && totalSelected === totalVisible;
+    selectAllCheckbox.indeterminate = totalSelected > 0 && totalSelected < totalVisible;
+  }
+}
+
+function updateBulkOOCButton() {
+  const button = document.getElementById("bulk-clear-ooc-btn");
+  if (button) {
+    button.disabled = selectedOOCAssets.size === 0;
+    button.textContent = selectedOOCAssets.size > 0 
+      ? `Clear OOC Status (${selectedOOCAssets.size})` 
+      : 'Clear OOC Status';
+  }
+}
+
+function filterOOCAssets() {
+  const searchTerm = document.getElementById("ooc-search")?.value.toLowerCase() || "";
+  const rows = document.querySelectorAll(".ooc-asset-item");
+  
+  rows.forEach(row => {
+    const text = row.textContent.toLowerCase();
+    if (text.includes(searchTerm)) {
+      row.style.display = "";
+    } else {
+      row.style.display = "none";
+    }
+  });
+}
+
+function openBulkOOCModal() {
+  if (selectedOOCAssets.size === 0) {
+    showNotification("warning", "Please select at least one asset");
+    return;
+  }
+  
+  updateSelectedOOCDisplay();
+  openModal('bulkOOCModal');
+}
+
+function updateSelectedOOCDisplay() {
+  const countElement = document.getElementById('selectedOOCCount');
+  const containerElement = document.getElementById('selectedOOCAssets');
+  
+  countElement.textContent = selectedOOCAssets.size;
+  
+  if (selectedOOCAssets.size === 0) {
+    containerElement.innerHTML = '<div style="color: #666; font-style: italic;">No assets selected</div>';
+    return;
+  }
+  
+  let html = '<div style="display: grid; gap: 8px;">';
+  selectedOOCAssets.forEach(assetId => {
+    const asset = assets ? assets.find(a => a.id === assetId) : null;
+    if (asset) {
+      html += `
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px; background: white; border: 1px solid #ddd; border-radius: 4px;">
+          <div>
+            <span style="font-weight: 500;">${assetId}</span>
+            <span style="color: #666; margin-left: 10px;">${asset.brand} ${asset.model}</span>
+          </div>
+          <button onclick="removeFromOOCSelection('${assetId}')" style="background: none; border: none; color: #999; cursor: pointer; font-size: 16px;" title="Remove">×</button>
+        </div>
+      `;
+    }
+  });
+  html += '</div>';
+  
+  containerElement.innerHTML = html;
+}
+
+function removeFromOOCSelection(assetId) {
+  selectedOOCAssets.delete(assetId);
+  updateSelectedOOCDisplay();
+  updateOOCAssetDisplay();
+  updateBulkOOCButton();
+}
+
+function clearSingleOOC(assetId) {
+  // Find the asset details
+  const asset = assets ? assets.find(a => a.id === assetId) : null;
+  if (!asset) {
+    showNotification('error', 'Asset not found');
+    return;
+  }
+  
+  // Populate the modal
+  document.getElementById('singleOOCTitle').textContent = `Clear OOC Status - ${assetId}`;
+  document.getElementById('singleOOCAssetId').value = assetId;
+  document.getElementById('singleOOCLogEntry').value = '';
+  document.getElementById('singleOOCNewLocation').value = 'Store';
+  
+  // Show asset info
+  const assetInfoDiv = document.getElementById('singleOOCAssetInfo');
+  assetInfoDiv.innerHTML = `
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px;">
+      <div><strong>Asset ID:</strong> ${asset.id}</div>
+      <div><strong>Brand:</strong> ${asset.brand}</div>
+      <div><strong>Model:</strong> ${asset.model}</div>
+      <div><strong>Current Location:</strong> ${asset.location || 'Store'}</div>
+    </div>
+    ${asset.description ? `<div style="margin-top: 8px;"><strong>Description:</strong> ${asset.description}</div>` : ''}
+  `;
+  
+  // Open the modal
+  openModal('singleOOCModal');
+}
+
+async function processSingleOOCClear() {
+  const assetId = document.getElementById('singleOOCAssetId').value;
+  const logEntry = document.getElementById('singleOOCLogEntry').value.trim();
+  const newLocation = document.getElementById('singleOOCNewLocation').value.trim();
+  
+  if (!logEntry) {
+    showNotification("warning", "Please enter a maintenance description");
+    return;
+  }
+  
+  if (!newLocation) {
+    showNotification("warning", "Please enter a location");
+    return;
+  }
+  
+  try {
+    await apiCall(`/api/assets/${encodeURIComponent(assetId)}/maintain`, "POST", {
+      logEntry: logEntry,
+      newLocation: newLocation,
+      markOOC: false,
+      unmarkOOC: true
+    });
+    
+    closeModal('singleOOCModal');
+    showNotification("success", `Cleared OOC status for ${assetId} and moved to ${newLocation}`);
+    
+    // Refresh the OOC list
+    loadOOCAssets();
+    
+    // Remove from selection if it was selected
+    selectedOOCAssets.delete(assetId);
+    updateBulkOOCButton();
+    
+  } catch (error) {
+    showNotification("error", `Failed to clear OOC status: ${error.message}`);
+  }
+}
+
+async function viewMaintenanceLog(assetId) {
+  try {
+    // Get the asset details
+    const asset = assets.find(a => a.id === assetId);
+    if (!asset) {
+      showNotification('error', 'Asset not found');
+      return;
+    }
+    
+    // Create and show the maintenance log modal
+    showMaintenanceLogModal(asset);
+    
+  } catch (error) {
+    console.error('Error viewing maintenance log:', error);
+    showNotification('error', 'Failed to load maintenance log');
+  }
+}
+
+function showMaintenanceLogModal(asset) {
+  // Create modal content
+  const modalContent = `
+    <div class="modal" id="maintenanceLogModal" style="display: flex; align-items: center; justify-content: center;">
+      <div class="modal-content" style="max-width: 800px; width: 90%; max-height: 80vh; overflow-y: auto;">
+        <div class="modal-header">
+          <h3 class="modal-title">Maintenance Log - ${asset.id}</h3>
+          <button class="close-btn" onclick="closeMaintenanceLogModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+          <!-- Asset Info -->
+          <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+              <div>
+                <strong>Asset ID:</strong> ${asset.id}<br>
+                <strong>Brand:</strong> ${asset.brand}<br>
+                <strong>Model:</strong> ${asset.model}
+              </div>
+              <div>
+                <strong>Description:</strong> ${asset.description || 'N/A'}<br>
+                <strong>Serial:</strong> ${asset.serial || 'N/A'}<br>
+                <strong>Department:</strong> <span class="asset-badge dept-${asset.department.toLowerCase()}">${asset.department}</span>
+              </div>
+              <div>
+                <strong>Status:</strong> <span class="asset-badge status-${asset.status}">${asset.status}</span><br>
+                <strong>Location:</strong> ${asset.location || 'Store'}<br>
+                <strong>OOC:</strong> ${asset.isOOC ? '<span style="color: #dc3545;">Yes</span>' : '<span style="color: #28a745;">No</span>'}
+              </div>
+            </div>
+          </div>
+          
+          <!-- Maintenance Log -->
+          <div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+              <h4 style="margin: 0; color: #495057;">Maintenance History</h4>
+              <button class="btn btn-primary" onclick="closeMaintenanceLogModal(); openMaintenanceModalForAsset('${asset.id}')">
+                Log New Maintenance
+              </button>
+            </div>
+            
+            ${createMaintenanceLogTable(asset)}
+          </div>
+        </div>
+        <div style="text-align: right; margin-top: 20px; padding-top: 15px; border-top: 1px solid #e9ecef;">
+          <button class="btn btn-secondary" onclick="closeMaintenanceLogModal()">Close</button>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  // Remove existing modal if any
+  const existingModal = document.getElementById('maintenanceLogModal');
+  if (existingModal) {
+    existingModal.remove();
+  }
+  
+  // Add modal to body
+  document.body.insertAdjacentHTML('beforeend', modalContent);
+  
+  // Show modal
+  document.getElementById('maintenanceLogModal').style.display = 'flex';
+}
+
+function createMaintenanceLogTable(asset) {
+  if (!asset.maintenanceLogs || asset.maintenanceLogs.length === 0) {
+    return `
+      <div style="text-align: center; padding: 40px; color: #666; background: #f8f9fa; border-radius: 8px;">
+        <div style="font-size: 48px; margin-bottom: 10px;">🔧</div>
+        <div style="font-size: 18px; margin-bottom: 5px;">No Maintenance Records</div>
+        <div style="font-size: 14px;">This asset has no maintenance history yet.</div>
+      </div>
+    `;
+  }
+  
+  // Sort logs by date (most recent first)
+  const sortedLogs = [...asset.maintenanceLogs].reverse();
+  
+  let tableHTML = `
+    <div style="border: 1px solid #e9ecef; border-radius: 8px; overflow: hidden;">
+      <table class="table" style="margin: 0;">
+        <thead style="background: #f8f9fa;">
+          <tr>
+            <th style="width: 120px;">Date</th>
+            <th style="width: 100px;">User</th>
+            <th>Maintenance Description</th>
+          </tr>
+        </thead>
+        <tbody>
+  `;
+  
+  sortedLogs.forEach((log, index) => {
+    const parts = log.split('\t');
+    if (parts.length >= 3) {
+      const date = parts[0];
+      const user = parts[1];
+      const description = parts.slice(2).join('\t'); // In case description contains tabs
+      
+      // Alternate row colors
+      const rowClass = index % 2 === 0 ? '' : 'style="background: #f8f9fa;"';
+      
+      tableHTML += `
+        <tr ${rowClass}>
+          <td style="font-size: 13px; color: #666;">${date}</td>
+          <td style="font-size: 13px;"><strong>${user}</strong></td>
+          <td style="font-size: 14px;">${description}</td>
+        </tr>
+      `;
+    }
+  });
+  
+  tableHTML += `
+        </tbody>
+      </table>
+    </div>
+    <div style="margin-top: 10px; text-align: center; color: #666; font-size: 12px;">
+      Showing ${sortedLogs.length} maintenance record${sortedLogs.length !== 1 ? 's' : ''}
+    </div>
+  `;
+  
+  return tableHTML;
+}
+
+function closeMaintenanceLogModal() {
+  const modal = document.getElementById('maintenanceLogModal');
+  if (modal) {
+    modal.remove();
+  }
+}
 
 // Utility functions
 function showNotification(type, message) {
@@ -4387,6 +5361,24 @@ async function initializeApp() {
     showNotification("error", "Failed to initialize application");
   }
 }
+
+// Close maintenance log modal when clicking outside
+document.addEventListener('click', function(e) {
+  const modal = document.getElementById('maintenanceLogModal');
+  if (modal && e.target === modal) {
+    closeMaintenanceLogModal();
+  }
+});
+
+// Handle escape key for maintenance log modal
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    const modal = document.getElementById('maintenanceLogModal');
+    if (modal) {
+      closeMaintenanceLogModal();
+    }
+  }
+});
 
 // Auto-refresh data every 6 seconds
 setInterval(async () => {

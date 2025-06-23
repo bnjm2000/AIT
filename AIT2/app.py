@@ -1836,19 +1836,42 @@ def update_asset(asset_id):
         logger.error(f"Error updating asset {asset_id}: {e}")
         return jsonify({'error': 'Failed to update asset'}), 500
 
-
 @app.route('/api/assets/<asset_id>/maintain', methods=['POST'])
 @require_auth
 def maintain_asset(asset_id):
     """Add maintenance log to an asset"""
     try:
+        logger.info(f"Received maintenance request for asset: '{asset_id}'")
+        
+        # URL decode the asset_id in case it has special characters
+        from urllib.parse import unquote
+        asset_id = unquote(asset_id)
+        logger.info(f"Decoded asset ID: '{asset_id}'")
+        
         asset = data_manager.inventory.get(asset_id)
         if not asset:
+            logger.error(f"Asset not found: '{asset_id}'. Available assets: {list(data_manager.inventory.keys())[:10]}")
             return jsonify({'error': 'Asset not found'}), 404
 
         data = request.get_json()
-        log_entry_text = data.get('logEntry', '').strip()
-        new_location = data.get('newLocation', '').strip()
+        logger.info(f"Received data: {data}")
+        
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+            
+        # Safely handle potentially None values
+        log_entry_text = data.get('logEntry')
+        if log_entry_text is None:
+            return jsonify({'error': 'Log entry is required'}), 400
+        log_entry_text = log_entry_text.strip()
+        
+        new_location = data.get('newLocation')
+        if new_location is not None:
+            new_location = new_location.strip()
+            # Treat empty string as None
+            if not new_location:
+                new_location = None
+        
         mark_ooc = data.get('markOOC', False)
         unmark_ooc = data.get('unmarkOOC', False)
 
@@ -1862,13 +1885,17 @@ def maintain_asset(asset_id):
 
         # Update location if provided
         if new_location:
+            old_location = asset.current_location or ''
             asset.current_location = new_location
+            log_action(f"Updated location for asset {asset_id} from '{old_location}' to '{new_location}'")
 
         # Update OOC status
-        if mark_ooc:
+        if mark_ooc and not asset.is_ooc:
             asset.is_ooc = True
-        if unmark_ooc:
+            log_action(f"Marked asset {asset_id} as Out of Commission")
+        elif unmark_ooc and asset.is_ooc:
             asset.is_ooc = False
+            log_action(f"Removed Out of Commission status from asset {asset_id}")
 
         # Save changes
         data_manager.save_inventory()
@@ -1876,14 +1903,16 @@ def maintain_asset(asset_id):
         # Invalidate cache
         invalidate_cache()
 
-        log_action(
-            f"Maintenance logged for asset {asset_id}: {log_entry_text}")
+        log_action(f"Maintenance logged for asset {asset_id}: {log_entry_text}")
 
+        logger.info(f"Successfully logged maintenance for asset {asset_id}")
         return jsonify({'success': True, 'message': 'Maintenance logged successfully'})
+        
     except Exception as e:
         logger.error(f"Error maintaining asset {asset_id}: {e}")
-        return jsonify({'error': 'Failed to log maintenance'}), 500
-
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        return jsonify({'error': f'Failed to log maintenance: {str(e)}'}), 500
 
 @app.route('/api/search', methods=['GET'])
 @require_auth
