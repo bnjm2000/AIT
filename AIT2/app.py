@@ -1026,11 +1026,25 @@ def manage_event_models(event_id):
             brand = data.get('brand', '').strip()
             model = data.get('model', '').strip()
             department = data.get('department', '').strip()
-            description = data.get('description', '').strip()
+            provided_description = data.get('description', '').strip()  # Renamed to avoid confusion
             quantity = int(data.get('quantity', 1))
 
             if not brand or not model or not department:
                 return jsonify({'error': 'Brand, model, and department are required'}), 400
+
+            # Get the FULL description from the actual asset, not from the request
+            # Find an actual asset of this brand/model to get the complete description
+            full_description = provided_description  # Start with what was provided
+            
+            for asset in data_manager.inventory.values():
+                if (asset.brand == brand and 
+                    asset.model_number == model and 
+                    asset.department_code == department):
+                    full_description = asset.description
+                    logger.info(f"Found matching asset {asset.asset_id} with full description: '{full_description}'")
+                    break
+            
+            logger.info(f"Using description for {brand} {model}: '{full_description}'")
 
             # Check if this model already exists in the event
             existing_model_id = None
@@ -1054,8 +1068,9 @@ def manage_event_models(event_id):
             else:
                 new_quantity = quantity
 
-            # Create consolidated model assignment identifier
-            model_id = f"[MODEL]{department}|{brand}|{model}|{new_quantity}|{description}"
+            # Create consolidated model assignment identifier with FULL description
+            model_id = f"[MODEL]{department}|{brand}|{model}|{new_quantity}|{full_description}"
+            logger.info(f"Creating model assignment: {model_id}")
             event.prepared_items.append(model_id)
 
             # Initialize actually_prepared if it doesn't exist

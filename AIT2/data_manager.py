@@ -82,7 +82,7 @@ class DataManager:
         filepath = os.path.join(self.data_folder, 'Inventory.csv')
         if not os.path.exists(filepath):
             return
-        with open(filepath, 'r', newline='') as f:
+        with open(filepath, 'r', newline='', encoding='utf-8') as f:
             reader = csv.DictReader(f)
             for row in reader:
                 if row:
@@ -94,7 +94,7 @@ class DataManager:
                         brand=row['Brand'],
                         model_number=row['ModelNumber'],
                         serial_number=row['SerialNumber'],
-                        description=row['Description'],
+                        description=row.get('Description',''),  # This should be the full description
                         is_missing=row['IsMissing'] == 'True',
                         is_ooc=is_ooc,
                         maintenance_logs=maintenance_logs,
@@ -103,7 +103,6 @@ class DataManager:
                         current_location=row.get('CurrentLocation', '')
                     )
                     self.inventory[item.asset_id] = item
-
     def save_inventory(self):
         filepath = os.path.join(self.data_folder, 'Inventory.csv')
         with open(filepath, 'w', newline='') as f:

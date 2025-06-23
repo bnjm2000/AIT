@@ -6,6 +6,20 @@ let containers = [];
 let logs = [];
 let stats = {};
 
+// Global utility function for HTML escaping
+function escapeHtml(str) {
+  if (!str) return '';
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// Global utility function for JavaScript string escaping
+function escapeJs(str) {
+  if (!str) return '';
+  return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t');
+}
+
 // Navigation functions
 function showSection(sectionName) {
   // Hide all sections
@@ -289,6 +303,14 @@ function createEventCard(event) {
         });
     };
     
+    // Helper function to escape HTML
+    const escapeHtml = (str) => {
+        if (!str) return '';
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    };
+    
     const dateRange = event.startDate === event.endDate 
         ? formatDate(event.startDate)
         : `${formatDate(event.startDate)} - ${formatDate(event.endDate)}`;
@@ -304,10 +326,10 @@ function createEventCard(event) {
     card.innerHTML = `
         <div class="event-header">
             <div class="event-id">ID: ${event.id}</div>
-            <div class="event-state state-${event.state.toLowerCase()}">${event.state}</div>
+            <div class="event-state state-${event.state.toLowerCase()}">${escapeHtml(event.state)}</div>
         </div>
-        <div class="event-title">${event.name}</div>
-        <div class="event-date">${dateRange}</div>
+        <div class="event-title">${escapeHtml(event.name)}</div>
+        <div class="event-date">${escapeHtml(dateRange)}</div>
         ${assetSummary}
         <div class="event-actions">
             <button class="btn btn-primary" onclick="viewEvent(${event.id})">View</button>
@@ -602,6 +624,14 @@ function createPrepareEventCard(event) {
   const card = document.createElement("div");
   card.className = `event-card state-${event.state.toLowerCase()}`;
 
+  // Helper function to escape HTML
+  const escapeHtml = (str) => {
+    if (!str) return '';
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  };
+
   const formatDate = (dateStr) => {
     return new Date(dateStr).toLocaleDateString("en-US", {
       month: "short",
@@ -634,7 +664,7 @@ function createPrepareEventCard(event) {
     models.slice(0, 2).forEach((model) => {
       const statusIcon = getModelStatusIcon(model.status);
       const assignedCount = model.assignedAssets.length;
-      modelSummary += `<div>${statusIcon} ${model.requiredQuantity}x ${model.brand} ${model.model} (${assignedCount}/${model.requiredQuantity})</div>`;
+      modelSummary += `<div>${statusIcon} ${model.requiredQuantity}x ${escapeHtml(model.brand)} ${escapeHtml(model.model)} (${assignedCount}/${model.requiredQuantity})</div>`;
     });
 
     if (models.length > 2) {
@@ -651,12 +681,10 @@ function createPrepareEventCard(event) {
   card.innerHTML = `
         <div class="event-header">
             <div class="event-id">ID: ${event.id}</div>
-            <div class="event-state state-${event.state.toLowerCase()}">${
-    event.state
-  }</div>
+            <div class="event-state state-${event.state.toLowerCase()}">${escapeHtml(event.state)}</div>
         </div>
-        <div class="event-title">${event.name}</div>
-        <div class="event-date">${dateRange}</div>
+        <div class="event-title">${escapeHtml(event.name)}</div>
+        <div class="event-date">${escapeHtml(dateRange)}</div>
         ${modelSummary}
         <div style="margin: 15px 0;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
@@ -668,12 +696,8 @@ function createPrepareEventCard(event) {
             </div>
         </div>
         <div class="event-actions">
-            <button class="btn btn-success" onclick="openPrepareEventModal(${
-              event.id
-            })">Prepare Assets</button>
-            <button class="btn btn-primary" onclick="viewEvent(${
-              event.id
-            })">View Details</button>
+            <button class="btn btn-success" onclick="openPrepareEventModal(${event.id})">Prepare Assets</button>
+            <button class="btn btn-primary" onclick="viewEvent(${event.id})">View Details</button>
         </div>
     `;
 
@@ -1547,6 +1571,14 @@ function createReturnEventCard(event) {
   const card = document.createElement("div");
   card.className = `event-card state-${event.state.toLowerCase()}`;
 
+  // Helper function to escape HTML
+  const escapeHtml = (str) => {
+    if (!str) return '';
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  };
+
   const formatDate = (dateStr) => {
     return new Date(dateStr).toLocaleDateString("en-US", {
       month: "short",
@@ -1566,22 +1598,16 @@ function createReturnEventCard(event) {
   card.innerHTML = `
         <div class="event-header">
             <div class="event-id">ID: ${event.id}</div>
-            <div class="event-state state-${event.state.toLowerCase()}">${
-    event.state
-  }</div>
+            <div class="event-state state-${event.state.toLowerCase()}">${escapeHtml(event.state)}</div>
         </div>
-        <div class="event-title">${event.name}</div>
-        <div class="event-date">${dateRange}</div>
+        <div class="event-title">${escapeHtml(event.name)}</div>
+        <div class="event-date">${escapeHtml(dateRange)}</div>
         <div style="margin: 15px 0;">
             <small style="color: #666;">${returnedCount}/${totalCount} assets returned</small>
         </div>
         <div class="event-actions">
-            <button class="btn btn-warning" onclick="openReturnAssetsModal(${
-              event.id
-            })">Return Assets</button>
-            <button class="btn btn-primary" onclick="viewEvent(${
-              event.id
-            })">View Details</button>
+            <button class="btn btn-warning" onclick="openReturnAssetsModal(${event.id})">Return Assets</button>
+            <button class="btn btn-primary" onclick="viewEvent(${event.id})">View Details</button>
         </div>
     `;
 
@@ -1760,6 +1786,14 @@ function createTransferEventCard(event) {
   const card = document.createElement("div");
   card.className = `event-card state-${event.state.toLowerCase()}`;
 
+  // Helper function to escape HTML
+  const escapeHtml = (str) => {
+    if (!str) return '';
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  };
+
   const formatDate = (dateStr) => {
     return new Date(dateStr).toLocaleDateString("en-US", {
       month: "short",
@@ -1776,21 +1810,15 @@ function createTransferEventCard(event) {
   card.innerHTML = `
         <div class="event-header">
             <div class="event-id">ID: ${event.id}</div>
-            <div class="event-state state-${event.state.toLowerCase()}">${
-    event.state
-  }</div>
+            <div class="event-state state-${event.state.toLowerCase()}">${escapeHtml(event.state)}</div>
         </div>
-        <div class="event-title">${event.name}</div>
-        <div class="event-date">${dateRange}</div>
+        <div class="event-title">${escapeHtml(event.name)}</div>
+        <div class="event-date">${escapeHtml(dateRange)}</div>
         <div style="margin: 15px 0;">
-            <small style="color: #666;">${
-              event.assetCount || 0
-            } assets assigned</small>
+            <small style="color: #666;">${event.assetCount || 0} assets assigned</small>
         </div>
         <div class="event-actions">
-            <button class="btn btn-primary" onclick="viewEvent(${
-              event.id
-            })">View Assets</button>
+            <button class="btn btn-primary" onclick="viewEvent(${event.id})">View Assets</button>
         </div>
     `;
 
@@ -2504,17 +2532,31 @@ async function editEvent(eventId) {
 
               // Handle different asset types
               if (asset.isModel) {
-                // Model assignment
+                // Model assignment - FIXED to show description properly
                 content += `
                             <div class="model-assignment" style="padding: 12px; border-bottom: 1px solid #f1f1f1; display: flex; justify-content: space-between; align-items: center; background: #f8f9fa;">
-                                <div>
-                                    <span style="font-weight: 500; color: #495057;">📦 ${asset.quantity}x ${escapeHtml(asset.brand)} ${escapeHtml(asset.model)}</span>
-                                    <div style="color: #666; font-size: 11px; margin-top: 2px;">${escapeHtml(asset.description || '')}</div>
-                                    <div style="color: #999; font-size: 10px; font-style: italic; margin-top: 2px;">Model requirement - assign specific assets during preparation</div>
+                                <div style="flex: 1;">
+                                    <div style="font-weight: 500; color: #495057; margin-bottom: 4px;">
+                                        📦 ${asset.quantity}x ${escapeHtml(asset.brand)} ${escapeHtml(asset.model)}
+                                    </div>
+                                    <div style="color: #666; font-size: 12px; margin-bottom: 2px;">
+                                        ${escapeHtml(asset.description || '')}
+                                    </div>
+                                    <div style="color: #999; font-size: 10px; font-style: italic;">
+                                        Model requirement - assign specific assets during preparation
+                                    </div>
                                 </div>
                                 <div style="display: flex; gap: 5px;">
-                                    <button class="btn btn-warning" style="padding: 3px 6px; font-size: 10px;" onclick="editModelQuantity(${event.id}, '${escapeHtml(asset.brand)}', '${escapeHtml(asset.model)}', '${escapeHtml(dept)}')">Edit Qty</button>
-                                    <button class="btn btn-danger" style="padding: 3px 6px; font-size: 10px;" onclick="removeModelFromEvent(${event.id}, '${escapeHtml(asset.brand)}', '${escapeHtml(asset.model)}', '${escapeHtml(dept)}')">Remove</button>
+                                    <button class="btn btn-warning edit-model-qty-btn" style="padding: 3px 6px; font-size: 10px;" 
+                                            data-event-id="${event.id}" 
+                                            data-brand="${escapeHtml(asset.brand)}" 
+                                            data-model="${escapeHtml(asset.model)}" 
+                                            data-department="${escapeHtml(dept)}">Edit Qty</button>
+                                    <button class="btn btn-danger remove-model-btn" style="padding: 3px 6px; font-size: 10px;" 
+                                            data-event-id="${event.id}" 
+                                            data-brand="${escapeHtml(asset.brand)}" 
+                                            data-model="${escapeHtml(asset.model)}" 
+                                            data-department="${escapeHtml(dept)}">Remove</button>
                                 </div>
                             </div>
                         `;
@@ -2529,7 +2571,9 @@ async function editEvent(eventId) {
                                     ${extraBadge}
                                     <div style="color: ${statusColor}; font-size: 11px; margin-top: 2px;">${statusText}</div>
                                 </div>
-                                <button class="btn btn-danger" style="padding: 4px 8px; font-size: 11px;" onclick="removeAssetFromEvent(${event.id}, '${escapeHtml(asset.id)}')">Remove</button>
+                                <button class="btn btn-danger remove-asset-btn" style="padding: 4px 8px; font-size: 11px;" 
+                                        data-event-id="${event.id}" 
+                                        data-asset-id="${escapeHtml(asset.id)}">Remove</button>
                             </div>
                         `;
               } else {
@@ -2544,7 +2588,9 @@ async function editEvent(eventId) {
                                     ${extraBadge}
                                     <div style="color: ${statusColor}; font-size: 11px; margin-top: 2px;">${statusText}</div>
                                 </div>
-                                <button class="btn btn-danger" style="padding: 4px 8px; font-size: 11px;" onclick="removeAssetFromEvent(${event.id}, '${escapeHtml(asset.id)}')">Remove</button>
+                                <button class="btn btn-danger remove-asset-btn" style="padding: 4px 8px; font-size: 11px;" 
+                                        data-event-id="${event.id}" 
+                                        data-asset-id="${escapeHtml(asset.id)}">Remove</button>
                             </div>
                         `;
               }
@@ -2791,13 +2837,12 @@ async function loadAvailableAssetsForEdit(eventId) {
 
 async function addModelToEvent(eventId, brand, model, department, description) {
   try {
-    // Get the quantity from the input field
-    const qtyInputId = `qty-${brand.replace(/\s+/g, "")}-${model.replace(
-      /\s+/g,
-      ""
-    )}`;
+    // Get the quantity from the input field - use a safer method
+    const cleanBrand = brand.replace(/\s+/g, "");
+    const cleanModel = model.replace(/\s+/g, "");
+    const qtyInputId = `qty-${cleanBrand}-${cleanModel}`;
     const qtyInput = document.getElementById(qtyInputId);
-    const requestedQuantity = parseInt(qtyInput.value) || 1;
+    const requestedQuantity = parseInt(qtyInput?.value) || 1;
 
     // Check available assets
     const availableAssets = window.currentEditAvailableAssets || [];
@@ -2830,9 +2875,10 @@ async function addModelToEvent(eventId, brand, model, department, description) {
       );
 
       // Update the input to show max available
-      qtyInput.value = Math.max(1, maxCanAdd);
-      qtyInput.max = maxCanAdd;
-
+      if (qtyInput) {
+        qtyInput.value = Math.max(1, maxCanAdd);
+        qtyInput.max = maxCanAdd;
+      }
       return;
     }
 
@@ -2840,11 +2886,12 @@ async function addModelToEvent(eventId, brand, model, department, description) {
       showNotification("error", `No ${brand} ${model} available.`);
 
       // Remove the model from search results
-      const modelElement = qtyInput.closest('div[style*="padding: 12px"]');
-      if (modelElement) {
-        modelElement.remove();
+      if (qtyInput) {
+        const modelElement = qtyInput.closest('div[style*="padding: 12px"]');
+        if (modelElement) {
+          modelElement.remove();
+        }
       }
-
       return;
     }
 
@@ -2868,20 +2915,24 @@ async function addModelToEvent(eventId, brand, model, department, description) {
     // Update the display
     if (newCount <= 0) {
       // Remove the entire model row if no more available
-      const modelElement = qtyInput.closest('div[style*="padding: 12px"]');
-      if (modelElement) {
-        modelElement.remove();
+      if (qtyInput) {
+        const modelElement = qtyInput.closest('div[style*="padding: 12px"]');
+        if (modelElement) {
+          modelElement.remove();
+        }
       }
     } else {
       // Update the available count
-      const countSpan = qtyInput.parentElement.parentElement.querySelector(
-        'span[style*="color: #28a745"]'
-      );
-      if (countSpan) {
-        countSpan.textContent = `${newCount} available`;
+      if (qtyInput) {
+        const countSpan = qtyInput.parentElement.parentElement.querySelector(
+          'span[style*="color: #28a745"]'
+        );
+        if (countSpan) {
+          countSpan.textContent = `${newCount} available`;
+        }
+        qtyInput.max = newCount;
+        qtyInput.value = Math.min(1, newCount);
       }
-      qtyInput.max = newCount;
-      qtyInput.value = Math.min(1, newCount);
     }
 
     // Update available assets list to remove used assets
@@ -2907,7 +2958,6 @@ async function addModelToEvent(eventId, brand, model, department, description) {
     showNotification("error", `Failed to add model: ${error.message}`);
   }
 }
-
 async function removeModelFromEvent(eventId, brand, model, department) {
   if (!confirm(`Remove all ${brand} ${model} from this event?`)) {
     return;
@@ -3144,39 +3194,26 @@ function filterAvailableAssetsSimple(searchTerm) {
     content += `
             <div style="padding: 12px; border-bottom: 1px solid #f1f1f1; display: flex; justify-content: space-between; align-items: center;">
                 <div style="flex: 1;">
-                    <div style="font-weight: 500; font-size: 14px;">${
-                      modelGroup.brand
-                    } ${modelGroup.model}</div>
-                    <div style="color: #666; font-size: 12px; margin: 4px 0;">${
-                      modelGroup.description || ""
-                    }</div>
+                    <div style="font-weight: 500; font-size: 14px;">${escapeHtml(modelGroup.brand)} ${escapeHtml(modelGroup.model)}</div>
+                    <div style="color: #666; font-size: 12px; margin: 4px 0;">${escapeHtml(modelGroup.description || "")}</div>
                     <div style="display: flex; align-items: center; gap: 10px;">
-                        <span class="asset-badge dept-${modelGroup.department.toLowerCase()}">${
-      modelGroup.department
-    }</span>
-                        <span style="color: #28a745; font-size: 11px; font-weight: 500;">${
-                          modelGroup.count
-                        } available</span>
+                        <span class="asset-badge dept-${modelGroup.department.toLowerCase()}">${escapeHtml(modelGroup.department)}</span>
+                        <span style="color: #28a745; font-size: 11px; font-weight: 500;">${modelGroup.count} available</span>
                     </div>
                 </div>
                 <div style="display: flex; align-items: center; gap: 8px;">
-                    <input type="number" min="1" max="${
-                      modelGroup.count
-                    }" value="1" 
+                    <input type="number" min="1" max="${modelGroup.count}" value="1" 
                            id="${inputId}"
                            style="width: 50px; padding: 4px; border: 1px solid #ddd; border-radius: 4px; text-align: center;"
-                           onchange="validateQuantityInput('${inputId}', ${
-      modelGroup.count
-    })"
-                           oninput="validateQuantityInput('${inputId}', ${
-      modelGroup.count
-    })">
-                    <button class="btn btn-success" style="padding: 6px 12px; font-size: 11px;" 
-                            onclick="addModelToEvent(${eventId}, '${
-      modelGroup.brand
-    }', '${modelGroup.model}', '${modelGroup.department}', '${
-      modelGroup.description || ""
-    }')">
+                           onchange="validateQuantityInput('${inputId}', ${modelGroup.count})"
+                           oninput="validateQuantityInput('${inputId}', ${modelGroup.count})">
+                    <button class="btn btn-success add-model-btn" style="padding: 6px 12px; font-size: 11px;" 
+                            data-event-id="${eventId}"
+                            data-brand="${escapeHtml(modelGroup.brand)}"
+                            data-model="${escapeHtml(modelGroup.model)}"
+                            data-department="${escapeHtml(modelGroup.department)}"
+                            data-description="${escapeHtml(modelGroup.description || '')}"
+                            data-input-id="${inputId}">
                         Add
                     </button>
                 </div>
@@ -3186,6 +3223,7 @@ function filterAvailableAssetsSimple(searchTerm) {
 
   container.innerHTML = content;
 }
+
 async function updateCurrentAssetsOnly(eventId) {
   try {
     const response = await apiCall(`/api/events/${eventId}`);
@@ -3856,6 +3894,80 @@ document.addEventListener("DOMContentLoaded", function () {
       }
     });
 
+  // Event delegation for assign and unassign buttons
+  document.addEventListener('click', function(e) {
+      if (e.target.classList.contains('assign-btn')) {
+          e.preventDefault();
+          const eventId = e.target.getAttribute('data-event-id');
+          const assetId = e.target.getAttribute('data-asset-id');
+          const brand = e.target.getAttribute('data-brand');
+          const model = e.target.getAttribute('data-model');
+          
+          if (eventId && assetId && brand && model) {
+              assignSpecificAsset(parseInt(eventId), assetId, brand, model);
+          }
+      }
+      
+      if (e.target.classList.contains('unassign-btn')) {
+          e.preventDefault();
+          const eventId = e.target.getAttribute('data-event-id');
+          const assetId = e.target.getAttribute('data-asset-id');
+          const brand = e.target.getAttribute('data-brand');
+          const model = e.target.getAttribute('data-model');
+          
+          if (eventId && assetId && brand && model) {
+              unassignSpecificAsset(parseInt(eventId), assetId, brand, model);
+          }
+      }
+
+      if (e.target.classList.contains('add-model-btn')) {
+          e.preventDefault();
+          const eventId = parseInt(e.target.getAttribute('data-event-id'));
+          const brand = e.target.getAttribute('data-brand');
+          const model = e.target.getAttribute('data-model');
+          const department = e.target.getAttribute('data-department');
+          const description = e.target.getAttribute('data-description');
+          
+          if (eventId && brand && model && department) {
+              addModelToEvent(eventId, brand, model, department, description);
+          }
+      }
+
+      if (e.target.classList.contains('edit-model-qty-btn')) {
+          e.preventDefault();
+          const eventId = parseInt(e.target.getAttribute('data-event-id'));
+          const brand = e.target.getAttribute('data-brand');
+          const model = e.target.getAttribute('data-model');
+          const department = e.target.getAttribute('data-department');
+          
+          if (eventId && brand && model && department) {
+              editModelQuantity(eventId, brand, model, department);
+          }
+      }
+    
+    if (e.target.classList.contains('remove-model-btn')) {
+        e.preventDefault();
+        const eventId = parseInt(e.target.getAttribute('data-event-id'));
+        const brand = e.target.getAttribute('data-brand');
+        const model = e.target.getAttribute('data-model');
+        const department = e.target.getAttribute('data-department');
+        
+        if (eventId && brand && model && department) {
+            removeModelFromEvent(eventId, brand, model, department);
+        }
+    }
+    
+    if (e.target.classList.contains('remove-asset-btn')) {
+        e.preventDefault();
+        const eventId = parseInt(e.target.getAttribute('data-event-id'));
+        const assetId = e.target.getAttribute('data-asset-id');
+        
+        if (eventId && assetId) {
+            removeAssetFromEvent(eventId, assetId);
+        }
+    }
+  });
+
   // Handle edit event form submission dynamically
   document.addEventListener("submit", async function (e) {
     if (e.target.id === "editEventDetailsForm") {
@@ -4223,6 +4335,28 @@ document.addEventListener("DOMContentLoaded", function () {
       // Still try to initialize in case of network issues
       initializeApp();
     });
+
+  // Add to the existing event delegation
+  document.addEventListener('click', function(e) {
+      // ... existing code ...
+      
+      if (e.target.classList.contains('select-maintenance-btn')) {
+          e.preventDefault();
+          e.stopPropagation();
+          const assetId = e.target.getAttribute('data-asset-id');
+          if (assetId) {
+              selectAssetForMaintenance(assetId);
+          }
+      }
+      
+      if (e.target.classList.contains('maintenance-asset-item')) {
+          const assetId = e.target.getAttribute('data-asset-id');
+          if (assetId) {
+              selectAssetForMaintenance(assetId);
+          }
+      }
+  });
+  
   // Edit Quantity Form
   document
     .getElementById("editQuantityForm")
@@ -4414,20 +4548,20 @@ function searchMaintenanceAssets() {
     const locationText = asset.location || 'Store';
     
     html += `
-      <div style="padding: 12px; border-bottom: 1px solid #f1f1f1; display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: background-color 0.2s;"
+      <div class="maintenance-asset-item" style="padding: 12px; border-bottom: 1px solid #f1f1f1; display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: background-color 0.2s;"
            onmouseover="this.style.backgroundColor='#f8f9fa'" 
            onmouseout="this.style.backgroundColor='white'"
-           onclick="selectAssetForMaintenance('${asset.id}')">
+           data-asset-id="${escapeHtml(asset.id)}">
         <div style="flex: 1;">
-          <div style="font-weight: 500; margin-bottom: 4px;">${asset.id}</div>
-          <div style="color: #666; font-size: 13px; margin-bottom: 2px;">${asset.brand} ${asset.model}</div>
-          <div style="color: #999; font-size: 12px;">${asset.description || ''}</div>
+          <div style="font-weight: 500; margin-bottom: 4px;">${escapeHtml(asset.id)}</div>
+          <div style="color: #666; font-size: 13px; margin-bottom: 2px;">${escapeHtml(asset.brand)} ${escapeHtml(asset.model)}</div>
+          <div style="color: #999; font-size: 12px;">${escapeHtml(asset.description || '')}</div>
           <div style="margin-top: 4px;">
             ${statusBadge}
-            <span style="color: #999; font-size: 11px; margin-left: 8px;">📍 ${locationText}</span>
+            <span style="color: #999; font-size: 11px; margin-left: 8px;">📍 ${escapeHtml(locationText)}</span>
           </div>
         </div>
-        <button class="btn btn-primary" style="padding: 6px 12px; font-size: 12px;" onclick="event.stopPropagation(); selectAssetForMaintenance('${asset.id}')">
+        <button class="btn btn-primary select-maintenance-btn" style="padding: 6px 12px; font-size: 12px;" data-asset-id="${escapeHtml(asset.id)}">
           Select
         </button>
       </div>
@@ -5189,8 +5323,8 @@ function createModelPreparationSection(eventId, brand, model, description, requi
         <div class="model-prep-section" style="border: 1px solid #e9ecef; border-radius: 8px; padding: 15px; margin-bottom: 15px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                 <div>
-                    <h5 style="margin: 0; color: #495057;">${requiredQty}x ${brand} ${model}</h5>
-                    <div style="color: #666; font-size: 12px; margin-top: 2px;">${description}</div>
+                    <h5 style="margin: 0; color: #495057;">${requiredQty}x ${escapeHtml(brand)} ${escapeHtml(model)}</h5>
+                    <div style="color: #666; font-size: 12px; margin-top: 2px;">${escapeHtml(description)}</div>
                 </div>
                 <div style="text-align: right;">
                     <div style="font-size: 14px; font-weight: 500; color: ${assignedCount >= requiredQty ? '#28a745' : '#ffc107'};">
@@ -5215,27 +5349,35 @@ function createModelPreparationSection(eventId, brand, model, description, requi
         assignedAssets.forEach((assetId, index) => {
             const asset = availableAssets.find(a => a.id === assetId);
             const isExtra = index >= requiredQty;
-            const bgColor = isExtra ? '#fff3cd' : '#d4edda'; // Yellow for extra assets
+            const bgColor = isExtra ? '#fff3cd' : '#d4edda';
             const textColor = isExtra ? '#856404' : '#155724';
             
             if (asset) {
                 section += `
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; padding: 4px 8px; background: ${bgColor}; border-radius: 3px;">
                         <span style="color: ${textColor};">
-                            ${isExtra ? '➕' : '✅'} ${asset.id} (SN: ${asset.serial || 'N/A'})
+                            ${isExtra ? '➕' : '✅'} ${escapeHtml(assetId)} (SN: ${escapeHtml(asset.serial || 'N/A')})
                             ${isExtra ? ' <span style="font-size: 10px;">(EXTRA)</span>' : ''}
                         </span>
-                        <button class="btn btn-warning" style="padding: 2px 6px; font-size: 10px;" onclick="unassignSpecificAsset(${eventId}, '${assetId}', '${brand}', '${model}')">Unprepare</button>
+                        <button class="btn btn-warning unassign-btn" style="padding: 2px 6px; font-size: 10px;" 
+                                data-event-id="${eventId}" 
+                                data-asset-id="${escapeHtml(assetId)}" 
+                                data-brand="${escapeHtml(brand)}" 
+                                data-model="${escapeHtml(model)}">Unprepare</button>
                     </div>
                 `;
             } else {
                 section += `
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; padding: 4px 8px; background: ${bgColor}; border-radius: 3px;">
                         <span style="color: ${textColor};">
-                            ${isExtra ? '➕' : '✅'} ${assetId}
+                            ${isExtra ? '➕' : '✅'} ${escapeHtml(assetId)}
                             ${isExtra ? ' <span style="font-size: 10px;">(EXTRA)</span>' : ''}
                         </span>
-                        <button class="btn btn-warning" style="padding: 2px 6px; font-size: 10px;" onclick="unassignSpecificAsset(${eventId}, '${assetId}', '${brand}', '${model}')">Unprepare</button>
+                        <button class="btn btn-warning unassign-btn" style="padding: 2px 6px; font-size: 10px;" 
+                                data-event-id="${eventId}" 
+                                data-asset-id="${escapeHtml(assetId)}" 
+                                data-brand="${escapeHtml(brand)}" 
+                                data-model="${escapeHtml(model)}">Unprepare</button>
                     </div>
                 `;
             }
@@ -5244,10 +5386,10 @@ function createModelPreparationSection(eventId, brand, model, description, requi
         section += '</div></div>';
     }
     
-    // Show available assets for assignment (always show, even if requirement is met)
+    // Show available assets for assignment
     section += `
         <div style="margin-bottom: 15px;">
-            <h6 style="color: #495057; margin-bottom: 10px;">Available ${brand} ${model} (${availableAssets.length} total):</h6>
+            <h6 style="color: #495057; margin-bottom: 10px;">Available ${escapeHtml(brand)} ${escapeHtml(model)} (${availableAssets.length} total):</h6>
             <div style="max-height: 200px; overflow-y: auto; border: 1px solid #e9ecef; border-radius: 4px;">
     `;
     
@@ -5260,12 +5402,16 @@ function createModelPreparationSection(eventId, brand, model, description, requi
                 section += `
                     <div style="padding: 8px 12px; border-bottom: 1px solid #f1f1f1; display: flex; justify-content: space-between; align-items: center;">
                         <div>
-                            <span style="font-weight: 500;">${asset.id}</span>
-                            <span style="color: #666; font-size: 12px; margin-left: 10px;">SN: ${asset.serial || 'N/A'}</span>
-                            <span style="color: #999; font-size: 11px; margin-left: 10px;">📍 ${asset.location}</span>
+                            <span style="font-weight: 500;">${escapeHtml(asset.id)}</span>
+                            <span style="color: #666; font-size: 12px; margin-left: 10px;">SN: ${escapeHtml(asset.serial || 'N/A')}</span>
+                            <span style="color: #999; font-size: 11px; margin-left: 10px;">📍 ${escapeHtml(asset.location || 'Store')}</span>
                         </div>
                         <div>
-                            <button class="btn btn-success" style="padding: 4px 8px; font-size: 11px;" onclick="assignSpecificAsset(${eventId}, '${asset.id}', '${brand}', '${model}')">Assign</button>
+                            <button class="btn btn-success assign-btn" style="padding: 4px 8px; font-size: 11px;" 
+                                    data-event-id="${eventId}" 
+                                    data-asset-id="${escapeHtml(asset.id)}" 
+                                    data-brand="${escapeHtml(brand)}" 
+                                    data-model="${escapeHtml(model)}">Assign</button>
                         </div>
                     </div>
                 `;
