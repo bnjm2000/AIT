@@ -6,7 +6,6 @@
 2024/11/12,bnjm2000,User bnjm2000 logged in.
 2024/11/12,bnjm2000,User bnjm2000 logged in.
 2024/11/12,bnjm2000,User bnjm2000 logged in.
-2024/11/12,bnjm2000,User bnjm2000 logged in.
 2024/11/12,bnjm2000,Added event 3: 
 2024/11/12,bnjm2000,User bnjm2000 logged in.
 2024/11/12,bnjm2000,Added event 1: wedding
@@ -998,3 +997,4 @@
 2025/06/17 15:31:29,admin,Reset location for asset MBAR#01 due to deletion of Event 23
 2025/06/17 15:31:29,admin,Reset location for asset 4061#01 due to deletion of Event 23
 2025/06/17 15:31:29,admin,"Deleted event 23: whywhy via web interface. Reset 13 asset locations: LEDBEAM#01 (from 'whywhy' to 'Store'), LEDBEAM#02 (from 'whywhy' to 'Store'), LEDBEAM#03 (from 'whywhy' to 'Store'), ESPRITE#01 (from 'whywhy' to 'Store'), ESPRITE#02 (from 'whywhy' to 'Store')..."
+2025/06/23 10:42:06,admin,User admin logged in via web interface
