@@ -478,6 +478,7 @@ function displayInventoryTable(assetsToShow) {
                     <th>Department</th>
                     <th>Status</th>
                     <th>Location</th>
+                    <th>OOC Status</th>
                     <th>Actions</th>
                 </tr>
             </thead>
@@ -498,6 +499,14 @@ function displayInventoryTable(assetsToShow) {
       asset.status
     }</span></td>
                 <td>${asset.location || "Store"}</td>
+                <td>
+                    <label class="ooc-toggle">
+                        <input type="checkbox" ${asset.isOOC ? 'checked' : ''} 
+                               onchange="toggleOOCStatus('${asset.id}', this.checked)"
+                               ${asset.status === 'deployed' ? 'disabled title="Cannot change OOC status while asset is deployed"' : ''}>
+                        <span class="ooc-slider"></span>
+                    </label>
+                </td>
                 <td>
                     <button class="btn btn-primary" onclick="viewAsset('${
                       asset.id
@@ -3715,8 +3724,25 @@ async function viewAsset(assetId) {
         <div class="form-group">
             <strong>Missing:</strong> ${asset.isMissing ? "Yes" : "No"}
         </div>
-        <div class="form-group">
-            <strong>Out of Commission:</strong> ${asset.isOOC ? "Yes" : "No"}
+        <div class="form-group" style="display: flex; align-items: center; gap: 15px;">
+            <strong>Out of Commission:</strong>
+            <label class="ooc-toggle">
+                <input type="checkbox" ${asset.isOOC ? 'checked' : ''} 
+                       onchange="toggleOOCStatus('${asset.id}', this.checked)"
+                       ${asset.status === 'deployed' ? 'disabled title="Cannot change OOC status while asset is deployed"' : ''}>
+                <span class="ooc-slider"></span>
+            </label>
+            <span style="color: ${asset.isOOC ? '#dc3545' : '#28a745'}; font-weight: 500;">
+                ${asset.isOOC ? 'Out of Commission' : 'In Service'}
+            </span>
+        </div>
+        <div class="form-group" style="margin-top: 20px;">
+            <button class="btn btn-primary" onclick="viewMaintenanceLog('${asset.id}')">
+                View Maintenance Log
+            </button>
+            <button class="btn btn-warning" onclick="closeModal('assetDetailsModal'); openMaintenanceModalForAsset('${asset.id}')">
+                Log Maintenance
+            </button>
         </div>
     `;
 
@@ -4104,6 +4130,7 @@ document.addEventListener("DOMContentLoaded", function () {
     });
 
   // Bulk OOC Clear Form
+  // Bulk OOC Clear Form
   document
     .getElementById("bulkOOCForm")
     .addEventListener("submit", async function (e) {
@@ -4129,12 +4156,21 @@ document.addEventListener("DOMContentLoaded", function () {
         // Process each selected asset
         for (const assetId of selectedOOCAssets) {
           try {
-            await apiCall(`/api/assets/${encodeURIComponent(assetId)}/maintain`, "POST", {
+            const maintenanceData = {
               logEntry,
-              newLocation: newLocation || "Store", // Default to Store if no location specified
+              newLocation: newLocation || "Store",
               markOOC: false,
               unmarkOOC: true
-            });
+            };
+            
+            // Check for serial number update
+            const serialInputId = `newSerial_${assetId.replace(/[^a-zA-Z0-9]/g, '_')}`;
+            const serialInput = document.getElementById(serialInputId);
+            if (serialInput && serialInput.value.trim()) {
+              maintenanceData.newSerial = serialInput.value.trim();
+            }
+            
+            await apiCall(`/api/assets/${encodeURIComponent(assetId)}/maintain`, "POST", maintenanceData);
             successCount++;
           } catch (error) {
             console.error(`Failed to clear OOC for ${assetId}:`, error);
@@ -4172,6 +4208,8 @@ document.addEventListener("DOMContentLoaded", function () {
     });
 
   // Maintenance Form
+  // Maintenance Form
+ // Maintenance Form
   document
   .getElementById("maintenanceForm")
   .addEventListener("submit", async function (e) {
@@ -4184,14 +4222,18 @@ document.addEventListener("DOMContentLoaded", function () {
 
     const logEntry = document.getElementById("maintenanceLogEntry").value.trim();
     const newLocation = document.getElementById("maintenanceNewLocation").value.trim();
-    const oocStatusEl = document.querySelector('input[name="oocStatus"]:checked');
     
-    if (!oocStatusEl) {
-      showNotification("warning", "Please select an OOC status option");
+    // Get OOC and Missing status from hidden radio buttons
+    const oocStatusEl = document.querySelector('input[name="oocStatus"]:checked');
+    const missingStatusEl = document.querySelector('input[name="missingStatus"]:checked');
+    
+    if (!oocStatusEl || !missingStatusEl) {
+      showNotification("warning", "Please select status options");
       return;
     }
     
     const oocStatus = oocStatusEl.value;
+    const missingStatus = missingStatusEl.value;
 
     if (!logEntry) {
       showNotification("warning", "Please enter a maintenance log entry");
@@ -4210,7 +4252,9 @@ document.addEventListener("DOMContentLoaded", function () {
             logEntry,
             newLocation: newLocation || null,
             markOOC: oocStatus === 'mark',
-            unmarkOOC: oocStatus === 'unmark'
+            unmarkOOC: false,
+            markMissing: missingStatus === 'mark',
+            unmarkMissing: false
           };
           
           // Encode the asset ID for the URL
@@ -4313,6 +4357,13 @@ document.addEventListener("DOMContentLoaded", function () {
       );
 
       displayInventoryTable(filteredAssets);
+    });
+  }
+
+  const maintenanceAssetSearch = document.getElementById("maintenanceAssetSearch");
+  if (maintenanceAssetSearch) {
+    maintenanceAssetSearch.addEventListener("input", function (e) {
+      searchMaintenanceAssets();
     });
   }
 
@@ -4471,7 +4522,8 @@ function openMaintenanceModal() {
   const newLocationEl = document.getElementById('maintenanceNewLocation');
   const assetSearchEl = document.getElementById('maintenanceAssetSearch');
   const availableAssetsEl = document.getElementById('availableMaintenanceAssets');
-  const noChangeRadio = document.querySelector('input[name="oocStatus"][value="nochange"]');
+  const oocNoChangeRadio = document.getElementById('hiddenOOCNoChange');
+  const missingNoChangeRadio = document.getElementById('hiddenMissingNoChange');
   
   if (!logEntryEl || !newLocationEl || !assetSearchEl || !availableAssetsEl) {
     console.error('Maintenance modal elements not found');
@@ -4486,8 +4538,30 @@ function openMaintenanceModal() {
   // Clear form
   logEntryEl.value = '';
   newLocationEl.value = '';
-  if (noChangeRadio) noChangeRadio.checked = true;
+  if (oocNoChangeRadio) oocNoChangeRadio.checked = true;
+  if (missingNoChangeRadio) missingNoChangeRadio.checked = true;
   assetSearchEl.value = '';
+  
+  // Reset status toggles
+  const markOOCToggle = document.getElementById('markOOCToggle');
+  const markMissingToggle = document.getElementById('markMissingToggle');
+  const oocStatusText = document.getElementById('oocStatusText');
+  const missingStatusText = document.getElementById('missingStatusText');
+  
+  if (markOOCToggle) markOOCToggle.checked = false;
+  if (markMissingToggle) markMissingToggle.checked = false;
+  
+  if (oocStatusText) {
+    oocStatusText.textContent = 'No change';
+    oocStatusText.style.color = '#6c757d';
+    oocStatusText.style.fontWeight = 'normal';
+  }
+  
+  if (missingStatusText) {
+    missingStatusText.textContent = 'No change';
+    missingStatusText.style.color = '#6c757d';
+    missingStatusText.style.fontWeight = 'normal';
+  }
   
   // Clear search results
   availableAssetsEl.innerHTML = 
@@ -4773,7 +4847,7 @@ function removeAssetFromMaintenance(assetId) {
 }
 
 function updateSelectedAssetsDisplay() {
-  const countElement = document.getElementById('selectedAssetsCount');
+  const countElement = document.getElementById('selectedCount');
   const listElement = document.getElementById('selectedAssetsList');
   
   if (!countElement || !listElement) {
@@ -4813,7 +4887,6 @@ function updateSelectedAssetsDisplay() {
   
   listElement.innerHTML = html;
 }
-
 // Global variable for selected OOC assets
 let selectedOOCAssets = new Set();
 
@@ -4859,9 +4932,9 @@ function switchMaintenanceTab(tabName) {
 async function loadOOCAssets() {
   try {
     const response = await apiCall("/api/assets");
-    const oocAssets = response.data.filter(asset => asset.isOOC);
+    const oocAndMissingAssets = response.data.filter(asset => asset.isOOC || asset.isMissing);
     
-    displayOOCAssets(oocAssets);
+    displayOOCAssets(oocAndMissingAssets);
     
     // Set up search functionality
     const searchInput = document.getElementById("ooc-search");
@@ -4872,7 +4945,7 @@ async function loadOOCAssets() {
     
   } catch (error) {
     document.getElementById("ooc-assets-list").innerHTML =
-      '<p style="color: red; text-align: center;">Error loading OOC assets</p>';
+      '<p style="color: red; text-align: center;">Error loading OOC and Missing assets</p>';
   }
 }
 
@@ -4881,14 +4954,14 @@ function displayOOCAssets(oocAssets) {
 
   if (oocAssets.length === 0) {
     container.innerHTML =
-      '<p style="text-align: center; color: #666; padding: 40px;">🎉 No assets are currently marked as Out of Commission!</p>';
+      '<p style="text-align: center; color: #666; padding: 40px;">🎉 No assets are currently marked as Out of Commission or Missing!</p>';
     return;
   }
 
   let tableHTML = `
     <div style="margin-bottom: 15px; padding: 10px; background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px;">
-      <strong>📋 Instructions:</strong> Select the assets that have been repaired/fixed and are ready to return to service. 
-      You can select multiple assets and clear their OOC status together.
+      <strong>📋 Instructions:</strong> Select the assets that have been repaired/fixed/found and are ready to return to service. 
+      You can select multiple assets and clear their OOC or Missing status together.
     </div>
     <table class="table">
       <thead>
@@ -4900,6 +4973,7 @@ function displayOOCAssets(oocAssets) {
           <th>Brand</th>
           <th>Model</th>
           <th>Description</th>
+          <th>Status</th>
           <th>Location</th>
           <th>Last Maintenance</th>
           <th>Actions</th>
@@ -4915,6 +4989,15 @@ function displayOOCAssets(oocAssets) {
         : "Never";
 
     const isSelected = selectedOOCAssets.has(asset.id);
+    
+    // Determine status badges
+    let statusBadges = '';
+    if (asset.isOOC) {
+      statusBadges += '<span class="asset-badge" style="background: #f8d7da; color: #721c24; margin-right: 5px;">OOC</span>';
+    }
+    if (asset.isMissing) {
+      statusBadges += '<span class="asset-badge" style="background: #fff3cd; color: #856404;">Missing</span>';
+    }
 
     tableHTML += `
       <tr class="ooc-asset-item ${isSelected ? 'selected' : ''}" onclick="toggleOOCAssetSelection('${asset.id}')">
@@ -4925,11 +5008,12 @@ function displayOOCAssets(oocAssets) {
         <td>${asset.brand}</td>
         <td>${asset.model}</td>
         <td>${asset.description || 'N/A'}</td>
+        <td>${statusBadges}</td>
         <td>${asset.location || "Store"}</td>
         <td style="font-size: 12px;">${lastMaintenance}</td>
         <td>
           <button class="btn btn-success" style="padding: 4px 8px; font-size: 11px;" onclick="event.stopPropagation(); clearSingleOOC('${asset.id}')">
-            Clear OOC
+            Clear Status
           </button>
         </td>
       </tr>
@@ -4940,6 +5024,89 @@ function displayOOCAssets(oocAssets) {
   container.innerHTML = tableHTML;
   
   updateBulkOOCButton();
+}
+
+async function toggleOOCStatus(assetId, isOOC) {
+  try {
+    // Find the asset in our local data
+    const asset = assets.find(a => a.id === assetId);
+    if (!asset) {
+      showNotification('error', 'Asset not found');
+      return;
+    }
+    
+    // Check if asset is deployed
+    if (asset.status === 'deployed') {
+      showNotification('warning', 'Cannot change OOC status while asset is deployed');
+      // Reset the toggle
+      const toggle = document.querySelector(`input[onchange*="${assetId}"]`);
+      if (toggle) {
+        toggle.checked = asset.isOOC;
+      }
+      return;
+    }
+    
+    // Prepare the maintenance data
+    const actionText = isOOC ? 'Marked as Out of Commission via toggle' : 'Removed Out of Commission status via toggle';
+    
+    const maintenanceData = {
+          logEntry,
+          newLocation: newLocation || "Store",
+          markOOC: false,
+          unmarkOOC: true,
+          markMissing: false,
+          unmarkMissing: true
+    };
+    
+    // Call the maintenance API to update OOC status
+    const response = await apiCall(`/api/assets/${encodeURIComponent(assetId)}/maintain`, 'POST', maintenanceData);
+    
+    if (response.success) {
+      // Update local asset data
+      asset.isOOC = isOOC;
+      
+      // Show success notification
+      const statusText = isOOC ? 'marked as Out of Commission' : 'removed from Out of Commission';
+      showNotification('success', `${assetId} ${statusText}`);
+      
+      // Refresh inventory if we're on that page
+      if (document.getElementById('inventory-section').classList.contains('active')) {
+        // Just update the local display instead of full reload for better UX
+        setTimeout(() => {
+          displayFilteredInventory();
+        }, 100);
+      }
+      
+      // Refresh maintenance section if it's active
+      if (document.getElementById('maintenance-section').classList.contains('active')) {
+        setTimeout(() => {
+          loadMaintenanceAssets();
+        }, 100);
+      }
+      
+    } else {
+      showNotification('error', response.message || 'Failed to update OOC status');
+      
+      // Reset the toggle on error
+      const toggle = document.querySelector(`input[onchange*="${assetId}"]`);
+      if (toggle) {
+        toggle.checked = asset.isOOC;
+      }
+    }
+    
+  } catch (error) {
+    showNotification('error', `Failed to update OOC status: ${error.message}`);
+    console.error('Error toggling OOC status:', error);
+    
+    // Reset the toggle on error
+    const toggle = document.querySelector(`input[onchange*="${assetId}"]`);
+    if (toggle) {
+      const asset = assets.find(a => a.id === assetId);
+      if (asset) {
+        toggle.checked = asset.isOOC;
+      }
+    }
+  }
 }
 
 function toggleOOCAssetSelection(assetId) {
@@ -5043,15 +5210,21 @@ function openBulkOOCModal() {
 function updateSelectedOOCDisplay() {
   const countElement = document.getElementById('selectedOOCCount');
   const containerElement = document.getElementById('selectedOOCAssets');
+  const serialUpdatesContainer = document.getElementById('bulkSerialNumberUpdates');
   
   countElement.textContent = selectedOOCAssets.size;
   
   if (selectedOOCAssets.size === 0) {
     containerElement.innerHTML = '<div style="color: #666; font-style: italic;">No assets selected</div>';
+    if (serialUpdatesContainer) {
+      serialUpdatesContainer.innerHTML = '<div style="color: #666; font-style: italic; text-align: center;">No assets selected for serial number updates</div>';
+    }
     return;
   }
   
   let html = '<div style="display: grid; gap: 8px;">';
+  let serialHtml = '<div style="display: grid; gap: 8px;">';
+  
   selectedOOCAssets.forEach(assetId => {
     const asset = assets ? assets.find(a => a.id === assetId) : null;
     if (asset) {
@@ -5064,11 +5237,30 @@ function updateSelectedOOCDisplay() {
           <button onclick="removeFromOOCSelection('${assetId}')" style="background: none; border: none; color: #999; cursor: pointer; font-size: 16px;" title="Remove">×</button>
         </div>
       `;
+      
+      serialHtml += `
+        <div style="display: flex; align-items: center; gap: 10px; padding: 8px; background: white; border: 1px solid #ddd; border-radius: 4px;">
+          <div style="flex: 1;">
+            <span style="font-weight: 500; font-size: 12px;">${assetId}</span>
+            <div style="color: #666; font-size: 11px;">Current SN: ${asset.serial || 'None'}</div>
+          </div>
+          <input 
+            type="text" 
+            placeholder="New serial number" 
+            id="newSerial_${assetId.replace(/[^a-zA-Z0-9]/g, '_')}"
+            style="flex: 2; padding: 4px 8px; border: 1px solid #ddd; border-radius: 3px; font-size: 12px;"
+          />
+        </div>
+      `;
     }
   });
   html += '</div>';
+  serialHtml += '</div>';
   
   containerElement.innerHTML = html;
+  if (serialUpdatesContainer) {
+    serialUpdatesContainer.innerHTML = serialHtml;
+  }
 }
 
 function removeFromOOCSelection(assetId) {
@@ -5091,6 +5283,7 @@ function clearSingleOOC(assetId) {
   document.getElementById('singleOOCAssetId').value = assetId;
   document.getElementById('singleOOCLogEntry').value = '';
   document.getElementById('singleOOCNewLocation').value = 'Store';
+  document.getElementById('singleOOCNewSerial').value = '';
   
   // Show asset info
   const assetInfoDiv = document.getElementById('singleOOCAssetInfo');
@@ -5100,6 +5293,7 @@ function clearSingleOOC(assetId) {
       <div><strong>Brand:</strong> ${asset.brand}</div>
       <div><strong>Model:</strong> ${asset.model}</div>
       <div><strong>Current Location:</strong> ${asset.location || 'Store'}</div>
+      <div><strong>Current Serial:</strong> ${asset.serial || 'None'}</div>
     </div>
     ${asset.description ? `<div style="margin-top: 8px;"><strong>Description:</strong> ${asset.description}</div>` : ''}
   `;
@@ -5112,6 +5306,7 @@ async function processSingleOOCClear() {
   const assetId = document.getElementById('singleOOCAssetId').value;
   const logEntry = document.getElementById('singleOOCLogEntry').value.trim();
   const newLocation = document.getElementById('singleOOCNewLocation').value.trim();
+  const newSerial = document.getElementById('singleOOCNewSerial').value.trim();
   
   if (!logEntry) {
     showNotification("warning", "Please enter a maintenance description");
@@ -5124,15 +5319,27 @@ async function processSingleOOCClear() {
   }
   
   try {
-    await apiCall(`/api/assets/${encodeURIComponent(assetId)}/maintain`, "POST", {
+    const maintenanceData = {
       logEntry: logEntry,
       newLocation: newLocation,
       markOOC: false,
       unmarkOOC: true
-    });
+    };
+    
+    // Add serial number if provided
+    if (newSerial) {
+      maintenanceData.newSerial = newSerial;
+    }
+    
+    await apiCall(`/api/assets/${encodeURIComponent(assetId)}/maintain`, "POST", maintenanceData);
     
     closeModal('singleOOCModal');
-    showNotification("success", `Cleared OOC status for ${assetId} and moved to ${newLocation}`);
+    
+    let message = `Cleared OOC status for ${assetId} and moved to ${newLocation}`;
+    if (newSerial) {
+      message += ` (Serial updated to: ${newSerial})`;
+    }
+    showNotification("success", message);
     
     // Refresh the OOC list
     loadOOCAssets();
@@ -5161,6 +5368,50 @@ async function viewMaintenanceLog(assetId) {
   } catch (error) {
     console.error('Error viewing maintenance log:', error);
     showNotification('error', 'Failed to load maintenance log');
+  }
+}
+
+function updateStatusFromToggle(statusType, isChecked) {
+  if (statusType === 'ooc') {
+    const hiddenNoChange = document.getElementById('hiddenOOCNoChange');
+    const hiddenMark = document.getElementById('hiddenOOCMark');
+    const statusText = document.getElementById('oocStatusText');
+    
+    if (!hiddenNoChange || !hiddenMark || !statusText) {
+      return;
+    }
+    
+    if (isChecked) {
+      hiddenMark.checked = true;
+      statusText.textContent = 'Mark as Out of Commission';
+      statusText.style.color = '#dc3545';
+      statusText.style.fontWeight = '500';
+    } else {
+      hiddenNoChange.checked = true;
+      statusText.textContent = 'No change';
+      statusText.style.color = '#6c757d';
+      statusText.style.fontWeight = 'normal';
+    }
+  } else if (statusType === 'missing') {
+    const hiddenNoChange = document.getElementById('hiddenMissingNoChange');
+    const hiddenMark = document.getElementById('hiddenMissingMark');
+    const statusText = document.getElementById('missingStatusText');
+    
+    if (!hiddenNoChange || !hiddenMark || !statusText) {
+      return;
+    }
+    
+    if (isChecked) {
+      hiddenMark.checked = true;
+      statusText.textContent = 'Mark as Missing';
+      statusText.style.color = '#fd7e14';
+      statusText.style.fontWeight = '500';
+    } else {
+      hiddenNoChange.checked = true;
+      statusText.textContent = 'No change';
+      statusText.style.color = '#6c757d';
+      statusText.style.fontWeight = 'normal';
+    }
   }
 }
 
@@ -5248,7 +5499,7 @@ function createMaintenanceLogTable(asset) {
           <tr>
             <th style="width: 120px;">Date</th>
             <th style="width: 100px;">User</th>
-            <th>Maintenance Description</th>
+            <th>Maintenance Description <small style="font-weight: normal; color: #666;">(click to edit)</small></th>
           </tr>
         </thead>
         <tbody>
@@ -5264,11 +5515,41 @@ function createMaintenanceLogTable(asset) {
       // Alternate row colors
       const rowClass = index % 2 === 0 ? '' : 'style="background: #f8f9fa;"';
       
+      // Create unique ID for this log entry
+      const logId = `log_${asset.id}_${index}`;
+      
       tableHTML += `
         <tr ${rowClass}>
-          <td style="font-size: 13px; color: #666;">${date}</td>
-          <td style="font-size: 13px;"><strong>${user}</strong></td>
-          <td style="font-size: 14px;">${description}</td>
+          <td style="font-size: 13px; color: #666;">${escapeHtml(date)}</td>
+          <td style="font-size: 13px;"><strong>${escapeHtml(user)}</strong></td>
+          <td style="font-size: 14px; position: relative;">
+            <div id="${logId}_display" 
+                 onclick="editMaintenanceLog('${escapeJs(asset.id)}', ${index}, '${logId}')" 
+                 style="cursor: pointer; padding: 4px; border-radius: 4px; transition: background-color 0.2s;"
+                 onmouseover="this.style.backgroundColor='#f8f9fa'" 
+                 onmouseout="this.style.backgroundColor='transparent'"
+                 title="Click to edit">
+              ${escapeHtml(description)}
+            </div>
+            <div id="${logId}_edit" style="display: none;">
+              <div style="display: flex; gap: 5px; align-items: center;">
+                <textarea 
+                  id="${logId}_input"
+                  style="flex: 1; padding: 4px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; resize: vertical; min-height: 40px;"
+                  onkeydown="if(event.key==='Enter' && event.ctrlKey) { event.preventDefault(); saveMaintenanceLog('${escapeJs(asset.id)}', ${index}, '${logId}'); } if(event.key==='Escape') { event.preventDefault(); cancelEditMaintenanceLog('${logId}'); }"
+                >${escapeHtml(description)}</textarea>
+                <button onclick="saveMaintenanceLog('${escapeJs(asset.id)}', ${index}, '${logId}')" 
+                        style="padding: 4px 8px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;"
+                        title="Save (Ctrl+Enter)">💾</button>
+                <button onclick="cancelEditMaintenanceLog('${logId}')" 
+                        style="padding: 4px 8px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;"
+                        title="Cancel (Esc)">❌</button>
+              </div>
+              <div style="font-size: 11px; color: #666; margin-top: 2px;">
+                💡 Tip: Ctrl+Enter to save, Esc to cancel
+              </div>
+            </div>
+          </td>
         </tr>
       `;
     }
@@ -5284,6 +5565,188 @@ function createMaintenanceLogTable(asset) {
   `;
   
   return tableHTML;
+}
+
+function editMaintenanceLog(assetId, logIndex, logId) {
+  // First, close any other editing logs
+  const currentlyEditing = document.querySelectorAll('div[id$="_edit"][style*="block"]');
+  currentlyEditing.forEach(editDiv => {
+    const textarea = editDiv.querySelector('textarea[id$="_input"]');
+    if (textarea && textarea.dataset.logId !== logId) {
+      const currentAssetId = textarea.dataset.assetId;
+      const currentLogIndex = parseInt(textarea.dataset.logIndex);
+      const currentLogId = textarea.dataset.logId;
+      const originalValue = textarea.dataset.originalValue;
+      const currentValue = textarea.value.trim();
+      
+      // Save if changed and not empty
+      if (currentValue && currentValue !== originalValue) {
+        saveMaintenanceLogSilent(currentAssetId, currentLogIndex, currentLogId);
+      } else {
+        cancelEditMaintenanceLog(currentLogId);
+      }
+    }
+  });
+  
+  const displayDiv = document.getElementById(`${logId}_display`);
+  const editDiv = document.getElementById(`${logId}_edit`);
+  const textarea = document.getElementById(`${logId}_input`);
+  
+  if (displayDiv && editDiv && textarea) {
+    displayDiv.style.display = 'none';
+    editDiv.style.display = 'block';
+    
+    // Store original value for potential restoration
+    textarea.dataset.originalValue = displayDiv.textContent;
+    textarea.dataset.assetId = assetId;
+    textarea.dataset.logIndex = logIndex;
+    textarea.dataset.logId = logId;
+    
+    // Focus and select text in textarea
+    setTimeout(() => {
+      textarea.focus();
+      textarea.select();
+    }, 10);
+    
+    // Remove any existing click-outside listener and add new one
+    document.removeEventListener('click', handleClickOutside);
+    setTimeout(() => {
+      document.addEventListener('click', handleClickOutside);
+    }, 100); // Small delay to prevent immediate trigger
+  }
+}
+function handleClickOutside(event) {
+  // Find all currently editing textareas
+  const editingTextareas = document.querySelectorAll('textarea[id$="_input"]');
+  
+  editingTextareas.forEach(async (textarea) => {
+    const editDiv = textarea.closest('div[id$="_edit"]');
+    
+    // Check if click was outside this specific edit area
+    if (editDiv && !editDiv.contains(event.target)) {
+      const assetId = textarea.dataset.assetId;
+      const logIndex = parseInt(textarea.dataset.logIndex);
+      const logId = textarea.dataset.logId;
+      const originalValue = textarea.dataset.originalValue;
+      const currentValue = textarea.value.trim();
+      
+      // If value changed and is not empty, save it
+      if (currentValue && currentValue !== originalValue) {
+        await saveMaintenanceLogSilent(assetId, logIndex, logId);
+      } else if (!currentValue) {
+        // If empty, restore original and cancel
+        cancelEditMaintenanceLog(logId);
+      } else {
+        // If unchanged, just cancel
+        cancelEditMaintenanceLog(logId);
+      }
+    }
+  });
+  
+  // Remove the global click listener after processing
+  document.removeEventListener('click', handleClickOutside);
+}
+
+function cancelEditMaintenanceLog(logId) {
+  const displayDiv = document.getElementById(`${logId}_display`);
+  const editDiv = document.getElementById(`${logId}_edit`);
+  const textarea = document.getElementById(`${logId}_input`);
+  
+  if (displayDiv && editDiv && textarea) {
+    // Reset textarea to original value
+    const originalText = textarea.dataset.originalValue || displayDiv.textContent;
+    textarea.value = originalText;
+    
+    // Show display, hide edit
+    displayDiv.style.display = 'block';
+    editDiv.style.display = 'none';
+    
+    // Clear dataset
+    delete textarea.dataset.originalValue;
+    delete textarea.dataset.assetId;
+    delete textarea.dataset.logIndex;
+    delete textarea.dataset.logId;
+    
+    // Only remove click-outside listener if no other logs are being edited
+    const stillEditing = document.querySelectorAll('div[id$="_edit"][style*="block"]');
+    if (stillEditing.length === 0) {
+      document.removeEventListener('click', handleClickOutside);
+    }
+  }
+}
+
+async function saveMaintenanceLogSilent(assetId, logIndex, logId) {
+  const displayDiv = document.getElementById(`${logId}_display`);
+  const editDiv = document.getElementById(`${logId}_edit`);
+  const textarea = document.getElementById(`${logId}_input`);
+  
+  if (!displayDiv || !editDiv || !textarea) {
+    return false;
+  }
+  
+  const newDescription = textarea.value.trim();
+  
+  if (!newDescription) {
+    cancelEditMaintenanceLog(logId);
+    return false;
+  }
+  
+  try {
+    // Call API to update the maintenance log
+    const response = await apiCall(`/api/assets/${encodeURIComponent(assetId)}/maintenance-log/${logIndex}`, 'PUT', {
+      description: newDescription
+    });
+    
+    if (response.success) {
+      // Update the display with new text
+      displayDiv.textContent = newDescription;
+      
+      // Show display, hide edit
+      displayDiv.style.display = 'block';
+      editDiv.style.display = 'none';
+      
+      // Clear dataset
+      delete textarea.dataset.originalValue;
+      delete textarea.dataset.assetId;
+      delete textarea.dataset.logIndex;
+      delete textarea.dataset.logId;
+      
+      // Update the assets array if it exists
+      if (window.assets) {
+        const asset = window.assets.find(a => a.id === assetId);
+        if (asset && asset.maintenanceLogs && asset.maintenanceLogs[logIndex]) {
+          const logParts = asset.maintenanceLogs[logIndex].split('\t');
+          if (logParts.length >= 3) {
+            logParts[2] = newDescription;
+            asset.maintenanceLogs[logIndex] = logParts.join('\t');
+          }
+        }
+      }
+      
+      // Only remove click-outside listener if no other logs are being edited
+      const stillEditing = document.querySelectorAll('div[id$="_edit"][style*="block"]');
+      if (stillEditing.length === 0) {
+        document.removeEventListener('click', handleClickOutside);
+      }
+      
+      return true;
+    } else {
+      showNotification('error', response.message || 'Failed to update maintenance log');
+      return false;
+    }
+  } catch (error) {
+    showNotification('error', `Failed to update maintenance log: ${error.message}`);
+    console.error('Error updating maintenance log:', error);
+    return false;
+  }
+}
+
+async function saveMaintenanceLog(assetId, logIndex, logId) {
+  const result = await saveMaintenanceLogSilent(assetId, logIndex, logId);
+  
+  if (result) {
+    showNotification('success', 'Maintenance log updated successfully');
+  }
 }
 
 function closeMaintenanceLogModal() {
