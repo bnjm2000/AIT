@@ -1903,8 +1903,23 @@ def maintain_asset(asset_id):
             return jsonify({'error': 'Log entry is required'}), 400
 
         # Add maintenance log
-        current_date = datetime.now().strftime("%Y/%m/%d")
-        entry = f"{current_date}\t{session['user']}\t{log_entry_text}"
+        # Get maintenance date from request or use current date as fallback
+        maintenance_date = data.get('maintenanceDate')
+        if maintenance_date:
+            try:
+                # Parse the date from frontend (YYYY-MM-DD format) and convert to our format (YYYY/MM/DD)
+                parsed_date = datetime.strptime(maintenance_date, '%Y-%m-%d')
+                formatted_date = parsed_date.strftime("%Y/%m/%d")
+            except ValueError:
+                # If date parsing fails, use current date
+                formatted_date = datetime.now().strftime("%Y/%m/%d")
+                logger.warning(f"Invalid maintenance date format: {maintenance_date}, using current date")
+        else:
+            # If no date provided, use current date
+            formatted_date = datetime.now().strftime("%Y/%m/%d")
+
+        # Add maintenance log with the specified or current date
+        entry = f"{formatted_date}\t{session['user']}\t{log_entry_text}"
         asset.maintenance_logs.append(entry)
 
         # Update location if provided
@@ -2009,6 +2024,48 @@ def update_maintenance_log(asset_id, log_index):
         import traceback
         logger.error(f"Traceback: {traceback.format_exc()}")
         return jsonify({'error': f'Failed to update maintenance log: {str(e)}'}), 500
+
+@app.route('/api/assets/<asset_id>/maintenance-log/<int:log_index>', methods=['DELETE'])
+@require_auth
+def delete_maintenance_log(asset_id, log_index):
+    """Delete a specific maintenance log entry"""
+    try:
+        logger.info(f"Received maintenance log delete request for asset: '{asset_id}', log index: {log_index}")
+        
+        # URL decode the asset_id in case it has special characters
+        from urllib.parse import unquote
+        asset_id = unquote(asset_id)
+        
+        asset = data_manager.inventory.get(asset_id)
+        if not asset:
+            return jsonify({'error': 'Asset not found'}), 404
+        
+        # Check if log index is valid
+        if not asset.maintenance_logs or log_index < 0 or log_index >= len(asset.maintenance_logs):
+            return jsonify({'error': 'Invalid log index'}), 400
+        
+        # Get the log entry that will be deleted for logging purposes
+        deleted_log = asset.maintenance_logs[log_index]
+        log_parts = deleted_log.split('\t')
+        deleted_description = '\t'.join(log_parts[2:]) if len(log_parts) >= 3 else deleted_log
+        
+        # Remove the log entry
+        asset.maintenance_logs.pop(log_index)
+        
+        # Save changes
+        data_manager.save_inventory()
+        
+        # Log the action
+        log_action(f"Deleted maintenance log for asset {asset_id}: '{deleted_description}' (deleted by {session['user']})")
+        
+        logger.info(f"Successfully deleted maintenance log for asset {asset_id}")
+        return jsonify({'success': True, 'message': 'Maintenance log deleted successfully'})
+        
+    except Exception as e:
+        logger.error(f"Error deleting maintenance log for asset {asset_id}: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        return jsonify({'error': f'Failed to delete maintenance log: {str(e)}'}), 500
 
 @app.route('/api/search', methods=['GET'])
 @require_auth

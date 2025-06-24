@@ -73,6 +73,11 @@ function showSection(sectionName) {
       break;
     case "maintenance":
       loadMaintenanceAssets();
+      // Ensure the Log Maintenance button is visible when entering maintenance section
+      const logMaintenanceBtn = document.getElementById('log-maintenance-btn');
+      if (logMaintenanceBtn) {
+        logMaintenanceBtn.style.display = 'inline-block';
+      }
       break;
     case "asset-check":
       loadAssetCheck();
@@ -2342,8 +2347,15 @@ function finishReturningAssets(eventId) {
 }
 
 function openMaintenanceModalForAsset(assetId) {
-  document.getElementById("maintenanceAssetId").value = assetId;
-  openModal("maintenanceModal");
+  openMaintenanceModal();
+  
+  setTimeout(() => {
+    if (assets && assets.length > 0) {
+      selectAssetForMaintenance(assetId);
+    } else {
+      console.warn('Assets not loaded yet, cannot pre-select asset');
+    }
+  }, 200);
 }
 
 function populateTransferDropdowns(events) {
@@ -4151,10 +4163,16 @@ document.addEventListener("DOMContentLoaded", function () {
       }
 
       const logEntry = document.getElementById("bulkOOCLogEntry").value.trim();
+      const maintenanceDate = document.getElementById("bulkOOCMaintenanceDate").value;
       const newLocation = document.getElementById("bulkOOCNewLocation").value.trim();
 
       if (!logEntry) {
         showNotification("warning", "Please enter a maintenance description");
+        return;
+      }
+
+      if (!maintenanceDate) {
+        showNotification("warning", "Please select a maintenance date");
         return;
       }
 
@@ -4172,6 +4190,7 @@ document.addEventListener("DOMContentLoaded", function () {
             
             const maintenanceData = {
               logEntry,
+              maintenanceDate, // Include the selected date
               newLocation: newLocation || "Store",
               markOOC: false,
               unmarkOOC: true,  // Clear OOC status
@@ -4689,8 +4708,11 @@ function selectAssetForMaintenance(assetId) {
   selectedMaintenanceAssets.add(assetId);
   updateSelectedAssetsDisplay();
   
-  // Remove from search results
-  searchMaintenanceAssets();
+  // Clear search results and show a message
+  const searchContainer = document.getElementById('availableMaintenanceAssets');
+  if (searchContainer) {
+    searchContainer.innerHTML = '<div style="padding: 20px; text-align: center; color: #666;">Asset pre-selected. You can search for additional assets to add to this maintenance session.</div>';
+  }
   
   showNotification('success', `Selected ${assetId} for maintenance`);
 }
@@ -4933,6 +4955,18 @@ function switchMaintenanceTab(tabName) {
     contentDiv.style.display = "block";
   }
 
+  // Show/hide the "Log Maintenance" button based on the active tab
+  const logMaintenanceBtn = document.getElementById('log-maintenance-btn');
+  if (logMaintenanceBtn) {
+    if (tabName === 'ooc') {
+      // Hide the button in OOC/Missing tab
+      logMaintenanceBtn.style.display = 'none';
+    } else {
+      // Show the button in All Assets tab
+      logMaintenanceBtn.style.display = 'inline-block';
+    }
+  }
+
   // Load appropriate data
   if (tabName === "all") {
     loadMaintenanceAssets();
@@ -4971,16 +5005,9 @@ function displayOOCAssets(oocAssets) {
   }
 
   let tableHTML = `
-    <div style="margin-bottom: 15px; padding: 10px; background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px;">
-      <strong>📋 Instructions:</strong> Select the assets that have been repaired/fixed/found and are ready to return to service. 
-      You can select multiple assets and clear their OOC or Missing status together.
-    </div>
     <div style="margin-bottom: 15px; display: flex; gap: 10px; align-items: center;">
-      <button id="bulkOOCClearBtn" class="btn btn-success" onclick="openBulkOOCClear()" disabled>
-        Clear Status for Selected Assets (<span id="selectedOOCCount">0</span>)
-      </button>
-      <button class="btn btn-secondary" onclick="toggleSelectAllOOC()">
-        Select All
+      <button id="bulk-clear-ooc-btn" class="btn btn-success" onclick="openBulkOOCModal()" style="display: none;">
+        Clear Status
       </button>
     </div>
     <div class="table-responsive">
@@ -5038,6 +5065,9 @@ function displayOOCAssets(oocAssets) {
   `;
   
   container.innerHTML = tableHTML;
+  
+  // Update the button state after rendering
+  updateBulkOOCButton();
 }
 
 async function toggleOOCStatus(assetId, isOOC) {
@@ -5187,13 +5217,24 @@ function updateOOCAssetDisplay() {
   }
 }
 
+// Update the bulk OOC button state
 function updateBulkOOCButton() {
-  const button = document.getElementById("bulk-clear-ooc-btn");
-  if (button) {
-    button.disabled = selectedOOCAssets.size === 0;
-    button.textContent = selectedOOCAssets.size > 0 
-      ? `Clear OOC Status (${selectedOOCAssets.size})` 
-      : 'Clear OOC Status';
+  const bulkButton = document.getElementById('bulk-clear-ooc-btn');
+  
+  if (bulkButton) {
+    const count = selectedOOCAssets.size;
+    
+    if (count === 0) {
+      // Hide the button when no assets are selected
+      bulkButton.style.display = 'none';
+    } else {
+      // Show the button and update text when assets are selected
+      bulkButton.style.display = 'inline-block';
+      bulkButton.textContent = `Clear Status (${count} selected)`;
+      bulkButton.disabled = false;
+      bulkButton.classList.add('btn-success');
+      bulkButton.classList.remove('btn-secondary');
+    }
   }
 }
 
@@ -5316,14 +5357,64 @@ function clearSingleOOC(assetId) {
   openModal('singleOOCModal');
 }
 
+function openBulkOOCClear() {
+  // Set current date as default
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('bulkOOCMaintenanceDate').value = today;
+  
+  openModal('bulkOOCModal');
+}
+
+function clearSingleOOC(assetId) {
+  // Find the asset details
+  const asset = assets ? assets.find(a => a.id === assetId) : null;
+  if (!asset) {
+    showNotification('error', 'Asset not found');
+    return;
+  }
+  
+  // Set current date as default
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('singleOOCMaintenanceDate').value = today;
+  
+  // Populate the modal
+  document.getElementById('singleOOCTitle').textContent = `Clear OOC Status - ${assetId}`;
+  document.getElementById('singleOOCAssetId').value = assetId;
+  document.getElementById('singleOOCLogEntry').value = '';
+  document.getElementById('singleOOCNewLocation').value = 'Store';
+  document.getElementById('singleOOCNewSerial').value = '';
+  
+  // Show asset info
+  const assetInfoDiv = document.getElementById('singleOOCAssetInfo');
+  assetInfoDiv.innerHTML = `
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px;">
+      <div><strong>Asset ID:</strong> ${asset.id}</div>
+      <div><strong>Brand:</strong> ${asset.brand}</div>
+      <div><strong>Model:</strong> ${asset.model}</div>
+      <div><strong>Current Location:</strong> ${asset.location || 'Store'}</div>
+      <div><strong>Current Serial:</strong> ${asset.serial || 'None'}</div>
+    </div>
+    ${asset.description ? `<div style="margin-top: 8px;"><strong>Description:</strong> ${asset.description}</div>` : ''}
+  `;
+  
+  // Open the modal
+  openModal('singleOOCModal');
+}
+
 async function processSingleOOCClear() {
   const assetId = document.getElementById('singleOOCAssetId').value;
   const logEntry = document.getElementById('singleOOCLogEntry').value.trim();
+  const maintenanceDate = document.getElementById('singleOOCMaintenanceDate').value;
   const newLocation = document.getElementById('singleOOCNewLocation').value.trim();
   const newSerial = document.getElementById('singleOOCNewSerial').value.trim();
   
   if (!logEntry) {
     showNotification("warning", "Please enter a maintenance description");
+    return;
+  }
+  
+  if (!maintenanceDate) {
+    showNotification("warning", "Please select a maintenance date");
     return;
   }
   
@@ -5335,11 +5426,12 @@ async function processSingleOOCClear() {
   try {
     const maintenanceData = {
       logEntry: logEntry,
+      maintenanceDate: maintenanceDate, // Include the selected date
       newLocation: newLocation,
       markOOC: false,
-      unmarkOOC: true,
+      unmarkOOC: true,   // Clear OOC status
       markMissing: false,
-      unmarkMissing: true
+      unmarkMissing: true // Clear Missing status
     };
     
     // Add serial number if provided
@@ -5432,8 +5524,8 @@ function updateStatusFromToggle(statusType, isChecked) {
 }
 
 function showMaintenanceLogModal(asset) {
-  // Create modal content
-  const modalContent = `
+  // Start building modal content
+  let modalContent = `
     <div class="modal" id="maintenanceLogModal" style="display: flex; align-items: center; justify-content: center;">
       <div class="modal-content" style="max-width: 800px; width: 90%; max-height: 80vh; overflow-y: auto;">
         <div class="modal-header">
@@ -5457,42 +5549,409 @@ function showMaintenanceLogModal(asset) {
               <div>
                 <strong>Status:</strong> <span class="asset-badge status-${asset.status}">${asset.status}</span><br>
                 <strong>Location:</strong> ${asset.location || 'Store'}<br>
-                <strong>OOC:</strong> ${asset.isOOC ? '<span style="color: #dc3545;">Yes</span>' : '<span style="color: #28a745;">No</span>'}
+                <strong>OOC:</strong> ${asset.isOOC ? '<span style="color: #dc3545;">Yes</span>' : '<span style="color: #28a745;">No</span>'}<br>
+                <strong>Missing:</strong> ${asset.isMissing ? '<span style="color: #fd7e14;">Yes</span>' : '<span style="color: #28a745;">No</span>'}
               </div>
             </div>
           </div>
           
-          <!-- Maintenance Log -->
+          <!-- Maintenance Logs -->
           <div>
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-              <h4 style="margin: 0; color: #495057;">Maintenance History</h4>
-              <button class="btn btn-primary" onclick="closeMaintenanceLogModal(); openMaintenanceModalForAsset('${asset.id}')">
-                Log New Maintenance
-              </button>
+            <h4 style="margin-bottom: 15px; color: #495057;">Maintenance History</h4>
+            <div style="max-height: 400px; overflow-y: auto;">
+              <table class="table" style="font-size: 14px;">
+                <thead>
+                  <tr>
+                    <th style="padding: 12px; font-weight: 600; color: #495057; border-bottom: 2px solid #e9ecef;">Date</th>
+                    <th style="padding: 12px; font-weight: 600; color: #495057; border-bottom: 2px solid #e9ecef;">User</th>
+                    <th style="padding: 12px; font-weight: 600; color: #495057; border-bottom: 2px solid #e9ecef;">Description</th>
+                    <th style="padding: 12px; font-weight: 600; color: #495057; border-bottom: 2px solid #e9ecef; width: 50px;"></th>
+                  </tr>
+                </thead>
+                <tbody>
+  `;
+
+  // Process maintenance logs
+  if (asset.maintenanceLogs && asset.maintenanceLogs.length > 0) {
+    const maintenanceData = asset.maintenanceLogs.map((log, originalIndex) => {
+      const parts = log.split('\t');
+      return {
+        date: parts[0] || '',
+        user: parts[1] || '',
+        description: parts.slice(2).join('\t') || '',
+        originalIndex: originalIndex // Keep track of the original index
+      };
+    });
+
+    // Display logs in reverse order (newest first) but keep original indices
+    const reversedData = [...maintenanceData].reverse();
+    
+    reversedData.forEach((log, displayIndex) => {
+      const logId = `log_${asset.id.replace(/[^a-zA-Z0-9]/g, '_')}_${log.originalIndex}`;
+      
+      modalContent += `
+        <tr style="border-bottom: 1px solid #f1f1f1;">
+          <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; vertical-align: top;">${log.date}</td>
+          <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; vertical-align: top;">${log.user}</td>
+          <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; vertical-align: top;">
+            <div id="${logId}_display" style="display: block; cursor: pointer;" onclick="editMaintenanceLog('${asset.id}', ${log.originalIndex}, '${logId}')">
+              ${escapeHtml(log.description)}
+            </div>
+            <div id="${logId}_edit" style="display: none;">
+              <textarea id="${logId}_input" 
+                        style="width: 100%; min-height: 60px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px; font-family: inherit; resize: vertical;"
+                        placeholder="Enter maintenance description...">${escapeHtml(log.description)}</textarea>
+              <div style="margin-top: 8px;">
+                <button onclick="saveMaintenanceLog('${asset.id}', ${log.originalIndex}, '${logId}')" 
+                        style="background: #28a745; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 11px; margin-right: 5px; cursor: pointer;">
+                  Save
+                </button>
+                <button onclick="cancelEditMaintenanceLog('${logId}')" 
+                        style="background: #6c757d; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 11px; cursor: pointer;">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </td>
+          <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; vertical-align: top; text-align: center;">
+            <button onclick="deleteMaintenanceLog('${asset.id}', ${log.originalIndex}, '${logId}')" 
+                    style="background: none; border: none; color: #dc3545; cursor: pointer; font-size: 16px; padding: 2px; border-radius: 3px; line-height: 1;"
+                    title="Delete this maintenance log"
+                    onmouseover="this.style.backgroundColor='#ffebee'"
+                    onmouseout="this.style.backgroundColor='transparent'">
+              ×
+            </button>
+          </td>
+        </tr>
+      `;
+    });
+  } else {
+    modalContent += `
+      <tr>
+        <td colspan="4" style="text-align: center; color: #666; padding: 30px; font-style: italic;">
+          No maintenance records found for this asset.
+        </td>
+      </tr>
+    `;
+  }
+
+  // Close the table and add action buttons
+  modalContent += `
+                  </tbody>
+                </table>
+              </div>
             </div>
             
-            ${createMaintenanceLogTable(asset)}
+            <!-- Action Buttons -->
+            <div style="margin-top: 20px; padding-top: 15px; border-top: 2px solid #eee; text-align: center;">
+              <button onclick="addNewLogEntryFromModal('${asset.id}')" 
+                      style="background: #667eea; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-size: 14px; margin-right: 10px; cursor: pointer;">
+                📝 Add New Log Entry
+              </button>
+              <button onclick="closeMaintenanceLogModal()" 
+                      style="background: #6c757d; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-size: 14px; cursor: pointer;">
+                Close
+              </button>
+            </div>
           </div>
         </div>
-        <div style="text-align: right; margin-top: 20px; padding-top: 15px; border-top: 1px solid #e9ecef;">
-          <button class="btn btn-secondary" onclick="closeMaintenanceLogModal()">Close</button>
-        </div>
       </div>
-    </div>
-  `;
-  
+    `;
+
   // Remove existing modal if any
   const existingModal = document.getElementById('maintenanceLogModal');
   if (existingModal) {
     existingModal.remove();
   }
-  
-  // Add modal to body
+
+  // Add new modal to body
   document.body.insertAdjacentHTML('beforeend', modalContent);
-  
+
   // Show modal
-  document.getElementById('maintenanceLogModal').style.display = 'flex';
+  const modal = document.getElementById('maintenanceLogModal');
+  modal.style.display = 'flex';
+  
+  // Add event listener for clicking outside modal
+  modal.addEventListener('click', function(e) {
+    if (e.target === modal) {
+      closeMaintenanceLogModal();
+    }
+  });
 }
+
+// Helper function to close the maintenance log modal
+function closeMaintenanceLogModal() {
+  const modal = document.getElementById('maintenanceLogModal');
+  if (modal) {
+    modal.remove();
+  }
+}
+
+// Function to handle adding new log entry from the maintenance log modal
+function addNewLogEntryFromModal(assetId) {
+  // Close the current maintenance log modal
+  closeMaintenanceLogModal();
+  
+  // Open the maintenance modal with the asset pre-selected
+  openMaintenanceModalForAsset(assetId);
+}
+
+// Delete maintenance log function
+async function deleteMaintenanceLog(assetId, logIndex, logId) {
+  // Show confirmation dialog
+  if (!confirm('Are you sure you want to delete this maintenance log entry? This action cannot be undone.')) {
+    return;
+  }
+  
+  try {
+    console.log(`Attempting to delete log at index ${logIndex} for asset ${assetId}`);
+    
+    const encodedAssetId = encodeURIComponent(assetId);
+    await apiCall(`/api/assets/${encodedAssetId}/maintenance-log/${logIndex}`, 'DELETE');
+    
+    showNotification('success', 'Maintenance log deleted');
+    
+    // Find the asset in our local assets array and refresh from server
+    const localAsset = assets.find(a => a.id === assetId);
+    if (localAsset) {
+      try {
+        // Force reload from server to get fresh data
+        const response = await apiCall('/api/assets');
+        if (response.success) {
+          // Update the global assets array
+          assets = response.data;
+          const updatedAsset = assets.find(a => a.id === assetId);
+          if (updatedAsset) {
+            showMaintenanceLogModal(updatedAsset);
+          }
+        } else {
+          // If reload fails, just close and reopen the modal
+          closeMaintenanceLogModal();
+          showNotification('info', 'Please refresh the page to see updated logs');
+        }
+      } catch (reloadError) {
+        console.warn('Could not reload asset data:', reloadError);
+        // If reload fails, just close the modal
+        closeMaintenanceLogModal();
+        showNotification('info', 'Log deleted. Please refresh the page to see updated logs');
+      }
+    }
+    
+  } catch (error) {
+    console.error('Error deleting maintenance log:', error);
+    showNotification('error', `Failed to delete maintenance log: ${error.message}`);
+  }
+}
+
+// Toggle select all OOC assets
+function toggleSelectAllOOC() {
+  const selectAllCheckbox = document.getElementById('selectAllOOCCheckbox');
+  const isChecked = selectAllCheckbox.checked;
+  
+  // Get all individual asset checkboxes
+  const assetCheckboxes = document.querySelectorAll('.ooc-asset-checkbox');
+  
+  assetCheckboxes.forEach(checkbox => {
+    const assetId = checkbox.getAttribute('data-asset-id') || 
+                   checkbox.closest('[data-asset-id]')?.getAttribute('data-asset-id');
+    
+    if (assetId) {
+      checkbox.checked = isChecked;
+      
+      if (isChecked) {
+        selectedOOCAssets.add(assetId);
+        checkbox.closest('tr')?.classList.add('selected');
+      } else {
+        selectedOOCAssets.delete(assetId);
+        checkbox.closest('tr')?.classList.remove('selected');
+      }
+    }
+  });
+  
+  updateSelectedOOCDisplay();
+  updateBulkOOCButton();
+}
+
+// Toggle individual OOC asset selection
+function toggleOOCAssetSelection(assetId) {
+  const checkbox = document.querySelector(`.ooc-asset-checkbox[onchange*="${assetId}"]`);
+  const row = checkbox?.closest('tr');
+  
+  if (checkbox.checked) {
+    selectedOOCAssets.add(assetId);
+    row?.classList.add('selected');
+  } else {
+    selectedOOCAssets.delete(assetId);
+    row?.classList.remove('selected');
+  }
+  
+  // Update the "select all" checkbox state
+  const selectAllCheckbox = document.getElementById('selectAllOOCCheckbox');
+  const allCheckboxes = document.querySelectorAll('.ooc-asset-checkbox');
+  const checkedCheckboxes = document.querySelectorAll('.ooc-asset-checkbox:checked');
+  
+  if (selectAllCheckbox) {
+    selectAllCheckbox.checked = allCheckboxes.length > 0 && checkedCheckboxes.length === allCheckboxes.length;
+    selectAllCheckbox.indeterminate = checkedCheckboxes.length > 0 && checkedCheckboxes.length < allCheckboxes.length;
+  }
+  
+  updateSelectedOOCDisplay();
+  updateBulkOOCButton();
+}
+
+// Update the selected OOC assets display
+function updateSelectedOOCDisplay() {
+  const countElement = document.getElementById('selectedOOCCount');
+  const containerElement = document.getElementById('selectedOOCAssets');
+  const serialUpdatesContainer = document.getElementById('bulkSerialNumberUpdates');
+  
+  if (countElement) {
+    countElement.textContent = selectedOOCAssets.size;
+  }
+  
+  if (!containerElement) return;
+  
+  let html = '<div style="display: flex; flex-wrap: wrap; gap: 8px;">';
+  let serialHtml = '<div style="display: flex; flex-direction: column; gap: 8px;">';
+  
+  if (selectedOOCAssets.size === 0) {
+    html = '<div style="color: #666; font-style: italic;">No assets selected</div>';
+    serialHtml = '<div style="color: #666; font-style: italic;">No assets selected</div>';
+  }
+  
+  selectedOOCAssets.forEach(assetId => {
+    const asset = assets ? assets.find(a => a.id === assetId) : null;
+    if (asset) {
+      html += `
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px; background: white; border: 1px solid #ddd; border-radius: 4px;">
+          <div>
+            <span style="font-weight: 500;">${assetId}</span>
+            <span style="color: #666; margin-left: 10px;">${asset.brand} ${asset.model}</span>
+          </div>
+          <button onclick="removeFromOOCSelection('${assetId}')" style="background: none; border: none; color: #999; cursor: pointer; font-size: 16px;" title="Remove">×</button>
+        </div>
+      `;
+      
+      serialHtml += `
+        <div style="display: flex; align-items: center; gap: 10px; padding: 8px; background: white; border: 1px solid #ddd; border-radius: 4px;">
+          <div style="flex: 1;">
+            <span style="font-weight: 500; font-size: 12px;">${assetId}</span>
+            <div style="color: #666; font-size: 11px;">Current SN: ${asset.serial || 'None'}</div>
+          </div>
+          <input 
+            type="text" 
+            placeholder="New serial number" 
+            id="newSerial_${assetId.replace(/[^a-zA-Z0-9]/g, '_')}"
+            style="flex: 2; padding: 4px 8px; border: 1px solid #ddd; border-radius: 3px; font-size: 12px;"
+          />
+        </div>
+      `;
+    }
+  });
+  html += '</div>';
+  serialHtml += '</div>';
+  
+  containerElement.innerHTML = html;
+  if (serialUpdatesContainer) {
+    serialUpdatesContainer.innerHTML = serialHtml;
+  }
+}
+
+// Remove asset from OOC selection
+function removeFromOOCSelection(assetId) {
+  selectedOOCAssets.delete(assetId);
+  
+  // Uncheck the checkbox
+  const checkbox = document.querySelector(`.ooc-asset-checkbox[onchange*="${assetId}"]`);
+  if (checkbox) {
+    checkbox.checked = false;
+    checkbox.closest('tr')?.classList.remove('selected');
+  }
+  
+  updateSelectedOOCDisplay();
+  updateOOCAssetDisplay();
+  updateBulkOOCButton();
+}
+
+// Update the bulk OOC button state
+function updateBulkOOCButton() {
+  const bulkButton = document.getElementById('bulk-clear-ooc-btn');
+  const countSpan = document.getElementById('selectedOOCCount');
+  
+  if (bulkButton && countSpan) {
+    const count = selectedOOCAssets.size;
+    bulkButton.disabled = count === 0;
+    bulkButton.textContent = `Clear Status (${count} selected)`;
+    
+    if (count === 0) {
+      bulkButton.classList.add('btn-secondary');
+      bulkButton.classList.remove('btn-success');
+    } else {
+      bulkButton.classList.add('btn-success');
+      bulkButton.classList.remove('btn-secondary');
+    }
+  }
+}
+
+// Update OOC asset display
+function updateOOCAssetDisplay() {
+  // This function updates the visual state of the OOC assets list
+  const assetRows = document.querySelectorAll('[data-asset-id]');
+  
+  assetRows.forEach(row => {
+    const assetId = row.getAttribute('data-asset-id');
+    const checkbox = row.querySelector('.ooc-asset-checkbox');
+    
+    if (assetId && checkbox) {
+      if (selectedOOCAssets.has(assetId)) {
+        row.classList.add('selected');
+        checkbox.checked = true;
+      } else {
+        row.classList.remove('selected');
+        checkbox.checked = false;
+      }
+    }
+  });
+}
+
+// Open bulk OOC modal
+function openBulkOOCModal() {
+  if (selectedOOCAssets.size === 0) {
+    showNotification('warning', 'Please select at least one asset to clear status');
+    return;
+  }
+  
+  // Set current date as default
+  const today = new Date().toISOString().split('T')[0];
+  const dateField = document.getElementById('bulkOOCMaintenanceDate');
+  if (dateField) {
+    dateField.value = today;
+  }
+  
+  // Update the display of selected assets
+  updateSelectedOOCDisplay();
+  
+  openModal('bulkOOCModal');
+}
+
+// Filter OOC assets (for search functionality)
+function filterOOCAssets() {
+  const searchInput = document.getElementById('ooc-search');
+  if (!searchInput) return;
+  
+  const searchTerm = searchInput.value.toLowerCase().trim();
+  const assetRows = document.querySelectorAll('#ooc-assets-list tr:not(:first-child)'); // Skip header row
+  
+  assetRows.forEach(row => {
+    const text = row.textContent.toLowerCase();
+    if (text.includes(searchTerm)) {
+      row.style.display = '';
+    } else {
+      row.style.display = 'none';
+    }
+  });
+}
+
 
 function createMaintenanceLogTable(asset) {
   if (!asset.maintenanceLogs || asset.maintenanceLogs.length === 0) {

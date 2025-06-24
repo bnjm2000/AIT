@@ -1394,7 +1394,7 @@
           <div id="maintenance-section" class="content-section">
             <div class="content-header">
               <h2 class="content-title">Asset Maintenance</h2>
-              <button class="btn btn-primary" onclick="openMaintenanceModal()">
+              <button class="btn btn-primary" id="log-maintenance-btn" onclick="openMaintenanceModal()">
                 Log Maintenance
               </button>
             </div>
@@ -1521,6 +1521,17 @@
             ></textarea>
           </div>
 
+          <!-- Maintenance Date -->
+          <div class="form-group">
+            <label class="form-label">Maintenance Date</label>
+            <input
+              type="date"
+              class="form-input"
+              id="bulkOOCMaintenanceDate"
+              required
+            />
+          </div>
+
           <div class="form-group">
             <label class="form-label">Update Serial Numbers (optional)</label>
             <div style="background: #f8f9fa; padding: 12px; border-radius: 6px; border: 1px solid #e9ecef; margin-bottom: 10px;">
@@ -1582,6 +1593,17 @@
               required
               placeholder="Describe maintenance/repair work"
             ></textarea>
+          </div>
+
+          <!-- Maintenance Date -->
+          <div class="form-group">
+            <label class="form-label">Maintenance Date</label>
+            <input
+              type="date"
+              class="form-input"
+              id="singleOOCMaintenanceDate"
+              required
+            />
           </div>
 
           <div class="form-group">
