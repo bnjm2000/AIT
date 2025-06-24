@@ -1887,8 +1887,17 @@ def maintain_asset(asset_id):
             if not new_location:
                 new_location = None
         
+        new_serial = data.get('newSerial')
+        if new_serial is not None:
+            new_serial = new_serial.strip()
+            # Treat empty string as None
+            if not new_serial:
+                new_serial = None
+        
         mark_ooc = data.get('markOOC', False)
         unmark_ooc = data.get('unmarkOOC', False)
+        mark_missing = data.get('markMissing', False)
+        unmark_missing = data.get('unmarkMissing', False)
 
         if not log_entry_text:
             return jsonify({'error': 'Log entry is required'}), 400
@@ -1904,6 +1913,12 @@ def maintain_asset(asset_id):
             asset.current_location = new_location
             log_action(f"Updated location for asset {asset_id} from '{old_location}' to '{new_location}'")
 
+        # Update serial number if provided
+        if new_serial:
+            old_serial = asset.serial_number or 'None'
+            asset.serial_number = new_serial
+            log_action(f"Updated serial number for asset {asset_id} from '{old_serial}' to '{new_serial}'")
+
         # Update OOC status
         if mark_ooc and not asset.is_ooc:
             asset.is_ooc = True
@@ -1911,6 +1926,14 @@ def maintain_asset(asset_id):
         elif unmark_ooc and asset.is_ooc:
             asset.is_ooc = False
             log_action(f"Removed Out of Commission status from asset {asset_id}")
+
+        # Update Missing status
+        if mark_missing and not asset.is_missing:
+            asset.is_missing = True
+            log_action(f"Marked asset {asset_id} as Missing")
+        elif unmark_missing and asset.is_missing:
+            asset.is_missing = False
+            log_action(f"Removed Missing status from asset {asset_id}")
 
         # Save changes
         data_manager.save_inventory()
@@ -1928,6 +1951,64 @@ def maintain_asset(asset_id):
         import traceback
         logger.error(f"Traceback: {traceback.format_exc()}")
         return jsonify({'error': f'Failed to log maintenance: {str(e)}'}), 500
+
+@app.route('/api/assets/<asset_id>/maintenance-log/<int:log_index>', methods=['PUT'])
+@require_auth
+def update_maintenance_log(asset_id, log_index):
+    """Update a specific maintenance log entry"""
+    try:
+        logger.info(f"Received maintenance log update request for asset: '{asset_id}', log index: {log_index}")
+        
+        # URL decode the asset_id in case it has special characters
+        from urllib.parse import unquote
+        asset_id = unquote(asset_id)
+        
+        asset = data_manager.inventory.get(asset_id)
+        if not asset:
+            return jsonify({'error': 'Asset not found'}), 404
+
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+            
+        new_description = data.get('description')
+        if not new_description or not new_description.strip():
+            return jsonify({'error': 'Description is required'}), 400
+        
+        new_description = new_description.strip()
+        
+        # Check if log index is valid
+        if not asset.maintenance_logs or log_index < 0 or log_index >= len(asset.maintenance_logs):
+            return jsonify({'error': 'Invalid log index'}), 400
+        
+        # Parse the existing log entry
+        log_parts = asset.maintenance_logs[log_index].split('\t')
+        if len(log_parts) < 3:
+            return jsonify({'error': 'Invalid log format'}), 400
+        
+        # Keep date and user, update description
+        original_date = log_parts[0]
+        original_user = log_parts[1]
+        original_description = '\t'.join(log_parts[2:])  # In case description contained tabs
+        
+        # Create updated log entry
+        updated_log = f"{original_date}\t{original_user}\t{new_description}"
+        asset.maintenance_logs[log_index] = updated_log
+        
+        # Save changes
+        data_manager.save_inventory()
+        
+        # Log the action
+        log_action(f"Updated maintenance log for asset {asset_id}: '{original_description}' -> '{new_description}' (edited by {session['user']})")
+        
+        logger.info(f"Successfully updated maintenance log for asset {asset_id}")
+        return jsonify({'success': True, 'message': 'Maintenance log updated successfully'})
+        
+    except Exception as e:
+        logger.error(f"Error updating maintenance log for asset {asset_id}: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        return jsonify({'error': f'Failed to update maintenance log: {str(e)}'}), 500
 
 @app.route('/api/search', methods=['GET'])
 @require_auth

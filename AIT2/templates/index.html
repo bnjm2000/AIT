@@ -706,6 +706,122 @@
         display: block;
       }
 
+      /* OOC Toggle Switch Styles */
+      .ooc-toggle {
+        position: relative;
+        display: inline-block;
+        width: 50px;
+        height: 24px;
+        margin: 0;
+      }
+
+      .ooc-toggle input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+      }
+
+      .ooc-slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: #28a745;
+        transition: 0.3s;
+        border-radius: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: flex-start;
+        padding: 2px;
+      }
+
+      .ooc-slider:before {
+        content: "✓";
+        position: absolute;
+        height: 20px;
+        width: 20px;
+        background-color: white;
+        transition: 0.3s;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        font-weight: bold;
+        color: #28a745;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+      }
+
+      .ooc-toggle input:checked + .ooc-slider {
+        background-color: #dc3545;
+      }
+
+      .ooc-toggle input:checked + .ooc-slider:before {
+        transform: translateX(26px);
+        content: "⚠";
+        color: #dc3545;
+      }
+
+      .ooc-toggle input:disabled + .ooc-slider {
+        background-color: #6c757d;
+        cursor: not-allowed;
+        opacity: 0.6;
+      }
+
+      .ooc-toggle input:disabled + .ooc-slider:before {
+        cursor: not-allowed;
+        color: #6c757d;
+      }
+
+      /* Hover effects */
+      .ooc-toggle:hover input:not(:disabled) + .ooc-slider {
+        box-shadow: 0 0 8px rgba(0,0,0,0.2);
+      }
+
+      .ooc-toggle input:focus + .ooc-slider {
+        box-shadow: 0 0 0 3px rgba(0,123,255,0.25);
+      }
+
+      /* Maintenance Modal OOC Toggle Styles */
+      .maintenance-ooc-toggle {
+        width: 40px;
+        height: 20px;
+      }
+
+      .maintenance-ooc-toggle .ooc-slider {
+        border-radius: 20px;
+        background-color: #6c757d;
+      }
+
+      .maintenance-ooc-toggle .ooc-slider:before {
+        height: 16px;
+        width: 16px;
+        border-radius: 50%;
+        font-size: 10px;
+        content: "";
+      }
+
+      .maintenance-ooc-toggle input:checked + .ooc-slider {
+        background-color: #dc3545;
+      }
+
+      .maintenance-ooc-toggle input:checked + .ooc-slider:before {
+        transform: translateX(20px);
+        background-color: white;
+      }
+
+      /* Mark as OOC specific styling */
+      .maintenance-ooc-toggle#markOOCToggle:checked + .ooc-slider {
+        background-color: #dc3545;
+      }
+
+      /* Remove OOC specific styling */
+      .maintenance-ooc-toggle#removeOOCToggle:checked + .ooc-slider {
+        background-color: #28a745;
+      }
+
       /* Tabs styling */
       .events-tab.active {
         color: #764ba2 !important;
@@ -807,6 +923,50 @@
         .stats-grid {
           grid-template-columns: repeat(2, 1fr);
         }
+      }
+
+      /* Maintenance Status Toggle Styles */
+      .maintenance-status-toggle {
+        width: 40px;
+        height: 20px;
+      }
+
+      .maintenance-status-toggle .ooc-slider {
+        border-radius: 20px;
+        background-color: #6c757d;
+      }
+
+      .maintenance-status-toggle .ooc-slider:before {
+        height: 16px;
+        width: 16px;
+        border-radius: 50%;
+        font-size: 10px;
+        content: "";
+      }
+
+      .maintenance-status-toggle input:checked + .ooc-slider {
+        background-color: #007bff;
+      }
+
+      .maintenance-status-toggle input:checked + .ooc-slider:before {
+        transform: translateX(20px);
+        background-color: white;
+      }
+
+      /* OOC specific styling - Red */
+      .maintenance-status-toggle input:checked + .ooc-red {
+        background-color: #dc3545;
+      }
+
+      /* Missing specific styling - Orange */
+      .maintenance-status-toggle input:checked + .missing-orange {
+        background-color: #fd7e14;
+      }
+
+      /* Missing asset badge */
+      .status-missing {
+        background: #fff3cd;
+        color: #856404;
       }
 
       @media (max-width: 480px) {
@@ -1319,7 +1479,7 @@
                   </div>
                   
                   <div id="ooc-assets-list">
-                    <div class="loading">Loading OOC assets...</div>
+                    <div class="loading">Loading assets...</div>
                   </div>
                 </div>
               </div>
@@ -1351,8 +1511,17 @@
               id="bulkOOCLogEntry"
               rows="3"
               required
-              placeholder="Describe what maintenance/repair work was completed to resolve the OOC status..."
+              placeholder="Describe maintenance/repair work"
             ></textarea>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Update Serial Numbers (optional)</label>
+            <div style="background: #f8f9fa; padding: 12px; border-radius: 6px; border: 1px solid #e9ecef; margin-bottom: 10px;">
+              <div id="bulkSerialNumberUpdates">
+                
+              </div>
+            </div>
           </div>
           
           <div class="form-group">
@@ -1405,8 +1574,20 @@
               id="singleOOCLogEntry"
               rows="3"
               required
-              placeholder="Describe what maintenance/repair work was completed to resolve the OOC status..."
+              placeholder="Describe maintenance/repair work"
             ></textarea>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Update Serial Number (optional)</label>
+            <input
+              type="text"
+              class="form-input"
+              id="singleOOCNewSerial"
+            />
+            <small style="color: #666; font-size: 12px; margin-top: 5px; display: block;">
+              For 1-to-1 exchanges
+            </small>
           </div>
           
           <div class="form-group">
@@ -1694,45 +1875,59 @@
           <!-- Asset Selection Section -->
           <div class="form-group">
             <label class="form-label">Select Assets for Maintenance</label>
-            <div style="border: 1px solid #e9ecef; border-radius: 8px; margin-bottom: 15px;">
-              <!-- Search Bar -->
-              <div style="padding: 10px; border-bottom: 1px solid #e9ecef;">
-                <input
-                  type="text"
-                  class="form-input"
-                  id="maintenanceAssetSearch"
-                  placeholder="Search by Asset ID, brand, model, or serial number..."
-                  oninput="searchMaintenanceAssets()"
-                  style="margin-bottom: 0;"
-                />
-              </div>
-              
-              <!-- Selected Assets Display -->
-              <div id="selectedMaintenanceAssets" style="padding: 10px; background: #f8f9fa; border-bottom: 1px solid #e9ecef; min-height: 60px;">
-                <div style="font-weight: 500; margin-bottom: 8px; color: #495057;">Selected Assets (<span id="selectedAssetsCount">0</span>):</div>
-                <div id="selectedAssetsList" style="color: #666; font-style: italic;">No assets selected</div>
-              </div>
-              
-              <!-- Available Assets List -->
-              <div id="availableMaintenanceAssets" style="max-height: 300px; overflow-y: auto;">
-                <div style="padding: 20px; text-align: center; color: #666;">
-                  Type to search for assets...
-                </div>
+            <input
+              type="text"
+              class="form-input"
+              id="maintenanceAssetSearch"
+              placeholder="Search by Asset ID, brand, model, or serial number..."
+              style="margin-bottom: 10px;"
+            />
+            <div
+              id="availableMaintenanceAssets"
+              style="
+                max-height: 200px;
+                overflow-y: auto;
+                border: 1px solid #e9ecef;
+                border-radius: 8px;
+                padding: 10px;
+                background: #f8f9fa;
+                margin-bottom: 15px;
+              "
+            >
+              Type at least 2 characters to search...
+            </div>
+            <div id="selectedMaintenanceAssets" style="margin-top: 10px;">
+              <h5 style="margin: 0 0 10px 0; color: #495057;">
+                Selected Assets (<span id="selectedCount">0</span>):
+              </h5>
+              <div
+                id="selectedAssetsList"
+                style="
+                  min-height: 40px;
+                  padding: 10px;
+                  border: 1px solid #e9ecef;
+                  border-radius: 8px;
+                  background: white;
+                "
+              >
+                No assets selected
               </div>
             </div>
           </div>
 
+          <!-- Maintenance Log Entry -->
           <div class="form-group">
             <label class="form-label">Maintenance Log Entry</label>
             <textarea
               class="form-input"
               id="maintenanceLogEntry"
-              rows="3"
-              required
+              rows="4"
               placeholder="Describe the maintenance performed..."
+              required
             ></textarea>
           </div>
-          
+
+          <!-- New Location -->
           <div class="form-group">
             <label class="form-label">New Location (optional)</label>
             <input
@@ -1742,26 +1937,42 @@
               placeholder="Leave blank to keep current location"
             />
           </div>
-          
+
+          <!-- Asset Status Changes -->
           <div class="form-group">
-            <label class="form-label">Out of Commission Status</label>
-            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-              <label style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; cursor: pointer; transition: all 0.2s;">
-                <input type="radio" name="oocStatus" value="nochange" checked style="margin: 0;">
-                <span>No Change</span>
+            <label class="form-label">Asset Status Changes</label>
+            
+            <!-- OOC Status -->
+            <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px;">
+              <span style="font-weight: 500; color: #495057; min-width: 120px;">Mark as OOC:</span>
+              <label class="ooc-toggle maintenance-status-toggle">
+                <input type="checkbox" id="markOOCToggle" onchange="updateStatusFromToggle('ooc', this.checked)">
+                <span class="ooc-slider ooc-red"></span>
               </label>
-              <label style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; cursor: pointer; transition: all 0.2s;">
-                <input type="radio" name="oocStatus" value="mark" style="margin: 0;">
-                <span>🔴 Mark as OOC</span>
+              <span id="oocStatusText" style="color: #6c757d; font-size: 14px;">No change</span>
+            </div>
+            
+            <!-- Missing Status -->
+            <div style="display: flex; align-items: center; gap: 15px;">
+              <span style="font-weight: 500; color: #495057; min-width: 120px;">Mark as Missing:</span>
+              <label class="ooc-toggle maintenance-status-toggle">
+                <input type="checkbox" id="markMissingToggle" onchange="updateStatusFromToggle('missing', this.checked)">
+                <span class="ooc-slider missing-orange"></span>
               </label>
-              <label style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; cursor: pointer; transition: all 0.2s;">
-                <input type="radio" name="oocStatus" value="unmark" style="margin: 0;">
-                <span>🟢 Remove OOC Status</span>
-              </label>
+              <span id="missingStatusText" style="color: #6c757d; font-size: 14px;">No change</span>
+            </div>
+            
+            <!-- Hidden radio buttons for form compatibility -->
+            <div style="display: none;">
+              <input type="radio" name="oocStatus" value="nochange" id="hiddenOOCNoChange" checked>
+              <input type="radio" name="oocStatus" value="mark" id="hiddenOOCMark">
+              <input type="radio" name="missingStatus" value="nochange" id="hiddenMissingNoChange" checked>
+              <input type="radio" name="missingStatus" value="mark" id="hiddenMissingMark">
             </div>
           </div>
           
-          <div style="display: flex; gap: 10px; justify-content: flex-end">
+          <!-- Form Buttons - This is the critical fix -->
+          <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
             <button
               type="button"
               class="btn btn-secondary"
