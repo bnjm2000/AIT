@@ -616,7 +616,7 @@ WARWICK STAND #02,Warwick,RS28400B,,Hand Crank Speaker Stand,False,False,,AX,Sto
 CL5#01,Yamaha,CL5,WTASK01015,Digital Mixer,False,False,"2024/11/11	bnjm2000	2024/09/12 - sent to Yamaha for servicing|2024/11/11	bnjm2000	2025/01/17 - Sent to Yamaha for service (Dante module error)|2024/11/11	bnjm2000	Replaced Dante Module [$631]
 Replaced DNTU PCB [$672]
 Replaced FFC Cable [$10]|2025/01/20	bnjm2000	Dante clock suddenly unlocked and could not lock back, phantom noise on both inputs and outputs [Wedding of Aim and Singhis @ TCP]|2025/02/05	bnjm2000	Replaced DSP PCB [$1011]|2025/02/13	bnjm2000	2025/02/13 -  Dante clock suddenly unlocked and could not lock back, phantom noise on both inputs and outputs [Wedding of Aim and Singhis @ TCP]|2025/02/27	bnjm2000	2025/02/27 - Replaced DSP PCB [$1011]",AX,Store,Store
-DM3#01,Yamaha,DM3,BGDK01029,Digital Mixer,False,False,2024/11/11	bnjm2000	07/11/24 - Collected from Yamaha|2024/11/11	bnjm2000	12/09/24 - sent to Yamaha for servicing|2024/11/11	bnjm2000	12/09/24 - sent to Yamaha for servicing|2024/11/11	bnjm2000	07/11/24 - Colelcted from Yamaha,AX,Store,
+DM3#01,Yamaha,DM3,BGDK01029,Digital Mixer,False,False,2024/11/11	bnjm2000	04/09/24 - Reported cannot power on from Niche|2024/11/11	bnjm2000	12/09/24 - sent to Yamaha for servicing|2024/11/11	bnjm2000	24/10/24 - Replaced PCB (report no. PA842034) $586.84|2024/11/11	bnjm2000	07/11/24 - Collected from Yamaha,AX,Store,
 DM3#02,Yamaha,DM3,BGDI01076,Digital Mixer,False,False,,AX,Store,
 DM7 #01,Yamaha,DM7,21EGEI01036,Digital Mixer,False,False,,AX,Store,
 DXR8#01,Yamaha,DXR8,EESM01180,"Active80"" Speaker",False,False,,AX,Store,
