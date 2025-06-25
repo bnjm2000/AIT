@@ -791,11 +791,33 @@ async function openPrepareEventModal(eventId) {
             Object.keys(modelGroupsByDept).forEach(dept => {
                 const modelGroups = modelGroupsByDept[dept];
                 
+                // Count total assets for this department
+                let totalRequired = 0;
+                let totalAssigned = 0;
+
+                modelGroups.forEach(modelGroup => {
+                    totalRequired += modelGroup.requiredQuantity;
+                    totalAssigned += modelGroup.assignedAssets.length;
+                });
+
+                const progressPercent = totalRequired > 0 ? Math.round((totalAssigned / totalRequired) * 100) : 0;
+                const progressColor = totalAssigned >= totalRequired ? '#28a745' : '#ffc107';
+
                 content += `
                     <div class="dept-section" style="margin-bottom: 20px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: #f1f3f4; border-radius: 6px; cursor: pointer; margin-bottom: 10px;" onclick="togglePrepareSection('dept-${dept}')">
                             <h5 style="margin: 0; color: #495057; font-size: 14px;">${dept} Department</h5>
-                            <span class="toggle-icon" style="font-size: 14px; font-weight: bold; color: #666;">▼</span>
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <div style="text-align: right;">
+                                    <div style="font-size: 12px; font-weight: 500; color: ${progressColor};">
+                                        ${totalAssigned}/${totalRequired} assigned
+                                    </div>
+                                    <div style="background: #e9ecef; border-radius: 8px; height: 3px; width: 100px; overflow: hidden; margin-top: 2px;">
+                                        <div style="background: ${progressColor}; height: 100%; width: ${Math.min(progressPercent, 100)}%; transition: width 0.3s ease;"></div>
+                                    </div>
+                                </div>
+                                <span class="toggle-icon" style="font-size: 14px; font-weight: bold; color: #666;">▼</span>
+                            </div>
                         </div>
                         <div id="dept-${dept}" style="display: block; padding: 0 10px;">
                 `;
@@ -846,10 +868,31 @@ async function openPrepareEventModal(eventId) {
                                 
                                 if (!alreadyProcessed) {
                                     if (!hasAddedDeptHeader) {
+                                        // Count assets that will be processed in this legacy department
+                                        let legacyAssetCount = 0;
+                                        modelAssets.forEach(asset => {
+                                            try {
+                                                const parts = asset.id.substring(7).split('|');
+                                                if (parts.length >= 4) {
+                                                    const assetDept = parts[0];
+                                                    if (assetDept === dept) {
+                                                        const assignedAssets = event.actuallyPrepared ? 
+                                                            event.actuallyPrepared.filter(assetId => {
+                                                                const availableAsset = availableAssets.find(a => a.id === assetId);
+                                                                return availableAsset && availableAsset.department === dept;
+                                                            }) : [];
+                                                        legacyAssetCount += assignedAssets.length;
+                                                    }
+                                                }
+                                            } catch (e) {
+                                                // Continue processing other assets
+                                            }
+                                        });
+
                                         content += `
                                             <div class="dept-section" style="margin-bottom: 20px;">
                                                 <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: #f1f3f4; border-radius: 6px; cursor: pointer; margin-bottom: 10px;" onclick="togglePrepareSection('legacy-dept-${dept}')">
-                                                    <h5 style="margin: 0; color: #495057; font-size: 14px;">${dept} Department</h5>
+                                                    <h5 style="margin: 0; color: #495057; font-size: 14px;">${dept} Department (${legacyAssetCount} assets)</h5>
                                                     <span class="toggle-icon" style="font-size: 14px; font-weight: bold; color: #666;">▼</span>
                                                 </div>
                                                 <div id="legacy-dept-${dept}" style="display: block; padding: 0 10px;">
@@ -1122,7 +1165,8 @@ async function updateAssetStatusInModal(eventId, assetId, action) {
             // Asset was completely removed, so remove it from both sections
             removeAssetFromModal(assetId);
             
-            // Get fresh event data to update counters
+            // Get fresh event data AFTER the removal to update counters
+            await new Promise(resolve => setTimeout(resolve, 100)); // Small delay to ensure backend is updated
             const response = await apiCall(`/api/events/${eventId}`);
             const event = response.data;
             
@@ -1131,6 +1175,9 @@ async function updateAssetStatusInModal(eventId, assetId, action) {
             
             // Update model progress bars
             updateModelProgressBars(event);
+            
+            // Update department progress bars
+            updateDepartmentProgressBars(event);
             
         } else {
             // Get fresh event data for other actions
@@ -1156,6 +1203,9 @@ async function updateAssetStatusInModal(eventId, assetId, action) {
             
             // Update model progress bars
             updateModelProgressBars(event);
+            
+            // Update department progress bars
+            updateDepartmentProgressBars(event);
         }
         
     } catch (error) {
@@ -1658,6 +1708,52 @@ function updateModelSectionCounts(modelSection, action) {
             }
         }
     });
+}
+
+function updateDepartmentProgressBars(event) {
+    // Update progress bars for model requirements departments
+    if (event.modelGroups) {
+        const deptProgress = {};
+        
+        // Calculate progress by department
+        Object.values(event.modelGroups).forEach(modelGroup => {
+            const dept = modelGroup.department;
+            if (!deptProgress[dept]) {
+                deptProgress[dept] = { required: 0, assigned: 0 };
+            }
+            deptProgress[dept].required += modelGroup.requiredQuantity;
+            deptProgress[dept].assigned += modelGroup.assignedAssets.length;
+        });
+        
+        // Update the department progress bars
+        Object.keys(deptProgress).forEach(dept => {
+            const { required, assigned } = deptProgress[dept];
+            const progressPercent = required > 0 ? Math.round((assigned / required) * 100) : 0;
+            const progressColor = assigned >= required ? '#28a745' : '#ffc107';
+            
+            // Find the department header - try multiple selectors
+            let deptHeader = document.querySelector(`[onclick*="togglePrepareSection('dept-${dept}')"]`);
+            if (!deptHeader) {
+                deptHeader = document.querySelector(`[onclick*="dept-${dept}"]`);
+            }
+            
+            if (deptHeader) {
+                // Update the progress text
+                const progressText = deptHeader.querySelector('[style*="font-size: 12px"][style*="font-weight: 500"]');
+                if (progressText) {
+                    progressText.style.color = progressColor;
+                    progressText.textContent = `${assigned}/${required} assigned`;
+                }
+                
+                // Update the progress bar
+                const progressBar = deptHeader.querySelector('[style*="background: #e9ecef"] div');
+                if (progressBar) {
+                    progressBar.style.background = progressColor;
+                    progressBar.style.width = `${Math.min(progressPercent, 100)}%`;
+                }
+            }
+        });
+    }
 }
 
 async function assignSpecificAsset(eventId, assetId, brand, model) {
