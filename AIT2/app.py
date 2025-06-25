@@ -74,6 +74,12 @@ def log_action(action):
     except Exception as e:
         logger.error(f"Failed to log action: {e}")
 
+def log_asset_change(event_id, asset_id, action, details=""):
+    """Log all asset changes for debugging"""
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    log_message = f"[ASSET_CHANGE] {timestamp} - Event {event_id}: {action} asset {asset_id} {details}"
+    logger.warning(log_message)
+    print(log_message)
 
 def validate_event_data(data):
     """Validate event data"""
@@ -202,47 +208,57 @@ def update_event_state(event):
         logger.error(f"Failed to update event state: {e}")
 
 def cleanup_extra_assets(event):
-    """Clean up the extra_assets list to ensure assets that fulfill model requirements are not marked as extra"""
+    """Clean up the extra_assets list - ONLY call this when explicitly needed, not on every view"""
     if not hasattr(event, 'extra_assets'):
         event.extra_assets = []
+        return
+    
+    # SAFETY CHECK: Only run if explicitly called for maintenance
+    logger.warning(f"CLEANUP: Manual cleanup requested for event {event.event_id}")
+    logger.warning(f"CLEANUP: Before cleanup - Extra assets: {event.extra_assets}")
+    logger.warning(f"CLEANUP: Before cleanup - Prepared items: {event.prepared_items}")
+    
+    # Don't auto-cleanup unless there are real issues
+    if not event.extra_assets:
         return
     
     assets_to_remove = []
     
     for asset_id in event.extra_assets:
-        # Skip loan/misc items
-        if asset_id.startswith('[LOAN]') or asset_id.startswith('[MISC]'):
-            continue
-            
-        asset = data_manager.inventory.get(asset_id)
-        if not asset:
-            assets_to_remove.append(asset_id)
-            continue
-            
         # Check if this asset fulfills any model requirement
-        for model_assignment in event.prepared_items:
-            if model_assignment.startswith('[MODEL]'):
+        fulfills_requirement = False
+        
+        for item in event.prepared_items:
+            if item.startswith('[MODEL]'):
                 try:
-                    parts = model_assignment[7:].split('|')
+                    parts = item.split('|')
                     if len(parts) >= 4:
-                        req_dept = parts[0]
-                        req_brand = parts[1]
-                        req_model = parts[2]
+                        dept = parts[0][7:]  # Remove '[MODEL]' prefix
+                        brand = parts[1]
+                        model = parts[2]
                         
-                        if (asset.department_code == req_dept and 
-                            asset.brand == req_brand and 
-                            asset.model_number == req_model):
-                            assets_to_remove.append(asset_id)
-                            logger.info(f"Removing {asset_id} from extra_assets - fulfills model requirement {req_brand} {req_model}")
+                        # Check if this specific asset matches this model requirement
+                        asset = data_manager.inventory.get(asset_id)
+                        if (asset and 
+                            asset.brand == brand and 
+                            asset.model_number == model and
+                            asset.department_code == dept):
+                            fulfills_requirement = True
+                            logger.warning(f"CLEANUP: Asset {asset_id} fulfills {brand} {model} requirement")
                             break
                 except Exception as e:
-                    logger.error(f"Error checking model fulfillment for cleanup: {e}")
+                    logger.error(f"CLEANUP: Error checking model requirement for {item}: {e}")
                     continue
+        
+        if fulfills_requirement:
+            assets_to_remove.append(asset_id)
     
-    # Remove assets that fulfill model requirements
+    # Remove assets that fulfill requirements
     for asset_id in assets_to_remove:
-        if asset_id in event.extra_assets:
-            event.extra_assets.remove(asset_id)
+        event.extra_assets.remove(asset_id)
+        logger.warning(f"CLEANUP: Removed {asset_id} from extra_assets (fulfills requirement)")
+    
+    logger.warning(f"CLEANUP: After cleanup - Extra assets: {event.extra_assets}")
 
 def init_data_manager():
     """Initialize the data manager with the configured data folder"""
@@ -423,6 +439,7 @@ def get_events():
                 'startDate': format_date_output(event.start_date),
                 'endDate': format_date_output(event.end_date),
                 'state': event.state,  # Keep original state, don't force update
+                'tag': getattr(event, 'tag', 'events'), 
                 'assetCount': total_required,
                 'preparedCount': total_prepared,
                 'returnedCount': total_returned,
@@ -455,10 +472,6 @@ def get_event(event_id):
             event.actually_prepared = []
         if not hasattr(event, 'extra_assets'):
             event.extra_assets = []
-
-        # Clean up extra_assets list to ensure consistency
-        cleanup_extra_assets(event)
-        data_manager.save_event(event)  # Save the cleaned up state
 
         logger.info(f"Loading event {event_id} - Extra assets: {event.extra_assets}")
         logger.info(f"Loading event {event_id} - Actually prepared: {event.actually_prepared}")
@@ -763,6 +776,7 @@ def get_event(event_id):
             'startDate': format_date_output(event.start_date),
             'endDate': format_date_output(event.end_date),
             'state': event.state,
+            'tag': getattr(event, 'tag', 'events'), 
             'assetModels': event.asset_models,
             'preparedItems': event.prepared_items,
             'actuallyPrepared': event.actually_prepared,
@@ -813,7 +827,8 @@ def create_event():
             asset_models=[],
             prepared_items=[],
             state='Added',
-            returned_items=[]
+            returned_items=[],
+            tag=data.get('tag', 'event')
         )
         event.actually_prepared = []
 
@@ -859,6 +874,8 @@ def update_event(event_id):
         if 'endDate' in data:
             event.end_date = datetime.strptime(
                 data['endDate'], '%Y-%m-%d').strftime('%Y%m%d')
+        if 'tag' in data:
+            event.tag = data['tag']
 
         # Update asset locations if event name changed
         if old_name != event.name:
@@ -870,15 +887,18 @@ def update_event(event_id):
             data_manager.save_inventory()
 
         # Save event
+        data_manager.events[event_id] = event
         data_manager.save_event(event)
+
+        # Invalidate cache
+        invalidate_cache()
 
         log_action(f"Updated event {event_id}: {event.name} via web interface")
 
         return jsonify({'success': True, 'message': 'Event updated successfully'})
     except Exception as e:
-        logger.error(f"Error updating event {event_id}: {e}")
+        logger.error(f"Error updating event: {e}")
         return jsonify({'error': 'Failed to update event'}), 500
-
 
 @app.route('/api/events/<int:event_id>', methods=['DELETE'])
 @require_admin
@@ -1242,7 +1262,7 @@ def prepare_event_asset(event_id):
 @app.route('/api/events/<int:event_id>/unprepare', methods=['POST'])
 @require_auth
 def unprepare_event_asset(event_id):
-    """Mark an asset as unprepared and unassign it from the event"""
+    """Mark an asset as unprepared but keep it assigned to the event"""
     try:
         event = data_manager.events.get(event_id)
         if not event:
@@ -1262,18 +1282,20 @@ def unprepare_event_asset(event_id):
         if asset_id not in event.actually_prepared:
             return jsonify({'error': 'Asset is not prepared'}), 400
 
-        # Remove from prepared list
+        # LOG THE UNPREPARE ACTION
+        log_asset_change(event_id, asset_id, "UNPREPARING", "removing from actually_prepared but keeping in event", "unprepare_event_asset")
+
+        # Remove from prepared list BUT KEEP IN prepared_items (don't unassign)
         event.actually_prepared.remove(asset_id)
         
-        # Also remove from prepared_items (completely unassign)
-        if asset_id in event.prepared_items:
-            event.prepared_items.remove(asset_id)
-            
+        # DO NOT remove from prepared_items - this was the bug!
+        # The asset should stay assigned to the event, just marked as not prepared
+        
         # Remove from extra_assets if it's there
         if hasattr(event, 'extra_assets') and asset_id in event.extra_assets:
             event.extra_assets.remove(asset_id)
 
-        # For regular assets, reset location
+        # For regular assets, reset location to default but keep assigned
         if not (asset_id.startswith('[LOAN]') or asset_id.startswith('[MISC]')):
             asset = data_manager.inventory.get(asset_id)
             if asset:
@@ -1289,9 +1311,9 @@ def unprepare_event_asset(event_id):
         # Invalidate cache
         invalidate_cache()
 
-        log_action(f"Unprepared and unassigned asset {asset_id} from event {event_id}")
+        log_action(f"Unprepared asset {asset_id} from event {event_id} (but kept assigned)")
 
-        return jsonify({'success': True, 'message': f'Asset {asset_id} unprepared and unassigned'})
+        return jsonify({'success': True, 'message': f'Asset {asset_id} unprepared (but still assigned to event)'})
     except Exception as e:
         logger.error(f"Error unpreparing asset from event {event_id}: {e}")
         return jsonify({'error': 'Failed to unprepare asset'}), 500
@@ -1541,7 +1563,6 @@ def unassign_specific_asset_from_model(event_id):
             f"Error unassigning specific asset from event {event_id}: {e}")
         return jsonify({'error': 'Failed to unassign asset'}), 500
 
-
 @app.route('/api/events/<int:event_id>/assets/<asset_id>', methods=['DELETE'])
 @require_auth
 def remove_asset_from_event(event_id, asset_id):
@@ -1555,12 +1576,16 @@ def remove_asset_from_event(event_id, asset_id):
         if asset_id not in event.prepared_items:
             return jsonify({'error': 'Asset is not assigned to this event'}), 400
 
+        # LOG THE REMOVAL
+        log_asset_change(event_id, asset_id, "REMOVING", "from prepared_items via DELETE endpoint", "remove_asset_from_event")
+
         # Remove the asset
         event.prepared_items.remove(asset_id)
 
         # Also remove from returned items if it was there
         if asset_id in event.returned_items:
             event.returned_items.remove(asset_id)
+            log_asset_change(event_id, asset_id, "REMOVING", "from returned_items", "remove_asset_from_event")
 
         # Initialize actually_prepared if it doesn't exist
         if not hasattr(event, 'actually_prepared'):
@@ -1569,6 +1594,7 @@ def remove_asset_from_event(event_id, asset_id):
         # Remove from actually_prepared if it was there
         if asset_id in event.actually_prepared:
             event.actually_prepared.remove(asset_id)
+            log_asset_change(event_id, asset_id, "REMOVING", "from actually_prepared", "remove_asset_from_event")
 
         # For regular assets, update location
         if not (asset_id.startswith('[LOAN]') or asset_id.startswith('[MISC]')):
@@ -1592,7 +1618,6 @@ def remove_asset_from_event(event_id, asset_id):
     except Exception as e:
         logger.error(f"Error removing asset from event {event_id}: {e}")
         return jsonify({'error': 'Failed to remove asset from event'}), 500
-
 
 @app.route('/api/events/<int:event_id>/transfer', methods=['POST'])
 @require_auth

@@ -20,6 +20,18 @@ function escapeJs(str) {
   return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t');
 }
 
+// Helper functions for event tags
+function getTagStyle(tag) {
+    if (tag === 'dry hire') {
+        return 'background: #17a2b8; color: white;';
+    }
+    return 'background: #28a745; color: white;';
+}
+
+function getTagDisplay(tag) {
+    return tag === 'dry hire' ? 'DRY HIRE' : 'EVENT';
+}
+
 // Navigation functions
 function showSection(sectionName) {
   // Hide all sections
@@ -226,6 +238,9 @@ async function loadUpcomingEvents() {
             })
             .sort((a, b) => new Date(a.startDate) - new Date(b.startDate));
         
+        // Update the counter
+        updateUpcomingEventsCounter(upcomingEvents.length);
+        
         container.innerHTML = '';
         
         if (upcomingEvents.length === 0) {
@@ -244,10 +259,31 @@ async function loadUpcomingEvents() {
         if (container) {
             container.innerHTML = '<p style="color: red; text-align: center;">Error loading upcoming events. <button onclick="loadUpcomingEvents()">Retry</button></p>';
         }
+        // Set counter to 0 on error
+        updateUpcomingEventsCounter(0);
     }
 }
 
-// Data loading functions
+// Update the upcoming events counter
+function updateUpcomingEventsCounter(count) {
+    const counter = document.getElementById('upcoming-events-counter');
+    if (counter) {
+        counter.textContent = count;
+        
+        // Update counter styling based on count
+        if (count === 0) {
+            counter.style.background = '#6c757d'; // Gray for 0
+        } else if (count <= 3) {
+            counter.style.background = '#28a745'; // Green for few events
+        } else if (count <= 6) {
+            counter.style.background = '#ffc107'; // Yellow for moderate events
+        } else {
+            counter.style.background = '#dc3545'; // Red for many events
+        }
+    }
+}
+
+// load the dashboard
 async function loadDashboard() {
   try {
     // Load stats
@@ -269,6 +305,7 @@ async function loadDashboard() {
     // Load ongoing events with a delay to ensure elements exist
     setTimeout(async () => {
       await loadOngoingEvents();
+      await loadUpcomingEvents(); // Also load upcoming events to update counter
     }, 300);
   } catch (error) {
     console.error("Error loading dashboard:", error);
@@ -316,33 +353,43 @@ function createEventCard(event) {
         return div.innerHTML;
     };
     
+    // Helper function to get tag styling
+    const getTagStyle = (tag) => {
+        if (tag === 'dry hire') {
+            return 'background: #17a2b8; color: white;';
+        }
+        return 'background: #28a745; color: white;';
+    };
+    
+    const getTagDisplay = (tag) => {
+        return tag === 'dry hire' ? 'DRY HIRE' : 'EVENT';
+    };
+    
     const dateRange = event.startDate === event.endDate 
         ? formatDate(event.startDate)
         : `${formatDate(event.startDate)} - ${formatDate(event.endDate)}`;
-    
-    // Simple asset count display
-    let assetSummary = '';
-    if (event.assetCount > 0) {
-        assetSummary = `<div style="margin: 10px 0; font-size: 12px; color: #666;">${event.preparedCount}/${event.assetCount} assets prepared</div>`;
-    } else {
-        assetSummary = '<div style="margin: 10px 0; font-size: 12px; color: #999; font-style: italic;">No assets assigned</div>';
-    }
-    
+
     card.innerHTML = `
         <div class="event-header">
-            <div class="event-id">ID: ${event.id}</div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <div class="event-id">ID: ${event.id}</div>
+                <span style="padding: 2px 8px; border-radius: 12px; font-size: 10px; font-weight: bold; ${getTagStyle(event.tag || 'events')}">
+                    ${getTagDisplay(event.tag || 'events')}
+                </span>
+            </div>
             <div class="event-state state-${event.state.toLowerCase()}">${escapeHtml(event.state)}</div>
         </div>
         <div class="event-title">${escapeHtml(event.name)}</div>
         <div class="event-date">${escapeHtml(dateRange)}</div>
-        ${assetSummary}
+        <div style="margin: 15px 0;">
+            <small style="color: #666;">${event.assetCount || 0} assets assigned</small>
+        </div>
         <div class="event-actions">
-            <button class="btn btn-primary" onclick="viewEvent(${event.id})">View</button>
+            <button class="btn btn-primary" onclick="viewEvent(${event.id})">View Assets</button>
             <button class="btn btn-warning" onclick="editEvent(${event.id})">Edit</button>
-            <button class="btn btn-danger" onclick="deleteEvent(${event.id})">Delete</button>
         </div>
     `;
-    
+
     return card;
 }
 
@@ -692,9 +739,14 @@ function createPrepareEventCard(event) {
   const progressPercent =
     totalRequired > 0 ? Math.round((totalAssigned / totalRequired) * 100) : 0;
 
-  card.innerHTML = `
+    card.innerHTML = `
         <div class="event-header">
-            <div class="event-id">ID: ${event.id}</div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <div class="event-id">ID: ${event.id}</div>
+                <span style="padding: 2px 8px; border-radius: 12px; font-size: 10px; font-weight: bold; ${event.tag === 'dry hire' ? 'background: #17a2b8; color: white;' : 'background: #28a745; color: white;'}">
+                    ${event.tag === 'dry hire' ? 'DRY HIRE' : 'EVENT'}
+                </span>
+            </div>
             <div class="event-state state-${event.state.toLowerCase()}">${escapeHtml(event.state)}</div>
         </div>
         <div class="event-title">${escapeHtml(event.name)}</div>
@@ -2249,20 +2301,24 @@ function createReturnEventCard(event) {
   const totalCount = event.preparedCount || 0;
 
   card.innerHTML = `
-        <div class="event-header">
-            <div class="event-id">ID: ${event.id}</div>
-            <div class="event-state state-${event.state.toLowerCase()}">${escapeHtml(event.state)}</div>
-        </div>
-        <div class="event-title">${escapeHtml(event.name)}</div>
-        <div class="event-date">${escapeHtml(dateRange)}</div>
-        <div style="margin: 15px 0;">
-            <small style="color: #666;">${returnedCount}/${totalCount} assets returned</small>
-        </div>
-        <div class="event-actions">
-            <button class="btn btn-warning" onclick="openReturnAssetsModal(${event.id})">Return Assets</button>
-            <button class="btn btn-primary" onclick="viewEvent(${event.id})">View Details</button>
-        </div>
-    `;
+      <div class="event-header">
+          <div style="display: flex; align-items: center; gap: 8px;">
+              <div class="event-id">ID: ${event.id}</div>
+              <span style="padding: 2px 8px; border-radius: 12px; font-size: 10px; font-weight: bold; ${event.tag === 'dry hire' ? 'background: #17a2b8; color: white;' : 'background: #28a745; color: white;'}">
+                  ${event.tag === 'dry hire' ? 'DRY HIRE' : 'EVENT'}
+              </span>
+          </div>
+          <div class="event-state state-${event.state.toLowerCase()}">${escapeHtml(event.state)}</div>
+      </div>
+      <div class="event-title">${escapeHtml(event.name)}</div>
+      <div class="event-date">${escapeHtml(dateRange)}</div>
+      <div style="margin: 15px 0;">
+          <small style="color: #666;">${event.assetCount || 0} assets assigned</small>
+      </div>
+      <div class="event-actions">
+          <button class="btn btn-primary" onclick="viewEvent(${event.id})">View Assets</button>
+      </div>
+  `;
 
   return card;
 }
@@ -2485,7 +2541,7 @@ async function viewEvent(eventId) {
 
     document.getElementById(
       "eventDetailsTitle"
-    ).textContent = `Event ${event.id}: ${event.name}`;
+    ).textContent = `${event.tag === 'dry hire' ? 'Dry Hire' : 'Event'} ${event.id}: ${event.name}`;
 
     const formatDate = (dateStr) => {
       return new Date(dateStr).toLocaleDateString("en-US", {
@@ -3032,14 +3088,15 @@ function populateTransferDropdowns(events) {
   toSelect.innerHTML = '<option value="">Select destination event...</option>';
 
   events.forEach((event) => {
+    const tagPrefix = event.tag === 'dry hire' ? '[DH]' : '[E]';
     const option1 = document.createElement("option");
     option1.value = event.id;
-    option1.textContent = `${event.id}: ${event.name}`;
+    option1.textContent = `${tagPrefix} ${event.id}: ${event.name}`;
     fromSelect.appendChild(option1);
 
     const option2 = document.createElement("option");
     option2.value = event.id;
-    option2.textContent = `${event.id}: ${event.name}`;
+    option2.textContent = `${tagPrefix} ${event.id}: ${event.name}`;
     toSelect.appendChild(option2);
   });
 }
@@ -3132,6 +3189,17 @@ async function editEvent(eventId) {
       });
     };
 
+    // Helper function to convert display date back to YYYY-MM-DD format
+    const formatDateForInput = (dateStr) => {
+      // The backend sends dates in YYYY-MM-DD format for API responses
+      // but if it's in a different format, convert it
+      const date = new Date(dateStr);
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+
     const dateRange =
       event.startDate === event.endDate
         ? formatDate(event.startDate)
@@ -3167,12 +3235,19 @@ async function editEvent(eventId) {
                         <input type="text" class="form-input" id="editEventName" value="${escapeHtml(event.name)}" required>
                     </div>
                     <div class="form-group">
+                        <label class="form-label">Event Tag</label>
+                        <select class="form-input" id="editEventTag" required>
+                            <option value="events" ${(event.tag === 'events' || !event.tag) ? 'selected' : ''}>Events</option>
+                            <option value="dry hire" ${event.tag === 'dry hire' ? 'selected' : ''}>Dry Hire</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
                         <label class="form-label">Start Date</label>
-                        <input type="date" class="form-input" id="editEventStartDate" value="${event.startDate}" required>
+                        <input type="date" class="form-input" id="editEventStartDate" value="${formatDateForInput(event.startDate)}" required>
                     </div>
                     <div class="form-group">
                         <label class="form-label">End Date</label>
-                        <input type="date" class="form-input" id="editEventEndDate" value="${event.endDate}" required>
+                        <input type="date" class="form-input" id="editEventEndDate" value="${formatDateForInput(event.endDate)}" required>
                     </div>
                     <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
                         <button type="button" class="btn btn-secondary" onclick="closeModal('eventDetailsModal')">Cancel</button>
@@ -3193,122 +3268,102 @@ async function editEvent(eventId) {
         .sort()
         .forEach((dept) => {
           const assets = event.assetsByDepartment[dept];
-          
-          if (assets.length > 0) {
-            content += `
+
+          content += `
                         <div style="background: #f8f9fa; padding: 8px 12px; font-weight: bold; border-bottom: 1px solid #e9ecef;">
-                            ${escapeHtml(dept)} Department (${assets.length} items)
+                            ${dept} Department (${assets.length} assets)
                         </div>
                     `;
 
-            assets.forEach((asset) => {
-              let statusIcon = '📋';
-              let statusColor = '#6c757d';
-              let statusText = 'Assigned';
-              
-              if (asset.status === 'returned') {
-                statusIcon = '↩️';
-                statusColor = '#dc3545';
-                statusText = 'Returned';
-              } else if (asset.status === 'prepared') {
-                statusIcon = '✅';
-                statusColor = '#28a745';
-                statusText = 'Prepared';
+          assets.forEach((asset) => {
+            if (!asset.id.startsWith("[MODEL]")) {
+              const isPrepared =
+                event.actuallyPrepared && event.actuallyPrepared.includes(asset.id);
+              const isReturned =
+                event.returnedItems && event.returnedItems.includes(asset.id);
+
+              let statusIcon = "📋";
+              let statusColor = "#666";
+              if (isReturned) {
+                statusIcon = "↩️";
+                statusColor = "#28a745";
+              } else if (isPrepared) {
+                statusIcon = "✅";
+                statusColor = "#007bff";
               }
 
-              // Handle different asset types
-              if (asset.isModel) {
-                // Model assignment - FIXED to show description properly
-                content += `
-                            <div class="model-assignment" style="padding: 12px; border-bottom: 1px solid #f1f1f1; display: flex; justify-content: space-between; align-items: center; background: #f8f9fa;">
-                                <div style="flex: 1;">
-                                    <div style="font-weight: 500; color: #495057; margin-bottom: 4px;">
-                                        📦 ${asset.quantity}x ${escapeHtml(asset.brand)} ${escapeHtml(asset.model)}
-                                    </div>
-                                    <div style="color: #666; font-size: 12px; margin-bottom: 2px;">
-                                        ${escapeHtml(asset.description || '')}
-                                    </div>
-                                    <div style="color: #999; font-size: 10px; font-style: italic;">
-                                        Model requirement - assign specific assets during preparation
-                                    </div>
-                                </div>
-                                <div style="display: flex; gap: 5px;">
-                                    <button class="btn btn-warning edit-model-qty-btn" style="padding: 3px 6px; font-size: 10px;" 
-                                            data-event-id="${event.id}" 
-                                            data-brand="${escapeHtml(asset.brand)}" 
-                                            data-model="${escapeHtml(asset.model)}" 
-                                            data-department="${escapeHtml(dept)}">Edit Qty</button>
-                                    <button class="btn btn-danger remove-model-btn" style="padding: 3px 6px; font-size: 10px;" 
-                                            data-event-id="${event.id}" 
-                                            data-brand="${escapeHtml(asset.brand)}" 
-                                            data-model="${escapeHtml(asset.model)}" 
-                                            data-department="${escapeHtml(dept)}">Remove</button>
-                                </div>
-                            </div>
-                        `;
-              } else if (asset.isLoanOrMisc) {
-                // Loan/Misc item
-                const extraBadge = asset.isExtra ? '<span style="background: #fff3cd; color: #856404; padding: 2px 6px; border-radius: 3px; font-size: 10px; margin-left: 10px;">EXTRA</span>' : '';
-                
-                content += `
-                            <div style="padding: 10px 12px; border-bottom: 1px solid #f1f1f1; display: flex; justify-content: space-between; align-items: center;">
-                                <div>
-                                    <span>${statusIcon} ${escapeHtml(asset.id)}</span>
-                                    ${extraBadge}
-                                    <div style="color: ${statusColor}; font-size: 11px; margin-top: 2px;">${statusText}</div>
-                                </div>
-                                <button class="btn btn-danger remove-asset-btn" style="padding: 4px 8px; font-size: 11px;" 
+              content += `
+                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; border-bottom: 1px solid #f1f3f4;">
+                                <span style="color: ${statusColor};">
+                                    ${statusIcon} ${asset.id} - ${escapeHtml(asset.brand)} ${escapeHtml(asset.model)} 
+                                    ${asset.serial ? `(SN: ${escapeHtml(asset.serial)})` : ''}
+                                </span>
+                                <button class="btn btn-danger btn-sm remove-asset-btn" 
                                         data-event-id="${event.id}" 
-                                        data-asset-id="${escapeHtml(asset.id)}">Remove</button>
+                                        data-asset-id="${asset.id}"
+                                        style="padding: 2px 8px; font-size: 11px;">Remove</button>
                             </div>
                         `;
-              } else {
-                // Regular asset
-                const extraBadge = asset.isExtra ? '<span style="background: #fff3cd; color: #856404; padding: 2px 6px; border-radius: 3px; font-size: 10px; margin-left: 10px;">EXTRA</span>' : '';
-                
-                content += `
-                            <div style="padding: 10px 12px; border-bottom: 1px solid #f1f1f1; display: flex; justify-content: space-between; align-items: center;">
-                                <div>
-                                    <span>${statusIcon} ${escapeHtml(asset.id)}</span>
-                                    <span style="color: #666; font-size: 12px; margin-left: 10px;">${escapeHtml(asset.name || '')}</span>
-                                    ${extraBadge}
-                                    <div style="color: ${statusColor}; font-size: 11px; margin-top: 2px;">${statusText}</div>
-                                </div>
-                                <button class="btn btn-danger remove-asset-btn" style="padding: 4px 8px; font-size: 11px;" 
-                                        data-event-id="${event.id}" 
-                                        data-asset-id="${escapeHtml(asset.id)}">Remove</button>
-                            </div>
-                        `;
-              }
-            });
-          }
+            }
+          });
         });
     } else {
-      content += '<p style="text-align: center; color: #666; padding: 40px;">No assets assigned to this event.</p>';
+      content += `
+                <div style="text-align: center; padding: 40px; color: #666;">
+                    No assets assigned to this event
+                </div>
+            `;
     }
 
     content += `
                     </div>
                 </div>
                 
-                <div>
+                <!-- Available Assets Section -->
+                <div style="margin-bottom: 30px;">
                     <h4 style="color: #495057; margin-bottom: 15px;">Add Assets</h4>
-                    <div class="form-group">
+                    <div style="margin-bottom: 15px;">
                         <input type="text" class="form-input" placeholder="Search available assets..." 
-                               onkeyup="filterAvailableAssetsSimple(this.value)" id="edit-asset-search">
+                               style="max-width: 400px;" 
+                               oninput="filterAvailableAssetsSimple(this.value)">
                     </div>
-                    <div id="available-assets-simple" style="border: 1px solid #e9ecef; border-radius: 8px; max-height: 300px; overflow-y: auto;">
-                        <p style="text-align: center; color: #666; padding: 20px;">Type to search for available assets...</p>
+                    <div id="available-assets-container" style="border: 1px solid #e9ecef; border-radius: 8px; max-height: 300px; overflow-y: auto;">
+                        <div style="text-align: center; padding: 20px; color: #666;">
+                            Loading available assets...
+                        </div>
                     </div>
                 </div>
             </div>
         `;
 
     document.getElementById("eventDetailsContent").innerHTML = content;
-    openModal("eventDetailsModal");
 
     // Load available assets for the assets tab
-    loadAvailableAssetsForEdit(event.id);
+    loadEditEventAssets(eventId);
+
+    // Clean up any existing event listeners on the eventDetailsContent
+    const eventDetailsContent = document.getElementById("eventDetailsContent");
+    if (eventDetailsContent.handleModelToggle) {
+      eventDetailsContent.removeEventListener(
+        "click",
+        eventDetailsContent.handleModelToggle
+      );
+    }
+
+    // Set up event delegation for model toggle
+    const handleModelToggle = function (e) {
+      if (e.target.classList.contains("toggle-model-btn")) {
+        e.preventDefault();
+        const modelId = e.target.getAttribute("data-model-id");
+        toggleModelDetailsInEdit(modelId);
+      }
+    };
+
+    // Store the listener reference for cleanup
+    eventDetailsContent.handleModelToggle = handleModelToggle;
+    eventDetailsContent.addEventListener("click", handleModelToggle);
+
+    openModal("eventDetailsModal");
   } catch (error) {
     showNotification("error", "Failed to load event details");
   }
@@ -4517,6 +4572,7 @@ document.addEventListener("DOMContentLoaded", function () {
         name: document.getElementById("eventName").value,
         startDate: document.getElementById("eventStartDate").value,
         endDate: document.getElementById("eventEndDate").value,
+        tag: document.getElementById("editEventTag").value,
       };
 
       try {
@@ -4666,6 +4722,7 @@ document.addEventListener("DOMContentLoaded", function () {
         name: document.getElementById("editEventName").value,
         startDate: document.getElementById("editEventStartDate").value,
         endDate: document.getElementById("editEventEndDate").value,
+        tag: document.getElementById("editEventTag").value,
       };
 
       try {
@@ -4684,6 +4741,13 @@ document.addEventListener("DOMContentLoaded", function () {
           document.getElementById("events-section").classList.contains("active")
         ) {
           loadAllEvents();
+        }
+
+        // Also refresh prepare section if it's active
+        if (
+          document.getElementById("prepare-section").classList.contains("active")
+        ) {
+          loadPrepareEvents();
         }
       } catch (error) {
         showNotification("error", "Failed to update event");

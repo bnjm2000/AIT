@@ -177,27 +177,53 @@ class DataManager:
                     actually_prepared = []
                     extra_assets = []
                     
+                    # IMPROVED PARSING WITH BETTER ERROR HANDLING
                     if event_data.get('PreparedItems'):
                         try:
-                            prepared_items = json.loads(event_data['PreparedItems'])
-                        except json.JSONDecodeError:
-                            print(f"Error parsing 'PreparedItems' in event file {filename}. Skipping...")
-                            prepared_items = []
+                            prepared_items_raw = event_data['PreparedItems']
+                            print(f"DEBUG: Parsing PreparedItems for {filename}: '{prepared_items_raw[:100]}...'")
+                            prepared_items = json.loads(prepared_items_raw)
+                            print(f"DEBUG: Successfully parsed {len(prepared_items)} prepared items for {filename}")
+                        except json.JSONDecodeError as e:
+                            print(f"ERROR: Failed to parse 'PreparedItems' in event file {filename}")
+                            print(f"ERROR: JSON Error: {e}")
+                            print(f"ERROR: Raw data: '{event_data['PreparedItems'][:200]}...'")
+                            # DO NOT SET TO EMPTY - TRY TO RECOVER THE DATA
+                            print(f"ERROR: KEEPING EXISTING prepared_items to prevent data loss!")
+                            # Try to load the previous version from memory if exists
+                            if event_id in self.events:
+                                prepared_items = self.events[event_id].prepared_items
+                                print(f"ERROR: Recovered {len(prepared_items)} items from memory")
+                            else:
+                                prepared_items = []
+                                print(f"ERROR: No previous data to recover - initializing as empty")
                             
                     if event_data.get('ReturnedItems'):
                         try:
-                            returned_items = json.loads(event_data['ReturnedItems'])
-                        except json.JSONDecodeError:
-                            print(f"Error parsing 'ReturnedItems' in event file {filename}. Initializing as empty.")
-                            returned_items = []
+                            returned_items_raw = event_data['ReturnedItems']
+                            returned_items = json.loads(returned_items_raw)
+                        except json.JSONDecodeError as e:
+                            print(f"ERROR: Failed to parse 'ReturnedItems' in event file {filename}: {e}")
+                            print(f"ERROR: Raw data: '{event_data['ReturnedItems'][:200]}...'")
+                            if event_id in self.events:
+                                returned_items = self.events[event_id].returned_items
+                                print(f"ERROR: Recovered returned_items from memory")
+                            else:
+                                returned_items = []
                             
                     # Handle ActuallyPrepared field (might not exist in older files)
                     if event_data.get('ActuallyPrepared'):
                         try:
-                            actually_prepared = json.loads(event_data['ActuallyPrepared'])
-                        except json.JSONDecodeError:
-                            print(f"Error parsing 'ActuallyPrepared' in event file {filename}. Initializing as empty.")
-                            actually_prepared = []
+                            actually_prepared_raw = event_data['ActuallyPrepared']
+                            actually_prepared = json.loads(actually_prepared_raw)
+                        except json.JSONDecodeError as e:
+                            print(f"ERROR: Failed to parse 'ActuallyPrepared' in event file {filename}: {e}")
+                            print(f"ERROR: Raw data: '{event_data['ActuallyPrepared'][:200]}...'")
+                            if event_id in self.events:
+                                actually_prepared = self.events[event_id].actually_prepared
+                                print(f"ERROR: Recovered actually_prepared from memory")
+                            else:
+                                actually_prepared = []
                     else:
                         # For backward compatibility - if field doesn't exist, initialize empty
                         actually_prepared = []
@@ -205,15 +231,21 @@ class DataManager:
                     # Handle ExtraAssets field (might not exist in older files)
                     if event_data.get('ExtraAssets'):
                         try:
-                            extra_assets = json.loads(event_data['ExtraAssets'])
-                        except json.JSONDecodeError:
-                            print(f"Error parsing 'ExtraAssets' in event file {filename}. Initializing as empty.")
-                            extra_assets = []
+                            extra_assets_raw = event_data['ExtraAssets']
+                            extra_assets = json.loads(extra_assets_raw)
+                        except json.JSONDecodeError as e:
+                            print(f"ERROR: Failed to parse 'ExtraAssets' in event file {filename}: {e}")
+                            if event_id in self.events:
+                                extra_assets = self.events[event_id].extra_assets
+                            else:
+                                extra_assets = []
                     else:
                         # For backward compatibility - if field doesn't exist, initialize empty
                         extra_assets = []
                             
                     state = event_data.get('State', 'Added')
+                    # Get tag from CSV, default to 'events' for backward compatibility
+                    tag = event_data.get('Tag', 'events')
                     
                     event = Event(
                         event_id=event_id,
@@ -225,17 +257,25 @@ class DataManager:
                         state=state,
                         returned_items=returned_items,
                         actually_prepared=actually_prepared,
-                        extra_assets=extra_assets
+                        extra_assets=extra_assets,
+                        tag=tag
                     )
                     
                     # Ensure the attributes are set (in case the Event constructor doesn't handle them properly)
                     event.actually_prepared = actually_prepared
                     event.extra_assets = extra_assets
+                    event.tag = tag
+                    
+                    print(f"DEBUG: Successfully loaded event {event_id} with {len(prepared_items)} prepared items")
                     
                     self.events[event_id] = event
                     self.event_file_map[event_id] = filename
 
     def save_event(self, event):
+        # Create backup before saving
+        if hasattr(self, 'event_file_map') and event.event_id in self.event_file_map:
+            self.backup_event_file(event.event_id)
+        
         sanitized_name = sanitize_filename(event.name)
         filename = f"{event.event_id}. [{event.start_date}] {sanitized_name}.csv"
         filepath = os.path.join(self.events_folder, filename)
@@ -243,16 +283,33 @@ class DataManager:
         # Ensure attributes exist
         actually_prepared = getattr(event, 'actually_prepared', [])
         extra_assets = getattr(event, 'extra_assets', [])
+        tag = getattr(event, 'tag', 'events')
+        
+        # VALIDATION: Don't save if critical data is missing
+        if not hasattr(event, 'prepared_items'):
+            print(f"ERROR: Event {event.event_id} missing prepared_items - NOT SAVING to prevent data loss!")
+            return
         
         print(f"DEBUG: Saving event {event.event_id}")
-        print(f"DEBUG: actually_prepared attribute exists: {hasattr(event, 'actually_prepared')}")
-        print(f"DEBUG: extra_assets attribute exists: {hasattr(event, 'extra_assets')}")
-        print(f"DEBUG: actually_prepared value: {actually_prepared}")
-        print(f"DEBUG: extra_assets value: {extra_assets}")
-        print(f"DEBUG: event.__dict__: {event.__dict__}")
+        print(f"DEBUG: prepared_items: {event.prepared_items}")
+        print(f"DEBUG: actually_prepared: {actually_prepared}")
+        print(f"DEBUG: extra_assets: {extra_assets}")
+        print(f"DEBUG: tag: {tag}")
+        
+        # Validate JSON serialization before writing
+        try:
+            prepared_items_json = json.dumps(event.prepared_items)
+            returned_items_json = json.dumps(event.returned_items)
+            actually_prepared_json = json.dumps(actually_prepared)
+            extra_assets_json = json.dumps(extra_assets)
+        except (TypeError, ValueError) as e:
+            print(f"ERROR: Cannot serialize event {event.event_id} data to JSON: {e}")
+            print(f"ERROR: prepared_items: {event.prepared_items}")
+            print(f"ERROR: NOT SAVING to prevent corruption!")
+            return
         
         with open(filepath, 'w', newline='') as f:
-            fieldnames = ['EventID', 'Name', 'StartDate', 'EndDate', 'AssetModels', 'PreparedItems', 'ReturnedItems', 'State', 'ActuallyPrepared', 'ExtraAssets']
+            fieldnames = ['EventID', 'Name', 'StartDate', 'EndDate', 'AssetModels', 'PreparedItems', 'ReturnedItems', 'State', 'ActuallyPrepared', 'ExtraAssets', 'Tag']
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
             
@@ -262,11 +319,12 @@ class DataManager:
                 'StartDate': event.start_date,
                 'EndDate': event.end_date,
                 'AssetModels': repr(event.asset_models),
-                'PreparedItems': json.dumps(event.prepared_items),
-                'ReturnedItems': json.dumps(event.returned_items),
+                'PreparedItems': prepared_items_json,
+                'ReturnedItems': returned_items_json,
                 'State': event.state,
-                'ActuallyPrepared': json.dumps(actually_prepared),
-                'ExtraAssets': json.dumps(extra_assets)
+                'ActuallyPrepared': actually_prepared_json,
+                'ExtraAssets': extra_assets_json,
+                'Tag': tag
             }
             
             print(f"DEBUG: Row data being written: {row_data}")
@@ -279,8 +337,8 @@ class DataManager:
                 os.remove(old_filepath)
         
         self.event_file_map[event.event_id] = filename
-        print(f"DEBUG: Event {event.event_id} saved to {filename}")
-
+        print(f"DEBUG: Event {event.event_id} saved successfully to {filename}")
+        
     def delete_event_file(self, event_id):
         if event_id in self.event_file_map:
             filename = self.event_file_map[event_id]
