@@ -124,7 +124,6 @@ def get_assigned_assets():
     _cache['cache_timestamp'] = now
     return assigned_assets
 
-
 def update_event_state(event):
     """Update the state of an event based on its prepared and returned items"""
     try:
@@ -152,7 +151,7 @@ def update_event_state(event):
                             brand = parts[1]
                             model = parts[2]
                             required_quantity = int(parts[3])
-                            
+                      
                             total_model_requirements += required_quantity
                             
                             # Count specific assets assigned to this model
@@ -185,7 +184,12 @@ def update_event_state(event):
             elif total_specific_assignments < total_model_requirements and total_returned == 0:
                 event.state = 'Preparing'
             elif total_specific_assignments == total_model_requirements and total_returned == 0:
-                event.state = 'Ready'
+                # Check if ready event is within its date range to make it ongoing
+                current_date = datetime.now().strftime('%Y%m%d')
+                if event.start_date <= current_date <= event.end_date:
+                    event.state = 'Ongoing'
+                else:
+                    event.state = 'Ready'
             elif total_returned > 0 and total_returned < total_specific_assignments:
                 event.state = 'Returning'
             elif total_returned == total_specific_assignments and total_returned == total_model_requirements:
@@ -200,12 +204,12 @@ def update_event_state(event):
             if total_assets == 0 and event.state == 'Added':
                 # Keep as Added if no assets and currently Added
                 pass
-            # Don't force state changes for old events without model assignments
-                
-        logger.debug(f"Event {event.event_id} state: {event.state} (Model-based: {has_model_assignments})")
+            # Don't modify state for events without model assignments
+            
+        logger.info(f"Updated event {event.event_id} state to: {event.state}")
         
     except Exception as e:
-        logger.error(f"Failed to update event state: {e}")
+        logger.error(f"Error updating event state for event {getattr(event, 'event_id', 'unknown')}: {e}")
 
 def cleanup_extra_assets(event):
     """Clean up the extra_assets list - ONLY call this when explicitly needed, not on every view"""
@@ -2226,6 +2230,41 @@ def get_stats():
         logger.error(f"Error getting stats: {e}")
         return jsonify({'error': 'Failed to retrieve statistics'}), 500
 
+@app.route('/api/events/update-states', methods=['POST'])
+@require_auth
+def update_all_event_states():
+    """Manually trigger state updates for all events"""
+    try:
+        current_date = datetime.now().strftime('%Y%m%d')
+        updated_events = []
+        
+        for event in data_manager.events.values():
+            old_state = event.state
+            update_event_state(event)
+            
+            if event.state != old_state:
+                data_manager.save_event(event)
+                updated_events.append({
+                    'eventId': event.event_id,
+                    'name': event.name,
+                    'oldState': old_state,
+                    'newState': event.state
+                })
+                logger.info(f"Event {event.event_id} state changed from {old_state} to {event.state}")
+        
+        if updated_events:
+            invalidate_cache()
+        
+        return jsonify({
+            'success': True, 
+            'message': f'Updated {len(updated_events)} events',
+            'updatedEvents': updated_events
+        })
+        
+    except Exception as e:
+        logger.error(f"Error updating event states: {e}")
+        return jsonify({'error': 'Failed to update event states'}), 500
+
 # Error handlers
 
 
@@ -2245,6 +2284,44 @@ def handle_exception(e):
     logger.error(f"Unhandled exception: {e}")
     return jsonify({'error': 'An unexpected error occurred'}), 500
 
+def check_and_update_ongoing_events():
+    """Periodically check if ready events should become ongoing"""
+    try:
+        current_date = datetime.now().strftime('%Y%m%d')
+        updated_count = 0
+        
+        for event in data_manager.events.values():
+            if (event.state == 'Ready' and 
+                event.start_date <= current_date <= event.end_date):
+                
+                old_state = event.state
+                update_event_state(event)
+                
+                if event.state != old_state:
+                    data_manager.save_event(event)
+                    updated_count += 1
+                    logger.info(f"Event {event.event_id} state changed from {old_state} to {event.state}")
+        
+        if updated_count > 0:
+            invalidate_cache()
+            logger.info(f"Updated {updated_count} events to ongoing status")
+            
+    except Exception as e:
+        logger.error(f"Error checking ongoing events: {e}")
+
+# Schedule this to run every hour (you can adjust the interval)
+import threading
+import time
+
+def schedule_ongoing_check():
+    """Run the ongoing event check in a background thread"""
+    while True:
+        time.sleep(3600)  # Check every hour
+        check_and_update_ongoing_events()
+
+# Start the background thread
+ongoing_thread = threading.Thread(target=schedule_ongoing_check, daemon=True)
+ongoing_thread.start()
 
 if __name__ == '__main__':
     try:

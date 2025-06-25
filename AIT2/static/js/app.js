@@ -286,6 +286,8 @@ function updateUpcomingEventsCounter(count) {
 // load the dashboard
 async function loadDashboard() {
   try {
+    await apiCall('/api/events/update-states', 'POST');
+    const response = await apiCall('/api/events');
     // Load stats
     const statsResponse = await apiCall("/api/stats");
     stats = statsResponse.data;
@@ -393,10 +395,37 @@ function createEventCard(event) {
     return card;
 }
 
+// Update all event states manually
+async function updateAllEventStates() {
+    try {
+        const response = await apiCall('/api/events/update-states', 'POST');
+        
+        if (response.updatedEvents && response.updatedEvents.length > 0) {
+            showNotification('success', `Updated ${response.updatedEvents.length} event(s) to current state`);
+            
+            // Log the changes
+            response.updatedEvents.forEach(event => {
+                console.log(`Event ${event.eventId} (${event.name}): ${event.oldState} → ${event.newState}`);
+            });
+            
+            // Refresh the dashboard
+            if (document.getElementById('dashboard-section').classList.contains('active')) {
+                loadDashboard();
+            }
+        } else {
+            showNotification('info', 'All events are already in the correct state');
+        }
+        
+    } catch (error) {
+        showNotification('error', `Failed to update event states: ${error.message}`);
+    }
+}
+
 function getModelStatusIcon(status) {
     switch(status) {
         case 'returned': return '↩️';
         case 'ready': return '✅';
+        case 'ongoing': return '🔴';
         case 'partial': return '🔄';
         case 'pending': return '📋';
         default: return '📋';
@@ -3397,7 +3426,8 @@ function switchEditTab(tabName) {
   }
 }
 
-// Load assets for editing (simplified)
+// Load assets for editing (original model-based interface)
+
 async function loadEditEventAssets(eventId) {
   try {
     const [eventResponse, availableAssetsResponse] = await Promise.all([
@@ -3408,97 +3438,175 @@ async function loadEditEventAssets(eventId) {
     const event = eventResponse.data;
     const availableAssets = availableAssetsResponse.data;
 
-    // Build simplified assets interface
+    // Store for functionality
+    window.currentEditAvailableAssets = availableAssets;
+    window.currentEditEventId = eventId;
+
+    // Helper function to escape HTML
+    const escapeHtml = (str) => {
+      if (!str) return '';
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    };
+
     let content = `
-            <div class="simplified-assets-interface">
+            <div class="assets-edit-interface">
+                <!-- Search Bar at Top -->
+                <div style="background: #e8f5e8; border: 2px solid #28a745; border-radius: 8px; padding: 20px; margin-bottom: 30px;">
+                    <h4 style="color: #155724; margin-bottom: 15px; font-size: 18px;">➕ Add Asset Models</h4>
+                    <div style="display: flex; gap: 15px; align-items: flex-end;">
+                        <div style="flex: 1;">
+                            <input type="text" class="form-input" placeholder="Search available asset models..." 
+                                   style="width: 100%; padding: 12px; border: 1px solid #28a745; border-radius: 6px; font-size: 14px;" 
+                                   oninput="filterAvailableModels(this.value)">
+                        </div>
+                        <button type="button" class="btn btn-secondary" onclick="clearModelSearch()" 
+                                style="padding: 12px 20px; background: #6c757d; border: none; border-radius: 6px; color: white; font-size: 14px;">
+                            Clear
+                        </button>
+                    </div>
+                    <div id="available-models-container" style="margin-top: 15px; border: 1px solid #28a745; border-radius: 6px; max-height: 250px; overflow-y: auto; background: white;">
+                        <div style="text-align: center; padding: 20px; color: #666; font-size: 14px;">
+                            Type to search for available asset models...
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Current Asset Models -->
                 <div style="margin-bottom: 30px;">
-                    <h4 style="color: #495057; margin-bottom: 15px;">Assets Required for Event</h4>
-                    <div id="current-asset-models" style="border: 1px solid #e9ecef; border-radius: 8px; min-height: 200px;">
+                    <h4 style="color: #495057; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
+                        <span>📦 Model Requirements</span>
+                        <span class="toggle-icon" style="font-size: 14px; cursor: pointer;" onclick="toggleViewSection('all-models')">▼</span>
+                    </h4>
+                    <div id="all-models" style="display: block;">
+                        <div id="current-asset-models" style="border: 1px solid #e9ecef; border-radius: 8px; min-height: 200px;">
         `;
 
-    // Group current assets by model for simplified display
-    const assetModels = {};
-    if (event.preparedItems && event.preparedItems.length > 0) {
-      // Process current assets to show simplified model counts
-      event.preparedItems.forEach((assetId) => {
-        // For now, just show individual assets - we'll enhance this later
-        content += `
-                    <div style="padding: 10px; border-bottom: 1px solid #f1f1f1; display: flex; justify-content: space-between; align-items: center;">
-                        <span>${assetId}</span>
-                        <button class="btn btn-danger" style="padding: 4px 8px; font-size: 11px;" onclick="removeAssetFromEvent(${eventId}, '${assetId}')">Remove</button>
+    // Display current model assignments
+    if (event.modelGroups && Object.keys(event.modelGroups).length > 0) {
+        // Group by department
+        const modelsByDept = {};
+        Object.values(event.modelGroups).forEach((model) => {
+            if (!modelsByDept[model.department]) {
+                modelsByDept[model.department] = [];
+            }
+            modelsByDept[model.department].push(model);
+        });
+
+        Object.keys(modelsByDept).sort().forEach((dept) => {
+            const models = modelsByDept[dept];
+            const totalAssigned = models.reduce((sum, model) => sum + (model.assignedAssets ? model.assignedAssets.length : 0), 0);
+            const totalRequired = models.reduce((sum, model) => sum + (model.requiredQuantity || 1), 0);
+            
+            content += `
+                <div style="border-bottom: 1px solid #f1f1f1;">
+                    <div style="background-color: #f8f9fa; padding: 12px 15px; font-weight: 600; color: #495057; display: flex; justify-content: space-between; align-items: center; cursor: pointer;" onclick="toggleViewSection('dept-${dept}')">
+                        <span>${escapeHtml(dept)} Department</span>
+                        <div style="display: flex; align-items: center; gap: 15px;">
+                            <span style="font-size: 12px; color: #ffc107;">${totalAssigned}/${totalRequired} assigned</span>
+                            <span class="toggle-icon" style="font-size: 12px;">▼</span>
+                        </div>
+                    </div>
+                    <div id="dept-${dept}" style="display: block;">
+            `;
+
+            models.forEach((model, index) => {
+                const modelId = `model-${dept}-${index}`;
+                const assignedCount = model.assignedAssets ? model.assignedAssets.length : 0;
+                const requiredQty = model.requiredQuantity || 1;
+                const statusIcon = assignedCount >= requiredQty ? "✅" : "⚠️";
+                const statusText = `${assignedCount}/${requiredQty} assigned`;
+
+                content += `
+                    <div class="model-assignment" style="border-bottom: 1px solid #f1f1f1;">
+                        <div style="padding: 12px 15px; display: flex; justify-content: space-between; align-items: center; cursor: pointer;" onclick="toggleModelDetailsInEdit('${modelId}')">
+                            <div style="flex: 1;">
+                                <span style="font-weight: 500;">${requiredQty}x ${escapeHtml(model.brand)} ${escapeHtml(model.model)}</span>
+                                <div style="font-size: 12px; color: #666; margin-top: 2px;">${escapeHtml(model.description || '')}</div>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <span style="font-size: 12px; color: ${assignedCount >= requiredQty ? '#28a745' : '#ffc107'};">${statusText}</span>
+                                <button class="btn btn-sm btn-outline-secondary edit-model-qty-btn" 
+                                        data-event-id="${eventId}" data-brand="${escapeHtml(model.brand)}" 
+                                        data-model="${escapeHtml(model.model)}" data-department="${escapeHtml(model.department)}"
+                                        style="padding: 2px 8px; font-size: 11px;">Edit Qty</button>
+                                <button class="btn btn-sm btn-danger remove-model-btn" 
+                                        data-event-id="${eventId}" data-brand="${escapeHtml(model.brand)}" 
+                                        data-model="${escapeHtml(model.model)}" data-department="${escapeHtml(model.department)}"
+                                        style="padding: 2px 8px; font-size: 11px;">Remove</button>
+                                <span class="toggle-icon" style="font-size: 12px; color: #666;">▼</span>
+                            </div>
+                        </div>
+                        
+                        <!-- Expandable asset details -->
+                        <div id="${modelId}" style="display: none; background: #f8f9fa; padding: 10px 15px;">
+                `;
+
+                if (model.assignedAssets && model.assignedAssets.length > 0) {
+                    model.assignedAssets.forEach(asset => {
+                        const statusIcon = asset.status === "missing" ? "❌" 
+                            : asset.status === "returned" ? "↩️"
+                            : asset.status === "prepared" ? "✅" 
+                            : "📋";
+
+                        content += `
+                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #e9ecef;">
+                                <div>
+                                    <div style="font-weight: 500; font-size: 12px;">${statusIcon} ${escapeHtml(asset.id)}</div>
+                                    ${asset.serial ? `<div style="color: #666; font-size: 11px;">SN: ${escapeHtml(asset.serial)}</div>` : ''}
+                                </div>
+                                <button class="btn btn-danger btn-xs remove-asset-btn" 
+                                        data-event-id="${eventId}" data-asset-id="${escapeHtml(asset.id)}"
+                                        style="padding: 2px 6px; font-size: 10px;">Remove</button>
+                            </div>
+                        `;
+                    });
+                } else {
+                    content += '<div style="text-align: center; color: #666; padding: 10px; font-size: 12px;">No assets assigned to this model</div>';
+                }
+
+                content += `
+                        </div>
                     </div>
                 `;
-      });
+            });
+
+            content += `
+                    </div>
+                </div>
+            `;
+        });
     } else {
-      content +=
-        '<p style="text-align: center; color: #666; padding: 40px;">No assets assigned to this event.</p>';
+        content += '<div style="text-align: center; padding: 40px; color: #666;">No asset models assigned to this event</div>';
     }
 
     content += `
-                    </div>
-                </div>
-                
-                <!-- Add Asset Models -->
-                <div>
-                    <h4 style="color: #495057; margin-bottom: 15px;">Add Assets</h4>
-                    <div class="form-group">
-                        <input type="text" class="form-input" id="addAssetSearch" 
-                               placeholder="Search available assets..." 
-                               onkeyup="filterAddAssets()">
-                    </div>
-                    <div id="available-assets-simplified" style="border: 1px solid #e9ecef; border-radius: 8px; max-height: 300px; overflow-y: auto;">
-        `;
-
-    // Show available assets in simplified format
-    const assetsByModel = {};
-    availableAssets.forEach((asset) => {
-      const modelKey = `${asset.brand} ${asset.model}`;
-      if (!assetsByModel[modelKey]) {
-        assetsByModel[modelKey] = {
-          model: modelKey,
-          department: asset.department,
-          count: 0,
-          description: asset.description,
-          assets: [],
-        };
-      }
-      assetsByModel[modelKey].count++;
-      assetsByModel[modelKey].assets.push(asset);
-    });
-
-    Object.values(assetsByModel).forEach((modelGroup) => {
-      const deptInfo = getDepartmentInfo(modelGroup.department);
-      content += `
-                <div class="model-group" style="padding: 12px; border-bottom: 1px solid #f1f1f1; display: flex; justify-content: space-between; align-items: center;">
-                    <div>
-                        <div style="font-weight: 500;">${modelGroup.model}</div>
-                        <div style="color: #666; font-size: 12px;">${
-                          modelGroup.description
-                        }</div>
-                        <span class="asset-badge dept-${modelGroup.department.toLowerCase()}">${
-        modelGroup.department
-      }</span>
-                        <span style="color: #999; font-size: 11px; margin-left: 10px;">${
-                          modelGroup.count
-                        } available</span>
-                    </div>
-                    <button class="btn btn-success" style="padding: 6px 12px; font-size: 12px;" onclick="addAssetModelToEvent(${eventId}, '${
-        modelGroup.model
-      }', '${modelGroup.department}')">Add One</button>
-                </div>
-            `;
-    });
-
-    content += `
+                        </div>
                     </div>
                 </div>
             </div>
         `;
 
-    document.getElementById("editEventAssetsContent").innerHTML = content;
+    document.getElementById("edit-assets-tab").innerHTML = content;
+
   } catch (error) {
+    console.error("Error loading edit event assets:", error);
     showNotification("error", "Failed to load assets for editing");
+  }
+}
+
+// Clear model search
+function clearModelSearch() {
+  const searchInput = document.querySelector('#edit-assets-tab input[placeholder*="Search available asset models"]');
+  const container = document.getElementById("available-models-container");
+  
+  if (searchInput) {
+    searchInput.value = "";
+  }
+  
+  if (container) {
+    container.innerHTML = '<div style="text-align: center; padding: 20px; color: #666; font-size: 14px;">Type to search for available asset models...</div>';
   }
 }
 
@@ -3612,31 +3720,12 @@ async function addModelToEvent(eventId, brand, model, department, description) {
     if (requestedQuantity > maxCanAdd) {
       showNotification(
         "error",
-        `Only ${maxCanAdd} ${brand} ${model} available. You requested ${requestedQuantity}.`
+        `Only ${maxCanAdd} ${brand} ${model} available. Try reducing the quantity.`
       );
-
-      // Update the input to show max available
-      if (qtyInput) {
-        qtyInput.value = Math.max(1, maxCanAdd);
-        qtyInput.max = maxCanAdd;
-      }
       return;
     }
 
-    if (maxCanAdd === 0) {
-      showNotification("error", `No ${brand} ${model} available.`);
-
-      // Remove the model from search results
-      if (qtyInput) {
-        const modelElement = qtyInput.closest('div[style*="padding: 12px"]');
-        if (modelElement) {
-          modelElement.remove();
-        }
-      }
-      return;
-    }
-
-    // Proceed with adding the model
+    // Add model to event
     await apiCall(`/api/events/${eventId}/models`, "POST", {
       brand: brand,
       model: model,
@@ -3645,60 +3734,163 @@ async function addModelToEvent(eventId, brand, model, department, description) {
       quantity: requestedQuantity,
     });
 
-    showNotification(
-      "success",
-      `Added ${requestedQuantity}x ${brand} ${model} to event`
-    );
+    showNotification("success", `${requestedQuantity}x ${brand} ${model} added to event`);
 
-    // Update available count in the search results
-    const newCount = Math.max(0, availableCount - requestedQuantity);
-
-    // Update the display
-    if (newCount <= 0) {
-      // Remove the entire model row if no more available
-      if (qtyInput) {
-        const modelElement = qtyInput.closest('div[style*="padding: 12px"]');
-        if (modelElement) {
-          modelElement.remove();
-        }
-      }
-    } else {
-      // Update the available count
-      if (qtyInput) {
-        const countSpan = qtyInput.parentElement.parentElement.querySelector(
-          'span[style*="color: #28a745"]'
-        );
-        if (countSpan) {
-          countSpan.textContent = `${newCount} available`;
-        }
-        qtyInput.max = newCount;
-        qtyInput.value = Math.min(1, newCount);
-      }
+    // Clear the quantity input
+    if (qtyInput) {
+      qtyInput.value = 1;
     }
 
-    // Update available assets list to remove used assets
+    // Update available assets by removing the assigned ones
     if (window.currentEditAvailableAssets) {
       let removedCount = 0;
-      window.currentEditAvailableAssets =
-        window.currentEditAvailableAssets.filter((asset) => {
-          if (
-            asset.brand === brand &&
-            asset.model === model &&
-            removedCount < requestedQuantity
-          ) {
-            removedCount++;
-            return false;
-          }
-          return true;
-        });
+      window.currentEditAvailableAssets = window.currentEditAvailableAssets.filter((asset) => {
+        if (asset.brand === brand && asset.model === model && removedCount < requestedQuantity) {
+          removedCount++;
+          return false;
+        }
+        return true;
+      });
     }
 
-    // Update only the current assets section (preserves search box)
-    await updateCurrentAssetsOnly(eventId);
+    // Update only the models section without disrupting the search
+    await updateModelRequirementsSection(eventId);
+
+    // Remove this model from the search results since it now has fewer available
+    const currentSearchTerm = document.querySelector('#edit-assets-tab input[placeholder*="Search available asset models"]')?.value;
+    if (currentSearchTerm && currentSearchTerm.length >= 2) {
+      filterAvailableModels(currentSearchTerm);
+    }
+
   } catch (error) {
     showNotification("error", `Failed to add model: ${error.message}`);
   }
 }
+
+// Update only the model requirements section without affecting search
+async function updateModelRequirementsSection(eventId) {
+  try {
+    const eventResponse = await apiCall(`/api/events/${eventId}`);
+    const event = eventResponse.data;
+
+    const modelsContainer = document.getElementById("current-asset-models");
+    if (!modelsContainer) return;
+
+    // Helper function to escape HTML
+    const escapeHtml = (str) => {
+      if (!str) return '';
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    };
+
+    let content = '';
+
+    // Display current model assignments
+    if (event.modelGroups && Object.keys(event.modelGroups).length > 0) {
+        // Group by department
+        const modelsByDept = {};
+        Object.values(event.modelGroups).forEach((model) => {
+            if (!modelsByDept[model.department]) {
+                modelsByDept[model.department] = [];
+            }
+            modelsByDept[model.department].push(model);
+        });
+
+        Object.keys(modelsByDept).sort().forEach((dept) => {
+            const models = modelsByDept[dept];
+            const totalAssigned = models.reduce((sum, model) => sum + (model.assignedAssets ? model.assignedAssets.length : 0), 0);
+            const totalRequired = models.reduce((sum, model) => sum + (model.requiredQuantity || 1), 0);
+            
+            content += `
+                <div style="border-bottom: 1px solid #f1f1f1;">
+                    <div style="background-color: #f8f9fa; padding: 12px 15px; font-weight: 600; color: #495057; display: flex; justify-content: space-between; align-items: center; cursor: pointer;" onclick="toggleViewSection('dept-${dept}')">
+                        <span>${escapeHtml(dept)} Department</span>
+                        <div style="display: flex; align-items: center; gap: 15px;">
+                            <span style="font-size: 12px; color: #ffc107;">${totalAssigned}/${totalRequired} assigned</span>
+                            <span class="toggle-icon" style="font-size: 12px;">▼</span>
+                        </div>
+                    </div>
+                    <div id="dept-${dept}" style="display: block;">
+            `;
+
+            models.forEach((model, index) => {
+                const modelId = `model-${dept}-${index}`;
+                const assignedCount = model.assignedAssets ? model.assignedAssets.length : 0;
+                const requiredQty = model.requiredQuantity || 1;
+                const statusIcon = assignedCount >= requiredQty ? "✅" : "⚠️";
+                const statusText = `${assignedCount}/${requiredQty} assigned`;
+
+                content += `
+                    <div class="model-assignment" style="border-bottom: 1px solid #f1f1f1;">
+                        <div style="padding: 12px 15px; display: flex; justify-content: space-between; align-items: center; cursor: pointer;" onclick="toggleModelDetailsInEdit('${modelId}')">
+                            <div style="flex: 1;">
+                                <span style="font-weight: 500;">${requiredQty}x ${escapeHtml(model.brand)} ${escapeHtml(model.model)}</span>
+                                <div style="font-size: 12px; color: #666; margin-top: 2px;">${escapeHtml(model.description || '')}</div>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <span style="font-size: 12px; color: ${assignedCount >= requiredQty ? '#28a745' : '#ffc107'};">${statusText}</span>
+                                <button class="btn btn-sm btn-outline-secondary edit-model-qty-btn" 
+                                        data-event-id="${eventId}" data-brand="${escapeHtml(model.brand)}" 
+                                        data-model="${escapeHtml(model.model)}" data-department="${escapeHtml(model.department)}"
+                                        style="padding: 2px 8px; font-size: 11px;">Edit Qty</button>
+                                <button class="btn btn-sm btn-danger remove-model-btn" 
+                                        data-event-id="${eventId}" data-brand="${escapeHtml(model.brand)}" 
+                                        data-model="${escapeHtml(model.model)}" data-department="${escapeHtml(model.department)}"
+                                        style="padding: 2px 8px; font-size: 11px;">Remove</button>
+                                <span class="toggle-icon" style="font-size: 12px; color: #666;">▼</span>
+                            </div>
+                        </div>
+                        
+                        <!-- Expandable asset details -->
+                        <div id="${modelId}" style="display: none; background: #f8f9fa; padding: 10px 15px;">
+                `;
+
+                if (model.assignedAssets && model.assignedAssets.length > 0) {
+                    model.assignedAssets.forEach(asset => {
+                        const statusIcon = asset.status === "missing" ? "❌" 
+                            : asset.status === "returned" ? "↩️"
+                            : asset.status === "prepared" ? "✅" 
+                            : "📋";
+
+                        content += `
+                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #e9ecef;">
+                                <div>
+                                    <div style="font-weight: 500; font-size: 12px;">${statusIcon} ${escapeHtml(asset.id)}</div>
+                                    ${asset.serial ? `<div style="color: #666; font-size: 11px;">SN: ${escapeHtml(asset.serial)}</div>` : ''}
+                                </div>
+                                <button class="btn btn-danger btn-xs remove-asset-btn" 
+                                        data-event-id="${eventId}" data-asset-id="${escapeHtml(asset.id)}"
+                                        style="padding: 2px 6px; font-size: 10px;">Remove</button>
+                            </div>
+                        `;
+                    });
+                } else {
+                    content += '<div style="text-align: center; color: #666; padding: 10px; font-size: 12px;">No assets assigned to this model</div>';
+                }
+
+                content += `
+                        </div>
+                    </div>
+                `;
+            });
+
+            content += `
+                    </div>
+                </div>
+            `;
+        });
+    } else {
+        content = '<div style="text-align: center; padding: 40px; color: #666;">No asset models assigned to this event</div>';
+    }
+
+    modelsContainer.innerHTML = content;
+
+  } catch (error) {
+    console.error("Error updating models section:", error);
+  }
+}
+
 async function removeModelFromEvent(eventId, brand, model, department) {
   if (!confirm(`Remove all ${brand} ${model} from this event?`)) {
     return;
@@ -3710,20 +3902,22 @@ async function removeModelFromEvent(eventId, brand, model, department) {
       model: model,
       department: department,
     });
-    await refreshAvailableAssetsAfterRemoval(eventId);
+    
     showNotification("success", `${brand} ${model} removed from event`);
 
-    // Update only the current assets section (preserves search box)
-    await updateCurrentAssetsOnly(eventId);
+    // Reload available assets to reflect the newly available items
+    const response = await apiCall("/api/assets/available");
+    window.currentEditAvailableAssets = response.data;
 
-    // Optionally, refresh the search results to show the model as available again
-    const searchInput = document.querySelector(
-      '#edit-assets-tab input[placeholder="Search available assets..."]'
-    );
-    if (searchInput && searchInput.value.length >= 2) {
-      // Re-trigger the search to update available assets
-      filterAvailableAssetsSimple(searchInput.value);
+    // Update only the models section without disrupting the search
+    await updateModelRequirementsSection(eventId);
+
+    // Refresh the search results to show the model as available again
+    const currentSearchTerm = document.querySelector('#edit-assets-tab input[placeholder*="Search available asset models"]')?.value;
+    if (currentSearchTerm && currentSearchTerm.length >= 2) {
+      filterAvailableModels(currentSearchTerm);
     }
+    
   } catch (error) {
     showNotification("error", `Failed to remove model: ${error.message}`);
   }
@@ -3762,6 +3956,13 @@ function editModelQuantity(eventId, brand, model, department) {
   document.getElementById("editQuantityInput").min = 1;
   document.getElementById("editQuantityInput").max = maxQuantity;
 
+  const editQtyInput = document.getElementById("editQuantityInput");
+  if (editQtyInput) {
+    editQtyInput.oninput = () => validateEditQuantityInput();
+    editQtyInput.onblur = () => handleEditQuantityBlur(maxQuantity);
+    editQtyInput.onkeydown = (e) => handleQuantityKeydown(e);
+  }
+
   // Show availability info with color coding
   const availableDiv = document.getElementById("editQuantityAvailable");
   if (modelAssets.length === 0) {
@@ -3779,6 +3980,59 @@ function editModelQuantity(eventId, brand, model, department) {
 
   // Open modal
   openModal("editQuantityModal");
+}
+
+// Handle blur for edit quantity modal
+function handleEditQuantityBlur(maxQuantity) {
+  const input = document.getElementById("editQuantityInput");
+  if (!input) return;
+
+  let value = input.value.trim();
+
+  // If empty on blur, restore to minimum 1
+  if (value === '' || isNaN(parseInt(value)) || parseInt(value) < 1) {
+    input.value = 1;
+    input.style.borderColor = "#28a745";
+    return;
+  }
+
+  // If value exceeds maximum, set to maximum
+  const numValue = parseInt(value);
+  if (numValue > maxQuantity) {
+    input.value = maxQuantity;
+    showNotification("warning", `Maximum ${maxQuantity} available`);
+  }
+
+  validateEditQuantityInput();
+}
+
+function validateEditQuantityInput() {
+  const input = document.getElementById("editQuantityInput");
+  if (!input) return false;
+
+  const maxQty = parseInt(input.max);
+  let value = input.value.trim();
+
+  // Allow empty during typing
+  if (value === '') {
+    input.style.borderColor = "#ddd";
+    return false;
+  }
+
+  const numValue = parseInt(value);
+
+  if (isNaN(numValue) || numValue < 1) {
+    input.style.borderColor = "#dc3545";
+    return false;
+  }
+
+  if (numValue > maxQty) {
+    input.style.borderColor = "#dc3545";
+    return false;
+  }
+
+  input.style.borderColor = "#28a745";
+  return true;
 }
 
 async function updateModelQuantity(
@@ -4073,27 +4327,84 @@ function validateQuantityInput(inputId, maxAvailable) {
   const input = document.getElementById(inputId);
   if (!input) return;
 
-  let value = parseInt(input.value);
+  let value = input.value.trim();
 
-  // Check if value is valid
-  if (isNaN(value) || value < 1) {
-    input.value = 1;
-    value = 1;
+  // Allow empty value during typing (don't force to 1 immediately)
+  if (value === '') {
+    input.style.borderColor = "#ddd";
+    input.style.backgroundColor = "white";
+    return;
   }
 
-  if (value > maxAvailable) {
+  // Parse the value
+  const numValue = parseInt(value);
+
+  // Check if value is valid number
+  if (isNaN(numValue) || numValue < 1) {
+    input.style.borderColor = "#dc3545";
+    input.style.backgroundColor = "#fff5f5";
+    return;
+  }
+
+  // Check if value exceeds maximum
+  if (numValue > maxAvailable) {
     input.value = maxAvailable;
-    value = maxAvailable;
+    input.style.borderColor = "#dc3545";
+    input.style.backgroundColor = "#fff5f5";
+    showNotification("warning", `Maximum ${maxAvailable} available`);
+    return;
+  }
+
+  // Valid value
+  input.style.borderColor = "#28a745";
+  input.style.backgroundColor = "white";
+}
+
+// Handle when user clicks out of quantity input (blur event)
+function handleQuantityBlur(inputId, maxAvailable) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+
+  let value = input.value.trim();
+
+  // If empty on blur, default to 1
+  if (value === '' || isNaN(parseInt(value)) || parseInt(value) < 1) {
+    input.value = 1;
+    input.style.borderColor = "#28a745";
+    input.style.backgroundColor = "white";
+    return;
+  }
+
+  // If value exceeds maximum, set to maximum
+  const numValue = parseInt(value);
+  if (numValue > maxAvailable) {
+    input.value = maxAvailable;
     showNotification("warning", `Maximum ${maxAvailable} available`);
   }
 
-  // Update the input styling based on validity
-  if (value > maxAvailable || value < 1) {
-    input.style.borderColor = "#dc3545";
-    input.style.backgroundColor = "#fff5f5";
-  } else {
-    input.style.borderColor = "#ddd";
-    input.style.backgroundColor = "white";
+  // Final validation
+  validateQuantityInput(inputId, maxAvailable);
+}
+
+// Handle special key behaviors for quantity input
+function handleQuantityKeydown(event) {
+  const input = event.target;
+  
+  // Allow: backspace, delete, tab, escape, enter
+  if ([8, 9, 27, 13, 46].indexOf(event.keyCode) !== -1 ||
+      // Allow: Ctrl+A, Ctrl+C, Ctrl+V, Ctrl+X
+      (event.keyCode === 65 && event.ctrlKey === true) ||
+      (event.keyCode === 67 && event.ctrlKey === true) ||
+      (event.keyCode === 86 && event.ctrlKey === true) ||
+      (event.keyCode === 88 && event.ctrlKey === true) ||
+      // Allow: home, end, left, right
+      (event.keyCode >= 35 && event.keyCode <= 39)) {
+    return;
+  }
+  
+  // Ensure that it is a number and stop the keypress
+  if ((event.shiftKey || (event.keyCode < 48 || event.keyCode > 57)) && (event.keyCode < 96 || event.keyCode > 105)) {
+    event.preventDefault();
   }
 }
 
@@ -4343,36 +4654,101 @@ async function removeAssetFromEvent(eventId, assetId) {
   }
 }
 
-function filterAvailableAssets() {
-  const searchTerm =
-    document.getElementById("availableAssetsSearch")?.value.toLowerCase() || "";
-  const availableAssets = window.currentAvailableAssets || [];
+// Filter available asset models for original interface
+function filterAvailableModels(searchTerm) {
+  const container = document.getElementById("available-models-container");
+  const availableAssets = window.currentEditAvailableAssets || [];
+  const eventId = window.currentEditEventId;
 
-  if (!searchTerm) {
-    // Show all assets
-    document.querySelectorAll('[class*="available-asset-"]').forEach((el) => {
-      el.style.display = "flex";
-    });
+  if (!container) {
+    console.error("Available models container not found");
     return;
   }
 
-  // Hide all assets first
-  document.querySelectorAll('[class*="available-asset-"]').forEach((el) => {
-    el.style.display = "none";
+  if (!searchTerm || searchTerm.length < 2) {
+    container.innerHTML =
+      '<div style="text-align: center; color: #666; padding: 20px;">Type at least 2 characters to search...</div>';
+    return;
+  }
+
+  // Group available assets by model
+  const modelGroups = {};
+  availableAssets.forEach(asset => {
+    const modelKey = `${asset.department}|${asset.brand}|${asset.model}`;
+    if (!modelGroups[modelKey]) {
+      modelGroups[modelKey] = {
+        department: asset.department,
+        brand: asset.brand,
+        model: asset.model,
+        description: asset.description || '',
+        count: 0,
+        assets: []
+      };
+    }
+    modelGroups[modelKey].count++;
+    modelGroups[modelKey].assets.push(asset);
   });
 
-  // Show matching assets
-  availableAssets.forEach((asset) => {
-    const searchableText =
-      `${asset.id} ${asset.brand} ${asset.model} ${asset.description}`.toLowerCase();
-    if (searchableText.includes(searchTerm)) {
-      const element = document.querySelector(`.available-asset-${asset.id}`);
-      if (element) {
-        element.style.display = "flex";
-      }
-    }
+  // Filter models based on search
+  const searchLower = searchTerm.toLowerCase();
+  const filteredModels = Object.values(modelGroups).filter(model => {
+    const searchableText = `${model.brand} ${model.model} ${model.description}`.toLowerCase();
+    return searchableText.includes(searchLower);
   });
+
+  if (filteredModels.length === 0) {
+    container.innerHTML = '<div style="text-align: center; color: #666; padding: 20px;">No matching asset models found.</div>';
+    return;
+  }
+
+  let html = '';
+  filteredModels.slice(0, 20).forEach(model => {
+    const cleanBrand = model.brand.replace(/\s+/g, "");
+    const cleanModel = model.model.replace(/\s+/g, "");
+    const qtyInputId = `qty-${cleanBrand}-${cleanModel}`;
+    
+    html += `
+      <div style="padding: 12px; border-bottom: 1px solid #f1f1f1; display: flex; justify-content: space-between; align-items: center;">
+        <div style="flex: 1;">
+          <div style="font-weight: 500; margin-bottom: 4px;">${model.brand} ${model.model}</div>
+          <div style="color: #666; font-size: 13px; margin-bottom: 2px;">${model.description}</div>
+          <div style="color: #28a745; font-size: 12px;">${model.count} available</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <input type="number" id="${qtyInputId}" min="1" max="${model.count}" value="1" 
+                 style="width: 60px; padding: 4px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;"
+                 oninput="validateQuantityInput('${qtyInputId}', ${model.count})"
+                 onblur="handleQuantityBlur('${qtyInputId}', ${model.count})"
+                 onkeydown="handleQuantityKeydown(event)">
+          <button class="btn btn-primary add-model-btn" style="padding: 6px 12px; font-size: 12px;" 
+                  data-event-id="${eventId}" data-brand="${model.brand}" data-model="${model.model}" 
+                  data-department="${model.department}" data-description="${model.description}">
+            Add
+          </button>
+        </div>
+      </div>
+    `;
+  });
+  
+  container.innerHTML = html;
 }
+
+// Toggle model details in edit interface
+function toggleModelDetailsInEdit(modelId) {
+  const detailsDiv = document.getElementById(modelId);
+  const toggleIcon = document.querySelector(`[onclick*="${modelId}"] .toggle-icon`);
+
+  if (detailsDiv && toggleIcon) {
+    if (detailsDiv.style.display === "none") {
+      detailsDiv.style.display = "block";
+      toggleIcon.textContent = "▲";
+    } else {
+      detailsDiv.style.display = "none";
+      toggleIcon.textContent = "▼";
+    }
+  }
+}
+
 async function deleteEvent(eventId) {
   if (
     !confirm(
