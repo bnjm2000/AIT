@@ -932,3 +932,22 @@ Replaced FFC Cable [$10]' (edited by bnjm2000)"
 2025/06/24 16:33:15,bnjm2000,User bnjm2000 logged in via web interface
 2025/06/24 16:42:39,bnjm2000,Added 2x L-Acoustics M-BAR model to event 24 (total: 2)
 2025/06/24 16:43:14,bnjm2000,Added 2x Interspace Industries PCBB3 model to event 24 (total: 2)
+2025/06/25 14:21:35,admin,Maintenance logged for asset CL5#01: 112
+2025/06/25 14:24:41,admin,Maintenance logged for asset CL5#01: 113
+2025/06/25 14:24:51,admin,Maintenance logged for asset CL5#01: 114
+2025/06/25 14:25:02,admin,"Updated maintenance log for asset CL5#01: '2024/09/12 - sent to Yamaha for servicing' -> '2025/02/13 -  Dante clock suddenly unlocked and could not lock back, phantom noise on both inputs and outputs [Wedding of Aim and Singhis @ TCP]' (edited by admin)"
+2025/06/25 14:29:47,admin,"Updated maintenance log for asset CL5#01: '2025/02/13 -  Dante clock suddenly unlocked and could not lock back, phantom noise on both inputs and outputs [Wedding of Aim and Singhis @ TCP]' -> '2025/02/13 -  Dante clock suddenly unlocked and could not lock back, phantom noise on both inputs and outputs [Wedding of Aim and Singhis @ TCP]' (edited by admin)"
+2025/06/25 14:32:25,admin,Maintenance logged for asset CL5#01: 123124224124
+2025/06/25 14:41:47,admin,"Updated maintenance log for asset CL5#01: '114' -> '114' (also: location: 'Store' -> 'Store', serial: 'WTASK01015' -> 'WTASK01015', marked as OOC) (edited by admin)"
+2025/06/25 14:41:54,admin,"Updated maintenance log for asset CL5#01: '123124224124' -> '123124224124' (also: location: 'Store' -> 'Store', serial: 'WTASK01015' -> 'WTASK01015', cleared OOC status) (edited by admin)"
+2025/06/25 14:48:28,admin,"Updated maintenance log for asset CL5#01: 'Replaced Dante Module [$631]
+Replaced DNTU PCB [$672]
+Replaced FFC Cable [$10]' -> 'Replaced Dante Module [$631]
+Replaced DNTU PCB [$672]
+Replaced FFC Cable [$10]' (also: Location: Store, Serial: WTASK01015, Cleared OOC) (edited by admin)"
+2025/06/25 14:48:35,admin,"Updated maintenance log for asset CL5#01: '2025/02/13 -  Dante clock suddenly unlocked and could not lock back, phantom noise on both inputs and outputs [Wedding of Aim and Singhis @ TCP]' -> '2025/02/13 -  Dante clock suddenly unlocked and could not lock back, phantom noise on both inputs and outputs' (also: Location: Store, Serial: WTASK01015, Marked OOC) (edited by admin)"
+2025/06/25 14:49:01,admin,"Updated maintenance log for asset CL5#01: '123124224124' -> '123124224124' (also: Location: Store, Serial: WTASK01015, Cleared OOC) (edited by admin)"
+2025/06/25 14:53:58,admin,"Updated maintenance log for asset CL5#01: '2025/01/17 - Sent to Yamaha for service (Dante module error)' -> '2025/01/17 - Sent to Yamaha for service (Dante module error) [1]' (also: Location: Store, Serial: WTASK01015) (edited by admin)"
+2025/06/25 14:54:13,admin,"Updated maintenance log for asset CL5#01: '112' -> '112 3' (also: Location: Store, Serial: WTASK01015) (edited by admin)"
+2025/06/25 15:01:56,admin,Updated maintenance log for asset CL5#01: '113' -> '113' (also: Marked OOC) (edited by admin)
+2025/06/25 15:02:00,admin,Updated maintenance log for asset CL5#01: '114' -> '114' (also: Cleared OOC) (edited by admin)

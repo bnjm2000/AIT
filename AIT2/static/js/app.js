@@ -6614,17 +6614,21 @@ function updateStatusFromToggle(statusType, isChecked) {
 }
 
 function showMaintenanceLogModal(asset) {
+  // Debug: Log the asset data to console
+  console.log('Asset maintenance logs:', asset.maintenanceLogs);
+  console.log('Total maintenance logs count:', asset.maintenanceLogs ? asset.maintenanceLogs.length : 0);
+  
   // Start building modal content
   let modalContent = `
     <div class="modal" id="maintenanceLogModal" style="display: flex; align-items: center; justify-content: center;">
-      <div class="modal-content" style="max-width: 800px; width: 90%; max-height: 80vh; overflow-y: auto;">
-        <div class="modal-header">
+      <div class="modal-content" style="max-width: 1200px; width: 95%; height: 95vh; display: flex; flex-direction: column; overflow: hidden; padding: 20px;">
+        <div class="modal-header" style="flex-shrink: 0; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 2px solid #eee;">
           <h3 class="modal-title">Maintenance Log - ${asset.id}</h3>
           <button class="close-btn" onclick="closeMaintenanceLogModal()">&times;</button>
         </div>
-        <div class="modal-body">
+        <div class="modal-body" style="flex: 1; display: flex; flex-direction: column; overflow: hidden; min-height: 0;">
           <!-- Asset Info -->
-          <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+          <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px; flex-shrink: 0;">
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
               <div>
                 <strong>Asset ID:</strong> ${asset.id}<br>
@@ -6646,16 +6650,20 @@ function showMaintenanceLogModal(asset) {
           </div>
           
           <!-- Maintenance Logs -->
-          <div>
-            <h4 style="margin-bottom: 15px; color: #495057;">Maintenance History</h4>
-            <div style="max-height: 400px; overflow-y: auto;">
-              <table class="table" style="font-size: 14px;">
-                <thead>
+          <div style="flex: 1; display: flex; flex-direction: column; min-height: 0;">
+            <h4 style="margin-bottom: 15px; color: #495057; flex-shrink: 0;">
+              Maintenance History - Total: ${asset.maintenanceLogs ? asset.maintenanceLogs.length : 0} entries
+            </h4>
+            <div style="flex: 1; overflow-y: scroll; border: 1px solid #e9ecef; border-radius: 8px; background: white;">
+              <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+                <thead style="position: sticky; top: 0; background: #f8f9fa; z-index: 10; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
                   <tr>
-                    <th style="padding: 12px; font-weight: 600; color: #495057; border-bottom: 2px solid #e9ecef;">Date</th>
-                    <th style="padding: 12px; font-weight: 600; color: #495057; border-bottom: 2px solid #e9ecef;">User</th>
-                    <th style="padding: 12px; font-weight: 600; color: #495057; border-bottom: 2px solid #e9ecef;">Description</th>
-                    <th style="padding: 12px; font-weight: 600; color: #495057; border-bottom: 2px solid #e9ecef; width: 50px;"></th>
+                    <th style="padding: 12px; font-weight: 600; color: #495057; border-bottom: 2px solid #e9ecef; text-align: left; background: #f8f9fa; width: 50px;">#</th>
+                    <th style="padding: 12px; font-weight: 600; color: #495057; border-bottom: 2px solid #e9ecef; text-align: left; background: #f8f9fa; width: 110px;">Date</th>
+                    <th style="padding: 12px; font-weight: 600; color: #495057; border-bottom: 2px solid #e9ecef; text-align: left; background: #f8f9fa; width: 100px;">User</th>
+                    <th style="padding: 12px; font-weight: 600; color: #495057; border-bottom: 2px solid #e9ecef; text-align: left; background: #f8f9fa;">Description</th>
+                    <th style="padding: 12px; font-weight: 600; color: #495057; border-bottom: 2px solid #e9ecef; text-align: left; background: #f8f9fa; width: 140px;">Status Changes</th>
+                    <th style="padding: 12px; font-weight: 600; color: #495057; border-bottom: 2px solid #e9ecef; width: 50px; text-align: center; background: #f8f9fa;"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -6676,32 +6684,70 @@ function showMaintenanceLogModal(asset) {
     // Display logs in reverse order (newest first) but keep original indices
     const reversedData = [...maintenanceData].reverse();
     
+    console.log('Processing', reversedData.length, 'maintenance logs for display');
+    
     reversedData.forEach((log, displayIndex) => {
       const logId = `log_${asset.id.replace(/[^a-zA-Z0-9]/g, '_')}_${log.originalIndex}`;
+      const displayNumber = displayIndex + 1;
+      
+      console.log(`Processing log ${displayNumber}:`, log);
+      
+      // Parse description and status changes
+      let mainDescription = log.description;
+      let statusChanges = '';
+      
+      const statusMatch = log.description.match(/^(.*?)(\s*\[.*?\]\s*)$/);
+      if (statusMatch) {
+        mainDescription = statusMatch[1].trim();
+        statusChanges = statusMatch[2].trim().replace(/^\[|\]$/g, ''); // Remove the brackets
+      }
+      
+      // Format status changes for display
+      let statusChangesDisplay = '';
+      if (statusChanges) {
+        const changes = statusChanges.split(',').map(change => change.trim());
+        statusChangesDisplay = changes.map(change => {
+          let color = '#667eea'; // Default blue
+          let icon = '';
+          
+          if (change.toLowerCase().includes('marked ooc')) {
+            color = '#dc3545';
+            icon = '⚠️';
+          } else if (change.toLowerCase().includes('cleared ooc')) {
+            color = '#28a745';
+            icon = '✅';
+          } else if (change.toLowerCase().includes('marked missing')) {
+            color = '#fd7e14';
+            icon = '❌';
+          } else if (change.toLowerCase().includes('cleared missing')) {
+            color = '#28a745';
+            icon = '✅';
+          } else if (change.toLowerCase().includes('location:')) {
+            color = '#17a2b8';
+            icon = '📍';
+          } else if (change.toLowerCase().includes('serial:')) {
+            color = '#6f42c1';
+            icon = '🔢';
+          }
+          
+          return `<span style="color: ${color}; font-weight: 500; font-size: 12px; display: block; margin-bottom: 2px;">${icon} ${escapeHtml(change)}</span>`;
+        }).join('');
+      } else {
+        statusChangesDisplay = '<span style="color: #999; font-style: italic; font-size: 12px;">No changes</span>';
+      }
       
       modalContent += `
         <tr style="border-bottom: 1px solid #f1f1f1;">
-          <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; vertical-align: top;">${log.date}</td>
-          <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; vertical-align: top;">${log.user}</td>
+          <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; vertical-align: top; font-weight: 500; text-align: center;">${displayNumber}</td>
+          <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; vertical-align: top; font-size: 13px;">${log.date}</td>
+          <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; vertical-align: top; font-size: 13px;">${escapeHtml(log.user)}</td>
           <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; vertical-align: top;">
             <div id="${logId}_display" style="display: block; cursor: pointer;" onclick="editMaintenanceLog('${asset.id}', ${log.originalIndex}, '${logId}')">
-              ${escapeHtml(log.description)}
+              ${escapeHtml(mainDescription)}
             </div>
-            <div id="${logId}_edit" style="display: none;">
-              <textarea id="${logId}_input" 
-                        style="width: 100%; min-height: 60px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px; font-family: inherit; resize: vertical;"
-                        placeholder="Enter maintenance description...">${escapeHtml(log.description)}</textarea>
-              <div style="margin-top: 8px;">
-                <button onclick="saveMaintenanceLog('${asset.id}', ${log.originalIndex}, '${logId}')" 
-                        style="background: #28a745; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 11px; margin-right: 5px; cursor: pointer;">
-                  Save
-                </button>
-                <button onclick="cancelEditMaintenanceLog('${logId}')" 
-                        style="background: #6c757d; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 11px; cursor: pointer;">
-                  Cancel
-                </button>
-              </div>
-            </div>
+          </td>
+          <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; vertical-align: top;">
+            ${statusChangesDisplay}
           </td>
           <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; vertical-align: top; text-align: center;">
             <button onclick="deleteMaintenanceLog('${asset.id}', ${log.originalIndex}, '${logId}')" 
@@ -6715,10 +6761,12 @@ function showMaintenanceLogModal(asset) {
         </tr>
       `;
     });
+    
+    console.log('Finished processing all logs. Total rows added:', reversedData.length);
   } else {
     modalContent += `
       <tr>
-        <td colspan="4" style="text-align: center; color: #666; padding: 30px; font-style: italic;">
+        <td colspan="6" style="text-align: center; color: #666; padding: 30px; font-style: italic;">
           No maintenance records found for this asset.
         </td>
       </tr>
@@ -6733,7 +6781,7 @@ function showMaintenanceLogModal(asset) {
             </div>
             
             <!-- Action Buttons -->
-            <div style="margin-top: 20px; padding-top: 15px; border-top: 2px solid #eee; text-align: center;">
+            <div style="margin-top: 20px; padding-top: 15px; border-top: 2px solid #eee; text-align: center; flex-shrink: 0;">
               <button onclick="addNewLogEntryFromModal('${asset.id}')" 
                       style="background: #667eea; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-size: 14px; margin-right: 10px; cursor: pointer;">
                 📝 Add New Log Entry
@@ -6767,6 +6815,12 @@ function showMaintenanceLogModal(asset) {
       closeMaintenanceLogModal();
     }
   });
+  
+  // Debug: Check if modal was created correctly
+  setTimeout(() => {
+    const tableRows = modal.querySelectorAll('tbody tr');
+    console.log('Table rows found in DOM:', tableRows.length);
+  }, 100);
 }
 
 // Helper function to close the maintenance log modal
@@ -7136,50 +7190,236 @@ function editMaintenanceLog(assetId, logIndex, logId) {
   // First, close any other editing logs
   const currentlyEditing = document.querySelectorAll('div[id$="_edit"][style*="block"]');
   currentlyEditing.forEach(editDiv => {
-    const textarea = editDiv.querySelector('textarea[id$="_input"]');
-    if (textarea && textarea.dataset.logId !== logId) {
-      const currentAssetId = textarea.dataset.assetId;
-      const currentLogIndex = parseInt(textarea.dataset.logIndex);
-      const currentLogId = textarea.dataset.logId;
-      const originalValue = textarea.dataset.originalValue;
-      const currentValue = textarea.value.trim();
-      
-      // Save if changed and not empty
-      if (currentValue && currentValue !== originalValue) {
-        saveMaintenanceLogSilent(currentAssetId, currentLogIndex, currentLogId);
-      } else {
-        cancelEditMaintenanceLog(currentLogId);
-      }
+    const currentLogId = editDiv.id.replace('_edit', '');
+    cancelEditMaintenanceLog(currentLogId);
+  });
+  
+  // Get the asset data
+  const asset = assets.find(a => a.id === assetId);
+  if (!asset || !asset.maintenanceLogs || !asset.maintenanceLogs[logIndex]) {
+    showNotification('error', 'Maintenance log not found');
+    return;
+  }
+  
+  // Parse the current log entry
+  const logEntry = asset.maintenanceLogs[logIndex];
+  const parts = logEntry.split('\t');
+  const currentDate = parts[0] || '';
+  const currentUser = parts[1] || '';
+  const descriptionWithStatus = parts.slice(2).join('\t') || '';
+  
+  // Extract status changes from description if they exist
+  let currentDescription = descriptionWithStatus;
+  let existingStatusChanges = '';
+  
+  // Check if description contains status changes in brackets
+  const statusMatch = descriptionWithStatus.match(/^(.*?)(\s*\[.*?\]\s*)$/);
+  if (statusMatch) {
+    currentDescription = statusMatch[1].trim();
+    existingStatusChanges = statusMatch[2].trim();
+  }
+  
+  // Convert date format from YYYY/MM/DD to YYYY-MM-DD for HTML date input
+  const dateForInput = currentDate.replace(/\//g, '-');
+  
+  // Determine current asset status for radio button pre-selection
+  let defaultStatusValue = 'nochange';
+  if (asset.isOOC && asset.isMissing) {
+    defaultStatusValue = 'nochange'; // Both statuses - let user choose
+  } else if (asset.isOOC) {
+    defaultStatusValue = 'clearooc'; // Currently OOC, suggest clearing it
+  } else if (asset.isMissing) {
+    defaultStatusValue = 'clearmissing'; // Currently missing, suggest clearing it
+  }
+  
+  // Create the enhanced edit modal
+  const modalContent = `
+    <div class="modal" id="editMaintenanceLogModal" style="display: flex; align-items: center; justify-content: center; z-index: 1100;">
+      <div class="modal-content" style="max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto;">
+        <div class="modal-header">
+          <h3 class="modal-title">Edit Maintenance Log - ${assetId}</h3>
+          <button class="close-btn" onclick="cancelEditMaintenanceLogModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+          <!-- Current Asset Status Display -->
+          <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #667eea;">
+            <h5 style="margin: 0 0 10px 0; color: #495057;">Current Asset Status</h5>
+            <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+              <div>
+                <strong>OOC:</strong> 
+                <span style="color: ${asset.isOOC ? '#dc3545' : '#28a745'}; font-weight: 500;">
+                  ${asset.isOOC ? 'Yes' : 'No'}
+                </span>
+              </div>
+              <div>
+                <strong>Missing:</strong> 
+                <span style="color: ${asset.isMissing ? '#fd7e14' : '#28a745'}; font-weight: 500;">
+                  ${asset.isMissing ? 'Yes' : 'No'}
+                </span>
+              </div>
+              <div>
+                <strong>Location:</strong> <span style="font-weight: 500;">${escapeHtml(asset.location || 'Store')}</span>
+              </div>
+              <div>
+                <strong>Serial:</strong> <span style="font-weight: 500;">${escapeHtml(asset.serial || 'N/A')}</span>
+              </div>
+            </div>
+            ${existingStatusChanges ? `<div style="margin-top: 10px;"><strong>Previous Changes:</strong> <span style="color: #666; font-style: italic;">${escapeHtml(existingStatusChanges)}</span></div>` : ''}
+          </div>
+
+          <form id="editMaintenanceLogForm">
+            <!-- Date -->
+            <div class="form-group">
+              <label class="form-label">Maintenance Date</label>
+              <input
+                type="date"
+                class="form-input"
+                id="editMaintenanceDate"
+                value="${dateForInput}"
+                required
+              />
+            </div>
+
+            <!-- User -->
+            <div class="form-group">
+              <label class="form-label">User</label>
+              <input
+                type="text"
+                class="form-input"
+                id="editMaintenanceUser"
+                value="${escapeHtml(currentUser)}"
+                required
+                placeholder="Enter username"
+              />
+            </div>
+
+            <!-- Description -->
+            <div class="form-group">
+              <label class="form-label">Maintenance Description</label>
+              <textarea
+                class="form-input"
+                id="editMaintenanceDescription"
+                rows="4"
+                required
+                placeholder="Describe maintenance work performed..."
+              >${escapeHtml(currentDescription)}</textarea>
+            </div>
+
+            // In the editMaintenanceLog function, change these two input fields:
+
+            <!-- New Location -->
+            <div class="form-group">
+              <label class="form-label">Update Location (optional)</label>
+              <input
+                type="text"
+                class="form-input"
+                id="editMaintenanceNewLocation"
+                placeholder="Leave blank to keep current location (${escapeHtml(asset.location || 'Store')})"
+                value=""
+              />
+            </div>
+
+            <!-- New Serial -->
+            <div class="form-group">
+              <label class="form-label">Update Serial Number (optional)</label>
+              <input
+                type="text"
+                class="form-input"
+                id="editMaintenanceNewSerial"
+                placeholder="Leave blank to keep current serial (${escapeHtml(asset.serial || 'N/A')})"
+                value=""
+              />
+            </div>    
+
+            <!-- Asset Status Changes -->
+            <div class="form-group">
+              <label class="form-label">Asset Status Changes</label>
+              <div style="display: flex; gap: 15px; flex-wrap: wrap; margin-top: 10px;">
+                <label style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 2px solid #e9ecef; border-radius: 6px; cursor: pointer; background: white;">
+                  <input type="radio" name="editAssetStatus" value="nochange" ${defaultStatusValue === 'nochange' ? 'checked' : ''}>
+                  <span>No Change</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 2px solid #e9ecef; border-radius: 6px; cursor: pointer; background: white;">
+                  <input type="radio" name="editAssetStatus" value="ooc" ${defaultStatusValue === 'ooc' ? 'checked' : ''}>
+                  <span style="color: #dc3545;">Mark as OOC</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 2px solid #e9ecef; border-radius: 6px; cursor: pointer; background: white;">
+                  <input type="radio" name="editAssetStatus" value="missing" ${defaultStatusValue === 'missing' ? 'checked' : ''}>
+                  <span style="color: #fd7e14;">Mark as Missing</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 2px solid #e9ecef; border-radius: 6px; cursor: pointer; background: white;">
+                  <input type="radio" name="editAssetStatus" value="clearooc" ${defaultStatusValue === 'clearooc' ? 'checked' : ''}>
+                  <span style="color: #28a745;">Clear OOC Status</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 2px solid #e9ecef; border-radius: 6px; cursor: pointer; background: white;">
+                  <input type="radio" name="editAssetStatus" value="clearmissing" ${defaultStatusValue === 'clearmissing' ? 'checked' : ''}>
+                  <span style="color: #28a745;">Clear Missing Status</span>
+                </label>
+              </div>
+            </div>
+
+            <!-- Form Buttons -->
+            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+              <button
+                type="button"
+                class="btn btn-secondary"
+                onclick="cancelEditMaintenanceLogModal()"
+              >
+                Cancel
+              </button>
+              <button 
+                type="button" 
+                class="btn btn-danger" 
+                onclick="deleteMaintenanceLogFromModal('${assetId}', ${logIndex}, '${logId}')"
+                style="margin-right: auto;"
+              >
+                Delete Log
+              </button>
+              <button type="submit" class="btn btn-primary">
+                Save Changes
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Remove existing edit modal if any
+  const existingModal = document.getElementById('editMaintenanceLogModal');
+  if (existingModal) {
+    existingModal.remove();
+  }
+
+  // Add new modal to body
+  document.body.insertAdjacentHTML('beforeend', modalContent);
+
+  // Show modal
+  const modal = document.getElementById('editMaintenanceLogModal');
+  modal.style.display = 'flex';
+  
+  // Add form submit handler
+  const form = document.getElementById('editMaintenanceLogForm');
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    saveEnhancedMaintenanceLog(assetId, logIndex, logId);
+  });
+  
+  // Add event listeners for clicking outside modal and escape key
+  modal.addEventListener('click', function(e) {
+    if (e.target === modal) {
+      cancelEditMaintenanceLogModal();
     }
   });
   
-  const displayDiv = document.getElementById(`${logId}_display`);
-  const editDiv = document.getElementById(`${logId}_edit`);
-  const textarea = document.getElementById(`${logId}_input`);
-  
-  if (displayDiv && editDiv && textarea) {
-    displayDiv.style.display = 'none';
-    editDiv.style.display = 'block';
-    
-    // Store original value for potential restoration
-    textarea.dataset.originalValue = displayDiv.textContent;
-    textarea.dataset.assetId = assetId;
-    textarea.dataset.logIndex = logIndex;
-    textarea.dataset.logId = logId;
-    
-    // Focus and select text in textarea
-    setTimeout(() => {
-      textarea.focus();
-      textarea.select();
-    }, 10);
-    
-    // Remove any existing click-outside listener and add new one
-    document.removeEventListener('click', handleClickOutside);
-    setTimeout(() => {
-      document.addEventListener('click', handleClickOutside);
-    }, 100); // Small delay to prevent immediate trigger
-  }
+  document.addEventListener('keydown', function escapeHandler(e) {
+    if (e.key === 'Escape') {
+      cancelEditMaintenanceLogModal();
+      document.removeEventListener('keydown', escapeHandler);
+    }
+  });
 }
+
 function handleClickOutside(event) {
   // Find all currently editing textareas
   const editingTextareas = document.querySelectorAll('textarea[id$="_input"]');
@@ -7212,31 +7452,101 @@ function handleClickOutside(event) {
   document.removeEventListener('click', handleClickOutside);
 }
 
-function cancelEditMaintenanceLog(logId) {
-  const displayDiv = document.getElementById(`${logId}_display`);
-  const editDiv = document.getElementById(`${logId}_edit`);
-  const textarea = document.getElementById(`${logId}_input`);
-  
-  if (displayDiv && editDiv && textarea) {
-    // Reset textarea to original value
-    const originalText = textarea.dataset.originalValue || displayDiv.textContent;
-    textarea.value = originalText;
-    
-    // Show display, hide edit
-    displayDiv.style.display = 'block';
-    editDiv.style.display = 'none';
-    
-    // Clear dataset
-    delete textarea.dataset.originalValue;
-    delete textarea.dataset.assetId;
-    delete textarea.dataset.logIndex;
-    delete textarea.dataset.logId;
-    
-    // Only remove click-outside listener if no other logs are being edited
-    const stillEditing = document.querySelectorAll('div[id$="_edit"][style*="block"]');
-    if (stillEditing.length === 0) {
-      document.removeEventListener('click', handleClickOutside);
+function cancelEditMaintenanceLogModal() {
+  const modal = document.getElementById('editMaintenanceLogModal');
+  if (modal) {
+    modal.remove();
+  }
+}
+
+async function saveEnhancedMaintenanceLog(assetId, logIndex, logId) {
+  try {
+    // Get the asset data to compare against current values
+    const asset = assets.find(a => a.id === assetId);
+    if (!asset) {
+      showNotification('error', 'Asset not found');
+      return;
     }
+    
+    // Get form values
+    const date = document.getElementById('editMaintenanceDate').value;
+    const user = document.getElementById('editMaintenanceUser').value.trim();
+    const description = document.getElementById('editMaintenanceDescription').value.trim();
+    const newLocation = document.getElementById('editMaintenanceNewLocation').value.trim();
+    const newSerial = document.getElementById('editMaintenanceNewSerial').value.trim();
+    const statusEl = document.querySelector('input[name="editAssetStatus"]:checked');
+    
+    if (!date || !user || !description) {
+      showNotification('warning', 'Date, user, and description are required');
+      return;
+    }
+    
+    if (!statusEl) {
+      showNotification('warning', 'Please select a status option');
+      return;
+    }
+    
+    const statusValue = statusEl.value;
+    
+    // Only include location if it's different from current location
+    let locationToUpdate = null;
+    const currentLocation = asset.location || '';
+    if (newLocation !== currentLocation) {
+      locationToUpdate = newLocation || null;
+    }
+    
+    // Only include serial if it's different from current serial
+    let serialToUpdate = null;
+    const currentSerial = asset.serial || '';
+    if (newSerial !== currentSerial) {
+      serialToUpdate = newSerial || null;
+    }
+    
+    // Prepare the data for the enhanced maintenance update
+    const updateData = {
+      logIndex: logIndex,
+      date: date,
+      user: user,
+      description: description,
+      newLocation: locationToUpdate,
+      newSerial: serialToUpdate,
+      markOOC: statusValue === 'ooc',
+      unmarkOOC: statusValue === 'clearooc',
+      markMissing: statusValue === 'missing',
+      unmarkMissing: statusValue === 'clearmissing'
+    };
+    
+    // Call the enhanced update API
+    const response = await apiCall(`/api/assets/${encodeURIComponent(assetId)}/maintenance-log-enhanced/${logIndex}`, 'PUT', updateData);
+    
+    if (response.success) {
+      showNotification('success', 'Maintenance log updated successfully');
+      cancelEditMaintenanceLogModal();
+      
+      // Refresh the maintenance log modal
+      const asset = assets.find(a => a.id === assetId);
+      if (asset) {
+        // Force reload from server to get fresh data
+        const assetsResponse = await apiCall('/api/assets');
+        if (assetsResponse.success) {
+          assets = assetsResponse.data;
+          const updatedAsset = assets.find(a => a.id === assetId);
+          if (updatedAsset) {
+            showMaintenanceLogModal(updatedAsset);
+          }
+        }
+      }
+    }
+  } catch (error) {
+    showNotification('error', `Failed to update maintenance log: ${error.message}`);
+    console.error('Error updating maintenance log:', error);
+  }
+}
+
+function deleteMaintenanceLogFromModal(assetId, logIndex, logId) {
+  if (confirm('Are you sure you want to delete this maintenance log entry? This action cannot be undone.')) {
+    cancelEditMaintenanceLogModal();
+    deleteMaintenanceLog(assetId, logIndex, logId);
   }
 }
 

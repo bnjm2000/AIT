@@ -1723,7 +1723,7 @@ def get_assets():
                 'isOOC': asset.is_ooc,
                 'defaultLocation': asset.default_location,
                 'currentLocation': asset.current_location,
-                'maintenanceLogs': asset.maintenance_logs[-5:]  # Last 5 logs
+                'maintenanceLogs': asset.maintenance_logs
             })
 
         return jsonify({'success': True, 'data': assets_data})
@@ -1954,8 +1954,25 @@ def maintain_asset(asset_id):
             # If no date provided, use current date
             formatted_date = datetime.now().strftime("%Y/%m/%d")
 
-        # Add maintenance log with the specified or current date
-        entry = f"{formatted_date}\t{session['user']}\t{log_entry_text}"
+        # Build status changes information
+        status_changes = []
+        if new_location:
+            status_changes.append(f"Location: {new_location}")
+        if new_serial:
+            status_changes.append(f"Serial: {new_serial}")
+        if mark_ooc:
+            status_changes.append("Marked OOC")
+        elif unmark_ooc:
+            status_changes.append("Cleared OOC")
+        if mark_missing:
+            status_changes.append("Marked Missing")
+        elif unmark_missing:
+            status_changes.append("Cleared Missing")
+        
+        # Create enhanced log entry with status changes
+        status_text = f" [{', '.join(status_changes)}]" if status_changes else ""
+        entry = f"{formatted_date}\t{session['user']}\t{log_entry_text}{status_text}"
+        
         asset.maintenance_logs.append(entry)
 
         # Update location if provided
@@ -2003,12 +2020,12 @@ def maintain_asset(asset_id):
         logger.error(f"Traceback: {traceback.format_exc()}")
         return jsonify({'error': f'Failed to log maintenance: {str(e)}'}), 500
 
-@app.route('/api/assets/<asset_id>/maintenance-log/<int:log_index>', methods=['PUT'])
+@app.route('/api/assets/<asset_id>/maintenance-log-enhanced/<int:log_index>', methods=['PUT'])
 @require_auth
-def update_maintenance_log(asset_id, log_index):
-    """Update a specific maintenance log entry"""
+def update_maintenance_log_enhanced(asset_id, log_index):
+    """Update a maintenance log entry with enhanced options"""
     try:
-        logger.info(f"Received maintenance log update request for asset: '{asset_id}', log index: {log_index}")
+        logger.info(f"Received enhanced maintenance log update request for asset: '{asset_id}', log index: {log_index}")
         
         # URL decode the asset_id in case it has special characters
         from urllib.parse import unquote
@@ -2021,87 +2038,95 @@ def update_maintenance_log(asset_id, log_index):
         data = request.get_json()
         if not data:
             return jsonify({'error': 'No data provided'}), 400
-            
+        
+        # Validate required fields
+        new_date = data.get('date')
+        new_user = data.get('user')
         new_description = data.get('description')
-        if not new_description or not new_description.strip():
-            return jsonify({'error': 'Description is required'}), 400
+        
+        if not all([new_date, new_user, new_description]):
+            return jsonify({'error': 'Date, user, and description are required'}), 400
         
         new_description = new_description.strip()
+        new_user = new_user.strip()
         
         # Check if log index is valid
         if not asset.maintenance_logs or log_index < 0 or log_index >= len(asset.maintenance_logs):
             return jsonify({'error': 'Invalid log index'}), 400
         
-        # Parse the existing log entry
-        log_parts = asset.maintenance_logs[log_index].split('\t')
-        if len(log_parts) < 3:
-            return jsonify({'error': 'Invalid log format'}), 400
+        # Convert date format from YYYY-MM-DD to YYYY/MM/DD
+        try:
+            parsed_date = datetime.strptime(new_date, '%Y-%m-%d')
+            formatted_date = parsed_date.strftime("%Y/%m/%d")
+        except ValueError:
+            return jsonify({'error': 'Invalid date format'}), 400
         
-        # Keep date and user, update description
-        original_date = log_parts[0]
-        original_user = log_parts[1]
-        original_description = '\t'.join(log_parts[2:])  # In case description contained tabs
+        # Get original log for logging purposes
+        original_log = asset.maintenance_logs[log_index]
+        original_parts = original_log.split('\t')
+        original_description = '\t'.join(original_parts[2:]) if len(original_parts) >= 3 else original_log
         
-        # Create updated log entry
-        updated_log = f"{original_date}\t{original_user}\t{new_description}"
+        # Handle additional updates
+        changes_made = []
+        
+        # Update location ONLY if provided and different
+        new_location = data.get('newLocation')
+        if new_location is not None and new_location.strip():
+            old_location = asset.current_location or ''
+            new_location_clean = new_location.strip()
+            if new_location_clean != old_location:
+                asset.current_location = new_location_clean
+                changes_made.append(f"Location: {asset.current_location}")
+        
+        # Update serial ONLY if provided and different
+        new_serial = data.get('newSerial')
+        if new_serial is not None and new_serial.strip():
+            old_serial = asset.serial_number or ''
+            new_serial_clean = new_serial.strip()
+            if new_serial_clean != old_serial:
+                asset.serial_number = new_serial_clean
+                changes_made.append(f"Serial: {asset.serial_number}")
+        
+        # Handle status changes
+        mark_ooc = data.get('markOOC', False)
+        unmark_ooc = data.get('unmarkOOC', False)
+        mark_missing = data.get('markMissing', False)
+        unmark_missing = data.get('unmarkMissing', False)
+        
+        if mark_ooc and not asset.is_ooc:
+            asset.is_ooc = True
+            changes_made.append("Marked OOC")
+        elif unmark_ooc and asset.is_ooc:
+            asset.is_ooc = False
+            changes_made.append("Cleared OOC")
+            
+        if mark_missing and not asset.is_missing:
+            asset.is_missing = True
+            changes_made.append("Marked Missing")
+        elif unmark_missing and asset.is_missing:
+            asset.is_missing = False
+            changes_made.append("Cleared Missing")
+        
+        # Create updated log entry with status changes
+        status_text = f" [{', '.join(changes_made)}]" if changes_made else ""
+        updated_log = f"{formatted_date}\t{new_user}\t{new_description}{status_text}"
         asset.maintenance_logs[log_index] = updated_log
         
         # Save changes
         data_manager.save_inventory()
         
         # Log the action
-        log_action(f"Updated maintenance log for asset {asset_id}: '{original_description}' -> '{new_description}' (edited by {session['user']})")
+        changes_text = f" (also: {', '.join(changes_made)})" if changes_made else ""
+        log_action(f"Updated maintenance log for asset {asset_id}: '{original_description}' -> '{new_description}'{changes_text} (edited by {session['user']})")
         
-        logger.info(f"Successfully updated maintenance log for asset {asset_id}")
+        logger.info(f"Successfully updated enhanced maintenance log for asset {asset_id}")
         return jsonify({'success': True, 'message': 'Maintenance log updated successfully'})
         
     except Exception as e:
-        logger.error(f"Error updating maintenance log for asset {asset_id}: {e}")
+        logger.error(f"Error updating enhanced maintenance log for asset {asset_id}: {e}")
         import traceback
         logger.error(f"Traceback: {traceback.format_exc()}")
         return jsonify({'error': f'Failed to update maintenance log: {str(e)}'}), 500
-
-@app.route('/api/assets/<asset_id>/maintenance-log/<int:log_index>', methods=['DELETE'])
-@require_auth
-def delete_maintenance_log(asset_id, log_index):
-    """Delete a specific maintenance log entry"""
-    try:
-        logger.info(f"Received maintenance log delete request for asset: '{asset_id}', log index: {log_index}")
-        
-        # URL decode the asset_id in case it has special characters
-        from urllib.parse import unquote
-        asset_id = unquote(asset_id)
-        
-        asset = data_manager.inventory.get(asset_id)
-        if not asset:
-            return jsonify({'error': 'Asset not found'}), 404
-        
-        # Check if log index is valid
-        if not asset.maintenance_logs or log_index < 0 or log_index >= len(asset.maintenance_logs):
-            return jsonify({'error': 'Invalid log index'}), 400
-        
-        # Get the log entry that will be deleted for logging purposes
-        deleted_log = asset.maintenance_logs[log_index]
-        log_parts = deleted_log.split('\t')
-        deleted_description = '\t'.join(log_parts[2:]) if len(log_parts) >= 3 else deleted_log
-        
-        # Remove the log entry
-        asset.maintenance_logs.pop(log_index)
-        
-        # Save changes
-        data_manager.save_inventory()
-        
-        # Log the action
-        log_action(f"Deleted maintenance log for asset {asset_id}: '{deleted_description}' (deleted by {session['user']})")
-        
-        logger.info(f"Successfully deleted maintenance log for asset {asset_id}")
-        return jsonify({'success': True, 'message': 'Maintenance log deleted successfully'})
-        
-    except Exception as e:
-        logger.error(f"Error deleting maintenance log for asset {asset_id}: {e}")
-        import traceback
-        logger.error(f"Traceback: {traceback.format_exc()}")
-        return jsonify({'error': f'Failed to delete maintenance log: {str(e)}'}), 500
 
 @app.route('/api/search', methods=['GET'])
 @require_auth
