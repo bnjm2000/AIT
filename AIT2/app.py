@@ -904,6 +904,90 @@ def update_event(event_id):
         logger.error(f"Error updating event: {e}")
         return jsonify({'error': 'Failed to update event'}), 500
 
+@app.route('/api/assets/<asset_id>/maintenance-log/<int:log_index>', methods=['DELETE'])
+@require_auth
+def delete_maintenance_log(asset_id, log_index):
+    """Delete a specific maintenance log entry and recalculate asset status"""
+    try:
+        logger.info(f"Received maintenance log delete request for asset: '{asset_id}', log index: {log_index}")
+        
+        # URL decode the asset_id in case it has special characters
+        from urllib.parse import unquote
+        asset_id = unquote(asset_id)
+        
+        asset = data_manager.inventory.get(asset_id)
+        if not asset:
+            return jsonify({'error': 'Asset not found'}), 404
+        
+        # Check if log index is valid
+        if not asset.maintenance_logs or log_index < 0 or log_index >= len(asset.maintenance_logs):
+            return jsonify({'error': 'Invalid log index'}), 400
+        
+        # Get the log entry that will be deleted for logging purposes
+        deleted_log = asset.maintenance_logs[log_index]
+        log_parts = deleted_log.split('\t')
+        deleted_description = '\t'.join(log_parts[2:]) if len(log_parts) >= 3 else deleted_log
+        
+        # Remove the log entry
+        asset.maintenance_logs.pop(log_index)
+        
+        # Recalculate asset status based on remaining logs
+        recalculate_asset_status_from_logs(asset)
+        
+        # Save changes
+        data_manager.save_inventory()
+        
+        # Log the action
+        log_action(f"Deleted maintenance log for asset {asset_id}: '{deleted_description}' (deleted by {session['user']})")
+        
+        logger.info(f"Successfully deleted maintenance log for asset {asset_id}")
+        return jsonify({'success': True, 'message': 'Maintenance log deleted successfully'})
+        
+    except Exception as e:
+        logger.error(f"Error deleting maintenance log for asset {asset_id}: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        return jsonify({'error': f'Failed to delete maintenance log: {str(e)}'}), 500
+
+def recalculate_asset_status_from_logs(asset):
+    """Recalculate asset OOC and Missing status based on maintenance logs"""
+    try:
+        # Reset status to defaults
+        asset.is_ooc = False
+        asset.is_missing = False
+        
+        # Process logs in chronological order to determine final status
+        for log_entry in asset.maintenance_logs:
+            parts = log_entry.split('\t')
+            if len(parts) >= 3:
+                description = '\t'.join(parts[2:])
+                
+                # Check for status changes in the log description
+                if '[' in description and ']' in description:
+                    # Extract status changes from brackets
+                    import re
+                    status_match = re.search(r'\[(.*?)\]', description)
+                    if status_match:
+                        status_changes = status_match.group(1)
+                        
+                        # Apply status changes - check for various forms
+                        if any(term in status_changes for term in ['Marked OOC', 'Mark OOC']):
+                            asset.is_ooc = True
+                        elif any(term in status_changes for term in ['Cleared OOC', 'Clear OOC', 'Removed OOC', 'Unmark OOC']):
+                            asset.is_ooc = False
+                            
+                        if any(term in status_changes for term in ['Marked Missing', 'Mark Missing']):
+                            asset.is_missing = True
+                        elif any(term in status_changes for term in ['Cleared Missing', 'Clear Missing', 'Removed Missing', 'Unmark Missing']):
+                            asset.is_missing = False
+        
+        logger.info(f"Asset {asset.asset_id} status recalculated: OOC={asset.is_ooc}, Missing={asset.is_missing}")
+        
+    except Exception as e:
+        logger.error(f"Error recalculating asset status for {asset.asset_id}: {e}")
+        # If recalculation fails, leave status unchanged
+        pass
+
 @app.route('/api/events/<int:event_id>', methods=['DELETE'])
 @require_admin
 def delete_event(event_id):
@@ -1282,12 +1366,16 @@ def unprepare_event_asset(event_id):
         if not hasattr(event, 'actually_prepared'):
             event.actually_prepared = []
 
-        # Check if asset is prepared
+        # Check if asset is assigned to this event first
+        if asset_id not in event.prepared_items:
+            return jsonify({'error': 'Asset is not assigned to this event'}), 400
+
+        # Check if asset is already unprepared
         if asset_id not in event.actually_prepared:
-            return jsonify({'error': 'Asset is not prepared'}), 400
+            return jsonify({'success': True, 'message': f'Asset {asset_id} is already unprepared'})
 
         # LOG THE UNPREPARE ACTION
-        log_asset_change(event_id, asset_id, "UNPREPARING", "removing from actually_prepared but keeping in event", "unprepare_event_asset")
+        log_asset_change(event_id, asset_id, "UNPREPARING", "removing from actually_prepared but keeping in event [unprepare_event_asset]")
 
         # Remove from prepared list BUT KEEP IN prepared_items (don't unassign)
         event.actually_prepared.remove(asset_id)
@@ -1536,7 +1624,7 @@ def unassign_specific_asset_from_model(event_id):
 
         # Check if asset is assigned
         if asset_id not in event.actually_prepared:
-            return jsonify({'error': 'Asset is not assigned to this event'}), 400
+            return jsonify({'error': 'Asset is not currently prepared for this event'}), 400
 
         # Remove from actually_prepared
         event.actually_prepared.remove(asset_id)
@@ -1954,8 +2042,9 @@ def maintain_asset(asset_id):
             # If no date provided, use current date
             formatted_date = datetime.now().strftime("%Y/%m/%d")
 
-        # Build status changes information
+        # Build status changes information - INITIALIZE HERE
         status_changes = []
+        
         if new_location:
             status_changes.append(f"Location: {new_location}")
         if new_serial:
@@ -2039,6 +2128,8 @@ def update_maintenance_log_enhanced(asset_id, log_index):
         if not data:
             return jsonify({'error': 'No data provided'}), 400
         
+        logger.info(f"Enhanced update data: {data}")
+        
         # Validate required fields
         new_date = data.get('date')
         new_user = data.get('user')
@@ -2066,7 +2157,7 @@ def update_maintenance_log_enhanced(asset_id, log_index):
         original_parts = original_log.split('\t')
         original_description = '\t'.join(original_parts[2:]) if len(original_parts) >= 3 else original_log
         
-        # Handle additional updates
+        # Handle additional updates - INITIALIZE changes_made HERE
         changes_made = []
         
         # Update location ONLY if provided and different
@@ -2077,6 +2168,7 @@ def update_maintenance_log_enhanced(asset_id, log_index):
             if new_location_clean != old_location:
                 asset.current_location = new_location_clean
                 changes_made.append(f"Location: {asset.current_location}")
+                logger.info(f"Updated location from '{old_location}' to '{new_location_clean}'")
         
         # Update serial ONLY if provided and different
         new_serial = data.get('newSerial')
@@ -2086,6 +2178,7 @@ def update_maintenance_log_enhanced(asset_id, log_index):
             if new_serial_clean != old_serial:
                 asset.serial_number = new_serial_clean
                 changes_made.append(f"Serial: {asset.serial_number}")
+                logger.info(f"Updated serial from '{old_serial}' to '{new_serial_clean}'")
         
         # Handle status changes
         mark_ooc = data.get('markOOC', False)
@@ -2093,23 +2186,50 @@ def update_maintenance_log_enhanced(asset_id, log_index):
         mark_missing = data.get('markMissing', False)
         unmark_missing = data.get('unmarkMissing', False)
         
-        if mark_ooc and not asset.is_ooc:
-            asset.is_ooc = True
-            changes_made.append("Marked OOC")
-        elif unmark_ooc and asset.is_ooc:
-            asset.is_ooc = False
-            changes_made.append("Cleared OOC")
-            
-        if mark_missing and not asset.is_missing:
-            asset.is_missing = True
-            changes_made.append("Marked Missing")
-        elif unmark_missing and asset.is_missing:
-            asset.is_missing = False
-            changes_made.append("Cleared Missing")
+        logger.info(f"Status change flags: markOOC={mark_ooc}, unmarkOOC={unmark_ooc}, markMissing={mark_missing}, unmarkMissing={unmark_missing}")
+        logger.info(f"Current asset status: OOC={asset.is_ooc}, Missing={asset.is_missing}")
+        
+        # Apply OOC status changes
+        if mark_ooc:
+            if not asset.is_ooc:
+                asset.is_ooc = True
+                changes_made.append("Marked OOC")
+                logger.info("Marked asset as OOC")
+            else:
+                logger.info("Asset already OOC, no change needed")
+        elif unmark_ooc:
+            if asset.is_ooc:
+                asset.is_ooc = False
+                changes_made.append("Cleared OOC")
+                logger.info("Cleared OOC status")
+            else:
+                logger.info("Asset not OOC, no change needed")
+                
+        # Apply Missing status changes
+        if mark_missing:
+            if not asset.is_missing:
+                asset.is_missing = True
+                changes_made.append("Marked Missing")
+                logger.info("Marked asset as Missing")
+            else:
+                logger.info("Asset already Missing, no change needed")
+        elif unmark_missing:
+            if asset.is_missing:
+                asset.is_missing = False
+                changes_made.append("Cleared Missing")
+                logger.info("Cleared Missing status")
+            else:
+                logger.info("Asset not Missing, no change needed")
+        
+        logger.info(f"Final changes made: {changes_made}")
+        logger.info(f"Final asset status: OOC={asset.is_ooc}, Missing={asset.is_missing}")
         
         # Create updated log entry with status changes
         status_text = f" [{', '.join(changes_made)}]" if changes_made else ""
         updated_log = f"{formatted_date}\t{new_user}\t{new_description}{status_text}"
+        
+        logger.info(f"Updated log entry: {updated_log}")
+        
         asset.maintenance_logs[log_index] = updated_log
         
         # Save changes

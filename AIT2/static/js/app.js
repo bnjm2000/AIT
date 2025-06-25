@@ -389,6 +389,7 @@ function createEventCard(event) {
         <div class="event-actions">
             <button class="btn btn-primary" onclick="viewEvent(${event.id})">View Assets</button>
             <button class="btn btn-warning" onclick="editEvent(${event.id})">Edit</button>
+            <button class="btn btn-danger" onclick="deleteEvent(${event.id})">Delete</button>
         </div>
     `;
 
@@ -581,26 +582,24 @@ function displayInventoryTable(assetsToShow) {
     }</span></td>
                 <td>${asset.location || "Store"}</td>
                 <td>
-                    <label class="ooc-toggle">
-                        <input type="checkbox" ${asset.isOOC ? 'checked' : ''} 
-                               onchange="toggleOOCStatus('${asset.id}', this.checked)"
-                               ${asset.status === 'deployed' ? 'disabled title="Cannot change OOC status while asset is deployed"' : ''}>
-                        <span class="ooc-slider"></span>
-                    </label>
+                    <span class="asset-badge ${asset.isOOC ? 'status-ooc' : 'status-available'}">
+                        ${asset.isOOC ? 'Out of Commission' : 'Available'}
+                    </span>
                 </td>
                 <td>
-                    <button class="btn btn-primary" onclick="viewAsset('${
-                      asset.id
-                    }')">View</button>
-                    <button class="btn btn-warning" onclick="editAsset('${
-                      asset.id
-                    }')">Edit</button>
+                    <button class="btn btn-primary btn-sm" onclick="viewMaintenanceLog('${asset.id}')" title="View maintenance log">
+                        View Log
+                    </button>
                 </td>
             </tr>
         `;
   });
 
-  tableHTML += "</tbody></table>";
+  tableHTML += `
+            </tbody>
+        </table>
+    `;
+
   container.innerHTML = tableHTML;
 }
 
@@ -4948,7 +4947,7 @@ document.addEventListener("DOMContentLoaded", function () {
         name: document.getElementById("eventName").value,
         startDate: document.getElementById("eventStartDate").value,
         endDate: document.getElementById("eventEndDate").value,
-        tag: document.getElementById("editEventTag").value,
+        tag: document.getElementById("eventTag").value,
       };
 
       try {
@@ -5098,7 +5097,7 @@ document.addEventListener("DOMContentLoaded", function () {
         name: document.getElementById("editEventName").value,
         startDate: document.getElementById("editEventStartDate").value,
         endDate: document.getElementById("editEventEndDate").value,
-        tag: document.getElementById("editEventTag").value,
+        tag: document.getElementById("eventTag").value,
       };
 
       try {
@@ -6695,13 +6694,13 @@ function showMaintenanceLogModal(asset) {
       // Parse description and status changes
       let mainDescription = log.description;
       let statusChanges = '';
-      
+
       const statusMatch = log.description.match(/^(.*?)(\s*\[.*?\]\s*)$/);
       if (statusMatch) {
         mainDescription = statusMatch[1].trim();
         statusChanges = statusMatch[2].trim().replace(/^\[|\]$/g, ''); // Remove the brackets
       }
-      
+
       // Format status changes for display
       let statusChangesDisplay = '';
       if (statusChanges) {
@@ -6710,22 +6709,25 @@ function showMaintenanceLogModal(asset) {
           let color = '#667eea'; // Default blue
           let icon = '';
           
-          if (change.toLowerCase().includes('marked ooc')) {
+          // More comprehensive status change detection
+          const changeLower = change.toLowerCase();
+          
+          if (changeLower.includes('marked ooc') || changeLower.includes('mark ooc')) {
             color = '#dc3545';
             icon = '⚠️';
-          } else if (change.toLowerCase().includes('cleared ooc')) {
+          } else if (changeLower.includes('cleared ooc') || changeLower.includes('clear ooc') || changeLower.includes('removed ooc') || changeLower.includes('unmark ooc')) {
             color = '#28a745';
             icon = '✅';
-          } else if (change.toLowerCase().includes('marked missing')) {
+          } else if (changeLower.includes('marked missing') || changeLower.includes('mark missing')) {
             color = '#fd7e14';
             icon = '❌';
-          } else if (change.toLowerCase().includes('cleared missing')) {
+          } else if (changeLower.includes('cleared missing') || changeLower.includes('clear missing') || changeLower.includes('removed missing') || changeLower.includes('unmark missing')) {
             color = '#28a745';
             icon = '✅';
-          } else if (change.toLowerCase().includes('location:')) {
+          } else if (changeLower.includes('location:')) {
             color = '#17a2b8';
             icon = '📍';
-          } else if (change.toLowerCase().includes('serial:')) {
+          } else if (changeLower.includes('serial:')) {
             color = '#6f42c1';
             icon = '🔢';
           }
@@ -6750,11 +6752,16 @@ function showMaintenanceLogModal(asset) {
             ${statusChangesDisplay}
           </td>
           <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; vertical-align: top; text-align: center;">
-            <button onclick="deleteMaintenanceLog('${asset.id}', ${log.originalIndex}, '${logId}')" 
-                    style="background: none; border: none; color: #dc3545; cursor: pointer; font-size: 16px; padding: 2px; border-radius: 3px; line-height: 1;"
-                    title="Delete this maintenance log"
-                    onmouseover="this.style.backgroundColor='#ffebee'"
-                    onmouseout="this.style.backgroundColor='transparent'">
+            <button 
+              type="button"
+              class="delete-log-btn" 
+              data-asset-id="${asset.id}"
+              data-log-index="${log.originalIndex}"
+              data-log-id="${logId}"
+              style="background: none; border: none; color: #dc3545; cursor: pointer; font-size: 16px; padding: 4px; border-radius: 3px; line-height: 1; width: 24px; height: 24px;"
+              title="Delete this maintenance log"
+              onmouseover="this.style.backgroundColor='#ffebee'"
+              onmouseout="this.style.backgroundColor='transparent'">
               ×
             </button>
           </td>
@@ -6816,10 +6823,28 @@ function showMaintenanceLogModal(asset) {
     }
   });
   
-  // Debug: Check if modal was created correctly
+  // Add event listeners for delete buttons
+
   setTimeout(() => {
-    const tableRows = modal.querySelectorAll('tbody tr');
-    console.log('Table rows found in DOM:', tableRows.length);
+    const deleteButtons = modal.querySelectorAll('.delete-log-btn');
+    console.log('Found delete buttons:', deleteButtons.length);
+    
+    deleteButtons.forEach((button, index) => {
+      console.log(`Setting up delete button ${index}:`, button.dataset);
+      
+      // Remove any existing click handlers and use a single handler
+      button.onclick = function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        const assetId = this.dataset.assetId;
+        const logIndex = parseInt(this.dataset.logIndex);
+        const logId = this.dataset.logId;
+        
+        console.log('Delete button clicked via onclick:', { assetId, logIndex, logId });
+        deleteMaintenanceLog(assetId, logIndex, logId);
+      };
+    });
   }, 100);
 }
 
@@ -6840,51 +6865,339 @@ function addNewLogEntryFromModal(assetId) {
   openMaintenanceModalForAsset(assetId);
 }
 
-// Delete maintenance log function
 async function deleteMaintenanceLog(assetId, logIndex, logId) {
-  // Show confirmation dialog
-  if (!confirm('Are you sure you want to delete this maintenance log entry? This action cannot be undone.')) {
+  console.log('Delete button clicked!');
+  console.log('Parameters:', { assetId, logIndex, logId });
+  
+  // Show custom confirmation dialog
+  const shouldDelete = await showCustomConfirm(
+    'Delete Maintenance Log', 
+    'Are you sure you want to delete this maintenance log entry? This action cannot be undone and will recalculate the asset status.'
+  );
+  
+  if (!shouldDelete) {
+    console.log('User cancelled deletion');
     return;
   }
+  
+  console.log('User confirmed deletion, proceeding...');
   
   try {
     console.log(`Attempting to delete log at index ${logIndex} for asset ${assetId}`);
     
     const encodedAssetId = encodeURIComponent(assetId);
-    await apiCall(`/api/assets/${encodedAssetId}/maintenance-log/${logIndex}`, 'DELETE');
+    const url = `/api/assets/${encodedAssetId}/maintenance-log/${logIndex}`;
+    console.log('API URL:', url);
     
-    showNotification('success', 'Maintenance log deleted');
+    const response = await apiCall(url, 'DELETE');
+    console.log('API Response:', response);
     
-    // Find the asset in our local assets array and refresh from server
-    const localAsset = assets.find(a => a.id === assetId);
-    if (localAsset) {
+    if (response && response.success) {
+      showNotification('success', 'Maintenance log deleted and asset status updated');
+      
+      // Force reload from server to get fresh data including updated status
       try {
-        // Force reload from server to get fresh data
-        const response = await apiCall('/api/assets');
-        if (response.success) {
+        const assetsResponse = await apiCall('/api/assets');
+        if (assetsResponse.success) {
           // Update the global assets array
-          assets = response.data;
+          assets = assetsResponse.data;
           const updatedAsset = assets.find(a => a.id === assetId);
           if (updatedAsset) {
+            // Close any existing edit modals first
+            const editModal = document.getElementById('editMaintenanceLogModal');
+            if (editModal) {
+              editModal.remove();
+            }
+            
+            // Show refreshed maintenance log modal
             showMaintenanceLogModal(updatedAsset);
           }
         } else {
-          // If reload fails, just close and reopen the modal
           closeMaintenanceLogModal();
           showNotification('info', 'Please refresh the page to see updated logs');
         }
       } catch (reloadError) {
         console.warn('Could not reload asset data:', reloadError);
-        // If reload fails, just close the modal
         closeMaintenanceLogModal();
-        showNotification('info', 'Log deleted. Please refresh the page to see updated logs');
+        showNotification('info', 'Log deleted. Please refresh the page to see updated logs and asset status');
       }
+    } else {
+      console.error('API returned error or no response:', response);
+      showNotification('error', (response && response.message) || 'Failed to delete maintenance log');
     }
     
   } catch (error) {
     console.error('Error deleting maintenance log:', error);
     showNotification('error', `Failed to delete maintenance log: ${error.message}`);
   }
+}
+
+// Add this improved custom confirmation function
+function showCustomConfirm(title, message) {
+  return new Promise((resolve) => {
+    // Remove any existing confirmation modals
+    const existingModal = document.getElementById('customConfirmModal');
+    if (existingModal) {
+      existingModal.remove();
+    }
+    
+    // Create confirmation modal with higher z-index
+    const confirmModalHTML = `
+      <div id="customConfirmModal" style="
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.6);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+        backdrop-filter: blur(2px);
+      ">
+        <div style="
+          background: white;
+          border-radius: 12px;
+          padding: 30px;
+          max-width: 450px;
+          width: 90%;
+          text-align: center;
+          box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+          border: 1px solid rgba(255, 255, 255, 0.2);
+          animation: confirmFadeIn 0.2s ease-out;
+        ">
+          <div style="
+            width: 60px;
+            height: 60px;
+            background: #fee;
+            border-radius: 50%;
+            margin: 0 auto 20px auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: #dc3545;
+          ">⚠️</div>
+          <h3 style="
+            margin: 0 0 15px 0; 
+            color: #333; 
+            font-size: 20px;
+            font-weight: 600;
+          ">${title}</h3>
+          <p style="
+            margin: 0 0 30px 0; 
+            color: #666; 
+            line-height: 1.5;
+            font-size: 15px;
+          ">${message}</p>
+          <div style="
+            display: flex; 
+            gap: 15px; 
+            justify-content: center;
+          ">
+            <button id="confirmCancel" style="
+              background: #6c757d;
+              color: white;
+              border: none;
+              padding: 12px 24px;
+              border-radius: 6px;
+              cursor: pointer;
+              font-size: 14px;
+              font-weight: 500;
+              transition: background-color 0.2s;
+            " onmouseover="this.style.backgroundColor='#5a6268'" 
+               onmouseout="this.style.backgroundColor='#6c757d'">
+              Cancel
+            </button>
+            <button id="confirmDelete" style="
+              background: #dc3545;
+              color: white;
+              border: none;
+              padding: 12px 24px;
+              border-radius: 6px;
+              cursor: pointer;
+              font-size: 14px;
+              font-weight: 500;
+              transition: background-color 0.2s;
+            " onmouseover="this.style.backgroundColor='#c82333'" 
+               onmouseout="this.style.backgroundColor='#dc3545'">
+              Delete
+            </button>
+          </div>
+        </div>
+      </div>
+      
+      <style>
+        @keyframes confirmFadeIn {
+          from {
+            opacity: 0;
+            transform: scale(0.9);
+          }
+          to {
+            opacity: 1;
+            transform: scale(1);
+          }
+        }
+      </style>
+    `;
+    
+    // Add modal to body
+    document.body.insertAdjacentHTML('beforeend', confirmModalHTML);
+    
+    // Get modal and buttons
+    const modal = document.getElementById('customConfirmModal');
+    const cancelBtn = document.getElementById('confirmCancel');
+    const deleteBtn = document.getElementById('confirmDelete');
+    
+    // Function to clean up and resolve
+    const cleanup = (result) => {
+      if (modal && modal.parentNode) {
+        modal.remove();
+      }
+      document.removeEventListener('keydown', escapeHandler);
+      resolve(result);
+    };
+    
+    // Handle cancel
+    cancelBtn.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      cleanup(false);
+    };
+    
+    // Handle delete
+    deleteBtn.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      cleanup(true);
+    };
+    
+    // Handle click outside (only on the backdrop)
+    modal.onclick = (e) => {
+      if (e.target === modal) {
+        cleanup(false);
+      }
+    };
+    
+    // Handle escape key
+    const escapeHandler = (e) => {
+      if (e.key === 'Escape') {
+        cleanup(false);
+      }
+    };
+    document.addEventListener('keydown', escapeHandler);
+    
+    // Focus the cancel button by default
+    setTimeout(() => {
+      cancelBtn.focus();
+    }, 100);
+  });
+}
+
+// Add this custom confirmation function
+function showCustomConfirm(message) {
+  return new Promise((resolve) => {
+    // Create confirmation modal
+    const confirmModalHTML = `
+      <div id="customConfirmModal" style="
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 2000;
+      ">
+        <div style="
+          background: white;
+          border-radius: 8px;
+          padding: 30px;
+          max-width: 400px;
+          width: 90%;
+          text-align: center;
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        ">
+          <h3 style="margin: 0 0 15px 0; color: #333;">Confirm Delete</h3>
+          <p style="margin: 0 0 25px 0; color: #666; line-height: 1.4;">${message}</p>
+          <div style="display: flex; gap: 15px; justify-content: center;">
+            <button id="confirmCancel" style="
+              background: #6c757d;
+              color: white;
+              border: none;
+              padding: 10px 20px;
+              border-radius: 5px;
+              cursor: pointer;
+              font-size: 14px;
+            ">Cancel</button>
+            <button id="confirmDelete" style="
+              background: #dc3545;
+              color: white;
+              border: none;
+              padding: 10px 20px;
+              border-radius: 5px;
+              cursor: pointer;
+              font-size: 14px;
+            ">Delete</button>
+          </div>
+        </div>
+      </div>
+    `;
+    
+    // Add modal to body
+    document.body.insertAdjacentHTML('beforeend', confirmModalHTML);
+    
+    // Get modal and buttons
+    const modal = document.getElementById('customConfirmModal');
+    const cancelBtn = document.getElementById('confirmCancel');
+    const deleteBtn = document.getElementById('confirmDelete');
+    
+    // Handle cancel
+    cancelBtn.onclick = () => {
+      modal.remove();
+      resolve(false);
+    };
+    
+    // Handle delete
+    deleteBtn.onclick = () => {
+      modal.remove();
+      resolve(true);
+    };
+    
+    // Handle click outside
+    modal.onclick = (e) => {
+      if (e.target === modal) {
+        modal.remove();
+        resolve(false);
+      }
+    };
+    
+    // Handle escape key
+    const escapeHandler = (e) => {
+      if (e.key === 'Escape') {
+        modal.remove();
+        document.removeEventListener('keydown', escapeHandler);
+        resolve(false);
+      }
+    };
+    document.addEventListener('keydown', escapeHandler);
+  });
+}
+
+function deleteMaintenanceLogFromModal(assetId, logIndex, logId) {
+  console.log('Delete Log button clicked from modal:', { assetId, logIndex, logId });
+  
+  // Close the edit modal first
+  const editModal = document.getElementById('editMaintenanceLogModal');
+  if (editModal) {
+    editModal.remove();
+  }
+  
+  // Then call the delete function
+  deleteMaintenanceLog(assetId, logIndex, logId);
 }
 
 // Toggle select all OOC assets
@@ -7305,8 +7618,6 @@ function editMaintenanceLog(assetId, logIndex, logId) {
               >${escapeHtml(currentDescription)}</textarea>
             </div>
 
-            // In the editMaintenanceLog function, change these two input fields:
-
             <!-- New Location -->
             <div class="form-group">
               <label class="form-label">Update Location (optional)</label>
@@ -7367,6 +7678,7 @@ function editMaintenanceLog(assetId, logIndex, logId) {
               >
                 Cancel
               </button>
+
               <button 
                 type="button" 
                 class="btn btn-danger" 
@@ -7487,6 +7799,7 @@ async function saveEnhancedMaintenanceLog(assetId, logIndex, logId) {
     }
     
     const statusValue = statusEl.value;
+    console.log('Status value selected:', statusValue);
     
     // Only include location if it's different from current location
     let locationToUpdate = null;
@@ -7516,6 +7829,8 @@ async function saveEnhancedMaintenanceLog(assetId, logIndex, logId) {
       unmarkMissing: statusValue === 'clearmissing'
     };
     
+    console.log('Sending update data:', updateData);
+    
     // Call the enhanced update API
     const response = await apiCall(`/api/assets/${encodeURIComponent(assetId)}/maintenance-log-enhanced/${logIndex}`, 'PUT', updateData);
     
@@ -7540,13 +7855,6 @@ async function saveEnhancedMaintenanceLog(assetId, logIndex, logId) {
   } catch (error) {
     showNotification('error', `Failed to update maintenance log: ${error.message}`);
     console.error('Error updating maintenance log:', error);
-  }
-}
-
-function deleteMaintenanceLogFromModal(assetId, logIndex, logId) {
-  if (confirm('Are you sure you want to delete this maintenance log entry? This action cannot be undone.')) {
-    cancelEditMaintenanceLogModal();
-    deleteMaintenanceLog(assetId, logIndex, logId);
   }
 }
 
@@ -7836,11 +8144,20 @@ async function initializeApp() {
   try {
     // Set today's date as default for event forms
     const today = new Date().toISOString().split("T")[0];
+    
+    // Check if elements exist before setting values
     const startDateEl = document.getElementById("eventStartDate");
     const endDateEl = document.getElementById("eventEndDate");
 
     if (startDateEl) startDateEl.value = today;
     if (endDateEl) endDateEl.value = today;
+
+    // Also set defaults for edit form if it exists
+    const editStartDateEl = document.getElementById("editEventStartDate");
+    const editEndDateEl = document.getElementById("editEventEndDate");
+    
+    if (editStartDateEl) editStartDateEl.value = today;
+    if (editEndDateEl) editEndDateEl.value = today;
 
     // Add a small delay to ensure all DOM elements are ready
     setTimeout(async () => {
