@@ -2664,9 +2664,9 @@ async function viewEvent(eventId) {
           <div style="margin-bottom: 25px;">
             <div style="display: flex; justify-content: space-between; align-items: center; padding: 15px; background: #f8f9fa; border-radius: 8px 8px 0 0; border-bottom: 1px solid #e9ecef; cursor: pointer;" onclick="toggleViewSection('individual-assets')">
               <h4 style="margin: 0; color: #495057; font-size: 16px;">📋 Individual Assets</h4>
-              <span class="toggle-icon" style="font-size: 18px; font-weight: bold; color: #666;">▼</span>
+              <span class="toggle-icon" style="font-size: 18px; font-weight: bold; color: #666;">▶</span>
             </div>
-            <div id="individual-assets" style="border: 1px solid #e9ecef; border-top: none; border-radius: 0 0 8px 8px;">
+            <div id="individual-assets" style="display: none; border: 1px solid #e9ecef; border-top: none; border-radius: 0 0 8px 8px;">
         `;
 
         Object.keys(event.assetsByDepartment).sort().forEach((dept) => {
