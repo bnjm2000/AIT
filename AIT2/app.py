@@ -1242,7 +1242,7 @@ def prepare_event_asset(event_id):
 @app.route('/api/events/<int:event_id>/unprepare', methods=['POST'])
 @require_auth
 def unprepare_event_asset(event_id):
-    """Mark an asset as unprepared (uncheck from grocery list)"""
+    """Mark an asset as unprepared and unassign it from the event"""
     try:
         event = data_manager.events.get(event_id)
         if not event:
@@ -1264,6 +1264,14 @@ def unprepare_event_asset(event_id):
 
         # Remove from prepared list
         event.actually_prepared.remove(asset_id)
+        
+        # Also remove from prepared_items (completely unassign)
+        if asset_id in event.prepared_items:
+            event.prepared_items.remove(asset_id)
+            
+        # Remove from extra_assets if it's there
+        if hasattr(event, 'extra_assets') and asset_id in event.extra_assets:
+            event.extra_assets.remove(asset_id)
 
         # For regular assets, reset location
         if not (asset_id.startswith('[LOAN]') or asset_id.startswith('[MISC]')):
@@ -1281,13 +1289,12 @@ def unprepare_event_asset(event_id):
         # Invalidate cache
         invalidate_cache()
 
-        log_action(f"Unprepared asset {asset_id} from event {event_id}")
+        log_action(f"Unprepared and unassigned asset {asset_id} from event {event_id}")
 
-        return jsonify({'success': True, 'message': f'Asset {asset_id} unprepared'})
+        return jsonify({'success': True, 'message': f'Asset {asset_id} unprepared and unassigned'})
     except Exception as e:
         logger.error(f"Error unpreparing asset from event {event_id}: {e}")
         return jsonify({'error': 'Failed to unprepare asset'}), 500
-
 
 @app.route('/api/events/<int:event_id>/return', methods=['POST'])
 @require_auth
