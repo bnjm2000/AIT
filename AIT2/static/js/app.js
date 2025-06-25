@@ -2565,9 +2565,11 @@ async function viewEvent(eventId) {
         
         content += `
             <div style="border: 1px solid #e9ecef; border-radius: 8px; margin-bottom: 15px; overflow: hidden;">
-                <div style="background: #f8f9fa; padding: 10px 15px; font-weight: 500; font-size: 14px; border-bottom: 1px solid #e9ecef;">
-                    ${escapeHtml(dept)} Department
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 15px; background: #f8f9fa; border-bottom: 1px solid #e9ecef; cursor: pointer;" onclick="toggleViewSection('model-dept-${dept}')">
+                    <div style="font-weight: 500; font-size: 14px;">${escapeHtml(dept)} Department</div>
+                    <span class="toggle-icon" style="font-size: 14px; font-weight: bold; color: #666;">▼</span>
                 </div>
+                <div id="model-dept-${dept}" style="display: block;">
         `;
 
         models.forEach((model, index) => {
@@ -2641,7 +2643,7 @@ async function viewEvent(eventId) {
           content += '</div></div>';
         });
 
-        content += '</div>';
+        content += '</div><div>';
       });
 
       content += '</div>';
@@ -2658,7 +2660,14 @@ async function viewEvent(eventId) {
       });
 
       if (hasIndividualAssets) {
-        content += '<div style="margin-bottom: 25px;"><h4 style="color: #495057; margin-bottom: 15px; font-size: 16px;">📋 Individual Assets</h4>';
+        content += `
+          <div style="margin-bottom: 25px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 15px; background: #f8f9fa; border-radius: 8px 8px 0 0; border-bottom: 1px solid #e9ecef; cursor: pointer;" onclick="toggleViewSection('individual-assets')">
+              <h4 style="margin: 0; color: #495057; font-size: 16px;">📋 Individual Assets</h4>
+              <span class="toggle-icon" style="font-size: 18px; font-weight: bold; color: #666;">▼</span>
+            </div>
+            <div id="individual-assets" style="border: 1px solid #e9ecef; border-top: none; border-radius: 0 0 8px 8px;">
+        `;
 
         Object.keys(event.assetsByDepartment).sort().forEach((dept) => {
           const assets = event.assetsByDepartment[dept];
@@ -2666,11 +2675,12 @@ async function viewEvent(eventId) {
           
           if (individualAssets.length > 0) {
             content += `
-                <div style="border: 1px solid #e9ecef; border-radius: 8px; margin-bottom: 15px; overflow: hidden;">
-                    <div style="background: #f8f9fa; padding: 8px 15px; font-weight: 500; font-size: 14px; border-bottom: 1px solid #e9ecef;">
-                        ${escapeHtml(dept)} Department (${individualAssets.length})
+                <div style="border-bottom: 1px solid #f1f1f1; overflow: hidden;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 15px; background: #f8f9fa; border-bottom: 1px solid #e9ecef; cursor: pointer;" onclick="toggleViewSection('dept-${dept}')">
+                        <div style="font-weight: 500; font-size: 14px;">${escapeHtml(dept)} Department (${individualAssets.length})</div>
+                        <span class="toggle-icon" style="font-size: 14px; font-weight: bold; color: #666;">▼</span>
                     </div>
-                    <div style="padding: 10px 15px;">
+                    <div id="dept-${dept}" style="display: block; padding: 10px 15px;">
                         <div style="display: grid; gap: 8px;">
             `;
 
@@ -2769,6 +2779,21 @@ async function viewEvent(eventId) {
   }
 }
 
+function toggleViewSection(sectionId) {
+    const section = document.getElementById(sectionId);
+    const toggleIcon = event.target.closest('[onclick]').querySelector('.toggle-icon');
+    
+    if (section && toggleIcon) {
+        if (section.style.display === 'none') {
+            section.style.display = 'block';
+            toggleIcon.textContent = '▼';
+        } else {
+            section.style.display = 'none';
+            toggleIcon.textContent = '▶';
+        }
+    }
+}
+
 function toggleModelDetailsInView(modelId) {
   const detailsDiv = document.getElementById(modelId);
   const toggleIcon = document.querySelector(`[data-model-id="${modelId}"].toggle-icon`);
@@ -2801,6 +2826,7 @@ function toggleModelDetails(modelId) {
     toggleIcon.textContent = "▼";
   }
 }
+
 async function loadMaintenanceAssets() {
   try {
     const response = await apiCall("/api/assets");
