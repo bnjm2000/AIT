@@ -5532,6 +5532,9 @@ document.addEventListener("DOMContentLoaded", function () {
       const logEntry = document.getElementById("maintenanceLogEntry").value.trim();
       const maintenanceDate = document.getElementById("maintenanceDate").value;
       const newLocation = document.getElementById("maintenanceNewLocation").value.trim();
+
+      const newSerialElement = document.getElementById("maintenanceNewSerial");
+      const newSerial = newSerialElement ? newSerialElement.value.trim() : '';
       
       // Get asset status from radio buttons
       const statusEl = document.querySelector('input[name="assetStatus"]:checked');
@@ -5562,13 +5565,14 @@ document.addEventListener("DOMContentLoaded", function () {
         for (const assetId of selectedMaintenanceAssets) {
           try {
             const maintenanceData = {
-              logEntry,
-              maintenanceDate,  // Include the selected date
+              logEntry: logEntry,
+              maintenanceDate: maintenanceDate,
               newLocation: newLocation || null,
+              newSerial: newSerial || null,
               markOOC: statusValue === 'ooc',
-              unmarkOOC: false,
+              unmarkOOC: statusValue === 'clearooc',
               markMissing: statusValue === 'missing',
-              unmarkMissing: false
+              unmarkMissing: statusValue === 'clearmissing'
             };
             
             // Encode the asset ID for the URL
@@ -6843,14 +6847,14 @@ function showMaintenanceLogModal(asset) {
               Maintenance History - Total: ${asset.maintenanceLogs ? asset.maintenanceLogs.length : 0} entries
             </h4>
             <div style="flex: 1; overflow-y: scroll; border: 1px solid #e9ecef; border-radius: 8px; background: white;">
-              <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+             <table style="width: 100%; border-collapse: collapse; font-size: 14px; table-layout: fixed;">
                 <thead style="position: sticky; top: 0; background: #f8f9fa; z-index: 10; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
                   <tr>
                     <th style="padding: 12px; font-weight: 600; color: #495057; border-bottom: 2px solid #e9ecef; text-align: left; background: #f8f9fa; width: 50px;">#</th>
                     <th style="padding: 12px; font-weight: 600; color: #495057; border-bottom: 2px solid #e9ecef; text-align: left; background: #f8f9fa; width: 110px;">Date</th>
                     <th style="padding: 12px; font-weight: 600; color: #495057; border-bottom: 2px solid #e9ecef; text-align: left; background: #f8f9fa; width: 100px;">User</th>
                     <th style="padding: 12px; font-weight: 600; color: #495057; border-bottom: 2px solid #e9ecef; text-align: left; background: #f8f9fa;">Description</th>
-                    <th style="padding: 12px; font-weight: 600; color: #495057; border-bottom: 2px solid #e9ecef; text-align: left; background: #f8f9fa; width: 140px;">Status Changes</th>
+                    <th style="padding: 12px; font-weight: 600; color: #495057; border-bottom: 2px solid #e9ecef; text-align: left; background: #f8f9fa; width: 200px;">Status Changes</th>
                     <th style="padding: 12px; font-weight: 600; color: #495057; border-bottom: 2px solid #e9ecef; width: 50px; text-align: center; background: #f8f9fa;"></th>
                   </tr>
                 </thead>
@@ -6884,10 +6888,13 @@ function showMaintenanceLogModal(asset) {
       let mainDescription = log.description;
       let statusChanges = '';
 
-      const statusMatch = log.description.match(/^(.*?)(\s*\[.*?\]\s*)$/);
-      if (statusMatch) {
-        mainDescription = statusMatch[1].trim();
-        statusChanges = statusMatch[2].trim().replace(/^\[|\]$/g, ''); // Remove the brackets
+      // Only look for status changes if brackets exist
+      if (log.description.includes('[') && log.description.includes(']')) {
+        const statusMatch = log.description.match(/^(.*?)(\s*\[.*?\]\s*)$/s);
+        if (statusMatch) {
+          mainDescription = statusMatch[1].trim();
+          statusChanges = statusMatch[2].trim().replace(/^\[|\]$/g, ''); // Remove the brackets
+        }
       }
 
       // Format status changes for display
@@ -6937,7 +6944,7 @@ function showMaintenanceLogModal(asset) {
               ${escapeHtml(mainDescription)}
             </div>
           </td>
-          <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; vertical-align: top;">
+          <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; vertical-align: top; word-wrap: break-word; overflow-wrap: break-word; max-width: 200px;">
             ${statusChangesDisplay}
           </td>
           <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; vertical-align: top; text-align: center;">
@@ -7713,13 +7720,25 @@ function editMaintenanceLog(assetId, logIndex, logId) {
   // Extract status changes from description if they exist
   let currentDescription = descriptionWithStatus;
   let existingStatusChanges = '';
-  
-  // Check if description contains status changes in brackets
-  const statusMatch = descriptionWithStatus.match(/^(.*?)(\s*\[.*?\]\s*)$/);
-  if (statusMatch) {
-    currentDescription = statusMatch[1].trim();
-    existingStatusChanges = statusMatch[2].trim();
+  let logLocationFromThisEntry = null; 
+  let hasLocationChangeInThisLog = false;
+
+  // Only look for status changes if brackets exist
+  if (descriptionWithStatus.includes('[') && descriptionWithStatus.includes(']')) {
+    const statusMatch = descriptionWithStatus.match(/^(.*?)(\s*\[.*?\]\s*)$/s);
+    if (statusMatch) {
+      currentDescription = statusMatch[1].trim();
+      existingStatusChanges = statusMatch[2].trim();
+      
+      // Extract location from this specific log's status changes
+      const locationMatch = existingStatusChanges.match(/Location:\s*([^,\]]+)/i);
+      if (locationMatch) {
+        logLocationFromThisEntry = locationMatch[1].trim();
+        hasLocationChangeInThisLog = true;
+      }
+    }
   }
+
   
   // Convert date format from YYYY/MM/DD to YYYY-MM-DD for HTML date input
   const dateForInput = currentDate.replace(/\//g, '-');
@@ -7814,8 +7833,8 @@ function editMaintenanceLog(assetId, logIndex, logId) {
                 type="text"
                 class="form-input"
                 id="editMaintenanceNewLocation"
-                placeholder="Leave blank to keep current location (${escapeHtml(asset.location || 'Store')})"
-                value=""
+                placeholder="Leave blank to keep ${hasLocationChangeInThisLog ? 'location from this log (' + escapeHtml(logLocationFromThisEntry || 'Store') + ')' : 'no location change'}"
+                value="${hasLocationChangeInThisLog ? escapeHtml(logLocationFromThisEntry || '') : ''}"
               />
             </div>
 
@@ -7989,14 +8008,33 @@ async function saveEnhancedMaintenanceLog(assetId, logIndex, logId) {
     
     const statusValue = statusEl.value;
     console.log('Status value selected:', statusValue);
-    
-    // Only include location if it's different from current location
-    let locationToUpdate = null;
-    const currentLocation = asset.location || '';
-    if (newLocation !== currentLocation) {
-      locationToUpdate = newLocation || null;
+
+    // Extract the original location from this specific log for comparison
+    let originalLogLocation = null;
+    let hadLocationChangeOriginally = false;
+    const logEntry = asset.maintenanceLogs[logIndex];
+    if (logEntry) {
+      const logParts = logEntry.split('\t');
+      const logDescription = logParts.slice(2).join('\t') || '';
+      const locationMatch = logDescription.match(/\[.*?Location:\s*([^,\]]+)/i);
+      if (locationMatch) {
+        originalLogLocation = locationMatch[1].trim();
+        hadLocationChangeOriginally = true;
+      }
     }
-    
+
+    // Handle location logic
+    let locationToUpdate = null;
+    const newLocationClean = newLocation.trim();
+
+    if (newLocationClean) {
+      // User entered a new location - always use it
+      locationToUpdate = newLocationClean;
+    } else if (hadLocationChangeOriginally) {
+
+      locationToUpdate = originalLogLocation;
+    }
+
     // Only include serial if it's different from current serial
     let serialToUpdate = null;
     const currentSerial = asset.serial || '';

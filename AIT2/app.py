@@ -1028,17 +1028,33 @@ def delete_maintenance_log(asset_id, log_index):
         return jsonify({'error': f'Failed to delete maintenance log: {str(e)}'}), 500
 
 def recalculate_asset_status_from_logs(asset):
-    """Recalculate asset OOC and Missing status based on maintenance logs"""
+    """Recalculate asset OOC, Missing status, and location based on maintenance logs"""
     try:
         # Reset status to defaults
         asset.is_ooc = False
         asset.is_missing = False
+        # Don't reset location here - we'll update it based on logs
         
-        # Process logs in chronological order to determine final status
-        for log_entry in asset.maintenance_logs:
+        # Sort logs by date to ensure chronological processing
+        sorted_logs = []
+        for i, log_entry in enumerate(asset.maintenance_logs):
+            parts = log_entry.split('\t')
+            if len(parts) >= 3:
+                date_str = parts[0]
+                sorted_logs.append((date_str, i, log_entry))
+        
+        # Sort by date (YYYY/MM/DD format sorts correctly as strings)
+        sorted_logs.sort(key=lambda x: x[0])
+        
+        logger.info(f"Processing {len(sorted_logs)} logs for {asset.asset_id} in chronological order")
+        
+        # Process logs in chronological order to determine final status and location
+        for date_str, log_index, log_entry in sorted_logs:
             parts = log_entry.split('\t')
             if len(parts) >= 3:
                 description = '\t'.join(parts[2:])
+                
+                logger.info(f"Processing log {log_index} ({date_str}): {description[:50]}...")
                 
                 # Check for status changes in the log description
                 if '[' in description and ']' in description:
@@ -1051,15 +1067,29 @@ def recalculate_asset_status_from_logs(asset):
                         # Apply status changes - check for various forms
                         if any(term in status_changes for term in ['Marked OOC', 'Mark OOC']):
                             asset.is_ooc = True
+                            logger.info(f"  -> Marked OOC")
                         elif any(term in status_changes for term in ['Cleared OOC', 'Clear OOC', 'Removed OOC', 'Unmark OOC']):
                             asset.is_ooc = False
+                            logger.info(f"  -> Cleared OOC")
                             
                         if any(term in status_changes for term in ['Marked Missing', 'Mark Missing']):
                             asset.is_missing = True
+                            logger.info(f"  -> Marked Missing")
                         elif any(term in status_changes for term in ['Cleared Missing', 'Clear Missing', 'Removed Missing', 'Unmark Missing']):
                             asset.is_missing = False
+                            logger.info(f"  -> Cleared Missing")
+                        
+                        # Update location based on location changes in logs
+                        location_match = re.search(r'Location:\s*([^,\]]+)', status_changes)
+                        if location_match:
+                            new_location = location_match.group(1).strip()
+                            if new_location == 'Store':
+                                asset.current_location = ''  # Store is represented as empty
+                            else:
+                                asset.current_location = new_location
+                            logger.info(f"  -> Location updated to: '{new_location}' (stored as: '{asset.current_location}')")
         
-        logger.info(f"Asset {asset.asset_id} status recalculated: OOC={asset.is_ooc}, Missing={asset.is_missing}")
+        logger.info(f"Asset {asset.asset_id} final status: OOC={asset.is_ooc}, Missing={asset.is_missing}, Location='{asset.current_location or 'Store'}'")
         
     except Exception as e:
         logger.error(f"Error recalculating asset status for {asset.asset_id}: {e}")
@@ -2238,16 +2268,32 @@ def update_maintenance_log_enhanced(asset_id, log_index):
         # Handle additional updates - INITIALIZE changes_made HERE
         changes_made = []
         
-        # Update location ONLY if provided and different
+        # Handle location changes - preserve original log's location if not explicitly changed
         new_location = data.get('newLocation')
-        if new_location is not None and new_location.strip():
-            old_location = asset.current_location or ''
-            new_location_clean = new_location.strip()
-            if new_location_clean != old_location:
-                asset.current_location = new_location_clean
-                changes_made.append(f"Location: {asset.current_location}")
-                logger.info(f"Updated location from '{old_location}' to '{new_location_clean}'")
-        
+
+        # First, check what location change was originally in this specific log
+        original_log_location_change = None
+        original_log = asset.maintenance_logs[log_index]
+        if original_log:
+            original_parts = original_log.split('\t')
+            original_description = '\t'.join(original_parts[2:]) if len(original_parts) >= 3 else ''
+            if '[' in original_description and ']' in original_description:
+                import re
+                location_match = re.search(r'Location:\s*([^,\]]+)', original_description)
+                if location_match:
+                    original_log_location_change = location_match.group(1).strip()
+
+        if new_location is not None:
+            # User provided a location (even if empty string, meaning they want to set it explicitly)
+            new_location_clean = new_location.strip() if new_location.strip() else 'Store'
+            changes_made.append(f"Location: {new_location_clean}")
+            logger.info(f"User set location to: '{new_location_clean}'")
+        elif original_log_location_change is not None:
+            # User didn't provide location, but original log had a location change - preserve it
+            changes_made.append(f"Location: {original_log_location_change}")
+            logger.info(f"Preserved original location change: '{original_log_location_change}'")
+        # If neither condition is met, no location change is added to the log
+
         # Update serial ONLY if provided and different
         new_serial = data.get('newSerial')
         if new_serial is not None and new_serial.strip():
@@ -2276,12 +2322,13 @@ def update_maintenance_log_enhanced(asset_id, log_index):
             else:
                 logger.info("Asset already OOC, no change needed")
         elif unmark_ooc:
+            # Always add to changes_made when explicitly clearing, even if already clear
+            changes_made.append("Cleared OOC")
             if asset.is_ooc:
                 asset.is_ooc = False
-                changes_made.append("Cleared OOC")
                 logger.info("Cleared OOC status")
             else:
-                logger.info("Asset not OOC, no change needed")
+                logger.info("Confirmed OOC status cleared (was already clear)")
                 
         # Apply Missing status changes
         if mark_missing:
@@ -2292,12 +2339,13 @@ def update_maintenance_log_enhanced(asset_id, log_index):
             else:
                 logger.info("Asset already Missing, no change needed")
         elif unmark_missing:
+            # Always add to changes_made when explicitly clearing, even if already clear
+            changes_made.append("Cleared Missing")
             if asset.is_missing:
                 asset.is_missing = False
-                changes_made.append("Cleared Missing")
                 logger.info("Cleared Missing status")
             else:
-                logger.info("Asset not Missing, no change needed")
+                logger.info("Confirmed Missing status cleared (was already clear)")
         
         logger.info(f"Final changes made: {changes_made}")
         logger.info(f"Final asset status: OOC={asset.is_ooc}, Missing={asset.is_missing}")
@@ -2309,10 +2357,12 @@ def update_maintenance_log_enhanced(asset_id, log_index):
         logger.info(f"Updated log entry: {updated_log}")
         
         asset.maintenance_logs[log_index] = updated_log
-        
+
+        recalculate_asset_status_from_logs(asset)
+
         # Save changes
         data_manager.save_inventory()
-        
+
         # Log the action
         changes_text = f" (also: {', '.join(changes_made)})" if changes_made else ""
         log_action(f"Updated maintenance log for asset {asset_id}: '{original_description}' -> '{new_description}'{changes_text} (edited by {session['user']})")

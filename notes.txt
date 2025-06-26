@@ -11,5 +11,4 @@
 -rental asset for event
 -undo button
 -dry hire cables
--icon beside all events for overdue 
 -ability to force status to ongoing as admin even if event not fully prepared
