@@ -6,6 +6,8 @@ import json
 from datetime import datetime
 from collections import defaultdict
 import logging
+import threading
+import time
 
 # Import your existing modules
 from models import User, InventoryItem, Container, Event, LogEntry, hash_password, format_date_output
@@ -127,6 +129,9 @@ def get_assigned_assets():
 def update_event_state(event):
     """Update the state of an event based on its prepared and returned items"""
     try:
+        # Get current date for overdue checks
+        current_date = datetime.now().strftime('%Y%m%d')
+        
         # Initialize actually_prepared if it doesn't exist
         if not hasattr(event, 'actually_prepared'):
             event.actually_prepared = []
@@ -153,7 +158,7 @@ def update_event_state(event):
                             required_quantity = int(parts[3])
                       
                             total_model_requirements += required_quantity
-                            
+                       
                             # Count specific assets assigned to this model
                             assigned_to_this_model = 0
                             returned_for_this_model = 0
@@ -176,8 +181,12 @@ def update_event_state(event):
                         logger.error(f"Error parsing model assignment {item_id}: {e}")
                         continue
             
-            # Apply model-based state logic
-            if total_model_requirements == 0:
+            # Apply model-based state logic WITH OVERDUE CHECKING FIRST
+            # CHECK FOR OVERDUE FIRST - this takes priority over other states
+            if (total_specific_assignments > total_returned and 
+                current_date > event.end_date):
+                event.state = 'Overdue'
+            elif total_model_requirements == 0:
                 event.state = 'Added'
             elif total_specific_assignments == 0:
                 event.state = 'Planning'
@@ -185,7 +194,6 @@ def update_event_state(event):
                 event.state = 'Preparing'
             elif total_specific_assignments == total_model_requirements and total_returned == 0:
                 # Check if ready event is within its date range to make it ongoing
-                current_date = datetime.now().strftime('%Y%m%d')
                 if event.start_date <= current_date <= event.end_date:
                     event.state = 'Ongoing'
                 else:
@@ -197,19 +205,22 @@ def update_event_state(event):
             else:
                 event.state = 'Planning'
         else:
-            # Use old logic for events without model assignments - DON'T CHANGE THEIR STATE
-            # Only update state if it's a very basic check
-            total_assets = len(event.prepared_items)
+            # Use logic for events without model assignments
+            total_assets = len([item for item in event.prepared_items if not item.startswith('[MODEL]')])
+            total_prepared = len([item for item in event.actually_prepared if item not in event.returned_items])
+            total_returned = len(event.returned_items)
             
-            if total_assets == 0 and event.state == 'Added':
-                # Keep as Added if no assets and currently Added
-                pass
-            # Don't modify state for events without model assignments
-            
-        logger.info(f"Updated event {event.event_id} state to: {event.state}")
-        
+            # Check for overdue status in non-model events too
+            if (total_prepared > total_returned and 
+                total_assets > 0 and 
+                current_date > event.end_date and 
+                event.state in ['Ongoing', 'Returning', 'Ready']):
+                event.state = 'Overdue'
+                
     except Exception as e:
-        logger.error(f"Error updating event state for event {getattr(event, 'event_id', 'unknown')}: {e}")
+        logger.error(f"Error updating event state for event {getattr(event, 'event_id', 'Unknown')}: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
 
 def cleanup_extra_assets(event):
     """Clean up the extra_assets list - ONLY call this when explicitly needed, not on every view"""
@@ -264,6 +275,44 @@ def cleanup_extra_assets(event):
     
     logger.warning(f"CLEANUP: After cleanup - Extra assets: {event.extra_assets}")
 
+def schedule_ongoing_check():
+    """Run the ongoing event check in a background thread"""
+    logger.info("Background thread started - checking events every 5 minutes")
+    
+    # Wait for data_manager to be initialized
+    while data_manager is None:
+        logger.info("Background thread: Waiting for data_manager to be initialized...")
+        time.sleep(5)
+    
+    logger.info("Background thread: data_manager is ready, starting checks")
+    
+    while True:
+        try:
+            if data_manager is not None and hasattr(data_manager, 'events'):
+                logger.info("Background thread: Starting scheduled event state check")
+                check_and_update_ongoing_events()
+                logger.info("Background thread: Completed scheduled event state check")
+            else:
+                logger.warning("Background thread: data_manager.events not available, skipping check")
+            
+            time.sleep(300)  # Check every 5 minutes for testing (change to 3600 for production)
+        except Exception as e:
+            logger.error(f"Background thread error: {e}")
+            import traceback
+            logger.error(f"Background thread traceback: {traceback.format_exc()}")
+            time.sleep(300)  # Continue running even if there's an error
+
+def start_background_thread():
+    """Start the background thread for event checking"""
+    try:
+        ongoing_thread = threading.Thread(target=schedule_ongoing_check, daemon=True)
+        ongoing_thread.start()
+        logger.info("Background thread for event checking started successfully")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to start background thread: {e}")
+        return False
+
 def init_data_manager():
     """Initialize the data manager with the configured data folder"""
     global data_manager
@@ -286,12 +335,19 @@ def init_data_manager():
         data_manager.check_and_initialize_files()
         data_manager.load_all_data()
         logger.info(f"Data manager initialized with folder: {data_folder}")
+        
+        # Start the background thread AFTER data_manager is initialized
+        background_started = start_background_thread()
+        if not background_started:
+            logger.warning("Background thread failed to start - automatic event updates disabled")
+        else:
+            logger.info("Background thread started successfully after data_manager initialization")
+            
     except Exception as e:
         logger.error(f"Failed to initialize data manager: {e}")
         raise
 
 # Routes
-
 
 @app.route('/')
 @require_auth
@@ -476,10 +532,6 @@ def get_event(event_id):
             event.actually_prepared = []
         if not hasattr(event, 'extra_assets'):
             event.extra_assets = []
-
-        logger.info(f"Loading event {event_id} - Extra assets: {event.extra_assets}")
-        logger.info(f"Loading event {event_id} - Actually prepared: {event.actually_prepared}")
-        logger.info(f"Loading event {event_id} - Prepared items: {event.prepared_items}")
 
         # Get detailed asset information grouped by department
         assets_by_department = defaultdict(list)
@@ -1581,10 +1633,10 @@ def assign_specific_asset_to_model(event_id):
             event.actually_prepared.append(asset_id)
             logger.info(f"Added {asset_id} to actually_prepared. List now: {event.actually_prepared}")
 
-        # Log final state before saving
-        logger.info(f"Final state before saving:")
-        logger.info(f"  Actually prepared: {event.actually_prepared}")
-        logger.info(f"  Extra assets: {event.extra_assets}")
+        # Log final state before saving (DEBUG)
+        # logger.info(f"Final state before saving:")
+        # logger.info(f"  Actually prepared: {event.actually_prepared}")
+        # logger.info(f"  Extra assets: {event.extra_assets}")
 
         # Update event state
         update_event_state(event)
@@ -2430,51 +2482,70 @@ def handle_exception(e):
     return jsonify({'error': 'An unexpected error occurred'}), 500
 
 def check_and_update_ongoing_events():
-    """Periodically check if ready events should become ongoing"""
+    """Periodically check if ready events should become ongoing or overdue"""
     try:
+        if data_manager is None:
+            logger.warning("data_manager is None, cannot check events")
+            return
+            
+        if not hasattr(data_manager, 'events') or data_manager.events is None:
+            logger.warning("data_manager.events is None or missing, cannot check events")
+            return
+            
         current_date = datetime.now().strftime('%Y%m%d')
         updated_count = 0
         
+        logger.info(f"Checking {len(data_manager.events)} events for state updates (current date: {current_date})")
+        
         for event in data_manager.events.values():
-            if (event.state == 'Ready' and 
-                event.start_date <= current_date <= event.end_date):
-                
-                old_state = event.state
-                update_event_state(event)
-                
-                if event.state != old_state:
-                    data_manager.save_event(event)
-                    updated_count += 1
-                    logger.info(f"Event {event.event_id} state changed from {old_state} to {event.state}")
+            old_state = event.state
+            
+            # Log event details for debugging overdue detection
+            has_unreturned = len(getattr(event, 'actually_prepared', [])) > len(getattr(event, 'returned_items', []))
+            is_past_end = current_date > event.end_date
+            
+            # (DEBUG)
+            # logger.info(f"Event {event.event_id}: {event.name}")
+            # logger.info(f"  State: {old_state}, End: {event.end_date}, Current: {current_date}")
+            # logger.info(f"  Past end date: {is_past_end}, Has unreturned assets: {has_unreturned}")
+            # logger.info(f"  Actually prepared: {len(getattr(event, 'actually_prepared', []))}, Returned: {len(getattr(event, 'returned_items', []))}")
+            
+            # Always call update_event_state to check for state changes
+            update_event_state(event)
+            
+            if event.state != old_state:
+                data_manager.save_event(event)
+                updated_count += 1
+                logger.info(f"  *** STATE CHANGED: {old_state} → {event.state} ***")
+            else:
+                logger.info(f"  No state change (remains {event.state})")
         
         if updated_count > 0:
             invalidate_cache()
-            logger.info(f"Updated {updated_count} events to ongoing status")
+            logger.info(f"Updated {updated_count} events (ongoing/overdue status)")
+        else:
+            logger.info("No events required state updates")
             
     except Exception as e:
-        logger.error(f"Error checking ongoing events: {e}")
-
-# Schedule this to run every hour (you can adjust the interval)
-import threading
-import time
-
-def schedule_ongoing_check():
-    """Run the ongoing event check in a background thread"""
-    while True:
-        time.sleep(3600)  # Check every hour
-        check_and_update_ongoing_events()
-
-# Start the background thread
-ongoing_thread = threading.Thread(target=schedule_ongoing_check, daemon=True)
-ongoing_thread.start()
+        logger.error(f"Error checking ongoing/overdue events: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
 
 if __name__ == '__main__':
     try:
         # Initialize data manager
         init_data_manager()
+        
+        # Start the background thread AFTER data_manager is initialized
+        background_started = start_background_thread()
+        if not background_started:
+            logger.warning("Background thread failed to start - automatic event updates disabled")
+        else:
+            logger.info("Background thread started successfully after data_manager initialization")
 
         # Run the Flask app
         app.run(debug=True, host='127.0.0.1', port=5000)
+        logger.info("app starteded")
     except Exception as e:
         logger.error(f"Failed to start application: {e}")
         raise

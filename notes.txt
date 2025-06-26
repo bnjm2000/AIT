@@ -1,0 +1,15 @@
+-when transferring items from one event to another, only show common assets, used to transfer prepared items
+-add new log no page refresh, add check to check status and assign to radio button
+-overdue status for events
+-view log in ooc 
+-view inventory allows user to view history of events as well as maintenance log
+-edit asset
+-making DO from event
+-maintenance date log not sorting by date
+
+-asset check shows all item of asset type and allows user to account for all assetID of that item
+-rental asset for event
+-undo button
+-dry hire cables
+-icon beside all events for overdue 
+-ability to force status to ongoing as admin even if event not fully prepared

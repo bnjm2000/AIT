@@ -268,6 +268,10 @@
         border-left-color: #6c757d;
       }
 
+      .event-card.state-overdue {
+        border-left-color: #dc3545;
+      }
+
       .event-header {
         display: flex;
         justify-content: space-between;
@@ -321,6 +325,11 @@
       .state-ready {
         background: #d4edda;
         color: #155724;
+      }
+
+      .state-overdue {
+        background: #f8abb2;
+        color: rgb(0, 0, 0);
       }
 
       .event-card.state-ongoing {
@@ -1002,6 +1011,21 @@
         color: #856404;
       }
 
+      @keyframes pulse {
+        0% {
+          transform: scale(1);
+          opacity: 1;
+        }
+        50% {
+          transform: scale(1.1);
+          opacity: 0.8;
+        }
+        100% {
+          transform: scale(1);
+          opacity: 1;
+        }
+      }
+
       @media (max-width: 480px) {
         .events-tabs {
           flex-direction: column !important;
@@ -1046,8 +1070,8 @@
             <button class="nav-item" onclick="showSection('prepare')">
               🔧 Prepare Events
             </button>
-            <button class="nav-item" onclick="showSection('return')">
-              ↩️ Return Assets
+            <button class="nav-item" onclick="showSection('return')" title="Return Assets - Click to view overdue items">
+              ↩️ Return Assets <span id="overdue-counter" style="background: #dc3545; color: white; border-radius: 50%; padding: 2px 8px; font-size: 12px; margin-left: 8px; display: none;" title="Overdue events requiring asset returns">0</span>
             </button>
             <button class="nav-item" onclick="showSection('transfer')">
               🔄 Transfer Assets
@@ -1376,6 +1400,12 @@
           <div id="return-section" class="content-section">
             <div class="content-header">
               <h2 class="content-title">Return Assets</h2>
+              <button
+                class="btn btn-warning"
+                onclick="openReturnAssetsModal()"
+              >
+                Return Asset
+              </button>
             </div>
 
             <div class="events-grid" id="return-events">
@@ -1856,6 +1886,21 @@
         </div>
         <div id="assetDetailsContent">
           <!-- Content will be populated dynamically -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Return Assets Modal -->
+    <div id="returnAssetsModalNew" class="modal">
+      <div class="modal-content" style="max-width: 900px">
+        <div class="modal-header">
+          <h2 id="returnAssetsTitle">Return Assets</h2>
+          <button class="close-btn" onclick="closeModal('returnAssetsModalNew')">
+            &times;
+          </button>
+        </div>
+        <div id="returnAssetsContentNew">
+          <!-- Content will be populated by JavaScript -->
         </div>
       </div>
     </div>

@@ -181,9 +181,9 @@ class DataManager:
                     if event_data.get('PreparedItems'):
                         try:
                             prepared_items_raw = event_data['PreparedItems']
-                            print(f"DEBUG: Parsing PreparedItems for {filename}: '{prepared_items_raw[:100]}...'")
+                            #print(f"DEBUG: Parsing PreparedItems for {filename}: '{prepared_items_raw[:100]}...'")
                             prepared_items = json.loads(prepared_items_raw)
-                            print(f"DEBUG: Successfully parsed {len(prepared_items)} prepared items for {filename}")
+                            #print(f"DEBUG: Successfully parsed {len(prepared_items)} prepared items for {filename}")
                         except json.JSONDecodeError as e:
                             print(f"ERROR: Failed to parse 'PreparedItems' in event file {filename}")
                             print(f"ERROR: JSON Error: {e}")
@@ -266,7 +266,7 @@ class DataManager:
                     event.extra_assets = extra_assets
                     event.tag = tag
                     
-                    print(f"DEBUG: Successfully loaded event {event_id} with {len(prepared_items)} prepared items")
+                    # print(f"DEBUG: Successfully loaded event {event_id} with {len(prepared_items)} prepared items")
                     
                     self.events[event_id] = event
                     self.event_file_map[event_id] = filename

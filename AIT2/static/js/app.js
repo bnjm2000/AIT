@@ -20,6 +20,26 @@ function escapeJs(str) {
   return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t');
 }
 
+// Update the overdue events counter
+function updateOverdueCounter(count) {
+    const counter = document.getElementById('overdue-counter');
+    if (counter) {
+        if (count > 0) {
+            counter.textContent = count;
+            counter.style.display = 'inline-block';
+            counter.style.background = '#dc3545'; // Red for overdue
+            counter.style.animation = 'pulse 2s infinite'; // Add pulsing animation
+        } else {
+            counter.style.display = 'none';
+        }
+    }
+}
+
+// Count overdue events from events data
+function countOverdueEvents(eventsData) {
+    return eventsData.filter(event => event.state === 'Overdue').length;
+}
+
 // Helper functions for event tags
 function getTagStyle(tag) {
     if (tag === 'dry hire') {
@@ -288,6 +308,11 @@ async function loadDashboard() {
   try {
     await apiCall('/api/events/update-states', 'POST');
     const response = await apiCall('/api/events');
+    
+    // Count and update overdue events counter
+    const overdueCount = countOverdueEvents(response.data);
+    updateOverdueCounter(overdueCount);
+    
     // Load stats
     const statsResponse = await apiCall("/api/stats");
     stats = statsResponse.data;
@@ -319,14 +344,18 @@ async function loadAllEvents() {
         const response = await apiCall('/api/events');
         events = response.data;
         
+        // Update overdue counter
+        const overdueCount = countOverdueEvents(events);
+        updateOverdueCounter(overdueCount);
+        
         const container = document.getElementById('all-events');
         container.innerHTML = '';
         
         if (events.length === 0) {
-            container.innerHTML = '<p style="text-align: center; color: #666; padding: 40px;">No events found. Create your first event!</p>';
+            container.innerHTML = '<p style="text-align: center; color: #666; padding: 40px;">No events found.</p>';
             return;
         }
-        
+
         events.forEach(event => {
             container.appendChild(createEventCard(event));
         });
@@ -684,9 +713,15 @@ async function loadLogs() {
 async function loadPrepareEvents() {
   try {
     const response = await apiCall("/api/events");
+    
+    // Update overdue counter
+    const overdueCount = countOverdueEvents(response.data);
+    updateOverdueCounter(overdueCount);
+    
     const preparableEvents = response.data.filter(
       (event) =>
         event.state !== "Closed" && // Allow all events except closed ones
+        event.state !== "Overdue" && // NEW: Exclude overdue events
         event.assetCount >= 0 // Include events with 0 assets too
     );
 
@@ -2273,6 +2308,11 @@ function clearUniversalFeedback() {
 async function loadReturnEvents() {
   try {
     const response = await apiCall("/api/events");
+    
+    // Update overdue counter
+    const overdueCount = countOverdueEvents(response.data);
+    updateOverdueCounter(overdueCount);
+    
     const returnableEvents = response.data.filter((event) => {
       const hasPreparedAssets = event.preparedCount > 0;
       const hasUnreturnedAssets = event.preparedCount > event.returnedCount;
@@ -2351,38 +2391,150 @@ function createReturnEventCard(event) {
   return card;
 }
 
-async function openReturnAssetsModal(eventId) {
+async function openReturnAssetsModal() {
     try {
-        const response = await apiCall(`/api/events/${eventId}`);
-        const event = response.data;
-        
-        document.getElementById('returnAssetsEventTitle').textContent = `Return Assets - Event ${event.id}: ${event.name}`;
-        
+        const response = await apiCall('/api/events');
+        const returnableEvents = response.data.filter(event => {
+            const hasPreparedAssets = event.preparedCount > 0;
+            const hasUnreturnedAssets = event.preparedCount > event.returnedCount;
+            return hasPreparedAssets && hasUnreturnedAssets && event.state !== 'Closed';
+        });
+
         let content = `
             <div class="return-assets-interface">
-                <!-- Event Summary -->
-                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
-                    <h4 style="margin-bottom: 10px; color: #495057;">Event Summary</h4>
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; text-align: center;">
-                        <div>
-                            <div style="font-size: 20px; font-weight: bold; color: #28a745;">${event.totalPrepared}</div>
-                            <div style="color: #666; font-size: 12px;">Prepared</div>
-                        </div>
-                        <div>
-                            <div style="font-size: 20px; font-weight: bold; color: #dc3545;">${event.totalReturned}</div>
-                            <div style="color: #666; font-size: 12px;">Returned</div>
-                        </div>
-                        <div>
-                            <div style="font-size: 20px; font-weight: bold; color: #ffc107;">${event.totalPrepared - event.totalReturned}</div>
-                            <div style="color: #666; font-size: 12px;">Still Out</div>
+                <!-- Event Selection -->
+                <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 25px;">
+                    <h4 style="margin-bottom: 15px; color: #495057;">Select Event to Return Assets From</h4>
+                    <div class="form-group">
+                        <select class="form-input" id="returnEventSelect" onchange="loadEventAssetsForReturn()">
+                            <option value="">Select an event...</option>
+        `;
+
+        returnableEvents.forEach(event => {
+            const dateRange = event.startDate === event.endDate 
+                ? new Date(event.startDate).toLocaleDateString()
+                : `${new Date(event.startDate).toLocaleDateString()} - ${new Date(event.endDate).toLocaleDateString()}`;
+            
+            const statusBadge = event.state === 'Overdue' ? ' 🔴 OVERDUE' : '';
+            const unreturned = event.preparedCount - event.returnedCount;
+            
+            content += `
+                <option value="${event.id}">
+                    Event ${event.id}: ${event.name} (${unreturned} assets to return) ${statusBadge}
+                </option>
+            `;
+        });
+
+        content += `
+                        </select>
+                    </div>
+                    <div id="event-summary" style="display: none; margin-top: 15px; padding: 15px; background: white; border-radius: 6px; border: 1px solid #e9ecef;">
+                        <!-- Event summary will be populated when event is selected -->
+                    </div>
+                </div>
+
+                <!-- Assets to Return (hidden until event is selected) -->
+                <div id="assets-return-section" style="display: none;">
+                    <h4 style="color: #495057; margin-bottom: 15px;">Assets Available for Return</h4>
+                    <div id="return-assets-list">
+                        <!-- Assets will be populated when event is selected -->
+                    </div>
+
+                    <!-- Manual Return -->
+                    <div style="margin-top: 30px; padding-top: 20px; border-top: 2px solid #e9ecef;">
+                        <h4 style="color: #495057; margin-bottom: 15px;">Manual Return</h4>
+                        <p style="color: #666; font-size: 14px; margin-bottom: 15px;">Scan or enter any asset ID to return it</p>
+                        <div class="form-group" style="display: flex; gap: 10px;">
+                            <input type="text" class="form-input" id="manualReturnAssetIdNew" 
+                                   placeholder="Enter Asset ID or Serial Number..." 
+                                   onkeypress="if(event.key==='Enter') returnManualAssetNew()"
+                                   style="flex: 1;">
+                            <button class="btn btn-warning" onclick="returnManualAssetNew()">Return Asset</button>
                         </div>
                     </div>
                 </div>
 
-                <!-- Assets to Return -->
-                <div id="assets-to-return">
-                    <h4 style="color: #495057; margin-bottom: 15px;">Assets Available for Return</h4>
+                <!-- Actions -->
+                <div style="margin-top: 30px; text-align: right; padding-top: 20px; border-top: 2px solid #e9ecef;">
+                    <button class="btn btn-secondary" onclick="closeModal('returnAssetsModalNew')">Close</button>
+                </div>
+            </div>
         `;
+
+        document.getElementById('returnAssetsContentNew').innerHTML = content;
+        openModal('returnAssetsModalNew');
+        
+    } catch (error) {
+        showNotification('error', 'Failed to load return assets interface');
+        console.error('Error loading return assets modal:', error);
+    }
+}
+
+async function loadEventAssetsForReturn() {
+    const selectElement = document.getElementById('returnEventSelect');
+    const eventId = selectElement.value;
+    
+    if (!eventId) {
+        document.getElementById('event-summary').style.display = 'none';
+        document.getElementById('assets-return-section').style.display = 'none';
+        return;
+    }
+
+    try {
+        const response = await apiCall(`/api/events/${eventId}`);
+        const event = response.data;
+
+        // Show event summary
+        const summaryDiv = document.getElementById('event-summary');
+        summaryDiv.style.display = 'block';
+        summaryDiv.innerHTML = `
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 15px; text-align: center;">
+                <div>
+                    <div style="font-size: 20px; font-weight: bold; color: #007bff;">${event.totalAssets}</div>
+                    <div style="color: #666; font-size: 12px;">Total Assets</div>
+                </div>
+                <div>
+                    <div style="font-size: 20px; font-weight: bold; color: #28a745;">${event.totalPrepared}</div>
+                    <div style="color: #666; font-size: 12px;">Prepared</div>
+                </div>
+                <div>
+                    <div style="font-size: 20px; font-weight: bold; color: #dc3545;">${event.totalReturned}</div>
+                    <div style="color: #666; font-size: 12px;">Returned</div>
+                </div>
+                <div>
+                    <div style="font-size: 20px; font-weight: bold; color: #ffc107;">${event.totalPrepared - event.totalReturned}</div>
+                    <div style="color: #666; font-size: 12px;">Still Out</div>
+                </div>
+            </div>
+        `;
+
+        // Show assets section
+        document.getElementById('assets-return-section').style.display = 'block';
+
+        // Add manual return section at the top
+        const assetsReturnSection = document.getElementById('assets-return-section');
+        assetsReturnSection.innerHTML = `
+            <!-- Manual Return - moved to top -->
+            <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 25px; border: 1px solid #e9ecef;">
+                <h4 style="color: #495057; margin-bottom: 15px;">📱 Quick Return</h4>
+                <p style="color: #666; font-size: 14px; margin-bottom: 15px;">Scan or enter any asset ID to return it quickly</p>
+                <div class="form-group" style="display: flex; gap: 10px;">
+                    <input type="text" class="form-input" id="manualReturnAssetIdNew" 
+                           placeholder="Enter Asset ID or Serial Number..." 
+                           onkeypress="if(event.key==='Enter') returnManualAssetNew()"
+                           style="flex: 1;">
+                    <button class="btn btn-warning" onclick="returnManualAssetNew()">Return Asset</button>
+                </div>
+            </div>
+
+            <h4 style="color: #495057; margin-bottom: 15px;">📦 Assets Available for Return</h4>
+            <div id="return-assets-list">
+                <!-- Assets will be populated below -->
+            </div>
+        `;
+
+        // Populate assets list
+        let assetsContent = '';
         
         if (event.assetsByDepartment && Object.keys(event.assetsByDepartment).length > 0) {
             Object.keys(event.assetsByDepartment).sort().forEach(dept => {
@@ -2393,7 +2545,7 @@ async function openReturnAssetsModal(eventId) {
                 );
                 
                 if (assetsToReturn.length > 0) {
-                    content += `
+                    assetsContent += `
                         <div class="dept-section" style="margin-bottom: 20px;">
                             <h5 style="color: #495057; margin-bottom: 10px; padding: 8px; background: #f8f9fa; border-radius: 6px;">
                                 ${dept} Department (${assetsToReturn.length} assets)
@@ -2405,11 +2557,10 @@ async function openReturnAssetsModal(eventId) {
                         const extraBadge = asset.isExtra ? 
                             '<span style="background: #fff3cd; color: #856404; padding: 2px 6px; border-radius: 3px; font-size: 10px; margin-left: 10px;">EXTRA</span>' : '';
                         
-                        content += `
+                        assetsContent += `
                             <div class="return-asset-item" style="padding: 12px; border-bottom: 1px solid #f1f1f1; display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: background-color 0.2s;"
                                  onmouseover="this.style.backgroundColor='#f8f9fa'" 
-                                 onmouseout="this.style.backgroundColor='white'"
-                                 onclick="returnSpecificAsset(${eventId}, '${asset.id}')">
+                                 onmouseout="this.style.backgroundColor='white'">
                                 <div style="flex: 1;">
                                     <div style="font-weight: 500; font-size: 14px;">
                                         ✅ ${asset.id}${extraBadge}
@@ -2419,68 +2570,106 @@ async function openReturnAssetsModal(eventId) {
                                     ${asset.location ? `<div style="color: #007bff; font-size: 11px;">📍 ${asset.location}</div>` : ''}
                                 </div>
                                 <div style="margin-left: 15px;">
-                                    <button class="btn btn-warning" style="padding: 6px 12px; font-size: 12px;" onclick="event.stopPropagation(); returnSpecificAsset(${eventId}, '${asset.id}')">
+                                    <button class="btn btn-warning" style="padding: 6px 12px; font-size: 12px;" onclick="event.stopPropagation(); returnSpecificAssetNew(${eventId}, '${asset.id}')">
                                         Return
                                     </button>
                                 </div>
                             </div>
                         `;
                     });
-                    content += '</div></div>';
+                    assetsContent += '</div></div>';
                 }
             });
         }
         
-        if (!event.assetsByDepartment || Object.keys(event.assetsByDepartment).length === 0) {
-            content += '<p style="text-align: center; color: #666; padding: 40px;">No assets found for this event.</p>';
-        } else {
-            // Check for assets to return
-            let hasAssetsToReturn = false;
-            Object.values(event.assetsByDepartment).forEach(assets => {
-                if (assets.some(asset => asset.status === 'prepared' && !asset.id.startsWith('[MODEL]'))) {
-                    hasAssetsToReturn = true;
-                }
-            });
-            
-            if (!hasAssetsToReturn) {
-                content += '<p style="text-align: center; color: #666; padding: 40px;">All assets have already been returned for this event.</p>';
+        if (!assetsContent) {
+            assetsContent = '<p style="text-align: center; color: #666; padding: 40px;">No assets available for return.</p>';
+        }
+
+        document.getElementById('return-assets-list').innerHTML = assetsContent;
+        
+    } catch (error) {
+        showNotification('error', 'Failed to load event assets');
+        console.error('Error loading event assets for return:', error);
+    }
+}
+
+async function returnSpecificAssetNew(eventId, assetId) {
+    try {
+        await apiCall(`/api/events/${eventId}/return`, 'POST', { assetId });
+        showNotification('success', `${assetId} returned successfully`);
+        
+        // Remove the asset from the UI with animation
+        const assetElement = document.querySelector(`[onclick*="returnSpecificAssetNew(${eventId}, '${assetId}')"]`);
+        if (assetElement) {
+            const parentItem = assetElement.closest('.return-asset-item');
+            if (parentItem) {
+                parentItem.style.transition = 'opacity 0.3s ease';
+                parentItem.style.opacity = '0.5';
+                parentItem.style.pointerEvents = 'none';
+                
+                setTimeout(() => {
+                    if (parentItem.parentNode) {
+                        parentItem.parentNode.removeChild(parentItem);
+                    }
+                    // Refresh the event summary
+                    loadEventAssetsForReturn();
+                }, 300);
             }
         }
         
-        content += `
-                </div>
-                <!-- Manual Return -->
-                <div style="margin-top: 30px; padding-top: 20px; border-top: 2px solid #e9ecef;">
-                    <h4 style="color: #495057; margin-bottom: 15px;">Manual Return</h4>
-                    <p style="color: #666; font-size: 14px; margin-bottom: 15px;">Scan or enter any asset ID to return it</p>
-                    <div class="form-group">
-                        <input type="text" class="form-input" id="manualReturnAssetId" 
-                               placeholder="Enter Asset ID or Serial Number..." 
-                               onkeypress="if(event.key==='Enter') returnManualAsset(${eventId})">
-                        <button class="btn btn-warning" style="margin-top: 10px;" onclick="returnManualAsset(${eventId})">Return Asset</button>
-                    </div>
-                </div>
-                
-                <!-- Actions -->
-                <div style="margin-top: 20px; text-align: right; padding-top: 20px; border-top: 2px solid #e9ecef;">
-                    <button class="btn btn-secondary" onclick="closeModal('returnAssetsModal')">Close</button>
-                    <button class="btn btn-primary" onclick="finishReturningAssets(${eventId})">Finish</button>
-                </div>
-            </div>
-        `;
-        
-        document.getElementById('returnAssetsContent').innerHTML = content;
-        openModal('returnAssetsModal');
+        // Update overdue counter
+        const response = await apiCall('/api/events');
+        const overdueCount = countOverdueEvents(response.data);
+        updateOverdueCounter(overdueCount);
         
     } catch (error) {
-        showNotification('error', 'Failed to load return assets interface');
-        console.error('Error loading return assets modal:', error);
+        showNotification('error', `Failed to return asset: ${error.message}`);
+    }
+}
+
+async function returnManualAssetNew() {
+    const eventSelect = document.getElementById('returnEventSelect');
+    const assetInput = document.getElementById('manualReturnAssetIdNew');
+    const eventId = eventSelect.value;
+    const assetId = assetInput.value.trim();
+    
+    if (!eventId) {
+        showNotification('warning', 'Please select an event first');
+        return;
+    }
+    
+    if (!assetId) {
+        showNotification('warning', 'Please enter an asset ID');
+        return;
+    }
+    
+    try {
+        await apiCall(`/api/events/${eventId}/return`, 'POST', { assetId });
+        showNotification('success', `${assetId} returned successfully`);
+        
+        // Clear input and focus back on it
+        assetInput.value = '';
+        assetInput.focus();
+        
+        // Refresh the event assets display
+        loadEventAssetsForReturn();
+        
+        // Update overdue counter
+        const response = await apiCall('/api/events');
+        const overdueCount = countOverdueEvents(response.data);
+        updateOverdueCounter(overdueCount);
+        
+    } catch (error) {
+        showNotification('error', `Failed to return asset: ${error.message}`);
     }
 }
 
 async function loadTransferHistory() {
   try {
     const response = await apiCall("/api/events");
+    const overdueCount = countOverdueEvents(response.data);
+    updateOverdueCounter(overdueCount);
     const activeEvents = response.data.filter((event) => {
       // An event is transferable if:
       // 1. It's not closed
