@@ -83,7 +83,7 @@ DAD6010#03,DPA,DAD 6010,,MicroDot to TA4F Adapter,False,False,,AX,Store,
 DAD6010#04,DPA,DAD 6010,,MicroDot to TA4F Adapter,False,False,,AX,Store,
 DAD6010#05,DPA,DAD 6010,,MicroDot to TA4F Adapter,False,False,,AX,Store,
 DAD6010#06,DPA,DAD 6010,,MicroDot to TA4F Adapter,False,False,,AX,Store,
-DAD6010#07,DPA,DAD 6010,,MicroDot to TA4F Adapter,False,False,"2024/11/19	bnjm2000	2024/11/19 - Connection loose, audio dropout [SLMA @ Jia He]",AX,Store,
+DAD6010#07,DPA,DAD 6010,,MicroDot to TA4F Adapter,False,True,"2024/11/14	bnjm2000	Connection loose, audio dropout (SLMA @ Jia He Grand Restaurant) [Marked OOC]",AX,Store,
 DAD6010#08,DPA,DAD 6010,,MicroDot to TA4F Adapter,False,False,,AX,Store,
 DAD6010#09,DPA,DAD 6010,,MicroDot to TA4F Adapter,False,False,,AX,Store,
 DAD6010#10,DPA,DAD 6010,,MicroDot to TA4F Adapter,False,False,,AX,Store,
@@ -151,7 +151,7 @@ C1ProRHS#06,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC00786C,,False,Fal
 C1ProRHS#07,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC008667,,False,False,,AX,Store,
 C1ProRHS#08,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC007AB4,,False,False,,AX,Store,
 C1ProWHS#01,Hollyland,Solidcom C1 Pro Wired Headset for Hub,2223170XX0D0036E,,False,False,,AX,Store,
-PCBB#01,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,
+PCBB#01,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,Store
 PCBB#02,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,
 PCBB#03,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,
 PCBB#04,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,
@@ -174,21 +174,21 @@ K&M ACC #02,K&M,21441-000-55,,Adapter sleeve ring lock,False,False,,AX,Store,
 K&M ACC #03,K&M,21441-000-55,,Adapter sleeve ring lock,False,False,,AX,Store,
 K&M ACC #04,K&M,21441-000-55,,Adapter sleeve ring lock,False,False,,AX,Store,
 5XTW#01,L-Acoustics,5XTW,260049579,"5"" passive coaxial enclosure, white",False,False,,AX,Store,
-5XTW#02,L-Acoustics,5XTW,260049582,"5"" passive coaxial enclosure, white",False,True,"2025/06/11	bnjm2000	[28/05/2025] Sent to Concept System for fixing, rubber gasket came out",AX,Store,
+5XTW#02,L-Acoustics,5XTW,260049582,"5"" passive coaxial enclosure, white",False,True,"2025/05/28	bnjm2000	Sent to Concept System for fixing, rubber gasket came out [Marked OOC]",AX,Store,Concept Systems
 5XTW#03,L-Acoustics,5XTW,260049584,"5"" passive coaxial enclosure, white",False,False,,AX,Store,
 5XTW#04,L-Acoustics,5XTW,260049585,"5"" passive coaxial enclosure, white",False,False,,AX,Store,
-5XTW#05,L-Acoustics,5XTW,260049587,"5"" passive coaxial enclosure, white",False,True,"2025/06/11	bnjm2000	[28/05/2025] Sent to Concept System for fixing, rubber gasket came out",AX,Store,
+5XTW#05,L-Acoustics,5XTW,260049587,"5"" passive coaxial enclosure, white",False,True,"2025/05/28	bnjm2000	Sent to Concept System for fixing [Location: Concept Systems, Marked OOC]",AX,Store,Concept Systems
 5XTW#06,L-Acoustics,5XTW,260049588,"5"" passive coaxial enclosure, white",False,False,,AX,Store,
-5XTW#07,L-Acoustics,5XTW,260049589,"5"" passive coaxial enclosure, white",False,True,"2025/06/11	bnjm2000	[28/05/2025] Sent to Concept System for fixing, rubber gasket came out",AX,Store,
+5XTW#07,L-Acoustics,5XTW,260049589,"5"" passive coaxial enclosure, white",False,True,"2025/05/28	bnjm2000	Sent to Concept System for fixing, rubber gasket came out [Marked OOC]",AX,Store,Concept Systems
 5XTW#08,L-Acoustics,5XTW,260049590,"5"" passive coaxial enclosure, white",False,False,,AX,Store,
 5XTW#09,L-Acoustics,5XTW,260049591,"5"" passive coaxial enclosure, white",False,False,,AX,Store,
 5XTW#10,L-Acoustics,5XTW,260049592,"5"" passive coaxial enclosure, white",False,False,,AX,Store,
 5XTW#11,L-Acoustics,5XTW,260049593,"5"" passive coaxial enclosure, white",False,False,,AX,Store,
 5XTW#12,L-Acoustics,5XTW,260049594,"5"" passive coaxial enclosure, white",False,False,,AX,Store,
 5XTW#13,L-Acoustics,5XTW,260049595,"5"" passive coaxial enclosure, white",False,False,,AX,Store,
-5XTW#14,L-Acoustics,5XTW,260049602,"5"" passive coaxial enclosure, white",False,True,"2025/06/11	bnjm2000	[28/05/2025] Sent to Concept System for fixing, rubber gasket came out",AX,Store,
-5XTW#15,L-Acoustics,5XTW,260049603,"5"" passive coaxial enclosure, white",False,True,"2025/06/11	bnjm2000	[28/05/2025] Sent to Concept System for fixing, rubber gasket came out",AX,Store,
-5XTW#16,L-Acoustics,5XTW,260049693,"5"" passive coaxial enclosure, white",False,True,"2025/06/11	bnjm2000	[28/05/2025] Sent to Concept System for fixing, rubber gasket came out",AX,Store,
+5XTW#14,L-Acoustics,5XTW,260049602,"5"" passive coaxial enclosure, white",False,True,"2025/05/28	bnjm2000	Sent to Concept System for fixing, rubber gasket came out [Marked OOC]",AX,Store,Concept Systems
+5XTW#15,L-Acoustics,5XTW,260049603,"5"" passive coaxial enclosure, white",False,True,"2025/05/28	bnjm2000	Sent to Concept System for fixing, rubber gasket came out [Marked OOC]",AX,Store,Concept Systems
+5XTW#16,L-Acoustics,5XTW,260049693,"5"" passive coaxial enclosure, white",False,True,"2025/05/28	bnjm2000	Sent to Concept System for fixing, rubber gasket came out [Marked OOC]",AX,Store,Concept Systems
 ETR5W#01,L-Acoustics,ETR5W,,Adjustable U-bracket: 5XTW,False,False,,AX,Store,
 ETR5W#02,L-Acoustics,ETR5W,,Adjustable U-bracket: 5XTW,False,False,,AX,Store,
 ETR5W#03,L-Acoustics,ETR5W,,Adjustable U-bracket: 5XTW,False,False,,AX,Store,
@@ -219,7 +219,7 @@ ETR5W#16,L-Acoustics,ETR5W,,Adjustable U-bracket: 5XTW,False,False,,AX,Store,
 5XT#12,L-Acoustics,5XT,260044506,"5"" passive coaxial enclosure, black",False,False,,AX,Store,
 5XT#13,L-Acoustics,5XT,260046645,"5"" passive coaxial enclosure, black",False,False,,AX,Store,
 5XT#14,L-Acoustics,5XT,260046649,"5"" passive coaxial enclosure, black",False,False,,AX,Store,
-5XT#15,L-Acoustics,5XT,260046671,"5"" passive coaxial enclosure, black",False,False,"2025/06/11	bnjm2000	[28/05/2025] Sent to Concept System for fixing, rubber gasket came out",AX,Store,
+5XT#15,L-Acoustics,5XT,260046671,"5"" passive coaxial enclosure, black",False,True,"2025/05/28	bnjm2000	Sent to Concept System for fixing, rubber gasket came out [Marked OOC]",AX,Store,Concept Systems
 5XT#16,L-Acoustics,5XT,260046697,"5"" passive coaxial enclosure, black",False,False,,AX,Store,
 ETR5#01,L-Acoustics,ETR5,440027215,Adjustable U-bracket: 5XT,False,False,,AX,Store,
 ETR5#02,L-Acoustics,ETR5,440027236,Adjustable U-bracket: 5XT,False,False,,AX,Store,
@@ -402,14 +402,14 @@ LPClaw#03,Latin Percussion,LP592A,,The Claw,False,False,,AX,Store,
 LPClaw#04,Latin Percussion,LP592A,,The Claw,False,False,,AX,Store,
 MR-90A#01,MiPro,MR-90,878292429A,Interlink receiver,False,False,2024/11/26	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	2024/11/26 - Collected back from MiPro after testing,AX,Store,
 MR-90A#02,MiPro,MR-90,878292430A,Interlink receiver,False,False,2024/11/26	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	2024/11/26 - Collected back from MiPro after testing,AX,Store,
-MR-90A#03,MiPro,MR-90,878292432A,Interlink receiver,False,False,"2024/11/11	bnjm2000	2024/11/01 - discovered no output (Dior @ ION Orchard (demo))|2024/11/11	bnjm2000	2024/11/11 - Handed over to MiPro for repair|2024/11/12	bnjm2000	2024/11/12 - repaired by MiPro|2024/11/13	bnjm2000	2024/11/13 - Collected back from MiPro|2024/11/26	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	2024/11/21 - Issue with RF B, sent to Taiwan for repair",AX,Store,
-MR-90A#04,MiPro,MR-90,878292434A,Interlink receiver,False,False,"2024/11/11	bnjm2000	2024/11/05 - Low RF, AF cutting in and out (Dior @ ION Orchard)|2024/11/11	bnjm2000	2024/11/11 - Handed over to MiPro for repair|2024/11/12	bnjm2000	2024/11/12 - repaired by MiPro|2024/11/13	bnjm2000	2024/11/13 - Collected back from MiPro|2024/11/26	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	2024/11/26 - Collected back from MiPro after testing",AX,Store,
-MR-90A#05,MiPro,MR-90,878292431A,Interlink receiver,False,False,"2024/11/11	bnjm2000	2024/10/29 - discovered no output (Hermes @ Takashimaya)|2024/11/11	bnjm2000	2024/11/11 - Handed over to MiPro for repair|2024/11/13	bnjm2000	2024/11/13 - Collected back from MiPro|2024/11/26	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	2024/11/26 - Tested in MiPro office with RF Dropout, remain with MiPro for further testing/repair|2025/06/11	bnjm2000	[22/05/2025] 1 to 1 exchange with MiPro. Old SN:878292435A New SN:878292431A|2025/05/21	bnjm2000	Send in to Mipro, no RF receiving|2025/05/22	bnjm2000	Technician tested working, went to MiPro office to check before collecting. Audio came through but unit kept skipping channels. MiPro did a 1-to-1 swap. New SN: 878292431A Old SN:878292435A",AX,Store,Store
+MR-90A#03,MiPro,MR-90,878292432A,Interlink receiver,False,False,"2024/11/01	bnjm2000	discovered no output (Dior @ ION Orchard (demo)) [Marked OOC]|2024/11/11	bnjm2000	Handed over to MiPro for repair|2024/11/12	bnjm2000	repaired by MiPro [Cleared OOC]|2024/11/13	bnjm2000	Collected back from MiPro|2024/11/20	bnjm2000	Send to MiPro for testing|2024/11/21	bnjm2000	Issue with RF B, sent to Taiwan for repair [Location: MiPro Taiwan, Marked OOC]|2025/06/26	bnjm2000	Collected back from MiPro [Location: Store, Cleared OOC]",AX,Store,Store
+MR-90A#04,MiPro,MR-90,878292434A,Interlink receiver,False,False,"2024/11/11	bnjm2000	2024/11/05 - Low RF, AF cutting in and out (Dior @ ION Orchard) [Marked OOC]|2024/11/11	bnjm2000	2024/11/11 - Handed over to MiPro for repair|2024/11/12	bnjm2000	2024/11/12 - repaired by MiPro [Cleared OOC]|2024/11/13	bnjm2000	2024/11/13 - Collected back from MiPro|2024/11/26	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	2024/11/26 - Collected back from MiPro after testing",AX,Store,
+MR-90A#05,MiPro,MR-90,878292431A,Interlink receiver,False,False,"2024/10/29	bnjm2000	discovered no output (Hermes @ Takashimaya) [Marked OOC]|2024/11/11	bnjm2000	2024/11/11 - Handed over to MiPro for repair|2024/11/13	bnjm2000	2024/11/13 - Collected back from MiPro [Cleared OOC]|2024/11/26	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	2024/11/26 - Tested in MiPro office with RF Dropout, remain with MiPro for further testing/repair [Marked OOC]|2025/05/21	bnjm2000	Send in to Mipro, no RF receiving|2025/05/22	bnjm2000	Technician tested working, went to MiPro office to check before collecting. Audio came through but unit kept skipping channels. MiPro did a 1-to-1 swap. New SN: 878292431A Old SN:878292435A [Cleared OOC]",AX,Store,Store
 MR-90A#06,MiPro,MR-90,878292436A,Interlink receiver,False,False,2024/11/26	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	2024/11/26 - Collected back from MiPro after testing,AX,Store,
 MT-90A#01,MiPro,MT-90A,858290901A,Interlink Transmitter,False,False,2024/11/26	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	2024/11/26 - Collected back from MiPro after testing,AX,Store,
 MT-90A#02,MiPro,MT-90A,858290902A,Interlink Transmitter,False,False,2024/11/26	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	2024/11/26 - Collected back from MiPro after testing,AX,Store,
-MT-90A#03,MiPro,MT-90A,858290899A,Interlink Transmitter,False,False,2024/11/26	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	2024/11/26 - changeed transmitter to same type ((Old S/N: 809264158A)|2024/11/26	bnjm2000	20224/11/16 - Changed transmitter to same type ((O(Old S/N: 809264158A)|2024/11/26	bnjm2000	2024/11/26 - Collected back from MiPro after testing,AX,Store,
-MT-90A#04,MiPro,MT-90A,858290898A,Interlink Transmitter,False,False,2024/11/11	bnjm2000	2024/10/24 Handed over to MiPro for PSU testing|2024/11/13	bnjm2000	2024/11/13 - Collected back from MiPro|2024/11/26	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	2024/11/26 - Collected back from MiPro after testing,AX,Store,
+MT-90A#03,MiPro,MT-90A,858290899A,Interlink Transmitter,False,False,2024/11/26	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	changed transmitter to same type (Old S/N: 809264158A)|2024/11/26	bnjm2000	2024/11/26 - Collected back from MiPro after testing,AX,Store,
+MT-90A#04,MiPro,MT-90A,858290898A,Interlink Transmitter,False,False,"2024/11/20	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	2024/11/26 - Collected back from MiPro after testing|2024/10/15	bnjm2000	Device keeps restarting, suspect PSU faulty (Wedding of Kenneth and Wong Mei Yin) [Marked OOC]|2025/10/24	bnjm2000	Handed over to MiPro for PSU testing [Location: MiPro]|2024/11/13	bnjm2000	Collected back from MiPro [Location: Store, Cleared OOC]",AX,Store,Store
 GSM4212P#01,Netgear,GSM4212P,6VB52B51A0392,Managed Switch,False,False,,AX,Store,
 GSM4212P#02,Netgear,GSM4212P,6VB52B5AA039B,Managed Switch,False,False,,AX,Store,
 GSM4212P#03,Netgear,GSM4212P,6VB52B5CA03B9,Managed Switch,False,False,,AX,Store,
@@ -424,8 +424,8 @@ CDJ2000NXS#01,Pioneer,CDJ2000NXS,,Professional DJ multi player (Black),False,Fal
 CDJ2000NXS#02,Pioneer,CDJ2000NXS,,Professional DJ multi player (Black),False,False,,AX,Store,
 CDJ2000NXS2#01,Pioneer,CDJ2000NXS2,,Professional DJ multi player (Black),False,False,,AX,Store,
 CDJ2000NXS2#02,Pioneer,CDJ2000NXS2,,Professional DJ multi player (Black),False,False,,AX,Store,
-CDJ3000#01,Pioneer,CDJ3000,CDMP038151EH,Professional DJ multi player (Black),False,False,2024/11/11	bnjm2000	22/09/2024 - Buttons and jog wheel melted under sun (F1 @ ShowCo)|2024/11/11	bnjm2000	03/10/2024 - Received spare from ShowCo while repairs underway (S/N: BHMP026156EH),AX,Store,
-CDJ3000#02,Pioneer,CDJ3000,CDMP038159EH,Professional DJ multi player (Black),False,False,2024/11/11	bnjm2000	22/09/2024 - Buttons and jog wheel melted under sun (F1 @ ShowCo)|2024/11/11	bnjm2000	03/10/2024 - Received spare from ShowCo while repairs underway (S/N: BHMP026170EH),AX,Store,
+CDJ3000#01,Pioneer,CDJ3000,CDMP038151EH,Professional DJ multi player (Black),False,False,"2024/09/22	bnjm2000	Buttons and jog wheel melted under sun (F1 @ ShowCo) [Marked OOC]|2024/10/03	bnjm2000	Received spare from ShowCo while repairs underway (S/N: BHMP026156EH) [Cleared OOC]|2025/03/15	bnjm2000	Collected back, tested working. (Wedding of Barbara and Ker Wei)",AX,Store,
+CDJ3000#02,Pioneer,CDJ3000,CDMP038159EH,Professional DJ multi player (Black),False,False,"2024/09/22	bnjm2000	22/09/2024 - Buttons and jog wheel melted under sun (F1 @ ShowCo) [Marked OOC]|2024/10/03	bnjm2000	03/10/2024 - Received spare from ShowCo while repairs underway (S/N: BHMP026170EH) [Cleared OOC]|2025/03/15	bnjm2000	Collected back, tested working. (Wedding of Barbara and Ker Wei)",AX,Store,
 DJM900NXS#01,Pioneer,DJM-900NXS,,DJ Mixer,False,False,,AX,Store,
 DJM900NXS2#01,Pioneer,DJM-900NXS2,,4-channel pro-DJ mixer,False,False,,AX,Store,
 DJMA9#01,Pioneer,DJM-A9,,4-channel pro-DJ mixer,False,False,,AX,Store,
@@ -562,7 +562,7 @@ ULXD2#07,Shure,ULXD2,2QK2204370,Handheld Microphone [L50],False,False,,AX,Store,
 ULXD2#08,Shure,ULXD2,2OB0659317-01,Handheld Microphone [L50],False,False,,AX,Store,
 ULXD2#09,Shure,ULXD2,2NK0771081-01,Handheld Microphone [L50],False,False,,AX,Store,
 ULXD2#10,Shure,ULXD2,2PK2362922,Handheld Microphone [L50],False,False,,AX,Store,
-ULXD2#11,Shure,ULXD2,2RC0141727,Handheld Microphone [L50],False,True,"2025/06/21	bnjm2000	2025/06/21 - Battery prong dropped out, unable to turn on [Wedding of Jeremy Seow & Julia Puzzo @ Pyramid Club]",AX,Store,E&E
+ULXD2#11,Shure,ULXD2,2RC0141727,Handheld Microphone [L50],False,True,"2025/06/21	bnjm2000	Battery prong dropped out, unable to turn on (Wedding of Jeremy and Julia @ The Pyramid Club), sent to E&E [Location: E&E, Marked OOC]",AX,Store,E&E
 ULXD2#12,Shure,ULXD2,2NK0771082-01,Handheld Microphone [L50],False,False,,AX,Store,
 ULXD2#13,Shure,ULXD2,3CC16144846,Handheld Microphone [G52],False,False,,AX,Store,
 ULXD2#14,Shure,ULXD2,3CC16144872,Handheld Microphone [G52],False,False,,AX,Store,
@@ -618,10 +618,11 @@ UE STAND #07,Ultimate Support,TS-100B,,Air-powered speaker stand,False,False,,AX
 UE STAND #08,Ultimate Support,TS-100B,,Air-powered speaker stand,False,False,,AX,Store,
 WARWICK STAND #01,Warwick,RS28400B,,Hand Crank Speaker Stand,False,False,,AX,Store,
 WARWICK STAND #02,Warwick,RS28400B,,Hand Crank Speaker Stand,False,False,,AX,Store,
-CL5#01,Yamaha,CL5,WTASK01015,Digital Mixer,False,False,"2024/11/11	bnjm2000	2024/09/12 - sent to Yamaha for servicing|2024/11/11	bnjm2000	2025/01/17 - Sent to Yamaha for service (Dante module error)|2024/11/11	bnjm2000	Replaced Dante Module [$631]
-Replaced DNTU PCB [$672]
-Replaced FFC Cable [$10]|2025/01/20	bnjm2000	Dante clock suddenly unlocked and could not lock back, phantom noise on both inputs and outputs [Wedding of Aim and Singhis @ TCP]|2025/02/05	bnjm2000	Replaced DSP PCB [$1011]|2025/02/13	bnjm2000	2025/02/13 -  Dante clock suddenly unlocked and could not lock back, phantom noise on both inputs and outputs [Wedding of Aim and Singhis @ TCP]|2025/02/27	bnjm2000	2025/02/27 - Replaced DSP PCB [$1011]",AX,Store,Store
-DM3#01,Yamaha,DM3,BGDK01029,Digital Mixer,False,False,2024/11/11	bnjm2000	04/09/24 - Reported cannot power on from Niche|2024/11/11	bnjm2000	12/09/24 - sent to Yamaha for servicing|2024/11/11	bnjm2000	24/10/24 - Replaced PCB (report no. PA842034) $586.84|2024/11/11	bnjm2000	07/11/24 - Collected from Yamaha,AX,Store,
+CL5#01,Yamaha,CL5,WTASK01015,Digital Mixer,False,False,"2024/09/12	bnjm2000	Sent into Yamaha for fader servicing, sometimes get stuck [Location: Yamaha Service Center, Marked OOC]|2024/10/22	bnjm2000	Replaced faulty faders: CH 1-8, 9-16, Centralogic CH 7,8 ($684) Service fee ($369.73) [Location: Store, Cleared OOC, Cleared Missing]|2025/01/16	bnjm2000	Unable to connect to dante network (Dante Module Error) (Wedding of Benjamin and Rachel @ Ritz Garden Pavilion) [Marked OOC]|2025/01/17	bnjm2000	Sent in to Yamaha for repairs [Location: Yamaha Service Center]|2025/02/06	bnjm2000	Replaced Dante Module ($631)
+Replaced DNTU PCB ($672)
+Replaced FFC Cable ($10) [Cleared OOC]|2025/02/13	bnjm2000	Dante clock suddenly unlocked and could not lock back, phantom noise on both inputs and outputs
+(Wedding of Aim and Singhis @ TCP) [Location: Yamaha Service Center]|2025/02/27	bnjm2000	Replaced DSP PCB ($1011) [Location: Store, Cleared OOC]",AX,Store,Store
+DM3#01,Yamaha,DM3,BGDK01029,Digital Mixer,False,False,2024/09/04	bnjm2000	Reported cannot power on from Niche [Marked OOC]|2024/09/12	bnjm2000	sent to Yamaha for servicing [Location: Yamaha Service Center]|2024/10/24	bnjm2000	Replaced PCB (report no. PA842034) $586.84 [Cleared OOC]|2024/11/07	bnjm2000	Collected from Yamaha [Location: Store],AX,Store,Store
 DM3#02,Yamaha,DM3,BGDI01076,Digital Mixer,False,False,,AX,Store,
 DM7#01,Yamaha,DM7,21EGEI01036,Digital Mixer,False,False,,AX,Store,
 DXR8#01,Yamaha,DXR8,EESM01180,"Active80"" Speaker",False,False,,AX,Store,
@@ -629,7 +630,8 @@ DXR10#01,Yamaha,DXR10,,"Active 10"" Speaker",False,False,,AX,Store,
 DXR10#02,Yamaha,DXR10,,"Active 10"" Speaker",False,False,,AX,Store,
 DXR10#03,Yamaha,DXR10,,"Active 10"" Speaker",False,False,,AX,Store,
 DXR10#04,Yamaha,DXR10,,"Active 10"" Speaker",False,False,,AX,Store,
-DXR12#01,Yamaha,DXR12,EETK01327,"Active 12"" Speaker",False,False,"2024/11/11	bnjm2000	26/07/23 - repaired|2024/11/11	bnjm2000	05/08/23 - dropped from ledge (Siong Leng Musical Association @ Thian Hock Keng Temple)|2024/11/11	bnjm2000	12/09/24 - sent to Yamaha for servicing|2024/11/11	bnjm2000	2024/12/31 - Sent back to Yamaha for servicing as woofer was still distorting.|2024/11/11	bnjm2000	2025/01/10 - Collected from Yamaha, replaced woofer [$185]|2025/01/03	bnjm2000	2024/12/31 - Sent back to Yamaha for servicing|2025/01/03	bnjm2000	2025/01/10 - Collected from Yamaha",AX,Store,
+DXR12#01,Yamaha,DXR12,EETK01327,"Active 12"" Speaker",False,False,"2023/07/26	bnjm2000	repaired|2023/08/05	bnjm2000	dropped from ledge, distorting (Siong Leng Musical Association @ Thian Hock Keng Temple) [Marked OOC]|2024/09/12	bnjm2000	sent to Yamaha for servicing [Location: Yamaha Service Center]|2024/10/22	bnjm2000	Replace fan - $18
+Technical charges - $122.94 [Location: Store, Cleared OOC]|2024/12/31	bnjm2000	Sent back to Yamaha for servicing as woofer was still distorting. [Location: Yamaha Service Center, Marked OOC]|2025/01/10	bnjm2000	Collected from Yamaha, replaced woofer - $185 [Location: Store, Cleared OOC]",AX,Store,Store
 DXR12#02,Yamaha,DXR12,,"Active 12"" Speaker",False,False,,AX,Store,
 DXR12#03,Yamaha,DXR12,,"Active 12"" Speaker",False,False,,AX,Store,
 DXR12#04,Yamaha,DXR12,,"Active 12"" Speaker",False,False,,AX,Store,
@@ -710,18 +712,24 @@ LEDBEAM#11,Robe,Robin LEDBeam 350 Wash,2300840404,Wash LED,False,False,,LX,Store
 LEDBEAM#12,Robe,Robin LEDBeam 350 Wash,2300840401,Wash LED,False,False,,LX,Store,
 LEDBEAM#13,Robe,Robin LEDBeam 350 Wash,2300840396,Wash LED,False,False,,LX,Store,
 LEDBEAM#14,Robe,Robin LEDBeam 350 Wash,2300840051,Wash LED,False,False,,LX,Store,
-LEDBEAM#15,Robe,Robin LEDBeam 350 Wash,2300877277,Wash LED,False,False,,LX,Store,
+LEDBEAM#15,Robe,Robin LEDBeam 350 Wash,2300877277,Wash LED,False,False,"2025/04/04	bnjm2000	Intermittent can't power up
+Replaced power supply - $217.69 (but FOC)",LX,Store,
 LEDBEAM#16,Robe,Robin LEDBeam 350 Wash,2300877284,Wash LED,False,False,,LX,Store,
-LEDBEAM#17,Robe,Robin LEDBeam 350 Wash,2300877283,Wash LED,False,False,,LX,Store,
+LEDBEAM#17,Robe,Robin LEDBeam 350 Wash,2300877283,Wash LED,False,False,"2025/04/04	bnjm2000	Intermittent can't power up
+Replaced power supply - $217.69 (but FOC)",LX,Store,
 LEDBEAM#18,Robe,Robin LEDBeam 350 Wash,2300877278,Wash LED,False,False,,LX,Store,
 LEDBEAM#19,Robe,Robin LEDBeam 350 Wash,2300840054,Wash LED,False,False,,LX,Store,
 LEDBEAM#20,Robe,Robin LEDBeam 350 Wash,2300877265,Wash LED,False,False,,LX,Store,
-LEDBEAM#21,Robe,Robin LEDBeam 350 Wash,2300840400,Wash LED,False,False,,LX,Store,
-LEDBEAM#22,Robe,Robin LEDBeam 350 Wash,2300840398,Wash LED,False,False,,LX,Store,
-LEDBEAM#23,Robe,Robin LEDBeam 350 Wash,2300077264,Wash LED,False,False,,LX,Store,
-LEDBEAM#24,Robe,Robin LEDBeam 350 Wash,2300840397,Wash LED,False,False,,LX,Store,
+LEDBEAM#21,Robe,Robin LEDBeam 350 Wash,2300840400,Wash LED,False,False,"2025/04/04	bnjm2000	Intermittent can't power up
+Replaced power supply - $217.69 (but FOC)",LX,Store,
+LEDBEAM#22,Robe,Robin LEDBeam 350 Wash,2300840398,Wash LED,False,False,"2025/04/04	bnjm2000	Intermittent can't power up
+Replaced power supply - $217.69 (but FOC)",LX,Store,
+LEDBEAM#23,Robe,Robin LEDBeam 350 Wash,2300077264,Wash LED,False,False,"2025/04/04	bnjm2000	Intermittent can't power up
+Replaced power supply - $217.69 (but FOC)",LX,Store,
+LEDBEAM#24,Robe,Robin LEDBeam 350 Wash,2300840397,Wash LED,False,False,"2025/04/04	bnjm2000	Intermittent can't power up
+Replaced power supply - $217.69 (but FOC)",LX,Store,
 DIABLO#01,Ayrton,Diablo (W.DMX),DB2935040,Profile LED,False,False,,LX,Store,
-DIABLO#02,Ayrton,Diablo (W.DMX),DB2935047,Profile LED,False,False,"2025/05/25	bnjm2000	Discovered fan error during [2025/05/25 - Wedding of Micheal and Cindy]|2025/06/05	bnjm2000	Sent to TSM, reset connector tested okay [$80]",LX,Store,Store
+DIABLO#02,Ayrton,Diablo (W.DMX),DB2935047,Profile LED,False,False,"2025/05/25	bnjm2000	Discovered fan error (Wedding of Micheal and Cindy) [Location: Total Solutions, Marked OOC]|2025/06/05	bnjm2000	Sent to TSM, reset connector tested okay - $80 [Location: Store, Cleared OOC]",LX,Store,Store
 DIABLO#03,Ayrton,Diablo (W.DMX),DB2935098,Profile LED,False,False,,LX,Store,
 DIABLO#04,Ayrton,Diablo (W.DMX),DB2935016,Profile LED,False,False,,LX,Store,
 DIABLO#05,Ayrton,Diablo (W.DMX),DB2953048,Profile LED,False,False,,LX,Store,
@@ -729,12 +737,13 @@ DIABLO#06,Ayrton,Diablo (W.DMX),DB2935001,Profile LED,False,False,,LX,Store,
 DIABLO#07,Ayrton,Diablo (W.DMX),DB2935033,Profile LED,False,False,,LX,Store,
 DIABLO#08,Ayrton,Diablo (W.DMX),DB2935002,Profile LED,False,False,,LX,Store,
 DIABLO#09,Ayrton,Diablo (W.DMX),DB2935036,Profile LED,False,False,,LX,Store,
-DIABLO#10,Ayrton,Diablo (W.DMX),DB2935057,Profile LED,False,False,2025/06/24	bnjm2000	Replaced Pan/Tilt Board [$222.87],LX,Store,
-DIABLO#11,Ayrton,Diablo (W.DMX),DB2935034,Profile LED,False,False,2025/06/24	bnjm2000	Replaced Pan/Tilt board [$222.87] and CMY Driver Board [$195.84],LX,Store,
-DIABLO#12,Ayrton,Diablo (W.DMX),DB2935019,Profile LED,False,False,2025/06/24	bnjm2000	Replaced Pan/Tilt Board [$222.87],LX,Store,
+DIABLO#10,Ayrton,Diablo (W.DMX),DB2935057,Profile LED,False,False,2025/06/05	bnjm2000	Replaced Pan/Tilt Board - $222.87,LX,Store,
+DIABLO#11,Ayrton,Diablo (W.DMX),DB2935034,Profile LED,False,False,"2025/06/05	bnjm2000	Replaced Pan/Tilt board - $222.87
+CMY Driver Board - $195.84",LX,Store,
+DIABLO#12,Ayrton,Diablo (W.DMX),DB2935019,Profile LED,False,False,2025/06/05	bnjm2000	Replaced Pan/Tilt Board - $222.87,LX,Store,
 DIABLO#13,Ayrton,Diablo Profile,DB5309007,Profile LED,False,False,,LX,Store,
 DIABLO#14,Ayrton,Diablo Profile,DB5309023,Profile LED,False,False,,LX,Store,
-DIABLO#15,Ayrton,Diablo Profile,DB5309005,Profile LED,False,False,"2025/06/24	bnjm2000	Many error after [2025/05/25 - Wedding of Micheal and Cindy], sent to TSM replaced Zoom/Focus Driver Board [$FOC]",LX,Store,
+DIABLO#15,Ayrton,Diablo Profile,DB5309005,Profile LED,False,False,2025/06/26	bnjm2000	Many error (Wedding of Micheal and Cindy) [Marked OOC]|2025/06/05	bnjm2000	Replaced Zoom/Focus Driver Board - $FOC [Cleared OOC],LX,Store,
 DIABLO#16,Ayrton,Diablo Profile,DB5309027,Profile LED,False,False,,LX,Store,
 DIABLO#17,Ayrton,Diablo Profile,DB5309010,Profile LED,False,False,,LX,Store,
 DIABLO#18,Ayrton,Diablo Profile,DB5309016,Profile LED,False,False,,LX,Store,
@@ -758,7 +767,7 @@ PB#11,Astera,Pixel Brick ,047-0313634,Batt LED Uplighters,False,False,2024/12/05
 PB#12,Astera,Pixel Brick ,047-0312725,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
 PB#13,Astera,Pixel Brick ,047-0312683,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
 PB#14,Astera,Pixel Brick ,047-0312682,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
-PB#15,Astera,Pixel Brick ,047-0312734,Batt LED Uplighters,False,False,"2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/06/11	bnjm2000	[28/05/2025] Collected back from TSM, fixed screen",LX,Store,
+PB#15,Astera,Pixel Brick ,047-0312734,Batt LED Uplighters,False,False,"2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/05/28	bnjm2000	Collected back from TSM, fixed screen",LX,Store,
 PB#16,Astera,Pixel Brick ,047-0313677,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
 PB#17,Astera,Pixel Brick ,047-0312751,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
 PB#18,Astera,Pixel Brick ,047-0308769,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
@@ -780,21 +789,21 @@ PB#33,Astera,Pixel Brick ,047-0312748,Batt LED Uplighters,False,False,2024/12/05
 PB#34,Astera,Pixel Brick ,047-0308768,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
 PB#35,Astera,Pixel Brick ,047-0312772,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
 PB#36,Astera,Pixel Brick ,047-0312668,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
-PB#37,Astera,Pixel Brick ,047-0313949,Batt LED Uplighters,False,False,"2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/06/05	bnjm2000	[05/06/2025] Handed over to TSM for repair, spoilt screen
-Replaced PB15 Rear Housing Assembly [$FOC]",LX,Store,
+PB#37,Astera,Pixel Brick ,047-0313949,Batt LED Uplighters,False,False,"2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/06/05	bnjm2000	Handed over to TSM for repair, spoilt screen
+Replaced PB15 Rear Housing Assembly",LX,Store,
 PB#38,Astera,Pixel Brick ,047-0313663,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
 PB#39,Astera,Pixel Brick ,047-0312708,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
 PB#40,Astera,Pixel Brick ,047-0316706,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
 PB#41,Astera,Pixel Brick ,047-0308759,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
-PB#42,Astera,Pixel Brick ,047-0313840,Batt LED Uplighters,False,False,"2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/06/11	bnjm2000	[02/05/2025] Handed over to TSM for repair, spoilt screen
-Replaced PB15 Rear Housing Assembly [$FOC]",LX,Store,
+PB#42,Astera,Pixel Brick ,047-0313840,Batt LED Uplighters,False,False,"2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/05/02	bnjm2000	Handed over to TSM for repair, spoilt screen
+Replaced PB15 Rear Housing Assembly",LX,Store,
 PB#43,Astera,Pixel Brick ,047-0313412,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
 PB#44,Astera,Pixel Brick ,047-0313874,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
 PB#45,Astera,Pixel Brick ,047-0312073,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
 PB#46,Astera,Pixel Brick ,047-0311942,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
 PB#47,Astera,Pixel Brick ,047-0312764,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
 PB#48,Astera,Pixel Brick ,047-0313867,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
-PB#49,Astera,Pixel Brick ,047-0312714,Batt LED Uplighters,False,False,"2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/06/11	bnjm2000	[28/05/2025] Collected back from TSM, fixed screen",LX,Store,
+PB#49,Astera,Pixel Brick ,047-0312714,Batt LED Uplighters,False,False,"2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/05/28	bnjm2000	Collected back from TSM, fixed screen",LX,Store,
 PB#50,Astera,Pixel Brick ,047-0313681,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
 PB#51,Astera,Pixel Brick ,047-0312716,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
 PB#52,Astera,Pixel Brick ,047-0312631,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
@@ -810,7 +819,7 @@ PB#61,Astera,Pixel Brick ,047-0312594,Batt LED Uplighters,False,False,2024/12/05
 PB#62,Astera,Pixel Brick ,047-0312735,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
 PB#63,Astera,Pixel Brick ,047-0312678,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
 PB#64,Astera,Pixel Brick ,047-0312730,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
-CAMEO#01,Cameo,Unicon Remote Control,CK01900822,DMX/RDM Controller,False,False,,LX,Store,Dry Hire: Fizah
+CAMEO#01,Cameo,Unicon Remote Control,CK01900822,DMX/RDM Controller,False,False,,LX,Store,Store
 ECLIPSE#01,Silver Star,Eclipse 1000 RGBAL SS847XAL,MO18112100400034,,False,False,,LX,Store,
 ECLIPSE#02,Silver Star,Eclipse 1000 RGBAL SS847XAL,MO18112100400039,,False,False,,LX,Store,
 ECLIPSE#03,Silver Star,Eclipse 1000 RGBAL SS847XAL,MO18112100400030,,False,False,,LX,Store,
