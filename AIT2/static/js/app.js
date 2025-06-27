@@ -1085,6 +1085,7 @@ async function openPrepareEventModal(eventId) {
                         const statusColor = isPrepared ? '#28a745' : '#ffc107';
                         const statusText = isPrepared ? 'Prepared' : 'Pending';
                         const isExtra = event.extraAssets && event.extraAssets.includes(asset.id);
+                        console.log(`Asset ${asset.id}: extraAssets=`, event.extraAssets, `isExtra=${isExtra}`);
                         const extraBadge = isExtra ? 
                             '<span style="background: #fff3cd; color: #856404; padding: 2px 6px; border-radius: 3px; font-size: 10px; margin-left: 10px;">EXTRA</span>' : '';
                         
@@ -1196,7 +1197,15 @@ function searchAdditionalAssets(eventId) {
     resultsContainer.innerHTML = content;
 }
 
+/**
+ * ASSIGN additional asset from search results
+ * Used by: "Assign as Extra" buttons in additional asset search
+ * Maintains exact same function signature as before
+ */
 async function assignAdditionalAsset(eventId, assetId) {
+    console.log(`=== assignAdditionalAsset CALLED ===`);
+    console.log('eventId:', eventId, 'assetId:', assetId);
+    
     try {
         await apiCall(`/api/events/${eventId}/assign-specific`, 'POST', { assetId });
         showNotification('success', `Assigned ${assetId} as additional asset`);
@@ -1207,21 +1216,30 @@ async function assignAdditionalAsset(eventId, assetId) {
             assetElement.remove();
         }
         
-        // Update available assets
+        // Update available assets cache
         if (window.currentAdditionalAssets) {
             window.currentAdditionalAssets = window.currentAdditionalAssets.filter(a => a.id !== assetId);
         }
         
-        // Refresh the preparation modal
+        console.log('About to refresh modal with state preservation...');
+        // Refresh modal while preserving UI state
         setTimeout(() => {
-            openPrepareEventModal(eventId);
-        }, 500);
+            preserveModalState(() => {
+                openPrepareEventModal(eventId);
+            });
+        }, 200);
         
     } catch (error) {
+        console.error('Error in assignAdditionalAsset:', error);
         showNotification('error', `Failed to assign asset: ${error.message}`);
     }
 }
 
+/**
+ * PREPARE asset from manual input field
+ * Used by: Input field with "Prepare Asset" button
+ * Maintains exact same function signature as before
+ */
 async function prepareAssignedAsset(eventId) {
     const input = document.getElementById('assignedAssetPrepare');
     const assetId = input.value.trim();
@@ -1231,6 +1249,9 @@ async function prepareAssignedAsset(eventId) {
         return;
     }
     
+    console.log(`=== prepareAssignedAsset CALLED ===`);
+    console.log('eventId:', eventId, 'assetId:', assetId);
+    
     try {
         await apiCall(`/api/events/${eventId}/prepare`, 'POST', { assetId });
         showNotification('success', `${assetId} marked as prepared`);
@@ -1238,38 +1259,85 @@ async function prepareAssignedAsset(eventId) {
         // Clear input
         input.value = '';
         
-        // Refresh the preparation modal
+        console.log('About to refresh modal with state preservation...');
+        // Refresh modal while preserving UI state
         setTimeout(() => {
-            openPrepareEventModal(eventId);
-        }, 500);
+            preserveModalState(() => {
+                openPrepareEventModal(eventId);
+            });
+        }, 200);
         
     } catch (error) {
+        console.error('Error in prepareAssignedAsset:', error);
         showNotification('error', `Failed to prepare asset: ${error.message}`);
     }
 }
 
+
+/**
+ * PREPARE an already-assigned asset (calls /prepare API)
+ * Used by: "Prepare" buttons for assigned-but-not-prepared assets
+ * Maintains exact same function signature as before
+ */
 async function prepareSpecificAsset(eventId, assetId) {
+    console.log(`=== prepareSpecificAsset CALLED ===`);
+    console.log('eventId:', eventId, 'assetId:', assetId);
+    
     try {
         await apiCall(`/api/events/${eventId}/prepare`, 'POST', { assetId });
         showNotification('success', `${assetId} marked as prepared`);
         
-        // Update the interface dynamically instead of full refresh
-        updateAssetStatusInModal(eventId, assetId, 'prepared');
+        console.log('About to refresh modal with state preservation...');
+        // Refresh modal while preserving UI state
+        setTimeout(() => {
+            preserveModalState(() => {
+                openPrepareEventModal(eventId);
+            });
+        }, 200);
+        
+        // Also refresh the prepare events list if it's active
+        if (document.getElementById('prepare-section').classList.contains('active')) {
+            setTimeout(() => {
+                loadPrepareEvents();
+            }, 500);
+        }
         
     } catch (error) {
+        console.error('Error in prepareSpecificAsset:', error);
         showNotification('error', `Failed to prepare asset: ${error.message}`);
     }
 }
 
+/**
+ * UNPREPARE/REMOVE an asset completely from event (calls /unprepare API)
+ * Used by: "Unprepare" buttons
+ * Maintains exact same function signature as before
+ */
 async function unprepareSpecificAsset(eventId, assetId) {
+    console.log(`=== unprepareSpecificAsset CALLED ===`);
+    console.log('eventId:', eventId, 'assetId:', assetId);
+    
     try {
         await apiCall(`/api/events/${eventId}/unprepare`, 'POST', { assetId });
         showNotification('success', `${assetId} unprepared`);
         
-        // Update the interface dynamically instead of full refresh
-        updateAssetStatusInModal(eventId, assetId, 'unprepared');
+        console.log('About to refresh modal with state preservation...');
+        // Refresh modal while preserving UI state
+        setTimeout(() => {
+            preserveModalState(() => {
+                openPrepareEventModal(eventId);
+            });
+        }, 200);
+        
+        // Also refresh the prepare events list if it's active
+        if (document.getElementById('prepare-section').classList.contains('active')) {
+            setTimeout(() => {
+                loadPrepareEvents();
+            }, 500);
+        }
         
     } catch (error) {
+        console.error('Error in unprepareSpecificAsset:', error);
         showNotification('error', `Failed to unprepare asset: ${error.message}`);
     }
 }
@@ -1301,10 +1369,10 @@ async function updateAssetStatusInModal(eventId, assetId, action) {
             
             if (action === 'prepared') {
                 // Update the asset's status in the "All Assets" section
-                updateAssetInAllAssetsSection(eventId, assetId, true);
+                await updateAssetInAllAssetsSection(eventId, assetId, true);
                 
-                // Move asset from available to assigned in model sections
-                moveAssetInModelSection(eventId, assetId);
+                // Move asset from available to assigned in model sections AND check for extra status
+                await moveAssetInModelSectionWithExtraCheck(eventId, assetId, event);
             } else if (action === 'assigned') {
                 // Asset was assigned and prepared, move from available to assigned
                 moveAssetFromAvailableToAssigned(eventId, assetId);
@@ -1328,6 +1396,7 @@ async function updateAssetStatusInModal(eventId, assetId, action) {
         showNotification('error', 'Failed to update interface. Please try again.');
     }
 }
+
 
 function moveAssetFromAvailableToAssigned(eventId, assetId) {
     // Find the asset in the available section
@@ -1402,6 +1471,9 @@ async function addAssetToAllAssetsSection(eventId, assetId, event) {
         let department = null;
         let isExtra = false;
         
+        // First check if it's in the fresh event's extraAssets array
+        isExtra = freshEvent.extraAssets && freshEvent.extraAssets.includes(assetId);
+        
         if (freshEvent.assetsByDepartment) {
             Object.keys(freshEvent.assetsByDepartment).forEach(dept => {
                 const deptAssets = freshEvent.assetsByDepartment[dept];
@@ -1409,8 +1481,7 @@ async function addAssetToAllAssetsSection(eventId, assetId, event) {
                 if (found) {
                     assetDetails = found;
                     department = dept;
-                    // Check if it's marked as extra in the asset data
-                    isExtra = found.isExtra || false;
+                    // Use the extraAssets array check, not the asset.isExtra property
                 }
             });
         }
@@ -1424,8 +1495,7 @@ async function addAssetToAllAssetsSection(eventId, assetId, event) {
             if (availableAsset) {
                 assetDetails = availableAsset;
                 department = availableAsset.department;
-                // Check if it's in extra_assets array
-                isExtra = freshEvent.extraAssets && freshEvent.extraAssets.includes(assetId);
+                // isExtra is already set from extraAssets array above
             }
         }
         
@@ -1486,7 +1556,7 @@ async function addAssetToAllAssetsSection(eventId, assetId, event) {
             }
             
             if (targetDeptSection) {
-                // Only show EXTRA badge if it's actually extra
+                // Use the extraAssets array check for the badge
                 const extraBadge = isExtra ? 
                     '<span style="background: #fff3cd; color: #856404; padding: 2px 6px; border-radius: 3px; font-size: 10px; margin-left: 10px;">EXTRA</span>' : '';
                 
@@ -1535,45 +1605,111 @@ async function addAssetToAllAssetsSection(eventId, assetId, event) {
     }
 }
 
-function removeAssetFromModal(assetId) {
-    // Remove from "All Assets Assigned" section
-    const allAssetsSection = document.getElementById('all-assigned-assets');
-    if (allAssetsSection) {
-        const assetElements = allAssetsSection.querySelectorAll('div[style*="padding: 8px 12px"]');
-        assetElements.forEach(element => {
-            const assetSpan = element.querySelector('span[style*="font-weight: 500"]');
-            if (assetSpan && assetSpan.textContent.includes(assetId)) {
-                element.remove();
+async function updateAssetInAllAssetsSection(eventId, assetId, isPrepared) {
+    // Get fresh event data to check if asset is extra
+    try {
+        const response = await apiCall(`/api/events/${eventId}`);
+        const freshEvent = response.data;
+        
+        // Check if asset is in extraAssets array
+        const isExtra = freshEvent.extraAssets && freshEvent.extraAssets.includes(assetId);
+        
+        // Find the asset in the "All Assets" section and update its status
+        const allAssetsElements = document.querySelectorAll(`[onclick*="'${assetId}'"]`);
+        allAssetsElements.forEach(element => {
+            const assetDiv = element.closest('div[style*="padding: 8px 12px"]');
+            if (assetDiv && assetDiv.textContent.includes(assetId)) {
+                // Update the status icon and text
+                const statusSpan = assetDiv.querySelector('span[style*="font-weight: 500"]');
+                if (statusSpan) {
+                    const icon = isPrepared ? '✅' : '⏳';
+                    statusSpan.innerHTML = statusSpan.innerHTML.replace(/^[✅⏳]\s/, `${icon} `);
+                }
+                
+                // Update the status text
+                const statusText = assetDiv.querySelector('div[style*="margin-top: 2px"]');
+                if (statusText) {
+                    statusText.textContent = isPrepared ? 'Prepared' : 'Pending';
+                    statusText.style.color = isPrepared ? '#28a745' : '#ffc107';
+                }
+                
+                // Update or add the EXTRA badge
+                const assetContainer = assetDiv.querySelector('div:first-child');
+                if (assetContainer) {
+                    // Remove existing EXTRA badge if it exists
+                    const existingBadge = assetContainer.querySelector('span[style*="background: #fff3cd"]');
+                    if (existingBadge) {
+                        existingBadge.remove();
+                    }
+                    
+                    // Add EXTRA badge if asset is extra
+                    if (isExtra) {
+                        const assetNameSpan = assetContainer.querySelector('span[style*="color: #666"]');
+                        if (assetNameSpan) {
+                            const extraBadge = document.createElement('span');
+                            extraBadge.style.cssText = 'background: #fff3cd; color: #856404; padding: 2px 6px; border-radius: 3px; font-size: 10px; margin-left: 10px;';
+                            extraBadge.textContent = 'EXTRA';
+                            assetNameSpan.insertAdjacentElement('afterend', extraBadge);
+                        }
+                    }
+                }
+                
+                // Update the button
+                const button = assetDiv.querySelector('button');
+                if (button) {
+                    if (isPrepared) {
+                        button.textContent = 'Unprepare';
+                        button.className = 'btn btn-warning';
+                        button.style.cssText = 'padding: 4px 8px; font-size: 11px;';
+                        button.onclick = () => unprepareSpecificAsset(eventId, assetId);
+                    } else {
+                        button.textContent = 'Prepare';
+                        button.className = 'btn btn-success';
+                        button.style.cssText = 'padding: 4px 8px; font-size: 11px;';
+                        button.onclick = () => prepareSpecificAsset(eventId, assetId);
+                    }
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Error updating asset status:', error);
+        // Fallback to original logic if API call fails
+        const allAssetsElements = document.querySelectorAll(`[onclick*="'${assetId}'"]`);
+        allAssetsElements.forEach(element => {
+            const assetDiv = element.closest('div[style*="padding: 8px 12px"]');
+            if (assetDiv && assetDiv.textContent.includes(assetId)) {
+                // Update the status icon and text
+                const statusSpan = assetDiv.querySelector('span[style*="font-weight: 500"]');
+                if (statusSpan) {
+                    const icon = isPrepared ? '✅' : '⏳';
+                    statusSpan.innerHTML = statusSpan.innerHTML.replace(/^[✅⏳]\s/, `${icon} `);
+                }
+                
+                // Update the status text
+                const statusText = assetDiv.querySelector('div[style*="margin-top: 2px"]');
+                if (statusText) {
+                    statusText.textContent = isPrepared ? 'Prepared' : 'Pending';
+                    statusText.style.color = isPrepared ? '#28a745' : '#ffc107';
+                }
+                
+                // Update the button
+                const button = assetDiv.querySelector('button');
+                if (button) {
+                    if (isPrepared) {
+                        button.textContent = 'Unprepare';
+                        button.className = 'btn btn-warning';
+                        button.style.cssText = 'padding: 4px 8px; font-size: 11px;';
+                        button.onclick = () => unprepareSpecificAsset(eventId, assetId);
+                    } else {
+                        button.textContent = 'Prepare';
+                        button.className = 'btn btn-success';
+                        button.style.cssText = 'padding: 4px 8px; font-size: 11px;';
+                        button.onclick = () => prepareSpecificAsset(eventId, assetId);
+                    }
+                }
             }
         });
     }
-    
-    // Remove from model sections (assigned section)
-    const modelSections = document.querySelectorAll('.model-prep-section');
-    modelSections.forEach(modelSection => {
-        const assignedContainer = modelSection.querySelector('[style*="background: #d4edda"]');
-        if (assignedContainer) {
-            const assignedAssets = assignedContainer.querySelectorAll('div[style*="display: flex"]');
-            assignedAssets.forEach(assetDiv => {
-                const assetSpan = assetDiv.querySelector('span[style*="font-weight: 500"]');
-                if (assetSpan && assetSpan.textContent.includes(assetId)) {
-                    // Get asset details before removing
-                    const assetIdText = assetId;
-                    const serialMatch = assetDiv.textContent.match(/SN: ([^•]+)/);
-                    const serialText = serialMatch ? serialMatch[1].trim() : 'N/A';
-                    
-                    // Remove from assigned section
-                    assetDiv.remove();
-                    
-                    // Add back to available section
-                    addAssetBackToAvailable(modelSection, assetIdText, serialText);
-                    
-                    // Update counts
-                    updateModelSectionCounts(modelSection, 'remove');
-                }
-            });
-        }
-    });
 }
 
 function removeAssetFromModal(assetId) {
@@ -1656,19 +1792,72 @@ function updateAssetInAllAssetsSection(eventId, assetId, isPrepared) {
     });
 }
 
-function moveAssetInModelSection(eventId, assetId) {
-    // Find the asset in available section and move it to assigned section
-    const availableAssetElements = document.querySelectorAll(`[onclick*="assignSpecificAsset"][onclick*="'${assetId}'"]`);
-    availableAssetElements.forEach(button => {
-        const assetDiv = button.closest('div[style*="display: flex"]');
-        if (assetDiv) {
-            // Update button to show "Assigned"
-            button.textContent = 'Assigned ✓';
-            button.className = 'btn btn-secondary';
-            button.disabled = true;
-            button.onclick = null;
-        }
-    });
+async function moveAssetInModelSection(eventId, assetId) {
+    try {
+        // Get fresh event data to check if asset is extra
+        const response = await apiCall(`/api/events/${eventId}`);
+        const freshEvent = response.data;
+        
+        // Find the asset in available section and move it to assigned section
+        const availableAssetElements = document.querySelectorAll(`[onclick*="prepareSpecificAsset(${eventId}, '${assetId}')"]`);
+        
+        availableAssetElements.forEach(button => {
+            const assetDiv = button.closest('div[style*="display: flex"]');
+            if (assetDiv) {
+                const modelSection = assetDiv.closest('.model-prep-section');
+                if (modelSection) {
+                    // Get asset details before removing from available
+                    const assetIdText = assetId;
+                    const serialMatch = assetDiv.textContent.match(/SN: ([^•]+)/);
+                    const serialText = serialMatch ? serialMatch[1].trim() : 'N/A';
+                    
+                    // Remove from available section
+                    assetDiv.remove();
+                    
+                    // Find the assigned section
+                    const assignedSection = modelSection.querySelector('[style*="background: #d4edda"]');
+                    if (assignedSection) {
+                        // Count how many assets are already assigned to determine if this one is extra
+                        const existingAssets = assignedSection.querySelectorAll('div[style*="display: flex"]');
+                        const currentAssignedCount = existingAssets.length;
+                        
+                        // Find the required quantity from the section title
+                        const titleElement = modelSection.querySelector('h5');
+                        const titleMatch = titleElement ? titleElement.textContent.match(/(\d+)x/) : null;
+                        const requiredQty = titleMatch ? parseInt(titleMatch[1]) : 1;
+                        
+                        // Determine if this asset is extra
+                        const isExtra = currentAssignedCount >= requiredQty;
+                        const bgColor = isExtra ? '#fff3cd' : '#d4edda';
+                        const textColor = isExtra ? '#856404' : '#155724';
+                        const statusIcon = isExtra ? '➕' : '✅';
+                        const statusText = isExtra ? 'Extra' : 'Required';
+                        const borderColor = isExtra ? '#ffeaa7' : '#c3e6cb';
+                        
+                        // Create new assigned asset element with proper styling
+                        const newAssetHTML = `
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; padding: 10px 12px; background: ${bgColor}; border-radius: 4px; border: 1px solid ${borderColor};">
+                                <div>
+                                    <span style="color: ${textColor}; font-weight: 500; font-size: 15px;">
+                                        ${statusIcon} ${assetIdText}
+                                    </span>
+                                    <div style="color: ${textColor}; font-size: 13px; margin-top: 3px;">SN: ${serialText} • ${statusText}</div>
+                                </div>
+                                <button class="btn btn-warning" style="padding: 6px 12px; font-size: 12px;" onclick="unprepareSpecificAsset(${eventId}, '${assetId}')">Unprepare</button>
+                            </div>
+                        `;
+                        
+                        assignedSection.insertAdjacentHTML('beforeend', newAssetHTML);
+                    }
+                    
+                    // Update counts
+                    updateModelSectionCounts(modelSection, 'add');
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Error moving asset in model section:', error);
+    }
 }
 
 function updateEventSummaryInModal(event) {
@@ -2052,25 +2241,50 @@ async function processUniversalAsset(eventId) {
     }
 }
 
+
+
+/**
+ * ASSIGN + PREPARE in one step for extra assets
+ * Used by: Universal asset input and "Assign & Prepare" buttons
+ * Maintains exact same function signature as before
+ */
 async function assignAndPrepareAsset(eventId, assetId) {
+    console.log(`=== assignAndPrepareAsset CALLED ===`);
+    console.log('eventId:', eventId, 'assetId:', assetId);
+    
     const feedbackDiv = document.getElementById('universal-asset-feedback');
     const input = document.getElementById('universalAssetInput');
     
     try {
-        // Just assign the asset to the event - it will be automatically prepared as an extra asset
         await apiCall(`/api/events/${eventId}/assign-specific`, 'POST', { assetId });
         
-        showFeedback(feedbackDiv, 'success', `✅ ${assetId} assigned and prepared as extra asset`);
+        if (feedbackDiv) {
+            showFeedback(feedbackDiv, 'success', `✅ ${assetId} assigned and prepared as extra asset`);
+        } else {
+            showNotification('success', `${assetId} assigned and prepared as extra asset`);
+        }
         
         // Clear input and focus back on it
-        input.value = '';
-        input.focus();
+        if (input) {
+            input.value = '';
+            input.focus();
+        }
         
-        // Update the interface dynamically instead of full refresh
-        updateAssetStatusInModal(eventId, assetId, 'assigned');
+        console.log('About to refresh modal with state preservation...');
+        // Refresh modal while preserving UI state
+        setTimeout(() => {
+            preserveModalState(() => {
+                openPrepareEventModal(eventId);
+            });
+        }, 200);
         
     } catch (error) {
-        showFeedback(feedbackDiv, 'error', `Failed to assign asset: ${error.message}`);
+        console.error('Error in assignAndPrepareAsset:', error);
+        if (feedbackDiv) {
+            showFeedback(feedbackDiv, 'error', `Failed to assign asset: ${error.message}`);
+        } else {
+            showNotification('error', `Failed to assign and prepare asset: ${error.message}`);
+        }
     }
 }
 
@@ -4298,6 +4512,54 @@ async function updateModelQuantity(
   }
 }
 
+function preserveModalState(callback) {
+    // Save which sections are expanded
+    const expandedSections = [];
+    const toggleIcons = document.querySelectorAll('.toggle-icon');
+    toggleIcons.forEach(icon => {
+        const parent = icon.closest('[onclick*="togglePrepareSection"]');
+        if (parent) {
+            const onclickAttr = parent.getAttribute('onclick');
+            const match = onclickAttr.match(/togglePrepareSection\('([^']+)'\)/);
+            if (match) {
+                const sectionId = match[1];
+                const section = document.getElementById(sectionId);
+                if (section && section.style.display !== 'none') {
+                    expandedSections.push(sectionId);
+                }
+            }
+        }
+    });
+    
+    // Save scroll position
+    const modalContent = document.getElementById('prepareEventContent');
+    const scrollTop = modalContent ? modalContent.scrollTop : 0;
+    
+    // Execute the callback (refresh)
+    callback();
+    
+    // Restore state after a short delay
+    setTimeout(() => {
+        // Restore expanded sections
+        expandedSections.forEach(sectionId => {
+            const section = document.getElementById(sectionId);
+            if (section) {
+                section.style.display = 'block';
+                // Also update the toggle icon
+                const toggleElement = document.querySelector(`[onclick*="togglePrepareSection('${sectionId}')"] .toggle-icon`);
+                if (toggleElement) {
+                    toggleElement.textContent = '▲';
+                }
+            }
+        });
+        
+        // Restore scroll position
+        if (modalContent) {
+            modalContent.scrollTop = scrollTop;
+        }
+    }, 100);
+}
+
 function validateEditQuantityInput() {
   const input = document.getElementById("editQuantityInput");
   const maxQty = parseInt(input.max);
@@ -4733,15 +4995,42 @@ async function addAssetToEventSimple(eventId, assetId) {
   }
 }
 
+/**
+ * ASSIGN an asset to an event (calls /assign-specific API)
+ * Used by: Model section "Prepare" buttons and other assignment flows
+ * Maintains exact same function signature as before
+ */
 async function assignSpecificAsset(eventId, assetId, brand, model) {
+    console.log(`=== assignSpecificAsset CALLED ===`);
+    console.log('eventId:', eventId, 'assetId:', assetId, 'brand:', brand, 'model:', model);
+    
     try {
         await apiCall(`/api/events/${eventId}/assign-specific`, 'POST', { assetId });
         showNotification('success', `Assigned ${assetId} to event`);
         
-        // Update the interface dynamically instead of full refresh
-        updateAssetStatusInModal(eventId, assetId, 'assigned');
+        console.log('About to refresh modal with state preservation...');
+        // Refresh modal while preserving UI state
+        setTimeout(() => {
+            preserveModalState(() => {
+                openPrepareEventModal(eventId);
+            });
+        }, 200);
+        
+        // Also refresh other views if they're active
+        setTimeout(() => {
+            if (document.getElementById('prepare-section').classList.contains('active')) {
+                loadPrepareEvents();
+            }
+            if (document.getElementById('dashboard-section').classList.contains('active')) {
+                loadDashboard();
+            }
+            if (document.getElementById('events-section').classList.contains('active')) {
+                loadAllEvents();
+            }
+        }, 700);
         
     } catch (error) {
+        console.error('Error in assignSpecificAsset:', error);
         showNotification('error', `Failed to assign asset: ${error.message}`);
     }
 }

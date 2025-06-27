@@ -855,14 +855,15 @@ def get_event(event_id):
         event_data = {
             'id': event.event_id,
             'name': event.name,
-            'startDate': format_date_output(event.start_date),
-            'endDate': format_date_output(event.end_date),
+            'startDate': event.start_date,
+            'endDate': event.end_date,
             'state': event.state,
             'tag': getattr(event, 'tag', 'events'), 
             'assetModels': event.asset_models,
             'preparedItems': event.prepared_items,
             'actuallyPrepared': event.actually_prepared,
             'returnedItems': event.returned_items,
+            'extraAssets': event.extra_assets,
             'assetsByDepartment': sorted_departments,
             'assignedAssets': assigned_assets,
             'preparedAssets': prepared_assets,
@@ -1458,7 +1459,7 @@ def prepare_event_asset(event_id):
 @app.route('/api/events/<int:event_id>/unprepare', methods=['POST'])
 @require_auth
 def unprepare_event_asset(event_id):
-    """Mark an asset as unprepared but keep it assigned to the event"""
+    """Remove a specific asset completely from the event"""
     try:
         event = data_manager.events.get(event_id)
         if not event:
@@ -1478,24 +1479,21 @@ def unprepare_event_asset(event_id):
         if asset_id not in event.prepared_items:
             return jsonify({'error': 'Asset is not assigned to this event'}), 400
 
-        # Check if asset is already unprepared
-        if asset_id not in event.actually_prepared:
-            return jsonify({'success': True, 'message': f'Asset {asset_id} is already unprepared'})
-
         # LOG THE UNPREPARE ACTION
-        log_asset_change(event_id, asset_id, "UNPREPARING", "removing from actually_prepared but keeping in event [unprepare_event_asset]")
+        log_asset_change(event_id, asset_id, "UNPREPARING", "completely removing asset from event [unprepare_event_asset]")
 
-        # Remove from prepared list BUT KEEP IN prepared_items (don't unassign)
-        event.actually_prepared.remove(asset_id)
+        # Remove from prepared list (completely unassign the asset)
+        event.prepared_items.remove(asset_id)
         
-        # DO NOT remove from prepared_items - this was the bug!
-        # The asset should stay assigned to the event, just marked as not prepared
+        # Remove from actually_prepared if it's there
+        if asset_id in event.actually_prepared:
+            event.actually_prepared.remove(asset_id)
         
         # Remove from extra_assets if it's there
         if hasattr(event, 'extra_assets') and asset_id in event.extra_assets:
             event.extra_assets.remove(asset_id)
 
-        # For regular assets, reset location to default but keep assigned
+        # For regular assets, reset location to default
         if not (asset_id.startswith('[LOAN]') or asset_id.startswith('[MISC]')):
             asset = data_manager.inventory.get(asset_id)
             if asset:
@@ -1511,12 +1509,12 @@ def unprepare_event_asset(event_id):
         # Invalidate cache
         invalidate_cache()
 
-        log_action(f"Unprepared asset {asset_id} from event {event_id} (but kept assigned)")
+        log_action(f"Completely removed asset {asset_id} from event {event_id}")
 
-        return jsonify({'success': True, 'message': f'Asset {asset_id} unprepared (but still assigned to event)'})
+        return jsonify({'success': True, 'message': f'Asset {asset_id} removed from event'})
     except Exception as e:
-        logger.error(f"Error unpreparing asset from event {event_id}: {e}")
-        return jsonify({'error': 'Failed to unprepare asset'}), 500
+        logger.error(f"Error removing asset from event {event_id}: {e}")
+        return jsonify({'error': 'Failed to remove asset'}), 500
 
 @app.route('/api/events/<int:event_id>/return', methods=['POST'])
 @require_auth
@@ -2592,9 +2590,11 @@ def check_and_update_ongoing_events():
             if event.state != old_state:
                 data_manager.save_event(event)
                 updated_count += 1
-                logger.info(f"  *** STATE CHANGED: {old_state} → {event.state} ***")
-            else:
-                logger.info(f"  No state change (remains {event.state})")
+                ##logger.info(f"  *** STATE CHANGED: {old_state} → {event.state} ***")
+
+                ##DEBUG
+            # else:
+            #     logger.info(f"  No state change (remains {event.state})")
         
         if updated_count > 0:
             invalidate_cache()
