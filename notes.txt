@@ -1,14 +1,16 @@
--when transferring items from one event to another, only show common assets, used to transfer prepared items
--add new log no page refresh, add check to check status and assign to radio button
--overdue status for events
--view log in ooc 
--view inventory allows user to view history of events as well as maintenance log
--edit asset
--making DO from event
+-add items that are not in asset (rental items or cables or trusses)
+-give me back the return button
+-ability to return item by asset type (return all option only for admin)
+-ability to check who returned and prepared the asset for the show for accountability
+-add new maintenance log no page refresh, add check to check status and assign to radio button
 -maintenance date log not sorting by date
+-making DO from event
+-ability to return item by asset type
+-view log in ooc
+-add ability to dispose items (same logic as OOC, just says "disposed")
+-edit all attributes of an asset
+-when transferring items from one event to another, only show common assets, used to transfer prepared items
 
 -asset check shows all item of asset type and allows user to account for all assetID of that item
--rental asset for event
--undo button
--dry hire cables
+-undo button (maybe dont need)
 -ability to force status to ongoing as admin even if event not fully prepared

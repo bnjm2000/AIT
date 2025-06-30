@@ -741,7 +741,7 @@ DIABLO#10,Ayrton,Diablo (W.DMX),DB2935057,Profile LED,False,False,2025/06/05	bnj
 DIABLO#11,Ayrton,Diablo (W.DMX),DB2935034,Profile LED,False,False,"2025/06/05	bnjm2000	Replaced Pan/Tilt board - $222.87
 CMY Driver Board - $195.84",LX,Store,
 DIABLO#12,Ayrton,Diablo (W.DMX),DB2935019,Profile LED,False,False,2025/06/05	bnjm2000	Replaced Pan/Tilt Board - $222.87,LX,Store,
-DIABLO#13,Ayrton,Diablo Profile,DB5309007,Profile LED,False,False,,LX,Store,
+DIABLO#13,Ayrton,Diablo Profile,DB5309007,Profile LED,False,True,2025/06/30	Deano	Gobo error [Marked OOC],LX,Store,
 DIABLO#14,Ayrton,Diablo Profile,DB5309023,Profile LED,False,False,,LX,Store,
 DIABLO#15,Ayrton,Diablo Profile,DB5309005,Profile LED,False,False,2025/06/26	bnjm2000	Many error (Wedding of Micheal and Cindy) [Marked OOC]|2025/06/05	bnjm2000	Replaced Zoom/Focus Driver Board - $FOC [Cleared OOC],LX,Store,
 DIABLO#16,Ayrton,Diablo Profile,DB5309027,Profile LED,False,False,,LX,Store,
@@ -840,6 +840,30 @@ ECLIPSE#17,Silver Star,Eclipse 1000 RGBAL SS847XAL,MO18112100400010,,False,False
 ECLIPSE#18,Silver Star,Eclipse 1000 RGBAL SS847XAL,MO18112100400001,,False,False,,LX,Store,
 ECLIPSE#19,Silver Star,Eclipse 1000 RGBAL SS847XAL,MO18112100400004,,False,False,,LX,Store,
 ECLIPSE#20,Silver Star,Eclipse 1000 RGBAL SS847XAL,MO18112100400009,,False,False,,LX,Store,
+STRIKEM#01,Pomelo,Photon Strike M,,LED MOVING HEAD STROBE 1200W,False,False,,LX,Store,
+STRIKEM#02,Pomelo,Photon Strike M,,LED MOVING HEAD STROBE 1200W,False,False,,LX,Store,
+STRIKEM#03,Pomelo,Photon Strike M,,LED MOVING HEAD STROBE 1200W,False,False,,LX,Store,
+STRIKEM#04,Pomelo,Photon Strike M,,LED MOVING HEAD STROBE 1200W,False,False,,LX,Store,
+STRIKEM#05,Pomelo,Photon Strike M,,LED MOVING HEAD STROBE 1200W,False,False,,LX,Store,
+STRIKEM#06,Pomelo,Photon Strike M,,LED MOVING HEAD STROBE 1200W,False,False,,LX,Store,
+STRIKEM#07,Pomelo,Photon Strike M,,LED MOVING HEAD STROBE 1200W,False,False,,LX,Store,
+STRIKEM#08,Pomelo,Photon Strike M,,LED MOVING HEAD STROBE 1200W,False,False,,LX,Store,
+NICKWASH#01,DTS,NickWash 600,,self-contained compact high-output LED moving head projector,False,False,,LX,Store,
+NICKWASH#02,DTS,NickWash 600,,self-contained compact high-output LED moving head projector,False,False,,LX,Store,
+NICKWASH#03,DTS,NickWash 600,,self-contained compact high-output LED moving head projector,False,False,,LX,Store,
+NICKWASH#04,DTS,NickWash 600,,self-contained compact high-output LED moving head projector,False,False,,LX,Store,
+NICKWASH#05,DTS,NickWash 600,,self-contained compact high-output LED moving head projector,False,False,,LX,Store,
+NICKWASH#06,DTS,NickWash 600,,self-contained compact high-output LED moving head projector,False,False,,LX,Store,
+NICKWASH#07,DTS,NickWash 600,,self-contained compact high-output LED moving head projector,False,False,,LX,Store,
+NICKWASH#08,DTS,NickWash 600,,self-contained compact high-output LED moving head projector,False,False,,LX,Store,
+NICKWASH#09,DTS,NickWash 600,,self-contained compact high-output LED moving head projector,False,False,,LX,Store,
+NICKWASH#10,DTS,NickWash 600,,self-contained compact high-output LED moving head projector,False,False,,LX,Store,
+NICKWASH#11,DTS,NickWash 600,,self-contained compact high-output LED moving head projector,False,False,,LX,Store,
+NICKWASH#12,DTS,NickWash 600,,self-contained compact high-output LED moving head projector,False,True,,LX,Store,
+63ADB#01,63A 3-Phase DB,Custom DB,,,False,False,,LX,Store,
+63ADB#02,63A 3-Phase DB,Custom DB,,,False,False,,LX,Store,
+32ADB#01,32A 3-Phase DB,Custom DB,,,False,False,,LX,Store,
+32ADB#02,32A 3-Phase DB,Custom DB,,,False,False,,LX,Store,
 LX TREE #01,Versa-Stand,,,Winch Up Lighting Stand,False,False,,LX,Store,
 LX TREE #02,Versa-Stand,,,Winch Up Lighting Stand,False,False,,LX,Store,
 LX TREE #03,Versa-Stand,,,Winch Up Lighting Stand,False,False,,LX,Store,
@@ -902,16 +926,16 @@ LG50#01,LG,50NANO75TPA,104INZY62629,"50"" Crystal UHD 4K Smart TV (2020)",False,
 LG50#02,LG,50NANO75TPA,209INHZ4B729,"50"" Crystal UHD 4K Smart TV (2020)",False,False,,VX,Store,
 LG50#03,LG,50NANO75TPA,209INVM4B727,"50"" Crystal UHD 4K Smart TV (2020)",False,False,,VX,Store,
 LG50#04,LG,50NANO75TPA,209INPT4B728,"50"" Crystal UHD 4K Smart TV (2020)",False,False,,VX,Store,
-CMD8#01,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,,SK,Store,Dry Hire: NicheAV
-CMD8#02,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,,SK,Store,Dry Hire: NicheAV
-CMD8#03,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,,SK,Store,Dry Hire: NicheAV
-CMD8#04,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,,SK,Store,Dry Hire: NicheAV
+CMD8#01,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,,SK,Store,Store
+CMD8#02,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,,SK,Store,Store
+CMD8#03,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,,SK,Store,Store
+CMD8#04,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,,SK,Store,Store
 CMD8#05,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,,SK,Store,
-CMD8#06,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,,SK,Store,Dry Hire: NicheAV
+CMD8#06,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,,SK,Store,Store
 CMD8#07,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,,SK,Store,
-CMD8#08,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,,SK,Store,Dry Hire: NicheAV
-CMD8#09,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,,SK,Store,Dry Hire: NicheAV
-CMD8#10,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,,SK,Store,Dry Hire: NicheAV
+CMD8#08,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,,SK,Store,Store
+CMD8#09,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,,SK,Store,Store
+CMD8#10,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,,SK,Store,Store
 CMD8#11,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,,SK,Store,
 CMD8#12,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,,SK,Store,
-CONTROLLER#01,Custom,Chain Hoist Controller,,Chain Hoist Controller,False,False,,SK,Store,Dry Hire: NicheAV
+CONTROLLER#01,Custom,Chain Hoist Controller,,Chain Hoist Controller,False,False,,SK,Store,Store
