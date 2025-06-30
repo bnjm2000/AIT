@@ -1,2 +1,2 @@
 EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,Tag
-28,Dry Hire: Fizah,20250528,20250530,[],"[""[MODEL]LX|Cameo|Unicon Remote Control|1|DMX/RDM Controller"", ""CAMEO#01""]",[],Overdue,"[""CAMEO#01""]",[],dry hire
+28,Dry Hire: Fizah,20250528,20250530,[],"[""[MODEL]LX|Cameo|Unicon Remote Control|1|DMX/RDM Controller"", ""CAMEO#01""]","[""CAMEO#01""]",Planning,[],[],dry hire
