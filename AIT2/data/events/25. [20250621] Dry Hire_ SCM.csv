@@ -1,2 +1,2 @@
 EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,Tag
-25,Dry Hire: SCM,20250621,20250626,[],"[""[MODEL]AX|Shure|AD3|2|Plug-on Transmitter"", ""AD3#03"", ""AD3#02""]",[],Ongoing,"[""AD3#03"", ""AD3#02""]",[],dry hire
+25,Dry Hire: SCM,20250621,20250626,[],"[""[MODEL]AX|Shure|AD3|2|Plug-on Transmitter"", ""AD3#03"", ""AD3#02""]",[],Overdue,"[""AD3#03"", ""AD3#02""]",[],dry hire
