@@ -2595,14 +2595,37 @@ function createReturnEventCard(event) {
       <div class="event-title">${escapeHtml(event.name)}</div>
       <div class="event-date">${escapeHtml(dateRange)}</div>
       <div style="margin: 15px 0;">
-          <small style="color: #666;">${event.assetCount || 0} assets assigned</small>
+          <small style="color: #666;">${returnedCount}/${totalCount} assets returned</small>
       </div>
       <div class="event-actions">
           <button class="btn btn-primary" onclick="viewEvent(${event.id})">View Assets</button>
+          <button class="btn btn-warning" onclick="openReturnAssetsModalWithEvent(${event.id})">Return</button>
       </div>
   `;
 
   return card;
+}
+
+async function openReturnAssetsModalWithEvent(eventId) {
+    try {
+        // Open the return assets modal
+        await openReturnAssetsModal();
+        
+        // Wait a short moment for the modal to render
+        setTimeout(() => {
+            // Pre-select the event in the dropdown
+            const eventSelect = document.getElementById('returnEventSelect');
+            if (eventSelect) {
+                eventSelect.value = eventId;
+                // Trigger the change event to load the assets
+                loadEventAssetsForReturn();
+            }
+        }, 100);
+        
+    } catch (error) {
+        showNotification('error', 'Failed to open return modal');
+        console.error('Error opening return modal with pre-selected event:', error);
+    }
 }
 
 async function openReturnAssetsModal() {
