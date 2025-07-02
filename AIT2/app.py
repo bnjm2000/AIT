@@ -119,7 +119,7 @@ def get_assigned_assets():
     for event in data_manager.events.values():
         for asset_id in event.prepared_items:
             if (asset_id not in event.returned_items and
-                    not (asset_id.startswith('[LOAN]') or asset_id.startswith('[MISC]') or asset_id.startswith('[RENTAL]'))):
+                    not (asset_id.startswith('[LOAN]') or asset_id.startswith('[MISC]'))):
                 assigned_assets.add(asset_id)
 
     _cache['assigned_assets'] = assigned_assets
@@ -442,14 +442,12 @@ def get_events():
             # Build model groups for this event
             model_groups = {}
             has_model_assignments = False
-
-            # Process prepared_items to find model assignments and build groups
-            for item in event.prepared_items:
-                if item.startswith('[MODEL]'):
+            
+            for asset_id in event.prepared_items:
+                if asset_id.startswith('[MODEL]'):
                     has_model_assignments = True
                     try:
-                        # Parse: [MODEL]DEPT|BRAND|MODEL|QUANTITY|DESCRIPTION
-                        parts = item[7:].split('|')
+                        parts = asset_id[7:].split('|')
                         if len(parts) >= 4:
                             dept = parts[0]
                             brand = parts[1]
@@ -457,73 +455,86 @@ def get_events():
                             quantity = int(parts[3])
                             description = parts[4] if len(parts) > 4 else ''
                             
-                            key = f"{dept}|{brand}|{model}"
-                            if key not in model_groups:
-                                model_groups[key] = {
+                            model_key = f"{dept}|{brand}|{model}"
+                            
+                            if model_key not in model_groups:
+                                model_groups[model_key] = {
                                     'department': dept,
                                     'brand': brand,
                                     'model': model,
                                     'description': description,
-                                    'requiredQuantity': 0,
-                                    'assignedAssets': []
+                                    'requiredQuantity': quantity,
+                                    'assignedAssets': [],
+                                    'status': 'pending'
                                 }
-                            model_groups[key]['requiredQuantity'] += quantity
-                    except (ValueError, IndexError) as e:
-                        logger.warning(f"Failed to parse model item {item}: {e}")
+                            
+                            # Find assigned specific assets for this model
+                            for specific_asset_id in event.actually_prepared:
+                                specific_asset = data_manager.inventory.get(specific_asset_id)
+                                if (specific_asset and 
+                                    specific_asset.brand == brand and 
+                                    specific_asset.model_number == model and
+                                    specific_asset.department_code == dept):
+                                    
+                                    asset_status = 'returned' if specific_asset_id in event.returned_items else 'prepared'
+                                    
+                                    model_groups[model_key]['assignedAssets'].append({
+                                        'id': specific_asset_id,
+                                        'serial': specific_asset.serial_number,
+                                        'status': asset_status,
+                                        'location': specific_asset.current_location
+                                    })
+                            
+                            # Determine overall model status - FIXED LOGIC
+                            assigned_count = len(model_groups[model_key]['assignedAssets'])
+                            returned_count = len([a for a in model_groups[model_key]['assignedAssets'] if a['status'] == 'returned'])
+                            
+                            if returned_count == assigned_count and returned_count == quantity:
+                                model_groups[model_key]['status'] = 'returned'
+                            elif assigned_count >= quantity:
+                                model_groups[model_key]['status'] = 'ready'
+                            elif assigned_count > 0:
+                                model_groups[model_key]['status'] = 'partial'
+                            else:
+                                model_groups[model_key]['status'] = 'pending'
+                                
+                    except Exception as e:
+                        logger.error(f"Error parsing model assignment {asset_id}: {e}")
                         continue
 
-            # Calculate counts
-            total_required = 0
-            total_prepared = 0
-            total_returned = 0
-            
-            # Count from model assignments
-            for model_group in model_groups.values():
-                total_required += model_group['requiredQuantity']
-            
-            # Count from custom assets and regular assets
-            for item in event.prepared_items:
-                if not item.startswith('[MODEL]'):  # Don't double-count model assignments
-                    total_required += 1
-                    
-                if item in event.actually_prepared:
-                    total_prepared += 1
-                    
-                if item in event.returned_items:
-                    total_returned += 1
+            # Calculate totals - ONLY use model-based logic for events with model assignments
+            if has_model_assignments:
+                total_required = 0
+                total_prepared = 0
+                total_returned = 0
+                
+                # Count from model groups for accurate totals
+                for model_group in model_groups.values():
+                    total_required += model_group['requiredQuantity']
+                    total_prepared += len(model_group['assignedAssets'])
+                    total_returned += len([a for a in model_group['assignedAssets'] if a['status'] == 'returned'])
+            else:
+                # Use old logic for events without model assignments
+                total_required = len(event.prepared_items)
+                total_prepared = len(event.actually_prepared)
+                total_returned = len(event.returned_items)
 
-            # Count asset assignments to models (assets that fulfill model requirements)
-            for item in event.prepared_items:
-                if not item.startswith('[MODEL]') and not item.startswith('[MISC]') and not item.startswith('[LOAN]') and not item.startswith('[RENTAL]'):
-                    # This is a regular asset - check if it matches any model requirement
-                    asset = data_manager.inventory.get(item)
-                    if asset:
-                        asset_key = f"{asset.department_code}|{asset.brand}|{asset.model_number}"
-                        if asset_key in model_groups:
-                            # Add to model group's assigned assets
-                            status = 'returned' if item in event.returned_items else ('prepared' if item in event.actually_prepared else 'assigned')
-                            model_groups[asset_key]['assignedAssets'].append({
-                                'id': item,
-                                'status': status,
-                                'serial': asset.serial_number,
-                                'name': asset.description
-                            })
-
-            # Format event data
-            event_data = {
+            events_data.append({
                 'id': event.event_id,
                 'name': event.name,
-                'startDate': datetime.strptime(event.start_date, '%Y%m%d').strftime('%Y-%m-%d'),
-                'endDate': datetime.strptime(event.end_date, '%Y%m%d').strftime('%Y-%m-%d'),
-                'state': event.state,
-                'tag': getattr(event, 'tag', 'events'),
+                'startDate': format_date_output(event.start_date),
+                'endDate': format_date_output(event.end_date),
+                'state': event.state,  # Keep original state, don't force update
+                'tag': getattr(event, 'tag', 'events'), 
                 'assetCount': total_required,
                 'preparedCount': total_prepared,
                 'returnedCount': total_returned,
-                'modelGroups': model_groups
-            }
-
-            events_data.append(event_data)
+                'assetModels': event.asset_models,
+                'preparedItems': event.prepared_items,
+                'returnedItems': event.returned_items,
+                'modelGroups': model_groups,
+                'hasModelAssignments': has_model_assignments  # Flag to know which logic to use
+            })
 
         # Sort by event ID descending
         events_data.sort(key=lambda x: x['id'], reverse=True)
@@ -532,7 +543,7 @@ def get_events():
     except Exception as e:
         logger.error(f"Error getting events: {e}")
         return jsonify({'error': 'Failed to retrieve events'}), 500
-    
+
 @app.route('/api/events/<int:event_id>', methods=['GET'])
 @require_auth
 def get_event(event_id):
@@ -558,36 +569,15 @@ def get_event(event_id):
         for asset_id in event.prepared_items:
             asset_info = None
 
-            if asset_id.startswith('[LOAN]') or asset_id.startswith('[MISC]') or asset_id.startswith('[RENTAL]'):
-                # Handle loan/misc/rental items
-                dept_map = {
-                    '[LOAN]': 'LOAN',
-                    '[MISC]': 'MISC', 
-                    '[RENTAL]': 'RENTAL'
-                }
-                
-                # Get department from stored metadata if available
-                if hasattr(event, 'custom_asset_metadata') and asset_id in event.custom_asset_metadata:
-                    metadata = event.custom_asset_metadata[asset_id]
-                    target_dept = metadata.get('department', 'MISC')
-                    name = metadata.get('description', asset_id)
-                else:
-                    # Fallback to old logic
-                    dept = None
-                    name = asset_id
-                    for prefix, dept_code in dept_map.items():
-                        if asset_id.startswith(prefix):
-                            dept = dept_code
-                            name = asset_id.replace(prefix, '').strip()
-                            break
-                    target_dept = dept if dept else 'MISC'
-                
-                # Handle quantity specifications (legacy format)
+            if asset_id.startswith('[LOAN]') or asset_id.startswith('[MISC]'):
+                # Handle loan/misc items
+                dept = 'LOAN' if asset_id.startswith('[LOAN]') else 'MISC'
+                name = asset_id.replace(f'[{dept}]', '').strip()
                 if ';' in name:
                     name, quantity = name.split(';', 1)
                     name = f"{name} (Qty: {quantity})"
 
-                # Determine status for custom items
+                # Determine status for loan/misc items
                 if asset_id in event.returned_items:
                     status = 'returned'
                 elif asset_id in event.actually_prepared:
@@ -602,9 +592,6 @@ def get_event(event_id):
                     'isLoanOrMisc': True,
                     'isExtra': asset_id in event.extra_assets
                 }
-                
-                # Add to the correct department based on metadata
-                assets_by_department[target_dept].append(asset_info)
             elif asset_id.startswith('[MODEL]'):
                 # Handle model assignments - INCLUDE THESE IN assetsByDepartment
                 try:
@@ -700,8 +687,7 @@ def get_event(event_id):
                     }
 
             if asset_info:
-                dept_key = target_dept if asset_id.startswith('[LOAN]') or asset_id.startswith('[MISC]') or asset_id.startswith('[RENTAL]') else dept
-                assets_by_department[dept_key].append(asset_info)
+                assets_by_department[dept].append(asset_info)
 
                 # Categorize assets
                 if asset_info['status'] == 'returned':
@@ -800,68 +786,26 @@ def get_event(event_id):
                         logger.info(f"Checking assets for model {brand} {model}: {all_potential_assets}")
                         
                         for specific_asset_id in all_potential_assets:
-                            # Handle custom assets (MISC/RENTAL) that might fulfill model requirements
-                            if specific_asset_id.startswith('[MISC]') or specific_asset_id.startswith('[RENTAL]'):
-                                # Check if this custom asset fulfills the current model requirement
-                                # Get custom asset metadata
-                                should_include = False
-                                display_name = specific_asset_id
+                            specific_asset = data_manager.inventory.get(specific_asset_id)
+                            
+                            if specific_asset:
+                                logger.info(f"Asset {specific_asset_id}: brand={specific_asset.brand}, model={specific_asset.model_number}, dept={specific_asset.department_code}")
+                                logger.info(f"Looking for: brand={brand}, model={model}, dept={dept}")
                                 
-                                if hasattr(event, 'custom_asset_metadata') and specific_asset_id in event.custom_asset_metadata:
-                                    metadata = event.custom_asset_metadata[specific_asset_id]
-                                    asset_dept = metadata.get('department', 'MISC')
-                                    display_name = metadata.get('description', specific_asset_id)
-                                    
-                                    # Check if this custom asset matches the model requirement by department
-                                    # and is not marked as extra (meaning it fulfills a requirement)
-                                    if (asset_dept == dept and specific_asset_id not in event.extra_assets):
-                                        should_include = True
-                                else:
-                                    # Fallback: if no metadata, check if it's not in extra_assets
-                                    if specific_asset_id not in event.extra_assets:
-                                        should_include = True
-                                        # Extract display name
-                                        if specific_asset_id.startswith('[MISC]'):
-                                            display_name = specific_asset_id[6:]
-                                        elif specific_asset_id.startswith('[RENTAL]'):
-                                            display_name = specific_asset_id[9:]
-                                
-                                if should_include:
+                                if (specific_asset.brand == brand and
+                                    specific_asset.model_number == model and
+                                    specific_asset.department_code == dept):
+
+                                    # Check if this asset is returned
                                     asset_status = 'returned' if specific_asset_id in event.returned_items else 'prepared'
-                                    logger.info(f"Custom asset {specific_asset_id} fulfills model requirement {brand} {model} and has status: {asset_status}")
-                                    
+                                    logger.info(f"Asset {specific_asset_id} matches model and has status: {asset_status}")
+
                                     model_groups[model_key]['assignedAssets'].append({
                                         'id': specific_asset_id,
-                                        'serial': '',  # Custom assets don't have serial numbers
+                                        'serial': specific_asset.serial_number,
                                         'status': asset_status,
-                                        'location': '',  # Custom assets don't have locations
-                                        'name': display_name,
-                                        'isCustom': True
+                                        'location': specific_asset.current_location
                                     })
-                            else:
-                                # Handle regular inventory assets
-                                specific_asset = data_manager.inventory.get(specific_asset_id)
-                                
-                                if specific_asset:
-                                    logger.info(f"Asset {specific_asset_id}: brand={specific_asset.brand}, model={specific_asset.model_number}, dept={specific_asset.department_code}")
-                                    logger.info(f"Looking for: brand={brand}, model={model}, dept={dept}")
-                                    
-                                    if (specific_asset.brand == brand and
-                                        specific_asset.model_number == model and
-                                        specific_asset.department_code == dept):
-
-                                        # Check if this asset is returned
-                                        asset_status = 'returned' if specific_asset_id in event.returned_items else 'prepared'
-                                        logger.info(f"Asset {specific_asset_id} matches model and has status: {asset_status}")
-
-                                        model_groups[model_key]['assignedAssets'].append({
-                                            'id': specific_asset_id,
-                                            'serial': specific_asset.serial_number,
-                                            'status': asset_status,
-                                            'location': specific_asset.current_location,
-                                            'name': specific_asset.description,
-                                            'isCustom': False
-                                        })
 
                         # Determine overall model status - FIXED LOGIC
                         assigned_count = len(model_groups[model_key]['assignedAssets'])
@@ -935,6 +879,7 @@ def get_event(event_id):
     except Exception as e:
         logger.error(f"Error getting event {event_id}: {e}")
         return jsonify({'error': 'Failed to retrieve event'}), 500
+    
 @app.route('/api/events', methods=['POST'])
 @require_auth
 def create_event():
@@ -1182,7 +1127,7 @@ def delete_event(event_id):
         # Reset assets from actually_prepared (in case there are any not in prepared_items)
         if hasattr(event, 'actually_prepared'):
             for asset_id in event.actually_prepared.copy():
-                if not (asset_id.startswith('[LOAN]') or asset_id.startswith('[MISC]') or asset_id.startswith('[RENTAL]')):
+                if not (asset_id.startswith('[LOAN]') or asset_id.startswith('[MISC]')):
                     asset = data_manager.inventory.get(asset_id)
                     if asset and asset_id not in event.prepared_items:
                         old_location = asset.current_location
@@ -1214,7 +1159,7 @@ def delete_event(event_id):
 @app.route('/api/events/<int:event_id>/assets', methods=['POST'])
 @require_auth
 def add_asset_to_event(event_id):
-    """Add an asset to an event"""
+    """Add an asset to an event (unprepared by default)"""
     try:
         event = data_manager.events.get(event_id)
         if not event:
@@ -1222,64 +1167,42 @@ def add_asset_to_event(event_id):
 
         data = request.get_json()
         asset_id = data.get('assetId', '').strip()
-        custom_asset = data.get('customAsset')  # New field for custom asset info
 
         if not asset_id:
             return jsonify({'error': 'Asset ID is required'}), 400
 
-        # Check if it's a custom asset (starts with [MISC] or [RENTAL])
-        if custom_asset and (asset_id.startswith('[MISC]') or asset_id.startswith('[RENTAL]')):
-            # Handle custom asset
-            logger.info(f"Adding custom asset {asset_id} to event {event_id}")
-            
-            # For custom assets, we don't check inventory - just add directly
-            if asset_id not in event.prepared_items:
-                event.prepared_items.append(asset_id)
-                
-                # Initialize actually_prepared if it doesn't exist
-                if not hasattr(event, 'actually_prepared'):
-                    event.actually_prepared = []
-                
-                # Store custom asset metadata for later retrieval
-                if not hasattr(event, 'custom_asset_metadata'):
-                    event.custom_asset_metadata = {}
-                
-                # Store the custom asset metadata including department
-                event.custom_asset_metadata[asset_id] = {
-                    'description': custom_asset.get('description', ''),
-                    'department': custom_asset.get('department', 'MISC'),
-                    'type': custom_asset.get('type', 'MISC')
-                }
-                
-                # Update event state
-                update_event_state(event)
-                
-                # Save changes
-                data_manager.save_event(event)
-                
-                # Invalidate cache
-                invalidate_cache()
-                
-                log_action(f"Added custom asset {asset_id} to event {event_id} - {custom_asset.get('description', '')}")
-                
-                return jsonify({'success': True, 'message': f'Custom asset {asset_id} added to event'})
-            else:
-                return jsonify({'error': 'Custom asset already assigned to this event'}), 400
-        
-        # Handle regular assets (existing logic)
-        asset = data_manager.inventory.get(asset_id)
-        if not asset:
-            return jsonify({'error': 'Asset not found'}), 404
+        # Initialize actually_prepared if it doesn't exist
+        if not hasattr(event, 'actually_prepared'):
+            event.actually_prepared = []
 
-        # Check if asset is already assigned
+        # Check if asset is already in this event
         if asset_id in event.prepared_items:
             return jsonify({'error': 'Asset is already assigned to this event'}), 400
 
-        # Check asset availability
-        if asset.is_missing:
-            return jsonify({'error': 'Asset is marked as missing'}), 400
+        # For regular assets, perform additional checks
+        if not (asset_id.startswith('[LOAN]') or asset_id.startswith('[MISC]')):
+            asset = data_manager.inventory.get(asset_id)
+            if not asset:
+                return jsonify({'error': 'Asset not found'}), 404
 
-        # Add asset to event
+            if asset.is_missing:
+                return jsonify({'error': 'Cannot assign missing asset'}), 400
+
+            if asset.is_ooc:
+                return jsonify({'error': 'Cannot assign out-of-commission asset'}), 400
+
+            # Check if asset is assigned to another active event
+            assigned_assets = get_assigned_assets()
+            if asset_id in assigned_assets:
+                for other_event in data_manager.events.values():
+                    if (other_event.event_id != event_id and
+                        asset_id in other_event.prepared_items and
+                            asset_id not in other_event.returned_items):
+                        return jsonify({
+                            'error': f'Asset is currently assigned to Event {other_event.event_id}: {other_event.name}'
+                        }), 400
+
+        # Add the asset as UNPREPARED (just assigned to event)
         event.prepared_items.append(asset_id)
 
         # Remove from returned items if it was there
@@ -1295,12 +1218,14 @@ def add_asset_to_event(event_id):
         # Invalidate cache
         invalidate_cache()
 
-        log_action(f"Assigned asset {asset_id} to event {event_id} (unprepared)")
+        log_action(
+            f"Assigned asset {asset_id} to event {event_id} (unprepared)")
 
         return jsonify({'success': True, 'message': f'Asset {asset_id} assigned to event (unprepared)'})
     except Exception as e:
         logger.error(f"Error adding asset to event {event_id}: {e}")
         return jsonify({'error': 'Failed to add asset to event'}), 500
+
 
 @app.route('/api/events/<int:event_id>/models', methods=['POST', 'DELETE'])
 @require_auth
@@ -1626,7 +1551,7 @@ def return_event_asset(event_id):
             event.actually_prepared.remove(asset_id)
 
         # For regular assets, update location
-        if not (asset_id.startswith('[LOAN]') or asset_id.startswith('[MISC]') or asset_id.startswith('[RENTAL]')):
+        if not (asset_id.startswith('[LOAN]') or asset_id.startswith('[MISC]')):
             asset = data_manager.inventory.get(asset_id)
             if asset:
                 asset.current_location = asset.default_location or ''
@@ -1894,7 +1819,6 @@ def remove_asset_from_event(event_id, asset_id):
 
 @app.route('/api/events/<int:event_id>/transfer', methods=['POST'])
 @require_auth
-
 def transfer_asset_between_events(event_id):
     """Transfer an asset from one event to another"""
     try:
@@ -1936,7 +1860,7 @@ def transfer_asset_between_events(event_id):
             to_event.prepared_items.append(asset_id)
 
         # For regular assets, update location
-        if not (asset_id.startswith('[LOAN]') or asset_id.startswith('[MISC]') or asset_id.startswith('[RENTAL]')):
+        if not (asset_id.startswith('[LOAN]') or asset_id.startswith('[MISC]')):
             asset = data_manager.inventory.get(asset_id)
             if asset:
                 asset.current_location = to_event.name

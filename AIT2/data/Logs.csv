@@ -951,29 +951,3 @@ Replaced FFC Cable [$10]' (also: Location: Store, Serial: WTASK01015, Cleared OO
 2025/06/25 14:54:13,admin,"Updated maintenance log for asset CL5#01: '112' -> '112 3' (also: Location: Store, Serial: WTASK01015) (edited by admin)"
 2025/06/25 15:01:56,admin,Updated maintenance log for asset CL5#01: '113' -> '113' (also: Marked OOC) (edited by admin)
 2025/06/25 15:02:00,admin,Updated maintenance log for asset CL5#01: '114' -> '114' (also: Cleared OOC) (edited by admin)
-2025/07/01 13:25:20,admin,User admin logged in via web interface
-2025/07/01 13:38:28,admin,Added custom asset [RENTAL]hwh#01 to event 27 - LED wal
-2025/07/01 13:39:04,admin,Added custom asset [RENTAL]wall#01 to event 27 - wall
-2025/07/01 13:49:55,admin,Assigned asset [MISC]trus#01-1 to event 24 (unprepared)
-2025/07/01 13:49:55,admin,Assigned asset [MISC]trus#01-2 to event 24 (unprepared)
-2025/07/01 13:49:55,admin,Assigned asset [MISC]trus#01-3 to event 24 (unprepared)
-2025/07/01 13:49:55,admin,Assigned asset [MISC]trus#01-4 to event 24 (unprepared)
-2025/07/01 13:49:55,admin,Assigned asset [MISC]trus#01-5 to event 24 (unprepared)
-2025/07/01 13:49:55,admin,Assigned asset [MISC]trus#01-6 to event 24 (unprepared)
-2025/07/01 13:49:55,admin,Assigned asset [MISC]trus#01-7 to event 24 (unprepared)
-2025/07/01 13:49:55,admin,Assigned asset [MISC]trus#01-8 to event 24 (unprepared)
-2025/07/01 13:49:55,admin,Assigned asset [MISC]trus#01-9 to event 24 (unprepared)
-2025/07/01 13:49:55,admin,Assigned asset [MISC]trus#01-10 to event 24 (unprepared)
-2025/07/01 14:02:34,admin,Prepared asset [MISC]trus#01-7 for event 24
-2025/07/01 14:02:37,admin,Prepared asset [MISC]trus#01-1 for event 24
-2025/07/01 14:02:38,admin,Prepared asset [MISC]trus#01-10 for event 24
-2025/07/01 14:02:40,admin,Prepared asset [MISC]trus#01-2 for event 24
-2025/07/01 14:02:42,admin,Completely removed asset [MISC]trus#01-1 from event 24
-2025/07/01 14:02:43,admin,Completely removed asset [MISC]trus#01-2 from event 24
-2025/07/01 14:02:43,admin,Completely removed asset [MISC]trus#01-10 from event 24
-2025/07/01 14:15:27,admin,Prepared asset [MISC]trus#01-3 for event 24
-2025/07/01 14:20:38,admin,Added custom asset [MISC]cust2 to event 24 - cust2
-2025/07/01 14:31:14,admin,Added custom asset [MISC]custom1-1 to event 24 - cutomsott
-2025/07/01 14:31:14,admin,Added custom asset [MISC]custom1-2 to event 24 - cutomsott
-2025/07/01 14:31:14,admin,Added custom asset [MISC]custom1-3 to event 24 - cutomsott
-2025/07/01 14:31:14,admin,Added custom asset [MISC]custom1-4 to event 24 - cutomsott
