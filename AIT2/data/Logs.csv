@@ -951,3 +951,23 @@ Replaced FFC Cable [$10]' (also: Location: Store, Serial: WTASK01015, Cleared OO
 2025/06/25 14:54:13,admin,"Updated maintenance log for asset CL5#01: '112' -> '112 3' (also: Location: Store, Serial: WTASK01015) (edited by admin)"
 2025/06/25 15:01:56,admin,Updated maintenance log for asset CL5#01: '113' -> '113' (also: Marked OOC) (edited by admin)
 2025/06/25 15:02:00,admin,Updated maintenance log for asset CL5#01: '114' -> '114' (also: Cleared OOC) (edited by admin)
+2025/07/08 13:10:48,admin,User admin logged in via web interface
+2025/07/08 14:29:08,admin,Created event 29: new stuff via web interface
+2025/07/08 14:29:14,admin,Assigned asset [MISC]asset2 to event 29 (unprepared)
+2025/07/08 14:29:32,admin,Added 1x L-Acoustics 5XT model to event 29 (total: 1)
+2025/07/08 14:29:41,admin,Prepared asset [MISC]asset2 for event 29
+2025/07/08 14:29:43,admin,Completely removed asset [MISC]asset2 from event 29
+2025/07/08 14:29:48,admin,Assigned specific asset 5XT#02 to event 29
+2025/07/08 14:29:58,admin,Assigned asset [MISC]asset2;4 to event 29 (unprepared)
+2025/07/08 14:30:07,admin,Prepared asset [MISC]asset2;4 for event 29
+2025/07/08 14:31:59,admin,Assigned asset [LOAN]custom2;3 to event 29 (unprepared)
+2025/07/08 14:32:29,admin,Assigned asset [MISC]trussme;4 to event 29 (unprepared)
+2025/07/08 14:32:42,admin,Prepared asset [MISC]trussme;4 for event 29
+2025/07/08 14:33:02,admin,Reset location for asset 5XT#02 due to deletion of Event 29
+2025/07/08 14:33:02,admin,Deleted event 29: new stuff via web interface. Reset 1 asset locations: 5XT#02 (from 'new stuff' to 'Store')
+2025/07/09 09:25:34,admin,User admin logged in via web interface
+2025/07/09 09:25:50,admin,Created event 29: ewr via web interface
+2025/07/09 09:25:59,admin,Assigned asset [MISC]cus2 to event 29 (unprepared)
+2025/07/09 09:26:06,admin,Added 1x L-Acoustics 5XT model to event 29 (total: 1)
+2025/07/09 09:26:12,admin,Assigned asset [MISC]cust4 to event 29 (unprepared)
+2025/07/09 09:26:30,admin,Assigned asset [MISC]tru;5 to event 29 (unprepared)

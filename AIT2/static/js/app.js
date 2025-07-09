@@ -889,6 +889,35 @@ async function openPrepareEventModal(eventId) {
                         <span class="toggle-icon" style="font-size: 18px; font-weight: bold; color: #666;">▼</span>
                     </div>
                     <div id="model-requirements" style="border: 1px solid #e9ecef; border-top: none; border-radius: 0 0 8px 8px;">
+
+                <!-- Custom Assets Preparation Section -->
+                <div style="margin-bottom: 20px;">
+                    <h4 style="color: #495057; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
+                        <span>🛠️ Custom Assets</span>
+                        <span class="toggle-icon" style="font-size: 14px; cursor: pointer;" onclick="togglePrepareSection('custom-assets')">▼</span>
+                    </h4>
+                    <div id="custom-assets" style="display: block;">
+                        <!-- Quick Add Custom Asset -->
+                        <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                            <h5 style="margin-bottom: 10px;">Quick Add Custom Asset</h5>
+                            <div style="display: flex; gap: 10px; align-items: center;">
+                                <input type="text" id="prepareCustomAssetName" placeholder="Custom asset name" 
+                                      style="flex: 1; padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px;">
+                                <select id="prepareCustomAssetType" style="padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px;">
+                                    <option value="MISC">Misc Item</option>
+                                    <option value="LOAN">Loan/Rental</option>
+                                </select>
+                                <button type="button" class="btn btn-success" onclick="addAndPrepareCustomAsset(${event.id})" 
+                                        style="padding: 8px 16px; white-space: nowrap;">
+                                    Add & Prepare
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Existing Custom Assets -->
+                        ${generateCustomAssetsSection(event)}
+                    </div>
+                </div>
         `;
         
         // Process model assignments and show preparation interface
@@ -1138,6 +1167,95 @@ async function openPrepareEventModal(eventId) {
     } catch (error) {
         showNotification('error', 'Failed to load event preparation interface');
         console.error('Error loading prepare event modal:', error);
+    }
+}
+
+function generateCustomAssetsSection(event) {
+    let content = '';
+    
+    if (event.assetsByDepartment) {
+        ['LOAN', 'MISC'].forEach(dept => {
+            if (event.assetsByDepartment[dept] && event.assetsByDepartment[dept].length > 0) {
+                const customAssets = event.assetsByDepartment[dept];
+                const deptDisplayName = dept === 'LOAN' ? '🏪 Loan/Rental Items' : '🔧 Misc Items';
+                
+                content += `
+                    <div style="border: 1px solid #e9ecef; border-radius: 8px; margin-bottom: 10px;">
+                        <div style="background: #f8f9fa; padding: 10px; font-weight: bold; border-radius: 8px 8px 0 0;">
+                            ${deptDisplayName} (${customAssets.length})
+                        </div>
+                        <div style="padding: 10px;">
+                `;
+                
+                customAssets.forEach(asset => {
+                    const statusIcon = asset.status === "returned" ? "↩️" 
+                                     : asset.status === "prepared" ? "✅" 
+                                     : "📋";
+                    const statusClass = asset.status === "prepared" ? "prepared" : "unprepared";
+                    
+                    content += `
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px; margin-bottom: 5px; border: 1px solid #e9ecef; border-radius: 4px;">
+                            <span>${statusIcon} ${escapeHtml(asset.name)}</span>
+                            <div>
+                                ${asset.status !== "prepared" ? 
+                                    `<button class="btn btn-success btn-sm" onclick="prepareSpecificAsset(${event.id}, '${escapeJs(asset.id)}')" style="margin-right: 5px;">Prepare</button>` : 
+                                    `<button class="btn btn-warning btn-sm" onclick="unprepareSpecificAsset(${event.id}, '${escapeJs(asset.id)}')" style="margin-right: 5px;">Unprepare</button>`
+                                }
+                                <button class="btn btn-danger btn-sm" onclick="removeAssetFromEvent(${event.id}, '${escapeJs(asset.id)}')">Remove</button>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                content += `
+                        </div>
+                    </div>
+                `;
+            }
+        });
+    }
+    
+    if (!content) {
+        content = '<div style="text-align: center; color: #666; padding: 20px;">No custom assets assigned to this event.</div>';
+    }
+    
+    return content;
+}
+
+// Add function to handle adding custom assets in prepare modal
+async function addAndPrepareCustomAsset(eventId) {
+    const nameInput = document.getElementById("prepareCustomAssetName");
+    const typeSelect = document.getElementById("prepareCustomAssetType");
+    
+    const name = nameInput.value.trim();
+    const type = typeSelect.value;
+    
+    if (!name) {
+        showNotification("error", "Please enter a custom asset name");
+        return;
+    }
+    
+    try {
+        // Create the custom asset ID
+        const customAssetId = `[${type}]${name}`;
+        
+        // Add and prepare in one step
+        await apiCall(`/api/events/${eventId}/assign-specific`, "POST", {
+            assetId: customAssetId,
+        });
+        
+        showNotification("success", `Custom asset "${name}" added and prepared`);
+        
+        // Clear inputs
+        nameInput.value = "";
+        
+        // Refresh the modal
+        setTimeout(() => {
+            openPrepareEventModal(eventId);
+        }, 500);
+        
+    } catch (error) {
+        showNotification("error", `Failed to add custom asset: ${error.message}`);
     }
 }
 
@@ -3898,6 +4016,25 @@ async function loadEditEventAssets(eventId) {
                     </div>
                 </div>
 
+                <!-- Add Custom Asset Section -->
+                <div style="margin-bottom: 30px;">
+                    <h4 style="color: #495057; margin-bottom: 15px;">🛠️ Add Custom Assets</h4>
+                    <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 15px;">
+                        <input type="text" id="customAssetName" placeholder="Enter custom asset name" 
+                               style="flex: 1; padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
+                        <input type="number" id="customAssetQuantity" placeholder="Qty" min="1" value="1"
+                               style="width: 60px; padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
+                        <select id="customAssetType" style="padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
+                            <option value="MISC">Misc Item</option>
+                            <option value="LOAN">Loan/Rental</option>
+                        </select>
+                        <button type="button" class="btn btn-success" onclick="addCustomAssetToEvent(${eventId})" 
+                                style="padding: 8px 16px; white-space: nowrap;">
+                            Add Custom Asset
+                        </button>
+                    </div>
+                </div>
+
                 <!-- Current Asset Models -->
                 <div style="margin-bottom: 30px;">
                     <h4 style="color: #495057; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
@@ -4018,6 +4155,43 @@ async function loadEditEventAssets(eventId) {
   } catch (error) {
     console.error("Error loading edit event assets:", error);
     showNotification("error", "Failed to load assets for editing");
+  }
+}
+
+// Add custom asset to event
+async function addCustomAssetToEvent(eventId) {
+  const nameInput = document.getElementById("customAssetName");
+  const quantityInput = document.getElementById("customAssetQuantity");
+  const typeSelect = document.getElementById("customAssetType");
+  
+  const name = nameInput.value.trim();
+  const quantity = parseInt(quantityInput.value) || 1;
+  const type = typeSelect.value;
+  
+  if (!name) {
+    showNotification("error", "Please enter a custom asset name");
+    return;
+  }
+  
+  try {
+    // Create the custom asset ID based on type
+    const customAssetId = `[${type}]${name}${quantity > 1 ? `;${quantity}` : ''}`;
+    
+    await apiCall(`/api/events/${eventId}/assets`, "POST", {
+      assetId: customAssetId,
+    });
+    
+    showNotification("success", `Custom asset "${name}" added to event`);
+    
+    // Clear the inputs
+    nameInput.value = "";
+    quantityInput.value = "1";
+    
+    // Refresh the assets view
+    await updateModelRequirementsSection(eventId);
+    
+  } catch (error) {
+    showNotification("error", `Failed to add custom asset: ${error.message}`);
   }
 }
 
@@ -4225,58 +4399,49 @@ async function updateModelRequirementsSection(eventId) {
         Object.keys(modelsByDept).sort().forEach((dept) => {
             const models = modelsByDept[dept];
             const totalAssigned = models.reduce((sum, model) => sum + (model.assignedAssets ? model.assignedAssets.length : 0), 0);
-            const totalRequired = models.reduce((sum, model) => sum + (model.requiredQuantity || 1), 0);
-            
+
             content += `
-                <div style="border-bottom: 1px solid #f1f1f1;">
-                    <div style="background-color: #f8f9fa; padding: 12px 15px; font-weight: 600; color: #495057; display: flex; justify-content: space-between; align-items: center; cursor: pointer;" onclick="toggleViewSection('dept-${dept}')">
-                        <span>${escapeHtml(dept)} Department</span>
-                        <div style="display: flex; align-items: center; gap: 15px;">
-                            <span style="font-size: 12px; color: #ffc107;">${totalAssigned}/${totalRequired} assigned</span>
-                            <span class="toggle-icon" style="font-size: 12px;">▼</span>
-                        </div>
-                    </div>
-                    <div id="dept-${dept}" style="display: block;">
+                <div style="background: #f8f9fa; padding: 12px; border-bottom: 1px solid #e9ecef; font-weight: bold;">
+                    ${dept} Department (${totalAssigned} assigned)
+                </div>
+                <div style="padding: 12px;">
             `;
 
-            models.forEach((model, index) => {
-                const modelId = `model-${dept}-${index}`;
-                const assignedCount = model.assignedAssets ? model.assignedAssets.length : 0;
-                const requiredQty = model.requiredQuantity || 1;
-                const statusIcon = assignedCount >= requiredQty ? "✅" : "⚠️";
-                const statusText = `${assignedCount}/${requiredQty} assigned`;
-
+            models.forEach((model) => {
+                const statusIcon = model.status === 'complete' ? '✅' 
+                                 : model.status === 'partial' ? '⚠️' 
+                                 : '📋';
+                
                 content += `
-                    <div class="model-assignment" style="border-bottom: 1px solid #f1f1f1;">
-                        <div style="padding: 12px 15px; display: flex; justify-content: space-between; align-items: center; cursor: pointer;" onclick="toggleModelDetailsInEdit('${modelId}')">
-                            <div style="flex: 1;">
-                                <span style="font-weight: 500;">${requiredQty}x ${escapeHtml(model.brand)} ${escapeHtml(model.model)}</span>
-                                <div style="font-size: 12px; color: #666; margin-top: 2px;">${escapeHtml(model.description || '')}</div>
-                            </div>
-                            <div style="display: flex; align-items: center; gap: 10px;">
-                                <span style="font-size: 12px; color: ${assignedCount >= requiredQty ? '#28a745' : '#ffc107'};">${statusText}</span>
-                                <button class="btn btn-sm btn-outline-secondary edit-model-qty-btn" 
-                                        data-event-id="${eventId}" data-brand="${escapeHtml(model.brand)}" 
-                                        data-model="${escapeHtml(model.model)}" data-department="${escapeHtml(model.department)}"
-                                        style="padding: 2px 8px; font-size: 11px;">Edit Qty</button>
-                                <button class="btn btn-sm btn-danger remove-model-btn" 
-                                        data-event-id="${eventId}" data-brand="${escapeHtml(model.brand)}" 
-                                        data-model="${escapeHtml(model.model)}" data-department="${escapeHtml(model.department)}"
-                                        style="padding: 2px 8px; font-size: 11px;">Remove</button>
-                                <span class="toggle-icon" style="font-size: 12px; color: #666;">▼</span>
-                            </div>
+                    <div class="model-assignment" style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #e9ecef;">
+                        <div>
+                            <div style="font-weight: 500;">${statusIcon} ${model.requiredQuantity}x ${escapeHtml(model.brand)} ${escapeHtml(model.model)}</div>
+                            <div style="color: #666; font-size: 12px;">${escapeHtml(model.description)}</div>
+                            <div style="color: #666; font-size: 11px;">Assigned: ${model.assignedAssets.length}/${model.requiredQuantity}</div>
                         </div>
-                        
-                        <!-- Expandable asset details -->
-                        <div id="${modelId}" style="display: none; background: #f8f9fa; padding: 10px 15px;">
+                        <div style="display: flex; gap: 5px;">
+                            <button class="btn btn-primary btn-xs edit-model-qty-btn" 
+                                    data-event-id="${eventId}" data-brand="${escapeHtml(model.brand)}" 
+                                    data-model="${escapeHtml(model.model)}" data-department="${escapeHtml(model.department)}"
+                                    style="padding: 2px 6px; font-size: 10px;">Edit Qty</button>
+                            <button class="btn btn-danger btn-xs remove-model-btn" 
+                                    data-event-id="${eventId}" data-brand="${escapeHtml(model.brand)}" 
+                                    data-model="${escapeHtml(model.model)}" data-department="${escapeHtml(model.department)}"
+                                    style="padding: 2px 6px; font-size: 10px;">Remove</button>
+                        </div>
+                    </div>
                 `;
 
+                // Show assigned assets for this model
                 if (model.assignedAssets && model.assignedAssets.length > 0) {
+                    content += `
+                        <div style="margin-left: 20px; margin-top: 5px; border-left: 2px solid #28a745; padding-left: 10px;">
+                    `;
+                    
                     model.assignedAssets.forEach(asset => {
-                        const statusIcon = asset.status === "missing" ? "❌" 
-                            : asset.status === "returned" ? "↩️"
-                            : asset.status === "prepared" ? "✅" 
-                            : "📋";
+                        const statusIcon = asset.status === "returned" ? "↩️" 
+                                        : asset.status === "prepared" ? "✅" 
+                                        : "📋";
 
                         content += `
                             <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #e9ecef;">
@@ -4305,6 +4470,45 @@ async function updateModelRequirementsSection(eventId) {
                 </div>
             `;
         });
+
+        // Add custom assets section
+        if (event.assetsByDepartment) {
+            // Display LOAN and MISC items
+            ['LOAN', 'MISC'].forEach(dept => {
+                if (event.assetsByDepartment[dept] && event.assetsByDepartment[dept].length > 0) {
+                    const customAssets = event.assetsByDepartment[dept];
+                    const deptDisplayName = dept === 'LOAN' ? '🏪 Loan/Rental Items' : '🔧 Misc Items';
+                    
+                    content += `
+                        <div style="background: #f8f9fa; padding: 12px; border-bottom: 1px solid #e9ecef; font-weight: bold;">
+                            ${deptDisplayName} (${customAssets.length})
+                        </div>
+                        <div style="padding: 12px;">
+                    `;
+                    
+                    customAssets.forEach(asset => {
+                        const statusIcon = asset.status === "returned" ? "↩️" 
+                                         : asset.status === "prepared" ? "✅" 
+                                         : "📋";
+                        
+                        content += `
+                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #e9ecef;">
+                                <div>
+                                    <div style="font-weight: 500; font-size: 12px;">${statusIcon} ${escapeHtml(asset.name)}</div>
+                                </div>
+                                <button class="btn btn-danger btn-xs remove-asset-btn" 
+                                        data-event-id="${eventId}" data-asset-id="${escapeHtml(asset.id)}"
+                                        style="padding: 2px 6px; font-size: 10px;">Remove</button>
+                            </div>
+                        `;
+                    });
+                    
+                    content += `
+                            </div>
+                    `;
+                }
+            });
+        }
     } else {
         content = '<div style="text-align: center; padding: 40px; color: #666;">No asset models assigned to this event</div>';
     }

@@ -1456,6 +1456,55 @@ def prepare_event_asset(event_id):
         logger.error(f"Error preparing asset for event {event_id}: {e}")
         return jsonify({'error': 'Failed to prepare asset'}), 500
 
+@app.route('/api/events/<int:event_id>/custom-assets', methods=['POST'])
+@require_auth
+def add_custom_asset_to_event(event_id):
+    """Add a custom asset (LOAN/MISC) to an event"""
+    try:
+        event = data_manager.events.get(event_id)
+        if not event:
+            return jsonify({'error': 'Event not found'}), 404
+
+        data = request.get_json()
+        name = data.get('name', '').strip()
+        quantity = int(data.get('quantity', 1))
+        asset_type = data.get('type', 'MISC').upper()
+        
+        if not name:
+            return jsonify({'error': 'Asset name is required'}), 400
+            
+        if asset_type not in ['LOAN', 'MISC']:
+            return jsonify({'error': 'Invalid asset type'}), 400
+        
+        # Create custom asset ID
+        custom_asset_id = f"[{asset_type}]{name}"
+        if quantity > 1:
+            custom_asset_id += f";{quantity}"
+        
+        # Add to event
+        if custom_asset_id not in event.prepared_items:
+            event.prepared_items.append(custom_asset_id)
+        
+        # Update event state
+        update_event_state(event)
+        
+        # Save changes
+        data_manager.save_event(event)
+        
+        # Invalidate cache
+        invalidate_cache()
+        
+        log_action(f"Added custom asset '{name}' to event {event_id}")
+        
+        return jsonify({
+            'success': True, 
+            'message': f'Custom asset "{name}" added to event'
+        })
+        
+    except Exception as e:
+        logger.error(f"Error adding custom asset to event {event_id}: {e}")
+        return jsonify({'error': 'Failed to add custom asset'}), 500
+
 @app.route('/api/events/<int:event_id>/unprepare', methods=['POST'])
 @require_auth
 def unprepare_event_asset(event_id):
