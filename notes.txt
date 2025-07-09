@@ -1,7 +1,7 @@
 
 //-add items that are not in asset (rental items or cables or trusses)
 //-give me back the return button
--ability to return item by asset type (return all option only for admin)
+//-ability to return item by asset type (return all option only for admin)
 -ability to check who returned and prepared the asset for the show for accountability
 -add new maintenance log no page refresh, add check to check status and assign to radio button
 -maintenance date log not sorting by date

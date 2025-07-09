@@ -152,14 +152,14 @@ HLBatt#15,Hollyland,HL-BAT700,23061207192,Solidcom C1 (Pro) Battery,False,False,
 HLBatt#16,Hollyland,HL-BAT700,23061207991,Solidcom C1 (Pro) Battery,False,False,,AX,Store,
 C1ProCharger#01,Hollyland,Solidcom C1 (Pro) 8-Slot Battery Charging Case,0223350C C001989,8-Slot Battery Charging Case,False,False,,AX,Store,
 C1ProHub#01,Hollyland,Solidcom C1 Pro Hub,0223350R C002984,,False,False,,AX,Store,
-C1ProRHS#01,Hollyland,Solidcom C1 Pro Remote Headset,222322OTXC00784E,,False,False,,AX,Store,
-C1ProRHS#02,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC008783,,False,False,,AX,Store,
-C1ProRHS#03,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC007B64,,False,False,,AX,Store,
-C1ProRHS#04,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC0082CF,,False,False,,AX,Store,
-C1ProRHS#05,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC00800E,,False,False,,AX,Store,
-C1ProRHS#06,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC00786C,,False,False,,AX,Store,
-C1ProRHS#07,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC008667,,False,False,,AX,Store,
-C1ProRHS#08,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC007AB4,,False,False,,AX,Store,
+C1ProRHS#01,Hollyland,Solidcom C1 Pro Remote Headset,222322OTXC00784E,,False,False,,AX,Store,Store
+C1ProRHS#02,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC008783,,False,False,,AX,Store,Store
+C1ProRHS#03,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC007B64,,False,False,,AX,Store,Store
+C1ProRHS#04,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC0082CF,,False,False,,AX,Store,Store
+C1ProRHS#05,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC00800E,,False,False,,AX,Store,Store
+C1ProRHS#06,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC00786C,,False,False,,AX,Store,Store
+C1ProRHS#07,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC008667,,False,False,,AX,Store,Store
+C1ProRHS#08,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC007AB4,,False,False,,AX,Store,Store
 C1ProWHS#01,Hollyland,Solidcom C1 Pro Wired Headset for Hub,2223170XX0D0036E,,False,False,,AX,Store,
 PCBB#01,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,Store
 PCBB#02,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,Store
@@ -215,12 +215,12 @@ ETR5W#13,L-Acoustics,ETR5W,,Adjustable U-bracket: 5XTW,False,False,,AX,Store,
 ETR5W#14,L-Acoustics,ETR5W,,Adjustable U-bracket: 5XTW,False,False,,AX,Store,
 ETR5W#15,L-Acoustics,ETR5W,,Adjustable U-bracket: 5XTW,False,False,,AX,Store,
 ETR5W#16,L-Acoustics,ETR5W,,Adjustable U-bracket: 5XTW,False,False,,AX,Store,
-5XT#01,L-Acoustics,5XT,260038164,"5"" passive coaxial enclosure, black",False,False,,AX,Store,
+5XT#01,L-Acoustics,5XT,260038164,"5"" passive coaxial enclosure, black",False,False,,AX,Store,Store
 5XT#02,L-Acoustics,5XT,260044263,"5"" passive coaxial enclosure, black",False,False,,AX,Store,Store
-5XT#03,L-Acoustics,5XT,260044264,"5"" passive coaxial enclosure, black",False,False,,AX,Store,
-5XT#04,L-Acoustics,5XT,260044265,"5"" passive coaxial enclosure, black",False,False,,AX,Store,
+5XT#03,L-Acoustics,5XT,260044264,"5"" passive coaxial enclosure, black",False,False,,AX,Store,Store
+5XT#04,L-Acoustics,5XT,260044265,"5"" passive coaxial enclosure, black",False,False,,AX,Store,Store
 5XT#05,L-Acoustics,5XT,260044285,"5"" passive coaxial enclosure, black",False,False,,AX,Store,
-5XT#06,L-Acoustics,5XT,260044288,"5"" passive coaxial enclosure, black",False,False,,AX,Store,
+5XT#06,L-Acoustics,5XT,260044288,"5"" passive coaxial enclosure, black",False,False,,AX,Store,Store
 5XT#07,L-Acoustics,5XT,260044300,"5"" passive coaxial enclosure, black",False,False,,AX,Store,
 5XT#08,L-Acoustics,5XT,260044302,"5"" passive coaxial enclosure, black",False,False,,AX,Store,
 5XT#09,L-Acoustics,5XT,260044304,"5"" passive coaxial enclosure, black",False,False,,AX,Store,
@@ -430,8 +430,8 @@ KM184#03,Neumann,KM184,,small-diaphragm cardioid condenser microphone,False,Fals
 KM184#04,Neumann,KM184,,small-diaphragm cardioid condenser microphone,False,False,,AX,Store,
 CDJ1000MK2#01,Pioneer,CDJ1000MKII,,Professional DJ multi player (Black),False,False,,AX,Store,
 CDJ1000MK2#02,Pioneer,CDJ1000MKII,,Professional DJ multi player (Black),False,False,,AX,Store,
-CDJ2000NXS#01,Pioneer,CDJ2000NXS,,Professional DJ multi player (Black),False,False,,AX,Store,
-CDJ2000NXS#02,Pioneer,CDJ2000NXS,,Professional DJ multi player (Black),False,False,,AX,Store,
+CDJ2000NXS#01,Pioneer,CDJ2000NXS,,Professional DJ multi player (Black),False,False,,AX,Store,Store
+CDJ2000NXS#02,Pioneer,CDJ2000NXS,,Professional DJ multi player (Black),False,False,,AX,Store,Store
 CDJ2000NXS2#01,Pioneer,CDJ2000NXS2,,Professional DJ multi player (Black),False,False,,AX,Store,
 CDJ2000NXS2#02,Pioneer,CDJ2000NXS2,,Professional DJ multi player (Black),False,False,,AX,Store,
 CDJ3000#01,Pioneer,CDJ3000,CDMP038151EH,Professional DJ multi player (Black),False,False,"2024/09/22	bnjm2000	Buttons and jog wheel melted under sun (F1 @ ShowCo) [Marked OOC]|2024/10/03	bnjm2000	Received spare from ShowCo while repairs underway (S/N: BHMP026156EH) [Cleared OOC]|2025/03/15	bnjm2000	Collected back, tested working. (Wedding of Barbara and Ker Wei)",AX,Store,
@@ -489,8 +489,8 @@ AD2#14,Shure,AD2,2CC22173949,Handheld Microphone [G56],False,False,,AX,Store,
 AD2#15,Shure,AD2,2CC22174180,Handheld Microphone [G56],False,False,,AX,Store,
 AD2#16,Shure,AD2,2SC0752116,Handheld Microphone [G56],False,False,,AX,Store,
 AD3#01,Shure,AD3,3CE17731585,Plug-on Transmitter,False,False,,AX,Store,
-AD3#02,Shure,AD3,3CB24309820,Plug-on Transmitter,False,False,,AX,Store,Dry Hire: SCM
-AD3#03,Shure,AD3,3B21414454,Plug-on Transmitter,False,False,,AX,Store,Dry Hire: SCM
+AD3#02,Shure,AD3,3CB24309820,Plug-on Transmitter,False,False,,AX,Store,Store
+AD3#03,Shure,AD3,3B21414454,Plug-on Transmitter,False,False,,AX,Store,Store
 AD3#04,Shure,AD3,3TH09460854,Plug-on Transmitter,False,False,,AX,Store,
 AD4D#01,Shure,AD4D,,Two-Channel Digital Wireless Receiver,False,False,,AX,Store,
 AD4Q#01,Shure,AD4Q,,Four-Channel Digital Wireless Receiver,False,False,,AX,Store,

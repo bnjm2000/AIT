@@ -2845,82 +2845,72 @@ async function loadEventAssetsForReturn() {
         summaryDiv.innerHTML = `
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 15px; text-align: center;">
                 <div>
-                    <div style="font-size: 20px; font-weight: bold; color: #007bff;">${event.totalAssets}</div>
-                    <div style="color: #666; font-size: 12px;">Total Assets</div>
+                    <div style="font-size: 24px; font-weight: bold; color: #007bff;">${event.preparedCount || 0}</div>
+                    <div style="color: #6c757d; font-size: 12px;">Total Assets</div>
                 </div>
                 <div>
-                    <div style="font-size: 20px; font-weight: bold; color: #28a745;">${event.totalPrepared}</div>
-                    <div style="color: #666; font-size: 12px;">Prepared</div>
+                    <div style="font-size: 24px; font-weight: bold; color: #28a745;">${event.returnedCount || 0}</div>
+                    <div style="color: #6c757d; font-size: 12px;">Returned</div>
                 </div>
                 <div>
-                    <div style="font-size: 20px; font-weight: bold; color: #dc3545;">${event.totalReturned}</div>
-                    <div style="color: #666; font-size: 12px;">Returned</div>
-                </div>
-                <div>
-                    <div style="font-size: 20px; font-weight: bold; color: #ffc107;">${event.totalPrepared - event.totalReturned}</div>
-                    <div style="color: #666; font-size: 12px;">Still Out</div>
+                    <div style="font-size: 24px; font-weight: bold; color: #ffc107;">${(event.preparedCount || 0) - (event.returnedCount || 0)}</div>
+                    <div style="color: #6c757d; font-size: 12px;">Remaining</div>
                 </div>
             </div>
         `;
 
-        // Show assets section
-        document.getElementById('assets-return-section').style.display = 'block';
+        // Show assets return section
+        const assetsSection = document.getElementById('assets-return-section');
+        assetsSection.style.display = 'block';
 
-        // Add manual return section at the top
-        const assetsReturnSection = document.getElementById('assets-return-section');
-        assetsReturnSection.innerHTML = `
-            <!-- Manual Return - moved to top -->
-            <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 25px; border: 1px solid #e9ecef;">
-                <h4 style="color: #495057; margin-bottom: 15px;">📱 Quick Return</h4>
-                <p style="color: #666; font-size: 14px; margin-bottom: 15px;">Scan or enter any asset ID to return it quickly</p>
-                <div class="form-group" style="display: flex; gap: 10px;">
-                    <input type="text" class="form-input" id="manualReturnAssetIdNew" 
-                           placeholder="Enter Asset ID or Serial Number..." 
-                           onkeypress="if(event.key==='Enter') returnManualAssetNew()"
-                           style="flex: 1;">
-                    <button class="btn btn-warning" onclick="returnManualAssetNew()">Return Asset</button>
-                </div>
-            </div>
+        // Group assets by type
+        const assetGroups = {};
+        const preparedAssets = event.preparedAssets || [];
 
-            <h4 style="color: #495057; margin-bottom: 15px;">📦 Assets Available for Return</h4>
-            <div id="return-assets-list">
-                <!-- Assets will be populated below -->
-            </div>
-        `;
+        preparedAssets.forEach(asset => {
+            const assetType = asset.id.split('#')[0];
+            if (!assetGroups[assetType]) {
+                assetGroups[assetType] = {
+                    type: assetType,
+                    assets: [],
+                    brand: asset.brand,
+                    model: asset.model,
+                    description: asset.description
+                };
+            }
+            assetGroups[assetType].assets.push(asset);
+        });
 
-        // Populate assets list
         let assetsContent = '';
         
-        if (event.assetsByDepartment && Object.keys(event.assetsByDepartment).length > 0) {
-            Object.keys(event.assetsByDepartment).sort().forEach(dept => {
-                const assets = event.assetsByDepartment[dept];
-                
-                const assetsToReturn = assets.filter(asset => 
-                    asset.status === 'prepared' && !asset.id.startsWith('[MODEL]')
-                );
-                
-                if (assetsToReturn.length > 0) {
+        if (Object.keys(assetGroups).length > 0) {
+            Object.values(assetGroups).forEach(group => {
+                const unreturnedAssets = group.assets.filter(asset => asset.status !== 'returned');
+                if (unreturnedAssets.length > 0) {
                     assetsContent += `
-                        <div class="dept-section" style="margin-bottom: 20px;">
-                            <h5 style="color: #495057; margin-bottom: 10px; padding: 8px; background: #f8f9fa; border-radius: 6px;">
-                                ${dept} Department (${assetsToReturn.length} assets)
-                            </h5>
-                            <div style="border: 1px solid #e9ecef; border-radius: 8px; overflow: hidden;">
+                        <div class="asset-type-group" style="margin-bottom: 25px; border: 1px solid #e9ecef; border-radius: 8px; overflow: hidden;">
+                            <div style="background: #f8f9fa; padding: 15px; border-bottom: 1px solid #e9ecef; display: flex; justify-content: space-between; align-items: center;">
+                                <div>
+                                    <h5 style="margin: 0; color: #495057;">${group.type}</h5>
+                                    <small style="color: #6c757d;">${group.brand} ${group.model} ${group.description}</small>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 15px;">
+                                    <span style="background: #17a2b8; color: white; padding: 4px 8px; border-radius: 12px; font-size: 12px; font-weight: 500;">
+                                        ${unreturnedAssets.length} items
+                                    </span>
+                                    <button class="btn btn-warning" style="padding: 8px 16px; font-size: 14px;" onclick="returnAssetsByType(${eventId}, '${group.type}')">
+                                        Return All ${group.type}
+                                    </button>
+                                </div>
+                            </div>
+                            <div style="padding: 15px;">
                     `;
                     
-                    assetsToReturn.forEach(asset => {
-                        const extraBadge = asset.isExtra ? 
-                            '<span style="background: #fff3cd; color: #856404; padding: 2px 6px; border-radius: 3px; font-size: 10px; margin-left: 10px;">EXTRA</span>' : '';
-                        
+                    unreturnedAssets.forEach(asset => {
                         assetsContent += `
-                            <div class="return-asset-item" style="padding: 12px; border-bottom: 1px solid #f1f1f1; display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: background-color 0.2s;"
-                                 onmouseover="this.style.backgroundColor='#f8f9fa'" 
-                                 onmouseout="this.style.backgroundColor='white'">
+                            <div class="return-asset-item" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #f1f3f4;">
                                 <div style="flex: 1;">
-                                    <div style="font-weight: 500; font-size: 14px;">
-                                        ✅ ${asset.id}${extraBadge}
-                                    </div>
-                                    <div style="color: #666; font-size: 12px; margin-top: 2px;">${asset.name || ''}</div>
+                                    <div style="font-weight: 500; color: #495057;">${asset.id}</div>
                                     ${asset.serial ? `<div style="color: #999; font-size: 11px;">SN: ${asset.serial}</div>` : ''}
                                     ${asset.location ? `<div style="color: #007bff; font-size: 11px;">📍 ${asset.location}</div>` : ''}
                                 </div>
@@ -2946,6 +2936,66 @@ async function loadEventAssetsForReturn() {
     } catch (error) {
         showNotification('error', 'Failed to load event assets');
         console.error('Error loading event assets for return:', error);
+    }
+}
+
+async function returnAssetsByType(eventId, assetType) {
+    if (!confirm(`Are you sure you want to return all ${assetType} assets from this event?`)) {
+        return;
+    }
+    
+    try {
+        // Get current event data to find assets of this type
+        const response = await apiCall(`/api/events/${eventId}`);
+        const event = response.data;
+        const preparedAssets = event.preparedAssets || [];
+        
+        // Filter unreturned assets of the specified type
+        const assetsToReturn = preparedAssets.filter(asset => {
+            const assetTypeFromId = asset.id.split('#')[0];
+            return assetTypeFromId === assetType && asset.status !== 'returned';
+        });
+        
+        if (assetsToReturn.length === 0) {
+            showNotification('info', `No ${assetType} assets available for return`);
+            return;
+        }
+        
+        // Return each asset
+        let successCount = 0;
+        let failCount = 0;
+        
+        for (const asset of assetsToReturn) {
+            try {
+                await apiCall(`/api/events/${eventId}/return`, 'POST', { assetId: asset.id });
+                successCount++;
+            } catch (error) {
+                console.error(`Failed to return ${asset.id}:`, error);
+                failCount++;
+            }
+        }
+        
+        // Show results
+        if (successCount > 0) {
+            showNotification('success', `Successfully returned ${successCount} ${assetType} asset(s)`);
+        }
+        if (failCount > 0) {
+            showNotification('warning', `Failed to return ${failCount} asset(s)`);
+        }
+        
+        // Refresh the interface
+        setTimeout(() => {
+            loadEventAssetsForReturn();
+        }, 500);
+        
+        // Update overdue counter
+        const eventsResponse = await apiCall('/api/events');
+        const overdueCount = countOverdueEvents(eventsResponse.data);
+        updateOverdueCounter(overdueCount);
+        
+    } catch (error) {
+        showNotification('error', `Failed to return ${assetType} assets: ${error.message}`);
+        console.error('Error returning assets by type:', error);
     }
 }
 
