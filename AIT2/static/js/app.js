@@ -3451,6 +3451,9 @@ async function viewEvent(eventId) {
     eventDetailsContent.handleModelToggle = handleModelToggle;
     eventDetailsContent.addEventListener('click', handleModelToggle);
 
+    const logHTML = await createEventLogViewer(event.id, event.name);
+    eventDetailsContent.innerHTML += logHTML;
+    
     openModal("eventDetailsModal");
   } catch (error) {
     showNotification("error", "Failed to load event details");
@@ -3791,6 +3794,165 @@ async function unprepareAsset(eventId, assetId) {
     }
   } catch (error) {
     showNotification("error", `Failed to unprepare asset: ${error.message}`);
+  }
+}
+
+function toggleEventLogSection(sectionId) {
+  const section = document.getElementById(sectionId);
+  const toggleIcon = document.getElementById(sectionId + '-toggle');
+  
+  if (section && toggleIcon) {
+    if (section.style.display === 'none') {
+      section.style.display = 'block';
+      toggleIcon.textContent = '▼';
+    } else {
+      section.style.display = 'none';
+      toggleIcon.textContent = '▶';
+    }
+  }
+}
+
+async function createEventLogViewer(eventId, eventName) {
+  try {
+    // Use your API to get logs
+    const response = await apiCall('/api/logs');
+    const logs = response.data || [];
+    
+    // Filter logs for this event
+    const relevantLogs = logs
+      .filter(log => {
+        if (!log.action) return false;
+        const action = log.action.toLowerCase();
+        const eventRef = `event ${eventId}`;
+        return action.includes(eventRef) && 
+               (action.includes('assigned') || 
+                action.includes('prepared') || 
+                action.includes('returned') || 
+                action.includes('unprepared'));
+      })
+      .map(log => ({
+        date: log.timestamp,
+        user: log.user,
+        action: log.action,
+        timestamp: new Date(log.timestamp).getTime()
+      }))
+      .sort((a, b) => b.timestamp - a.timestamp);
+
+    // Helper functions
+    const getActionIcon = (actionType) => {
+      switch (actionType) {
+        case 'prepared': return '📦';
+        case 'returned': return '🔄';
+        case 'assigned': return '📋';
+        case 'unprepared': return '❌';
+        default: return '📝';
+      }
+    };
+
+    const getActionColor = (actionType) => {
+      switch (actionType) {
+        case 'prepared': return 'color: #28a745; background: #d4edda; border-left-color: #28a745;';
+        case 'returned': return 'color: #007bff; background: #cce5ff; border-left-color: #007bff;';
+        case 'assigned': return 'color: #ffc107; background: #fff3cd; border-left-color: #ffc107;';
+        case 'unprepared': return 'color: #dc3545; background: #f8d7da; border-left-color: #dc3545;';
+        default: return 'color: #6c757d; background: #e2e3e5; border-left-color: #6c757d;';
+      }
+    };
+
+    const getActionType = (action) => {
+      const actionLower = action.toLowerCase();
+      if (actionLower.includes('prepared')) return 'prepared';
+      if (actionLower.includes('returned')) return 'returned';
+      if (actionLower.includes('assigned')) return 'assigned';
+      if (actionLower.includes('unprepared')) return 'unprepared';
+      return 'other';
+    };
+
+    const extractAssetId = (action) => {
+      const match = action.match(/asset\s+([A-Z0-9#]+(?:\[[^\]]+\])?[^;\s]*)/i);
+      return match ? match[1] : null;
+    };
+
+    // Generate unique ID for this event's log section
+    const logSectionId = `event-log-${eventId}`;
+
+    // Generate HTML with collapsible header
+    let logHTML = `
+      <div style="background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); padding: 20px; margin-top: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none;" onclick="toggleEventLogSection('${logSectionId}')">
+          <h3 style="margin: 0; color: #333; font-size: 18px; display: flex; align-items: center; gap: 10px;">
+            📋 Event Activity Log
+            <span style="font-size: 14px; color: #666; font-weight: normal;">(${eventName})</span>
+            ${relevantLogs.length > 0 ? `<span style="background: #007bff; color: white; border-radius: 12px; padding: 2px 8px; font-size: 12px; font-weight: bold;">${relevantLogs.length}</span>` : ''}
+          </h3>
+          <span id="${logSectionId}-toggle" style="font-size: 18px; color: #666; font-weight: bold;">▶</span>
+        </div>
+        <div id="${logSectionId}" style="display: none; margin-top: 20px;">
+    `;
+
+    if (relevantLogs.length === 0) {
+      logHTML += `
+        <div style="text-align: center; padding: 40px 0; color: #666;">
+          <div style="font-size: 48px; margin-bottom: 10px;">📋</div>
+          <p>No asset activity recorded for this event yet.</p>
+        </div>
+      `;
+    } else {
+      logHTML += `<div style="max-height: 400px; overflow-y: auto;">`;
+      
+      relevantLogs.forEach((log, index) => {
+        const actionType = getActionType(log.action);
+        const assetId = extractAssetId(log.action);
+        
+        logHTML += `
+          <div style="padding: 15px; border-radius: 8px; border-left: 4px solid; margin-bottom: 12px; ${getActionColor(actionType)}">
+            <div style="display: flex; align-items: start; gap: 12px;">
+              <span style="font-size: 18px; line-height: 1;">${getActionIcon(actionType)}</span>
+              <div style="flex: 1;">
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                  <span style="font-weight: bold; color: #333;">${log.user}</span>
+                  <span style="color: #999; font-size: 12px;">•</span>
+                  <span style="color: #666; font-size: 13px;">${log.date}</span>
+                </div>
+                ${assetId ? `
+                  <div style="margin: 6px 0;">
+                    <span style="font-family: 'Courier New', monospace; background: #f8f9fa; padding: 3px 6px; border-radius: 3px; font-size: 12px; color: #495057;">
+                      ${assetId}
+                    </span>
+                  </div>
+                ` : ''}
+                <p style="margin: 6px 0 0 0; color: #555; font-size: 13px; line-height: 1.4;">${log.action}</p>
+              </div>
+            </div>
+          </div>
+        `;
+      });
+      
+      logHTML += `</div>`;
+      
+      logHTML += `
+        <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #e9ecef; text-align: center; color: #666; font-size: 12px;">
+          Showing ${relevantLogs.length} activity record(s)
+        </div>
+      `;
+    }
+
+    logHTML += `
+        </div>
+      </div>
+    `;
+    
+    return logHTML;
+  } catch (error) {
+    console.error('Error loading event logs:', error);
+    return `
+      <div style="background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); padding: 20px; margin-top: 20px;">
+        <h3 style="margin: 0 0 20px 0; color: #333;">📋 Event Activity Log</h3>
+        <div style="text-align: center; padding: 20px; color: #dc3545;">
+          Error loading activity log. Please try again.
+        </div>
+      </div>
+    `;
   }
 }
 

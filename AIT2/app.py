@@ -1,4 +1,6 @@
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for, jsonify
+import csv
+import os
 from flask_cors import CORS
 from functools import wraps
 import os
@@ -2503,9 +2505,9 @@ def get_containers():
 def get_logs():
     """Get activity logs"""
     try:
-        # Get last 100 logs
+        # Get all logs (not just last 100) for event activity tracking
         logs_data = []
-        for log in data_manager.logs[-100:]:
+        for log in data_manager.logs:
             logs_data.append({
                 'timestamp': log.timestamp,
                 'user': log.user,
@@ -2519,7 +2521,6 @@ def get_logs():
     except Exception as e:
         logger.error(f"Error getting logs: {e}")
         return jsonify({'error': 'Failed to retrieve logs'}), 500
-
 
 @app.route('/api/stats', methods=['GET'])
 @require_auth

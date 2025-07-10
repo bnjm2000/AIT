@@ -4,8 +4,8 @@
 //-ability to return item by asset type (return all option only for admin)
 //-edit event does not change event type to dry-hire
 //-scanning invalid code removes asset in maintenance
--location not reset when deleting maintenance log
--ability to check who returned and prepared the asset for the show for accountability
+//-location not reset when deleting maintenance log
+//-ability to check who returned and prepared the asset for the show for accountability
 -add new maintenance log no page refresh, add check to check status and assign to radio button
 -maintenance date log not sorting by date
 -making DO from event
