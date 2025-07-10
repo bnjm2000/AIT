@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for, jsonify
 import csv
+from urllib.parse import unquote_plus
 import os
 from flask_cors import CORS
 from functools import wraps
@@ -848,6 +849,7 @@ def get_event(event_id):
                 total_returned += returned_assets_count
         else:
             # Use old logic for events without model assignments
+            # Count all items in prepared_items except [MODEL] items (includes [LOAN] and [MISC])
             total_required = len([item for item in event.prepared_items if not item.startswith('[MODEL]')])
             total_prepared = len([item for item in event.actually_prepared if item not in event.returned_items])
             total_returned = len(event.returned_items)
@@ -994,7 +996,7 @@ def delete_maintenance_log(asset_id, log_index):
         
         # URL decode the asset_id in case it has special characters
         from urllib.parse import unquote
-        asset_id = unquote(asset_id)
+        asset_id = unquote_plus(asset_id)
         
         asset = data_manager.inventory.get(asset_id)
         if not asset:
@@ -1146,14 +1148,34 @@ def delete_event(event_id):
         del data_manager.events[event_id]
         data_manager.delete_event_file(event_id)
 
+        # Delete related logs
+        logs_deleted = 0
+        logs_to_keep = []
+        
+        for log in data_manager.logs:
+            # Check if this log is related to the deleted event
+            if (f"event {event_id}" in log.action.lower() or 
+                f"Event {event_id}" in log.action or
+                f"to event {event_id}" in log.action.lower() or
+                f"from event {event_id}" in log.action.lower()):
+                logs_deleted += 1
+            else:
+                logs_to_keep.append(log)
+        
+        # Update the logs list
+        data_manager.logs = logs_to_keep
+        
+        # Save the updated logs
+        data_manager.save_logs()
+
         # Invalidate cache
         invalidate_cache()
 
-        # Log the deletion with details of reset assets
+        # Log the deletion with details of reset assets and deleted logs
         if assets_reset:
-            log_action(f"Deleted event {event_id}: {event_name} via web interface. Reset {len(assets_reset)} asset locations: {', '.join(assets_reset[:5])}{'...' if len(assets_reset) > 5 else ''}")
+            log_action(f"Deleted event {event_id}: {event_name} via web interface. Reset {len(assets_reset)} asset locations: {', '.join(assets_reset[:5])}{'...' if len(assets_reset) > 5 else ''}. Removed {logs_deleted} related log entries.")
         else:
-            log_action(f"Deleted event {event_id}: {event_name} via web interface. No asset locations to reset.")
+            log_action(f"Deleted event {event_id}: {event_name} via web interface. No asset locations to reset. Removed {logs_deleted} related log entries.")
 
         return jsonify({'success': True, 'message': 'Event deleted successfully', 'assetsReset': len(assets_reset)})
     except Exception as e:
@@ -1459,7 +1481,6 @@ def prepare_event_asset(event_id):
     except Exception as e:
         logger.error(f"Error preparing asset for event {event_id}: {e}")
         return jsonify({'error': 'Failed to prepare asset'}), 500
-
 @app.route('/api/events/<int:event_id>/custom-assets', methods=['POST'])
 @require_auth
 def add_custom_asset_to_event(event_id):
@@ -1489,6 +1510,14 @@ def add_custom_asset_to_event(event_id):
         if custom_asset_id not in event.prepared_items:
             event.prepared_items.append(custom_asset_id)
         
+        # Initialize actually_prepared if it doesn't exist
+        if not hasattr(event, 'actually_prepared'):
+            event.actually_prepared = []
+            
+        # Custom assets are automatically "prepared" when added since they don't require physical preparation
+        if custom_asset_id not in event.actually_prepared:
+            event.actually_prepared.append(custom_asset_id)
+        
         # Update event state
         update_event_state(event)
         
@@ -1508,7 +1537,7 @@ def add_custom_asset_to_event(event_id):
     except Exception as e:
         logger.error(f"Error adding custom asset to event {event_id}: {e}")
         return jsonify({'error': 'Failed to add custom asset'}), 500
-
+    
 @app.route('/api/events/<int:event_id>/unprepare', methods=['POST'])
 @require_auth
 def unprepare_event_asset(event_id):
@@ -1819,6 +1848,11 @@ def unassign_specific_asset_from_model(event_id):
 def remove_asset_from_event(event_id, asset_id):
     """Remove an asset from an event"""
     try:
+        # URL decode the asset_id in case it has special characters
+        from urllib.parse import unquote
+        asset_id = unquote(asset_id)
+        logger.info(f"Decoded asset ID: '{asset_id}'")
+        
         event = data_manager.events.get(event_id)
         if not event:
             return jsonify({'error': 'Event not found'}), 404
@@ -1846,6 +1880,11 @@ def remove_asset_from_event(event_id, asset_id):
         if asset_id in event.actually_prepared:
             event.actually_prepared.remove(asset_id)
             log_asset_change(event_id, asset_id, "REMOVING", "from actually_prepared", "remove_asset_from_event")
+
+        # Remove from extra_assets if it exists
+        if hasattr(event, 'extra_assets') and asset_id in event.extra_assets:
+            event.extra_assets.remove(asset_id)
+            log_asset_change(event_id, asset_id, "REMOVING", "from extra_assets", "remove_asset_from_event")
 
         # For regular assets, update location
         if not (asset_id.startswith('[LOAN]') or asset_id.startswith('[MISC]')):
@@ -2143,7 +2182,7 @@ def maintain_asset(asset_id):
         
         # URL decode the asset_id in case it has special characters
         from urllib.parse import unquote
-        asset_id = unquote(asset_id)
+        asset_id = unquote_plus(asset_id)
         logger.info(f"Decoded asset ID: '{asset_id}'")
         
         asset = data_manager.inventory.get(asset_id)
@@ -2277,7 +2316,7 @@ def update_maintenance_log_enhanced(asset_id, log_index):
         
         # URL decode the asset_id in case it has special characters
         from urllib.parse import unquote
-        asset_id = unquote(asset_id)
+        asset_id = unquote_plus(asset_id)
         
         asset = data_manager.inventory.get(asset_id)
         if not asset:

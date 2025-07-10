@@ -797,6 +797,10 @@ function createPrepareEventCard(event) {
       } more</div>`;
     }
     modelSummary += "</div>";
+  } else {
+    // Fall back to using the event's asset counts for events without model groups (like custom assets only)
+    totalRequired = event.assetCount || 0;
+    totalAssigned = event.preparedCount || 0;
   }
 
   const progressPercent =
@@ -1201,7 +1205,6 @@ function generateCustomAssetsSection(event) {
                                     `<button class="btn btn-success btn-sm" onclick="prepareSpecificAsset(${event.id}, '${escapeJs(asset.id)}')" style="margin-right: 5px;">Prepare</button>` : 
                                     `<button class="btn btn-warning btn-sm" onclick="unprepareSpecificAsset(${event.id}, '${escapeJs(asset.id)}')" style="margin-right: 5px;">Unprepare</button>`
                                 }
-                                <button class="btn btn-danger btn-sm" onclick="removeAssetFromEvent(${event.id}, '${escapeJs(asset.id)}')">Remove</button>
                             </div>
                         </div>
                     `;
@@ -1235,13 +1238,18 @@ async function addAndPrepareCustomAsset(eventId) {
         return;
     }
     
+    // Validate asset name - check for problematic characters
+    if (name.includes('"') || name.includes("'") || name.includes(';') || name.includes('`')) {
+        showNotification("error", "Asset name cannot contain quotes, semicolons, or backticks");
+        return;
+    }
+    
     try {
-        // Create the custom asset ID
-        const customAssetId = `[${type}]${name}`;
-        
-        // Add and prepare in one step
-        await apiCall(`/api/events/${eventId}/assign-specific`, "POST", {
-            assetId: customAssetId,
+        // Create single custom asset (quantity 1 for quick add)
+        await apiCall(`/api/events/${eventId}/custom-assets`, "POST", {
+            name: name,
+            quantity: 1,
+            type: type
         });
         
         showNotification("success", `Custom asset "${name}" added and prepared`);
@@ -4181,8 +4189,6 @@ function switchEditTab(tabName) {
   }
 }
 
-// Load assets for editing (original model-based interface)
-
 async function loadEditEventAssets(eventId) {
   try {
     const [eventResponse, availableAssetsResponse] = await Promise.all([
@@ -4271,50 +4277,41 @@ async function loadEditEventAssets(eventId) {
         Object.keys(modelsByDept).sort().forEach((dept) => {
             const models = modelsByDept[dept];
             const totalAssigned = models.reduce((sum, model) => sum + (model.assignedAssets ? model.assignedAssets.length : 0), 0);
-            const totalRequired = models.reduce((sum, model) => sum + (model.requiredQuantity || 1), 0);
-            
+            const totalRequired = models.reduce((sum, model) => sum + model.requiredQuantity, 0);
+            const deptInfo = getDepartmentInfo(dept);
+
             content += `
-                <div style="border-bottom: 1px solid #f1f1f1;">
-                    <div style="background-color: #f8f9fa; padding: 12px 15px; font-weight: 600; color: #495057; display: flex; justify-content: space-between; align-items: center; cursor: pointer;" onclick="toggleViewSection('dept-${dept}')">
-                        <span>${escapeHtml(dept)} Department</span>
-                        <div style="display: flex; align-items: center; gap: 15px;">
-                            <span style="font-size: 12px; color: #ffc107;">${totalAssigned}/${totalRequired} assigned</span>
-                            <span class="toggle-icon" style="font-size: 12px;">▼</span>
-                        </div>
-                    </div>
-                    <div id="dept-${dept}" style="display: block;">
+                <div style="background: ${deptInfo.bgColor}; padding: 12px; border-bottom: 1px solid #e9ecef; font-weight: bold;">
+                    ${deptInfo.name} (${totalAssigned}/${totalRequired} assigned)
+                </div>
+                <div style="padding: 12px;">
             `;
 
-            models.forEach((model, index) => {
-                const modelId = `model-${dept}-${index}`;
+            models.forEach((model) => {
                 const assignedCount = model.assignedAssets ? model.assignedAssets.length : 0;
-                const requiredQty = model.requiredQuantity || 1;
-                const statusIcon = assignedCount >= requiredQty ? "✅" : "⚠️";
-                const statusText = `${assignedCount}/${requiredQty} assigned`;
+                const statusIcon = assignedCount >= model.requiredQuantity ? "✅" : "⏳";
+                const statusColor = assignedCount >= model.requiredQuantity ? "#28a745" : "#ffc107";
 
                 content += `
-                    <div class="model-assignment" style="border-bottom: 1px solid #f1f1f1;">
-                        <div style="padding: 12px 15px; display: flex; justify-content: space-between; align-items: center; cursor: pointer;" onclick="toggleModelDetailsInEdit('${modelId}')">
-                            <div style="flex: 1;">
-                                <span style="font-weight: 500;">${requiredQty}x ${escapeHtml(model.brand)} ${escapeHtml(model.model)}</span>
-                                <div style="font-size: 12px; color: #666; margin-top: 2px;">${escapeHtml(model.description || '')}</div>
+                    <div style="cursor: pointer; border: 1px solid #e9ecef; border-radius: 6px; margin-bottom: 8px; background: white;" 
+                         onclick="toggleModelDetails('${escapeJs(model.brand)}_${escapeJs(model.model)}_${escapeJs(model.department)}')">
+                        <div style="padding: 12px; display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <div style="font-weight: 500; margin-bottom: 4px;">
+                                    ${statusIcon} ${assignedCount}/${model.requiredQuantity}x ${escapeHtml(model.brand)} ${escapeHtml(model.model)}
+                                </div>
+                                <div style="color: #666; font-size: 12px;">${escapeHtml(model.description)}</div>
                             </div>
                             <div style="display: flex; align-items: center; gap: 10px;">
-                                <span style="font-size: 12px; color: ${assignedCount >= requiredQty ? '#28a745' : '#ffc107'};">${statusText}</span>
-                                <button class="btn btn-sm btn-outline-secondary edit-model-qty-btn" 
-                                        data-event-id="${eventId}" data-brand="${escapeHtml(model.brand)}" 
-                                        data-model="${escapeHtml(model.model)}" data-department="${escapeHtml(model.department)}"
-                                        style="padding: 2px 8px; font-size: 11px;">Edit Qty</button>
-                                <button class="btn btn-sm btn-danger remove-model-btn" 
-                                        data-event-id="${eventId}" data-brand="${escapeHtml(model.brand)}" 
-                                        data-model="${escapeHtml(model.model)}" data-department="${escapeHtml(model.department)}"
-                                        style="padding: 2px 8px; font-size: 11px;">Remove</button>
+                                <span style="color: ${statusColor}; font-size: 12px; font-weight: 500;">
+                                    ${assignedCount >= model.requiredQuantity ? 'Complete' : 'Needs ' + (model.requiredQuantity - assignedCount)}
+                                </span>
                                 <span class="toggle-icon" style="font-size: 12px; color: #666;">▼</span>
                             </div>
                         </div>
                         
                         <!-- Expandable asset details -->
-                        <div id="${modelId}" style="display: none; background: #f8f9fa; padding: 10px 15px;">
+                        <div id="${escapeJs(model.brand)}_${escapeJs(model.model)}_${escapeJs(model.department)}" style="display: none; background: #f8f9fa; padding: 10px 15px;">
                 `;
 
                 if (model.assignedAssets && model.assignedAssets.length > 0) {
@@ -4353,6 +4350,45 @@ async function loadEditEventAssets(eventId) {
         });
     } else {
         content += '<div style="text-align: center; padding: 40px; color: #666;">No asset models assigned to this event</div>';
+    }
+
+    // Add custom assets section if they exist
+    if (event.assetsByDepartment) {
+        ['LOAN', 'MISC'].forEach(dept => {
+            if (event.assetsByDepartment[dept] && event.assetsByDepartment[dept].length > 0) {
+                const customAssets = event.assetsByDepartment[dept];
+                const deptDisplayName = dept === 'LOAN' ? '🏪 Loan/Rental Items' : '🔧 Misc Items';
+                
+                content += `
+                    <div style="border-top: 1px solid #e9ecef; margin-top: 20px; padding-top: 20px;">
+                        <h5 style="color: #495057; margin-bottom: 15px; font-weight: 500;">
+                            ${deptDisplayName} (${customAssets.length})
+                        </h5>
+                `;
+                
+                customAssets.forEach(asset => {
+                    const statusIcon = asset.status === "returned" ? "↩️" 
+                                     : asset.status === "prepared" ? "✅" 
+                                     : "📋";
+
+                    content += `
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #f1f1f1;">
+                            <div style="display: flex; align-items: center;">
+                                <span style="margin-right: 8px;">${statusIcon}</span>
+                                <span style="font-weight: 500;">${escapeHtml(asset.name)}</span>
+                            </div>
+                            <button class="btn btn-danger btn-sm remove-asset-btn" 
+                                    data-event-id="${eventId}" data-asset-id="${escapeHtml(asset.id)}"
+                                    style="padding: 4px 8px; font-size: 11px;">Remove</button>
+                        </div>
+                    `;
+                });
+                
+                content += `
+                    </div>
+                `;
+            }
+        });
     }
 
     content += `
@@ -4399,8 +4435,8 @@ async function addCustomAssetToEvent(eventId) {
     nameInput.value = "";
     quantityInput.value = "1";
     
-    // Refresh the assets view
-    await updateModelRequirementsSection(eventId);
+    // Only add custom assets section - DON'T refresh the whole model requirements
+    await addCustomAssetsToModelRequirements(eventId);
     
   } catch (error) {
     showNotification("error", `Failed to add custom asset: ${error.message}`);
@@ -4729,6 +4765,59 @@ async function updateModelRequirementsSection(eventId) {
 
   } catch (error) {
     console.error("Error updating models section:", error);
+  }
+}
+
+// Add custom assets to existing model requirements without changing format
+async function addCustomAssetsToModelRequirements(eventId) {
+  try {
+    const eventResponse = await apiCall(`/api/events/${eventId}`);
+    const event = eventResponse.data;
+
+    const modelsContainer = document.getElementById("current-asset-models");
+    if (!modelsContainer) return;
+
+    // Remove any existing custom asset sections first
+    const existingCustomSections = modelsContainer.querySelectorAll('[data-custom-section="true"]');
+    existingCustomSections.forEach(section => section.remove());
+
+    // Add custom assets section if they exist - append to existing content
+    if (event.assetsByDepartment) {
+      ['LOAN', 'MISC'].forEach(dept => {
+        if (event.assetsByDepartment[dept] && event.assetsByDepartment[dept].length > 0) {
+          const customAssets = event.assetsByDepartment[dept];
+          const deptDisplayName = dept === 'LOAN' ? '🏪 Loan/Rental Items' : '🔧 Misc Items';
+          
+          const customSectionHTML = `
+            <div data-custom-section="true" style="border-top: 1px solid #e9ecef; margin-top: 20px; padding-top: 20px;">
+              <h5 style="color: #495057; margin-bottom: 15px; font-weight: 500;">
+                ${deptDisplayName} (${customAssets.length})
+              </h5>
+              ${customAssets.map(asset => {
+                const statusIcon = asset.status === "returned" ? "↩️" 
+                               : asset.status === "prepared" ? "✅" 
+                               : "📋";
+                return `
+                  <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #f1f1f1;">
+                    <div style="display: flex; align-items: center;">
+                      <span style="margin-right: 8px;">${statusIcon}</span>
+                      <span style="font-weight: 500;">${escapeHtml(asset.name)}</span>
+                    </div>
+                    <button class="btn btn-danger btn-sm remove-asset-btn" 
+                            data-event-id="${eventId}" data-asset-id="${escapeHtml(asset.id)}"
+                            style="padding: 4px 8px; font-size: 11px;">Remove</button>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          `;
+          
+          modelsContainer.insertAdjacentHTML('beforeend', customSectionHTML);
+        }
+      });
+    }
+  } catch (error) {
+    console.error("Error adding custom assets to model requirements:", error);
   }
 }
 
