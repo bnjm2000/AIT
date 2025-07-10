@@ -6,6 +6,9 @@
 //-scanning invalid code removes asset in maintenance
 //-location not reset when deleting maintenance log
 //-ability to check who returned and prepared the asset for the show for accountability
+-events with custom assets only do not change in status
+-events with custom assets do not show up
+-events with custom assets cannot be prepared (THH Base plate)
 -add new maintenance log no page refresh, add check to check status and assign to radio button
 -maintenance date log not sorting by date
 -making DO from event
