@@ -471,14 +471,13 @@ AD1#14,Shure,AD1,2SI25669222,Beltpack [G56],False,False,,AX,Store,
 AD1#15,Shure,AD1,2SI25669246,Beltpack [G56],False,False,,AX,Store,
 AD1#16,Shure,AD1,2SI25669599,Beltpack [G56],False,False,,AX,Store,
 AD2#01,Shure,AD2,2SC0752114,Handheld Microphone [G56],False,False,,AX,Store,
-AD2#02,Shure,AD2,2SD04117237,Handheld Microphone [G56],False,True,"2025/06/24	bnjm2000	[2025/06/24] Replaced display bezel [$25]
-Service charge [$60]",AX,Store,E&E
+AD2#02,Shure,AD2,2SD04117237,Handheld Microphone [G56],False,False,"2025/07/10	bnjm2000	Replaced display bezel $25 Service charge $60 [Location: E&E, Marked OOC]|2025/07/10	bnjm2000	Collected from E&E [Location: Store, Cleared OOC, Cleared Missing]",AX,Store,Store
 AD2#03,Shure,AD2,2CC22174166,Handheld Microphone [G56],False,False,,AX,Store,
 AD2#04,Shure,AD2,2CC22174279,Handheld Microphone [G56],False,False,,AX,Store,
 AD2#05,Shure,AD2,2SD04117263,Handheld Microphone [G56],False,False,,AX,Store,
 AD2#06,Shure,AD2,2SD04117249,Handheld Microphone [G56],False,False,,AX,Store,
-AD2#07,Shure,AD2,2SD04117504,Handheld Microphone [G56],False,True,"2025/06/24	bnjm2000	[2025/06/24] Replaced display bezel [$25]
-Service charge [$60]",AX,Store,E&E
+AD2#07,Shure,AD2,2SD04117504,Handheld Microphone [G56],False,False,"2025/06/24	bnjm2000	Replaced display bezel $25 
+Service charge $60 [Location: E&E, Marked OOC]|2025/07/10	bnjm2000	Collected from E&E [Location: Store, Cleared OOC, Cleared Missing]",AX,Store,Store
 AD2#08,Shure,AD2,2CC22174281,Handheld Microphone [G56],False,False,,AX,Store,
 AD2#09,Shure,AD2,2CC22174116,Handheld Microphone [G56],False,False,,AX,Store,
 AD2#10,Shure,AD2,2CC22174130,Handheld Microphone [G56],False,False,,AX,Store,
@@ -562,6 +561,7 @@ ULXD1#15,Shure,ULXD1,3BI28076513,Beltpack [G52],False,False,,AX,Store,
 ULXD1#16,Shure,ULXD1,3BI28076373,Beltpack [G52],False,False,,AX,Store,
 ULXD1#17,Shure,ULXD1,3BI28076436,Beltpack [G52],False,False,,AX,Store,
 ULXD1#18,Shure,ULXD1,3BI28078539,Beltpack [G52],False,False,,AX,Store,
+ULXD1#19,Shure,ULXD1,3EC18480865,Beltpack [L50],False,False,,AX,Store,
 ULXD2#01,Shure,ULXD2,2NK0071080-01,Handheld Microphone [L50],False,False,,AX,Store,dearGENTLEFOLK @ Restaurant Born
 ULXD2#02,Shure,ULXD2,2PH3049605,Handheld Microphone [L50],False,False,,AX,Store,
 ULXD2#03,Shure,ULXD2,2OB0659314-01,Handheld Microphone [L50],False,False,,AX,Store,
@@ -572,7 +572,7 @@ ULXD2#07,Shure,ULXD2,2QK2204370,Handheld Microphone [L50],False,False,,AX,Store,
 ULXD2#08,Shure,ULXD2,2OB0659317-01,Handheld Microphone [L50],False,False,,AX,Store,
 ULXD2#09,Shure,ULXD2,2NK0771081-01,Handheld Microphone [L50],False,False,,AX,Store,
 ULXD2#10,Shure,ULXD2,2PK2362922,Handheld Microphone [L50],False,False,,AX,Store,dearGENTLEFOLK @ Restaurant Born
-ULXD2#11,Shure,ULXD2,2RC0141727,Handheld Microphone [L50],False,True,"2025/06/21	bnjm2000	Battery prong dropped out, unable to turn on (Wedding of Jeremy and Julia @ The Pyramid Club), sent to E&E [Location: E&E, Marked OOC]",AX,Store,E&E
+ULXD2#11,Shure,ULXD2,2RC0141727,Handheld Microphone [L50],False,True,"2025/06/21	bnjm2000	Battery prong dropped out, unable to turn on (Wedding of Jeremy and Julia @ The Pyramid Club) [Location: Store, Marked OOC]|2025/07/10	bnjm2000	Sent to E&E for service. [Location: E&E]",AX,Store,E&E
 ULXD2#12,Shure,ULXD2,2NK0771082-01,Handheld Microphone [L50],False,False,,AX,Store,
 ULXD2#13,Shure,ULXD2,3CC16144846,Handheld Microphone [G52],False,False,,AX,Store,
 ULXD2#14,Shure,ULXD2,3CC16144872,Handheld Microphone [G52],False,False,,AX,Store,
@@ -650,7 +650,7 @@ DXR12#06,Yamaha,DXR12,,"Active 12"" Speaker",False,False,,AX,Store,
 MG06#01,Yamaha,MG06,,6-Channel Analog Mixing Console with FX,False,False,,AX,Store,
 MG12XU#01,Yamaha,MG12XU,,12-Channel Analog Mixing Console with FX,False,False,,AX,Store,
 MG12XU#02,Yamaha,MG12XU,,12-Channel Analog Mixing Console with FX,False,False,,AX,Store,
-MG10#01,Yamaha,MG10,,10-Channel Analogue Mixer,False,False,,AX,Store,dearGENTLEFOLK @ Restaurant Born
+MG10#01,Yamaha,MG10,ECWH01433,10-Channel Analogue Mixer,False,False,,AX,Store,dearGENTLEFOLK @ Restaurant Born
 MG124CX#01,Yamaha,MG124CX,,12-Input Stereo Mixer with Compression and Effects,False,False,,AX,Store,
 MG124CX#02,Yamaha,MG124CX,,12-Input Stereo Mixer with Compression and Effects,False,False,,AX,Store,
 QL1#01,Yamaha,QL1,WTAUM01016,Digital Mixer,False,False,,AX,Store,
