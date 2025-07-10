@@ -1,29 +1,3 @@
-2024/11/11,bnjm2000,Added equipment ULXD2#12.
-2024/11/11,bnjm2000,Added equipment ULXD2#13.
-2024/11/11,bnjm2000,Added equipment ULXD2#14.
-2024/11/11,bnjm2000,Added equipment ULXD2#15.
-2024/11/11,bnjm2000,Added equipment ULXD2#16.
-2024/11/11,bnjm2000,Added equipment ULXD2#17.
-2024/11/11,bnjm2000,Added equipment ULXD2#18.
-2024/11/11,bnjm2000,User bnjm2000 logged in.
-2024/11/11,bnjm2000,Added equipment ULXD1#01.
-2024/11/11,bnjm2000,Added equipment ULXD1#02.
-2024/11/11,bnjm2000,Added equipment ULXD1#03.
-2024/11/11,bnjm2000,Added equipment ULXD1#04.
-2024/11/11,bnjm2000,Added equipment ULXD1#05.
-2024/11/11,bnjm2000,Added equipment ULXD1#06.
-2024/11/11,bnjm2000,Added equipment ULXD1#07.
-2024/11/11,bnjm2000,Added equipment ULXD1#08.
-2024/11/11,bnjm2000,Added equipment ULXD1#09.
-2024/11/11,bnjm2000,Added equipment ULXD1#10.
-2024/11/11,bnjm2000,Added equipment ULXD1#11.
-2024/11/11,bnjm2000,Added equipment ULXD1#12.
-2024/11/11,bnjm2000,Added equipment ULXD1#13.
-2024/11/11,bnjm2000,Added equipment ULXD1#14.
-2024/11/11,bnjm2000,Added equipment ULXD1#15.
-2024/11/11,bnjm2000,Added equipment ULXD1#16.
-2024/11/11,bnjm2000,Added equipment ULXD1#17.
-2024/11/11,bnjm2000,Added equipment ULXD1#18.
 2024/11/11,bnjm2000,Added equipment ULXD4D#01.
 2024/11/11,bnjm2000,Added equipment ULXD4D#02.
 2024/11/11,bnjm2000,Added equipment IPAD (10TH GENERATION)#01.
@@ -1012,3 +986,29 @@ Replaced FFC Cable [$10]' (also: Location: Store, Serial: WTASK01015, Cleared OO
 2025/07/09 16:57:43,bnjm2000,Maintenance logged for asset HERCULES 8#01: Discovered frayed metal cable during BBC 2025 @ GBTB
 2025/07/09 16:58:42,bnjm2000,Updated location for asset HERCULES 8#01 from '' to 'LSD SG'
 2025/07/09 16:58:42,bnjm2000,Maintenance logged for asset HERCULES 8#01: Sent to LSD or servicing (Service order no. 1636)
+2025/07/09 17:01:36,bnjm2000,Created event 29: dearGENTLEFOLK @ Restaurant Born via web interface
+2025/07/09 17:01:44,bnjm2000,Added 8x Turbosound IP1000 model to event 29 (total: 8)
+2025/07/09 17:01:52,bnjm2000,Added 6x MiPro MR-90 model to event 29 (total: 6)
+2025/07/09 17:01:54,bnjm2000,Added 2x MiPro MT-90A model to event 29 (total: 2)
+2025/07/09 17:02:12,bnjm2000,Added 1x Shure PA805SWB model to event 29 (total: 1)
+2025/07/09 17:02:24,bnjm2000,Added 2x Shure ULXD2 model to event 29 (total: 2)
+2025/07/09 17:02:29,bnjm2000,Added 1x Shure ULXD4D model to event 29 (total: 1)
+2025/07/09 17:02:37,bnjm2000,Added 1x Yamaha MG10 model to event 29 (total: 1)
+2025/07/09 17:03:58,bnjm2000,Updated location for asset DIABLO#13 from '' to 'Store'
+2025/07/09 17:03:58,bnjm2000,Removed Out of Commission status from asset DIABLO#13
+2025/07/09 17:03:58,bnjm2000,Maintenance logged for asset DIABLO#13: Repaired by Technician Dean
+2025/07/09 17:04:37,bnjm2000,"Updated maintenance log for asset DIABLO#13: 'Repaired by Technician Dean [Location: Store, Cleared OOC, Cleared Missing]' -> 'Repaired by Technician Dean' (also: Location: Store) (edited by bnjm2000)"
+2025/07/09 17:04:43,bnjm2000,"Updated maintenance log for asset DIABLO#13: 'Repaired by Technician Dean [Location: Store]' -> 'Repaired by Technician Dean' (also: Location: Store, Cleared OOC) (edited by bnjm2000)"
+2025/07/09 17:05:44,bnjm2000,Created event 30: Dry-hire: THH via web interface
+2025/07/09 17:06:01,bnjm2000,"Assigned asset [MISC]24"" silver base plate;4 to event 30 (unprepared)"
+2025/07/10 09:27:17,system,Failed login attempt for username: bnjm2000
+2025/07/10 09:27:21,bnjm2000,User bnjm2000 logged in via web interface
+2025/07/10 09:27:50,bnjm2000,Added 4x TalentCell YB1208300-USB model to event 29 (total: 4)
+2025/07/10 09:29:30,bnjm2000,"Created event 31: Harpers Bazaar x Heart Evangelista @ Bar Somma, New Bahru via web interface"
+2025/07/10 09:29:36,bnjm2000,Added 1x Samsung UN65TU8000F model to event 31 (total: 1)
+2025/07/10 09:30:10,bnjm2000,Assigned asset [MISC]Prism+ KANVA Tripod TV Stand to event 31 (unprepared)
+2025/07/10 09:30:28,bnjm2000,Added 1x Samsung UN65TU8000F model to event 30 (total: 1)
+2025/07/10 09:30:32,bnjm2000,Removed Samsung UN65TU8000F model from event 30
+2025/07/10 09:31:19,bnjm2000,Updated event 30: Dry-hire: THH via web interface
+2025/07/10 09:31:29,bnjm2000,Updated event 30: Dry-hire: THH via web interface
+2025/07/10 09:31:46,bnjm2000,Updated event 30: Dry-hire: THH via web interface
