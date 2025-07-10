@@ -5852,7 +5852,7 @@ document.addEventListener("DOMContentLoaded", function () {
         name: document.getElementById("editEventName").value,
         startDate: document.getElementById("editEventStartDate").value,
         endDate: document.getElementById("editEventEndDate").value,
-        tag: document.getElementById("eventTag").value,
+        tag: document.getElementById("editEventTag").value,
       };
 
       try {
@@ -6257,6 +6257,39 @@ document.addEventListener("DOMContentLoaded", function () {
   if (maintenanceAssetSearch) {
     maintenanceAssetSearch.addEventListener("input", function (e) {
       searchMaintenanceAssets();
+    });
+    
+    // Add Enter key handler for direct asset ID selection
+    maintenanceAssetSearch.addEventListener("keypress", function (e) {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        const searchTerm = e.target.value.trim();
+        
+        if (!searchTerm) {
+          return;
+        }
+        
+        // Try to find exact asset match
+        if (assets && assets.length > 0) {
+          const asset = assets.find(a => 
+            a.id.toLowerCase() === searchTerm.toLowerCase() || 
+            (a.serial && a.serial.toLowerCase() === searchTerm.toLowerCase())
+          );
+          
+          if (asset) {
+            if (!selectedMaintenanceAssets.has(asset.id)) {
+              selectAssetForMaintenance(asset.id);
+              e.target.value = '';
+            } else {
+              showNotification('warning', `Asset ${asset.id} is already selected`);
+            }
+          } else {
+            showNotification('error', `Asset ID '${searchTerm}' not found`);
+          }
+        } else {
+          showNotification('error', 'Assets not loaded yet');
+        }
+      }
     });
   }
 

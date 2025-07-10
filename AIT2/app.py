@@ -1034,7 +1034,9 @@ def recalculate_asset_status_from_logs(asset):
         # Reset status to defaults
         asset.is_ooc = False
         asset.is_missing = False
-        # Don't reset location here - we'll update it based on logs
+        
+        # Reset location to default (Store), will be updated if logs contain location changes
+        asset.current_location = ''  # Empty string represents "Store"
         
         # Sort logs by date to ensure chronological processing
         sorted_logs = []
