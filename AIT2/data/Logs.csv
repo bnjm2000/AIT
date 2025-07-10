@@ -1,5 +1,3 @@
-2024/11/11,bnjm2000,Added equipment X8#05.
-2024/11/11,bnjm2000,Added equipment X8#06.
 2024/11/11,bnjm2000,Added equipment X8#07.
 2024/11/11,bnjm2000,Added equipment X8#08.
 2024/11/11,bnjm2000,Added equipment X8#09.
@@ -1015,3 +1013,5 @@ Service charge [$60]' (deleted by bnjm2000)"
 2025/07/10 14:48:17,bnjm2000,Assigned asset [MISC]NL4 Socapex breakout;2 to event 35 (unprepared)
 2025/07/10 14:48:24,bnjm2000,Prepared asset [MISC]NL4 Socapex breakout;2 for event 35
 2025/07/10 14:48:44,bnjm2000,Updated event 35: Dry Hire: UAV via web interface
+2025/07/10 15:59:44,bnjm2000,Maintenance logged for asset AD2#11: Replaced grill as it was rusty
+2025/07/10 15:59:44,bnjm2000,Maintenance logged for asset AD2#13: Replaced grill as it was rusty
