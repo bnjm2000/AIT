@@ -1,8 +1,5 @@
 2024/11/12,bnjm2000,User bnjm2000 logged in.
 2024/11/12,bnjm2000,User bnjm2000 logged in.
-2024/11/12,bnjm2000,Added event 1: Wedding @ Ritz Carlton.
-2024/11/12,bnjm2000,User bnjm2000 logged in.
-2024/11/12,bnjm2000,User bnjm2000 logged in.
 2024/11/12,bnjm2000,User bnjm2000 logged in.
 2024/11/12,bnjm2000,Added event 1: FM x Cortina @ Artyzen.
 2024/11/12,bnjm2000,User bnjm2000 logged in.
@@ -1015,3 +1012,6 @@ Service charge [$60]' (deleted by bnjm2000)"
 2025/07/14 12:31:57,bnjm2000,Completely removed asset [MISC]Shure P9RA [NicheAV];5 from event 38
 2025/07/14 12:32:04,bnjm2000,Prepared asset [MISC]Mic belt for event 38
 2025/07/14 12:32:05,bnjm2000,Completely removed asset [MISC]Mic belt from event 38
+2025/07/14 13:24:49,bnjm2000,Assigned asset [LOAN]Shure P9T;3 to event 38 (unprepared)
+2025/07/14 13:25:00,bnjm2000,Assigned asset [LOAN]Shure P9RA [NicheAV];5 to event 38 (unprepared)
+2025/07/14 14:14:19,bnjm2000,Assigned asset [MISC]Shure P9RA;5 to event 38 (unprepared)
