@@ -1842,49 +1842,58 @@ def unassign_specific_asset_from_model(event_id):
         logger.error(
             f"Error unassigning specific asset from event {event_id}: {e}")
         return jsonify({'error': 'Failed to unassign asset'}), 500
-
-@app.route('/api/events/<int:event_id>/assets/<asset_id>', methods=['DELETE'])
+    
+@app.route('/api/events/<int:event_id>/remove-asset', methods=['POST'])
 @require_auth
-def remove_asset_from_event(event_id, asset_id):
-    """Remove an asset from an event"""
+def remove_asset_from_event_post(event_id):
+    """Remove an asset from an event - uses POST body to avoid URL encoding issues"""
     try:
-        # URL decode the asset_id in case it has special characters
-        from urllib.parse import unquote
-        asset_id = unquote(asset_id)
-        logger.info(f"Decoded asset ID: '{asset_id}'")
+        data = request.get_json()
+        asset_id = data.get('assetId', '').strip()
+        
+        if not asset_id:
+            return jsonify({'error': 'Asset ID is required'}), 400
+        
+        logger.info(f"Remove asset request: Event {event_id}, Asset: '{asset_id}'")
         
         event = data_manager.events.get(event_id)
         if not event:
             return jsonify({'error': 'Event not found'}), 404
 
-        # Check if asset is in this event
-        if asset_id not in event.prepared_items:
-            return jsonify({'error': 'Asset is not assigned to this event'}), 400
-
-        # LOG THE REMOVAL
-        log_asset_change(event_id, asset_id, "REMOVING", "from prepared_items via DELETE endpoint", "remove_asset_from_event")
-
-        # Remove the asset
-        event.prepared_items.remove(asset_id)
-
-        # Also remove from returned items if it was there
-        if asset_id in event.returned_items:
-            event.returned_items.remove(asset_id)
-            log_asset_change(event_id, asset_id, "REMOVING", "from returned_items", "remove_asset_from_event")
-
-        # Initialize actually_prepared if it doesn't exist
+        # Initialize lists if they don't exist
         if not hasattr(event, 'actually_prepared'):
             event.actually_prepared = []
+        if not hasattr(event, 'extra_assets'):
+            event.extra_assets = []
 
-        # Remove from actually_prepared if it was there
+        # Check if asset is in this event (check ALL possible locations)
+        asset_is_assigned = (asset_id in event.prepared_items or 
+                            asset_id in event.actually_prepared or
+                            asset_id in event.extra_assets)
+
+        if not asset_is_assigned:
+            logger.warning(f"Asset '{asset_id}' not found in event {event_id}")
+            logger.info(f"  prepared_items: {event.prepared_items}")
+            logger.info(f"  actually_prepared: {event.actually_prepared}")
+            logger.info(f"  extra_assets: {event.extra_assets}")
+            return jsonify({'error': 'Asset is not assigned to this event'}), 400
+
+        # Remove the asset from ALL possible locations
+        if asset_id in event.prepared_items:
+            event.prepared_items.remove(asset_id)
+            logger.info(f"Removed '{asset_id}' from prepared_items")
+
+        if asset_id in event.returned_items:
+            event.returned_items.remove(asset_id)
+            logger.info(f"Removed '{asset_id}' from returned_items")
+
         if asset_id in event.actually_prepared:
             event.actually_prepared.remove(asset_id)
-            log_asset_change(event_id, asset_id, "REMOVING", "from actually_prepared", "remove_asset_from_event")
+            logger.info(f"Removed '{asset_id}' from actually_prepared")
 
-        # Remove from extra_assets if it exists
-        if hasattr(event, 'extra_assets') and asset_id in event.extra_assets:
+        if asset_id in event.extra_assets:
             event.extra_assets.remove(asset_id)
-            log_asset_change(event_id, asset_id, "REMOVING", "from extra_assets", "remove_asset_from_event")
+            logger.info(f"Removed '{asset_id}' from extra_assets")
 
         # For regular assets, update location
         if not (asset_id.startswith('[LOAN]') or asset_id.startswith('[MISC]')):
@@ -1892,6 +1901,7 @@ def remove_asset_from_event(event_id, asset_id):
             if asset:
                 asset.current_location = asset.default_location or ''
                 data_manager.save_inventory()
+                logger.info(f"Reset location for asset '{asset_id}'")
 
         # Update event state
         update_event_state(event)

@@ -14,6 +14,188 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+let isClickHandlerSetup = false;
+let processingAssets = new Set();
+
+function setupSingleAssetClickHandler() {
+    // Prevent multiple setups
+    if (isClickHandlerSetup) {
+        console.log('Click handler already setup, skipping...');
+        return;
+    }
+    
+    console.log('Setting up SINGLE asset click handler...');
+    
+    // Remove ALL possible existing listeners
+    const oldHandler1 = document._assetClickHandler;
+    const oldHandler2 = document._customAssetHandler;
+    const oldHandler3 = window.handleAssetActionClick;
+    const oldHandler4 = window.handleCustomAssetClick;
+    
+    if (oldHandler1) document.removeEventListener('click', oldHandler1);
+    if (oldHandler2) document.removeEventListener('click', oldHandler2);
+    if (oldHandler3) document.removeEventListener('click', oldHandler3);
+    if (oldHandler4) document.removeEventListener('click', oldHandler4);
+    
+    // Create the ONE and ONLY click handler for ALL button types
+    const singleClickHandler = function(event) {
+        // Handle prepare/unprepare buttons
+        if (event.target.classList.contains('asset-action-btn') || 
+            event.target.classList.contains('custom-asset-btn')) {
+            
+            event.preventDefault();
+            event.stopPropagation();
+            
+            const eventId = event.target.dataset.eventId;
+            const assetId = decodeURIComponent(event.target.dataset.assetId);
+            const action = event.target.dataset.action;
+            
+            // Create unique key for this asset
+            const assetKey = `${eventId}-${assetId}`;
+            
+            // Check if already processing
+            if (processingAssets.has(assetKey)) {
+                console.log(`BLOCKED: Asset ${assetId} already processing`);
+                return false;
+            }
+            
+            // Mark as processing
+            processingAssets.add(assetKey);
+            console.log(`PROCESSING: Asset ${assetId}, action: ${action}`);
+            
+            // Disable all buttons for this asset
+            const buttons = document.querySelectorAll(`[data-asset-id="${encodeURIComponent(assetId)}"]`);
+            buttons.forEach(btn => {
+                btn.disabled = true;
+                btn.style.opacity = '0.5';
+            });
+            
+            // Process the action
+            const cleanup = () => {
+                processingAssets.delete(assetKey);
+                console.log(`COMPLETED: Asset ${assetId} processing finished`);
+            };
+            
+            if (action === 'prepare') {
+                prepareSpecificAsset(eventId, assetId).finally(cleanup);
+            } else if (action === 'unprepare') {
+                unprepareSpecificAsset(eventId, assetId).finally(cleanup);
+            } else {
+                cleanup();
+            }
+            
+            return false;
+        }
+        
+        // Handle REMOVE buttons
+        if (event.target.classList.contains('remove-asset-btn')) {
+            event.preventDefault();
+            event.stopPropagation();
+            
+            const eventId = event.target.dataset.eventId;
+            const assetId = event.target.dataset.assetId; // Already decoded when set
+            
+            console.log(`REMOVE CLICKED: Event ${eventId}, Asset: "${assetId}"`);
+            
+            // Create unique key for this asset removal
+            const assetKey = `remove-${eventId}-${assetId}`;
+            
+            // Check if already processing
+            if (processingAssets.has(assetKey)) {
+                console.log(`BLOCKED: Asset ${assetId} removal already processing`);
+                return false;
+            }
+            
+            // Show confirmation and process
+            if (confirm(`Are you sure you want to remove asset ${assetId} from this event?`)) {
+                // Mark as processing
+                processingAssets.add(assetKey);
+                
+                // Disable the button
+                event.target.disabled = true;
+                event.target.style.opacity = '0.5';
+                
+                // Process removal
+                const cleanup = () => {
+                    processingAssets.delete(assetKey);
+                    console.log(`COMPLETED: Asset ${assetId} removal finished`);
+                };
+                
+                removeAssetFromEvent(eventId, assetId).finally(cleanup);
+            }
+            
+            return false;
+        }
+    };
+    
+    // Store reference and add listener
+    document._singleAssetHandler = singleClickHandler;
+    document.addEventListener('click', singleClickHandler, true); // Use capture phase
+    
+    isClickHandlerSetup = true;
+    console.log('Single click handler setup complete');
+}
+
+function removeExistingListeners() {
+    // Remove any existing click handlers
+    const existingHandler = document._assetClickHandler;
+    if (existingHandler) {
+        document.removeEventListener('click', existingHandler);
+    }
+}
+
+function setupAssetClickHandler() {
+    removeExistingListeners();
+    
+    const clickHandler = function(event) {
+        if (event.target.classList.contains('asset-action-btn')) {
+            event.preventDefault();
+            event.stopPropagation();
+            
+            const eventId = event.target.dataset.eventId;
+            const assetId = decodeURIComponent(event.target.dataset.assetId);
+            const action = event.target.dataset.action;
+            
+            const assetKey = `${eventId}-${assetId}`;
+            
+            if (processingAssets.has(assetKey)) {
+                console.log(`Click ignored - asset ${assetId} already being processed`);
+                return;
+            }
+            
+            processingAssets.add(assetKey);
+
+            const allButtonsForAsset = document.querySelectorAll(`[data-asset-id="${encodeURIComponent(assetId)}"]`);
+            allButtonsForAsset.forEach(btn => {
+                btn.disabled = true;
+                btn.style.opacity = '0.6';
+            });
+            
+            console.log('Asset action clicked:', { eventId, assetId, action });
+
+            const cleanup = () => {
+                processingAssets.delete(assetKey);
+            };
+            
+            if (action === 'prepare') {
+                prepareSpecificAsset(eventId, assetId)
+                    .finally(cleanup);
+            } else if (action === 'unprepare') {
+                unprepareSpecificAsset(eventId, assetId)
+                    .finally(cleanup);
+            } else {
+                cleanup();
+            }
+            
+            return;
+        }
+    };
+    
+    document._assetClickHandler = clickHandler;
+    
+    document.addEventListener('click', clickHandler);
+}
+
 // Global utility function for JavaScript string escaping
 function escapeJs(str) {
   if (!str) return '';
@@ -127,6 +309,14 @@ function openModal(modalId) {
       modal.style.zIndex = "1100";
     }
   }
+}
+
+function generateRemoveButton(eventId, assetId) {
+    // Store raw asset ID - no HTML escaping here
+    return `<button class="btn btn-danger btn-sm remove-asset-btn" 
+                    data-event-id="${eventId}" 
+                    data-asset-id="${assetId}"
+                    style="padding: 4px 8px; font-size: 11px;">Remove</button>`;
 }
 
 function closeModal(modalId) {
@@ -1121,11 +1311,20 @@ async function openPrepareEventModal(eventId) {
                         console.log(`Asset ${asset.id}: extraAssets=`, event.extraAssets, `isExtra=${isExtra}`);
                         const extraBadge = isExtra ? 
                             '<span style="background: #fff3cd; color: #856404; padding: 2px 6px; border-radius: 3px; font-size: 10px; margin-left: 10px;">EXTRA</span>' : '';
-                        
+                        const safeAssetId = encodeURIComponent(asset.id);
                         const actionButton = isPrepared ? 
-                            `<button class="btn btn-warning" style="padding: 4px 8px; font-size: 11px;" onclick="unprepareSpecificAsset(${eventId}, '${asset.id}')">Unprepare</button>` :
-                            `<button class="btn btn-success" style="padding: 4px 8px; font-size: 11px;" onclick="prepareSpecificAsset(${eventId}, '${asset.id}')">Prepare</button>`;
-                        
+                            `<button class="btn btn-warning asset-action-btn" 
+                                    data-event-id="${eventId}" 
+                                    data-asset-id="${safeAssetId}" 
+                                    data-action="unprepare"
+                                    style="padding: 4px 8px; font-size: 11px;">Unprepare</button>` :
+                            `<button class="btn btn-success asset-action-btn" 
+                                    data-event-id="${eventId}" 
+                                    data-asset-id="${safeAssetId}" 
+                                    data-action="prepare"
+                                    style="padding: 4px 8px; font-size: 11px;">Prepare</button>`;
+
+                        let isProcessingClick = false;
                         content += `
                             <div style="padding: 8px 12px; border-bottom: 1px solid #f1f1f1; display: flex; justify-content: space-between; align-items: center;">
                                 <div>
@@ -1172,6 +1371,23 @@ async function openPrepareEventModal(eventId) {
         showNotification('error', 'Failed to load event preparation interface');
         console.error('Error loading prepare event modal:', error);
     }
+    setupAssetClickHandler();
+}
+
+function handleAssetActionClick(event) {
+    if (event.target.classList.contains('asset-action-btn')) {
+        event.preventDefault();
+        
+        const eventId = event.target.dataset.eventId;
+        const assetId = event.target.dataset.assetId.replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+        const action = event.target.dataset.action;
+        
+        if (action === 'prepare') {
+            prepareSpecificAsset(eventId, assetId);
+        } else if (action === 'unprepare') {
+            unprepareSpecificAsset(eventId, assetId);
+        }
+    }
 }
 
 function generateCustomAssetsSection(event) {
@@ -1192,19 +1408,47 @@ function generateCustomAssetsSection(event) {
                 `;
                 
                 customAssets.forEach(asset => {
-                    const statusIcon = asset.status === "returned" ? "↩️" 
-                                     : asset.status === "prepared" ? "✅" 
-                                     : "📋";
-                    const statusClass = asset.status === "prepared" ? "prepared" : "unprepared";
+                    // Use the same logic as regular assets - check actuallyPrepared array
+                    const isPrepared = event.actuallyPrepared && event.actuallyPrepared.includes(asset.id);
+                    const isReturned = event.returnedItems && event.returnedItems.includes(asset.id);
+                    
+                    let statusIcon, statusText;
+                    if (isReturned) {
+                        statusIcon = "↩️";
+                        statusText = "Returned";
+                    } else if (isPrepared) {
+                        statusIcon = "✅";
+                        statusText = "Prepared";
+                    } else {
+                        statusIcon = "📋";
+                        statusText = "Pending";
+                    }
+                    
+                    const safeAssetId = encodeURIComponent(asset.id);
+                    
+                    // Generate action button based on actual status
+                    let actionButton;
+                    if (isReturned) {
+                        actionButton = '<span style="color: #dc3545; font-size: 11px;">Returned</span>';
+                    } else if (isPrepared) {
+                        actionButton = `<button class="btn btn-warning btn-sm asset-action-btn" 
+                                               data-event-id="${event.id}" 
+                                               data-asset-id="${safeAssetId}" 
+                                               data-action="unprepare"
+                                               style="margin-right: 5px;">Unprepare</button>`;
+                    } else {
+                        actionButton = `<button class="btn btn-success btn-sm asset-action-btn" 
+                                               data-event-id="${event.id}" 
+                                               data-asset-id="${safeAssetId}" 
+                                               data-action="prepare"
+                                               style="margin-right: 5px;">Prepare</button>`;
+                    }
                     
                     content += `
                         <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px; margin-bottom: 5px; border: 1px solid #e9ecef; border-radius: 4px;">
                             <span>${statusIcon} ${escapeHtml(asset.name)}</span>
                             <div>
-                                ${asset.status !== "prepared" ? 
-                                    `<button class="btn btn-success btn-sm" onclick="prepareSpecificAsset(${event.id}, '${escapeJs(asset.id)}')" style="margin-right: 5px;">Prepare</button>` : 
-                                    `<button class="btn btn-warning btn-sm" onclick="unprepareSpecificAsset(${event.id}, '${escapeJs(asset.id)}')" style="margin-right: 5px;">Unprepare</button>`
-                                }
+                                ${actionButton}
                             </div>
                         </div>
                     `;
@@ -1223,6 +1467,40 @@ function generateCustomAssetsSection(event) {
     }
     
     return content;
+}
+
+function handleCustomAssetClick(event) {
+    if (event.target.classList.contains('custom-asset-btn')) {
+        event.preventDefault();
+        
+        const eventId = event.target.dataset.eventId;
+        const assetId = event.target.dataset.assetId.replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+        const action = event.target.dataset.action;
+        
+        if (action === 'prepare') {
+            prepareSpecificAsset(eventId, assetId);
+        } else if (action === 'unprepare') {
+            unprepareSpecificAsset(eventId, assetId);
+        }
+    }
+}
+
+function generateActionButton(eventId, asset, isPrepared) {
+    const safeAssetId = encodeURIComponent(asset.id);
+    
+    if (isPrepared) {
+        return `<button class="btn btn-warning asset-action-btn" 
+                        data-event-id="${eventId}" 
+                        data-asset-id="${safeAssetId}" 
+                        data-action="unprepare"
+                        style="padding: 4px 8px; font-size: 11px; margin-right: 5px;">Unprepare</button>`;
+    } else {
+        return `<button class="btn btn-success asset-action-btn" 
+                        data-event-id="${eventId}" 
+                        data-asset-id="${safeAssetId}" 
+                        data-action="prepare"
+                        style="padding: 4px 8px; font-size: 11px; margin-right: 5px;">Prepare</button>`;
+    }
 }
 
 // Add function to handle adding custom assets in prepare modal
@@ -1399,72 +1677,78 @@ async function prepareAssignedAsset(eventId) {
     }
 }
 
-
-/**
- * PREPARE an already-assigned asset (calls /prepare API)
- * Used by: "Prepare" buttons for assigned-but-not-prepared assets
- * Maintains exact same function signature as before
- */
 async function prepareSpecificAsset(eventId, assetId) {
-    console.log(`=== prepareSpecificAsset CALLED ===`);
+    console.log(`=== SINGLE prepareSpecificAsset CALLED ===`);
     console.log('eventId:', eventId, 'assetId:', assetId);
     
     try {
         await apiCall(`/api/events/${eventId}/prepare`, 'POST', { assetId });
         showNotification('success', `${assetId} marked as prepared`);
-        
-        console.log('About to refresh modal with state preservation...');
-        // Refresh modal while preserving UI state
-        setTimeout(() => {
-            preserveModalState(() => {
-                openPrepareEventModal(eventId);
-            });
-        }, 200);
-        
-        // Also refresh the prepare events list if it's active
-        if (document.getElementById('prepare-section').classList.contains('active')) {
-            setTimeout(() => {
-                loadPrepareEvents();
-            }, 500);
-        }
+        updateAllButtonsForAsset(assetId, true);
         
     } catch (error) {
         console.error('Error in prepareSpecificAsset:', error);
         showNotification('error', `Failed to prepare asset: ${error.message}`);
+        updateAllButtonsForAsset(assetId, false);
     }
 }
 
-/**
- * UNPREPARE/REMOVE an asset completely from event (calls /unprepare API)
- * Used by: "Unprepare" buttons
- * Maintains exact same function signature as before
- */
+function updateAllButtonsForAsset(assetId, isPrepared) {
+    const encodedAssetId = encodeURIComponent(assetId);
+    const buttons = document.querySelectorAll(`[data-asset-id="${encodedAssetId}"]`);
+    
+    console.log(`Updating ${buttons.length} buttons for asset ${assetId}, isPrepared: ${isPrepared}`);
+    
+    buttons.forEach(button => {
+        // Re-enable the button and restore opacity
+        button.disabled = false;
+        button.style.opacity = '1';
+        
+        // Update button appearance and action
+        if (isPrepared) {
+            button.textContent = 'Unprepare';
+            button.className = button.className.replace('btn-success', 'btn-warning');
+            button.dataset.action = 'unprepare';
+        } else {
+            button.textContent = 'Prepare';
+            button.className = button.className.replace('btn-warning', 'btn-success');
+            button.dataset.action = 'prepare';
+        }
+        
+        // Update status icons and text in the same row
+        const assetRow = button.closest('div[style*="display: flex"]');
+        if (assetRow) {
+            // Update status icon in the asset name
+            const assetNameSpan = assetRow.querySelector('span');
+            if (assetNameSpan && assetNameSpan.textContent.includes(assetId)) {
+                const icon = isPrepared ? '✅' : '📋';
+                // Replace any existing icon at the start
+                assetNameSpan.innerHTML = assetNameSpan.innerHTML.replace(/^[✅📋↩️]\s/, `${icon} `);
+            }
+            
+            // Update status text if it exists
+            const statusText = assetRow.querySelector('div[style*="margin-top: 2px"]');
+            if (statusText) {
+                statusText.textContent = isPrepared ? 'Prepared' : 'Pending';
+                statusText.style.color = isPrepared ? '#28a745' : '#ffc107';
+            }
+        }
+    });
+}
+
 async function unprepareSpecificAsset(eventId, assetId) {
-    console.log(`=== unprepareSpecificAsset CALLED ===`);
+    console.log(`=== SINGLE unprepareSpecificAsset CALLED ===`);
     console.log('eventId:', eventId, 'assetId:', assetId);
     
     try {
         await apiCall(`/api/events/${eventId}/unprepare`, 'POST', { assetId });
         showNotification('success', `${assetId} unprepared`);
-        
-        console.log('About to refresh modal with state preservation...');
-        // Refresh modal while preserving UI state
-        setTimeout(() => {
-            preserveModalState(() => {
-                openPrepareEventModal(eventId);
-            });
-        }, 200);
-        
-        // Also refresh the prepare events list if it's active
-        if (document.getElementById('prepare-section').classList.contains('active')) {
-            setTimeout(() => {
-                loadPrepareEvents();
-            }, 500);
-        }
+        updateAllButtonsForAsset(assetId, false);
         
     } catch (error) {
         console.error('Error in unprepareSpecificAsset:', error);
         showNotification('error', `Failed to unprepare asset: ${error.message}`);
+        updateAllButtonsForAsset(assetId, true);
     }
 }
 
@@ -1523,6 +1807,46 @@ async function updateAssetStatusInModal(eventId, assetId, action) {
     }
 }
 
+function updateButtonState(eventId, assetId, isPrepared) {
+    const encodedAssetId = encodeURIComponent(assetId);
+    const buttons = document.querySelectorAll(`[data-asset-id="${encodedAssetId}"]`);
+    
+    buttons.forEach(button => {
+        // Re-enable the button
+        button.disabled = false;
+        
+        // Update button appearance and action
+        if (isPrepared) {
+            button.textContent = 'Unprepare';
+            button.className = 'btn btn-warning asset-action-btn';
+            button.dataset.action = 'unprepare';
+            button.style.cssText = 'padding: 4px 8px; font-size: 11px; margin-right: 5px;';
+        } else {
+            button.textContent = 'Prepare';
+            button.className = 'btn btn-success asset-action-btn';
+            button.dataset.action = 'prepare';
+            button.style.cssText = 'padding: 4px 8px; font-size: 11px; margin-right: 5px;';
+        }
+        
+        // Update status icons and text in the same row
+        const assetRow = button.closest('div[style*="display: flex"]');
+        if (assetRow) {
+            // Update status icon
+            const statusSpan = assetRow.querySelector('span');
+            if (statusSpan && statusSpan.textContent.includes(assetId)) {
+                const icon = isPrepared ? '✅' : '📋';
+                statusSpan.innerHTML = statusSpan.innerHTML.replace(/^[✅📋]\s/, `${icon} `);
+            }
+            
+            // Update status text
+            const statusText = assetRow.querySelector('div[style*="margin-top: 2px"]');
+            if (statusText) {
+                statusText.textContent = isPrepared ? 'Prepared' : 'Pending';
+                statusText.style.color = isPrepared ? '#28a745' : '#ffc107';
+            }
+        }
+    });
+}
 
 function moveAssetFromAvailableToAssigned(eventId, assetId) {
     // Find the asset in the available section
@@ -2538,18 +2862,21 @@ function updateAllAssetsSection(event, eventId) {
                     let statusIcon = '📋';
                     let statusColor = '#6c757d';
                     let statusText = 'Assigned';
-                    let actionButton = `<button class="btn btn-success" style="padding: 4px 8px; font-size: 11px;" onclick="prepareSpecificAsset(${eventId}, '${asset.id}')">Prepare</button>`;
-                    
+                    const safeAssetId = encodeURIComponent(asset.id);
+                    let actionButton = `<button class="btn btn-success asset-action-btn" 
+                                              data-event-id="${eventId}" 
+                                              data-asset-id="${safeAssetId}" 
+                                              data-action="prepare"
+                                              style="padding: 4px 8px; font-size: 11px;">Prepare</button>`;
+
                     if (isReturned) {
-                        statusIcon = '↩️';
-                        statusColor = '#dc3545';
-                        statusText = 'Returned';
                         actionButton = '<span style="color: #dc3545; font-size: 11px;">Returned</span>';
                     } else if (isPrepared) {
-                        statusIcon = '✅';
-                        statusColor = '#28a745';
-                        statusText = 'Prepared';
-                        actionButton = `<button class="btn btn-warning" style="padding: 4px 8px; font-size: 11px;" onclick="unprepareSpecificAsset(${eventId}, '${asset.id}')">Unprepare</button>`;
+                        actionButton = `<button class="btn btn-warning asset-action-btn" 
+                                              data-event-id="${eventId}" 
+                                              data-asset-id="${safeAssetId}" 
+                                              data-action="unprepare"
+                                              style="padding: 4px 8px; font-size: 11px;">Unprepare</button>`;
                     }
                     
                     // Add extra asset indicator
@@ -3881,6 +4208,24 @@ async function createEventLogViewer(eventId, eventName) {
       return match ? match[1] : null;
     };
 
+    function generateActionButton(eventId, asset, isPrepared) {
+    const safeAssetId = encodeURIComponent(asset.id);
+    
+    if (isPrepared) {
+        return `<button class="btn btn-warning asset-action-btn" 
+                        data-event-id="${eventId}" 
+                        data-asset-id="${safeAssetId}" 
+                        data-action="unprepare"
+                        style="padding: 4px 8px; font-size: 11px; margin-right: 5px;">Unprepare</button>`;
+    } else {
+        return `<button class="btn btn-success asset-action-btn" 
+                        data-event-id="${eventId}" 
+                        data-asset-id="${safeAssetId}" 
+                        data-action="prepare"
+                        style="padding: 4px 8px; font-size: 11px; margin-right: 5px;">Prepare</button>`;
+    }
+}
+
     // Generate unique ID for this event's log section
     const logSectionId = `event-log-${eventId}`;
 
@@ -4090,12 +4435,11 @@ async function editEvent(eventId) {
                                     ${statusIcon} ${asset.id} - ${escapeHtml(asset.brand)} ${escapeHtml(asset.model)} 
                                     ${asset.serial ? `(SN: ${escapeHtml(asset.serial)})` : ''}
                                 </span>
-                                <button class="btn btn-danger btn-sm remove-asset-btn" 
-                                        data-event-id="${event.id}" 
-                                        data-asset-id="${asset.id}"
-                                        style="padding: 2px 8px; font-size: 11px;">Remove</button>
-                            </div>
-                        `;
+                                <div>
+                                    <span>${asset.name}</span>
+                                    ${generateRemoveButton(eventId, asset.id)}
+                                </div>
+                                `;  
             }
           });
         });
@@ -4376,12 +4720,11 @@ async function loadEditEventAssets(eventId) {
                             <div style="display: flex; align-items: center;">
                                 <span style="margin-right: 8px;">${statusIcon}</span>
                                 <span style="font-weight: 500;">${escapeHtml(asset.name)}</span>
-                            </div>
-                            <button class="btn btn-danger btn-sm remove-asset-btn" 
-                                    data-event-id="${eventId}" data-asset-id="${escapeHtml(asset.id)}"
-                                    style="padding: 4px 8px; font-size: 11px;">Remove</button>
-                        </div>
-                    `;
+                             <div>
+                                <span>${asset.name}</span>
+                                ${generateRemoveButton(eventId, asset.id)}
+                             </div>
+                          `;
                 });
                 
                 content += `
@@ -5620,43 +5963,64 @@ async function addAssetToEvent(eventId, assetId) {
 }
 
 async function removeAssetFromEvent(eventId, assetId) {
-  if (
-    !confirm(
-      `Are you sure you want to remove asset ${assetId} from this event?`
-    )
-  ) {
-    return;
-  }
+    console.log(`=== removeAssetFromEvent CALLED ===`);
+    console.log('eventId:', eventId, 'assetId:', assetId);
+    
+    try {
+        // Instead of URL encoding the asset ID in the path, send it in the request body
+        const url = `/api/events/${eventId}/remove-asset`;
+        
+        console.log(`Making POST request to: ${url}`);
+        console.log(`Request body: { assetId: "${assetId}" }`);
+        
+        await apiCall(url, "POST", { assetId: assetId });
+        
+        showNotification("success", `Asset ${assetId} removed from event`);
+        
+        // Remove the asset element from UI with animation
+        const assetElements = document.querySelectorAll(`[data-asset-id="${escapeHtml(assetId)}"]`);
+        assetElements.forEach(element => {
+            const assetRow = element.closest('div[style*="display: flex"]');
+            if (assetRow) {
+                assetRow.style.transition = 'opacity 0.3s ease';
+                assetRow.style.opacity = '0.5';
+                assetRow.style.pointerEvents = 'none';
+                
+                setTimeout(() => {
+                    if (assetRow.parentNode) {
+                        assetRow.parentNode.removeChild(assetRow);
+                    }
+                }, 300);
+            }
+        });
 
-  try {
-    // Try the correct endpoint format
-    await apiCall(
-      `/api/events/${eventId}/assets/${encodeURIComponent(assetId)}`,
-      "DELETE"
-    );
-    showNotification("success", `Asset ${assetId} removed from event`);
+        // If we're in an edit modal, refresh the content
+        const editModal = document.getElementById('editEventAssetsModal');
+        if (editModal && editModal.classList.contains('active')) {
+            // Refresh the edit modal content
+            editEventAssets(eventId);
+        }
 
-    // Just update the specific asset item without full refresh
-    const assetElement = document
-      .querySelector(
-        `[onclick*="removeAssetFromEvent(${eventId}, '${assetId}')"]`
-      )
-      .closest("div");
-    if (assetElement) {
-      assetElement.remove();
+        // If we're in a detail modal, refresh it
+        const detailModal = document.getElementById('eventDetailsModal');
+        if (detailModal && detailModal.classList.contains('active')) {
+            viewEvent(eventId);
+        }
+
+        // Refresh main dashboard if it's visible
+        if (document.getElementById('dashboard-section').classList.contains('active')) {
+            loadDashboard();
+        }
+        
+        // Refresh events list if it's visible
+        if (document.getElementById('events-section').classList.contains('active')) {
+            loadAllEvents();
+        }
+
+    } catch (error) {
+        console.error('Remove asset error:', error);
+        throw error; // Re-throw so the calling code can handle it
     }
-
-    // Update the asset count
-    const assetsHeader = document.querySelector("#edit-assets-tab h4");
-    if (assetsHeader) {
-      const currentText = assetsHeader.textContent;
-      const currentCount = parseInt(currentText.match(/\d+/)[0]);
-      assetsHeader.textContent = `Current Assets (${currentCount - 1})`;
-    }
-  } catch (error) {
-    console.error("Remove asset error:", error);
-    showNotification("error", `Failed to remove asset: ${error.message}`);
-  }
 }
 
 // Filter available asset models for original interface
@@ -5896,7 +6260,7 @@ async function refreshAssetsTabContent(eventId) {
                                 <div>
                                     <span>${statusIcon} ${asset.id} - ${asset.name}</span>
                                 </div>
-                                <button class="btn btn-danger" style="padding: 4px 8px; font-size: 11px;" onclick="removeAssetFromEvent(${event.id}, '${asset.id}')">Remove</button>
+                                ${generateRemoveButton(event.id, asset.id)}
                             </div>
                         `;
         });
@@ -9290,3 +9654,7 @@ setInterval(async () => {
     console.error("Auto-refresh error:", error);
   }
 }, 6000);
+
+document.addEventListener('DOMContentLoaded', function() {
+    setupSingleAssetClickHandler();
+});
