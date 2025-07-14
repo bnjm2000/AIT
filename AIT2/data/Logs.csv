@@ -1,69 +1,3 @@
-2024/11/11,bnjm2000,Added equipment X8#07.
-2024/11/11,bnjm2000,Added equipment X8#08.
-2024/11/11,bnjm2000,Added equipment X8#09.
-2024/11/11,bnjm2000,Added equipment X8#10.
-2024/11/11,bnjm2000,Added equipment X8#11.
-2024/11/11,bnjm2000,Added equipment X8#12.
-2024/11/11,bnjm2000,Added equipment 5XT#01.
-2024/11/11,bnjm2000,Added equipment 5XT#02.
-2024/11/11,bnjm2000,Added equipment 5XT#03.
-2024/11/11,bnjm2000,Added equipment 5XT#04.
-2024/11/11,bnjm2000,Added equipment 5XT#05.
-2024/11/11,bnjm2000,Added equipment 5XT#06.
-2024/11/11,bnjm2000,Added equipment 5XT#07.
-2024/11/11,bnjm2000,Added equipment 5XT#08.
-2024/11/11,bnjm2000,Added equipment 5XT#09.
-2024/11/11,bnjm2000,Added equipment 5XT#10.
-2024/11/11,bnjm2000,Added equipment 5XT#11.
-2024/11/11,bnjm2000,Added equipment 5XT#12.
-2024/11/11,bnjm2000,User bnjm2000 logged in.
-2024/11/11,bnjm2000,Added event 1: Wedding @ Ritz Carlton.
-2024/11/11,bnjm2000,User bnjm2000 logged in.
-2024/11/11,bnjm2000,Added equipment AD4Q#01.
-2024/11/11,bnjm2000,Added equipment AD4Q#02.
-2024/11/11,bnjm2000,Added equipment AD4Q#03.
-2024/11/11,bnjm2000,Added equipment AD4Q#04.
-2024/11/11,bnjm2000,Added event 1: Wedding @ Ritz Carlton.
-2024/11/11,bnjm2000,User bnjm2000 logged out.
-2024/11/11,bnjm2000,User bnjm2000 logged in.
-2024/11/11,bnjm2000,User bnjm2000 logged in.
-2024/11/11,bnjm2000,User bnjm2000 logged in.
-2024/11/11,bnjm2000,User bnjm2000 logged in.
-2024/11/11,bnjm2000,User bnjm2000 logged in.
-2024/11/11,bnjm2000,Added event 1: Wedding @ Ritz Carlton.
-2024/11/11,bnjm2000,User bnjm2000 logged in.
-2024/11/11,bnjm2000,Added event 1: Wedding @ Ritz Carlton.
-2024/11/11,bnjm2000,Added event 2: Euan Kennedy Dinner (IP).
-2024/11/11,bnjm2000,User bnjm2000 logged in.
-2024/11/11,bnjm2000,Added event 3: event@venue.
-2024/11/11,admin,User admin logged in.
-2024/11/11,admin,User admin logged in.
-2024/11/11,admin,Added user bnjm2000.
-2024/11/11,bnjm2000,User bnjm2000 logged in.
-2024/11/11,bnjm2000,User bnjm2000 logged out.
-2024/11/12,bnjm2000,User bnjm2000 logged in.
-2024/11/12,bnjm2000,User bnjm2000 logged in.
-2024/11/12,bnjm2000,Added event 1: Wedding @ Ritz.
-2024/11/12,bnjm2000,User bnjm2000 logged in.
-2024/11/12,bnjm2000,Added event 2: Ritz.
-2024/11/12,bnjm2000,Edited event 1.
-2024/11/12,bnjm2000,Edited event 2.
-2024/11/12,bnjm2000,Deleted event 2.
-2024/11/12,bnjm2000,Deleted event 1.
-2024/11/12,bnjm2000,Added event 1: one.
-2024/11/12,bnjm2000,Added event 2: two.
-2024/11/12,bnjm2000,Deleted event 1.
-2024/11/12,bnjm2000,User bnjm2000 logged out.
-2024/11/12,bnjm2000,User bnjm2000 logged in.
-2024/11/12,bnjm2000,User bnjm2000 logged in.
-2024/11/12,bnjm2000,User bnjm2000 logged in.
-2024/11/12,bnjm2000,Added event 3: Wedding.
-2024/11/12,bnjm2000,User bnjm2000 logged in.
-2024/11/12,bnjm2000,Added event 1: one.
-2024/11/12,bnjm2000,User bnjm2000 logged out.
-2024/11/12,bnjm2000,User bnjm2000 logged in.
-2024/11/12,bnjm2000,User bnjm2000 logged in.
-2024/11/12,bnjm2000,Added event 1: wedding.
 2024/11/12,bnjm2000,User bnjm2000 logged out.
 2024/11/12,bnjm2000,User bnjm2000 logged in.
 2024/11/12,bnjm2000,User bnjm2000 logged in.
@@ -920,20 +854,12 @@ Replaced FFC Cable [$10]' (also: Location: Store, Serial: WTASK01015, Cleared OO
 2025/07/09 17:03:58,bnjm2000,Maintenance logged for asset DIABLO#13: Repaired by Technician Dean
 2025/07/09 17:04:37,bnjm2000,"Updated maintenance log for asset DIABLO#13: 'Repaired by Technician Dean [Location: Store, Cleared OOC, Cleared Missing]' -> 'Repaired by Technician Dean' (also: Location: Store) (edited by bnjm2000)"
 2025/07/09 17:04:43,bnjm2000,"Updated maintenance log for asset DIABLO#13: 'Repaired by Technician Dean [Location: Store]' -> 'Repaired by Technician Dean' (also: Location: Store, Cleared OOC) (edited by bnjm2000)"
-2025/07/09 17:05:44,bnjm2000,Created event 30: Dry-hire: THH via web interface
-2025/07/09 17:06:01,bnjm2000,"Assigned asset [MISC]24"" silver base plate;4 to event 30 (unprepared)"
 2025/07/10 09:27:17,system,Failed login attempt for username: bnjm2000
 2025/07/10 09:27:21,bnjm2000,User bnjm2000 logged in via web interface
 2025/07/10 09:27:50,bnjm2000,Added 4x TalentCell YB1208300-USB model to event 29 (total: 4)
 2025/07/10 09:29:30,bnjm2000,"Created event 31: Harpers Bazaar x Heart Evangelista @ Bar Somma, New Bahru via web interface"
 2025/07/10 09:29:36,bnjm2000,Added 1x Samsung UN65TU8000F model to event 31 (total: 1)
 2025/07/10 09:30:10,bnjm2000,Assigned asset [MISC]Prism+ KANVA Tripod TV Stand to event 31 (unprepared)
-2025/07/10 09:30:28,bnjm2000,Added 1x Samsung UN65TU8000F model to event 30 (total: 1)
-2025/07/10 09:30:32,bnjm2000,Removed Samsung UN65TU8000F model from event 30
-2025/07/10 09:31:19,bnjm2000,Updated event 30: Dry-hire: THH via web interface
-2025/07/10 09:31:29,bnjm2000,Updated event 30: Dry-hire: THH via web interface
-2025/07/10 09:31:46,bnjm2000,Updated event 30: Dry-hire: THH via web interface
-2025/07/10 10:15:57,bnjm2000,Updated event 30: Dry-hire: THH via web interface
 2025/07/10 10:16:11,bnjm2000,Assigned specific asset MT-90A#01 to event 29
 2025/07/10 10:16:16,bnjm2000,Assigned specific asset MT-90A#03 to event 29
 2025/07/10 10:16:20,bnjm2000,Assigned specific asset MR-90A#01 to event 29
@@ -1015,3 +941,77 @@ Service charge [$60]' (deleted by bnjm2000)"
 2025/07/10 14:48:44,bnjm2000,Updated event 35: Dry Hire: UAV via web interface
 2025/07/10 15:59:44,bnjm2000,Maintenance logged for asset AD2#11: Replaced grill as it was rusty
 2025/07/10 15:59:44,bnjm2000,Maintenance logged for asset AD2#13: Replaced grill as it was rusty
+2025/07/14 09:45:23,bnjm2000,User bnjm2000 logged in via web interface
+2025/07/14 09:45:48,bnjm2000,Created event 36: Dry Hire: THH via web interface
+2025/07/14 09:46:07,bnjm2000,Assigned asset [MISC]24in base plate;4 to event 36 (unprepared)
+2025/07/14 09:46:09,bnjm2000,Deleted event 30: Dry-hire: THH via web interface. No asset locations to reset. Removed 8 related log entries.
+2025/07/14 09:46:13,bnjm2000,Prepared asset [MISC]24in base plate;4 for event 36
+2025/07/14 09:47:31,bnjm2000,Updated event 36: Dry Hire: THH via web interface
+2025/07/14 09:48:42,bnjm2000,Returned asset MT-90A#01 from event 29
+2025/07/14 09:48:43,bnjm2000,Returned asset MT-90A#03 from event 29
+2025/07/14 09:48:44,bnjm2000,Returned asset MR-90A#01 from event 29
+2025/07/14 09:48:44,bnjm2000,Returned asset MR-90A#02 from event 29
+2025/07/14 09:48:44,bnjm2000,Returned asset MR-90A#03 from event 29
+2025/07/14 09:48:44,bnjm2000,Returned asset MR-90A#04 from event 29
+2025/07/14 09:48:44,bnjm2000,Returned asset MR-90A#05 from event 29
+2025/07/14 09:48:44,bnjm2000,Returned asset MR-90A#06 from event 29
+2025/07/14 09:48:46,bnjm2000,Returned asset PA805SWB#01 from event 29
+2025/07/14 09:48:47,bnjm2000,Returned asset ULXD2#01 from event 29
+2025/07/14 09:48:47,bnjm2000,Returned asset ULXD2#05 from event 29
+2025/07/14 09:48:48,bnjm2000,Returned asset ULXD2#10 from event 29
+2025/07/14 09:48:49,bnjm2000,Returned asset TALENTCELL#01 from event 29
+2025/07/14 09:48:49,bnjm2000,Returned asset TALENTCELL#02 from event 29
+2025/07/14 09:48:49,bnjm2000,Returned asset TALENTCELL#03 from event 29
+2025/07/14 09:48:49,bnjm2000,Returned asset TALENTCELL#04 from event 29
+2025/07/14 09:48:50,bnjm2000,Returned asset IP1000#01 from event 29
+2025/07/14 09:48:50,bnjm2000,Returned asset IP1000#02 from event 29
+2025/07/14 09:48:50,bnjm2000,Returned asset IP1000#03 from event 29
+2025/07/14 09:48:50,bnjm2000,Returned asset IP1000#04 from event 29
+2025/07/14 09:48:50,bnjm2000,Returned asset IP1000#05 from event 29
+2025/07/14 09:48:50,bnjm2000,Returned asset IP1000#06 from event 29
+2025/07/14 09:48:50,bnjm2000,Returned asset IP1000#07 from event 29
+2025/07/14 09:48:50,bnjm2000,Returned asset IP1000#08 from event 29
+2025/07/14 09:48:52,bnjm2000,Returned asset MG10#01 from event 29
+2025/07/14 09:48:54,bnjm2000,Returned asset ULXD4D#04 from event 29
+2025/07/14 09:50:21,bnjm2000,Created event 37: SingHealth DUKE-NUS Gala @ TRCM via web interface
+2025/07/14 09:50:31,bnjm2000,Added 4x L-Acoustics X12 model to event 37 (total: 4)
+2025/07/14 09:50:42,bnjm2000,Added 4x L-Acoustics SB18 model to event 37 (total: 4)
+2025/07/14 09:52:57,bnjm2000,Added 2x DPA 6061 model to event 37 (total: 2)
+2025/07/14 09:53:13,bnjm2000,Added 1x Shure Beta 52A model to event 37 (total: 1)
+2025/07/14 09:53:23,bnjm2000,Added 3x Sennheiser E904 model to event 37 (total: 3)
+2025/07/14 09:53:34,bnjm2000,Added 2x Shure SM57 model to event 37 (total: 2)
+2025/07/14 09:53:41,bnjm2000,Added 2x Shure SM58S model to event 37 (total: 2)
+2025/07/14 09:54:10,bnjm2000,Added 1x Shure ULXD4Q model to event 37 (total: 1)
+2025/07/14 09:54:12,bnjm2000,Added 3x Shure ULXD4D model to event 37 (total: 3)
+2025/07/14 09:54:38,bnjm2000,Added 8x Shure ULXD2 model to event 37 (total: 8)
+2025/07/14 09:55:09,bnjm2000,Added 1x Yamaha QL5 model to event 37 (total: 1)
+2025/07/14 09:55:15,bnjm2000,Added 1x GrandMA3 Compact XT model to event 37 (total: 1)
+2025/07/14 09:55:38,bnjm2000,Added 12x Ayrton Diablo (W.DMX) model to event 37 (total: 12)
+2025/07/14 09:55:41,bnjm2000,Added 4x Ayrton Diablo Profile model to event 37 (total: 4)
+2025/07/14 09:55:48,bnjm2000,Added 10x Robe Robin LEDBeam 350 Wash model to event 37 (total: 10)
+2025/07/14 09:56:05,bnjm2000,Removed Robe Robin LEDBeam 350 Wash model from event 37
+2025/07/14 09:56:05,bnjm2000,Added 12x Robe Robin LEDBeam 350 Wash model to event 37 (total: 12)
+2025/07/14 09:56:26,bnjm2000,Added 1x L-Acoustics P1 model to event 37 (total: 1)
+2025/07/14 09:56:32,bnjm2000,Added 2x Netgear GSM4212P model to event 37 (total: 2)
+2025/07/14 09:56:54,bnjm2000,Added 8x L-Acoustics X8 model to event 37 (total: 8)
+2025/07/14 10:20:05,bnjm2000,Added 6x DPA 4099 model to event 37 (total: 6)
+2025/07/14 10:26:28,bnjm2000,"Maintenance logged for asset 4099#01: Inventory check, cable is exposed"
+2025/07/14 10:26:28,bnjm2000,"Maintenance logged for asset 4099#03: Inventory check, cable is exposed"
+2025/07/14 10:26:28,bnjm2000,"Maintenance logged for asset 4099#07: Inventory check, cable is exposed"
+2025/07/14 10:26:28,bnjm2000,"Maintenance logged for asset 4099#10: Inventory check, cable is exposed"
+2025/07/14 10:26:52,bnjm2000,"Maintenance logged for asset 4099#11: inventory check, cable a little exposed"
+2025/07/14 10:26:52,bnjm2000,"Maintenance logged for asset 4099#10: inventory check, cable a little exposed"
+2025/07/14 10:27:13,bnjm2000,"Maintenance logged for asset 4099#15: Inventory check, cable a little exposed"
+2025/07/14 10:28:08,bnjm2000,"Updated maintenance log for asset 4099#03: 'Inventory check, cable is exposed' -> 'Inventory check, cable is oxidised and disintegrating' (also: Marked OOC) (edited by bnjm2000)"
+2025/07/14 10:28:31,bnjm2000,Marked asset 4099#13 as Out of Commission
+2025/07/14 10:28:31,bnjm2000,"Maintenance logged for asset 4099#13: Inventory check, sponge spoilt, cable exposed"
+2025/07/14 10:29:00,bnjm2000,"Maintenance logged for asset 4099#12: Inventory check, cable is exposed, sponge is going"
+2025/07/14 10:29:19,bnjm2000,Marked asset 4099#09 as Out of Commission
+2025/07/14 10:29:19,bnjm2000,"Maintenance logged for asset 4099#09: Inventory check, cable exposed, no sponge"
+2025/07/14 10:30:29,bnjm2000,Marked asset 4099#06 as Out of Commission
+2025/07/14 10:30:29,bnjm2000,"Maintenance logged for asset 4099#06: Inventory check, no sponge, cable ok"
+2025/07/14 10:30:54,bnjm2000,Marked asset 4099#08 as Out of Commission
+2025/07/14 10:30:54,bnjm2000,"Maintenance logged for asset 4099#08: Inventory check, no sponge, cable exposed"
+2025/07/14 10:31:19,bnjm2000,Marked asset 4099#02 as Out of Commission
+2025/07/14 10:31:19,bnjm2000,"Maintenance logged for asset 4099#02: Inventory check, no sponge, cable exposed"
+2025/07/14 10:32:26,bnjm2000,"Deleted maintenance log for asset 4099#10: 'Inventory check, cable is exposed' (deleted by bnjm2000)"
