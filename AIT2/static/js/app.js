@@ -2539,16 +2539,22 @@ async function assignSpecificAsset(eventId, assetId, brand, model) {
 }
 
 async function unassignSpecificAsset(eventId, assetId, brand, model) {
-    try {
-        await apiCall(`/api/events/${eventId}/unassign-specific`, 'POST', { assetId });
-        showNotification('success', `Unassigned ${assetId} from event`);
-        
-        // Update the interface dynamically instead of full refresh
-        updateAssetStatusInModal(eventId, assetId, 'unprepared');
-        
-    } catch (error) {
-        showNotification('error', `Failed to unassign asset: ${error.message}`);
-    }
+  try {
+    // Use the new unassign-specific endpoint
+    await apiCall(`/api/events/${eventId}/unassign-specific`, "POST", {
+      assetId,
+    });
+    showNotification("success", `Unassigned ${assetId} from event`);
+
+    // Refresh the preparation modal with state preservation
+    setTimeout(() => {
+      preserveModalState(() => {
+        openPrepareEventModal(eventId);
+      });
+    }, 200);
+  } catch (error) {
+    showNotification("error", `Failed to unassign asset: ${error.message}`);
+  }
 }
 
 function finishEventPreparation(eventId) {
@@ -5406,27 +5412,42 @@ function preserveModalState(callback) {
     const modalContent = document.getElementById('prepareEventContent');
     const scrollTop = modalContent ? modalContent.scrollTop : 0;
     
-    // Execute the callback (refresh)
+    // Save active tabs
+    const activeTab = document.querySelector('.nav-link.active');
+    const activeTabText = activeTab ? activeTab.textContent.trim() : '';
+    
+    // Execute the callback (usually openPrepareEventModal)
     callback();
     
-    // Restore state after a short delay
+    // Restore state after a short delay to allow DOM to update
     setTimeout(() => {
         // Restore expanded sections
         expandedSections.forEach(sectionId => {
             const section = document.getElementById(sectionId);
             if (section) {
                 section.style.display = 'block';
-                // Also update the toggle icon
-                const toggleElement = document.querySelector(`[onclick*="togglePrepareSection('${sectionId}')"] .toggle-icon`);
-                if (toggleElement) {
-                    toggleElement.textContent = '▲';
+                // Update toggle icon
+                const toggleIcon = document.querySelector(`[onclick*="togglePrepareSection('${sectionId}')"] .toggle-icon`);
+                if (toggleIcon) {
+                    toggleIcon.textContent = '▼';
                 }
             }
         });
         
         // Restore scroll position
-        if (modalContent) {
-            modalContent.scrollTop = scrollTop;
+        const newModalContent = document.getElementById('prepareEventContent');
+        if (newModalContent) {
+            newModalContent.scrollTop = scrollTop;
+        }
+        
+        // Restore active tab
+        if (activeTabText) {
+            const tabs = document.querySelectorAll('.nav-link');
+            tabs.forEach(tab => {
+                if (tab.textContent.trim() === activeTabText) {
+                    tab.click();
+                }
+            });
         }
     }, 100);
 }
@@ -5866,11 +5887,6 @@ async function addAssetToEventSimple(eventId, assetId) {
   }
 }
 
-/**
- * ASSIGN an asset to an event (calls /assign-specific API)
- * Used by: Model section "Prepare" buttons and other assignment flows
- * Maintains exact same function signature as before
- */
 async function assignSpecificAsset(eventId, assetId, brand, model) {
     console.log(`=== assignSpecificAsset CALLED ===`);
     console.log('eventId:', eventId, 'assetId:', assetId, 'brand:', brand, 'model:', model);
@@ -5994,32 +6010,29 @@ async function removeAssetFromEvent(eventId, assetId) {
             }
         });
 
-        // If we're in an edit modal, refresh the content
+        // Check which modal is currently active and refresh appropriately
+        const prepareModal = document.getElementById('prepareEventModal');
         const editModal = document.getElementById('editEventAssetsModal');
-        if (editModal && editModal.classList.contains('active')) {
-            // Refresh the edit modal content
-            editEventAssets(eventId);
-        }
-
-        // If we're in a detail modal, refresh it
-        const detailModal = document.getElementById('eventDetailsModal');
-        if (detailModal && detailModal.classList.contains('active')) {
-            viewEvent(eventId);
-        }
-
-        // Refresh main dashboard if it's visible
-        if (document.getElementById('dashboard-section').classList.contains('active')) {
-            loadDashboard();
+        
+        if (prepareModal && prepareModal.classList.contains('active')) {
+            // We're in the prepare modal - refresh with state preservation
+            console.log('Refreshing prepare modal with state preservation...');
+            setTimeout(() => {
+                preserveModalState(() => {
+                    openPrepareEventModal(eventId);
+                });
+            }, 400);
+        } else if (editModal && editModal.classList.contains('active')) {
+            // We're in the edit modal - refresh edit modal
+            console.log('Refreshing edit modal...');
+            setTimeout(() => {
+                editEventAssets(eventId);
+            }, 400);
         }
         
-        // Refresh events list if it's visible
-        if (document.getElementById('events-section').classList.contains('active')) {
-            loadAllEvents();
-        }
-
     } catch (error) {
-        console.error('Remove asset error:', error);
-        throw error; // Re-throw so the calling code can handle it
+        console.error('Error removing asset from event:', error);
+        showNotification("error", `Failed to remove asset: ${error.message}`);
     }
 }
 
