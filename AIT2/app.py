@@ -225,26 +225,46 @@ def update_event_state(event):
                 logger.warning(f"Event {event.event_id} fell through to fallback case - keeping current state {event.state}")
                 # Don't change state if we can't determine what it should be
         else:
-            # Use logic for events without model assignments
+            # Use logic for events without model assignments (includes custom assets like LOAN/MISC)
             total_prepared_items = len([item for item in event.prepared_items if not item.startswith('[MODEL]')])
             total_actually_prepared = len(event.actually_prepared)
             total_returned = len(event.returned_items)
-            
-            logger.debug(f"Event {event.event_id} (non-model): prepared_items={total_prepared_items}, actually_prepared={total_actually_prepared}, returned={total_returned}")
             
             # 1. CHECK FOR AUTO-CLOSE FIRST - all prepared assets returned
             if (total_actually_prepared > 0 and 
                 total_returned == total_actually_prepared):
                 event.state = 'Closed'
                 logger.info(f"Event {event.event_id} set to Closed: all prepared assets returned")
-            # 2. CHECK FOR OVERDUE - event ended but still has unreturned assets
             elif (total_actually_prepared > total_returned and 
                   current_date > event.end_date and 
                   event.state in ['Ongoing', 'Returning', 'Ready']):
                 event.state = 'Overdue'
-                logger.info(f"Event {event.event_id} set to Overdue: past end date with unreturned assets")
-            # 3. For non-model events, don't automatically change other states
-            # Let them keep their current state unless specifically closing or overdue
+            # 3. No assets assigned yet
+            elif total_prepared_items == 0:
+                event.state = 'Added'
+            # 4. Assets assigned but none prepared yet
+            elif total_prepared_items > 0 and total_actually_prepared == 0:
+                event.state = 'Planning'
+            # 5. Some assets prepared but not all, no returns yet
+            elif (total_actually_prepared > 0 and 
+                  total_actually_prepared < total_prepared_items and 
+                  total_returned == 0):
+                event.state = 'Preparing'
+            # 6. All assets prepared, no returns yet
+            elif (total_actually_prepared >= total_prepared_items and 
+                  total_returned == 0):
+                # Check if ready event is within its date range to make it ongoing
+                if event.start_date <= current_date <= event.end_date:
+                    event.state = 'Ongoing'
+                else:
+                    event.state = 'Ready'
+            # 7. Some assets returned but not all
+            elif total_returned > 0 and total_returned < total_actually_prepared:
+                event.state = 'Returning'
+            # 8. Fallback - keep current state if we can't determine what it should be
+            else:
+                logger.warning(f"Event {event.event_id} fell through to fallback case - keeping current state {event.state}")
+                logger.warning(f"  prepared_items={total_prepared_items}, actually_prepared={total_actually_prepared}, returned={total_returned}")
                 
     except Exception as e:
         logger.error(f"Error updating event state for event {getattr(event, 'event_id', 'Unknown')}: {e}")
