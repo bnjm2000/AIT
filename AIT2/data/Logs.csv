@@ -1,30 +1,3 @@
-2024/11/12,bnjm2000,User bnjm2000 logged out.
-2024/11/12,bnjm2000,User bnjm2000 logged in.
-2024/11/12,bnjm2000,User bnjm2000 logged in.
-2024/11/12,bnjm2000,User bnjm2000 logged in.
-2024/11/12,bnjm2000,User bnjm2000 logged out.
-2024/11/12,bnjm2000,User bnjm2000 logged in.
-2024/11/12,bnjm2000,User bnjm2000 logged in.
-2024/11/12,bnjm2000,Added event 2: ritz
-2024/11/12,bnjm2000,User bnjm2000 logged in.
-2024/11/12,bnjm2000,User bnjm2000 logged in.
-2024/11/12,bnjm2000,User bnjm2000 logged in.
-2024/11/12,bnjm2000,User bnjm2000 logged in.
-2024/11/12,bnjm2000,User bnjm2000 logged in.
-2024/11/12,bnjm2000,User bnjm2000 logged in.
-2024/11/12,bnjm2000,User bnjm2000 logged in.
-2024/11/12,bnjm2000,User bnjm2000 logged in.
-2024/11/12,bnjm2000,User bnjm2000 logged in.
-2024/11/12,bnjm2000,User bnjm2000 logged in.
-2024/11/12,bnjm2000,Added event 3: 
-2024/11/12,bnjm2000,User bnjm2000 logged in.
-2024/11/12,bnjm2000,Added event 1: wedding
-2024/11/12,bnjm2000,User bnjm2000 logged in.
-2024/11/12,bnjm2000,User bnjm2000 logged in.
-2024/11/12,bnjm2000,User bnjm2000 logged in.
-2024/11/12,bnjm2000,User bnjm2000 logged in.
-2024/11/12,bnjm2000,Added event 2: Wedding @ Ritz Carlton
-2024/11/12,bnjm2000,User bnjm2000 logged in.
 2024/11/12,bnjm2000,User bnjm2000 logged in.
 2024/11/12,bnjm2000,User bnjm2000 logged in.
 2024/11/12,bnjm2000,Added event 1: Wedding @ Ritz Carlton.
@@ -1015,3 +988,30 @@ Service charge [$60]' (deleted by bnjm2000)"
 2025/07/14 10:31:19,bnjm2000,Marked asset 4099#02 as Out of Commission
 2025/07/14 10:31:19,bnjm2000,"Maintenance logged for asset 4099#02: Inventory check, no sponge, cable exposed"
 2025/07/14 10:32:26,bnjm2000,"Deleted maintenance log for asset 4099#10: 'Inventory check, cable is exposed' (deleted by bnjm2000)"
+2025/07/14 12:27:17,bnjm2000,Created event 38: Tempest & Tranquility @ Drama Centre Blackbox via web interface
+2025/07/14 12:27:27,bnjm2000,Added 4x Ayrton Diablo Profile model to event 38 (total: 4)
+2025/07/14 12:27:32,bnjm2000,Added 4x Robe ESPRITE model to event 38 (total: 4)
+2025/07/14 12:27:47,bnjm2000,Added 2x Shure ULXD2 model to event 38 (total: 2)
+2025/07/14 12:27:53,bnjm2000,Added 8x Shure ULXD1 model to event 38 (total: 8)
+2025/07/14 12:28:03,bnjm2000,Added 8x DPA DAD 6010 model to event 38 (total: 8)
+2025/07/14 12:28:15,bnjm2000,Added 5x DPA 6061 model to event 38 (total: 5)
+2025/07/14 12:28:23,bnjm2000,Added 4x DPA 4466 model to event 38 (total: 4)
+2025/07/14 12:28:29,bnjm2000,Added 1x DPA 4099 model to event 38 (total: 1)
+2025/07/14 12:28:35,bnjm2000,Added 1x DPA DAD 6001 model to event 38 (total: 1)
+2025/07/14 12:28:48,bnjm2000,Added 3x Shure SM57 model to event 38 (total: 3)
+2025/07/14 12:28:54,bnjm2000,Added 1x Shure ULXD4D model to event 38 (total: 1)
+2025/07/14 12:28:54,bnjm2000,Added 1x Shure ULXD4D model to event 38 (total: 2)
+2025/07/14 12:28:55,bnjm2000,Added 1x Shure ULXD4D model to event 38 (total: 3)
+2025/07/14 12:29:00,bnjm2000,Added 1x Shure ULXD4Q model to event 38 (total: 1)
+2025/07/14 12:29:14,bnjm2000,Added 1x Yamaha Rio3224-d model to event 38 (total: 1)
+2025/07/14 12:29:36,bnjm2000,Assigned asset [MISC]Mic belt to event 38 (unprepared)
+2025/07/14 12:29:58,bnjm2000,Added 5x Shure P9T model to event 38 (total: 5)
+2025/07/14 12:30:01,bnjm2000,Added 4x Shure P9RA model to event 38 (total: 4)
+2025/07/14 12:30:44,bnjm2000,Assigned asset [MISC]Shure P9T [NicheAV];3 to event 38 (unprepared)
+2025/07/14 12:31:17,bnjm2000,Assigned asset [MISC]Shure P9RA [NicheAV];5 to event 38 (unprepared)
+2025/07/14 12:31:37,bnjm2000,Prepared asset [MISC]Shure P9T [NicheAV];3 for event 38
+2025/07/14 12:31:41,bnjm2000,Completely removed asset [MISC]Shure P9T [NicheAV];3 from event 38
+2025/07/14 12:31:57,bnjm2000,Prepared asset [MISC]Shure P9RA [NicheAV];5 for event 38
+2025/07/14 12:31:57,bnjm2000,Completely removed asset [MISC]Shure P9RA [NicheAV];5 from event 38
+2025/07/14 12:32:04,bnjm2000,Prepared asset [MISC]Mic belt for event 38
+2025/07/14 12:32:05,bnjm2000,Completely removed asset [MISC]Mic belt from event 38
