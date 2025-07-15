@@ -874,6 +874,175 @@
         background-color: #28a745;
       }
 
+      .btn-secondary {
+        background-color: #6c757d;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 500;
+        transition: background-color 0.3s;
+        margin-right: 10px;
+      }
+
+      .btn-secondary:hover {
+          background-color: #5a6268;
+      }
+
+      /* modal styling */
+      .modal {
+          display: none;
+          position: fixed;
+          z-index: 1000;
+          left: 0;
+          top: 0;
+          width: 100%;
+          height: 100%;
+          overflow: auto;
+          background-color: rgba(0, 0, 0, 0.4);
+      }
+
+      .modal-content {
+          background-color: #fefefe;
+          margin: 15% auto;
+          padding: 20px;
+          border: 1px solid #888;
+          width: 80%;
+          max-width: 1200px;
+          border-radius: 15px;
+          box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+      }
+
+      .close {
+          color: #aaa;
+          float: right;
+          font-size: 28px;
+          font-weight: bold;
+          cursor: pointer;
+      }
+
+      .close:hover,
+      .close:focus {
+          color: black;
+          text-decoration: none;
+      }
+
+      .modal-header {
+          padding-bottom: 10px;
+          border-bottom: 1px solid #e0e0e0;
+          margin-bottom: 20px;
+      }
+
+      .modal-header h3 {
+          margin: 0;
+          color: #333;
+      }
+
+      .modal-body {
+          padding: 0;
+      }
+
+      .modal-footer {
+          padding-top: 15px;
+          border-top: 1px solid #e0e0e0;
+          margin-top: 20px;
+          text-align: right;
+      }
+
+      /* Form Styling */
+      .form-group {
+          margin-bottom: 15px;
+      }
+
+      .form-group label {
+          display: block;
+          margin-bottom: 5px;
+          font-weight: bold;
+          color: #555;
+      }
+
+      .form-input, .form-select {
+          width: 100%;
+          padding: 8px 12px;
+          border: 1px solid #ddd;
+          border-radius: 4px;
+          font-size: 14px;
+          box-sizing: border-box;
+      }
+
+      .form-input:focus, .form-select:focus {
+          outline: none;
+          border-color: #667eea;
+          box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
+      }
+
+      /* Button Styling */
+      .btn {
+          display: inline-block;
+          padding: 8px 16px;
+          margin: 4px 2px;
+          border: none;
+          border-radius: 4px;
+          cursor: pointer;
+          font-size: 14px;
+          text-decoration: none;
+          transition: background-color 0.3s;
+      }
+
+      .btn-primary {
+          background-color: #007bff;
+          color: white;
+      }
+
+      .btn-primary:hover {
+          background-color: #0056b3;
+      }
+
+      .btn-secondary {
+          background-color: #6c757d;
+          color: white;
+      }
+
+      .btn-secondary:hover {
+          background-color: #545b62;
+      }
+
+      .btn-warning {
+          background-color: #ffc107;
+          color: #212529;
+      }
+
+      .btn-warning:hover {
+          background-color: #e0a800;
+      }
+
+      .btn-success {
+          background-color: #28a745;
+          color: white;
+      }
+
+      .btn-success:hover {
+          background-color: #218838;
+      }
+
+      .btn-danger {
+          background-color: #dc3545;
+          color: white;
+      }
+
+      .btn-danger:hover {
+          background-color: #c82333;
+      }
+
+      /* Small modal for specific cases like force state */
+      .modal-small .modal-content {
+          max-width: 500px;
+          width: 500px;
+          margin: 20% auto;
+      }
+
       /* Tabs styling */
       .events-tab.active {
         color: #764ba2 !important;

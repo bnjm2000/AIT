@@ -166,6 +166,11 @@ def get_assigned_assets():
 def update_event_state(event):
     """Update the state of an event based on its prepared and returned items"""
     try:
+        # Check if state is manually forced - if so, don't auto-update
+        if getattr(event, 'force_state_override', False):
+            logger.debug(f"Event {event.event_id} has forced state override, skipping automatic update")
+            return
+            
         # Get current date for overdue checks
         current_date = datetime.now().strftime('%Y%m%d')
         
@@ -195,7 +200,7 @@ def update_event_state(event):
                             required_quantity = int(parts[3])
                       
                             total_model_requirements += required_quantity
-                       
+                            
                             # Count specific assets assigned to this model
                             assigned_to_this_model = 0
                             returned_for_this_model = 0
@@ -269,10 +274,11 @@ def update_event_state(event):
                 total_returned == total_actually_prepared):
                 event.state = 'Closed'
                 logger.info(f"Event {event.event_id} set to Closed: all prepared assets returned")
+            # 2. CHECK FOR OVERDUE - event ended but still has unreturned assets (HIGH PRIORITY)
             elif (total_actually_prepared > total_returned and 
-                  current_date > event.end_date and 
-                  event.state in ['Ongoing', 'Returning', 'Ready']):
+                  current_date > event.end_date):
                 event.state = 'Overdue'
+                logger.info(f"Event {event.event_id} set to Overdue: past end date with unreturned assets")
             # 3. No assets assigned yet
             elif total_prepared_items == 0:
                 event.state = 'Added'
@@ -295,13 +301,12 @@ def update_event_state(event):
             # 7. Some assets returned but not all
             elif total_returned > 0 and total_returned < total_actually_prepared:
                 event.state = 'Returning'
-            # 8. Fallback - keep current state if we can't determine what it should be
+            # 8. Fallback case
             else:
                 logger.warning(f"Event {event.event_id} fell through to fallback case - keeping current state {event.state}")
-                logger.warning(f"  prepared_items={total_prepared_items}, actually_prepared={total_actually_prepared}, returned={total_returned}")
                 
     except Exception as e:
-        logger.error(f"Error updating event state for event {getattr(event, 'event_id', 'Unknown')}: {e}")
+        logger.error(f"Error updating event state for event {event.event_id}: {e}")
         import traceback
         logger.error(f"Traceback: {traceback.format_exc()}")
 
@@ -590,7 +595,8 @@ def get_events():
                 'preparedItems': event.prepared_items,
                 'returnedItems': event.returned_items,
                 'modelGroups': model_groups,
-                'hasModelAssignments': has_model_assignments  # Flag to know which logic to use
+                'hasModelAssignments': has_model_assignments,  # Flag to know which logic to use
+                'forceStateOverride': getattr(event, 'force_state_override', False)
             })
 
         # Sort by event ID descending
@@ -929,7 +935,8 @@ def get_event(event_id):
             'totalAssets': total_required,
             'totalPrepared': total_prepared,
             'totalReturned': total_returned,
-            'modelGroups': model_groups
+            'modelGroups': model_groups,
+            'forceStateOverride': getattr(event, 'force_state_override', False)
         }
 
         return jsonify({'success': True, 'data': event_data})
@@ -2974,6 +2981,98 @@ def update_all_event_states():
     except Exception as e:
         logger.error(f"Error updating event states: {e}")
         return jsonify({'error': 'Failed to update event states'}), 500
+
+@app.route('/api/events/<int:event_id>/force-state', methods=['POST'])
+@require_auth
+def force_event_state(event_id):
+    """Force an event to a specific state"""
+    try:
+        data = request.get_json()
+        new_state = data.get('state')
+        
+        # Validate state
+        valid_states = ['Added', 'Planning', 'Preparing', 'Ready', 'Ongoing', 'Returning', 'Closed', 'Overdue']
+        if new_state not in valid_states:
+            return jsonify({'error': f'Invalid state. Must be one of: {valid_states}'}), 400
+            
+        # Get the event
+        event = data_manager.events.get(event_id)
+        if not event:
+            return jsonify({'error': 'Event not found'}), 404
+            
+        # Store old state for logging
+        old_state = event.state
+        
+        # Force the new state and set override flag
+        event.state = new_state
+        event.force_state_override = True
+        
+        # Save the event
+        data_manager.save_event(event)
+        
+        # Log the action
+        username = session.get('user', 'Unknown')
+        log_action(f"User {username} forced event {event_id} ({event.name}) state from {old_state} to {new_state}")
+        
+        # Invalidate cache
+        invalidate_cache()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Event {event_id} state forced to {new_state}',
+            'eventId': event_id,
+            'oldState': old_state,
+            'newState': new_state
+        })
+        
+    except Exception as e:
+        logger.error(f"Error forcing event state: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        return jsonify({'error': 'Failed to force event state'}), 500
+
+@app.route('/api/events/<int:event_id>/remove-force-state', methods=['POST'])
+@require_auth
+def remove_force_state(event_id):
+    """Remove forced state override and return to automatic state management"""
+    try:
+        # Get the event
+        event = data_manager.events.get(event_id)
+        if not event:
+            return jsonify({'error': 'Event not found'}), 404
+            
+        # Store old state for logging
+        old_state = event.state
+        
+        # Remove the override flag
+        event.force_state_override = False
+        
+        # Update state automatically
+        update_event_state(event)
+        
+        # Save the event
+        data_manager.save_event(event)
+        
+        # Log the action
+        username = session.get('user', 'Unknown')
+        log_action(f"User {username} removed forced state override for event {event_id} ({event.name}): {old_state} -> {event.state}")
+        
+        # Invalidate cache
+        invalidate_cache()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Event {event_id} returned to automatic state management',
+            'eventId': event_id,
+            'oldState': old_state,
+            'newState': event.state
+        })
+        
+    except Exception as e:
+        logger.error(f"Error removing forced state: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        return jsonify({'error': 'Failed to remove forced state'}), 500
 
 # Error handlers
 

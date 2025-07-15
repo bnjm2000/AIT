@@ -1,2 +1,2 @@
-EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State
-20,Standard Chartered Lunar New Year Celebration 2025 @ Ritz Carlton Grand Ballroom,20250204,20250205,[],[],[],Closed
+EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,Tag
+20,Standard Chartered Lunar New Year Celebration 2025 @ Ritz Carlton Grand Ballroom,20250204,20250205,[],[],[],Added,[],[],events

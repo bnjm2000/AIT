@@ -688,8 +688,9 @@ function createEventCard(event) {
             <small style="color: #666;">${event.assetCount || 0} assets assigned</small>
         </div>
         <div class="event-actions">
-            <button class="btn btn-primary" onclick="viewEvent(${event.id})">View Assets</button>
+            <button class="btn btn-primary" onclick="viewEvent(${event.id})">View</button>
             <button class="btn btn-warning" onclick="editEvent(${event.id})">Edit</button>
+            <button class="btn btn-secondary" onclick="showForceStateModal(${event.id}, '${event.state}')">Force State</button>
             <button class="btn btn-danger" onclick="deleteEvent(${event.id})">Delete</button>
         </div>
     `;
@@ -721,6 +722,329 @@ async function updateAllEventStates() {
     } catch (error) {
         showNotification('error', `Failed to update event states: ${error.message}`);
     }
+}
+
+// Force event state
+async function forceEventState(eventId, newState) {
+    try {
+        const response = await apiCall(`/api/events/${eventId}/force-state`, 'POST', { state: newState });
+        
+        showNotification('success', `Event ${eventId} state forced to ${newState}`);
+        console.log(`Event ${eventId} state forced: ${response.oldState} → ${response.newState}`);
+        
+        // Refresh all relevant views
+        setTimeout(() => {
+            if (document.getElementById('prepare-section').classList.contains('active')) {
+                loadPrepareEvents();
+            }
+            if (document.getElementById('dashboard-section').classList.contains('active')) {
+                loadDashboard();
+            }
+            if (document.getElementById('events-section').classList.contains('active')) {
+                loadAllEvents();
+            }
+            if (document.getElementById('return-section').classList.contains('active')) {
+                loadReturnEvents();
+            }
+        }, 500);
+        
+    } catch (error) {
+        showNotification('error', `Failed to force event state: ${error.message}`);
+        console.error('Error forcing event state:', error);
+    }
+}
+
+// Remove forced state override
+async function removeForcedState(eventId) {
+    try {
+        const response = await apiCall(`/api/events/${eventId}/remove-force-state`, 'POST');
+        
+        showNotification('success', `Event ${eventId} returned to automatic state management`);
+        console.log(`Event ${eventId} force override removed: ${response.oldState} → ${response.newState}`);
+        
+        // Refresh all relevant views
+        setTimeout(() => {
+            if (document.getElementById('prepare-section').classList.contains('active')) {
+                loadPrepareEvents();
+            }
+            if (document.getElementById('dashboard-section').classList.contains('active')) {
+                loadDashboard();
+            }
+            if (document.getElementById('events-section').classList.contains('active')) {
+                loadAllEvents();
+            }
+            if (document.getElementById('return-section').classList.contains('active')) {
+                loadReturnEvents();
+            }
+        }, 500);
+        
+    } catch (error) {
+        showNotification('error', `Failed to remove forced state: ${error.message}`);
+        console.error('Error removing forced state:', error);
+    }
+}
+
+// Show force state modal
+function showForceStateModal(eventId, currentState) {
+    // Create modal HTML if it doesn't exist
+    let modal = document.getElementById('forceStateModal');
+    if (!modal) {
+        const modalHTML = `
+            <div id="forceStateModal" class="modal">
+                <div class="modal-content" style="max-width: 450px;">
+                    <div class="modal-header">
+                        <h3>Force Event State</h3>
+                    </div>
+                    <div class="modal-body">
+                        <div style="margin-bottom: 20px;">
+                            <p><strong>Event ID:</strong> <span id="forceStateEventId"></span></p>
+                            <p><strong>Current State:</strong> <span id="forceStateCurrentState"></span></p>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="forceStateSelect">Select New State:</label>
+                            <select id="forceStateSelect" class="form-input">
+                                <option value="">Choose a state...</option>
+                                <option value="Added">Added</option>
+                                <option value="Planning">Planning</option>
+                                <option value="Preparing">Preparing</option>
+                                <option value="Ready">Ready</option>
+                                <option value="Ongoing">Ongoing</option>
+                                <option value="Returning">Returning</option>
+                                <option value="Closed">Closed</option>
+                                <option value="Overdue">Overdue</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" id="forceStateCancelBtn">Cancel</button>
+                        <button type="button" class="btn btn-primary" id="forceStateConfirmBtn">Force State</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Add modal to DOM
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+        modal = document.getElementById('forceStateModal');
+        
+        // Add click event listener to modal backdrop
+        modal.addEventListener('click', function(event) {
+            if (event.target === modal) {
+                modal.style.display = 'none';
+            }
+        });
+        
+        // Add click event listeners to buttons
+        document.getElementById('forceStateCancelBtn').addEventListener('click', function() {
+            modal.style.display = 'none';
+        });
+        
+        document.getElementById('forceStateConfirmBtn').addEventListener('click', function() {
+            confirmForceState();
+        });
+    }
+    
+    // Now populate the modal
+    const eventIdSpan = document.getElementById('forceStateEventId');
+    const currentStateSpan = document.getElementById('forceStateCurrentState');
+    const stateSelect = document.getElementById('forceStateSelect');
+    
+    if (eventIdSpan && currentStateSpan && stateSelect) {
+        eventIdSpan.textContent = eventId;
+        currentStateSpan.textContent = currentState;
+        
+        // Reset select to default
+        stateSelect.value = '';
+        
+        // Store event ID for use in confirmation
+        stateSelect.setAttribute('data-event-id', eventId);
+        
+        // Show modal
+        modal.style.display = 'block';
+    } else {
+        console.error('Modal elements not found after creation');
+        showNotification('error', 'Failed to open force state modal');
+    }
+}
+
+// Show force state modal - Updated to show current force status
+function showForceStateModal(eventId, currentState) {
+    // Create modal HTML if it doesn't exist
+    let modal = document.getElementById('forceStateModal');
+    if (!modal) {
+        const modalHTML = `
+            <div id="forceStateModal" class="modal">
+                <div class="modal-content" style="max-width: 450px;">
+                    <div class="modal-header">
+                        <h3>Force Event State</h3>
+                    </div>
+                    <div class="modal-body">
+                        <div style="margin-bottom: 20px;">
+                            <p><strong>Event ID:</strong> <span id="forceStateEventId"></span></p>
+                            <p><strong>Current State:</strong> <span id="forceStateCurrentState"></span> <span id="forceStateIndicator"></span></p>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="forceStateSelect">Select New State:</label>
+                            <select id="forceStateSelect" class="form-input">
+                                <option value="">Choose a state...</option>
+                                <option value="Added">Added</option>
+                                <option value="Planning">Planning</option>
+                                <option value="Preparing">Preparing</option>
+                                <option value="Ready">Ready</option>
+                                <option value="Ongoing">Ongoing</option>
+                                <option value="Returning">Returning</option>
+                                <option value="Closed">Closed</option>
+                                <option value="Overdue">Overdue</option>
+                            </select>
+                        </div>
+                        <div id="removeForceSection" style="background: #e7f3ff; border: 1px solid #b3d9ff; padding: 15px; border-radius: 5px; margin: 20px 0; display: none;">
+                            <strong>ℹ️ Note:</strong> This event's state is currently forced. You can return it to automatic state management.
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" id="forceStateCancelBtn">Cancel</button>
+                        <button type="button" class="btn btn-warning" id="removeForceBtn" style="display: none;" onclick="handleRemoveForcedState()">Remove Force</button>
+                        <button type="button" class="btn btn-primary" id="forceStateConfirmBtn">Force State</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Add modal to DOM and set up event listeners
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+        modal = document.getElementById('forceStateModal');
+        
+        // Event listeners
+        modal.addEventListener('click', function(event) {
+            if (event.target === modal) {
+                modal.style.display = 'none';
+            }
+        });
+        
+        document.getElementById('forceStateCancelBtn').addEventListener('click', function() {
+            modal.style.display = 'none';
+        });
+        
+        document.getElementById('forceStateConfirmBtn').addEventListener('click', function() {
+            confirmForceState();
+        });
+    }
+    
+    // Populate the modal and check if state is forced
+    const eventIdSpan = document.getElementById('forceStateEventId');
+    const currentStateSpan = document.getElementById('forceStateCurrentState');
+    const forceStateIndicator = document.getElementById('forceStateIndicator');
+    const removeForceSection = document.getElementById('removeForceSection');
+    const removeForceBtn = document.getElementById('removeForceBtn');
+    const stateSelect = document.getElementById('forceStateSelect');
+    
+    if (eventIdSpan && currentStateSpan && stateSelect) {
+        eventIdSpan.textContent = eventId;
+        currentStateSpan.textContent = currentState;
+        
+        // Check if this event has a forced state by calling the API
+        checkIfStateIsForced(eventId).then(isForced => {
+            if (isForced) {
+                forceStateIndicator.innerHTML = '<span style="color: #dc3545; font-weight: bold;">(FORCED)</span>';
+                removeForceSection.style.display = 'block';
+                removeForceBtn.style.display = 'inline-block';
+            } else {
+                forceStateIndicator.innerHTML = '';
+                removeForceSection.style.display = 'none';
+                removeForceBtn.style.display = 'none';
+            }
+        });
+        
+        // Reset select and store event ID
+        stateSelect.value = '';
+        stateSelect.setAttribute('data-event-id', eventId);
+        
+        // Show modal
+        modal.style.display = 'block';
+    } else {
+        console.error('Modal elements not found after creation');
+        showNotification('error', 'Failed to open force state modal');
+    }
+}
+
+// Helper function to check if state is forced
+async function checkIfStateIsForced(eventId) {
+    try {
+        const response = await apiCall(`/api/events/${eventId}`);
+        return response.data.forceStateOverride || false;
+    } catch (error) {
+        console.error('Error checking force state status:', error);
+        return false;
+    }
+}
+
+// Handle remove forced state
+function handleRemoveForcedState() {
+    const stateSelect = document.getElementById('forceStateSelect');
+    const eventId = parseInt(stateSelect.getAttribute('data-event-id'));
+    
+    if (!eventId) {
+        showNotification('error', 'Event ID not found');
+        return;
+    }
+    
+    // Close modal
+    const modal = document.getElementById('forceStateModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+    
+    // Remove forced state
+    removeForcedState(eventId);
+}
+
+// Handle modal backdrop clicks
+function handleModalBackdropClick(event, modalId) {
+    if (event.target.id === modalId) {
+        closeModal(modalId);
+    }
+}
+
+// Close force state modal specifically
+function closeForceStateModal() {
+    const modal = document.getElementById('forceStateModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+// Confirm force state change
+function confirmForceState() {
+    const stateSelect = document.getElementById('forceStateSelect');
+    const modal = document.getElementById('forceStateModal');
+    
+    if (!stateSelect) {
+        showNotification('error', 'State selection not found');
+        return;
+    }
+    
+    const eventId = parseInt(stateSelect.getAttribute('data-event-id'));
+    const newState = stateSelect.value;
+    
+    if (!newState) {
+        showNotification('warning', 'Please select a state');
+        return;
+    }
+    
+    if (!eventId) {
+        showNotification('error', 'Event ID not found');
+        return;
+    }
+    
+    // Close modal
+    if (modal) {
+        modal.style.display = 'none';
+    }
+    
+    // Force the state
+    forceEventState(eventId, newState);
 }
 
 function getModelStatusIcon(status) {

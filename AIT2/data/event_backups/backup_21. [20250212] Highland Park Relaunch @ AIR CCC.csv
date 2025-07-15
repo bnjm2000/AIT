@@ -1,2 +1,2 @@
-EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State
-21,Highland Park Relaunch @ AIR CCC,20250212,20250213,[],[],[],Closed
+EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,Tag
+21,Highland Park Relaunch @ AIR CCC,20250212,20250213,[],[],[],Added,[],[],events
