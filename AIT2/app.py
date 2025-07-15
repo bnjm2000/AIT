@@ -106,28 +106,62 @@ def validate_event_data(data):
 
     return errors
 
-
 def get_assigned_assets():
     """Get all assets currently assigned to events (with caching)"""
     global _cache
 
-    # Cache for 30 seconds
-    now = datetime.now().timestamp()
-    if (_cache['assigned_assets'] is not None and
-        _cache['cache_timestamp'] is not None and
-            now - _cache['cache_timestamp'] < 30):
-        return _cache['assigned_assets']
+    try:
+        # Add validation checks
+        if data_manager is None:
+            logger.error("get_assigned_assets: data_manager is None")
+            return set()
+            
+        if not hasattr(data_manager, 'events') or data_manager.events is None:
+            logger.error("get_assigned_assets: data_manager.events is None")
+            return set()
 
-    assigned_assets = set()
-    for event in data_manager.events.values():
-        for asset_id in event.prepared_items:
-            if (asset_id not in event.returned_items and
-                    not (asset_id.startswith('[LOAN]') or asset_id.startswith('[MISC]'))):
-                assigned_assets.add(asset_id)
+        # Cache for 30 seconds
+        now = datetime.now().timestamp()
+        if (_cache['assigned_assets'] is not None and
+            _cache['cache_timestamp'] is not None and
+                now - _cache['cache_timestamp'] < 30):
+            logger.debug("get_assigned_assets: returning cached result")
+            return _cache['assigned_assets']
 
-    _cache['assigned_assets'] = assigned_assets
-    _cache['cache_timestamp'] = now
-    return assigned_assets
+        logger.debug(f"get_assigned_assets: processing {len(data_manager.events)} events")
+        
+        assigned_assets = set()
+        for event in data_manager.events.values():
+            try:
+                # Ensure event has prepared_items attribute
+                if not hasattr(event, 'prepared_items'):
+                    logger.warning(f"Event {getattr(event, 'event_id', 'unknown')} missing prepared_items")
+                    continue
+                    
+                # Ensure event has returned_items attribute
+                if not hasattr(event, 'returned_items'):
+                    event.returned_items = []
+                    
+                for asset_id in event.prepared_items:
+                    if (asset_id not in event.returned_items and
+                            not (asset_id.startswith('[LOAN]') or asset_id.startswith('[MISC]'))):
+                        assigned_assets.add(asset_id)
+                        
+            except Exception as e:
+                logger.error(f"Error processing event {getattr(event, 'event_id', 'unknown')}: {e}")
+                continue
+
+        logger.debug(f"get_assigned_assets: found {len(assigned_assets)} assigned assets")
+        
+        _cache['assigned_assets'] = assigned_assets
+        _cache['cache_timestamp'] = now
+        return assigned_assets
+        
+    except Exception as e:
+        logger.error(f"Error in get_assigned_assets: {e}")
+        import traceback
+        logger.error(f"get_assigned_assets traceback: {traceback.format_exc()}")
+        return set()  # Return empty set on error
 
 def update_event_state(event):
     """Update the state of an event based on its prepared and returned items"""
@@ -1845,8 +1879,82 @@ def unassign_specific_asset_from_model(event_id):
 
 @app.route('/api/events/<int:event_id>/assets/<asset_id>', methods=['DELETE'])
 @require_auth
+<<<<<<< Updated upstream
 def remove_asset_from_event(event_id, asset_id):
     """Remove an asset from an event"""
+=======
+def remove_asset_from_event_body(event_id):
+    """Remove an asset from an event (with asset ID in request body)"""
+    try:
+        data = request.get_json()
+        asset_id = data.get('assetId', '').strip()
+        
+        if not asset_id:
+            return jsonify({'error': 'Asset ID is required'}), 400
+        
+        logger.info(f"Removing asset '{asset_id}' from event {event_id}")
+        
+        event = data_manager.events.get(event_id)
+        if not event:
+            return jsonify({'error': 'Event not found'}), 404
+
+        # Check if asset is in this event
+        if asset_id not in event.prepared_items:
+            return jsonify({'error': 'Asset is not assigned to this event'}), 400
+
+        # LOG THE REMOVAL
+        log_asset_change(event_id, asset_id, "REMOVING", "from prepared_items via POST remove-asset endpoint", "remove_asset_from_event_body")
+
+        # Remove the asset
+        event.prepared_items.remove(asset_id)
+
+        # Also remove from returned items if it was there
+        if asset_id in event.returned_items:
+            event.returned_items.remove(asset_id)
+            log_asset_change(event_id, asset_id, "REMOVING", "from returned_items", "remove_asset_from_event_body")
+
+        # Initialize actually_prepared if it doesn't exist
+        if not hasattr(event, 'actually_prepared'):
+            event.actually_prepared = []
+
+        # Remove from actually_prepared if it was there
+        if asset_id in event.actually_prepared:
+            event.actually_prepared.remove(asset_id)
+            log_asset_change(event_id, asset_id, "REMOVING", "from actually_prepared", "remove_asset_from_event_body")
+
+        # Remove from extra_assets if it exists
+        if hasattr(event, 'extra_assets') and asset_id in event.extra_assets:
+            event.extra_assets.remove(asset_id)
+            log_asset_change(event_id, asset_id, "REMOVING", "from extra_assets", "remove_asset_from_event_body")
+
+        # For regular assets, update location
+        if not (asset_id.startswith('[LOAN]') or asset_id.startswith('[MISC]')):
+            asset = data_manager.inventory.get(asset_id)
+            if asset:
+                asset.current_location = asset.default_location or ''
+                data_manager.save_inventory()
+
+        # Update event state
+        update_event_state(event)
+
+        # Save changes
+        data_manager.save_event(event)
+
+        # Invalidate cache
+        invalidate_cache()
+
+        log_action(f"Removed asset {asset_id} from event {event_id}")
+
+        return jsonify({'success': True, 'message': f'Asset {asset_id} removed from event'})
+    except Exception as e:
+        logger.error(f"Error removing asset from event {event_id}: {e}")
+        return jsonify({'error': 'Failed to remove asset from event'}), 500
+
+@app.route('/api/events/<int:event_id>/remove-asset', methods=['POST'])
+@require_auth
+def remove_asset_from_event_post(event_id):
+    """Remove an asset from an event - uses POST body to avoid URL encoding issues"""
+>>>>>>> Stashed changes
     try:
         # URL decode the asset_id in case it has special characters
         from urllib.parse import unquote
@@ -2566,31 +2674,246 @@ def get_logs():
 def get_stats():
     """Get dashboard statistics"""
     try:
+        # Add validation checks
+        if data_manager is None:
+            logger.error("Data manager is not initialized")
+            return jsonify({'error': 'Data manager not initialized'}), 500
+            
+        if not hasattr(data_manager, 'events') or data_manager.events is None:
+            logger.error("Data manager events not initialized")
+            return jsonify({'error': 'Events data not available'}), 500
+            
+        if not hasattr(data_manager, 'inventory') or data_manager.inventory is None:
+            logger.error("Data manager inventory not initialized")
+            return jsonify({'error': 'Inventory data not available'}), 500
+
+        logger.info(f"Getting stats - Events: {len(data_manager.events)}, Inventory: {len(data_manager.inventory)}")
+        
         total_events = len(data_manager.events)
         active_events = len(
             [e for e in data_manager.events.values() if e.state not in ['Closed']])
         total_assets = len(data_manager.inventory)
-        assigned_assets = get_assigned_assets()
-        deployed_assets = len(assigned_assets)
+        
+        # Add error handling for get_assigned_assets
+        try:
+            assigned_assets = get_assigned_assets()
+            deployed_assets = len(assigned_assets)
+            logger.info(f"Successfully got assigned assets count: {deployed_assets}")
+        except Exception as e:
+            logger.error(f"Error getting assigned assets: {e}")
+            deployed_assets = 0
+            
         missing_assets = len(
             [a for a in data_manager.inventory.values() if a.is_missing])
         ooc_assets = len(
             [a for a in data_manager.inventory.values() if a.is_ooc])
 
+        stats_data = {
+            'totalEvents': total_events,
+            'activeEvents': active_events,
+            'totalAssets': total_assets,
+            'deployedAssets': deployed_assets,
+            'missingAssets': missing_assets,
+            'oocAssets': ooc_assets
+        }
+        
+        logger.info(f"Returning stats: {stats_data}")
+
         return jsonify({
             'success': True,
-            'data': {
-                'totalEvents': total_events,
-                'activeEvents': active_events,
-                'totalAssets': total_assets,
-                'deployedAssets': deployed_assets,
-                'missingAssets': missing_assets,
-                'oocAssets': ooc_assets
-            }
+            'data': stats_data
         })
     except Exception as e:
         logger.error(f"Error getting stats: {e}")
+        import traceback
+        logger.error(f"Stats error traceback: {traceback.format_exc()}")
         return jsonify({'error': 'Failed to retrieve statistics'}), 500
+    
+@app.route('/api/events/<int:event_id>/custom-assets/update-quantity', methods=['PUT'])
+@require_auth
+def update_custom_asset_quantity(event_id):
+    """Update the quantity of a custom asset in an event"""
+    try:
+        data = request.get_json()
+        old_asset_id = data.get('assetId')
+        new_quantity = data.get('newQuantity')
+        
+        logger.info(f"Updating custom asset quantity: {old_asset_id} -> {new_quantity} for event {event_id}")
+        
+        if not old_asset_id or not new_quantity:
+            return jsonify({'success': False, 'error': 'assetId and newQuantity are required'}), 400
+        
+        # Validate new_quantity is a positive integer
+        try:
+            new_quantity = int(new_quantity)
+            if new_quantity < 1:
+                return jsonify({'success': False, 'error': 'newQuantity must be a positive integer'}), 400
+        except (ValueError, TypeError):
+            return jsonify({'success': False, 'error': 'newQuantity must be a valid integer'}), 400
+        
+        # Get the event using your existing data manager
+        event = data_manager.events.get(event_id)
+        if not event:
+            return jsonify({'success': False, 'error': 'Event not found'}), 404
+        
+        logger.info(f"Found event: {event.name}")
+        
+        # Check if the old asset exists in prepared_items
+        if old_asset_id not in event.prepared_items:
+            return jsonify({'success': False, 'error': f'Custom asset {old_asset_id} not found in event'}), 404
+        
+        logger.info(f"Found old asset in prepared_items")
+        
+        # Parse the old asset ID to extract name and type
+        if not old_asset_id.startswith('['):
+            return jsonify({'success': False, 'error': 'Invalid custom asset format'}), 400
+        
+        try:
+            if old_asset_id.startswith('[MISC]'):
+                asset_type = 'MISC'
+                name_part = old_asset_id[6:]  # Remove '[MISC]'
+            elif old_asset_id.startswith('[LOAN]'):
+                asset_type = 'LOAN'
+                name_part = old_asset_id[6:]  # Remove '[LOAN]'
+            else:
+                return jsonify({'success': False, 'error': 'Unsupported custom asset type'}), 400
+            
+            # Remove existing quantity if present
+            if ';' in name_part:
+                asset_name = name_part.split(';')[0]
+            else:
+                asset_name = name_part
+                
+        except Exception as e:
+            logger.error(f"Error parsing asset ID: {e}")
+            return jsonify({'success': False, 'error': f'Error parsing asset ID: {str(e)}'}), 400
+        
+        logger.info(f"Parsed asset: type={asset_type}, name={asset_name}")
+        
+        # Create the new asset ID with updated quantity
+        if new_quantity > 1:
+            new_asset_id = f'[{asset_type}]{asset_name};{new_quantity}'
+        else:
+            new_asset_id = f'[{asset_type}]{asset_name}'
+        
+        logger.info(f"New asset ID: {new_asset_id}")
+        
+        # Find and replace the old asset ID in prepared_items
+        old_asset_index = event.prepared_items.index(old_asset_id)
+        event.prepared_items[old_asset_index] = new_asset_id
+        
+        # Initialize actually_prepared if it doesn't exist
+        if not hasattr(event, 'actually_prepared'):
+            event.actually_prepared = []
+        
+        # Update actually_prepared if the old asset was there
+        if old_asset_id in event.actually_prepared:
+            actually_prepared_index = event.actually_prepared.index(old_asset_id)
+            event.actually_prepared[actually_prepared_index] = new_asset_id
+            logger.info(f"Updated asset in actually_prepared")
+        
+        # Update returned_items if the old asset was there
+        if old_asset_id in event.returned_items:
+            returned_index = event.returned_items.index(old_asset_id)
+            event.returned_items[returned_index] = new_asset_id
+            logger.info(f"Updated asset in returned_items")
+        
+        # Update event state
+        update_event_state(event)
+        
+        # Save the event using your existing data manager
+        data_manager.save_event(event)
+        
+        # Invalidate cache
+        invalidate_cache()
+        
+        # Log the activity
+        log_action(f'Updated custom asset quantity: {old_asset_id} -> {new_asset_id} for event {event_id}')
+        
+        logger.info(f"Successfully updated custom asset quantity")
+        
+        return jsonify({
+            'success': True,
+            'message': f'Custom asset quantity updated from {old_asset_id} to {new_asset_id}',
+            'oldAssetId': old_asset_id,
+            'newAssetId': new_asset_id,
+            'newQuantity': new_quantity
+        })
+        
+    except Exception as e:
+        logger.error(f"Error updating custom asset quantity: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': 'An unexpected error occurred'}), 500
+    
+@app.route('/api/events/<int:event_id>/custom-assets/remove', methods=['POST'])
+@require_auth
+def remove_custom_asset_from_event(event_id):
+    """Remove a custom asset (LOAN/MISC) from an event"""
+    try:
+        data = request.get_json()
+        asset_id = data.get('assetId', '').strip()
+        
+        if not asset_id:
+            return jsonify({'error': 'Asset ID is required'}), 400
+        
+        logger.info(f"Removing custom asset '{asset_id}' from event {event_id}")
+        
+        event = data_manager.events.get(event_id)
+        if not event:
+            return jsonify({'error': 'Event not found'}), 404
+
+        # Verify this is a custom asset
+        if not (asset_id.startswith('[MISC]') or asset_id.startswith('[LOAN]')):
+            return jsonify({'error': 'This endpoint is only for custom assets'}), 400
+
+        # Check if asset is in this event
+        if asset_id not in event.prepared_items:
+            return jsonify({'error': 'Custom asset is not assigned to this event'}), 400
+
+        # Remove the asset from prepared_items
+        event.prepared_items.remove(asset_id)
+        logger.info(f"Removed {asset_id} from prepared_items")
+
+        # Initialize lists if they don't exist
+        if not hasattr(event, 'actually_prepared'):
+            event.actually_prepared = []
+        if not hasattr(event, 'extra_assets'):
+            event.extra_assets = []
+
+        # Remove from actually_prepared if it was there
+        if asset_id in event.actually_prepared:
+            event.actually_prepared.remove(asset_id)
+            logger.info(f"Removed {asset_id} from actually_prepared")
+
+        # Remove from returned_items if it was there
+        if asset_id in event.returned_items:
+            event.returned_items.remove(asset_id)
+            logger.info(f"Removed {asset_id} from returned_items")
+
+        # Remove from extra_assets if it was there
+        if asset_id in event.extra_assets:
+            event.extra_assets.remove(asset_id)
+            logger.info(f"Removed {asset_id} from extra_assets")
+
+        # Update event state
+        update_event_state(event)
+
+        # Save changes
+        data_manager.save_event(event)
+
+        # Invalidate cache
+        invalidate_cache()
+
+        log_action(f"Removed custom asset {asset_id} from event {event_id}")
+
+        return jsonify({'success': True, 'message': f'Custom asset {asset_id} removed from event'})
+        
+    except Exception as e:
+        logger.error(f"Error removing custom asset from event {event_id}: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        return jsonify({'error': 'Failed to remove custom asset from event'}), 500
 
 @app.route('/api/events/update-states', methods=['POST'])
 @require_auth

@@ -3992,11 +3992,6 @@ async function editEvent(eventId) {
       return `${year}-${month}-${day}`;
     };
 
-    const dateRange =
-      event.startDate === event.endDate
-        ? formatDate(event.startDate)
-        : `${formatDate(event.startDate)} - ${formatDate(event.endDate)}`;
-
     // Helper function to escape HTML
     const escapeHtml = (str) => {
       if (!str) return '';
@@ -4049,22 +4044,27 @@ async function editEvent(eventId) {
             </div>
             
             <div id="edit-assets-tab" class="edit-tab-content" style="display: none;">
-                <div style="margin-bottom: 30px;">
-                    <h4 style="color: #495057; margin-bottom: 15px;">Current Assets (${event.totalAssets})</h4>
-                    <div id="current-assets-container" style="border: 1px solid #e9ecef; border-radius: 8px; min-height: 200px;">
-        `;
-
-    // Show current assets - including ALL assets (model assignments AND individual assets)
-    if (event.assetsByDepartment && Object.keys(event.assetsByDepartment).length > 0) {
-      Object.keys(event.assetsByDepartment)
-        .sort()
-        .forEach((dept) => {
-          const assets = event.assetsByDepartment[dept];
-
-          content += `
-                        <div style="background: #f8f9fa; padding: 8px 12px; font-weight: bold; border-bottom: 1px solid #e9ecef;">
-                            ${dept} Department (${assets.length} assets)
+                <div class="assets-edit-interface">
+                    <!-- Search Bar at Top -->
+                    <div style="background: #e8f5e8; border: 2px solid #28a745; border-radius: 8px; padding: 20px; margin-bottom: 30px;">
+                        <h4 style="color: #155724; margin-bottom: 15px; font-size: 18px;">➕ Add Asset Models</h4>
+                        <div style="display: flex; gap: 15px; align-items: flex-end;">
+                            <div style="flex: 1;">
+                                <input type="text" class="form-input" placeholder="Search available asset models..." 
+                                       style="width: 100%; padding: 12px; border: 1px solid #28a745; border-radius: 6px; font-size: 14px;" 
+                                       oninput="filterAvailableModels(this.value)">
+                            </div>
+                            <button type="button" class="btn btn-secondary" onclick="clearModelSearch()" 
+                                    style="padding: 12px 20px; background: #6c757d; border: none; border-radius: 6px; color: white; font-size: 14px;">
+                                Clear
+                            </button>
                         </div>
+                        <div id="available-models-container" style="margin-top: 15px; border: 1px solid #28a745; border-radius: 6px; max-height: 250px; overflow-y: auto; background: white;">
+                            <div style="text-align: center; padding: 20px; color: #666; font-size: 14px;">
+                                Type to search for available asset models...
+                            </div>
+                        </div>
+<<<<<<< Updated upstream
                     `;
 
           assets.forEach((asset) => {
@@ -4108,20 +4108,38 @@ async function editEvent(eventId) {
     }
 
     content += `
+=======
+>>>>>>> Stashed changes
                     </div>
-                </div>
-                
-                <!-- Available Assets Section -->
-                <div style="margin-bottom: 30px;">
-                    <h4 style="color: #495057; margin-bottom: 15px;">Add Assets</h4>
-                    <div style="margin-bottom: 15px;">
-                        <input type="text" class="form-input" placeholder="Search available assets..." 
-                               style="max-width: 400px;" 
-                               oninput="filterAvailableAssetsSimple(this.value)">
+
+                    <!-- Add Custom Asset Section -->
+                    <div style="margin-bottom: 30px;">
+                        <h4 style="color: #495057; margin-bottom: 15px;">🛠️ Add Custom Assets</h4>
+                        <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 15px;">
+                            <input type="text" id="customAssetName" placeholder="Enter custom asset name" 
+                                   style="flex: 1; padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
+                            <input type="number" id="customAssetQuantity" placeholder="Qty" min="1" value="1"
+                                   style="width: 60px; padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
+                            <select id="customAssetType" style="padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
+                                <option value="MISC">Misc Item</option>
+                                <option value="LOAN">Loan/Rental</option>
+                            </select>
+                            <button type="button" class="btn btn-success" onclick="addCustomAssetToEvent(${eventId})" 
+                                    style="padding: 8px 16px; white-space: nowrap;">
+                                Add Custom Asset
+                            </button>
+                        </div>
                     </div>
-                    <div id="available-assets-container" style="border: 1px solid #e9ecef; border-radius: 8px; max-height: 300px; overflow-y: auto;">
-                        <div style="text-align: center; padding: 20px; color: #666;">
-                            Loading available assets...
+
+                    <!-- Current Asset Models -->
+                    <div style="margin-bottom: 30px;">
+                        <h4 style="color: #495057; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
+                            <span>📦 Model Requirements</span>
+                            <span class="toggle-icon" style="font-size: 14px; cursor: pointer;" onclick="toggleViewSection('all-models')">▼</span>
+                        </h4>
+                        <div id="all-models" style="display: block;">
+                            <div id="current-asset-models" style="border: 1px solid #e9ecef; border-radius: 8px; min-height: 200px;">
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -4215,31 +4233,25 @@ async function loadEditEventAssets(eventId) {
             <div class="assets-edit-interface">
                 <!-- Search Bar at Top -->
                 <div style="background: #e8f5e8; border: 2px solid #28a745; border-radius: 8px; padding: 20px; margin-bottom: 30px;">
-                    <h4 style="color: #155724; margin-bottom: 15px; font-size: 18px;">➕ Add Asset Models</h4>
-                    <div style="display: flex; gap: 15px; align-items: flex-end;">
-                        <div style="flex: 1;">
-                            <input type="text" class="form-input" placeholder="Search available asset models..." 
-                                   style="width: 100%; padding: 12px; border: 1px solid #28a745; border-radius: 6px; font-size: 14px;" 
-                                   oninput="filterAvailableModels(this.value)">
-                        </div>
-                        <button type="button" class="btn btn-secondary" onclick="clearModelSearch()" 
-                                style="padding: 12px 20px; background: #6c757d; border: none; border-radius: 6px; color: white; font-size: 14px;">
-                            Clear
-                        </button>
+                    <h4 style="color: #155724; margin: 0 0 15px 0; font-weight: 600;">🔍 Search Available Asset Models</h4>
+                    <div style="display: flex; align-items: center; gap: 15px;">
+                        <input type="text" class="form-input" placeholder="Search available asset models (min 2 characters)..." 
+                               style="flex: 1; max-width: 500px; padding: 10px 15px; border: 1px solid #28a745; border-radius: 5px;" 
+                               oninput="filterAvailableModels(this.value)">
+                        <button type="button" class="btn btn-outline-secondary" onclick="clearModelSearch()" 
+                                style="padding: 10px 15px; white-space: nowrap;">Clear Search</button>
                     </div>
-                    <div id="available-models-container" style="margin-top: 15px; border: 1px solid #28a745; border-radius: 6px; max-height: 250px; overflow-y: auto; background: white;">
-                        <div style="text-align: center; padding: 20px; color: #666; font-size: 14px;">
-                            Type to search for available asset models...
-                        </div>
+                    <div id="available-models-container" style="margin-top: 15px; border: 1px solid #28a745; border-radius: 5px; background: white; max-height: 300px; overflow-y: auto;">
+                        <div style="text-align: center; padding: 20px; color: #666; font-size: 14px;">Type to search for available asset models...</div>
                     </div>
                 </div>
 
-                <!-- Add Custom Asset Section -->
-                <div style="margin-bottom: 30px;">
-                    <h4 style="color: #495057; margin-bottom: 15px;">🛠️ Add Custom Assets</h4>
-                    <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 15px;">
-                        <input type="text" id="customAssetName" placeholder="Enter custom asset name" 
-                               style="flex: 1; padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
+                <!-- Add Custom Assets Section -->
+                <div style="background: #fff3cd; border: 2px solid #ffc107; border-radius: 8px; padding: 20px; margin-bottom: 30px;">
+                    <h4 style="color: #856404; margin: 0 0 15px 0; font-weight: 600;">➕ Add Custom Assets</h4>
+                    <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                        <input type="text" id="customAssetName" placeholder="Asset Name" 
+                               style="flex: 1; min-width: 200px; padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
                         <input type="number" id="customAssetQuantity" placeholder="Qty" min="1" value="1"
                                style="width: 60px; padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
                         <select id="customAssetType" style="padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
@@ -4261,6 +4273,7 @@ async function loadEditEventAssets(eventId) {
                     </h4>
                     <div id="all-models" style="display: block;">
                         <div id="current-asset-models" style="border: 1px solid #e9ecef; border-radius: 8px; min-height: 200px;">
+<<<<<<< Updated upstream
         `;
 
     // Display current model assignments
@@ -4392,6 +4405,9 @@ async function loadEditEventAssets(eventId) {
     }
 
     content += `
+=======
+                            <!-- Content will be populated by updateModelRequirementsSection -->
+>>>>>>> Stashed changes
                         </div>
                     </div>
                 </div>
@@ -4399,6 +4415,10 @@ async function loadEditEventAssets(eventId) {
         `;
 
     document.getElementById("edit-assets-tab").innerHTML = content;
+
+    // IMPORTANT: Use updateModelRequirementsSection to populate the current-asset-models 
+    // This ensures consistent UI with Edit/Remove buttons
+    await updateModelRequirementsSection(eventId);
 
   } catch (error) {
     console.error("Error loading edit event assets:", error);
@@ -4423,20 +4443,22 @@ async function addCustomAssetToEvent(eventId) {
   
   try {
     // Create the custom asset ID based on type
-    const customAssetId = `[${type}]${name}${quantity > 1 ? `;${quantity}` : ''}`;
+    // Use semicolon format for quantities > 1: [TYPE]name;quantity
+    const customAssetId = quantity > 1 ? `[${type}]${name};${quantity}` : `[${type}]${name}`;
     
     await apiCall(`/api/events/${eventId}/assets`, "POST", {
       assetId: customAssetId,
     });
     
-    showNotification("success", `Custom asset "${name}" added to event`);
+    const quantityText = quantity > 1 ? ` (Qty: ${quantity})` : '';
+    showNotification("success", `Custom asset "${name}"${quantityText} added to event`);
     
     // Clear the inputs
     nameInput.value = "";
     quantityInput.value = "1";
     
-    // Only add custom assets section - DON'T refresh the whole model requirements
-    await addCustomAssetsToModelRequirements(eventId);
+    // Update the model requirements section to show the new custom asset
+    await updateModelRequirementsSection(eventId);
     
   } catch (error) {
     showNotification("error", `Failed to add custom asset: ${error.message}`);
@@ -4600,7 +4622,7 @@ async function addModelToEvent(eventId, brand, model, department, description) {
       });
     }
 
-    // Update only the models section without disrupting the search
+    // IMPORTANT: Use updateModelRequirementsSection to ensure buttons are present
     await updateModelRequirementsSection(eventId);
 
     // Remove this model from the search results since it now has fewer available
@@ -4614,7 +4636,6 @@ async function addModelToEvent(eventId, brand, model, department, description) {
   }
 }
 
-// Update only the model requirements section without affecting search
 async function updateModelRequirementsSection(eventId) {
   try {
     const eventResponse = await apiCall(`/api/events/${eventId}`);
@@ -4647,175 +4668,173 @@ async function updateModelRequirementsSection(eventId) {
         Object.keys(modelsByDept).sort().forEach((dept) => {
             const models = modelsByDept[dept];
             const totalAssigned = models.reduce((sum, model) => sum + (model.assignedAssets ? model.assignedAssets.length : 0), 0);
+            const totalRequired = models.reduce((sum, model) => sum + model.requiredQuantity, 0);
+            const deptInfo = getDepartmentInfo(dept);
 
             content += `
-                <div style="background: #f8f9fa; padding: 12px; border-bottom: 1px solid #e9ecef; font-weight: bold;">
-                    ${dept} Department (${totalAssigned} assigned)
+                <div style="background: ${deptInfo.bgColor}; padding: 12px; border-bottom: 1px solid #e9ecef; font-weight: bold;">
+                    ${deptInfo.name} (${totalAssigned}/${totalRequired} assigned)
                 </div>
                 <div style="padding: 12px;">
             `;
 
             models.forEach((model) => {
-                const statusIcon = model.status === 'complete' ? '✅' 
-                                 : model.status === 'partial' ? '⚠️' 
-                                 : '📋';
+                const assignedCount = model.assignedAssets ? model.assignedAssets.length : 0;
+                const statusIcon = assignedCount >= model.requiredQuantity ? "✅" : "⚠️";
                 
                 content += `
-                    <div class="model-assignment" style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #e9ecef;">
-                        <div>
-                            <div style="font-weight: 500;">${statusIcon} ${model.requiredQuantity}x ${escapeHtml(model.brand)} ${escapeHtml(model.model)}</div>
-                            <div style="color: #666; font-size: 12px;">${escapeHtml(model.description)}</div>
-                            <div style="color: #666; font-size: 11px;">Assigned: ${model.assignedAssets.length}/${model.requiredQuantity}</div>
+                    <div class="model-assignment" style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #f1f1f1;">
+                        <div style="display: flex; align-items: center;">
+                            <span style="margin-right: 8px;">${statusIcon}</span>
+                            <span style="font-weight: 500;">${model.requiredQuantity}x ${escapeHtml(model.brand)} ${escapeHtml(model.model)}</span>
+                            <span style="color: #666; margin-left: 8px;">(${assignedCount} assigned)</span>
                         </div>
-                        <div style="display: flex; gap: 5px;">
-                            <button class="btn btn-primary btn-xs edit-model-qty-btn" 
+                        <div style="display: flex; gap: 8px;">
+                            <button class="btn btn-sm btn-outline-primary edit-model-qty-btn" 
                                     data-event-id="${eventId}" data-brand="${escapeHtml(model.brand)}" 
                                     data-model="${escapeHtml(model.model)}" data-department="${escapeHtml(model.department)}"
-                                    style="padding: 2px 6px; font-size: 10px;">Edit Qty</button>
-                            <button class="btn btn-danger btn-xs remove-model-btn" 
+                                    style="padding: 4px 8px; font-size: 11px;">Edit Qty</button>
+                            <button class="btn btn-sm btn-danger remove-model-btn" 
                                     data-event-id="${eventId}" data-brand="${escapeHtml(model.brand)}" 
                                     data-model="${escapeHtml(model.model)}" data-department="${escapeHtml(model.department)}"
-                                    style="padding: 2px 6px; font-size: 10px;">Remove</button>
-                        </div>
-                    </div>
-                `;
-
-                // Show assigned assets for this model
-                if (model.assignedAssets && model.assignedAssets.length > 0) {
-                    content += `
-                        <div style="margin-left: 20px; margin-top: 5px; border-left: 2px solid #28a745; padding-left: 10px;">
-                    `;
-                    
-                    model.assignedAssets.forEach(asset => {
-                        const statusIcon = asset.status === "returned" ? "↩️" 
-                                        : asset.status === "prepared" ? "✅" 
-                                        : "📋";
-
-                        content += `
-                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #e9ecef;">
-                                <div>
-                                    <div style="font-weight: 500; font-size: 12px;">${statusIcon} ${escapeHtml(asset.id)}</div>
-                                    ${asset.serial ? `<div style="color: #666; font-size: 11px;">SN: ${escapeHtml(asset.serial)}</div>` : ''}
-                                </div>
-                                <button class="btn btn-danger btn-xs remove-asset-btn" 
-                                        data-event-id="${eventId}" data-asset-id="${escapeHtml(asset.id)}"
-                                        style="padding: 2px 6px; font-size: 10px;">Remove</button>
-                            </div>
-                        `;
-                    });
-                } else {
-                    content += '<div style="text-align: center; color: #666; padding: 10px; font-size: 12px;">No assets assigned to this model</div>';
-                }
-
-                content += `
+                                    style="padding: 4px 8px; font-size: 11px;">Remove</button>
                         </div>
                     </div>
                 `;
             });
 
-            content += `
-                    </div>
-                </div>
-            `;
+            content += `</div>`;
         });
-
-        // Add custom assets section
-        if (event.assetsByDepartment) {
-            // Display LOAN and MISC items
-            ['LOAN', 'MISC'].forEach(dept => {
-                if (event.assetsByDepartment[dept] && event.assetsByDepartment[dept].length > 0) {
-                    const customAssets = event.assetsByDepartment[dept];
-                    const deptDisplayName = dept === 'LOAN' ? '🏪 Loan/Rental Items' : '🔧 Misc Items';
-                    
-                    content += `
-                        <div style="background: #f8f9fa; padding: 12px; border-bottom: 1px solid #e9ecef; font-weight: bold;">
-                            ${deptDisplayName} (${customAssets.length})
-                        </div>
-                        <div style="padding: 12px;">
-                    `;
-                    
-                    customAssets.forEach(asset => {
-                        const statusIcon = asset.status === "returned" ? "↩️" 
-                                         : asset.status === "prepared" ? "✅" 
-                                         : "📋";
-                        
-                        content += `
-                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #e9ecef;">
-                                <div>
-                                    <div style="font-weight: 500; font-size: 12px;">${statusIcon} ${escapeHtml(asset.name)}</div>
-                                </div>
-                                <button class="btn btn-danger btn-xs remove-asset-btn" 
-                                        data-event-id="${eventId}" data-asset-id="${escapeHtml(asset.id)}"
-                                        style="padding: 2px 6px; font-size: 10px;">Remove</button>
-                            </div>
-                        `;
-                    });
-                    
-                    content += `
-                            </div>
-                    `;
-                }
-            });
-        }
-    } else {
-        content = '<div style="text-align: center; padding: 40px; color: #666;">No asset models assigned to this event</div>';
     }
 
-    modelsContainer.innerHTML = content;
-
+    // Always add custom assets section, regardless of whether there are model groups
+    await addCustomAssetsToModelRequirements(eventId, content);
+    
   } catch (error) {
-    console.error("Error updating models section:", error);
+    console.error("Error updating model requirements:", error);
   }
 }
 
 // Add custom assets to existing model requirements without changing format
-async function addCustomAssetsToModelRequirements(eventId) {
+async function addCustomAssetsToModelRequirements(eventId, existingContent = '') {
   try {
     const eventResponse = await apiCall(`/api/events/${eventId}`);
     const event = eventResponse.data;
-
     const modelsContainer = document.getElementById("current-asset-models");
+    
     if (!modelsContainer) return;
 
-    // Remove any existing custom asset sections first
-    const existingCustomSections = modelsContainer.querySelectorAll('[data-custom-section="true"]');
-    existingCustomSections.forEach(section => section.remove());
+    // Helper function to escape HTML
+    const escapeHtml = (str) => {
+      if (!str) return '';
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    };
 
-    // Add custom assets section if they exist - append to existing content
-    if (event.assetsByDepartment) {
-      ['LOAN', 'MISC'].forEach(dept => {
-        if (event.assetsByDepartment[dept] && event.assetsByDepartment[dept].length > 0) {
-          const customAssets = event.assetsByDepartment[dept];
-          const deptDisplayName = dept === 'LOAN' ? '🏪 Loan/Rental Items' : '🔧 Misc Items';
+    // Helper function to parse custom asset name and quantity
+    const parseCustomAsset = (assetId, assetName) => {
+      let name = assetName;
+      let quantity = 1;
+      
+      // Check if the asset ID has quantity in format [TYPE]name;quantity
+      if (assetId.includes(';')) {
+        const parts = assetId.split(';');
+        if (parts.length === 2) {
+          quantity = parseInt(parts[1]) || 1;
+          // Extract the base name from the ID
+          const namePart = parts[0];
+          if (namePart.startsWith('[MISC]')) {
+            name = namePart.replace('[MISC]', '');
+          } else if (namePart.startsWith('[LOAN]')) {
+            name = namePart.replace('[LOAN]', '');
+          }
+        }
+      }
+      
+      return { name, quantity };
+    };
+
+    let content = existingContent;
+
+    // Process custom assets (those starting with [MISC] or [LOAN])
+    if (event.assignedAssets) {
+      const customAssets = event.assignedAssets.filter(asset => 
+        asset.id && (asset.id.startsWith('[MISC]') || asset.id.startsWith('[LOAN]'))
+      );
+
+      if (customAssets.length > 0) {
+        // Group custom assets by type
+        const customAssetsByType = {};
+        customAssets.forEach(asset => {
+          const type = asset.id.startsWith('[MISC]') ? 'MISC' : 'LOAN';
+          if (!customAssetsByType[type]) {
+            customAssetsByType[type] = [];
+          }
+          customAssetsByType[type].push(asset);
+        });
+
+        // Add each type section
+        Object.keys(customAssetsByType).forEach(type => {
+          const assetsOfType = customAssetsByType[type];
+          const deptDisplayName = type === 'LOAN' ? '🏪 Loan/Rental Items' : '🔧 Misc Items';
           
-          const customSectionHTML = `
+          // Calculate total quantity for this type
+          let totalQuantity = 0;
+          assetsOfType.forEach(asset => {
+            const parsed = parseCustomAsset(asset.id, asset.name);
+            totalQuantity += parsed.quantity;
+          });
+          
+          content += `
             <div data-custom-section="true" style="border-top: 1px solid #e9ecef; margin-top: 20px; padding-top: 20px;">
-              <h5 style="color: #495057; margin-bottom: 15px; font-weight: 500;">
-                ${deptDisplayName} (${customAssets.length})
-              </h5>
-              ${customAssets.map(asset => {
-                const statusIcon = asset.status === "returned" ? "↩️" 
-                               : asset.status === "prepared" ? "✅" 
-                               : "📋";
-                return `
-                  <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #f1f1f1;">
-                    <div style="display: flex; align-items: center;">
-                      <span style="margin-right: 8px;">${statusIcon}</span>
-                      <span style="font-weight: 500;">${escapeHtml(asset.name)}</span>
+              <div style="background: #f8f9fa; padding: 12px; border-bottom: 1px solid #e9ecef; font-weight: bold;">
+                ${deptDisplayName} (${totalQuantity} total qty, ${assetsOfType.length} items)
+              </div>
+              <div style="padding: 12px;">
+                ${assetsOfType.map(asset => {
+                  const statusIcon = asset.status === "returned" ? "↩️" 
+                                 : asset.status === "prepared" ? "✅" 
+                                 : "📋";
+                  const parsed = parseCustomAsset(asset.id, asset.name);
+                  const displayName = parsed.quantity > 1 ? `${parsed.quantity}x ${parsed.name}` : parsed.name;
+                  
+                  return `
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #f1f1f1;">
+                      <div style="display: flex; align-items: center;">
+                        <span style="margin-right: 8px;">${statusIcon}</span>
+                        <span style="font-weight: 500;">${escapeHtml(displayName)}</span>
+                      </div>
+                      <div style="display: flex; gap: 8px;">
+                        <button class="btn btn-sm btn-outline-primary edit-custom-qty-btn" 
+                                data-event-id="${eventId}" data-asset-id="${escapeHtml(asset.id)}" 
+                                data-asset-name="${escapeHtml(parsed.name)}" data-asset-type="${type}"
+                                style="padding: 4px 8px; font-size: 11px;">Edit Qty</button>
+                        <button class="btn btn-danger btn-sm remove-asset-btn" 
+                                data-event-id="${eventId}" data-asset-id="${escapeHtml(asset.id)}"
+                                style="padding: 4px 8px; font-size: 11px;">Remove</button>
+                      </div>
                     </div>
-                    <button class="btn btn-danger btn-sm remove-asset-btn" 
-                            data-event-id="${eventId}" data-asset-id="${escapeHtml(asset.id)}"
-                            style="padding: 4px 8px; font-size: 11px;">Remove</button>
-                  </div>
-                `;
-              }).join('')}
+                  `;
+                }).join('')}
+              </div>
             </div>
           `;
-          
-          modelsContainer.insertAdjacentHTML('beforeend', customSectionHTML);
-        }
-      });
+        });
+      }
     }
+
+    // If no content at all, show empty state
+    if (!content.trim()) {
+      content = `
+        <div style="text-align: center; padding: 40px; color: #666;">
+          No assets assigned to this event
+        </div>
+      `;
+    }
+
+    modelsContainer.innerHTML = content;
+    
   } catch (error) {
     console.error("Error adding custom assets to model requirements:", error);
   }
@@ -4965,14 +4984,7 @@ function validateEditQuantityInput() {
   return true;
 }
 
-async function updateModelQuantity(
-  eventId,
-  brand,
-  model,
-  department,
-  newQuantity,
-  currentQuantity
-) {
+async function updateModelQuantity(eventId, brand, model, department, newQuantity, currentQuantity) {
   try {
     // Remove the old model assignment
     await apiCall(`/api/events/${eventId}/models`, "DELETE", {
@@ -4990,56 +5002,46 @@ async function updateModelQuantity(
       quantity: newQuantity,
     });
 
-    showNotification(
-      "success",
-      `Updated ${brand} ${model} quantity to ${newQuantity}`
-    );
+    showNotification("success", `Updated ${brand} ${model} quantity to ${newQuantity}`);
 
     // Update available assets count
     const quantityDifference = newQuantity - currentQuantity;
     if (window.currentEditAvailableAssets) {
       const availableAssets = window.currentEditAvailableAssets;
-      const modelAssets = availableAssets.filter(
-        (a) => a.brand === brand && a.model === model
-      );
+      const modelAssets = availableAssets.filter((a) => a.brand === brand && a.model === model);
 
       if (quantityDifference > 0) {
         // Quantity increased - remove more assets from available
         let removedCount = 0;
-        window.currentEditAvailableAssets =
-          window.currentEditAvailableAssets.filter((asset) => {
-            if (
-              asset.brand === brand &&
-              asset.model === model &&
-              removedCount < quantityDifference
-            ) {
-              removedCount++;
-              return false;
-            }
-            return true;
-          });
-      } else {
-        // Quantity decreased - add assets back to available (this is complex, so we'll reload)
-        const response = await apiCall("/api/assets/available");
-        window.currentEditAvailableAssets = response.data;
+        window.currentEditAvailableAssets = window.currentEditAvailableAssets.filter((asset) => {
+          if (asset.brand === brand && asset.model === model && removedCount < quantityDifference) {
+            removedCount++;
+            return false;
+          }
+          return true;
+        });
+      } else if (quantityDifference < 0) {
+        // Quantity decreased - add assets back to available
+        const assetsToAddBack = Math.abs(quantityDifference);
+        for (let i = 0; i < assetsToAddBack && i < modelAssets.length; i++) {
+          window.currentEditAvailableAssets.push(modelAssets[i]);
+        }
       }
     }
 
-    // Update the display
-    await updateCurrentAssetsOnly(eventId);
+    // Only update the model requirements section to maintain consistent UI
+    await updateModelRequirementsSection(eventId);
 
-    // Refresh search results if there's an active search
-    const searchInput = document.querySelector(
-      '#edit-assets-tab input[placeholder="Search available assets..."]'
-    );
-    if (searchInput && searchInput.value.length >= 2) {
-      filterAvailableAssetsSimple(searchInput.value);
+    // Refresh the search results if there's an active search
+    const currentSearchTerm = document.querySelector('#edit-assets-tab input[placeholder*="Search available asset models"]')?.value;
+    if (currentSearchTerm && currentSearchTerm.length >= 2) {
+      filterAvailableModels(currentSearchTerm);
     }
+
   } catch (error) {
-    showNotification("error", `Failed to update quantity: ${error.message}`);
+    showNotification("error", `Failed to update model quantity: ${error.message}`);
   }
 }
-
 function preserveModalState(callback) {
     // Save which sections are expanded
     const expandedSections = [];
@@ -5613,13 +5615,14 @@ async function addAssetToEvent(eventId, assetId) {
     showNotification("success", `Asset ${assetId} added to event`);
 
     // Refresh the edit modal
-    editEventAssets(eventId);
+    loadEditEventAssets(eventId);
   } catch (error) {
     showNotification("error", `Failed to add asset: ${error.message}`);
   }
 }
 
 async function removeAssetFromEvent(eventId, assetId) {
+<<<<<<< Updated upstream
   if (
     !confirm(
       `Are you sure you want to remove asset ${assetId} from this event?`
@@ -5644,6 +5647,51 @@ async function removeAssetFromEvent(eventId, assetId) {
       .closest("div");
     if (assetElement) {
       assetElement.remove();
+=======
+    console.log('=== removeAssetFromEvent CALLED ===');
+    console.log('eventId:', eventId, 'assetId:', assetId);
+    
+    try {
+        let endpoint;
+        
+        // Use different endpoints for custom vs regular assets
+        if (assetId.startsWith('[MISC]') || assetId.startsWith('[LOAN]')) {
+            endpoint = `/api/events/${eventId}/custom-assets/remove`;
+            console.log('Using custom asset removal endpoint');
+        } else {
+            endpoint = `/api/events/${eventId}/remove-asset`;
+            console.log('Using regular asset removal endpoint');
+        }
+        
+        console.log('Making POST request to:', endpoint);
+        console.log('Request body:', { assetId: assetId });
+        
+        const response = await apiCall(endpoint, 'POST', { assetId: assetId });
+        
+        if (response.success) {
+            console.log('Asset removed successfully');
+            
+            // Remove the asset element from UI
+            const assetElements = document.querySelectorAll(`[data-asset-id="${assetId}"]`);
+            assetElements.forEach(element => {
+                const assetRow = element.closest('div[style*="display: flex"]');
+                if (assetRow) {
+                    assetRow.remove();
+                }
+            });
+            
+            // Update the model requirements section to reflect changes
+            await updateModelRequirementsSection(eventId);
+            
+            alert(`Asset ${assetId} removed successfully`);
+        } else {
+            throw new Error(response.error || 'Failed to remove asset');
+        }
+        
+    } catch (error) {
+        console.error('Error removing asset from event:', error);
+        alert(`Error removing asset: ${error.message}`);
+>>>>>>> Stashed changes
     }
 
     // Update the asset count
@@ -6089,6 +6137,18 @@ document.addEventListener("DOMContentLoaded", function () {
         
         if (eventId && assetId) {
             removeAssetFromEvent(eventId, assetId);
+        }
+    }
+
+    if (e.target.classList.contains('edit-custom-qty-btn')) {
+        e.preventDefault();
+        const eventId = parseInt(e.target.getAttribute('data-event-id'));
+        const assetId = e.target.getAttribute('data-asset-id');
+        const assetName = e.target.getAttribute('data-asset-name');
+        const assetType = e.target.getAttribute('data-asset-type');
+        
+        if (eventId && assetId && assetName && assetType) {
+            editCustomAssetQuantity(eventId, assetId, assetName, assetType);
         }
     }
   });
@@ -6586,95 +6646,39 @@ document.addEventListener("DOMContentLoaded", function () {
   });
   
   // Edit Quantity Form
-  document
-    .getElementById("editQuantityForm")
-    .addEventListener("submit", async function (e) {
+  document.addEventListener("submit", async function (e) {
+    if (e.target.id === "editQuantityForm") {
       e.preventDefault();
 
-      const eventId = document.getElementById("editQuantityEventId").value;
-      const brand = document.getElementById("editQuantityBrand").value;
-      const model = document.getElementById("editQuantityModel").value;
-      const department = document.getElementById(
-        "editQuantityDepartment"
-      ).value;
-      const currentQuantity = parseInt(
-        document.getElementById("editQuantityCurrentQty").value
-      );
-      const newQuantity = parseInt(
-        document.getElementById("editQuantityInput").value
-      );
+      const eventId = parseInt(document.getElementById("editQuantityEventId").value);
+      const newQuantity = parseInt(document.getElementById("editQuantityInput").value);
+      const currentQuantity = parseInt(document.getElementById("editQuantityCurrentQty").value);
 
-      if (newQuantity === currentQuantity) {
-        closeModal("editQuantityModal");
-        return;
+      // Check if this is a custom asset edit
+      const isCustomAsset = e.target.dataset.customAsset === "true";
+
+      if (isCustomAsset) {
+        // Handle custom asset quantity update
+        const oldAssetId = document.getElementById("editQuantityBrand").value; // Asset ID stored here
+        const assetName = document.getElementById("editQuantityModel").value;
+        const assetType = document.getElementById("editQuantityDepartment").value;
+
+        await updateCustomAssetQuantity(eventId, oldAssetId, assetName, assetType, newQuantity);
+        
+        // Clear the custom asset flag
+        delete e.target.dataset.customAsset;
+      } else {
+        // Handle regular model quantity update
+        const brand = document.getElementById("editQuantityBrand").value;
+        const model = document.getElementById("editQuantityModel").value;
+        const department = document.getElementById("editQuantityDepartment").value;
+
+        await updateModelQuantity(eventId, brand, model, department, newQuantity, currentQuantity);
       }
 
-      try {
-        // Remove the old model assignment
-        await apiCall(`/api/events/${eventId}/models`, "DELETE", {
-          brand: brand,
-          model: model,
-          department: department,
-        });
-
-        // Add the new model assignment with updated quantity
-        await apiCall(`/api/events/${eventId}/models`, "POST", {
-          brand: brand,
-          model: model,
-          department: department,
-          description: "", // Description will be preserved by backend
-          quantity: newQuantity,
-        });
-
-        closeModal("editQuantityModal");
-        showNotification(
-          "success",
-          `Updated ${brand} ${model} quantity to ${newQuantity}`
-        );
-
-        // Update available assets count
-        const quantityDifference = newQuantity - currentQuantity;
-        if (window.currentEditAvailableAssets) {
-          if (quantityDifference > 0) {
-            // Quantity increased - remove more assets from available
-            let removedCount = 0;
-            window.currentEditAvailableAssets =
-              window.currentEditAvailableAssets.filter((asset) => {
-                if (
-                  asset.brand === brand &&
-                  asset.model === model &&
-                  removedCount < quantityDifference
-                ) {
-                  removedCount++;
-                  return false;
-                }
-                return true;
-              });
-          } else {
-            // Quantity decreased - reload available assets
-            const response = await apiCall("/api/assets/available");
-            window.currentEditAvailableAssets = response.data;
-          }
-        }
-
-        // Update the display
-        await updateCurrentAssetsOnly(eventId);
-
-        // Refresh search results if there's an active search
-        const searchInput = document.querySelector(
-          '#edit-assets-tab input[placeholder="Search available assets..."]'
-        );
-        if (searchInput && searchInput.value.length >= 2) {
-          filterAvailableAssetsSimple(searchInput.value);
-        }
-      } catch (error) {
-        showNotification(
-          "error",
-          `Failed to update quantity: ${error.message}`
-        );
-      }
-    });
-});
+      closeModal("editQuantityModal");
+    }
+  });
 
 function openMaintenanceModalForAsset(assetId) {
   // Ensure the modal is opened first
@@ -8358,6 +8362,140 @@ function updateSelectedOOCDisplay() {
   if (serialUpdatesContainer) {
     serialUpdatesContainer.innerHTML = serialHtml;
   }
+}});
+
+function editCustomAssetQuantity(eventId, assetId, assetName, assetType) {
+  // Parse current quantity from asset ID
+  let currentQuantity = 1;
+  if (assetId.includes(';')) {
+    const parts = assetId.split(';');
+    if (parts.length === 2) {
+      currentQuantity = parseInt(parts[1]) || 1;
+    }
+  }
+
+  // Populate modal - reuse the existing edit quantity modal
+  document.getElementById("editQuantityTitle").textContent = `Edit Custom Asset Quantity`;
+  document.getElementById("editQuantityLabel").textContent = `Editing: ${assetName} (${assetType === 'LOAN' ? 'Loan/Rental' : 'Misc'})`;
+  document.getElementById("editQuantityInput").value = currentQuantity;
+  document.getElementById("editQuantityInput").min = 1;
+  document.getElementById("editQuantityInput").max = 999; // No limit for custom assets
+
+  const editQtyInput = document.getElementById("editQuantityInput");
+  if (editQtyInput) {
+    editQtyInput.oninput = () => validateCustomAssetQuantityInput();
+    editQtyInput.onblur = () => handleCustomAssetQuantityBlur();
+    editQtyInput.onkeydown = (e) => handleQuantityKeydown(e);
+  }
+
+  // Show info
+  const availableDiv = document.getElementById("editQuantityAvailable");
+  availableDiv.innerHTML = `<span style="color: #28a745;">✅ Custom assets have no quantity limits</span>`;
+
+  // Store values in hidden fields (repurpose existing ones)
+  document.getElementById("editQuantityEventId").value = eventId;
+  document.getElementById("editQuantityBrand").value = assetId; // Store full asset ID here
+  document.getElementById("editQuantityModel").value = assetName;
+  document.getElementById("editQuantityDepartment").value = assetType;
+  document.getElementById("editQuantityCurrentQty").value = currentQuantity;
+
+  // Mark this as custom asset edit by setting a flag
+  document.getElementById("editQuantityForm").dataset.customAsset = "true";
+
+  // Open modal
+  openModal("editQuantityModal");
+}
+
+function validateCustomAssetQuantityInput() {
+  const input = document.getElementById("editQuantityInput");
+  if (!input) return false;
+
+  let value = input.value.trim();
+
+  // Allow empty during typing
+  if (value === '') {
+    input.style.borderColor = "#ddd";
+    return false;
+  }
+
+  const numValue = parseInt(value);
+
+  if (isNaN(numValue) || numValue < 1) {
+    input.style.borderColor = "#dc3545";
+    return false;
+  }
+
+  if (numValue > 999) {
+    input.style.borderColor = "#dc3545";
+    return false;
+  }
+
+  input.style.borderColor = "#28a745";
+  return true;
+}
+
+function handleCustomAssetQuantityBlur() {
+  const input = document.getElementById("editQuantityInput");
+  if (!input) return;
+
+  let value = input.value.trim();
+
+  // If empty on blur, restore to minimum 1
+  if (value === '' || isNaN(parseInt(value)) || parseInt(value) < 1) {
+    input.value = 1;
+    input.style.borderColor = "#28a745";
+    return;
+  }
+
+  // If value exceeds maximum, set to maximum
+  const numValue = parseInt(value);
+  if (numValue > 999) {
+    input.value = 999;
+    showNotification("warning", "Maximum quantity is 999");
+  }
+
+  validateCustomAssetQuantityInput();
+}
+
+async function updateCustomAssetQuantity(eventId, oldAssetId, assetName, assetType, newQuantity) {
+  try {
+    console.log(`Updating custom asset quantity: ${oldAssetId} -> quantity ${newQuantity}`);
+    
+    // Create the update payload for a dedicated quantity update endpoint
+    const updateData = {
+      assetId: oldAssetId,
+      newQuantity: newQuantity
+    };
+    
+    // Try a dedicated custom asset quantity update endpoint
+    await apiCall(`/api/events/${eventId}/custom-assets/update-quantity`, "PUT", updateData);
+    
+    console.log(`Successfully updated custom asset quantity via dedicated endpoint`);
+
+    const quantityText = newQuantity > 1 ? ` (Qty: ${newQuantity})` : '';
+    showNotification("success", `Updated "${assetName}"${quantityText} quantity to ${newQuantity}`);
+
+    // Update the model requirements section to show the changes
+    await updateModelRequirementsSection(eventId);
+
+  } catch (error) {
+    console.error("Error in updateCustomAssetQuantity:", error);
+    
+    // Create updateData here for the error logging
+    const updateData = {
+      assetId: oldAssetId,
+      newQuantity: newQuantity
+    };
+    
+    // If the dedicated endpoint doesn't exist, show a helpful error
+    if (error.message.includes('Not found') || error.message.includes('404')) {
+      showNotification("error", "Custom asset quantity update endpoint not available. This feature needs to be implemented on the backend.");
+      console.log("Backend needs endpoint: PUT /api/events/{eventId}/custom-assets/update-quantity");
+      console.log("Expected payload:", updateData);
+    } else {
+      showNotification("error", `Failed to update custom asset quantity: ${error.message}`);
+    }
+  }
 }
 
 // Remove asset from OOC selection
@@ -8550,7 +8688,7 @@ function editMaintenanceLog(assetId, logIndex, logId) {
   const currentlyEditing = document.querySelectorAll('div[id$="_edit"][style*="block"]');
   currentlyEditing.forEach(editDiv => {
     const currentLogId = editDiv.id.replace('_edit', '');
-    cancelEditMaintenanceLog(currentLogId);
+    cancelEditMaintenanceLogModal(currentLogId);
   });
   
   // Get the asset data
@@ -8810,10 +8948,10 @@ function handleClickOutside(event) {
         await saveMaintenanceLogSilent(assetId, logIndex, logId);
       } else if (!currentValue) {
         // If empty, restore original and cancel
-        cancelEditMaintenanceLog(logId);
+        cancelEditMaintenanceLogModal(logId);
       } else {
         // If unchanged, just cancel
-        cancelEditMaintenanceLog(logId);
+        cancelEditMaintenanceLogModal(logId);
       }
     }
   });
@@ -8947,7 +9085,7 @@ async function saveMaintenanceLogSilent(assetId, logIndex, logId) {
   const newDescription = textarea.value.trim();
   
   if (!newDescription) {
-    cancelEditMaintenanceLog(logId);
+    cancelEditMaintenanceLogModal(logId);
     return false;
   }
   

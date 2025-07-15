@@ -21,3 +21,5 @@
 -asset check shows all item of asset type and allows user to account for all assetID of that item
 -undo button (maybe dont need)
 -ability to force status to ongoing as admin even if event not fully prepared
+
+ui for manage assets changes? what calls updateModelRequirementsSection and updateModelQuantity and why is it causing the ui to change.
