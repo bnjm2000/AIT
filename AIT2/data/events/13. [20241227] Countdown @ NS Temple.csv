@@ -1,2 +1,2 @@
-EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State
-13,Countdown @ NS Temple,20241227,20241227,"[{'model_description': '[AX] Yamaha DXR10 Active 12"" Speaker', 'quantity': 4}]","[""DXR10#01"", ""DXR10#02"", ""DXR10#03"", ""DXR10#04"", ""MG06#01""]","[""DXR10#01"", ""DXR10#02"", ""DXR10#03"", ""DXR10#04"", ""MG06#01""]",Closed
+EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,Tag
+13,Countdown @ NS Temple,20241227,20241227,"[{'model_description': '[AX] Yamaha DXR10 Active 12"" Speaker', 'quantity': 4}]","[""DXR10#01"", ""DXR10#02"", ""DXR10#03"", ""DXR10#04"", ""MG06#01""]","[""DXR10#01"", ""DXR10#02"", ""DXR10#03"", ""DXR10#04"", ""MG06#01""]",Planning,[],[],events
