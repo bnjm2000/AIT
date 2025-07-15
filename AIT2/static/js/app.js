@@ -39,6 +39,88 @@ function setupSingleAssetClickHandler() {
     
     // Create the ONE and ONLY click handler for ALL button types
     const singleClickHandler = function(event) {
+      const onclickAttr = event.target.getAttribute('onclick');
+      if (onclickAttr) {
+          event.preventDefault();
+          event.stopPropagation();
+          
+          // Handle viewMaintenanceLog calls
+          const viewLogMatch = onclickAttr.match(/viewMaintenanceLog\('([^']+)'\)/);
+          if (viewLogMatch) {
+              const assetId = viewLogMatch[1];
+              if (typeof window.viewMaintenanceLog === 'function') {
+                  window.viewMaintenanceLog(assetId);
+              } else {
+                  const asset = assets.find(a => a.id === assetId);
+                  if (asset) {
+                      showMaintenanceLogModal(asset);
+                  }
+              }
+              return;
+          }
+          
+          // Handle openMaintenanceModal calls
+          const openModalMatch = onclickAttr.match(/openMaintenanceModal\(\)/);
+          if (openModalMatch) {
+              if (typeof window.openMaintenanceModal === 'function') {
+                  window.openMaintenanceModal();
+              }
+              return;
+          }
+          
+          // Handle switchMaintenanceTab calls
+          const switchTabMatch = onclickAttr.match(/switchMaintenanceTab\('([^']+)'\)/);
+          if (switchTabMatch) {
+              const tabName = switchTabMatch[1];
+              if (typeof window.switchMaintenanceTab === 'function') {
+                  window.switchMaintenanceTab(tabName);
+              }
+              return;
+          }
+          
+          // Handle any other onclick functions generically
+          // Handle any other onclick functions generically - but only if they exist
+          try {
+              // Extract function name from onclick attribute
+              const funcMatch = onclickAttr.match(/^(\w+)\(/);
+              if (funcMatch) {
+                  const funcName = funcMatch[1];
+                  
+                  // Only execute if the function exists in global scope
+                  if (typeof window[funcName] === 'function') {
+                      const func = new Function(onclickAttr);
+                      func.call(window);
+                      return;
+                  } else {
+                      console.warn(`Function ${funcName} not found in global scope, skipping onclick execution`);
+                      return;
+                  }
+              }
+          } catch (error) {
+              console.error('Error executing onclick function:', error);
+              console.log('Failed onclick attribute:', onclickAttr);
+          }
+      }
+      
+      // Handle maintenance log buttons by data attributes
+      if (event.target.dataset.action === 'view-maintenance') {
+          event.preventDefault();
+          event.stopPropagation();
+          
+          const assetId = event.target.dataset.assetId;
+          if (assetId) {
+              if (typeof window.viewMaintenanceLog === 'function') {
+                  window.viewMaintenanceLog(assetId);
+              } else {
+                  const asset = assets.find(a => a.id === assetId);
+                  if (asset) {
+                      showMaintenanceLogModal(asset);
+                  }
+              }
+          }
+          return;
+      }
+        
         // Handle prepare/unprepare buttons
         if (event.target.classList.contains('asset-action-btn') || 
             event.target.classList.contains('custom-asset-btn')) {
@@ -55,8 +137,8 @@ function setupSingleAssetClickHandler() {
             
             // Check if already processing
             if (processingAssets.has(assetKey)) {
-                console.log(`BLOCKED: Asset ${assetId} already processing`);
-                return false;
+                console.log(`BLOCKED: Asset ${assetId} already being processed`);
+                return;
             }
             
             // Mark as processing
@@ -8039,6 +8121,13 @@ function showMaintenanceLogModal(asset) {
     });
   }, 100);
 }
+
+//WHAT IS LOVE, BABY DONT HURT ME, DONT HURT ME NO MOREEE
+window.viewMaintenanceLog = viewMaintenanceLog;
+window.openMaintenanceModal = openMaintenanceModal;
+window.switchMaintenanceTab = switchMaintenanceTab;
+window.openMaintenanceModalForAsset = openMaintenanceModal;
+window.clearSingleOOC = clearSingleOOC;
 
 // Helper function to close the maintenance log modal
 function closeMaintenanceLogModal() {
