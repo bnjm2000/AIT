@@ -1240,6 +1240,9 @@
             <button class="nav-item" onclick="showSection('prepare')">
               🔧 Prepare Events
             </button>
+            <button class="nav-item" onclick="showSection('delivery-order')" id="delivery-order-tab">
+              📄 Delivery Order
+            </button>
             <button class="nav-item" onclick="showSection('return')" title="Return Assets - Click to view overdue items">
               ↩️ Return Assets <span id="overdue-counter" style="background: #dc3545; color: white; border-radius: 50%; padding: 2px 8px; font-size: 12px; margin-left: 8px; display: none;" title="Overdue events requiring asset returns">0</span>
             </button>
@@ -1564,6 +1567,87 @@
             <div class="events-grid" id="prepare-events">
               <div class="loading">Loading events...</div>
             </div>
+          </div>
+
+          <!-- Delivery Order Tab -->
+          <div id="delivery-order-section" class="content-section">
+              <div class="content-header">
+                  <h2 class="content-title">Generate Delivery Order</h2>
+                  <div class="section-actions">
+                      <button onclick="generateDeliveryOrder('pdf')" class="btn btn-primary" id="generatePdfBtn">
+                          📄 Generate PDF
+                      </button>
+                      <button onclick="generateDeliveryOrder('excel')" class="btn btn-success" id="generateExcelBtn">
+                          📊 Generate Excel
+                      </button>
+                  </div>
+              </div>
+
+              <div class="form-container">
+                  <div class="form-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 20px;">
+                      <div class="form-group">
+                          <label for="doNumber" class="form-label">DO Number:</label>
+                          <input type="text" id="doNumber" class="form-input" placeholder="DO-24005">
+                      </div>
+                      
+                      <div class="form-group">
+                          <label for="doDate" class="form-label">Date:</label>
+                          <input type="date" id="doDate" class="form-input">
+                      </div>
+                      
+                      <div class="form-group">
+                          <label for="clientName" class="form-label">Client Name:</label>
+                          <input type="text" id="clientName" class="form-input" placeholder="Marina Bay Sands B2 Hall D">
+                      </div>
+                      
+                      <div class="form-group">
+                          <label for="clientCompany" class="form-label">Client Company:</label>
+                          <input type="text" id="clientCompany" class="form-input" placeholder="c/o Hermès Singapore (Retail) Pte Ltd">
+                      </div>
+                      
+                      <div class="form-group">
+                          <label for="deliveryAddress1" class="form-label">Delivery Address Line 1:</label>
+                          <input type="text" id="deliveryAddress1" class="form-input" placeholder="Marina Bay Sands">
+                      </div>
+                      
+                      <div class="form-group">
+                          <label for="deliveryAddress2" class="form-label">Delivery Address Line 2:</label>
+                          <input type="text" id="deliveryAddress2" class="form-input" placeholder="10 Bayfront Ave">
+                      </div>
+                      
+                      <div class="form-group">
+                          <label for="deliveryAddress3" class="form-label">Delivery Address Line 3:</label>
+                          <input type="text" id="deliveryAddress3" class="form-input" placeholder="Singapore 018956">
+                      </div>
+                      
+                      <div class="form-group">
+                          <label for="clientPhone" class="form-label">Phone Number:</label>
+                          <input type="text" id="clientPhone" class="form-input" placeholder="93200507">
+                      </div>
+                  </div>
+                  
+                  <div class="form-group">
+                      <label for="jobTitle" class="form-label">Job Title:</label>
+                      <input type="text" id="jobTitle" class="form-input" placeholder="Wings of Hermes">
+                  </div>
+                  
+                  <div class="form-group">
+                      <label for="jobLocation" class="form-label">Job Location:</label>
+                      <input type="text" id="jobLocation" class="form-input" placeholder="Marina Bay Sands B2 Hall D">
+                  </div>
+                  
+                  <div class="form-group">
+                      <label for="additionalComments" class="form-label">Additional Comments:</label>
+                      <textarea id="additionalComments" class="form-input" rows="3" placeholder="Enter any additional comments..."></textarea>
+                  </div>
+              </div>
+
+              <div class="items-preview">
+                  <h3>Items to be Delivered</h3>
+                  <div id="deliveryItemsPreview" class="items-list" style="border: 1px solid #e9ecef; border-radius: 8px; padding: 20px; background: #f8f9fa; min-height: 200px;">
+                      <!-- Items will be populated here -->
+                  </div>
+              </div>
           </div>
 
           <!-- Return Assets Section -->
@@ -2035,10 +2119,10 @@
           <!-- Event details will be populated here -->
         </div>
         <div class="modal-footer">
-          <button
-            class="btn btn-secondary"
-            onclick="closeModal('eventDetailsModal')"
-          >
+          <button onclick="openDeliveryOrderTab(window.currentEventId)" class="btn btn-primary" style="margin-right: 10px;">
+            📄 Generate Delivery Order
+          </button>
+          <button class="btn btn-secondary" onclick="closeModal('eventDetailsModal')">
             Close
           </button>
         </div>

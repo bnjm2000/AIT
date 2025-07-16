@@ -378,6 +378,8 @@ function showSection(sectionName) {
     case "asset-check":
       loadAssetCheck();
       break;
+    case "delivery-order":
+      break;
   }
 }
 
@@ -3907,6 +3909,11 @@ async function viewEvent(eventId) {
   try {
     const response = await apiCall(`/api/events/${eventId}`);
     const event = response.data;
+    
+    // Store the current event ID and data for the delivery order button
+    window.currentEventId = eventId;
+    window.currentEventData = event;
+    
 
     document.getElementById(
       "eventDetailsTitle"
@@ -7027,7 +7034,7 @@ document.addEventListener("DOMContentLoaded", function () {
           console.error('Maintenance errors:', errors);
           showNotification("error", `Failed to log maintenance for ${errorCount} asset${errorCount > 1 ? 's' : ''}. Check console for details.`);
         }
-        
+
         // Update assets data without refreshing search results
         try {
           const assetsResponse = await apiCall('/api/assets');
@@ -9884,6 +9891,771 @@ function createModelPreparationSection(eventId, brand, model, description, requi
     section += '</div></div>';
     
     return section;
+}
+
+let currentDeliveryOrderEvent = null;
+
+async function openDeliveryOrderTab(eventId) {
+    // Use stored event data if available, otherwise fetch it
+    if (window.currentEventData && window.currentEventData.id === eventId) {
+        currentDeliveryOrderEvent = window.currentEventData;
+        await populateDeliveryOrderForm(window.currentEventData);
+        showSection('delivery-order');
+        
+        // Update the tab to show it's active
+        const deliveryTab = document.getElementById('delivery-order-tab');
+        if (deliveryTab) deliveryTab.click();
+    } else {
+        // Fallback: fetch event data
+        try {
+            const response = await apiCall(`/api/events/${eventId}`);
+            currentDeliveryOrderEvent = response.data;
+            await populateDeliveryOrderForm(response.data);
+            showSection('delivery-order');
+            
+            // Update the tab to show it's active
+            const deliveryTab = document.getElementById('delivery-order-tab');
+            if (deliveryTab) deliveryTab.click();
+        } catch (error) {
+            console.error('Error fetching event data:', error);
+            showNotification('error', 'Failed to load event data');
+        }
+    }
+}
+
+async function populateDeliveryOrderForm(event) {
+    // Auto-populate form with event data and defaults
+    const doNumberEl = document.getElementById('doNumber');
+    const doDateEl = document.getElementById('doDate');
+    const clientNameEl = document.getElementById('clientName');
+    const clientCompanyEl = document.getElementById('clientCompany');
+    const deliveryAddress1El = document.getElementById('deliveryAddress1');
+    const deliveryAddress2El = document.getElementById('deliveryAddress2');
+    const deliveryAddress3El = document.getElementById('deliveryAddress3');
+    const clientPhoneEl = document.getElementById('clientPhone');
+    const jobTitleEl = document.getElementById('jobTitle');
+    const jobLocationEl = document.getElementById('jobLocation');
+    const additionalCommentsEl = document.getElementById('additionalComments');
+    
+    if (doNumberEl) doNumberEl.value = `DO-${String(Math.floor(Math.random() * 90000) + 10000)}`;
+    if (doDateEl) doDateEl.value = new Date().toISOString().split('T')[0];
+    if (clientNameEl) clientNameEl.value = event.client_name || event.name || '';
+    if (clientCompanyEl) clientCompanyEl.value = event.client_company || '';
+    if (deliveryAddress1El) deliveryAddress1El.value = event.venue || '';
+    if (deliveryAddress2El) deliveryAddress2El.value = event.venue_address || '';
+    if (deliveryAddress3El) deliveryAddress3El.value = event.venue_city || '';
+    if (clientPhoneEl) clientPhoneEl.value = event.client_phone || '';
+    if (jobTitleEl) jobTitleEl.value = event.name || '';
+    if (jobLocationEl) jobLocationEl.value = event.venue || '';
+    if (additionalCommentsEl) additionalCommentsEl.value = '';
+    
+    // Populate items preview (now async)
+    await populateDeliveryItemsPreview(event);
+}
+
+function populateDeliveryItemsPreview(event) {
+    const previewContainer = document.getElementById('deliveryItemsPreview');
+    const departments = groupItemsByDepartment(event);
+    
+    let html = '';
+    Object.keys(departments).forEach(dept => {
+        if (departments[dept].length > 0) {
+            html += `<div class="department-section">
+                <h4>${dept}</h4>
+                <ul>`;
+            departments[dept].forEach(item => {
+                html += `<li>${item.description} <span class="quantity-badge">${item.quantity}</span></li>`;
+            });
+            html += '</ul></div>';
+        }
+    });
+    
+    if (html === '') {
+        html = '<p class="no-items">No items assigned to this event.</p>';
+    }
+    
+    previewContainer.innerHTML = html;
+}
+
+function generateDeliveryOrder(format) {
+    if (!currentDeliveryOrderEvent) {
+        showNotification('error', 'No event selected');
+        return;
+    }
+    
+    // Get form data
+    const deliveryOrderData = {
+        doNumber: document.getElementById('doNumber').value,
+        doDate: document.getElementById('doDate').value,
+        clientName: document.getElementById('clientName').value,
+        clientCompany: document.getElementById('clientCompany').value,
+        deliveryAddress1: document.getElementById('deliveryAddress1').value,
+        deliveryAddress2: document.getElementById('deliveryAddress2').value,
+        deliveryAddress3: document.getElementById('deliveryAddress3').value,
+        clientPhone: document.getElementById('clientPhone').value,
+        jobTitle: document.getElementById('jobTitle').value,
+        jobLocation: document.getElementById('jobLocation').value,
+        additionalComments: document.getElementById('additionalComments').value,
+        event: currentDeliveryOrderEvent
+    };
+    
+    // Validate required fields
+    if (!deliveryOrderData.doNumber || !deliveryOrderData.doDate || !deliveryOrderData.clientName) {
+        showNotification('error', 'Please fill in DO Number, Date, and Client Name');
+        return;
+    }
+    
+    if (format === 'excel') {
+        generateExcelDO(deliveryOrderData);
+    } else {
+        generatePdfDO(deliveryOrderData);
+    }
+}
+
+function generatePdfDO(data) {
+    // Format the date for display
+    const formattedDate = new Date(data.doDate).toLocaleDateString('en-GB', { 
+        day: '2-digit', 
+        month: 'short', 
+        year: 'numeric' 
+    });
+    
+    // Create a new window for the delivery order
+    const doWindow = window.open('', '_blank', 'width=800,height=1000');
+    
+    // Generate pages content
+    const pagesContent = generatePagesContent(data, formattedDate);
+    
+    // Get the HTML template with populated data
+    const template = `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Delivery Order - ${data.jobTitle}</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 20mm;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Century Gothic', sans-serif;
+            font-size: 9pt;
+            line-height: 1.2;
+            color: black;
+            background: white;
+        }
+        
+        .page {
+            min-height: 240mm;
+            page-break-after: avoid;
+            position: relative;
+            padding-bottom: 50mm;
+        }
+
+        .page-break {
+            page-break-before: always;
+            height: 0;
+            margin: 0;
+            padding: 0;
+        }
+        
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 25px;
+        }
+        
+        .header-left {
+            flex: 1;
+        }
+        
+        .header-right {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 5px;
+            margin-right: 0;
+        }
+        
+        .logo {
+            height: 60px;
+            width: auto;
+        }
+        
+        .delivery-order-title {
+            font-family: 'Century Gothic', sans-serif;
+            font-size: 14pt;
+            font-weight: bold;
+            color: black;
+            margin-bottom: 5px;
+            text-align: right;
+        }
+        
+        .do-number {
+            font-family: 'Century Gothic', sans-serif;
+            font-size: 9pt;
+            color: black;
+            text-align: right;
+        }
+        
+        .deliver-to {
+            font-family: 'Century Gothic', sans-serif;
+            font-size: 9pt;
+            font-weight: bold;
+            color: black;
+            margin-bottom: 10px;
+        }
+        
+        .client-info {
+            font-family: 'Century Gothic', sans-serif;
+            font-size: 9pt;
+            color: black;
+            margin-bottom: 10px;
+        }
+        
+        .client-phone {
+            font-family: 'Century Gothic', sans-serif;
+            font-size: 9pt;
+            color: black;
+        }
+        
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 30px;
+        }
+        
+        .items-table th {
+            background-color: #333;
+            color: white;
+            padding: 12px 8px;
+            text-align: left;
+            font-family: 'Century Gothic', sans-serif;
+            font-size: 9pt;
+            font-weight: bold;
+            border: 1px solid #333;
+        }
+        
+        .items-table td {
+            padding: 8px;
+            font-family: 'Century Gothic', sans-serif;
+            font-size: 9pt;
+            color: black;
+            vertical-align: top;
+        }
+        
+        .job-title {
+            font-weight: bold;
+            background-color: #f5f5f5;
+        }
+        
+        .department-header {
+            font-weight: bold;
+            color: black;
+            background-color: #f0f0f0;
+        }
+        
+        .quantity-col {
+            text-align: center;
+            width: 80px;
+        }
+        
+        .comments-section {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            margin-top: 30px;
+            margin-bottom: 30px;
+        }
+        
+        .other-comments {
+            font-family: 'Century Gothic', sans-serif;
+            font-size: 9pt;
+            font-weight: bold;
+            color: black;
+        }
+        
+        .received-text {
+            font-family: 'Century Gothic', sans-serif;
+            font-size: 9pt;
+            color: black;
+        }
+        
+        .signature-line {
+            width: 200px;
+            height: 60px;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            align-items: center;
+            font-family: 'Century Gothic', sans-serif;
+            font-size: 9pt;
+            color: black;
+            margin-top: 20px;
+        }
+        
+        .signature-line::before {
+            content: "";
+            border-bottom: 2px solid black;
+            width: 100%;
+            margin-bottom: 5px;
+        }
+        
+        .footer {
+            position: fixed;
+            bottom: 10mm;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            font-family: 'Calibri', sans-serif;
+            font-size: 7pt;
+            color: black;
+            line-height: 1.2;
+            z-index: 100;
+        }
+
+        .page-number {
+            position: fixed;
+            bottom: 5mm;
+            right: 0;
+            font-family: 'Century Gothic', sans-serif;
+            font-size: 7pt;
+            color: black;
+        }
+        
+        @media print {
+            body {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            
+            .page {
+                page-break-after: avoid; /* Prevent automatic page breaks */
+                page-break-inside: avoid; /* Prevent breaking within a page */
+            }
+            
+            .page-break {
+                page-break-before: always; /* Only break where we explicitly want */
+                display: block;
+                height: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    ${pagesContent}
+    
+    <div class="footer">
+        AVEC VISION PRIVATE LIMITED<br>
+        601 SIMS DRIVE PAN-I COMPLEX #04-10 SINGAPORE 387382 TEL 65.9743.3660 CO REG 202122775G
+    </div>
+    
+    <script>
+        // Calculate total pages and update page numbers
+        function updatePageNumbers() {
+            const pages = document.querySelectorAll('.page');
+            const totalPages = pages.length;
+            
+            pages.forEach((page, index) => {
+                const pageNum = index + 1;
+                let pageNumberDiv = page.querySelector('.page-number');
+                if (!pageNumberDiv) {
+                    pageNumberDiv = document.createElement('div');
+                    pageNumberDiv.className = 'page-number';
+                    page.appendChild(pageNumberDiv);
+                }
+                pageNumberDiv.textContent = 'Page ' + pageNum + ' of ' + totalPages;
+            });
+        }
+        
+        // Wait for content to load before updating page numbers
+        setTimeout(() => {
+            updatePageNumbers();
+        }, 100);
+    </script>
+</body>
+</html>`;
+    
+    doWindow.document.write(template);
+    doWindow.document.close();
+    
+    // Add print functionality
+    setTimeout(() => {
+        doWindow.focus();
+        doWindow.print();
+    }, 1000);
+    
+    showNotification('success', 'PDF delivery order generated successfully');
+}
+
+function generatePagesContent(data, formattedDate) {
+    const departments = groupItemsByDepartment(data.event);
+    const maxRowsPerPage = 15;
+    let currentPageRows = 1;
+    let pages = [];
+    let currentPageItems = [];
+    
+    // Check if we have any content
+    const allItems = Object.values(departments).flat();
+    if (allItems.length === 0) {
+        // Create single page with no items
+        pages.push([]);
+    } else {
+        // Distribute items across pages
+        Object.keys(departments).forEach(dept => {
+            if (departments[dept].length > 0) {
+                const deptItems = departments[dept];
+                const deptRowCount = 1 + deptItems.length; // 1 for header + items
+                
+                // Check if department fits on current page
+                if (currentPageRows + deptRowCount > maxRowsPerPage && currentPageItems.length > 0) {
+                    // Save current page and start new page
+                    pages.push([...currentPageItems]);
+                    currentPageItems = [];
+                    currentPageRows = 1; // Reset for job title row
+                }
+                
+                // Add department to current page
+                currentPageItems.push({
+                    type: 'department',
+                    name: dept,
+                    items: deptItems
+                });
+                currentPageRows += deptRowCount;
+            }
+        });
+        
+        // Add the last page if it has items
+        if (currentPageItems.length > 0) {
+            pages.push(currentPageItems);
+        }
+    }
+    
+    // Generate HTML for all pages
+    let pagesHtml = '';
+    
+    pages.forEach((pageItems, pageIndex) => {
+        const isFirstPage = pageIndex === 0;
+        const isLastPage = pageIndex === pages.length - 1;
+        
+        if (!isFirstPage) {
+            pagesHtml += '<div class="page-break"></div>';
+        }
+        
+        pagesHtml += `
+            <div class="page">
+                <div class="header">
+                    <div class="header-left">
+                        <div class="deliver-to">DELIVER TO:</div>
+                        <div class="client-info">
+                            ${data.clientName}<br>
+                            ${data.clientCompany ? data.clientCompany + '<br>' : ''}
+                            ${data.deliveryAddress1 ? data.deliveryAddress1 + '<br>' : ''}
+                            ${data.deliveryAddress2 ? data.deliveryAddress2 + '<br>' : ''}
+                            ${data.deliveryAddress3 ? data.deliveryAddress3 + '<br>' : ''}
+                        </div>
+                        ${data.clientPhone ? `<div class="client-phone">Tel : ${data.clientPhone}</div>` : '<div class="client-phone">Tel : N/A</div>'}
+                    </div>
+                    <div class="header-right">
+                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                            <img src="data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%20100%2050%22%3E%3Ctext%20x%3D%2250%22%20y%3D%2230%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20sans-serif%22%20font-size%3D%2220%22%20font-weight%3D%22bold%22%20fill%3D%22%23764ba2%22%3EAVEC%3C/text%3E%3C/svg%3E" alt="AVEC Logo" class="logo">
+                            <div class="delivery-order-title">DELIVERY ORDER</div>
+                        </div>
+                        <div class="do-number">No. : ${data.doNumber}</div>
+                        <div class="do-number">Date : ${formattedDate}</div>
+                    </div>
+                </div>
+                
+                <table class="items-table">
+                    <thead>
+                        <tr>
+                            <th class="description-header">DESCRIPTION</th>
+                            <th class="quantity-header">QUANTITY</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td class="job-title">Job Title : ${data.jobTitle}${data.jobLocation ? '<br>' + data.jobLocation : ''}</td>
+                            <td class="quantity-col"></td>
+                        </tr>
+        `;
+        
+        // Add items for this page
+        pageItems.forEach(pageItem => {
+            if (pageItem.type === 'department') {
+                pagesHtml += `<tr><td class="department-header" colspan="2">${pageItem.name}:</td></tr>`;
+                pageItem.items.forEach(item => {
+                    pagesHtml += `
+                        <tr>
+                            <td>${item.description}</td>
+                            <td class="quantity-col">${item.quantity}</td>
+                        </tr>
+                    `;
+                });
+            }
+        });
+        
+        pagesHtml += `
+                    </tbody>
+                </table>
+        `;
+        
+        // Add comments section only on last page
+        if (isLastPage) {
+            pagesHtml += `
+                <div class="comments-section">
+                    <div class="other-comments">Other Comments: ${data.additionalComments || ''}</div>
+                    <div style="display: flex; flex-direction: column; align-items: flex-end;">
+                        <div class="received-text">Received in good order & condition</div>
+                        <div class="signature-line">
+                            Company's Stamp & Signature
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        pagesHtml += `
+            </div>
+        `;
+    });
+    
+    return pagesHtml;
+}
+
+function generateExcelDO(data) {
+    // Import SheetJS if not already loaded
+    if (typeof XLSX === 'undefined') {
+        const script = document.createElement('script');
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+        script.onload = () => generateExcelDO(data);
+        document.head.appendChild(script);
+        return;
+    }
+    
+    // Format the date for display
+    const formattedDate = new Date(data.doDate).toLocaleDateString('en-GB', { 
+        day: '2-digit', 
+        month: 'short', 
+        year: 'numeric' 
+    });
+    
+    // Prepare data for Excel
+    const excelData = [];
+    
+    // Header information
+    excelData.push(['DELIVERY ORDER']);
+    excelData.push([]);
+    excelData.push(['DELIVER TO:', '', '', 'No.:  ', data.doNumber]);
+    excelData.push([data.clientName, '', '', 'Date: ', formattedDate]);
+    if (data.clientCompany) excelData.push([data.clientCompany]);
+    if (data.deliveryAddress1) excelData.push([data.deliveryAddress1]);
+    if (data.deliveryAddress2) excelData.push([data.deliveryAddress2]);
+    if (data.deliveryAddress3) excelData.push([data.deliveryAddress3]);
+    if (data.clientPhone) excelData.push([`Tel. ${data.clientPhone}`]);
+    excelData.push([]);
+    
+    // Table headers
+    excelData.push(['DESCRIPTION', 'QUANTITY']);
+    
+    // Job title row
+    excelData.push([`Job Title :  ${data.jobTitle}`, '']);
+    if (data.jobLocation) excelData.push([data.jobLocation, '']);
+    
+    // Group items by department
+    const departments = groupItemsByDepartment(data.event);
+    
+    // Add items by department
+    Object.keys(departments).forEach(dept => {
+        if (departments[dept].length > 0) {
+            excelData.push([`${dept}:`]);
+            departments[dept].forEach(item => {
+                excelData.push([item.description, item.quantity]);
+            });
+        }
+    });
+    
+    excelData.push([]);
+    excelData.push([`Other Comments: ${data.additionalComments || ''}`, 'Received in good order & condition']);
+    excelData.push([]);
+    excelData.push(["Company's Stamp & Signature"]);
+    excelData.push([]);
+    excelData.push(['AVEC VISION PRIVATE LIMITED']);
+    excelData.push(['25 KAKI BUKIT ROAD 4 #07-55 SYNERGY@KB SINGAPORE 417800 TEL 65.6747.5201 CO REG 202122775G']);
+    
+    // Create workbook
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(excelData);
+    
+    // Set column widths
+    ws['!cols'] = [
+        { width: 60 }, // Description column
+        { width: 12 }  // Quantity column
+    ];
+    
+    // Add worksheet to workbook
+    XLSX.utils.book_append_sheet(wb, ws, 'Delivery Order');
+    
+    // Generate and download file
+    const fileName = `DO_${data.doNumber}_${data.jobTitle.replace(/[^a-zA-Z0-9]/g, '_')}.xlsx`;
+    XLSX.writeFile(wb, fileName);
+    
+    showNotification('success', 'Excel delivery order generated successfully');
+}
+
+// Keep the existing helper functions
+function generateItemRows(event) {
+    let html = '';
+    const departments = groupItemsByDepartment(event);
+    
+    // Generate HTML for each department
+    Object.keys(departments).forEach(dept => {
+        if (departments[dept].length > 0) {
+            html += `<tr><td class="department-header" colspan="2">${dept}:</td></tr>`;
+            departments[dept].forEach(item => {
+                html += `
+                    <tr>
+                        <td>${item.description}</td>
+                        <td class="quantity-col">${item.quantity}</td>
+                    </tr>
+                `;
+            });
+        }
+    });
+    
+    return html;
+}
+
+// Function to ensure assets are loaded before using them
+async function ensureAssetsLoaded() {
+    if (!assets || assets.length === 0) {
+        console.log('Assets not loaded, fetching from API...');
+        try {
+            const response = await apiCall('/api/assets');
+            if (response.success) {
+                assets = response.data;
+                console.log(`Loaded ${assets.length} assets for delivery order`);
+            } else {
+                console.error('Failed to load assets:', response);
+            }
+        } catch (error) {
+            console.error('Error loading assets:', error);
+        }
+    } else {
+        console.log(`Using ${assets.length} pre-loaded assets`);
+    }
+}
+
+async function populateDeliveryItemsPreview(event) {
+    const previewContainer = document.getElementById('deliveryItemsPreview');
+    if (!previewContainer) return;
+    
+    // Ensure assets are loaded before grouping items
+    await ensureAssetsLoaded();
+    
+    const departments = groupItemsByDepartment(event);
+    
+    let html = '';
+    Object.keys(departments).forEach(dept => {
+        if (departments[dept].length > 0) {
+            html += `<div class="department-section" style="margin-bottom: 20px;">
+                <h4 style="color: #495057; margin-bottom: 10px;">${dept}</h4>
+                <ul style="list-style: none; padding-left: 0;">`;
+            departments[dept].forEach(item => {
+                html += `<li style="padding: 5px 0; border-bottom: 1px solid #eee; display: flex; justify-content: space-between;">
+                    <span>${item.description}</span>
+                    <span class="quantity-badge" style="background: #667eea; color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px;">${item.quantity}</span>
+                </li>`;
+            });
+            html += '</ul></div>';
+        }
+    });
+    
+    if (html === '') {
+        html = '<p class="no-items" style="text-align: center; color: #666; padding: 40px;">No assigned items found for this event.</p>';
+    }
+    
+    previewContainer.innerHTML = html;
+}
+
+function groupItemsByDepartment(event) {
+    const departments = {
+        'Audio': [],
+        'Lighting': [],
+        'Video': [],
+        'MISC': []
+    };
+    
+    console.log('Event data for delivery order:', event);
+    
+    // ONLY use modelGroups - this shows what's assigned to the event
+    if (event.modelGroups && Object.keys(event.modelGroups).length > 0) {
+        console.log('Using modelGroups:', event.modelGroups);
+        
+        Object.values(event.modelGroups).forEach(modelGroup => {
+            let deptName = 'MISC';
+            if (modelGroup.department === 'AX') deptName = 'Audio';
+            else if (modelGroup.department === 'LX') deptName = 'Lighting';
+            else if (modelGroup.department === 'VX') deptName = 'Video';
+            
+            // Use the required quantity (what was assigned), not what's prepared
+            departments[deptName].push({
+                description: `${modelGroup.brand} ${modelGroup.model}${modelGroup.description ? ' - ' + modelGroup.description : ''}`,
+                quantity: modelGroup.requiredQuantity.toString()
+            });
+        });
+    }
+    
+    // Add custom assets ONLY from prepared_items (not actuallyPrepared)
+    if (event.prepared_items && event.prepared_items.length > 0) {
+        const customAssets = event.prepared_items.filter(assetId => 
+            assetId.startsWith('[MISC]') || assetId.startsWith('[LOAN]')
+        );
+        
+        // Group custom assets by description to combine quantities
+        const customAssetGroups = {};
+        
+        customAssets.forEach(assetId => {
+            if (assetId.startsWith('[MISC]')) {
+                const parts = assetId.substring(6).split(';');
+                const description = parts[0] || 'Misc Item';
+                const quantity = parseInt(parts[1]) || 1;
+                
+                if (!customAssetGroups[description]) {
+                    customAssetGroups[description] = 0;
+                }
+                customAssetGroups[description] += quantity;
+            } else if (assetId.startsWith('[LOAN]')) {
+                const parts = assetId.substring(6).split(';');
+                const description = parts[0] || 'Loan Item';
+                const quantity = parseInt(parts[1]) || 1;
+                
+                if (!customAssetGroups[description]) {
+                    customAssetGroups[description] = 0;
+                }
+                customAssetGroups[description] += quantity;
+            }
+        });
+        
+        // Add grouped custom assets to MISC department
+        Object.entries(customAssetGroups).forEach(([description, totalQuantity]) => {
+            departments['MISC'].push({
+                description: description,
+                quantity: totalQuantity.toString()
+            });
+        });
+    }
+    
+    console.log('Final departments for delivery order:', departments);
+    return departments;
 }
 
 function exportLogs() {
