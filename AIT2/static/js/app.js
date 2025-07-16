@@ -7027,14 +7027,30 @@ document.addEventListener("DOMContentLoaded", function () {
           console.error('Maintenance errors:', errors);
           showNotification("error", `Failed to log maintenance for ${errorCount} asset${errorCount > 1 ? 's' : ''}. Check console for details.`);
         }
+        
+        // Update assets data without refreshing search results
+        try {
+          const assetsResponse = await apiCall('/api/assets');
+          if (assetsResponse.success) {
+            assets = assetsResponse.data;
+          }
+        } catch (error) {
+          console.error('Failed to refresh assets data:', error);
+        }
 
-        // Refresh maintenance view if it's active
-        if (document.getElementById("maintenance-section").classList.contains("active")) {
+        // Only refresh views if user is not actively searching
+        const maintenanceSearchInput = document.getElementById("maintenance-search");
+        const assetSearchInput = document.getElementById("asset-search");
+        const isMaintenanceSearchActive = maintenanceSearchInput && maintenanceSearchInput.value.trim().length > 0;
+        const isAssetSearchActive = assetSearchInput && assetSearchInput.value.trim().length > 0;
+
+        // Refresh maintenance view if it's active and no search is active
+        if (document.getElementById("maintenance-section").classList.contains("active") && !isMaintenanceSearchActive) {
           loadMaintenanceAssets();
         }
 
-        // Refresh inventory view if it's active
-        if (document.getElementById("inventory-section").classList.contains("active")) {
+        // Refresh inventory view if it's active and no search is active  
+        if (document.getElementById("inventory-section").classList.contains("active") && !isAssetSearchActive) {
           loadInventory();
         }
 
@@ -8275,12 +8291,30 @@ function showMaintenanceLogModal(asset) {
       };
     });
 
-    // Display logs in reverse order (newest first) but keep original indices
-    const reversedData = [...maintenanceData].reverse();
+    // Sort logs by date (most recent first) using proper date parsing
+    const sortedData = maintenanceData.map(log => {
+      // Parse the date for proper sorting
+      let dateObj;
+      try {
+        const dateParts = log.date.split('/');
+        if (dateParts.length === 3) {
+          dateObj = new Date(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2]));
+        } else {
+          dateObj = new Date(0); // Very old date if parsing fails
+        }
+      } catch (e) {
+        dateObj = new Date(0);
+      }
+      
+      return {
+        ...log,
+        dateObj: dateObj
+      };
+    }).sort((a, b) => b.dateObj - a.dateObj); // Sort newest first
     
-    console.log('Processing', reversedData.length, 'maintenance logs for display');
     
-    reversedData.forEach((log, displayIndex) => {
+    
+    sortedData.forEach((log, displayIndex) => {
       const logId = `log_${asset.id.replace(/[^a-zA-Z0-9]/g, '_')}_${log.originalIndex}`;
       const displayNumber = displayIndex + 1;
       
@@ -8367,7 +8401,7 @@ function showMaintenanceLogModal(asset) {
       `;
     });
     
-    console.log('Finished processing all logs. Total rows added:', reversedData.length);
+    //console.log('Finished processing all logs. Total rows added:', reversedData.length);
   } else {
     modalContent += `
       <tr>
@@ -8452,6 +8486,7 @@ window.openMaintenanceModal = openMaintenanceModal;
 window.switchMaintenanceTab = switchMaintenanceTab;
 window.openMaintenanceModalForAsset = openMaintenanceModal;
 window.clearSingleOOC = clearSingleOOC;
+window.addNewLogEntryFromModal = addNewLogEntryFromModal;
 
 // Helper function to close the maintenance log modal
 function closeMaintenanceLogModal() {
@@ -9148,7 +9183,6 @@ function filterOOCAssets() {
   });
 }
 
-
 function createMaintenanceLogTable(asset) {
   if (!asset.maintenanceLogs || asset.maintenanceLogs.length === 0) {
     return `
@@ -9161,7 +9195,7 @@ function createMaintenanceLogTable(asset) {
   }
   
   // Sort logs by date (most recent first)
-  const sortedLogs = [...asset.maintenanceLogs].reverse();
+  const sortedLogs = sortMaintenanceLogsByDate(asset.maintenanceLogs);
   
   let tableHTML = `
     <div style="border: 1px solid #e9ecef; border-radius: 8px; overflow: hidden;">
@@ -9176,51 +9210,21 @@ function createMaintenanceLogTable(asset) {
         <tbody>
   `;
   
-  sortedLogs.forEach((log, index) => {
-    const parts = log.split('\t');
+  sortedLogs.forEach((logData, index) => {
+    const parts = logData.log.split('\t');
     if (parts.length >= 3) {
       const date = parts[0];
       const user = parts[1];
       const description = parts.slice(2).join('\t'); // In case description contains tabs
       
       // Alternate row colors
-      const rowClass = index % 2 === 0 ? '' : 'style="background: #f8f9fa;"';
-      
-      // Create unique ID for this log entry
-      const logId = `log_${asset.id}_${index}`;
+      const rowClass = index % 2 === 0 ? '' : 'style="background-color: #f8f9fa;"';
       
       tableHTML += `
-        <tr ${rowClass}>
-          <td style="font-size: 13px; color: #666;">${escapeHtml(date)}</td>
-          <td style="font-size: 13px;"><strong>${escapeHtml(user)}</strong></td>
-          <td style="font-size: 14px; position: relative;">
-            <div id="${logId}_display" 
-                 onclick="editMaintenanceLog('${escapeJs(asset.id)}', ${index}, '${logId}')" 
-                 style="cursor: pointer; padding: 4px; border-radius: 4px; transition: background-color 0.2s;"
-                 onmouseover="this.style.backgroundColor='#f8f9fa'" 
-                 onmouseout="this.style.backgroundColor='transparent'"
-                 title="Click to edit">
-              ${escapeHtml(description)}
-            </div>
-            <div id="${logId}_edit" style="display: none;">
-              <div style="display: flex; gap: 5px; align-items: center;">
-                <textarea 
-                  id="${logId}_input"
-                  style="flex: 1; padding: 4px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; resize: vertical; min-height: 40px;"
-                  onkeydown="if(event.key==='Enter' && event.ctrlKey) { event.preventDefault(); saveMaintenanceLog('${escapeJs(asset.id)}', ${index}, '${logId}'); } if(event.key==='Escape') { event.preventDefault(); cancelEditMaintenanceLog('${logId}'); }"
-                >${escapeHtml(description)}</textarea>
-                <button onclick="saveMaintenanceLog('${escapeJs(asset.id)}', ${index}, '${logId}')" 
-                        style="padding: 4px 8px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;"
-                        title="Save (Ctrl+Enter)">💾</button>
-                <button onclick="cancelEditMaintenanceLog('${logId}')" 
-                        style="padding: 4px 8px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;"
-                        title="Cancel (Esc)">❌</button>
-              </div>
-              <div style="font-size: 11px; color: #666; margin-top: 2px;">
-                💡 Tip: Ctrl+Enter to save, Esc to cancel
-              </div>
-            </div>
-          </td>
+        <tr ${rowClass} style="cursor: pointer;" onclick="editMaintenanceLog('${asset.id}', ${logData.originalIndex}, 'log_${asset.id}_${logData.originalIndex}')">
+          <td style="padding: 12px; vertical-align: top; font-weight: 500;">${date}</td>
+          <td style="padding: 12px; vertical-align: top;">${user}</td>
+          <td style="padding: 12px;">${description}</td>
         </tr>
       `;
     }
@@ -9230,12 +9234,44 @@ function createMaintenanceLogTable(asset) {
         </tbody>
       </table>
     </div>
-    <div style="margin-top: 10px; text-align: center; color: #666; font-size: 12px;">
-      Showing ${sortedLogs.length} maintenance record${sortedLogs.length !== 1 ? 's' : ''}
-    </div>
   `;
   
   return tableHTML;
+}
+
+function sortMaintenanceLogsByDate(logs) {
+  if (!logs || logs.length === 0) return [];
+  
+  // Parse logs and sort by date (most recent first)
+  const parsedLogs = logs.map((log, index) => {
+    const parts = log.split('\t');
+    const dateStr = parts[0] || '';
+    
+    // Convert date string to Date object for proper sorting
+    let dateObj;
+    try {
+      // Parse YYYY/MM/DD format
+      const dateParts = dateStr.split('/');
+      if (dateParts.length === 3) {
+        dateObj = new Date(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2]));
+      } else {
+        dateObj = new Date(0); // Very old date if parsing fails
+      }
+    } catch (e) {
+      dateObj = new Date(0); // Very old date if parsing fails
+    }
+    
+    return {
+      log: log,
+      date: dateObj,
+      originalIndex: index
+    };
+  });
+  
+  // Sort by date (most recent first)
+  parsedLogs.sort((a, b) => b.date - a.date);
+  
+  return parsedLogs;
 }
 
 function editMaintenanceLog(assetId, logIndex, logId) {

@@ -1109,18 +1109,26 @@ def recalculate_asset_status_from_logs(asset):
             parts = log_entry.split('\t')
             if len(parts) >= 3:
                 date_str = parts[0]
-                sorted_logs.append((date_str, i, log_entry))
+                # Convert date to comparable format for sorting
+                try:
+                    date_obj = datetime.strptime(date_str, "%Y/%m/%d")
+                    sorted_logs.append((date_obj, i, log_entry))
+                except ValueError:
+                    # If date parsing fails, treat as very old date
+                    logger.warning(f"Invalid date format in log: {date_str}")
+                    sorted_logs.append((datetime.min, i, log_entry))
         
-        # Sort by date (YYYY/MM/DD format sorts correctly as strings)
+        # Sort by date (chronological order - oldest first for processing)
         sorted_logs.sort(key=lambda x: x[0])
         
         logger.info(f"Processing {len(sorted_logs)} logs for {asset.asset_id} in chronological order")
         
         # Process logs in chronological order to determine final status and location
-        for date_str, log_index, log_entry in sorted_logs:
+        for date_obj, log_index, log_entry in sorted_logs:
             parts = log_entry.split('\t')
             if len(parts) >= 3:
                 description = '\t'.join(parts[2:])
+                date_str = parts[0]
                 
                 logger.info(f"Processing log {log_index} ({date_str}): {description[:50]}...")
                 
@@ -1130,39 +1138,37 @@ def recalculate_asset_status_from_logs(asset):
                     import re
                     status_match = re.search(r'\[(.*?)\]', description)
                     if status_match:
-                        status_changes = status_match.group(1)
+                        status_info = status_match.group(1)
+                        status_parts = [part.strip() for part in status_info.split(',')]
                         
-                        # Apply status changes - check for various forms
-                        if any(term in status_changes for term in ['Marked OOC', 'Mark OOC']):
-                            asset.is_ooc = True
-                            logger.info(f"  -> Marked OOC")
-                        elif any(term in status_changes for term in ['Cleared OOC', 'Clear OOC', 'Removed OOC', 'Unmark OOC']):
-                            asset.is_ooc = False
-                            logger.info(f"  -> Cleared OOC")
-                            
-                        if any(term in status_changes for term in ['Marked Missing', 'Mark Missing']):
-                            asset.is_missing = True
-                            logger.info(f"  -> Marked Missing")
-                        elif any(term in status_changes for term in ['Cleared Missing', 'Clear Missing', 'Removed Missing', 'Unmark Missing']):
-                            asset.is_missing = False
-                            logger.info(f"  -> Cleared Missing")
-                        
-                        # Update location based on location changes in logs
-                        location_match = re.search(r'Location:\s*([^,\]]+)', status_changes)
-                        if location_match:
-                            new_location = location_match.group(1).strip()
-                            if new_location == 'Store':
-                                asset.current_location = ''  # Store is represented as empty
-                            else:
+                        for part in status_parts:
+                            if part.startswith('Location:'):
+                                new_location = part.replace('Location:', '').strip()
                                 asset.current_location = new_location
-                            logger.info(f"  -> Location updated to: '{new_location}' (stored as: '{asset.current_location}')")
-        
-        logger.info(f"Asset {asset.asset_id} final status: OOC={asset.is_ooc}, Missing={asset.is_missing}, Location='{asset.current_location or 'Store'}'")
+                                logger.info(f"Updated location to: {new_location}")
+                            elif part.startswith('Serial:'):
+                                new_serial = part.replace('Serial:', '').strip()
+                                asset.serial_number = new_serial
+                                logger.info(f"Updated serial to: {new_serial}")
+                            elif part == 'Marked OOC':
+                                asset.is_ooc = True
+                                logger.info("Marked asset as OOC")
+                            elif part == 'Unmarked OOC':
+                                asset.is_ooc = False
+                                logger.info("Unmarked asset as OOC")
+                            elif part == 'Marked Missing':
+                                asset.is_missing = True
+                                logger.info("Marked asset as Missing")
+                            elif part == 'Unmarked Missing':
+                                asset.is_missing = False
+                                logger.info("Unmarked asset as Missing")
+                        
+        logger.info(f"Final status for {asset.asset_id}: OOC={asset.is_ooc}, Missing={asset.is_missing}, Location='{asset.current_location}'")
         
     except Exception as e:
-        logger.error(f"Error recalculating asset status for {asset.asset_id}: {e}")
-        # If recalculation fails, leave status unchanged
-        pass
+        logger.error(f"Error recalculating asset status from logs for {asset.asset_id}: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
 
 @app.route('/api/events/<int:event_id>', methods=['DELETE'])
 @require_admin
@@ -1758,47 +1764,27 @@ def assign_specific_asset_to_model(event_id):
             # Check if asset is assigned to another active event
             assigned_assets = get_assigned_assets()
             if asset_id in assigned_assets:
-                for other_event in data_manager.events.values():
-                    if (other_event.event_id != event_id and
-                            asset_id in other_event.actually_prepared):
-                        return jsonify({
-                            'error': f'Asset is currently assigned to Event {other_event.event_id}: {other_event.name}'
-                        }), 400
+                for other_event_id, other_event in data_manager.events.items():
+                    if (asset_id in other_event.prepared_items and 
+                        asset_id not in other_event.returned_items):
+                        return jsonify({'error': f'Asset is already assigned to event {other_event_id}: {other_event.name}'}), 400
 
-            # Check if this asset fulfills a model requirement
+            # Check if asset matches any model requirement
             fulfills_model_requirement = False
-            
-            logger.info(f"Checking if {asset_id} fulfills any model requirements...")
-            
-            # Check if this asset fulfills any model requirement
-            for prepared_item in event.prepared_items:
-                logger.info(f"Checking prepared item: {prepared_item}")
-                
-                if prepared_item.startswith('[MODEL]'):
-                    try:
-                        parts = prepared_item[7:].split('|')
-                        logger.info(f"Model parts: {parts}")
+            if hasattr(event, 'model_requirements'):
+                for req in event.model_requirements:
+                    if req.get('fulfilled', 0) < req.get('quantity', 0):
+                        req_dept = req.get('department', '').strip()
+                        req_brand = req.get('brand', '').strip()
+                        req_model = req.get('model', '').strip()
                         
-                        if len(parts) >= 4:
-                            dept = parts[0]
-                            brand = parts[1]
-                            model = parts[2]
-                            
-                            logger.info(f"Model requirement - Dept: {dept}, Brand: {brand}, Model: {model}")
-                            logger.info(f"Asset matches - Dept: {asset.department_code == dept}, Brand: {asset.brand == brand}, Model: {asset.model_number == model}")
-                            
-                            # Check if this asset matches the model requirement
-                            if (asset.department_code == dept and 
-                                asset.brand == brand and 
-                                asset.model_number == model):
-                                fulfills_model_requirement = True
-                                logger.info(f"Asset {asset_id} fulfills model requirement {prepared_item}")
-                                break
-                    except Exception as e:
-                        logger.error(f"Error parsing model assignment: {e}")
-                        continue
-            
-            logger.info(f"Does {asset_id} fulfill a model requirement? {fulfills_model_requirement}")
+                        if (req_dept == asset.department_code and
+                            req_brand.lower() == asset.brand.lower() and
+                                req_model.lower() == asset.model_number.lower()):
+                            fulfills_model_requirement = True
+                            break
+
+            logger.info(f"Asset {asset_id} fulfills model requirement: {fulfills_model_requirement}")
             
             # Add to prepared_items if not already there (regardless of whether it fulfills a model requirement)
             if asset_id not in event.prepared_items:
@@ -1821,7 +1807,6 @@ def assign_specific_asset_to_model(event_id):
                 event.extra_assets.remove(asset_id)
                 logger.info(f"Removed {asset_id} from extra_assets (fulfills requirement). Extra assets: {event.extra_assets}")
 
-            # Update asset location
             asset.current_location = event.name
             data_manager.save_inventory()
 
@@ -1829,11 +1814,6 @@ def assign_specific_asset_to_model(event_id):
         if asset_id not in event.actually_prepared:
             event.actually_prepared.append(asset_id)
             logger.info(f"Added {asset_id} to actually_prepared. List now: {event.actually_prepared}")
-
-        # Log final state before saving (DEBUG)
-        # logger.info(f"Final state before saving:")
-        # logger.info(f"  Actually prepared: {event.actually_prepared}")
-        # logger.info(f"  Extra assets: {event.extra_assets}")
 
         # Update event state
         update_event_state(event)

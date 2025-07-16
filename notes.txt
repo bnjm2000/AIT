@@ -9,11 +9,11 @@
 //-events with custom assets only do not change in status
 //-events with custom assets do not show up
 //-events with custom assets cannot be prepared (THH Base plate)
--log not showing location of deployed asset
--add new maintenance log no page refresh, add check to check status and assign to radio button
--maintenance date log not sorting by date
+//-log not showing location of deployed asset
+//-add new maintenance log no page refresh, add check to check status and assign to radio button
+//-maintenance date log not sorting by date
 -making DO from event
--ability to return item by asset type
+//-ability to return item by asset type
 -view log in ooc
 -add ability to dispose items (same logic as OOC, just says "disposed")
 -edit all attributes of an asset
@@ -21,6 +21,4 @@
 
 -asset check shows all item of asset type and allows user to account for all assetID of that item
 -undo button (maybe dont need)
--ability to force status to ongoing as admin even if event not fully prepared
-
-ui for manage assets changes? what calls updateModelRequirementsSection and updateModelQuantity and why is it causing the ui to change.
+//-ability to force status to ongoing as admin even if event not fully prepared
