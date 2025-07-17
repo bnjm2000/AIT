@@ -10062,7 +10062,7 @@ function generatePdfDO(data) {
             min-height: 240mm;
             page-break-after: avoid;
             position: relative;
-            padding-bottom: 50mm;
+            padding-bottom: 1mm;
         }
 
         .page-break {
@@ -10198,13 +10198,17 @@ function generatePdfDO(data) {
         }
         
         .comments-section {
+            position: absolute;
+            bottom: 5mm;
+            left: 0;
+            right: 0;
             display: flex;
             justify-content: space-between;
             align-items: flex-end;
             margin-top: 30px;
             margin-bottom: 30px;
         }
-        
+
         .other-comments {
             font-family: 'Century Gothic', sans-serif;
             font-size: 9pt;
@@ -10213,13 +10217,15 @@ function generatePdfDO(data) {
         }
         
         .received-text {
+            bottom: 5mm; 
             font-family: 'Century Gothic', sans-serif;
             font-size: 9pt;
             color: black;
         }
         
         .signature-line {
-            width: 200px;
+            bottom: 2mm;
+            width: 210px;
             height: 60px;
             display: flex;
             flex-direction: column;
@@ -10239,10 +10245,10 @@ function generatePdfDO(data) {
         }
         
         .footer {
-            position: fixed;
+            position: absolute;
             bottom: 10mm;
-            left: 50%;
-            transform: translateX(-50%);
+            left: 0;
+            right: 0;
             text-align: center;
             font-family: 'Calibri', sans-serif;
             font-size: 7pt;
@@ -10470,11 +10476,11 @@ function generatePagesContent(data, formattedDate) {
             pagesHtml += `
                 <div class="comments-section">
                     <div class="other-comments">Other Comments: ${data.additionalComments || ''}</div>
-                    <div style="display: flex; flex-direction: column; align-items: flex-end;">
-                        <div class="received-text">Received in good order & condition</div>
-                        <div class="signature-line">
-                            Company's Stamp & Signature
-                        </div>
+                    <div class="received-text">Received in good order & condition</div>
+                </div>
+                <div style="position: absolute; bottom: -10mm; right: 0;">
+                    <div class="signature-line">
+                        Company's Stamp & Signature
                     </div>
                 </div>
             `;
@@ -10653,7 +10659,7 @@ function groupItemsByDepartment(event) {
     
     console.log('Event data for delivery order:', event);
     
-    // ONLY use modelGroups - this shows what's assigned to the event
+    // Process modelGroups - this shows what's assigned to the event
     if (event.modelGroups && Object.keys(event.modelGroups).length > 0) {
         console.log('Using modelGroups:', event.modelGroups);
         
@@ -10671,14 +10677,16 @@ function groupItemsByDepartment(event) {
         });
     }
     
-    // Add custom assets ONLY from prepared_items (not actuallyPrepared)
+    // Add custom assets from multiple sources
+    const customAssetGroups = {};
+    
+    // Check prepared_items for custom assets
     if (event.prepared_items && event.prepared_items.length > 0) {
+        console.log('Checking prepared_items for custom assets:', event.prepared_items);
+        
         const customAssets = event.prepared_items.filter(assetId => 
             assetId.startsWith('[MISC]') || assetId.startsWith('[LOAN]')
         );
-        
-        // Group custom assets by description to combine quantities
-        const customAssetGroups = {};
         
         customAssets.forEach(assetId => {
             if (assetId.startsWith('[MISC]')) {
@@ -10701,15 +10709,44 @@ function groupItemsByDepartment(event) {
                 customAssetGroups[description] += quantity;
             }
         });
+    }
+    
+    // Also check assetsByDepartment for LOAN and MISC
+    if (event.assetsByDepartment) {
+        console.log('Checking assetsByDepartment for custom assets:', event.assetsByDepartment);
         
-        // Add grouped custom assets to MISC department
-        Object.entries(customAssetGroups).forEach(([description, totalQuantity]) => {
-            departments['MISC'].push({
-                description: description,
-                quantity: totalQuantity.toString()
-            });
+        ['LOAN', 'MISC'].forEach(dept => {
+            if (event.assetsByDepartment[dept] && event.assetsByDepartment[dept].length > 0) {
+                event.assetsByDepartment[dept].forEach(asset => {
+                    // Parse custom asset format
+                    let description = asset.name || asset.id || 'Custom Item';
+                    let quantity = 1;
+                    
+                    // Handle different custom asset formats
+                    if (asset.id && asset.id.includes(';')) {
+                        const parts = asset.id.split(';');
+                        if (parts.length >= 2) {
+                            description = parts[0];
+                            quantity = parseInt(parts[1]) || 1;
+                        }
+                    }
+                    
+                    if (!customAssetGroups[description]) {
+                        customAssetGroups[description] = 0;
+                    }
+                    customAssetGroups[description] += quantity;
+                });
+            }
         });
     }
+    
+    // Add grouped custom assets to MISC department
+    Object.entries(customAssetGroups).forEach(([description, totalQuantity]) => {
+        departments['MISC'].push({
+            description: description,
+            quantity: totalQuantity.toString()
+        });
+    });
     
     console.log('Final departments for delivery order:', departments);
     return departments;
