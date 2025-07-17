@@ -10036,6 +10036,12 @@ function generatePdfDO(data) {
         @page {
             size: A4;
             margin: 20mm;
+            @top-left { content: ""; }
+            @top-center { content: ""; }
+            @top-right { content: ""; }
+            @bottom-left { content: ""; }
+            @bottom-center { content: ""; }
+            @bottom-right { content: ""; }
         }
         
         * {
@@ -10065,6 +10071,10 @@ function generatePdfDO(data) {
             margin: 0;
             padding: 0;
         }
+
+        .page-break + .page {
+            padding-top: 12mm;
+        }
         
         .header {
             display: flex;
@@ -10083,6 +10093,8 @@ function generatePdfDO(data) {
             align-items: flex-end;
             gap: 5px;
             margin-right: 0;
+            margin-top: -5px;
+            margin-bottom: 2px;
         }
         
         .logo {
@@ -10095,15 +10107,19 @@ function generatePdfDO(data) {
             font-size: 14pt;
             font-weight: bold;
             color: black;
-            margin-bottom: 5px;
+            margin-bottom: 5;
             text-align: right;
+            margin-top: 5;
         }
         
         .do-number {
             font-family: 'Century Gothic', sans-serif;
             font-size: 9pt;
             color: black;
-            text-align: right;
+            text-align: left;
+            margin-right: 46px;
+            font-weight: bold;
+            margin-bottom: 1;
         }
         
         .deliver-to {
@@ -10111,32 +10127,36 @@ function generatePdfDO(data) {
             font-size: 9pt;
             font-weight: bold;
             color: black;
-            margin-bottom: 10px;
+            margin-bottom: 2px;
         }
         
         .client-info {
             font-family: 'Century Gothic', sans-serif;
             font-size: 9pt;
             color: black;
-            margin-bottom: 10px;
+            font-weight: bold;
+            margin-bottom: 1px;
         }
         
         .client-phone {
             font-family: 'Century Gothic', sans-serif;
             font-size: 9pt;
+            font-weight: bold;
             color: black;
+            margin-bottom: 1px;
         }
         
         .items-table {
             width: 100%;
             border-collapse: collapse;
             margin-bottom: 30px;
+            border: 2px solid black;
         }
         
         .items-table th {
             background-color: #333;
             color: white;
-            padding: 12px 8px;
+            padding: 8px;
             text-align: left;
             font-family: 'Century Gothic', sans-serif;
             font-size: 9pt;
@@ -10145,12 +10165,21 @@ function generatePdfDO(data) {
         }
         
         .items-table td {
-            padding: 8px;
+            padding: 6px 8px;
             font-family: 'Century Gothic', sans-serif;
             font-size: 9pt;
             color: black;
             vertical-align: top;
         }
+
+        .items-table td:first-child {
+            border-right: 1px solid black;
+            border-left: 1px solid black;
+        }
+
+        .items-table td:last-child {
+            border-right: 1px solid black;
+        } 
         
         .job-title {
             font-weight: bold;
@@ -10226,6 +10255,7 @@ function generatePdfDO(data) {
             position: fixed;
             bottom: 5mm;
             right: 0;
+            margin-right: 20px;
             font-family: 'Century Gothic', sans-serif;
             font-size: 7pt;
             color: black;
@@ -10238,16 +10268,20 @@ function generatePdfDO(data) {
             }
             
             .page {
-                page-break-after: avoid; /* Prevent automatic page breaks */
-                page-break-inside: avoid; /* Prevent breaking within a page */
+                page-break-after: avoid;
+                page-break-inside: avoid;
             }
             
             .page-break {
-                page-break-before: always; /* Only break where we explicitly want */
+                page-break-before: always;
                 display: block;
                 height: 0;
             }
+
+            @page { margin: 0; }
+            html, body { margin: 0 !important; padding: 7mm !important; }
         }
+
     </style>
 </head>
 <body>
@@ -10298,38 +10332,59 @@ function generatePdfDO(data) {
 
 function generatePagesContent(data, formattedDate) {
     const departments = groupItemsByDepartment(data.event);
-    const maxRowsPerPage = 15;
-    let currentPageRows = 1;
+    const maxRowsPerPage = 24;
     let pages = [];
     let currentPageItems = [];
+    let currentRowCount = 1; 
     
     // Check if we have any content
     const allItems = Object.values(departments).flat();
     if (allItems.length === 0) {
-        // Create single page with no items
         pages.push([]);
     } else {
-        // Distribute items across pages
+        // Process each department
         Object.keys(departments).forEach(dept => {
             if (departments[dept].length > 0) {
                 const deptItems = departments[dept];
-                const deptRowCount = 1 + deptItems.length; // 1 for header + items
                 
-                // Check if department fits on current page
-                if (currentPageRows + deptRowCount > maxRowsPerPage && currentPageItems.length > 0) {
-                    // Save current page and start new page
+                // Check if we need to add department header
+                if (currentRowCount + 1 > maxRowsPerPage && currentPageItems.length > 0) {
+                    // Start new page
                     pages.push([...currentPageItems]);
                     currentPageItems = [];
-                    currentPageRows = 1; // Reset for job title row
+                    currentRowCount = 1;
                 }
                 
-                // Add department to current page
+                // Add department header
                 currentPageItems.push({
                     type: 'department',
                     name: dept,
-                    items: deptItems
+                    items: []
                 });
-                currentPageRows += deptRowCount;
+                currentRowCount += 1;
+                
+                // Add items one by one
+                deptItems.forEach(item => {
+                    if (currentRowCount + 1 > maxRowsPerPage) {
+                        // Start new page
+                        pages.push([...currentPageItems]);
+                        currentPageItems = [];
+                        currentRowCount = 1; // Reset for job title row
+                        
+                        // Add department header to new page
+                        currentPageItems.push({
+                            type: 'department',
+                            name: dept,
+                            items: []
+                        });
+                        currentRowCount += 1;
+                    }
+                    
+                    // Add item to current department on current page
+                    const currentDept = currentPageItems[currentPageItems.length - 1];
+                    currentDept.items.push(item);
+                    currentRowCount += 1;
+                });
             }
         });
         
@@ -10350,8 +10405,11 @@ function generatePagesContent(data, formattedDate) {
             pagesHtml += '<div class="page-break"></div>';
         }
         
-        pagesHtml += `
+       pagesHtml += `
             <div class="page">
+                <div style="display: flex; justify-content: flex-end; margin-bottom: 7px;">
+                    <img src="/static/images/logo.png" alt="Company Logo" id="company-logo" style="height: 39px; width: auto; object-fit: contain"/>
+                </div>
                 <div class="header">
                     <div class="header-left">
                         <div class="deliver-to">DELIVER TO:</div>
@@ -10365,15 +10423,14 @@ function generatePagesContent(data, formattedDate) {
                         ${data.clientPhone ? `<div class="client-phone">Tel : ${data.clientPhone}</div>` : '<div class="client-phone">Tel : N/A</div>'}
                     </div>
                     <div class="header-right">
-                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
-                            <img src="data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%20100%2050%22%3E%3Ctext%20x%3D%2250%22%20y%3D%2230%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20sans-serif%22%20font-size%3D%2220%22%20font-weight%3D%22bold%22%20fill%3D%22%23764ba2%22%3EAVEC%3C/text%3E%3C/svg%3E" alt="AVEC Logo" class="logo">
-                            <div class="delivery-order-title">DELIVERY ORDER</div>
-                        </div>
-                        <div class="do-number">No. : ${data.doNumber}</div>
-                        <div class="do-number">Date : ${formattedDate}</div>
+                        <div class="delivery-order-title">DELIVERY ORDER</div>
+                        <div class="do-number">
+                            No. : ${data.doNumber + '<br>'}
+                            Date : ${formattedDate}
+                            </div>
                     </div>
                 </div>
-                
+               
                 <table class="items-table">
                     <thead>
                         <tr>
