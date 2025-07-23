@@ -14,6 +14,8 @@
 //-maintenance date log not sorting by date
 -making DO from event
 //-ability to return item by asset type
+-unable to return custom assets
+-add ability to see history of events an asset was at
 -view log in ooc
 -add ability to dispose items (same logic as OOC, just says "disposed")
 -edit all attributes of an asset
