@@ -1,2 +1,2 @@
 EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,Tag,ForceStateOverride
-35,Dry Hire: UAV,20250314,20250322,[],"[""[MISC]NL4 Socapex breakout;2""]",[],Overdue,"[""[MISC]NL4 Socapex breakout;2""]",[],dry hire,False
+35,Dry Hire: UAV,20250314,20250322,[],"[""[MISC]NL4 Socapex breakout;2""]","[""[MISC]NL4 Socapex breakout;2""]",Closed,[],[],dry hire,True
