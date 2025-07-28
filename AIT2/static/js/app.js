@@ -39,88 +39,6 @@ function setupSingleAssetClickHandler() {
     
     // Create the ONE and ONLY click handler for ALL button types
     const singleClickHandler = function(event) {
-      const onclickAttr = event.target.getAttribute('onclick');
-      if (onclickAttr) {
-          event.preventDefault();
-          event.stopPropagation();
-          
-          // Handle viewMaintenanceLog calls
-          const viewLogMatch = onclickAttr.match(/viewMaintenanceLog\('([^']+)'\)/);
-          if (viewLogMatch) {
-              const assetId = viewLogMatch[1];
-              if (typeof window.viewMaintenanceLog === 'function') {
-                  window.viewMaintenanceLog(assetId);
-              } else {
-                  const asset = assets.find(a => a.id === assetId);
-                  if (asset) {
-                      showMaintenanceLogModal(asset);
-                  }
-              }
-              return;
-          }
-          
-          // Handle openMaintenanceModal calls
-          const openModalMatch = onclickAttr.match(/openMaintenanceModal\(\)/);
-          if (openModalMatch) {
-              if (typeof window.openMaintenanceModal === 'function') {
-                  window.openMaintenanceModal();
-              }
-              return;
-          }
-          
-          // Handle switchMaintenanceTab calls
-          const switchTabMatch = onclickAttr.match(/switchMaintenanceTab\('([^']+)'\)/);
-          if (switchTabMatch) {
-              const tabName = switchTabMatch[1];
-              if (typeof window.switchMaintenanceTab === 'function') {
-                  window.switchMaintenanceTab(tabName);
-              }
-              return;
-          }
-          
-          // Handle any other onclick functions generically
-          // Handle any other onclick functions generically - but only if they exist
-          try {
-              // Extract function name from onclick attribute
-              const funcMatch = onclickAttr.match(/^(\w+)\(/);
-              if (funcMatch) {
-                  const funcName = funcMatch[1];
-                  
-                  // Only execute if the function exists in global scope
-                  if (typeof window[funcName] === 'function') {
-                      const func = new Function(onclickAttr);
-                      func.call(window);
-                      return;
-                  } else {
-                      console.warn(`Function ${funcName} not found in global scope, skipping onclick execution`);
-                      return;
-                  }
-              }
-          } catch (error) {
-              console.error('Error executing onclick function:', error);
-              console.log('Failed onclick attribute:', onclickAttr);
-          }
-      }
-      
-      // Handle maintenance log buttons by data attributes
-      if (event.target.dataset.action === 'view-maintenance') {
-          event.preventDefault();
-          event.stopPropagation();
-          
-          const assetId = event.target.dataset.assetId;
-          if (assetId) {
-              if (typeof window.viewMaintenanceLog === 'function') {
-                  window.viewMaintenanceLog(assetId);
-              } else {
-                  const asset = assets.find(a => a.id === assetId);
-                  if (asset) {
-                      showMaintenanceLogModal(asset);
-                  }
-              }
-          }
-          return;
-      }
-        
         // Handle prepare/unprepare buttons
         if (event.target.classList.contains('asset-action-btn') || 
             event.target.classList.contains('custom-asset-btn')) {
@@ -138,58 +56,51 @@ function setupSingleAssetClickHandler() {
             // Check if already processing
             if (processingAssets.has(assetKey)) {
                 console.log(`BLOCKED: Asset ${assetId} already being processed`);
-                return;
+                return false;
             }
             
-            // Mark as processing
             processingAssets.add(assetKey);
-            console.log(`PROCESSING: Asset ${assetId}, action: ${action}`);
-            
-            // Disable all buttons for this asset
-            const buttons = document.querySelectorAll(`[data-asset-id="${encodeURIComponent(assetId)}"]`);
-            buttons.forEach(btn => {
-                btn.disabled = true;
-                btn.style.opacity = '0.5';
-            });
-            
-            // Process the action
-            const cleanup = () => {
-                processingAssets.delete(assetKey);
-                console.log(`COMPLETED: Asset ${assetId} processing finished`);
-            };
             
             if (action === 'prepare') {
-                prepareSpecificAsset(eventId, assetId).finally(cleanup);
+                prepareSpecificAsset(eventId, assetId).finally(() => {
+                    processingAssets.delete(assetKey);
+                });
             } else if (action === 'unprepare') {
-                unprepareSpecificAsset(eventId, assetId).finally(cleanup);
-            } else {
-                cleanup();
+                unprepareSpecificAsset(eventId, assetId).finally(() => {
+                    processingAssets.delete(assetKey);
+                });
+            } else if (action === 'editCustom') {
+                editCustomAsset(eventId, assetId);
+                processingAssets.delete(assetKey);
+            } else if (action === 'removeCustom') {
+                removeCustomAsset(eventId, assetId).finally(() => {
+                    processingAssets.delete(assetKey);
+                });
             }
             
             return false;
         }
         
-        // Handle REMOVE buttons
-        if (event.target.classList.contains('remove-asset-btn')) {
+        // Handle removal buttons (remove from event)
+        if (event.target.classList.contains('asset-remove-btn') || 
+            event.target.classList.contains('custom-remove-btn')) {
+            
             event.preventDefault();
             event.stopPropagation();
             
             const eventId = event.target.dataset.eventId;
-            const assetId = event.target.dataset.assetId; // Already decoded when set
+            const assetId = decodeURIComponent(event.target.dataset.assetId);
             
-            console.log(`REMOVE CLICKED: Event ${eventId}, Asset: "${assetId}"`);
-            
-            // Create unique key for this asset removal
-            const assetKey = `remove-${eventId}-${assetId}`;
+            // Create unique key for this asset
+            const assetKey = `${eventId}-${assetId}`;
             
             // Check if already processing
             if (processingAssets.has(assetKey)) {
-                console.log(`BLOCKED: Asset ${assetId} removal already processing`);
+                console.log(`BLOCKED: Asset ${assetId} removal already being processed`);
                 return false;
             }
             
-            // Show confirmation and process
-            if (confirm(`Are you sure you want to remove asset ${assetId} from this event?`)) {
+            if (confirm(`Remove ${assetId} from this event?`)) {
                 // Mark as processing
                 processingAssets.add(assetKey);
                 
@@ -208,6 +119,7 @@ function setupSingleAssetClickHandler() {
             
             return false;
         }
+
     };
     
     // Store reference and add listener
@@ -3388,18 +3300,40 @@ function clearUniversalFeedback() {
 
 async function loadReturnEvents() {
   try {
-    const response = await apiCall("/api/events");
+    const response = await apiCall('/api/events');
     
     // Update overdue counter
     const overdueCount = countOverdueEvents(response.data);
     updateOverdueCounter(overdueCount);
     
     const returnableEvents = response.data.filter((event) => {
+      // Check for regular prepared assets
       const hasPreparedAssets = event.preparedCount > 0;
       const hasUnreturnedAssets = event.preparedCount > event.returnedCount;
       
+      // Also check for custom assets (LOAN/MISC)
+      let hasCustomAssets = false;
+      let hasUnreturnedCustomAssets = false;
+      
+      if (event.assetsByDepartment) {
+        ['LOAN', 'MISC'].forEach(dept => {
+          if (event.assetsByDepartment[dept] && event.assetsByDepartment[dept].length > 0) {
+            hasCustomAssets = true;
+            const unreturnedCustom = event.assetsByDepartment[dept].filter(asset => 
+              asset.status !== 'returned'
+            );
+            if (unreturnedCustom.length > 0) {
+              hasUnreturnedCustomAssets = true;
+            }
+          }
+        });
+      }
+      
       // Include events that have assets that can be returned, regardless of state
-      return hasPreparedAssets && hasUnreturnedAssets && event.state !== 'Closed';
+      const isReturnable = (hasPreparedAssets && hasUnreturnedAssets) || 
+                          (hasCustomAssets && hasUnreturnedCustomAssets);
+      
+      return isReturnable && event.state !== 'Closed';
     });
 
     const container = document.getElementById("return-events");
@@ -3446,8 +3380,21 @@ function createReturnEventCard(event) {
       ? formatDate(event.startDate)
       : `${formatDate(event.startDate)} - ${formatDate(event.endDate)}`;
 
-  const returnedCount = event.returnedCount || 0;
-  const totalCount = event.preparedCount || 0;
+  // Calculate total counts including custom assets
+  let returnedCount = event.returnedCount || 0;
+  let totalCount = event.preparedCount || 0;
+  
+  // Add custom assets to the counts
+  if (event.assetsByDepartment) {
+    ['LOAN', 'MISC'].forEach(dept => {
+      if (event.assetsByDepartment[dept]) {
+        const deptAssets = event.assetsByDepartment[dept];
+        totalCount += deptAssets.length;
+        const returnedCustom = deptAssets.filter(asset => asset.status === 'returned');
+        returnedCount += returnedCustom.length;
+      }
+    });
+  }
 
   card.innerHTML = `
       <div class="event-header">
@@ -3498,11 +3445,98 @@ async function openReturnAssetsModalWithEvent(eventId) {
 async function openReturnAssetsModal() {
     try {
         const response = await apiCall('/api/events');
+        
+        // Debug: Log all events to see their structure
+        console.log('All events from API:', response.data);
+        
         const returnableEvents = response.data.filter(event => {
+            // Debug: Log each event's key properties
+            console.log(`Event ${event.id}:`, {
+                preparedCount: event.preparedCount,
+                returnedCount: event.returnedCount,
+                state: event.state,
+                assetsByDepartment: event.assetsByDepartment,
+                preparedItems: event.preparedItems,
+                actuallyPrepared: event.actuallyPrepared,
+                returnedItems: event.returnedItems
+            });
+            
+            // Check for regular prepared assets
             const hasPreparedAssets = event.preparedCount > 0;
             const hasUnreturnedAssets = event.preparedCount > event.returnedCount;
-            return hasPreparedAssets && hasUnreturnedAssets && event.state !== 'Closed';
+            
+            // Check for custom assets in multiple places
+            let hasCustomAssets = false;
+            let hasUnreturnedCustomAssets = false;
+            
+            // Check 1: assetsByDepartment
+            if (event.assetsByDepartment) {
+                ['LOAN', 'MISC'].forEach(dept => {
+                    if (event.assetsByDepartment[dept] && event.assetsByDepartment[dept].length > 0) {
+                        hasCustomAssets = true;
+                        const unreturnedCustom = event.assetsByDepartment[dept].filter(asset => 
+                            asset.status !== 'returned'
+                        );
+                        if (unreturnedCustom.length > 0) {
+                            hasUnreturnedCustomAssets = true;
+                        }
+                    }
+                });
+            }
+            
+            // Check 2: preparedItems for custom assets
+            if (event.preparedItems && event.preparedItems.length > 0) {
+                const customItemsInPrepared = event.preparedItems.filter(item => 
+                    item.startsWith('[LOAN]') || item.startsWith('[MISC]')
+                );
+                if (customItemsInPrepared.length > 0) {
+                    hasCustomAssets = true;
+                    
+                    // Check if any are not returned
+                    const unreturnedCustomItems = customItemsInPrepared.filter(item => 
+                        !event.returnedItems || !event.returnedItems.includes(item)
+                    );
+                    if (unreturnedCustomItems.length > 0) {
+                        hasUnreturnedCustomAssets = true;
+                    }
+                }
+            }
+            
+            // Check 3: actuallyPrepared for custom assets
+            if (event.actuallyPrepared && event.actuallyPrepared.length > 0) {
+                const customItemsActuallyPrepared = event.actuallyPrepared.filter(item => 
+                    item.startsWith('[LOAN]') || item.startsWith('[MISC]')
+                );
+                if (customItemsActuallyPrepared.length > 0) {
+                    hasCustomAssets = true;
+                    
+                    // Check if any are not returned
+                    const unreturnedCustomItems = customItemsActuallyPrepared.filter(item => 
+                        !event.returnedItems || !event.returnedItems.includes(item)
+                    );
+                    if (unreturnedCustomItems.length > 0) {
+                        hasUnreturnedCustomAssets = true;
+                    }
+                }
+            }
+            
+            console.log(`Event ${event.id} analysis:`, {
+                hasPreparedAssets,
+                hasUnreturnedAssets,
+                hasCustomAssets,
+                hasUnreturnedCustomAssets
+            });
+            
+            // Event is returnable if it has unreturned regular assets OR unreturned custom assets
+            const isReturnable = (hasPreparedAssets && hasUnreturnedAssets) || 
+                                (hasCustomAssets && hasUnreturnedCustomAssets);
+            
+            console.log(`Event ${event.id} is returnable: ${isReturnable}`);
+            
+            return isReturnable && event.state !== 'Closed';
         });
+
+        console.log('Filtered returnable events:', returnableEvents);
 
         let content = `
             <div class="return-assets-interface">
@@ -3520,11 +3554,37 @@ async function openReturnAssetsModal() {
                 : `${new Date(event.startDate).toLocaleDateString()} - ${new Date(event.endDate).toLocaleDateString()}`;
             
             const statusBadge = event.state === 'Overdue' ? ' 🔴 OVERDUE' : '';
-            const unreturned = event.preparedCount - event.returnedCount;
+            
+            // Calculate total unreturned (including custom assets)
+            let totalUnreturned = (event.preparedCount || 0) - (event.returnedCount || 0);
+            
+            // Add custom assets count from various sources
+            if (event.assetsByDepartment) {
+                ['LOAN', 'MISC'].forEach(dept => {
+                    if (event.assetsByDepartment[dept]) {
+                        const unreturnedCustom = event.assetsByDepartment[dept].filter(asset => 
+                            asset.status !== 'returned'
+                        );
+                        totalUnreturned += unreturnedCustom.length;
+                    }
+                });
+            }
+            
+            // Also count from preparedItems and actuallyPrepared
+            if (event.preparedItems) {
+                const customInPrepared = event.preparedItems.filter(item => 
+                    (item.startsWith('[LOAN]') || item.startsWith('[MISC]')) &&
+                    (!event.returnedItems || !event.returnedItems.includes(item))
+                );
+                // Don't double count if already counted in assetsByDepartment
+                if (!event.assetsByDepartment || !event.assetsByDepartment.LOAN && !event.assetsByDepartment.MISC) {
+                    totalUnreturned += customInPrepared.length;
+                }
+            }
             
             content += `
                 <option value="${event.id}">
-                    Event ${event.id}: ${event.name} (${unreturned} assets to return) ${statusBadge}
+                    Event ${event.id}: ${event.name} (${totalUnreturned} assets to return) ${statusBadge}
                 </option>
             `;
         });
@@ -3587,6 +3647,34 @@ async function loadEventAssetsForReturn() {
     try {
         const response = await apiCall(`/api/events/${eventId}`);
         const event = response.data;
+        
+        console.log(`Loading assets for event ${eventId}:`, event);
+
+        // Calculate total counts including custom assets from preparedItems
+        let totalPrepared = event.preparedCount || 0;
+        let totalReturned = event.returnedCount || 0;
+        
+        // Count custom assets from preparedItems
+        let customAssetsCount = 0;
+        let customReturnedCount = 0;
+        
+        if (event.preparedItems) {
+            const customItems = event.preparedItems.filter(item => 
+                item.startsWith('[LOAN]') || item.startsWith('[MISC]')
+            );
+            customAssetsCount = customItems.length;
+            
+            if (event.returnedItems) {
+                customReturnedCount = customItems.filter(item => 
+                    event.returnedItems.includes(item)
+                ).length;
+            }
+        }
+        
+        // Add custom assets to totals
+        const totalAssetsIncludingCustom = totalPrepared + customAssetsCount;
+        const totalReturnedIncludingCustom = totalReturned + customReturnedCount;
+        const remaining = totalAssetsIncludingCustom - totalReturnedIncludingCustom;
 
         // Show event summary
         const summaryDiv = document.getElementById('event-summary');
@@ -3594,15 +3682,15 @@ async function loadEventAssetsForReturn() {
         summaryDiv.innerHTML = `
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 15px; text-align: center;">
                 <div>
-                    <div style="font-size: 24px; font-weight: bold; color: #007bff;">${event.preparedCount || 0}</div>
+                    <div style="font-size: 24px; font-weight: bold; color: #007bff;">${totalAssetsIncludingCustom}</div>
                     <div style="color: #6c757d; font-size: 12px;">Total Assets</div>
                 </div>
                 <div>
-                    <div style="font-size: 24px; font-weight: bold; color: #28a745;">${event.returnedCount || 0}</div>
+                    <div style="font-size: 24px; font-weight: bold; color: #28a745;">${totalReturnedIncludingCustom}</div>
                     <div style="color: #6c757d; font-size: 12px;">Returned</div>
                 </div>
                 <div>
-                    <div style="font-size: 24px; font-weight: bold; color: #ffc107;">${(event.preparedCount || 0) - (event.returnedCount || 0)}</div>
+                    <div style="font-size: 24px; font-weight: bold; color: #ffc107;">${remaining}</div>
                     <div style="color: #6c757d; font-size: 12px;">Remaining</div>
                 </div>
             </div>
@@ -3612,59 +3700,59 @@ async function loadEventAssetsForReturn() {
         const assetsSection = document.getElementById('assets-return-section');
         assetsSection.style.display = 'block';
 
-        // Group assets by type
-        const assetGroups = {};
-        const preparedAssets = event.preparedAssets || [];
-
-        preparedAssets.forEach(asset => {
-            const assetType = asset.id.split('#')[0];
-            if (!assetGroups[assetType]) {
-                assetGroups[assetType] = {
-                    type: assetType,
-                    assets: [],
-                    brand: asset.brand,
-                    model: asset.model,
-                    description: asset.description
-                };
-            }
-            assetGroups[assetType].assets.push(asset);
-        });
-
         let assetsContent = '';
         
-        if (Object.keys(assetGroups).length > 0) {
+        // Process regular assets (from preparedAssets if available)
+        if (event.preparedAssets && event.preparedAssets.length > 0) {
+            // Group regular assets by type
+            const assetGroups = {};
+            
+            event.preparedAssets.forEach(asset => {
+                if (!asset.id.startsWith('[LOAN]') && !asset.id.startsWith('[MISC]')) {
+                    const assetType = asset.id.split('#')[0];
+                    if (!assetGroups[assetType]) {
+                        assetGroups[assetType] = {
+                            type: assetType,
+                            assets: [],
+                            brand: asset.brand,
+                            model: asset.model,
+                            description: asset.description
+                        };
+                    }
+                    assetGroups[assetType].assets.push(asset);
+                }
+            });
+
             Object.values(assetGroups).forEach(group => {
                 const unreturnedAssets = group.assets.filter(asset => asset.status !== 'returned');
                 if (unreturnedAssets.length > 0) {
                     assetsContent += `
-                        <div class="asset-type-group" style="margin-bottom: 25px; border: 1px solid #e9ecef; border-radius: 8px; overflow: hidden;">
-                            <div style="background: #f8f9fa; padding: 15px; border-bottom: 1px solid #e9ecef; display: flex; justify-content: space-between; align-items: center;">
-                                <div>
-                                    <h5 style="margin: 0; color: #495057;">${group.type}</h5>
-                                    <small style="color: #6c757d;">${group.brand} ${group.model} ${group.description}</small>
-                                </div>
-                                <div style="display: flex; align-items: center; gap: 15px;">
-                                    <span style="background: #17a2b8; color: white; padding: 4px 8px; border-radius: 12px; font-size: 12px; font-weight: 500;">
-                                        ${unreturnedAssets.length} items
-                                    </span>
-                                    <button class="btn btn-warning" style="padding: 8px 16px; font-size: 14px;" onclick="returnAssetsByType(${eventId}, '${group.type}')">
-                                        Return All ${group.type}
-                                    </button>
+                        <div class="asset-type-group" style="margin-bottom: 25px; border: 1px solid #e9ecef; border-radius: 8px;">
+                            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px 8px 0 0; border-bottom: 1px solid #e9ecef;">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <div>
+                                        <h5 style="margin: 0; color: #495057;">${group.brand} ${group.model}</h5>
+                                        <small style="color: #6c757d;">${group.description || ''}</small>
+                                    </div>
+                                    <div style="text-align: right;">
+                                        <div style="font-size: 18px; font-weight: bold; color: #ffc107;">${unreturnedAssets.length}</div>
+                                        <small style="color: #6c757d;">to return</small>
+                                    </div>
                                 </div>
                             </div>
                             <div style="padding: 15px;">
                     `;
-                    
-                    unreturnedAssets.forEach(asset => {
+
+                    unreturnedAssets.forEach((asset, index) => {
                         assetsContent += `
-                            <div class="return-asset-item" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #f1f3f4;">
-                                <div style="flex: 1;">
-                                    <div style="font-weight: 500; color: #495057;">${asset.id}</div>
+                            <div class="return-asset-item" style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background: ${index % 2 === 0 ? '#f8f9fa' : 'white'}; border-radius: 6px; margin-bottom: 8px;">
+                                <div>
+                                    <div style="font-weight: 500; font-size: 14px;">${asset.id}</div>
                                     ${asset.serial ? `<div style="color: #999; font-size: 11px;">SN: ${asset.serial}</div>` : ''}
                                     ${asset.location ? `<div style="color: #007bff; font-size: 11px;">📍 ${asset.location}</div>` : ''}
                                 </div>
                                 <div style="margin-left: 15px;">
-                                    <button class="btn btn-warning" style="padding: 6px 12px; font-size: 12px;" onclick="event.stopPropagation(); returnSpecificAssetNew(${eventId}, '${asset.id}')">
+                                    <button class="btn btn-warning return-asset-btn" style="padding: 6px 12px; font-size: 12px;" onclick="returnSpecificAssetNew(${eventId}, '${asset.id}')">
                                         Return
                                     </button>
                                 </div>
@@ -3674,6 +3762,74 @@ async function loadEventAssetsForReturn() {
                     assetsContent += '</div></div>';
                 }
             });
+        }
+        
+        // Process custom assets from preparedItems
+        if (event.preparedItems && event.preparedItems.length > 0) {
+            const customItems = event.preparedItems.filter(item => 
+                item.startsWith('[LOAN]') || item.startsWith('[MISC]')
+            );
+            
+            if (customItems.length > 0) {
+                // Group custom items by type
+                const loanItems = customItems.filter(item => item.startsWith('[LOAN]'));
+                const miscItems = customItems.filter(item => item.startsWith('[MISC]'));
+                
+                [
+                    { items: loanItems, title: '🏪 Loan/Rental Items', type: 'LOAN' },
+                    { items: miscItems, title: '🔧 Misc Items', type: 'MISC' }
+                ].forEach(({ items, title, type }) => {
+                    if (items.length > 0) {
+                        // Filter out returned items
+                        const unreturnedItems = items.filter(item => 
+                            !event.returnedItems || !event.returnedItems.includes(item)
+                        );
+                        
+                        if (unreturnedItems.length > 0) {
+                            assetsContent += `
+                                <div class="asset-type-group" style="margin-bottom: 25px; border: 1px solid #e9ecef; border-radius: 8px;">
+                                    <div style="background: #f8f9fa; padding: 15px; border-radius: 8px 8px 0 0; border-bottom: 1px solid #e9ecef;">
+                                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                                            <div>
+                                                <h5 style="margin: 0; color: #495057;">${title}</h5>
+                                                <small style="color: #6c757d;">Custom assets</small>
+                                            </div>
+                                            <div style="text-align: right;">
+                                                <div style="font-size: 18px; font-weight: bold; color: #ffc107;">${unreturnedItems.length}</div>
+                                                <small style="color: #6c757d;">to return</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div style="padding: 15px;">
+                            `;
+
+                            unreturnedItems.forEach((item, index) => {
+                                // Parse custom asset format: [LOAN]name;quantity or [MISC]name;quantity
+                                const prefix = `[${type}]`;
+                                const itemContent = item.substring(prefix.length);
+                                const [name, quantity] = itemContent.split(';');
+                                const displayName = quantity ? `${name} (Qty: ${quantity})` : name;
+                                
+                                assetsContent += `
+                                    <div class="return-asset-item" style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background: ${index % 2 === 0 ? '#f8f9fa' : 'white'}; border-radius: 6px; margin-bottom: 8px;">
+                                        <div>
+                                            <div style="font-weight: 500; font-size: 14px;">${displayName}</div>
+                                            <div style="color: #666; font-size: 11px;">Custom Asset ID: ${item}</div>
+                                        </div>
+                                        <div style="margin-left: 15px;">
+                                            <button class="btn btn-warning return-asset-btn" style="padding: 6px 12px; font-size: 12px;" onclick="returnSpecificAssetNew(${eventId}, '${item}')">
+                                                Return
+                                            </button>
+                                        </div>
+                                    </div>
+                                `;
+                            });
+                            
+                            assetsContent += '</div></div>';
+                        }
+                    }
+                });
+            }
         }
         
         if (!assetsContent) {
@@ -3749,27 +3905,44 @@ async function returnAssetsByType(eventId, assetType) {
 }
 
 async function returnSpecificAssetNew(eventId, assetId) {
+    // Prevent multiple clicks
+    const buttonElement = document.querySelector(`[onclick*="returnSpecificAssetNew(${eventId}, '${assetId}')"]`);
+    if (buttonElement && buttonElement.disabled) {
+        return;
+    }
+    
     try {
+        // Disable the button immediately
+        if (buttonElement) {
+            buttonElement.disabled = true;
+            buttonElement.style.opacity = '0.5';
+            buttonElement.textContent = 'Returning...';
+        }
+        
         await apiCall(`/api/events/${eventId}/return`, 'POST', { assetId });
         showNotification('success', `${assetId} returned successfully`);
         
         // Remove the asset from the UI with animation
-        const assetElement = document.querySelector(`[onclick*="returnSpecificAssetNew(${eventId}, '${assetId}')"]`);
-        if (assetElement) {
-            const parentItem = assetElement.closest('.return-asset-item');
-            if (parentItem) {
-                parentItem.style.transition = 'opacity 0.3s ease';
-                parentItem.style.opacity = '0.5';
-                parentItem.style.pointerEvents = 'none';
-                
+        const parentItem = buttonElement ? buttonElement.closest('.return-asset-item') : null;
+        if (parentItem) {
+            parentItem.style.transition = 'opacity 0.3s ease';
+            parentItem.style.opacity = '0.3';
+            parentItem.style.pointerEvents = 'none';
+            
+            setTimeout(() => {
+                if (parentItem.parentNode) {
+                    parentItem.parentNode.removeChild(parentItem);
+                }
+                // Refresh the event summary after removal
                 setTimeout(() => {
-                    if (parentItem.parentNode) {
-                        parentItem.parentNode.removeChild(parentItem);
-                    }
-                    // Refresh the event summary
                     loadEventAssetsForReturn();
-                }, 300);
-            }
+                }, 100);
+            }, 300);
+        } else {
+            // Fallback refresh if we can't find the specific element
+            setTimeout(() => {
+                loadEventAssetsForReturn();
+            }, 500);
         }
         
         // Update overdue counter
@@ -3779,6 +3952,14 @@ async function returnSpecificAssetNew(eventId, assetId) {
         
     } catch (error) {
         showNotification('error', `Failed to return asset: ${error.message}`);
+        console.error('Error returning asset:', error);
+        
+        // Re-enable button on error
+        if (buttonElement) {
+            buttonElement.disabled = false;
+            buttonElement.style.opacity = '1';
+            buttonElement.textContent = 'Return';
+        }
     }
 }
 
@@ -8494,6 +8675,7 @@ window.switchMaintenanceTab = switchMaintenanceTab;
 window.openMaintenanceModalForAsset = openMaintenanceModal;
 window.clearSingleOOC = clearSingleOOC;
 window.addNewLogEntryFromModal = addNewLogEntryFromModal;
+window.returnSpecificAssetNew = returnSpecificAssetNew;
 
 // Helper function to close the maintenance log modal
 function closeMaintenanceLogModal() {

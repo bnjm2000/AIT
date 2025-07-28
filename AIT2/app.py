@@ -269,11 +269,22 @@ def update_event_state(event):
             total_actually_prepared = len(event.actually_prepared)
             total_returned = len(event.returned_items)
             
-            # 1. CHECK FOR AUTO-CLOSE FIRST - all prepared assets returned
-            if (total_actually_prepared > 0 and 
-                total_returned == total_actually_prepared):
+            logger.info(f"Event {event.event_id} state calculation - Prepared items: {total_prepared_items}, Actually prepared: {total_actually_prepared}, Returned: {total_returned}")
+            
+            # For custom assets, check if all items in actually_prepared are also in returned_items
+            all_actually_prepared_returned = True
+            if total_actually_prepared > 0:
+                for item in event.actually_prepared:
+                    if item not in event.returned_items:
+                        all_actually_prepared_returned = False
+                        break
+            else:
+                all_actually_prepared_returned = False
+            
+            # 1. CHECK FOR AUTO-CLOSE FIRST - all actually prepared assets returned
+            if (total_actually_prepared > 0 and all_actually_prepared_returned):
                 event.state = 'Closed'
-                logger.info(f"Event {event.event_id} set to Closed: all prepared assets returned")
+                logger.info(f"Event {event.event_id} set to Closed: all actually prepared assets returned")
             # 2. CHECK FOR OVERDUE - event ended but still has unreturned assets (HIGH PRIORITY)
             elif (total_actually_prepared > total_returned and 
                   current_date > event.end_date):
@@ -285,25 +296,23 @@ def update_event_state(event):
             # 4. Assets assigned but none prepared yet
             elif total_prepared_items > 0 and total_actually_prepared == 0:
                 event.state = 'Planning'
-            # 5. Some assets prepared but not all, no returns yet
-            elif (total_actually_prepared > 0 and 
-                  total_actually_prepared < total_prepared_items and 
-                  total_returned == 0):
+            # 5. Some assets prepared but not all
+            elif total_actually_prepared > 0 and total_actually_prepared < total_prepared_items and total_returned == 0:
                 event.state = 'Preparing'
-            # 6. All assets prepared, no returns yet
-            elif (total_actually_prepared >= total_prepared_items and 
-                  total_returned == 0):
-                # Check if ready event is within its date range to make it ongoing
+            # 6. All assets prepared, none returned yet - check if event is active
+            elif total_actually_prepared >= total_prepared_items and total_returned == 0:
+                # Check if event is within its date range
                 if event.start_date <= current_date <= event.end_date:
                     event.state = 'Ongoing'
                 else:
                     event.state = 'Ready'
             # 7. Some assets returned but not all
-            elif total_returned > 0 and total_returned < total_actually_prepared:
+            elif total_returned > 0 and not all_actually_prepared_returned:
                 event.state = 'Returning'
-            # 8. Fallback case
+            # 8. Fallback - keep current state if we can't determine what it should be
             else:
                 logger.warning(f"Event {event.event_id} fell through to fallback case - keeping current state {event.state}")
+                # Don't change state if we can't determine what it should be
                 
     except Exception as e:
         logger.error(f"Error updating event state for event {event.event_id}: {e}")
@@ -1695,9 +1704,15 @@ def return_event_asset(event_id):
         if not hasattr(event, 'actually_prepared'):
             event.actually_prepared = []
 
-        # Remove from actually_prepared if it was there
-        if asset_id in event.actually_prepared:
-            event.actually_prepared.remove(asset_id)
+        # IMPORTANT: Do NOT remove custom assets from actually_prepared when returning them
+        # Custom assets (LOAN/MISC) should remain in actually_prepared for proper state calculation
+        # Only remove regular inventory assets from actually_prepared when they're returned
+        if not (asset_id.startswith('[LOAN]') or asset_id.startswith('[MISC]')):
+            # For regular assets, remove from actually_prepared when returned
+            if asset_id in event.actually_prepared:
+                event.actually_prepared.remove(asset_id)
+        # For custom assets, keep them in actually_prepared - the state logic will check
+        # if they're in returned_items to determine closure
 
         # For regular assets, update location
         if not (asset_id.startswith('[LOAN]') or asset_id.startswith('[MISC]')):
@@ -1717,9 +1732,11 @@ def return_event_asset(event_id):
 
         log_action(f"Returned asset {asset_id} from event {event_id}")
 
-        return jsonify({'success': True, 'message': f'Asset {asset_id} returned from event'})
+        return jsonify({'success': True, 'message': f'Asset {asset_id} returned successfully'})
     except Exception as e:
         logger.error(f"Error returning asset from event {event_id}: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
         return jsonify({'error': 'Failed to return asset'}), 500
 
 @app.route('/api/events/<int:event_id>/assign-specific', methods=['POST'])
