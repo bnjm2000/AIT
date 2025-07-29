@@ -269,8 +269,8 @@ ETR5#15,L-Acoustics,ETR5,,Adjustable U-bracket: 5XT,False,False,,AX,Store,
 ETR5#16,L-Acoustics,ETR5,,Adjustable U-bracket: 5XT,False,False,,AX,Store,
 LA4X#01,L-Acoustics,LA4X,1180053925,Amplified controller,False,False,,AX,Store,Store
 LA4X#02,L-Acoustics,LA4X,1180051677,Amplified controller,False,False,,AX,Store,Store
-LA4X#03,L-Acoustics,LA4X,,Amplified controller,False,False,,AX,Store,Store
-LA4X#04,L-Acoustics,LA4X,,Amplified controller,False,False,,AX,Store,
+LA4X#03,L-Acoustics,LA4X,1180051678,Amplified controller,False,False,,AX,Store,Store
+LA4X#04,L-Acoustics,LA4X,1180053934,Amplified controller,False,False,,AX,Store,
 LA4X#05,L-Acoustics,LA4X,1180053927,Amplified controller,False,False,,AX,Store,
 LA4X#06,L-Acoustics,LA4X,1180051467,Amplified controller,False,False,,AX,Store,
 LA4X#07,L-Acoustics,LA4X,1180053692,Amplified controller,False,False,,AX,Store,Store
@@ -321,12 +321,12 @@ SB18#09,L-Acoustics,SB18,780023835,"High power compact subwoofer: 1 x 18""",Fals
 SB18#10,L-Acoustics,SB18,780023853,"High power compact subwoofer: 1 x 18""",False,False,,AX,Store,
 SB18#11,L-Acoustics,SB18,780023871,"High power compact subwoofer: 1 x 18""",False,False,,AX,Store,
 SB18#12,L-Acoustics,SB18,780023872,"High power compact subwoofer: 1 x 18""",False,False,,AX,Store,
-LS10#01,L-Acoustics,LS10,1670010350,"10-port Ethernet AVB Switch, Avnu-certified",False,False,,AX,Store,
-LS10#02,L-Acoustics,LS10,1670010355,"10-port Ethernet AVB Switch, Avnu-certified",False,False,,AX,Store,
-LS10#03,L-Acoustics,LS10,1670010373,"10-port Ethernet AVB Switch, Avnu-certified",False,False,,AX,Store,
-LS10#04,L-Acoustics,LS10,1670010374,"10-port Ethernet AVB Switch, Avnu-certified",False,False,,AX,Store,
-LS10#05,L-Acoustics,LS10,1670010391,"10-port Ethernet AVB Switch, Avnu-certified",False,False,,AX,Store,
-LS10#06,L-Acoustics,LS10,1670010429,"10-port Ethernet AVB Switch, Avnu-certified",False,False,,AX,Store,
+LS10#01,L-Acoustics,LS10,1670010429,"10-port Ethernet AVB Switch, Avnu-certified",False,False,,AX,Store,
+LS10#02,L-Acoustics,LS10,1670010391,"10-port Ethernet AVB Switch, Avnu-certified",False,False,,AX,Store,
+LS10#03,L-Acoustics,LS10,1670010355,"10-port Ethernet AVB Switch, Avnu-certified",False,False,,AX,Store,
+LS10#04,L-Acoustics,LS10,1670010350,"10-port Ethernet AVB Switch, Avnu-certified",False,False,,AX,Store,
+LS10#05,L-Acoustics,LS10,1670010373,"10-port Ethernet AVB Switch, Avnu-certified",False,False,,AX,Store,
+LS10#06,L-Acoustics,LS10,1670010374,"10-port Ethernet AVB Switch, Avnu-certified",False,False,,AX,Store,
 MBUMP#01,L-Acoustics,M-BUMP,890009396,Bumper for flying or stacking KARA (II)/SB18,False,False,,AX,Store,
 MBUMP#02,L-Acoustics,M-BUMP,890009399,Bumper for flying or stacking KARA (II)/SB18,False,False,,AX,Store,
 MBUMP#03,L-Acoustics,M-BUMP,,Bumper for flying or stacking KARA (II)/SB18,False,False,,AX,Store,
@@ -525,7 +525,7 @@ P9R#03,Shure,P9R,,Bodypack Receiver [P7],False,False,,AX,Store,
 P9RA#01,Shure,P9RA,,Bodypack Receiver [P7],False,False,,AX,Store,
 P9RA#02,Shure,P9RA,,Bodypack Receiver [P7],False,False,,AX,Store,
 P9RA#03,Shure,P9RA,,Bodypack Receiver [P7],False,False,,AX,Store,
-P9RA#04,Shure,P9RA,,Bodypack Receiver [P7],False,False,,AX,Store,
+P9RA#04,Shure,P9RA,,Bodypack Receiver [P7],False,False,2025/07/29	bnjm2000	Beltpack will turn off when battery compartment closed,AX,Store,
 P9T#01,Shure,P9T,,Wireless Transmitter,False,False,,AX,Store,
 P9T#02,Shure,P9T,,Wireless Transmitter,False,False,,AX,Store,
 P9T#03,Shure,P9T,,Wireless Transmitter,False,False,,AX,Store,
@@ -857,6 +857,8 @@ PB#61,Astera,Pixel Brick ,047-0312594,Batt LED Uplighters,False,False,2024/12/05
 PB#62,Astera,Pixel Brick ,047-0312735,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
 PB#63,Astera,Pixel Brick ,047-0312678,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
 PB#64,Astera,Pixel Brick ,047-0312730,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
+ART7#01,Astera,AsteraBox Art7-U ,025-0935647,WIFI AsteraBox CRMX,False,False,,LX,Store,
+ART7#01,Astera,AsteraBox Art7-U ,025-0935934,WIFI AsteraBox CRMX,False,False,,LX,Store,
 CAMEO#01,Cameo,Unicon Remote Control,CK01900822,DMX/RDM Controller,False,False,,LX,Store,Store
 ECLIPSE#01,Silver Star,Eclipse 1000 RGBAL SS847XAL,MO18112100400034,,False,False,,LX,Store,Store
 ECLIPSE#02,Silver Star,Eclipse 1000 RGBAL SS847XAL,MO18112100400039,,False,False,,LX,Store,Store
