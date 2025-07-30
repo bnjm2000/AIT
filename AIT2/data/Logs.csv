@@ -1,31 +1,3 @@
-2025/06/24 15:51:43,bnjm2000,Deleted maintenance log for asset ULXD2#11: '2025/06/21 - Battery prong dropped out [Wedding of Jeremy Seow & Julia Puzzo @ Pyramid Club]' (deleted by bnjm2000)
-2025/06/24 15:52:11,bnjm2000,Updated location for asset ULXD2#11 from '' to 'E&E'
-2025/06/24 15:52:11,bnjm2000,Marked asset ULXD2#11 as Out of Commission
-2025/06/24 15:52:11,bnjm2000,"Maintenance logged for asset ULXD2#11: 2025/06/21 - Battery prong dropped out, unable to turn on [Wedding of Jeremy Seow & Julia Puzzo @ Pyramid Club]"
-2025/06/24 15:59:36,bnjm2000,"Maintenance logged for asset CL5#01: 2025/02/05 - Replaced Dante Module [$631]
-Replaced DNTU PCB [$672]
-Replaced FFC Cable [$10]"
-2025/06/24 16:03:40,bnjm2000,Marked asset CL5#01 as Out of Commission
-2025/06/24 16:03:40,bnjm2000,"Maintenance logged for asset CL5#01: 2025/02/13 -  Dante clock suddenly unlocked and could not lock back, phantom noise on both inputs and outputs [Wedding of Aim and Singhis @ TCP]"
-2025/06/24 16:05:47,bnjm2000,Updated location for asset CL5#01 from '' to 'Store'
-2025/06/24 16:05:47,bnjm2000,Removed Out of Commission status from asset CL5#01
-2025/06/24 16:05:47,bnjm2000,Maintenance logged for asset CL5#01: 2025/02/27 - Replaced DSP PCB [$1011]
-2025/06/24 16:06:32,bnjm2000,"Updated maintenance log for asset CL5#01: '2025/02/05 - Replaced Dante Module [$631]
-Replaced DNTU PCB [$672]
-Replaced FFC Cable [$10]' -> 'Replaced DSP PCB [$1011]' (edited by bnjm2000)"
-2025/06/24 16:06:36,bnjm2000,"Updated maintenance log for asset CL5#01: '2025/01/17 - Sent to Yamaha for service (Dante module error)' -> 'Dante clock suddenly unlocked and could not lock back, phantom noise on both inputs and outputs [Wedding of Aim and Singhis @ TCP]' (edited by bnjm2000)"
-2025/06/24 16:06:41,bnjm2000,"Updated maintenance log for asset CL5#01: '2024/11/07 - Collected from Yamaha' -> 'Replaced Dante Module [$631]
-Replaced DNTU PCB [$672]
-Replaced FFC Cable [$10]' (edited by bnjm2000)"
-2025/06/24 16:06:47,bnjm2000,"Updated maintenance log for asset CL5#01: '2024/10/22 - Replaced sliding faders 1-8, 9-16, CL 7,8 (report no. 481878) $1148.57' -> '2025/01/17 - Sent to Yamaha for service (Dante module error)' (edited by bnjm2000)"
-2025/06/24 16:10:39,bnjm2000,Updated location for asset MR-90A#05 from '' to 'MiPro'
-2025/06/24 16:10:39,bnjm2000,Marked asset MR-90A#05 as Out of Commission
-2025/06/24 16:10:39,bnjm2000,"Maintenance logged for asset MR-90A#05: Send in to Mipro, no RF receiving"
-2025/06/24 16:14:06,bnjm2000,Updated location for asset MR-90A#05 from 'MiPro' to 'Store'
-2025/06/24 16:14:06,bnjm2000,Updated serial number for asset MR-90A#05 from '878292435A' to '878292431A'
-2025/06/24 16:14:06,bnjm2000,Removed Out of Commission status from asset MR-90A#05
-2025/06/24 16:14:06,bnjm2000,"Maintenance logged for asset MR-90A#05: Technician tested working, went to MiPro office to check before collecting. Audio came through but unit kept skipping channels. MiPro did a 1-to-1 swap. New SN: 878292431A Old SN:878292435A"
-2025/06/24 16:14:46,bnjm2000,Deleted maintenance log for asset MR-90A#05: '2024/11/12 - repaired by MiPro' (deleted by bnjm2000)
 2025/06/24 16:16:44,bnjm2000,Updated maintenance log for asset DXR12#01: '2024/12/31 - Sent back to Yamaha for servicing as woofer was still distorting.' -> '2024/12/31 - Sent back to Yamaha for servicing as woofer was still distorting.' (edited by bnjm2000)
 2025/06/24 16:17:02,bnjm2000,"Updated maintenance log for asset DXR12#01: '07/11/24 - Collected from Yamaha' -> '2025/01/10 - Collected from Yamaha, replaced woofer [$185]' (edited by bnjm2000)"
 2025/06/24 16:23:02,bnjm2000,Updated maintenance log for asset DM3#01: '07/11/24 - Colelcted from Yamaha' -> '07/11/24 - Collected from Yamaha' (edited by bnjm2000)
@@ -1011,3 +983,25 @@ Service charge [$60]' (deleted by bnjm2000)"
 2025/07/29 09:14:47,bnjm2000,User bnjm2000 logged in via web interface
 2025/07/29 09:16:05,bnjm2000,"Maintenance logged for asset P9RA#04: Beltpack will turn off when battery compartment closed, only can use with rechargeable"
 2025/07/29 09:19:39,bnjm2000,"Updated maintenance log for asset P9RA#04: 'Beltpack will turn off when battery compartment closed, only can use with rechargeable' -> 'Beltpack will turn off when battery compartment closed' (edited by bnjm2000)"
+2025/07/30 13:18:23,bnjm2000,User bnjm2000 logged in via web interface
+2025/07/30 13:19:34,bnjm2000,Updated location for asset AURORA#01 from 'Store' to 'Total Solutions'
+2025/07/30 13:19:34,bnjm2000,"Maintenance logged for asset AURORA#01: Send in to TSM for checking, repair. Signal weak"
+2025/07/30 13:20:40,bnjm2000,"Maintenance logged for asset AURORA#02: Send in to TSM for checking, repair. Signal weak"
+2025/07/30 13:20:59,bnjm2000,"Updated maintenance log for asset AURORA#02: 'Send in to TSM for checking, repair. Signal weak' -> 'Send in to TSM for checking, repair. Signal weak' (also: Location: Total Solutions) (edited by bnjm2000)"
+2025/07/30 13:21:03,bnjm2000,"Deleted maintenance log for asset AURORA#02: 'Send in to TSM for checking, repair. Signal weak [Location: Total Solutions]' (deleted by bnjm2000)"
+2025/07/30 13:21:14,bnjm2000,Updated location for asset AURORA#02 from '' to 'Total Solutions'
+2025/07/30 13:21:14,bnjm2000,"Maintenance logged for asset AURORA#02: Send in to TSM for checking, repair. Signal weak"
+2025/07/30 14:22:34,bnjm2000,Added 1x Hollyland Solidcom C1 (Pro) 8-Slot Battery Charging Case model to event 40 (total: 1)
+2025/07/30 14:22:35,bnjm2000,Added 1x Hollyland Solidcom C1 Pro Hub model to event 40 (total: 1)
+2025/07/30 14:22:35,bnjm2000,Added 1x Hollyland Solidcom C1 Pro Remote Headset model to event 40 (total: 1)
+2025/07/30 14:22:36,bnjm2000,Added 1x Hollyland Solidcom C1 Pro Remote Headset model to event 40 (total: 2)
+2025/07/30 14:22:36,bnjm2000,Added 1x Hollyland Solidcom C1 Pro Remote Headset model to event 40 (total: 3)
+2025/07/30 14:22:36,bnjm2000,Added 1x Hollyland Solidcom C1 Pro Remote Headset model to event 40 (total: 4)
+2025/07/30 14:22:36,bnjm2000,Added 1x Hollyland Solidcom C1 Pro Remote Headset model to event 40 (total: 5)
+2025/07/30 14:22:37,bnjm2000,Added 1x Hollyland Solidcom C1 Pro Remote Headset model to event 40 (total: 6)
+2025/07/30 14:22:37,bnjm2000,Added 1x Hollyland Solidcom C1 Pro Remote Headset model to event 40 (total: 7)
+2025/07/30 14:22:37,bnjm2000,Added 1x Hollyland Solidcom C1 Pro Remote Headset model to event 40 (total: 8)
+2025/07/30 14:22:37,bnjm2000,Added 1x Hollyland Solidcom C1 Pro Wired Headset for Hub model to event 40 (total: 1)
+2025/07/30 14:22:38,bnjm2000,Added 1x Hollyland HL-BAT700 model to event 40 (total: 1)
+2025/07/30 14:22:39,bnjm2000,Added 15x Hollyland HL-BAT700 model to event 40 (total: 16)
+2025/07/30 14:22:44,bnjm2000,Added 2x Netgear GSM4212P model to event 40 (total: 2)

@@ -107,10 +107,10 @@ DAD6010#12,DPA,DAD 6010,,MicroDot to TA4F Adapter,False,False,,AX,Store,
 DAD6010#13,DPA,DAD 6010,,MicroDot to TA4F Adapter,False,False,,AX,Store,Store
 DAD6010#14,DPA,DAD 6010,,MicroDot to TA4F Adapter,False,False,,AX,Store,
 DAD6010#15,DPA,DAD 6010,,MicroDot to TA4F Adapter,False,False,,AX,Store,
-DAD6010#16,DPA,DAD 6010,,MicroDot to TA4F Adapter,False,False,,AX,Store,Store
-DAD6010#17,DPA,DAD 6010,,MicroDot to TA4F Adapter,False,False,,AX,Store,Store
-DAD6010#18,DPA,DAD 6010,,MicroDot to TA4F Adapter,False,False,,AX,Store,Store
-DAD6010#19,DPA,DAD 6010,,MicroDot to TA4F Adapter,False,False,,AX,Store,Store
+DAD6010#16,DPA,DAD 6010,,MicroDot to TA4F Adapter,False,False,,AX,Store,
+DAD6010#17,DPA,DAD 6010,,MicroDot to TA4F Adapter,False,False,,AX,Store,
+DAD6010#18,DPA,DAD 6010,,MicroDot to TA4F Adapter,False,False,,AX,Store,
+DAD6010#19,DPA,DAD 6010,,MicroDot to TA4F Adapter,False,False,,AX,Store,
 DAD6010#20,DPA,DAD 6010,,MicroDot to TA4F Adapter,False,False,,AX,Store,
 DAD6010#21,DPA,DAD 6010,,MicroDot to TA4F Adapter,False,False,,AX,Store,
 DAD6010#22,DPA,DAD 6010,,MicroDot to TA4F Adapter,False,False,,AX,Store,
@@ -123,7 +123,7 @@ DAD6010#28,DPA,DAD 6010,,MicroDot to TA4F Adapter,False,False,,AX,Store,
 DAD6010#29,DPA,DAD 6010,,MicroDot to TA4F Adapter,False,False,,AX,Store,
 DAD6010#30,DPA,DAD 6010,,MicroDot to TA4F Adapter,False,False,,AX,Store,
 DAD6010#31,DPA,DAD 6010,,MicroDot to TA4F Adapter,False,False,,AX,Store,
-DAD6010#32,DPA,DAD 6010,,MicroDot to TA4F Adapter,False,False,,AX,Store,Store
+DAD6010#32,DPA,DAD 6010,,MicroDot to TA4F Adapter,False,False,,AX,Store,
 DAD6010#33,DPA,DAD 6010,,MicroDot to TA4F Adapter,False,False,,AX,Store,
 DAD6010#34,DPA,DAD 6010,,MicroDot to TA4F Adapter,False,False,,AX,Store,
 DAD6010#35,DPA,DAD 6010,,MicroDot to TA4F Adapter,False,False,,AX,Store,
@@ -132,7 +132,11 @@ DAD6010#37,DPA,DAD 6010,,MicroDot to TA4F Adapter,False,False,,AX,Store,
 DAD6010#38,DPA,DAD 6010,,MicroDot to TA4F Adapter,False,False,,AX,Store,
 DAD6010#39,DPA,DAD 6010,,MicroDot to TA4F Adapter,False,False,,AX,Store,
 DAD6010#40,DPA,DAD 6010,,MicroDot to TA4F Adapter,False,False,,AX,Store,
-DAD6010#41,DPA,DAD 6010,,MicroDot to TA4F Adapter,False,False,,AX,Store,Store
+DAD6010#41,DPA,DAD 6010,,MicroDot to TA4F Adapter,False,False,,AX,Store,
+DAD6010#42,DPA,DAD 6010,,MicroDot to TA4F Adapter,False,False,,AX,Store,
+DAD6010#43,DPA,DAD 6010,,MicroDot to TA4F Adapter,False,False,,AX,Store,
+DAD6010#44,DPA,DAD 6010,,MicroDot to TA4F Adapter,False,False,,AX,Store,
+DAD6010#45,DPA,DAD 6010,,MicroDot to TA4F Adapter,False,False,,AX,Store,
 EVOLVE50#01,EV,EVOLVE 50,405294795801150521,Portable column system,False,False,,AX,Store,
 EVOLVE50#02,EV,EVOLVE 50,405294795801160310,Portable column system,False,False,,AX,Store,
 EVOLVE50#03,EV,EVOLVE 50,405294795801160374,Portable column system,False,False,,AX,Store,Store
@@ -857,33 +861,40 @@ PB#61,Astera,Pixel Brick,047-0312594,Batt LED Uplighters,False,False,2024/12/05	
 PB#62,Astera,Pixel Brick,047-0312735,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
 PB#63,Astera,Pixel Brick,047-0312678,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
 PB#64,Astera,Pixel Brick,047-0312730,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
-ART7#01,Astera,AsteraBox Art7-U,025-0935647,WIFI AsteraBox CRMX,False,False,,LX,Store,
 ART7#01,Astera,AsteraBox Art7-U,025-0935934,WIFI AsteraBox CRMX,False,False,,LX,Store,
 CX1204#01,Lite-Puter,CX-1204,11B11R0299,12 Channel Fader Board,False,False,,LX,Store,
 CX2#01,Lite-Puter,CX-2,11804R0345,6 Channel Fader Board,False,False,,LX,Store,
 DX402A#01,Lite-Puter,DX-402A,07806R2066,4 Channel DMX Dimmer Pack,False,False,,LX,Store,
 DX402A#02,Lite-Puter,DX-402A,14109R2041,4 Channel DMX Dimmer Pack,False,False,,LX,Store,
 CAMEO#01,Cameo,Unicon Remote Control,CK01900822,DMX/RDM Controller,False,False,,LX,Store,Store
-ECLIPSE#01,Silver Star,Eclipse 1000 RGBAL SS847XAL,MO18112100400034,,False,False,,LX,Store,Store
-ECLIPSE#02,Silver Star,Eclipse 1000 RGBAL SS847XAL,MO18112100400039,,False,False,,LX,Store,Store
-ECLIPSE#03,Silver Star,Eclipse 1000 RGBAL SS847XAL,MO18112100400030,,False,False,,LX,Store,Store
-ECLIPSE#04,Silver Star,Eclipse 1000 RGBAL SS847XAL,MO18112100400005,,False,False,,LX,Store,Store
-ECLIPSE#05,Silver Star,Eclipse 1000 RGBAL SS847XAL,MO18112100400026,,False,False,,LX,Store,Store
-ECLIPSE#06,Silver Star,Eclipse 1000 RGBAL SS847XAL,MO18112100400016,,False,False,,LX,Store,Store
-ECLIPSE#07,Silver Star,Eclipse 1000 RGBAL SS847XAL,MO18112139400432,,False,False,,LX,Store,Store
-ECLIPSE#08,Silver Star,Eclipse 1000 RGBAL SS847XAL,MO18112100400013,,False,False,,LX,Store,Store
-ECLIPSE#09,Silver Star,Eclipse 1000 RGBAL SS847XAL,MO18112100400029,,False,False,,LX,Store,
-ECLIPSE#10,Silver Star,Eclipse 1000 RGBAL SS847XAL,MO18112100400027,,False,False,,LX,Store,
-ECLIPSE#11,Silver Star,Eclipse 1000 RGBAL SS847XAL,MO18112100400006,,False,False,,LX,Store,
-ECLIPSE#12,Silver Star,Eclipse 1000 RGBAL SS847XAL,MO18112100400023,,False,False,,LX,Store,
-ECLIPSE#13,Silver Star,Eclipse 1000 RGBAL SS847XAL,MO18112100400012,,False,False,,LX,Store,Store
-ECLIPSE#14,Silver Star,Eclipse 1000 RGBAL SS847XAL,MO18112100400033,,False,False,,LX,Store,Store
-ECLIPSE#15,Silver Star,Eclipse 1000 RGBAL SS847XAL,MO18112100400028,,False,False,,LX,Store,Store
-ECLIPSE#16,Silver Star,Eclipse 1000 RGBAL SS847XAL,MO18112100400036,,False,False,,LX,Store,Store
-ECLIPSE#17,Silver Star,Eclipse 1000 RGBAL SS847XAL,MO18112100400010,,False,False,,LX,Store,
-ECLIPSE#18,Silver Star,Eclipse 1000 RGBAL SS847XAL,MO18112100400001,,False,False,,LX,Store,
-ECLIPSE#19,Silver Star,Eclipse 1000 RGBAL SS847XAL,MO18112100400004,,False,False,,LX,Store,
-ECLIPSE#20,Silver Star,Eclipse 1000 RGBAL SS847XAL,MO18112100400009,,False,False,,LX,Store,
+ECLIPSE#01,Silver Star,Eclipse 1000 RGBAL SS847XAL,MO18112100400034,300W LED Profile Spot,False,False,,LX,Store,Store
+ECLIPSE#02,Silver Star,Eclipse 1000 RGBAL SS847XAL,MO18112100400039,300W LED Profile Spot,False,False,,LX,Store,Store
+ECLIPSE#03,Silver Star,Eclipse 1000 RGBAL SS847XAL,MO18112100400030,300W LED Profile Spot,False,False,,LX,Store,Store
+ECLIPSE#04,Silver Star,Eclipse 1000 RGBAL SS847XAL,MO18112100400005,300W LED Profile Spot,False,False,,LX,Store,Store
+ECLIPSE#05,Silver Star,Eclipse 1000 RGBAL SS847XAL,MO18112100400026,300W LED Profile Spot,False,False,,LX,Store,Store
+ECLIPSE#06,Silver Star,Eclipse 1000 RGBAL SS847XAL,MO18112100400016,300W LED Profile Spot,False,False,,LX,Store,Store
+ECLIPSE#07,Silver Star,Eclipse 1000 RGBAL SS847XAL,MO18112139400432,300W LED Profile Spot,False,False,,LX,Store,Store
+ECLIPSE#08,Silver Star,Eclipse 1000 RGBAL SS847XAL,MO18112100400013,300W LED Profile Spot,False,False,,LX,Store,Store
+ECLIPSE#09,Silver Star,Eclipse 1000 RGBAL SS847XAL,MO18112100400029,300W LED Profile Spot,False,False,,LX,Store,
+ECLIPSE#10,Silver Star,Eclipse 1000 RGBAL SS847XAL,MO18112100400027,300W LED Profile Spot,False,False,,LX,Store,
+ECLIPSE#11,Silver Star,Eclipse 1000 RGBAL SS847XAL,MO18112100400006,300W LED Profile Spot,False,False,,LX,Store,
+ECLIPSE#12,Silver Star,Eclipse 1000 RGBAL SS847XAL,MO18112100400023,300W LED Profile Spot,False,False,,LX,Store,
+ECLIPSE#13,Silver Star,Eclipse 1000 RGBAL SS847XAL,MO18112100400012,300W LED Profile Spot,False,False,,LX,Store,Store
+ECLIPSE#14,Silver Star,Eclipse 1000 RGBAL SS847XAL,MO18112100400033,300W LED Profile Spot,False,False,,LX,Store,Store
+ECLIPSE#15,Silver Star,Eclipse 1000 RGBAL SS847XAL,MO18112100400028,300W LED Profile Spot,False,False,,LX,Store,Store
+ECLIPSE#16,Silver Star,Eclipse 1000 RGBAL SS847XAL,MO18112100400036,300W LED Profile Spot,False,False,,LX,Store,Store
+ECLIPSE#17,Silver Star,Eclipse 1000 RGBAL SS847XAL,MO18112100400010,300W LED Profile Spot,False,False,,LX,Store,
+ECLIPSE#18,Silver Star,Eclipse 1000 RGBAL SS847XAL,MO18112100400001,300W LED Profile Spot,False,False,,LX,Store,
+ECLIPSE#19,Silver Star,Eclipse 1000 RGBAL SS847XAL,MO18112100400004,300W LED Profile Spot,False,False,,LX,Store,
+ECLIPSE#20,Silver Star,Eclipse 1000 RGBAL SS847XAL,MO18112100400009,300W LED Profile Spot,False,False,,LX,Store,
+ETCZOOM#01,ETC,Source Four Zoom 25-50deg,,750W Tungsten Fixture,False,False,,LX,Store,
+ETCZOOM#02,ETC,Source Four Zoom 25-50deg,,750W Tungsten Fixture,False,False,,LX,Store,
+ETCZOOM#03,ETC,Source Four Zoom 25-50deg,,750W Tungsten Fixture,False,False,,LX,Store,
+ETCZOOM#04,ETC,Source Four Zoom 25-50deg,,750W Tungsten Fixture,False,False,,LX,Store,
+ETCZOOM#05,ETC,Source Four Zoom 25-50deg,,750W Tungsten Fixture,False,False,,LX,Store,
+ETCZOOM#06,ETC,Source Four Zoom 25-50deg,,750W Tungsten Fixture,False,False,,LX,Store,
+ETCZOOM#07,ETC,Source Four Zoom 25-50deg,,750W Tungsten Fixture,False,False,,LX,Store,
+ETCZOOM#08,ETC,Source Four Zoom 25-50deg,,750W Tungsten Fixture,False,False,,LX,Store,
 STRIKEM#01,Pomelo,Photon Strike M,,LED MOVING HEAD STROBE 1200W,False,False,,LX,Store,
 STRIKEM#02,Pomelo,Photon Strike M,,LED MOVING HEAD STROBE 1200W,False,False,,LX,Store,
 STRIKEM#03,Pomelo,Photon Strike M,,LED MOVING HEAD STROBE 1200W,False,False,,LX,Store,
@@ -913,8 +924,8 @@ LX TREE #02,Versa-Stand,,,Winch Up Lighting Stand,False,False,,LX,Store,
 LX TREE #03,Versa-Stand,,,Winch Up Lighting Stand,False,False,,LX,Store,
 LX TREE #04,Versa-Stand,,,Winch Up Lighting Stand,False,False,,LX,Store,
 LX TREE #05,Versa-Stand,,,Winch Up Lighting Stand,False,False,,LX,Store,
-AURORA#01,Lumenradio,Aurora,MAURA100000710,,False,False,,LX,Store,Store
-AURORA#02,Lumenradio,Aurora,MAURA100000707,,False,False,,LX,Store,Store
+AURORA#01,Lumenradio,Aurora,MAURA100000710,,False,False,"2025/07/30	bnjm2000	Send in to TSM for checking, repair. Signal weak [Location: Total Solutions]",LX,Store,Total Solutions
+AURORA#02,Lumenradio,Aurora,MAURA100000707,,False,False,"2025/07/30	bnjm2000	Send in to TSM for checking, repair. Signal weak [Location: Total Solutions]",LX,Store,Total Solutions
 AURORA#03,Lumenradio,Aurora,MAURA100000648,,False,False,,LX,Store,
 AURORA#04,Lumenradio,Aurora,MAURA100000981,,False,False,,LX,Store,
 DMX RECORDER #01,,XRC-200,2304738,,False,False,,LX,Store,
