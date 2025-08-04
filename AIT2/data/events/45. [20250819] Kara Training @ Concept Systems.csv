@@ -1,0 +1,2 @@
+EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,Tag,ForceStateOverride
+45,Kara Training @ Concept Systems,20250819,20250820,[],[],[],Added,[],[],events,False

@@ -1,0 +1,2 @@
+EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,Tag,ForceStateOverride
+44,STPI Annual Patrons Dinner @ STPI,20250813,20250815,[],[],[],Added,[],[],events,False

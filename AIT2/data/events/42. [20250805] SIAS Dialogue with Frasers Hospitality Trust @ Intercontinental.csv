@@ -1,0 +1,2 @@
+EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,Tag,ForceStateOverride
+42,SIAS Dialogue with Frasers Hospitality Trust @ Intercontinental,20250805,20250805,[],"[""[MODEL]LX|Robe|Robin LEDBeam 350 Wash|4|Wash LED"", ""[MODEL]LX|Avolites|Quartz|1|Console"", ""[MISC]LX Tree;2"", ""LEDBEAM#13"", ""LEDBEAM#14"", ""LEDBEAM#15"", ""LEDBEAM#16"", ""QUARTZ#01""]",[],Ready,"[""LEDBEAM#13"", ""LEDBEAM#14"", ""LEDBEAM#15"", ""LEDBEAM#16"", ""QUARTZ#01"", ""[MISC]LX Tree;2""]",[],events,False
