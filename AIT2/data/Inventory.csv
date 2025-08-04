@@ -915,6 +915,8 @@ NICKWASH#09,DTS,NickWash 600,,self-contained compact high-output LED moving head
 NICKWASH#10,DTS,NickWash 600,,self-contained compact high-output LED moving head projector,False,False,,LX,Store,
 NICKWASH#11,DTS,NickWash 600,,self-contained compact high-output LED moving head projector,False,False,,LX,Store,
 NICKWASH#12,DTS,NickWash 600,,self-contained compact high-output LED moving head projector,False,True,,LX,Store,
+MVSHAZER#01,Le Maitre,MVS Hazer,5317,Hazer machine,False,False,,LX,Store,
+MVSHAZER#02,Le Maitre,MVS Hazer,2222,Hazer machine,False,False,,LX,Store,
 63ADB#01,63A 3-Phase DB,Custom DB,,,False,False,,LX,Store,Store
 63ADB#02,63A 3-Phase DB,Custom DB,,,False,False,,LX,Store,
 32ADB#01,32A 3-Phase DB,Custom DB,,,False,False,,LX,Store,Store
