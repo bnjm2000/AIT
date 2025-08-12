@@ -1,0 +1,2 @@
+EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,Tag,ForceStateOverride
+46,Loewe Event @ Le Freeport,20250821,20250825,[],"[""[MODEL]AX|L-Acoustics|5XT|4|5\"" passive coaxial enclosure, black"", ""[MODEL]AX|L-Acoustics|ETR5|4|Adjustable U-bracket: 5XT"", ""[MODEL]AX|L-Acoustics|LA4X|1|Amplified controller""]",[],Planning,[],[],events,False

@@ -1,264 +1,3 @@
-2025/07/09 16:55:56,bnjm2000,Updated location for asset 5XTW#07 from 'Concept Systems' to 'Store'
-2025/07/09 16:55:56,bnjm2000,Removed Out of Commission status from asset 5XTW#07
-2025/07/09 16:55:56,bnjm2000,"Maintenance logged for asset 5XTW#07: Collected back from Concept Systems, inspected ok"
-2025/07/09 16:55:56,bnjm2000,Updated location for asset 5XTW#11 from 'Concept Systems' to 'Store'
-2025/07/09 16:55:56,bnjm2000,Removed Out of Commission status from asset 5XTW#11
-2025/07/09 16:55:56,bnjm2000,"Maintenance logged for asset 5XTW#11: Collected back from Concept Systems, inspected ok"
-2025/07/09 16:55:56,bnjm2000,Updated location for asset 5XTW#05 from 'Concept Systems' to 'Store'
-2025/07/09 16:55:56,bnjm2000,Removed Out of Commission status from asset 5XTW#05
-2025/07/09 16:55:56,bnjm2000,"Maintenance logged for asset 5XTW#05: Collected back from Concept Systems, inspected ok"
-2025/07/09 16:55:56,bnjm2000,Updated location for asset 5XTW#03 from 'Concept Systems' to 'Store'
-2025/07/09 16:55:56,bnjm2000,Removed Out of Commission status from asset 5XTW#03
-2025/07/09 16:55:57,bnjm2000,"Maintenance logged for asset 5XTW#03: Collected back from Concept Systems, inspected ok"
-2025/07/09 16:55:57,bnjm2000,Updated location for asset 5XTW#02 from 'Concept Systems' to 'Store'
-2025/07/09 16:55:57,bnjm2000,Removed Out of Commission status from asset 5XTW#02
-2025/07/09 16:55:57,bnjm2000,"Maintenance logged for asset 5XTW#02: Collected back from Concept Systems, inspected ok"
-2025/07/09 16:56:42,bnjm2000,Added asset HERCULES 8#01 via web interface
-2025/07/09 16:56:54,bnjm2000,Added asset HERCULES 8#02 via web interface
-2025/07/09 16:57:43,bnjm2000,Marked asset HERCULES 8#01 as Out of Commission
-2025/07/09 16:57:43,bnjm2000,Maintenance logged for asset HERCULES 8#01: Discovered frayed metal cable during BBC 2025 @ GBTB
-2025/07/09 16:58:42,bnjm2000,Updated location for asset HERCULES 8#01 from '' to 'LSD SG'
-2025/07/09 16:58:42,bnjm2000,Maintenance logged for asset HERCULES 8#01: Sent to LSD or servicing (Service order no. 1636)
-2025/07/09 17:01:36,bnjm2000,Created event 29: dearGENTLEFOLK @ Restaurant Born via web interface
-2025/07/09 17:01:44,bnjm2000,Added 8x Turbosound IP1000 model to event 29 (total: 8)
-2025/07/09 17:01:52,bnjm2000,Added 6x MiPro MR-90 model to event 29 (total: 6)
-2025/07/09 17:01:54,bnjm2000,Added 2x MiPro MT-90A model to event 29 (total: 2)
-2025/07/09 17:02:12,bnjm2000,Added 1x Shure PA805SWB model to event 29 (total: 1)
-2025/07/09 17:02:24,bnjm2000,Added 2x Shure ULXD2 model to event 29 (total: 2)
-2025/07/09 17:02:29,bnjm2000,Added 1x Shure ULXD4D model to event 29 (total: 1)
-2025/07/09 17:02:37,bnjm2000,Added 1x Yamaha MG10 model to event 29 (total: 1)
-2025/07/09 17:03:58,bnjm2000,Updated location for asset DIABLO#13 from '' to 'Store'
-2025/07/09 17:03:58,bnjm2000,Removed Out of Commission status from asset DIABLO#13
-2025/07/09 17:03:58,bnjm2000,Maintenance logged for asset DIABLO#13: Repaired by Technician Dean
-2025/07/09 17:04:37,bnjm2000,"Updated maintenance log for asset DIABLO#13: 'Repaired by Technician Dean [Location: Store, Cleared OOC, Cleared Missing]' -> 'Repaired by Technician Dean' (also: Location: Store) (edited by bnjm2000)"
-2025/07/09 17:04:43,bnjm2000,"Updated maintenance log for asset DIABLO#13: 'Repaired by Technician Dean [Location: Store]' -> 'Repaired by Technician Dean' (also: Location: Store, Cleared OOC) (edited by bnjm2000)"
-2025/07/10 09:27:17,system,Failed login attempt for username: bnjm2000
-2025/07/10 09:27:21,bnjm2000,User bnjm2000 logged in via web interface
-2025/07/10 09:27:50,bnjm2000,Added 4x TalentCell YB1208300-USB model to event 29 (total: 4)
-2025/07/10 09:29:30,bnjm2000,"Created event 31: Harpers Bazaar x Heart Evangelista @ Bar Somma, New Bahru via web interface"
-2025/07/10 09:29:36,bnjm2000,Added 1x Samsung UN65TU8000F model to event 31 (total: 1)
-2025/07/10 09:30:10,bnjm2000,Assigned asset [MISC]Prism+ KANVA Tripod TV Stand to event 31 (unprepared)
-2025/07/10 10:16:11,bnjm2000,Assigned specific asset MT-90A#01 to event 29
-2025/07/10 10:16:16,bnjm2000,Assigned specific asset MT-90A#03 to event 29
-2025/07/10 10:16:20,bnjm2000,Assigned specific asset MR-90A#01 to event 29
-2025/07/10 10:16:21,bnjm2000,Assigned specific asset MR-90A#02 to event 29
-2025/07/10 10:16:21,bnjm2000,Assigned specific asset MR-90A#03 to event 29
-2025/07/10 10:16:24,bnjm2000,Assigned specific asset MR-90A#04 to event 29
-2025/07/10 10:16:25,bnjm2000,Assigned specific asset MR-90A#05 to event 29
-2025/07/10 10:16:25,bnjm2000,Assigned specific asset MR-90A#06 to event 29
-2025/07/10 10:16:45,bnjm2000,Assigned specific asset PA805SWB#01 to event 29
-2025/07/10 10:17:01,bnjm2000,Removed Shure ULXD2 model from event 29
-2025/07/10 10:17:01,bnjm2000,Added 3x Shure ULXD2 model to event 29 (total: 3)
-2025/07/10 10:17:10,bnjm2000,Assigned specific asset ULXD2#01 to event 29
-2025/07/10 10:17:15,bnjm2000,Assigned specific asset ULXD2#05 to event 29
-2025/07/10 10:17:17,bnjm2000,Assigned specific asset ULXD2#10 to event 29
-2025/07/10 10:17:22,bnjm2000,Assigned specific asset TALENTCELL#01 to event 29
-2025/07/10 10:17:24,bnjm2000,Assigned specific asset TALENTCELL#02 to event 29
-2025/07/10 10:17:25,bnjm2000,Assigned specific asset TALENTCELL#03 to event 29
-2025/07/10 10:17:27,bnjm2000,Assigned specific asset TALENTCELL#04 to event 29
-2025/07/10 10:17:30,bnjm2000,Assigned specific asset IP1000#01 to event 29
-2025/07/10 10:17:31,bnjm2000,Assigned specific asset IP1000#02 to event 29
-2025/07/10 10:17:33,bnjm2000,Assigned specific asset IP1000#03 to event 29
-2025/07/10 10:17:34,bnjm2000,Assigned specific asset IP1000#04 to event 29
-2025/07/10 10:17:35,bnjm2000,Assigned specific asset IP1000#05 to event 29
-2025/07/10 10:17:37,bnjm2000,Assigned specific asset IP1000#06 to event 29
-2025/07/10 10:17:38,bnjm2000,Assigned specific asset IP1000#07 to event 29
-2025/07/10 10:17:40,bnjm2000,Assigned specific asset IP1000#08 to event 29
-2025/07/10 10:17:42,bnjm2000,Assigned specific asset MG10#01 to event 29
-2025/07/10 10:18:38,bnjm2000,Created event 32: Dry Hire: Vision Display via web interface
-2025/07/10 10:18:46,bnjm2000,Assigned asset [MISC]1 x TV stand to event 32 (unprepared)
-2025/07/10 10:18:57,bnjm2000,Added 1x Samsung UN65TU8000F model to event 32 (total: 1)
-2025/07/10 10:19:21,bnjm2000,Prepared asset [MISC]1 x TV stand for event 32
-2025/07/10 10:19:23,bnjm2000,Completely removed asset [MISC]1 x TV stand from event 32
-2025/07/10 10:19:54,bnjm2000,Assigned asset [MISC]TV stand to event 32 (unprepared)
-2025/07/10 10:19:56,bnjm2000,Removed Samsung UN65TU8000F model from event 32
-2025/07/10 10:21:27,bnjm2000,Created event 33:  Hermes Event @ The Art House via web interface
-2025/07/10 10:21:53,bnjm2000,Created event 34: Dry Hire: Avery Events via web interface
-2025/07/10 10:22:11,bnjm2000,"Assigned asset [MISC]43"" TV;4 to event 34 (unprepared)"
-2025/07/10 10:22:24,bnjm2000,Assigned asset [MISC]TV DSM Stand;3 to event 34 (unprepared)
-2025/07/10 10:22:39,bnjm2000,Prepared asset [MISC]TV DSM Stand;3 for event 34
-2025/07/10 10:22:39,bnjm2000,Completely removed asset [MISC]TV DSM Stand;3 from event 34
-2025/07/10 10:22:46,bnjm2000,Assigned asset [MISC]TV DSM Stand;4 to event 34 (unprepared)
-2025/07/10 10:22:59,bnjm2000,Updated event 34: Dry Hire: Avery Events via web interface
-2025/07/10 10:42:26,bnjm2000,Assigned specific asset ULXD4D#04 to event 29
-2025/07/10 13:03:26,bnjm2000,Updated location for asset AD2#02 from 'E&E' to 'Store'
-2025/07/10 13:03:26,bnjm2000,Removed Out of Commission status from asset AD2#02
-2025/07/10 13:03:26,bnjm2000,Maintenance logged for asset AD2#02: Collected from E&E
-2025/07/10 13:03:26,bnjm2000,Updated location for asset AD2#07 from 'E&E' to 'Store'
-2025/07/10 13:03:26,bnjm2000,Removed Out of Commission status from asset AD2#07
-2025/07/10 13:03:26,bnjm2000,Maintenance logged for asset AD2#07: Collected from E&E
-2025/07/10 13:04:01,bnjm2000,"Deleted maintenance log for asset AD2#07: '[2025/06/24] Replaced display bezel [$25]
-Service charge [$60]' (deleted by bnjm2000)"
-2025/07/10 13:04:25,bnjm2000,Updated location for asset AD2#07 from '' to 'E&E'
-2025/07/10 13:04:25,bnjm2000,Marked asset AD2#07 as Out of Commission
-2025/07/10 13:04:25,bnjm2000,"Maintenance logged for asset AD2#07: Replaced display bezel $25 
-Service charge $60"
-2025/07/10 13:04:44,bnjm2000,"Deleted maintenance log for asset AD2#02: '[2025/06/24] Replaced display bezel [$25]
-Service charge [$60]' (deleted by bnjm2000)"
-2025/07/10 13:04:50,bnjm2000,Updated location for asset AD2#02 from '' to 'E&E'
-2025/07/10 13:04:50,bnjm2000,Marked asset AD2#02 as Out of Commission
-2025/07/10 13:04:51,bnjm2000,Maintenance logged for asset AD2#02: Replaced display bezel $25 Service charge $60
-2025/07/10 13:05:00,bnjm2000,"Deleted maintenance log for asset AD2#02: 'Collected from E&E [Location: Store, Cleared OOC, Cleared Missing]' (deleted by bnjm2000)"
-2025/07/10 13:05:04,bnjm2000,"Deleted maintenance log for asset AD2#07: 'Collected from E&E [Location: Store, Cleared OOC, Cleared Missing]' (deleted by bnjm2000)"
-2025/07/10 13:05:12,bnjm2000,Updated location for asset AD2#07 from 'E&E' to 'Store'
-2025/07/10 13:05:12,bnjm2000,Removed Out of Commission status from asset AD2#07
-2025/07/10 13:05:12,bnjm2000,Maintenance logged for asset AD2#07: Collected from E&E
-2025/07/10 13:05:12,bnjm2000,Updated location for asset AD2#02 from 'E&E' to 'Store'
-2025/07/10 13:05:12,bnjm2000,Removed Out of Commission status from asset AD2#02
-2025/07/10 13:05:12,bnjm2000,Maintenance logged for asset AD2#02: Collected from E&E
-2025/07/10 13:05:47,bnjm2000,"Updated maintenance log for asset ULXD2#11: 'Battery prong dropped out, unable to turn on (Wedding of Jeremy and Julia @ The Pyramid Club), sent to E&E [Location: E&E, Marked OOC]' -> 'Battery prong dropped out, unable to turn on (Wedding of Jeremy and Julia @ The Pyramid Club)' (also: Location: E&E) (edited by bnjm2000)"
-2025/07/10 13:05:53,bnjm2000,"Updated maintenance log for asset ULXD2#11: 'Battery prong dropped out, unable to turn on (Wedding of Jeremy and Julia @ The Pyramid Club) [Location: E&E]' -> 'Battery prong dropped out, unable to turn on (Wedding of Jeremy and Julia @ The Pyramid Club)' (also: Location: E&E, Marked OOC) (edited by bnjm2000)"
-2025/07/10 13:06:00,bnjm2000,"Updated maintenance log for asset ULXD2#11: 'Battery prong dropped out, unable to turn on (Wedding of Jeremy and Julia @ The Pyramid Club) [Location: E&E, Marked OOC]' -> 'Battery prong dropped out, unable to turn on (Wedding of Jeremy and Julia @ The Pyramid Club)' (also: Location: E&E) (edited by bnjm2000)"
-2025/07/10 13:06:09,bnjm2000,"Updated maintenance log for asset ULXD2#11: 'Battery prong dropped out, unable to turn on (Wedding of Jeremy and Julia @ The Pyramid Club) [Location: E&E]' -> 'Battery prong dropped out, unable to turn on (Wedding of Jeremy and Julia @ The Pyramid Club)' (also: Location: Store) (edited by bnjm2000)"
-2025/07/10 13:06:13,bnjm2000,"Updated maintenance log for asset ULXD2#11: 'Battery prong dropped out, unable to turn on (Wedding of Jeremy and Julia @ The Pyramid Club) [Location: Store]' -> 'Battery prong dropped out, unable to turn on (Wedding of Jeremy and Julia @ The Pyramid Club)' (also: Location: Store, Marked OOC) (edited by bnjm2000)"
-2025/07/10 13:06:26,bnjm2000,Updated location for asset ULXD2#11 from '' to 'E&E'
-2025/07/10 13:06:26,bnjm2000,Maintenance logged for asset ULXD2#11: Sent to E&E for service.
-2025/07/10 14:47:50,bnjm2000,Created event 35: Dry Hire: UAV via web interface
-2025/07/10 14:48:17,bnjm2000,Assigned asset [MISC]NL4 Socapex breakout;2 to event 35 (unprepared)
-2025/07/10 14:48:24,bnjm2000,Prepared asset [MISC]NL4 Socapex breakout;2 for event 35
-2025/07/10 14:48:44,bnjm2000,Updated event 35: Dry Hire: UAV via web interface
-2025/07/10 15:59:44,bnjm2000,Maintenance logged for asset AD2#11: Replaced grill as it was rusty
-2025/07/10 15:59:44,bnjm2000,Maintenance logged for asset AD2#13: Replaced grill as it was rusty
-2025/07/14 09:45:23,bnjm2000,User bnjm2000 logged in via web interface
-2025/07/14 09:45:48,bnjm2000,Created event 36: Dry Hire: THH via web interface
-2025/07/14 09:46:07,bnjm2000,Assigned asset [MISC]24in base plate;4 to event 36 (unprepared)
-2025/07/14 09:46:09,bnjm2000,Deleted event 30: Dry-hire: THH via web interface. No asset locations to reset. Removed 8 related log entries.
-2025/07/14 09:46:13,bnjm2000,Prepared asset [MISC]24in base plate;4 for event 36
-2025/07/14 09:47:31,bnjm2000,Updated event 36: Dry Hire: THH via web interface
-2025/07/14 09:48:42,bnjm2000,Returned asset MT-90A#01 from event 29
-2025/07/14 09:48:43,bnjm2000,Returned asset MT-90A#03 from event 29
-2025/07/14 09:48:44,bnjm2000,Returned asset MR-90A#01 from event 29
-2025/07/14 09:48:44,bnjm2000,Returned asset MR-90A#02 from event 29
-2025/07/14 09:48:44,bnjm2000,Returned asset MR-90A#03 from event 29
-2025/07/14 09:48:44,bnjm2000,Returned asset MR-90A#04 from event 29
-2025/07/14 09:48:44,bnjm2000,Returned asset MR-90A#05 from event 29
-2025/07/14 09:48:44,bnjm2000,Returned asset MR-90A#06 from event 29
-2025/07/14 09:48:46,bnjm2000,Returned asset PA805SWB#01 from event 29
-2025/07/14 09:48:47,bnjm2000,Returned asset ULXD2#01 from event 29
-2025/07/14 09:48:47,bnjm2000,Returned asset ULXD2#05 from event 29
-2025/07/14 09:48:48,bnjm2000,Returned asset ULXD2#10 from event 29
-2025/07/14 09:48:49,bnjm2000,Returned asset TALENTCELL#01 from event 29
-2025/07/14 09:48:49,bnjm2000,Returned asset TALENTCELL#02 from event 29
-2025/07/14 09:48:49,bnjm2000,Returned asset TALENTCELL#03 from event 29
-2025/07/14 09:48:49,bnjm2000,Returned asset TALENTCELL#04 from event 29
-2025/07/14 09:48:50,bnjm2000,Returned asset IP1000#01 from event 29
-2025/07/14 09:48:50,bnjm2000,Returned asset IP1000#02 from event 29
-2025/07/14 09:48:50,bnjm2000,Returned asset IP1000#03 from event 29
-2025/07/14 09:48:50,bnjm2000,Returned asset IP1000#04 from event 29
-2025/07/14 09:48:50,bnjm2000,Returned asset IP1000#05 from event 29
-2025/07/14 09:48:50,bnjm2000,Returned asset IP1000#06 from event 29
-2025/07/14 09:48:50,bnjm2000,Returned asset IP1000#07 from event 29
-2025/07/14 09:48:50,bnjm2000,Returned asset IP1000#08 from event 29
-2025/07/14 09:48:52,bnjm2000,Returned asset MG10#01 from event 29
-2025/07/14 09:48:54,bnjm2000,Returned asset ULXD4D#04 from event 29
-2025/07/14 09:50:21,bnjm2000,Created event 37: SingHealth DUKE-NUS Gala @ TRCM via web interface
-2025/07/14 09:50:31,bnjm2000,Added 4x L-Acoustics X12 model to event 37 (total: 4)
-2025/07/14 09:50:42,bnjm2000,Added 4x L-Acoustics SB18 model to event 37 (total: 4)
-2025/07/14 09:52:57,bnjm2000,Added 2x DPA 6061 model to event 37 (total: 2)
-2025/07/14 09:53:13,bnjm2000,Added 1x Shure Beta 52A model to event 37 (total: 1)
-2025/07/14 09:53:23,bnjm2000,Added 3x Sennheiser E904 model to event 37 (total: 3)
-2025/07/14 09:53:34,bnjm2000,Added 2x Shure SM57 model to event 37 (total: 2)
-2025/07/14 09:53:41,bnjm2000,Added 2x Shure SM58S model to event 37 (total: 2)
-2025/07/14 09:54:10,bnjm2000,Added 1x Shure ULXD4Q model to event 37 (total: 1)
-2025/07/14 09:54:12,bnjm2000,Added 3x Shure ULXD4D model to event 37 (total: 3)
-2025/07/14 09:54:38,bnjm2000,Added 8x Shure ULXD2 model to event 37 (total: 8)
-2025/07/14 09:55:09,bnjm2000,Added 1x Yamaha QL5 model to event 37 (total: 1)
-2025/07/14 09:55:15,bnjm2000,Added 1x GrandMA3 Compact XT model to event 37 (total: 1)
-2025/07/14 09:55:38,bnjm2000,Added 12x Ayrton Diablo (W.DMX) model to event 37 (total: 12)
-2025/07/14 09:55:41,bnjm2000,Added 4x Ayrton Diablo Profile model to event 37 (total: 4)
-2025/07/14 09:55:48,bnjm2000,Added 10x Robe Robin LEDBeam 350 Wash model to event 37 (total: 10)
-2025/07/14 09:56:05,bnjm2000,Removed Robe Robin LEDBeam 350 Wash model from event 37
-2025/07/14 09:56:05,bnjm2000,Added 12x Robe Robin LEDBeam 350 Wash model to event 37 (total: 12)
-2025/07/14 09:56:26,bnjm2000,Added 1x L-Acoustics P1 model to event 37 (total: 1)
-2025/07/14 09:56:32,bnjm2000,Added 2x Netgear GSM4212P model to event 37 (total: 2)
-2025/07/14 09:56:54,bnjm2000,Added 8x L-Acoustics X8 model to event 37 (total: 8)
-2025/07/14 10:20:05,bnjm2000,Added 6x DPA 4099 model to event 37 (total: 6)
-2025/07/14 10:26:28,bnjm2000,"Maintenance logged for asset 4099#01: Inventory check, cable is exposed"
-2025/07/14 10:26:28,bnjm2000,"Maintenance logged for asset 4099#03: Inventory check, cable is exposed"
-2025/07/14 10:26:28,bnjm2000,"Maintenance logged for asset 4099#07: Inventory check, cable is exposed"
-2025/07/14 10:26:28,bnjm2000,"Maintenance logged for asset 4099#10: Inventory check, cable is exposed"
-2025/07/14 10:26:52,bnjm2000,"Maintenance logged for asset 4099#11: inventory check, cable a little exposed"
-2025/07/14 10:26:52,bnjm2000,"Maintenance logged for asset 4099#10: inventory check, cable a little exposed"
-2025/07/14 10:27:13,bnjm2000,"Maintenance logged for asset 4099#15: Inventory check, cable a little exposed"
-2025/07/14 10:28:08,bnjm2000,"Updated maintenance log for asset 4099#03: 'Inventory check, cable is exposed' -> 'Inventory check, cable is oxidised and disintegrating' (also: Marked OOC) (edited by bnjm2000)"
-2025/07/14 10:28:31,bnjm2000,Marked asset 4099#13 as Out of Commission
-2025/07/14 10:28:31,bnjm2000,"Maintenance logged for asset 4099#13: Inventory check, sponge spoilt, cable exposed"
-2025/07/14 10:29:00,bnjm2000,"Maintenance logged for asset 4099#12: Inventory check, cable is exposed, sponge is going"
-2025/07/14 10:29:19,bnjm2000,Marked asset 4099#09 as Out of Commission
-2025/07/14 10:29:19,bnjm2000,"Maintenance logged for asset 4099#09: Inventory check, cable exposed, no sponge"
-2025/07/14 10:30:29,bnjm2000,Marked asset 4099#06 as Out of Commission
-2025/07/14 10:30:29,bnjm2000,"Maintenance logged for asset 4099#06: Inventory check, no sponge, cable ok"
-2025/07/14 10:30:54,bnjm2000,Marked asset 4099#08 as Out of Commission
-2025/07/14 10:30:54,bnjm2000,"Maintenance logged for asset 4099#08: Inventory check, no sponge, cable exposed"
-2025/07/14 10:31:19,bnjm2000,Marked asset 4099#02 as Out of Commission
-2025/07/14 10:31:19,bnjm2000,"Maintenance logged for asset 4099#02: Inventory check, no sponge, cable exposed"
-2025/07/14 10:32:26,bnjm2000,"Deleted maintenance log for asset 4099#10: 'Inventory check, cable is exposed' (deleted by bnjm2000)"
-2025/07/14 12:27:17,bnjm2000,Created event 38: Tempest & Tranquility @ Drama Centre Blackbox via web interface
-2025/07/14 12:27:27,bnjm2000,Added 4x Ayrton Diablo Profile model to event 38 (total: 4)
-2025/07/14 12:27:32,bnjm2000,Added 4x Robe ESPRITE model to event 38 (total: 4)
-2025/07/14 12:27:47,bnjm2000,Added 2x Shure ULXD2 model to event 38 (total: 2)
-2025/07/14 12:27:53,bnjm2000,Added 8x Shure ULXD1 model to event 38 (total: 8)
-2025/07/14 12:28:03,bnjm2000,Added 8x DPA DAD 6010 model to event 38 (total: 8)
-2025/07/14 12:28:15,bnjm2000,Added 5x DPA 6061 model to event 38 (total: 5)
-2025/07/14 12:28:23,bnjm2000,Added 4x DPA 4466 model to event 38 (total: 4)
-2025/07/14 12:28:29,bnjm2000,Added 1x DPA 4099 model to event 38 (total: 1)
-2025/07/14 12:28:35,bnjm2000,Added 1x DPA DAD 6001 model to event 38 (total: 1)
-2025/07/14 12:28:48,bnjm2000,Added 3x Shure SM57 model to event 38 (total: 3)
-2025/07/14 12:28:54,bnjm2000,Added 1x Shure ULXD4D model to event 38 (total: 1)
-2025/07/14 12:28:54,bnjm2000,Added 1x Shure ULXD4D model to event 38 (total: 2)
-2025/07/14 12:28:55,bnjm2000,Added 1x Shure ULXD4D model to event 38 (total: 3)
-2025/07/14 12:29:00,bnjm2000,Added 1x Shure ULXD4Q model to event 38 (total: 1)
-2025/07/14 12:29:14,bnjm2000,Added 1x Yamaha Rio3224-d model to event 38 (total: 1)
-2025/07/14 12:29:36,bnjm2000,Assigned asset [MISC]Mic belt to event 38 (unprepared)
-2025/07/14 12:29:58,bnjm2000,Added 5x Shure P9T model to event 38 (total: 5)
-2025/07/14 12:30:01,bnjm2000,Added 4x Shure P9RA model to event 38 (total: 4)
-2025/07/14 12:30:44,bnjm2000,Assigned asset [MISC]Shure P9T [NicheAV];3 to event 38 (unprepared)
-2025/07/14 12:31:17,bnjm2000,Assigned asset [MISC]Shure P9RA [NicheAV];5 to event 38 (unprepared)
-2025/07/14 12:31:37,bnjm2000,Prepared asset [MISC]Shure P9T [NicheAV];3 for event 38
-2025/07/14 12:31:41,bnjm2000,Completely removed asset [MISC]Shure P9T [NicheAV];3 from event 38
-2025/07/14 12:31:57,bnjm2000,Prepared asset [MISC]Shure P9RA [NicheAV];5 for event 38
-2025/07/14 12:31:57,bnjm2000,Completely removed asset [MISC]Shure P9RA [NicheAV];5 from event 38
-2025/07/14 12:32:04,bnjm2000,Prepared asset [MISC]Mic belt for event 38
-2025/07/14 12:32:05,bnjm2000,Completely removed asset [MISC]Mic belt from event 38
-2025/07/14 13:24:49,bnjm2000,Assigned asset [LOAN]Shure P9T;3 to event 38 (unprepared)
-2025/07/14 13:25:00,bnjm2000,Assigned asset [LOAN]Shure P9RA [NicheAV];5 to event 38 (unprepared)
-2025/07/14 14:14:19,bnjm2000,Assigned asset [MISC]Shure P9RA;5 to event 38 (unprepared)
-2025/07/15 14:54:25,admin,User admin forced event 23 (Dry Hire: Variety Communications) state from Planning to Closed
-2025/07/15 14:54:55,admin,User admin forced event 24 (BBC Earth Screening @ GBTB) state from Planning to Closed
-2025/07/15 14:55:00,admin,User admin forced event 22 (Wedding @ TWG) state from Added to Closed
-2025/07/15 14:55:03,admin,User admin forced event 21 (Highland Park Relaunch @ AIR CCC) state from Added to Closed
-2025/07/15 14:55:06,admin,User admin forced event 20 (Standard Chartered Lunar New Year Celebration 2025 @ Ritz Carlton Grand Ballroom) state from Added to Closed
-2025/07/15 14:55:09,admin,User admin forced event 19 (SEA Focus Talk @ Tanjong Pagar Distripark) state from Added to Closed
-2025/07/15 14:55:12,admin,User admin forced event 18 (Grand Seiko CNY In-store Event @ MBS) state from Added to Closed
-2025/07/15 14:57:24,admin,User admin forced event 1 (Franck Muller x Cortina High Jewelry Dinner @ Quenino) state from Planning to Closed
-2025/07/15 14:57:27,admin,User admin forced event 2 (Townhall @ 10 Tai Seng Drive) state from Planning to Closed
-2025/07/15 14:57:30,admin,User admin forced event 3 (ESMO @ JW Mariott) state from Planning to Closed
-2025/07/15 14:57:52,admin,User admin forced event 5 (ESMO @ Assembly) state from Added to Closed
-2025/07/15 14:58:09,admin,User admin forced event 6 (Rental to Aaron) state from Planning to Closed
-2025/07/15 14:58:11,admin,User admin forced event 4 (ESMO @ Swissotel) state from Added to Closed
-2025/07/15 14:58:14,admin,User admin forced event 7 (A Legacy in Bloom (SLMA) @ Jia He Grand Restaurant) state from Planning to Closed
-2025/07/15 14:58:18,admin,User admin forced event 8 (Rental of Comms to Avery Events) state from Planning to Closed
-2025/07/15 14:58:21,admin,User admin forced event 10 (LV @ 72 Joo Chiat Place) state from Planning to Closed
-2025/07/15 14:58:24,admin,User admin forced event 13 (Countdown @ NS Temple) state from Planning to Closed
-2025/07/15 14:58:27,admin,User admin forced event 12 (Martell @ Ritz Carlton Garden Pavillion) state from Added to Closed
-2025/07/15 14:58:30,admin,User admin forced event 11 (SEA Focus) state from Planning to Closed
-2025/07/15 14:58:34,admin,User admin forced event 14 (Institutum @ Edition Hotel) state from Planning to Closed
-2025/07/15 14:58:36,admin,User admin forced event 15 (Ben & Rachel Wedding @ Ritz Carlton) state from Planning to Closed
-2025/07/15 14:58:38,admin,User admin forced event 16 (Wedding Lunch Reception of Emily & Fred @ 2E Bishopsgate) state from Planning to Closed
-2025/07/15 14:58:42,admin,User admin forced event 19 (SEA Focus Talk @ Tanjong Pagar Distripark) state from Added to Closed
-2025/07/15 14:58:45,admin,User admin forced event 18 (Grand Seiko CNY In-store Event @ MBS) state from Added to Closed
-2025/07/15 14:58:48,admin,User admin forced event 17 (Hermes SS25 WRTW RDV Presentation @ Liat Towers) state from Planning to Closed
-2025/07/15 14:58:52,admin,User admin forced event 22 (Wedding @ TWG) state from Added to Closed
-2025/07/15 14:58:59,admin,User admin forced event 21 (Highland Park Relaunch @ AIR CCC) state from Added to Closed
-2025/07/15 14:59:03,admin,User admin forced event 20 (Standard Chartered Lunar New Year Celebration 2025 @ Ritz Carlton Grand Ballroom) state from Added to Closed
-2025/07/15 14:59:08,admin,User admin forced event 24 (BBC Earth Screening @ GBTB) state from Planning to Closed
-2025/07/15 14:59:13,admin,User admin forced event 23 (Dry Hire: Variety Communications) state from Planning to Closed
-2025/07/15 15:13:46,admin,User admin forced event 1 (Franck Muller x Cortina High Jewelry Dinner @ Quenino) state from Planning to Closed
-2025/07/15 15:15:06,admin,User admin forced event 1 (Franck Muller x Cortina High Jewelry Dinner @ Quenino) state from Planning to Closed
-2025/07/15 15:19:33,admin,User admin forced event 1 (Franck Muller x Cortina High Jewelry Dinner @ Quenino) state from Planning to Closed
-2025/07/15 15:24:41,admin,User admin forced event 2 (Townhall @ 10 Tai Seng Drive) state from Planning to Closed
-2025/07/15 15:24:44,admin,User admin forced event 3 (ESMO @ JW Mariott) state from Planning to Closed
-2025/07/15 15:24:47,admin,User admin forced event 4 (ESMO @ Swissotel) state from Added to Closed
 2025/07/15 15:24:49,admin,User admin forced event 5 (ESMO @ Assembly) state from Added to Closed
 2025/07/15 15:24:52,admin,User admin forced event 6 (Rental to Aaron) state from Planning to Closed
 2025/07/15 15:24:55,admin,User admin forced event 10 (LV @ 72 Joo Chiat Place) state from Planning to Closed
@@ -1001,3 +740,261 @@ Service charge [$60]' (deleted by bnjm2000)"
 2025/08/04 15:57:14,bnjm2000,Assigned specific asset ETCZOOM#04 to event 41
 2025/08/04 15:57:15,bnjm2000,Assigned specific asset ETCZOOM#05 to event 41
 2025/08/04 15:57:15,bnjm2000,Assigned specific asset ETCZOOM#06 to event 41
+2025/08/05 16:59:25,system,Failed login attempt for username: bnjm2000
+2025/08/05 16:59:30,bnjm2000,User bnjm2000 logged in via web interface
+2025/08/05 16:59:51,bnjm2000,Added 2x Turbosound IP1000 model to event 44 (total: 2)
+2025/08/05 16:59:58,bnjm2000,Added 4x Shure ULXD2 model to event 44 (total: 4)
+2025/08/05 17:00:10,bnjm2000,Added 1x Yamaha DM3 model to event 44 (total: 1)
+2025/08/05 17:00:21,bnjm2000,Added 4x Turbosound IP1000 model to event 43 (total: 4)
+2025/08/05 17:00:25,bnjm2000,Added 1x Yamaha QL5 model to event 43 (total: 1)
+2025/08/05 17:00:32,bnjm2000,Added 2x L-Acoustics SB18 model to event 43 (total: 2)
+2025/08/05 17:00:37,bnjm2000,Added 4x L-Acoustics 5XT model to event 43 (total: 4)
+2025/08/05 17:00:43,bnjm2000,Added 4x L-Acoustics X8 model to event 43 (total: 4)
+2025/08/05 17:01:04,bnjm2000,Added 3x L-Acoustics LA12X model to event 43 (total: 3)
+2025/08/05 17:01:07,bnjm2000,Added 1x L-Acoustics P1 model to event 43 (total: 1)
+2025/08/05 17:01:19,bnjm2000,Added 1x Yamaha Rio3224-d model to event 43 (total: 1)
+2025/08/05 17:01:25,bnjm2000,Added 2x Netgear GSM4212P model to event 43 (total: 2)
+2025/08/05 17:01:41,bnjm2000,Added 8x Ayrton Diablo (W.DMX) model to event 43 (total: 8)
+2025/08/05 17:01:47,bnjm2000,Added 4x Robe Robin LEDBeam 350 Wash model to event 43 (total: 4)
+2025/08/05 17:02:33,bnjm2000,Added 1x Analogue Way Pulse 2 model to event 44 (total: 1)
+2025/08/05 17:02:40,bnjm2000,Added 2x Samsung LH85QMCEBGCXXS model to event 43 (total: 2)
+2025/08/11 15:24:29,admin,User admin logged in via web interface
+2025/08/11 15:24:42,admin,Prepared asset [MISC]Fibre Cables;2 for event 40
+2025/08/11 15:24:55,admin,Returned asset LEDBEAM#13 from event 42
+2025/08/11 15:24:56,admin,Returned asset LEDBEAM#14 from event 42
+2025/08/11 15:24:57,admin,Returned asset LEDBEAM#15 from event 42
+2025/08/11 15:24:58,admin,Returned asset QUARTZ#01 from event 42
+2025/08/11 15:24:59,admin,Returned asset LEDBEAM#16 from event 42
+2025/08/11 15:25:01,admin,Returned asset [MISC]LX Tree;2 from event 42
+2025/08/11 15:25:14,admin,Returned asset HLBatt#01 from event 41
+2025/08/11 15:25:15,admin,Returned asset HLBatt#02 from event 41
+2025/08/11 15:25:15,admin,Returned asset HLBatt#03 from event 41
+2025/08/11 15:25:16,admin,Returned asset HLBatt#04 from event 41
+2025/08/11 15:25:16,admin,Returned asset HLBatt#05 from event 41
+2025/08/11 15:25:19,admin,Returned asset HLBatt#06 from event 41
+2025/08/11 15:25:19,admin,Returned asset HLBatt#07 from event 41
+2025/08/11 15:25:22,admin,Returned asset HLBatt#08 from event 41
+2025/08/11 15:25:25,admin,Returned asset HLBatt#09 from event 41
+2025/08/11 15:25:25,admin,Returned asset HLBatt#11 from event 41
+2025/08/11 15:25:26,admin,Returned asset HLBatt#12 from event 41
+2025/08/11 15:25:28,admin,Returned asset HLBatt#10 from event 41
+2025/08/11 15:25:29,admin,Returned asset HLBatt#13 from event 41
+2025/08/11 15:25:30,admin,Returned asset HLBatt#15 from event 41
+2025/08/11 15:25:30,admin,Returned asset HLBatt#16 from event 41
+2025/08/11 15:25:31,admin,Returned asset HLBatt#14 from event 41
+2025/08/11 15:25:36,admin,Returned asset C1ProHub#01 from event 41
+2025/08/11 15:25:37,admin,Returned asset C1ProCharger#01 from event 41
+2025/08/11 15:25:41,admin,Returned asset C1ProRHS#01 from event 41
+2025/08/11 15:25:42,admin,Returned asset C1ProRHS#02 from event 41
+2025/08/11 15:25:43,admin,Returned asset C1ProRHS#04 from event 41
+2025/08/11 15:25:44,admin,Returned asset C1ProRHS#05 from event 41
+2025/08/11 15:25:44,admin,Returned asset C1ProRHS#07 from event 41
+2025/08/11 15:25:48,admin,Returned asset C1ProRHS#03 from event 41
+2025/08/11 15:25:49,admin,Returned asset C1ProRHS#06 from event 41
+2025/08/11 15:25:50,admin,Returned asset C1ProRHS#08 from event 41
+2025/08/11 15:25:52,admin,Returned asset C1ProWHS#01 from event 41
+2025/08/11 15:25:55,admin,Returned asset ME36#01 from event 41
+2025/08/11 15:25:55,admin,Returned asset ME36#02 from event 41
+2025/08/11 15:25:56,admin,Returned asset QL1#02 from event 41
+2025/08/11 15:25:58,admin,Returned asset IPAD#03 from event 41
+2025/08/11 15:26:02,admin,Returned asset EVOLVE50#03 from event 41
+2025/08/11 15:26:02,admin,Returned asset EVOLVE50#04 from event 41
+2025/08/11 15:26:04,admin,Returned asset EVOLVE50#05 from event 41
+2025/08/11 15:26:06,admin,Returned asset IP1000#07 from event 41
+2025/08/11 15:26:07,admin,Returned asset IP1000#08 from event 41
+2025/08/11 15:26:07,admin,Returned asset EVOLVE50#06 from event 41
+2025/08/11 15:26:11,admin,Returned asset RIO1608-D #01 from event 41
+2025/08/11 15:26:12,admin,Returned asset TIGERTOUCH2#01 from event 41
+2025/08/11 15:26:13,admin,Returned asset DXR10#01 from event 41
+2025/08/11 15:26:16,admin,Returned asset MVSHAZER#02 from event 41
+2025/08/11 15:26:17,admin,Returned asset DIABLO#13 from event 41
+2025/08/11 15:26:20,admin,Returned asset DXR10#02 from event 41
+2025/08/11 15:26:22,admin,Returned asset DIABLO#14 from event 41
+2025/08/11 15:26:22,admin,Returned asset DIABLO#16 from event 41
+2025/08/11 15:26:23,admin,Returned asset DIABLO#18 from event 41
+2025/08/11 15:26:23,admin,Returned asset DIABLO#17 from event 41
+2025/08/11 15:26:25,admin,Returned asset DIABLO#19 from event 41
+2025/08/11 15:26:27,admin,Returned asset J48S#06 from event 41
+2025/08/11 15:26:28,admin,Returned asset J48S#05 from event 41
+2025/08/11 15:26:29,admin,Returned asset DIABLO#15 from event 41
+2025/08/11 15:26:30,admin,Returned asset DIABLO#20 from event 41
+2025/08/11 15:26:32,admin,Returned asset MT-90A#01 from event 41
+2025/08/11 15:26:36,admin,Returned asset J48M#01 from event 41
+2025/08/11 15:26:37,admin,Returned asset PCBB#05 from event 41
+2025/08/11 15:26:38,admin,Returned asset PCBB#07 from event 41
+2025/08/11 15:26:39,admin,Returned asset ULXD2#04 from event 41
+2025/08/11 15:26:43,admin,Returned asset ULXD2#03 from event 41
+2025/08/11 15:26:44,admin,Returned asset ULXD2#07 from event 41
+2025/08/11 15:26:45,admin,Returned asset ULXD2#12 from event 41
+2025/08/11 15:26:46,admin,Returned asset ULXD4Q#01 from event 41
+2025/08/11 15:26:47,admin,Returned asset MR-90A#01 from event 41
+2025/08/11 15:26:50,admin,Returned asset ULXD4D#01 from event 41
+2025/08/11 15:26:56,admin,Returned asset MR-90A#02 from event 41
+2025/08/11 15:26:56,admin,Returned asset MR-90A#04 from event 41
+2025/08/11 15:26:58,admin,Returned asset MR-90A#05 from event 41
+2025/08/11 15:26:59,admin,Returned asset MR-90A#06 from event 41
+2025/08/11 15:27:00,admin,Returned asset DX402A#01 from event 41
+2025/08/11 15:27:02,admin,Returned asset DX402A#02 from event 41
+2025/08/11 15:27:08,admin,Returned asset ETCZOOM#01 from event 41
+2025/08/11 15:27:09,admin,Returned asset ETCZOOM#04 from event 41
+2025/08/11 15:27:11,admin,Returned asset MR-90A#03 from event 41
+2025/08/11 15:27:13,admin,Returned asset ETCZOOM#06 from event 41
+2025/08/11 15:27:13,admin,Returned asset ETCZOOM#05 from event 41
+2025/08/11 15:27:14,admin,Returned asset ETCZOOM#02 from event 41
+2025/08/11 15:27:16,admin,Returned asset ETCZOOM#03 from event 41
+2025/08/11 15:27:27,admin,Assigned specific asset HLBatt#01 to event 40
+2025/08/11 15:27:29,admin,Assigned specific asset C1ProCharger#01 to event 40
+2025/08/11 15:27:30,admin,Assigned specific asset HLBatt#02 to event 40
+2025/08/11 15:27:31,admin,Assigned specific asset HLBatt#03 to event 40
+2025/08/11 15:27:33,admin,Assigned specific asset HLBatt#05 to event 40
+2025/08/11 15:27:33,admin,Assigned specific asset HLBatt#06 to event 40
+2025/08/11 15:27:35,admin,Assigned specific asset HLBatt#04 to event 40
+2025/08/11 15:27:36,admin,Assigned specific asset HLBatt#07 to event 40
+2025/08/11 15:27:38,admin,Assigned specific asset HLBatt#10 to event 40
+2025/08/11 15:27:38,admin,Assigned specific asset HLBatt#09 to event 40
+2025/08/11 15:27:39,admin,Assigned specific asset HLBatt#08 to event 40
+2025/08/11 15:27:45,admin,Assigned specific asset HLBatt#13 to event 40
+2025/08/11 15:27:46,admin,Assigned specific asset HLBatt#12 to event 40
+2025/08/11 15:27:49,admin,Assigned specific asset C1ProHub#01 to event 40
+2025/08/11 15:27:52,admin,Assigned specific asset HLBatt#14 to event 40
+2025/08/11 15:27:52,admin,Assigned specific asset HLBatt#11 to event 40
+2025/08/11 15:27:56,admin,Assigned specific asset HLBatt#15 to event 40
+2025/08/11 15:27:56,admin,Assigned specific asset HLBatt#16 to event 40
+2025/08/11 15:28:04,admin,Assigned specific asset C1ProRHS#01 to event 40
+2025/08/11 15:28:05,admin,Assigned specific asset C1ProRHS#02 to event 40
+2025/08/11 15:28:07,admin,Assigned specific asset C1ProRHS#04 to event 40
+2025/08/11 15:28:07,admin,Assigned specific asset C1ProRHS#05 to event 40
+2025/08/11 15:29:30,admin,Assigned specific asset C1ProRHS#03 to event 40
+2025/08/11 15:29:31,admin,Assigned specific asset C1ProRHS#06 to event 40
+2025/08/11 15:29:33,admin,Assigned specific asset C1ProRHS#08 to event 40
+2025/08/11 15:29:33,admin,Assigned specific asset C1ProRHS#07 to event 40
+2025/08/11 15:29:34,admin,Assigned specific asset C1ProWHS#01 to event 40
+2025/08/11 15:29:36,admin,Assigned specific asset GSM4212P#01 to event 40
+2025/08/11 15:29:43,admin,Assigned specific asset GSM4212P#04 to event 40
+2025/08/11 15:29:44,admin,Assigned specific asset GSM4212P#03 to event 40
+2025/08/11 15:29:50,admin,Assigned specific asset MVSHAZER#02 to event 40
+2025/08/11 15:29:52,admin,Assigned specific asset MVSHAZER#01 to event 40
+2025/08/11 15:29:54,admin,Assigned specific asset STRIKEM#01 to event 40
+2025/08/11 15:29:55,admin,Assigned specific asset STRIKEM#02 to event 40
+2025/08/11 15:29:57,admin,Assigned specific asset STRIKEM#03 to event 40
+2025/08/11 15:29:57,admin,Assigned specific asset STRIKEM#04 to event 40
+2025/08/11 15:30:04,admin,Assigned specific asset STRIKEM#07 to event 40
+2025/08/11 15:30:04,admin,Assigned specific asset STRIKEM#06 to event 40
+2025/08/11 15:30:06,admin,Assigned specific asset STRIKEM#05 to event 40
+2025/08/11 15:30:06,admin,Assigned specific asset STRIKEM#08 to event 40
+2025/08/11 15:30:25,admin,Added 1x GrandMA3 Compact XT model to event 40 (total: 1)
+2025/08/11 15:30:47,admin,Prepared asset [MISC]TV DSM Stand;4 for event 34
+2025/08/11 15:31:12,admin,User admin forced event 34 (Dry Hire: Avery Events) state from Overdue to Closed
+2025/08/11 15:31:20,admin,User admin forced event 40 (Dry Hire: Avery Events) state from Overdue to Preparing
+2025/08/11 15:31:25,admin,Assigned specific asset COMPACTXT#01 to event 40
+2025/08/11 15:31:30,admin,User admin removed forced state override for event 40 (Dry Hire: Avery Events): Preparing -> Overdue
+2025/08/11 15:32:29,admin,Returned asset HLBatt#01 from event 40
+2025/08/11 15:32:30,admin,Returned asset HLBatt#03 from event 40
+2025/08/11 15:32:30,admin,Returned asset C1ProCharger#01 from event 40
+2025/08/11 15:32:32,admin,Returned asset HLBatt#06 from event 40
+2025/08/11 15:32:32,admin,Returned asset HLBatt#05 from event 40
+2025/08/11 15:32:33,admin,Returned asset HLBatt#10 from event 40
+2025/08/11 15:32:34,admin,Returned asset HLBatt#07 from event 40
+2025/08/11 15:32:35,admin,Returned asset HLBatt#02 from event 40
+2025/08/11 15:32:36,admin,Returned asset HLBatt#12 from event 40
+2025/08/11 15:32:37,admin,Returned asset HLBatt#13 from event 40
+2025/08/11 15:32:37,admin,Returned asset HLBatt#08 from event 40
+2025/08/11 15:32:38,admin,Returned asset HLBatt#09 from event 40
+2025/08/11 15:32:38,admin,Returned asset HLBatt#04 from event 40
+2025/08/11 15:32:40,admin,Returned asset HLBatt#11 from event 40
+2025/08/11 15:32:40,admin,Returned asset HLBatt#14 from event 40
+2025/08/11 15:32:41,admin,Returned asset C1ProHub#01 from event 40
+2025/08/11 15:32:42,admin,Returned asset HLBatt#16 from event 40
+2025/08/11 15:32:43,admin,Returned asset C1ProRHS#01 from event 40
+2025/08/11 15:32:44,admin,Returned asset C1ProRHS#02 from event 40
+2025/08/11 15:32:45,admin,Returned asset HLBatt#15 from event 40
+2025/08/11 15:32:46,admin,Returned asset C1ProRHS#08 from event 40
+2025/08/11 15:32:47,admin,Returned asset C1ProRHS#06 from event 40
+2025/08/11 15:32:48,admin,Returned asset C1ProRHS#04 from event 40
+2025/08/11 15:32:49,admin,Returned asset C1ProRHS#07 from event 40
+2025/08/11 15:32:50,admin,Returned asset C1ProRHS#05 from event 40
+2025/08/11 15:32:51,admin,Returned asset C1ProRHS#03 from event 40
+2025/08/11 15:32:51,admin,Returned asset C1ProWHS#01 from event 40
+2025/08/11 15:32:53,admin,Returned asset GSM4212P#03 from event 40
+2025/08/11 15:32:53,admin,Returned asset GSM4212P#04 from event 40
+2025/08/11 15:32:54,admin,Returned asset MVSHAZER#01 from event 40
+2025/08/11 15:32:55,admin,Returned asset MVSHAZER#02 from event 40
+2025/08/11 15:32:56,admin,Returned asset GSM4212P#01 from event 40
+2025/08/11 15:32:57,admin,Returned asset STRIKEM#06 from event 40
+2025/08/11 15:32:57,admin,Returned asset STRIKEM#07 from event 40
+2025/08/11 15:32:58,admin,Returned asset STRIKEM#03 from event 40
+2025/08/11 15:32:58,admin,Returned asset STRIKEM#02 from event 40
+2025/08/11 15:32:59,admin,Returned asset STRIKEM#01 from event 40
+2025/08/11 15:33:00,admin,Returned asset COMPACTXT#01 from event 40
+2025/08/11 15:33:01,admin,Returned asset STRIKEM#05 from event 40
+2025/08/11 15:33:01,admin,Returned asset STRIKEM#04 from event 40
+2025/08/11 15:33:02,admin,Returned asset [MISC]Fibre Cables;2 from event 40
+2025/08/11 15:33:04,admin,Returned asset STRIKEM#08 from event 40
+2025/08/11 15:37:49,admin,User admin forced event 40 (Dry Hire: Avery Events) state from Overdue to Closed
+2025/08/12 09:47:11,bnjm2000,User bnjm2000 logged in via web interface
+2025/08/12 09:47:24,bnjm2000,Assigned specific asset 4061#02 to event 38
+2025/08/12 09:47:40,bnjm2000,Assigned specific asset 6061#04 to event 38
+2025/08/12 09:47:44,bnjm2000,Assigned specific asset 6061#12 to event 38
+2025/08/12 09:48:07,bnjm2000,Assigned specific asset MKE2#02 to event 38
+2025/08/12 09:48:08,bnjm2000,Assigned specific asset MKE2#01 to event 38
+2025/08/12 09:48:21,bnjm2000,Assigned specific asset P9T#01 to event 38
+2025/08/12 09:48:23,bnjm2000,Assigned specific asset P9T#02 to event 38
+2025/08/12 09:48:24,bnjm2000,Assigned specific asset P9T#03 to event 38
+2025/08/12 09:48:26,bnjm2000,Assigned specific asset P9T#04 to event 38
+2025/08/12 09:48:36,bnjm2000,Assigned specific asset ULXD1#01 to event 38
+2025/08/12 09:48:39,bnjm2000,Assigned specific asset ULXD1#04 to event 38
+2025/08/12 09:48:42,bnjm2000,Assigned specific asset ULXD1#08 to event 38
+2025/08/12 09:48:48,bnjm2000,Assigned specific asset ULXD1#09 to event 38
+2025/08/12 09:48:49,bnjm2000,Assigned specific asset ULXD1#10 to event 38
+2025/08/12 09:48:53,bnjm2000,Assigned specific asset ULXD1#11 to event 38
+2025/08/12 09:48:55,bnjm2000,Assigned specific asset ULXD1#19 to event 38
+2025/08/12 09:49:09,bnjm2000,Assigned specific asset ULXD2#01 to event 38
+2025/08/12 09:49:13,bnjm2000,Assigned specific asset ULXD2#03 to event 38
+2025/08/12 09:49:18,bnjm2000,Assigned specific asset ULXD2#12 to event 38
+2025/08/12 09:50:00,bnjm2000,Removed Yamaha Rio3224-d model from event 38
+2025/08/12 09:50:14,bnjm2000,Removed Shure P9RA model from event 38
+2025/08/12 09:50:14,bnjm2000,Added 3x Shure P9RA model to event 38 (total: 3)
+2025/08/12 09:50:41,bnjm2000,Removed Shure P9T model from event 38
+2025/08/12 09:50:41,bnjm2000,Added 4x Shure P9T model to event 38 (total: 4)
+2025/08/12 09:50:49,bnjm2000,Removed Shure ULXD1 model from event 38
+2025/08/12 09:50:49,bnjm2000,Added 7x Shure ULXD1 model to event 38 (total: 7)
+2025/08/12 09:50:55,bnjm2000,Removed Shure ULXD4D model from event 38
+2025/08/12 09:50:56,bnjm2000,Added 2x Shure ULXD4D model to event 38 (total: 2)
+2025/08/12 09:51:10,bnjm2000,Added 1x Yamaha Rio3224-d2 model to event 38 (total: 1)
+2025/08/12 09:51:19,bnjm2000,Added 5x Behringher P1 model to event 38 (total: 5)
+2025/08/12 09:51:28,bnjm2000,Assigned specific asset RIO3224-D2 #01 to event 38
+2025/08/12 09:51:40,bnjm2000,Assigned specific asset P1#01 to event 38
+2025/08/12 09:51:41,bnjm2000,Assigned specific asset P1#02 to event 38
+2025/08/12 09:51:43,bnjm2000,Assigned specific asset P1#03 to event 38
+2025/08/12 09:51:46,bnjm2000,Assigned specific asset P1#06 to event 38
+2025/08/12 09:51:46,bnjm2000,Assigned specific asset P1#07 to event 38
+2025/08/12 09:53:32,bnjm2000,Added 1x Shure ULXD4Q model to event 43 (total: 1)
+2025/08/12 09:53:32,bnjm2000,Added 1x Shure ULXD4D model to event 43 (total: 1)
+2025/08/12 09:54:14,bnjm2000,Added 1x DPA 4099 model to event 43 (total: 1)
+2025/08/12 09:54:20,bnjm2000,Added 1x DPA DAD 6001 model to event 43 (total: 1)
+2025/08/12 09:54:27,bnjm2000,Added 3x Shure SM57 model to event 43 (total: 3)
+2025/08/12 09:54:35,bnjm2000,Removed Shure SM57 model from event 43
+2025/08/12 09:54:35,bnjm2000,Added 4x Shure SM57 model to event 43 (total: 4)
+2025/08/12 09:54:44,bnjm2000,Added 1x Radial Engineering J48 Mono model to event 43 (total: 1)
+2025/08/12 09:55:02,bnjm2000,Added 1x Radial Engineering J48 Stereo model to event 43 (total: 1)
+2025/08/12 09:59:09,bnjm2000,Added 1x Shure ULXD4D model to event 44 (total: 1)
+2025/08/12 09:59:09,bnjm2000,Added 1x Shure ULXD4D model to event 44 (total: 2)
+2025/08/12 09:59:17,bnjm2000,Added 1x Apple IPAD model to event 44 (total: 1)
+2025/08/12 09:59:27,bnjm2000,Added 1x Apple IPAD model to event 43 (total: 1)
+2025/08/12 15:49:57,bnjm2000,Marked asset PB#35 as Out of Commission
+2025/08/12 15:49:57,bnjm2000,Maintenance logged for asset PB#35: Screen stopped working after charging
+2025/08/12 15:50:07,bnjm2000,Marked asset PB#36 as Out of Commission
+2025/08/12 15:50:07,bnjm2000,Maintenance logged for asset PB#36: Screen stopped working after charging
+2025/08/12 15:52:21,bnjm2000,Marked asset PB#02 as Out of Commission
+2025/08/12 15:52:21,bnjm2000,Maintenance logged for asset PB#02: Screen messed up after charging
+2025/08/12 15:52:40,bnjm2000,Marked asset PB#09 as Out of Commission
+2025/08/12 15:52:40,bnjm2000,Maintenance logged for asset PB#09: Screen messed up after charging
+2025/08/12 16:41:45,bnjm2000,Deleted event 47: Loewe Event @ Le Freeport via web interface. No asset locations to reset. Removed 4 related log entries.
+2025/08/12 16:41:51,bnjm2000,Added 4x L-Acoustics 5XT model to event 46 (total: 4)
+2025/08/12 16:41:53,bnjm2000,Added 4x L-Acoustics ETR5 model to event 46 (total: 4)
+2025/08/12 16:41:58,bnjm2000,Added 1x L-Acoustics LA4X model to event 46 (total: 1)
+2025/08/12 16:42:04,bnjm2000,Added 1x Interspace Industries PCBB3 model to event 46 (total: 1)
+2025/08/12 16:43:46,bnjm2000,Assigned specific asset DIABLO#17 to event 38
+2025/08/12 16:43:50,bnjm2000,Assigned specific asset DIABLO#18 to event 38
+2025/08/12 16:43:50,bnjm2000,Assigned specific asset DIABLO#19 to event 38
+2025/08/12 16:43:53,bnjm2000,Assigned specific asset DIABLO#20 to event 38

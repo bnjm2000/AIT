@@ -1,0 +1,2 @@
+EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,Tag,ForceStateOverride
+44,STPI Annual Patrons Dinner @ STPI,20250813,20250815,[],"[""[MODEL]AX|Turbosound|IP1000|2|Powered Column Loudspeaker"", ""[MODEL]AX|Shure|ULXD2|4|Handheld Microphone [L50]"", ""[MODEL]AX|Yamaha|DM3|1|Digital Mixer"", ""[MODEL]VX|Analogue Way|Pulse 2|1|Video Switcher"", ""[MODEL]AX|Shure|ULXD4D|2|Dual Channel Receiver [L50]""]",[],Planning,[],[],events,False
