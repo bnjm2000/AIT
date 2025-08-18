@@ -1,76 +1,3 @@
-2025/07/15 15:24:49,admin,User admin forced event 5 (ESMO @ Assembly) state from Added to Closed
-2025/07/15 15:24:52,admin,User admin forced event 6 (Rental to Aaron) state from Planning to Closed
-2025/07/15 15:24:55,admin,User admin forced event 10 (LV @ 72 Joo Chiat Place) state from Planning to Closed
-2025/07/15 15:24:58,admin,User admin forced event 8 (Rental of Comms to Avery Events) state from Planning to Closed
-2025/07/15 15:25:01,admin,User admin forced event 7 (A Legacy in Bloom (SLMA) @ Jia He Grand Restaurant) state from Planning to Closed
-2025/07/15 15:25:03,admin,User admin forced event 13 (Countdown @ NS Temple) state from Planning to Closed
-2025/07/15 15:25:06,admin,User admin forced event 12 (Martell @ Ritz Carlton Garden Pavillion) state from Added to Closed
-2025/07/15 15:25:08,admin,User admin forced event 11 (SEA Focus) state from Planning to Closed
-2025/07/15 15:25:12,admin,User admin forced event 16 (Wedding Lunch Reception of Emily & Fred @ 2E Bishopsgate) state from Planning to Closed
-2025/07/15 15:25:14,admin,User admin forced event 15 (Ben & Rachel Wedding @ Ritz Carlton) state from Planning to Closed
-2025/07/15 15:25:17,admin,User admin forced event 14 (Institutum @ Edition Hotel) state from Planning to Closed
-2025/07/15 15:25:20,admin,User admin forced event 19 (SEA Focus Talk @ Tanjong Pagar Distripark) state from Added to Closed
-2025/07/15 15:25:22,admin,User admin forced event 18 (Grand Seiko CNY In-store Event @ MBS) state from Added to Closed
-2025/07/15 15:25:24,admin,User admin forced event 17 (Hermes SS25 WRTW RDV Presentation @ Liat Towers) state from Planning to Closed
-2025/07/15 15:25:27,admin,User admin forced event 22 (Wedding @ TWG) state from Added to Closed
-2025/07/15 15:25:32,admin,User admin forced event 21 (Highland Park Relaunch @ AIR CCC) state from Added to Closed
-2025/07/15 15:25:34,admin,User admin forced event 20 (Standard Chartered Lunar New Year Celebration 2025 @ Ritz Carlton Grand Ballroom) state from Added to Closed
-2025/07/15 15:25:37,admin,User admin forced event 24 (BBC Earth Screening @ GBTB) state from Planning to Closed
-2025/07/15 15:25:40,admin,User admin forced event 23 (Dry Hire: Variety Communications) state from Planning to Closed
-2025/07/23 15:10:45,system,Failed login attempt for username: bnjm2000
-2025/07/23 15:10:49,bnjm2000,User bnjm2000 logged in via web interface
-2025/07/23 15:11:09,bnjm2000,"Prepared asset [MISC]43"" TV;4 for event 34"
-2025/07/23 15:11:10,bnjm2000,Prepared asset [MISC]TV DSM Stand;4 for event 34
-2025/07/23 15:12:28,bnjm2000,"User bnjm2000 forced event 31 (Harpers Bazaar x Heart Evangelista @ Bar Somma, New Bahru) state from Planning to Closed"
-2025/07/23 15:12:54,bnjm2000,Added 2x Shure ULXD2 model to event 33 (total: 2)
-2025/07/23 15:12:58,bnjm2000,Added 2x Shure ULXD4D model to event 33 (total: 2)
-2025/07/23 15:13:06,bnjm2000,Added 1x Apple IPAD model to event 33 (total: 1)
-2025/07/23 15:13:12,bnjm2000,Added 2x DPA 4488 model to event 33 (total: 2)
-2025/07/23 15:13:26,bnjm2000,Added 1x Shure ULXD1 model to event 33 (total: 1)
-2025/07/23 15:13:34,bnjm2000,Added 2x Turbosound IP1000 model to event 33 (total: 2)
-2025/07/23 15:13:40,bnjm2000,Added 2x Avolites Quartz model to event 33 (total: 2)
-2025/07/23 15:15:09,bnjm2000,Deleted event 39: Hermes Beauty Event @ The Arts House via web interface. No asset locations to reset. Removed 1 related log entries.
-2025/07/23 15:15:33,bnjm2000,Updated event 33: Hermes Beauty Event @ The Art House via web interface
-2025/07/23 15:16:05,bnjm2000,Prepared asset [MISC]TV stand for event 32
-2025/07/23 15:16:43,bnjm2000,Created event 39: Midea Building Tech. Grand Opening @ Midea Office via web interface
-2025/07/23 15:16:51,bnjm2000,Added 2x Shure ULXD2 model to event 39 (total: 2)
-2025/07/23 15:16:53,bnjm2000,Added 1x Shure ULXD4D model to event 39 (total: 1)
-2025/07/23 15:16:56,bnjm2000,Added 1x EV EVOLVE 50 model to event 39 (total: 1)
-2025/07/23 15:16:59,bnjm2000,Added 1x Apple IPAD model to event 39 (total: 1)
-2025/07/23 15:17:04,bnjm2000,Added 1x Yamaha MG12XU model to event 39 (total: 1)
-2025/07/23 15:17:11,bnjm2000,Removed EV EVOLVE 50 model from event 39
-2025/07/23 15:17:12,bnjm2000,Added 2x EV EVOLVE 50 model to event 39 (total: 2)
-2025/07/23 15:17:53,bnjm2000,Assigned specific asset IPAD#02 to event 33
-2025/07/23 15:19:46,bnjm2000,Assigned specific asset 4488#02 to event 33
-2025/07/23 15:20:49,bnjm2000,Assigned specific asset DAD6010#41 to event 33
-2025/07/23 15:20:57,bnjm2000,Assigned specific asset DAD6010#32 to event 33
-2025/07/23 15:27:00,bnjm2000,User bnjm2000 forced event 33 (Hermes Beauty Event @ The Art House) state from Overdue to Preparing
-2025/07/23 15:27:09,bnjm2000,Assigned specific asset 4488#12 to event 33
-2025/07/23 15:28:01,bnjm2000,Assigned specific asset ULXD2#04 to event 33
-2025/07/23 15:29:16,bnjm2000,Assigned specific asset IP1000#03 to event 33
-2025/07/23 15:29:18,bnjm2000,Assigned specific asset IP1000#04 to event 33
-2025/07/23 15:29:21,bnjm2000,Assigned specific asset QUARTZ#02 to event 33
-2025/07/23 15:29:35,bnjm2000,Removed Avolites Quartz model from event 33
-2025/07/23 15:29:35,bnjm2000,Added 1x Avolites Quartz model to event 33 (total: 1)
-2025/07/23 15:29:47,bnjm2000,Assigned specific asset DM3#02 to event 33
-2025/07/23 15:30:13,bnjm2000,Assigned specific asset ULXD2#07 to event 33
-2025/07/23 15:30:31,bnjm2000,Assigned specific asset ULXD1#06 to event 33
-2025/07/23 15:31:38,bnjm2000,Assigned specific asset ULXD4D#01 to event 33
-2025/07/23 15:31:40,bnjm2000,Assigned specific asset ULXD4D#02 to event 33
-2025/07/23 15:31:52,bnjm2000,Assigned specific asset IPAD#01 to event 39
-2025/07/23 15:31:57,bnjm2000,Assigned specific asset EVOLVE50#05 to event 39
-2025/07/23 15:31:58,bnjm2000,Assigned specific asset EVOLVE50#06 to event 39
-2025/07/23 15:32:07,bnjm2000,Assigned specific asset ULXD4D#04 to event 39
-2025/07/23 15:32:10,bnjm2000,Assigned specific asset MG12XU#01 to event 39
-2025/07/23 15:32:51,bnjm2000,Assigned specific asset PCBB#03 to event 39
-2025/07/23 15:32:56,bnjm2000,Assigned specific asset PCBB#08 to event 39
-2025/07/23 15:33:26,bnjm2000,Assigned specific asset ULXD2#03 to event 39
-2025/07/23 15:33:30,bnjm2000,Assigned specific asset ULXD2#06 to event 39
-2025/07/23 15:33:37,bnjm2000,Returned asset IPAD#01 from event 39
-2025/07/23 15:33:39,bnjm2000,Returned asset EVOLVE50#05 from event 39
-2025/07/23 15:33:39,bnjm2000,Returned asset EVOLVE50#06 from event 39
-2025/07/23 15:33:41,bnjm2000,Returned asset ULXD4D#04 from event 39
-2025/07/23 15:33:42,bnjm2000,Returned asset MG12XU#01 from event 39
 2025/07/23 15:33:44,bnjm2000,Returned asset PCBB#03 from event 39
 2025/07/23 15:33:44,bnjm2000,Returned asset PCBB#08 from event 39
 2025/07/23 15:33:46,bnjm2000,Returned asset ULXD2#03 from event 39
@@ -998,3 +925,76 @@
 2025/08/12 16:43:50,bnjm2000,Assigned specific asset DIABLO#18 to event 38
 2025/08/12 16:43:50,bnjm2000,Assigned specific asset DIABLO#19 to event 38
 2025/08/12 16:43:53,bnjm2000,Assigned specific asset DIABLO#20 to event 38
+2025/08/18 16:21:44,bnjm2000,User bnjm2000 logged in via web interface
+2025/08/18 16:22:42,bnjm2000,Updated location for asset PB#02 from '' to 'Total Solutions'
+2025/08/18 16:22:42,bnjm2000,Maintenance logged for asset PB#02: Sent in to Total Solutions
+2025/08/18 16:22:53,bnjm2000,Updated location for asset PB#09 from '' to 'Total Solutions'
+2025/08/18 16:22:53,bnjm2000,Maintenance logged for asset PB#09: Sent in to Total Solutions
+2025/08/18 16:23:00,bnjm2000,Updated location for asset PB#35 from '' to 'Total Solutions'
+2025/08/18 16:23:00,bnjm2000,Maintenance logged for asset PB#35: Sent in to Total Solutions
+2025/08/18 16:23:06,bnjm2000,Updated location for asset PB#36 from '' to 'Total Solutions'
+2025/08/18 16:23:06,bnjm2000,Maintenance logged for asset PB#36: Sent in to Total Solutions
+2025/08/18 16:29:40,bnjm2000,User bnjm2000 logged in via web interface
+2025/08/18 16:29:45,bnjm2000,Returned asset AD3#03 from event 25
+2025/08/18 16:29:46,bnjm2000,Returned asset AD3#02 from event 25
+2025/08/18 16:29:53,bnjm2000,Returned asset 4061#02 from event 38
+2025/08/18 16:29:54,bnjm2000,Returned asset 6061#04 from event 38
+2025/08/18 16:29:55,bnjm2000,Returned asset 6061#12 from event 38
+2025/08/18 16:29:57,bnjm2000,Returned asset MKE2#01 from event 38
+2025/08/18 16:29:57,bnjm2000,Returned asset MKE2#02 from event 38
+2025/08/18 16:29:58,bnjm2000,Returned asset P9T#01 from event 38
+2025/08/18 16:29:59,bnjm2000,Returned asset P9T#03 from event 38
+2025/08/18 16:29:59,bnjm2000,Returned asset P9T#02 from event 38
+2025/08/18 16:30:01,bnjm2000,Returned asset P9T#04 from event 38
+2025/08/18 16:30:02,bnjm2000,Returned asset ULXD1#01 from event 38
+2025/08/18 16:30:04,bnjm2000,Returned asset ULXD1#04 from event 38
+2025/08/18 16:30:04,bnjm2000,Returned asset ULXD1#08 from event 38
+2025/08/18 16:30:05,bnjm2000,Returned asset ULXD1#09 from event 38
+2025/08/18 16:30:06,bnjm2000,Returned asset ULXD1#10 from event 38
+2025/08/18 16:30:07,bnjm2000,Returned asset ULXD1#11 from event 38
+2025/08/18 16:30:09,bnjm2000,Returned asset ULXD1#19 from event 38
+2025/08/18 16:30:10,bnjm2000,Returned asset ULXD2#01 from event 38
+2025/08/18 16:30:11,bnjm2000,Returned asset ULXD2#03 from event 38
+2025/08/18 16:30:12,bnjm2000,Returned asset ULXD2#12 from event 38
+2025/08/18 16:30:13,bnjm2000,Returned asset RIO3224-D2 #01 from event 38
+2025/08/18 16:30:14,bnjm2000,Returned asset P1#01 from event 38
+2025/08/18 16:30:15,bnjm2000,Returned asset P1#02 from event 38
+2025/08/18 16:30:16,bnjm2000,Returned asset P1#03 from event 38
+2025/08/18 16:30:17,bnjm2000,Returned asset P1#06 from event 38
+2025/08/18 16:30:18,bnjm2000,Returned asset P1#07 from event 38
+2025/08/18 16:30:19,bnjm2000,Returned asset DIABLO#17 from event 38
+2025/08/18 16:30:20,bnjm2000,Returned asset DIABLO#18 from event 38
+2025/08/18 16:30:21,bnjm2000,Returned asset DIABLO#19 from event 38
+2025/08/18 16:30:22,bnjm2000,Returned asset DIABLO#20 from event 38
+2025/08/18 16:30:33,bnjm2000,Added 1x L-Acoustics M-BUMP model to event 45 (total: 1)
+2025/08/18 16:30:33,bnjm2000,Added 1x L-Acoustics M-BUMP model to event 45 (total: 2)
+2025/08/18 16:30:36,bnjm2000,Added 6x L-Acoustics KARAII model to event 45 (total: 6)
+2025/08/18 16:30:40,bnjm2000,Added 1x L-Acoustics LA12X model to event 45 (total: 1)
+2025/08/18 16:30:40,bnjm2000,Added 1x L-Acoustics LA12X model to event 45 (total: 2)
+2025/08/18 16:30:40,bnjm2000,Added 1x L-Acoustics LA12X model to event 45 (total: 3)
+2025/08/18 16:30:41,bnjm2000,Added 1x L-Acoustics LA12X model to event 45 (total: 4)
+2025/08/18 16:30:45,bnjm2000,Removed L-Acoustics LA12X model from event 45
+2025/08/18 16:30:45,bnjm2000,Added 3x L-Acoustics LA12X model to event 45 (total: 3)
+2025/08/18 16:30:55,bnjm2000,Added 1x L-Acoustics SB18 model to event 45 (total: 1)
+2025/08/18 16:30:55,bnjm2000,Added 1x L-Acoustics SB18 model to event 45 (total: 2)
+2025/08/18 16:31:02,bnjm2000,Added 1x L-Acoustics M-BAR model to event 45 (total: 1)
+2025/08/18 16:31:04,bnjm2000,Added 1x L-Acoustics M-BAR model to event 45 (total: 2)
+2025/08/18 16:32:33,bnjm2000,Added 1x Accsoon Cineview Master 4K RX model to event 44 (total: 1)
+2025/08/18 16:32:33,bnjm2000,Added 1x Accsoon Cineview Master 4K RX model to event 44 (total: 2)
+2025/08/18 16:32:34,bnjm2000,Added 1x Accsoon Cineview Master 4K RX model to event 44 (total: 3)
+2025/08/18 16:32:35,bnjm2000,Added 1x Accsoon Cineview Master 4K TX model to event 44 (total: 1)
+2025/08/18 16:32:36,bnjm2000,Added 1x Accsoon Cineview Master 4K TX model to event 44 (total: 2)
+2025/08/18 16:32:45,bnjm2000,User bnjm2000 forced event 43 (National Museum of SG Fundraising Dinner 2025 @ NMS) state from Planning to Closed
+2025/08/18 16:33:02,bnjm2000,User bnjm2000 forced event 44 (STPI Annual Patrons Dinner @ STPI) state from Planning to Closed
+2025/08/18 16:33:15,bnjm2000,Assigned specific asset LA12X#01 to event 45
+2025/08/18 16:33:15,bnjm2000,Assigned specific asset LA12X#03 to event 45
+2025/08/18 16:33:16,bnjm2000,Assigned specific asset LA12X#02 to event 45
+2025/08/18 16:34:28,bnjm2000,User bnjm2000 forced event 38 (Tempest & Tranquility @ Drama Centre Blackbox) state from Overdue to Closed
+2025/08/18 16:35:19,bnjm2000,Created event 47: Louis Vuitton Event @ Ngee Ann City via web interface
+2025/08/18 16:35:25,bnjm2000,Added 5x Turbosound IP1000 model to event 47 (total: 5)
+2025/08/18 16:35:39,bnjm2000,Added 6x MiPro MR-90 model to event 47 (total: 6)
+2025/08/18 16:35:40,bnjm2000,Added 1x MiPro MT-90A model to event 47 (total: 1)
+2025/08/18 16:37:26,bnjm2000,Created event 48: Dry Hire: TTP via web interface
+2025/08/18 16:37:36,bnjm2000,Added 5x Ayrton Diablo Profile model to event 48 (total: 5)
+2025/08/18 16:38:02,bnjm2000,Created event 49: Dry Hire: NicheAV via web interface
+2025/08/18 16:38:07,bnjm2000,Added 1x Yamaha QL1 model to event 49 (total: 1)

@@ -1,0 +1,2 @@
+EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,Tag,ForceStateOverride
+47,Louis Vuitton Event @ Ngee Ann City,20250904,20250905,[],"[""[MODEL]AX|Turbosound|IP1000|5|Powered Column Loudspeaker"", ""[MODEL]AX|MiPro|MR-90|6|Interlink receiver""]",[],Planning,[],[],events,False

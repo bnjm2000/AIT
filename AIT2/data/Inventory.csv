@@ -68,7 +68,7 @@ CT3#01,DBX,CT3,11065310806,advanced cable tester,False,False,,AX,Store,
 6061#01,DPA,6061,R311927,Omni Submini Lavalier Microphone,False,False,,AX,Store,
 6061#02,DPA,6061,R311977,Omni Submini Lavalier Microphone,False,False,,AX,Store,
 6061#03,DPA,6061,R311988,Omni Submini Lavalier Microphone,False,False,,AX,Store,Store
-6061#04,DPA,6061,R316442,Omni Submini Lavalier Microphone,False,False,,AX,Store,Tempest & Tranquility @ Drama Centre Blackbox
+6061#04,DPA,6061,R316442,Omni Submini Lavalier Microphone,False,False,,AX,Store,Store
 6061#05,DPA,6061,R316445,Omni Submini Lavalier Microphone,False,False,,AX,Store,
 6061#06,DPA,6061,R316447,Omni Submini Lavalier Microphone,False,False,,AX,Store,
 6061#07,DPA,6061,R317526,Omni Submini Lavalier Microphone,False,False,,AX,Store,
@@ -76,9 +76,9 @@ CT3#01,DBX,CT3,11065310806,advanced cable tester,False,False,,AX,Store,
 6061#09,DPA,6061,R317530,Omni Submini Lavalier Microphone,False,False,,AX,Store,
 6061#10,DPA,6061,R317531,Omni Submini Lavalier Microphone,False,False,,AX,Store,
 6061#11,DPA,6061,R317534,Omni Submini Lavalier Microphone,False,False,,AX,Store,
-6061#12,DPA,6061,R317535,Omni Submini Lavalier Microphone,False,False,,AX,Store,Tempest & Tranquility @ Drama Centre Blackbox
+6061#12,DPA,6061,R317535,Omni Submini Lavalier Microphone,False,False,,AX,Store,Store
 4061#01,DPA,4061,R238770,Omni Submini Lavalier Microphone,False,True,2024/11/19	bnjm2000	Sleeving disintegrated/tore after removing from instrument (SLMA @ Jia He Grand Restaurant) [Marked OOC],AX,Store,
-4061#02,DPA,4061,R238785,Omni Submini Lavalier Microphone,False,False,,AX,Store,Tempest & Tranquility @ Drama Centre Blackbox
+4061#02,DPA,4061,R238785,Omni Submini Lavalier Microphone,False,False,,AX,Store,Store
 DAD6001#01,DPA,DAD 6001,,Microdot to 3-Pin XLR Adapter,False,False,,AX,Store,Store
 DAD6001#02,DPA,DAD 6001,,Microdot to 3-Pin XLR Adapter,False,False,,AX,Store,Store
 DAD6001#03,DPA,DAD 6001,,Microdot to 3-Pin XLR Adapter,False,False,,AX,Store,Store
@@ -281,9 +281,9 @@ LA4X#07,L-Acoustics,LA4X,1180053692,Amplified controller,False,False,,AX,Store,S
 LA4X#08,L-Acoustics,LA4X,1180051680,Amplified controller,False,False,,AX,Store,
 LA4X#09,L-Acoustics,LA4X,1180053978,Amplified controller,False,False,,AX,Store,Store
 LA4X#10,L-Acoustics,LA4X,1180053926,Amplified controller,False,False,,AX,Store,Store
-LA12X#01,L-Acoustics,LA12X,1140035138,Amplified controller,False,False,,AX,Store,
-LA12X#02,L-Acoustics,LA12X,1140037808,Amplified controller,False,False,,AX,Store,
-LA12X#03,L-Acoustics,LA12X,1140037839,Amplified controller,False,False,,AX,Store,
+LA12X#01,L-Acoustics,LA12X,1140035138,Amplified controller,False,False,,AX,Store,Kara Training @ Concept Systems
+LA12X#02,L-Acoustics,LA12X,1140037808,Amplified controller,False,False,,AX,Store,Kara Training @ Concept Systems
+LA12X#03,L-Acoustics,LA12X,1140037839,Amplified controller,False,False,,AX,Store,Kara Training @ Concept Systems
 LA12X#04,L-Acoustics,LA12X,1140037868,Amplified controller,False,False,,AX,Store,
 LA12X#05,L-Acoustics,LA12X,1140037870,Amplified controller,False,False,,AX,Store,
 LA12X#06,L-Acoustics,LA12X,1140037871,Amplified controller,False,False,,AX,Store,
@@ -474,8 +474,8 @@ E906#01,Sennheiser,E906,,"super-cardioid, dynamic instrument microphone",False,F
 E906#02,Sennheiser,E906,,"super-cardioid, dynamic instrument microphone",False,False,,AX,Store,
 ME36#01,Sennheiser,ME36,,Gooseneck mic,False,False,,AX,Store,Store
 ME36#02,Sennheiser,ME36,,Gooseneck mic,False,False,,AX,Store,Store
-MKE2#01,Sennheiser,MKE2,86827,"Lavalier microphone, black",False,False,,AX,Store,Tempest & Tranquility @ Drama Centre Blackbox
-MKE2#02,Sennheiser,MKE2,86825,"Lavalier microphone, black",False,False,,AX,Store,Tempest & Tranquility @ Drama Centre Blackbox
+MKE2#01,Sennheiser,MKE2,86827,"Lavalier microphone, black",False,False,,AX,Store,Store
+MKE2#02,Sennheiser,MKE2,86825,"Lavalier microphone, black",False,False,,AX,Store,Store
 MKE2#03,Sennheiser,MKE2,,"Lavalier microphone, beige",False,False,,AX,Store,
 MKE2#04,Sennheiser,MKE2,,"Lavalier microphone, beige",False,False,,AX,Store,
 MKE2#05,Sennheiser,MKE2,,"Lavalier microphone, beige",False,False,,AX,Store,
@@ -530,18 +530,18 @@ P9RA#01,Shure,P9RA,,Bodypack Receiver [P7],False,False,,AX,Store,
 P9RA#02,Shure,P9RA,,Bodypack Receiver [P7],False,False,,AX,Store,
 P9RA#03,Shure,P9RA,,Bodypack Receiver [P7],False,False,,AX,Store,
 P9RA#04,Shure,P9RA,,Bodypack Receiver [P7],False,False,2025/07/29	bnjm2000	Beltpack will turn off when battery compartment closed,AX,Store,
-P9T#01,Shure,P9T,,Wireless Transmitter,False,False,,AX,Store,Tempest & Tranquility @ Drama Centre Blackbox
-P9T#02,Shure,P9T,,Wireless Transmitter,False,False,,AX,Store,Tempest & Tranquility @ Drama Centre Blackbox
-P9T#03,Shure,P9T,,Wireless Transmitter,False,False,,AX,Store,Tempest & Tranquility @ Drama Centre Blackbox
-P9T#04,Shure,P9T,,Wireless Transmitter,False,False,,AX,Store,Tempest & Tranquility @ Drama Centre Blackbox
+P9T#01,Shure,P9T,,Wireless Transmitter,False,False,,AX,Store,Store
+P9T#02,Shure,P9T,,Wireless Transmitter,False,False,,AX,Store,Store
+P9T#03,Shure,P9T,,Wireless Transmitter,False,False,,AX,Store,Store
+P9T#04,Shure,P9T,,Wireless Transmitter,False,False,,AX,Store,Store
 P9T#05,Shure,P9T,3KD1452613-02,Wireless Transmitter,False,False,,AX,Store,
-P1#01,Behringher,P1,S1403222AZM,Wired IEM beltpack,False,False,,AX,Store,Tempest & Tranquility @ Drama Centre Blackbox
-P1#02,Behringher,P1,S1403409AZM,Wired IEM beltpack,False,False,,AX,Store,Tempest & Tranquility @ Drama Centre Blackbox
-P1#03,Behringher,P1,S1403575AZM,Wired IEM beltpack,False,False,,AX,Store,Tempest & Tranquility @ Drama Centre Blackbox
+P1#01,Behringher,P1,S1403222AZM,Wired IEM beltpack,False,False,,AX,Store,Store
+P1#02,Behringher,P1,S1403409AZM,Wired IEM beltpack,False,False,,AX,Store,Store
+P1#03,Behringher,P1,S1403575AZM,Wired IEM beltpack,False,False,,AX,Store,Store
 P1#04,Behringher,P1,S1403579AZM,Wired IEM beltpack,False,False,,AX,Store,
 P1#05,Behringher,P1,S1403649AZM,Wired IEM beltpack,False,False,,AX,Store,
-P1#06,Behringher,P1,S1506343AZM,Wired IEM beltpack,False,False,,AX,Store,Tempest & Tranquility @ Drama Centre Blackbox
-P1#07,Behringher,P1,S1506350AZM,Wired IEM beltpack,False,False,,AX,Store,Tempest & Tranquility @ Drama Centre Blackbox
+P1#06,Behringher,P1,S1506343AZM,Wired IEM beltpack,False,False,,AX,Store,Store
+P1#07,Behringher,P1,S1506350AZM,Wired IEM beltpack,False,False,,AX,Store,Store
 PA421A#01,Shure,PA421A,1112383 4407,4-Port Antenna Combiner,False,False,,AX,Store,
 PA805SWB#01,Shure,PA805SWB,,Passive Directional Antenna,False,False,,AX,Store,
 SE215#01,Shure,SE215,3CA17269504,"sound-isolating earphones, black",False,False,,AX,Store,
@@ -576,17 +576,17 @@ SM58S#01,Shure,SM58S,,cardioid dynamic w/ switch,False,False,,AX,Store,
 SM58S#02,Shure,SM58S,,cardioid dynamic w/ switch,False,False,,AX,Store,Store
 SM58S#03,Shure,SM58S,,cardioid dynamic w/ switch,False,False,,AX,Store,
 SM58S#04,Shure,SM58S,,cardioid dynamic w/ switch,False,False,,AX,Store,Store
-ULXD1#01,Shure,ULXD1,1ND2342330-01,Beltpack [L50],False,False,,AX,Store,Tempest & Tranquility @ Drama Centre Blackbox
+ULXD1#01,Shure,ULXD1,1ND2342330-01,Beltpack [L50],False,False,,AX,Store,Store
 ULXD1#02,Shure,ULXD1,1ML0246448,Beltpack [L50],False,False,,AX,Store,
 ULXD1#03,Shure,ULXD1,1NB0326366-01,Beltpack [L50],False,False,,AX,Store,
-ULXD1#04,Shure,ULXD1,1ND2342613-01,Beltpack [L50],False,False,,AX,Store,Tempest & Tranquility @ Drama Centre Blackbox
+ULXD1#04,Shure,ULXD1,1ND2342613-01,Beltpack [L50],False,False,,AX,Store,Store
 ULXD1#05,Shure,ULXD1,1ND23423459-01,Beltpack [L50],False,False,,AX,Store,
 ULXD1#06,Shure,ULXD1,1ND2342323-01,Beltpack [L50],False,False,,AX,Store,Store
 ULXD1#07,Shure,ULXD1,1ND2342445-01,Beltpack [L50],False,False,,AX,Store,
-ULXD1#08,Shure,ULXD1,1ND2342622-01,Beltpack [L50],False,False,,AX,Store,Tempest & Tranquility @ Drama Centre Blackbox
-ULXD1#09,Shure,ULXD1,1ML0246482-01,Beltpack [L50],False,False,,AX,Store,Tempest & Tranquility @ Drama Centre Blackbox
-ULXD1#10,Shure,ULXD1,1ND2342618-01,Beltpack [L50],False,False,,AX,Store,Tempest & Tranquility @ Drama Centre Blackbox
-ULXD1#11,Shure,ULXD1,2QJ0777983,Beltpack [L50],False,False,,AX,Store,Tempest & Tranquility @ Drama Centre Blackbox
+ULXD1#08,Shure,ULXD1,1ND2342622-01,Beltpack [L50],False,False,,AX,Store,Store
+ULXD1#09,Shure,ULXD1,1ML0246482-01,Beltpack [L50],False,False,,AX,Store,Store
+ULXD1#10,Shure,ULXD1,1ND2342618-01,Beltpack [L50],False,False,,AX,Store,Store
+ULXD1#11,Shure,ULXD1,2QJ0777983,Beltpack [L50],False,False,,AX,Store,Store
 ULXD1#12,Shure,ULXD1,,Beltpack [L50],False,False,,AX,Store,
 ULXD1#13,Shure,ULXD1,3BI28076309,Beltpack [G52],False,False,,AX,Store,
 ULXD1#14,Shure,ULXD1,3BI28074129,Beltpack [G52],False,False,,AX,Store,
@@ -594,10 +594,10 @@ ULXD1#15,Shure,ULXD1,3BI28076513,Beltpack [G52],False,False,,AX,Store,
 ULXD1#16,Shure,ULXD1,3BI28076373,Beltpack [G52],False,False,,AX,Store,
 ULXD1#17,Shure,ULXD1,3BI28076436,Beltpack [G52],False,False,,AX,Store,
 ULXD1#18,Shure,ULXD1,3BI28078539,Beltpack [G52],False,False,,AX,Store,
-ULXD1#19,Shure,ULXD1,3EC18480865,Beltpack [L50],False,False,,AX,Store,Tempest & Tranquility @ Drama Centre Blackbox
-ULXD2#01,Shure,ULXD2,2NK0071080-01,Handheld Microphone [L50],False,False,,AX,Store,Tempest & Tranquility @ Drama Centre Blackbox
+ULXD1#19,Shure,ULXD1,3EC18480865,Beltpack [L50],False,False,,AX,Store,Store
+ULXD2#01,Shure,ULXD2,2NK0071080-01,Handheld Microphone [L50],False,False,,AX,Store,Store
 ULXD2#02,Shure,ULXD2,2PH3049605,Handheld Microphone [L50],False,False,,AX,Store,
-ULXD2#03,Shure,ULXD2,2OB0659314-01,Handheld Microphone [L50],False,False,,AX,Store,Tempest & Tranquility @ Drama Centre Blackbox
+ULXD2#03,Shure,ULXD2,2OB0659314-01,Handheld Microphone [L50],False,False,,AX,Store,Store
 ULXD2#04,Shure,ULXD2,2PK2362933,Handheld Microphone [L50],False,False,,AX,Store,Store
 ULXD2#05,Shure,ULXD2,20A1395239-01,Handheld Microphone [L50],False,False,,AX,Store,
 ULXD2#06,Shure,ULXD2,2PK2362926,Handheld Microphone [L50],False,False,,AX,Store,Store
@@ -606,7 +606,7 @@ ULXD2#08,Shure,ULXD2,2OB0659317-01,Handheld Microphone [L50],False,False,,AX,Sto
 ULXD2#09,Shure,ULXD2,2NK0771081-01,Handheld Microphone [L50],False,False,,AX,Store,
 ULXD2#10,Shure,ULXD2,2PK2362922,Handheld Microphone [L50],False,False,,AX,Store,
 ULXD2#11,Shure,ULXD2,2RC0141727,Handheld Microphone [L50],False,True,"2025/06/21	bnjm2000	Battery prong dropped out, unable to turn on (Wedding of Jeremy and Julia @ The Pyramid Club) [Location: Store, Marked OOC]|2025/07/10	bnjm2000	Sent to E&E for service. [Location: E&E]",AX,Store,E&E
-ULXD2#12,Shure,ULXD2,2NK0771082-01,Handheld Microphone [L50],False,False,,AX,Store,Tempest & Tranquility @ Drama Centre Blackbox
+ULXD2#12,Shure,ULXD2,2NK0771082-01,Handheld Microphone [L50],False,False,,AX,Store,Store
 ULXD2#13,Shure,ULXD2,3CC16144846,Handheld Microphone [G52],False,False,,AX,Store,
 ULXD2#14,Shure,ULXD2,3CC16144872,Handheld Microphone [G52],False,False,,AX,Store,
 ULXD2#15,Shure,ULXD2,3CC16145063,Handheld Microphone [G52],False,False,,AX,Store,
@@ -692,7 +692,7 @@ RIO1608-D #01,Yamaha,Rio1608-d,,High Performance I/O Rack,False,False,2024/11/13
 RIO1608-D2 #01,Yamaha,Rio1608-d2,EEYP01258,High Performance I/O Rack,False,False,2024/11/13	bnjm2000	2024/11/13 - Updated firmware version to v1.85,AX,Store,
 RIO3224-D #01,Yamaha,Rio3224-d,,High Performance I/O Rack,False,False,2024/11/13	bnjm2000	2024/11/13 - Updated firmware to v5.80,AX,Store,Store
 RIO3224-D #02,Yamaha,Rio3224-d,,High Performance I/O Rack,False,False,2024/11/13	bnjm2000	2024/11/13 - Updated firmware to v5.80,AX,Store,
-RIO3224-D2 #01,Yamaha,Rio3224-d2,EEDX01062,High Performance I/O Rack,False,False,2024/11/13	bnjm2000	2024/11/13 - Updated firmware to v1.85,AX,Store,Tempest & Tranquility @ Drama Centre Blackbox
+RIO3224-D2 #01,Yamaha,Rio3224-d2,EEDX01062,High Performance I/O Rack,False,False,2024/11/13	bnjm2000	2024/11/13 - Updated firmware to v1.85,AX,Store,Store
 SBC800#01,Shure,SBC800,,8-bay battery charger,False,False,,AX,Store,
 SB900#01,Shure,SB900,,Rechargeable Battery,False,False,,AX,Store,
 SB900#02,Shure,SB900,,Rechargeable Battery,False,False,,AX,Store,
@@ -787,23 +787,23 @@ DIABLO#13,Ayrton,Diablo Profile,DB5309007,Profile LED,False,False,"2025/06/30	De
 DIABLO#14,Ayrton,Diablo Profile,DB5309023,Profile LED,False,False,,LX,Store,Store
 DIABLO#15,Ayrton,Diablo Profile,DB5309005,Profile LED,False,False,2025/06/26	bnjm2000	Many error (Wedding of Micheal and Cindy) [Marked OOC]|2025/06/05	bnjm2000	Replaced Zoom/Focus Driver Board - $FOC [Cleared OOC],LX,Store,Store
 DIABLO#16,Ayrton,Diablo Profile,DB5309027,Profile LED,False,False,,LX,Store,Store
-DIABLO#17,Ayrton,Diablo Profile,DB5309010,Profile LED,False,False,,LX,Store,Tempest & Tranquility @ Drama Centre Blackbox
-DIABLO#18,Ayrton,Diablo Profile,DB5309016,Profile LED,False,False,,LX,Store,Tempest & Tranquility @ Drama Centre Blackbox
-DIABLO#19,Ayrton,Diablo Profile,DB5309034,Profile LED,False,False,,LX,Store,Tempest & Tranquility @ Drama Centre Blackbox
-DIABLO#20,Ayrton,Diablo Profile,DB5309017,Profile LED,False,False,,LX,Store,Tempest & Tranquility @ Drama Centre Blackbox
+DIABLO#17,Ayrton,Diablo Profile,DB5309010,Profile LED,False,False,,LX,Store,Store
+DIABLO#18,Ayrton,Diablo Profile,DB5309016,Profile LED,False,False,,LX,Store,Store
+DIABLO#19,Ayrton,Diablo Profile,DB5309034,Profile LED,False,False,,LX,Store,Store
+DIABLO#20,Ayrton,Diablo Profile,DB5309017,Profile LED,False,False,,LX,Store,Store
 DIABLO#21,Ayrton,Diablo Profile,DB5309028,Profile LED,False,False,,LX,Store,Store
 DIABLO#22,Ayrton,Diablo Profile,DB5309015,Profile LED,False,False,,LX,Store,Store
 DIABLO#23,Ayrton,Diablo Profile,DB5309008,Profile LED,False,False,,LX,Store,Store
 DIABLO#24,Ayrton,Diablo Profile,DB5309042,Profile LED,False,False,,LX,Store,Store
 PB#01,Astera,Pixel Brick,047-0312660,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
-PB#02,Astera,Pixel Brick,047-0312797,Batt LED Uplighters,False,True,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/08/12	bnjm2000	Screen messed up after charging [Marked OOC],LX,Store,
+PB#02,Astera,Pixel Brick,047-0312797,Batt LED Uplighters,False,True,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/08/12	bnjm2000	Screen messed up after charging [Marked OOC]|2025/08/14	bnjm2000	Sent in to Total Solutions [Location: Total Solutions],LX,Store,Total Solutions
 PB#03,Astera,Pixel Brick,047-0312711,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
 PB#04,Astera,Pixel Brick,047-0312670,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
 PB#05,Astera,Pixel Brick,047-0312685,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2024/11/15	bnjm2000	Screen dim,LX,Store,
 PB#06,Astera,Pixel Brick,047-0312648,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
 PB#07,Astera,Pixel Brick,047-0312686,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
 PB#08,Astera,Pixel Brick,047-0313538,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
-PB#09,Astera,Pixel Brick,047-0311934,Batt LED Uplighters,False,True,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/08/12	bnjm2000	Screen messed up after charging [Marked OOC],LX,Store,
+PB#09,Astera,Pixel Brick,047-0311934,Batt LED Uplighters,False,True,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/08/12	bnjm2000	Screen messed up after charging [Marked OOC]|2025/08/18	bnjm2000	Sent in to Total Solutions [Location: Total Solutions],LX,Store,Total Solutions
 PB#10,Astera,Pixel Brick,047-0312696,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
 PB#11,Astera,Pixel Brick,047-0313634,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2024/11/08	bnjm2000	LED screen cannot on,LX,Store,
 PB#12,Astera,Pixel Brick,047-0312725,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
@@ -829,8 +829,8 @@ PB#31,Astera,Pixel Brick,047-0315560,Batt LED Uplighters,False,False,2024/12/05	
 PB#32,Astera,Pixel Brick,047-0313519,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
 PB#33,Astera,Pixel Brick,047-0312748,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
 PB#34,Astera,Pixel Brick,047-0308768,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
-PB#35,Astera,Pixel Brick,047-0312772,Batt LED Uplighters,False,True,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/08/12	bnjm2000	Screen stopped working after charging [Marked OOC],LX,Store,
-PB#36,Astera,Pixel Brick,047-0312668,Batt LED Uplighters,False,True,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/08/12	bnjm2000	Screen stopped working after charging [Marked OOC],LX,Store,
+PB#35,Astera,Pixel Brick,047-0312772,Batt LED Uplighters,False,True,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/08/12	bnjm2000	Screen stopped working after charging [Marked OOC]|2025/08/18	bnjm2000	Sent in to Total Solutions [Location: Total Solutions],LX,Store,Total Solutions
+PB#36,Astera,Pixel Brick,047-0312668,Batt LED Uplighters,False,True,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/08/12	bnjm2000	Screen stopped working after charging [Marked OOC]|2025/08/18	bnjm2000	Sent in to Total Solutions [Location: Total Solutions],LX,Store,Total Solutions
 PB#37,Astera,Pixel Brick,047-0313949,Batt LED Uplighters,False,False,"2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/06/05	bnjm2000	Handed over to TSM for repair, spoilt screen
 Replaced PB15 Rear Housing Assembly",LX,Store,
 PB#38,Astera,Pixel Brick,047-0313663,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
@@ -998,3 +998,10 @@ CMD8#12,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,,S
 CONTROLLER#01,Custom,Chain Hoist Controller,,Chain Hoist Controller,False,False,,SK,Store,Store
 HERCULES 8#01,Fenix,HERCULES 8,180439_30,Frontal lifting tower array lifter,False,True,2025/07/03	bnjm2000	Discovered frayed metal cable during BBC 2025 @ GBTB [Marked OOC]|2025/07/09	bnjm2000	Sent to LSD or servicing (Service order no. 1636) [Location: LSD SG],AX,Store,LSD SG
 HERCULES 8#02,Fenix,HERCULES 8,180439_28,Frontal lifting tower array lifter,False,False,,AX,Store,
+MASTER4KTX#01,Accsoon,Cineview Master 4K TX,WIT07-0137-BE0F,Wireless SDI/HDMI Transmitter,False,False,,VX,Store,
+MASTER4KTX#02,Accsoon,Cineview Master 4K TX,WIT07-0938-BE0B,Wireless SDI/HDMI Transmitter,False,False,,VX,Store,
+MASTER4KRX#01,Accsoon,Cineview Master 4K RX,WIT07-0672-BE0F,Wireless SDI/HDMI Receiver,False,False,,VX,Store,
+MASTER4KRX#02,Accsoon,Cineview Master 4K RX,WIT07-1438-BE0B,Wireless SDI/HDMI Receiver,False,False,,VX,Store,
+MASTER4KRX#03,Accsoon,Cineview Master 4K RX,WIT07-1377-BE0B,Wireless SDI/HDMI Receiver,False,False,,VX,Store,
+PERFECTCUE#01,DSAN,PerfectCue Mini,24-24582,Professional Wireless Clicker,False,False,,VX,Store,
+CLICKER#01,DSAN,PerfectCue Mini,,Professional Wireless Clicker,False,False,,VX,Store,
