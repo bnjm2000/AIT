@@ -1,69 +1,3 @@
-2025/07/23 15:33:44,bnjm2000,Returned asset PCBB#03 from event 39
-2025/07/23 15:33:44,bnjm2000,Returned asset PCBB#08 from event 39
-2025/07/23 15:33:46,bnjm2000,Returned asset ULXD2#03 from event 39
-2025/07/23 15:33:46,bnjm2000,Returned asset ULXD2#06 from event 39
-2025/07/23 15:33:52,bnjm2000,Returned asset 4488#02 from event 33
-2025/07/23 15:33:52,bnjm2000,Returned asset 4488#12 from event 33
-2025/07/23 15:33:54,bnjm2000,Returned asset IPAD#02 from event 33
-2025/07/23 15:33:56,bnjm2000,Returned asset DAD6010#41 from event 33
-2025/07/23 15:33:56,bnjm2000,Returned asset DAD6010#32 from event 33
-2025/07/23 15:33:57,bnjm2000,Returned asset ULXD2#04 from event 33
-2025/07/23 15:33:57,bnjm2000,Returned asset ULXD2#07 from event 33
-2025/07/23 15:33:59,bnjm2000,Returned asset IP1000#03 from event 33
-2025/07/23 15:33:59,bnjm2000,Returned asset IP1000#04 from event 33
-2025/07/23 15:34:01,bnjm2000,Returned asset QUARTZ#02 from event 33
-2025/07/23 15:34:03,bnjm2000,Returned asset DM3#02 from event 33
-2025/07/23 15:34:05,bnjm2000,Returned asset ULXD1#06 from event 33
-2025/07/23 15:34:06,bnjm2000,Returned asset ULXD4D#01 from event 33
-2025/07/23 15:34:07,bnjm2000,Returned asset ULXD4D#02 from event 33
-2025/07/23 15:34:15,bnjm2000,User bnjm2000 removed forced state override for event 33 (Hermes Beauty Event @ The Art House): Preparing -> Closed
-2025/07/23 15:34:47,bnjm2000,Removed L-Acoustics X12 model from event 37
-2025/07/23 15:34:47,bnjm2000,Added 8x L-Acoustics X12 model to event 37 (total: 8)
-2025/07/23 15:34:59,bnjm2000,Removed L-Acoustics X8 model from event 37
-2025/07/23 15:34:59,bnjm2000,Added 12x L-Acoustics X8 model to event 37 (total: 12)
-2025/07/23 15:35:06,bnjm2000,Removed DPA 6061 model from event 37
-2025/07/23 15:35:06,bnjm2000,Added 3x DPA 6061 model to event 37 (total: 3)
-2025/07/23 15:35:23,bnjm2000,Added 4x AKG C451B model to event 37 (total: 4)
-2025/07/23 15:35:33,bnjm2000,Removed Shure ULXD4Q model from event 37
-2025/07/23 15:35:36,bnjm2000,Removed Shure ULXD4D model from event 37
-2025/07/23 15:35:38,bnjm2000,Removed Shure ULXD2 model from event 37
-2025/07/23 15:35:50,bnjm2000,Added 4x Shure AD4Q model to event 37 (total: 4)
-2025/07/23 15:35:55,bnjm2000,Added 2x Shure AD3 model to event 37 (total: 2)
-2025/07/23 15:36:01,bnjm2000,Added 16x Shure AD2 model to event 37 (total: 16)
-2025/07/23 15:36:05,bnjm2000,Added 1x Shure AD1 model to event 37 (total: 1)
-2025/07/23 15:36:09,bnjm2000,Added 15x Shure AD1 model to event 37 (total: 16)
-2025/07/23 15:36:16,bnjm2000,Added 2x Sennheiser ME36 model to event 37 (total: 2)
-2025/07/23 15:36:20,bnjm2000,Added 2x Audio Tecnica AT8668 model to event 37 (total: 2)
-2025/07/24 12:20:26,system,Failed login attempt for username: bnjm2000
-2025/07/24 12:20:29,bnjm2000,User bnjm2000 logged in via web interface
-2025/07/24 12:22:11,bnjm2000,Added 6x L-Acoustics LA4X model to event 37 (total: 6)
-2025/07/24 12:22:50,bnjm2000,Added 2x L-Acoustics X-US1215 model to event 37 (total: 2)
-2025/07/24 12:23:13,bnjm2000,Added 3x Netgear GSM4212P model to event 37 (total: 5)
-2025/07/24 12:23:19,bnjm2000,Added 1x Yamaha Rio3224-d model to event 37 (total: 1)
-2025/07/24 12:23:29,bnjm2000,Added 1x Hollyland Solidcom C1 (Pro) 8-Slot Battery Charging Case model to event 37 (total: 1)
-2025/07/24 12:23:30,bnjm2000,Added 1x Hollyland Solidcom C1 Pro Hub model to event 37 (total: 1)
-2025/07/24 12:23:35,bnjm2000,Added 8x Hollyland Solidcom C1 Pro Remote Headset model to event 37 (total: 8)
-2025/07/24 12:23:36,bnjm2000,Added 1x Hollyland Solidcom C1 Pro Wired Headset for Hub model to event 37 (total: 1)
-2025/07/24 12:23:38,bnjm2000,Added 16x Hollyland HL-BAT700 model to event 37 (total: 16)
-2025/07/24 12:24:34,bnjm2000,Added 1x Shure Beta 91A model to event 37 (total: 1)
-2025/07/24 12:25:10,bnjm2000,Added 4x Interspace Industries PCBB3 model to event 37 (total: 4)
-2025/07/24 12:25:20,bnjm2000,Added 2x Apple IPAD model to event 37 (total: 2)
-2025/07/24 12:25:42,bnjm2000,Removed Ayrton Diablo Profile model from event 37
-2025/07/24 12:25:50,bnjm2000,Added 13x Silver Star Eclipse 1000 RGBAL SS847XAL model to event 37 (total: 13)
-2025/07/24 12:26:01,bnjm2000,Added 1x Cameo Unicon Remote Control model to event 37 (total: 1)
-2025/07/24 12:26:17,bnjm2000,Assigned specific asset IPAD#01 to event 37
-2025/07/24 12:26:18,bnjm2000,Assigned specific asset IPAD#02 to event 37
-2025/07/24 12:26:22,bnjm2000,Assigned specific asset HLBatt#01 to event 37
-2025/07/24 12:26:23,bnjm2000,Assigned specific asset HLBatt#02 to event 37
-2025/07/24 12:26:24,bnjm2000,Assigned specific asset HLBatt#03 to event 37
-2025/07/24 12:26:24,bnjm2000,Assigned specific asset HLBatt#04 to event 37
-2025/07/24 12:26:25,bnjm2000,Assigned specific asset HLBatt#05 to event 37
-2025/07/24 12:26:25,bnjm2000,Assigned specific asset HLBatt#06 to event 37
-2025/07/24 12:26:26,bnjm2000,Assigned specific asset HLBatt#07 to event 37
-2025/07/24 12:26:26,bnjm2000,Assigned specific asset HLBatt#08 to event 37
-2025/07/24 12:26:28,bnjm2000,Assigned specific asset HLBatt#09 to event 37
-2025/07/24 12:26:30,bnjm2000,Assigned specific asset HLBatt#10 to event 37
-2025/07/24 12:26:31,bnjm2000,Assigned specific asset HLBatt#11 to event 37
 2025/07/24 12:26:32,bnjm2000,Assigned specific asset HLBatt#12 to event 37
 2025/07/24 12:26:33,bnjm2000,Assigned specific asset HLBatt#13 to event 37
 2025/07/24 12:26:34,bnjm2000,Assigned specific asset HLBatt#14 to event 37
@@ -998,3 +932,69 @@
 2025/08/18 16:37:36,bnjm2000,Added 5x Ayrton Diablo Profile model to event 48 (total: 5)
 2025/08/18 16:38:02,bnjm2000,Created event 49: Dry Hire: NicheAV via web interface
 2025/08/18 16:38:07,bnjm2000,Added 1x Yamaha QL1 model to event 49 (total: 1)
+2025/08/21 16:31:06,system,Failed login attempt for username: bnjm2000
+2025/08/21 16:31:09,bnjm2000,User bnjm2000 logged in via web interface
+2025/08/21 16:31:54,bnjm2000,"Updated maintenance log for asset PB#09: 'Sent in to Total Solutions [Location: Total Solutions]' -> 'Screen worked again when sending into Total Solutions' (also: Location: Store, Cleared OOC) (edited by bnjm2000)"
+2025/08/21 16:32:03,bnjm2000,"Updated maintenance log for asset PB#09: 'Screen worked again when sending into Total Solutions [Location: Store, Cleared OOC]' -> 'Screen worked again when sending into Total Solutions' (also: Location: Store, Cleared OOC) (edited by bnjm2000)"
+2025/08/21 16:32:08,bnjm2000,"Deleted maintenance log for asset PB#09: 'Screen worked again when sending into Total Solutions [Location: Store, Cleared OOC]' (deleted by bnjm2000)"
+2025/08/21 16:32:17,bnjm2000,Removed Out of Commission status from asset PB#09
+2025/08/21 16:32:17,bnjm2000,Maintenance logged for asset PB#09: Screen worked again when sending into Total Solutions
+2025/08/21 16:32:28,bnjm2000,Deleted maintenance log for asset PB#36: 'Sent in to Total Solutions [Location: Total Solutions]' (deleted by bnjm2000)
+2025/08/21 16:32:34,bnjm2000,Removed Out of Commission status from asset PB#36
+2025/08/21 16:32:34,bnjm2000,Maintenance logged for asset PB#36: Screen worked again when sending into Total Solutions
+2025/08/21 16:33:11,bnjm2000,User bnjm2000 forced event 45 (Kara Training @ Concept Systems) state from Overdue to Preparing
+2025/08/21 16:33:18,bnjm2000,Assigned specific asset KARAII#07 to event 45
+2025/08/21 16:33:22,bnjm2000,Assigned specific asset KARAII#08 to event 45
+2025/08/21 16:33:25,bnjm2000,Assigned specific asset KARAII#09 to event 45
+2025/08/21 16:33:28,bnjm2000,Assigned specific asset KARAII#10 to event 45
+2025/08/21 16:33:31,bnjm2000,Assigned specific asset KARAII#12 to event 45
+2025/08/21 16:33:35,bnjm2000,Assigned specific asset KARAII#11 to event 45
+2025/08/21 16:33:42,bnjm2000,Assigned specific asset SB18#09 to event 45
+2025/08/21 16:33:45,bnjm2000,Assigned specific asset SB18#10 to event 45
+2025/08/21 16:33:48,bnjm2000,Assigned specific asset SB18#11 to event 45
+2025/08/21 16:33:50,bnjm2000,Assigned specific asset SB18#12 to event 45
+2025/08/21 16:33:56,bnjm2000,Returned asset LA12X#01 from event 45
+2025/08/21 16:33:57,bnjm2000,Returned asset LA12X#03 from event 45
+2025/08/21 16:33:58,bnjm2000,Returned asset LA12X#02 from event 45
+2025/08/21 16:33:59,bnjm2000,Returned asset KARAII#07 from event 45
+2025/08/21 16:34:01,bnjm2000,Returned asset KARAII#08 from event 45
+2025/08/21 16:34:01,bnjm2000,Returned asset KARAII#10 from event 45
+2025/08/21 16:34:02,bnjm2000,Returned asset KARAII#09 from event 45
+2025/08/21 16:34:03,bnjm2000,Returned asset KARAII#11 from event 45
+2025/08/21 16:34:03,bnjm2000,Returned asset KARAII#12 from event 45
+2025/08/21 16:34:04,bnjm2000,Returned asset SB18#09 from event 45
+2025/08/21 16:34:05,bnjm2000,Returned asset SB18#10 from event 45
+2025/08/21 16:34:06,bnjm2000,Returned asset SB18#11 from event 45
+2025/08/21 16:34:06,bnjm2000,Returned asset SB18#12 from event 45
+2025/08/21 16:34:11,bnjm2000,User bnjm2000 removed forced state override for event 45 (Kara Training @ Concept Systems): Preparing -> Preparing
+2025/08/21 16:34:19,bnjm2000,User bnjm2000 forced event 45 (Kara Training @ Concept Systems) state from Preparing to Closed
+2025/08/21 16:34:26,bnjm2000,Removed L-Acoustics 5XT model from event 46
+2025/08/21 16:34:26,bnjm2000,Added 2x L-Acoustics 5XT model to event 46 (total: 2)
+2025/08/21 16:34:31,bnjm2000,Removed L-Acoustics ETR5 model from event 46
+2025/08/21 16:34:31,bnjm2000,Added 2x L-Acoustics ETR5 model to event 46 (total: 2)
+2025/08/21 16:34:34,bnjm2000,Removed Interspace Industries PCBB3 model from event 46
+2025/08/21 16:34:43,bnjm2000,Added 1x Radial Engineering Trim-two model to event 46 (total: 1)
+2025/08/21 16:36:08,bnjm2000,Assigned specific asset 5XT#06 to event 46
+2025/08/21 16:36:11,bnjm2000,Assigned specific asset 5XT#07 to event 46
+2025/08/21 16:36:14,bnjm2000,Assigned specific asset ETR5#06 to event 46
+2025/08/21 16:36:16,bnjm2000,Assigned specific asset ETR5#07 to event 46
+2025/08/21 16:36:36,bnjm2000,Assigned specific asset LA4X#08 to event 46
+2025/08/21 16:36:38,bnjm2000,Assigned specific asset TRIM-TWO#01 to event 46
+2025/08/21 16:41:30,bnjm2000,Created event 50: Valentino Le Meta-Theatre Des Intimates @ ArtSpace via web interface
+2025/08/21 16:41:43,bnjm2000,Added 8x Astera Titan Tube model to event 50 (total: 8)
+2025/08/21 16:43:48,bnjm2000,Added 12x L-Acoustics ETR5 model to event 50 (total: 12)
+2025/08/21 16:43:50,bnjm2000,Added 12x L-Acoustics 5XTW model to event 50 (total: 12)
+2025/08/21 16:43:57,bnjm2000,Added 4x L-Acoustics 5XT model to event 50 (total: 4)
+2025/08/21 16:44:00,bnjm2000,Added 12x L-Acoustics ETR5W model to event 50 (total: 12)
+2025/08/21 16:44:06,bnjm2000,Removed L-Acoustics ETR5 model from event 50
+2025/08/21 16:44:06,bnjm2000,Added 4x L-Acoustics ETR5 model to event 50 (total: 4)
+2025/08/21 16:44:24,bnjm2000,Added 1x L-Acoustics LA4X model to event 50 (total: 1)
+2025/08/21 16:44:59,bnjm2000,Added 2x Turbosound IP1000 model to event 50 (total: 2)
+2025/08/21 16:45:03,bnjm2000,Added 1x Yamaha DM3 model to event 50 (total: 1)
+2025/08/21 16:45:11,bnjm2000,Added 1x MiPro MR-90 model to event 50 (total: 1)
+2025/08/21 16:45:11,bnjm2000,Added 1x MiPro MT-90A model to event 50 (total: 1)
+2025/08/21 16:45:22,bnjm2000,Added 1x Yamaha DXR10 model to event 50 (total: 1)
+2025/08/21 16:45:24,bnjm2000,Added 1x Yamaha DXR10 model to event 50 (total: 2)
+2025/08/21 16:46:52,bnjm2000,Added 4x Ayrton Diablo (W.DMX) model to event 50 (total: 4)
+2025/08/21 16:47:22,bnjm2000,Added 2x Lumenradio Aurora model to event 50 (total: 2)
+2025/08/21 16:47:57,bnjm2000,Added 1x Pioneer DJM-900NXS2 model to event 50 (total: 1)
