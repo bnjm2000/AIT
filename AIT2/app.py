@@ -526,7 +526,7 @@ def get_events():
                             quantity = int(parts[3])
                             description = parts[4] if len(parts) > 4 else ''
                             
-                            model_key = f"{dept}|{brand}|{model}"
+                            model_key = f"{dept}|{brand}|{model}|{description}"
                             
                             if model_key not in model_groups:
                                 model_groups[model_key] = {
@@ -833,7 +833,7 @@ def get_event(event_id):
                         quantity = int(parts[3])
                         description = parts[4] if len(parts) > 4 else ''
 
-                        model_key = f"{dept}|{brand}|{model}"
+                        model_key = f"{dept}|{brand}|{model}|{description}"
 
                         if model_key not in model_groups:
                             model_groups[model_key] = {
@@ -1507,11 +1507,13 @@ def prepare_event_asset(event_id):
                             dept = parts[0]
                             brand = parts[1]
                             model = parts[2]
-                            
+                            description = parts[4]
+
                             # Check if this asset matches the model requirement
                             if (asset.department_code == dept and 
                                 asset.brand == brand and 
-                                asset.model_number == model):
+                                asset.model_number == model and
+                                asset.description == description):
                                 fulfills_model_requirement = True
                                 logger.info(f"Asset {asset_id} fulfills model requirement {prepared_item}")
                                 break

@@ -5928,7 +5928,7 @@ function filterAvailableAssetsSimple(searchTerm) {
   // Group assets by model
   const assetsByModel = {};
   filteredAssets.forEach((asset) => {
-    const modelKey = `${asset.brand} ${asset.model}`;
+    const modelKey = `${asset.brand} ${asset.model} ${asset.description || ''}`;
     if (!assetsByModel[modelKey]) {
       assetsByModel[modelKey] = {
         brand: asset.brand,
@@ -6467,7 +6467,7 @@ function filterAvailableModels(searchTerm) {
   // Group available assets by model
   const modelGroups = {};
   availableAssets.forEach(asset => {
-    const modelKey = `${asset.department}|${asset.brand}|${asset.model}`;
+    const modelKey = `${asset.department}|${asset.brand}|${asset.model}|${asset.description || ''}`;
     if (!modelGroups[modelKey]) {
       modelGroups[modelKey] = {
         department: asset.department,
