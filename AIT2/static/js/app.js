@@ -130,6 +130,10 @@ function setupSingleAssetClickHandler() {
     console.log('Single click handler setup complete');
 }
 
+// Global variables for maintenance functionality
+let selectedMaintenanceAssets = new Set();
+let selectedOOCAssets = new Set();
+
 function removeExistingListeners() {
     // Remove any existing click handlers
     const existingHandler = document._assetClickHandler;
@@ -8676,6 +8680,8 @@ window.openMaintenanceModalForAsset = openMaintenanceModal;
 window.clearSingleOOC = clearSingleOOC;
 window.addNewLogEntryFromModal = addNewLogEntryFromModal;
 window.returnSpecificAssetNew = returnSpecificAssetNew;
+window.selectAssetForMaintenance = selectAssetForMaintenance;
+window.removeAssetFromMaintenance = removeAssetFromMaintenance;
 
 // Helper function to close the maintenance log modal
 function closeMaintenanceLogModal() {
