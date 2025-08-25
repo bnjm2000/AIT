@@ -943,10 +943,10 @@ LX TREE #02,Versa-Stand,,,Winch Up Lighting Stand,False,False,,LX,Store,
 LX TREE #03,Versa-Stand,,,Winch Up Lighting Stand,False,False,,LX,Store,
 LX TREE #04,Versa-Stand,,,Winch Up Lighting Stand,False,False,,LX,Store,
 LX TREE #05,Versa-Stand,,,Winch Up Lighting Stand,False,False,,LX,Store,
-AURORA#01,Lumenradio,Aurora,MAURA100000710,,False,False,"2025/07/30	bnjm2000	Send in to TSM for checking, repair. Signal weak [Location: Total Solutions]",LX,Store,Total Solutions
-AURORA#02,Lumenradio,Aurora,MAURA100000707,,False,False,"2025/07/30	bnjm2000	Send in to TSM for checking, repair. Signal weak [Location: Total Solutions]",LX,Store,Total Solutions
-AURORA#03,Lumenradio,Aurora,MAURA100000648,,False,False,,LX,Store,
-AURORA#04,Lumenradio,Aurora,MAURA100000981,,False,False,,LX,Store,
+AURORA#01,Lumenradio,Aurora,MAURA100000710,,False,False,"2025/07/30	bnjm2000	Send in to TSM for checking, repair. Signal weak [Location: Total Solutions]|2025/08/14	bnjm2000	Collected back from TSM, tested to 5m working. [Location: Store]",LX,Store,Store
+AURORA#02,Lumenradio,Aurora,MAURA100000707,,False,False,"2025/07/30	bnjm2000	Send in to TSM for checking, repair. Signal weak [Location: Total Solutions]|2025/08/14	bnjm2000	Collected back from TSM, tested to 5m working. [Location: Store]",LX,Store,Store
+AURORA#03,Lumenradio,Aurora,MAURA100000648,,False,False,"2025/08/14	bnjm2000	Sent into TSM for testing, range issue [Location: Total Solutions]",LX,Store,Total Solutions
+AURORA#04,Lumenradio,Aurora,MAURA100000981,,False,False,"2025/08/14	bnjm2000	Sent into TSM for testing, range issue [Location: Total Solutions]",LX,Store,Total Solutions
 DMX RECORDER #01,,XRC-200,2304738,,False,False,,LX,Store,
 MOONLITE WDMX #01,Lumenradio,MoonLite,JMRFO000000087,,False,False,,LX,Store,
 TRIM-TWO#01,Radial Engineering,Trim-two,,Stereo DI with Level Control,False,False,,AX,Store,Loewe Event @ Le Freeport

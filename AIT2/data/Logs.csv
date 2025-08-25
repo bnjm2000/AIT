@@ -1,16 +1,3 @@
-2025/07/24 12:26:32,bnjm2000,Assigned specific asset HLBatt#12 to event 37
-2025/07/24 12:26:33,bnjm2000,Assigned specific asset HLBatt#13 to event 37
-2025/07/24 12:26:34,bnjm2000,Assigned specific asset HLBatt#14 to event 37
-2025/07/24 12:26:35,bnjm2000,Assigned specific asset HLBatt#15 to event 37
-2025/07/24 12:26:36,bnjm2000,Assigned specific asset HLBatt#16 to event 37
-2025/07/24 12:26:39,bnjm2000,Assigned specific asset C1ProCharger#01 to event 37
-2025/07/24 12:26:41,bnjm2000,Assigned specific asset C1ProHub#01 to event 37
-2025/07/24 12:26:43,bnjm2000,Assigned specific asset C1ProRHS#01 to event 37
-2025/07/24 12:26:46,bnjm2000,Assigned specific asset C1ProWHS#01 to event 37
-2025/07/24 12:26:47,bnjm2000,Assigned specific asset C1ProRHS#02 to event 37
-2025/07/24 12:26:49,bnjm2000,Assigned specific asset C1ProRHS#03 to event 37
-2025/07/24 12:26:50,bnjm2000,Assigned specific asset C1ProRHS#04 to event 37
-2025/07/24 12:26:51,bnjm2000,Assigned specific asset C1ProRHS#05 to event 37
 2025/07/24 12:26:52,bnjm2000,Assigned specific asset C1ProRHS#06 to event 37
 2025/07/24 12:26:54,bnjm2000,Assigned specific asset C1ProRHS#07 to event 37
 2025/07/24 12:26:55,bnjm2000,Assigned specific asset C1ProRHS#08 to event 37
@@ -998,3 +985,16 @@
 2025/08/21 16:46:52,bnjm2000,Added 4x Ayrton Diablo (W.DMX) model to event 50 (total: 4)
 2025/08/21 16:47:22,bnjm2000,Added 2x Lumenradio Aurora model to event 50 (total: 2)
 2025/08/21 16:47:57,bnjm2000,Added 1x Pioneer DJM-900NXS2 model to event 50 (total: 1)
+2025/08/22 16:42:25,system,Failed login attempt for username: bnjm2000
+2025/08/22 16:42:29,bnjm2000,User bnjm2000 logged in via web interface
+2025/08/22 16:43:56,bnjm2000,Updated location for asset AURORA#01 from 'Total Solutions' to 'Store'
+2025/08/22 16:43:56,bnjm2000,"Maintenance logged for asset AURORA#01: Collected back from TSM, tested to 5m working."
+2025/08/22 16:43:56,bnjm2000,Updated location for asset AURORA#02 from 'Total Solutions' to 'Store'
+2025/08/22 16:43:56,bnjm2000,"Maintenance logged for asset AURORA#02: Collected back from TSM, tested to 5m working."
+2025/08/22 16:44:30,bnjm2000,Updated location for asset AURORA#03 from '' to 'Total Solutions'
+2025/08/22 16:44:30,bnjm2000,"Maintenance logged for asset AURORA#03: Sent into TSM for testing, range issue"
+2025/08/22 16:44:30,bnjm2000,Updated location for asset AURORA#04 from '' to 'Total Solutions'
+2025/08/22 16:44:30,bnjm2000,"Maintenance logged for asset AURORA#04: Sent into TSM for testing, range issue"
+2025/08/22 16:45:41,bnjm2000,Updated event 50: Valentino Le Meta-Theatre Des Intimates @ ArtSpace via web interface
+2025/08/22 16:46:03,bnjm2000,Created event 51: Dry Hire: NicheAV via web interface
+2025/08/22 16:46:07,bnjm2000,Added 1x Yamaha QL5 model to event 51 (total: 1)
