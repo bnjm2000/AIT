@@ -47,7 +47,7 @@ CT3#01,DBX,CT3,11065310806,advanced cable tester,False,False,,AX,Store,
 4099#17,DPA,4099,EG3977,Instrument Microphone,False,False,,AX,Store,Store
 4288#01,DPA,4288,,Directional Headset,False,False,,AX,Store,
 4288#02,DPA,4288,,Directional Headset,False,False,,AX,Store,
-4466#01,DPA,4466,C073762,"Omnidirectional Headset, beige",False,False,,AX,Store,Tempest & Tranquility @ Drama Centre Blackbox
+4466#01,DPA,4466,C073762,"Omnidirectional Headset, beige",False,False,,AX,Store,
 4466#02,DPA,4466,C074934,"Omnidirectional Headset, beige",False,False,,AX,Store,
 4466#03,DPA,4466,C075186,"Omnidirectional Headset, beige",False,False,,AX,Store,
 4466#04,DPA,4466,C056003,"Omnidirectional Headset, beige",False,False,,AX,Store,
@@ -78,7 +78,7 @@ CT3#01,DBX,CT3,11065310806,advanced cable tester,False,False,,AX,Store,
 6061#11,DPA,6061,R317534,Omni Submini Lavalier Microphone,False,False,,AX,Store,
 6061#12,DPA,6061,R317535,Omni Submini Lavalier Microphone,False,False,,AX,Store,Store
 4061#01,DPA,4061,R238770,Omni Submini Lavalier Microphone,False,True,2024/11/19	bnjm2000	Sleeving disintegrated/tore after removing from instrument (SLMA @ Jia He Grand Restaurant) [Marked OOC],AX,Store,
-4061#02,DPA,4061,R238785,Omni Submini Lavalier Microphone,False,False,,AX,Store,Store
+4061#02,DPA,4061,R238785,Omni Submini Lavalier Microphone,False,True,2025/08/15	bnjm2000	Sleeving disintegrated/tore after removing from instrument (Tampest & Tranquility @ Blackbox) [Marked OOC],AX,Store,Store
 DAD6001#01,DPA,DAD 6001,,Microdot to 3-Pin XLR Adapter,False,False,,AX,Store,Store
 DAD6001#02,DPA,DAD 6001,,Microdot to 3-Pin XLR Adapter,False,False,,AX,Store,Store
 DAD6001#03,DPA,DAD 6001,,Microdot to 3-Pin XLR Adapter,False,False,,AX,Store,Store
@@ -180,17 +180,17 @@ C1ProRHS#06,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC00786C,,False,Fal
 C1ProRHS#07,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC008667,,False,False,,AX,Store,Store
 C1ProRHS#08,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC007AB4,,False,False,,AX,Store,Store
 C1ProWHS#01,Hollyland,Solidcom C1 Pro Wired Headset for Hub,2223170XX0D0036E,,False,False,,AX,Store,Store
-PCBB#01,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,Store
-PCBB#02,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,Store
-PCBB#03,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,Store
+PCBB#01,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,
+PCBB#02,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,
+PCBB#03,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,
 PCBB#04,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,
-PCBB#05,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,Store
-PCBB#06,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,Store
-PCBB#07,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,Store
-PCBB#08,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,Store
+PCBB#05,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,
+PCBB#06,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,
+PCBB#07,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,
+PCBB#08,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,
 PCBB#09,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,
-PCBB#10,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,Store
-PCBB#11,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,Store
+PCBB#10,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,
+PCBB#11,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,
 PCBB#12,Interspace Industries,PCBB,,PC Balance Box,False,False,,AX,Store,
 LSP1#01,Dsan,LSP-1,,Laptop Sound Port (Mono),False,False,,AX,Store,
 LSP1#02,Dsan,LSP-1,,Laptop Sound Port (Mono),False,False,,AX,Store,
@@ -244,8 +244,8 @@ ETR5W#16,L-Acoustics,ETR5W,,Adjustable U-bracket: 5XTW,False,False,,AX,Store,
 5XT#03,L-Acoustics,5XT,260044264,"5"" passive coaxial enclosure, black",False,False,,AX,Store,Store
 5XT#04,L-Acoustics,5XT,260044265,"5"" passive coaxial enclosure, black",False,False,,AX,Store,Store
 5XT#05,L-Acoustics,5XT,260044285,"5"" passive coaxial enclosure, black",False,False,,AX,Store,
-5XT#06,L-Acoustics,5XT,260044288,"5"" passive coaxial enclosure, black",False,False,,AX,Store,Loewe Event @ Le Freeport
-5XT#07,L-Acoustics,5XT,260044300,"5"" passive coaxial enclosure, black",False,False,,AX,Store,Loewe Event @ Le Freeport
+5XT#06,L-Acoustics,5XT,260044288,"5"" passive coaxial enclosure, black",False,False,,AX,Store,Store
+5XT#07,L-Acoustics,5XT,260044300,"5"" passive coaxial enclosure, black",False,False,,AX,Store,Store
 5XT#08,L-Acoustics,5XT,260044302,"5"" passive coaxial enclosure, black",False,False,,AX,Store,
 5XT#09,L-Acoustics,5XT,260044304,"5"" passive coaxial enclosure, black",False,False,,AX,Store,
 5XT#10,L-Acoustics,5XT,260044306,"5"" passive coaxial enclosure, black",False,False,,AX,Store,
@@ -260,8 +260,8 @@ ETR5#02,L-Acoustics,ETR5,440027236,Adjustable U-bracket: 5XT,False,False,,AX,Sto
 ETR5#03,L-Acoustics,ETR5,440031349,Adjustable U-bracket: 5XT,False,False,,AX,Store,
 ETR5#04,L-Acoustics,ETR5,440031356,Adjustable U-bracket: 5XT,False,False,,AX,Store,
 ETR5#05,L-Acoustics,ETR5,440031388,Adjustable U-bracket: 5XT,False,False,,AX,Store,
-ETR5#06,L-Acoustics,ETR5,440031793,Adjustable U-bracket: 5XT,False,False,,AX,Store,Loewe Event @ Le Freeport
-ETR5#07,L-Acoustics,ETR5,440031849,Adjustable U-bracket: 5XT,False,False,,AX,Store,Loewe Event @ Le Freeport
+ETR5#06,L-Acoustics,ETR5,440031793,Adjustable U-bracket: 5XT,False,False,,AX,Store,Store
+ETR5#07,L-Acoustics,ETR5,440031849,Adjustable U-bracket: 5XT,False,False,,AX,Store,Store
 ETR5#08,L-Acoustics,ETR5,440031851,Adjustable U-bracket: 5XT,False,False,,AX,Store,
 ETR5#09,L-Acoustics,ETR5,440032582,Adjustable U-bracket: 5XT,False,False,,AX,Store,
 ETR5#10,L-Acoustics,ETR5,440032585,Adjustable U-bracket: 5XT,False,False,,AX,Store,
@@ -278,7 +278,7 @@ LA4X#04,L-Acoustics,LA4X,1180053934,Amplified controller,False,False,,AX,Store,
 LA4X#05,L-Acoustics,LA4X,1180053927,Amplified controller,False,False,,AX,Store,
 LA4X#06,L-Acoustics,LA4X,1180051467,Amplified controller,False,False,,AX,Store,
 LA4X#07,L-Acoustics,LA4X,1180053692,Amplified controller,False,False,,AX,Store,Store
-LA4X#08,L-Acoustics,LA4X,1180051680,Amplified controller,False,False,,AX,Store,Loewe Event @ Le Freeport
+LA4X#08,L-Acoustics,LA4X,1180051680,Amplified controller,False,False,,AX,Store,Store
 LA4X#09,L-Acoustics,LA4X,1180053978,Amplified controller,False,False,,AX,Store,Store
 LA4X#10,L-Acoustics,LA4X,1180053926,Amplified controller,False,False,,AX,Store,Store
 LA12X#01,L-Acoustics,LA12X,1140035138,Amplified controller,False,False,,AX,Store,Store
@@ -442,7 +442,7 @@ MR-90A#05,MiPro,MR-90,878292431A,Interlink receiver,False,False,"2024/10/29	bnjm
 MR-90A#06,MiPro,MR-90,878292436A,Interlink receiver,False,False,2024/11/26	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	2024/11/26 - Collected back from MiPro after testing,AX,Store,Store
 MT-90A#01,MiPro,MT-90A,858290901A,Interlink Transmitter,False,False,2024/11/26	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	2024/11/26 - Collected back from MiPro after testing,AX,Store,Store
 MT-90A#02,MiPro,MT-90A,858290902A,Interlink Transmitter,False,False,2024/11/26	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	2024/11/26 - Collected back from MiPro after testing,AX,Store,
-MT-90A#03,MiPro,MT-90A,858290899A,Interlink Transmitter,False,False,2024/11/26	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	changed transmitter to same type (Old S/N: 809264158A)|2024/11/26	bnjm2000	2024/11/26 - Collected back from MiPro after testing,AX,Store,dearGENTLEFOLK @ Restaurant Born
+MT-90A#03,MiPro,MT-90A,858290899A,Interlink Transmitter,False,False,2024/11/26	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	changed transmitter to same type (Old S/N: 809264158A)|2024/11/26	bnjm2000	2024/11/26 - Collected back from MiPro after testing,AX,Store,
 MT-90A#04,MiPro,MT-90A,858290898A,Interlink Transmitter,False,False,"2024/11/20	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	2024/11/26 - Collected back from MiPro after testing|2024/10/15	bnjm2000	Device keeps restarting, suspect PSU faulty (Wedding of Kenneth and Wong Mei Yin) [Marked OOC]|2025/10/24	bnjm2000	Handed over to MiPro for PSU testing [Location: MiPro]|2024/11/13	bnjm2000	Collected back from MiPro [Location: Store, Cleared OOC]",AX,Store,Store
 GSM4212P#01,Netgear,GSM4212P,6VB52B51A0392,Managed Switch,False,False,,AX,Store,Store
 GSM4212P#02,Netgear,GSM4212P,6VB52B5AA039B,Managed Switch,False,False,,AX,Store,Store
@@ -949,7 +949,7 @@ AURORA#03,Lumenradio,Aurora,MAURA100000648,,False,False,"2025/08/14	bnjm2000	Sen
 AURORA#04,Lumenradio,Aurora,MAURA100000981,,False,False,"2025/08/14	bnjm2000	Sent into TSM for testing, range issue [Location: Total Solutions]",LX,Store,Total Solutions
 DMX RECORDER #01,,XRC-200,2304738,,False,False,,LX,Store,
 MOONLITE WDMX #01,Lumenradio,MoonLite,JMRFO000000087,,False,False,,LX,Store,
-TRIM-TWO#01,Radial Engineering,Trim-two,,Stereo DI with Level Control,False,False,,AX,Store,Loewe Event @ Le Freeport
+TRIM-TWO#01,Radial Engineering,Trim-two,,Stereo DI with Level Control,False,False,,AX,Store,Store
 TRIM-TWO#02,Radial Engineering,Trim-two,,Stereo DI with Level Control,False,False,,AX,Store,
 J48M#01,Radial Engineering,J48 Mono,1466800,Phantom Powered Active Direct Box,False,False,,AX,Store,Store
 J48M#02,Radial Engineering,J48 Mono,1466824,Phantom Powered Active Direct Box,False,False,,AX,Store,
