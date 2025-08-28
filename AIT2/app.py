@@ -928,8 +928,8 @@ def get_event(event_id):
         event_data = {
             'id': event.event_id,
             'name': event.name,
-            'startDate': event.start_date,
-            'endDate': event.end_date,
+            'startDate': format_date_output(event.start_date),
+            'endDate': format_date_output(event.end_date),    
             'state': event.state,
             'tag': getattr(event, 'tag', 'events'), 
             'assetModels': event.asset_models,

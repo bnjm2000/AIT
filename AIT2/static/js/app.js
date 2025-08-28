@@ -17,6 +17,57 @@ function escapeHtml(str) {
 let isClickHandlerSetup = false;
 let processingAssets = new Set();
 
+// Universal date formatting function to handle YYYY/MM/DD format from backend
+function formatDate(dateStr) {
+  if (!dateStr) return '';
+  
+  // Handle YYYY/MM/DD format from backend
+  if (dateStr.includes('/')) {
+    const dateParts = dateStr.split('/');
+    if (dateParts.length === 3) {
+      const [year, month, day] = dateParts;
+      const isoDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+      return new Date(isoDate).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      });
+    }
+  }
+  
+  // Fallback for other date formats
+  return new Date(dateStr).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+// Function to convert YYYY/MM/DD to YYYY-MM-DD for HTML date inputs
+function formatDateForInput(dateStr) {
+  if (!dateStr) return '';
+  
+  // Handle YYYY/MM/DD format from backend
+  if (dateStr.includes('/')) {
+    const dateParts = dateStr.split('/');
+    if (dateParts.length === 3) {
+      const [year, month, day] = dateParts;
+      return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+    }
+  }
+  
+  // Fallback: try parsing as regular date
+  const date = new Date(dateStr);
+  if (!isNaN(date.getTime())) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+  
+  return '';
+}
+
 function setupSingleAssetClickHandler() {
     // Prevent multiple setups
     if (isClickHandlerSetup) {
@@ -557,14 +608,6 @@ async function loadAllEvents() {
 function createEventCard(event) {
     const card = document.createElement('div');
     card.className = `event-card state-${event.state.toLowerCase()}`;
-    
-    const formatDate = (dateStr) => {
-        return new Date(dateStr).toLocaleDateString('en-US', { 
-            month: 'short', 
-            day: 'numeric', 
-            year: 'numeric' 
-        });
-    };
     
     // Helper function to escape HTML
     const escapeHtml = (str) => {
@@ -1268,14 +1311,6 @@ function createPrepareEventCard(event) {
     const div = document.createElement('div');
     div.textContent = str;
     return div.innerHTML;
-  };
-
-  const formatDate = (dateStr) => {
-    return new Date(dateStr).toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
   };
 
   const dateRange =
@@ -3371,14 +3406,6 @@ function createReturnEventCard(event) {
     return div.innerHTML;
   };
 
-  const formatDate = (dateStr) => {
-    return new Date(dateStr).toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-  };
-
   const dateRange =
     event.startDate === event.endDate
       ? formatDate(event.startDate)
@@ -4059,14 +4086,6 @@ function createTransferEventCard(event) {
     return div.innerHTML;
   };
 
-  const formatDate = (dateStr) => {
-    return new Date(dateStr).toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-  };
-
   const dateRange =
     event.startDate === event.endDate
       ? formatDate(event.startDate)
@@ -4105,6 +4124,21 @@ async function viewEvent(eventId) {
     ).textContent = `${event.tag === 'dry hire' ? 'Dry Hire' : 'Event'} ${event.id}: ${event.name}`;
 
     const formatDate = (dateStr) => {
+      // Fix: Convert YYYY/MM/DD format to a format that Date constructor can understand
+      if (dateStr && dateStr.includes('/')) {
+        // Convert YYYY/MM/DD to YYYY-MM-DD for proper parsing
+        const dateParts = dateStr.split('/');
+        if (dateParts.length === 3) {
+          const [year, month, day] = dateParts;
+          const isoDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+          return new Date(isoDate).toLocaleDateString("en-US", {
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+          });
+        }
+      }
+      // Fallback for other date formats
       return new Date(dateStr).toLocaleDateString("en-US", {
         month: "short",
         day: "numeric",
@@ -4921,25 +4955,6 @@ async function editEvent(eventId) {
     document.getElementById(
       "eventDetailsTitle"
     ).textContent = `Edit Event ${event.id}: ${event.name}`;
-
-    const formatDate = (dateStr) => {
-      return new Date(dateStr).toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      });
-    };
-
-    // Helper function to convert display date back to YYYY-MM-DD format
-    const formatDateForInput = (dateStr) => {
-      // The backend sends dates in YYYY-MM-DD format for API responses
-      // but if it's in a different format, convert it
-      const date = new Date(dateStr);
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const day = String(date.getDate()).padStart(2, '0');
-      return `${year}-${month}-${day}`;
-    };
 
     // Helper function to escape HTML
     const escapeHtml = (str) => {
@@ -5928,7 +5943,7 @@ function filterAvailableAssetsSimple(searchTerm) {
   // Group assets by model
   const assetsByModel = {};
   filteredAssets.forEach((asset) => {
-    const modelKey = `${asset.brand} ${asset.model} ${asset.description || ''}`;
+    const modelKey = `${asset.brand} ${asset.model}`;
     if (!assetsByModel[modelKey]) {
       assetsByModel[modelKey] = {
         brand: asset.brand,
