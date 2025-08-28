@@ -1524,7 +1524,8 @@ async function openPrepareEventModal(eventId) {
                     const modelAvailableAssets = availableAssets.filter(a => 
                         a.brand === modelGroup.brand && 
                         a.model === modelGroup.model && 
-                        a.department === modelGroup.department
+                        a.department === modelGroup.department &&
+                        (a.description || '') === (modelGroup.description || '')
                     );
                     
                     // Get assigned assets for this model
@@ -1573,14 +1574,16 @@ async function openPrepareEventModal(eventId) {
                                 }
 
                                 const modelAvailableAssets = availableAssets.filter(a => 
-                                    a.brand === brand && a.model === model && a.department === dept
+                                    a.brand === brand && a.model === model && a.department === dept &&
+                                    (a.description || '') === description
                                 );
 
                                 const assignedAssets = event.actuallyPrepared ? 
-                                    event.actuallyPrepared.filter(assetId => {
-                                        const availableAsset = availableAssets.find(a => a.id === assetId);
-                                        return availableAsset && availableAsset.brand === brand && availableAsset.model === model;
-                                    }) : [];
+                                  event.actuallyPrepared.filter(assetId => {
+                                      const availableAsset = availableAssets.find(a => a.id === assetId);
+                                      return availableAsset && availableAsset.brand === brand && availableAsset.model === model && 
+                                            (availableAsset.description || '') === description;
+                                  }) : [];
 
                                 content += createModelPreparationSection(
                                     eventId, brand, model, description, requiredQty, 
@@ -2964,11 +2967,13 @@ async function processUniversalAsset(eventId) {
                             const reqDept = parts[0];
                             const reqBrand = parts[1];
                             const reqModel = parts[2];
+                            const reqDescription = parts[4] || '';
                             
-                            // Check if this asset matches the model requirement
+                            // Check if this asset matches the model requirement (including description)
                             if (assetDetails.department === reqDept && 
                                 assetDetails.brand === reqBrand && 
-                                assetDetails.model === reqModel) {
+                                assetDetails.model === reqModel &&
+                                (assetDetails.description || '') === reqDescription) {
                                 fulfillsModelRequirement = true;
                                 break;
                             }
@@ -4227,6 +4232,7 @@ async function viewEvent(eventId) {
                                 <span style="font-weight: 500; font-size: 14px;">${statusIcon} ${model.requiredQuantity}x ${escapeHtml(model.brand)} ${escapeHtml(model.model)}</span>
                                 <span style="color: ${statusColor}; font-size: 11px; font-weight: 500; text-transform: uppercase;">${displayStatus}</span>
                             </div>
+                            ${model.description ? `<div style="color: #666; font-size: 12px; margin-bottom: 6px;">${escapeHtml(model.description)}</div>` : ''}
                             <div style="display: flex; align-items: center; gap: 15px;">
                                 <div style="flex: 1; max-width: 200px;">
                                     <div style="background: #e9ecef; height: 4px; border-radius: 2px; overflow: hidden;">
@@ -9954,7 +9960,7 @@ function showNotification(type, message) {
 function createModelPreparationSection(eventId, brand, model, description, requiredQty, availableAssets, assignedAssets) {
     const assignedCount = assignedAssets.length;
     const progressPercent = Math.round((assignedCount / requiredQty) * 100);
-    const modelId = `model-${brand.replace(/\s+/g, '')}-${model.replace(/\s+/g, '')}-${eventId}`;
+    const modelId = `model-${brand.replace(/\s+/g, '')}-${model.replace(/\s+/g, '')}-${description.replace(/\s+/g, '').replace(/[\[\]]/g, '')}-${eventId}`;
     
     let section = `
         <div class="model-prep-section" style="border: 1px solid #e9ecef; border-radius: 8px; padding: 0; margin-bottom: 15px;">
