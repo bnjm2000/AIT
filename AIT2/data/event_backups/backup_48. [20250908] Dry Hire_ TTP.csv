@@ -1,2 +1,2 @@
 EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,Tag,ForceStateOverride
-48,Dry Hire: TTP,20250908,20250914,[],[],[],Added,[],[],dry hire,False
+48,Dry Hire: TTP,20250908,20250914,[],"[""[MODEL]LX|Lumenradio|Aurora|1|""]",[],Planning,[],[],dry hire,False
