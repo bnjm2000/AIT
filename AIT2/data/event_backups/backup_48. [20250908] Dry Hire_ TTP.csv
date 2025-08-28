@@ -1,2 +1,2 @@
 EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,Tag,ForceStateOverride
-48,Dry Hire: TTP,20250908,20250914,[],"[""[MODEL]LX|Lumenradio|Aurora|1|""]",[],Planning,[],[],dry hire,False
+48,Dry Hire: TTP,20250908,20250914,[],"[""[MODEL]LX|Lumenradio|Aurora|1|"", ""[MODEL]LX|Ayrton|Diablo (W.DMX)|5|Profile LED"", ""[MISC]16A Cable - 10m;2"", ""[MISC]16A Cable - 3m;5"", ""[MISC]DMX Cable - 10m;2"", ""[MISC]DMX Cable - 3m;5""]",[],Planning,[],[],dry hire,False

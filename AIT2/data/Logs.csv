@@ -1,8 +1,3 @@
-2025/07/24 12:29:08,bnjm2000,Assigned specific asset AD2#04 to event 37
-2025/07/24 12:29:10,bnjm2000,Assigned specific asset AD2#05 to event 37
-2025/07/24 12:29:11,bnjm2000,Assigned specific asset AD2#06 to event 37
-2025/07/24 12:29:13,bnjm2000,Assigned specific asset AD2#07 to event 37
-2025/07/24 12:29:15,bnjm2000,Assigned specific asset AD2#08 to event 37
 2025/07/24 12:29:17,bnjm2000,Assigned specific asset AD2#09 to event 37
 2025/07/24 12:29:18,bnjm2000,Assigned specific asset AD2#10 to event 37
 2025/07/24 12:29:20,bnjm2000,Assigned specific asset AD2#11 to event 37
@@ -998,3 +993,8 @@
 2025/08/28 10:51:16,admin,Removed Shure ULXD1 model from event 55
 2025/08/28 10:51:20,admin,Added 1x Shure ULXD1 model to event 55 (total: 1)
 2025/08/28 10:51:21,admin,Added 1x Shure ULXD1 model to event 55 (total: 1)
+2025/08/28 15:55:33,bnjm2000,Assigned asset [MISC]16A Cable - 10m;2 to event 48 (unprepared)
+2025/08/28 15:55:48,bnjm2000,Assigned asset [MISC]16A Cable - 3m;5 to event 48 (unprepared)
+2025/08/28 15:56:01,bnjm2000,Assigned asset [MISC]DMX Cable - 10m;2 to event 48 (unprepared)
+2025/08/28 15:56:10,bnjm2000,Assigned asset [MISC]DMX Cable - 3m;5 to event 48 (unprepared)
+2025/08/28 15:56:23,bnjm2000,Assigned asset [MISC]5-3 pin DMX Converter;5 to event 48 (unprepared)
