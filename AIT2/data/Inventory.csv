@@ -796,7 +796,7 @@ DIABLO#22,Ayrton,Diablo Profile,DB5309015,Profile LED,False,False,,LX,Store,Stor
 DIABLO#23,Ayrton,Diablo Profile,DB5309008,Profile LED,False,False,,LX,Store,Store
 DIABLO#24,Ayrton,Diablo Profile,DB5309042,Profile LED,False,False,,LX,Store,Store
 PB#01,Astera,Pixel Brick,047-0312660,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
-PB#02,Astera,Pixel Brick,047-0312797,Batt LED Uplighters,False,True,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/08/12	bnjm2000	Screen messed up after charging [Marked OOC]|2025/08/14	bnjm2000	Sent in to Total Solutions [Location: Total Solutions],LX,Store,Total Solutions
+PB#02,Astera,Pixel Brick,047-0312797,Batt LED Uplighters,False,False,"2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/08/12	bnjm2000	Screen messed up after charging [Marked OOC]|2025/08/14	bnjm2000	Sent in to Total Solutions [Location: Total Solutions]|2025/08/27	bnjm2000	Replaced PB15 rear housing assembly, sent back to us by TSM [Location: Store, Cleared OOC, Cleared Missing]",LX,Store,Store
 PB#03,Astera,Pixel Brick,047-0312711,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
 PB#04,Astera,Pixel Brick,047-0312670,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
 PB#05,Astera,Pixel Brick,047-0312685,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2024/11/15	bnjm2000	Screen dim,LX,Store,
@@ -829,7 +829,7 @@ PB#31,Astera,Pixel Brick,047-0315560,Batt LED Uplighters,False,False,2024/12/05	
 PB#32,Astera,Pixel Brick,047-0313519,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
 PB#33,Astera,Pixel Brick,047-0312748,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
 PB#34,Astera,Pixel Brick,047-0308768,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
-PB#35,Astera,Pixel Brick,047-0312772,Batt LED Uplighters,False,True,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/08/12	bnjm2000	Screen stopped working after charging [Marked OOC]|2025/08/18	bnjm2000	Sent in to Total Solutions [Location: Total Solutions],LX,Store,Total Solutions
+PB#35,Astera,Pixel Brick,047-0312772,Batt LED Uplighters,False,False,"2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/08/12	bnjm2000	Screen stopped working after charging [Marked OOC]|2025/08/18	bnjm2000	Sent in to Total Solutions [Location: Total Solutions]|2025/08/27	bnjm2000	Replaced PB15 rear housing assembly, sent back to us by TSM [Location: Store, Cleared OOC, Cleared Missing]",LX,Store,Store
 PB#36,Astera,Pixel Brick,047-0312668,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/08/12	bnjm2000	Screen stopped working after charging [Marked OOC]|2025/08/18	bnjm2000	Screen worked again when sending into Total Solutions [Cleared OOC],LX,Store,
 PB#37,Astera,Pixel Brick,047-0313949,Batt LED Uplighters,False,False,"2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/06/05	bnjm2000	Handed over to TSM for repair, spoilt screen
 Replaced PB15 Rear Housing Assembly",LX,Store,
@@ -943,10 +943,10 @@ LX TREE #02,Versa-Stand,,,Winch Up Lighting Stand,False,False,,LX,Store,
 LX TREE #03,Versa-Stand,,,Winch Up Lighting Stand,False,False,,LX,Store,
 LX TREE #04,Versa-Stand,,,Winch Up Lighting Stand,False,False,,LX,Store,
 LX TREE #05,Versa-Stand,,,Winch Up Lighting Stand,False,False,,LX,Store,
-AURORA#01,Lumenradio,Aurora,MAURA100000710,,False,False,"2025/07/30	bnjm2000	Send in to TSM for checking, repair. Signal weak [Location: Total Solutions]|2025/08/14	bnjm2000	Collected back from TSM, tested to 5m working. [Location: Store]",LX,Store,Store
-AURORA#02,Lumenradio,Aurora,MAURA100000707,,False,False,"2025/07/30	bnjm2000	Send in to TSM for checking, repair. Signal weak [Location: Total Solutions]|2025/08/14	bnjm2000	Collected back from TSM, tested to 5m working. [Location: Store]",LX,Store,Store
-AURORA#03,Lumenradio,Aurora,MAURA100000648,,False,False,"2025/08/14	bnjm2000	Sent into TSM for testing, range issue [Location: Total Solutions]",LX,Store,Total Solutions
-AURORA#04,Lumenradio,Aurora,MAURA100000981,,False,False,"2025/08/14	bnjm2000	Sent into TSM for testing, range issue [Location: Total Solutions]",LX,Store,Total Solutions
+AURORA#01,Lumenradio,Aurora,MAURA100000710,Single Universe DMX/RDM transceiver with WiFi and Bluetooth,False,False,"2025/07/30	bnjm2000	Send in to TSM for checking, repair. Signal weak [Location: Total Solutions]|2025/08/14	bnjm2000	Collected back from TSM, tested to 5m working. [Location: Store]",LX,Store,Store
+AURORA#02,Lumenradio,Aurora,MAURA100000707,Single Universe DMX/RDM transceiver with WiFi and Bluetooth,False,False,"2025/07/30	bnjm2000	Send in to TSM for checking, repair. Signal weak [Location: Total Solutions]|2025/08/14	bnjm2000	Collected back from TSM, tested to 5m working. [Location: Store]",LX,Store,Store
+AURORA#03,Lumenradio,Aurora,MAURA100000648,Single Universe DMX/RDM transceiver with WiFi and Bluetooth,False,False,"2025/08/14	bnjm2000	Sent into TSM for testing, range issue [Location: Total Solutions]|2025/08/27	bnjm2000	Tested working ok, sent back to us by TSM [Location: Store]",LX,Store,Store
+AURORA#04,Lumenradio,Aurora,MAURA100000981,Single Universe DMX/RDM transceiver with WiFi and Bluetooth,False,False,"2025/08/14	bnjm2000	Sent into TSM for testing, range issue [Location: Total Solutions]|2025/08/27	bnjm2000	Tested working ok, sent back to us by TSM [Location: Store]",LX,Store,Store
 DMX RECORDER #01,,XRC-200,2304738,,False,False,,LX,Store,
 MOONLITE WDMX #01,Lumenradio,MoonLite,JMRFO000000087,,False,False,,LX,Store,
 TRIM-TWO#01,Radial Engineering,Trim-two,,Stereo DI with Level Control,False,False,,AX,Store,Store
