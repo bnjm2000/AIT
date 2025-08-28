@@ -4973,7 +4973,6 @@ async function editEvent(eventId) {
                         <input type="date" class="form-input" id="editEventEndDate" value="${formatDateForInput(event.endDate)}" required>
                     </div>
                     <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
-                        <button type="button" class="btn btn-secondary" onclick="closeModal('eventDetailsModal')">Cancel</button>
                         <button type="submit" class="btn btn-primary">Update Event</button>
                     </div>
                 </form>
