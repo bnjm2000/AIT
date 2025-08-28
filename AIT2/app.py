@@ -694,10 +694,12 @@ def get_event(event_id):
                                         req_dept = parts[0]
                                         req_brand = parts[1]
                                         req_model = parts[2]
+                                        req_description = parts[4] if len(parts) > 4 else ''
                                         
                                         if (asset.department_code == req_dept and 
                                             asset.brand == req_brand and 
-                                            asset.model_number == req_model):
+                                            asset.model_number == req_model and
+                                            asset.description == req_description):
                                             is_extra = False
                                             # Also clean up the extra_assets list
                                             if asset_id in event.extra_assets:
