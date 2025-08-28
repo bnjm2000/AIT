@@ -665,42 +665,6 @@ def get_event(event_id):
                     'isExtra': asset_id in event.extra_assets
                 }
             elif asset_id.startswith('[MODEL]'):
-                # Handle model assignments - INCLUDE THESE IN assetsByDepartment
-                try:
-                    # Parse: [MODEL]DEPT|BRAND|MODEL|QUANTITY|DESCRIPTION
-                    parts = asset_id[7:].split('|')
-                    if len(parts) >= 4:
-                        dept = parts[0]
-                        brand = parts[1]
-                        model = parts[2]
-                        quantity = parts[3]
-                        description = parts[4] if len(parts) > 4 else ''
-
-                        # Clean display name - just brand and model
-                        name = f"{quantity}x {brand} {model}"
-
-                        # Determine status for model assignments
-                        if asset_id in event.returned_items:
-                            status = 'returned'
-                        elif asset_id in event.actually_prepared:
-                            status = 'prepared'
-                        else:
-                            status = 'assigned'
-
-                        asset_info = {
-                            'id': asset_id,
-                            'name': name,
-                            'status': status,
-                            'isModel': True,
-                            'quantity': quantity,
-                            'brand': brand,
-                            'model': model,
-                            'description': description,
-                            'isExtra': False  # Model assignments are never extra
-                        }
-                except Exception as e:
-                    logger.error(
-                        f"Error parsing model assignment {asset_id}: {e}")
                     continue
             else:
                 # Handle regular assets
@@ -1345,52 +1309,78 @@ def manage_event_models(event_id):
             brand = data.get('brand', '').strip()
             model = data.get('model', '').strip()
             department = data.get('department', '').strip()
-            provided_description = data.get('description', '').strip()  # Renamed to avoid confusion
+            provided_description = data.get('description', '').strip()
             quantity = int(data.get('quantity', 1))
+
+            logger.info(f"=== ADD MODEL REQUEST ===")
+            logger.info(f"Brand: '{brand}', Model: '{model}', Dept: '{department}'")
+            logger.info(f"Provided description: '{provided_description}'")
+            logger.info(f"Quantity: {quantity}")
 
             if not brand or not model or not department:
                 return jsonify({'error': 'Brand, model, and department are required'}), 400
 
             # Get the FULL description from the actual asset, not from the request
-            # Find an actual asset of this brand/model to get the complete description
-            full_description = provided_description  # Start with what was provided
-            
-            for asset in data_manager.inventory.values():
-                if (asset.brand == brand and 
-                    asset.model_number == model and 
-                    asset.department_code == department):
-                    full_description = asset.description
-                    logger.info(f"Found matching asset {asset.asset_id} with full description: '{full_description}'")
-                    break
-            
-            logger.info(f"Using description for {brand} {model}: '{full_description}'")
+            full_description = provided_description
 
-            # Check if this model already exists in the event
+            # Only try to get description from inventory if none was provided
+            if not full_description:
+                for asset in data_manager.inventory.values():
+                    if (asset.brand == brand and 
+                        asset.model_number == model and 
+                        asset.department_code == department):
+                        full_description = asset.description
+                        logger.info(f"No description provided, using from asset {asset.asset_id}: '{full_description}'")
+                        break
+
+            logger.info(f"Using description for {brand} {model}: '{full_description}'")
+            
+            # Log current prepared_items
+            logger.info(f"Current prepared_items: {event.prepared_items}")
+
+            # Check if this model already exists in the event (including description)
             existing_model_id = None
             existing_quantity = 0
 
             for item in event.prepared_items:
-                if (item.startswith('[MODEL]') and
-                    f"|{brand}|{model}|" in item and
-                        item.startswith(f"[MODEL]{department}|")):
-                    existing_model_id = item
-                    # Extract existing quantity
+                logger.info(f"Checking item: '{item}'")
+                if item.startswith('[MODEL]'):
                     parts = item[7:].split('|')
-                    if len(parts) >= 4:
-                        existing_quantity = int(parts[3])
-                    break
+                    logger.info(f"Item parts: {parts}")
+                    if len(parts) >= 5:  # dept|brand|model|qty|description
+                        item_dept = parts[0]
+                        item_brand = parts[1]
+                        item_model = parts[2]
+                        item_description = parts[4] if len(parts) > 4 else ''
+                        
+                        logger.info(f"Item details - Dept: '{item_dept}', Brand: '{item_brand}', Model: '{item_model}', Desc: '{item_description}'")
+                        
+                        # Match on department, brand, model, AND description
+                        if (item_dept == department and 
+                            item_brand == brand and 
+                            item_model == model and
+                            item_description == full_description):
+                            existing_model_id = item
+                            existing_quantity = int(parts[3])
+                            logger.info(f"FOUND EXISTING MODEL: '{existing_model_id}' with quantity {existing_quantity}")
+                            break
+                        else:
+                            logger.info(f"No match - descriptions differ: '{item_description}' vs '{full_description}'")
 
             if existing_model_id:
-                # Update existing model with new total quantity
+                logger.info(f"Updating existing model, removing: '{existing_model_id}'")
                 event.prepared_items.remove(existing_model_id)
                 new_quantity = existing_quantity + quantity
             else:
+                logger.info("Creating new model assignment")
                 new_quantity = quantity
 
             # Create consolidated model assignment identifier with FULL description
             model_id = f"[MODEL]{department}|{brand}|{model}|{new_quantity}|{full_description}"
-            logger.info(f"Creating model assignment: {model_id}")
+            logger.info(f"Creating model assignment: '{model_id}'")
             event.prepared_items.append(model_id)
+            
+            logger.info(f"Updated prepared_items: {event.prepared_items}")
 
             # Initialize actually_prepared if it doesn't exist
             if not hasattr(event, 'actually_prepared'):
@@ -1421,11 +1411,32 @@ def manage_event_models(event_id):
 
             # Find and remove matching model assignments
             items_to_remove = []
+            description_to_match = data.get('description', '').strip()
+
+            # If no description provided, get it from inventory
+            if not description_to_match:
+                for asset in data_manager.inventory.values():
+                    if (asset.brand == brand and 
+                        asset.model_number == model and 
+                        asset.department_code == department):
+                        description_to_match = asset.description
+                        break
+
             for item in event.prepared_items:
-                if (item.startswith('[MODEL]') and
-                    f"|{brand}|{model}|" in item and
-                        item.startswith(f"[MODEL]{department}|")):
-                    items_to_remove.append(item)
+                if item.startswith('[MODEL]'):
+                    parts = item[7:].split('|')
+                    if len(parts) >= 5:
+                        item_dept = parts[0]
+                        item_brand = parts[1] 
+                        item_model = parts[2]
+                        item_description = parts[4] if len(parts) > 4 else ''
+                        
+                        # Match on department, brand, model, AND description
+                        if (item_dept == department and 
+                            item_brand == brand and 
+                            item_model == model and
+                            item_description == description_to_match):
+                            items_to_remove.append(item)
 
             if not items_to_remove:
                 return jsonify({'error': 'Model assignment not found'}), 404

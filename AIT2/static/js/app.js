@@ -1540,8 +1540,10 @@ async function openPrepareEventModal(eventId) {
             });
         }
         
-        // Also check for model assignments in prepared_items (fallback for older events)
-        if (event.assetsByDepartment && Object.keys(event.assetsByDepartment).length > 0) {
+        // Only use assetsByDepartment fallback if modelGroups is empty or doesn't exist
+        if ((!event.modelGroups || Object.keys(event.modelGroups).length === 0) && 
+            event.assetsByDepartment && Object.keys(event.assetsByDepartment).length > 0) {
+            
             Object.keys(event.assetsByDepartment).forEach(dept => {
                 const assets = event.assetsByDepartment[dept];
                 
@@ -1559,61 +1561,31 @@ async function openPrepareEventModal(eventId) {
                                 const requiredQty = parseInt(parts[3]) || 1;
                                 const description = parts[4] || '';
                                 
-                                // Skip if already processed in modelGroups
-                                const modelKey = `${dept}|${brand}|${model}`;
-                                const alreadyProcessed = event.modelGroups && event.modelGroups[modelKey];
-                                
-                                if (!alreadyProcessed) {
-                                    if (!hasAddedDeptHeader) {
-                                        // Count assets that will be processed in this legacy department
-                                        let legacyAssetCount = 0;
-                                        modelAssets.forEach(asset => {
-                                            try {
-                                                const parts = asset.id.substring(7).split('|');
-                                                if (parts.length >= 4) {
-                                                    const assetDept = parts[0];
-                                                    if (assetDept === dept) {
-                                                        const assignedAssets = event.actuallyPrepared ? 
-                                                            event.actuallyPrepared.filter(assetId => {
-                                                                const availableAsset = availableAssets.find(a => a.id === assetId);
-                                                                return availableAsset && availableAsset.department === dept;
-                                                            }) : [];
-                                                        legacyAssetCount += assignedAssets.length;
-                                                    }
-                                                }
-                                            } catch (e) {
-                                                // Continue processing other assets
-                                            }
-                                        });
-
-                                        content += `
-                                            <div class="dept-section" style="margin-bottom: 20px;">
-                                                <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: #f1f3f4; border-radius: 6px; cursor: pointer; margin-bottom: 10px;" onclick="togglePrepareSection('legacy-dept-${dept}')">
-                                                    <h5 style="margin: 0; color: #495057; font-size: 14px;">${dept} Department (${legacyAssetCount} assets)</h5>
-                                                    <span class="toggle-icon" style="font-size: 14px; font-weight: bold; color: #666;">▼</span>
-                                                </div>
-                                                <div id="legacy-dept-${dept}" style="display: block; padding: 0 10px;">
-                                        `;
-                                        hasAddedDeptHeader = true;
-                                    }
-                                    
-                                    // Find available assets of this model
-                                    const modelAvailableAssets = availableAssets.filter(a => 
-                                        a.brand === brand && a.model === model && a.department === dept
-                                    );
-                                    
-                                    // Find already assigned specific assets
-                                    const assignedAssets = event.actuallyPrepared ? 
-                                        event.actuallyPrepared.filter(assetId => {
-                                            const availableAsset = availableAssets.find(a => a.id === assetId);
-                                            return availableAsset && availableAsset.brand === brand && availableAsset.model === model;
-                                        }) : [];
-                                    
-                                    content += createModelPreparationSection(
-                                        eventId, brand, model, description, requiredQty, 
-                                        modelAvailableAssets, assignedAssets
-                                    );
+                                if (!hasAddedDeptHeader) {
+                                    content += `
+                                        <div style="margin-bottom: 25px;">
+                                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 15px; background: #f8f9fa; border-radius: 8px 8px 0 0; border-bottom: 1px solid #e9ecef;">
+                                                <h4 style="margin: 0; color: #495057;">${dept} Department</h4>
+                                            </div>
+                                            <div style="border: 1px solid #e9ecef; border-top: none; border-radius: 0 0 8px 8px;">
+                                    `;
+                                    hasAddedDeptHeader = true;
                                 }
+
+                                const modelAvailableAssets = availableAssets.filter(a => 
+                                    a.brand === brand && a.model === model && a.department === dept
+                                );
+
+                                const assignedAssets = event.actuallyPrepared ? 
+                                    event.actuallyPrepared.filter(assetId => {
+                                        const availableAsset = availableAssets.find(a => a.id === assetId);
+                                        return availableAsset && availableAsset.brand === brand && availableAsset.model === model;
+                                    }) : [];
+
+                                content += createModelPreparationSection(
+                                    eventId, brand, model, description, requiredQty, 
+                                    modelAvailableAssets, assignedAssets
+                                );
                             }
                         } catch (e) {
                             console.error('Error parsing model assignment:', e);
@@ -5468,10 +5440,13 @@ async function updateModelRequirementsSection(eventId) {
                 
                 content += `
                     <div class="model-assignment" style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #f1f1f1;">
-                        <div style="display: flex; align-items: center;">
-                            <span style="margin-right: 8px;">${statusIcon}</span>
-                            <span style="font-weight: 500;">${model.requiredQuantity}x ${escapeHtml(model.brand)} ${escapeHtml(model.model)}</span>
-                            <span style="color: #666; margin-left: 8px;">(${assignedCount} assigned)</span>
+                        <div style="flex: 1;">
+                            <div style="display: flex; align-items: center;">
+                                <span style="margin-right: 8px;">${statusIcon}</span>
+                                <span style="font-weight: 500;">${model.requiredQuantity}x ${escapeHtml(model.brand)} ${escapeHtml(model.model)}</span>
+                                <span style="color: #666; margin-left: 8px;">(${assignedCount} assigned)</span>
+                            </div>
+                            <div style="color: #666; font-size: 12px; margin-left: 20px; margin-top: 2px;">${escapeHtml(model.description || '')}</div>
                         </div>
                         <div style="display: flex; gap: 8px;">
                             <button class="btn btn-sm btn-outline-primary edit-model-qty-btn" 
