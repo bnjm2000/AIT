@@ -10901,13 +10901,26 @@ function groupItemsByDepartment(event) {
         ['LOAN', 'MISC'].forEach(dept => {
             if (event.assetsByDepartment[dept] && event.assetsByDepartment[dept].length > 0) {
                 event.assetsByDepartment[dept].forEach(asset => {
-                    // Parse custom asset format
+                    // Parse custom asset format and remove tags
                     let description = asset.name || asset.id || 'Custom Item';
                     let quantity = 1;
                     
+                    // Remove tags from description if present
+                    if (description.startsWith('[MISC]')) {
+                        description = description.substring(6); // Remove '[MISC]'
+                    } else if (description.startsWith('[LOAN]')) {
+                        description = description.substring(6); // Remove '[LOAN]'
+                    }
+                    
                     // Handle different custom asset formats
                     if (asset.id && asset.id.includes(';')) {
-                        const parts = asset.id.split(';');
+                        const parts = asset.id.substring(asset.id.indexOf(']') + 1).split(';'); // Remove tag before splitting
+                        if (parts.length >= 2) {
+                            description = parts[0];
+                            quantity = parseInt(parts[1]) || 1;
+                        }
+                    } else if (description.includes(';')) {
+                        const parts = description.split(';');
                         if (parts.length >= 2) {
                             description = parts[0];
                             quantity = parseInt(parts[1]) || 1;
