@@ -772,10 +772,10 @@ LEDBEAM#23,Robe,Robin LEDBeam 350 Wash,2300077264,Wash LED,False,False,"2025/04/
 Replaced power supply - $217.69 (but FOC)",LX,Store,Store
 LEDBEAM#24,Robe,Robin LEDBeam 350 Wash,2300840397,Wash LED,False,False,"2025/04/04	bnjm2000	Intermittent can't power up
 Replaced power supply - $217.69 (but FOC)",LX,Store,Store
-DIABLO#01,Ayrton,Diablo (W.DMX),DB2935040,Profile LED,False,False,,LX,Store,
-DIABLO#02,Ayrton,Diablo (W.DMX),DB2935047,Profile LED,False,False,"2025/05/25	bnjm2000	Discovered fan error (Wedding of Micheal and Cindy) [Location: Total Solutions, Marked OOC]|2025/06/05	bnjm2000	Sent to TSM, reset connector tested okay - $80 [Location: Store, Cleared OOC]",LX,Store,Store
-DIABLO#03,Ayrton,Diablo (W.DMX),DB2935098,Profile LED,False,False,,LX,Store,
-DIABLO#04,Ayrton,Diablo (W.DMX),DB2935016,Profile LED,False,False,,LX,Store,
+DIABLO#01,Ayrton,Diablo (W.DMX),DB2935040,Profile LED,False,False,,LX,Store,Dry Hire: TTP
+DIABLO#02,Ayrton,Diablo (W.DMX),DB2935047,Profile LED,False,False,"2025/05/25	bnjm2000	Discovered fan error (Wedding of Micheal and Cindy) [Location: Total Solutions, Marked OOC]|2025/06/05	bnjm2000	Sent to TSM, reset connector tested okay - $80 [Location: Store, Cleared OOC]",LX,Store,Dry Hire: TTP
+DIABLO#03,Ayrton,Diablo (W.DMX),DB2935098,Profile LED,False,False,,LX,Store,Dry Hire: TTP
+DIABLO#04,Ayrton,Diablo (W.DMX),DB2935016,Profile LED,False,False,,LX,Store,Dry Hire: TTP
 DIABLO#05,Ayrton,Diablo (W.DMX),DB2953048,Profile LED,False,False,,LX,Store,
 DIABLO#06,Ayrton,Diablo (W.DMX),DB2935001,Profile LED,False,False,,LX,Store,
 DIABLO#07,Ayrton,Diablo (W.DMX),DB2935033,Profile LED,False,False,,LX,Store,
@@ -783,7 +783,7 @@ DIABLO#08,Ayrton,Diablo (W.DMX),DB2935002,Profile LED,False,False,,LX,Store,
 DIABLO#09,Ayrton,Diablo (W.DMX),DB2935036,Profile LED,False,False,,LX,Store,
 DIABLO#10,Ayrton,Diablo (W.DMX),DB2935057,Profile LED,False,False,2025/06/05	bnjm2000	Replaced Pan/Tilt Board - $222.87,LX,Store,
 DIABLO#11,Ayrton,Diablo (W.DMX),DB2935034,Profile LED,False,False,"2025/06/05	bnjm2000	Replaced Pan/Tilt board - $222.87
-CMY Driver Board - $195.84",LX,Store,
+CMY Driver Board - $195.84",LX,Store,Dry Hire: TTP
 DIABLO#12,Ayrton,Diablo (W.DMX),DB2935019,Profile LED,False,False,2025/06/05	bnjm2000	Replaced Pan/Tilt Board - $222.87,LX,Store,
 DIABLO#13,Ayrton,Diablo Profile,DB5309007,Profile LED,False,False,"2025/06/30	Deano	Gobo error [Marked OOC]|2025/07/08	Deano	Repaired by Technician Dean [Location: Store, Cleared OOC]",LX,Store,Store
 DIABLO#14,Ayrton,Diablo Profile,DB5309023,Profile LED,False,False,,LX,Store,Store
@@ -795,7 +795,8 @@ DIABLO#19,Ayrton,Diablo Profile,DB5309034,Profile LED,False,False,,LX,Store,Stor
 DIABLO#20,Ayrton,Diablo Profile,DB5309017,Profile LED,False,False,,LX,Store,Store
 DIABLO#21,Ayrton,Diablo Profile,DB5309028,Profile LED,False,False,,LX,Store,Store
 DIABLO#22,Ayrton,Diablo Profile,DB5309015,Profile LED,False,False,,LX,Store,Store
-DIABLO#23,Ayrton,Diablo Profile,DB5309008,Profile LED,False,False,,LX,Store,Store
+DIABLO#23,Ayrton,Diablo Profile,DB5309008,Profile LED,False,False,"2025/09/02	bnjm2000	Discovered screw thread rounded when doing cleaning
+-Jacky",LX,Store,Store
 DIABLO#24,Ayrton,Diablo Profile,DB5309042,Profile LED,False,False,,LX,Store,Store
 PB#01,Astera,Pixel Brick,047-0312660,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
 PB#02,Astera,Pixel Brick,047-0312797,Batt LED Uplighters,False,False,"2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/08/12	bnjm2000	Screen messed up after charging [Marked OOC]|2025/08/14	bnjm2000	Sent in to Total Solutions [Location: Total Solutions]|2025/08/27	bnjm2000	Replaced PB15 rear housing assembly, sent back to us by TSM [Location: Store, Cleared OOC, Cleared Missing]",LX,Store,Store

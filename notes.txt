@@ -1,6 +1,5 @@
--making DO from event
--unable to return custom assets
 -add ability to see history of events an asset was at
+-calendar view of events
 -view log in ooc
 -add ability to dispose items (same logic as OOC, just says "disposed")
 -edit all attributes of an asset
