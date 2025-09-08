@@ -1,2 +1,2 @@
 EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,Tag,ForceStateOverride
-52,Dry Hire: Avery Events,20250827,20250827,[],"[""[MISC]Silver Truss - 2m"", ""[MODEL]VX|Samsung|LH85QMCEBGCXXS|1|85\"" Crystal UHD Signage"", ""[MISC]610mm Base plate""]",[],Planning,"[""[MISC]610mm Base plate""]",[],dry hire,False
+52,Dry Hire: Avery Events,20250827,20250827,[],"[""[MISC]Silver Truss - 2m"", ""[MODEL]VX|Samsung|LH85QMCEBGCXXS|1|85\"" Crystal UHD Signage"", ""[MISC]610mm Base plate""]",[],Planning,"[""[MISC]610mm Base plate"", ""[MISC]Silver Truss - 2m""]",[],dry hire,False

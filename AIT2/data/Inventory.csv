@@ -464,7 +464,7 @@ CDJ2000NXS2#02,Pioneer,CDJ2000NXS2,,Professional DJ multi player (Black),False,F
 CDJ3000#01,Pioneer,CDJ3000,CDMP038151EH,Professional DJ multi player (Black),False,False,"2024/09/22	bnjm2000	Buttons and jog wheel melted under sun (F1 @ ShowCo) [Marked OOC]|2024/10/03	bnjm2000	Received spare from ShowCo while repairs underway (S/N: BHMP026156EH) [Cleared OOC]|2025/03/15	bnjm2000	Collected back, tested working. (Wedding of Barbara and Ker Wei)",AX,Store,Store
 CDJ3000#02,Pioneer,CDJ3000,CDMP038159EH,Professional DJ multi player (Black),False,False,"2024/09/22	bnjm2000	22/09/2024 - Buttons and jog wheel melted under sun (F1 @ ShowCo) [Marked OOC]|2024/10/03	bnjm2000	03/10/2024 - Received spare from ShowCo while repairs underway (S/N: BHMP026170EH) [Cleared OOC]|2025/03/15	bnjm2000	Collected back, tested working. (Wedding of Barbara and Ker Wei)",AX,Store,Store
 DJM900NXS#01,Pioneer,DJM-900NXS,,DJ Mixer,False,False,,AX,Store,
-DJM900NXS2#01,Pioneer,DJM-900NXS2,,4-channel pro-DJ mixer,False,False,,AX,Store,
+DJM900NXS2#01,Pioneer,DJM-900NXS2,,4-channel pro-DJ mixer,False,False,,AX,Store,Store
 DJMA9#01,Pioneer,DJM-A9,,4-channel pro-DJ mixer,False,False,,AX,Store,Store
 COMBINE4#01,RF Venue,Combine4,J6803014t2d4-124,active transmitter combiner,False,False,,AX,Store,
 E904#01,Sennheiser,E904,1471264124,Dynamic cardioid instrument microphone,False,False,,AX,Store,
@@ -637,12 +637,12 @@ TALENTCELL#04,TalentCell,YB1208300-USB,20240527004,Lithuim ion battery pack,Fals
 TALENTCELL#06,TalentCell,YB1208300-USB,20240527006,Lithuim ion battery pack,False,False,,AX,Store,
 TALENTCELL#07,TalentCell,YB1208300-USB,20240527007,Lithuim ion battery pack,False,False,,AX,Store,
 TALENTCELL#08,TalentCell,YB1208300-USB,20240527008,Lithuim ion battery pack,False,False,,AX,Store,
-IP1000#01,Turbosound,IP1000,S231100118DCW,Powered Column Loudspeaker,False,False,,AX,Store,
-IP1000#02,Turbosound,IP1000,S231100129DCW,Powered Column Loudspeaker,False,False,,AX,Store,
+IP1000#01,Turbosound,IP1000,S231100118DCW,Powered Column Loudspeaker,False,False,,AX,Store,Store
+IP1000#02,Turbosound,IP1000,S231100129DCW,Powered Column Loudspeaker,False,False,,AX,Store,Store
 IP1000#03,Turbosound,IP1000,S211200024DCW,Powered Column Loudspeaker,False,False,,AX,Store,Store
 IP1000#04,Turbosound,IP1000,S231100119DCW,Powered Column Loudspeaker,False,False,,AX,Store,Store
-IP1000#05,Turbosound,IP1000,S211200022DCW,Powered Column Loudspeaker,False,False,,AX,Store,
-IP1000#06,Turbosound,IP1000,S231100120DCW,Powered Column Loudspeaker,False,False,,AX,Store,
+IP1000#05,Turbosound,IP1000,S211200022DCW,Powered Column Loudspeaker,False,False,,AX,Store,Store
+IP1000#06,Turbosound,IP1000,S231100120DCW,Powered Column Loudspeaker,False,False,,AX,Store,Store
 IP1000#07,Turbosound,IP1000,S231100118DCW,Powered Column Loudspeaker,False,False,,AX,Store,Store
 IP1000#08,Turbosound,IP1000,S231100125DCW,Powered Column Loudspeaker,False,False,,AX,Store,Store
 K&M STAND #01,K&M,214/6,,Aluminium Speaker Stand,False,False,,AX,Store,
@@ -687,7 +687,7 @@ MG12XU#02,Yamaha,MG12XU,,12-Channel Analog Mixing Console with FX,False,False,,A
 MG10#01,Yamaha,MG10,ECWH01433,10-Channel Analogue Mixer,False,False,,AX,Store,
 MG124CX#01,Yamaha,MG124CX,,12-Input Stereo Mixer with Compression and Effects,False,False,,AX,Store,
 MG124CX#02,Yamaha,MG124CX,,12-Input Stereo Mixer with Compression and Effects,False,False,,AX,Store,
-QL1#01,Yamaha,QL1,WTAUM01016,Digital Mixer,False,False,,AX,Store,
+QL1#01,Yamaha,QL1,WTAUM01016,Digital Mixer,False,False,,AX,Store,Store
 QL1#02,Yamaha,QL1,EAXP01044,Digital Mixer,False,False,,AX,Store,Store
 QL5#01,Yamaha,QL5,,Digital Mixer,False,False,,AX,Store,Store
 RIO1608-D #01,Yamaha,Rio1608-d,,High Performance I/O Rack,False,False,2024/11/13	bnjm2000	2024/11/13 - Updated firmware version to v5.80,AX,Store,Store
@@ -822,7 +822,7 @@ PB#21,Astera,Pixel Brick,047-0313675,Batt LED Uplighters,False,False,2024/12/05	
 PB#22,Astera,Pixel Brick,047-0312619,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
 PB#23,Astera,Pixel Brick,047-0315708,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
 PB#24,Astera,Pixel Brick,047-0312564,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
-PB#25,Astera,Pixel Brick,047-0313626,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
+PB#25,Astera,Pixel Brick,047-0313626,Batt LED Uplighters,False,True,"2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/09/08	bnjm2000	Screen spoilt, device still works [Marked OOC]",LX,Store,
 PB#26,Astera,Pixel Brick,047-0310053,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
 PB#27,Astera,Pixel Brick,047-0312635,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/11/15	bnjm2000	LED Screen cannot on,LX,Store,
 PB#28,Astera,Pixel Brick,047-0313638,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
@@ -833,7 +833,7 @@ PB#32,Astera,Pixel Brick,047-0313519,Batt LED Uplighters,False,False,2024/12/05	
 PB#33,Astera,Pixel Brick,047-0312748,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
 PB#34,Astera,Pixel Brick,047-0308768,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
 PB#35,Astera,Pixel Brick,047-0312772,Batt LED Uplighters,False,False,"2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/08/12	bnjm2000	Screen stopped working after charging [Marked OOC]|2025/08/18	bnjm2000	Sent in to Total Solutions [Location: Total Solutions]|2025/08/27	bnjm2000	Replaced PB15 rear housing assembly, sent back to us by TSM [Location: Store, Cleared OOC, Cleared Missing]",LX,Store,Store
-PB#36,Astera,Pixel Brick,047-0312668,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/08/12	bnjm2000	Screen stopped working after charging [Marked OOC]|2025/08/18	bnjm2000	Screen worked again when sending into Total Solutions [Cleared OOC],LX,Store,
+PB#36,Astera,Pixel Brick,047-0312668,Batt LED Uplighters,False,True,"2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/08/12	bnjm2000	Screen stopped working after charging [Marked OOC]|2025/08/18	bnjm2000	Screen worked again when sending into Total Solutions [Cleared OOC]|2025/09/08	bnjm2000	Device not responsive, no display [Marked OOC]",LX,Store,
 PB#37,Astera,Pixel Brick,047-0313949,Batt LED Uplighters,False,False,"2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/06/05	bnjm2000	Handed over to TSM for repair, spoilt screen
 Replaced PB15 Rear Housing Assembly",LX,Store,
 PB#38,Astera,Pixel Brick,047-0313663,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
@@ -948,7 +948,7 @@ LX TREE #04,Versa-Stand,,,Winch Up Lighting Stand,False,False,,LX,Store,
 LX TREE #05,Versa-Stand,,,Winch Up Lighting Stand,False,False,,LX,Store,
 AURORA#01,Lumenradio,Aurora,MAURA100000710,Single Universe DMX/RDM transceiver with WiFi and Bluetooth,False,False,"2025/07/30	bnjm2000	Send in to TSM for checking, repair. Signal weak [Location: Total Solutions]|2025/08/14	bnjm2000	Collected back from TSM, tested to 5m working. [Location: Store]",LX,Store,Store
 AURORA#02,Lumenradio,Aurora,MAURA100000707,Single Universe DMX/RDM transceiver with WiFi and Bluetooth,False,False,"2025/07/30	bnjm2000	Send in to TSM for checking, repair. Signal weak [Location: Total Solutions]|2025/08/14	bnjm2000	Collected back from TSM, tested to 5m working. [Location: Store]",LX,Store,Store
-AURORA#03,Lumenradio,Aurora,MAURA100000648,Single Universe DMX/RDM transceiver with WiFi and Bluetooth,False,False,"2025/08/14	bnjm2000	Sent into TSM for testing, range issue [Location: Total Solutions]|2025/08/27	bnjm2000	Tested working ok, sent back to us by TSM [Location: Store]",LX,Store,Store
+AURORA#03,Lumenradio,Aurora,MAURA100000648,Single Universe DMX/RDM transceiver with WiFi and Bluetooth,False,False,"2025/08/14	bnjm2000	Sent into TSM for testing, range issue [Location: Total Solutions]|2025/08/27	bnjm2000	Tested working ok, sent back to us by TSM [Location: Store]",LX,Store,Dry Hire: TTP
 AURORA#04,Lumenradio,Aurora,MAURA100000981,Single Universe DMX/RDM transceiver with WiFi and Bluetooth,False,False,"2025/08/14	bnjm2000	Sent into TSM for testing, range issue [Location: Total Solutions]|2025/08/27	bnjm2000	Tested working ok, sent back to us by TSM [Location: Store]",LX,Store,Store
 DMX RECORDER #01,,XRC-200,2304738,,False,False,,LX,Store,
 MOONLITE WDMX #01,Lumenradio,MoonLite,JMRFO000000087,,False,False,,LX,Store,
