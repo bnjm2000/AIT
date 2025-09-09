@@ -1924,7 +1924,7 @@ function searchAdditionalAssets(eventId) {
                 <div>
                     <div style="font-weight: 500;">${asset.id}</div>
                     <div style="color: #666; font-size: 12px;">${asset.brand} ${asset.model}</div>
-                    <div style="color: #999; font-size: 11px;">${asset.description || ''}</div>
+                    <div style="color: #999; font-size: 11px;">${escapeJs(asset.description || '')}</div>
                     <span class="asset-badge dept-${asset.department.toLowerCase()}">${asset.department}</span>
                 </div>
                 <button class="btn btn-warning" style="padding: 4px 8px; font-size: 11px; background: #ff8c00;" onclick="assignAdditionalAsset(${eventId}, '${asset.id}')">Assign as Extra</button>
@@ -2348,12 +2348,12 @@ async function addAssetToAllAssetsSection(eventId, assetId, event) {
                     <div style="padding: 8px 12px; border-bottom: 1px solid #f1f1f1; display: flex; justify-content: space-between; align-items: center;">
                         <div>
                             <span style="font-weight: 500;">✅ ${assetId}</span>
-                            <span style="color: #666; font-size: 12px; margin-left: 10px;">${assetDetails.name || assetDetails.description || ''}</span>
+                            <span style="color: #666; font-size: 12px; margin-left: 10px;">${escapeJs(assetDetails.name || assetDetails.description || '')}</span>
                             ${extraBadge}
                             <div style="color: #28a745; font-size: 11px; margin-top: 2px;">Prepared</div>
                         </div>
                         <div>
-                            <button class="btn btn-warning" style="padding: 4px 8px; font-size: 11px;" onclick="unprepareSpecificAsset(${eventId}, '${assetId}')">Unprepare</button>
+                            <button class="btn btn-warning" style="padding: 4px 8px; font-size: 11px;" onclick="unprepareSpecificAsset(${eventId}, '${escapeJs(assetId)}')">Unprepare</button>
                         </div>
                     </div>
                 `;
@@ -2741,7 +2741,7 @@ function addAssetBackToAvailable(modelSection, assetId, serial) {
                         <div style="font-weight: 500; font-size: 14px;">${assetId}</div>
                         <div style="color: #666; font-size: 12px;">SN: ${serial}</div>
                     </div>
-                    <button class="btn btn-success" style="padding: 4px 10px; font-size: 11px;" onclick="assignSpecificAsset(${eventId}, '${assetId}', '', '')">Prepare</button>
+                    <button class="btn btn-success" style="padding: 4px 10px; font-size: 11px;" onclick="assignSpecificAsset(${eventId}, '${escapeJs(assetId)}', '', '')">Prepare</button>
                 </div>
             `;
             
@@ -6462,7 +6462,7 @@ function filterAvailableModels(searchTerm) {
   // Group available assets by model
   const modelGroups = {};
   availableAssets.forEach(asset => {
-    const modelKey = `${asset.department}|${asset.brand}|${asset.model}|${asset.description || ''}`;
+    const modelKey = `${asset.department}|${asset.brand}|${asset.model}|${escapeJs(asset.description || '')}`;
     if (!modelGroups[modelKey]) {
       modelGroups[modelKey] = {
         department: asset.department,
@@ -7524,7 +7524,7 @@ function searchMaintenanceAssets() {
   
   // Filter assets based on search term
   const filteredAssets = assets.filter(asset => {
-    const searchableText = `${asset.id} ${asset.brand} ${asset.model} ${asset.serial || ''} ${asset.description || ''}`.toLowerCase();
+    const searchableText = `${asset.id} ${asset.brand} ${asset.model} ${asset.serial || ''} ${escapeJs(asset.description || '')}`.toLowerCase();
     return searchableText.includes(searchTerm) && !selectedMaintenanceAssets.has(asset.id);
   });
   
@@ -7546,7 +7546,7 @@ function searchMaintenanceAssets() {
         <div style="flex: 1;">
           <div style="font-weight: 500; margin-bottom: 4px;">${escapeHtml(asset.id)}</div>
           <div style="color: #666; font-size: 13px; margin-bottom: 2px;">${escapeHtml(asset.brand)} ${escapeHtml(asset.model)}</div>
-          <div style="color: #999; font-size: 12px;">${escapeHtml(asset.description || '')}</div>
+          <div style="color: #999; font-size: 12px;">${escapeJs(asset.description || '')}</div>
           <div style="margin-top: 4px;">
             ${statusBadge}
             <span style="color: #999; font-size: 11px; margin-left: 8px;">📍 ${escapeHtml(locationText)}</span>
@@ -7679,7 +7679,7 @@ function searchMaintenanceAssets() {
   
   // Filter assets based on search term
   const filteredAssets = assets.filter(asset => {
-    const searchableText = `${asset.id} ${asset.brand} ${asset.model} ${asset.serial || ''} ${asset.description || ''}`.toLowerCase();
+    const searchableText = `${asset.id} ${asset.brand} ${asset.model} ${asset.serial || ''} ${escapeJs(asset.description || '')}`.toLowerCase();
     return searchableText.includes(searchTerm) && !selectedMaintenanceAssets.has(asset.id);
   });
   
@@ -7701,7 +7701,7 @@ function searchMaintenanceAssets() {
         <div style="flex: 1;">
           <div style="font-weight: 500; margin-bottom: 4px;">${asset.id}</div>
           <div style="color: #666; font-size: 13px; margin-bottom: 2px;">${asset.brand} ${asset.model}</div>
-          <div style="color: #999; font-size: 12px;">${asset.description || ''}</div>
+          <div style="color: #999; font-size: 12px;">${escapeJs(asset.description || '')}</div>
           <div style="margin-top: 4px;">
             ${statusBadge}
             <span style="color: #999; font-size: 11px; margin-left: 8px;">📍 ${locationText}</span>
@@ -8237,7 +8237,7 @@ function clearSingleOOC(assetId) {
       <div><strong>Current Location:</strong> ${asset.location || 'Store'}</div>
       <div><strong>Current Serial:</strong> ${asset.serial || 'None'}</div>
     </div>
-    ${asset.description ? `<div style="margin-top: 8px;"><strong>Description:</strong> ${asset.description}</div>` : ''}
+    ${asset.description ? `<div style="margin-top: 8px;"><strong>Description:</strong> ${escapeJs(asset.description || '')}</div>` : ''}
   `;
   
   // Open the modal
@@ -8281,7 +8281,7 @@ function clearSingleOOC(assetId) {
       <div><strong>Current Location:</strong> ${asset.location || 'Store'}</div>
       <div><strong>Current Serial:</strong> ${asset.serial || 'None'}</div>
     </div>
-    ${asset.description ? `<div style="margin-top: 8px;"><strong>Description:</strong> ${asset.description}</div>` : ''}
+    ${asset.description ? `<div style="margin-top: 8px;"><strong>Description:</strong> ${escapeJs(asset.description || '')}</div>` : ''}
   `;
   
   // Open the modal
@@ -9960,7 +9960,7 @@ function showNotification(type, message) {
 function createModelPreparationSection(eventId, brand, model, description, requiredQty, availableAssets, assignedAssets) {
     const assignedCount = assignedAssets.length;
     const progressPercent = Math.round((assignedCount / requiredQty) * 100);
-    const modelId = `model-${brand.replace(/\s+/g, '')}-${model.replace(/\s+/g, '')}-${description.replace(/\s+/g, '').replace(/[\[\]]/g, '')}-${eventId}`;
+    const modelId = `model-${brand.replace(/\s+/g, '').replace(/[^a-zA-Z0-9]/g, '')}-${model.replace(/\s+/g, '').replace(/[^a-zA-Z0-9]/g, '')}-${eventId}`;
     
     let section = `
         <div class="model-prep-section" style="border: 1px solid #e9ecef; border-radius: 8px; padding: 0; margin-bottom: 15px;">
@@ -10001,7 +10001,7 @@ function createModelPreparationSection(eventId, brand, model, description, requi
               );
               const buttonText = isAlreadyAssigned ? 'Assigned ✓' : 'Prepare';
               const buttonClass = isAlreadyAssigned ? 'btn-secondary' : 'btn-success';
-              const buttonAction = isAlreadyAssigned ? '' : `assignSpecificAsset(${eventId}, '${asset.id}', '${escapeJs(brand)}', '${escapeJs(model)}')`;
+              const buttonAction = isAlreadyAssigned ? '' : `assignSpecificAsset(${eventId}, '${escapeJs(asset.id)}', '${escapeJs(brand)}', '${escapeJs(model)}')`;
               const disabled = isAlreadyAssigned ? 'disabled' : '';
             
             section += `
