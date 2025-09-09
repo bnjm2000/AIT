@@ -1,2 +1,2 @@
 EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,Tag,ForceStateOverride
-55,Dry Hire: Variety Communications,20250918,20250919,[],"[""[MODEL]VX|Samsung|LH75QMCEBGCXXS|8|75"", ""[MISC]2m Truss;4""]",[],Planning,[],[],dry hire,False
+55,Dry Hire: Variety Communications,20250918,20250919,[],"[""[MODEL]VX|Samsung|LH75QMCEBGCXXS|3|75INCH Crystal UHD Signage""]",[],Planning,[],[],[],False

@@ -1,9 +1,3 @@
-2025/07/24 13:35:49,bnjm2000,Removed Netgear GSM4212P model from event 37
-2025/07/24 13:35:49,bnjm2000,Added 3x Netgear GSM4212P model to event 37 (total: 3)
-2025/07/24 13:38:31,bnjm2000,Assigned specific asset X-US1215#04 to event 37
-2025/07/24 13:38:38,bnjm2000,Assigned specific asset X-US1215#05 to event 37
-2025/07/24 13:38:43,bnjm2000,Assigned specific asset X12#01 to event 37
-2025/07/24 13:38:47,bnjm2000,Assigned specific asset X12#02 to event 37
 2025/07/24 13:38:51,bnjm2000,Assigned specific asset X12#03 to event 37
 2025/07/24 13:38:55,bnjm2000,Assigned specific asset X12#04 to event 37
 2025/07/24 13:38:59,bnjm2000,Assigned specific asset X12#05 to event 37
@@ -999,3 +993,9 @@
 2025/09/08 14:04:39,bnjm2000,"Maintenance logged for asset PB#25: Screen spoilt, device still works"
 2025/09/08 14:04:54,bnjm2000,Marked asset PB#36 as Out of Commission
 2025/09/08 14:04:55,bnjm2000,"Maintenance logged for asset PB#36: Device not responsive, no display"
+2025/09/09 13:05:05,admin,Added 4x Samsung LH75QMCEBGCXXS model to event 55 (total: 4)
+2025/09/09 13:05:10,admin,Removed Samsung LH75QMCEBGCXXS model from event 55
+2025/09/09 13:05:10,admin,Added 3x Samsung LH75QMCEBGCXXS model to event 55 (total: 3)
+2025/09/09 13:05:15,admin,Assigned specific asset 75INCH#03 to event 55
+2025/09/09 13:05:17,admin,Completely removed asset 75INCH#03 from event 55
+2025/09/09 13:05:35,admin,Removed Samsung LH75QMCEBGCXXS model from event 55
