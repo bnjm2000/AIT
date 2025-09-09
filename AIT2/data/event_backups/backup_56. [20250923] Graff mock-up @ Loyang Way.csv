@@ -1,0 +1,2 @@
+EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,Tag,ForceStateOverride
+56,Graff mock-up @ Loyang Way,20250923,20250923,[],"[""[MODEL]LX|Astera|Pixel Brick|1|Batt LED Uplighters""]",[],Planning,[],[],events,False

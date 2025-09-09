@@ -1,47 +1,3 @@
-2025/07/24 13:40:09,bnjm2000,Added 12x Ayrton Diablo Profile model to event 37 (total: 12)
-2025/07/24 13:40:21,bnjm2000,Assigned specific asset DIABLO#13 to event 37
-2025/07/24 13:40:25,bnjm2000,Assigned specific asset DIABLO#14 to event 37
-2025/07/24 13:40:29,bnjm2000,Assigned specific asset DIABLO#15 to event 37
-2025/07/24 13:40:33,bnjm2000,Assigned specific asset DIABLO#16 to event 37
-2025/07/24 13:40:38,bnjm2000,Assigned specific asset DIABLO#17 to event 37
-2025/07/24 13:40:44,bnjm2000,Assigned specific asset DIABLO#18 to event 37
-2025/07/24 13:40:52,bnjm2000,Assigned specific asset DIABLO#19 to event 37
-2025/07/24 13:40:56,bnjm2000,Assigned specific asset DIABLO#20 to event 37
-2025/07/24 13:41:00,bnjm2000,Assigned specific asset DIABLO#21 to event 37
-2025/07/24 13:41:21,bnjm2000,Assigned specific asset DIABLO#22 to event 37
-2025/07/24 13:41:25,bnjm2000,Assigned specific asset DIABLO#23 to event 37
-2025/07/24 13:41:30,bnjm2000,Assigned specific asset DIABLO#24 to event 37
-2025/07/24 13:41:37,bnjm2000,Assigned specific asset ECLIPSE#01 to event 37
-2025/07/24 13:41:42,bnjm2000,Assigned specific asset ECLIPSE#02 to event 37
-2025/07/24 13:41:48,bnjm2000,Assigned specific asset ECLIPSE#03 to event 37
-2025/07/24 13:41:53,bnjm2000,Assigned specific asset ECLIPSE#04 to event 37
-2025/07/24 13:42:01,bnjm2000,Assigned specific asset ECLIPSE#13 to event 37
-2025/07/24 13:42:07,bnjm2000,Assigned specific asset ECLIPSE#14 to event 37
-2025/07/24 13:42:13,bnjm2000,Assigned specific asset ECLIPSE#15 to event 37
-2025/07/24 13:42:22,bnjm2000,Assigned specific asset ECLIPSE#16 to event 37
-2025/07/24 13:42:41,bnjm2000,Completely removed asset ECLIPSE#04 from event 37
-2025/07/24 13:42:47,bnjm2000,Completely removed asset ECLIPSE#02 from event 37
-2025/07/24 13:42:49,bnjm2000,Completely removed asset ECLIPSE#01 from event 37
-2025/07/24 13:42:49,bnjm2000,Completely removed asset ECLIPSE#15 from event 37
-2025/07/24 13:42:50,bnjm2000,Completely removed asset ECLIPSE#14 from event 37
-2025/07/24 13:42:51,bnjm2000,Completely removed asset ECLIPSE#16 from event 37
-2025/07/24 13:42:52,bnjm2000,Completely removed asset ECLIPSE#13 from event 37
-2025/07/24 13:42:53,bnjm2000,Completely removed asset ECLIPSE#03 from event 37
-2025/07/24 13:43:26,bnjm2000,Removed Silver Star Eclipse 1000 RGBAL SS847XAL model from event 37
-2025/07/24 13:43:26,bnjm2000,Added 5x Silver Star Eclipse 1000 RGBAL SS847XAL model to event 37 (total: 5)
-2025/07/24 13:46:43,bnjm2000,Assigned specific asset E904#05 to event 37
-2025/07/24 13:49:53,bnjm2000,Added 2x Lumenradio Aurora model to event 37 (total: 2)
-2025/07/24 13:50:03,bnjm2000,Assigned specific asset AURORA#01 to event 37
-2025/07/24 13:50:07,bnjm2000,Assigned specific asset AURORA#02 to event 37
-2025/07/24 13:51:19,bnjm2000,Assigned specific asset ECLIPSE#15 to event 37
-2025/07/24 13:51:25,bnjm2000,Assigned specific asset ECLIPSE#05 to event 37
-2025/07/24 13:51:31,bnjm2000,Assigned specific asset ECLIPSE#06 to event 37
-2025/07/24 13:51:38,bnjm2000,Assigned specific asset ECLIPSE#07 to event 37
-2025/07/24 13:51:44,bnjm2000,Assigned specific asset ECLIPSE#08 to event 37
-2025/07/24 13:52:01,bnjm2000,Assigned specific asset LEDBEAM#13 to event 37
-2025/07/24 13:52:03,bnjm2000,Assigned specific asset LEDBEAM#14 to event 37
-2025/07/24 13:52:05,bnjm2000,Assigned specific asset LEDBEAM#15 to event 37
-2025/07/24 13:52:16,bnjm2000,Assigned specific asset LEDBEAM#16 to event 37
 2025/07/24 13:52:17,bnjm2000,Assigned specific asset LEDBEAM#17 to event 37
 2025/07/24 13:52:18,bnjm2000,Assigned specific asset LEDBEAM#18 to event 37
 2025/07/24 13:52:19,bnjm2000,Assigned specific asset LEDBEAM#19 to event 37
@@ -999,3 +955,47 @@
 2025/09/09 13:21:36,bnjm2000,Removed MiPro MT-90A model from event 50
 2025/09/09 13:24:00,bnjm2000,Maintenance logged for asset CMD8#02: Maintenance done - greased chain
 2025/09/09 13:24:00,bnjm2000,Maintenance logged for asset CMD8#08: Maintenance done - greased chain
+2025/09/09 14:06:05,bnjm2000,Maintenance logged for asset CMD8#10: Maintenance done - greased chain
+2025/09/09 14:06:05,bnjm2000,Maintenance logged for asset CMD8#01: Maintenance done - greased chain
+2025/09/09 14:06:05,bnjm2000,Maintenance logged for asset CMD8#04: Maintenance done - greased chain
+2025/09/09 14:06:05,bnjm2000,Maintenance logged for asset CMD8#09: Maintenance done - greased chain
+2025/09/09 14:06:05,bnjm2000,Maintenance logged for asset CMD8#03: Maintenance done - greased chain
+2025/09/09 14:29:35,bnjm2000,Maintenance logged for asset CMD8#11: Maintenance done - greased chain
+2025/09/09 14:37:29,bnjm2000,Assigned specific asset QL5#01 to event 51
+2025/09/09 14:39:07,bnjm2000,Assigned specific asset 5XTW#05 to event 50
+2025/09/09 14:39:09,bnjm2000,Assigned specific asset 5XTW#06 to event 50
+2025/09/09 14:39:11,bnjm2000,Assigned specific asset 5XTW#07 to event 50
+2025/09/09 14:39:13,bnjm2000,Assigned specific asset 5XTW#08 to event 50
+2025/09/09 14:39:15,bnjm2000,Assigned specific asset 5XTW#09 to event 50
+2025/09/09 14:39:16,bnjm2000,Assigned specific asset 5XTW#10 to event 50
+2025/09/09 14:39:18,bnjm2000,Assigned specific asset 5XTW#11 to event 50
+2025/09/09 14:39:19,bnjm2000,Assigned specific asset 5XTW#12 to event 50
+2025/09/09 14:39:21,bnjm2000,Assigned specific asset 5XTW#13 to event 50
+2025/09/09 14:39:22,bnjm2000,Assigned specific asset 5XTW#14 to event 50
+2025/09/09 14:39:23,bnjm2000,Assigned specific asset 5XTW#15 to event 50
+2025/09/09 14:39:25,bnjm2000,Assigned specific asset 5XTW#16 to event 50
+2025/09/09 14:39:49,bnjm2000,Assigned specific asset 5XT#01 to event 50
+2025/09/09 14:39:52,bnjm2000,Assigned specific asset 5XT#02 to event 50
+2025/09/09 14:39:56,bnjm2000,Assigned specific asset ETR5#01 to event 50
+2025/09/09 14:39:59,bnjm2000,Assigned specific asset ETR5#02 to event 50
+2025/09/09 14:40:08,bnjm2000,Assigned specific asset ETR5W#05 to event 50
+2025/09/09 14:40:10,bnjm2000,Assigned specific asset ETR5W#06 to event 50
+2025/09/09 14:40:11,bnjm2000,Assigned specific asset ETR5W#07 to event 50
+2025/09/09 14:40:13,bnjm2000,Assigned specific asset ETR5W#08 to event 50
+2025/09/09 14:40:14,bnjm2000,Assigned specific asset ETR5W#09 to event 50
+2025/09/09 14:40:16,bnjm2000,Assigned specific asset ETR5W#10 to event 50
+2025/09/09 14:40:18,bnjm2000,Assigned specific asset ETR5W#11 to event 50
+2025/09/09 14:40:20,bnjm2000,Assigned specific asset ETR5W#12 to event 50
+2025/09/09 14:40:21,bnjm2000,Assigned specific asset ETR5W#13 to event 50
+2025/09/09 14:40:23,bnjm2000,Assigned specific asset ETR5W#14 to event 50
+2025/09/09 14:40:28,bnjm2000,Assigned specific asset ETR5W#15 to event 50
+2025/09/09 14:40:30,bnjm2000,Assigned specific asset ETR5W#16 to event 50
+2025/09/09 14:40:37,bnjm2000,Assigned specific asset CDJ3000#01 to event 50
+2025/09/09 14:40:38,bnjm2000,Assigned specific asset CDJ3000#02 to event 50
+2025/09/09 14:40:41,bnjm2000,Assigned specific asset DJM900NXS2#01 to event 50
+2025/09/09 14:40:47,bnjm2000,Assigned specific asset DM3#01 to event 50
+2025/09/09 14:42:58,bnjm2000,Updated event 51: Dry Hire: NicheAV via web interface
+2025/09/09 14:43:08,bnjm2000,Updated event 49: Dry Hire: NicheAV via web interface
+2025/09/09 14:51:27,bnjm2000,Created event 56: Graff mock-up @ Loyang Way via web interface
+2025/09/09 14:51:33,bnjm2000,Added 1x Astera Pixel Brick model to event 56 (total: 1)
+2025/09/09 14:51:38,bnjm2000,Added 1x L-Acoustics 5XT model to event 56 (total: 1)
