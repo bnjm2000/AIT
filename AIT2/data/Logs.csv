@@ -1,10 +1,3 @@
-2025/07/24 13:40:09,bnjm2000,Added 12x Ayrton Diablo Profile model to event 37 (total: 12)
-2025/07/24 13:40:21,bnjm2000,Assigned specific asset DIABLO#13 to event 37
-2025/07/24 13:40:25,bnjm2000,Assigned specific asset DIABLO#14 to event 37
-2025/07/24 13:40:29,bnjm2000,Assigned specific asset DIABLO#15 to event 37
-2025/07/24 13:40:33,bnjm2000,Assigned specific asset DIABLO#16 to event 37
-2025/07/24 13:40:38,bnjm2000,Assigned specific asset DIABLO#17 to event 37
-2025/07/24 13:40:44,bnjm2000,Assigned specific asset DIABLO#18 to event 37
 2025/07/24 13:40:52,bnjm2000,Assigned specific asset DIABLO#19 to event 37
 2025/07/24 13:40:56,bnjm2000,Assigned specific asset DIABLO#20 to event 37
 2025/07/24 13:41:00,bnjm2000,Assigned specific asset DIABLO#21 to event 37
@@ -999,3 +992,10 @@
 2025/09/09 13:21:36,bnjm2000,Removed MiPro MT-90A model from event 50
 2025/09/09 13:24:00,bnjm2000,Maintenance logged for asset CMD8#02: Maintenance done - greased chain
 2025/09/09 13:24:00,bnjm2000,Maintenance logged for asset CMD8#08: Maintenance done - greased chain
+2025/09/09 14:06:05,bnjm2000,Maintenance logged for asset CMD8#10: Maintenance done - greased chain
+2025/09/09 14:06:05,bnjm2000,Maintenance logged for asset CMD8#01: Maintenance done - greased chain
+2025/09/09 14:06:05,bnjm2000,Maintenance logged for asset CMD8#04: Maintenance done - greased chain
+2025/09/09 14:06:05,bnjm2000,Maintenance logged for asset CMD8#09: Maintenance done - greased chain
+2025/09/09 14:06:05,bnjm2000,Maintenance logged for asset CMD8#03: Maintenance done - greased chain
+2025/09/09 14:29:35,bnjm2000,Maintenance logged for asset CMD8#11: Maintenance done - greased chain
+2025/09/09 14:37:29,bnjm2000,Assigned specific asset QL5#01 to event 51
