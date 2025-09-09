@@ -1,14 +1,3 @@
-2025/07/24 13:38:51,bnjm2000,Assigned specific asset X12#03 to event 37
-2025/07/24 13:38:55,bnjm2000,Assigned specific asset X12#04 to event 37
-2025/07/24 13:38:59,bnjm2000,Assigned specific asset X12#05 to event 37
-2025/07/24 13:39:03,bnjm2000,Assigned specific asset X12#06 to event 37
-2025/07/24 13:39:07,bnjm2000,Assigned specific asset X12#07 to event 37
-2025/07/24 13:39:10,bnjm2000,Assigned specific asset X12#08 to event 37
-2025/07/24 13:39:16,bnjm2000,Assigned specific asset GSM4212P#01 to event 37
-2025/07/24 13:39:20,bnjm2000,Assigned specific asset GSM4212P#02 to event 37
-2025/07/24 13:39:25,bnjm2000,Assigned specific asset GSM4212P#03 to event 37
-2025/07/24 13:39:30,bnjm2000,Assigned specific asset RIO3224-D #01 to event 37
-2025/07/24 13:40:00,bnjm2000,Removed Ayrton Diablo (W.DMX) model from event 37
 2025/07/24 13:40:09,bnjm2000,Added 12x Ayrton Diablo Profile model to event 37 (total: 12)
 2025/07/24 13:40:21,bnjm2000,Assigned specific asset DIABLO#13 to event 37
 2025/07/24 13:40:25,bnjm2000,Assigned specific asset DIABLO#14 to event 37
@@ -999,3 +988,14 @@
 2025/09/09 13:05:15,admin,Assigned specific asset 75INCH#03 to event 55
 2025/09/09 13:05:17,admin,Completely removed asset 75INCH#03 from event 55
 2025/09/09 13:05:35,admin,Removed Samsung LH75QMCEBGCXXS model from event 55
+2025/09/09 13:18:25,bnjm2000,User bnjm2000 logged in via web interface
+2025/09/09 13:18:35,bnjm2000,Added 4x Samsung LH75QMCEBGCXXS model to event 55 (total: 4)
+2025/09/09 13:18:49,bnjm2000,Assigned asset [MISC]Truss - 2m;4 to event 55 (unprepared)
+2025/09/09 13:18:58,bnjm2000,Assigned asset [MISC]Base plate;4 to event 55 (unprepared)
+2025/09/09 13:19:21,bnjm2000,Assigned specific asset QL1#01 to event 49
+2025/09/09 13:21:21,bnjm2000,Added 1x Shure AD4D model to event 50 (total: 1)
+2025/09/09 13:21:25,bnjm2000,Added 2x Shure AD3 model to event 50 (total: 2)
+2025/09/09 13:21:33,bnjm2000,Removed MiPro MR-90 model from event 50
+2025/09/09 13:21:36,bnjm2000,Removed MiPro MT-90A model from event 50
+2025/09/09 13:24:00,bnjm2000,Maintenance logged for asset CMD8#02: Maintenance done - greased chain
+2025/09/09 13:24:00,bnjm2000,Maintenance logged for asset CMD8#08: Maintenance done - greased chain
