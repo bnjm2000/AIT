@@ -1007,14 +1007,14 @@ CMD8#01,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,20
 CMD8#02,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,2025/09/09	bnjm2000	Maintenance done - greased chain,SK,Store,Store
 CMD8#03,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,2025/09/09	bnjm2000	Maintenance done - greased chain,SK,Store,Store
 CMD8#04,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,2025/09/09	bnjm2000	Maintenance done - greased chain,SK,Store,Store
-CMD8#05,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,,SK,Store,
-CMD8#06,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,,SK,Store,Store
-CMD8#07,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,,SK,Store,
+CMD8#05,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,2025/09/09	bnjm2000	Maintenance done - greased chain,SK,Store,
+CMD8#06,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,2025/09/09	bnjm2000	Maintenance done - greased chain,SK,Store,Store
+CMD8#07,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,2025/09/09	bnjm2000	Maintenance done - greased chain,SK,Store,
 CMD8#08,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,2025/09/09	bnjm2000	Maintenance done - greased chain,SK,Store,Store
 CMD8#09,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,2025/09/09	bnjm2000	Maintenance done - greased chain,SK,Store,Store
 CMD8#10,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,2025/09/09	bnjm2000	Maintenance done - greased chain,SK,Store,Store
 CMD8#11,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,2025/09/09	bnjm2000	Maintenance done - greased chain,SK,Store,
-CMD8#12,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,,SK,Store,
+CMD8#12,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,2025/09/09	bnjm2000	Maintenance done - greased chain,SK,Store,
 CONTROLLER#01,Custom,Chain Hoist Controller,,Chain Hoist Controller,False,False,,SK,Store,Store
 HERCULES 8#01,Fenix,HERCULES 8,180439_30,Frontal lifting tower array lifter,False,True,2025/07/03	bnjm2000	Discovered frayed metal cable during BBC 2025 @ GBTB [Marked OOC]|2025/07/09	bnjm2000	Sent to LSD or servicing (Service order no. 1636) [Location: LSD SG],AX,Store,LSD SG
 HERCULES 8#02,Fenix,HERCULES 8,180439_28,Frontal lifting tower array lifter,False,False,,AX,Store,
