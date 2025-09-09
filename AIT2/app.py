@@ -1306,6 +1306,8 @@ def manage_event_models(event_id):
 
         data = request.get_json()
 
+        # In the POST section of manage_event_models function, around line 620:
+
         if request.method == 'POST':
             # Add model assignment
             brand = data.get('brand', '').strip()
@@ -1317,12 +1319,13 @@ def manage_event_models(event_id):
             logger.info(f"=== ADD MODEL REQUEST ===")
             logger.info(f"Brand: '{brand}', Model: '{model}', Dept: '{department}'")
             logger.info(f"Provided description: '{provided_description}'")
+            logger.info(f"Raw data: {data}")  # Add this line to see what's being sent
             logger.info(f"Quantity: {quantity}")
 
             if not brand or not model or not department:
                 return jsonify({'error': 'Brand, model, and department are required'}), 400
 
-            # Get the FULL description from the actual asset, not from the request
+            # Get the FULL description from the actual asset, not from the request if none provided
             full_description = provided_description
 
             # Only try to get description from inventory if none was provided
@@ -1335,7 +1338,7 @@ def manage_event_models(event_id):
                         logger.info(f"No description provided, using from asset {asset.asset_id}: '{full_description}'")
                         break
 
-            logger.info(f"Using description for {brand} {model}: '{full_description}'")
+            logger.info(f"Final description for {brand} {model}: '{full_description}' (length: {len(full_description)})")
             
             # Log current prepared_items
             logger.info(f"Current prepared_items: {event.prepared_items}")

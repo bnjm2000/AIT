@@ -251,6 +251,16 @@ function escapeJs(str) {
   return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t');
 }
 
+function escapeHtmlAttribute(str) {
+  if (!str) return '';
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
 // Update the overdue events counter
 function updateOverdueCounter(count) {
     const counter = document.getElementById('overdue-counter');
@@ -5455,11 +5465,11 @@ async function updateModelRequirementsSection(eventId) {
                         </div>
                         <div style="display: flex; gap: 8px;">
                             <button class="btn btn-sm btn-outline-primary edit-model-qty-btn" 
-                                    data-event-id="${eventId}" data-brand="${escapeHtml(model.brand)}" 
+                                    data-event-id="${eventId}" data-brand="${escapeHtmlAttribute(model.brand)}" 
                                     data-model="${escapeHtml(model.model)}" data-department="${escapeHtml(model.department)}"
                                     style="padding: 4px 8px; font-size: 11px;">Edit Qty</button>
                             <button class="btn btn-sm btn-danger remove-model-btn" 
-                                    data-event-id="${eventId}" data-brand="${escapeHtml(model.brand)}" 
+                                    data-event-id="${eventId}" data-brand="${escapeHtmlAttribute(model.brand)}" 
                                     data-model="${escapeHtml(model.model)}" data-department="${escapeHtml(model.department)}"
                                     style="padding: 4px 8px; font-size: 11px;">Remove</button>
                         </div>
@@ -5637,20 +5647,35 @@ async function removeModelFromEvent(eventId, brand, model, department) {
 }
 
 function editModelQuantity(eventId, brand, model, department) {
-  // Find the current quantity
+  // Get the description from the original model data, not DOM
   let currentQuantity = 1;
-  const modelElements = document.querySelectorAll(".model-assignment");
-  for (let element of modelElements) {
-    const text = element.textContent;
-    if (text.includes(`${brand} ${model}`)) {
-      const qtyMatch = text.match(/(\d+)x/);
-      if (qtyMatch) {
-        currentQuantity = parseInt(qtyMatch[1]);
-        break;
+  let description = "";
+  
+  // Get it from the event data instead of DOM parsing
+  fetch(`/api/events/${eventId}`)
+    .then(r => r.json())
+    .then(data => {
+      const event = data.data;
+      if (event.modelGroups) {
+        // Find the matching model
+        const modelKey = Object.keys(event.modelGroups).find(key => {
+          const model_data = event.modelGroups[key];
+          return model_data.brand === brand && model_data.model === model && model_data.department === department;
+        });
+        
+        if (modelKey) {
+          const modelData = event.modelGroups[modelKey];
+          description = modelData.description || "";
+          currentQuantity = modelData.requiredQuantity || 1;
+          
+          // Now populate the modal with the correct data
+          populateEditQuantityModal(eventId, brand, model, department, currentQuantity, description);
+        }
       }
-    }
-  }
+    });
+}
 
+function populateEditQuantityModal(eventId, brand, model, department, currentQuantity, description) {
   // Calculate available assets
   const availableAssets = window.currentEditAvailableAssets || [];
   const modelAssets = availableAssets.filter(
@@ -5659,39 +5684,21 @@ function editModelQuantity(eventId, brand, model, department) {
   const maxQuantity = currentQuantity + modelAssets.length;
 
   // Populate modal
-  document.getElementById(
-    "editQuantityTitle"
-  ).textContent = `Edit Quantity - ${brand} ${model}`;
-  document.getElementById(
-    "editQuantityLabel"
-  ).textContent = `Current quantity: ${currentQuantity}`;
+  document.getElementById("editQuantityTitle").textContent = `Edit Quantity - ${brand} ${model}`;
+  document.getElementById("editQuantityLabel").textContent = `Current quantity: ${currentQuantity}`;
   document.getElementById("editQuantityInput").value = currentQuantity;
   document.getElementById("editQuantityInput").min = 1;
   document.getElementById("editQuantityInput").max = maxQuantity;
-
-  const editQtyInput = document.getElementById("editQuantityInput");
-  if (editQtyInput) {
-    editQtyInput.oninput = () => validateEditQuantityInput();
-    editQtyInput.onblur = () => handleEditQuantityBlur(maxQuantity);
-    editQtyInput.onkeydown = (e) => handleQuantityKeydown(e);
-  }
-
-  // Show availability info with color coding
-  const availableDiv = document.getElementById("editQuantityAvailable");
-  if (modelAssets.length === 0) {
-    availableDiv.innerHTML = `<span style="color: #dc3545;">⚠️ No additional assets available (max: ${currentQuantity})</span>`;
-  } else {
-    availableDiv.innerHTML = `<span style="color: #28a745;">✅ ${modelAssets.length} additional available (max: ${maxQuantity})</span>`;
-  }
-
-  // Store values in hidden fields
   document.getElementById("editQuantityEventId").value = eventId;
   document.getElementById("editQuantityBrand").value = brand;
   document.getElementById("editQuantityModel").value = model;
   document.getElementById("editQuantityDepartment").value = department;
   document.getElementById("editQuantityCurrentQty").value = currentQuantity;
+  
+  // Store the full description (add this hidden field to your HTML)
+  document.getElementById("editQuantityDescription").value = description;
 
-  // Open modal
+  validateEditQuantityInput();
   openModal("editQuantityModal");
 }
 
@@ -5748,13 +5755,14 @@ function validateEditQuantityInput() {
   return true;
 }
 
-async function updateModelQuantity(eventId, brand, model, department, newQuantity, currentQuantity) {
+async function updateModelQuantity(eventId, brand, model, department, newQuantity, currentQuantity, description = "") {
   try {
     // Remove the old model assignment
     await apiCall(`/api/events/${eventId}/models`, "DELETE", {
       brand: brand,
       model: model,
       department: department,
+      description: description,
     });
 
     // Add the new model assignment with updated quantity
@@ -5762,7 +5770,7 @@ async function updateModelQuantity(eventId, brand, model, department, newQuantit
       brand: brand,
       model: model,
       department: department,
-      description: "", // We'll need to preserve the original description
+      description: description,
       quantity: newQuantity,
     });
 
@@ -5966,7 +5974,7 @@ function filterAvailableAssetsSimple(searchTerm) {
                             data-brand="${escapeHtml(modelGroup.brand)}"
                             data-model="${escapeHtml(modelGroup.model)}"
                             data-department="${escapeHtml(modelGroup.department)}"
-                            data-description="${escapeHtml(modelGroup.description || '')}"
+                            data-description="${escapeHtmlAttribute(modelGroup.description || '')}"
                             data-input-id="${inputId}">
                         Add
                     </button>
@@ -6035,8 +6043,8 @@ async function updateCurrentAssetsOnly(eventId) {
                                             <div style="color: #999; font-size: 10px; font-style: italic; margin-top: 2px;">Specific assets will be assigned during preparation</div>
                                         </div>
                                         <div style="display: flex; gap: 5px;">
-                                            <button class="btn btn-warning" style="padding: 3px 6px; font-size: 10px;" onclick="editModelQuantity(${eventId}, '${brand}', '${model}', '${dept}')">Edit Qty</button>
-                                            <button class="btn btn-danger" style="padding: 3px 6px; font-size: 10px;" onclick="removeModelFromEvent(${eventId}, '${brand}', '${model}', '${dept}')">Remove</button>
+                                            <button class="btn btn-warning" style="padding: 3px 6px; font-size: 10px;" onclick="editModelQuantity(${eventId}, '${escapeJs(brand)}', '${escapeJs(model)}', '${escapeJs(dept)}')">Edit Qty</button>
+                                            <button class="btn btn-danger" style="padding: 3px 6px; font-size: 10px;" onclick="removeModelFromEvent(${eventId}, '${escapeJs(brand)}', '${escapeJs(model)}', '${escapeJs(dept)}')">Remove</button>
                                         </div>
                                     </div>
                                 `;
@@ -6510,7 +6518,7 @@ function filterAvailableModels(searchTerm) {
                  onkeydown="handleQuantityKeydown(event)">
           <button class="btn btn-primary add-model-btn" style="padding: 6px 12px; font-size: 12px;" 
                   data-event-id="${eventId}" data-brand="${model.brand}" data-model="${model.model}" 
-                  data-department="${model.department}" data-description="${model.description}">
+                  data-department="${model.department}" data-description="${escapeHtmlAttribute(model.description)}">
             Add
           </button>
         </div>
@@ -7419,13 +7427,14 @@ document.addEventListener("DOMContentLoaded", function () {
         // Clear the custom asset flag
         delete e.target.dataset.customAsset;
       } else {
-        // Handle regular model quantity update
-        const brand = document.getElementById("editQuantityBrand").value;
-        const model = document.getElementById("editQuantityModel").value;
-        const department = document.getElementById("editQuantityDepartment").value;
-
-        await updateModelQuantity(eventId, brand, model, department, newQuantity, currentQuantity);
-      }
+          // Handle regular model quantity update
+          const brand = document.getElementById("editQuantityBrand").value;
+          const model = document.getElementById("editQuantityModel").value;
+          const department = document.getElementById("editQuantityDepartment").value;
+          const description = document.getElementById("editQuantityDescription").value;
+          
+          await updateModelQuantity(eventId, brand, model, department, newQuantity, currentQuantity, description);
+        }
 
       closeModal("editQuantityModal");
     }
