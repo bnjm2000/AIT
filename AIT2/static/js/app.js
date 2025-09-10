@@ -10128,8 +10128,22 @@ async function populateDeliveryOrderForm(event) {
     const jobTitleEl = document.getElementById('jobTitle');
     const jobLocationEl = document.getElementById('jobLocation');
     const additionalCommentsEl = document.getElementById('additionalComments');
+
+    if (doNumberEl) {
+      // event.startDate is "YYYY/MM/DD" from the API; fall back to current year if missing
+      const yearStr =
+        (event.startDate && /^\d{4}/.test(event.startDate))
+          ? event.startDate.substring(0, 4)
+          : String(new Date().getFullYear());
     
-    if (doNumberEl) doNumberEl.value = `DO-${String(Math.floor(Math.random() * 90000) + 10000)}`;
+      // event.id is provided by the API; left-pad to 4 digits
+      const rawId = (typeof event.id !== 'undefined') ? event.id : event.event_id;
+      const idNum = parseInt(rawId, 10);
+      const idStr = String(Number.isFinite(idNum) ? idNum : 0).padStart(4, '0');
+    
+      doNumberEl.value = `DO-${yearStr}${idStr}`;
+    }
+    
     if (doDateEl) doDateEl.value = new Date().toISOString().split('T')[0];
     if (clientNameEl) clientNameEl.value = event.client_name || event.name || '';
     if (clientCompanyEl) clientCompanyEl.value = event.client_company || '';
