@@ -10130,18 +10130,9 @@ async function populateDeliveryOrderForm(event) {
     const additionalCommentsEl = document.getElementById('additionalComments');
 
     if (doNumberEl) {
-      // event.startDate is "YYYY/MM/DD" from the API; fall back to current year if missing
-      const yearStr =
-        (event.startDate && /^\d{4}/.test(event.startDate))
-          ? event.startDate.substring(0, 4)
-          : String(new Date().getFullYear());
-    
-      // event.id is provided by the API; left-pad to 4 digits
-      const rawId = (typeof event.id !== 'undefined') ? event.id : event.event_id;
-      const idNum = parseInt(rawId, 10);
-      const idStr = String(Number.isFinite(idNum) ? idNum : 0).padStart(4, '0');
-    
-      doNumberEl.value = `DO-${yearStr}${idStr}`;
+      const year = new Date().getFullYear();
+      const eid = (event && (event.event_id ?? event.id)) ? String(event.event_id ?? event.id).padStart(4, '0') : '0000';
+      doNumberEl.value = `DO-${year}${eid}`;
     }
     
     if (doDateEl) doDateEl.value = new Date().toISOString().split('T')[0];
@@ -10157,6 +10148,8 @@ async function populateDeliveryOrderForm(event) {
     
     // Populate items preview (now async)
     await populateDeliveryItemsPreview(event);
+    await setupClientAutocomplete();    // NEW
+    ensureKnownClientsButton();
 }
 
 function populateDeliveryItemsPreview(event) {
@@ -11108,3 +11101,168 @@ setInterval(async () => {
 document.addEventListener('DOMContentLoaded', function() {
     setupSingleAssetClickHandler();
 });
+
+// --- Client directory helpers ---
+async function fetchClients(query = '') {
+  try {
+    const res = await apiCall(`/api/clients${query ? `?query=${encodeURIComponent(query)}` : ''}`);
+    return res.success ? res.data : [];
+  } catch (e) {
+    console.error('fetchClients error', e);
+    return [];
+  }
+}
+
+async function fetchClientByName(name) {
+  try {
+    const res = await apiCall(`/api/clients/${encodeURIComponent(name)}`);
+    return res.success ? res.data : null;
+  } catch { return null; }
+}
+
+async function saveClient(client) {
+  const res = await apiCall('/api/clients', 'POST', client);
+  return res.success ? res.data : null;
+}
+
+function fillClientFieldsFromRecord(rec) {
+  if (!rec) return;
+  const companyEl = document.getElementById('clientCompany');
+  const a1 = document.getElementById('deliveryAddress1');
+  const a2 = document.getElementById('deliveryAddress2');
+  const a3 = document.getElementById('deliveryAddress3');
+  const phoneEl = document.getElementById('clientPhone');
+  const postalEl = document.getElementById('clientPostalCode'); // optional input if you add it to the form
+
+  if (companyEl) companyEl.value = rec.company || '';
+  if (a1) a1.value = rec.address1 || '';
+  if (a2) a2.value = rec.address2 || '';
+  if (a3) a3.value = rec.address3 || (rec.postalCode ? `${rec.postalCode}` : '');
+  if (phoneEl) phoneEl.value = rec.phone || '';
+
+  // If you add a dedicated postal code input:
+  if (postalEl) postalEl.value = rec.postalCode || '';
+}
+
+async function setupClientAutocomplete() {
+  const input = document.getElementById('clientName');
+  if (!input) return;
+
+  // Create or reuse a datalist for suggestions
+  let dl = document.getElementById('clientNameList');
+  if (!dl) {
+    dl = document.createElement('datalist');
+    dl.id = 'clientNameList';
+    document.body.appendChild(dl);
+  }
+  input.setAttribute('list', 'clientNameList');
+
+  // Populate suggestions
+  const all = await fetchClients('');
+  dl.innerHTML = all.map(c => `<option value="${c.name}">`).join('');
+
+  // When user chooses a known name, auto-fill the rest
+  input.addEventListener('change', async () => {
+    const name = input.value.trim();
+    if (!name) return;
+    const rec = (all.find(x => x.name.toLowerCase() === name.toLowerCase())) || await fetchClientByName(name);
+    if (rec) fillClientFieldsFromRecord(rec);
+  });
+}
+
+function ensureKnownClientsButton() {
+  const input = document.getElementById('clientName');
+  if (!input || document.getElementById('btnKnownClients')) return;
+
+  const btn = document.createElement('button');
+  btn.id = 'btnKnownClients';
+  btn.type = 'button';
+  btn.className = 'btn btn-secondary';
+  btn.style.marginLeft = '8px';
+  btn.textContent = 'Known Clients';
+  btn.onclick = openClientsManager;
+
+  // Try to place next to the clientName input
+  if (input.parentElement) input.parentElement.appendChild(btn);
+  else input.insertAdjacentElement('afterend', btn);
+}
+
+async function openClientsManager() {
+  const modal = document.createElement('div');
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;z-index:9999;';
+  modal.innerHTML = `
+    <div style="background:#fff;min-width:720px;max-height:80vh;overflow:auto;border-radius:8px;padding:16px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <h3 style="margin:0;">Known Clients</h3>
+        <button class="btn btn-light" id="kcClose">✕</button>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:12px;">
+        <input class="form-control" id="kcName" placeholder="Name *">
+        <input class="form-control" id="kcCompany" placeholder="Company">
+        <input class="form-control" id="kcA1" placeholder="Address line 1">
+        <input class="form-control" id="kcA2" placeholder="Address line 2">
+        <input class="form-control" id="kcA3" placeholder="Address line 3">
+        <input class="form-control" id="kcPostal" placeholder="Postal code">
+        <input class="form-control" id="kcPhone" placeholder="Phone">
+        <button class="btn btn-primary" id="kcSave">Save/Update</button>
+      </div>
+
+      <input class="form-control" id="kcSearch" placeholder="Search...">
+      <table class="table table-sm" style="margin-top:8px;">
+        <thead><tr><th>Name</th><th>Company</th><th>Phone</th><th>Postal</th></tr></thead>
+        <tbody id="kcBody"></tbody>
+      </table>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  const close = () => modal.remove();
+  modal.querySelector('#kcClose').onclick = close;
+
+  async function refreshList(query='') {
+    const list = await fetchClients(query);
+    modal.querySelector('#kcBody').innerHTML = list.map(c => `
+      <tr style="cursor:pointer" data-name="${c.name}">
+        <td>${c.name}</td><td>${c.company||''}</td><td>${c.phone||''}</td><td>${c.postalCode||''}</td>
+      </tr>
+    `).join('');
+    modal.querySelectorAll('#kcBody tr').forEach(tr=>{
+      tr.onclick = async () => {
+        const name = tr.getAttribute('data-name');
+        const rec = await fetchClientByName(name);
+        if (rec) {
+          // drop selected into the DO form, then close
+          const input = document.getElementById('clientName');
+          if (input) input.value = rec.name;
+          fillClientFieldsFromRecord(rec);
+          close();
+        }
+      };
+    });
+  }
+
+  modal.querySelector('#kcSearch').addEventListener('input', (e)=>refreshList(e.target.value));
+  await refreshList('');
+
+  modal.querySelector('#kcSave').onclick = async () => {
+    const client = {
+      name: modal.querySelector('#kcName').value.trim(),
+      company: modal.querySelector('#kcCompany').value.trim(),
+      address1: modal.querySelector('#kcA1').value.trim(),
+      address2: modal.querySelector('#kcA2').value.trim(),
+      address3: modal.querySelector('#kcA3').value.trim(),
+      postalCode: modal.querySelector('#kcPostal').value.trim(),
+      phone: modal.querySelector('#kcPhone').value.trim(),
+    };
+    if (!client.name) { alert('Name is required'); return; }
+    const saved = await saveClient(client);
+    if (saved) {
+      await refreshList('');
+      // also refresh the datalist in case a new name was added
+      setupClientAutocomplete();
+    } else {
+      alert('Failed to save client');
+    }
+  };
+}

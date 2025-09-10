@@ -16,6 +16,7 @@ import time
 from models import User, InventoryItem, Container, Event, LogEntry, hash_password, format_date_output
 from data_manager import DataManager
 from utils import get_state_color
+from urllib.parse import unquote_plus
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -443,6 +444,13 @@ def init_data_manager():
     except Exception as e:
         logger.error(f"Failed to initialize data manager: {e}")
         raise
+
+    def _client_to_dict(c):
+        return {
+            'name': c.name, 'company': c.company,
+            'address1': c.address1, 'address2': c.address2, 'address3': c.address3,
+            'postalCode': c.postal_code, 'phone': c.phone
+        }
 
 # Routes
 
@@ -3159,6 +3167,86 @@ def check_and_update_ongoing_events():
         logger.error(f"Error checking ongoing/overdue events: {e}")
         import traceback
         logger.error(f"Traceback: {traceback.format_exc()}")
+
+def _client_to_dict(c):
+    # Handles both model instances and plain dicts defensively
+    get = (lambda k, d='': getattr(c, k, getattr(c, k.replace('postalCode', 'postal_code'), d)))
+    return {
+        'name': get('name'),
+        'company': get('company'),
+        'address1': get('address1'),
+        'address2': get('address2'),
+        'address3': get('address3'),
+        'postalCode': getattr(c, 'postal_code', getattr(c, 'postalCode', '')),
+        'phone': get('phone'),
+    }
+
+
+@app.route('/api/clients', methods=['GET', 'POST'])
+@require_auth
+def clients_collection():
+    if request.method == 'GET':
+        query = (request.args.get('query') or '').strip().lower()
+        data = []
+        for c in data_manager.clients.values():
+            if not query or query in c.name.lower():
+                data.append(_client_to_dict(c))
+        return jsonify({'success': True, 'data': data})
+
+    # POST (create or upsert)
+    data = request.get_json(force=True) or {}
+    name = (data.get('name') or '').strip()
+    if not name:
+        return jsonify({'success': False, 'message': 'Client name is required'}), 400
+
+    from models import Client
+    c = Client(
+        name=name,
+        company=(data.get('company') or '').strip(),
+        address1=(data.get('address1') or '').strip(),
+        address2=(data.get('address2') or '').strip(),
+        address3=(data.get('address3') or '').strip(),
+        postal_code=(data.get('postalCode') or '').strip(),
+        phone=(data.get('phone') or '').strip(),
+    )
+    data_manager.clients[name] = c
+    data_manager.save_clients()
+    log_action(f"Saved client {name}")
+    return jsonify({'success': True, 'data': _client_to_dict(c)})
+
+@app.route('/api/clients/<name>', methods=['GET', 'PUT', 'DELETE'])
+@require_auth
+def client_item(name):
+    key = unquote_plus(name)
+    c = data_manager.clients.get(key)
+    if request.method == 'GET':
+        if not c:
+            return jsonify({'success': False, 'message': 'Not found'}), 404
+        return jsonify({'success': True, 'data': _client_to_dict(c)})
+
+    if request.method == 'PUT':
+        if not c:
+            return jsonify({'success': False, 'message': 'Not found'}), 404
+        data = request.get_json(force=True) or {}
+        c.company = (data.get('company') or c.company).strip()
+        c.address1 = (data.get('address1') or c.address1).strip()
+        c.address2 = (data.get('address2') or c.address2).strip()
+        c.address3 = (data.get('address3') or c.address3).strip()
+        c.postal_code = (data.get('postalCode') or c.postal_code).strip()
+        c.phone = (data.get('phone') or c.phone).strip()
+        data_manager.save_clients()
+        log_action(f"Updated client {key}")
+        return jsonify({'success': True, 'data': _client_to_dict(c)})
+
+    # DELETE (admin)
+    if not c:
+        return jsonify({'success': False, 'message': 'Not found'}), 404
+    if not session.get('is_admin', False):
+        return jsonify({'error': 'Admin privileges required'}), 403
+    del data_manager.clients[key]
+    data_manager.save_clients()
+    log_action(f"Deleted client {key}")
+    return jsonify({'success': True})
 
 if __name__ == '__main__':
     try:

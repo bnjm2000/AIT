@@ -34,6 +34,16 @@ class User:
         self.salt = salt
         self.is_admin = is_admin
 
+class Client:
+    def __init__(self, name, company='', address1='', address2='', address3='', postal_code='', phone=''):
+        self.name = name
+        self.company = company
+        self.address1 = address1
+        self.address2 = address2
+        self.address3 = address3
+        self.postal_code = postal_code
+        self.phone = phone
+
 class InventoryItem:
     def __init__(self, asset_id, brand, model_number, serial_number, description, is_missing, maintenance_logs, department_code, default_location='', current_location='', is_ooc=False):
         self.asset_id = asset_id

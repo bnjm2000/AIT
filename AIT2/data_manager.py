@@ -17,13 +17,14 @@ class DataManager:
         self.events = {}
         self.event_file_map = {}
         self.logs = []
+        self.clients = {}
 
     def setup_data_folder(self):
         if not os.path.exists(self.events_folder):
             os.makedirs(self.events_folder)
 
     def check_and_initialize_files(self):
-        required_files = ['Inventory.csv', 'Logs.csv', 'Users.csv', 'Containers.csv']
+        required_files = ['Inventory.csv', 'Logs.csv', 'Users.csv', 'Containers.csv', 'Clients.csv']
         missing_files = []
         for filename in required_files:
             filepath = os.path.join(self.data_folder, filename)
@@ -36,7 +37,7 @@ class DataManager:
             print("All required files are present.")
 
     def initialize_files(self):
-        required_files = ['Inventory.csv', 'Logs.csv', 'Users.csv', 'Containers.csv']
+        required_files = ['Inventory.csv', 'Logs.csv', 'Users.csv', 'Containers.csv', 'Clients.csv']
         for filename in required_files:
             filepath = os.path.join(self.data_folder, filename)
             if not os.path.exists(filepath):
@@ -59,6 +60,7 @@ class DataManager:
         self.load_containers()
         self.load_events()
         self.load_logs()
+        self.load_clients()
 
     def load_users(self):
         filepath = os.path.join(self.data_folder, 'Users.csv')
@@ -350,3 +352,47 @@ class DataManager:
                 print(f"Event file {filename} does not exist. No backup created.")
         else:
             print(f"No file mapping found for Event ID {event_id}. Cannot create backup.")
+    
+    def load_clients(self):
+        import csv, os
+        filepath = os.path.join(self.data_folder, 'Clients.csv')
+        if not os.path.exists(filepath):
+            # when creating Clients.csv from scratch
+            with open(os.path.join(self.data_folder, 'Clients.csv'), 'w', newline='', encoding='utf-8') as f:
+                writer = csv.writer(f)
+                writer.writerow(['Name','Company','Address1','Address2','Address3','PostalCode','Phone'])
+        from models import Client
+        with open(filepath, 'r', newline='', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                if not row:
+                    continue
+                c = Client(
+                    name=row.get('Name', '').strip(),
+                    company=row.get('Company', '').strip(),
+                    address1=row.get('Address1', '').strip(),
+                    address2=row.get('Address2', '').strip(),
+                    address3=row.get('Address3', '').strip(),
+                    postal_code=row.get('PostalCode', '').strip(),
+                    phone=row.get('Phone', '').strip(),
+                )
+                if c.name:
+                    self.clients[c.name] = c
+
+    def save_clients(self):
+        import csv, os
+        filepath = os.path.join(self.data_folder, 'Clients.csv')
+        fieldnames = ['Name', 'Company', 'Address1', 'Address2', 'Address3', 'PostalCode', 'Phone']
+        with open(filepath, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            for c in sorted(self.clients.values(), key=lambda x: x.name.lower()):
+                writer.writerow({
+                    'Name': c.name,
+                    'Company': c.company,
+                    'Address1': c.address1,
+                    'Address2': c.address2,
+                    'Address3': c.address3,
+                    'PostalCode': c.postal_code,
+                    'Phone': c.phone,
+                })
