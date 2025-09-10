@@ -33,14 +33,14 @@ CT3#01,DBX,CT3,11065310806,advanced cable tester,False,False,,AX,Store,
 4099#03,DPA,4099,E47127,Instrument Microphone,False,True,"2025/07/14	bnjm2000	Inventory check, cable is oxidised and disintegrating [Marked OOC]",AX,Store,
 4099#04,DPA,4099,E48465,Instrument Microphone,False,False,,AX,Store,Store
 4099#05,DPA,4099,E48467,Instrument Microphone,False,False,,AX,Store,Store
-4099#06,DPA,4099,E51806,Instrument Microphone,False,True,"2025/07/14	bnjm2000	Inventory check, no sponge, cable ok [Marked OOC]",AX,Store,
+4099#06,DPA,4099,E51806,Instrument Microphone,False,False,"2025/07/14	bnjm2000	Inventory check, no sponge, cable ok [Marked OOC]|2025/09/10	bnjm2000	replaced sponge [Cleared OOC]",AX,Store,
 4099#07,DPA,4099,E51807,Instrument Microphone,False,False,"2025/07/14	bnjm2000	Inventory check, cable is exposed",AX,Store,
 4099#08,DPA,4099,E51808,Instrument Microphone,False,True,"2025/07/14	bnjm2000	Inventory check, no sponge, cable exposed [Marked OOC]",AX,Store,
 4099#09,DPA,4099,E51856,Instrument Microphone,False,True,"2025/07/14	bnjm2000	Inventory check, cable exposed, no sponge [Marked OOC]",AX,Store,
 4099#10,DPA,4099,EC3606,Instrument Microphone,False,False,"2025/07/14	bnjm2000	inventory check, cable a little exposed",AX,Store,
 4099#11,DPA,4099,EC3615,Instrument Microphone,False,False,"2025/07/14	bnjm2000	inventory check, cable a little exposed",AX,Store,
-4099#12,DPA,4099,EC5708,Instrument Microphone,False,False,"2025/07/14	bnjm2000	Inventory check, cable is exposed, sponge is going",AX,Store,
-4099#13,DPA,4099,EC5709,Instrument Microphone,False,True,"2025/07/14	bnjm2000	Inventory check, sponge spoilt, cable exposed [Marked OOC]",AX,Store,
+4099#12,DPA,4099,EC5708,Instrument Microphone,False,False,"2025/07/14	bnjm2000	Inventory check, cable is exposed, sponge is going|2025/09/10	bnjm2000	Sponge replaced [Cleared OOC]",AX,Store,
+4099#13,DPA,4099,EC5709,Instrument Microphone,False,False,"2025/07/14	bnjm2000	Inventory check, sponge spoilt, cable exposed [Marked OOC]|2025/09/10	bnjm2000	Sponge replaced [Cleared OOC]",AX,Store,
 4099#14,DPA,4099,EC5730,Instrument Microphone,False,False,,AX,Store,Store
 4099#15,DPA,4099,ED0511,Instrument Microphone,False,False,"2025/07/14	bnjm2000	Inventory check, cable a little exposed",AX,Store,Store
 4099#16,DPA,4099,EG3923,Instrument Microphone,False,False,,AX,Store,Store
