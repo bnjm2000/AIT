@@ -14,6 +14,44 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+// PATCH: attribute-safe HTML escaper (handles quotes too)
+function escapeHtmlAttr(str) {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/* PATCH A — Delivery Order (DO) edit helpers */
+function getDoEdits(eventId) {
+  const blank = { 
+    overrides: {}, 
+    custom: { Audio: [], Lighting: [], Video: [], MISC: [] } 
+  };
+  try {
+    const raw = localStorage.getItem(`doEdits/${eventId}`);
+    if (!raw) return blank;
+    const data = JSON.parse(raw);
+    data.overrides ||= {};
+    data.custom ||= {};
+    ['Audio','Lighting','Video','MISC'].forEach(d => data.custom[d] ||= []);
+    return data;
+  } catch { return blank; }
+}
+function saveDoEdits(eventId, data) {
+  localStorage.setItem(`doEdits/${eventId}`, JSON.stringify(data));
+}
+function clearDoEdits(eventId) {
+  localStorage.removeItem(`doEdits/${eventId}`);
+}
+/* stable key for model-group rows */
+function makeModelKey(mg) {
+  return `MG|${mg.department||''}|${mg.brand||''}|${mg.model||''}|${mg.description||''}`;
+}
+
+
 let isClickHandlerSetup = false;
 let processingAssets = new Set();
 
@@ -10623,29 +10661,6 @@ async function populateDeliveryOrderForm(event) {
     ensureKnownClientsButton();
 }
 
-function populateDeliveryItemsPreview(event) {
-    const previewContainer = document.getElementById('deliveryItemsPreview');
-    const departments = groupItemsByDepartment(event);
-    
-    let html = '';
-    Object.keys(departments).forEach(dept => {
-        if (departments[dept].length > 0) {
-            html += `<div class="department-section">
-                <h4>${dept}</h4>
-                <ul>`;
-            departments[dept].forEach(item => {
-                html += `<li>${item.description} <span class="quantity-badge">${item.quantity}</span></li>`;
-            });
-            html += '</ul></div>';
-        }
-    });
-    
-    if (html === '') {
-        html = '<p class="no-items">No items assigned to this event.</p>';
-    }
-    
-    previewContainer.innerHTML = html;
-}
 
 function generateDeliveryOrder(format) {
     if (!currentDeliveryOrderEvent) {
@@ -11287,153 +11302,262 @@ async function ensureAssetsLoaded() {
     }
 }
 
+// NON-BULLET DO PREVIEW + EDIT MODE
 async function populateDeliveryItemsPreview(event) {
-    const previewContainer = document.getElementById('deliveryItemsPreview');
-    if (!previewContainer) return;
-    
-    // Ensure assets are loaded before grouping items
-    await ensureAssetsLoaded();
-    
-    const departments = groupItemsByDepartment(event);
-    
-    let html = '';
-    Object.keys(departments).forEach(dept => {
-        if (departments[dept].length > 0) {
-            html += `<div class="department-section" style="margin-bottom: 20px;">
-                <h4 style="color: #495057; margin-bottom: 10px;">${dept}</h4>
-                <ul style="list-style: none; padding-left: 0;">`;
-            departments[dept].forEach(item => {
-                html += `<li style="padding: 5px 0; border-bottom: 1px solid #eee; display: flex; justify-content: space-between;">
-                    <span>${item.description}</span>
-                    <span class="quantity-badge" style="background: #667eea; color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px;">${item.quantity}</span>
-                </li>`;
-            });
-            html += '</ul></div>';
+  const previewContainer = document.getElementById('deliveryItemsPreview');
+  if (!previewContainer) return;
+
+  try { if (typeof ensureAssetsLoaded === 'function') await ensureAssetsLoaded(); } catch {}
+
+  const eventId = event.id || event.event_id || window.currentEventId || '0';
+  const edits = getDoEdits(eventId);
+
+  const render = () => {
+    const depts = groupItemsByDepartment(event);
+    const editMode = !!document.querySelector('#doEditToggle')?.checked;
+
+    // inline styles to match pre-bullet layout
+    let html = `
+      <style>
+        .do-toolbar{display:flex;gap:12px;align-items:center;margin-bottom:8px;}
+        .dept-title{margin:6px 0 2px;}
+        .do-list{margin:0;padding:0;}
+        .do-row{display:flex;align-items:center;gap:12px;padding:4px 0;border-bottom:1px dotted #ddd;}
+        .do-row:last-child{border-bottom:none;}
+        .do-col-desc{flex:1;min-width:320px}
+        .do-col-qty{min-width:70px;text-align:right;font-weight:600}
+        .quantity-badge{
+          display:inline-block;
+          background:#6f42c1;
+          color:#fff;
+          padding:2px 8px;
+          border-radius:12px;
+          font-size:12px;
+          font-weight:600;
+          min-width:32px;
+          text-align:center;
         }
+        .do-add{display:flex;gap:8px;align-items:center;margin-top:6px;}
+      </style>
+
+      <div class="do-toolbar">
+        <label style="display:flex;gap:6px;align-items:center;">
+          <input type="checkbox" id="doEditToggle"${editMode ? ' checked' : ''}> Edit items
+        </label>
+        <button class="btn btn-sm btn-outline-secondary" id="doResetEdits">Reset edits</button>
+      </div>
+    `;
+
+    const esc = (s)=>escapeHtml(s);
+    const escA = (s)=> (typeof escapeHtmlAttr === 'function' ? escapeHtmlAttr(s) : esc(String(s)));
+
+    const section = (deptName, items) => {
+      let rows = '';
+
+      items.forEach((item) => {
+        if (!editMode) {
+          rows += `
+            <div class="do-row">
+              <div class="do-col-desc">${esc(item.description)}</div>
+              <div class="do-col-qty">
+                <span class="quantity-badge">${esc(String(item.quantity))}</span>
+              </div>
+            </div>`;
+        }else {
+          // EDIT MODE — inline inputs in same two-column layout
+          const isDocustom = item.source === 'do-custom';
+          const docustomMeta = isDocustom
+            ? `data-kind="do-custom" data-dept="${escA(deptName)}" data-index="${escA(item.key.split('|').pop())}"`
+            : `data-kind="base"`;
+          rows += `
+            <div class="do-row" data-key="${escA(item.key)}" ${docustomMeta}>
+              <input class="form-control do-desc do-col-desc" value="${escA(item.description)}">
+              <div style="display:flex;gap:8px;align-items:center;justify-content:flex-end;">
+                <input class="form-control do-qty" type="number" min="1" value="${escA(String(item.quantity))}" style="width:90px">
+                ${isDocustom ? `<button class="btn btn-sm btn-danger do-del">Delete</button>` : ``}
+                <button class="btn btn-sm btn-primary do-save">Save</button>
+              </div>
+            </div>`;
+        }
+      });
+
+      // add-row (edit mode only)
+      const addRow = !editMode ? '' : `
+        <div class="do-add">
+          <input class="form-control do-add-desc" placeholder="Add custom item to ${escA(deptName)}" style="min-width:320px;max-width:600px">
+          <input class="form-control do-add-qty" type="number" min="1" value="1" style="width:90px">
+          <button class="btn btn-sm btn-outline-primary do-add-btn" data-dept="${escA(deptName)}">Add</button>
+        </div>`;
+
+      return `
+        <div class="department-section" style="margin-bottom:10px;">
+          <h4 class="dept-title">${esc(deptName)}</h4>
+          <div class="do-list">${rows}</div>
+          ${addRow}
+        </div>`;
+    };
+
+    let body = '';
+    ['Audio','Lighting','Video','MISC'].forEach(d => {
+      if ((depts[d] || []).length > 0 || (edits.custom[d] || []).length > 0 || editMode) {
+        body += section(d, depts[d] || []);
+      }
     });
-    
-    if (html === '') {
-        html = '<p class="no-items" style="text-align: center; color: #666; padding: 40px;">No assigned items found for this event.</p>';
+
+    if (!body.trim()) body = '<p class="no-items">No items assigned to this event.</p>';
+
+    previewContainer.innerHTML = html + body;
+
+    // wire up
+    const resetBtn = document.getElementById('doResetEdits');
+    if (resetBtn) {
+      resetBtn.onclick = () => {
+        clearDoEdits(eventId);
+        if (typeof showNotification === 'function') showNotification('success', 'DO edits reset');
+        populateDeliveryItemsPreview(event);
+      };
     }
-    
-    previewContainer.innerHTML = html;
+    const toggle = document.getElementById('doEditToggle');
+    if (toggle) toggle.onchange = () => populateDeliveryItemsPreview(event);
+
+    // save / delete / add handlers
+    previewContainer.querySelectorAll('.do-save').forEach(btn => {
+      btn.onclick = (e) => {
+        const row = e.target.closest('.do-row');
+        const key = row.getAttribute('data-key');
+        const kind = row.getAttribute('data-kind');
+        const dept = row.getAttribute('data-dept');
+        const idxStr = row.getAttribute('data-index');
+        const desc = row.querySelector('.do-desc').value.trim();
+        const qty = Math.max(1, parseInt(row.querySelector('.do-qty').value, 10) || 1);
+
+        const state = getDoEdits(eventId);
+        if (kind === 'do-custom') {
+          const i = parseInt(idxStr, 10);
+          if (Number.isInteger(i) && state.custom[dept] && state.custom[dept][i]) {
+            state.custom[dept][i] = { description: desc, quantity: qty };
+          }
+        } else {
+          state.overrides[key] = { description: desc, quantity: qty };
+        }
+        saveDoEdits(eventId, state);
+        if (typeof showNotification === 'function') showNotification('success', 'Saved');
+        populateDeliveryItemsPreview(event);
+      };
+    });
+
+    previewContainer.querySelectorAll('.do-del').forEach(btn => {
+      btn.onclick = (e) => {
+        const row = e.target.closest('.do-row');
+        const dept = row.getAttribute('data-dept');
+        const idxStr = row.getAttribute('data-index');
+        const i = parseInt(idxStr, 10);
+        const state = getDoEdits(eventId);
+        if (Number.isInteger(i) && state.custom[dept]) {
+          state.custom[dept].splice(i, 1);
+          saveDoEdits(eventId, state);
+          if (typeof showNotification === 'function') showNotification('success', 'Deleted');
+          populateDeliveryItemsPreview(event);
+        }
+      };
+    });
+
+    previewContainer.querySelectorAll('.do-add-btn').forEach(btn => {
+      btn.onclick = (e) => {
+        const dept = e.currentTarget.getAttribute('data-dept');
+        const wrap = e.currentTarget.closest('.do-add');
+        const desc = wrap.querySelector('.do-add-desc').value.trim();
+        const qty = Math.max(1, parseInt(wrap.querySelector('.do-add-qty').value, 10) || 1);
+        if (!desc) { if (typeof showNotification === 'function') showNotification('warning', 'Description required'); return; }
+        const state = getDoEdits(eventId);
+        state.custom[dept].push({ description: desc, quantity: qty });
+        saveDoEdits(eventId, state);
+        wrap.querySelector('.do-add-desc').value = '';
+        wrap.querySelector('.do-add-qty').value = '1';
+        if (typeof showNotification === 'function') showNotification('success', `Added to ${dept}`);
+        populateDeliveryItemsPreview(event);
+      };
+    });
+  };
+
+  render();
 }
 
+// PATCH B — group items (with DO overrides + DO custom additions)
 function groupItemsByDepartment(event) {
-    const departments = {
-        'Audio': [],
-        'Lighting': [],
-        'Video': [],
-        'MISC': []
-    };
-    
-    console.log('Event data for delivery order:', event);
-    
-    // Process modelGroups - this shows what's assigned to the event
-    if (event.modelGroups && Object.keys(event.modelGroups).length > 0) {
-        console.log('Using modelGroups:', event.modelGroups);
-        
-        Object.values(event.modelGroups).forEach(modelGroup => {
-            let deptName = 'MISC';
-            if (modelGroup.department === 'AX') deptName = 'Audio';
-            else if (modelGroup.department === 'LX') deptName = 'Lighting';
-            else if (modelGroup.department === 'VX') deptName = 'Video';
-            
-            // Use the required quantity (what was assigned), not what's prepared
-            departments[deptName].push({
-                description: `${modelGroup.brand} ${modelGroup.model}${modelGroup.description ? ' - ' + modelGroup.description : ''}`,
-                quantity: modelGroup.requiredQuantity.toString()
-            });
-        });
-    }
-    
-    // Add custom assets from multiple sources
-    const customAssetGroups = {};
-    
-    // Check prepared_items for custom assets
-    if (event.prepared_items && event.prepared_items.length > 0) {
-        console.log('Checking prepared_items for custom assets:', event.prepared_items);
-        
-        const customAssets = event.prepared_items.filter(assetId => 
-            assetId.startsWith('[MISC]') || assetId.startsWith('[LOAN]')
-        );
-        
-        customAssets.forEach(assetId => {
-            if (assetId.startsWith('[MISC]')) {
-                const parts = assetId.substring(6).split(';');
-                const description = parts[0] || 'Misc Item';
-                const quantity = parseInt(parts[1]) || 1;
-                
-                if (!customAssetGroups[description]) {
-                    customAssetGroups[description] = 0;
-                }
-                customAssetGroups[description] += quantity;
-            } else if (assetId.startsWith('[LOAN]')) {
-                const parts = assetId.substring(6).split(';');
-                const description = parts[0] || 'Loan Item';
-                const quantity = parseInt(parts[1]) || 1;
-                
-                if (!customAssetGroups[description]) {
-                    customAssetGroups[description] = 0;
-                }
-                customAssetGroups[description] += quantity;
-            }
-        });
-    }
-    
-    // Also check assetsByDepartment for LOAN and MISC
-    if (event.assetsByDepartment) {
-        console.log('Checking assetsByDepartment for custom assets:', event.assetsByDepartment);
-        
-        ['LOAN', 'MISC'].forEach(dept => {
-            if (event.assetsByDepartment[dept] && event.assetsByDepartment[dept].length > 0) {
-                event.assetsByDepartment[dept].forEach(asset => {
-                    // Parse custom asset format and remove tags
-                    let description = asset.name || asset.id || 'Custom Item';
-                    let quantity = 1;
-                    
-                    // Remove tags from description if present
-                    if (description.startsWith('[MISC]')) {
-                        description = description.substring(6); // Remove '[MISC]'
-                    } else if (description.startsWith('[LOAN]')) {
-                        description = description.substring(6); // Remove '[LOAN]'
-                    }
-                    
-                    // Handle different custom asset formats
-                    if (asset.id && asset.id.includes(';')) {
-                        const parts = asset.id.substring(asset.id.indexOf(']') + 1).split(';'); // Remove tag before splitting
-                        if (parts.length >= 2) {
-                            description = parts[0];
-                            quantity = parseInt(parts[1]) || 1;
-                        }
-                    } else if (description.includes(';')) {
-                        const parts = description.split(';');
-                        if (parts.length >= 2) {
-                            description = parts[0];
-                            quantity = parseInt(parts[1]) || 1;
-                        }
-                    }
-                    
-                    if (!customAssetGroups[description]) {
-                        customAssetGroups[description] = 0;
-                    }
-                    customAssetGroups[description] += quantity;
-                });
-            }
-        });
-    }
-    
-    // Add grouped custom assets to MISC department
-    Object.entries(customAssetGroups).forEach(([description, totalQuantity]) => {
-        departments['MISC'].push({
-            description: description,
-            quantity: totalQuantity.toString()
-        });
+  const departments = { Audio: [], Lighting: [], Video: [], MISC: [] };
+  const deptName = (code) => (code === 'AX' ? 'Audio' : code === 'LX' ? 'Lighting' : code === 'VX' ? 'Video' : 'MISC');
+
+  // 1) Base groups from modelGroups (what the job actually asked for)
+  if (event.modelGroups && Object.keys(event.modelGroups).length) {
+    Object.values(event.modelGroups).forEach(mg => {
+      const dname = deptName(mg.department);
+      const baseDesc = `${mg.brand||''} ${mg.model||''}${mg.description ? ' - ' + mg.description : ''}`.trim();
+      departments[dname].push({
+        key: makeModelKey(mg),
+        description: baseDesc,
+        quantity: String(mg.requiredQuantity || 0),
+        source: 'model'
+      });
     });
-    
-    console.log('Final departments for delivery order:', departments);
-    return departments;
+  }
+
+  // 2) Custom assets already assigned to the event via prepared_items ([MISC]/[LOAN]) → placed under MISC
+  if (Array.isArray(event.prepared_items) && event.prepared_items.length) {
+    const grouped = {};
+    event.prepared_items.forEach(id => {
+      if (typeof id !== 'string') return;
+      if (id.startsWith('[MISC]') || id.startsWith('[LOAN]')) {
+        const type = id.startsWith('[MISC]') ? 'MISC' : 'LOAN';
+        const parts = id.substring(type.length + 2 /* [] */).split(';');
+        const desc = (parts[0] || (type === 'MISC' ? 'Misc Item' : 'Loan Item')).trim();
+        const qty = parseInt(parts[1], 10) || 1;
+        grouped[desc] = (grouped[desc] || 0) + qty;
+      }
+    });
+    let idx = 0;
+    Object.entries(grouped).forEach(([desc, qty]) => {
+      departments.MISC.push({
+        key: `CA|MISC|${idx++}|${desc}`,
+        description: desc,
+        quantity: String(qty),
+        source: 'custom-prepared'
+      });
+    });
+  }
+
+  // 3) Apply DO display overrides + DO-only custom additions (stored locally per event)
+  const eventId = event.id || event.event_id || event.eventId || window.currentEventId || '0';
+  const edits = getDoEdits(eventId);
+
+  // 3a) Apply overrides (by item.key)
+  ['Audio','Lighting','Video','MISC'].forEach(d => {
+    departments[d].forEach((item) => {
+      const ov = edits.overrides[item.key];
+      if (ov) {
+        item.description = ov.description || item.description;
+        item.quantity = String(ov.quantity || item.quantity);
+      }
+    });
+  });
+
+  // 3b) Append DO-only customs (user added just for DO printout)
+  if (edits && edits.custom) {
+    ['Audio','Lighting','Video','MISC'].forEach(d => {
+      (edits.custom[d] || []).forEach((ci, i) => {
+        departments[d].push({
+          key: `DOCUSTOM|${d}|${i}`,
+          description: ci.description,
+          quantity: String(ci.quantity || 1),
+          source: 'do-custom'
+        });
+      });
+    });
+  }
+
+  return departments;
 }
+
 
 function exportLogs() {
   if (logs.length === 0) {
