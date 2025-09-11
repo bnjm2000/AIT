@@ -11596,6 +11596,16 @@ async function saveClient(client) {
   return res.success ? res.data : null;
 }
 
+async function updateClient(name, data) {
+  const res = await apiCall(`/api/clients/${encodeURIComponent(name)}`, 'PUT', data);
+  return res && res.success ? res.data : null;
+}
+
+async function deleteClient(name) {
+  const res = await apiCall(`/api/clients/${encodeURIComponent(name)}`, 'DELETE');
+  return !!(res && res.success);
+}
+
 function fillClientFieldsFromRecord(rec) {
   if (!rec) return;
   const companyEl = document.getElementById('clientCompany');
@@ -11657,10 +11667,10 @@ function ensureKnownClientsButton() {
   if (input.parentElement) input.parentElement.appendChild(btn);
   else input.insertAdjacentElement('afterend', btn);
 }
-
+// PATCH B — full replacement of openClientsManager (adds Edit & Delete)
 async function openClientsManager() {
   const modal = document.createElement('div');
-  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;z-index:9999;';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center;z-index:9999;';
   modal.innerHTML = `
     <div style="background:#fff;min-width:720px;max-height:80vh;overflow:auto;border-radius:8px;padding:16px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
@@ -11679,9 +11689,14 @@ async function openClientsManager() {
         <button class="btn btn-primary" id="kcSave">Save/Update</button>
       </div>
 
-      <input class="form-control" id="kcSearch" placeholder="Search...">
+      <input class="form-control" id="kcSearch" placeholder="Search.">
       <table class="table table-sm" style="margin-top:8px;">
-        <thead><tr><th>Name</th><th>Company</th><th>Phone</th><th>Postal</th></tr></thead>
+        <thead>
+          <tr>
+            <th>Name</th><th>Company</th><th>Phone</th><th>Postal</th>
+            <th style="width:140px">Actions</th>
+          </tr>
+        </thead>
         <tbody id="kcBody"></tbody>
       </table>
     </div>
@@ -11691,19 +11706,31 @@ async function openClientsManager() {
   const close = () => modal.remove();
   modal.querySelector('#kcClose').onclick = close;
 
+  let editingName = null; // track original name when editing
+
   async function refreshList(query='') {
     const list = await fetchClients(query);
     modal.querySelector('#kcBody').innerHTML = list.map(c => `
       <tr style="cursor:pointer" data-name="${c.name}">
-        <td>${c.name}</td><td>${c.company||''}</td><td>${c.phone||''}</td><td>${c.postalCode||''}</td>
+        <td>${c.name}</td>
+        <td>${c.company || ''}</td>
+        <td>${c.phone || ''}</td>
+        <td>${c.postalCode || ''}</td>
+        <td>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button class="btn btn-sm btn-outline-primary kc-edit" data-name="${c.name}">Edit</button>
+            <button class="btn btn-sm btn-danger kc-del" data-name="${c.name}">Delete</button>
+          </div>
+        </td>
       </tr>
     `).join('');
-    modal.querySelectorAll('#kcBody tr').forEach(tr=>{
+
+    // Row click selects client into DO form and closes
+    modal.querySelectorAll('#kcBody tr').forEach(tr => {
       tr.onclick = async () => {
         const name = tr.getAttribute('data-name');
         const rec = await fetchClientByName(name);
         if (rec) {
-          // drop selected into the DO form, then close
           const input = document.getElementById('clientName');
           if (input) input.value = rec.name;
           fillClientFieldsFromRecord(rec);
@@ -11711,9 +11738,61 @@ async function openClientsManager() {
         }
       };
     });
+
+    // Edit buttons
+    modal.querySelectorAll('.kc-edit').forEach(btn => {
+      btn.onclick = async (e) => {
+        e.stopPropagation();
+        const name = btn.getAttribute('data-name');
+        const rec = await fetchClientByName(name);
+        if (!rec) return;
+
+        editingName = rec.name;
+        modal.querySelector('#kcName').value = rec.name || '';
+        modal.querySelector('#kcCompany').value = rec.company || '';
+        modal.querySelector('#kcA1').value = rec.address1 || '';
+        modal.querySelector('#kcA2').value = rec.address2 || '';
+        modal.querySelector('#kcA3').value = rec.address3 || '';
+        modal.querySelector('#kcPostal').value = rec.postalCode || '';
+        modal.querySelector('#kcPhone').value = rec.phone || '';
+        modal.querySelector('#kcName').focus();
+      };
+    });
+
+    // Delete buttons
+    modal.querySelectorAll('.kc-del').forEach(btn => {
+      btn.onclick = async (e) => {
+        e.stopPropagation();
+        const name = btn.getAttribute('data-name');
+        const ok = await showCustomConfirm(`Delete client “${name}”?`);
+        if (!ok) return;
+        try {
+          const done = await deleteClient(name);
+          if (done) {
+            showNotification('success', `Deleted client ${name}`);
+            // if we were editing this one, clear the form
+            if (editingName === name) {
+              editingName = null;
+              modal.querySelector('#kcName').value = '';
+              modal.querySelector('#kcCompany').value = '';
+              modal.querySelector('#kcA1').value = '';
+              modal.querySelector('#kcA2').value = '';
+              modal.querySelector('#kcA3').value = '';
+              modal.querySelector('#kcPostal').value = '';
+              modal.querySelector('#kcPhone').value = '';
+            }
+            await refreshList(modal.querySelector('#kcSearch').value.trim());
+          } else {
+            showNotification('error', 'Delete failed (are you an admin?)');
+          }
+        } catch (err) {
+          showNotification('error', err?.message || 'Delete failed');
+        }
+      };
+    });
   }
 
-  modal.querySelector('#kcSearch').addEventListener('input', (e)=>refreshList(e.target.value));
+  modal.querySelector('#kcSearch').addEventListener('input', (e) => refreshList(e.target.value));
   await refreshList('');
 
   modal.querySelector('#kcSave').onclick = async () => {
@@ -11726,14 +11805,33 @@ async function openClientsManager() {
       postalCode: modal.querySelector('#kcPostal').value.trim(),
       phone: modal.querySelector('#kcPhone').value.trim(),
     };
-    if (!client.name) { alert('Name is required'); return; }
-    const saved = await saveClient(client);
-    if (saved) {
-      await refreshList('');
-      // also refresh the datalist in case a new name was added
-      setupClientAutocomplete();
-    } else {
-      alert('Failed to save client');
+    if (!client.name) {
+      showNotification('warning', 'Name is required');
+      return;
+    }
+
+    try {
+      if (editingName && editingName === client.name) {
+        // update in-place
+        await updateClient(editingName, client);
+        showNotification('success', `Updated client ${client.name}`);
+      } else if (editingName && editingName !== client.name) {
+        // rename: create new + offer to delete old
+        await saveClient(client);
+        const removeOld = await showCustomConfirm(`Created “${client.name}”. Delete old client “${editingName}”?`);
+        if (removeOld) {
+          await deleteClient(editingName);
+        }
+        showNotification('success', `Saved ${client.name}`);
+      } else {
+        // create
+        await saveClient(client);
+        showNotification('success', `Saved ${client.name}`);
+      }
+      editingName = null;
+      await refreshList(modal.querySelector('#kcSearch').value.trim());
+    } catch (e) {
+      showNotification('error', e?.message || 'Save/Update failed');
     }
   };
 }
