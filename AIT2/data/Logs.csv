@@ -1,15 +1,3 @@
-2025/07/24 16:03:56,bnjm2000,Assigned specific asset PCBB#03 to event 37
-2025/07/24 16:04:04,bnjm2000,Assigned specific asset PCBB#06 to event 37
-2025/07/24 16:04:10,bnjm2000,Assigned specific asset PCBB#10 to event 37
-2025/07/24 16:04:12,bnjm2000,Assigned specific asset PCBB#11 to event 37
-2025/07/24 16:05:10,bnjm2000,Returned asset [MISC]NL4 Socapex breakout;2 from event 35
-2025/07/24 16:05:20,bnjm2000,Returned asset [MISC]TV DSM Stand;4 from event 34
-2025/07/24 16:05:48,bnjm2000,Returned asset [MISC]24in base plate;4 from event 36
-2025/07/24 16:05:53,bnjm2000,Returned asset [MISC]TV stand from event 32
-2025/07/24 16:07:01,bnjm2000,User bnjm2000 forced event 36 (Dry Hire: THH) state from Planning to Closed
-2025/07/24 16:07:04,bnjm2000,User bnjm2000 forced event 32 (Dry Hire: Vision Display) state from Planning to Closed
-2025/07/24 16:07:06,bnjm2000,User bnjm2000 forced event 35 (Dry Hire: UAV) state from Planning to Closed
-2025/07/24 16:07:31,bnjm2000,Removed DPA DAD 6010 model from event 38
 2025/07/24 16:07:31,bnjm2000,Added 9x DPA DAD 6010 model to event 38 (total: 9)
 2025/07/24 16:07:40,bnjm2000,Removed Shure SM57 model from event 38
 2025/07/24 16:10:34,bnjm2000,Created event 40: Dry Hire: Avery Events via web interface
@@ -999,3 +987,15 @@
 2025/09/09 15:53:24,bnjm2000,Added 1x Astera Pixel Brick model to event 56 (total: 1)
 2025/09/10 11:31:36,admin,Saved client Chua Lithan
 2025/09/10 11:37:22,admin,Saved client Adityan Sohien
+2025/09/11 13:30:42,bnjm2000,User bnjm2000 logged in via web interface
+2025/09/11 13:33:05,bnjm2000,Removed Out of Commission status from asset 4099#09
+2025/09/11 13:33:05,bnjm2000,Maintenance logged for asset 4099#09: Replaced sponge
+2025/09/11 13:33:26,bnjm2000,Removed Out of Commission status from asset 4099#08
+2025/09/11 13:33:26,bnjm2000,Maintenance logged for asset 4099#08: Replaced sponge
+2025/09/11 13:47:05,bnjm2000,Created event 57: Dry Hire: Creative Technology via web interface
+2025/09/11 13:47:14,bnjm2000,Added 6x L-Acoustics LA4X model to event 57 (total: 6)
+2025/09/11 13:47:21,bnjm2000,Added 10x L-Acoustics X12 model to event 57 (total: 10)
+2025/09/11 14:58:21,bnjm2000,Added 2x L-Acoustics LS10 model to event 57 (total: 2)
+2025/09/11 15:02:35,bnjm2000,Added 4x Samsung LH75QMCEBGCXXS model to event 55 (total: 4)
+2025/09/11 15:02:41,bnjm2000,Removed Samsung LH75QMCEBGCXXS model from event 55
+2025/09/11 15:02:48,bnjm2000,Added 4x Samsung LH75QMCEBGCXXS model to event 55 (total: 4)
