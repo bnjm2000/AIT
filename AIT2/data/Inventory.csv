@@ -225,10 +225,6 @@ K&M ACC #04,K&M,21441-000-55,,Adapter sleeve ring lock,False,False,,AX,Store,
 5XTW#14,L-Acoustics,5XTW,260049599,"5"" passive coaxial enclosure, white",False,False,"2025/05/28	bnjm2000	Sent to Concept Systems as rubber gasket was coming out [Location: Concept Systems, Marked OOC]|2025/07/09	bnjm2000	Collected back from Concept Systems, inspected ok [Location: Store, Cleared OOC, Cleared Missing]",AX,Store,Valentino Le Meta-Theatre Des Intimates @ ArtSpace
 5XTW#15,L-Acoustics,5XTW,260049602,"5"" passive coaxial enclosure, white",False,False,"2025/05/28	bnjm2000	Sent to Concept Systems as rubber gasket was coming out [Location: Concept Systems, Marked OOC]|2025/07/09	bnjm2000	Collected back from Concept Systems, inspected ok [Location: Store, Cleared OOC, Cleared Missing]",AX,Store,Valentino Le Meta-Theatre Des Intimates @ ArtSpace
 5XTW#16,L-Acoustics,5XTW,260049603,"5"" passive coaxial enclosure, white",False,False,,AX,Store,Valentino Le Meta-Theatre Des Intimates @ ArtSpace
-5XTW#17,L-Acoustics,5XTW,,"5"" passive coaxial enclosure, white",False,False,,AX,Store,
-5XTW#18,L-Acoustics,5XTW,,"5"" passive coaxial enclosure, white",False,False,,AX,Store,
-5XTW#19,L-Acoustics,5XTW,,"5"" passive coaxial enclosure, white",False,False,,AX,Store,
-5XTW#20,L-Acoustics,5XTW,,"5"" passive coaxial enclosure, white",False,False,,AX,Store,
 ETR5W#01,L-Acoustics,ETR5W,440035175,Adjustable U-bracket: 5XTW,False,False,,AX,Store,
 ETR5W#02,L-Acoustics,ETR5W,440035179,Adjustable U-bracket: 5XTW,False,False,,AX,Store,
 ETR5W#03,L-Acoustics,ETR5W,440035182,Adjustable U-bracket: 5XTW,False,False,,AX,Store,
@@ -245,10 +241,6 @@ ETR5W#13,L-Acoustics,ETR5W,440036993,Adjustable U-bracket: 5XTW,False,False,,AX,
 ETR5W#14,L-Acoustics,ETR5W,440037001,Adjustable U-bracket: 5XTW,False,False,,AX,Store,Valentino Le Meta-Theatre Des Intimates @ ArtSpace
 ETR5W#15,L-Acoustics,ETR5W,440037004,Adjustable U-bracket: 5XTW,False,False,,AX,Store,Valentino Le Meta-Theatre Des Intimates @ ArtSpace
 ETR5W#16,L-Acoustics,ETR5W,440037025,Adjustable U-bracket: 5XTW,False,False,,AX,Store,Valentino Le Meta-Theatre Des Intimates @ ArtSpace
-ETR5W#17,L-Acoustics,ETR5W,,Adjustable U-bracket: 5XTW,False,False,,AX,Store,
-ETR5W#18,L-Acoustics,ETR5W,,Adjustable U-bracket: 5XTW,False,False,,AX,Store,
-ETR5W#19,L-Acoustics,ETR5W,,Adjustable U-bracket: 5XTW,False,False,,AX,Store,
-ETR5W#20,L-Acoustics,ETR5W,,Adjustable U-bracket: 5XTW,False,False,,AX,Store,
 5XT#01,L-Acoustics,5XT,260038164,"5"" passive coaxial enclosure, black",False,False,,AX,Store,Valentino Le Meta-Theatre Des Intimates @ ArtSpace
 5XT#02,L-Acoustics,5XT,260044263,"5"" passive coaxial enclosure, black",False,False,,AX,Store,Valentino Le Meta-Theatre Des Intimates @ ArtSpace
 5XT#03,L-Acoustics,5XT,260044264,"5"" passive coaxial enclosure, black",False,False,,AX,Store,Store
@@ -615,7 +607,9 @@ ULXD2#07,Shure,ULXD2,2QK2204370,Handheld Microphone [L50],False,False,,AX,Store,
 ULXD2#08,Shure,ULXD2,2OB0659317-01,Handheld Microphone [L50],False,False,,AX,Store,
 ULXD2#09,Shure,ULXD2,2NK0771081-01,Handheld Microphone [L50],False,False,,AX,Store,
 ULXD2#10,Shure,ULXD2,2PK2362922,Handheld Microphone [L50],False,False,,AX,Store,
-ULXD2#11,Shure,ULXD2,2RC0141727,Handheld Microphone [L50],False,True,"2025/06/21	bnjm2000	Battery prong dropped out, unable to turn on (Wedding of Jeremy and Julia @ The Pyramid Club) [Location: Store, Marked OOC]|2025/07/10	bnjm2000	Sent to E&E for service. [Location: E&E]",AX,Store,E&E
+ULXD2#11,Shure,ULXD2,2RC0141727,Handheld Microphone [L50],False,True,"2025/06/21	bnjm2000	Battery prong dropped out, unable to turn on (Wedding of Jeremy and Julia @ The Pyramid Club) [Location: Store, Marked OOC]|2025/07/10	bnjm2000	Sent to E&E for service. [Location: E&E]|2025/09/11	bnjm2000	Replace battery pin $5
+Replace rubber slot $5
+Service charge $60",AX,Store,E&E
 ULXD2#12,Shure,ULXD2,2NK0771082-01,Handheld Microphone [L50],False,False,,AX,Store,Store
 ULXD2#13,Shure,ULXD2,3CC16144846,Handheld Microphone [G52],False,False,,AX,Store,
 ULXD2#14,Shure,ULXD2,3CC16144872,Handheld Microphone [G52],False,False,,AX,Store,
