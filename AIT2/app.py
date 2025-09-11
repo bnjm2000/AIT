@@ -3273,9 +3273,12 @@ def clients_collection():
         query = (request.args.get('query') or '').strip().lower()
         data = []
         for c in data_manager.clients.values():
-            if not query or query in c.name.lower():
+            name = (getattr(c, 'name', '') or '').strip().lower()
+            company = (getattr(c, 'company', '') or '').strip().lower()
+            if not query or (query in name) or (query in company):
                 data.append(_client_to_dict(c))
         return jsonify({'success': True, 'data': data})
+
 
     # POST (create or upsert)
     data = request.get_json(force=True) or {}
