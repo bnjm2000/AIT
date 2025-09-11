@@ -4119,7 +4119,35 @@ async function loadEventAssetsForReturn() {
         assetsSection.style.display = 'block';
 
         let assetsContent = '';
-        
+        // Department quick actions: compute unreturned counts per department
+        if (event.assetsByDepartment) {
+          const depts = Object.keys(event.assetsByDepartment);
+          const rows = [];
+          depts.forEach((dept) => {
+              const items = event.assetsByDepartment[dept] || [];
+              const unreturned = items.filter(a => a.status !== 'returned');
+              if (unreturned.length > 0) {
+                  rows.push(`
+                      <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; border:1px solid #e9ecef; border-radius:8px; margin-bottom:8px;">
+                          <div style="font-weight:600;">${dept}</div>
+                          <div style="display:flex; align-items:center; gap:10px;">
+                              <span style="font-size:12px; color:#6c757d;">${unreturned.length} to return</span>
+                              <button class="btn btn-success btn-sm" onclick="returnAllForDepartment(${eventId}, '${dept.replace(/'/g, "\\'")}')">Return all</button>
+                          </div>
+                      </div>
+                  `);
+              }
+          });
+          if (rows.length > 0) {
+              assetsContent += `
+                  <div style="margin-bottom:16px;">
+                      <div style="font-weight:600; margin-bottom:6px;">Department quick actions</div>
+                      ${rows.join('')}
+                  </div>
+              `;
+          }
+        }
+
         // Process regular assets (from preparedAssets if available)
         if (event.preparedAssets && event.preparedAssets.length > 0) {
             // Group regular assets by type
@@ -4379,6 +4407,49 @@ async function returnSpecificAssetNew(eventId, assetId) {
             buttonElement.textContent = 'Return';
         }
     }
+}
+
+async function returnAllForDepartment(eventId, department) {
+  try {
+      // Best-effort disable of the clicked button
+      const btn = document.querySelector(`[onclick*="returnAllForDepartment(${eventId}, '${department.replace("'", "\\'")}')"]`);
+      if (btn) {
+          btn.disabled = true;
+          btn.textContent = 'Returning...';
+          btn.style.opacity = '0.6';
+      }
+
+      const res = await apiCall(`/api/events/${eventId}/return-department`, 'POST', { department });
+
+      // Prefer explicit count, then top-level returned[], then data.returned[]
+      const returnedList =
+        Array.isArray(res?.returned) ? res.returned :
+        Array.isArray(res?.data?.returned) ? res.data.returned : [];
+
+      const count =
+        Number.isFinite(res?.count) ? res.count :
+        Number.isFinite(res?.data?.count) ? res.data.count :
+        returnedList.length;
+
+      // Use a consistent success message
+      showNotification('success', `${count} item(s) returned for ${department}`);
+
+
+      // Refresh views
+      loadEventAssetsForReturn();
+      if (document.getElementById('return-section').classList.contains('active')) {
+          loadReturnEvents();
+      }
+      if (document.getElementById('dashboard-section').classList.contains('active')) {
+          loadDashboard();
+      }
+      if (document.getElementById('events-section').classList.contains('active')) {
+          loadAllEvents();
+      }
+  } catch (error) {
+      console.error('Error returning department assets:', error);
+      showNotification('error', `Failed to return all for ${department}`);
+  }
 }
 
 async function returnManualAssetNew() {

@@ -1764,6 +1764,90 @@ def return_event_asset(event_id):
         import traceback
         logger.error(f"Traceback: {traceback.format_exc()}")
         return jsonify({'error': 'Failed to return asset'}), 500
+    
+@app.route('/api/events/<int:event_id>/return-department', methods=['POST'])
+@require_auth
+def return_department_assets(event_id):
+    """Return all unreturned assets for a given department in this event.
+    Includes regular inventory assets from actually_prepared that match the department,
+    any specifically prepared assets from prepared_items in that department,
+    and custom assets ([LOAN]/[MISC]) if department is LOAN or MISC.
+    """
+    try:
+        event = data_manager.events.get(event_id)
+        if not event:
+            return jsonify({'error': 'Event not found'}), 404
+
+        data = request.get_json() or {}
+        department = (data.get('department') or '').strip()
+        if not department:
+            return jsonify({'error': 'Department is required'}), 400
+
+        # Ensure lists exist
+        if not hasattr(event, 'actually_prepared'):
+            event.actually_prepared = []
+        if not hasattr(event, 'extra_assets'):
+            event.extra_assets = []
+
+        already_returned = set(event.returned_items or [])
+        targets = []
+
+        # 1) Regular inventory assets (match department)
+        specific_ids_in_prepared = [
+            aid for aid in event.prepared_items
+            if not (aid.startswith('[LOAN]') or aid.startswith('[MISC]') or aid.startswith('[MODEL]'))
+        ]
+        for asset_id in set(event.actually_prepared + specific_ids_in_prepared):
+            if asset_id in already_returned:
+                continue
+            asset = data_manager.inventory.get(asset_id)
+            if not asset:
+                continue
+            if asset.department_code == department:
+                targets.append(asset_id)
+
+        # 2) Custom assets (LOAN/MISC)
+        if department in ('LOAN', 'MISC'):
+            for item in event.prepared_items:
+                if item.startswith(f'[{department}]') and item not in already_returned:
+                    targets.append(item)
+
+        if not targets:
+            return jsonify({'success': True, 'message': f'No pending items for department {department}', 'returned': []})
+
+        returned_now = []
+
+        for asset_id in targets:
+            if asset_id in event.returned_items:
+                continue
+
+            # Mark returned
+            event.returned_items.append(asset_id)
+            returned_now.append(asset_id)
+
+            # Regular assets: remove from actually_prepared + reset location
+            if not (asset_id.startswith('[LOAN]') or asset_id.startswith('[MISC]')):
+                if asset_id in event.actually_prepared:
+                    event.actually_prepared.remove(asset_id)
+                asset = data_manager.inventory.get(asset_id)
+                if asset:
+                    asset.current_location = asset.default_location or ''
+
+            # For custom assets, DO NOT remove from actually_prepared (to match single-return semantics)
+
+        # Persist
+        data_manager.save_inventory()
+        update_event_state(event)
+        data_manager.save_event(event)
+        invalidate_cache()
+
+        log_action(f"Returned all assets for department {department} in event {event_id}: {len(returned_now)} items")
+
+        return jsonify({'success': True, 'message': f'Returned {len(returned_now)} items for {department}', 'returned': returned_now})
+    except Exception as e:
+        logger.error(f"Error returning all assets for department {department} in event {event_id}: {e}")
+        return jsonify({'error': 'Failed to return department assets'}), 500
+
 
 @app.route('/api/events/<int:event_id>/assign-specific', methods=['POST'])
 @require_auth
