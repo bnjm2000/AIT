@@ -1717,6 +1717,406 @@ async function openPrepareEventModal(eventId) {
     }
     setupAssetClickHandler();
 }
+// All Events Tab System
+function switchAllEventsTab(tabName) {
+  // Remove active class from all tabs
+  document.querySelectorAll('.all-events-tab').forEach(tab => {
+    tab.classList.remove('active');
+  });
+  
+  // Hide all tab content
+  document.querySelectorAll('.all-events-content').forEach(content => {
+    content.classList.remove('active');
+    content.style.display = 'none';
+  });
+  
+  // Add active class to clicked tab
+  document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+  
+  // Show corresponding content
+  const contentDiv = document.getElementById(`all-events-${tabName}-view`);
+  contentDiv.classList.add('active');
+  contentDiv.style.display = 'block';
+  
+  // Load appropriate data
+  if (tabName === "list") {
+    loadAllEvents();
+  } else if (tabName === "calendar") {
+    loadCalendarView();
+  }
+}
+
+// Calendar functionality
+let currentCalendarDate = new Date();
+
+async function loadCalendarView() {
+  try {
+    const response = await apiCall('/api/events');
+    const events = response.data;
+    
+    renderCalendar(events);
+  } catch (error) {
+    document.getElementById('calendar-container').innerHTML = 
+      '<p style="color: red; text-align: center;">Error loading calendar</p>';
+  }
+}
+
+function renderCalendar(events) {
+  const container = document.getElementById('calendar-container');
+  const currentMonth = currentCalendarDate.getMonth();
+  const currentYear = currentCalendarDate.getFullYear();
+  
+  // Calendar header
+  const monthNames = ["January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"];
+  
+  const headerHTML = `
+    <div class="calendar-header">
+      <h3>${monthNames[currentMonth]} ${currentYear}</h3>
+      <div class="calendar-nav">
+        <button onclick="navigateCalendar(-1)">‹ Previous</button>
+        <button onclick="goToToday()">Today</button>
+        <button onclick="navigateCalendar(1)">Next ›</button>
+      </div>
+    </div>
+  `;
+  
+  // Days of week header
+  const daysOfWeek = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const headerRowHTML = daysOfWeek.map(day => 
+    `<div class="calendar-day-header">${day}</div>`
+  ).join('');
+  
+  // Calculate calendar grid
+  const firstDay = new Date(currentYear, currentMonth, 1);
+  const lastDay = new Date(currentYear, currentMonth + 1, 0);
+  const firstDayOfWeek = (firstDay.getDay() + 6) % 7;
+  const daysInMonth = lastDay.getDate();
+  
+  // Previous month days
+  const prevMonth = new Date(currentYear, currentMonth, 0);
+  const daysInPrevMonth = prevMonth.getDate();
+  
+  // Create calendar grid data structure
+  const calendarDays = [];
+  
+  // Previous month's trailing days
+  for (let i = firstDayOfWeek - 1; i >= 0; i--) {
+    const dayNum = daysInPrevMonth - i;
+    const date = new Date(currentYear, currentMonth - 1, dayNum);
+    calendarDays.push({
+      date,
+      dayNum,
+      isCurrentMonth: false,
+      isToday: false
+    });
+  }
+  
+  // Current month days
+  const today = new Date();
+  for (let day = 1; day <= daysInMonth; day++) {
+    const date = new Date(currentYear, currentMonth, day);
+    const isToday = date.toDateString() === today.toDateString();
+    
+    calendarDays.push({
+      date,
+      dayNum: day,
+      isCurrentMonth: true,
+      isToday
+    });
+  }
+  
+  // Next month's leading days
+  const totalCells = 35; // 5 rows × 7 days (changed from 42)
+  const usedCells = calendarDays.length;
+  const remainingCells = totalCells - usedCells;
+
+  for (let day = 1; day <= remainingCells; day++) {
+    const date = new Date(currentYear, currentMonth + 1, day);
+    calendarDays.push({
+      date,
+      dayNum: day,
+      isCurrentMonth: false,
+      isToday: false
+    });
+  }
+  
+  // Process events for the calendar with proper row assignment
+  const eventPlacements = processEventsForCalendar(events, calendarDays);
+  
+  // Generate calendar HTML
+  let calendarDaysHTML = '';
+  
+  calendarDays.forEach((dayData, dayIndex) => {
+    const dayPlacements = eventPlacements.filter(p => p.dayIndex === dayIndex);
+    
+    // Create event layers HTML (max 4 visible)
+    const eventLayersHTML = [];
+    for (let row = 0; row < 4; row++) {
+      const placement = dayPlacements.find(p => p.row === row);
+      if (placement) {
+        const eventClass = `calendar-event state-${placement.event.state.toLowerCase()}${placement.event.tag === 'dry hire' ? ' dry-hire' : ''} ${placement.spanClass}`;
+        
+        // Only show text on the first day of the event span or if it's a single day event
+        let eventText = '';
+        if (placement.spanClass === 'span-single' || placement.spanClass === 'span-start') {
+          eventText = placement.event.name;
+        }
+
+        eventLayersHTML.push(`
+          <div class="calendar-event-layer" style="top: ${20 + (row * 18)}px; z-index: ${placement.spanClass === 'span-start' ? 10 : 5};">
+            <div class="${eventClass}" onclick="viewEvent(${placement.event.id})" title="${placement.event.name}" style="z-index: ${placement.spanClass === 'span-start' ? 10 : 5}; position: relative;">
+              ${eventText}
+            </div>
+          </div>
+        `);
+      }
+    }
+    
+    // Count total events for this day (for "more" indicator)
+    const allDayEvents = events.filter(event => {
+      const eventStart = new Date(event.startDate);
+      const eventEnd = new Date(event.endDate);
+      const dayDate = new Date(dayData.date);
+      eventStart.setHours(0, 0, 0, 0);
+      eventEnd.setHours(23, 59, 59, 999);
+      dayDate.setHours(0, 0, 0, 0);
+      return dayDate >= eventStart && dayDate <= eventEnd;
+    });
+    
+    const hiddenEventCount = Math.max(0, allDayEvents.length - 4);
+    
+    // More events indicator
+    const moreEventsHTML = hiddenEventCount > 0 ? 
+      `<div class="more-events" onclick="showDayEvents(event, ${dayIndex}, '${dayData.date.toDateString()}')">${hiddenEventCount} more</div>` : '';
+    
+    const dayClass = `calendar-day ${!dayData.isCurrentMonth ? 'other-month' : ''} ${dayData.isToday ? 'today' : ''}`;
+    
+    calendarDaysHTML += `
+      <div class="${dayClass}">
+        <div class="calendar-day-number">${dayData.dayNum}</div>
+        <div class="calendar-events-container">
+          ${eventLayersHTML.join('')}
+          ${moreEventsHTML}
+        </div>
+      </div>
+    `;
+  });
+  
+  container.innerHTML = `
+    ${headerHTML}
+    <div class="calendar-grid">
+      ${headerRowHTML}
+      ${calendarDaysHTML}
+    </div>
+  `;
+  
+  // Store events data for popup
+  window.calendarAllEvents = events;
+  window.calendarDays = calendarDays;
+}
+
+function processEventsForCalendar(events, calendarDays) {
+  const eventPlacements = [];
+  const rowOccupancy = {}; // Track which rows are occupied on which days
+  
+  // Initialize row occupancy tracking
+  calendarDays.forEach((_, dayIndex) => {
+    rowOccupancy[dayIndex] = new Set();
+  });
+  
+  // Sort events by start date, then by duration (longer events first)
+  const sortedEvents = [...events].sort((a, b) => {
+    const startA = new Date(a.startDate);
+    const startB = new Date(b.startDate);
+    if (startA.getTime() === startB.getTime()) {
+      const durationA = new Date(a.endDate) - new Date(a.startDate);
+      const durationB = new Date(b.endDate) - new Date(b.startDate);
+      return durationB - durationA; // Longer events first
+    }
+    return startA - startB;
+  });
+  
+  sortedEvents.forEach(event => {
+    const eventStart = new Date(event.startDate);
+    const eventEnd = new Date(event.endDate);
+    eventStart.setHours(0, 0, 0, 0);
+    eventEnd.setHours(23, 59, 59, 999);
+    
+    // Find all days this event spans
+    const spanningDays = [];
+    calendarDays.forEach((dayData, dayIndex) => {
+      const dayDate = new Date(dayData.date);
+      dayDate.setHours(0, 0, 0, 0);
+      
+      if (dayDate >= eventStart && dayDate <= eventEnd) {
+        spanningDays.push({
+          dayIndex,
+          date: dayDate,
+          calendarRow: Math.floor(dayIndex / 7),
+          calendarCol: dayIndex % 7
+        });
+      }
+    });
+    
+    if (spanningDays.length === 0) return;
+    
+    // Find the first available row that works for ALL spanning days
+    let assignedRow = -1;
+    for (let row = 0; row < 4; row++) {
+      let rowAvailable = true;
+      for (let day of spanningDays) {
+        if (rowOccupancy[day.dayIndex].has(row)) {
+          rowAvailable = false;
+          break;
+        }
+      }
+      if (rowAvailable) {
+        assignedRow = row;
+        break;
+      }
+    }
+    
+    // If no row available in visible area, skip this event
+    if (assignedRow === -1) return;
+    
+    // Mark this row as occupied on all spanning days
+    spanningDays.forEach(day => {
+      rowOccupancy[day.dayIndex].add(assignedRow);
+    });
+    
+    // Group spanning days by calendar row to handle week breaks
+    const daysByCalendarRow = {};
+    spanningDays.forEach(day => {
+      if (!daysByCalendarRow[day.calendarRow]) {
+        daysByCalendarRow[day.calendarRow] = [];
+      }
+      daysByCalendarRow[day.calendarRow].push(day);
+    });
+    
+    // Create placements for each calendar row
+    Object.values(daysByCalendarRow).forEach(rowDays => {
+      rowDays.sort((a, b) => a.calendarCol - b.calendarCol);
+      
+      // Group consecutive days
+      const consecutiveGroups = [];
+      let currentGroup = [rowDays[0]];
+      
+      for (let i = 1; i < rowDays.length; i++) {
+        if (rowDays[i].calendarCol === rowDays[i-1].calendarCol + 1) {
+          currentGroup.push(rowDays[i]);
+        } else {
+          consecutiveGroups.push(currentGroup);
+          currentGroup = [rowDays[i]];
+        }
+      }
+      consecutiveGroups.push(currentGroup);
+      
+      // Create placements for each consecutive group
+      consecutiveGroups.forEach(group => {
+        group.forEach((day, dayIndexInGroup) => {
+          let spanClass = 'span-single';
+          
+          if (group.length > 1) {
+            if (dayIndexInGroup === 0) {
+              spanClass = 'span-start';
+            } else if (dayIndexInGroup === group.length - 1) {
+              spanClass = 'span-end';
+            } else {
+              spanClass = 'span-middle';
+            }
+          }
+          
+          eventPlacements.push({
+            event,
+            dayIndex: day.dayIndex,
+            row: assignedRow,
+            spanClass
+          });
+        });
+      });
+    });
+  });
+  
+  return eventPlacements;
+}
+
+function showDayEvents(event, dayIndex, dateString) {
+  event.stopPropagation();
+  
+  // Remove any existing popup
+  const existingPopup = document.querySelector('.day-events-popup');
+  if (existingPopup) {
+    existingPopup.remove();
+  }
+  
+  // Get all events for this day
+  const dayDate = window.calendarDays[dayIndex].date;
+  const dayEvents = window.calendarAllEvents.filter(event => {
+    const eventStart = new Date(event.startDate);
+    const eventEnd = new Date(event.endDate);
+    const checkDate = new Date(dayDate);
+    eventStart.setHours(0, 0, 0, 0);
+    eventEnd.setHours(23, 59, 59, 999);
+    checkDate.setHours(0, 0, 0, 0);
+    return checkDate >= eventStart && checkDate <= eventEnd;
+  });
+  
+  // Create popup
+  const popup = document.createElement('div');
+  popup.className = 'day-events-popup';
+  
+  const eventsHTML = dayEvents.map(event => {
+    const eventClass = `day-event-item state-${event.state.toLowerCase()}${event.tag === 'dry hire' ? ' dry-hire' : ''}`;
+    return `<div class="${eventClass}" onclick="viewEvent(${event.id}); closeDayEventsPopup();" title="${event.name}">${event.name}</div>`;
+  }).join('');
+  
+  popup.innerHTML = `
+    <div class="day-events-header">
+      <span>${dateString}</span>
+      <button class="day-events-close" onclick="closeDayEventsPopup()">×</button>
+    </div>
+    ${eventsHTML}
+  `;
+  
+  // Position popup near the click
+  const rect = event.target.getBoundingClientRect();
+  popup.style.left = `${rect.left}px`;
+  popup.style.top = `${rect.bottom + 5}px`;
+  
+  // Adjust if popup goes off screen
+  document.body.appendChild(popup);
+  const popupRect = popup.getBoundingClientRect();
+  if (popupRect.right > window.innerWidth) {
+    popup.style.left = `${window.innerWidth - popupRect.width - 10}px`;
+  }
+  if (popupRect.bottom > window.innerHeight) {
+    popup.style.top = `${rect.top - popupRect.height - 5}px`;
+  }
+  
+  // Close popup when clicking outside
+  setTimeout(() => {
+    document.addEventListener('click', closeDayEventsPopup);
+  }, 100);
+}
+
+function closeDayEventsPopup() {
+  const popup = document.querySelector('.day-events-popup');
+  if (popup) {
+    popup.remove();
+  }
+  document.removeEventListener('click', closeDayEventsPopup);
+}
+
+function navigateCalendar(direction) {
+  currentCalendarDate.setMonth(currentCalendarDate.getMonth() + direction);
+  loadCalendarView();
+}
+
+function goToToday() {
+  currentCalendarDate = new Date();
+  loadCalendarView();
+}
 
 function handleAssetActionClick(event) {
     if (event.target.classList.contains('asset-action-btn')) {
@@ -8421,8 +8821,8 @@ function updateStatusFromToggle(statusType, isChecked) {
 
 function showMaintenanceLogModal(asset) {
   // Debug: Log the asset data to console
-  console.log('Asset maintenance logs:', asset.maintenanceLogs);
-  console.log('Total maintenance logs count:', asset.maintenanceLogs ? asset.maintenanceLogs.length : 0);
+  // console.log('Asset maintenance logs:', asset.maintenanceLogs);
+  // console.log('Total maintenance logs count:', asset.maintenanceLogs ? asset.maintenanceLogs.length : 0);
   
   // Start building modal content
   let modalContent = `

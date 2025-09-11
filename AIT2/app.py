@@ -235,12 +235,12 @@ def update_event_state(event):
                 total_specific_assignments >= total_model_requirements and 
                 total_returned == total_specific_assignments):
                 event.state = 'Closed'
-                logger.info(f"Event {event.event_id} set to Closed: all assets returned")
+                #logger.info(f"Event {event.event_id} set to Closed: all assets returned")
             # 2. CHECK FOR OVERDUE - event ended but still has unreturned assets
             elif (total_specific_assignments > total_returned and 
                   current_date > event.end_date):
                 event.state = 'Overdue'
-                logger.info(f"Event {event.event_id} set to Overdue: past end date with unreturned assets")
+                #logger.info(f"Event {event.event_id} set to Overdue: past end date with unreturned assets")
             # 3. No requirements set yet
             elif total_model_requirements == 0:
                 event.state = 'Added'
@@ -285,12 +285,12 @@ def update_event_state(event):
             # 1. CHECK FOR AUTO-CLOSE FIRST - all actually prepared assets returned
             if (total_actually_prepared > 0 and all_actually_prepared_returned):
                 event.state = 'Closed'
-                logger.info(f"Event {event.event_id} set to Closed: all actually prepared assets returned")
+                #logger.info(f"Event {event.event_id} set to Closed: all actually prepared assets returned")
             # 2. CHECK FOR OVERDUE - event ended but still has unreturned assets (HIGH PRIORITY)
             elif (total_actually_prepared > total_returned and 
                   current_date > event.end_date):
                 event.state = 'Overdue'
-                logger.info(f"Event {event.event_id} set to Overdue: past end date with unreturned assets")
+                # logger.info(f"Event {event.event_id} set to Overdue: past end date with unreturned assets")
             # 3. No assets assigned yet
             elif total_prepared_items == 0:
                 event.state = 'Added'
