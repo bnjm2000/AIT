@@ -1,0 +1,2 @@
+EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,Tag,ForceStateOverride
+57,Dry Hire: Creative Technology,20250928,20251002,[],"[""[MODEL]AX|L-Acoustics|LA4X|6|Amplified controller""]",[],Planning,[],[],dry hire,False
