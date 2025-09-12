@@ -10655,12 +10655,13 @@ async function populateDeliveryOrderForm(event) {
     if (jobLocationEl) jobLocationEl.value = event.venue || '';
     if (additionalCommentsEl) additionalCommentsEl.value = '';
     
+    if (document.getElementById('showAssetIds')) document.getElementById('showAssetIds').checked = false;
+
     // Populate items preview (now async)
     await populateDeliveryItemsPreview(event);
     await setupClientAutocomplete();    // NEW
     ensureKnownClientsButton();
 }
-
 
 function generateDeliveryOrder(format) {
     if (!currentDeliveryOrderEvent) {
@@ -10681,6 +10682,7 @@ function generateDeliveryOrder(format) {
         jobTitle: document.getElementById('jobTitle').value,
         jobLocation: document.getElementById('jobLocation').value,
         additionalComments: document.getElementById('additionalComments').value,
+        showAssetIds: document.getElementById('showAssetIds').checked,
         event: currentDeliveryOrderEvent
     };
     
@@ -11055,8 +11057,27 @@ function generatePagesContent(data, formattedDate) {
                 currentRowCount += 1;
                 
                 // Add items one by one
+                // Add items one by one
                 deptItems.forEach(item => {
-                    if (currentRowCount + 1 > maxRowsPerPage) {
+                    console.log(`Processing item in ${dept}:`, item);
+                    
+                    // Calculate how many rows this item will take (base + asset IDs if enabled)
+                    let itemRowCount = 1; // Base row
+                    let itemAssetIds = [];
+                    
+                    if (data.showAssetIds) {
+                        console.log('showAssetIds is enabled, getting asset IDs...');
+                        itemAssetIds = getAssetIdsByItem(data.event, item, dept);
+                        console.log(`Found ${itemAssetIds.length} asset IDs for this item:`, itemAssetIds);
+                        if (itemAssetIds.length > 0) {
+                            // Add rows for asset IDs (roughly 6-8 asset IDs per row)
+                            itemRowCount += Math.ceil(itemAssetIds.length / 7);
+                        }
+                    } else {
+                        console.log('showAssetIds is disabled');
+                    }
+                    
+                    if (currentRowCount + itemRowCount > maxRowsPerPage) {
                         // Start new page
                         pages.push([...currentPageItems]);
                         currentPageItems = [];
@@ -11073,8 +11094,11 @@ function generatePagesContent(data, formattedDate) {
                     
                     // Add item to current department on current page
                     const currentDept = currentPageItems[currentPageItems.length - 1];
-                    currentDept.items.push(item);
-                    currentRowCount += 1;
+                    currentDept.items.push({
+                        ...item,
+                        assetIds: data.showAssetIds ? itemAssetIds : []
+                    });
+                    currentRowCount += itemRowCount;
                 });
             }
         });
@@ -11116,12 +11140,12 @@ function generatePagesContent(data, formattedDate) {
                     <div class="header-right">
                         <div class="delivery-order-title">DELIVERY ORDER</div>
                         <div class="do-number">
-                            No. : ${data.doNumber + '<br>'}
+                            No. : ${data.doNumber}<br>
                             Date : ${formattedDate}
-                            </div>
+                        </div>
                     </div>
                 </div>
-               
+                
                 <table class="items-table">
                     <thead>
                         <tr>
@@ -11143,7 +11167,7 @@ function generatePagesContent(data, formattedDate) {
                 pageItem.items.forEach(item => {
                     pagesHtml += `
                         <tr>
-                            <td>${item.description}</td>
+                            <td>${item.description}${item.assetIds && item.assetIds.length > 0 ? '<br><span style="font-size: 8px; color: #666; font-style: italic;">Asset IDs: ' + item.assetIds.join(', ') + '</span>' : ''}</td>
                             <td class="quantity-col">${item.quantity}</td>
                         </tr>
                     `;
@@ -11483,7 +11507,7 @@ async function populateDeliveryItemsPreview(event) {
   render();
 }
 
-// PATCH B — group items (with DO overrides + DO custom additions)
+// PATCH B – group items (with DO overrides + DO custom additions)
 function groupItemsByDepartment(event) {
   const departments = { Audio: [], Lighting: [], Video: [], MISC: [] };
   const deptName = (code) => (code === 'AX' ? 'Audio' : code === 'LX' ? 'Lighting' : code === 'VX' ? 'Video' : 'MISC');
@@ -11526,11 +11550,43 @@ function groupItemsByDepartment(event) {
     });
   }
 
-  // 3) Apply DO display overrides + DO-only custom additions (stored locally per event)
+  // 3) Also check assetsByDepartment for custom assets (MISC department)
+  if (event.assetsByDepartment && event.assetsByDepartment.MISC) {
+    const customAssetsFromDept = {};
+    event.assetsByDepartment.MISC.forEach(asset => {
+      if (asset.id && (asset.id.startsWith('[MISC]') || asset.id.startsWith('[LOAN]'))) {
+        const type = asset.id.startsWith('[MISC]') ? 'MISC' : 'LOAN';
+        const parts = asset.id.substring(type.length + 2).split(';');
+        const desc = (parts[0] || (type === 'MISC' ? 'Misc Item' : 'Loan Item')).trim();
+        const qty = parseInt(parts[1], 10) || 1;
+        
+        // Check if this custom asset is already counted from prepared_items
+        const alreadyCounted = departments.MISC.some(item => 
+          item.description === desc && item.source === 'custom-prepared'
+        );
+        
+        if (!alreadyCounted) {
+          customAssetsFromDept[desc] = (customAssetsFromDept[desc] || 0) + qty;
+        }
+      }
+    });
+    
+    let idx = departments.MISC.length;
+    Object.entries(customAssetsFromDept).forEach(([desc, qty]) => {
+      departments.MISC.push({
+        key: `CA|MISC|${idx++}|${desc}`,
+        description: desc,
+        quantity: String(qty),
+        source: 'custom-assets-dept'
+      });
+    });
+  }
+
+  // 4) Apply DO display overrides + DO-only custom additions (stored locally per event)
   const eventId = event.id || event.event_id || event.eventId || window.currentEventId || '0';
   const edits = getDoEdits(eventId);
 
-  // 3a) Apply overrides (by item.key)
+  // 4a) Apply overrides (by item.key)
   ['Audio','Lighting','Video','MISC'].forEach(d => {
     departments[d].forEach((item) => {
       const ov = edits.overrides[item.key];
@@ -11541,7 +11597,7 @@ function groupItemsByDepartment(event) {
     });
   });
 
-  // 3b) Append DO-only customs (user added just for DO printout)
+  // 4b) Append DO-only customs (user added just for DO printout)
   if (edits && edits.custom) {
     ['Audio','Lighting','Video','MISC'].forEach(d => {
       (edits.custom[d] || []).forEach((ci, i) => {
@@ -11555,9 +11611,90 @@ function groupItemsByDepartment(event) {
     });
   }
 
+  console.log('Final grouped departments:', departments);
   return departments;
 }
 
+function getAssetIdsByItem(event, item, department) {
+    console.log('=== getAssetIdsByItem Debug ===');
+    console.log('Department:', department);
+    console.log('Item:', item);
+    console.log('Item key:', item.key);
+    console.log('Item source:', item.source);
+    
+    const assetIds = [];
+    
+    if (!event.assetsByDepartment) {
+        console.log('No assetsByDepartment found in event');
+        return assetIds;
+    }
+    
+    console.log('Available departments:', Object.keys(event.assetsByDepartment));
+    
+    // Map department names to their codes
+    const deptCodeMap = {
+        'Audio': 'AX',
+        'Lighting': 'LX', 
+        'Video': 'VX',
+        'MISC': 'MISC'
+    };
+    
+    const deptCode = deptCodeMap[department] || department;
+    console.log(`Mapped department "${department}" to code "${deptCode}"`);
+    
+    if (!event.assetsByDepartment[deptCode]) {
+        console.log(`No assets found for department code: ${deptCode}`);
+        return assetIds;
+    }
+    
+    const departmentAssets = event.assetsByDepartment[deptCode];
+    console.log(`Found ${departmentAssets.length} assets in ${deptCode} department:`, departmentAssets);
+    
+    // For regular inventory items, find assets that match the item description
+    if (item.source === 'model') {
+        const itemKey = item.key;
+        const keyParts = itemKey.split('|');
+        console.log('Key parts:', keyParts);
+        
+        if (keyParts.length >= 3) {
+            const brand = keyParts[2]; // Brand is at index 2
+            const model = keyParts[3]; // Model is at index 3
+            console.log(`Looking for assets with brand: "${brand}", model: "${model}"`);
+            
+            // Find assets that match this brand/model combination
+            departmentAssets.forEach(asset => {
+                // Skip custom assets (they don't have brand/model)
+                if (asset.id.startsWith('[MISC]') || asset.id.startsWith('[LOAN]')) {
+                    console.log(`Skipping custom asset: ${asset.id}`);
+                    return;
+                }
+                
+                console.log(`Checking asset ${asset.id}:`, {
+                    id: asset.id,
+                    brand: asset.brand,
+                    model: asset.model,
+                    startsWithModel: asset.id.startsWith('[MODEL]')
+                });
+                
+                if (!asset.id.startsWith('[MODEL]') && 
+                    asset.brand === brand && 
+                    asset.model === model) {
+                    console.log(`✓ Match found: ${asset.id}`);
+                    assetIds.push(asset.id);
+                } else {
+                    console.log(`✗ No match for ${asset.id} (brand: "${asset.brand}" vs "${brand}", model: "${asset.model}" vs "${model}")`);
+                }
+            });
+        }
+    } else {
+        console.log(`Item source is "${item.source}", not "model" - skipping asset ID lookup`);
+    }
+    
+    console.log('Final asset IDs:', assetIds);
+    console.log('=== End Debug ===');
+    
+    return assetIds.sort();
+}
 
 function exportLogs() {
   if (logs.length === 0) {
