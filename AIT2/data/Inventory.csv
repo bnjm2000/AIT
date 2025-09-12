@@ -461,10 +461,10 @@ CDJ2000NXS#01,Pioneer,CDJ2000NXS,,Professional DJ multi player (Black),False,Fal
 CDJ2000NXS#02,Pioneer,CDJ2000NXS,,Professional DJ multi player (Black),False,False,,AX,Store,Store
 CDJ2000NXS2#01,Pioneer,CDJ2000NXS2,,Professional DJ multi player (Black),False,False,,AX,Store,
 CDJ2000NXS2#02,Pioneer,CDJ2000NXS2,,Professional DJ multi player (Black),False,False,,AX,Store,
-CDJ3000#01,Pioneer,CDJ3000,CDMP038151EH,Professional DJ multi player (Black),False,False,"2024/09/22	bnjm2000	Buttons and jog wheel melted under sun (F1 @ ShowCo) [Marked OOC]|2024/10/03	bnjm2000	Received spare from ShowCo while repairs underway (S/N: BHMP026156EH) [Cleared OOC]|2025/03/15	bnjm2000	Collected back, tested working. (Wedding of Barbara and Ker Wei)",AX,Store,Valentino Le Meta-Theatre Des Intimates @ ArtSpace
-CDJ3000#02,Pioneer,CDJ3000,CDMP038159EH,Professional DJ multi player (Black),False,False,"2024/09/22	bnjm2000	22/09/2024 - Buttons and jog wheel melted under sun (F1 @ ShowCo) [Marked OOC]|2024/10/03	bnjm2000	03/10/2024 - Received spare from ShowCo while repairs underway (S/N: BHMP026170EH) [Cleared OOC]|2025/03/15	bnjm2000	Collected back, tested working. (Wedding of Barbara and Ker Wei)",AX,Store,Valentino Le Meta-Theatre Des Intimates @ ArtSpace
+CDJ3000#01,Pioneer,CDJ3000,CDMP038151EH,Professional DJ multi player (Black),False,False,"2024/09/22	bnjm2000	Buttons and jog wheel melted under sun (F1 @ ShowCo) [Marked OOC]|2024/10/03	bnjm2000	Received spare from ShowCo while repairs underway (S/N: BHMP026156EH) [Cleared OOC]|2025/03/15	bnjm2000	Collected back, tested working. (Wedding of Barbara and Ker Wei)",AX,Store,Louis Vuitton Event @ MBS
+CDJ3000#02,Pioneer,CDJ3000,CDMP038159EH,Professional DJ multi player (Black),False,False,"2024/09/22	bnjm2000	22/09/2024 - Buttons and jog wheel melted under sun (F1 @ ShowCo) [Marked OOC]|2024/10/03	bnjm2000	03/10/2024 - Received spare from ShowCo while repairs underway (S/N: BHMP026170EH) [Cleared OOC]|2025/03/15	bnjm2000	Collected back, tested working. (Wedding of Barbara and Ker Wei)",AX,Store,Louis Vuitton Event @ MBS
 DJM900NXS#01,Pioneer,DJM-900NXS,,DJ Mixer,False,False,,AX,Store,
-DJM900NXS2#01,Pioneer,DJM-900NXS2,,4-channel pro-DJ mixer,False,False,,AX,Store,Valentino Le Meta-Theatre Des Intimates @ ArtSpace
+DJM900NXS2#01,Pioneer,DJM-900NXS2,,4-channel pro-DJ mixer,False,False,,AX,Store,Louis Vuitton Event @ MBS
 DJMA9#01,Pioneer,DJM-A9,,4-channel pro-DJ mixer,False,False,,AX,Store,Store
 COMBINE4#01,RF Venue,Combine4,J6803014t2d4-124,active transmitter combiner,False,False,,AX,Store,
 E904#01,Sennheiser,E904,1471264124,Dynamic cardioid instrument microphone,False,False,,AX,Store,
@@ -617,15 +617,15 @@ ULXD2#15,Shure,ULXD2,3CC16145063,Handheld Microphone [G52],False,False,,AX,Store
 ULXD2#16,Shure,ULXD2,3CC16145013,Handheld Microphone [G52],False,False,,AX,Store,
 ULXD2#17,Shure,ULXD2,3CC16145099,Handheld Microphone [G52],False,False,,AX,Store,
 ULXD2#18,Shure,ULXD2,3CC16145049,Handheld Microphone [G52],False,False,,AX,Store,
-ULXD4D#01,Shure,ULXD4D,4141682622,Dual Channel Receiver [L50],False,False,,AX,Store,Store
-ULXD4D#02,Shure,ULXD4D,4141064861,Dual Channel Receiver [L50],False,False,,AX,Store,Store
-ULXD4D#03,Shure,ULXD4D,4160634860,Dual Channel Receiver [L50],False,False,,AX,Store,
-ULXD4D#04,Shure,ULXD4D,4160634873,Dual Channel Receiver [L50],False,False,,AX,Store,Store
-ULXD4D#05,Shure,ULXD4D,,Dual Channel Receiver [G52],False,False,,AX,Store,
-ULXD4D#06,Shure,ULXD4D,,Dual Channel Receiver [G52],False,False,,AX,Store,
-ULXD4Q#01,Shure,ULXD4Q,4150560725,Quad Channel Receiver [L50],False,False,,AX,Store,Store
-ULXD4Q#02,Shure,ULXD4Q,,Quad Channel Receiver [G52],False,False,,AX,Store,
-ULXD4Q#03,Shure,ULXD4Q,,Quad Channel Receiver [G52],False,False,,AX,Store,
+ULXD4D#01,Shure,ULXD4D,,Dual Channel Receiver [L50],False,False,,AX,Store,Store
+ULXD4D#02,Shure,ULXD4D,,Dual Channel Receiver [L50],False,False,,AX,Store,Store
+ULXD4D#03,Shure,ULXD4D,,Dual Channel Receiver [L50],False,False,,AX,Store,
+ULXD4D#04,Shure,ULXD4D,,Dual Channel Receiver [L50],False,False,,AX,Store,Store
+ULXD4D#05,Shure,ULXD4D,3BH26487024,Dual Channel Receiver [G52],False,False,,AX,Store,
+ULXD4D#06,Shure,ULXD4D,3BH26487098,Dual Channel Receiver [G52],False,False,,AX,Store,
+ULXD4Q#01,Shure,ULXD4Q,,Quad Channel Receiver [L50],False,False,,AX,Store,Store
+ULXD4Q#02,Shure,ULXD4Q,3BF11462545,Quad Channel Receiver [G52],False,False,,AX,Store,
+ULXD4Q#03,Shure,ULXD4Q,3BF11462711,Quad Channel Receiver [G52],False,False,,AX,Store,
 WL184#01,Shure,WL184,,supercardioid condenser lavalier microphone,False,False,,AX,Store,
 WL184#02,Shure,WL184,,supercardioid condenser lavalier microphone,False,False,,AX,Store,
 WL184#03,Shure,WL184,,supercardioid condenser lavalier microphone,False,False,,AX,Store,
@@ -639,10 +639,10 @@ TALENTCELL#04,TalentCell,YB1208300-USB,20240527004,Lithuim ion battery pack,Fals
 TALENTCELL#06,TalentCell,YB1208300-USB,20240527006,Lithuim ion battery pack,False,False,,AX,Store,
 TALENTCELL#07,TalentCell,YB1208300-USB,20240527007,Lithuim ion battery pack,False,False,,AX,Store,
 TALENTCELL#08,TalentCell,YB1208300-USB,20240527008,Lithuim ion battery pack,False,False,,AX,Store,
-IP1000#01,Turbosound,IP1000,S231100118DCW,Powered Column Loudspeaker,False,False,,AX,Store,Store
-IP1000#02,Turbosound,IP1000,S231100129DCW,Powered Column Loudspeaker,False,False,,AX,Store,Store
-IP1000#03,Turbosound,IP1000,S211200024DCW,Powered Column Loudspeaker,False,False,,AX,Store,Store
-IP1000#04,Turbosound,IP1000,S231100119DCW,Powered Column Loudspeaker,False,False,,AX,Store,Store
+IP1000#01,Turbosound,IP1000,S231100118DCW,Powered Column Loudspeaker,False,False,,AX,Store,Louis Vuitton Event @ MBS
+IP1000#02,Turbosound,IP1000,S231100129DCW,Powered Column Loudspeaker,False,False,,AX,Store,Louis Vuitton Event @ MBS
+IP1000#03,Turbosound,IP1000,S211200024DCW,Powered Column Loudspeaker,False,False,,AX,Store,Louis Vuitton Event @ MBS
+IP1000#04,Turbosound,IP1000,S231100119DCW,Powered Column Loudspeaker,False,False,,AX,Store,Louis Vuitton Event @ MBS
 IP1000#05,Turbosound,IP1000,S211200022DCW,Powered Column Loudspeaker,False,False,,AX,Store,Store
 IP1000#06,Turbosound,IP1000,S231100120DCW,Powered Column Loudspeaker,False,False,,AX,Store,Store
 IP1000#07,Turbosound,IP1000,S231100118DCW,Powered Column Loudspeaker,False,False,,AX,Store,Store
@@ -672,8 +672,8 @@ DM3#01,Yamaha,DM3,BGDK01029,Digital Mixer,False,False,2024/09/04	bnjm2000	Report
 DM3#02,Yamaha,DM3,BGDI01076,Digital Mixer,False,False,,AX,Store,Store
 DM7#01,Yamaha,DM7,21EGEI01036,Digital Mixer,False,False,,AX,Store,
 DXR8#01,Yamaha,DXR8,EESM01180,"Active80"" Speaker",False,False,,AX,Store,
-DXR10#01,Yamaha,DXR10,,"Active 10"" Speaker",False,False,,AX,Store,Store
-DXR10#02,Yamaha,DXR10,,"Active 10"" Speaker",False,False,,AX,Store,Store
+DXR10#01,Yamaha,DXR10,,"Active 10"" Speaker",False,False,,AX,Store,Louis Vuitton Event @ MBS
+DXR10#02,Yamaha,DXR10,,"Active 10"" Speaker",False,False,,AX,Store,Louis Vuitton Event @ MBS
 DXR10#03,Yamaha,DXR10,,"Active 10"" Speaker",False,False,,AX,Store,Store
 DXR10#04,Yamaha,DXR10,,"Active 10"" Speaker",False,False,,AX,Store,
 DXR12#01,Yamaha,DXR12,EETK01327,"Active 12"" Speaker",False,False,"2023/07/26	bnjm2000	repaired|2023/08/05	bnjm2000	dropped from ledge, distorting (Siong Leng Musical Association @ Thian Hock Keng Temple) [Marked OOC]|2024/09/12	bnjm2000	sent to Yamaha for servicing [Location: Yamaha Service Center]|2024/10/22	bnjm2000	Replace fan - $18
@@ -713,7 +713,7 @@ FURMAN#02,FURMAN,M-10LX E,,Power Conditioner and distributor,False,False,,AX,Sto
 FURMAN#03,FURMAN,M-10LX E,,Power Conditioner and distributor,False,False,,AX,Store,
 FURMAN#04,FURMAN,M-10LX E,,Power Conditioner and distributor,False,False,,AX,Store,
 UA845UWB#01,Shure,UA845UWB,,Antenna and power distributor,False,False,,AX,Store,
-UA845#01,Shure,UA845,,UHF Antenna Distribution System,False,False,,AX,Store,
+UA845#01,Shure,UA845,2AL11380223,UHF Antenna Distribution System,False,False,,AX,Store,
 COMPACTXT#01,GrandMA3,Compact XT,1542000000-101464,Console,False,False,,LX,Store,Store
 MA2PCWING#01,GrandMA2,PCWing,,Console,False,False,,LX,Store,
 PEARL2010#01,Avolites,Pearl 2010,,Console,False,False,,LX,Store,
@@ -1061,3 +1061,4 @@ BA70#17,Sennheiser,BA70,,Lithium Ion rechargeable battery,False,False,,AX,Store,
 BA70#18,Sennheiser,BA70,,Lithium Ion rechargeable battery,False,False,,AX,Store,
 BA70#19,Sennheiser,BA70,,Lithium Ion rechargeable battery,False,False,,AX,Store,
 BA70#20,Sennheiser,BA70,,Lithium Ion rechargeable battery,False,False,,AX,Store,
+SG105#01,TP-Link,TL-SG105,22550WN008358,5-port network switch,False,False,,AX,Store,
