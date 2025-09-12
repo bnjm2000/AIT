@@ -1,31 +1,3 @@
-2025/07/24 16:07:31,bnjm2000,Added 9x DPA DAD 6010 model to event 38 (total: 9)
-2025/07/24 16:07:40,bnjm2000,Removed Shure SM57 model from event 38
-2025/07/24 16:10:34,bnjm2000,Created event 40: Dry Hire: Avery Events via web interface
-2025/07/24 16:10:41,bnjm2000,Added 12x Robe ESPRITE model to event 40 (total: 12)
-2025/07/24 16:10:46,bnjm2000,Added 8x Pomelo Photon Strike M model to event 40 (total: 8)
-2025/07/24 16:26:40,bnjm2000,Assigned specific asset CMD8#02 to event 37
-2025/07/24 16:26:49,bnjm2000,Assigned specific asset CMD8#09 to event 37
-2025/07/24 16:26:56,bnjm2000,Assigned specific asset CMD8#04 to event 37
-2025/07/28 17:15:02,system,Failed login attempt for username: bnjm2000
-2025/07/28 17:15:05,system,Failed login attempt for username: bnjm2000
-2025/07/28 17:15:11,bnjm2000,User bnjm2000 logged in via web interface
-2025/07/28 17:15:57,bnjm2000,User bnjm2000 forced event 34 (Dry Hire: Avery Events) state from Returning to Ongoing
-2025/07/28 17:16:04,bnjm2000,User bnjm2000 removed forced state override for event 34 (Dry Hire: Avery Events): Ongoing -> Returning
-2025/07/28 17:16:17,bnjm2000,User bnjm2000 removed forced state override for event 37 (SingHealth DUKE-NUS Gala @ TRCM): Overdue -> Overdue
-2025/07/28 17:16:21,bnjm2000,User bnjm2000 forced event 37 (SingHealth DUKE-NUS Gala @ TRCM) state from Overdue to Preparing
-2025/07/28 17:16:46,bnjm2000,Assigned specific asset SB18#05 to event 37
-2025/07/28 17:16:49,bnjm2000,Assigned specific asset SB18#06 to event 37
-2025/07/28 17:16:50,bnjm2000,Assigned specific asset SB18#07 to event 37
-2025/07/28 17:16:58,bnjm2000,Assigned specific asset SB18#08 to event 37
-2025/07/28 17:17:44,bnjm2000,Assigned specific asset CMD8#10 to event 37
-2025/07/28 17:17:46,bnjm2000,Assigned specific asset CMD8#08 to event 37
-2025/07/28 17:17:54,bnjm2000,Assigned specific asset CMD8#01 to event 37
-2025/07/28 17:18:33,bnjm2000,Assigned specific asset 4488#12 to event 37
-2025/07/28 17:19:01,bnjm2000,Assigned specific asset 4488#11 to event 37
-2025/07/28 17:20:01,bnjm2000,Returned asset 4099#05 from event 37
-2025/07/28 17:20:02,bnjm2000,Returned asset 4099#17 from event 37
-2025/07/28 17:20:03,bnjm2000,Returned asset 4099#01 from event 37
-2025/07/28 17:20:03,bnjm2000,Returned asset 4099#15 from event 37
 2025/07/28 17:20:04,bnjm2000,Returned asset 4099#14 from event 37
 2025/07/28 17:20:04,bnjm2000,Returned asset 4099#16 from event 37
 2025/07/28 17:20:05,bnjm2000,Returned asset 4099#04 from event 37
@@ -999,3 +971,31 @@
 2025/09/11 15:02:35,bnjm2000,Added 4x Samsung LH75QMCEBGCXXS model to event 55 (total: 4)
 2025/09/11 15:02:41,bnjm2000,Removed Samsung LH75QMCEBGCXXS model from event 55
 2025/09/11 15:02:48,bnjm2000,Added 4x Samsung LH75QMCEBGCXXS model to event 55 (total: 4)
+2025/09/12 16:34:23,bnjm2000,Created event 58: Dry Hire: Avery Events via web interface
+2025/09/12 16:34:31,bnjm2000,Added 1x Shure ULXD4Q model to event 58 (total: 1)
+2025/09/12 16:34:38,bnjm2000,Added 1x Shure ULXD2 model to event 58 (total: 1)
+2025/09/12 16:34:41,bnjm2000,Added 1x FURMAN M-10LX E model to event 58 (total: 1)
+2025/09/12 16:34:46,bnjm2000,Added 1x Shure UA845UWB model to event 58 (total: 1)
+2025/09/12 16:36:57,bnjm2000,Added 2x Shure UA874WB model to event 58 (total: 2)
+2025/09/12 16:37:08,bnjm2000,Assigned asset [MISC]BNC Cable - 3m to event 58 (unprepared)
+2025/09/12 16:37:13,bnjm2000,Assigned asset [MISC]BNC Cable - 5m to event 58 (unprepared)
+2025/09/12 16:37:26,bnjm2000,Assigned asset [MISC]8-core XLR cable - 3m to event 58 (unprepared)
+2025/09/12 16:37:45,bnjm2000,Prepared asset [MISC]8-core XLR cable - 3m for event 58
+2025/09/12 16:37:46,bnjm2000,Prepared asset [MISC]BNC Cable - 3m for event 58
+2025/09/12 16:37:46,bnjm2000,Prepared asset [MISC]BNC Cable - 5m for event 58
+2025/09/12 16:37:48,bnjm2000,Assigned specific asset FURMAN#01 to event 58
+2025/09/12 16:37:50,bnjm2000,Assigned specific asset UA845UWB#01 to event 58
+2025/09/12 16:37:53,bnjm2000,Assigned specific asset UA874WB#01 to event 58
+2025/09/12 16:37:54,bnjm2000,Assigned specific asset UA874WB#02 to event 58
+2025/09/12 16:38:00,bnjm2000,Assigned specific asset ULXD2#13 to event 58
+2025/09/12 16:38:01,bnjm2000,Assigned specific asset ULXD2#15 to event 58
+2025/09/12 16:38:15,bnjm2000,Removed Shure ULXD2 model from event 58
+2025/09/12 16:38:15,bnjm2000,Added 6x Shure ULXD2 model to event 58 (total: 6)
+2025/09/12 16:38:20,bnjm2000,Removed Shure ULXD4Q model from event 58
+2025/09/12 16:38:20,bnjm2000,Added 2x Shure ULXD4Q model to event 58 (total: 2)
+2025/09/12 16:38:29,bnjm2000,Assigned specific asset ULXD2#14 to event 58
+2025/09/12 16:38:31,bnjm2000,Assigned specific asset ULXD2#16 to event 58
+2025/09/12 16:38:32,bnjm2000,Assigned specific asset ULXD2#17 to event 58
+2025/09/12 16:38:32,bnjm2000,Assigned specific asset ULXD2#18 to event 58
+2025/09/12 16:38:34,bnjm2000,Assigned specific asset ULXD4Q#02 to event 58
+2025/09/12 16:38:39,bnjm2000,Assigned specific asset ULXD4Q#03 to event 58

@@ -611,12 +611,12 @@ ULXD2#11,Shure,ULXD2,2RC0141727,Handheld Microphone [L50],False,True,"2025/06/21
 Replace rubber slot $5
 Service charge $60",AX,Store,E&E
 ULXD2#12,Shure,ULXD2,2NK0771082-01,Handheld Microphone [L50],False,False,,AX,Store,Store
-ULXD2#13,Shure,ULXD2,3CC16144846,Handheld Microphone [G52],False,False,,AX,Store,
-ULXD2#14,Shure,ULXD2,3CC16144872,Handheld Microphone [G52],False,False,,AX,Store,
-ULXD2#15,Shure,ULXD2,3CC16145063,Handheld Microphone [G52],False,False,,AX,Store,
-ULXD2#16,Shure,ULXD2,3CC16145013,Handheld Microphone [G52],False,False,,AX,Store,
-ULXD2#17,Shure,ULXD2,3CC16145099,Handheld Microphone [G52],False,False,,AX,Store,
-ULXD2#18,Shure,ULXD2,3CC16145049,Handheld Microphone [G52],False,False,,AX,Store,
+ULXD2#13,Shure,ULXD2,3CC16144846,Handheld Microphone [G52],False,False,,AX,Store,Dry Hire: Avery Events
+ULXD2#14,Shure,ULXD2,3CC16144872,Handheld Microphone [G52],False,False,,AX,Store,Dry Hire: Avery Events
+ULXD2#15,Shure,ULXD2,3CC16145063,Handheld Microphone [G52],False,False,,AX,Store,Dry Hire: Avery Events
+ULXD2#16,Shure,ULXD2,3CC16145013,Handheld Microphone [G52],False,False,,AX,Store,Dry Hire: Avery Events
+ULXD2#17,Shure,ULXD2,3CC16145099,Handheld Microphone [G52],False,False,,AX,Store,Dry Hire: Avery Events
+ULXD2#18,Shure,ULXD2,3CC16145049,Handheld Microphone [G52],False,False,,AX,Store,Dry Hire: Avery Events
 ULXD4D#01,Shure,ULXD4D,,Dual Channel Receiver [L50],False,False,,AX,Store,Store
 ULXD4D#02,Shure,ULXD4D,,Dual Channel Receiver [L50],False,False,,AX,Store,Store
 ULXD4D#03,Shure,ULXD4D,,Dual Channel Receiver [L50],False,False,,AX,Store,
@@ -624,8 +624,8 @@ ULXD4D#04,Shure,ULXD4D,,Dual Channel Receiver [L50],False,False,,AX,Store,Store
 ULXD4D#05,Shure,ULXD4D,3BH26487024,Dual Channel Receiver [G52],False,False,,AX,Store,
 ULXD4D#06,Shure,ULXD4D,3BH26487098,Dual Channel Receiver [G52],False,False,,AX,Store,
 ULXD4Q#01,Shure,ULXD4Q,,Quad Channel Receiver [L50],False,False,,AX,Store,Store
-ULXD4Q#02,Shure,ULXD4Q,3BF11462545,Quad Channel Receiver [G52],False,False,,AX,Store,
-ULXD4Q#03,Shure,ULXD4Q,3BF11462711,Quad Channel Receiver [G52],False,False,,AX,Store,
+ULXD4Q#02,Shure,ULXD4Q,3BF11462545,Quad Channel Receiver [G52],False,False,,AX,Store,Dry Hire: Avery Events
+ULXD4Q#03,Shure,ULXD4Q,3BF11462711,Quad Channel Receiver [G52],False,False,,AX,Store,Dry Hire: Avery Events
 WL184#01,Shure,WL184,,supercardioid condenser lavalier microphone,False,False,,AX,Store,
 WL184#02,Shure,WL184,,supercardioid condenser lavalier microphone,False,False,,AX,Store,
 WL184#03,Shure,WL184,,supercardioid condenser lavalier microphone,False,False,,AX,Store,
@@ -708,12 +708,14 @@ SB900#07,Shure,SB900,,Rechargeable Battery,False,False,,AX,Store,
 SB900#08,Shure,SB900,,Rechargeable Battery,False,False,,AX,Store,
 SB900#09,Shure,SB900,,Rechargeable Battery,False,False,,AX,Store,
 SB900#10,Shure,SB900,,Rechargeable Battery,False,False,,AX,Store,
-FURMAN#01,FURMAN,M-10LX E,,Power Conditioner and distributor,False,False,,AX,Store,
+FURMAN#01,FURMAN,M-10LX E,,Power Conditioner and distributor,False,False,,AX,Store,Dry Hire: Avery Events
 FURMAN#02,FURMAN,M-10LX E,,Power Conditioner and distributor,False,False,,AX,Store,
 FURMAN#03,FURMAN,M-10LX E,,Power Conditioner and distributor,False,False,,AX,Store,
 FURMAN#04,FURMAN,M-10LX E,,Power Conditioner and distributor,False,False,,AX,Store,
-UA845UWB#01,Shure,UA845UWB,,Antenna and power distributor,False,False,,AX,Store,
+UA845UWB#01,Shure,UA845UWB,,Antenna and power distributor,False,False,,AX,Store,Dry Hire: Avery Events
 UA845#01,Shure,UA845,2AL11380223,UHF Antenna Distribution System,False,False,,AX,Store,
+UA874WB#01,Shure,UA874WB,,Directional Antenna,False,False,,AX,Store,Dry Hire: Avery Events
+UA874WB#02,Shure,UA874WB,,Directional Antenna,False,False,,AX,Store,Dry Hire: Avery Events
 COMPACTXT#01,GrandMA3,Compact XT,1542000000-101464,Console,False,False,,LX,Store,Store
 MA2PCWING#01,GrandMA2,PCWing,,Console,False,False,,LX,Store,
 PEARL2010#01,Avolites,Pearl 2010,,Console,False,False,,LX,Store,
