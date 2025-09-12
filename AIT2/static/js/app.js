@@ -11326,6 +11326,253 @@ async function ensureAssetsLoaded() {
     }
 }
 
+// Add these functions before the populateDeliveryItemsPreview function
+
+// Helper function to reorder items within a department
+// Replace the existing reordering functions with these enhanced versions
+
+// Enhanced helper function to reorder any type of items within a department
+function reorderDoItems(eventId, dept, fromIndex, toIndex) {
+  const state = getDoEdits(eventId);
+  
+  // Get the current items for this department from groupItemsByDepartment
+  const event = events.find(e => e.id === eventId || e.event_id === eventId);
+  if (!event) return false;
+  
+  const depts = groupItemsByDepartment(event);
+  const items = depts[dept] || [];
+  
+  if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0 || 
+      fromIndex >= items.length || toIndex >= items.length) {
+    return false;
+  }
+
+  // Create a new ordering array for this department if it doesn't exist
+  if (!state.ordering) {
+    state.ordering = {};
+  }
+  if (!state.ordering[dept]) {
+    // Initialize ordering with current item keys
+    state.ordering[dept] = items.map(item => item.key);
+  }
+
+  // Reorder in the ordering array
+  const ordering = [...state.ordering[dept]];
+  const [movedKey] = ordering.splice(fromIndex, 1);
+  ordering.splice(toIndex, 0, movedKey);
+  
+  state.ordering[dept] = ordering;
+  saveDoEdits(eventId, state);
+  return true;
+}
+
+// Enhanced function to apply ordering to grouped items
+function applyDoOrdering(items, dept, eventId) {
+  const state = getDoEdits(eventId);
+  
+  if (!state.ordering || !state.ordering[dept]) {
+    return items; // Return original order if no custom ordering
+  }
+  
+  const ordering = state.ordering[dept];
+  const orderedItems = [];
+  const itemsMap = new Map(items.map(item => [item.key, item]));
+  
+  // First, add items in the specified order
+  ordering.forEach(key => {
+    const item = itemsMap.get(key);
+    if (item) {
+      orderedItems.push(item);
+      itemsMap.delete(key); // Remove from map to avoid duplicates
+    }
+  });
+  
+  // Then, add any new items that weren't in the original ordering
+  itemsMap.forEach(item => {
+    orderedItems.push(item);
+  });
+  
+  return orderedItems;
+}
+
+// Setup drag and drop handlers for DO items (enhanced)
+function setupDoItemDragHandlers(previewContainer, eventId) {
+  let draggedElement = null;
+  let draggedIndex = null;
+  let draggedDept = null;
+
+  previewContainer.querySelectorAll('.do-item-row[draggable="true"]').forEach(row => {
+    row.addEventListener('dragstart', (e) => {
+      draggedElement = e.target;
+      draggedIndex = parseInt(e.target.getAttribute('data-index'));
+      draggedDept = e.target.getAttribute('data-dept');
+      e.target.classList.add('dragging');
+      
+      // Set drag data
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/html', e.target.outerHTML);
+    });
+
+    row.addEventListener('dragend', (e) => {
+      e.target.classList.remove('dragging');
+      draggedElement = null;
+      draggedIndex = null;
+      draggedDept = null;
+      
+      // Remove drag-over class from all rows
+      previewContainer.querySelectorAll('.do-item-row').forEach(r => r.classList.remove('drag-over'));
+    });
+
+    row.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      
+      // Only allow dropping within same department
+      const targetDept = e.target.closest('.do-item-row').getAttribute('data-dept');
+      if (targetDept === draggedDept) {
+        e.target.closest('.do-item-row').classList.add('drag-over');
+      }
+    });
+
+    row.addEventListener('dragleave', (e) => {
+      e.target.closest('.do-item-row').classList.remove('drag-over');
+    });
+
+    row.addEventListener('drop', (e) => {
+      e.preventDefault();
+      const targetRow = e.target.closest('.do-item-row');
+      const targetIndex = parseInt(targetRow.getAttribute('data-index'));
+      const targetDept = targetRow.getAttribute('data-dept');
+      
+      targetRow.classList.remove('drag-over');
+      
+      // Only allow dropping within same department
+      if (targetDept !== draggedDept || targetIndex === draggedIndex) {
+        return;
+      }
+
+      // Attempt to reorder the items
+      if (reorderDoItems(eventId, draggedDept, draggedIndex, targetIndex)) {
+        // Refresh the display
+        const event = events.find(e => e.id === eventId || e.event_id === eventId);
+        if (event) {
+          populateDeliveryItemsPreview(event);
+        }
+        if (typeof showNotification === 'function') {
+          showNotification('success', 'Items reordered successfully');
+        }
+      } else {
+        if (typeof showNotification === 'function') {
+          showNotification('warning', 'Unable to reorder items');
+        }
+      }
+    });
+  });
+
+  // Prevent drag on form inputs
+  previewContainer.querySelectorAll('input').forEach(input => {
+    input.addEventListener('dragstart', (e) => {
+      e.preventDefault();
+      return false;
+    });
+  });
+}
+
+// Helper function to clear ordering when DO edits are reset
+function clearDoOrdering(eventId) {
+  const state = getDoEdits(eventId);
+  if (state.ordering) {
+    delete state.ordering;
+    saveDoEdits(eventId, state);
+  }
+}
+
+// Setup drag and drop handlers for DO items
+function setupDoItemDragHandlers(previewContainer, eventId) {
+  let draggedElement = null;
+  let draggedIndex = null;
+  let draggedDept = null;
+
+  previewContainer.querySelectorAll('.do-item-row[draggable="true"]').forEach(row => {
+    row.addEventListener('dragstart', (e) => {
+      draggedElement = e.target;
+      draggedIndex = parseInt(e.target.getAttribute('data-index'));
+      draggedDept = e.target.getAttribute('data-dept');
+      e.target.classList.add('dragging');
+      
+      // Set drag data
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/html', e.target.outerHTML);
+    });
+
+    row.addEventListener('dragend', (e) => {
+      e.target.classList.remove('dragging');
+      draggedElement = null;
+      draggedIndex = null;
+      draggedDept = null;
+      
+      // Remove drag-over class from all rows
+      previewContainer.querySelectorAll('.do-item-row').forEach(r => r.classList.remove('drag-over'));
+    });
+
+    row.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      
+      // Only allow dropping within same department
+      const targetDept = e.target.closest('.do-item-row').getAttribute('data-dept');
+      if (targetDept === draggedDept) {
+        e.target.closest('.do-item-row').classList.add('drag-over');
+      }
+    });
+
+    row.addEventListener('dragleave', (e) => {
+      e.target.closest('.do-item-row').classList.remove('drag-over');
+    });
+
+    row.addEventListener('drop', (e) => {
+      e.preventDefault();
+      const targetRow = e.target.closest('.do-item-row');
+      const targetIndex = parseInt(targetRow.getAttribute('data-index'));
+      const targetDept = targetRow.getAttribute('data-dept');
+      
+      targetRow.classList.remove('drag-over');
+      
+      // Only allow dropping within same department
+      if (targetDept !== draggedDept || targetIndex === draggedIndex) {
+        return;
+      }
+
+      // Attempt to reorder the items
+      if (reorderDoItems(eventId, draggedDept, draggedIndex, targetIndex)) {
+        // Refresh the display
+        const event = events.find(e => e.id === eventId || e.event_id === eventId);
+        if (event) {
+          populateDeliveryItemsPreview(event);
+        }
+        if (typeof showNotification === 'function') {
+          showNotification('success', 'Items reordered successfully');
+        }
+      } else {
+        if (typeof showNotification === 'function') {
+          showNotification('warning', 'Can only reorder custom items within the same department');
+        }
+      }
+    });
+  });
+}
+
+// Helper function to update item indices after reordering
+function updateDoItemIndices(eventId, dept) {
+  const state = getDoEdits(eventId);
+  
+  // Re-index custom items to maintain consistency
+  if (state.custom[dept]) {
+    state.custom[dept] = state.custom[dept].map((item, index) => ({...item}));
+    saveDoEdits(eventId, state);
+  }
+}
+
 // NON-BULLET DO PREVIEW + EDIT MODE with consistent styling
 async function populateDeliveryItemsPreview(event) {
   const previewContainer = document.getElementById('deliveryItemsPreview');
@@ -11468,6 +11715,27 @@ async function populateDeliveryItemsPreview(event) {
           color: #6c757d;
           font-style: italic;
         }
+
+        .do-item-row.dragging {
+          opacity: 0.5;
+        }
+        .do-item-row.drag-over {
+          border-top: 2px solid #667eea;
+        }
+        .do-drag-handle {
+          cursor: grab;
+          padding: 8px;
+          margin-right: 8px;
+          color: #6c757d;
+          font-size: 14px;
+          user-select: none;
+        }
+        .do-drag-handle:hover {
+          color: #495057;
+        }
+        .do-drag-handle:active {
+          cursor: grabbing;
+        }
       </style>
 
       <div class="do-items-container">
@@ -11493,7 +11761,8 @@ async function populateDeliveryItemsPreview(event) {
         
         if (editMode) {
           return `
-            <div class="do-item-row" data-key="${escA(item.key)}" data-kind="${escA(item.source || '')}" data-dept="${escA(deptName)}" data-index="${i}">
+            <div class="do-item-row" draggable="true" data-key="${escA(item.key)}" data-kind="${escA(item.source || '')}" data-dept="${escA(deptName)}" data-index="${i}">
+              <div class="do-drag-handle">⋮⋮</div>
               <div class="do-item-description">
                 <input type="text" class="do-desc form-input" value="${escA(item.description)}" placeholder="Item description">
               </div>
@@ -11543,7 +11812,7 @@ async function populateDeliveryItemsPreview(event) {
       return `
         <div class="do-department-section">
           <div class="do-dept-header">${esc(deptName)} Department</div>
-          <div class="do-items-list">
+          <div class="do-items-list" data-dept="${escA(deptName)}">
             ${rows || '<div class="no-items-message">No items in this department</div>'}
           </div>
           ${addSection}
@@ -11570,6 +11839,7 @@ async function populateDeliveryItemsPreview(event) {
     if (resetBtn) {
       resetBtn.onclick = () => {
         clearDoEdits(eventId);
+        clearDoOrdering(eventId); // Add this line
         if (typeof showNotification === 'function') {
           showNotification('success', 'DO edits reset');
         }
@@ -11679,12 +11949,28 @@ async function populateDeliveryItemsPreview(event) {
         }
       });
     });
+
+    // Setup drag and drop handlers for reordering (only in edit mode)
+    if (editMode) {
+      setupDoItemDragHandlers(previewContainer, eventId);
+    }
+
+    // Also update the drag handles to prevent dragging on form inputs
+    previewContainer.querySelectorAll('.do-drag-handle').forEach(handle => {
+      handle.addEventListener('mousedown', (e) => {
+        // Prevent drag from starting on input fields
+        const row = handle.closest('.do-item-row');
+        const inputs = row.querySelectorAll('input');
+        inputs.forEach(input => {
+          input.setAttribute('draggable', 'false');
+        });
+      });
+    });
   };
 
   render();
 }
 
-// PATCH B – group items (with DO overrides + DO custom additions)
 function groupItemsByDepartment(event) {
   const departments = { Audio: [], Lighting: [], Video: [], MISC: [] };
   const deptName = (code) => (code === 'AX' ? 'Audio' : code === 'LX' ? 'Lighting' : code === 'VX' ? 'Video' : 'MISC');
@@ -11787,6 +12073,11 @@ function groupItemsByDepartment(event) {
       });
     });
   }
+
+  // 5) Apply custom ordering if it exists
+  ['Audio','Lighting','Video','MISC'].forEach(d => {
+    departments[d] = applyDoOrdering(departments[d], d, eventId);
+  });
 
   console.log('Final grouped departments:', departments);
   return departments;
