@@ -11326,12 +11326,14 @@ async function ensureAssetsLoaded() {
     }
 }
 
-// NON-BULLET DO PREVIEW + EDIT MODE
+// NON-BULLET DO PREVIEW + EDIT MODE with consistent styling
 async function populateDeliveryItemsPreview(event) {
   const previewContainer = document.getElementById('deliveryItemsPreview');
   if (!previewContainer) return;
 
-  try { if (typeof ensureAssetsLoaded === 'function') await ensureAssetsLoaded(); } catch {}
+  try { 
+    if (typeof ensureAssetsLoaded === 'function') await ensureAssetsLoaded(); 
+  } catch {}
 
   const eventId = event.id || event.event_id || window.currentEventId || '0';
   const edits = getDoEdits(eventId);
@@ -11340,120 +11342,261 @@ async function populateDeliveryItemsPreview(event) {
     const depts = groupItemsByDepartment(event);
     const editMode = !!document.querySelector('#doEditToggle')?.checked;
 
-    // inline styles to match pre-bullet layout
+    // Updated styles to match application theme
     let html = `
       <style>
-        .do-toolbar{display:flex;gap:12px;align-items:center;margin-bottom:8px;}
-        .dept-title{margin:6px 0 2px;}
-        .do-list{margin:0;padding:0;}
-        .do-row{display:flex;align-items:center;gap:12px;padding:4px 0;border-bottom:1px dotted #ddd;}
-        .do-row:last-child{border-bottom:none;}
-        .do-col-desc{flex:1;min-width:320px}
-        .do-col-qty{min-width:70px;text-align:right;font-weight:600}
-        .quantity-badge{
-          display:inline-block;
-          background:#6f42c1;
-          color:#fff;
-          padding:2px 8px;
-          border-radius:12px;
-          font-size:12px;
-          font-weight:600;
-          min-width:32px;
-          text-align:center;
+        .do-items-container {
+          background: white;
+          border-radius: 8px;
+          overflow: hidden;
         }
-        .do-add{display:flex;gap:8px;align-items:center;margin-top:6px;}
+        .do-toolbar {
+          background: #f8f9fa;
+          padding: 15px 20px;
+          border-bottom: 1px solid #e9ecef;
+          display: flex;
+          gap: 15px;
+          align-items: center;
+        }
+        .do-toolbar label {
+          display: flex;
+          gap: 8px;
+          align-items: center;
+          font-weight: 500;
+          color: #495057;
+          cursor: pointer;
+        }
+        .do-department-section {
+          border-bottom: 1px solid #f1f3f4;
+        }
+        .do-department-section:last-child {
+          border-bottom: none;
+        }
+        .do-dept-header {
+          background: #f8f9fa;
+          padding: 12px 20px;
+          font-weight: 600;
+          color: #495057;
+          border-bottom: 1px solid #e9ecef;
+        }
+        .do-items-list {
+          padding: 0;
+        }
+        .do-item-row {
+          display: flex;
+          align-items: center;
+          padding: 12px 20px;
+          border-bottom: 1px solid #f8f9fa;
+          transition: background-color 0.2s ease;
+        }
+        .do-item-row:hover {
+          background-color: #f8f9fa;
+        }
+        .do-item-row:last-child {
+          border-bottom: none;
+        }
+        .do-item-description {
+          flex: 1;
+          min-width: 0;
+          margin-right: 15px;
+        }
+        .do-item-description input {
+          width: 100%;
+          border: 1px solid #e9ecef;
+          border-radius: 4px;
+          padding: 8px 12px;
+          font-size: 14px;
+        }
+        .do-item-description input:focus {
+          outline: none;
+          border-color: #667eea;
+          box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
+        }
+        .do-item-quantity {
+          width: 80px;
+          margin-right: 15px;
+        }
+        .do-item-quantity input {
+          width: 100%;
+          text-align: center;
+          border: 1px solid #e9ecef;
+          border-radius: 4px;
+          padding: 8px;
+          font-size: 14px;
+          font-weight: 600;
+        }
+        .do-item-quantity input:focus {
+          outline: none;
+          border-color: #667eea;
+          box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
+        }
+        .do-quantity-badge {
+          display: inline-block;
+          background: #6f42c1;
+          color: white;
+          padding: 4px 12px;
+          border-radius: 12px;
+          font-size: 12px;
+          font-weight: 600;
+          min-width: 32px;
+          text-align: center;
+        }
+        .do-item-actions {
+          display: flex;
+          gap: 8px;
+        }
+        .do-add-section {
+          background: #f8f9fa;
+          padding: 15px 20px;
+          border-top: 1px solid #e9ecef;
+        }
+        .do-add-form {
+          display: flex;
+          gap: 10px;
+          align-items: center;
+        }
+        .do-add-description {
+          flex: 1;
+          min-width: 300px;
+        }
+        .do-add-quantity {
+          width: 80px;
+        }
+        .no-items-message {
+          padding: 40px 20px;
+          text-align: center;
+          color: #6c757d;
+          font-style: italic;
+        }
       </style>
 
-      <div class="do-toolbar">
-        <label style="display:flex;gap:6px;align-items:center;">
-          <input type="checkbox" id="doEditToggle"${editMode ? ' checked' : ''}> Edit items
-        </label>
-        <button class="btn btn-sm btn-outline-secondary" id="doResetEdits">Reset edits</button>
-      </div>
+      <div class="do-items-container">
+        <div class="do-toolbar">
+          <label>
+            <input type="checkbox" id="doEditToggle"${editMode ? ' checked' : ''}> 
+            <span>Edit items for delivery order</span>
+          </label>
+          <button class="btn btn-secondary" id="doResetEdits" title="Reset all edits and return to original items">
+            Reset Edits
+          </button>
+        </div>
     `;
 
-    const esc = (s)=>escapeHtml(s);
-    const escA = (s)=> (typeof escapeHtmlAttr === 'function' ? escapeHtmlAttr(s) : esc(String(s)));
+    const esc = (s) => escapeHtml(s);
+    const escA = (s) => (typeof escapeHtmlAttr === 'function' ? escapeHtmlAttr(s) : esc(s));
 
+    // Generate department sections
     const section = (deptName, items) => {
-      let rows = '';
-
-      items.forEach((item) => {
-        if (!editMode) {
-          rows += `
-            <div class="do-row">
-              <div class="do-col-desc">${esc(item.description)}</div>
-              <div class="do-col-qty">
-                <span class="quantity-badge">${esc(String(item.quantity))}</span>
+      const rows = items.map((item, i) => {
+        const isCustom = item.source?.startsWith('do-custom') || item.source === 'custom-prepared' || item.source === 'custom-assets-dept';
+        const canDelete = editMode && isCustom;
+        
+        if (editMode) {
+          return `
+            <div class="do-item-row" data-key="${escA(item.key)}" data-kind="${escA(item.source || '')}" data-dept="${escA(deptName)}" data-index="${i}">
+              <div class="do-item-description">
+                <input type="text" class="do-desc form-input" value="${escA(item.description)}" placeholder="Item description">
               </div>
-            </div>`;
-        }else {
-          // EDIT MODE — inline inputs in same two-column layout
-          const isDocustom = item.source === 'do-custom';
-          const docustomMeta = isDocustom
-            ? `data-kind="do-custom" data-dept="${escA(deptName)}" data-index="${escA(item.key.split('|').pop())}"`
-            : `data-kind="base"`;
-          rows += `
-            <div class="do-row" data-key="${escA(item.key)}" ${docustomMeta}>
-              <input class="form-control do-desc do-col-desc" value="${escA(item.description)}">
-              <div style="display:flex;gap:8px;align-items:center;justify-content:flex-end;">
-                <input class="form-control do-qty" type="number" min="1" value="${escA(String(item.quantity))}" style="width:90px">
-                ${isDocustom ? `<button class="btn btn-sm btn-danger do-del">Delete</button>` : ``}
-                <button class="btn btn-sm btn-primary do-save">Save</button>
+              <div class="do-item-quantity">
+                <input type="number" class="do-qty form-input" value="${item.quantity}" min="1" max="999">
               </div>
-            </div>`;
+              <div class="do-item-actions">
+                <button class="btn btn-primary btn-sm do-save">Save</button>
+                ${canDelete ? '<button class="btn btn-danger btn-sm do-del">Delete</button>' : ''}
+              </div>
+            </div>
+          `;
+        } else {
+          return `
+            <div class="do-item-row">
+              <div class="do-item-description">
+                <span style="color: #495057; font-weight: 500;">${esc(item.description)}</span>
+              </div>
+              <div class="do-item-quantity">
+                <span class="do-quantity-badge">${item.quantity}</span>
+              </div>
+              <div class="do-item-actions">
+                <!-- Read-only mode -->
+              </div>
+            </div>
+          `;
         }
-      });
+      }).join('');
 
-      // add-row (edit mode only)
-      const addRow = !editMode ? '' : `
-        <div class="do-add">
-          <input class="form-control do-add-desc" placeholder="Add custom item to ${escA(deptName)}" style="min-width:320px;max-width:600px">
-          <input class="form-control do-add-qty" type="number" min="1" value="1" style="width:90px">
-          <button class="btn btn-sm btn-outline-primary do-add-btn" data-dept="${escA(deptName)}">Add</button>
-        </div>`;
+      // Add section for new items (edit mode only)
+      const addSection = !editMode ? '' : `
+        <div class="do-add-section">
+          <div class="do-add-form">
+            <div class="do-add-description">
+              <input type="text" class="form-input do-add-desc" placeholder="Add custom item to ${deptName} department">
+            </div>
+            <div class="do-add-quantity">
+              <input type="number" class="form-input do-add-qty" value="1" min="1" max="999">
+            </div>
+            <button class="btn btn-primary do-add-btn" data-dept="${escA(deptName)}">
+              Add Item
+            </button>
+          </div>
+        </div>
+      `;
 
       return `
-        <div class="department-section" style="margin-bottom:10px;">
-          <h4 class="dept-title">${esc(deptName)}</h4>
-          <div class="do-list">${rows}</div>
-          ${addRow}
-        </div>`;
+        <div class="do-department-section">
+          <div class="do-dept-header">${esc(deptName)} Department</div>
+          <div class="do-items-list">
+            ${rows || '<div class="no-items-message">No items in this department</div>'}
+          </div>
+          ${addSection}
+        </div>
+      `;
     };
 
     let body = '';
-    ['Audio','Lighting','Video','MISC'].forEach(d => {
-      if ((depts[d] || []).length > 0 || (edits.custom[d] || []).length > 0 || editMode) {
-        body += section(d, depts[d] || []);
+    ['Audio', 'Lighting', 'Video', 'MISC'].forEach(dept => {
+      if ((depts[dept] || []).length > 0 || (edits.custom[dept] || []).length > 0 || editMode) {
+        body += section(dept, depts[dept] || []);
       }
     });
 
-    if (!body.trim()) body = '<p class="no-items">No items assigned to this event.</p>';
+    if (!body.trim()) {
+      body = '<div class="no-items-message">No items assigned to this event.</div>';
+    }
 
-    previewContainer.innerHTML = html + body;
+    html += body + '</div>';
+    previewContainer.innerHTML = html;
 
-    // wire up
+    // Wire up event handlers
     const resetBtn = document.getElementById('doResetEdits');
     if (resetBtn) {
       resetBtn.onclick = () => {
         clearDoEdits(eventId);
-        if (typeof showNotification === 'function') showNotification('success', 'DO edits reset');
+        if (typeof showNotification === 'function') {
+          showNotification('success', 'DO edits reset');
+        }
         populateDeliveryItemsPreview(event);
       };
     }
-    const toggle = document.getElementById('doEditToggle');
-    if (toggle) toggle.onchange = () => populateDeliveryItemsPreview(event);
 
-    // save / delete / add handlers
+    const toggle = document.getElementById('doEditToggle');
+    if (toggle) {
+      toggle.onchange = () => populateDeliveryItemsPreview(event);
+    }
+
+    // Save / delete / add handlers
     previewContainer.querySelectorAll('.do-save').forEach(btn => {
       btn.onclick = (e) => {
-        const row = e.target.closest('.do-row');
+        const row = e.target.closest('.do-item-row');
         const key = row.getAttribute('data-key');
         const kind = row.getAttribute('data-kind');
         const dept = row.getAttribute('data-dept');
         const idxStr = row.getAttribute('data-index');
         const desc = row.querySelector('.do-desc').value.trim();
         const qty = Math.max(1, parseInt(row.querySelector('.do-qty').value, 10) || 1);
+
+        if (!desc) {
+          showNotification('warning', 'Description is required');
+          return;
+        }
 
         const state = getDoEdits(eventId);
         if (kind === 'do-custom') {
@@ -11464,23 +11607,36 @@ async function populateDeliveryItemsPreview(event) {
         } else {
           state.overrides[key] = { description: desc, quantity: qty };
         }
+        
         saveDoEdits(eventId, state);
-        if (typeof showNotification === 'function') showNotification('success', 'Saved');
+        if (typeof showNotification === 'function') {
+          showNotification('success', 'Item updated successfully');
+        }
         populateDeliveryItemsPreview(event);
       };
     });
 
     previewContainer.querySelectorAll('.do-del').forEach(btn => {
-      btn.onclick = (e) => {
-        const row = e.target.closest('.do-row');
+      btn.onclick = async (e) => {
+        const confirmed = await showCustomConfirm(
+          'Delete Item', 
+          'Are you sure you want to delete this item from the delivery order?'
+        );
+        
+        if (!confirmed) return;
+
+        const row = e.target.closest('.do-item-row');
         const dept = row.getAttribute('data-dept');
         const idxStr = row.getAttribute('data-index');
         const i = parseInt(idxStr, 10);
         const state = getDoEdits(eventId);
+        
         if (Number.isInteger(i) && state.custom[dept]) {
           state.custom[dept].splice(i, 1);
           saveDoEdits(eventId, state);
-          if (typeof showNotification === 'function') showNotification('success', 'Deleted');
+          if (typeof showNotification === 'function') {
+            showNotification('success', 'Item deleted successfully');
+          }
           populateDeliveryItemsPreview(event);
         }
       };
@@ -11489,18 +11645,39 @@ async function populateDeliveryItemsPreview(event) {
     previewContainer.querySelectorAll('.do-add-btn').forEach(btn => {
       btn.onclick = (e) => {
         const dept = e.currentTarget.getAttribute('data-dept');
-        const wrap = e.currentTarget.closest('.do-add');
+        const wrap = e.currentTarget.closest('.do-add-form');
         const desc = wrap.querySelector('.do-add-desc').value.trim();
         const qty = Math.max(1, parseInt(wrap.querySelector('.do-add-qty').value, 10) || 1);
-        if (!desc) { if (typeof showNotification === 'function') showNotification('warning', 'Description required'); return; }
+        
+        if (!desc) {
+          showNotification('warning', 'Description is required');
+          wrap.querySelector('.do-add-desc').focus();
+          return;
+        }
+
         const state = getDoEdits(eventId);
         state.custom[dept].push({ description: desc, quantity: qty });
         saveDoEdits(eventId, state);
+        
+        // Clear the form
         wrap.querySelector('.do-add-desc').value = '';
         wrap.querySelector('.do-add-qty').value = '1';
-        if (typeof showNotification === 'function') showNotification('success', `Added to ${dept}`);
+        
+        if (typeof showNotification === 'function') {
+          showNotification('success', `Added item to ${dept} department`);
+        }
         populateDeliveryItemsPreview(event);
       };
+    });
+
+    // Add keyboard shortcuts for form inputs
+    previewContainer.querySelectorAll('.do-add-desc').forEach(input => {
+      input.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+          const addBtn = input.closest('.do-add-form').querySelector('.do-add-btn');
+          if (addBtn) addBtn.click();
+        }
+      });
     });
   };
 
@@ -11928,67 +12105,154 @@ function ensureKnownClientsButton() {
   if (input.parentElement) input.parentElement.appendChild(btn);
   else input.insertAdjacentElement('afterend', btn);
 }
-// PATCH B — full replacement of openClientsManager (adds Edit & Delete)
+// PATCH B – full replacement of openClientsManager (adds Edit & Delete) with consistent styling
 async function openClientsManager() {
   const modal = document.createElement('div');
-  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center;z-index:9999;';
+  modal.className = 'modal active';
   modal.innerHTML = `
-    <div style="background:#fff;min-width:720px;max-height:80vh;overflow:auto;border-radius:8px;padding:16px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-        <h3 style="margin:0;">Known Clients</h3>
-        <button class="btn btn-light" id="kcClose">✕</button>
+    <div class="modal-content" style="max-width: 900px;">
+      <div class="modal-header">
+        <h3 class="modal-title">Known Clients</h3>
+        <button class="close-btn" id="kcClose">&times;</button>
       </div>
+      
+      <div class="modal-body">
+        <!-- Client Form -->
+        <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 25px;">
+          <h4 style="margin-bottom: 15px; color: #495057;">Add/Edit Client</h4>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; margin-bottom: 15px;">
+            <div class="form-group">
+              <label class="form-label">Name *</label>
+              <input class="form-input" id="kcName" placeholder="Client name">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Company</label>
+              <input class="form-input" id="kcCompany" placeholder="Company name">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Address Line 1</label>
+              <input class="form-input" id="kcA1" placeholder="Address line 1">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Address Line 2</label>
+              <input class="form-input" id="kcA2" placeholder="Address line 2">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Address Line 3</label>
+              <input class="form-input" id="kcA3" placeholder="Address line 3">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Postal Code</label>
+              <input class="form-input" id="kcPostal" placeholder="Postal code">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Phone</label>
+              <input class="form-input" id="kcPhone" placeholder="Phone number">
+            </div>
+          </div>
+          <div style="text-align: right;">
+            <button class="btn btn-primary" id="kcSave">Save Client</button>
+          </div>
+        </div>
 
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:12px;">
-        <input class="form-control" id="kcName" placeholder="Name *">
-        <input class="form-control" id="kcCompany" placeholder="Company">
-        <input class="form-control" id="kcA1" placeholder="Address line 1">
-        <input class="form-control" id="kcA2" placeholder="Address line 2">
-        <input class="form-control" id="kcA3" placeholder="Address line 3">
-        <input class="form-control" id="kcPostal" placeholder="Postal code">
-        <input class="form-control" id="kcPhone" placeholder="Phone">
-        <button class="btn btn-primary" id="kcSave">Save/Update</button>
+        <!-- Search & Client List -->
+        <div>
+          <div class="form-group">
+            <label class="form-label">Search Clients</label>
+            <input class="form-input" id="kcSearch" placeholder="Search by name, company, phone, or postal code...">
+          </div>
+          
+          <div style="border: 1px solid #e9ecef; border-radius: 8px; overflow: hidden; max-height: 400px; overflow-y: auto;">
+            <table class="table" style="margin: 0;">
+              <thead style="background: #f8f9fa; position: sticky; top: 0; z-index: 1;">
+                <tr>
+                  <th style="padding: 12px; text-align: left; border-bottom: 1px solid #e9ecef;">Name</th>
+                  <th style="padding: 12px; text-align: left; border-bottom: 1px solid #e9ecef;">Company</th>
+                  <th style="padding: 12px; text-align: left; border-bottom: 1px solid #e9ecef;">Phone</th>
+                  <th style="padding: 12px; text-align: left; border-bottom: 1px solid #e9ecef;">Postal</th>
+                  <th style="padding: 12px; text-align: center; border-bottom: 1px solid #e9ecef; width: 140px;">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="kcBody">
+                <tr>
+                  <td colspan="5" style="padding: 40px; text-align: center; color: #666;">
+                    Loading clients...
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
-
-      <input class="form-control" id="kcSearch" placeholder="Search.">
-      <table class="table table-sm" style="margin-top:8px;">
-        <thead>
-          <tr>
-            <th>Name</th><th>Company</th><th>Phone</th><th>Postal</th>
-            <th style="width:140px">Actions</th>
-          </tr>
-        </thead>
-        <tbody id="kcBody"></tbody>
-      </table>
     </div>
   `;
+  
   document.body.appendChild(modal);
 
   const close = () => modal.remove();
   modal.querySelector('#kcClose').onclick = close;
+  
+  // Close on backdrop click
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) close();
+  });
+  
+  // Close on Escape key
+  document.addEventListener('keydown', function escapeHandler(e) {
+    if (e.key === 'Escape') {
+      close();
+      document.removeEventListener('keydown', escapeHandler);
+    }
+  });
 
   let editingName = null; // track original name when editing
 
-  async function refreshList(query='') {
+  async function refreshList(query = '') {
     const list = await fetchClients(query);
-    modal.querySelector('#kcBody').innerHTML = list.map(c => `
-      <tr style="cursor:pointer" data-name="${c.name}">
-        <td>${c.name}</td>
-        <td>${c.company || ''}</td>
-        <td>${c.phone || ''}</td>
-        <td>${c.postalCode || ''}</td>
-        <td>
-          <div style="display:flex;gap:6px;flex-wrap:wrap">
-            <button class="btn btn-sm btn-outline-primary kc-edit" data-name="${c.name}">Edit</button>
-            <button class="btn btn-sm btn-danger kc-del" data-name="${c.name}">Delete</button>
+    const tbody = modal.querySelector('#kcBody');
+    
+    if (list.length === 0) {
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="5" style="padding: 40px; text-align: center; color: #666;">
+            ${query ? 'No clients found matching your search.' : 'No clients found. Add your first client above.'}
+          </td>
+        </tr>
+      `;
+      return;
+    }
+    
+    tbody.innerHTML = list.map(c => `
+      <tr style="cursor: pointer; transition: background-color 0.2s;" data-name="${escapeHtmlAttr(c.name)}">
+        <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; font-weight: 500;">${escapeHtml(c.name)}</td>
+        <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; color: #666;">${escapeHtml(c.company || '')}</td>
+        <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; color: #666;">${escapeHtml(c.phone || '')}</td>
+        <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; color: #666;">${escapeHtml(c.postalCode || '')}</td>
+        <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; text-align: center;">
+          <div style="display: flex; gap: 6px; justify-content: center;">
+            <button class="btn btn-secondary kc-edit" data-name="${escapeHtmlAttr(c.name)}" style="padding: 4px 8px; font-size: 12px;">Edit</button>
+            <button class="btn btn-danger kc-del" data-name="${escapeHtmlAttr(c.name)}" style="padding: 4px 8px; font-size: 12px;">Delete</button>
           </div>
         </td>
       </tr>
     `).join('');
 
+    // Add hover effects to rows
+    tbody.querySelectorAll('tr[data-name]').forEach(row => {
+      row.addEventListener('mouseenter', () => {
+        row.style.backgroundColor = '#f8f9fa';
+      });
+      row.addEventListener('mouseleave', () => {
+        row.style.backgroundColor = '';
+      });
+    });
+
     // Row click selects client into DO form and closes
-    modal.querySelectorAll('#kcBody tr').forEach(tr => {
-      tr.onclick = async () => {
+    tbody.querySelectorAll('tr[data-name]').forEach(tr => {
+      tr.onclick = async (e) => {
+        // Don't trigger row click if clicking on buttons
+        if (e.target.closest('button')) return;
+        
         const name = tr.getAttribute('data-name');
         const rec = await fetchClientByName(name);
         if (rec) {
@@ -12001,7 +12265,7 @@ async function openClientsManager() {
     });
 
     // Edit buttons
-    modal.querySelectorAll('.kc-edit').forEach(btn => {
+    tbody.querySelectorAll('.kc-edit').forEach(btn => {
       btn.onclick = async (e) => {
         e.stopPropagation();
         const name = btn.getAttribute('data-name');
@@ -12017,34 +12281,32 @@ async function openClientsManager() {
         modal.querySelector('#kcPostal').value = rec.postalCode || '';
         modal.querySelector('#kcPhone').value = rec.phone || '';
         modal.querySelector('#kcName').focus();
+        
+        // Update button text to indicate editing
+        modal.querySelector('#kcSave').textContent = 'Update Client';
       };
     });
 
     // Delete buttons
-    modal.querySelectorAll('.kc-del').forEach(btn => {
+    tbody.querySelectorAll('.kc-del').forEach(btn => {
       btn.onclick = async (e) => {
         e.stopPropagation();
         const name = btn.getAttribute('data-name');
-        const ok = await showCustomConfirm(`Delete client “${name}”?`);
+        const ok = await showCustomConfirm('Delete Client', `Are you sure you want to delete client "${name}"? This action cannot be undone.`);
         if (!ok) return;
+        
         try {
           const done = await deleteClient(name);
           if (done) {
             showNotification('success', `Deleted client ${name}`);
-            // if we were editing this one, clear the form
+            
+            // If we were editing this one, clear the form
             if (editingName === name) {
-              editingName = null;
-              modal.querySelector('#kcName').value = '';
-              modal.querySelector('#kcCompany').value = '';
-              modal.querySelector('#kcA1').value = '';
-              modal.querySelector('#kcA2').value = '';
-              modal.querySelector('#kcA3').value = '';
-              modal.querySelector('#kcPostal').value = '';
-              modal.querySelector('#kcPhone').value = '';
+              clearClientForm();
             }
             await refreshList(modal.querySelector('#kcSearch').value.trim());
           } else {
-            showNotification('error', 'Delete failed (are you an admin?)');
+            showNotification('error', 'Delete failed. You may not have permission to delete clients.');
           }
         } catch (err) {
           showNotification('error', err?.message || 'Delete failed');
@@ -12053,9 +12315,24 @@ async function openClientsManager() {
     });
   }
 
-  modal.querySelector('#kcSearch').addEventListener('input', (e) => refreshList(e.target.value));
-  await refreshList('');
+  function clearClientForm() {
+    editingName = null;
+    modal.querySelector('#kcName').value = '';
+    modal.querySelector('#kcCompany').value = '';
+    modal.querySelector('#kcA1').value = '';
+    modal.querySelector('#kcA2').value = '';
+    modal.querySelector('#kcA3').value = '';
+    modal.querySelector('#kcPostal').value = '';
+    modal.querySelector('#kcPhone').value = '';
+    modal.querySelector('#kcSave').textContent = 'Save Client';
+  }
 
+  // Search input handler
+  modal.querySelector('#kcSearch').addEventListener('input', (e) => {
+    refreshList(e.target.value.trim());
+  });
+
+  // Save button handler
   modal.querySelector('#kcSave').onclick = async () => {
     const client = {
       name: modal.querySelector('#kcName').value.trim(),
@@ -12066,33 +12343,42 @@ async function openClientsManager() {
       postalCode: modal.querySelector('#kcPostal').value.trim(),
       phone: modal.querySelector('#kcPhone').value.trim(),
     };
+    
     if (!client.name) {
       showNotification('warning', 'Name is required');
+      modal.querySelector('#kcName').focus();
       return;
     }
 
     try {
       if (editingName && editingName === client.name) {
-        // update in-place
+        // Update in-place
         await updateClient(editingName, client);
         showNotification('success', `Updated client ${client.name}`);
       } else if (editingName && editingName !== client.name) {
-        // rename: create new + offer to delete old
+        // Rename: create new + offer to delete old
         await saveClient(client);
-        const removeOld = await showCustomConfirm(`Created “${client.name}”. Delete old client “${editingName}”?`);
+        const removeOld = await showCustomConfirm(
+          'Replace Client', 
+          `Created new client "${client.name}". Would you like to delete the old client "${editingName}"?`
+        );
         if (removeOld) {
           await deleteClient(editingName);
         }
         showNotification('success', `Saved ${client.name}`);
       } else {
-        // create
+        // Create new
         await saveClient(client);
         showNotification('success', `Saved ${client.name}`);
       }
-      editingName = null;
+      
+      clearClientForm();
       await refreshList(modal.querySelector('#kcSearch').value.trim());
     } catch (e) {
       showNotification('error', e?.message || 'Save/Update failed');
     }
   };
+
+  // Initial load
+  await refreshList('');
 }
