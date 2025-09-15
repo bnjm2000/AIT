@@ -23,7 +23,7 @@ C451B#08,AKG,C451B,,Cardioid condenser microphone,False,False,,AX,Store,
 C451B#09,AKG,C451B,,Cardioid condenser microphone,False,False,,AX,Store,Store
 C451B#10,AKG,C451B,,Cardioid condenser microphone,False,False,,AX,Store,
 B91A#01,Shure,Beta 91A,98A14333,Boundary condenser microphone,False,False,,AX,Store,Store
-B52A#01,Shure,Beta 52A,,Kick drum mic,False,False,,AX,Store,Store
+B52A#01,Shure,Beta 52A,3AL13116579,Kick drum mic,False,False,,AX,Store,Store
 C411#01,AKG,C411,VI0821-375594,PP Miniature condenser vibration pickup mic,False,False,,AX,Store,
 CT3#01,DBX,CT3,11065310806,advanced cable tester,False,False,,AX,Store,
 4088#01,DPA,4088,,"Directional Headset, beige",False,False,,AX,Store,
@@ -273,12 +273,12 @@ ETR5#13,L-Acoustics,ETR5,440033749,Adjustable U-bracket: 5XT,False,False,,AX,Sto
 ETR5#14,L-Acoustics,ETR5,440033753,Adjustable U-bracket: 5XT,False,False,,AX,Store,
 ETR5#15,L-Acoustics,ETR5,440033769,Adjustable U-bracket: 5XT,False,False,,AX,Store,
 ETR5#16,L-Acoustics,ETR5,440033884,Adjustable U-bracket: 5XT,False,False,,AX,Store,
-LA4X#01,L-Acoustics,LA4X,1180053925,Amplified controller,False,False,,AX,Store,Store
-LA4X#02,L-Acoustics,LA4X,1180051677,Amplified controller,False,False,,AX,Store,Store
-LA4X#03,L-Acoustics,LA4X,1180051678,Amplified controller,False,False,,AX,Store,Store
-LA4X#04,L-Acoustics,LA4X,1180053934,Amplified controller,False,False,,AX,Store,
-LA4X#05,L-Acoustics,LA4X,1180053927,Amplified controller,False,False,,AX,Store,
-LA4X#06,L-Acoustics,LA4X,1180051467,Amplified controller,False,False,,AX,Store,
+LA4X#01,L-Acoustics,LA4X,1180053925,Amplified controller,False,False,,AX,Store,Dry Hire: Creative Technology
+LA4X#02,L-Acoustics,LA4X,1180051677,Amplified controller,False,False,,AX,Store,Dry Hire: Creative Technology
+LA4X#03,L-Acoustics,LA4X,1180051678,Amplified controller,False,False,,AX,Store,Dry Hire: Creative Technology
+LA4X#04,L-Acoustics,LA4X,1180053934,Amplified controller,False,False,,AX,Store,Dry Hire: Creative Technology
+LA4X#05,L-Acoustics,LA4X,1180053927,Amplified controller,False,False,,AX,Store,Dry Hire: Creative Technology
+LA4X#06,L-Acoustics,LA4X,1180051467,Amplified controller,False,False,,AX,Store,Dry Hire: Creative Technology
 LA4X#07,L-Acoustics,LA4X,1180053692,Amplified controller,False,False,,AX,Store,Store
 LA4X#08,L-Acoustics,LA4X,1180051680,Amplified controller,False,False,,AX,Store,Valentino Le Meta-Theatre Des Intimates @ ArtSpace
 LA4X#09,L-Acoustics,LA4X,1180053978,Amplified controller,False,False,,AX,Store,Store
@@ -432,6 +432,20 @@ X8#13,L-Acoustics,X8,1260040534,"8"" passive coaxial enclosure",False,False,,AX,
 X8#14,L-Acoustics,X8,1260040626,"8"" passive coaxial enclosure",False,False,,AX,Store,Store
 X8#15,L-Acoustics,X8,1260040643,"8"" passive coaxial enclosure",False,False,,AX,Store,Store
 X8#16,L-Acoustics,X8,1260040692,"8"" passive coaxial enclosure",False,False,,AX,Store,Store
+SYVA#01,L-Acoustics,Syva,1350010796,"5"" Colinear source",False,False,,AX,Store,Store
+SYVA#02,L-Acoustics,Syva,1350010797,"5"" Colinear source",False,False,,AX,Store,Store
+SYVA#03,L-Acoustics,Syva,1350010798,"5"" Colinear source",False,False,,AX,Store,Store
+SYVA#04,L-Acoustics,Syva,1350010807,"5"" Colinear source",False,False,,AX,Store,Store
+SYVA#05,L-Acoustics,Syva,1350011541,"5"" Colinear source",False,False,,AX,Store,Store
+SYVA#06,L-Acoustics,Syva,1350011571,"5"" Colinear source",False,False,,AX,Store,Store
+SYVALOW#01,L-Acoustics,Syva Low,,Bass reflex dual 12",False,False,,AX,Store,Store
+SYVALOW#02,L-Acoustics,Syva Low,,Bass reflex dual 12",False,False,,AX,Store,Store
+SYVALOW#03,L-Acoustics,Syva Low,,Bass reflex dual 12",False,False,,AX,Store,Store
+SYVALOW#04,L-Acoustics,Syva Low,,Bass reflex dual 12",False,False,,AX,Store,Store
+SYVALOW#05,L-Acoustics,Syva Low,,Bass reflex dual 12",False,False,,AX,Store,Store
+SYVALOW#06,L-Acoustics,Syva Low,,Bass reflex dual 12",False,False,,AX,Store,Store
+SYVALOW#07,L-Acoustics,Syva Low,,Bass reflex dual 12",False,False,,AX,Store,Store
+SYVALOW#08,L-Acoustics,Syva Low,,Bass reflex dual 12",False,False,,AX,Store,Store
 LPClaw#01,Latin Percussion,LP592A,,The Claw,False,False,,AX,Store,
 LPClaw#02,Latin Percussion,LP592A,,The Claw,False,False,,AX,Store,
 LPClaw#03,Latin Percussion,LP592A,,The Claw,False,False,,AX,Store,
@@ -524,7 +538,6 @@ AD4Q#01,Shure,AD4Q,,Four-Channel Digital Wireless Receiver,False,False,,AX,Store
 AD4Q#02,Shure,AD4Q,,Four-Channel Digital Wireless Receiver,False,False,,AX,Store,Store
 AD4Q#03,Shure,AD4Q,,Four-Channel Digital Wireless Receiver,False,False,,AX,Store,Store
 AD4Q#04,Shure,AD4Q,,Four-Channel Digital Wireless Receiver,False,False,,AX,Store,Store
-BETA52A#01,Shure ,Beta 52A,3AL13116579,supercardioid dynamic kick drum mic,False,False,,AX,Store,
 P9R#01,Shure,P9R,,Bodypack Receiver [P7],False,False,,AX,Store,
 P9R#02,Shure,P9R,,Bodypack Receiver [P7],False,False,,AX,Store,
 P9R#03,Shure,P9R,,Bodypack Receiver [P7],False,False,,AX,Store,
@@ -578,6 +591,10 @@ SM58S#01,Shure,SM58S,,cardioid dynamic w/ switch,False,False,,AX,Store,
 SM58S#02,Shure,SM58S,,cardioid dynamic w/ switch,False,False,,AX,Store,Store
 SM58S#03,Shure,SM58S,,cardioid dynamic w/ switch,False,False,,AX,Store,
 SM58S#04,Shure,SM58S,,cardioid dynamic w/ switch,False,False,,AX,Store,Store
+B58A#01,Shure,Beta 58A,,supercardioid dynamic vocal microphone,False,False,,AX,Store,Store
+B58A#02,Shure,Beta 58A,,supercardioid dynamic vocal microphone,False,False,,AX,Store,Store
+B58A#03,Shure,Beta 58A,,supercardioid dynamic vocal microphone,False,False,,AX,Store,Store
+B58A#04,Shure,Beta 58A,,supercardioid dynamic vocal microphone,False,False,,AX,Store,Store
 ULXD1#01,Shure,ULXD1,1ND2342330-01,Beltpack [L50],False,False,,AX,Store,Store
 ULXD1#02,Shure,ULXD1,1ML0246448,Beltpack [L50],False,False,,AX,Store,
 ULXD1#03,Shure,ULXD1,1NB0326366-01,Beltpack [L50],False,False,,AX,Store,
@@ -776,10 +793,10 @@ LEDBEAM#23,Robe,Robin LEDBeam 350 Wash,2300077264,Wash LED,False,False,"2025/04/
 Replaced power supply - $217.69 (but FOC)",LX,Store,Store
 LEDBEAM#24,Robe,Robin LEDBeam 350 Wash,2300840397,Wash LED,False,False,"2025/04/04	bnjm2000	Intermittent can't power up
 Replaced power supply - $217.69 (but FOC)",LX,Store,Store
-DIABLO#01,Ayrton,Diablo (W.DMX),DB2935040,Profile LED,False,False,,LX,Store,Dry Hire: TTP
-DIABLO#02,Ayrton,Diablo (W.DMX),DB2935047,Profile LED,False,False,"2025/05/25	bnjm2000	Discovered fan error (Wedding of Micheal and Cindy) [Location: Total Solutions, Marked OOC]|2025/06/05	bnjm2000	Sent to TSM, reset connector tested okay - $80 [Location: Store, Cleared OOC]",LX,Store,Dry Hire: TTP
-DIABLO#03,Ayrton,Diablo (W.DMX),DB2935098,Profile LED,False,False,,LX,Store,Dry Hire: TTP
-DIABLO#04,Ayrton,Diablo (W.DMX),DB2935016,Profile LED,False,False,,LX,Store,Dry Hire: TTP
+DIABLO#01,Ayrton,Diablo (W.DMX),DB2935040,Profile LED,False,False,,LX,Store,Store
+DIABLO#02,Ayrton,Diablo (W.DMX),DB2935047,Profile LED,False,False,"2025/05/25	bnjm2000	Discovered fan error (Wedding of Micheal and Cindy) [Location: Total Solutions, Marked OOC]|2025/06/05	bnjm2000	Sent to TSM, reset connector tested okay - $80 [Location: Store, Cleared OOC]",LX,Store,Store
+DIABLO#03,Ayrton,Diablo (W.DMX),DB2935098,Profile LED,False,False,,LX,Store,Store
+DIABLO#04,Ayrton,Diablo (W.DMX),DB2935016,Profile LED,False,False,,LX,Store,Store
 DIABLO#05,Ayrton,Diablo (W.DMX),DB2953048,Profile LED,False,False,,LX,Store,
 DIABLO#06,Ayrton,Diablo (W.DMX),DB2935001,Profile LED,False,False,,LX,Store,
 DIABLO#07,Ayrton,Diablo (W.DMX),DB2935033,Profile LED,False,False,,LX,Store,
@@ -787,7 +804,7 @@ DIABLO#08,Ayrton,Diablo (W.DMX),DB2935002,Profile LED,False,False,,LX,Store,
 DIABLO#09,Ayrton,Diablo (W.DMX),DB2935036,Profile LED,False,False,,LX,Store,
 DIABLO#10,Ayrton,Diablo (W.DMX),DB2935057,Profile LED,False,False,2025/06/05	bnjm2000	Replaced Pan/Tilt Board - $222.87,LX,Store,
 DIABLO#11,Ayrton,Diablo (W.DMX),DB2935034,Profile LED,False,False,"2025/06/05	bnjm2000	Replaced Pan/Tilt board - $222.87
-CMY Driver Board - $195.84",LX,Store,Dry Hire: TTP
+CMY Driver Board - $195.84",LX,Store,Store
 DIABLO#12,Ayrton,Diablo (W.DMX),DB2935019,Profile LED,False,False,2025/06/05	bnjm2000	Replaced Pan/Tilt Board - $222.87,LX,Store,
 DIABLO#13,Ayrton,Diablo Profile,DB5309007,Profile LED,False,False,"2025/06/30	Deano	Gobo error [Marked OOC]|2025/07/08	Deano	Repaired by Technician Dean [Location: Store, Cleared OOC]",LX,Store,Store
 DIABLO#14,Ayrton,Diablo Profile,DB5309023,Profile LED,False,False,,LX,Store,Store
@@ -952,7 +969,7 @@ LX TREE #04,Versa-Stand,,,Winch Up Lighting Stand,False,False,,LX,Store,
 LX TREE #05,Versa-Stand,,,Winch Up Lighting Stand,False,False,,LX,Store,
 AURORA#01,Lumenradio,Aurora,MAURA100000710,Single Universe DMX/RDM transceiver with WiFi and Bluetooth,False,False,"2025/07/30	bnjm2000	Send in to TSM for checking, repair. Signal weak [Location: Total Solutions]|2025/08/14	bnjm2000	Collected back from TSM, tested to 5m working. [Location: Store]",LX,Store,Store
 AURORA#02,Lumenradio,Aurora,MAURA100000707,Single Universe DMX/RDM transceiver with WiFi and Bluetooth,False,False,"2025/07/30	bnjm2000	Send in to TSM for checking, repair. Signal weak [Location: Total Solutions]|2025/08/14	bnjm2000	Collected back from TSM, tested to 5m working. [Location: Store]",LX,Store,Store
-AURORA#03,Lumenradio,Aurora,MAURA100000648,Single Universe DMX/RDM transceiver with WiFi and Bluetooth,False,False,"2025/08/14	bnjm2000	Sent into TSM for testing, range issue [Location: Total Solutions]|2025/08/27	bnjm2000	Tested working ok, sent back to us by TSM [Location: Store]",LX,Store,Dry Hire: TTP
+AURORA#03,Lumenradio,Aurora,MAURA100000648,Single Universe DMX/RDM transceiver with WiFi and Bluetooth,False,False,"2025/08/14	bnjm2000	Sent into TSM for testing, range issue [Location: Total Solutions]|2025/08/27	bnjm2000	Tested working ok, sent back to us by TSM [Location: Store]",LX,Store,Store
 AURORA#04,Lumenradio,Aurora,MAURA100000981,Single Universe DMX/RDM transceiver with WiFi and Bluetooth,False,False,"2025/08/14	bnjm2000	Sent into TSM for testing, range issue [Location: Total Solutions]|2025/08/27	bnjm2000	Tested working ok, sent back to us by TSM [Location: Store]",LX,Store,Store
 DMX RECORDER #01,,XRC-200,2304738,,False,False,,LX,Store,
 MOONLITE WDMX #01,Lumenradio,MoonLite,JMRFO000000087,,False,False,,LX,Store,
@@ -989,10 +1006,10 @@ DN200#03,Klark Teknik,DN200,,,False,False,,AX,Store,
 PULSE2#01,Analogue Way,Pulse 2,,Video Switcher,False,False,,VX,Store,
 75INCH#01,Samsung,,,,False,False,,VX,Store,
 75INCH#02,Samsung,,,,False,False,,VX,Store,
-75INCH#03,Samsung,LH75QMCEBGCXXS,0R3KHNIXA00066,"75"" Crystal UHD Signage",False,False,,VX,Store,Store
-75INCH#04,Samsung,LH75QMCEBGCXXS,0R3KHNIXA00086,"75"" Crystal UHD Signage",False,False,,VX,Store,
-75INCH#05,Samsung,LH75QMCEBGCXXS,0R3KHNIXA00093,"75"" Crystal UHD Signage",False,False,,VX,Store,
-75INCH#06,Samsung,LH75QMCEBGCXXS,0R3KHNIXA00094,"75"" Crystal UHD Signage",False,False,,VX,Store,
+QM75C#01,Samsung,LH75QMCEBGCXXS,0R3KHNIXA00066,"75"" Crystal UHD Signage",False,False,,VX,Store,Store
+QM75C#02,Samsung,LH75QMCEBGCXXS,0R3KHNIXA00086,"75"" Crystal UHD Signage",False,False,,VX,Store,
+QM75C#03,Samsung,LH75QMCEBGCXXS,0R3KHNIXA00093,"75"" Crystal UHD Signage",False,False,,VX,Store,
+QM75C#04,Samsung,LH75QMCEBGCXXS,0R3KHNIXA00094,"75"" Crystal UHD Signage",False,False,,VX,Store,
 QM85C#01,Samsung,LH85QMCEBGCXXS,0R3NHNIX600093,"85"" Crystal UHD Signage",False,False,,VX,Store,
 QM85C#02,Samsung,LH85QMCEBGCXXS,0R3NHNIXA00012,"85"" Crystal UHD Signage",False,False,,VX,Store,
 QM85C#03,Samsung,LH85QMCEBGCXXS,0R3NHNIX600095,"85"" Crystal UHD Signage",False,False,,VX,Store,

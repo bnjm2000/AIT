@@ -1,55 +1,3 @@
-2025/07/28 17:20:04,bnjm2000,Returned asset 4099#14 from event 37
-2025/07/28 17:20:04,bnjm2000,Returned asset 4099#16 from event 37
-2025/07/28 17:20:05,bnjm2000,Returned asset 4099#04 from event 37
-2025/07/28 17:20:11,bnjm2000,Returned asset 4488#12 from event 37
-2025/07/28 17:20:12,bnjm2000,Returned asset 4488#11 from event 37
-2025/07/28 17:20:13,bnjm2000,Returned asset 6061#12 from event 37
-2025/07/28 17:20:14,bnjm2000,Returned asset 6061#04 from event 37
-2025/07/28 17:20:15,bnjm2000,Returned asset 6061#03 from event 37
-2025/07/28 17:20:22,bnjm2000,Returned asset IPAD#01 from event 37
-2025/07/28 17:20:23,bnjm2000,Returned asset IPAD#02 from event 37
-2025/07/28 17:20:25,bnjm2000,Returned asset HLBatt#01 from event 37
-2025/07/28 17:20:26,bnjm2000,Returned asset HLBatt#02 from event 37
-2025/07/28 17:20:27,bnjm2000,Returned asset HLBatt#03 from event 37
-2025/07/28 17:20:27,bnjm2000,Returned asset HLBatt#04 from event 37
-2025/07/28 17:20:28,bnjm2000,Returned asset HLBatt#05 from event 37
-2025/07/28 17:20:29,bnjm2000,Returned asset HLBatt#06 from event 37
-2025/07/28 17:20:29,bnjm2000,Returned asset HLBatt#07 from event 37
-2025/07/28 17:20:30,bnjm2000,Returned asset HLBatt#08 from event 37
-2025/07/28 17:20:30,bnjm2000,Returned asset HLBatt#09 from event 37
-2025/07/28 17:20:31,bnjm2000,Returned asset HLBatt#10 from event 37
-2025/07/28 17:20:31,bnjm2000,Returned asset HLBatt#11 from event 37
-2025/07/28 17:20:32,bnjm2000,Returned asset HLBatt#12 from event 37
-2025/07/28 17:20:32,bnjm2000,Returned asset HLBatt#13 from event 37
-2025/07/28 17:20:33,bnjm2000,Returned asset HLBatt#14 from event 37
-2025/07/28 17:20:33,bnjm2000,Returned asset HLBatt#15 from event 37
-2025/07/28 17:20:34,bnjm2000,Returned asset HLBatt#16 from event 37
-2025/07/28 17:20:44,bnjm2000,Returned asset C1ProHub#01 from event 37
-2025/07/28 17:20:58,bnjm2000,Returned asset C1ProCharger#01 from event 37
-2025/07/28 17:21:56,bnjm2000,Returned asset C1ProRHS#01 from event 37
-2025/07/28 17:22:08,bnjm2000,Returned asset C1ProWHS#01 from event 37
-2025/07/28 17:22:10,bnjm2000,Returned asset C1ProRHS#02 from event 37
-2025/07/28 17:22:11,bnjm2000,Returned asset C1ProRHS#03 from event 37
-2025/07/28 17:22:12,bnjm2000,Returned asset C1ProRHS#04 from event 37
-2025/07/28 17:22:20,bnjm2000,Returned asset C1ProRHS#05 from event 37
-2025/07/28 17:22:20,bnjm2000,Returned asset C1ProRHS#06 from event 37
-2025/07/28 17:22:21,bnjm2000,Returned asset C1ProRHS#07 from event 37
-2025/07/28 17:22:21,bnjm2000,Returned asset C1ProRHS#08 from event 37
-2025/07/28 17:22:29,bnjm2000,Returned asset LA4X#01 from event 37
-2025/07/28 17:22:29,bnjm2000,Returned asset LA4X#02 from event 37
-2025/07/28 17:22:30,bnjm2000,Returned asset LA4X#03 from event 37
-2025/07/28 17:22:30,bnjm2000,Returned asset LA4X#09 from event 37
-2025/07/28 17:22:31,bnjm2000,Returned asset LA4X#07 from event 37
-2025/07/28 17:22:33,bnjm2000,Returned asset LA4X#10 from event 37
-2025/07/28 17:22:36,bnjm2000,Returned asset LAP1#01 from event 37
-2025/07/28 17:22:38,bnjm2000,Returned asset X8#01 from event 37
-2025/07/28 17:22:44,bnjm2000,Returned asset X8#02 from event 37
-2025/07/28 17:22:45,bnjm2000,Returned asset X8#03 from event 37
-2025/07/28 17:22:45,bnjm2000,Returned asset X8#04 from event 37
-2025/07/28 17:22:46,bnjm2000,Returned asset X8#09 from event 37
-2025/07/28 17:22:47,bnjm2000,Returned asset X8#10 from event 37
-2025/07/28 17:23:00,bnjm2000,Returned asset X8#11 from event 37
-2025/07/28 17:23:01,bnjm2000,Returned asset X8#12 from event 37
 2025/07/28 17:23:01,bnjm2000,Returned asset X8#13 from event 37
 2025/07/28 17:23:03,bnjm2000,Returned asset X8#14 from event 37
 2025/07/28 17:23:04,bnjm2000,Returned asset X8#15 from event 37
@@ -999,3 +947,55 @@
 2025/09/12 16:38:32,bnjm2000,Assigned specific asset ULXD2#18 to event 58
 2025/09/12 16:38:34,bnjm2000,Assigned specific asset ULXD4Q#02 to event 58
 2025/09/12 16:38:39,bnjm2000,Assigned specific asset ULXD4Q#03 to event 58
+2025/09/15 12:30:12,bnjm2000,User bnjm2000 logged in via web interface
+2025/09/15 12:32:08,bnjm2000,Added 16x Astera Pixel Brick model to event 55 (total: 16)
+2025/09/15 12:34:35,bnjm2000,Removed Samsung LH75QMCEBGCXXS model from event 55
+2025/09/15 12:34:41,bnjm2000,Added 4x Samsung LH75QMCEBGCXXS model to event 55 (total: 4)
+2025/09/15 12:35:29,bnjm2000,Returned all assets for department LX in event 48: 6 items
+2025/09/15 12:35:30,bnjm2000,Returned all assets for department MISC in event 48: 5 items
+2025/09/15 12:37:54,bnjm2000,Added 2x Lumenradio Aurora model to event 50 (total: 2)
+2025/09/15 12:37:58,bnjm2000,Removed Lumenradio Aurora model from event 50
+2025/09/15 12:39:32,bnjm2000,Added 2x Lumenradio Aurora model to event 50 (total: 2)
+2025/09/15 12:40:33,bnjm2000,Assigned specific asset LA4X#01 to event 57
+2025/09/15 12:40:34,bnjm2000,Assigned specific asset LA4X#02 to event 57
+2025/09/15 12:40:35,bnjm2000,Assigned specific asset LA4X#03 to event 57
+2025/09/15 12:40:37,bnjm2000,Assigned specific asset LA4X#04 to event 57
+2025/09/15 12:40:37,bnjm2000,Assigned specific asset LA4X#06 to event 57
+2025/09/15 12:40:39,bnjm2000,Assigned specific asset LA4X#05 to event 57
+2025/09/15 12:49:58,bnjm2000,Created event 59: Dry Hire: Creative Technology via web interface
+2025/09/15 12:50:07,bnjm2000,Added 2x L-Acoustics Syva Low model to event 59 (total: 2)
+2025/09/15 12:50:07,bnjm2000,Added 1x L-Acoustics Syva model to event 59 (total: 1)
+2025/09/15 12:50:13,bnjm2000,Removed L-Acoustics Syva model from event 59
+2025/09/15 12:50:13,bnjm2000,Added 2x L-Acoustics Syva model to event 59 (total: 2)
+2025/09/15 12:50:30,bnjm2000,Removed L-Acoustics Syva Low model from event 59
+2025/09/15 12:50:58,bnjm2000,Added 1x L-Acoustics Syva Low model to event 59 (total: 1)
+2025/09/15 12:50:58,bnjm2000,Added 1x L-Acoustics Syva Low model to event 59 (total: 2)
+2025/09/15 12:57:49,bnjm2000,Removed L-Acoustics LS10 model from event 57
+2025/09/15 13:03:31,bnjm2000,Removed L-Acoustics LA12X model from event 54
+2025/09/15 13:03:31,bnjm2000,Added 7x L-Acoustics LA12X model to event 54 (total: 7)
+2025/09/15 13:03:40,bnjm2000,Removed L-Acoustics LA4X model from event 54
+2025/09/15 13:03:40,bnjm2000,Added 3x L-Acoustics LA4X model to event 54 (total: 3)
+2025/09/15 13:03:45,bnjm2000,Removed L-Acoustics LA12X model from event 54
+2025/09/15 13:03:45,bnjm2000,Added 8x L-Acoustics LA12X model to event 54 (total: 8)
+2025/09/15 13:04:22,bnjm2000,Removed L-Acoustics M-BUMP model from event 54
+2025/09/15 13:04:22,bnjm2000,Added 2x L-Acoustics M-BUMP model to event 54 (total: 2)
+2025/09/15 13:04:31,bnjm2000,Removed L-Acoustics M-BAR model from event 54
+2025/09/15 13:04:31,bnjm2000,Added 4x L-Acoustics M-BAR model to event 54 (total: 4)
+2025/09/15 13:04:35,bnjm2000,Removed L-Acoustics M-BUMP model from event 54
+2025/09/15 13:04:35,bnjm2000,Added 4x L-Acoustics M-BUMP model to event 54 (total: 4)
+2025/09/15 13:04:48,bnjm2000,Added 8x L-Acoustics X8 model to event 54 (total: 8)
+2025/09/15 13:05:11,bnjm2000,Added 1x Yamaha QL1 model to event 54 (total: 1)
+2025/09/15 13:05:44,bnjm2000,Added 4x Shure ULXD2 model to event 54 (total: 4)
+2025/09/15 13:05:46,bnjm2000,Added 1x Shure ULXD4D model to event 54 (total: 1)
+2025/09/15 13:05:46,bnjm2000,Added 1x Shure ULXD4D model to event 54 (total: 2)
+2025/09/15 13:05:53,bnjm2000,Added 1x Shure AD3 model to event 54 (total: 1)
+2025/09/15 13:05:58,bnjm2000,Added 1x Shure AD4D model to event 54 (total: 1)
+2025/09/15 13:06:01,bnjm2000,Added 1x Sennheiser ME36 model to event 54 (total: 1)
+2025/09/15 13:06:02,bnjm2000,Added 1x Sennheiser ME36 model to event 54 (total: 2)
+2025/09/15 13:06:05,bnjm2000,Added 1x Audio Tecnica AT8668 model to event 54 (total: 1)
+2025/09/15 13:06:20,bnjm2000,Added 4x Radial Engineering J48 Mono model to event 54 (total: 4)
+2025/09/15 13:06:20,bnjm2000,Added 1x Radial Engineering J48 Stereo model to event 54 (total: 1)
+2025/09/15 13:06:30,bnjm2000,Added 1x AKG C451B model to event 54 (total: 1)
+2025/09/15 13:06:35,bnjm2000,Added 4x Shure SM57 model to event 54 (total: 4)
+2025/09/15 13:14:05,bnjm2000,Added 4x Shure Beta 58A model to event 54 (total: 4)
+2025/09/15 14:03:54,bnjm2000,Assigned asset [MISC]TV Bracket;4 to event 55 (unprepared)

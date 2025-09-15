@@ -1,2 +1,2 @@
 EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,Tag,ForceStateOverride
-55,Dry Hire: Variety Communications,20250918,20250919,[],"[""[MISC]Truss - 2m;4"", ""[MISC]Base plate;4"", ""[MODEL]VX|Samsung|LH75QMCEBGCXXS|4|75\"" Crystal UHD Signage""]",[],Planning,[],[],[],False
+55,Dry Hire: Variety Communications,20250918,20250919,[],"[""[MISC]Truss - 2m;4"", ""[MISC]Base plate;4"", ""[MODEL]LX|Astera|Pixel Brick|16|Batt LED Uplighters"", ""[MODEL]VX|Samsung|LH75QMCEBGCXXS|4|75\"" Crystal UHD Signage"", ""[MISC]TV Bracket;4""]",[],Planning,[],[],[],False
