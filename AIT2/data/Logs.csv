@@ -1,24 +1,3 @@
-2025/07/28 17:34:50,bnjm2000,Returned asset DAD6001#06 from event 37
-2025/07/28 17:34:51,bnjm2000,Returned asset DAD6001#04 from event 37
-2025/07/28 17:34:51,bnjm2000,Returned asset DAD6001#07 from event 37
-2025/07/28 17:34:53,bnjm2000,Returned asset DAD6010#08 from event 37
-2025/07/28 17:34:54,bnjm2000,Returned asset X-US1215#04 from event 37
-2025/07/28 17:34:56,bnjm2000,Returned asset DAD6001#02 from event 37
-2025/07/28 17:34:57,bnjm2000,Returned asset DAD6001#01 from event 37
-2025/07/28 17:34:58,bnjm2000,Returned asset DAD6001#03 from event 37
-2025/07/28 17:35:00,bnjm2000,Returned asset X-US1215#05 from event 37
-2025/07/28 17:35:04,bnjm2000,Returned asset X12#01 from event 37
-2025/07/28 17:35:06,bnjm2000,Returned asset X12#02 from event 37
-2025/07/28 17:35:07,bnjm2000,Returned asset X12#04 from event 37
-2025/07/28 17:35:10,bnjm2000,Returned asset X12#07 from event 37
-2025/07/28 17:35:11,bnjm2000,Returned asset X12#08 from event 37
-2025/07/28 17:35:12,bnjm2000,Returned asset X12#06 from event 37
-2025/07/28 17:35:14,bnjm2000,Returned asset X12#03 from event 37
-2025/07/28 17:35:17,bnjm2000,Returned asset X12#05 from event 37
-2025/07/28 17:35:18,bnjm2000,Returned asset GSM4212P#01 from event 37
-2025/07/28 17:35:20,bnjm2000,Returned asset GSM4212P#02 from event 37
-2025/07/28 17:35:22,bnjm2000,Returned asset GSM4212P#03 from event 37
-2025/07/28 17:35:23,bnjm2000,Returned asset RIO3224-D #01 from event 37
 2025/07/28 17:35:27,bnjm2000,Returned asset DIABLO#13 from event 37
 2025/07/28 17:35:28,bnjm2000,Returned asset DIABLO#15 from event 37
 2025/07/28 17:35:30,bnjm2000,Returned asset DIABLO#17 from event 37
@@ -999,3 +978,24 @@
 2025/09/16 17:42:57,admin,Assigned specific asset X12#13 to event 57
 2025/09/16 17:43:01,admin,Assigned specific asset X12#14 to event 57
 2025/09/16 22:06:39,admin,Created event 60: Dior Cruise 2026 Presentation @ Former Command House via web interface
+2025/09/16 23:02:50,bnjm2000,Added 16x L-Acoustics 5XTW model to event 60 (total: 16)
+2025/09/16 23:02:57,bnjm2000,Added 16x L-Acoustics ETR5W model to event 60 (total: 16)
+2025/09/16 23:03:51,bnjm2000,Removed L-Acoustics 5XTW model from event 60
+2025/09/16 23:03:52,bnjm2000,Removed L-Acoustics ETR5W model from event 60
+2025/09/16 23:05:09,bnjm2000,Added 16x L-Acoustics ETR5W model to event 60 (total: 16)
+2025/09/16 23:05:22,bnjm2000,Removed L-Acoustics ETR5W model from event 60
+2025/09/16 23:18:56,bnjm2000,Added 20x L-Acoustics 5XTW model to event 60 (total: 20)
+2025/09/16 23:18:59,bnjm2000,Added 20x L-Acoustics ETR5W model to event 60 (total: 20)
+2025/09/16 23:21:20,bnjm2000,Added 5x L-Acoustics 5XT model to event 60 (total: 5)
+2025/09/16 23:21:22,bnjm2000,Added 5x L-Acoustics ETR5 model to event 60 (total: 5)
+2025/09/16 23:21:28,bnjm2000,Added 4x L-Acoustics LA4X model to event 60 (total: 4)
+2025/09/16 23:21:52,bnjm2000,Added 1x Yamaha DM3 model to event 60 (total: 1)
+2025/09/16 23:22:00,bnjm2000,Added 1x Apple IPAD model to event 60 (total: 1)
+2025/09/16 23:22:12,bnjm2000,Added 1x Radial Engineering Trim-two model to event 60 (total: 1)
+2025/09/16 23:22:19,bnjm2000,Added 1x Interspace Industries PCBB3 model to event 60 (total: 1)
+2025/09/16 23:23:52,bnjm2000,Created event 61: GRAFF Diamonds High Jewelry Event @ ION Art Gallery via web interface
+2025/09/16 23:24:04,bnjm2000,Added 8x L-Acoustics 5XT model to event 61 (total: 8)
+2025/09/16 23:24:06,bnjm2000,Added 8x L-Acoustics ETR5 model to event 61 (total: 8)
+2025/09/16 23:24:10,bnjm2000,Added 1x L-Acoustics LA4X model to event 61 (total: 1)
+2025/09/16 23:24:16,bnjm2000,Added 1x Yamaha DM3 model to event 61 (total: 1)
+2025/09/17 00:01:27,bnjm2000,User bnjm2000 logged in via web interface
