@@ -408,12 +408,12 @@ X12#05,L-Acoustics,X12,1190036011,"12"" passive coaxial enclosure",False,False,,
 X12#06,L-Acoustics,X12,1190036012,"12"" passive coaxial enclosure",False,False,,AX,Store,Store
 X12#07,L-Acoustics,X12,1190036013,"12"" passive coaxial enclosure",False,False,,AX,Store,Store
 X12#08,L-Acoustics,X12,1190036014,"12"" passive coaxial enclosure",False,False,,AX,Store,Store
-X12#09,L-Acoustics,X12,1190036015,"12"" passive coaxial enclosure",False,False,,AX,Store,
-X12#10,L-Acoustics,X12,1190036022,"12"" passive coaxial enclosure",False,False,,AX,Store,
-X12#11,L-Acoustics,X12,1190036023,"12"" passive coaxial enclosure",False,False,,AX,Store,
-X12#12,L-Acoustics,X12,1190036038,"12"" passive coaxial enclosure",False,False,,AX,Store,
-X12#13,L-Acoustics,X12,1190036040,"12"" passive coaxial enclosure",False,False,,AX,Store,
-X12#14,L-Acoustics,X12,1190036041,"12"" passive coaxial enclosure",False,False,,AX,Store,
+X12#09,L-Acoustics,X12,1190036015,"12"" passive coaxial enclosure",False,False,,AX,Store,Dry Hire: Creative Technology
+X12#10,L-Acoustics,X12,1190036022,"12"" passive coaxial enclosure",False,False,,AX,Store,Dry Hire: Creative Technology
+X12#11,L-Acoustics,X12,1190036023,"12"" passive coaxial enclosure",False,False,,AX,Store,Dry Hire: Creative Technology
+X12#12,L-Acoustics,X12,1190036038,"12"" passive coaxial enclosure",False,False,,AX,Store,Dry Hire: Creative Technology
+X12#13,L-Acoustics,X12,1190036040,"12"" passive coaxial enclosure",False,False,,AX,Store,Dry Hire: Creative Technology
+X12#14,L-Acoustics,X12,1190036041,"12"" passive coaxial enclosure",False,False,,AX,Store,Dry Hire: Creative Technology
 X12#15,L-Acoustics,X12,1190036043,"12"" passive coaxial enclosure",False,False,,AX,Store,
 X12#16,L-Acoustics,X12,1190036044,"12"" passive coaxial enclosure",False,False,,AX,Store,
 X8#01,L-Acoustics,X8,1260036022,"8"" passive coaxial enclosure",False,False,,AX,Store,Store
@@ -819,22 +819,22 @@ DIABLO#22,Ayrton,Diablo Profile,DB5309015,Profile LED,False,False,,LX,Store,Stor
 DIABLO#23,Ayrton,Diablo Profile,DB5309008,Profile LED,False,False,"2025/09/02	bnjm2000	Discovered screw thread rounded when doing cleaning
 -Jacky",LX,Store,Store
 DIABLO#24,Ayrton,Diablo Profile,DB5309042,Profile LED,False,False,,LX,Store,Store
-PB#01,Astera,Pixel Brick,047-0312660,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
-PB#02,Astera,Pixel Brick,047-0312797,Batt LED Uplighters,False,False,"2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/08/12	bnjm2000	Screen messed up after charging [Marked OOC]|2025/08/14	bnjm2000	Sent in to Total Solutions [Location: Total Solutions]|2025/08/27	bnjm2000	Replaced PB15 rear housing assembly, sent back to us by TSM [Location: Store, Cleared OOC, Cleared Missing]",LX,Store,Store
-PB#03,Astera,Pixel Brick,047-0312711,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
-PB#04,Astera,Pixel Brick,047-0312670,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
-PB#05,Astera,Pixel Brick,047-0312685,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2024/11/15	bnjm2000	Screen dim,LX,Store,
-PB#06,Astera,Pixel Brick,047-0312648,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
-PB#07,Astera,Pixel Brick,047-0312686,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
-PB#08,Astera,Pixel Brick,047-0313538,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
-PB#09,Astera,Pixel Brick,047-0311934,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/08/12	bnjm2000	Screen messed up after charging [Marked OOC]|2025/08/18	bnjm2000	Screen worked again when sending into Total Solutions [Cleared OOC],LX,Store,
-PB#10,Astera,Pixel Brick,047-0312696,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
-PB#11,Astera,Pixel Brick,047-0313634,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2024/11/08	bnjm2000	LED screen cannot on,LX,Store,
-PB#12,Astera,Pixel Brick,047-0312725,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
-PB#13,Astera,Pixel Brick,047-0312683,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2024/11/15	bnjm2000	Screen dim,LX,Store,
-PB#14,Astera,Pixel Brick,047-0312682,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
-PB#15,Astera,Pixel Brick,047-0312734,Batt LED Uplighters,False,False,"2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/05/28	bnjm2000	Collected back from TSM, fixed screen",LX,Store,
-PB#16,Astera,Pixel Brick,047-0313677,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
+PB#01,Astera,Pixel Brick,047-0312660,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,Dry Hire: Variety Communications
+PB#02,Astera,Pixel Brick,047-0312797,Batt LED Uplighters,False,False,"2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/08/12	bnjm2000	Screen messed up after charging [Marked OOC]|2025/08/14	bnjm2000	Sent in to Total Solutions [Location: Total Solutions]|2025/08/27	bnjm2000	Replaced PB15 rear housing assembly, sent back to us by TSM [Location: Store, Cleared OOC, Cleared Missing]",LX,Store,Dry Hire: Variety Communications
+PB#03,Astera,Pixel Brick,047-0312711,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,Dry Hire: Variety Communications
+PB#04,Astera,Pixel Brick,047-0312670,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,Dry Hire: Variety Communications
+PB#05,Astera,Pixel Brick,047-0312685,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2024/11/15	bnjm2000	Screen dim,LX,Store,Dry Hire: Variety Communications
+PB#06,Astera,Pixel Brick,047-0312648,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,Dry Hire: Variety Communications
+PB#07,Astera,Pixel Brick,047-0312686,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,Dry Hire: Variety Communications
+PB#08,Astera,Pixel Brick,047-0313538,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,Dry Hire: Variety Communications
+PB#09,Astera,Pixel Brick,047-0311934,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/08/12	bnjm2000	Screen messed up after charging [Marked OOC]|2025/08/18	bnjm2000	Screen worked again when sending into Total Solutions [Cleared OOC],LX,Store,Dry Hire: Variety Communications
+PB#10,Astera,Pixel Brick,047-0312696,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,Dry Hire: Variety Communications
+PB#11,Astera,Pixel Brick,047-0313634,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2024/11/08	bnjm2000	LED screen cannot on,LX,Store,Dry Hire: Variety Communications
+PB#12,Astera,Pixel Brick,047-0312725,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,Dry Hire: Variety Communications
+PB#13,Astera,Pixel Brick,047-0312683,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2024/11/15	bnjm2000	Screen dim,LX,Store,Dry Hire: Variety Communications
+PB#14,Astera,Pixel Brick,047-0312682,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,Dry Hire: Variety Communications
+PB#15,Astera,Pixel Brick,047-0312734,Batt LED Uplighters,False,False,"2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/05/28	bnjm2000	Collected back from TSM, fixed screen",LX,Store,Dry Hire: Variety Communications
+PB#16,Astera,Pixel Brick,047-0313677,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,Dry Hire: Variety Communications
 PB#17,Astera,Pixel Brick,047-0312751,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
 PB#18,Astera,Pixel Brick,047-0308769,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
 PB#19,Astera,Pixel Brick,047-0312729,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
@@ -1006,10 +1006,10 @@ DN200#03,Klark Teknik,DN200,,,False,False,,AX,Store,
 PULSE2#01,Analogue Way,Pulse 2,,Video Switcher,False,False,,VX,Store,
 75INCH#01,Samsung,,,,False,False,,VX,Store,
 75INCH#02,Samsung,,,,False,False,,VX,Store,
-QM75C#01,Samsung,LH75QMCEBGCXXS,0R3KHNIXA00066,"75"" Crystal UHD Signage",False,False,,VX,Store,Store
-QM75C#02,Samsung,LH75QMCEBGCXXS,0R3KHNIXA00086,"75"" Crystal UHD Signage",False,False,,VX,Store,
-QM75C#03,Samsung,LH75QMCEBGCXXS,0R3KHNIXA00093,"75"" Crystal UHD Signage",False,False,,VX,Store,
-QM75C#04,Samsung,LH75QMCEBGCXXS,0R3KHNIXA00094,"75"" Crystal UHD Signage",False,False,,VX,Store,
+QM75C#01,Samsung,LH75QMCEBGCXXS,0R3KHNIXA00066,"75"" Crystal UHD Signage",False,False,,VX,Store,Dry Hire: Variety Communications
+QM75C#02,Samsung,LH75QMCEBGCXXS,0R3KHNIXA00086,"75"" Crystal UHD Signage",False,False,,VX,Store,Dry Hire: Variety Communications
+QM75C#03,Samsung,LH75QMCEBGCXXS,0R3KHNIXA00093,"75"" Crystal UHD Signage",False,False,,VX,Store,Dry Hire: Variety Communications
+QM75C#04,Samsung,LH75QMCEBGCXXS,0R3KHNIXA00094,"75"" Crystal UHD Signage",False,False,,VX,Store,Dry Hire: Variety Communications
 QM85C#01,Samsung,LH85QMCEBGCXXS,0R3NHNIX600093,"85"" Crystal UHD Signage",False,False,,VX,Store,
 QM85C#02,Samsung,LH85QMCEBGCXXS,0R3NHNIXA00012,"85"" Crystal UHD Signage",False,False,,VX,Store,
 QM85C#03,Samsung,LH85QMCEBGCXXS,0R3NHNIX600095,"85"" Crystal UHD Signage",False,False,,VX,Store,

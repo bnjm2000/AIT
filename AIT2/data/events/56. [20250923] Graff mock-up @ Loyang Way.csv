@@ -1,2 +1,2 @@
 EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,Tag,ForceStateOverride
-56,Graff mock-up @ Loyang Way,20250923,20250923,[],"[""[MODEL]AX|L-Acoustics|5XT|1|5\"" passive coaxial enclosure, black"", ""[MODEL]LX|Astera|Pixel Brick|1|Batt LED Uplighters""]",[],Planning,[],[],events,False
+56,Graff mock-up @ Loyang Way,20250923,20250923,[],"[""[MODEL]AX|L-Acoustics|5XT|1|5\"" passive coaxial enclosure, black"", ""[MODEL]LX|Astera|Pixel Brick|1|Batt LED Uplighters"", ""[MISC]Mini Profile""]",[],Planning,[],[],events,False

@@ -1,34 +1,3 @@
-2025/07/28 17:33:51,bnjm2000,Returned asset AD4Q#03 from event 37
-2025/07/28 17:33:51,bnjm2000,Returned asset AD4Q#04 from event 37
-2025/07/28 17:33:56,bnjm2000,Returned asset CONTROLLER#01 from event 37
-2025/07/28 17:33:57,bnjm2000,Returned asset QL5#01 from event 37
-2025/07/28 17:33:58,bnjm2000,Returned asset AD4Q#02 from event 37
-2025/07/28 17:34:01,bnjm2000,Returned asset CAMEO#01 from event 37
-2025/07/28 17:34:02,bnjm2000,Returned asset COMPACTXT#01 from event 37
-2025/07/28 17:34:05,bnjm2000,Returned asset E904#03 from event 37
-2025/07/28 17:34:08,bnjm2000,Returned asset E904#02 from event 37
-2025/07/28 17:34:08,bnjm2000,Returned asset E904#05 from event 37
-2025/07/28 17:34:12,bnjm2000,Returned asset SM58S#02 from event 37
-2025/07/28 17:34:13,bnjm2000,Returned asset SM58S#04 from event 37
-2025/07/28 17:34:16,bnjm2000,Returned asset C451B#06 from event 37
-2025/07/28 17:34:17,bnjm2000,Returned asset C451B#05 from event 37
-2025/07/28 17:34:18,bnjm2000,Returned asset C451B#04 from event 37
-2025/07/28 17:34:19,bnjm2000,Returned asset C451B#09 from event 37
-2025/07/28 17:34:22,bnjm2000,Returned asset SM57#02 from event 37
-2025/07/28 17:34:25,bnjm2000,Returned asset SM57#01 from event 37
-2025/07/28 17:34:26,bnjm2000,Returned asset AT8668#01 from event 37
-2025/07/28 17:34:28,bnjm2000,Returned asset 32ADB#01 from event 37
-2025/07/28 17:34:31,bnjm2000,Returned asset AT8668#02 from event 37
-2025/07/28 17:34:35,bnjm2000,Returned asset 63ADB#01 from event 37
-2025/07/28 17:34:36,bnjm2000,Returned asset DAD6010#09 from event 37
-2025/07/28 17:34:42,bnjm2000,Returned asset DAD6010#11 from event 37
-2025/07/28 17:34:42,bnjm2000,Returned asset DAD6010#17 from event 37
-2025/07/28 17:34:43,bnjm2000,Returned asset DAD6010#19 from event 37
-2025/07/28 17:34:45,bnjm2000,Returned asset DAD6010#02 from event 37
-2025/07/28 17:34:46,bnjm2000,Returned asset DAD6010#16 from event 37
-2025/07/28 17:34:47,bnjm2000,Returned asset DAD6010#18 from event 37
-2025/07/28 17:34:47,bnjm2000,Returned asset DAD6010#13 from event 37
-2025/07/28 17:34:49,bnjm2000,Returned asset DAD6001#05 from event 37
 2025/07/28 17:34:50,bnjm2000,Returned asset DAD6001#06 from event 37
 2025/07/28 17:34:51,bnjm2000,Returned asset DAD6001#04 from event 37
 2025/07/28 17:34:51,bnjm2000,Returned asset DAD6001#07 from event 37
@@ -999,3 +968,34 @@
 2025/09/16 15:55:15,bnjm2000,Assigned specific asset QUARTZ#02 to event 50
 2025/09/16 15:55:18,bnjm2000,Assigned specific asset AURORA#01 to event 50
 2025/09/16 15:55:18,bnjm2000,Assigned specific asset AURORA#02 to event 50
+2025/09/16 17:41:35,admin,Prepared asset [MISC]Base plate;4 for event 55
+2025/09/16 17:41:35,admin,Prepared asset [MISC]TV Bracket;4 for event 55
+2025/09/16 17:41:36,admin,Prepared asset [MISC]Truss - 2m;4 for event 55
+2025/09/16 17:41:38,admin,Assigned specific asset PB#01 to event 55
+2025/09/16 17:41:39,admin,Assigned specific asset PB#03 to event 55
+2025/09/16 17:41:40,admin,Assigned specific asset PB#02 to event 55
+2025/09/16 17:41:40,admin,Assigned specific asset PB#04 to event 55
+2025/09/16 17:41:41,admin,Assigned specific asset PB#05 to event 55
+2025/09/16 17:41:41,admin,Assigned specific asset PB#06 to event 55
+2025/09/16 17:41:42,admin,Assigned specific asset PB#07 to event 55
+2025/09/16 17:41:43,admin,Assigned specific asset PB#08 to event 55
+2025/09/16 17:41:43,admin,Assigned specific asset PB#09 to event 55
+2025/09/16 17:41:44,admin,Assigned specific asset PB#10 to event 55
+2025/09/16 17:41:44,admin,Assigned specific asset PB#11 to event 55
+2025/09/16 17:41:45,admin,Assigned specific asset PB#12 to event 55
+2025/09/16 17:41:45,admin,Assigned specific asset PB#13 to event 55
+2025/09/16 17:41:46,admin,Assigned specific asset PB#14 to event 55
+2025/09/16 17:41:46,admin,Assigned specific asset PB#15 to event 55
+2025/09/16 17:41:47,admin,Assigned specific asset PB#16 to event 55
+2025/09/16 17:41:49,admin,Assigned specific asset QM75C#01 to event 55
+2025/09/16 17:41:54,admin,Assigned specific asset QM75C#02 to event 55
+2025/09/16 17:41:54,admin,Assigned specific asset QM75C#03 to event 55
+2025/09/16 17:41:55,admin,Assigned specific asset QM75C#04 to event 55
+2025/09/16 17:42:27,admin,Assigned asset [MISC]Mini Profile to event 56 (unprepared)
+2025/09/16 17:42:41,admin,Assigned specific asset X12#09 to event 57
+2025/09/16 17:42:45,admin,Assigned specific asset X12#10 to event 57
+2025/09/16 17:42:49,admin,Assigned specific asset X12#11 to event 57
+2025/09/16 17:42:54,admin,Assigned specific asset X12#12 to event 57
+2025/09/16 17:42:57,admin,Assigned specific asset X12#13 to event 57
+2025/09/16 17:43:01,admin,Assigned specific asset X12#14 to event 57
+2025/09/16 22:06:39,admin,Created event 60: Dior Cruise 2026 Presentation @ Former Command House via web interface
