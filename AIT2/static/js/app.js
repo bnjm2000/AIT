@@ -628,29 +628,73 @@ async function loadDashboard() {
   }
 }
 
-async function loadAllEvents() {
-    try {
-        const response = await apiCall('/api/events');
-        events = response.data;
-        
-        // Update overdue counter
-        const overdueCount = countOverdueEvents(events);
-        updateOverdueCounter(overdueCount);
-        
-        const container = document.getElementById('all-events');
-        container.innerHTML = '';
-        
-        if (events.length === 0) {
-            container.innerHTML = '<p style="text-align: center; color: #666; padding: 40px;">No events found.</p>';
-            return;
-        }
+function sortEventsStartDateFutureTop(list) {
+  const parseEventDate = (val) => {
+    if (!val) return new Date(NaN);
+    if (typeof val === "string") {
+      const norm = val.includes("/")
+        ? (() => {
+            const [y, m, d] = val.split("/");
+            return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+          })()
+        : val;
 
-        events.forEach(event => {
-            container.appendChild(createEventCard(event));
-        });
-    } catch (error) {
-        document.getElementById('all-events').innerHTML = '<p style="color: red; text-align: center;">Error loading events</p>';
+      // force local noon to avoid timezone edge-cases around midnight
+      if (/^\d{4}-\d{2}-\d{2}$/.test(norm)) {
+        return new Date(`${norm}T12:00:00`);
+      }
+      return new Date(norm);
     }
+    return new Date(val);
+  };
+
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+
+  return [...list].sort((a, b) => {
+    const aStart = parseEventDate(a.startDate);
+    const bStart = parseEventDate(b.startDate);
+
+    const aFuture = aStart >= startOfToday;
+    const bFuture = bStart >= startOfToday;
+
+    // bucket: future first
+    if (aFuture !== bFuture) return aFuture ? -1 : 1;
+
+    // within the future bucket: DESC (later first => Oct above Sep)
+    if (aFuture) return bStart - aStart;
+
+    // within past/ongoing bucket: DESC (most recent past first)
+    return bStart - aStart;
+  });
+}
+
+async function loadAllEvents() {
+  try {
+    const response = await apiCall('/api/events');
+    events = response.data;
+
+    // Update overdue counter (unchanged)
+    const overdueCount = countOverdueEvents(events);
+    updateOverdueCounter(overdueCount);
+
+    const container = document.getElementById('all-events');
+    container.innerHTML = '';
+
+    if (!events || events.length === 0) {
+      container.innerHTML = '<p style="text-align: center; color: #666; padding: 40px;">No events found.</p>';
+      return;
+    }
+
+    // NEW: sort by start date with future events on top
+    const sorted = sortEventsStartDateFutureTop(events);
+
+    sorted.forEach(event => {
+      container.appendChild(createEventCard(event));
+    });
+  } catch (error) {
+    document.getElementById('all-events').innerHTML = '<p style="color: red; text-align: center;">Error loading events</p>';
+  }
 }
 
 function createEventCard(event) {
