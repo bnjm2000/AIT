@@ -1482,7 +1482,7 @@ async function openPrepareEventModal(eventId) {
     try {
         const [eventResponse, availableAssetsResponse] = await Promise.all([
             apiCall(`/api/events/${eventId}`),
-            apiCall('/api/assets/available')
+            apiCall(`/api/assets/available-for-event/${eventId}`)
         ]);
         
         const event = eventResponse.data;
@@ -5667,9 +5667,10 @@ function switchEditTab(tabName) {
 
 async function loadEditEventAssets(eventId) {
   try {
-    const [eventResponse, availableAssetsResponse] = await Promise.all([
+    const [eventResponse, availableAssetsResponse, availabilityResponse] = await Promise.all([
       apiCall(`/api/events/${eventId}`),
       apiCall("/api/assets/available"),
+      apiCall(`/api/events/${eventId}/availability`),
     ]);
 
     const event = eventResponse.data;
@@ -5678,6 +5679,8 @@ async function loadEditEventAssets(eventId) {
     // Store for functionality
     window.currentEditAvailableAssets = availableAssets;
     window.currentEditEventId = eventId;
+    window.currentEditEvent = event;
+    window.currentEditAvailabilityList = availabilityResponse.data;
 
     // Helper function to escape HTML
     const escapeHtml = (str) => {
@@ -5866,12 +5869,16 @@ function switchEditTab(tabName) {
 // Load available assets for editing
 async function loadAvailableAssetsForEdit(eventId) {
   try {
-    const response = await apiCall("/api/assets/available");
-    const availableAssets = response.data;
+    const [availableResponse, availabilityResponse] = await Promise.all([
+      apiCall("/api/assets/available"),
+      apiCall(`/api/events/${eventId}/availability`),
+    ]);
+    const availableAssets = availableResponse.data;
 
     // Store for search functionality
     window.currentEditAvailableAssets = availableAssets;
     window.currentEditEventId = eventId;
+    window.currentEditAvailabilityList = availabilityResponse.data;
   } catch (error) {
     console.error("Error loading available assets:", error);
   }
@@ -7003,11 +7010,11 @@ async function removeAssetFromEvent(eventId, assetId) {
     }
 }
 
-// Filter available asset models for original interface
 function filterAvailableModels(searchTerm) {
   const container = document.getElementById("available-models-container");
   const availableAssets = window.currentEditAvailableAssets || [];
   const eventId = window.currentEditEventId;
+  const availabilityList = window.currentEditAvailabilityList || [];
 
   if (!container) {
     console.error("Available models container not found");
@@ -7020,7 +7027,7 @@ function filterAvailableModels(searchTerm) {
     return;
   }
 
-  // Group available assets by model
+  // Group ALL non-missing/OOC assets by model (physical pool)
   const modelGroups = {};
   availableAssets.forEach(asset => {
     const modelKey = `${asset.department}|${asset.brand}|${asset.model}|${escapeJs(asset.description || '')}`;
@@ -7030,15 +7037,15 @@ function filterAvailableModels(searchTerm) {
         brand: asset.brand,
         model: asset.model,
         description: asset.description || '',
-        count: 0,
+        count: 0,     // physical count
         assets: []
       };
     }
-    modelGroups[modelKey].count++;
+    modelGroups[modelKey].count += 1;
     modelGroups[modelKey].assets.push(asset);
   });
 
-  // Filter models based on search
+  // Filter models by search
   const searchLower = searchTerm.toLowerCase();
   const filteredModels = Object.values(modelGroups).filter(model => {
     const searchableText = `${model.brand} ${model.model} ${model.description}`.toLowerCase();
@@ -7050,27 +7057,65 @@ function filterAvailableModels(searchTerm) {
     return;
   }
 
+  const adjustedAvailFor = (m) => {
+    const list = window.currentEditAvailabilityList || [];
+
+    // 1) try exact 4-tuple match (dept, brand, model, desc)
+    let entry = list.find(e =>
+      e.department === m.department &&
+      e.brand === m.brand &&
+      e.model === m.model &&
+      (e.description || '') === (m.description || '')
+    );
+    if (entry) {
+      return {
+        adjusted: (entry.available ?? 0),     // per-description display value from backend
+        physical: (entry.physical ?? m.count) // per-description physical from backend
+      };
+    }
+
+    // 2) fall back to 3-tuple match (dept, brand, model) ignoring description
+    entry = list.find(e =>
+      e.department === m.department &&
+      e.brand === m.brand &&
+      e.model === m.model
+    );
+    if (entry) {
+      // We must never exceed this card’s own physical count
+      const display = Math.max(0, Math.min(entry.adjustedGlobal ?? entry.available ?? 0, m.count));
+      return { adjusted: display, physical: m.count };
+    }
+
+    // 3) final fallback: show physical only
+    return { adjusted: m.count, physical: m.count };
+  };
+
   let html = '';
   filteredModels.slice(0, 20).forEach(model => {
     const cleanBrand = model.brand.replace(/\s+/g, "");
     const cleanModel = model.model.replace(/\s+/g, "");
     const qtyInputId = `qty-${cleanBrand}-${cleanModel}`;
-    
+
+    const { adjusted, physical } = adjustedAvailFor(model);
+    const displayCount = Math.max(0, adjusted);
+    const color = adjusted < 1 ? '#dc3545' : '#28a745'; // RED if fewer than 1 remaining
+
     html += `
       <div style="padding: 12px; border-bottom: 1px solid #f1f1f1; display: flex; justify-content: space-between; align-items: center;">
         <div style="flex: 1;">
           <div style="font-weight: 500; margin-bottom: 4px;">${model.brand} ${model.model}</div>
           <div style="color: #666; font-size: 13px; margin-bottom: 2px;">${model.description}</div>
-          <div style="color: #28a745; font-size: 12px;">${model.count} available</div>
+          <div style="font-size: 12px; color: ${color};">${displayCount} available</div>
         </div>
         <div style="display: flex; align-items: center; gap: 10px;">
-          <input type="number" id="${qtyInputId}" min="1" max="${model.count}" value="1" 
+          <!-- IMPORTANT: we keep max bound to PHYSICAL so we do NOT prevent adding when adjusted < 1 -->
+          <input type="number" id="${qtyInputId}" min="1" max="${physical}" value="1"
                  style="width: 60px; padding: 4px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;"
-                 oninput="validateQuantityInput('${qtyInputId}', ${model.count})"
-                 onblur="handleQuantityBlur('${qtyInputId}', ${model.count})"
+                 oninput="validateQuantityInput('${qtyInputId}', ${physical})"
+                 onblur="handleQuantityBlur('${qtyInputId}', ${physical})"
                  onkeydown="handleQuantityKeydown(event)">
-          <button class="btn btn-primary add-model-btn" style="padding: 6px 12px; font-size: 12px;" 
-                  data-event-id="${eventId}" data-brand="${model.brand}" data-model="${model.model}" 
+          <button class="btn btn-primary add-model-btn" style="padding: 6px 12px; font-size: 12px;"
+                  data-event-id="${eventId}" data-brand="${model.brand}" data-model="${model.model}"
                   data-department="${model.department}" data-description="${escapeHtmlAttribute(model.description)}">
             Add
           </button>
@@ -7078,7 +7123,7 @@ function filterAvailableModels(searchTerm) {
       </div>
     `;
   });
-  
+
   container.innerHTML = html;
 }
 

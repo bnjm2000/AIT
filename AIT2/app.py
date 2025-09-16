@@ -13,7 +13,7 @@ import threading
 import time
 
 # Import your existing modules
-from models import User, InventoryItem, Container, Event, LogEntry, hash_password, format_date_output
+from models import User, InventoryItem, Container, Event, LogEntry, hash_password, format_date_output, dates_overlap
 from data_manager import DataManager
 from utils import get_state_color
 from urllib.parse import unquote_plus
@@ -36,6 +36,26 @@ _cache = {
     'cache_timestamp': None
 }
 
+from datetime import datetime as _dt
+from flask import request, jsonify
+
+def _parse_any_date(_s):
+    if not _s:
+        return None
+    s = str(_s).strip()
+    for fmt in ("%Y%m%d", "%Y/%m/%d", "%Y-%m-%d"):
+        try:
+            return _dt.strptime(s, fmt).date()
+        except Exception:
+            pass
+    return None
+
+def _ranges_overlap(a_start, a_end, b_start, b_end):
+    ad1, ad2 = _parse_any_date(a_start), _parse_any_date(a_end)
+    bd1, bd2 = _parse_any_date(b_start), _parse_any_date(b_end)
+    if not all([ad1, ad2, bd1, bd2]):
+        return False
+    return ad1 <= bd2 and bd1 <= ad2
 
 def invalidate_cache():
     """Invalidate the asset cache when data changes"""
@@ -53,7 +73,165 @@ def require_auth(f):
         return f(*args, **kwargs)
     return decorated_function
 
+@app.route('/api/assets/available-for-event/<int:event_id>', methods=['GET'])
+@require_auth
+def get_available_assets_for_event(event_id):
+    """
+    Return the list of *asset objects* that are free for this event, after subtracting:
+      - assets specifically assigned (and not returned) to overlapping events, and
+      - additional assets equal to the *model quantity* reserved in those overlapping events
+        (even if no specific IDs have been attached there yet).
 
+    Matching/comparison is done by (department, brand, model) — description is ignored for the overlap math.
+    We DO NOT prevent anything on the client — this only adjusts the 'available' list/counts shown to the user.
+    """
+    try:
+        # --- Load target event & its dates ---
+        event = data_manager.events.get(event_id)
+        if not event:
+            return jsonify({'error': 'Event not found'}), 404
+
+        my_start = getattr(event, 'start_date', '')
+        my_end   = getattr(event, 'end_date', '')
+
+        from collections import defaultdict
+
+        # --- Build a pool of all physical assets (not missing/OOC) grouped by model key (dept, brand, model) ---
+        assets_by_k3 = defaultdict(list)   # (dept, brand, model) -> [asset_id, ...]
+        asset_info = {}                    # id -> { id, brand, model, description, department, serial, ... }
+
+        for a_id, a in data_manager.inventory.items():
+            if not a:
+                continue
+            if getattr(a, 'is_missing', False) or getattr(a, 'is_ooc', False):
+                continue
+            k3 = (a.department_code, a.brand, a.model_number)
+            assets_by_k3[k3].append(a_id)
+            # shape it to what your frontend expects
+            asset_info[a_id] = {
+                'id': a_id,
+                'brand': a.brand,
+                'model': a.model_number,
+                'description': getattr(a, 'description', '') or '',
+                'department': a.department_code,
+                'serial': getattr(a, 'serial', '') or '',
+                # add any other fields your UI shows here if needed
+            }
+
+        # --- Tally overlapping events' demand ---
+        #   For each overlapping event:
+        #     event_demand_by_k3 = max( MODEL qty sum by k3 , count of specific assets assigned & not returned by k3 )
+        #   Sum across all overlapping events.
+        total_specific_by_k3 = defaultdict(int)
+        total_event_demand_by_k3 = defaultdict(int)
+
+        for other in data_manager.events.values():
+            if not other or other.event_id == event_id:
+                continue
+            if not _ranges_overlap(my_start, my_end, getattr(other, 'start_date', ''), getattr(other, 'end_date', '')):
+                continue
+
+            returned_other = set(getattr(other, 'returned_items', []) or [])
+            other_specific_by_k3 = defaultdict(int)
+            other_model_qty_by_k3 = defaultdict(int)
+
+            for it in getattr(other, 'prepared_items', []) or []:
+                if not isinstance(it, str):
+                    continue
+
+                # [MODEL]dept|brand|model|qty|desc?
+                if it.startswith('[MODEL]'):
+                    parts = it[7:].split('|')
+                    if len(parts) >= 4:
+                        dept = parts[0]; brand = parts[1]; model = parts[2]
+                        try:
+                            qty = int(parts[3])
+                        except Exception:
+                            qty = 0
+                        other_model_qty_by_k3[(dept, brand, model)] += qty
+                    continue
+
+                # specific asset id
+                if it.startswith('[LOAN]') or it.startswith('[MISC]'):
+                    # ignore custom lines here
+                    continue
+
+                # count only if not returned
+                if it in returned_other:
+                    continue
+                a = data_manager.inventory.get(it)
+                if not a or getattr(a, 'is_missing', False) or getattr(a, 'is_ooc', False):
+                    continue
+                k3 = (a.department_code, a.brand, a.model_number)
+                other_specific_by_k3[k3] += 1
+
+            # accumulate totals
+            for k3 in set(other_model_qty_by_k3.keys()) | set(other_specific_by_k3.keys()):
+                ev_specific = other_specific_by_k3.get(k3, 0)
+                ev_models   = other_model_qty_by_k3.get(k3, 0)
+                ev_demand   = max(ev_models, ev_specific)
+                total_specific_by_k3[k3] += ev_specific
+                total_event_demand_by_k3[k3] += ev_demand
+
+        # --- Build a set of "busy" asset IDs we must exclude from availability ---
+        busy_assets = set()
+
+        # 1) Add specifically assigned assets from overlapping events (not returned)
+        for other in data_manager.events.values():
+            if not other or other.event_id == event_id:
+                continue
+            if not _ranges_overlap(my_start, my_end, getattr(other, 'start_date', ''), getattr(other, 'end_date', '')):
+                continue
+            returned_other = set(getattr(other, 'returned_items', []) or [])
+            for it in getattr(other, 'prepared_items', []) or []:
+                if not isinstance(it, str):
+                    continue
+                if it.startswith('[MODEL]') or it.startswith('[LOAN]') or it.startswith('[MISC]'):
+                    continue
+                if it in returned_other:
+                    continue
+                # it's a specific asset id
+                busy_assets.add(it)
+
+        # 2) For the remaining "pure model qty" demand, reserve additional assets by k3
+        #    extra_needed_by_k3 = total_event_demand_by_k3 - total_specific_by_k3
+        extra_needed_by_k3 = {
+            k3: max(total_event_demand_by_k3.get(k3, 0) - total_specific_by_k3.get(k3, 0), 0)
+            for k3 in set(total_event_demand_by_k3.keys()) | set(total_specific_by_k3.keys())
+        }
+
+        # Also remove assets this *current* event already has assigned (so we don't offer them again)
+        current_assigned = set()
+        for it in getattr(event, 'prepared_items', []) or []:
+            if isinstance(it, str) and not it.startswith('[MODEL]') and not it.startswith('[LOAN]') and not it.startswith('[MISC]'):
+                current_assigned.add(it)
+
+        # For each k3, grab extra_needed assets from free pool and mark as busy
+        for k3, need in extra_needed_by_k3.items():
+            if need <= 0:
+                continue
+            # candidate pool = all assets of this k3 minus already busy minus already in this event
+            pool = [aid for aid in assets_by_k3.get(k3, [])
+                    if aid not in busy_assets and aid not in current_assigned]
+            # pick any 'need' assets (stable order by id)
+            pool.sort()
+            for aid in pool[:need]:
+                busy_assets.add(aid)
+
+        # --- Now compute the final list of assets that are free for this event ---
+        # Base pool = all physical assets minus busy assets minus those already in this event
+        final_ids = [aid for aid in asset_info.keys()
+                     if aid not in busy_assets and aid not in current_assigned]
+
+        # Optionally, if you previously excluded anything else in /api/assets/available (like maintenance), do it here too.
+
+        # Shape into the same structure the frontend expects
+        final_list = [asset_info[aid] for aid in sorted(final_ids)]
+        return jsonify({'success': True, 'data': final_list})
+    except Exception as e:
+        logger.error(f"Error computing available-for-event({event_id}): {e}")
+        return jsonify({'error': 'Failed to compute event-aware availability'}), 500
+    
 def require_admin(f):
     """Decorator to require admin privileges"""
     @wraps(f)
@@ -927,7 +1105,130 @@ def get_event(event_id):
     except Exception as e:
         logger.error(f"Error getting event {event_id}: {e}")
         return jsonify({'error': 'Failed to retrieve event'}), 500
-    
+
+@app.route('/api/events/<int:event_id>/availability', methods=['GET'])
+@require_auth
+def get_event_model_availability(event_id):
+    """
+    For a given event, compute availability per (dept, brand, model), ignoring description for overlap math:
+      global_physical(∑ across desc)
+      - used_here_models(∑ across desc for THIS event)
+      - overlapping_demand(∑ across desc for OTHER overlapping events,
+                           taken as max(models_qty_sum, specific_assets_count))
+    For display per description row, we clamp to the per-description physical with:
+      available_for_desc = max(0, min(global_adjusted, physical_for_desc))
+
+    We DO NOT block adding when available < 1; UI just shows the number in red.
+    """
+    try:
+        event = data_manager.events.get(event_id)
+        if not event:
+            return jsonify({'error': 'Event not found'}), 404
+
+        from collections import defaultdict
+
+        # ---------- 1) PHYSICAL ----------
+        # per-desc: key4 = (dept, brand, model, desc)
+        # desc-agnostic: key3 = (dept, brand, model)
+        physical_by4 = defaultdict(int)
+        physical_by3 = defaultdict(int)
+
+        for asset in data_manager.inventory.values():
+            if not asset:
+                continue
+            if getattr(asset, 'is_missing', False) or getattr(asset, 'is_ooc', False):
+                continue
+            k4 = (asset.department_code, asset.brand, asset.model_number, asset.description or '')
+            k3 = (asset.department_code, asset.brand, asset.model_number)
+            physical_by4[k4] += 1
+            physical_by3[k3] += 1
+
+        # ---------- 2) USED IN THIS EVENT (MODEL LINES), desc-agnostic ----------
+        used_here_by3 = defaultdict(int)
+        for it in getattr(event, 'prepared_items', []) or []:
+            if isinstance(it, str) and it.startswith('[MODEL]'):
+                parts = it[7:].split('|')  # dept|brand|model|qty|desc?
+                if len(parts) >= 4:
+                    dept = parts[0]; brand = parts[1]; model = parts[2]
+                    try:
+                        qty = int(parts[3])
+                    except Exception:
+                        qty = 0
+                    used_here_by3[(dept, brand, model)] += qty
+
+        # ---------- 3) OVERLAPPING DEMAND (OTHER EVENTS), desc-agnostic ----------
+        overlap_by3 = defaultdict(int)
+        my_s, my_e = getattr(event, 'start_date', ''), getattr(event, 'end_date', '')
+
+        for other in data_manager.events.values():
+            if not other or other.event_id == event_id:
+                continue
+            if not _ranges_overlap(my_s, my_e, getattr(other, 'start_date', ''), getattr(other, 'end_date', '')):
+                continue
+
+            # Sum MODEL qty across descriptions
+            other_models_by3 = defaultdict(int)
+            # Count specific assets (not returned)
+            other_specific_by3 = defaultdict(int)
+            returned_other = set(getattr(other, 'returned_items', []) or [])
+
+            for it in getattr(other, 'prepared_items', []) or []:
+                if isinstance(it, str) and it.startswith('[MODEL]'):
+                    p = it[7:].split('|')  # dept|brand|model|qty|desc?
+                    if len(p) >= 4:
+                        k3 = (p[0], p[1], p[2])
+                        try:
+                            other_models_by3[k3] += int(p[3])
+                        except Exception:
+                            pass
+                    continue
+
+                # Specific asset IDs (exclude virtual markers)
+                if isinstance(it, str) and not (it.startswith('[MODEL]') or it.startswith('[LOAN]') or it.startswith('[MISC]')):
+                    if it in returned_other:
+                        continue
+                    a = data_manager.inventory.get(it)
+                    if not a or getattr(a, 'is_missing', False) or getattr(a, 'is_ooc', False):
+                        continue
+                    k3 = (a.department_code, a.brand, a.model_number)
+                    other_specific_by3[k3] += 1
+
+            # For each key3 present, overlap demand += max(models_sum, specific_count)
+            for k3 in set(other_models_by3.keys()) | set(other_specific_by3.keys()):
+                overlap_by3[k3] += max(other_models_by3.get(k3, 0), other_specific_by3.get(k3, 0))
+
+        # ---------- 4) Build response per description row ----------
+        result = []
+        # Iterate every description variant we physically have; that’s what UI lists/searches
+        for k4, physical_desc in physical_by4.items():
+            dept, brand, model, desc = k4
+            k3 = (dept, brand, model)
+            physical_global = physical_by3.get(k3, 0)
+            used_here = used_here_by3.get(k3, 0)
+            overlap = overlap_by3.get(k3, 0)
+
+            global_adjusted = physical_global - used_here - overlap
+            # show per-desc availability but never above that desc’s own physical
+            available_for_desc = max(0, min(global_adjusted, physical_desc))
+
+            result.append({
+                'department': dept,
+                'brand': brand,
+                'model': model,
+                'description': desc,
+                'physical': physical_desc,             # physical for THIS description
+                'physicalGlobal': physical_global,     # physical across all desc
+                'usedInThisEvent': used_here,          # desc-agnostic
+                'overlappingDemand': overlap,          # desc-agnostic
+                'available': available_for_desc,       # final display value for THIS description
+                'adjustedGlobal': max(global_adjusted, 0)
+            })
+
+        return jsonify({'success': True, 'data': result})
+    except Exception as e:
+        logger.error(f"Error computing model availability for event {event_id}: {e}")
+        return jsonify({'error': 'Failed to compute availability'}), 500
+
 @app.route('/api/events', methods=['POST'])
 @require_auth
 def create_event():
