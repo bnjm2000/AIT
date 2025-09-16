@@ -1267,17 +1267,6 @@ def add_asset_to_event(event_id):
             if asset.is_ooc:
                 return jsonify({'error': 'Cannot assign out-of-commission asset'}), 400
 
-            # Check if asset is assigned to another active event
-            assigned_assets = get_assigned_assets()
-            if asset_id in assigned_assets:
-                for other_event in data_manager.events.values():
-                    if (other_event.event_id != event_id and
-                        asset_id in other_event.prepared_items and
-                            asset_id not in other_event.returned_items):
-                        return jsonify({
-                            'error': f'Asset is currently assigned to Event {other_event.event_id}: {other_event.name}'
-                        }), 400
-
         # Add the asset as UNPREPARED (just assigned to event)
         event.prepared_items.append(asset_id)
 
@@ -1323,6 +1312,35 @@ def manage_event_models(event_id):
             department = data.get('department', '').strip()
             provided_description = data.get('description', '').strip()
             quantity = int(data.get('quantity', 1))
+
+            # --- server-side cap: total assigned for this brand/model/dept cannot exceed physical inventory ---
+            # Count how many you physically own (ignore deployments), excluding Missing/OOC
+            inv_count = sum(
+                1 for a in data_manager.inventory.values()
+                if (a.brand == brand and a.model_number == model and a.department_code == department
+                    and not a.is_missing and not a.is_ooc)
+            )
+
+            # Current total of this brand/model/dept already requested in this event (across all descriptions)
+            current_total = 0
+            for item in event.prepared_items:
+                if item.startswith('[MODEL]'):
+                    parts = item[7:].split('|')
+                    if len(parts) >= 4 and parts[0] == department and parts[1] == brand and parts[2] == model:
+                        try:
+                            current_total += int(parts[3])
+                        except Exception:
+                            pass
+
+            requested_total = current_total + quantity
+            if requested_total > inv_count:
+                return jsonify({
+                    'error': (
+                        f"Quantity exceeds inventory: you have {inv_count} units of {brand} {model} "
+                        f"in {department}. Already assigned here: {current_total}. Requested additional: {quantity}."
+                    )
+                }), 400
+
 
             logger.info(f"=== ADD MODEL REQUEST ===")
             logger.info(f"Brand: '{brand}', Model: '{model}', Dept: '{department}'")
@@ -2268,17 +2286,14 @@ def get_assets():
 @app.route('/api/assets/available', methods=['GET'])
 @require_auth
 def get_available_assets():
-    """Get all assets that are available for assignment"""
+    """
+    Get assets that are assignable, ignoring whether they are already assigned
+    to other events. We only exclude Missing / OOC here.
+    """
     try:
-        assigned_assets = get_assigned_assets()
-
-        # Filter available assets
         available_assets = []
         for asset in data_manager.inventory.values():
-            if (asset.asset_id not in assigned_assets and
-                not asset.is_missing and
-                    not asset.is_ooc):
-
+            if not asset.is_missing and not asset.is_ooc:
                 available_assets.append({
                     'id': asset.asset_id,
                     'brand': asset.brand,
@@ -2289,9 +2304,8 @@ def get_available_assets():
                     'location': asset.current_location or asset.default_location
                 })
 
-        # Sort by department, then by asset ID
+        # keep the same sort as before to avoid UI surprises
         available_assets.sort(key=lambda x: (x['department'], x['id']))
-
         return jsonify({'success': True, 'data': available_assets})
     except Exception as e:
         logger.error(f"Error getting available assets: {e}")
