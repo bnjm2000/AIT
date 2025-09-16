@@ -438,28 +438,28 @@ SYVA#03,L-Acoustics,Syva,1350010798,"5"" Colinear source",False,False,,AX,Store,
 SYVA#04,L-Acoustics,Syva,1350010807,"5"" Colinear source",False,False,,AX,Store,Store
 SYVA#05,L-Acoustics,Syva,1350011541,"5"" Colinear source",False,False,,AX,Store,Store
 SYVA#06,L-Acoustics,Syva,1350011571,"5"" Colinear source",False,False,,AX,Store,Store
-SYVALOW#01,L-Acoustics,Syva Low,,Bass reflex dual 12",False,False,,AX,Store,Store
-SYVALOW#02,L-Acoustics,Syva Low,,Bass reflex dual 12",False,False,,AX,Store,Store
-SYVALOW#03,L-Acoustics,Syva Low,,Bass reflex dual 12",False,False,,AX,Store,Store
-SYVALOW#04,L-Acoustics,Syva Low,,Bass reflex dual 12",False,False,,AX,Store,Store
-SYVALOW#05,L-Acoustics,Syva Low,,Bass reflex dual 12",False,False,,AX,Store,Store
-SYVALOW#06,L-Acoustics,Syva Low,,Bass reflex dual 12",False,False,,AX,Store,Store
-SYVALOW#07,L-Acoustics,Syva Low,,Bass reflex dual 12",False,False,,AX,Store,Store
-SYVALOW#08,L-Acoustics,Syva Low,,Bass reflex dual 12",False,False,,AX,Store,Store
+SYVALOW#01,L-Acoustics,Syva Low,,"Bass reflex dual 12""",False,False,,AX,Store,Store
+SYVALOW#02,L-Acoustics,Syva Low,,"Bass reflex dual 12""",False,False,,AX,Store,Store
+SYVALOW#03,L-Acoustics,Syva Low,,"Bass reflex dual 12""",False,False,,AX,Store,Store
+SYVALOW#04,L-Acoustics,Syva Low,,"Bass reflex dual 12""",False,False,,AX,Store,Store
+SYVALOW#05,L-Acoustics,Syva Low,,"Bass reflex dual 12""",False,False,,AX,Store,Store
+SYVALOW#06,L-Acoustics,Syva Low,,"Bass reflex dual 12""",False,False,,AX,Store,Store
+SYVALOW#07,L-Acoustics,Syva Low,,"Bass reflex dual 12""",False,False,,AX,Store,Store
+SYVALOW#08,L-Acoustics,Syva Low,,"Bass reflex dual 12""",False,False,,AX,Store,Store
 LPClaw#01,Latin Percussion,LP592A,,The Claw,False,False,,AX,Store,
 LPClaw#02,Latin Percussion,LP592A,,The Claw,False,False,,AX,Store,
 LPClaw#03,Latin Percussion,LP592A,,The Claw,False,False,,AX,Store,
 LPClaw#04,Latin Percussion,LP592A,,The Claw,False,False,,AX,Store,
 MR-90A#01,MiPro,MR-90,878292429A,Interlink receiver,False,False,2024/11/26	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	2024/11/26 - Collected back from MiPro after testing,AX,Store,Store
-MR-90A#02,MiPro,MR-90,878292430A,Interlink receiver,False,False,2024/11/26	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	2024/11/26 - Collected back from MiPro after testing,AX,Store,Store
-MR-90A#03,MiPro,MR-90,878292432A,Interlink receiver,False,False,"2024/11/01	bnjm2000	discovered no output (Dior @ ION Orchard (demo)) [Marked OOC]|2024/11/11	bnjm2000	Handed over to MiPro for repair|2024/11/12	bnjm2000	repaired by MiPro [Cleared OOC]|2024/11/13	bnjm2000	Collected back from MiPro|2024/11/20	bnjm2000	Send to MiPro for testing|2024/11/21	bnjm2000	Issue with RF B, sent to Taiwan for repair [Location: MiPro Taiwan, Marked OOC]|2025/06/26	bnjm2000	Collected back from MiPro [Location: Store, Cleared OOC]",AX,Store,Store
+MR-90A#02,MiPro,MR-90,878292430A,Interlink receiver,False,False,2024/11/26	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	2024/11/26 - Collected back from MiPro after testing,AX,Store,Louis Vuitton Event @ MBS
+MR-90A#03,MiPro,MR-90,878292432A,Interlink receiver,False,False,"2024/11/01	bnjm2000	discovered no output (Dior @ ION Orchard (demo)) [Marked OOC]|2024/11/11	bnjm2000	Handed over to MiPro for repair|2024/11/12	bnjm2000	repaired by MiPro [Cleared OOC]|2024/11/13	bnjm2000	Collected back from MiPro|2024/11/20	bnjm2000	Send to MiPro for testing|2024/11/21	bnjm2000	Issue with RF B, sent to Taiwan for repair [Location: MiPro Taiwan, Marked OOC]|2025/06/26	bnjm2000	Collected back from MiPro [Location: Store, Cleared OOC]",AX,Store,Louis Vuitton Event @ MBS
 MR-90A#04,MiPro,MR-90,878292434A,Interlink receiver,False,False,"2024/11/11	bnjm2000	2024/11/05 - Low RF, AF cutting in and out (Dior @ ION Orchard) [Marked OOC]|2024/11/11	bnjm2000	2024/11/11 - Handed over to MiPro for repair|2024/11/12	bnjm2000	2024/11/12 - repaired by MiPro [Cleared OOC]|2024/11/13	bnjm2000	2024/11/13 - Collected back from MiPro|2024/11/26	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	2024/11/26 - Collected back from MiPro after testing",AX,Store,Store
 MR-90A#05,MiPro,MR-90,878292431A,Interlink receiver,False,False,"2024/10/29	bnjm2000	discovered no output (Hermes @ Takashimaya) [Marked OOC]|2024/11/11	bnjm2000	2024/11/11 - Handed over to MiPro for repair|2024/11/13	bnjm2000	2024/11/13 - Collected back from MiPro [Cleared OOC]|2024/11/26	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	2024/11/26 - Tested in MiPro office with RF Dropout, remain with MiPro for further testing/repair [Marked OOC]|2025/05/21	bnjm2000	Send in to Mipro, no RF receiving|2025/05/22	bnjm2000	Technician tested working, went to MiPro office to check before collecting. Audio came through but unit kept skipping channels. MiPro did a 1-to-1 swap. New SN: 878292431A Old SN:878292435A [Cleared OOC]",AX,Store,Store
 MR-90A#06,MiPro,MR-90,878292436A,Interlink receiver,False,False,2024/11/26	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	2024/11/26 - Collected back from MiPro after testing,AX,Store,Store
 MT-90A#01,MiPro,MT-90A,858290901A,Interlink Transmitter,False,False,2024/11/26	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	2024/11/26 - Collected back from MiPro after testing,AX,Store,Store
 MT-90A#02,MiPro,MT-90A,858290902A,Interlink Transmitter,False,False,2024/11/26	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	2024/11/26 - Collected back from MiPro after testing,AX,Store,
 MT-90A#03,MiPro,MT-90A,858290899A,Interlink Transmitter,False,False,2024/11/26	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	changed transmitter to same type (Old S/N: 809264158A)|2024/11/26	bnjm2000	2024/11/26 - Collected back from MiPro after testing,AX,Store,
-MT-90A#04,MiPro,MT-90A,858290898A,Interlink Transmitter,False,False,"2024/11/20	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	2024/11/26 - Collected back from MiPro after testing|2024/10/15	bnjm2000	Device keeps restarting, suspect PSU faulty (Wedding of Kenneth and Wong Mei Yin) [Marked OOC]|2025/10/24	bnjm2000	Handed over to MiPro for PSU testing [Location: MiPro]|2024/11/13	bnjm2000	Collected back from MiPro [Location: Store, Cleared OOC]",AX,Store,Store
+MT-90A#04,MiPro,MT-90A,858290898A,Interlink Transmitter,False,False,"2024/11/20	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	2024/11/26 - Collected back from MiPro after testing|2024/10/15	bnjm2000	Device keeps restarting, suspect PSU faulty (Wedding of Kenneth and Wong Mei Yin) [Marked OOC]|2025/10/24	bnjm2000	Handed over to MiPro for PSU testing [Location: MiPro]|2024/11/13	bnjm2000	Collected back from MiPro [Location: Store, Cleared OOC]",AX,Store,Louis Vuitton Event @ MBS
 GSM4212P#01,Netgear,GSM4212P,6VB52B51A0392,Managed Switch,False,False,,AX,Store,Store
 GSM4212P#02,Netgear,GSM4212P,6VB52B5AA039B,Managed Switch,False,False,,AX,Store,Store
 GSM4212P#03,Netgear,GSM4212P,6VB52B5CA03B9,Managed Switch,False,False,,AX,Store,Store
@@ -529,11 +529,11 @@ AD2#13,Shure,AD2,2CC22174217,Handheld Microphone [G56],False,False,2025/07/10	bn
 AD2#14,Shure,AD2,2CC22173949,Handheld Microphone [G56],False,False,,AX,Store,Store
 AD2#15,Shure,AD2,2CC22174180,Handheld Microphone [G56],False,False,,AX,Store,Store
 AD2#16,Shure,AD2,2SC0752116,Handheld Microphone [G56],False,False,,AX,Store,Store
-AD3#01,Shure,AD3,3CE17731585,Plug-on Transmitter,False,False,,AX,Store,Store
+AD3#01,Shure,AD3,3CE17731585,Plug-on Transmitter,False,False,,AX,Store,Valentino Le Meta-Theatre Des Intimates @ ArtSpace
 AD3#02,Shure,AD3,3CB24309820,Plug-on Transmitter,False,False,,AX,Store,Store
-AD3#03,Shure,AD3,3B21414454,Plug-on Transmitter,False,False,,AX,Store,Store
+AD3#03,Shure,AD3,3B21414454,Plug-on Transmitter,False,False,,AX,Store,Valentino Le Meta-Theatre Des Intimates @ ArtSpace
 AD3#04,Shure,AD3,3TH09460854,Plug-on Transmitter,False,False,,AX,Store,Store
-AD4D#01,Shure,AD4D,,Two-Channel Digital Wireless Receiver,False,False,,AX,Store,
+AD4D#01,Shure,AD4D,,Two-Channel Digital Wireless Receiver,False,False,,AX,Store,Valentino Le Meta-Theatre Des Intimates @ ArtSpace
 AD4Q#01,Shure,AD4Q,,Four-Channel Digital Wireless Receiver,False,False,,AX,Store,Store
 AD4Q#02,Shure,AD4Q,,Four-Channel Digital Wireless Receiver,False,False,,AX,Store,Store
 AD4Q#03,Shure,AD4Q,,Four-Channel Digital Wireless Receiver,False,False,,AX,Store,Store
@@ -738,7 +738,7 @@ MA2PCWING#01,GrandMA2,PCWing,,Console,False,False,,LX,Store,
 PEARL2010#01,Avolites,Pearl 2010,,Console,False,False,,LX,Store,
 TIGERTOUCH2#01,Avolites,Tiger Touch 2,,Console,False,False,,LX,Store,Store
 QUARTZ#01,Avolites,Quartz,QTZHS23122602C,Console,False,False,,LX,Store,Store
-QUARTZ#02,Avolites,Quartz,QTZHS23122701C,Console,False,False,,LX,Store,Store
+QUARTZ#02,Avolites,Quartz,QTZHS23122701C,Console,False,False,,LX,Store,Valentino Le Meta-Theatre Des Intimates @ ArtSpace
 ESPRITE#01,Robe,ESPRITE,,Profile LED,False,False,,LX,Store,
 ESPRITE#02,Robe,ESPRITE,,Profile LED,False,False,,LX,Store,
 ESPRITE#03,Robe,ESPRITE,,Profile LED,False,False,,LX,Store,
@@ -797,10 +797,10 @@ DIABLO#01,Ayrton,Diablo (W.DMX),DB2935040,Profile LED,False,False,,LX,Store,Stor
 DIABLO#02,Ayrton,Diablo (W.DMX),DB2935047,Profile LED,False,False,"2025/05/25	bnjm2000	Discovered fan error (Wedding of Micheal and Cindy) [Location: Total Solutions, Marked OOC]|2025/06/05	bnjm2000	Sent to TSM, reset connector tested okay - $80 [Location: Store, Cleared OOC]",LX,Store,Store
 DIABLO#03,Ayrton,Diablo (W.DMX),DB2935098,Profile LED,False,False,,LX,Store,Store
 DIABLO#04,Ayrton,Diablo (W.DMX),DB2935016,Profile LED,False,False,,LX,Store,Store
-DIABLO#05,Ayrton,Diablo (W.DMX),DB2953048,Profile LED,False,False,,LX,Store,
-DIABLO#06,Ayrton,Diablo (W.DMX),DB2935001,Profile LED,False,False,,LX,Store,
-DIABLO#07,Ayrton,Diablo (W.DMX),DB2935033,Profile LED,False,False,,LX,Store,
-DIABLO#08,Ayrton,Diablo (W.DMX),DB2935002,Profile LED,False,False,,LX,Store,
+DIABLO#05,Ayrton,Diablo (W.DMX),DB2953048,Profile LED,False,False,,LX,Store,Valentino Le Meta-Theatre Des Intimates @ ArtSpace
+DIABLO#06,Ayrton,Diablo (W.DMX),DB2935001,Profile LED,False,False,,LX,Store,Valentino Le Meta-Theatre Des Intimates @ ArtSpace
+DIABLO#07,Ayrton,Diablo (W.DMX),DB2935033,Profile LED,False,False,,LX,Store,Valentino Le Meta-Theatre Des Intimates @ ArtSpace
+DIABLO#08,Ayrton,Diablo (W.DMX),DB2935002,Profile LED,False,False,,LX,Store,Valentino Le Meta-Theatre Des Intimates @ ArtSpace
 DIABLO#09,Ayrton,Diablo (W.DMX),DB2935036,Profile LED,False,False,,LX,Store,
 DIABLO#10,Ayrton,Diablo (W.DMX),DB2935057,Profile LED,False,False,2025/06/05	bnjm2000	Replaced Pan/Tilt Board - $222.87,LX,Store,
 DIABLO#11,Ayrton,Diablo (W.DMX),DB2935034,Profile LED,False,False,"2025/06/05	bnjm2000	Replaced Pan/Tilt board - $222.87
@@ -843,7 +843,7 @@ PB#21,Astera,Pixel Brick,047-0313675,Batt LED Uplighters,False,False,2024/12/05	
 PB#22,Astera,Pixel Brick,047-0312619,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
 PB#23,Astera,Pixel Brick,047-0315708,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
 PB#24,Astera,Pixel Brick,047-0312564,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
-PB#25,Astera,Pixel Brick,047-0313626,Batt LED Uplighters,False,True,"2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/09/08	bnjm2000	Screen spoilt, device still works [Marked OOC]",LX,Store,
+PB#25,Astera,Pixel Brick,047-0313626,Batt LED Uplighters,False,True,"2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/09/08	bnjm2000	Screen spoilt, device still works [Marked OOC]|2025/09/16	bnjm2000	Sent to TSM for repair [Location: Total Solutions]",LX,Store,Total Solutions
 PB#26,Astera,Pixel Brick,047-0310053,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
 PB#27,Astera,Pixel Brick,047-0312635,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/11/15	bnjm2000	LED Screen cannot on,LX,Store,
 PB#28,Astera,Pixel Brick,047-0313638,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
@@ -854,7 +854,7 @@ PB#32,Astera,Pixel Brick,047-0313519,Batt LED Uplighters,False,False,2024/12/05	
 PB#33,Astera,Pixel Brick,047-0312748,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
 PB#34,Astera,Pixel Brick,047-0308768,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
 PB#35,Astera,Pixel Brick,047-0312772,Batt LED Uplighters,False,False,"2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/08/12	bnjm2000	Screen stopped working after charging [Marked OOC]|2025/08/18	bnjm2000	Sent in to Total Solutions [Location: Total Solutions]|2025/08/27	bnjm2000	Replaced PB15 rear housing assembly, sent back to us by TSM [Location: Store, Cleared OOC, Cleared Missing]",LX,Store,Store
-PB#36,Astera,Pixel Brick,047-0312668,Batt LED Uplighters,False,True,"2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/08/12	bnjm2000	Screen stopped working after charging [Marked OOC]|2025/08/18	bnjm2000	Screen worked again when sending into Total Solutions [Cleared OOC]|2025/09/08	bnjm2000	Device not responsive, no display [Marked OOC]",LX,Store,
+PB#36,Astera,Pixel Brick,047-0312668,Batt LED Uplighters,False,True,"2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/08/12	bnjm2000	Screen stopped working after charging [Marked OOC]|2025/08/18	bnjm2000	Screen worked again when sending into Total Solutions [Cleared OOC]|2025/09/08	bnjm2000	Device not responsive, no display [Marked OOC]|2025/09/16	bnjm2000	Sent to TSM for repair [Location: Total Solutions]",LX,Store,Total Solutions
 PB#37,Astera,Pixel Brick,047-0313949,Batt LED Uplighters,False,False,"2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/06/05	bnjm2000	Handed over to TSM for repair, spoilt screen
 Replaced PB15 Rear Housing Assembly",LX,Store,
 PB#38,Astera,Pixel Brick,047-0313663,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
@@ -887,14 +887,14 @@ PB#63,Astera,Pixel Brick,047-0312678,Batt LED Uplighters,False,False,2024/12/05	
 PB#64,Astera,Pixel Brick,047-0312730,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
 ART7#01,Astera,AsteraBox Art7-U,025-0935934,WIFI AsteraBox CRMX,False,False,,LX,Store,
 ART7#02,Astera,AsteraBox Art7-U,,WIFI AsteraBox CRMX,False,False,,LX,Store,
-TT#01,Astera,Titan Tube,038-1045958,LED tube,False,False,,LX,Store,
-TT#02,Astera,Titan Tube,038-1046322,LED tube,False,False,,LX,Store,
-TT#03,Astera,Titan Tube,038-1046351,LED tube,False,False,,LX,Store,
-TT#04,Astera,Titan Tube,038-1046352,LED tube,False,False,,LX,Store,
-TT#05,Astera,Titan Tube,038-1046362,LED tube,False,False,,LX,Store,
-TT#06,Astera,Titan Tube,038-1046368,LED tube,False,False,,LX,Store,
-TT#07,Astera,Titan Tube,038-1046374,LED tube,False,False,,LX,Store,
-TT#08,Astera,Titan Tube,038-1046376,LED tube,False,False,,LX,Store,
+TT#01,Astera,Titan Tube,038-1045958,LED tube,False,False,,LX,Store,Valentino Le Meta-Theatre Des Intimates @ ArtSpace
+TT#02,Astera,Titan Tube,038-1046322,LED tube,False,False,,LX,Store,Valentino Le Meta-Theatre Des Intimates @ ArtSpace
+TT#03,Astera,Titan Tube,038-1046351,LED tube,False,False,,LX,Store,Valentino Le Meta-Theatre Des Intimates @ ArtSpace
+TT#04,Astera,Titan Tube,038-1046352,LED tube,False,False,,LX,Store,Valentino Le Meta-Theatre Des Intimates @ ArtSpace
+TT#05,Astera,Titan Tube,038-1046362,LED tube,False,False,,LX,Store,Valentino Le Meta-Theatre Des Intimates @ ArtSpace
+TT#06,Astera,Titan Tube,038-1046368,LED tube,False,False,,LX,Store,Valentino Le Meta-Theatre Des Intimates @ ArtSpace
+TT#07,Astera,Titan Tube,038-1046374,LED tube,False,False,,LX,Store,Valentino Le Meta-Theatre Des Intimates @ ArtSpace
+TT#08,Astera,Titan Tube,038-1046376,LED tube,False,False,,LX,Store,Valentino Le Meta-Theatre Des Intimates @ ArtSpace
 TT#09,Astera,Titan Tube,038-1046398,LED tube,False,False,,LX,Store,
 TT#10,Astera,Titan Tube,038-1046404,LED tube,False,False,,LX,Store,
 TT#11,Astera,Titan Tube,038-1046408,LED tube,False,False,,LX,Store,
@@ -967,8 +967,8 @@ LX TREE #02,Versa-Stand,,,Winch Up Lighting Stand,False,False,,LX,Store,
 LX TREE #03,Versa-Stand,,,Winch Up Lighting Stand,False,False,,LX,Store,
 LX TREE #04,Versa-Stand,,,Winch Up Lighting Stand,False,False,,LX,Store,
 LX TREE #05,Versa-Stand,,,Winch Up Lighting Stand,False,False,,LX,Store,
-AURORA#01,Lumenradio,Aurora,MAURA100000710,Single Universe DMX/RDM transceiver with WiFi and Bluetooth,False,False,"2025/07/30	bnjm2000	Send in to TSM for checking, repair. Signal weak [Location: Total Solutions]|2025/08/14	bnjm2000	Collected back from TSM, tested to 5m working. [Location: Store]",LX,Store,Store
-AURORA#02,Lumenradio,Aurora,MAURA100000707,Single Universe DMX/RDM transceiver with WiFi and Bluetooth,False,False,"2025/07/30	bnjm2000	Send in to TSM for checking, repair. Signal weak [Location: Total Solutions]|2025/08/14	bnjm2000	Collected back from TSM, tested to 5m working. [Location: Store]",LX,Store,Store
+AURORA#01,Lumenradio,Aurora,MAURA100000710,Single Universe DMX/RDM transceiver with WiFi and Bluetooth,False,False,"2025/07/30	bnjm2000	Send in to TSM for checking, repair. Signal weak [Location: Total Solutions]|2025/08/14	bnjm2000	Collected back from TSM, tested to 5m working. [Location: Store]",LX,Store,Valentino Le Meta-Theatre Des Intimates @ ArtSpace
+AURORA#02,Lumenradio,Aurora,MAURA100000707,Single Universe DMX/RDM transceiver with WiFi and Bluetooth,False,False,"2025/07/30	bnjm2000	Send in to TSM for checking, repair. Signal weak [Location: Total Solutions]|2025/08/14	bnjm2000	Collected back from TSM, tested to 5m working. [Location: Store]",LX,Store,Valentino Le Meta-Theatre Des Intimates @ ArtSpace
 AURORA#03,Lumenradio,Aurora,MAURA100000648,Single Universe DMX/RDM transceiver with WiFi and Bluetooth,False,False,"2025/08/14	bnjm2000	Sent into TSM for testing, range issue [Location: Total Solutions]|2025/08/27	bnjm2000	Tested working ok, sent back to us by TSM [Location: Store]",LX,Store,Store
 AURORA#04,Lumenradio,Aurora,MAURA100000981,Single Universe DMX/RDM transceiver with WiFi and Bluetooth,False,False,"2025/08/14	bnjm2000	Sent into TSM for testing, range issue [Location: Total Solutions]|2025/08/27	bnjm2000	Tested working ok, sent back to us by TSM [Location: Store]",LX,Store,Store
 DMX RECORDER #01,,XRC-200,2304738,,False,False,,LX,Store,
@@ -1037,7 +1037,7 @@ CMD8#10,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,20
 CMD8#11,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,2025/09/09	bnjm2000	Maintenance done - greased chain,SK,Store,
 CMD8#12,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,2025/09/09	bnjm2000	Maintenance done - greased chain,SK,Store,
 CONTROLLER#01,Custom,Chain Hoist Controller,,Chain Hoist Controller,False,False,,SK,Store,Store
-HERCULES 8#01,Fenix,HERCULES 8,180439_30,Frontal lifting tower array lifter,False,True,2025/07/03	bnjm2000	Discovered frayed metal cable during BBC 2025 @ GBTB [Marked OOC]|2025/07/09	bnjm2000	Sent to LSD or servicing (Service order no. 1636) [Location: LSD SG],AX,Store,LSD SG
+HERCULES 8#01,Fenix,HERCULES 8,180439_30,Frontal lifting tower array lifter,False,False,"2025/07/03	bnjm2000	Discovered frayed metal cable during BBC 2025 @ GBTB [Marked OOC]|2025/07/09	bnjm2000	Sent to LSD or servicing (Service order no. 1636) [Location: LSD SG]|2025/09/16	bnjm2000	Collected back from LSD, tested working [Location: Store, Cleared OOC, Cleared Missing]",AX,Store,Store
 HERCULES 8#02,Fenix,HERCULES 8,180439_28,Frontal lifting tower array lifter,False,False,,AX,Store,
 MASTER4KTX#01,Accsoon,Cineview Master 4K TX,WIT07-0137-BE0F,Wireless SDI/HDMI Transmitter,False,False,,VX,Store,
 MASTER4KTX#02,Accsoon,Cineview Master 4K TX,WIT07-0938-BE0B,Wireless SDI/HDMI Transmitter,False,False,,VX,Store,
@@ -1046,38 +1046,42 @@ MASTER4KRX#02,Accsoon,Cineview Master 4K RX,WIT07-1438-BE0B,Wireless SDI/HDMI Re
 MASTER4KRX#03,Accsoon,Cineview Master 4K RX,WIT07-1377-BE0B,Wireless SDI/HDMI Receiver,False,False,,VX,Store,
 PERFECTCUE#01,DSAN,PerfectCue Mini,24-24582,Professional Wireless Clicker,False,False,,VX,Store,
 CLICKER#01,DSAN,PerfectCue Mini,,Professional Wireless Clicker,False,False,,VX,Store,
-SBS#01,Sennheiser,Base Station,,1RU Spectera Base Station,False,False,,AX,Store,
-SEK#02,Sennheiser,SEK(UHF),,Bidirectional bodypack,False,False,,AX,Store,
-SEK#03,Sennheiser,SEK(UHF),,Bidirectional bodypack,False,False,,AX,Store,
-SEK#04,Sennheiser,SEK(UHF),,Bidirectional bodypack,False,False,,AX,Store,
-SEK#05,Sennheiser,SEK(UHF),,Bidirectional bodypack,False,False,,AX,Store,
-SEK#06,Sennheiser,SEK(UHF),,Bidirectional bodypack,False,False,,AX,Store,
-SEK#07,Sennheiser,SEK(UHF),,Bidirectional bodypack,False,False,,AX,Store,
-SEK#08,Sennheiser,SEK(UHF),,Bidirectional bodypack,False,False,,AX,Store,
-SEK#09,Sennheiser,SEK(UHF),,Bidirectional bodypack,False,False,,AX,Store,
-SEK#10,Sennheiser,SEK(UHF),,Bidirectional bodypack,False,False,,AX,Store,
-DAD#01,Sennheiser,DAD(UHF),,Bidirectional digital antenna,False,False,,AX,Store,
-DAD#02,Sennheiser,DAD(UHF),,Bidirectional digital antenna,False,False,,AX,Store,
-L6000#01,Sennheiser,L6000,,Rackmount Charger,False,False,,AX,Store,
+SBS#01,Sennheiser,Base Station,1205000475,1RU Spectera Base Station,False,False,,AX,Store,
+SEK#01,Sennheiser,SEK(UHF),1165001727,Bidirectional bodypack,False,False,,AX,Store,
+SEK#02,Sennheiser,SEK(UHF),1165001729,Bidirectional bodypack,False,False,,AX,Store,
+SEK#03,Sennheiser,SEK(UHF),1195001949,Bidirectional bodypack,False,False,,AX,Store,
+SEK#04,Sennheiser,SEK(UHF),1195001964,Bidirectional bodypack,False,False,,AX,Store,
+SEK#05,Sennheiser,SEK(UHF),1195001965,Bidirectional bodypack,False,False,,AX,Store,
+SEK#06,Sennheiser,SEK(UHF),1195001966,Bidirectional bodypack,False,False,,AX,Store,
+SEK#07,Sennheiser,SEK(UHF),1195001968,Bidirectional bodypack,False,False,,AX,Store,
+SEK#08,Sennheiser,SEK(UHF),1195001986,Bidirectional bodypack,False,False,,AX,Store,
+SEK#09,Sennheiser,SEK(UHF),1195002041,Bidirectional bodypack,False,False,,AX,Store,
+SEK#10,Sennheiser,SEK(UHF),1195002042,Bidirectional bodypack,False,False,,AX,Store,
+DAD#01,Sennheiser,DAD(UHF),1185001690,Bidirectional digital antenna,False,False,,AX,Store,
+DAD#02,Sennheiser,DAD(UHF),1185001691,Bidirectional digital antenna,False,False,,AX,Store,
+L6000#01,Sennheiser,L6000,1134005936,Rackmount Charger,False,False,,AX,Store,
 LM6070#01,Sennheiser,LM6070,,Charging module for the L 6000 rack-mount charger,False,False,,AX,Store,
-BA70#01,Sennheiser,BA70,,Lithium Ion rechargeable battery,False,False,,AX,Store,
-BA70#02,Sennheiser,BA70,,Lithium Ion rechargeable battery,False,False,,AX,Store,
-BA70#03,Sennheiser,BA70,,Lithium Ion rechargeable battery,False,False,,AX,Store,
-BA70#04,Sennheiser,BA70,,Lithium Ion rechargeable battery,False,False,,AX,Store,
-BA70#05,Sennheiser,BA70,,Lithium Ion rechargeable battery,False,False,,AX,Store,
-BA70#06,Sennheiser,BA70,,Lithium Ion rechargeable battery,False,False,,AX,Store,
-BA70#07,Sennheiser,BA70,,Lithium Ion rechargeable battery,False,False,,AX,Store,
-BA70#08,Sennheiser,BA70,,Lithium Ion rechargeable battery,False,False,,AX,Store,
-BA70#09,Sennheiser,BA70,,Lithium Ion rechargeable battery,False,False,,AX,Store,
-BA70#10,Sennheiser,BA70,,Lithium Ion rechargeable battery,False,False,,AX,Store,
-BA70#11,Sennheiser,BA70,,Lithium Ion rechargeable battery,False,False,,AX,Store,
-BA70#12,Sennheiser,BA70,,Lithium Ion rechargeable battery,False,False,,AX,Store,
-BA70#13,Sennheiser,BA70,,Lithium Ion rechargeable battery,False,False,,AX,Store,
-BA70#14,Sennheiser,BA70,,Lithium Ion rechargeable battery,False,False,,AX,Store,
-BA70#15,Sennheiser,BA70,,Lithium Ion rechargeable battery,False,False,,AX,Store,
-BA70#16,Sennheiser,BA70,,Lithium Ion rechargeable battery,False,False,,AX,Store,
-BA70#17,Sennheiser,BA70,,Lithium Ion rechargeable battery,False,False,,AX,Store,
-BA70#18,Sennheiser,BA70,,Lithium Ion rechargeable battery,False,False,,AX,Store,
-BA70#19,Sennheiser,BA70,,Lithium Ion rechargeable battery,False,False,,AX,Store,
-BA70#20,Sennheiser,BA70,,Lithium Ion rechargeable battery,False,False,,AX,Store,
+LM6070#02,Sennheiser,LM6070,,Charging module for the L 6000 rack-mount charger,False,False,,AX,Store,
+LM6070#03,Sennheiser,LM6070,,Charging module for the L 6000 rack-mount charger,False,False,,AX,Store,
+LM6070#04,Sennheiser,LM6070,,Charging module for the L 6000 rack-mount charger,False,False,,AX,Store,
+BA70#01,Sennheiser,BA70,0241008002944,Lithium Ion rechargeable battery,False,False,,AX,Store,
+BA70#02,Sennheiser,BA70,0241008002955,Lithium Ion rechargeable battery,False,False,,AX,Store,
+BA70#03,Sennheiser,BA70,0423000334,Lithium Ion rechargeable battery,False,False,,AX,Store,
+BA70#04,Sennheiser,BA70,0423000358,Lithium Ion rechargeable battery,False,False,,AX,Store,
+BA70#05,Sennheiser,BA70,0423000372,Lithium Ion rechargeable battery,False,False,,AX,Store,
+BA70#06,Sennheiser,BA70,0423000381,Lithium Ion rechargeable battery,False,False,,AX,Store,
+BA70#07,Sennheiser,BA70,0423000383,Lithium Ion rechargeable battery,False,False,,AX,Store,
+BA70#08,Sennheiser,BA70,0423000386,Lithium Ion rechargeable battery,False,False,,AX,Store,
+BA70#09,Sennheiser,BA70,0423000387,Lithium Ion rechargeable battery,False,False,,AX,Store,
+BA70#10,Sennheiser,BA70,0423000388,Lithium Ion rechargeable battery,False,False,,AX,Store,
+BA70#11,Sennheiser,BA70,0423000921,Lithium Ion rechargeable battery,False,False,,AX,Store,
+BA70#12,Sennheiser,BA70,0423000949,Lithium Ion rechargeable battery,False,False,,AX,Store,
+BA70#13,Sennheiser,BA70,0423000954,Lithium Ion rechargeable battery,False,False,,AX,Store,
+BA70#14,Sennheiser,BA70,0423000962,Lithium Ion rechargeable battery,False,False,,AX,Store,
+BA70#15,Sennheiser,BA70,0483001284,Lithium Ion rechargeable battery,False,False,,AX,Store,
+BA70#16,Sennheiser,BA70,0483001285,Lithium Ion rechargeable battery,False,False,,AX,Store,
+BA70#17,Sennheiser,BA70,0483001298,Lithium Ion rechargeable battery,False,False,,AX,Store,
+BA70#18,Sennheiser,BA70,0483001323,Lithium Ion rechargeable battery,False,False,,AX,Store,
+BA70#19,Sennheiser,BA70,0483001855,Lithium Ion rechargeable battery,False,False,,AX,Store,
+BA70#20,Sennheiser,BA70,0483001902,Lithium Ion rechargeable battery,False,False,,AX,Store,
 SG105#01,TP-Link,TL-SG105,22550WN008358,5-port network switch,False,False,,AX,Store,

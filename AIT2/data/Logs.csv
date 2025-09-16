@@ -1,46 +1,3 @@
-2025/07/28 17:23:01,bnjm2000,Returned asset X8#13 from event 37
-2025/07/28 17:23:03,bnjm2000,Returned asset X8#14 from event 37
-2025/07/28 17:23:04,bnjm2000,Returned asset X8#15 from event 37
-2025/07/28 17:23:05,bnjm2000,Returned asset X8#16 from event 37
-2025/07/28 17:23:08,bnjm2000,Returned asset ME36#01 from event 37
-2025/07/28 17:23:09,bnjm2000,Returned asset ME36#02 from event 37
-2025/07/28 17:23:24,bnjm2000,Returned asset AD1#01 from event 37
-2025/07/28 17:23:25,bnjm2000,Returned asset AD1#03 from event 37
-2025/07/28 17:25:24,bnjm2000,Returned asset AD1#02 from event 37
-2025/07/28 17:25:25,bnjm2000,Returned asset AD1#04 from event 37
-2025/07/28 17:25:26,bnjm2000,Returned asset AD1#05 from event 37
-2025/07/28 17:25:27,bnjm2000,Returned asset AD1#06 from event 37
-2025/07/28 17:25:27,bnjm2000,Returned asset AD1#07 from event 37
-2025/07/28 17:30:27,bnjm2000,Returned asset AD1#08 from event 37
-2025/07/28 17:30:27,bnjm2000,Returned asset AD1#09 from event 37
-2025/07/28 17:30:28,bnjm2000,Returned asset AD1#10 from event 37
-2025/07/28 17:30:29,bnjm2000,Returned asset AD1#11 from event 37
-2025/07/28 17:30:30,bnjm2000,Returned asset AD1#12 from event 37
-2025/07/28 17:30:34,bnjm2000,Returned asset AD2#01 from event 37
-2025/07/28 17:30:35,bnjm2000,Returned asset AD2#02 from event 37
-2025/07/28 17:30:36,bnjm2000,Returned asset AD2#03 from event 37
-2025/07/28 17:30:38,bnjm2000,Returned asset AD1#13 from event 37
-2025/07/28 17:30:40,bnjm2000,Returned asset AD1#14 from event 37
-2025/07/28 17:30:42,bnjm2000,Returned asset AD1#15 from event 37
-2025/07/28 17:30:42,bnjm2000,Returned asset AD1#16 from event 37
-2025/07/28 17:30:44,bnjm2000,Returned asset AD2#04 from event 37
-2025/07/28 17:30:46,bnjm2000,Returned asset AD2#05 from event 37
-2025/07/28 17:30:47,bnjm2000,Returned asset AD2#06 from event 37
-2025/07/28 17:33:28,bnjm2000,Returned asset AD2#07 from event 37
-2025/07/28 17:33:29,bnjm2000,Returned asset AD2#09 from event 37
-2025/07/28 17:33:29,bnjm2000,Returned asset AD2#08 from event 37
-2025/07/28 17:33:31,bnjm2000,Returned asset AD2#11 from event 37
-2025/07/28 17:33:32,bnjm2000,Returned asset AD2#10 from event 37
-2025/07/28 17:33:33,bnjm2000,Returned asset AD2#15 from event 37
-2025/07/28 17:33:34,bnjm2000,Returned asset AD2#14 from event 37
-2025/07/28 17:33:38,bnjm2000,Returned asset AD3#01 from event 37
-2025/07/28 17:33:38,bnjm2000,Returned asset AD3#04 from event 37
-2025/07/28 17:33:39,bnjm2000,Returned asset AD2#12 from event 37
-2025/07/28 17:33:40,bnjm2000,Returned asset AD2#16 from event 37
-2025/07/28 17:33:40,bnjm2000,Returned asset AD2#13 from event 37
-2025/07/28 17:33:42,bnjm2000,Returned asset AD4Q#01 from event 37
-2025/07/28 17:33:46,bnjm2000,Returned asset B52A#01 from event 37
-2025/07/28 17:33:49,bnjm2000,Returned asset B91A#01 from event 37
 2025/07/28 17:33:51,bnjm2000,Returned asset AD4Q#03 from event 37
 2025/07/28 17:33:51,bnjm2000,Returned asset AD4Q#04 from event 37
 2025/07/28 17:33:56,bnjm2000,Returned asset CONTROLLER#01 from event 37
@@ -999,3 +956,46 @@
 2025/09/15 13:06:35,bnjm2000,Added 4x Shure SM57 model to event 54 (total: 4)
 2025/09/15 13:14:05,bnjm2000,Added 4x Shure Beta 58A model to event 54 (total: 4)
 2025/09/15 14:03:54,bnjm2000,Assigned asset [MISC]TV Bracket;4 to event 55 (unprepared)
+2025/09/15 15:12:52,bnjm2000,Added 1x Yamaha DM3 model to event 54 (total: 1)
+2025/09/15 15:13:04,bnjm2000,Added 1x DPA 4099 model to event 54 (total: 1)
+2025/09/15 15:14:16,bnjm2000,Added 1x Shure ULXD4D model to event 54 (total: 1)
+2025/09/15 15:14:40,bnjm2000,Removed Shure ULXD4D model from event 54
+2025/09/15 15:14:40,bnjm2000,Added 2x Shure ULXD4D model to event 54 (total: 2)
+2025/09/15 15:14:51,bnjm2000,Added 1x Shure ULXD1 model to event 54 (total: 1)
+2025/09/15 15:15:07,bnjm2000,Added 1x DPA DAD 6010 model to event 54 (total: 1)
+2025/09/15 15:15:08,bnjm2000,Added 1x DPA DAD 6001 model to event 54 (total: 1)
+2025/09/16 15:02:04,system,Failed login attempt for username: bnjm2000
+2025/09/16 15:02:09,bnjm2000,User bnjm2000 logged in via web interface
+2025/09/16 15:03:23,bnjm2000,Updated location for asset HERCULES 8#01 from 'LSD SG' to 'Store'
+2025/09/16 15:03:23,bnjm2000,Removed Out of Commission status from asset HERCULES 8#01
+2025/09/16 15:03:23,bnjm2000,"Maintenance logged for asset HERCULES 8#01: Collected back from LSD, tested working"
+2025/09/16 15:06:53,bnjm2000,Updated location for asset PB#25 from '' to 'Total Solutions'
+2025/09/16 15:06:53,bnjm2000,Maintenance logged for asset PB#25: Sent to TSM for repair
+2025/09/16 15:06:53,bnjm2000,Updated location for asset PB#36 from '' to 'Total Solutions'
+2025/09/16 15:06:53,bnjm2000,Maintenance logged for asset PB#36: Sent to TSM for repair
+2025/09/16 15:08:27,bnjm2000,Assigned asset [MISC]TruCon to PowerCon;2 to event 58 (unprepared)
+2025/09/16 15:08:33,bnjm2000,Assigned asset [MISC]T-Bar;2 to event 58 (unprepared)
+2025/09/16 15:08:39,bnjm2000,Prepared asset [MISC]T-Bar;2 for event 58
+2025/09/16 15:08:39,bnjm2000,Prepared asset [MISC]TruCon to PowerCon;2 for event 58
+2025/09/16 15:26:35,bnjm2000,Assigned specific asset MR-90A#03 to event 53
+2025/09/16 15:26:40,bnjm2000,Assigned specific asset MT-90A#04 to event 53
+2025/09/16 15:31:12,bnjm2000,Assigned specific asset MR-90A#02 to event 53
+2025/09/16 15:37:32,bnjm2000,Assigned specific asset AD4D#01 to event 50
+2025/09/16 15:37:35,bnjm2000,Assigned specific asset AD3#01 to event 50
+2025/09/16 15:37:37,bnjm2000,Assigned specific asset AD3#03 to event 50
+2025/09/16 15:37:43,bnjm2000,Assigned specific asset TT#01 to event 50
+2025/09/16 15:37:43,bnjm2000,Assigned specific asset TT#02 to event 50
+2025/09/16 15:37:45,bnjm2000,Assigned specific asset TT#03 to event 50
+2025/09/16 15:37:45,bnjm2000,Assigned specific asset TT#04 to event 50
+2025/09/16 15:37:47,bnjm2000,Assigned specific asset TT#05 to event 50
+2025/09/16 15:37:47,bnjm2000,Assigned specific asset TT#06 to event 50
+2025/09/16 15:37:49,bnjm2000,Assigned specific asset TT#07 to event 50
+2025/09/16 15:37:50,bnjm2000,Assigned specific asset TT#08 to event 50
+2025/09/16 15:37:54,bnjm2000,Assigned specific asset DIABLO#05 to event 50
+2025/09/16 15:37:54,bnjm2000,Assigned specific asset DIABLO#06 to event 50
+2025/09/16 15:37:57,bnjm2000,Assigned specific asset DIABLO#07 to event 50
+2025/09/16 15:37:58,bnjm2000,Assigned specific asset DIABLO#08 to event 50
+2025/09/16 15:55:08,bnjm2000,Added 1x Avolites Quartz model to event 50 (total: 1)
+2025/09/16 15:55:15,bnjm2000,Assigned specific asset QUARTZ#02 to event 50
+2025/09/16 15:55:18,bnjm2000,Assigned specific asset AURORA#01 to event 50
+2025/09/16 15:55:18,bnjm2000,Assigned specific asset AURORA#02 to event 50
