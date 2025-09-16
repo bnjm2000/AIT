@@ -1,0 +1,2 @@
+EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,Tag,ForceStateOverride
+62,"Macallan ""The Aquarius SG Event"" @ Edition Hotel",20251012,20251019,[],[],[],Added,[],[],events,False
