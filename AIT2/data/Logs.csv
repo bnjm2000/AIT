@@ -1,26 +1,3 @@
-2025/07/28 17:35:38,bnjm2000,Returned asset DIABLO#14 from event 37
-2025/07/28 17:35:39,bnjm2000,Returned asset DIABLO#16 from event 37
-2025/07/28 17:35:43,bnjm2000,Returned asset AURORA#01 from event 37
-2025/07/28 17:35:46,bnjm2000,Returned asset AURORA#02 from event 37
-2025/07/28 17:35:49,bnjm2000,Returned asset ECLIPSE#15 from event 37
-2025/07/28 17:35:50,bnjm2000,Returned asset ECLIPSE#05 from event 37
-2025/07/28 17:35:51,bnjm2000,Returned asset ECLIPSE#06 from event 37
-2025/07/28 17:35:52,bnjm2000,Returned asset ECLIPSE#07 from event 37
-2025/07/28 17:35:53,bnjm2000,Returned asset ECLIPSE#08 from event 37
-2025/07/28 17:35:56,bnjm2000,Returned asset LEDBEAM#13 from event 37
-2025/07/28 17:35:58,bnjm2000,Returned asset LEDBEAM#14 from event 37
-2025/07/28 17:36:00,bnjm2000,Returned asset LEDBEAM#15 from event 37
-2025/07/28 17:36:01,bnjm2000,Returned asset LEDBEAM#16 from event 37
-2025/07/28 17:36:02,bnjm2000,Returned asset LEDBEAM#17 from event 37
-2025/07/28 17:36:03,bnjm2000,Returned asset LEDBEAM#18 from event 37
-2025/07/28 17:36:07,bnjm2000,Returned asset LEDBEAM#23 from event 37
-2025/07/28 17:36:09,bnjm2000,Returned asset LEDBEAM#24 from event 37
-2025/07/28 17:36:13,bnjm2000,Returned asset PCBB#03 from event 37
-2025/07/28 17:36:14,bnjm2000,Returned asset PCBB#06 from event 37
-2025/07/28 17:36:15,bnjm2000,Returned asset PCBB#10 from event 37
-2025/07/28 17:36:15,bnjm2000,Returned asset PCBB#11 from event 37
-2025/07/28 17:36:16,bnjm2000,Returned asset LEDBEAM#19 from event 37
-2025/07/28 17:36:17,bnjm2000,Returned asset LEDBEAM#20 from event 37
 2025/07/28 17:36:19,bnjm2000,Returned asset LEDBEAM#21 from event 37
 2025/07/28 17:36:20,bnjm2000,Returned asset LEDBEAM#22 from event 37
 2025/07/28 17:36:31,bnjm2000,Returned asset CMD8#02 from event 37
@@ -999,3 +976,26 @@
 2025/09/17 01:18:37,bnjm2000,Created event 65: Audemars Piguet Regional Ladies Cocktail Party @ Raffles Hotel via web interface
 2025/09/17 01:19:11,bnjm2000,Created event 66: Wedding of Justin & Amanda @ Raffles Sentosa via web interface
 2025/09/17 01:19:38,bnjm2000,Created event 67: Wedding of Matthew Chia & Teresa @ Capella via web interface
+2025/09/17 15:19:42,bnjm2000,Added 51x L-Acoustics 5XT model to event 63 (total: 51)
+2025/09/17 15:19:54,bnjm2000,Added 51x L-Acoustics ETR5 model to event 63 (total: 51)
+2025/09/17 15:20:17,bnjm2000,Added 16x L-Acoustics X8 model to event 63 (total: 16)
+2025/09/17 15:20:23,bnjm2000,Added 5x L-Acoustics SB18 model to event 63 (total: 5)
+2025/09/17 15:20:25,bnjm2000,Added 5x L-Acoustics M-BUMP model to event 63 (total: 5)
+2025/09/17 15:22:02,bnjm2000,Added 1x Yamaha DM7 model to event 63 (total: 1)
+2025/09/17 15:22:35,bnjm2000,Added 4x L-Acoustics LA2Xi model to event 63 (total: 4)
+2025/09/17 15:22:49,bnjm2000,Added 6x L-Acoustics LA4X model to event 63 (total: 6)
+2025/09/17 15:22:54,bnjm2000,Added 6x L-Acoustics LA12X model to event 63 (total: 6)
+2025/09/17 15:24:06,bnjm2000,Added 4x L-Acoustics X12 model to event 67 (total: 4)
+2025/09/17 15:24:11,bnjm2000,Added 2x L-Acoustics SB18 model to event 67 (total: 2)
+2025/09/17 15:24:17,bnjm2000,Added 2x L-Acoustics LA4X model to event 67 (total: 2)
+2025/09/17 15:26:18,bnjm2000,Removed L-Acoustics LA4X model from event 61
+2025/09/17 15:26:25,bnjm2000,Added 1x L-Acoustics LA12X model to event 61 (total: 1)
+2025/09/17 15:26:45,bnjm2000,Removed L-Acoustics LA12X model from event 54
+2025/09/17 15:26:45,bnjm2000,Added 7x L-Acoustics LA12X model to event 54 (total: 7)
+2025/09/17 15:26:55,bnjm2000,Removed L-Acoustics LA12X model from event 61
+2025/09/17 15:27:08,bnjm2000,Added 1x L-Acoustics LA12X model to event 61 (total: 1)
+2025/09/17 15:31:51,bnjm2000,Updated event 54: Wedding Dinner of Leon & Cabrina @ Ritz Carlton Grand Ballroom via web interface
+2025/09/17 15:32:02,bnjm2000,Updated event 37: SingHealth DUKE-NUS Gala @ Ritz Carlton via web interface
+2025/09/17 15:36:14,bnjm2000,Created event 68: Richard Mille F1 Meet & Greet Session @ Richard Mille Boutique via web interface
+2025/09/17 15:36:24,bnjm2000,Added 4x EV EVOLVE 50 model to event 68 (total: 4)
+2025/09/17 15:36:34,bnjm2000,Removed EV EVOLVE 50 model from event 68
