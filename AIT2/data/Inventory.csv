@@ -193,7 +193,7 @@ PCBB#10,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,
 PCBB#11,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,
 PCBB#12,Interspace Industries,PCBB,,PC Balance Box,False,False,,AX,Store,
 PCBB#13,Interspace Industries,PCBB,,PC Balance Box,False,False,,AX,Store,
-PCBB#14,Interspace Industries,PCBB,,PC Balance Box,False,False,,AX,Store,
+PCBB#14,Interspace Industries,PCBB,,PC Balance Box,False,False,,AX,Store,Store
 LSP1#01,Dsan,LSP-1,,Laptop Sound Port (Mono),False,False,,AX,Store,
 LSP1#02,Dsan,LSP-1,,Laptop Sound Port (Mono),False,False,,AX,Store,
 LSP2#01,Dsan,LSP-2,,Laptop Sound Port (Stereo),False,False,,AX,Store,
@@ -313,9 +313,9 @@ ETR5W#20,L-Acoustics,ETR5W,,Adjustable U-bracket: 5XTW,False,False,,AX,Store,
 5XT#62,L-Acoustics,5XT,,"5"" passive coaxial enclosure, black",False,False,,AX,Store,
 5XT#63,L-Acoustics,5XT,,"5"" passive coaxial enclosure, black",False,False,,AX,Store,
 5XT#64,L-Acoustics,5XT,,"5"" passive coaxial enclosure, black",False,False,,AX,Store,
-ETR5#01,L-Acoustics,ETR5,440027215,Adjustable U-bracket: 5XT,False,False,,AX,Store,Store
+ETR5#01,L-Acoustics,ETR5,440027215,Adjustable U-bracket: 5XT,False,False,,AX,Store,Graff mock-up @ Loyang Way
 ETR5#02,L-Acoustics,ETR5,440027236,Adjustable U-bracket: 5XT,False,False,,AX,Store,Graff mock-up @ Loyang Way
-ETR5#03,L-Acoustics,ETR5,440031349,Adjustable U-bracket: 5XT,False,False,,AX,Store,Graff mock-up @ Loyang Way
+ETR5#03,L-Acoustics,ETR5,440031349,Adjustable U-bracket: 5XT,False,False,,AX,Store,Store
 ETR5#04,L-Acoustics,ETR5,440031356,Adjustable U-bracket: 5XT,False,False,,AX,Store,
 ETR5#05,L-Acoustics,ETR5,440031388,Adjustable U-bracket: 5XT,False,False,,AX,Store,
 ETR5#06,L-Acoustics,ETR5,440031793,Adjustable U-bracket: 5XT,False,False,,AX,Store,Store
@@ -986,14 +986,14 @@ PB#53,Astera,Pixel Brick,047-0312617,Batt LED Uplighters,False,False,2024/12/05	
 PB#54,Astera,Pixel Brick,047-0308765,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
 PB#55,Astera,Pixel Brick,047-0313557,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
 PB#56,Astera,Pixel Brick,047-0312739,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
-PB#57,Astera,Pixel Brick,04  7-0313057,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
-PB#58,Astera,Pixel Brick,047-0313547,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2024/11/15	bnjm2000	Screen dim,LX,Store,
-PB#59,Astera,Pixel Brick,047-0313940,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
-PB#60,Astera,Pixel Brick,047-0312649,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
-PB#61,Astera,Pixel Brick,047-0312594,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
-PB#62,Astera,Pixel Brick,047-0312735,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
-PB#63,Astera,Pixel Brick,047-0312678,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
-PB#64,Astera,Pixel Brick,047-0312730,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
+PB#57,Astera,Pixel Brick,04  7-0313057,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,Store
+PB#58,Astera,Pixel Brick,047-0313547,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2024/11/15	bnjm2000	Screen dim,LX,Store,Store
+PB#59,Astera,Pixel Brick,047-0313940,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,Store
+PB#60,Astera,Pixel Brick,047-0312649,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,Store
+PB#61,Astera,Pixel Brick,047-0312594,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,Store
+PB#62,Astera,Pixel Brick,047-0312735,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,Store
+PB#63,Astera,Pixel Brick,047-0312678,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,Store
+PB#64,Astera,Pixel Brick,047-0312730,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,Store
 ART7#01,Astera,AsteraBox Art7-U,025-0935934,WIFI AsteraBox CRMX,False,False,,LX,Store,
 ART7#02,Astera,AsteraBox Art7-U,,WIFI AsteraBox CRMX,False,False,,LX,Store,
 TT#01,Astera,Titan Tube,038-1045958,LED tube,False,False,,LX,Store,Store

@@ -1,0 +1,2 @@
+EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,Tag,ForceStateOverride
+65,Audemars Piguet Regional Ladies Cocktail Party @ Raffles Hotel,20251015,20251016,[],"[""[MODEL]AX|EV|EVOLVE 50|6|Portable column system"", ""[MODEL]AX|Pioneer|CDJ3000|2|Professional DJ multi player (Black)"", ""[MODEL]AX|Pioneer|DJM-900NXS2|1|4-channel pro-DJ mixer""]",[],Planning,[],[],events,False

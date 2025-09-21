@@ -1,2 +1,2 @@
 EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,Tag,ForceStateOverride
-64,Audemars Piguet Regional Ladies Masterclass @ Raffles Hotel,20251014,20251017,[],[],[],Added,[],[],events,False
+64,Audemars Piguet Regional Ladies Masterclass @ Raffles Hotel,20251014,20251017,[],"[""[MODEL]AX|Turbosound|IP1000|2|Powered Column Loudspeaker"", ""[MODEL]AX|Yamaha|DM3|1|Digital Mixer""]",[],Planning,[],[],events,False
