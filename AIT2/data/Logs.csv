@@ -1,31 +1,3 @@
-2025/07/28 17:40:44,bnjm2000,Added 1x Interspace Industries PCBB3 model to event 41 (total: 1)
-2025/07/28 17:40:44,bnjm2000,Added 1x Interspace Industries PCBB3 model to event 41 (total: 2)
-2025/07/28 17:40:52,bnjm2000,Added 1x Apple IPAD model to event 41 (total: 1)
-2025/07/28 17:40:57,bnjm2000,Added 1x Hollyland Solidcom C1 (Pro) 8-Slot Battery Charging Case model to event 41 (total: 1)
-2025/07/28 17:40:58,bnjm2000,Added 1x Hollyland Solidcom C1 Pro Hub model to event 41 (total: 1)
-2025/07/28 17:41:01,bnjm2000,Added 8x Hollyland Solidcom C1 Pro Remote Headset model to event 41 (total: 8)
-2025/07/28 17:41:02,bnjm2000,Added 1x Hollyland Solidcom C1 Pro Wired Headset for Hub model to event 41 (total: 1)
-2025/07/28 17:41:04,bnjm2000,Added 16x Hollyland HL-BAT700 model to event 41 (total: 16)
-2025/07/28 17:41:15,bnjm2000,Added 1x Yamaha QL1 model to event 41 (total: 1)
-2025/07/28 17:41:19,bnjm2000,Added 1x Avolites Tiger Touch 2 model to event 41 (total: 1)
-2025/07/28 17:41:30,bnjm2000,Added 1x Lumenradio Aurora model to event 41 (total: 1)
-2025/07/29 09:14:47,bnjm2000,User bnjm2000 logged in via web interface
-2025/07/29 09:16:05,bnjm2000,"Maintenance logged for asset P9RA#04: Beltpack will turn off when battery compartment closed, only can use with rechargeable"
-2025/07/29 09:19:39,bnjm2000,"Updated maintenance log for asset P9RA#04: 'Beltpack will turn off when battery compartment closed, only can use with rechargeable' -> 'Beltpack will turn off when battery compartment closed' (edited by bnjm2000)"
-2025/07/30 13:18:23,bnjm2000,User bnjm2000 logged in via web interface
-2025/07/30 13:19:34,bnjm2000,Updated location for asset AURORA#01 from 'Store' to 'Total Solutions'
-2025/07/30 13:19:34,bnjm2000,"Maintenance logged for asset AURORA#01: Send in to TSM for checking, repair. Signal weak"
-2025/07/30 13:20:40,bnjm2000,"Maintenance logged for asset AURORA#02: Send in to TSM for checking, repair. Signal weak"
-2025/07/30 13:20:59,bnjm2000,"Updated maintenance log for asset AURORA#02: 'Send in to TSM for checking, repair. Signal weak' -> 'Send in to TSM for checking, repair. Signal weak' (also: Location: Total Solutions) (edited by bnjm2000)"
-2025/07/30 13:21:03,bnjm2000,"Deleted maintenance log for asset AURORA#02: 'Send in to TSM for checking, repair. Signal weak [Location: Total Solutions]' (deleted by bnjm2000)"
-2025/07/30 13:21:14,bnjm2000,Updated location for asset AURORA#02 from '' to 'Total Solutions'
-2025/07/30 13:21:14,bnjm2000,"Maintenance logged for asset AURORA#02: Send in to TSM for checking, repair. Signal weak"
-2025/07/30 14:22:34,bnjm2000,Added 1x Hollyland Solidcom C1 (Pro) 8-Slot Battery Charging Case model to event 40 (total: 1)
-2025/07/30 14:22:35,bnjm2000,Added 1x Hollyland Solidcom C1 Pro Hub model to event 40 (total: 1)
-2025/07/30 14:22:35,bnjm2000,Added 1x Hollyland Solidcom C1 Pro Remote Headset model to event 40 (total: 1)
-2025/07/30 14:22:36,bnjm2000,Added 1x Hollyland Solidcom C1 Pro Remote Headset model to event 40 (total: 2)
-2025/07/30 14:22:36,bnjm2000,Added 1x Hollyland Solidcom C1 Pro Remote Headset model to event 40 (total: 3)
-2025/07/30 14:22:36,bnjm2000,Added 1x Hollyland Solidcom C1 Pro Remote Headset model to event 40 (total: 4)
 2025/07/30 14:22:36,bnjm2000,Added 1x Hollyland Solidcom C1 Pro Remote Headset model to event 40 (total: 5)
 2025/07/30 14:22:37,bnjm2000,Added 1x Hollyland Solidcom C1 Pro Remote Headset model to event 40 (total: 6)
 2025/07/30 14:22:37,bnjm2000,Added 1x Hollyland Solidcom C1 Pro Remote Headset model to event 40 (total: 7)
@@ -999,3 +971,31 @@
 2025/09/20 00:23:51,bnjm2000,Removed Avolites Quartz model from event 50
 2025/09/20 00:23:55,bnjm2000,Added 1x GrandMA3 Compact XT model to event 50 (total: 1)
 2025/09/20 00:24:01,bnjm2000,Assigned specific asset COMPACTXT#01 to event 50
+2025/09/21 22:10:55,bnjm2000,Returned all assets for department AX in event 50: 31 items
+2025/09/21 22:10:55,bnjm2000,Returned all assets for department LX in event 50: 15 items
+2025/09/21 22:10:56,bnjm2000,Returned all assets for department MISC in event 50: 1 items
+2025/09/21 22:11:14,bnjm2000,Removed Astera Pixel Brick model from event 56
+2025/09/21 22:11:14,bnjm2000,Added 8x Astera Pixel Brick model to event 56 (total: 8)
+2025/09/21 22:11:17,bnjm2000,Removed L-Acoustics 5XT model from event 56
+2025/09/21 22:11:17,bnjm2000,Added 2x L-Acoustics 5XT model to event 56 (total: 2)
+2025/09/21 22:11:21,bnjm2000,Added 1x L-Acoustics LA4X model to event 56 (total: 1)
+2025/09/21 22:11:35,bnjm2000,Added 2x Samsung LH75QMCEBGCXXS model to event 56 (total: 2)
+2025/09/21 22:12:17,bnjm2000,Assigned specific asset 5XT#01 to event 56
+2025/09/21 22:12:18,bnjm2000,Assigned specific asset 5XT#02 to event 56
+2025/09/21 22:12:25,bnjm2000,Assigned specific asset LA4X#08 to event 56
+2025/09/21 22:12:30,bnjm2000,Assigned specific asset PB#09 to event 56
+2025/09/21 22:12:34,bnjm2000,Assigned specific asset PB#10 to event 56
+2025/09/21 22:12:38,bnjm2000,Assigned specific asset PB#11 to event 56
+2025/09/21 22:12:42,bnjm2000,Assigned specific asset PB#12 to event 56
+2025/09/21 22:12:46,bnjm2000,Assigned specific asset PB#13 to event 56
+2025/09/21 22:12:48,bnjm2000,Assigned specific asset PB#14 to event 56
+2025/09/21 22:12:50,bnjm2000,Assigned specific asset PB#15 to event 56
+2025/09/21 22:12:53,bnjm2000,Assigned specific asset PB#16 to event 56
+2025/09/21 22:12:56,bnjm2000,Assigned specific asset QM75C#01 to event 56
+2025/09/21 22:12:57,bnjm2000,Assigned specific asset QM75C#04 to event 56
+2025/09/21 22:15:15,bnjm2000,Added 1x L-Acoustics ETR5 model to event 56 (total: 1)
+2025/09/21 22:15:16,bnjm2000,Added 1x L-Acoustics ETR5 model to event 56 (total: 2)
+2025/09/21 22:15:22,bnjm2000,Assigned specific asset ETR5#01 to event 56
+2025/09/21 22:15:24,bnjm2000,Assigned specific asset ETR5#02 to event 56
+2025/09/21 22:15:31,bnjm2000,Assigned specific asset ETR5#03 to event 56
+2025/09/21 22:15:33,bnjm2000,Completely removed asset ETR5#01 from event 56
