@@ -1,40 +1,3 @@
-2025/08/04 15:39:22,bnjm2000,Assigned specific asset IP1000#07 to event 41
-2025/08/04 15:39:25,bnjm2000,Assigned specific asset IP1000#08 to event 41
-2025/08/04 15:39:28,bnjm2000,Assigned specific asset DXR10#01 to event 41
-2025/08/04 15:39:31,bnjm2000,Assigned specific asset DXR10#03 to event 41
-2025/08/04 15:39:36,bnjm2000,Completely removed asset DXR10#03 from event 41
-2025/08/04 15:39:40,bnjm2000,Assigned specific asset DXR10#02 to event 41
-2025/08/04 15:39:54,bnjm2000,Removed Yamaha Rio1608-d2 model from event 41
-2025/08/04 15:39:59,bnjm2000,Added 1x Yamaha Rio1608-d model to event 41 (total: 1)
-2025/08/04 15:40:02,bnjm2000,Added 1x Le Maitre MVS Hazer model to event 41 (total: 1)
-2025/08/04 15:40:07,bnjm2000,Assigned specific asset RIO1608-D #01 to event 41
-2025/08/04 15:40:11,bnjm2000,Assigned specific asset TIGERTOUCH2#01 to event 41
-2025/08/04 15:40:14,bnjm2000,Assigned specific asset MVSHAZER#02 to event 41
-2025/08/04 15:40:51,bnjm2000,Removed Ayrton Diablo (W.DMX) model from event 41
-2025/08/04 15:40:55,bnjm2000,Removed Lumenradio Aurora model from event 41
-2025/08/04 15:41:03,bnjm2000,Added 8x Ayrton Diablo Profile model to event 41 (total: 8)
-2025/08/04 15:41:35,bnjm2000,Assigned specific asset DIABLO#13 to event 41
-2025/08/04 15:41:38,bnjm2000,Assigned specific asset DIABLO#14 to event 41
-2025/08/04 15:41:39,bnjm2000,Assigned specific asset DIABLO#15 to event 41
-2025/08/04 15:41:41,bnjm2000,Assigned specific asset DIABLO#16 to event 41
-2025/08/04 15:41:43,bnjm2000,Assigned specific asset DIABLO#17 to event 41
-2025/08/04 15:41:45,bnjm2000,Assigned specific asset DIABLO#18 to event 41
-2025/08/04 15:41:51,bnjm2000,Assigned specific asset DIABLO#19 to event 41
-2025/08/04 15:41:53,bnjm2000,Assigned specific asset DIABLO#20 to event 41
-2025/08/04 15:42:38,bnjm2000,Assigned specific asset J48S#05 to event 41
-2025/08/04 15:42:42,bnjm2000,Assigned specific asset J48S#06 to event 41
-2025/08/04 15:42:47,bnjm2000,Assigned specific asset J48M#01 to event 41
-2025/08/04 15:42:49,bnjm2000,Assigned specific asset MT-90A#01 to event 41
-2025/08/04 15:42:55,bnjm2000,Assigned specific asset PCBB#05 to event 41
-2025/08/04 15:42:58,bnjm2000,Assigned specific asset PCBB#07 to event 41
-2025/08/04 15:43:22,bnjm2000,Removed Shure ULXD4D model from event 41
-2025/08/04 15:43:22,bnjm2000,Added 1x Shure ULXD4D model to event 41 (total: 1)
-2025/08/04 15:43:31,bnjm2000,Added 1x Shure AD4Q model to event 41 (total: 1)
-2025/08/04 15:43:41,bnjm2000,Removed Shure ULXD2 model from event 41
-2025/08/04 15:43:42,bnjm2000,Added 4x Shure ULXD2 model to event 41 (total: 4)
-2025/08/04 15:44:26,bnjm2000,Assigned specific asset ULXD2#03 to event 41
-2025/08/04 15:44:29,bnjm2000,Assigned specific asset ULXD2#04 to event 41
-2025/08/04 15:44:32,bnjm2000,Assigned specific asset ULXD2#07 to event 41
 2025/08/04 15:44:40,bnjm2000,Assigned specific asset ULXD2#12 to event 41
 2025/08/04 15:44:54,bnjm2000,Removed Shure AD4Q model from event 41
 2025/08/04 15:45:00,bnjm2000,Added 1x Shure ULXD4Q model to event 41 (total: 1)
@@ -723,14 +686,6 @@
 2025/09/15 12:40:37,bnjm2000,Assigned specific asset LA4X#04 to event 57
 2025/09/15 12:40:37,bnjm2000,Assigned specific asset LA4X#06 to event 57
 2025/09/15 12:40:39,bnjm2000,Assigned specific asset LA4X#05 to event 57
-2025/09/15 12:49:58,bnjm2000,Created event 59: Dry Hire: Creative Technology via web interface
-2025/09/15 12:50:07,bnjm2000,Added 2x L-Acoustics Syva Low model to event 59 (total: 2)
-2025/09/15 12:50:07,bnjm2000,Added 1x L-Acoustics Syva model to event 59 (total: 1)
-2025/09/15 12:50:13,bnjm2000,Removed L-Acoustics Syva model from event 59
-2025/09/15 12:50:13,bnjm2000,Added 2x L-Acoustics Syva model to event 59 (total: 2)
-2025/09/15 12:50:30,bnjm2000,Removed L-Acoustics Syva Low model from event 59
-2025/09/15 12:50:58,bnjm2000,Added 1x L-Acoustics Syva Low model to event 59 (total: 1)
-2025/09/15 12:50:58,bnjm2000,Added 1x L-Acoustics Syva Low model to event 59 (total: 2)
 2025/09/15 12:57:49,bnjm2000,Removed L-Acoustics LS10 model from event 57
 2025/09/15 13:03:31,bnjm2000,Removed L-Acoustics LA12X model from event 54
 2025/09/15 13:03:31,bnjm2000,Added 7x L-Acoustics LA12X model to event 54 (total: 7)
@@ -999,3 +954,48 @@
 2025/09/23 12:58:43,bnjm2000,Added 2x Shure ULXD4D model to event 68 (total: 2)
 2025/09/23 12:58:54,bnjm2000,Added 1x MiPro MT-90A model to event 68 (total: 1)
 2025/09/23 12:58:56,bnjm2000,Added 2x MiPro MR-90 model to event 68 (total: 2)
+2025/09/24 13:30:43,bnjm2000,User bnjm2000 logged in via web interface
+2025/09/24 13:31:04,bnjm2000,Deleted event 59: Dry Hire: Creative Technology via web interface. No asset locations to reset. Removed 8 related log entries.
+2025/09/24 13:31:08,bnjm2000,Returned all assets for department AX in event 56: 5 items
+2025/09/24 13:31:09,bnjm2000,Returned all assets for department LX in event 56: 8 items
+2025/09/24 13:31:09,bnjm2000,Returned all assets for department MISC in event 56: 2 items
+2025/09/24 13:31:10,bnjm2000,Returned all assets for department VX in event 56: 2 items
+2025/09/24 13:31:26,bnjm2000,Added 12x L-Acoustics X-UL12 model to event 57 (total: 12)
+2025/09/24 13:31:35,bnjm2000,Completely removed asset LA4X#01 from event 57
+2025/09/24 13:31:36,bnjm2000,Completely removed asset LA4X#02 from event 57
+2025/09/24 13:31:37,bnjm2000,Completely removed asset LA4X#03 from event 57
+2025/09/24 13:31:38,bnjm2000,Assigned specific asset LA4X#04 to event 57
+2025/09/24 13:31:42,bnjm2000,Assigned specific asset LA4X#05 to event 57
+2025/09/24 13:31:44,bnjm2000,Assigned specific asset LA4X#06 to event 57
+2025/09/24 13:31:50,bnjm2000,Assigned specific asset LA4X#08 to event 57
+2025/09/24 13:31:53,bnjm2000,Assigned specific asset X-UL12#01 to event 57
+2025/09/24 13:31:54,bnjm2000,Assigned specific asset X-UL12#02 to event 57
+2025/09/24 13:31:55,bnjm2000,Assigned specific asset X-UL12#03 to event 57
+2025/09/24 13:31:57,bnjm2000,Assigned specific asset X-UL12#04 to event 57
+2025/09/24 13:31:58,bnjm2000,Assigned specific asset X-UL12#05 to event 57
+2025/09/24 13:31:59,bnjm2000,Assigned specific asset X-UL12#06 to event 57
+2025/09/24 13:32:03,bnjm2000,Assigned specific asset X-UL12#07 to event 57
+2025/09/24 13:32:05,bnjm2000,Assigned specific asset X-UL12#08 to event 57
+2025/09/24 13:32:09,bnjm2000,Assigned specific asset X-UL12#09 to event 57
+2025/09/24 13:32:10,bnjm2000,Assigned specific asset X-UL12#10 to event 57
+2025/09/24 13:32:14,bnjm2000,Assigned specific asset X-UL12#14 to event 57
+2025/09/24 13:32:18,bnjm2000,Assigned specific asset X-UL12#15 to event 57
+2025/09/24 13:32:23,bnjm2000,Assigned specific asset X12#01 to event 57
+2025/09/24 13:32:24,bnjm2000,Assigned specific asset X12#02 to event 57
+2025/09/24 13:32:25,bnjm2000,Assigned specific asset X12#03 to event 57
+2025/09/24 13:32:27,bnjm2000,Assigned specific asset X12#04 to event 57
+2025/09/24 13:32:29,bnjm2000,Assigned specific asset X12#15 to event 57
+2025/09/24 13:32:31,bnjm2000,Assigned specific asset X12#16 to event 57
+2025/09/24 14:06:59,bnjm2000,Removed Yamaha QL1 model from event 54
+2025/09/24 14:07:06,bnjm2000,Added 1x Yamaha QL5 model to event 54 (total: 1)
+2025/09/24 19:15:42,bnjm2000,Added 2x Pioneer CDJ3000 model to event 62 (total: 2)
+2025/09/24 19:15:50,bnjm2000,Added 1x TP-Link TL-SG105 model to event 62 (total: 1)
+2025/09/24 19:18:41,bnjm2000,Added 1x Yamaha DM3 model to event 62 (total: 1)
+2025/09/24 19:18:45,bnjm2000,Added 1x Yamaha Rio1608-d model to event 62 (total: 1)
+2025/09/24 19:18:53,bnjm2000,Added 1x Radial Engineering J48 Mono model to event 62 (total: 1)
+2025/09/24 19:19:04,bnjm2000,Assigned asset [MISC]Cat tail to event 62 (unprepared)
+2025/09/24 19:19:10,bnjm2000,Assigned asset [MISC]Mic boom stand to event 62 (unprepared)
+2025/09/24 19:19:32,bnjm2000,Added 3x Shure ULXD2 model to event 62 (total: 3)
+2025/09/24 19:19:35,bnjm2000,Added 1x Shure ULXD4D model to event 62 (total: 1)
+2025/09/24 19:20:01,bnjm2000,Added 1x Interspace Industries PCBB3 model to event 61 (total: 1)
+2025/09/24 19:20:05,bnjm2000,Added 1x Apple IPAD model to event 61 (total: 1)
