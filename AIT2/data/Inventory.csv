@@ -387,7 +387,7 @@ LA4X#03,L-Acoustics,LA4X,1180051678,Amplified controller,False,False,,AX,Store,D
 LA4X#04,L-Acoustics,LA4X,1180053934,Amplified controller,False,False,,AX,Store,Dry Hire: Creative Technology
 LA4X#05,L-Acoustics,LA4X,1180053927,Amplified controller,False,False,,AX,Store,Dry Hire: Creative Technology
 LA4X#06,L-Acoustics,LA4X,1180051467,Amplified controller,False,False,,AX,Store,Dry Hire: Creative Technology
-LA4X#07,L-Acoustics,LA4X,1180053692,Amplified controller,False,False,,AX,Store,Store
+LA4X#07,L-Acoustics,LA4X,1180053692,Amplified controller,False,False,,AX,Store,Dry Hire: SCM
 LA4X#08,L-Acoustics,LA4X,1180051680,Amplified controller,False,False,,AX,Store,Dry Hire: Creative Technology
 LA4X#09,L-Acoustics,LA4X,1180053978,Amplified controller,False,False,,AX,Store,Dry Hire: SCM
 LA4X#10,L-Acoustics,LA4X,1180053926,Amplified controller,False,False,,AX,Store,Dry Hire: SCM
@@ -584,8 +584,8 @@ CDJ2000NXS#01,Pioneer,CDJ2000NXS,,Professional DJ multi player (Black),False,Fal
 CDJ2000NXS#02,Pioneer,CDJ2000NXS,,Professional DJ multi player (Black),False,False,,AX,Store,Store
 CDJ2000NXS2#01,Pioneer,CDJ2000NXS2,,Professional DJ multi player (Black),False,False,,AX,Store,
 CDJ2000NXS2#02,Pioneer,CDJ2000NXS2,,Professional DJ multi player (Black),False,False,,AX,Store,
-CDJ3000#01,Pioneer,CDJ3000,CDMP038151EH,Professional DJ multi player (Black),False,False,"2024/09/22	bnjm2000	Buttons and jog wheel melted under sun (F1 @ ShowCo) [Marked OOC]|2024/10/03	bnjm2000	Received spare from ShowCo while repairs underway (S/N: BHMP026156EH) [Cleared OOC]|2025/03/15	bnjm2000	Collected back, tested working. (Wedding of Barbara and Ker Wei)",AX,Store,Store
-CDJ3000#02,Pioneer,CDJ3000,CDMP038159EH,Professional DJ multi player (Black),False,False,"2024/09/22	bnjm2000	22/09/2024 - Buttons and jog wheel melted under sun (F1 @ ShowCo) [Marked OOC]|2024/10/03	bnjm2000	03/10/2024 - Received spare from ShowCo while repairs underway (S/N: BHMP026170EH) [Cleared OOC]|2025/03/15	bnjm2000	Collected back, tested working. (Wedding of Barbara and Ker Wei)",AX,Store,Store
+CDJ3000#01,Pioneer,CDJ3000,CDMP038151EH,Professional DJ multi player (Black),False,False,"2024/09/22	bnjm2000	Buttons and jog wheel melted under sun (F1 @ ShowCo) [Marked OOC]|2024/10/03	bnjm2000	Received spare from ShowCo while repairs underway (S/N: BHMP026156EH) [Cleared OOC]|2025/03/15	bnjm2000	Collected back, tested working. (Wedding of Barbara and Ker Wei)",AX,Store,Dry Hire: Avery Events
+CDJ3000#02,Pioneer,CDJ3000,CDMP038159EH,Professional DJ multi player (Black),False,False,"2024/09/22	bnjm2000	22/09/2024 - Buttons and jog wheel melted under sun (F1 @ ShowCo) [Marked OOC]|2024/10/03	bnjm2000	03/10/2024 - Received spare from ShowCo while repairs underway (S/N: BHMP026170EH) [Cleared OOC]|2025/03/15	bnjm2000	Collected back, tested working. (Wedding of Barbara and Ker Wei)",AX,Store,Dry Hire: Avery Events
 DJM900NXS#01,Pioneer,DJM-900NXS,,DJ Mixer,False,False,,AX,Store,
 DJM900NXS2#01,Pioneer,DJM-900NXS2,,4-channel pro-DJ mixer,False,False,,AX,Store,Store
 DJMA9#01,Pioneer,DJM-A9,,4-channel pro-DJ mixer,False,False,,AX,Store,Store
@@ -1194,3 +1194,9 @@ BA70#18,Sennheiser,BA70,0483001323,Lithium Ion rechargeable battery,False,False,
 BA70#19,Sennheiser,BA70,0483001855,Lithium Ion rechargeable battery,False,False,,AX,Store,
 BA70#20,Sennheiser,BA70,0483001902,Lithium Ion rechargeable battery,False,False,,AX,Store,
 SG105#01,TP-Link,TL-SG105,22550WN008358,5-port network switch,False,False,,AX,Store,
+PS15R2#01,Nexo,PS15 R2,,"15"" passive enclosure",False,False,,AX,Store,
+PS15R2#02,Nexo,PS15 R2,,"15"" passive enclosure",False,False,,AX,Store,
+PS15R2#03,Nexo,PS15 R2,,"15"" passive enclosure",False,False,,AX,Store,
+PS15R2#04,Nexo,PS15 R2,,"15"" passive enclosure",False,False,,AX,Store,
+PS15R2#05,Nexo,PS15 R2,,"15"" passive enclosure",False,False,,AX,Store,
+PS15R2#06,Nexo,PS15 R2,,"15"" passive enclosure",False,False,,AX,Store,
