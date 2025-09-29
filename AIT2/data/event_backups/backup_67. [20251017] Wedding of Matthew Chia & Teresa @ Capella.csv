@@ -1,2 +1,2 @@
 EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,Tag,ForceStateOverride
-67,Wedding of Matthew Chia & Teresa @ Capella,20251017,20251018,[],"[""[MODEL]AX|L-Acoustics|X12|4|12\"" passive coaxial enclosure"", ""[MODEL]AX|L-Acoustics|SB18|2|High power compact subwoofer: 1 x 18\""""]",[],Planning,[],[],events,False
+67,Wedding of Matthew Chia & Teresa @ Capella,20251017,20251018,[],"[""[MODEL]AX|L-Acoustics|X12|4|12\"" passive coaxial enclosure"", ""[MODEL]AX|L-Acoustics|SB18|2|High power compact subwoofer: 1 x 18\"""", ""[MODEL]AX|L-Acoustics|LA4X|2|Amplified controller""]",[],Planning,[],[],events,False

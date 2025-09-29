@@ -1,71 +1,3 @@
-2025/08/11 15:24:56,admin,Returned asset LEDBEAM#14 from event 42
-2025/08/11 15:24:57,admin,Returned asset LEDBEAM#15 from event 42
-2025/08/11 15:24:58,admin,Returned asset QUARTZ#01 from event 42
-2025/08/11 15:24:59,admin,Returned asset LEDBEAM#16 from event 42
-2025/08/11 15:25:01,admin,Returned asset [MISC]LX Tree;2 from event 42
-2025/08/11 15:25:14,admin,Returned asset HLBatt#01 from event 41
-2025/08/11 15:25:15,admin,Returned asset HLBatt#02 from event 41
-2025/08/11 15:25:15,admin,Returned asset HLBatt#03 from event 41
-2025/08/11 15:25:16,admin,Returned asset HLBatt#04 from event 41
-2025/08/11 15:25:16,admin,Returned asset HLBatt#05 from event 41
-2025/08/11 15:25:19,admin,Returned asset HLBatt#06 from event 41
-2025/08/11 15:25:19,admin,Returned asset HLBatt#07 from event 41
-2025/08/11 15:25:22,admin,Returned asset HLBatt#08 from event 41
-2025/08/11 15:25:25,admin,Returned asset HLBatt#09 from event 41
-2025/08/11 15:25:25,admin,Returned asset HLBatt#11 from event 41
-2025/08/11 15:25:26,admin,Returned asset HLBatt#12 from event 41
-2025/08/11 15:25:28,admin,Returned asset HLBatt#10 from event 41
-2025/08/11 15:25:29,admin,Returned asset HLBatt#13 from event 41
-2025/08/11 15:25:30,admin,Returned asset HLBatt#15 from event 41
-2025/08/11 15:25:30,admin,Returned asset HLBatt#16 from event 41
-2025/08/11 15:25:31,admin,Returned asset HLBatt#14 from event 41
-2025/08/11 15:25:36,admin,Returned asset C1ProHub#01 from event 41
-2025/08/11 15:25:37,admin,Returned asset C1ProCharger#01 from event 41
-2025/08/11 15:25:41,admin,Returned asset C1ProRHS#01 from event 41
-2025/08/11 15:25:42,admin,Returned asset C1ProRHS#02 from event 41
-2025/08/11 15:25:43,admin,Returned asset C1ProRHS#04 from event 41
-2025/08/11 15:25:44,admin,Returned asset C1ProRHS#05 from event 41
-2025/08/11 15:25:44,admin,Returned asset C1ProRHS#07 from event 41
-2025/08/11 15:25:48,admin,Returned asset C1ProRHS#03 from event 41
-2025/08/11 15:25:49,admin,Returned asset C1ProRHS#06 from event 41
-2025/08/11 15:25:50,admin,Returned asset C1ProRHS#08 from event 41
-2025/08/11 15:25:52,admin,Returned asset C1ProWHS#01 from event 41
-2025/08/11 15:25:55,admin,Returned asset ME36#01 from event 41
-2025/08/11 15:25:55,admin,Returned asset ME36#02 from event 41
-2025/08/11 15:25:56,admin,Returned asset QL1#02 from event 41
-2025/08/11 15:25:58,admin,Returned asset IPAD#03 from event 41
-2025/08/11 15:26:02,admin,Returned asset EVOLVE50#03 from event 41
-2025/08/11 15:26:02,admin,Returned asset EVOLVE50#04 from event 41
-2025/08/11 15:26:04,admin,Returned asset EVOLVE50#05 from event 41
-2025/08/11 15:26:06,admin,Returned asset IP1000#07 from event 41
-2025/08/11 15:26:07,admin,Returned asset IP1000#08 from event 41
-2025/08/11 15:26:07,admin,Returned asset EVOLVE50#06 from event 41
-2025/08/11 15:26:11,admin,Returned asset RIO1608-D #01 from event 41
-2025/08/11 15:26:12,admin,Returned asset TIGERTOUCH2#01 from event 41
-2025/08/11 15:26:13,admin,Returned asset DXR10#01 from event 41
-2025/08/11 15:26:16,admin,Returned asset MVSHAZER#02 from event 41
-2025/08/11 15:26:17,admin,Returned asset DIABLO#13 from event 41
-2025/08/11 15:26:20,admin,Returned asset DXR10#02 from event 41
-2025/08/11 15:26:22,admin,Returned asset DIABLO#14 from event 41
-2025/08/11 15:26:22,admin,Returned asset DIABLO#16 from event 41
-2025/08/11 15:26:23,admin,Returned asset DIABLO#18 from event 41
-2025/08/11 15:26:23,admin,Returned asset DIABLO#17 from event 41
-2025/08/11 15:26:25,admin,Returned asset DIABLO#19 from event 41
-2025/08/11 15:26:27,admin,Returned asset J48S#06 from event 41
-2025/08/11 15:26:28,admin,Returned asset J48S#05 from event 41
-2025/08/11 15:26:29,admin,Returned asset DIABLO#15 from event 41
-2025/08/11 15:26:30,admin,Returned asset DIABLO#20 from event 41
-2025/08/11 15:26:32,admin,Returned asset MT-90A#01 from event 41
-2025/08/11 15:26:36,admin,Returned asset J48M#01 from event 41
-2025/08/11 15:26:37,admin,Returned asset PCBB#05 from event 41
-2025/08/11 15:26:38,admin,Returned asset PCBB#07 from event 41
-2025/08/11 15:26:39,admin,Returned asset ULXD2#04 from event 41
-2025/08/11 15:26:43,admin,Returned asset ULXD2#03 from event 41
-2025/08/11 15:26:44,admin,Returned asset ULXD2#07 from event 41
-2025/08/11 15:26:45,admin,Returned asset ULXD2#12 from event 41
-2025/08/11 15:26:46,admin,Returned asset ULXD4Q#01 from event 41
-2025/08/11 15:26:47,admin,Returned asset MR-90A#01 from event 41
-2025/08/11 15:26:50,admin,Returned asset ULXD4D#01 from event 41
 2025/08/11 15:26:56,admin,Returned asset MR-90A#02 from event 41
 2025/08/11 15:26:56,admin,Returned asset MR-90A#04 from event 41
 2025/08/11 15:26:58,admin,Returned asset MR-90A#05 from event 41
@@ -995,3 +927,75 @@
 2025/09/29 09:55:17,bnjm2000,Added 2x Nexo PS15-R2 model to event 71 (total: 2)
 2025/09/29 09:55:25,bnjm2000,Assigned specific asset PS15R2#03 to event 71
 2025/09/29 09:55:26,bnjm2000,Assigned specific asset PS15R2#04 to event 71
+2025/09/29 15:35:55,bnjm2000,Assigned specific asset 5XTW#01 to event 60
+2025/09/29 15:35:55,bnjm2000,Assigned specific asset 5XTW#02 to event 60
+2025/09/29 15:35:56,bnjm2000,Assigned specific asset 5XTW#03 to event 60
+2025/09/29 15:35:56,bnjm2000,Assigned specific asset 5XTW#04 to event 60
+2025/09/29 15:36:00,bnjm2000,Assigned specific asset 5XTW#05 to event 60
+2025/09/29 15:36:01,bnjm2000,Assigned specific asset 5XTW#06 to event 60
+2025/09/29 15:36:03,bnjm2000,Assigned specific asset 5XTW#07 to event 60
+2025/09/29 15:36:05,bnjm2000,Assigned specific asset 5XTW#08 to event 60
+2025/09/29 15:36:06,bnjm2000,Assigned specific asset 5XTW#09 to event 60
+2025/09/29 15:36:07,bnjm2000,Assigned specific asset 5XTW#10 to event 60
+2025/09/29 15:36:09,bnjm2000,Assigned specific asset 5XTW#11 to event 60
+2025/09/29 15:36:10,bnjm2000,Assigned specific asset 5XTW#12 to event 60
+2025/09/29 15:36:12,bnjm2000,Assigned specific asset 5XTW#13 to event 60
+2025/09/29 15:36:13,bnjm2000,Assigned specific asset 5XTW#14 to event 60
+2025/09/29 15:36:14,bnjm2000,Assigned specific asset 5XTW#15 to event 60
+2025/09/29 15:36:15,bnjm2000,Assigned specific asset 5XTW#16 to event 60
+2025/09/29 15:36:16,bnjm2000,Assigned specific asset 5XTW#17 to event 60
+2025/09/29 15:36:17,bnjm2000,Assigned specific asset 5XTW#18 to event 60
+2025/09/29 15:36:19,bnjm2000,Assigned specific asset 5XTW#19 to event 60
+2025/09/29 15:36:20,bnjm2000,Assigned specific asset 5XTW#20 to event 60
+2025/09/29 15:36:21,bnjm2000,Assigned specific asset 5XT#63 to event 60
+2025/09/29 15:36:24,bnjm2000,Completely removed asset 5XT#63 from event 60
+2025/09/29 15:36:31,bnjm2000,Assigned specific asset ETR5W#01 to event 60
+2025/09/29 15:36:32,bnjm2000,Assigned specific asset ETR5W#02 to event 60
+2025/09/29 15:36:33,bnjm2000,Assigned specific asset ETR5W#03 to event 60
+2025/09/29 15:36:34,bnjm2000,Assigned specific asset ETR5W#04 to event 60
+2025/09/29 15:36:35,bnjm2000,Assigned specific asset ETR5W#05 to event 60
+2025/09/29 15:36:37,bnjm2000,Assigned specific asset ETR5W#06 to event 60
+2025/09/29 15:36:39,bnjm2000,Assigned specific asset ETR5W#07 to event 60
+2025/09/29 15:36:40,bnjm2000,Assigned specific asset ETR5W#08 to event 60
+2025/09/29 15:36:42,bnjm2000,Assigned specific asset ETR5W#09 to event 60
+2025/09/29 15:36:43,bnjm2000,Assigned specific asset ETR5W#10 to event 60
+2025/09/29 15:36:45,bnjm2000,Assigned specific asset ETR5W#11 to event 60
+2025/09/29 15:36:46,bnjm2000,Assigned specific asset ETR5W#12 to event 60
+2025/09/29 15:36:48,bnjm2000,Assigned specific asset ETR5W#13 to event 60
+2025/09/29 15:36:49,bnjm2000,Assigned specific asset ETR5W#14 to event 60
+2025/09/29 15:36:51,bnjm2000,Assigned specific asset ETR5W#15 to event 60
+2025/09/29 15:36:52,bnjm2000,Assigned specific asset ETR5W#16 to event 60
+2025/09/29 15:36:53,bnjm2000,Assigned specific asset ETR5W#17 to event 60
+2025/09/29 15:36:55,bnjm2000,Assigned specific asset ETR5W#18 to event 60
+2025/09/29 15:36:56,bnjm2000,Assigned specific asset ETR5W#19 to event 60
+2025/09/29 15:36:57,bnjm2000,Assigned specific asset ETR5W#20 to event 60
+2025/09/29 15:40:47,bnjm2000,Added 2x L-Acoustics Syva model to event 66 (total: 2)
+2025/09/29 15:40:48,bnjm2000,Added 2x L-Acoustics Syva Low model to event 66 (total: 2)
+2025/09/29 15:40:55,bnjm2000,Added 2x L-Acoustics SB18 model to event 66 (total: 2)
+2025/09/29 15:41:07,bnjm2000,Added 3x L-Acoustics LA4X model to event 66 (total: 3)
+2025/09/29 15:41:14,bnjm2000,Added 2x EV EVOLVE 50 model to event 66 (total: 2)
+2025/09/29 15:41:21,bnjm2000,Added 2x Pioneer CDJ3000 model to event 66 (total: 2)
+2025/09/29 15:41:27,bnjm2000,Added 1x Yamaha DM3 model to event 66 (total: 1)
+2025/09/29 15:41:40,bnjm2000,Added 1x Yamaha QL5 model to event 66 (total: 1)
+2025/09/29 15:42:03,bnjm2000,Added 1x Sennheiser Base Station model to event 66 (total: 1)
+2025/09/29 15:42:08,bnjm2000,Added 5x Sennheiser SEK(UHF) model to event 66 (total: 5)
+2025/09/29 15:43:25,bnjm2000,Added 2x Pioneer CDJ3000 model to event 54 (total: 2)
+2025/09/29 15:43:40,bnjm2000,Assigned asset [LOAN]Pioneer DJM S11 to event 54 (unprepared)
+2025/09/29 15:43:58,bnjm2000,Added 1x Shure ULXD1 model to event 66 (total: 1)
+2025/09/29 15:44:04,bnjm2000,Added 1x DPA 4099 model to event 66 (total: 1)
+2025/09/29 15:44:08,bnjm2000,Added 1x DPA DAD 6010 model to event 66 (total: 1)
+2025/09/29 15:45:24,bnjm2000,Removed DPA 4099 model from event 66
+2025/09/29 15:45:24,bnjm2000,Added 6x DPA 4099 model to event 66 (total: 6)
+2025/09/29 15:45:40,bnjm2000,Added 4x DPA DAD 6001 model to event 66 (total: 4)
+2025/09/29 15:45:59,bnjm2000,Assigned asset [MISC]DPA saxaphone clip to event 66 (unprepared)
+2025/09/29 15:46:40,bnjm2000,Assigned asset [MISC]DPA violin clip;4 to event 66 (unprepared)
+2025/09/29 15:46:47,bnjm2000,Assigned asset [MISC]DPA cello clip to event 66 (unprepared)
+2025/09/29 15:48:45,bnjm2000,Added 1x Sennheiser DAD(UHF) model to event 66 (total: 1)
+2025/09/29 15:48:52,bnjm2000,Added 10x Sennheiser BA70 model to event 66 (total: 10)
+2025/09/29 15:49:48,bnjm2000,Removed Audio Tecnica AT8668 model from event 54
+2025/09/29 15:49:48,bnjm2000,Added 2x Audio Tecnica AT8668 model to event 54 (total: 2)
+2025/09/29 15:55:33,bnjm2000,Added 4x EV EVOLVE 50 model to event 67 (total: 4)
+2025/09/29 16:08:46,bnjm2000,Added 2x Interspace Industries PCBB3 model to event 68 (total: 2)
+2025/09/29 16:08:50,bnjm2000,Added 1x Apple IPAD model to event 68 (total: 1)
+2025/09/29 16:09:00,bnjm2000,Added 1x Apple IPAD model to event 63 (total: 1)
+2025/09/29 16:22:58,bnjm2000,Removed Astera Pixel Brick model from event 54
