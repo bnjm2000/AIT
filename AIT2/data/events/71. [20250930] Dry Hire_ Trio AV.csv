@@ -1,0 +1,2 @@
+EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,Tag,ForceStateOverride
+71,Dry Hire: Trio AV,20250930,20251005,[],"[""[MODEL]AX|Nexo|PS15-R2|2|15\"" passive enclosure"", ""PS15R2#03"", ""PS15R2#04""]",[],Ready,"[""PS15R2#03"", ""PS15R2#04""]","[""PS15R2#04""]",dry hire,False

@@ -1,11 +1,3 @@
-2025/08/05 17:01:25,bnjm2000,Added 2x Netgear GSM4212P model to event 43 (total: 2)
-2025/08/05 17:01:41,bnjm2000,Added 8x Ayrton Diablo (W.DMX) model to event 43 (total: 8)
-2025/08/05 17:01:47,bnjm2000,Added 4x Robe Robin LEDBeam 350 Wash model to event 43 (total: 4)
-2025/08/05 17:02:33,bnjm2000,Added 1x Analogue Way Pulse 2 model to event 44 (total: 1)
-2025/08/05 17:02:40,bnjm2000,Added 2x Samsung LH85QMCEBGCXXS model to event 43 (total: 2)
-2025/08/11 15:24:29,admin,User admin logged in via web interface
-2025/08/11 15:24:42,admin,Prepared asset [MISC]Fibre Cables;2 for event 40
-2025/08/11 15:24:55,admin,Returned asset LEDBEAM#13 from event 42
 2025/08/11 15:24:56,admin,Returned asset LEDBEAM#14 from event 42
 2025/08/11 15:24:57,admin,Returned asset LEDBEAM#15 from event 42
 2025/08/11 15:24:58,admin,Returned asset QUARTZ#01 from event 42
@@ -955,7 +947,6 @@
 2025/09/25 18:42:09,bnjm2000,Created event 70: Dry Hire: SCM via web interface
 2025/09/25 18:42:21,bnjm2000,Added 5x L-Acoustics LA4X model to event 70 (total: 5)
 2025/09/25 18:42:51,bnjm2000,Added 2x Pioneer CDJ3000 model to event 69 (total: 2)
-2025/09/25 18:44:53,bnjm2000,Created event 71: Dry Hire: TrioAV via web interface
 2025/09/25 18:53:36,bnjm2000,Assigned specific asset LA4X#01 to event 70
 2025/09/25 18:53:38,bnjm2000,Assigned specific asset LA4X#02 to event 70
 2025/09/25 18:53:40,bnjm2000,Assigned specific asset LA4X#03 to event 70
@@ -975,7 +966,6 @@
 2025/09/28 23:46:59,bnjm2000,Added 52x L-Acoustics 5XT model to event 63 (total: 52)
 2025/09/28 23:47:02,bnjm2000,Removed L-Acoustics ETR5 model from event 63
 2025/09/28 23:47:02,bnjm2000,Added 52x L-Acoustics ETR5 model to event 63 (total: 52)
-2025/09/28 23:51:13,bnjm2000,Added 2x Nexo PS15 R2 model to event 71 (total: 2)
 2025/09/28 23:51:56,bnjm2000,Removed Yamaha DM3 model from event 62
 2025/09/28 23:52:02,bnjm2000,Added 1x Yamaha QL1 model to event 62 (total: 1)
 2025/09/28 23:53:29,bnjm2000,Added 12x L-Acoustics X-UL8 model to event 63 (total: 12)
@@ -993,9 +983,15 @@
 2025/09/29 00:09:42,bnjm2000,Added 1x DPA DAD 6010 model to event 64 (total: 1)
 2025/09/29 00:09:43,bnjm2000,Added 1x DPA DAD 6010 model to event 64 (total: 2)
 2025/09/29 00:10:27,bnjm2000,Updated event 66: Wedding of Justin & Amanda @ Raffles Sentosa via web interface
-2025/09/29 00:16:42,bnjm2000,Updated event 71: Dry Hire: TrioAV via web interface
 2025/09/29 00:22:51,bnjm2000,Removed Shure ULXD2 model from event 68
 2025/09/29 00:22:51,bnjm2000,Added 2x Shure ULXD2 model to event 68 (total: 2)
 2025/09/29 00:22:55,bnjm2000,Removed Shure ULXD4D model from event 68
 2025/09/29 00:22:55,bnjm2000,Added 1x Shure ULXD4D model to event 68 (total: 1)
 2025/09/29 00:24:19,bnjm2000,Added 1x Yamaha DM3 model to event 68 (total: 1)
+2025/09/29 09:51:07,bnjm2000,User bnjm2000 logged in via web interface
+2025/09/29 09:52:41,bnjm2000,Saved client David Tiang
+2025/09/29 09:54:54,bnjm2000,Deleted event 71: Dry Hire: TrioAV via web interface. No asset locations to reset. Removed 9 related log entries.
+2025/09/29 09:55:11,bnjm2000,Created event 71: Dry Hire: Trio AV via web interface
+2025/09/29 09:55:17,bnjm2000,Added 2x Nexo PS15-R2 model to event 71 (total: 2)
+2025/09/29 09:55:25,bnjm2000,Assigned specific asset PS15R2#03 to event 71
+2025/09/29 09:55:26,bnjm2000,Assigned specific asset PS15R2#04 to event 71

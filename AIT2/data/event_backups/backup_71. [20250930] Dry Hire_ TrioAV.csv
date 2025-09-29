@@ -1,2 +1,2 @@
 EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,Tag,ForceStateOverride
-71,Dry Hire: TrioAV,20250930,20251005,[],"[""[MODEL]AX|Nexo|PS15 R2|2|15\"" passive enclosure""]",[],Planning,[],[],events,False
+71,Dry Hire: TrioAV,20250930,20251005,[],"[""[MODEL]AX|Nexo|PS15 R2|2|15\"" passive enclosure""]",[],Planning,[],[],dry hire,False
