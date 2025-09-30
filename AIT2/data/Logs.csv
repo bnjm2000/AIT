@@ -1,30 +1,3 @@
-2025/08/11 15:26:56,admin,Returned asset MR-90A#02 from event 41
-2025/08/11 15:26:56,admin,Returned asset MR-90A#04 from event 41
-2025/08/11 15:26:58,admin,Returned asset MR-90A#05 from event 41
-2025/08/11 15:26:59,admin,Returned asset MR-90A#06 from event 41
-2025/08/11 15:27:00,admin,Returned asset DX402A#01 from event 41
-2025/08/11 15:27:02,admin,Returned asset DX402A#02 from event 41
-2025/08/11 15:27:08,admin,Returned asset ETCZOOM#01 from event 41
-2025/08/11 15:27:09,admin,Returned asset ETCZOOM#04 from event 41
-2025/08/11 15:27:11,admin,Returned asset MR-90A#03 from event 41
-2025/08/11 15:27:13,admin,Returned asset ETCZOOM#06 from event 41
-2025/08/11 15:27:13,admin,Returned asset ETCZOOM#05 from event 41
-2025/08/11 15:27:14,admin,Returned asset ETCZOOM#02 from event 41
-2025/08/11 15:27:16,admin,Returned asset ETCZOOM#03 from event 41
-2025/08/11 15:27:27,admin,Assigned specific asset HLBatt#01 to event 40
-2025/08/11 15:27:29,admin,Assigned specific asset C1ProCharger#01 to event 40
-2025/08/11 15:27:30,admin,Assigned specific asset HLBatt#02 to event 40
-2025/08/11 15:27:31,admin,Assigned specific asset HLBatt#03 to event 40
-2025/08/11 15:27:33,admin,Assigned specific asset HLBatt#05 to event 40
-2025/08/11 15:27:33,admin,Assigned specific asset HLBatt#06 to event 40
-2025/08/11 15:27:35,admin,Assigned specific asset HLBatt#04 to event 40
-2025/08/11 15:27:36,admin,Assigned specific asset HLBatt#07 to event 40
-2025/08/11 15:27:38,admin,Assigned specific asset HLBatt#10 to event 40
-2025/08/11 15:27:38,admin,Assigned specific asset HLBatt#09 to event 40
-2025/08/11 15:27:39,admin,Assigned specific asset HLBatt#08 to event 40
-2025/08/11 15:27:45,admin,Assigned specific asset HLBatt#13 to event 40
-2025/08/11 15:27:46,admin,Assigned specific asset HLBatt#12 to event 40
-2025/08/11 15:27:49,admin,Assigned specific asset C1ProHub#01 to event 40
 2025/08/11 15:27:52,admin,Assigned specific asset HLBatt#14 to event 40
 2025/08/11 15:27:52,admin,Assigned specific asset HLBatt#11 to event 40
 2025/08/11 15:27:56,admin,Assigned specific asset HLBatt#15 to event 40
@@ -999,3 +972,30 @@
 2025/09/29 16:08:50,bnjm2000,Added 1x Apple IPAD model to event 68 (total: 1)
 2025/09/29 16:09:00,bnjm2000,Added 1x Apple IPAD model to event 63 (total: 1)
 2025/09/29 16:22:58,bnjm2000,Removed Astera Pixel Brick model from event 54
+2025/09/30 10:09:05,bnjm2000,User bnjm2000 logged in via web interface
+2025/09/30 10:12:57,bnjm2000,Assigned specific asset IP1000#03 to event 68
+2025/09/30 10:13:00,bnjm2000,Assigned specific asset IP1000#04 to event 68
+2025/09/30 17:46:12,bnjm2000,User bnjm2000 removed forced state override for event 24 (BBC Earth Screening @ GBTB): Closed -> Planning
+2025/09/30 17:46:19,bnjm2000,User bnjm2000 forced event 24 (BBC Earth Screening @ GBTB) state from Planning to Returning
+2025/09/30 17:46:36,bnjm2000,User bnjm2000 forced event 24 (BBC Earth Screening @ GBTB) state from Returning to Preparing
+2025/09/30 17:46:54,bnjm2000,Prepared asset PCBB#01 for event 24
+2025/09/30 17:46:55,bnjm2000,Prepared asset PCBB#02 for event 24
+2025/09/30 17:46:56,bnjm2000,Completely removed asset PCBB#01 from event 24
+2025/09/30 17:46:57,bnjm2000,Completely removed asset PCBB#02 from event 24
+2025/09/30 17:47:12,bnjm2000,Removed Interspace Industries PCBB3 model from event 24
+2025/09/30 17:47:21,bnjm2000,Assigned specific asset PCBB#01 to event 68
+2025/09/30 17:47:23,bnjm2000,Assigned specific asset PCBB#02 to event 68
+2025/09/30 17:47:27,bnjm2000,Completely removed asset PCBB#02 from event 68
+2025/09/30 17:47:29,bnjm2000,Assigned specific asset PCBB#11 to event 68
+2025/09/30 17:47:34,bnjm2000,Assigned specific asset MT-90A#01 to event 68
+2025/09/30 17:47:38,bnjm2000,Assigned specific asset DM3#01 to event 68
+2025/09/30 17:47:47,bnjm2000,Assigned specific asset ULXD4D#04 to event 68
+2025/09/30 17:47:53,bnjm2000,Assigned specific asset IPAD#01 to event 68
+2025/09/30 17:50:55,bnjm2000,Assigned specific asset ULXD2#02 to event 68
+2025/09/30 17:50:57,bnjm2000,Assigned specific asset ULXD2#03 to event 68
+2025/09/30 17:50:59,bnjm2000,Completely removed asset ULXD2#02 from event 68
+2025/09/30 17:51:00,bnjm2000,Completely removed asset ULXD2#03 from event 68
+2025/09/30 17:51:02,bnjm2000,Assigned specific asset MR-90A#02 to event 68
+2025/09/30 17:51:04,bnjm2000,Assigned specific asset MR-90A#03 to event 68
+2025/09/30 17:51:10,bnjm2000,Assigned specific asset ULXD2#07 to event 68
+2025/09/30 17:51:13,bnjm2000,Assigned specific asset ULXD2#09 to event 68
