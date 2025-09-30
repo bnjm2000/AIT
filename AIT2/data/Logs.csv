@@ -1,18 +1,3 @@
-2025/08/11 15:26:56,admin,Returned asset MR-90A#02 from event 41
-2025/08/11 15:26:56,admin,Returned asset MR-90A#04 from event 41
-2025/08/11 15:26:58,admin,Returned asset MR-90A#05 from event 41
-2025/08/11 15:26:59,admin,Returned asset MR-90A#06 from event 41
-2025/08/11 15:27:00,admin,Returned asset DX402A#01 from event 41
-2025/08/11 15:27:02,admin,Returned asset DX402A#02 from event 41
-2025/08/11 15:27:08,admin,Returned asset ETCZOOM#01 from event 41
-2025/08/11 15:27:09,admin,Returned asset ETCZOOM#04 from event 41
-2025/08/11 15:27:11,admin,Returned asset MR-90A#03 from event 41
-2025/08/11 15:27:13,admin,Returned asset ETCZOOM#06 from event 41
-2025/08/11 15:27:13,admin,Returned asset ETCZOOM#05 from event 41
-2025/08/11 15:27:14,admin,Returned asset ETCZOOM#02 from event 41
-2025/08/11 15:27:16,admin,Returned asset ETCZOOM#03 from event 41
-2025/08/11 15:27:27,admin,Assigned specific asset HLBatt#01 to event 40
-2025/08/11 15:27:29,admin,Assigned specific asset C1ProCharger#01 to event 40
 2025/08/11 15:27:30,admin,Assigned specific asset HLBatt#02 to event 40
 2025/08/11 15:27:31,admin,Assigned specific asset HLBatt#03 to event 40
 2025/08/11 15:27:33,admin,Assigned specific asset HLBatt#05 to event 40
@@ -999,3 +984,18 @@
 2025/09/29 16:08:50,bnjm2000,Added 1x Apple IPAD model to event 68 (total: 1)
 2025/09/29 16:09:00,bnjm2000,Added 1x Apple IPAD model to event 63 (total: 1)
 2025/09/29 16:22:58,bnjm2000,Removed Astera Pixel Brick model from event 54
+2025/09/30 15:31:33,admin,User admin logged in via web interface
+2025/09/30 15:31:58,admin,Added 12x Ayrton Diablo Profile model to event 63 (total: 12)
+2025/09/30 15:31:59,admin,Added 1x Ayrton Diablo (W.DMX) model to event 63 (total: 1)
+2025/09/30 15:32:38,admin,Added 16x Astera Pixel Brick model to event 63 (total: 16)
+2025/09/30 15:32:43,admin,Added 8x Astera Titan Tube model to event 63 (total: 8)
+2025/09/30 15:33:10,admin,Added 1x Avolites Tiger Touch 2 model to event 66 (total: 1)
+2025/09/30 15:33:15,admin,Added 1x Avolites Quartz model to event 66 (total: 1)
+2025/09/30 15:33:30,admin,Added 4x Ayrton Diablo (W.DMX) model to event 66 (total: 4)
+2025/09/30 15:33:36,admin,Added 4x Silver Star Eclipse 1000 RGBAL SS847XAL model to event 66 (total: 4)
+2025/09/30 15:33:45,admin,Added 4x Robe Robin LEDBeam 350 Wash model to event 66 (total: 4)
+2025/09/30 15:33:57,admin,Added 4x Ayrton Diablo (W.DMX) model to event 66 (total: 8)
+2025/09/30 15:34:15,admin,Added 4x Ayrton Diablo (W.DMX) model to event 62 (total: 4)
+2025/09/30 15:34:22,admin,Added 6x Astera Titan Tube model to event 62 (total: 6)
+2025/09/30 15:34:48,admin,Added 8x Ayrton Diablo (W.DMX) model to event 67 (total: 8)
+2025/09/30 15:34:57,admin,Added 10x Robe Robin LEDBeam 350 Wash model to event 67 (total: 10)
