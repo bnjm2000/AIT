@@ -443,9 +443,9 @@ LS10#05,L-Acoustics,LS10,1670010373,"10-port Ethernet AVB Switch, Avnu-certified
 LS10#06,L-Acoustics,LS10,1670010374,"10-port Ethernet AVB Switch, Avnu-certified",False,False,,AX,Store,Store
 MBUMP#01,L-Acoustics,M-BUMP,890009396,Bumper for flying or stacking KARA (II)/SB18,False,False,,AX,Store,Store
 MBUMP#02,L-Acoustics,M-BUMP,890009399,Bumper for flying or stacking KARA (II)/SB18,False,False,,AX,Store,Store
-MBUMP#03,L-Acoustics,M-BUMP,,Bumper for flying or stacking KARA (II)/SB18,False,False,,AX,Store,
-MBUMP#04,L-Acoustics,M-BUMP,,Bumper for flying or stacking KARA (II)/SB18,False,False,,AX,Store,
-MBUMP#05,L-Acoustics,M-BUMP,,Bumper for flying or stacking KARA (II)/SB18,False,False,,AX,Store,
+MBUMP#03,L-Acoustics,M-BUMP,890009866,Bumper for flying or stacking KARA (II)/SB18,False,False,,AX,Store,
+MBUMP#04,L-Acoustics,M-BUMP,890010152,Bumper for flying or stacking KARA (II)/SB18,False,False,,AX,Store,
+MBUMP#05,L-Acoustics,M-BUMP,890010057,Bumper for flying or stacking KARA (II)/SB18,False,False,,AX,Store,
 MBAR#01,L-Acoustics,M-BAR,900009077,Extension bar for rigging frame,False,False,,AX,Store,
 MBAR#02,L-Acoustics,M-BAR,900009092,Extension bar for rigging frame,False,False,,AX,Store,
 MBAR#03,L-Acoustics,M-BAR,900009093,Extension bar for rigging frame,False,False,,AX,Store,
