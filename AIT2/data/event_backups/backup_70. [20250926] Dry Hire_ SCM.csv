@@ -1,2 +1,2 @@
 EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,Tag,ForceStateOverride
-70,Dry Hire: SCM,20250926,20251002,[],"[""LA4X#01"", ""LA4X#02"", ""LA4X#03"", ""LA4X#09"", ""LA4X#10"", ""[MODEL]AX|L-Acoustics|LA4X|6|Amplified controller""]",[],Preparing,"[""LA4X#01"", ""LA4X#02"", ""LA4X#03"", ""LA4X#09"", ""LA4X#10""]",[],dry hire,False
+70,Dry Hire: SCM,20250926,20251002,[],"[""LA4X#01"", ""LA4X#02"", ""LA4X#03"", ""LA4X#09"", ""LA4X#10"", ""[MODEL]AX|L-Acoustics|LA4X|6|Amplified controller"", ""LA4X#07""]",[],Ongoing,"[""LA4X#01"", ""LA4X#02"", ""LA4X#03"", ""LA4X#09"", ""LA4X#10"", ""LA4X#07""]","[""LA4X#07""]",dry hire,False
