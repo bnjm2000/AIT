@@ -1,39 +1,3 @@
-2025/08/11 15:27:38,admin,Assigned specific asset HLBatt#10 to event 40
-2025/08/11 15:27:38,admin,Assigned specific asset HLBatt#09 to event 40
-2025/08/11 15:27:39,admin,Assigned specific asset HLBatt#08 to event 40
-2025/08/11 15:27:45,admin,Assigned specific asset HLBatt#13 to event 40
-2025/08/11 15:27:46,admin,Assigned specific asset HLBatt#12 to event 40
-2025/08/11 15:27:49,admin,Assigned specific asset C1ProHub#01 to event 40
-2025/08/11 15:27:52,admin,Assigned specific asset HLBatt#14 to event 40
-2025/08/11 15:27:52,admin,Assigned specific asset HLBatt#11 to event 40
-2025/08/11 15:27:56,admin,Assigned specific asset HLBatt#15 to event 40
-2025/08/11 15:27:56,admin,Assigned specific asset HLBatt#16 to event 40
-2025/08/11 15:28:04,admin,Assigned specific asset C1ProRHS#01 to event 40
-2025/08/11 15:28:05,admin,Assigned specific asset C1ProRHS#02 to event 40
-2025/08/11 15:28:07,admin,Assigned specific asset C1ProRHS#04 to event 40
-2025/08/11 15:28:07,admin,Assigned specific asset C1ProRHS#05 to event 40
-2025/08/11 15:29:30,admin,Assigned specific asset C1ProRHS#03 to event 40
-2025/08/11 15:29:31,admin,Assigned specific asset C1ProRHS#06 to event 40
-2025/08/11 15:29:33,admin,Assigned specific asset C1ProRHS#08 to event 40
-2025/08/11 15:29:33,admin,Assigned specific asset C1ProRHS#07 to event 40
-2025/08/11 15:29:34,admin,Assigned specific asset C1ProWHS#01 to event 40
-2025/08/11 15:29:36,admin,Assigned specific asset GSM4212P#01 to event 40
-2025/08/11 15:29:43,admin,Assigned specific asset GSM4212P#04 to event 40
-2025/08/11 15:29:44,admin,Assigned specific asset GSM4212P#03 to event 40
-2025/08/11 15:29:50,admin,Assigned specific asset MVSHAZER#02 to event 40
-2025/08/11 15:29:52,admin,Assigned specific asset MVSHAZER#01 to event 40
-2025/08/11 15:29:54,admin,Assigned specific asset STRIKEM#01 to event 40
-2025/08/11 15:29:55,admin,Assigned specific asset STRIKEM#02 to event 40
-2025/08/11 15:29:57,admin,Assigned specific asset STRIKEM#03 to event 40
-2025/08/11 15:29:57,admin,Assigned specific asset STRIKEM#04 to event 40
-2025/08/11 15:30:04,admin,Assigned specific asset STRIKEM#07 to event 40
-2025/08/11 15:30:04,admin,Assigned specific asset STRIKEM#06 to event 40
-2025/08/11 15:30:06,admin,Assigned specific asset STRIKEM#05 to event 40
-2025/08/11 15:30:06,admin,Assigned specific asset STRIKEM#08 to event 40
-2025/08/11 15:30:25,admin,Added 1x GrandMA3 Compact XT model to event 40 (total: 1)
-2025/08/11 15:30:47,admin,Prepared asset [MISC]TV DSM Stand;4 for event 34
-2025/08/11 15:31:12,admin,User admin forced event 34 (Dry Hire: Avery Events) state from Overdue to Closed
-2025/08/11 15:31:20,admin,User admin forced event 40 (Dry Hire: Avery Events) state from Overdue to Preparing
 2025/08/11 15:31:25,admin,Assigned specific asset COMPACTXT#01 to event 40
 2025/08/11 15:31:30,admin,User admin removed forced state override for event 40 (Dry Hire: Avery Events): Preparing -> Overdue
 2025/08/11 15:32:29,admin,Returned asset HLBatt#01 from event 40
@@ -999,3 +963,39 @@
 2025/10/08 18:28:05,admin,Assigned specific asset PS15#01 to event 72
 2025/10/08 18:28:06,admin,Assigned specific asset PS15#02 to event 72
 2025/10/08 18:29:06,admin,Saved client Kaizer Tan
+2025/10/08 21:30:22,bnjm2000,Returned all assets for department AX in event 49: 1 items
+2025/10/08 21:30:24,bnjm2000,Returned all assets for department AX in event 51: 1 items
+2025/10/08 21:30:31,bnjm2000,Returned all assets for department AX in event 70: 6 items
+2025/10/08 21:30:35,bnjm2000,Returned all assets for department AX in event 69: 2 items
+2025/10/08 21:30:38,bnjm2000,Returned all assets for department AX in event 68: 12 items
+2025/10/08 21:30:47,bnjm2000,Returned all assets for department AX in event 57: 28 items
+2025/10/08 21:32:43,bnjm2000,Assigned specific asset QL1#02 to event 60
+2025/10/08 21:33:08,bnjm2000,Removed Radial Engineering Trim-two model from event 60
+2025/10/08 21:33:14,bnjm2000,Added 2x Radial Engineering Trim-two model to event 61 (total: 2)
+2025/10/08 21:33:26,bnjm2000,Removed Apple IPAD model from event 61
+2025/10/08 21:33:32,bnjm2000,Removed L-Acoustics 5XT model from event 61
+2025/10/08 21:33:32,bnjm2000,Added 12x L-Acoustics 5XT model to event 61 (total: 12)
+2025/10/08 21:33:35,bnjm2000,Removed L-Acoustics ETR5 model from event 61
+2025/10/08 21:33:35,bnjm2000,Added 12x L-Acoustics ETR5 model to event 61 (total: 12)
+2025/10/08 21:33:39,bnjm2000,Removed L-Acoustics LA12X model from event 61
+2025/10/08 21:33:39,bnjm2000,Added 1x L-Acoustics LA12X model to event 61 (total: 1)
+2025/10/08 21:33:43,bnjm2000,Added 1x L-Acoustics LA4X model to event 61 (total: 1)
+2025/10/08 21:33:53,bnjm2000,Removed L-Acoustics LA4X model from event 60
+2025/10/08 21:33:53,bnjm2000,Added 3x L-Acoustics LA4X model to event 60 (total: 3)
+2025/10/08 21:33:57,bnjm2000,Added 1x L-Acoustics LA12X model to event 60 (total: 1)
+2025/10/08 21:34:18,bnjm2000,Assigned specific asset LA12X#08 to event 60
+2025/10/08 21:34:22,bnjm2000,Assigned specific asset LA4X#07 to event 60
+2025/10/08 21:34:35,bnjm2000,Assigned specific asset LA4X#09 to event 60
+2025/10/08 21:34:38,bnjm2000,Assigned specific asset LA4X#10 to event 60
+2025/10/08 21:36:57,bnjm2000,Created event 73: Dry Hire: Avery Events via web interface
+2025/10/08 21:37:05,bnjm2000,Added 2x Shure ULXD4D model to event 73 (total: 2)
+2025/10/08 21:37:14,bnjm2000,Added 3x Shure ULXD1 model to event 73 (total: 3)
+2025/10/08 21:37:19,bnjm2000,Added 1x Shure P9T model to event 73 (total: 1)
+2025/10/08 21:37:25,bnjm2000,Added 4x Shure P9RA model to event 73 (total: 4)
+2025/10/08 21:38:11,bnjm2000,Added 2x Yamaha DXR12 model to event 73 (total: 2)
+2025/10/08 21:38:31,bnjm2000,Assigned asset [MISC]8-core XLR - 30m;2 to event 73 (unprepared)
+2025/10/08 21:39:26,bnjm2000,Added 3x Shure SE215 model to event 73 (total: 3)
+2025/10/08 21:40:10,bnjm2000,Removed L-Acoustics LA4X model from event 66
+2025/10/08 21:40:10,bnjm2000,Added 2x L-Acoustics LA4X model to event 66 (total: 2)
+2025/10/08 21:40:50,bnjm2000,Removed Yamaha DM3 model from event 66
+2025/10/08 21:40:53,bnjm2000,Added 1x Yamaha QL1 model to event 66 (total: 1)

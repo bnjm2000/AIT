@@ -1,2 +1,2 @@
 EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,Tag,ForceStateOverride
-72,Dry Hire: Show Productions,20251009,20251012,[],"[""[MODEL]AX|Nexo|PS15|2|15\"" passive enclosure"", ""PS15#01""]",[],Preparing,"[""PS15#01""]","[""PS15#01""]",dry hire,False
+72,Dry Hire: Show Productions,20251009,20251012,[],"[""[MODEL]AX|Nexo|PS15|2|15\"" passive enclosure"", ""PS15#01"", ""PS15#02""]",[],Ongoing,"[""PS15#01"", ""PS15#02""]","[""PS15#02""]",dry hire,False

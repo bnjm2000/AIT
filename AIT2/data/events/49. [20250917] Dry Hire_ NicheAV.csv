@@ -1,2 +1,2 @@
 EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,Tag,ForceStateOverride
-49,Dry Hire: NicheAV,20250917,20250919,[],"[""[MODEL]AX|Yamaha|QL1|1|Digital Mixer"", ""QL1#01""]",[],Overdue,"[""QL1#01""]",[],dry hire,False
+49,Dry Hire: NicheAV,20250917,20250919,[],"[""[MODEL]AX|Yamaha|QL1|1|Digital Mixer"", ""QL1#01""]","[""QL1#01""]",Closed,[],[],dry hire,False
