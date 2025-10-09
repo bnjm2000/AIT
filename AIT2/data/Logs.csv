@@ -1,39 +1,3 @@
-2025/08/11 15:31:25,admin,Assigned specific asset COMPACTXT#01 to event 40
-2025/08/11 15:31:30,admin,User admin removed forced state override for event 40 (Dry Hire: Avery Events): Preparing -> Overdue
-2025/08/11 15:32:29,admin,Returned asset HLBatt#01 from event 40
-2025/08/11 15:32:30,admin,Returned asset HLBatt#03 from event 40
-2025/08/11 15:32:30,admin,Returned asset C1ProCharger#01 from event 40
-2025/08/11 15:32:32,admin,Returned asset HLBatt#06 from event 40
-2025/08/11 15:32:32,admin,Returned asset HLBatt#05 from event 40
-2025/08/11 15:32:33,admin,Returned asset HLBatt#10 from event 40
-2025/08/11 15:32:34,admin,Returned asset HLBatt#07 from event 40
-2025/08/11 15:32:35,admin,Returned asset HLBatt#02 from event 40
-2025/08/11 15:32:36,admin,Returned asset HLBatt#12 from event 40
-2025/08/11 15:32:37,admin,Returned asset HLBatt#13 from event 40
-2025/08/11 15:32:37,admin,Returned asset HLBatt#08 from event 40
-2025/08/11 15:32:38,admin,Returned asset HLBatt#09 from event 40
-2025/08/11 15:32:38,admin,Returned asset HLBatt#04 from event 40
-2025/08/11 15:32:40,admin,Returned asset HLBatt#11 from event 40
-2025/08/11 15:32:40,admin,Returned asset HLBatt#14 from event 40
-2025/08/11 15:32:41,admin,Returned asset C1ProHub#01 from event 40
-2025/08/11 15:32:42,admin,Returned asset HLBatt#16 from event 40
-2025/08/11 15:32:43,admin,Returned asset C1ProRHS#01 from event 40
-2025/08/11 15:32:44,admin,Returned asset C1ProRHS#02 from event 40
-2025/08/11 15:32:45,admin,Returned asset HLBatt#15 from event 40
-2025/08/11 15:32:46,admin,Returned asset C1ProRHS#08 from event 40
-2025/08/11 15:32:47,admin,Returned asset C1ProRHS#06 from event 40
-2025/08/11 15:32:48,admin,Returned asset C1ProRHS#04 from event 40
-2025/08/11 15:32:49,admin,Returned asset C1ProRHS#07 from event 40
-2025/08/11 15:32:50,admin,Returned asset C1ProRHS#05 from event 40
-2025/08/11 15:32:51,admin,Returned asset C1ProRHS#03 from event 40
-2025/08/11 15:32:51,admin,Returned asset C1ProWHS#01 from event 40
-2025/08/11 15:32:53,admin,Returned asset GSM4212P#03 from event 40
-2025/08/11 15:32:53,admin,Returned asset GSM4212P#04 from event 40
-2025/08/11 15:32:54,admin,Returned asset MVSHAZER#01 from event 40
-2025/08/11 15:32:55,admin,Returned asset MVSHAZER#02 from event 40
-2025/08/11 15:32:56,admin,Returned asset GSM4212P#01 from event 40
-2025/08/11 15:32:57,admin,Returned asset STRIKEM#06 from event 40
-2025/08/11 15:32:57,admin,Returned asset STRIKEM#07 from event 40
 2025/08/11 15:32:58,admin,Returned asset STRIKEM#03 from event 40
 2025/08/11 15:32:58,admin,Returned asset STRIKEM#02 from event 40
 2025/08/11 15:32:59,admin,Returned asset STRIKEM#01 from event 40
@@ -999,3 +963,39 @@
 2025/10/08 21:40:10,bnjm2000,Added 2x L-Acoustics LA4X model to event 66 (total: 2)
 2025/10/08 21:40:50,bnjm2000,Removed Yamaha DM3 model from event 66
 2025/10/08 21:40:53,bnjm2000,Added 1x Yamaha QL1 model to event 66 (total: 1)
+2025/10/09 16:41:04,bnjm2000,User bnjm2000 logged in via web interface
+2025/10/09 16:41:23,bnjm2000,Assigned specific asset IPAD#01 to event 60
+2025/10/09 16:42:45,bnjm2000,Unassigned specific asset ETR5W#10 from event 60
+2025/10/09 16:42:57,bnjm2000,Completely removed asset ETR5W#07 from event 60
+2025/10/09 16:43:01,bnjm2000,Completely removed asset ETR5W#08 from event 60
+2025/10/09 16:43:11,bnjm2000,Completely removed asset 5XTW#10 from event 60
+2025/10/09 16:43:14,bnjm2000,Completely removed asset 5XTW#07 from event 60
+2025/10/09 16:43:16,bnjm2000,Completely removed asset 5XTW#08 from event 60
+2025/10/09 16:43:28,bnjm2000,Assigned specific asset 5XT#01 to event 60
+2025/10/09 16:43:31,bnjm2000,Assigned specific asset 5XT#02 to event 60
+2025/10/09 16:43:36,bnjm2000,Assigned specific asset 5XT#04 to event 60
+2025/10/09 16:43:42,bnjm2000,Assigned specific asset ETR5#01 to event 60
+2025/10/09 16:43:45,bnjm2000,Assigned specific asset ETR5#02 to event 60
+2025/10/09 16:43:49,bnjm2000,Assigned specific asset ETR5#04 to event 60
+2025/10/09 16:44:02,bnjm2000,Removed L-Acoustics 5XTW model from event 60
+2025/10/09 16:44:02,bnjm2000,Added 17x L-Acoustics 5XTW model to event 60 (total: 17)
+2025/10/09 16:44:07,bnjm2000,Removed L-Acoustics 5XT model from event 60
+2025/10/09 16:44:07,bnjm2000,Added 3x L-Acoustics 5XT model to event 60 (total: 3)
+2025/10/09 16:44:11,bnjm2000,Removed L-Acoustics ETR5W model from event 60
+2025/10/09 16:44:12,bnjm2000,Added 17x L-Acoustics ETR5W model to event 60 (total: 17)
+2025/10/09 16:44:20,bnjm2000,Removed L-Acoustics ETR5 model from event 60
+2025/10/09 16:44:21,bnjm2000,Added 3x L-Acoustics ETR5 model to event 60 (total: 3)
+2025/10/09 16:44:26,bnjm2000,Returned all assets for department AX in event 71: 2 items
+2025/10/09 16:44:59,bnjm2000,Assigned specific asset P9T#05 to event 73
+2025/10/09 16:45:03,bnjm2000,Assigned specific asset P9RA#01 to event 73
+2025/10/09 16:45:04,bnjm2000,Assigned specific asset P9RA#02 to event 73
+2025/10/09 16:45:06,bnjm2000,Assigned specific asset P9RA#03 to event 73
+2025/10/09 16:45:07,bnjm2000,Assigned specific asset P9RA#04 to event 73
+2025/10/09 16:45:31,bnjm2000,Assigned specific asset ULXD4D#02 to event 73
+2025/10/09 16:45:33,bnjm2000,Assigned specific asset ULXD4D#03 to event 73
+2025/10/09 16:45:36,bnjm2000,Assigned specific asset DXR12#01 to event 73
+2025/10/09 16:45:37,bnjm2000,Assigned specific asset DXR12#02 to event 73
+2025/10/09 16:46:27,bnjm2000,Added 2x Pioneer CDJ2000NXS2 model to event 61 (total: 2)
+2025/10/09 16:46:34,bnjm2000,Added 1x Pioneer DJM-900NXS2 model to event 61 (total: 1)
+2025/10/09 17:47:44,bnjm2000,Removed Shure ULXD2 model from event 62
+2025/10/09 17:47:44,bnjm2000,Added 4x Shure ULXD2 model to event 62 (total: 4)
