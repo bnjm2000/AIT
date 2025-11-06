@@ -565,14 +565,14 @@ SYVA#03,L-Acoustics,Syva,1350010798,"5"" Colinear source",False,False,,AX,Store,
 SYVA#04,L-Acoustics,Syva,1350010807,"5"" Colinear source",False,False,,AX,Store,Store
 SYVA#05,L-Acoustics,Syva,1350011541,"5"" Colinear source",False,False,,AX,Store,Store
 SYVA#06,L-Acoustics,Syva,1350011571,"5"" Colinear source",False,False,,AX,Store,Store
-SYVALOW#01,L-Acoustics,Syva Low,,"Bass reflex dual 12""",False,False,,AX,Store,Store
-SYVALOW#02,L-Acoustics,Syva Low,,"Bass reflex dual 12""",False,False,,AX,Store,Store
-SYVALOW#03,L-Acoustics,Syva Low,,"Bass reflex dual 12""",False,False,,AX,Store,Store
-SYVALOW#04,L-Acoustics,Syva Low,,"Bass reflex dual 12""",False,False,,AX,Store,Store
-SYVALOW#05,L-Acoustics,Syva Low,,"Bass reflex dual 12""",False,False,,AX,Store,Store
-SYVALOW#06,L-Acoustics,Syva Low,,"Bass reflex dual 12""",False,False,,AX,Store,Store
-SYVALOW#07,L-Acoustics,Syva Low,1360011727,"Bass reflex dual 12""",False,False,,AX,Store,Store
-SYVALOW#08,L-Acoustics,Syva Low,0260049101,"Bass reflex dual 12""",False,False,,AX,Store,Store
+SYVALOW#01,L-Acoustics,Syva Low,1360009075,"Bass reflex dual 12""",False,False,,AX,Store,Store
+SYVALOW#02,L-Acoustics,Syva Low,1360009080,"Bass reflex dual 12""",False,False,,AX,Store,Store
+SYVALOW#03,L-Acoustics,Syva Low,1360009097,"Bass reflex dual 12""",False,False,,AX,Store,Store
+SYVALOW#04,L-Acoustics,Syva Low,1360009115,"Bass reflex dual 12""",False,False,,AX,Store,Store
+SYVALOW#05,L-Acoustics,Syva Low,1360010149,"Bass reflex dual 12""",False,False,,AX,Store,Store
+SYVALOW#06,L-Acoustics,Syva Low,1360010151,"Bass reflex dual 12""",False,False,,AX,Store,Store
+SYVALOW#07,L-Acoustics,Syva Low,1360011722,"Bass reflex dual 12""",False,False,,AX,Store,Store
+SYVALOW#08,L-Acoustics,Syva Low,1360011727,"Bass reflex dual 12""",False,False,,AX,Store,Store
 LPClaw#01,Latin Percussion,LP592A,,The Claw,False,False,,AX,Store,
 LPClaw#02,Latin Percussion,LP592A,,The Claw,False,False,,AX,Store,
 LPClaw#03,Latin Percussion,LP592A,,The Claw,False,False,,AX,Store,
