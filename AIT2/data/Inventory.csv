@@ -1,5 +1,5 @@
 AssetID,Brand,ModelNumber,SerialNumber,Description,IsMissing,IsOOC,MaintenanceLogs,DepartmentCode,DefaultLocation,CurrentLocation
-IPAD#01,Apple,IPAD,YVTP9HPX47,(10th Generation),False,False,,AX,Store,Johnny Walker @ T3 Changi Airport
+IPAD#01,Apple,IPAD,YVTP9HPX47,(10th Generation),False,False,,AX,Store,Store
 IPAD#02,Apple,IPAD,JX9KXKKPF4,(10th Generation),False,False,,AX,Store,Store
 IPAD#03,Apple,IPAD,TFQYL2K0JW,(10th Generation),False,False,,AX,Store,Store
 AT8668#01,Audio Tecnica,AT8668,,Microphone Desk Stand,False,False,,AX,Store,Store
@@ -65,18 +65,22 @@ CT3#01,DBX,CT3,11065310806,advanced cable tester,False,False,,AX,Store,
 4488#10,DPA,4488,M069545,"Directional Headset, beige",False,False,,AX,Store,
 4488#11,DPA,4488,M069673,"Directional Headset, beige",False,False,,AX,Store,Store
 4488#12,DPA,4488,M070071,"Directional Headset, beige",False,False,,AX,Store,Store
-6061#01,DPA,6061,R311927,Omni Submini Lavalier Microphone,False,False,,AX,Store,
-6061#02,DPA,6061,R311977,Omni Submini Lavalier Microphone,False,False,,AX,Store,
-6061#03,DPA,6061,R311988,Omni Submini Lavalier Microphone,False,False,,AX,Store,Store
-6061#04,DPA,6061,R316442,Omni Submini Lavalier Microphone,False,False,,AX,Store,Store
-6061#05,DPA,6061,R316445,Omni Submini Lavalier Microphone,False,False,,AX,Store,
-6061#06,DPA,6061,R316447,Omni Submini Lavalier Microphone,False,False,,AX,Store,
-6061#07,DPA,6061,R317526,Omni Submini Lavalier Microphone,False,False,,AX,Store,
-6061#08,DPA,6061,R317528,Omni Submini Lavalier Microphone,False,False,,AX,Store,
-6061#09,DPA,6061,R317530,Omni Submini Lavalier Microphone,False,False,,AX,Store,
-6061#10,DPA,6061,R317531,Omni Submini Lavalier Microphone,False,False,,AX,Store,
-6061#11,DPA,6061,R317534,Omni Submini Lavalier Microphone,False,False,,AX,Store,
-6061#12,DPA,6061,R317535,Omni Submini Lavalier Microphone,False,False,,AX,Store,Store
+6061#01,DPA,6061,R311927,Omni Submini Lavalier Microphone (beige),False,False,,AX,Store,
+6061#02,DPA,6061,R311977,Omni Submini Lavalier Microphone (beige),False,False,,AX,Store,
+6061#03,DPA,6061,R311988,Omni Submini Lavalier Microphone (beige),False,False,,AX,Store,Store
+6061#04,DPA,6061,R316442,Omni Submini Lavalier Microphone (beige),False,False,,AX,Store,Store
+6061#05,DPA,6061,R316445,Omni Submini Lavalier Microphone (beige),False,False,,AX,Store,
+6061#06,DPA,6061,R316447,Omni Submini Lavalier Microphone (beige),False,False,,AX,Store,
+6061#07,DPA,6061,R317526,Omni Submini Lavalier Microphone (beige),False,False,,AX,Store,
+6061#08,DPA,6061,R317528,Omni Submini Lavalier Microphone (beige),False,False,,AX,Store,
+6061#09,DPA,6061,R317530,Omni Submini Lavalier Microphone (beige),False,False,,AX,Store,
+6061#10,DPA,6061,R317531,Omni Submini Lavalier Microphone (beige),False,False,,AX,Store,
+6061#11,DPA,6061,R317534,Omni Submini Lavalier Microphone (beige),False,False,,AX,Store,
+6061#12,DPA,6061,R317535,Omni Submini Lavalier Microphone (beige),False,False,,AX,Store,
+6061#13,DPA,6061,R283616,Omni Submini Lavalier Microphone (black),False,False,,AX,Store,
+6061#14,DPA,6061,R283623,Omni Submini Lavalier Microphone (black),False,False,,AX,Store,
+6061#15,DPA,6061,R283625,Omni Submini Lavalier Microphone (black),False,False,,AX,Store,
+6061#16,DPA,6061,R283632,Omni Submini Lavalier Microphone (black),False,False,,AX,Store,
 4061#01,DPA,4061,R238770,Omni Submini Lavalier Microphone,False,True,2024/11/19	bnjm2000	Sleeving disintegrated/tore after removing from instrument (SLMA @ Jia He Grand Restaurant) [Marked OOC],AX,Store,
 4061#02,DPA,4061,R238785,Omni Submini Lavalier Microphone,False,True,2025/08/15	bnjm2000	Sleeving disintegrated/tore after removing from instrument (Tampest & Tranquility @ Blackbox) [Marked OOC],AX,Store,Store
 DAD6001#01,DPA,DAD 6001,,Microdot to 3-Pin XLR Adapter,False,False,,AX,Store,Store
@@ -149,8 +153,8 @@ DAD9003#09,DPA,DAD 9003,,MicroLock to 3-pin LEMO,False,False,,AX,Store,
 DAD9003#10,DPA,DAD 9003,,MicroLock to 3-pin LEMO,False,False,,AX,Store,
 EVOLVE50#01,EV,EVOLVE 50,405294795801150521,Portable column system,False,False,,AX,Store,Store
 EVOLVE50#02,EV,EVOLVE 50,405294795801160310,Portable column system,False,False,,AX,Store,Store
-EVOLVE50#03,EV,EVOLVE 50,405294795801160374,Portable column system,False,False,,AX,Store,Johnny Walker @ T3 Changi Airport
-EVOLVE50#04,EV,EVOLVE 50,405294795801160383,Portable column system,False,False,,AX,Store,Johnny Walker @ T3 Changi Airport
+EVOLVE50#03,EV,EVOLVE 50,405294795801160374,Portable column system,False,False,,AX,Store,Store
+EVOLVE50#04,EV,EVOLVE 50,405294795801160383,Portable column system,False,False,,AX,Store,Store
 EVOLVE50#05,EV,EVOLVE 50,405294795801160390,Portable column system,False,False,,AX,Store,Store
 EVOLVE50#06,EV,EVOLVE 50,405294781901280231,Portable column system,False,False,,AX,Store,Store
 MAUI11#01,LD Systems,Maui 11,,Portable column system,False,False,,AX,Store,
@@ -163,33 +167,33 @@ MAUI11#07,LD Systems,Maui 11,,Portable column system,False,False,,AX,Store,
 MAUI28#01,LD Systems,Maui 28,,Portable column system,False,False,,AX,Store,Store
 MAUI28#02,LD Systems,Maui 28,,Portable column system,False,False,,AX,Store,
 MAUI28#03,LD Systems,Maui 28,,Portable column system,False,False,,AX,Store,
-HLBatt#01,Hollyland,HL-BAT700,23060502575,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Store
-HLBatt#02,Hollyland,HL-BAT700,23060502934,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Store
-HLBatt#03,Hollyland,HL-BAT700,23060502956,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Store
-HLBatt#04,Hollyland,HL-BAT700,23060503026,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Store
-HLBatt#05,Hollyland,HL-BAT700,23060503040,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Store
-HLBatt#06,Hollyland,HL-BAT700,23060507138,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Store
-HLBatt#07,Hollyland,HL-BAT700,23060509410,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Store
-HLBatt#08,Hollyland,HL-BAT700,23060906641,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Store
-HLBatt#09,Hollyland,HL-BAT700,23061200043,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Store
-HLBatt#10,Hollyland,HL-BAT700,23061200118,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Store
-HLBatt#11,Hollyland,HL-BAT700,23061200226,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Store
-HLBatt#12,Hollyland,HL-BAT700,23061200233,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Store
-HLBatt#13,Hollyland,HL-BAT700,23061206791,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Store
-HLBatt#14,Hollyland,HL-BAT700,23061206889,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Store
-HLBatt#15,Hollyland,HL-BAT700,23061207192,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Store
-HLBatt#16,Hollyland,HL-BAT700,23061207991,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Store
-C1ProCharger#01,Hollyland,Solidcom C1 (Pro) 8-Slot Battery Charging Case,0223350C C001989,8-Slot Battery Charging Case,False,False,,AX,Store,Store
-C1ProHub#01,Hollyland,Solidcom C1 Pro Hub,0223350R C002984,,False,False,,AX,Store,Store
-C1ProRHS#01,Hollyland,Solidcom C1 Pro Remote Headset,222322OTXC00784E,,False,False,,AX,Store,Store
-C1ProRHS#02,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC008783,,False,False,,AX,Store,Store
-C1ProRHS#03,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC007B64,,False,False,,AX,Store,Store
-C1ProRHS#04,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC0082CF,,False,False,,AX,Store,Store
-C1ProRHS#05,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC00800E,,False,False,,AX,Store,Store
-C1ProRHS#06,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC00786C,,False,False,,AX,Store,Store
-C1ProRHS#07,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC008667,,False,False,,AX,Store,Store
-C1ProRHS#08,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC007AB4,,False,False,,AX,Store,Store
-C1ProWHS#01,Hollyland,Solidcom C1 Pro Wired Headset for Hub,2223170XX0D0036E,,False,False,,AX,Store,Store
+HLBatt#01,Hollyland,HL-BAT700,23060502575,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Wedding of Andrew & Nicolette @ TRCM
+HLBatt#02,Hollyland,HL-BAT700,23060502934,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Wedding of Andrew & Nicolette @ TRCM
+HLBatt#03,Hollyland,HL-BAT700,23060502956,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Wedding of Andrew & Nicolette @ TRCM
+HLBatt#04,Hollyland,HL-BAT700,23060503026,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Wedding of Andrew & Nicolette @ TRCM
+HLBatt#05,Hollyland,HL-BAT700,23060503040,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Wedding of Andrew & Nicolette @ TRCM
+HLBatt#06,Hollyland,HL-BAT700,23060507138,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Wedding of Andrew & Nicolette @ TRCM
+HLBatt#07,Hollyland,HL-BAT700,23060509410,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Wedding of Andrew & Nicolette @ TRCM
+HLBatt#08,Hollyland,HL-BAT700,23060906641,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Wedding of Andrew & Nicolette @ TRCM
+HLBatt#09,Hollyland,HL-BAT700,23061200043,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Wedding of Andrew & Nicolette @ TRCM
+HLBatt#10,Hollyland,HL-BAT700,23061200118,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Wedding of Andrew & Nicolette @ TRCM
+HLBatt#11,Hollyland,HL-BAT700,23061200226,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Wedding of Andrew & Nicolette @ TRCM
+HLBatt#12,Hollyland,HL-BAT700,23061200233,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Wedding of Andrew & Nicolette @ TRCM
+HLBatt#13,Hollyland,HL-BAT700,23061206791,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Wedding of Andrew & Nicolette @ TRCM
+HLBatt#14,Hollyland,HL-BAT700,23061206889,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Wedding of Andrew & Nicolette @ TRCM
+HLBatt#15,Hollyland,HL-BAT700,23061207192,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Wedding of Andrew & Nicolette @ TRCM
+HLBatt#16,Hollyland,HL-BAT700,23061207991,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Wedding of Andrew & Nicolette @ TRCM
+C1ProCharger#01,Hollyland,Solidcom C1 (Pro) 8-Slot Battery Charging Case,0223350C C001989,8-Slot Battery Charging Case,False,False,,AX,Store,Wedding of Andrew & Nicolette @ TRCM
+C1ProHub#01,Hollyland,Solidcom C1 Pro Hub,0223350R C002984,,False,False,,AX,Store,Wedding of Andrew & Nicolette @ TRCM
+C1ProRHS#01,Hollyland,Solidcom C1 Pro Remote Headset,222322OTXC00784E,,False,False,,AX,Store,Wedding of Andrew & Nicolette @ TRCM
+C1ProRHS#02,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC008783,,False,False,,AX,Store,Wedding of Andrew & Nicolette @ TRCM
+C1ProRHS#03,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC007B64,,False,False,,AX,Store,Wedding of Andrew & Nicolette @ TRCM
+C1ProRHS#04,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC0082CF,,False,False,,AX,Store,Wedding of Andrew & Nicolette @ TRCM
+C1ProRHS#05,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC00800E,,False,False,,AX,Store,Wedding of Andrew & Nicolette @ TRCM
+C1ProRHS#06,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC00786C,,False,False,,AX,Store,Wedding of Andrew & Nicolette @ TRCM
+C1ProRHS#07,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC008667,,False,False,,AX,Store,Wedding of Andrew & Nicolette @ TRCM
+C1ProRHS#08,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC007AB4,,False,False,,AX,Store,Wedding of Andrew & Nicolette @ TRCM
+C1ProWHS#01,Hollyland,Solidcom C1 Pro Wired Headset for Hub,2223170XX0D0036E,,False,False,,AX,Store,Wedding of Andrew & Nicolette @ TRCM
 PCBB#01,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,Store
 PCBB#02,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,Store
 PCBB#03,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,
@@ -288,7 +292,7 @@ ETR5W#20,L-Acoustics,ETR5W,,Adjustable U-bracket: 5XTW,False,False,,AX,Store,Sto
 5XT#27,L-Acoustics,5XT,260046701,"5"" passive coaxial enclosure, black",False,False,,AX,Store,
 5XT#28,L-Acoustics,5XT,260046704,"5"" passive coaxial enclosure, black",False,False,,AX,Store,
 5XT#29,L-Acoustics,5XT,260046709,"5"" passive coaxial enclosure, black",False,False,,AX,Store,
-5XT#30,L-Acoustics,5XT,260046715,"5"" passive coaxial enclosure, black",False,True,2025/10/14	admin	Discovered dented when unboxing [Marked OOC],AX,Store,
+5XT#30,L-Acoustics,5XT,260053861,"5"" passive coaxial enclosure, black",False,False,"2025/10/14	bnjm2000	Discovered dented when unboxing [Marked OOC]|2025/10/16	bnjm2000	Exchanged with Concept Systems for 1-to-1 swap. OLD SN: 260046715 NEW SN: 260053861 [Location: Store, Serial: 260053861, Cleared OOC, Cleared Missing]",AX,Store,Store
 5XT#31,L-Acoustics,5XT,260046716,"5"" passive coaxial enclosure, black",False,False,,AX,Store,
 5XT#32,L-Acoustics,5XT,260046719,"5"" passive coaxial enclosure, black",False,False,,AX,Store,
 5XT#33,L-Acoustics,5XT,260046731,"5"" passive coaxial enclosure, black",False,False,,AX,Store,
@@ -395,26 +399,26 @@ ETR5#65,L-Acoustics,ETR5,440041134,Adjustable U-bracket: 5XT,False,False,,AX,Sto
 ETR5#66,L-Acoustics,ETR5,440041150,Adjustable U-bracket: 5XT,False,False,,AX,Store,
 ETR5#67,L-Acoustics,ETR5,440041156,Adjustable U-bracket: 5XT,False,False,,AX,Store,
 ETR5#68,L-Acoustics,ETR5,440041158,Adjustable U-bracket: 5XT,False,False,,AX,Store,
-LA2XI#01,L-Acoustics,LA2Xi,1730003008,Amplified controller,False,False,,AX,Store,"Hermes ""The Silky Way"" @ MBS"
-LA2XI#02,L-Acoustics,LA2Xi,1730003010,Amplified controller,False,False,,AX,Store,"Hermes ""The Silky Way"" @ MBS"
-LA2XI#03,L-Acoustics,LA2Xi,1730003047,Amplified controller,False,False,,AX,Store,"Hermes ""The Silky Way"" @ MBS"
-LA2XI#04,L-Acoustics,LA2Xi,1730005059,Amplified controller,False,False,,AX,Store,"Hermes ""The Silky Way"" @ MBS"
-LA4X#01,L-Acoustics,LA4X,1180053925,Amplified controller,False,False,,AX,Store,"Hermes ""The Silky Way"" @ MBS"
-LA4X#02,L-Acoustics,LA4X,1180051677,Amplified controller,False,False,,AX,Store,"Hermes ""The Silky Way"" @ MBS"
-LA4X#03,L-Acoustics,LA4X,1180051678,Amplified controller,False,False,,AX,Store,"Hermes ""The Silky Way"" @ MBS"
-LA4X#04,L-Acoustics,LA4X,1180053934,Amplified controller,False,False,,AX,Store,"Hermes ""The Silky Way"" @ MBS"
-LA4X#05,L-Acoustics,LA4X,1180053927,Amplified controller,False,False,,AX,Store,"Hermes ""The Silky Way"" @ MBS"
-LA4X#06,L-Acoustics,LA4X,1180051467,Amplified controller,False,False,,AX,Store,"Hermes ""The Silky Way"" @ MBS"
+LA2XI#01,L-Acoustics,LA2Xi,1730003008,Amplified controller,False,False,,AX,Store,Store
+LA2XI#02,L-Acoustics,LA2Xi,1730003010,Amplified controller,False,False,,AX,Store,Store
+LA2XI#03,L-Acoustics,LA2Xi,1730003047,Amplified controller,False,False,,AX,Store,Store
+LA2XI#04,L-Acoustics,LA2Xi,1730005059,Amplified controller,False,False,,AX,Store,Store
+LA4X#01,L-Acoustics,LA4X,1180053925,Amplified controller,False,False,,AX,Store,Wedding of Andrew & Nicolette @ TRCM
+LA4X#02,L-Acoustics,LA4X,1180051677,Amplified controller,False,False,,AX,Store,Wedding of Andrew & Nicolette @ TRCM
+LA4X#03,L-Acoustics,LA4X,1180051678,Amplified controller,False,False,,AX,Store,Wedding of Andrew & Nicolette @ TRCM
+LA4X#04,L-Acoustics,LA4X,1180053934,Amplified controller,False,False,,AX,Store,Store
+LA4X#05,L-Acoustics,LA4X,1180053927,Amplified controller,False,False,,AX,Store,Store
+LA4X#06,L-Acoustics,LA4X,1180051467,Amplified controller,False,False,,AX,Store,Store
 LA4X#07,L-Acoustics,LA4X,1180053692,Amplified controller,False,False,,AX,Store,Store
 LA4X#08,L-Acoustics,LA4X,1180051680,Amplified controller,False,False,,AX,Store,Store
-LA4X#09,L-Acoustics,LA4X,1180053978,Amplified controller,False,False,,AX,Store,Store
-LA4X#10,L-Acoustics,LA4X,1180053926,Amplified controller,False,False,,AX,Store,Store
-LA12X#01,L-Acoustics,LA12X,1140035138,Amplified controller,False,False,,AX,Store,"Hermes ""The Silky Way"" @ MBS"
-LA12X#02,L-Acoustics,LA12X,1140037808,Amplified controller,False,False,,AX,Store,"Hermes ""The Silky Way"" @ MBS"
-LA12X#03,L-Acoustics,LA12X,1140037839,Amplified controller,False,False,,AX,Store,"Hermes ""The Silky Way"" @ MBS"
-LA12X#04,L-Acoustics,LA12X,1140037868,Amplified controller,False,False,,AX,Store,"Hermes ""The Silky Way"" @ MBS"
-LA12X#05,L-Acoustics,LA12X,1140037870,Amplified controller,False,False,,AX,Store,"Hermes ""The Silky Way"" @ MBS"
-LA12X#06,L-Acoustics,LA12X,1140037871,Amplified controller,False,False,,AX,Store,"Hermes ""The Silky Way"" @ MBS"
+LA4X#09,L-Acoustics,LA4X,1180053978,Amplified controller,False,False,,AX,Store,Wedding of Andrew & Nicolette @ TRCM
+LA4X#10,L-Acoustics,LA4X,1180053926,Amplified controller,False,False,,AX,Store,Wedding of Andrew & Nicolette @ TRCM
+LA12X#01,L-Acoustics,LA12X,1140035138,Amplified controller,False,False,,AX,Store,Store
+LA12X#02,L-Acoustics,LA12X,1140037808,Amplified controller,False,False,,AX,Store,Store
+LA12X#03,L-Acoustics,LA12X,1140037839,Amplified controller,False,False,,AX,Store,Store
+LA12X#04,L-Acoustics,LA12X,1140037868,Amplified controller,False,False,,AX,Store,Store
+LA12X#05,L-Acoustics,LA12X,1140037870,Amplified controller,False,False,,AX,Store,Store
+LA12X#06,L-Acoustics,LA12X,1140037871,Amplified controller,False,False,,AX,Store,Store
 LA12X#07,L-Acoustics,LA12X,1140039534,Amplified controller,False,False,,AX,Store,
 LA12X#08,L-Acoustics,LA12X,1140039542,Amplified controller,False,False,,AX,Store,Store
 KARAII#01,L-Acoustics,KARAII,2190019410,Long Throw Concert Sound Loudspeaker ,False,False,,AX,Store,
@@ -453,24 +457,24 @@ SB18#09,L-Acoustics,SB18,780023835,"High power compact subwoofer: 1 x 18""",Fals
 SB18#10,L-Acoustics,SB18,780023853,"High power compact subwoofer: 1 x 18""",False,False,,AX,Store,Store
 SB18#11,L-Acoustics,SB18,780023871,"High power compact subwoofer: 1 x 18""",False,False,,AX,Store,Store
 SB18#12,L-Acoustics,SB18,780023872,"High power compact subwoofer: 1 x 18""",False,False,,AX,Store,Store
-LS10#01,L-Acoustics,LS10,1670010429,"10-port Ethernet AVB Switch, Avnu-certified",False,False,,AX,Store,"Hermes ""The Silky Way"" @ MBS"
-LS10#02,L-Acoustics,LS10,1670010391,"10-port Ethernet AVB Switch, Avnu-certified",False,False,,AX,Store,"Hermes ""The Silky Way"" @ MBS"
-LS10#03,L-Acoustics,LS10,1670010355,"10-port Ethernet AVB Switch, Avnu-certified",False,False,,AX,Store,"Hermes ""The Silky Way"" @ MBS"
-LS10#04,L-Acoustics,LS10,1670010350,"10-port Ethernet AVB Switch, Avnu-certified",False,False,,AX,Store,"Hermes ""The Silky Way"" @ MBS"
-LS10#05,L-Acoustics,LS10,1670010373,"10-port Ethernet AVB Switch, Avnu-certified",False,False,,AX,Store,"Hermes ""The Silky Way"" @ MBS"
-LS10#06,L-Acoustics,LS10,1670010374,"10-port Ethernet AVB Switch, Avnu-certified",False,False,,AX,Store,"Hermes ""The Silky Way"" @ MBS"
-MBUMP#01,L-Acoustics,M-BUMP,890009396,Bumper for flying or stacking KARA (II)/SB18,False,False,,AX,Store,"Hermes ""The Silky Way"" @ MBS"
-MBUMP#02,L-Acoustics,M-BUMP,890009399,Bumper for flying or stacking KARA (II)/SB18,False,False,,AX,Store,"Hermes ""The Silky Way"" @ MBS"
-MBUMP#03,L-Acoustics,M-BUMP,890009866,Bumper for flying or stacking KARA (II)/SB18,False,False,,AX,Store,"Hermes ""The Silky Way"" @ MBS"
-MBUMP#04,L-Acoustics,M-BUMP,890010152,Bumper for flying or stacking KARA (II)/SB18,False,False,,AX,Store,"Hermes ""The Silky Way"" @ MBS"
-MBUMP#05,L-Acoustics,M-BUMP,890010057,Bumper for flying or stacking KARA (II)/SB18,False,False,,AX,Store,"Hermes ""The Silky Way"" @ MBS"
+LS10#01,L-Acoustics,LS10,1670010429,"10-port Ethernet AVB Switch, Avnu-certified",False,False,,AX,Store,Store
+LS10#02,L-Acoustics,LS10,1670010391,"10-port Ethernet AVB Switch, Avnu-certified",False,False,,AX,Store,Store
+LS10#03,L-Acoustics,LS10,1670010355,"10-port Ethernet AVB Switch, Avnu-certified",False,False,,AX,Store,Store
+LS10#04,L-Acoustics,LS10,1670010350,"10-port Ethernet AVB Switch, Avnu-certified",False,False,,AX,Store,Store
+LS10#05,L-Acoustics,LS10,1670010373,"10-port Ethernet AVB Switch, Avnu-certified",False,False,,AX,Store,Store
+LS10#06,L-Acoustics,LS10,1670010374,"10-port Ethernet AVB Switch, Avnu-certified",False,False,,AX,Store,Store
+MBUMP#01,L-Acoustics,M-BUMP,890009396,Bumper for flying or stacking KARA (II)/SB18,False,False,,AX,Store,Store
+MBUMP#02,L-Acoustics,M-BUMP,890009399,Bumper for flying or stacking KARA (II)/SB18,False,False,,AX,Store,Store
+MBUMP#03,L-Acoustics,M-BUMP,890009866,Bumper for flying or stacking KARA (II)/SB18,False,False,,AX,Store,Store
+MBUMP#04,L-Acoustics,M-BUMP,890010152,Bumper for flying or stacking KARA (II)/SB18,False,False,,AX,Store,Store
+MBUMP#05,L-Acoustics,M-BUMP,890010057,Bumper for flying or stacking KARA (II)/SB18,False,False,,AX,Store,Store
 MBAR#01,L-Acoustics,M-BAR,900009077,Extension bar for rigging frame,False,False,,AX,Store,
 MBAR#02,L-Acoustics,M-BAR,900009092,Extension bar for rigging frame,False,False,,AX,Store,
 MBAR#03,L-Acoustics,M-BAR,900009093,Extension bar for rigging frame,False,False,,AX,Store,
 MBAR#04,L-Acoustics,M-BAR,900009095,Extension bar for rigging frame,False,False,,AX,Store,
 MJACK#01,L-Acoustics,M-JACK,,,False,False,,AX,Store,
 MJACK#02,L-Acoustics,M-JACK,,,False,False,,AX,Store,
-LAP1#01,L-Acoustics,P1,1400004120,Digital audio processor and measurement platform: 20x 18 mic/line AES/EBU and AVB. CE version.,False,False,,AX,Store,Store
+LAP1#01,L-Acoustics,P1,1400004120,Digital audio processor and measurement platform: 20x 18 mic/line AES/EBU and AVB. CE version.,False,False,,AX,Store,Wedding of Andrew & Nicolette @ TRCM
 X-UL12#01,L-Acoustics,X-UL12,1210008336,Long U-bracket for X12,False,False,,AX,Store,Store
 X-UL12#02,L-Acoustics,X-UL12,1210008580,Long U-bracket for X12,False,False,,AX,Store,Store
 X-UL12#03,L-Acoustics,X-UL12,1210008583,Long U-bracket for X12,False,False,,AX,Store,Store
@@ -503,18 +507,18 @@ X-US1215#13,L-Acoustics,X-US1215,1220011171,Short U-bracket for X12 and X15 HiQ,
 X-US1215#14,L-Acoustics,X-US1215,1220011174,Short U-bracket for X12 and X15 HiQ,False,False,,AX,Store,
 X-US1215#15,L-Acoustics,X-US1215,1220011175,Short U-bracket for X12 and X15 HiQ,False,False,,AX,Store,
 X-US1215#16,L-Acoustics,X-US1215,1220011176,Short U-bracket for X12 and X15 HiQ,False,False,,AX,Store,
-X-UL8#01,L-Acoustics,X-UL8,1270021069,Long U-bracket for X8,False,False,,AX,Store,"Hermes ""The Silky Way"" @ MBS"
-X-UL8#02,L-Acoustics,X-UL8,1270021072,Long U-bracket for X8,False,False,,AX,Store,"Hermes ""The Silky Way"" @ MBS"
-X-UL8#03,L-Acoustics,X-UL8,1270021074,Long U-bracket for X8,False,False,,AX,Store,"Hermes ""The Silky Way"" @ MBS"
-X-UL8#04,L-Acoustics,X-UL8,1270021088,Long U-bracket for X8,False,False,,AX,Store,"Hermes ""The Silky Way"" @ MBS"
-X-UL8#05,L-Acoustics,X-UL8,1270021089,Long U-bracket for X8,False,False,,AX,Store,"Hermes ""The Silky Way"" @ MBS"
-X-UL8#06,L-Acoustics,X-UL8,1270021090,Long U-bracket for X8,False,False,,AX,Store,"Hermes ""The Silky Way"" @ MBS"
-X-UL8#07,L-Acoustics,X-UL8,1270021091,Long U-bracket for X8,False,False,,AX,Store,"Hermes ""The Silky Way"" @ MBS"
-X-UL8#08,L-Acoustics,X-UL8,1270021092,Long U-bracket for X8,False,False,,AX,Store,"Hermes ""The Silky Way"" @ MBS"
-X-UL8#09,L-Acoustics,X-UL8,1270021095,Long U-bracket for X8,False,False,,AX,Store,"Hermes ""The Silky Way"" @ MBS"
-X-UL8#10,L-Acoustics,X-UL8,1270021182,Long U-bracket for X8,False,False,,AX,Store,"Hermes ""The Silky Way"" @ MBS"
-X-UL8#11,L-Acoustics,X-UL8,1270021190,Long U-bracket for X8,False,False,,AX,Store,"Hermes ""The Silky Way"" @ MBS"
-X-UL8#12,L-Acoustics,X-UL8,1270021191,Long U-bracket for X8,False,False,,AX,Store,"Hermes ""The Silky Way"" @ MBS"
+X-UL8#01,L-Acoustics,X-UL8,1270021069,Long U-bracket for X8,False,False,,AX,Store,Store
+X-UL8#02,L-Acoustics,X-UL8,1270021072,Long U-bracket for X8,False,False,,AX,Store,Store
+X-UL8#03,L-Acoustics,X-UL8,1270021074,Long U-bracket for X8,False,False,,AX,Store,Store
+X-UL8#04,L-Acoustics,X-UL8,1270021088,Long U-bracket for X8,False,False,,AX,Store,Store
+X-UL8#05,L-Acoustics,X-UL8,1270021089,Long U-bracket for X8,False,False,,AX,Store,Store
+X-UL8#06,L-Acoustics,X-UL8,1270021090,Long U-bracket for X8,False,False,,AX,Store,Store
+X-UL8#07,L-Acoustics,X-UL8,1270021091,Long U-bracket for X8,False,False,,AX,Store,Store
+X-UL8#08,L-Acoustics,X-UL8,1270021092,Long U-bracket for X8,False,False,,AX,Store,Store
+X-UL8#09,L-Acoustics,X-UL8,1270021095,Long U-bracket for X8,False,False,,AX,Store,Store
+X-UL8#10,L-Acoustics,X-UL8,1270021182,Long U-bracket for X8,False,False,,AX,Store,Store
+X-UL8#11,L-Acoustics,X-UL8,1270021190,Long U-bracket for X8,False,False,,AX,Store,Store
+X-UL8#12,L-Acoustics,X-UL8,1270021191,Long U-bracket for X8,False,False,,AX,Store,Store
 X-US8#01,L-Acoustics,X-US8,1280004181,Short U-bracket for X8,False,False,,AX,Store,
 X-US8#02,L-Acoustics,X-US8,1280005529,Short U-bracket for X8,False,False,,AX,Store,
 X-US8#03,L-Acoustics,X-US8,1280005636,Short U-bracket for X8,False,False,,AX,Store,
@@ -615,8 +619,8 @@ E904#04,Sennheiser,E904,,Dynamic cardioid instrument microphone,False,False,,AX,
 E904#05,Sennheiser,E904,,Dynamic cardioid instrument microphone,False,False,,AX,Store,Store
 E906#01,Sennheiser,E906,,"super-cardioid, dynamic instrument microphone",False,False,,AX,Store,
 E906#02,Sennheiser,E906,,"super-cardioid, dynamic instrument microphone",False,False,,AX,Store,
-ME36#01,Sennheiser,ME36,,Gooseneck mic,False,False,,AX,Store,Store
-ME36#02,Sennheiser,ME36,,Gooseneck mic,False,False,,AX,Store,Store
+ME36#01,Sennheiser,ME36,,Gooseneck mic,False,False,,AX,Store,Wedding of Andrew & Nicolette @ TRCM
+ME36#02,Sennheiser,ME36,,Gooseneck mic,False,False,,AX,Store,Wedding of Andrew & Nicolette @ TRCM
 MKE2#01,Sennheiser,MKE2,86827,"Lavalier microphone, black",False,False,,AX,Store,Store
 MKE2#02,Sennheiser,MKE2,86825,"Lavalier microphone, black",False,False,,AX,Store,Store
 MKE2#03,Sennheiser,MKE2,,"Lavalier microphone, beige",False,False,,AX,Store,
@@ -663,7 +667,7 @@ AD3#04,Shure,AD3,3TH09460854,Plug-on Transmitter,False,False,,AX,Store,Store
 AD4D#01,Shure,AD4D,,Two-Channel Digital Wireless Receiver,False,False,,AX,Store,Store
 AD4Q#01,Shure,AD4Q,,Four-Channel Digital Wireless Receiver,False,False,,AX,Store,Store
 AD4Q#02,Shure,AD4Q,,Four-Channel Digital Wireless Receiver,False,False,,AX,Store,Store
-AD4Q#03,Shure,AD4Q,,Four-Channel Digital Wireless Receiver,False,False,,AX,Store,Store
+AD4Q#03,Shure,AD4Q,2CA25976600,Four-Channel Digital Wireless Receiver,False,True,"2025/11/16	bnjm2000	Discovered ""B"" antenna not working, even when connected directly to antenna [Marked OOC]",AX,Store,Store
 AD4Q#04,Shure,AD4Q,,Four-Channel Digital Wireless Receiver,False,False,,AX,Store,Store
 P9R#01,Shure,P9R,,Bodypack Receiver [P7],False,False,,AX,Store,
 P9R#02,Shure,P9R,,Bodypack Receiver [P7],False,False,,AX,Store,
@@ -751,9 +755,9 @@ ULXD2#07,Shure,ULXD2,2QK2204370,Handheld Microphone [L50],False,False,,AX,Store,
 ULXD2#08,Shure,ULXD2,2OB0659317-01,Handheld Microphone [L50],False,False,,AX,Store,
 ULXD2#09,Shure,ULXD2,2NK0771081-01,Handheld Microphone [L50],False,False,,AX,Store,Store
 ULXD2#10,Shure,ULXD2,2PK2362922,Handheld Microphone [L50],False,False,,AX,Store,
-ULXD2#11,Shure,ULXD2,2RC0141727,Handheld Microphone [L50],False,True,"2025/06/21	bnjm2000	Battery prong dropped out, unable to turn on (Wedding of Jeremy and Julia @ The Pyramid Club) [Location: Store, Marked OOC]|2025/07/10	bnjm2000	Sent to E&E for service. [Location: E&E]|2025/09/11	bnjm2000	Replace battery pin $5
+ULXD2#11,Shure,ULXD2,2RC0141727,Handheld Microphone [L50],False,False,"2025/06/21	bnjm2000	Battery prong dropped out, unable to turn on (Wedding of Jeremy and Julia @ The Pyramid Club) [Location: Store, Marked OOC]|2025/07/10	bnjm2000	Sent to E&E for service. [Location: E&E]|2025/09/11	bnjm2000	Replace battery pin $5
 Replace rubber slot $5
-Service charge $60",AX,Store,E&E
+Service charge $60|2025/11/12	bnjm2000	Collected back from E&E, replaced battery contact pin and bumper [Location: Store, Cleared OOC, Cleared Missing]",AX,Store,Store
 ULXD2#12,Shure,ULXD2,2NK0771082-01,Handheld Microphone [L50],False,False,,AX,Store,Store
 ULXD2#13,Shure,ULXD2,3CC16144846,Handheld Microphone [G52],False,False,,AX,Store,Store
 ULXD2#14,Shure,ULXD2,3CC16144872,Handheld Microphone [G52],False,False,,AX,Store,Store
@@ -811,10 +815,10 @@ WARWICK STAND #02,Warwick,RS28400B,,Hand Crank Speaker Stand,False,False,,AX,Sto
 CL5#01,Yamaha,CL5,WTASK01015,Digital Mixer,False,False,"2024/09/12	bnjm2000	Sent into Yamaha for fader servicing, sometimes get stuck [Location: Yamaha Service Center, Marked OOC]|2024/10/22	bnjm2000	Replaced faulty faders: CH 1-8, 9-16, Centralogic CH 7,8 ($684) Service fee ($369.73) [Location: Store, Cleared OOC, Cleared Missing]|2025/01/16	bnjm2000	Unable to connect to dante network (Dante Module Error) (Wedding of Benjamin and Rachel @ Ritz Garden Pavilion) [Marked OOC]|2025/01/17	bnjm2000	Sent in to Yamaha for repairs [Location: Yamaha Service Center]|2025/02/06	bnjm2000	Replaced Dante Module ($631)
 Replaced DNTU PCB ($672)
 Replaced FFC Cable ($10) [Cleared OOC]|2025/02/13	bnjm2000	Dante clock suddenly unlocked and could not lock back, phantom noise on both inputs and outputs
-(Wedding of Aim and Singhis @ TCP) [Location: Yamaha Service Center]|2025/02/27	bnjm2000	Replaced DSP PCB ($1011) [Location: Store, Cleared OOC]",AX,Store,Store
+(Wedding of Aim and Singhis @ TCP) [Location: Yamaha Service Center]|2025/02/27	bnjm2000	Replaced DSP PCB ($1011) [Location: Store, Cleared OOC]",AX,Store,Wedding of Andrew & Nicolette @ TRCM
 DM3#01,Yamaha,DM3,BGDK01029,Digital Mixer,False,False,2024/09/04	bnjm2000	Reported cannot power on from Niche [Marked OOC]|2024/09/12	bnjm2000	sent to Yamaha for servicing [Location: Yamaha Service Center]|2024/10/24	bnjm2000	Replaced PCB (report no. PA842034) $586.84 [Cleared OOC]|2024/11/07	bnjm2000	Collected from Yamaha [Location: Store],AX,Store,Store
 DM3#02,Yamaha,DM3,BGDI01076,Digital Mixer,False,False,,AX,Store,Store
-DM7#01,Yamaha,DM7,21EGEI01036,Digital Mixer,False,False,,AX,Store,"Hermes ""The Silky Way"" @ MBS"
+DM7#01,Yamaha,DM7,21EGEI01036,Digital Mixer,False,False,,AX,Store,Store
 DXR8#01,Yamaha,DXR8,EESM01180,"Active80"" Speaker",False,False,,AX,Store,
 DXR10#01,Yamaha,DXR10,,"Active 10"" Speaker",False,False,,AX,Store,Store
 DXR10#02,Yamaha,DXR10,,"Active 10"" Speaker",False,False,,AX,Store,Store
@@ -830,16 +834,16 @@ DXR12#06,Yamaha,DXR12,,"Active 12"" Speaker",False,False,,AX,Store,
 MG06#01,Yamaha,MG06,,6-Channel Analog Mixing Console with FX,False,False,,AX,Store,
 MG12XU#01,Yamaha,MG12XU,,12-Channel Analog Mixing Console with FX,False,False,,AX,Store,Store
 MG12XU#02,Yamaha,MG12XU,,12-Channel Analog Mixing Console with FX,False,False,,AX,Store,
-MG10#01,Yamaha,MG10,ECWH01433,10-Channel Analogue Mixer,False,False,,AX,Store,Johnny Walker @ T3 Changi Airport
+MG10#01,Yamaha,MG10,ECWH01433,10-Channel Analogue Mixer,False,False,,AX,Store,Store
 MG124CX#01,Yamaha,MG124CX,,12-Input Stereo Mixer with Compression and Effects,False,False,,AX,Store,
 MG124CX#02,Yamaha,MG124CX,,12-Input Stereo Mixer with Compression and Effects,False,False,,AX,Store,
 QL1#01,Yamaha,QL1,WTAUM01016,Digital Mixer,False,False,,AX,Store,Store
 QL1#02,Yamaha,QL1,EAXP01044,Digital Mixer,False,False,,AX,Store,Store
-QL5#01,Yamaha,QL5,,Digital Mixer,False,False,,AX,Store,Store
+QL5#01,Yamaha,QL5,,Digital Mixer,False,False,,AX,Store,Wedding of Andrew & Nicolette @ TRCM
 RIO1608-D #01,Yamaha,Rio1608-d,,High Performance I/O Rack,False,False,2024/11/13	bnjm2000	2024/11/13 - Updated firmware version to v5.80,AX,Store,Store
 RIO1608-D2 #01,Yamaha,Rio1608-d2,EEYP01258,High Performance I/O Rack,False,False,2024/11/13	bnjm2000	2024/11/13 - Updated firmware version to v1.85,AX,Store,
-RIO3224-D #01,Yamaha,Rio3224-d,,High Performance I/O Rack,False,False,2024/11/13	bnjm2000	2024/11/13 - Updated firmware to v5.80,AX,Store,"Hermes ""The Silky Way"" @ MBS"
-RIO3224-D #02,Yamaha,Rio3224-d,,High Performance I/O Rack,False,False,2024/11/13	bnjm2000	2024/11/13 - Updated firmware to v5.80,AX,Store,"Hermes ""The Silky Way"" @ MBS"
+RIO3224-D #01,Yamaha,Rio3224-d,,High Performance I/O Rack,False,False,2024/11/13	bnjm2000	2024/11/13 - Updated firmware to v5.80,AX,Store,Store
+RIO3224-D #02,Yamaha,Rio3224-d,,High Performance I/O Rack,False,False,2024/11/13	bnjm2000	2024/11/13 - Updated firmware to v5.80,AX,Store,Store
 RIO3224-D2 #01,Yamaha,Rio3224-d2,EEDX01062,High Performance I/O Rack,False,False,2024/11/13	bnjm2000	2024/11/13 - Updated firmware to v1.85,AX,Store,Store
 SBC800#01,Shure,SBC800,,8-bay battery charger,False,False,,AX,Store,
 SB900#01,Shure,SB900,,Rechargeable Battery,False,False,,AX,Store,
@@ -920,19 +924,19 @@ LEDBEAM#23,Robe,Robin LEDBeam 350 Wash,2300077264,Wash LED,False,False,"2025/04/
 Replaced power supply - $217.69 (but FOC)",LX,Store,Store
 LEDBEAM#24,Robe,Robin LEDBeam 350 Wash,2300840397,Wash LED,False,False,"2025/04/04	bnjm2000	Intermittent can't power up
 Replaced power supply - $217.69 (but FOC)",LX,Store,Store
-DIABLO#01,Ayrton,Diablo (W.DMX),DB2935040,Profile LED,False,False,,LX,Store,Store
-DIABLO#02,Ayrton,Diablo (W.DMX),DB2935047,Profile LED,False,False,"2025/05/25	bnjm2000	Discovered fan error (Wedding of Micheal and Cindy) [Location: Total Solutions, Marked OOC]|2025/06/05	bnjm2000	Sent to TSM, reset connector tested okay - $80 [Location: Store, Cleared OOC]",LX,Store,Store
-DIABLO#03,Ayrton,Diablo (W.DMX),DB2935098,Profile LED,False,False,,LX,Store,Store
-DIABLO#04,Ayrton,Diablo (W.DMX),DB2935016,Profile LED,False,False,,LX,Store,Store
+DIABLO#01,Ayrton,Diablo (W.DMX),DB2935040,Profile LED,False,False,,LX,Store,Wedding of Andrew & Nicolette @ TRCM
+DIABLO#02,Ayrton,Diablo (W.DMX),DB2935047,Profile LED,False,False,"2025/05/25	bnjm2000	Discovered fan error (Wedding of Micheal and Cindy) [Location: Total Solutions, Marked OOC]|2025/06/05	bnjm2000	Sent to TSM, reset connector tested okay - $80 [Location: Store, Cleared OOC]",LX,Store,Wedding of Andrew & Nicolette @ TRCM
+DIABLO#03,Ayrton,Diablo (W.DMX),DB2935098,Profile LED,False,False,,LX,Store,Wedding of Andrew & Nicolette @ TRCM
+DIABLO#04,Ayrton,Diablo (W.DMX),DB2935016,Profile LED,False,False,,LX,Store,Wedding of Andrew & Nicolette @ TRCM
 DIABLO#05,Ayrton,Diablo (W.DMX),DB2953048,Profile LED,False,False,,LX,Store,Store
 DIABLO#06,Ayrton,Diablo (W.DMX),DB2935001,Profile LED,False,False,,LX,Store,Store
 DIABLO#07,Ayrton,Diablo (W.DMX),DB2935033,Profile LED,False,False,,LX,Store,Store
 DIABLO#08,Ayrton,Diablo (W.DMX),DB2935002,Profile LED,False,False,,LX,Store,Store
-DIABLO#09,Ayrton,Diablo (W.DMX),DB2935036,Profile LED,False,False,,LX,Store,
-DIABLO#10,Ayrton,Diablo (W.DMX),DB2935057,Profile LED,False,False,2025/06/05	bnjm2000	Replaced Pan/Tilt Board - $222.87,LX,Store,
+DIABLO#09,Ayrton,Diablo (W.DMX),DB2935036,Profile LED,False,False,,LX,Store,Wedding of Andrew & Nicolette @ TRCM
+DIABLO#10,Ayrton,Diablo (W.DMX),DB2935057,Profile LED,False,False,2025/06/05	bnjm2000	Replaced Pan/Tilt Board - $222.87,LX,Store,Wedding of Andrew & Nicolette @ TRCM
 DIABLO#11,Ayrton,Diablo (W.DMX),DB2935034,Profile LED,False,False,"2025/06/05	bnjm2000	Replaced Pan/Tilt board - $222.87
-CMY Driver Board - $195.84",LX,Store,Store
-DIABLO#12,Ayrton,Diablo (W.DMX),DB2935019,Profile LED,False,False,2025/06/05	bnjm2000	Replaced Pan/Tilt Board - $222.87,LX,Store,
+CMY Driver Board - $195.84",LX,Store,Wedding of Andrew & Nicolette @ TRCM
+DIABLO#12,Ayrton,Diablo (W.DMX),DB2935019,Profile LED,False,False,2025/06/05	bnjm2000	Replaced Pan/Tilt Board - $222.87,LX,Store,Wedding of Andrew & Nicolette @ TRCM
 DIABLO#13,Ayrton,Diablo Profile,DB5309007,Profile LED,False,False,"2025/06/30	Deano	Gobo error [Marked OOC]|2025/07/08	Deano	Repaired by Technician Dean [Location: Store, Cleared OOC]",LX,Store,Store
 DIABLO#14,Ayrton,Diablo Profile,DB5309023,Profile LED,False,False,,LX,Store,Store
 DIABLO#15,Ayrton,Diablo Profile,DB5309005,Profile LED,False,False,2025/06/26	bnjm2000	Many error (Wedding of Micheal and Cindy) [Marked OOC]|2025/06/05	bnjm2000	Replaced Zoom/Focus Driver Board - $FOC [Cleared OOC],LX,Store,Store
@@ -959,7 +963,7 @@ PB#10,Astera,Pixel Brick,047-0312696,Batt LED Uplighters,False,False,2024/12/05	
 PB#11,Astera,Pixel Brick,047-0313634,Batt LED Uplighters,False,True,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2024/11/08	bnjm2000	LED screen cannot on|2025/11/01	admin	Screen discovered messed up when charging [Marked OOC],LX,Store,Store
 PB#12,Astera,Pixel Brick,047-0312725,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,Store
 PB#13,Astera,Pixel Brick,047-0312683,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2024/11/15	bnjm2000	Screen dim,LX,Store,Store
-PB#14,Astera,Pixel Brick,047-0312682,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,Store
+PB#14,Astera,Pixel Brick,047-0312682,Batt LED Uplighters,False,True,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/11/05	bnjm2000	Discovered screen faulty (Franck Muller @ Claudine Restaurant) [Marked OOC],LX,Store,Store
 PB#15,Astera,Pixel Brick,047-0312734,Batt LED Uplighters,False,False,"2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/05/28	bnjm2000	Collected back from TSM, fixed screen",LX,Store,Store
 PB#16,Astera,Pixel Brick,047-0313677,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,Store
 PB#17,Astera,Pixel Brick,047-0312751,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
@@ -970,23 +974,23 @@ PB#21,Astera,Pixel Brick,047-0313675,Batt LED Uplighters,False,False,2024/12/05	
 PB#22,Astera,Pixel Brick,047-0312619,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
 PB#23,Astera,Pixel Brick,047-0315708,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
 PB#24,Astera,Pixel Brick,047-0312564,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
-PB#25,Astera,Pixel Brick,047-0313626,Batt LED Uplighters,False,True,"2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/09/08	bnjm2000	Screen spoilt, device still works [Marked OOC]|2025/09/16	bnjm2000	Sent to TSM for repair [Location: Total Solutions]",LX,Store,Total Solutions
+PB#25,Astera,Pixel Brick,047-0313626,Batt LED Uplighters,False,False,"2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/09/08	bnjm2000	Screen spoilt, device still works [Marked OOC]|2025/09/16	bnjm2000	Sent to TSM for repair [Location: Total Solutions]|2025/11/20	bnjm2000	Replaced housing assembly ($FOC). Collected back. [Location: Store, Cleared OOC, Cleared Missing]",LX,Store,Store
 PB#26,Astera,Pixel Brick,047-0310053,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
 PB#27,Astera,Pixel Brick,047-0312635,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/11/15	bnjm2000	LED Screen cannot on,LX,Store,
 PB#28,Astera,Pixel Brick,047-0313638,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
-PB#29,Astera,Pixel Brick,047-0313596,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
+PB#29,Astera,Pixel Brick,047-0313596,Batt LED Uplighters,False,True,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/11/13	bnjm2000	Display discovered faulty when charging [Marked OOC],LX,Store,
 PB#30,Astera,Pixel Brick,047-0313383,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
-PB#31,Astera,Pixel Brick,047-0315560,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2024/11/01	bnjm2000	Cell 4 overvolt,LX,Store,
+PB#31,Astera,Pixel Brick,047-0315560,Batt LED Uplighters,False,True,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2024/11/01	bnjm2000	Cell 4 overvolt|2025/11/13	bnjm2000	Display discovered faulty when charging [Marked OOC],LX,Store,
 PB#32,Astera,Pixel Brick,047-0313519,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
 PB#33,Astera,Pixel Brick,047-0312748,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
 PB#34,Astera,Pixel Brick,047-0308768,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
 PB#35,Astera,Pixel Brick,047-0312772,Batt LED Uplighters,False,False,"2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/08/12	bnjm2000	Screen stopped working after charging [Marked OOC]|2025/08/18	bnjm2000	Sent in to Total Solutions [Location: Total Solutions]|2025/08/27	bnjm2000	Replaced PB15 rear housing assembly, sent back to us by TSM [Location: Store, Cleared OOC, Cleared Missing]",LX,Store,Store
-PB#36,Astera,Pixel Brick,047-0312668,Batt LED Uplighters,False,True,"2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/08/12	bnjm2000	Screen stopped working after charging [Marked OOC]|2025/08/18	bnjm2000	Screen worked again when sending into Total Solutions [Cleared OOC]|2025/09/08	bnjm2000	Device not responsive, no display [Marked OOC]|2025/09/16	bnjm2000	Sent to TSM for repair [Location: Total Solutions]",LX,Store,Total Solutions
+PB#36,Astera,Pixel Brick,047-0312668,Batt LED Uplighters,False,False,"2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/08/12	bnjm2000	Screen stopped working after charging [Marked OOC]|2025/08/18	bnjm2000	Screen worked again when sending into Total Solutions [Cleared OOC]|2025/09/08	bnjm2000	Device not responsive, no display [Marked OOC]|2025/09/16	bnjm2000	Sent to TSM for repair [Location: Total Solutions]|2025/11/20	bnjm2000	Replaced Housing assembly, battery pack ($51,76), control board ($86.54), service charge ($150). Collected back. [Location: Store, Cleared OOC, Cleared Missing]",LX,Store,Store
 PB#37,Astera,Pixel Brick,047-0313949,Batt LED Uplighters,False,False,"2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/06/05	bnjm2000	Handed over to TSM for repair, spoilt screen
 Replaced PB15 Rear Housing Assembly",LX,Store,
 PB#38,Astera,Pixel Brick,047-0313663,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
 PB#39,Astera,Pixel Brick,047-0312708,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
-PB#40,Astera,Pixel Brick,047-0316706,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
+PB#40,Astera,Pixel Brick,047-0316706,Batt LED Uplighters,False,True,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/11/13	bnjm2000	Display discovered faulty when charging [Marked OOC],LX,Store,
 PB#41,Astera,Pixel Brick,047-0308759,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2024/11/15	bnjm2000	Screen dim,LX,Store,
 PB#42,Astera,Pixel Brick,047-0313840,Batt LED Uplighters,False,False,"2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/05/02	bnjm2000	Handed over to TSM for repair, spoilt screen
 Replaced PB15 Rear Housing Assembly",LX,Store,
@@ -999,7 +1003,7 @@ PB#48,Astera,Pixel Brick,047-0313867,Batt LED Uplighters,False,False,2024/12/05	
 PB#49,Astera,Pixel Brick,047-0312714,Batt LED Uplighters,False,False,"2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/05/28	bnjm2000	Collected back from TSM, fixed screen",LX,Store,
 PB#50,Astera,Pixel Brick,047-0313681,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
 PB#51,Astera,Pixel Brick,047-0312716,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
-PB#52,Astera,Pixel Brick,047-0312631,Batt LED Uplighters,False,True,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/10/21	admin	Screen discovered messed up @ Hermes Silky Way F&F Night [Marked OOC],LX,Store,
+PB#52,Astera,Pixel Brick,047-0312631,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
 PB#53,Astera,Pixel Brick,047-0312617,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
 PB#54,Astera,Pixel Brick,047-0308765,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
 PB#55,Astera,Pixel Brick,047-0313557,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
@@ -1173,7 +1177,7 @@ MASTER4KRX#02,Accsoon,Cineview Master 4K RX,WIT07-1438-BE0B,Wireless SDI/HDMI Re
 MASTER4KRX#03,Accsoon,Cineview Master 4K RX,WIT07-1377-BE0B,Wireless SDI/HDMI Receiver,False,False,,VX,Store,
 PERFECTCUE#01,DSAN,PerfectCue Mini,24-24582,Professional Wireless Clicker,False,False,,VX,Store,
 CLICKER#01,DSAN,PerfectCue Mini,,Professional Wireless Clicker,False,False,,VX,Store,
-SBS#01,Sennheiser,Base Station,1205000475,1RU Spectera Base Station,False,False,,AX,Store,
+SBS#01,Sennheiser,Base Station,1205000475,1RU Spectera Base Station,False,False,,AX,Store,Wedding of Andrew & Nicolette @ TRCM
 SEK#01,Sennheiser,SEK(UHF),1165001727,Bidirectional bodypack,False,False,,AX,Store,
 SEK#02,Sennheiser,SEK(UHF),1165001729,Bidirectional bodypack,False,False,,AX,Store,
 SEK#03,Sennheiser,SEK(UHF),1195001949,Bidirectional bodypack,False,False,,AX,Store,
@@ -1184,8 +1188,8 @@ SEK#07,Sennheiser,SEK(UHF),1195001968,Bidirectional bodypack,False,False,,AX,Sto
 SEK#08,Sennheiser,SEK(UHF),1195001986,Bidirectional bodypack,False,False,,AX,Store,
 SEK#09,Sennheiser,SEK(UHF),1195002041,Bidirectional bodypack,False,False,,AX,Store,
 SEK#10,Sennheiser,SEK(UHF),1195002042,Bidirectional bodypack,False,False,,AX,Store,
-DAD#01,Sennheiser,DAD(UHF),1185001690,Bidirectional digital antenna,False,False,,AX,Store,
-DAD#02,Sennheiser,DAD(UHF),1185001691,Bidirectional digital antenna,False,False,,AX,Store,
+DAD#01,Sennheiser,DAD(UHF),1185001690,Bidirectional digital antenna,False,False,,AX,Store,Wedding of Andrew & Nicolette @ TRCM
+DAD#02,Sennheiser,DAD(UHF),1185001691,Bidirectional digital antenna,False,False,,AX,Store,Wedding of Andrew & Nicolette @ TRCM
 L6000#01,Sennheiser,L6000,1134005936,Rackmount Charger,False,False,,AX,Store,
 LM6070#01,Sennheiser,LM6070,,Charging module for the L 6000 rack-mount charger,False,False,,AX,Store,
 LM6070#02,Sennheiser,LM6070,,Charging module for the L 6000 rack-mount charger,False,False,,AX,Store,
@@ -1206,7 +1210,7 @@ BA70#12,Sennheiser,BA70,0423000949,Lithium Ion rechargeable battery,False,False,
 BA70#13,Sennheiser,BA70,0423000954,Lithium Ion rechargeable battery,False,False,,AX,Store,
 BA70#14,Sennheiser,BA70,0423000962,Lithium Ion rechargeable battery,False,False,,AX,Store,
 BA70#15,Sennheiser,BA70,0483001284,Lithium Ion rechargeable battery,False,False,,AX,Store,
-BA70#16,Sennheiser,BA70,0483001285,Lithium Ion rechargeable battery,False,False,,AX,Store,
+BA70#16,Sennheiser,BA70,0483001888,Lithium Ion rechargeable battery,False,False,"2025/10/11	bnjm2000	Became faulty on use (Wedding of Justin & Amanda @ Raffles Sentosa) [Marked OOC]|2025/10/13	bnjm2000	1-to-1 swap with Concept Systems. Old SN:0483001285 New SN:0483001888 [Location: Store, Serial: 0483001888, Cleared OOC, Cleared Missing]",AX,Store,Store
 BA70#17,Sennheiser,BA70,0483001298,Lithium Ion rechargeable battery,False,False,,AX,Store,
 BA70#18,Sennheiser,BA70,0483001323,Lithium Ion rechargeable battery,False,False,,AX,Store,
 BA70#19,Sennheiser,BA70,0483001855,Lithium Ion rechargeable battery,False,False,,AX,Store,

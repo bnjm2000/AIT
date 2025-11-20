@@ -1,0 +1,2 @@
+EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,Tag,ForceStateOverride
+81,Wedding of Eamon & Mia @ Capella,20251122,20251123,[],"[""[MODEL]AX|L-Acoustics|X12|4|12\"" passive coaxial enclosure"", ""[MODEL]AX|L-Acoustics|SB18|1|High power compact subwoofer: 1 x 18\""""]",[],Planning,[],[],events,False
