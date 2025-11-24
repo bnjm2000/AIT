@@ -1,81 +1,3 @@
-2025/09/16 15:37:32,bnjm2000,Assigned specific asset AD4D#01 to event 50
-2025/09/16 15:37:35,bnjm2000,Assigned specific asset AD3#01 to event 50
-2025/09/16 15:37:37,bnjm2000,Assigned specific asset AD3#03 to event 50
-2025/09/16 15:37:43,bnjm2000,Assigned specific asset TT#01 to event 50
-2025/09/16 15:37:43,bnjm2000,Assigned specific asset TT#02 to event 50
-2025/09/16 15:37:45,bnjm2000,Assigned specific asset TT#03 to event 50
-2025/09/16 15:37:45,bnjm2000,Assigned specific asset TT#04 to event 50
-2025/09/16 15:37:47,bnjm2000,Assigned specific asset TT#05 to event 50
-2025/09/16 15:37:47,bnjm2000,Assigned specific asset TT#06 to event 50
-2025/09/16 15:37:49,bnjm2000,Assigned specific asset TT#07 to event 50
-2025/09/16 15:37:50,bnjm2000,Assigned specific asset TT#08 to event 50
-2025/09/16 15:37:54,bnjm2000,Assigned specific asset DIABLO#05 to event 50
-2025/09/16 15:37:54,bnjm2000,Assigned specific asset DIABLO#06 to event 50
-2025/09/16 15:37:57,bnjm2000,Assigned specific asset DIABLO#07 to event 50
-2025/09/16 15:37:58,bnjm2000,Assigned specific asset DIABLO#08 to event 50
-2025/09/16 15:55:08,bnjm2000,Added 1x Avolites Quartz model to event 50 (total: 1)
-2025/09/16 15:55:15,bnjm2000,Assigned specific asset QUARTZ#02 to event 50
-2025/09/16 15:55:18,bnjm2000,Assigned specific asset AURORA#01 to event 50
-2025/09/16 15:55:18,bnjm2000,Assigned specific asset AURORA#02 to event 50
-2025/09/16 17:41:35,admin,Prepared asset [MISC]Base plate;4 for event 55
-2025/09/16 17:41:35,admin,Prepared asset [MISC]TV Bracket;4 for event 55
-2025/09/16 17:41:36,admin,Prepared asset [MISC]Truss - 2m;4 for event 55
-2025/09/16 17:41:38,admin,Assigned specific asset PB#01 to event 55
-2025/09/16 17:41:39,admin,Assigned specific asset PB#03 to event 55
-2025/09/16 17:41:40,admin,Assigned specific asset PB#02 to event 55
-2025/09/16 17:41:40,admin,Assigned specific asset PB#04 to event 55
-2025/09/16 17:41:41,admin,Assigned specific asset PB#05 to event 55
-2025/09/16 17:41:41,admin,Assigned specific asset PB#06 to event 55
-2025/09/16 17:41:42,admin,Assigned specific asset PB#07 to event 55
-2025/09/16 17:41:43,admin,Assigned specific asset PB#08 to event 55
-2025/09/16 17:41:43,admin,Assigned specific asset PB#09 to event 55
-2025/09/16 17:41:44,admin,Assigned specific asset PB#10 to event 55
-2025/09/16 17:41:44,admin,Assigned specific asset PB#11 to event 55
-2025/09/16 17:41:45,admin,Assigned specific asset PB#12 to event 55
-2025/09/16 17:41:45,admin,Assigned specific asset PB#13 to event 55
-2025/09/16 17:41:46,admin,Assigned specific asset PB#14 to event 55
-2025/09/16 17:41:46,admin,Assigned specific asset PB#15 to event 55
-2025/09/16 17:41:47,admin,Assigned specific asset PB#16 to event 55
-2025/09/16 17:41:49,admin,Assigned specific asset QM75C#01 to event 55
-2025/09/16 17:41:54,admin,Assigned specific asset QM75C#02 to event 55
-2025/09/16 17:41:54,admin,Assigned specific asset QM75C#03 to event 55
-2025/09/16 17:41:55,admin,Assigned specific asset QM75C#04 to event 55
-2025/09/16 17:42:27,admin,Assigned asset [MISC]Mini Profile to event 56 (unprepared)
-2025/09/16 17:42:41,admin,Assigned specific asset X12#09 to event 57
-2025/09/16 17:42:45,admin,Assigned specific asset X12#10 to event 57
-2025/09/16 17:42:49,admin,Assigned specific asset X12#11 to event 57
-2025/09/16 17:42:54,admin,Assigned specific asset X12#12 to event 57
-2025/09/16 17:42:57,admin,Assigned specific asset X12#13 to event 57
-2025/09/16 17:43:01,admin,Assigned specific asset X12#14 to event 57
-2025/09/16 22:06:39,admin,Created event 60: Dior Cruise 2026 Presentation @ Former Command House via web interface
-2025/09/16 23:02:50,bnjm2000,Added 16x L-Acoustics 5XTW model to event 60 (total: 16)
-2025/09/16 23:02:57,bnjm2000,Added 16x L-Acoustics ETR5W model to event 60 (total: 16)
-2025/09/16 23:03:51,bnjm2000,Removed L-Acoustics 5XTW model from event 60
-2025/09/16 23:03:52,bnjm2000,Removed L-Acoustics ETR5W model from event 60
-2025/09/16 23:05:09,bnjm2000,Added 16x L-Acoustics ETR5W model to event 60 (total: 16)
-2025/09/16 23:05:22,bnjm2000,Removed L-Acoustics ETR5W model from event 60
-2025/09/16 23:18:56,bnjm2000,Added 20x L-Acoustics 5XTW model to event 60 (total: 20)
-2025/09/16 23:18:59,bnjm2000,Added 20x L-Acoustics ETR5W model to event 60 (total: 20)
-2025/09/16 23:21:20,bnjm2000,Added 5x L-Acoustics 5XT model to event 60 (total: 5)
-2025/09/16 23:21:22,bnjm2000,Added 5x L-Acoustics ETR5 model to event 60 (total: 5)
-2025/09/16 23:21:28,bnjm2000,Added 4x L-Acoustics LA4X model to event 60 (total: 4)
-2025/09/16 23:21:52,bnjm2000,Added 1x Yamaha DM3 model to event 60 (total: 1)
-2025/09/16 23:22:00,bnjm2000,Added 1x Apple IPAD model to event 60 (total: 1)
-2025/09/16 23:22:12,bnjm2000,Added 1x Radial Engineering Trim-two model to event 60 (total: 1)
-2025/09/16 23:22:19,bnjm2000,Added 1x Interspace Industries PCBB3 model to event 60 (total: 1)
-2025/09/16 23:23:52,bnjm2000,Created event 61: GRAFF Diamonds High Jewelry Event @ ION Art Gallery via web interface
-2025/09/16 23:24:04,bnjm2000,Added 8x L-Acoustics 5XT model to event 61 (total: 8)
-2025/09/16 23:24:06,bnjm2000,Added 8x L-Acoustics ETR5 model to event 61 (total: 8)
-2025/09/16 23:24:10,bnjm2000,Added 1x L-Acoustics LA4X model to event 61 (total: 1)
-2025/09/16 23:24:16,bnjm2000,Added 1x Yamaha DM3 model to event 61 (total: 1)
-2025/09/17 00:01:27,bnjm2000,User bnjm2000 logged in via web interface
-2025/09/17 01:13:36,bnjm2000,User bnjm2000 logged in via web interface
-2025/09/17 01:14:31,bnjm2000,User bnjm2000 logged in via web interface
-2025/09/17 01:14:37,bnjm2000,Added 1x L-Acoustics 5XTW model to event 61 (total: 1)
-2025/09/17 01:14:53,bnjm2000,Removed L-Acoustics 5XTW model from event 61
-2025/09/17 01:17:07,bnjm2000,"Created event 62: Macallan ""The Aquarius SG Event"" @ Edition Hotel via web interface"
-2025/09/17 01:17:40,bnjm2000,"Created event 63: Hermes ""The Silky Way"" @ MBS via web interface"
-2025/09/17 01:18:13,bnjm2000,Created event 64: Audemars Piguet Regional Ladies Masterclass @ Raffles Hotel via web interface
 2025/09/17 01:18:37,bnjm2000,Created event 65: Audemars Piguet Regional Ladies Cocktail Party @ Raffles Hotel via web interface
 2025/09/17 01:19:11,bnjm2000,Created event 66: Wedding of Justin & Amanda @ Raffles Sentosa via web interface
 2025/09/17 01:19:38,bnjm2000,Created event 67: Wedding of Matthew Chia & Teresa @ Capella via web interface
@@ -998,3 +920,81 @@
 2025/11/21 14:59:47,bnjm2000,Assigned specific asset LA4X#01 to event 81
 2025/11/21 14:59:48,bnjm2000,Assigned specific asset LA4X#02 to event 81
 2025/11/21 14:59:48,bnjm2000,Assigned specific asset LA4X#03 to event 81
+2025/11/24 18:15:55,bnjm2000,User bnjm2000 logged in via web interface
+2025/11/24 18:17:23,bnjm2000,Updated location for asset PB#11 from 'Store' to 'Total Solutions'
+2025/11/24 18:17:23,bnjm2000,Maintenance logged for asset PB#11: Sent to Total Solutions
+2025/11/24 18:17:23,bnjm2000,Updated location for asset PB#14 from 'Store' to 'Total Solutions'
+2025/11/24 18:17:23,bnjm2000,Maintenance logged for asset PB#14: Sent to Total Solutions
+2025/11/24 18:17:23,bnjm2000,Updated location for asset PB#29 from '' to 'Total Solutions'
+2025/11/24 18:17:23,bnjm2000,Maintenance logged for asset PB#29: Sent to Total Solutions
+2025/11/24 18:17:23,bnjm2000,Updated location for asset PB#31 from '' to 'Total Solutions'
+2025/11/24 18:17:23,bnjm2000,Maintenance logged for asset PB#31: Sent to Total Solutions
+2025/11/24 18:17:23,bnjm2000,Updated location for asset PB#40 from '' to 'Total Solutions'
+2025/11/24 18:17:23,bnjm2000,Maintenance logged for asset PB#40: Sent to Total Solutions
+2025/11/24 18:17:39,bnjm2000,Returned all assets for department AX in event 82: 56 items
+2025/11/24 18:17:40,bnjm2000,Returned all assets for department LX in event 82: 10 items
+2025/11/24 18:18:00,bnjm2000,User bnjm2000 forced event 81 (Wedding of Eamon & Mia @ Capella) state from Overdue to Preparing
+2025/11/24 18:18:22,bnjm2000,Assigned specific asset LA4X#08 to event 81
+2025/11/24 18:18:39,bnjm2000,Assigned specific asset X12#03 to event 81
+2025/11/24 18:18:41,bnjm2000,Assigned specific asset X12#04 to event 81
+2025/11/24 18:19:05,bnjm2000,Assigned specific asset DIABLO#01 to event 81
+2025/11/24 18:19:08,bnjm2000,Assigned specific asset DIABLO#02 to event 81
+2025/11/24 18:19:10,bnjm2000,Assigned specific asset DIABLO#03 to event 81
+2025/11/24 18:19:13,bnjm2000,Assigned specific asset DIABLO#04 to event 81
+2025/11/24 18:19:37,bnjm2000,Assigned specific asset DIABLO#09 to event 81
+2025/11/24 18:19:37,bnjm2000,Assigned specific asset DIABLO#10 to event 81
+2025/11/24 18:19:38,bnjm2000,Assigned specific asset DIABLO#11 to event 81
+2025/11/24 18:19:49,bnjm2000,Assigned specific asset DIABLO#12 to event 81
+2025/11/24 18:20:01,bnjm2000,Removed Audio Tecnica AT8668 model from event 81
+2025/11/24 18:20:08,bnjm2000,Removed AKG C451B model from event 81
+2025/11/24 18:20:08,bnjm2000,Added 3x AKG C451B model to event 81 (total: 3)
+2025/11/24 18:20:12,bnjm2000,Removed L-Acoustics SB18 model from event 81
+2025/11/24 18:20:19,bnjm2000,Removed Sennheiser E904 model from event 81
+2025/11/24 18:20:20,bnjm2000,Added 3x Sennheiser E904 model to event 81 (total: 3)
+2025/11/24 18:20:24,bnjm2000,Removed Shure Beta 58A model from event 81
+2025/11/24 18:20:31,bnjm2000,User bnjm2000 removed forced state override for event 81 (Wedding of Eamon & Mia @ Capella): Preparing -> Overdue
+2025/11/24 18:20:34,bnjm2000,Returned all assets for department LX in event 81: 58 items
+2025/11/24 18:20:36,bnjm2000,Returned all assets for department AX in event 81: 36 items
+2025/11/24 18:20:43,bnjm2000,User bnjm2000 forced event 82 (Siong Leng Gala Dinner @ Andaz Hotel) state from Overdue to Closed
+2025/11/24 18:20:52,bnjm2000,Assigned specific asset 5XTW#07 to event 83
+2025/11/24 18:20:57,bnjm2000,Assigned specific asset 5XTW#08 to event 83
+2025/11/24 18:20:57,bnjm2000,Assigned specific asset 5XTW#09 to event 83
+2025/11/24 18:21:03,bnjm2000,Assigned specific asset 5XTW#10 to event 83
+2025/11/24 18:21:06,bnjm2000,Assigned specific asset 5XTW#11 to event 83
+2025/11/24 18:21:10,bnjm2000,Assigned specific asset 5XTW#12 to event 83
+2025/11/24 18:21:11,bnjm2000,Assigned specific asset 5XTW#13 to event 83
+2025/11/24 18:21:15,bnjm2000,Assigned specific asset 5XTW#14 to event 83
+2025/11/24 18:21:19,bnjm2000,Assigned specific asset 5XTW#15 to event 83
+2025/11/24 18:21:22,bnjm2000,Assigned specific asset 5XTW#16 to event 83
+2025/11/24 18:21:22,bnjm2000,Assigned specific asset 5XTW#17 to event 83
+2025/11/24 18:21:26,bnjm2000,Assigned specific asset 5XTW#18 to event 83
+2025/11/24 18:21:29,bnjm2000,Assigned specific asset 5XTW#19 to event 83
+2025/11/24 18:21:29,bnjm2000,Assigned specific asset 5XTW#20 to event 83
+2025/11/24 18:21:33,bnjm2000,Assigned specific asset ETR5W#07 to event 83
+2025/11/24 18:21:37,bnjm2000,Assigned specific asset ETR5W#08 to event 83
+2025/11/24 18:21:38,bnjm2000,Assigned specific asset ETR5W#09 to event 83
+2025/11/24 18:21:42,bnjm2000,Assigned specific asset ETR5W#12 to event 83
+2025/11/24 18:21:47,bnjm2000,Assigned specific asset ETR5W#10 to event 83
+2025/11/24 18:21:47,bnjm2000,Assigned specific asset ETR5W#11 to event 83
+2025/11/24 18:21:51,bnjm2000,Assigned specific asset ETR5W#13 to event 83
+2025/11/24 18:21:52,bnjm2000,Assigned specific asset ETR5W#14 to event 83
+2025/11/24 18:21:55,bnjm2000,Assigned specific asset ETR5W#15 to event 83
+2025/11/24 18:21:55,bnjm2000,Assigned specific asset ETR5W#16 to event 83
+2025/11/24 18:21:58,bnjm2000,Assigned specific asset ETR5W#17 to event 83
+2025/11/24 18:22:01,bnjm2000,Assigned specific asset ETR5W#18 to event 83
+2025/11/24 18:22:05,bnjm2000,Assigned specific asset ETR5W#19 to event 83
+2025/11/24 18:22:05,bnjm2000,Assigned specific asset ETR5W#20 to event 83
+2025/11/24 18:22:09,bnjm2000,Assigned specific asset LA2XI#01 to event 83
+2025/11/24 18:22:11,bnjm2000,Assigned specific asset LA2XI#02 to event 83
+2025/11/24 18:22:28,bnjm2000,Assigned specific asset ULXD4Q#01 to event 83
+2025/11/24 18:22:32,bnjm2000,Assigned specific asset ULXD4D#01 to event 83
+2025/11/24 18:22:35,bnjm2000,Assigned specific asset ULXD4D#02 to event 83
+2025/11/24 18:22:52,bnjm2000,Assigned specific asset DM3#01 to event 83
+2025/11/24 18:23:00,bnjm2000,Completely removed asset ULXD4D#02 from event 83
+2025/11/24 18:23:08,bnjm2000,Completely removed asset ULXD4D#01 from event 83
+2025/11/24 18:23:20,bnjm2000,Prepared asset ULXD4D#01 for event 83
+2025/11/24 18:23:21,bnjm2000,Prepared asset ULXD4D#02 for event 83
+2025/11/24 18:23:23,bnjm2000,Completely removed asset ULXD4D#01 from event 83
+2025/11/24 18:23:40,bnjm2000,Assigned specific asset QL1#02 to event 84
+2025/11/24 18:24:32,bnjm2000,Marked asset PB#52 as Out of Commission
+2025/11/24 18:24:32,bnjm2000,Maintenance logged for asset PB#52: Discovered screen haywire (Wedding of Eamon & Mia @ Capella)
