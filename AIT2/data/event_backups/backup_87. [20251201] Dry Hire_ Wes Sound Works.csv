@@ -1,0 +1,2 @@
+EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,Tag,ForceStateOverride
+87,Dry Hire: Wes Sound Works,20251201,20251201,[],"[""[MODEL]AX|Sennheiser|Base Station|1|1RU Spectera Base Station"", ""[MODEL]AX|Sennheiser|SEK(UHF)|10|Bidirectional bodypack"", ""[MODEL]AX|Sennheiser|DAD(UHF)|2|Bidirectional digital antenna"", ""[MODEL]AX|Shure|ULXD2|4|Handheld Microphone [L50]""]",[],Planning,[],[],dry hire,False
