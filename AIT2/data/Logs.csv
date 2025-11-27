@@ -1,23 +1,3 @@
-2025/09/21 22:20:33,bnjm2000,Assigned specific asset PB#59 to event 50
-2025/09/21 22:20:40,bnjm2000,Assigned specific asset PB#60 to event 50
-2025/09/21 22:20:42,bnjm2000,Assigned specific asset PB#61 to event 50
-2025/09/21 22:20:44,bnjm2000,Assigned specific asset PB#62 to event 50
-2025/09/21 22:20:46,bnjm2000,Assigned specific asset PB#63 to event 50
-2025/09/21 22:20:47,bnjm2000,Assigned specific asset PB#64 to event 50
-2025/09/21 22:20:53,bnjm2000,Returned all assets for department LX in event 50: 8 items
-2025/09/21 22:21:02,bnjm2000,User bnjm2000 removed forced state override for event 50 (Valentino Le Meta-Theatre Des Intimates @ ArtSpace): Preparing -> Closed
-2025/09/21 22:22:22,bnjm2000,Added 1x Interspace Industries PCBB model to event 50 (total: 1)
-2025/09/21 22:22:29,bnjm2000,User bnjm2000 forced event 50 (Valentino Le Meta-Theatre Des Intimates @ ArtSpace) state from Closed to Preparing
-2025/09/21 22:22:36,bnjm2000,Assigned specific asset PCBB#14 to event 50
-2025/09/21 22:22:41,bnjm2000,Returned all assets for department AX in event 50: 1 items
-2025/09/21 22:22:50,bnjm2000,Added 1x Apple IPAD model to event 50 (total: 1)
-2025/09/21 22:23:02,bnjm2000,User bnjm2000 removed forced state override for event 50 (Valentino Le Meta-Theatre Des Intimates @ ArtSpace): Preparing -> Preparing
-2025/09/21 22:23:40,bnjm2000,Removed Apple IPAD model from event 50
-2025/09/21 22:27:16,bnjm2000,Updated event 56: Graff mock-up @ Loyang Way via web interface
-2025/09/21 22:30:19,bnjm2000,Added 1x 32A 3-Phase DB Custom DB model to event 63 (total: 1)
-2025/09/21 22:30:19,bnjm2000,Added 1x 32A 3-Phase DB Custom DB model to event 63 (total: 2)
-2025/09/21 22:30:20,bnjm2000,Added 1x 63A 3-Phase DB Custom DB model to event 63 (total: 1)
-2025/09/21 22:31:45,bnjm2000,Added 5x EV EVOLVE 50 model to event 65 (total: 5)
 2025/09/21 22:31:46,bnjm2000,Added 1x EV EVOLVE 50 model to event 65 (total: 6)
 2025/09/21 22:31:56,bnjm2000,Added 1x Pioneer CDJ3000 model to event 65 (total: 1)
 2025/09/21 22:31:57,bnjm2000,Added 1x Pioneer CDJ3000 model to event 65 (total: 2)
@@ -998,3 +978,23 @@
 2025/11/27 17:03:48,bnjm2000,Added 2x Sennheiser DAD(UHF) model to event 87 (total: 2)
 2025/11/27 17:03:57,bnjm2000,Added 4x Shure ULXD2 model to event 87 (total: 4)
 2025/11/27 17:04:08,bnjm2000,Added 2x Shure ULXD4D model to event 87 (total: 2)
+2025/11/27 17:05:24,bnjm2000,Added 1x Hollyland Solidcom C1 (Pro) 8-Slot Battery Charging Case model to event 85 (total: 1)
+2025/11/27 17:05:25,bnjm2000,Added 1x Hollyland Solidcom C1 Pro Hub model to event 85 (total: 1)
+2025/11/27 17:05:28,bnjm2000,Added 8x Hollyland Solidcom C1 Pro Remote Headset model to event 85 (total: 8)
+2025/11/27 17:05:29,bnjm2000,Added 1x Hollyland Solidcom C1 Pro Wired Headset for Hub model to event 85 (total: 1)
+2025/11/27 17:05:30,bnjm2000,Added 16x Hollyland HL-BAT700 model to event 85 (total: 16)
+2025/11/27 17:05:39,bnjm2000,Added 16x Shure AD2 model to event 85 (total: 16)
+2025/11/27 17:05:43,bnjm2000,Added 16x Shure AD1 model to event 85 (total: 16)
+2025/11/27 17:05:49,bnjm2000,Added 3x Shure AD4Q model to event 85 (total: 3)
+2025/11/27 17:06:10,bnjm2000,Added 1x Sennheiser Base Station model to event 85 (total: 1)
+2025/11/27 17:06:13,bnjm2000,Added 2x Sennheiser DAD(UHF) model to event 85 (total: 2)
+2025/11/27 17:06:24,bnjm2000,Added 7x Sennheiser SEK(UHF) model to event 85 (total: 7)
+2025/11/27 17:06:35,bnjm2000,Added 2x L-Acoustics LA4X model to event 86 (total: 2)
+2025/11/27 17:06:48,bnjm2000,Added 3x L-Acoustics LA12X model to event 85 (total: 3)
+2025/11/27 17:06:52,bnjm2000,Added 2x L-Acoustics LA4X model to event 85 (total: 2)
+2025/11/27 17:07:04,bnjm2000,Assigned specific asset LA4X#07 to event 85
+2025/11/27 17:07:07,bnjm2000,Assigned specific asset LA4X#08 to event 85
+2025/11/27 17:07:09,bnjm2000,Assigned specific asset LA12X#01 to event 85
+2025/11/27 17:07:12,bnjm2000,Assigned specific asset LA12X#02 to event 85
+2025/11/27 17:07:15,bnjm2000,Assigned specific asset LA12X#03 to event 85
+2025/11/27 17:07:20,bnjm2000,Added 1x L-Acoustics P1 model to event 85 (total: 1)
