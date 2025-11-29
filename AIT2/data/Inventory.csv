@@ -31,7 +31,7 @@ CT3#01,DBX,CT3,11065310806,advanced cable tester,False,False,,AX,Store,
 4099#01,DPA,4099,E46719,Instrument Microphone,False,False,"2025/07/14	bnjm2000	Inventory check, cable is exposed",AX,Store,Store
 4099#02,DPA,4099,E46935,Instrument Microphone,False,True,"2025/07/14	bnjm2000	Inventory check, no sponge, cable exposed [Marked OOC]",AX,Store,
 4099#03,DPA,4099,E47127,Instrument Microphone,False,True,"2025/07/14	bnjm2000	Inventory check, cable is oxidised and disintegrating [Marked OOC]",AX,Store,
-4099#04,DPA,4099,E48465,Instrument Microphone,False,False,,AX,Store,Store
+4099#04,DPA,4099,E48465,Instrument Microphone,False,False,,AX,Store,Dry Hire: Wes Sound Works
 4099#05,DPA,4099,E48467,Instrument Microphone,False,False,,AX,Store,Store
 4099#06,DPA,4099,E51806,Instrument Microphone,False,False,"2025/07/14	bnjm2000	Inventory check, no sponge, cable ok [Marked OOC]|2025/09/10	bnjm2000	replaced sponge [Cleared OOC]",AX,Store,
 4099#07,DPA,4099,E51807,Instrument Microphone,False,False,"2025/07/14	bnjm2000	Inventory check, cable is exposed",AX,Store,
@@ -40,8 +40,8 @@ CT3#01,DBX,CT3,11065310806,advanced cable tester,False,False,,AX,Store,
 4099#10,DPA,4099,EC3606,Instrument Microphone,False,False,"2025/07/14	bnjm2000	inventory check, cable a little exposed",AX,Store,
 4099#11,DPA,4099,EC3615,Instrument Microphone,False,False,"2025/07/14	bnjm2000	inventory check, cable a little exposed",AX,Store,
 4099#12,DPA,4099,EC5708,Instrument Microphone,False,False,"2025/07/14	bnjm2000	Inventory check, cable is exposed, sponge is going|2025/09/10	bnjm2000	Sponge replaced [Cleared OOC]",AX,Store,
-4099#13,DPA,4099,EC5709,Instrument Microphone,False,False,"2025/07/14	bnjm2000	Inventory check, sponge spoilt, cable exposed [Marked OOC]|2025/09/10	bnjm2000	Sponge replaced [Cleared OOC]",AX,Store,Store
-4099#14,DPA,4099,EC5730,Instrument Microphone,False,False,,AX,Store,Store
+4099#13,DPA,4099,EC5709,Instrument Microphone,False,False,"2025/07/14	bnjm2000	Inventory check, sponge spoilt, cable exposed [Marked OOC]|2025/09/10	bnjm2000	Sponge replaced [Cleared OOC]",AX,Store,Dry Hire: Wes Sound Works
+4099#14,DPA,4099,EC5730,Instrument Microphone,False,False,,AX,Store,Dry Hire: Wes Sound Works
 4099#15,DPA,4099,ED0511,Instrument Microphone,False,False,"2025/07/14	bnjm2000	Inventory check, cable a little exposed",AX,Store,Store
 4099#16,DPA,4099,EG3923,Instrument Microphone,False,False,,AX,Store,Store
 4099#17,DPA,4099,EG3977,Instrument Microphone,False,False,,AX,Store,Store
@@ -53,12 +53,12 @@ CT3#01,DBX,CT3,11065310806,advanced cable tester,False,False,,AX,Store,
 4466#04,DPA,4466,C056003,"Omnidirectional Headset, beige",False,False,,AX,Store,
 4466#05,DPA,4466,C074966,"Omnidirectional Headset, beige",False,False,,AX,Store,
 4466#06,DPA,4466,C075149,"Omnidirectional Headset, beige",False,False,,AX,Store,
-4488#01,DPA,4488,M069287,"Directional Headset, beige",False,False,,AX,Store,Store
+4488#01,DPA,4488,M069287,"Directional Headset, beige",False,False,,AX,Store,Dry Hire: Wes Sound Works
 4488#02,DPA,4488,M068571,"Directional Headset, beige",False,False,,AX,Store,Store
 4488#03,DPA,4488,M069881,"Directional Headset, beige",False,False,,AX,Store,Loro Piana @ Jiak Kim House
 4488#04,DPA,4488,M069448,"Directional Headset, beige",False,False,,AX,Store,Loro Piana @ Jiak Kim House
 4488#05,DPA,4488,M071554,"Directional Headset, beige",False,False,,AX,Store,
-4488#06,DPA,4488,M068245,"Directional Headset, beige",False,False,,AX,Store,
+4488#06,DPA,4488,M068245,"Directional Headset, beige",False,False,,AX,Store,Dry Hire: Wes Sound Works
 4488#07,DPA,4488,M069285,"Directional Headset, beige",False,False,,AX,Store,
 4488#08,DPA,4488,M068376,"Directional Headset, beige",False,False,,AX,Store,Loro Piana @ Jiak Kim House
 4488#09,DPA,4488,M070024,"Directional Headset, beige",False,False,,AX,Store,
@@ -78,9 +78,9 @@ CT3#01,DBX,CT3,11065310806,advanced cable tester,False,False,,AX,Store,
 6061#11,DPA,6061,R317534,Omni Submini Lavalier Microphone (beige),False,False,,AX,Store,
 6061#12,DPA,6061,R317535,Omni Submini Lavalier Microphone (beige),False,False,,AX,Store,
 6061#13,DPA,6061,R283616,Omni Submini Lavalier Microphone (black),False,False,,AX,Store,Store
-6061#14,DPA,6061,R283623,Omni Submini Lavalier Microphone (black),False,False,,AX,Store,Store
-6061#15,DPA,6061,R283625,Omni Submini Lavalier Microphone (black),False,False,,AX,Store,Store
-6061#16,DPA,6061,R283632,Omni Submini Lavalier Microphone (black),False,False,,AX,Store,Store
+6061#14,DPA,6061,R283623,Omni Submini Lavalier Microphone (black),False,False,,AX,Store,Dry Hire: Wes Sound Works
+6061#15,DPA,6061,R283625,Omni Submini Lavalier Microphone (black),False,False,,AX,Store,Dry Hire: Wes Sound Works
+6061#16,DPA,6061,R283632,Omni Submini Lavalier Microphone (black),False,False,,AX,Store,Dry Hire: Wes Sound Works
 4061#01,DPA,4061,R238770,Omni Submini Lavalier Microphone,False,True,2024/11/19	bnjm2000	Sleeving disintegrated/tore after removing from instrument (SLMA @ Jia He Grand Restaurant) [Marked OOC],AX,Store,
 4061#02,DPA,4061,R238785,Omni Submini Lavalier Microphone,False,True,2025/08/15	bnjm2000	Sleeving disintegrated/tore after removing from instrument (Tampest & Tranquility @ Blackbox) [Marked OOC],AX,Store,Store
 DAD6001#01,DPA,DAD 6001,,Microdot to 3-Pin XLR Adapter,False,False,,AX,Store,Store
@@ -185,7 +185,7 @@ HLBatt#15,Hollyland,HL-BAT700,23061207192,Solidcom C1 (Pro) Battery,False,False,
 HLBatt#16,Hollyland,HL-BAT700,23061207991,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Store
 C1ProCharger#01,Hollyland,Solidcom C1 (Pro) 8-Slot Battery Charging Case,0223350C C001989,8-Slot Battery Charging Case,False,False,,AX,Store,Store
 C1ProHub#01,Hollyland,Solidcom C1 Pro Hub,0223350R C002984,,False,False,,AX,Store,Store
-C1ProRHS#01,Hollyland,Solidcom C1 Pro Remote Headset,222322OTXC00784E,,False,False,,AX,Store,Store
+C1ProRHS#01,Hollyland,Solidcom C1 Pro Remote Headset,222322OTXC00784E,,False,False,2025/11/28	bnjm2000	Discovered broken while in use (Doris Han's 90th Birthday Celebration @ St Regis),AX,Store,Store
 C1ProRHS#02,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC008783,,False,False,,AX,Store,Store
 C1ProRHS#03,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC007B64,,False,False,,AX,Store,Store
 C1ProRHS#04,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC0082CF,,False,False,,AX,Store,Store
@@ -197,7 +197,7 @@ C1ProWHS#01,Hollyland,Solidcom C1 Pro Wired Headset for Hub,2223170XX0D0036E,,Fa
 PCBB#01,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,Store
 PCBB#02,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,Store
 PCBB#03,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,
-PCBB#04,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,
+PCBB#04,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,Store
 PCBB#05,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,
 PCBB#06,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,
 PCBB#07,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,
@@ -206,7 +206,7 @@ PCBB#09,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,
 PCBB#10,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,
 PCBB#11,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,Store
 PCBB#12,Interspace Industries,PCBB,,PC Balance Box,False,False,,AX,Store,
-PCBB#13,Interspace Industries,PCBB,,PC Balance Box,False,False,,AX,Store,
+PCBB#13,Interspace Industries,PCBB,,PC Balance Box,False,False,,AX,Store,Store
 PCBB#14,Interspace Industries,PCBB,,PC Balance Box,False,False,,AX,Store,Store
 LSP1#01,Dsan,LSP-1,,Laptop Sound Port (Mono),False,False,,AX,Store,
 LSP1#02,Dsan,LSP-1,,Laptop Sound Port (Mono),False,False,,AX,Store,
@@ -409,13 +409,13 @@ LA4X#03,L-Acoustics,LA4X,1180051678,Amplified controller,False,False,,AX,Store,S
 LA4X#04,L-Acoustics,LA4X,1180053934,Amplified controller,False,False,,AX,Store,Store
 LA4X#05,L-Acoustics,LA4X,1180053927,Amplified controller,False,False,,AX,Store,Store
 LA4X#06,L-Acoustics,LA4X,1180051467,Amplified controller,False,False,,AX,Store,Store
-LA4X#07,L-Acoustics,LA4X,1180053692,Amplified controller,False,False,,AX,Store,Doris Han's 90th Birthday Celebration
-LA4X#08,L-Acoustics,LA4X,1180051680,Amplified controller,False,False,,AX,Store,Doris Han's 90th Birthday Celebration
+LA4X#07,L-Acoustics,LA4X,1180053692,Amplified controller,False,False,,AX,Store,Store
+LA4X#08,L-Acoustics,LA4X,1180051680,Amplified controller,False,False,,AX,Store,Store
 LA4X#09,L-Acoustics,LA4X,1180053978,Amplified controller,False,False,,AX,Store,Store
 LA4X#10,L-Acoustics,LA4X,1180053926,Amplified controller,False,False,,AX,Store,Store
-LA12X#01,L-Acoustics,LA12X,1140035138,Amplified controller,False,False,,AX,Store,Doris Han's 90th Birthday Celebration
-LA12X#02,L-Acoustics,LA12X,1140037808,Amplified controller,False,False,,AX,Store,Doris Han's 90th Birthday Celebration
-LA12X#03,L-Acoustics,LA12X,1140037839,Amplified controller,False,False,,AX,Store,Doris Han's 90th Birthday Celebration
+LA12X#01,L-Acoustics,LA12X,1140035138,Amplified controller,False,False,,AX,Store,Store
+LA12X#02,L-Acoustics,LA12X,1140037808,Amplified controller,False,False,,AX,Store,Store
+LA12X#03,L-Acoustics,LA12X,1140037839,Amplified controller,False,False,,AX,Store,Store
 LA12X#04,L-Acoustics,LA12X,1140037868,Amplified controller,False,False,,AX,Store,Store
 LA12X#05,L-Acoustics,LA12X,1140037870,Amplified controller,False,False,,AX,Store,Store
 LA12X#06,L-Acoustics,LA12X,1140037871,Amplified controller,False,False,,AX,Store,Store
@@ -648,9 +648,9 @@ AD2#02,Shure,AD2,2SD04117237,Handheld Microphone [G56],False,False,"2025/07/10	b
 AD2#03,Shure,AD2,2CC22174166,Handheld Microphone [G56],False,False,,AX,Store,Store
 AD2#04,Shure,AD2,2CC22174279,Handheld Microphone [G56],False,False,,AX,Store,Store
 AD2#05,Shure,AD2,2SD04117263,Handheld Microphone [G56],False,False,,AX,Store,Store
-AD2#06,Shure,AD2,2SD04117249,Handheld Microphone [G56],False,False,,AX,Store,Store
-AD2#07,Shure,AD2,2SD04117504,Handheld Microphone [G56],False,False,"2025/06/24	bnjm2000	Replaced display bezel $25 
-Service charge $60 [Location: E&E, Marked OOC]|2025/07/10	bnjm2000	Collected from E&E [Location: Store, Cleared OOC, Cleared Missing]",AX,Store,Store
+AD2#06,Shure,AD2,2SD04117249,Handheld Microphone [G56],False,False,2025/11/29	bnjm2000	Mic clip discovered to be broken,AX,Store,Store
+AD2#07,Shure,AD2,2SD04117504,Handheld Microphone [G56],False,True,"2025/06/24	bnjm2000	Replaced display bezel $25 
+Service charge $60 [Location: E&E, Marked OOC]|2025/07/10	bnjm2000	Collected from E&E [Location: Store, Cleared OOC, Cleared Missing]|2025/11/29	bnjm2000	Handheld died while in use. Cannot power on with rechargeable battery, shows empty bar when using brand new AA batteries (WSAudiology Town Hall @ 18 Tai Seng Street) [Marked OOC]",AX,Store,Store
 AD2#08,Shure,AD2,2CC22174281,Handheld Microphone [G56],False,False,,AX,Store,Store
 AD2#09,Shure,AD2,2CC22174116,Handheld Microphone [G56],False,False,,AX,Store,Store
 AD2#10,Shure,AD2,2CC22174130,Handheld Microphone [G56],False,False,,AX,Store,Store
@@ -667,7 +667,7 @@ AD3#04,Shure,AD3,3TH09460854,Plug-on Transmitter,False,False,,AX,Store,Store
 AD4D#01,Shure,AD4D,,Two-Channel Digital Wireless Receiver,False,False,,AX,Store,Store
 AD4Q#01,Shure,AD4Q,,Four-Channel Digital Wireless Receiver,False,False,,AX,Store,Store
 AD4Q#02,Shure,AD4Q,,Four-Channel Digital Wireless Receiver,False,False,,AX,Store,Store
-AD4Q#03,Shure,AD4Q,2CA25976600,Four-Channel Digital Wireless Receiver,False,True,"2025/11/16	bnjm2000	Discovered ""B"" antenna not working, even when connected directly to antenna [Marked OOC]",AX,Store,Store
+AD4Q#03,Shure,AD4Q,2CA25976600,Four-Channel Digital Wireless Receiver,False,True,"2025/11/20	bnjm2000	Sent to E&E for repairs [Location: E&E]|2025/11/16	bnjm2000	Discovered ""B"" antenna not working, even when connected directly to antenna (Wedding of Andrew Chua & Nicolette Ong @ TRCM) [Marked OOC]",AX,Store,E&E
 AD4Q#04,Shure,AD4Q,,Four-Channel Digital Wireless Receiver,False,False,,AX,Store,Store
 P9R#01,Shure,P9R,,Bodypack Receiver [P7],False,False,,AX,Store,
 P9R#02,Shure,P9R,,Bodypack Receiver [P7],False,False,,AX,Store,
@@ -681,11 +681,11 @@ P9T#02,Shure,P9T,,Wireless Transmitter,False,False,,AX,Store,Store
 P9T#03,Shure,P9T,,Wireless Transmitter,False,False,,AX,Store,Store
 P9T#04,Shure,P9T,,Wireless Transmitter,False,False,,AX,Store,Store
 P9T#05,Shure,P9T,3KD1452613-02,Wireless Transmitter,False,False,,AX,Store,Store
-P1#01,Behringher,P1,S1403222AZM,Wired IEM beltpack,False,False,,AX,Store,Store
+P1#01,Behringher,P1,S1403222AZM,Wired IEM beltpack,False,False,,AX,Store,Dry Hire: Wes Sound Works
 P1#02,Behringher,P1,S1403409AZM,Wired IEM beltpack,False,False,,AX,Store,Store
 P1#03,Behringher,P1,S1403575AZM,Wired IEM beltpack,False,False,,AX,Store,Store
 P1#04,Behringher,P1,S1403579AZM,Wired IEM beltpack,False,False,,AX,Store,
-P1#05,Behringher,P1,S1403649AZM,Wired IEM beltpack,False,False,,AX,Store,
+P1#05,Behringher,P1,S1403649AZM,Wired IEM beltpack,False,False,,AX,Store,Dry Hire: Wes Sound Works
 P1#06,Behringher,P1,S1506343AZM,Wired IEM beltpack,False,False,,AX,Store,Store
 P1#07,Behringher,P1,S1506350AZM,Wired IEM beltpack,False,False,,AX,Store,Store
 PA421A#01,Shure,PA421A,1112383 4407,4-Port Antenna Combiner,False,False,,AX,Store,
@@ -759,18 +759,18 @@ ULXD2#11,Shure,ULXD2,2RC0141727,Handheld Microphone [L50],False,False,"2025/06/2
 Replace rubber slot $5
 Service charge $60|2025/11/12	bnjm2000	Collected back from E&E, replaced battery contact pin and bumper [Location: Store, Cleared OOC, Cleared Missing]",AX,Store,Store
 ULXD2#12,Shure,ULXD2,2NK0771082-01,Handheld Microphone [L50],False,False,,AX,Store,Store
-ULXD2#13,Shure,ULXD2,3CC16144846,Handheld Microphone [G52],False,False,,AX,Store,Store
-ULXD2#14,Shure,ULXD2,3CC16144872,Handheld Microphone [G52],False,False,,AX,Store,Store
+ULXD2#13,Shure,ULXD2,3CC16144846,Handheld Microphone [G52],False,False,,AX,Store,Dry Hire: Wes Sound Works
+ULXD2#14,Shure,ULXD2,3CC16144872,Handheld Microphone [G52],False,False,,AX,Store,Dry Hire: Wes Sound Works
 ULXD2#15,Shure,ULXD2,3CC16145063,Handheld Microphone [G52],False,False,,AX,Store,Store
 ULXD2#16,Shure,ULXD2,3CC16145013,Handheld Microphone [G52],False,False,,AX,Store,Store
-ULXD2#17,Shure,ULXD2,3CC16145099,Handheld Microphone [G52],False,False,,AX,Store,Store
-ULXD2#18,Shure,ULXD2,3CC16145049,Handheld Microphone [G52],False,False,,AX,Store,Store
-ULXD4D#01,Shure,ULXD4D,,Dual Channel Receiver [L50],False,False,,AX,Store,Store
-ULXD4D#02,Shure,ULXD4D,,Dual Channel Receiver [L50],False,False,,AX,Store,Loro Piana @ Jiak Kim House
+ULXD2#17,Shure,ULXD2,3CC16145099,Handheld Microphone [G52],False,False,,AX,Store,Dry Hire: Wes Sound Works
+ULXD2#18,Shure,ULXD2,3CC16145049,Handheld Microphone [G52],False,False,,AX,Store,Dry Hire: Wes Sound Works
+ULXD4D#01,Shure,ULXD4D,,Dual Channel Receiver [L50],False,False,,AX,Store,Loro Piana @ Jiak Kim House
+ULXD4D#02,Shure,ULXD4D,,Dual Channel Receiver [L50],False,False,,AX,Store,Store
 ULXD4D#03,Shure,ULXD4D,,Dual Channel Receiver [L50],False,False,,AX,Store,Store
 ULXD4D#04,Shure,ULXD4D,,Dual Channel Receiver [L50],False,False,,AX,Store,Store
-ULXD4D#05,Shure,ULXD4D,3BH26487024,Dual Channel Receiver [G52],False,False,,AX,Store,
-ULXD4D#06,Shure,ULXD4D,3BH26487098,Dual Channel Receiver [G52],False,False,,AX,Store,
+ULXD4D#05,Shure,ULXD4D,3BH26487024,Dual Channel Receiver [G52],False,False,,AX,Store,Dry Hire: Wes Sound Works
+ULXD4D#06,Shure,ULXD4D,3BH26487098,Dual Channel Receiver [G52],False,False,,AX,Store,Dry Hire: Wes Sound Works
 ULXD4Q#01,Shure,ULXD4Q,,Quad Channel Receiver [L50],False,False,,AX,Store,Loro Piana @ Jiak Kim House
 ULXD4Q#02,Shure,ULXD4Q,3BF11462545,Quad Channel Receiver [G52],False,False,,AX,Store,Store
 ULXD4Q#03,Shure,ULXD4Q,3BF11462711,Quad Channel Receiver [G52],False,False,,AX,Store,Store
@@ -841,7 +841,7 @@ QL1#01,Yamaha,QL1,WTAUM01016,Digital Mixer,False,False,,AX,Store,Store
 QL1#02,Yamaha,QL1,EAXP01044,Digital Mixer,False,False,,AX,Store,Store
 QL5#01,Yamaha,QL5,,Digital Mixer,False,False,,AX,Store,Store
 RIO1608-D #01,Yamaha,Rio1608-d,,High Performance I/O Rack,False,False,2024/11/13	bnjm2000	2024/11/13 - Updated firmware version to v5.80,AX,Store,Store
-RIO1608-D2 #01,Yamaha,Rio1608-d2,EEYP01258,High Performance I/O Rack,False,False,2024/11/13	bnjm2000	2024/11/13 - Updated firmware version to v1.85,AX,Store,
+RIO1608-D2 #01,Yamaha,Rio1608-d2,EEYP01258,High Performance I/O Rack,False,False,2024/11/13	bnjm2000	2024/11/13 - Updated firmware version to v1.85,AX,Store,Dry Hire: Wes Sound Works
 RIO3224-D #01,Yamaha,Rio3224-d,,High Performance I/O Rack,False,False,2024/11/13	bnjm2000	2024/11/13 - Updated firmware to v5.80,AX,Store,Store
 RIO3224-D #02,Yamaha,Rio3224-d,,High Performance I/O Rack,False,False,2024/11/13	bnjm2000	2024/11/13 - Updated firmware to v5.80,AX,Store,Store
 RIO3224-D2 #01,Yamaha,Rio3224-d2,EEDX01062,High Performance I/O Rack,False,False,2024/11/13	bnjm2000	2024/11/13 - Updated firmware to v1.85,AX,Store,Store
@@ -958,7 +958,7 @@ PB#05,Astera,Pixel Brick,047-0312685,Batt LED Uplighters,False,False,2024/12/05	
 PB#06,Astera,Pixel Brick,047-0312648,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,Store
 PB#07,Astera,Pixel Brick,047-0312686,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,Store
 PB#08,Astera,Pixel Brick,047-0313538,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,Store
-PB#09,Astera,Pixel Brick,047-0311934,Batt LED Uplighters,False,True,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/08/12	bnjm2000	Screen messed up after charging [Marked OOC]|2025/08/18	bnjm2000	Screen worked again when sending into Total Solutions [Cleared OOC]|2025/11/02	admin	Screen discovered not working when charging [Marked OOC],LX,Store,Store
+PB#09,Astera,Pixel Brick,047-0311934,Batt LED Uplighters,False,True,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/08/12	bnjm2000	Screen messed up after charging [Marked OOC]|2025/08/18	bnjm2000	Screen worked again when sending into Total Solutions [Cleared OOC]|2025/11/02	admin	Screen discovered not working when charging [Marked OOC]|2025/11/20	bnjm2000	Sent to Total Solutions [Location: Total Solutions],LX,Store,Total Solutions
 PB#10,Astera,Pixel Brick,047-0312696,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,Store
 PB#11,Astera,Pixel Brick,047-0313634,Batt LED Uplighters,False,True,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2024/11/08	bnjm2000	LED screen cannot on|2025/11/01	admin	Screen discovered messed up when charging [Marked OOC]|2025/11/20	bnjm2000	Sent to Total Solutions [Location: Total Solutions],LX,Store,Total Solutions
 PB#12,Astera,Pixel Brick,047-0312725,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,Store
@@ -1177,19 +1177,19 @@ MASTER4KRX#02,Accsoon,Cineview Master 4K RX,WIT07-1438-BE0B,Wireless SDI/HDMI Re
 MASTER4KRX#03,Accsoon,Cineview Master 4K RX,WIT07-1377-BE0B,Wireless SDI/HDMI Receiver,False,False,,VX,Store,
 PERFECTCUE#01,DSAN,PerfectCue Mini,24-24582,Professional Wireless Clicker,False,False,,VX,Store,
 CLICKER#01,DSAN,PerfectCue Mini,,Professional Wireless Clicker,False,False,,VX,Store,
-SBS#01,Sennheiser,Base Station,1205000475,1RU Spectera Base Station,False,False,,AX,Store,Store
-SEK#01,Sennheiser,SEK(UHF),1165001727,Bidirectional bodypack,False,False,,AX,Store,Store
-SEK#02,Sennheiser,SEK(UHF),1165001729,Bidirectional bodypack,False,False,,AX,Store,Store
-SEK#03,Sennheiser,SEK(UHF),1195001949,Bidirectional bodypack,False,False,,AX,Store,Store
-SEK#04,Sennheiser,SEK(UHF),1195001964,Bidirectional bodypack,False,False,,AX,Store,Store
-SEK#05,Sennheiser,SEK(UHF),1195001965,Bidirectional bodypack,False,False,,AX,Store,Store
-SEK#06,Sennheiser,SEK(UHF),1195001966,Bidirectional bodypack,False,False,,AX,Store,Store
-SEK#07,Sennheiser,SEK(UHF),1195001968,Bidirectional bodypack,False,False,,AX,Store,Store
-SEK#08,Sennheiser,SEK(UHF),1195001986,Bidirectional bodypack,False,False,,AX,Store,Store
-SEK#09,Sennheiser,SEK(UHF),1195002041,Bidirectional bodypack,False,False,,AX,Store,Store
-SEK#10,Sennheiser,SEK(UHF),1195002042,Bidirectional bodypack,False,False,,AX,Store,Store
-DAD#01,Sennheiser,DAD(UHF),1185001690,Bidirectional digital antenna,False,False,,AX,Store,Store
-DAD#02,Sennheiser,DAD(UHF),1185001691,Bidirectional digital antenna,False,False,,AX,Store,Store
+SBS#01,Sennheiser,Base Station,1205000475,1RU Spectera Base Station,False,False,,AX,Store,Dry Hire: Wes Sound Works
+SEK#01,Sennheiser,SEK(UHF),1165001727,Bidirectional bodypack,False,False,,AX,Store,Dry Hire: Wes Sound Works
+SEK#02,Sennheiser,SEK(UHF),1165001729,Bidirectional bodypack,False,False,,AX,Store,Dry Hire: Wes Sound Works
+SEK#03,Sennheiser,SEK(UHF),1195001949,Bidirectional bodypack,False,False,,AX,Store,Dry Hire: Wes Sound Works
+SEK#04,Sennheiser,SEK(UHF),1195001964,Bidirectional bodypack,False,False,,AX,Store,Dry Hire: Wes Sound Works
+SEK#05,Sennheiser,SEK(UHF),1195001965,Bidirectional bodypack,False,False,,AX,Store,Dry Hire: Wes Sound Works
+SEK#06,Sennheiser,SEK(UHF),1195001966,Bidirectional bodypack,False,False,,AX,Store,Dry Hire: Wes Sound Works
+SEK#07,Sennheiser,SEK(UHF),1195001968,Bidirectional bodypack,False,False,,AX,Store,Dry Hire: Wes Sound Works
+SEK#08,Sennheiser,SEK(UHF),1195001986,Bidirectional bodypack,False,False,,AX,Store,Dry Hire: Wes Sound Works
+SEK#09,Sennheiser,SEK(UHF),1195002041,Bidirectional bodypack,False,False,,AX,Store,Dry Hire: Wes Sound Works
+SEK#10,Sennheiser,SEK(UHF),1195002042,Bidirectional bodypack,False,False,,AX,Store,Dry Hire: Wes Sound Works
+DAD#01,Sennheiser,DAD(UHF),1185001690,Bidirectional digital antenna,False,False,,AX,Store,Dry Hire: Wes Sound Works
+DAD#02,Sennheiser,DAD(UHF),1185001691,Bidirectional digital antenna,False,False,,AX,Store,Dry Hire: Wes Sound Works
 L6000#01,Sennheiser,L6000,1134005936,Rackmount Charger,False,False,,AX,Store,
 LM6070#01,Sennheiser,LM6070,,Charging module for the L 6000 rack-mount charger,False,False,,AX,Store,
 LM6070#02,Sennheiser,LM6070,,Charging module for the L 6000 rack-mount charger,False,False,,AX,Store,
