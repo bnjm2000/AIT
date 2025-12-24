@@ -10567,7 +10567,11 @@ function showNotification(type, message) {
 function createModelPreparationSection(eventId, brand, model, description, requiredQty, availableAssets, assignedAssets) {
     const assignedCount = assignedAssets.length;
     const progressPercent = Math.round((assignedCount / requiredQty) * 100);
-    const modelId = `model-${brand.replace(/\s+/g, '').replace(/[^a-zA-Z0-9]/g, '')}-${model.replace(/\s+/g, '').replace(/[^a-zA-Z0-9]/g, '')}-${eventId}`;
+    const safeBrand = (brand || '').replace(/\s+/g, '').replace(/[^a-zA-Z0-9]/g, '');
+    const safeModel = (model || '').replace(/\s+/g, '').replace(/[^a-zA-Z0-9]/g, '');
+    const safeDesc  = (description || '').replace(/\s+/g, '').replace(/[^a-zA-Z0-9]/g, '');
+
+    const modelId = `model-${safeBrand}-${safeModel}-${safeDesc}-${eventId}`;
     
     let section = `
         <div class="model-prep-section" style="border: 1px solid #e9ecef; border-radius: 8px; padding: 0; margin-bottom: 15px;">
