@@ -105,7 +105,7 @@ def get_available_assets_for_event(event_id):
                 continue
             if getattr(a, 'is_missing', False) or getattr(a, 'is_ooc', False):
                 continue
-            k3 = (a.department_code, a.brand, a.model_number)
+            k3 = (a.department_code, a.brand, a.model_number, (getattr(a, 'description', '') or ''))
             assets_by_k3[k3].append(a_id)
             # shape it to what your frontend expects
             asset_info[a_id] = {
@@ -114,7 +114,7 @@ def get_available_assets_for_event(event_id):
                 'model': a.model_number,
                 'description': getattr(a, 'description', '') or '',
                 'department': a.department_code,
-                'serial': getattr(a, 'serial', '') or '',
+                'serial': (getattr(a, 'serial_number', None) or getattr(a, 'serial', None) or ''),
                 # add any other fields your UI shows here if needed
             }
 
@@ -148,7 +148,8 @@ def get_available_assets_for_event(event_id):
                             qty = int(parts[3])
                         except Exception:
                             qty = 0
-                        other_model_qty_by_k3[(dept, brand, model)] += qty
+                        desc = parts[4] if len(parts) > 4 else ''
+                        other_model_qty_by_k3[(dept, brand, model, desc)] += qty
                     continue
 
                 # specific asset id
@@ -162,7 +163,7 @@ def get_available_assets_for_event(event_id):
                 a = data_manager.inventory.get(it)
                 if not a or getattr(a, 'is_missing', False) or getattr(a, 'is_ooc', False):
                     continue
-                k3 = (a.department_code, a.brand, a.model_number)
+                k3 = (a.department_code, a.brand, a.model_number, (getattr(a, 'description', '') or ''))
                 other_specific_by_k3[k3] += 1
 
             # accumulate totals
@@ -377,6 +378,7 @@ def update_event_state(event):
                             brand = parts[1]
                             model = parts[2]
                             required_quantity = int(parts[3])
+                            description = parts[4] if len(parts) > 4 else ''
                       
                             total_model_requirements += required_quantity
                             
@@ -389,10 +391,11 @@ def update_event_state(event):
                             
                             for specific_asset_id in all_assigned_assets:
                                 specific_asset = data_manager.inventory.get(specific_asset_id)
-                                if (specific_asset and 
-                                    specific_asset.brand == brand and 
+                                if (specific_asset and
+                                    specific_asset.brand == brand and
                                     specific_asset.model_number == model and
-                                    specific_asset.department_code == dept):
+                                    specific_asset.department_code == dept and
+                                    (getattr(specific_asset, 'description', '') or '') == (description or '')):
                                     
                                     assigned_to_this_model += 1
                                     if specific_asset_id in event.returned_items:
@@ -728,10 +731,12 @@ def get_events():
                             # Find assigned specific assets for this model
                             for specific_asset_id in event.actually_prepared:
                                 specific_asset = data_manager.inventory.get(specific_asset_id)
-                                if (specific_asset and 
-                                    specific_asset.brand == brand and 
+                                if (specific_asset and
+                                    specific_asset.brand == brand and
                                     specific_asset.model_number == model and
-                                    specific_asset.department_code == dept):
+                                    specific_asset.department_code == dept and
+                                    (getattr(specific_asset, 'description', '') or '') == (description or '')):
+
                                     
                                     asset_status = 'returned' if specific_asset_id in event.returned_items else 'prepared'
                                     
@@ -1018,7 +1023,9 @@ def get_event(event_id):
                                 
                                 if (specific_asset.brand == brand and
                                     specific_asset.model_number == model and
-                                    specific_asset.department_code == dept):
+                                    specific_asset.department_code == dept and
+                                    (getattr(specific_asset, 'description', '') or '') == (description or '')):
+
 
                                     # Check if this asset is returned
                                     asset_status = 'returned' if specific_asset_id in event.returned_items else 'prepared'
@@ -1143,21 +1150,22 @@ def get_event_model_availability(event_id):
             physical_by4[k4] += 1
             physical_by3[k3] += 1
 
-        # ---------- 2) USED IN THIS EVENT (MODEL LINES), desc-agnostic ----------
-        used_here_by3 = defaultdict(int)
+        # ---------- 2) USED IN THIS EVENT (MODEL LINES), description-aware ----------
+        used_here_by4 = defaultdict(int)
         for it in getattr(event, 'prepared_items', []) or []:
             if isinstance(it, str) and it.startswith('[MODEL]'):
                 parts = it[7:].split('|')  # dept|brand|model|qty|desc?
                 if len(parts) >= 4:
                     dept = parts[0]; brand = parts[1]; model = parts[2]
+                    desc = parts[4] if len(parts) > 4 else ''
                     try:
                         qty = int(parts[3])
                     except Exception:
                         qty = 0
-                    used_here_by3[(dept, brand, model)] += qty
+                    used_here_by4[(dept, brand, model, desc)] += qty
 
-        # ---------- 3) OVERLAPPING DEMAND (OTHER EVENTS), desc-agnostic ----------
-        overlap_by3 = defaultdict(int)
+        # ---------- 3) OVERLAPPING DEMAND (OTHER EVENTS), description-aware ----------
+        overlap_by4 = defaultdict(int)
         my_s, my_e = getattr(event, 'start_date', ''), getattr(event, 'end_date', '')
 
         for other in data_manager.events.values():
@@ -1166,62 +1174,53 @@ def get_event_model_availability(event_id):
             if not _ranges_overlap(my_s, my_e, getattr(other, 'start_date', ''), getattr(other, 'end_date', '')):
                 continue
 
-            # Sum MODEL qty across descriptions
-            other_models_by3 = defaultdict(int)
-            # Count specific assets (not returned)
-            other_specific_by3 = defaultdict(int)
+            other_models_by4 = defaultdict(int)
+            other_specific_by4 = defaultdict(int)
             returned_other = set(getattr(other, 'returned_items', []) or [])
 
             for it in getattr(other, 'prepared_items', []) or []:
                 if isinstance(it, str) and it.startswith('[MODEL]'):
-                    p = it[7:].split('|')  # dept|brand|model|qty|desc?
+                    p = it[7:].split('|')
                     if len(p) >= 4:
-                        k3 = (p[0], p[1], p[2])
+                        dept = p[0]; brand = p[1]; model = p[2]
+                        desc = p[4] if len(p) > 4 else ''
+                        k4 = (dept, brand, model, desc)
                         try:
-                            other_models_by3[k3] += int(p[3])
+                            other_models_by4[k4] += int(p[3])
                         except Exception:
                             pass
                     continue
 
-                # Specific asset IDs (exclude virtual markers)
                 if isinstance(it, str) and not (it.startswith('[MODEL]') or it.startswith('[LOAN]') or it.startswith('[MISC]')):
                     if it in returned_other:
                         continue
                     a = data_manager.inventory.get(it)
                     if not a or getattr(a, 'is_missing', False) or getattr(a, 'is_ooc', False):
                         continue
-                    k3 = (a.department_code, a.brand, a.model_number)
-                    other_specific_by3[k3] += 1
+                    k4 = (a.department_code, a.brand, a.model_number, (getattr(a, 'description', '') or ''))
+                    other_specific_by4[k4] += 1
 
-            # For each key3 present, overlap demand += max(models_sum, specific_count)
-            for k3 in set(other_models_by3.keys()) | set(other_specific_by3.keys()):
-                overlap_by3[k3] += max(other_models_by3.get(k3, 0), other_specific_by3.get(k3, 0))
+            for k4 in set(other_models_by4.keys()) | set(other_specific_by4.keys()):
+                overlap_by4[k4] += max(other_models_by4.get(k4, 0), other_specific_by4.get(k4, 0))
 
         # ---------- 4) Build response per description row ----------
         result = []
-        # Iterate every description variant we physically have; that’s what UI lists/searches
         for k4, physical_desc in physical_by4.items():
             dept, brand, model, desc = k4
-            k3 = (dept, brand, model)
-            physical_global = physical_by3.get(k3, 0)
-            used_here = used_here_by3.get(k3, 0)
-            overlap = overlap_by3.get(k3, 0)
+            used_here = used_here_by4.get(k4, 0)
+            overlap = overlap_by4.get(k4, 0)
 
-            global_adjusted = physical_global - used_here - overlap
-            # show per-desc availability but never above that desc’s own physical
-            available_for_desc = max(0, min(global_adjusted, physical_desc))
+            available_for_desc = max(0, physical_desc - used_here - overlap)
 
             result.append({
                 'department': dept,
                 'brand': brand,
                 'model': model,
                 'description': desc,
-                'physical': physical_desc,             # physical for THIS description
-                'physicalGlobal': physical_global,     # physical across all desc
-                'usedInThisEvent': used_here,          # desc-agnostic
-                'overlappingDemand': overlap,          # desc-agnostic
-                'available': available_for_desc,       # final display value for THIS description
-                'adjustedGlobal': max(global_adjusted, 0)
+                'physical': physical_desc,
+                'usedInThisEvent': used_here,
+                'overlappingDemand': overlap,
+                'available': available_for_desc
             })
 
         return jsonify({'success': True, 'data': result})
@@ -1616,32 +1615,38 @@ def manage_event_models(event_id):
 
             # --- server-side cap: total assigned for this brand/model/dept cannot exceed physical inventory ---
             # Count how many you physically own (ignore deployments), excluding Missing/OOC
+            # --- server-side cap: cap PER DESCRIPTION (dept+brand+model+description) ---
+            desc_key = (full_description or '')
+
             inv_count = sum(
                 1 for a in data_manager.inventory.values()
                 if (a.brand == brand and a.model_number == model and a.department_code == department
+                    and (getattr(a, 'description', '') or '') == desc_key
                     and not a.is_missing and not a.is_ooc)
             )
 
-            # Current total of this brand/model/dept already requested in this event (across all descriptions)
             current_total = 0
             for item in event.prepared_items:
                 if item.startswith('[MODEL]'):
                     parts = item[7:].split('|')
-                    if len(parts) >= 4 and parts[0] == department and parts[1] == brand and parts[2] == model:
-                        try:
-                            current_total += int(parts[3])
-                        except Exception:
-                            pass
+                    if len(parts) >= 4:
+                        item_dept = parts[0]; item_brand = parts[1]; item_model = parts[2]
+                        item_desc = parts[4] if len(parts) > 4 else ''
+                        if (item_dept == department and item_brand == brand and item_model == model and (item_desc or '') == desc_key):
+                            try:
+                                current_total += int(parts[3])
+                            except Exception:
+                                pass
 
             requested_total = current_total + quantity
             if requested_total > inv_count:
                 return jsonify({
                     'error': (
-                        f"Quantity exceeds inventory: you have {inv_count} units of {brand} {model} "
-                        f"in {department}. Already assigned here: {current_total}. Requested additional: {quantity}."
+                        f"Quantity exceeds inventory for this type: you have {inv_count} units of "
+                        f"{brand} {model} [{desc_key}] in {department}. "
+                        f"Already assigned here: {current_total}. Requested additional: {quantity}."
                     )
                 }), 400
-
 
             logger.info(f"=== ADD MODEL REQUEST ===")
             logger.info(f"Brand: '{brand}', Model: '{model}', Dept: '{department}'")
@@ -2215,18 +2220,20 @@ def assign_specific_asset_to_model(event_id):
                         asset_id not in other_event.returned_items):
                         return jsonify({'error': f'Asset is already assigned to event {other_event_id}: {other_event.name}'}), 400
 
-            # Check if asset matches any model requirement
+            # Check if asset matches any MODEL line in prepared_items (dept+brand+model+description)
             fulfills_model_requirement = False
-            if hasattr(event, 'model_requirements'):
-                for req in event.model_requirements:
-                    if req.get('fulfilled', 0) < req.get('quantity', 0):
-                        req_dept = req.get('department', '').strip()
-                        req_brand = req.get('brand', '').strip()
-                        req_model = req.get('model', '').strip()
-                        
-                        if (req_dept == asset.department_code and
-                            req_brand.lower() == asset.brand.lower() and
-                                req_model.lower() == asset.model_number.lower()):
+            for prepared_item in getattr(event, 'prepared_items', []) or []:
+                if isinstance(prepared_item, str) and prepared_item.startswith('[MODEL]'):
+                    parts = prepared_item[7:].split('|')
+                    if len(parts) >= 4:
+                        req_dept = parts[0]
+                        req_brand = parts[1]
+                        req_model = parts[2]
+                        req_desc = parts[4] if len(parts) > 4 else ''
+                        if (asset.department_code == req_dept and
+                            asset.brand == req_brand and
+                            asset.model_number == req_model and
+                            (getattr(asset, 'description', '') or '') == (req_desc or '')):
                             fulfills_model_requirement = True
                             break
 
