@@ -820,8 +820,8 @@ DM3#01,Yamaha,DM3,BGDK01029,Digital Mixer,False,False,2024/09/04	bnjm2000	Report
 DM3#02,Yamaha,DM3,BGDI01076,Digital Mixer,False,False,,AX,Store,Store
 DM7#01,Yamaha,DM7,21EGEI01036,Digital Mixer,False,False,,AX,Store,Store
 DXR8#01,Yamaha,DXR8,EESM01180,"Active80"" Speaker",False,False,,AX,Store,
-DXR10#01,Yamaha,DXR10,,"Active 10"" Speaker",False,False,,AX,Store,Store
-DXR10#02,Yamaha,DXR10,,"Active 10"" Speaker",False,False,,AX,Store,Store
+DXR10#01,Yamaha,DXR10,,"Active 10"" Speaker",False,False,,AX,Store,NS Temple
+DXR10#02,Yamaha,DXR10,,"Active 10"" Speaker",False,False,,AX,Store,NS Temple
 DXR10#03,Yamaha,DXR10,,"Active 10"" Speaker",False,False,,AX,Store,Store
 DXR10#04,Yamaha,DXR10,,"Active 10"" Speaker",False,False,,AX,Store,
 DXR12#01,Yamaha,DXR12,EETK01327,"Active 12"" Speaker",False,False,"2023/07/26	bnjm2000	repaired|2023/08/05	bnjm2000	dropped from ledge, distorting (Siong Leng Musical Association @ Thian Hock Keng Temple) [Marked OOC]|2024/09/12	bnjm2000	sent to Yamaha for servicing [Location: Yamaha Service Center]|2024/10/22	bnjm2000	Replace fan - $18
@@ -831,7 +831,7 @@ DXR12#03,Yamaha,DXR12,,"Active 12"" Speaker",False,False,,AX,Store,
 DXR12#04,Yamaha,DXR12,,"Active 12"" Speaker",False,False,,AX,Store,
 DXR12#05,Yamaha,DXR12,,"Active 12"" Speaker",False,False,,AX,Store,
 DXR12#06,Yamaha,DXR12,,"Active 12"" Speaker",False,False,,AX,Store,
-MG06#01,Yamaha,MG06,,6-Channel Analog Mixing Console with FX,False,False,,AX,Store,
+MG06#01,Yamaha,MG06,,6-Channel Analog Mixing Console with FX,False,False,,AX,Store,NS Temple
 MG12XU#01,Yamaha,MG12XU,,12-Channel Analog Mixing Console with FX,False,False,,AX,Store,Store
 MG12XU#02,Yamaha,MG12XU,,12-Channel Analog Mixing Console with FX,False,False,,AX,Store,
 MG10#01,Yamaha,MG10,ECWH01433,10-Channel Analogue Mixer,False,False,,AX,Store,Store
@@ -1135,8 +1135,12 @@ DN200#01,Klark Teknik,DN200,,,False,False,,AX,Store,
 DN200#02,Klark Teknik,DN200,,,False,False,,AX,Store,
 DN200#03,Klark Teknik,DN200,,,False,False,,AX,Store,
 PULSE2#01,Analogue Way,Pulse 2,,Video Switcher,False,False,,VX,Store,
-75INCH#01,Samsung,,,,False,False,,VX,Store,
-75INCH#02,Samsung,,,,False,False,,VX,Store,
+40INCH#01,Sharp,,,"40"" TV",False,False,,VX,Store,NS Temple
+40INCH#02,Sharp,,,"40"" TV",False,False,,VX,Store,NS Temple
+46INCH#01,Sharp,,,"46"" TV",False,False,,VX,Store,
+46INCH#02,Sharp,,,"46"" TV",False,False,,VX,Store,
+75INCH#01,Samsung,,,"75"" Smart TV",False,False,,VX,Store,
+75INCH#02,Samsung,,,"75"" Smart TV",False,False,,VX,Store,
 QM75C#01,Samsung,LH75QMCEBGCXXS,0R3KHNIXA00066,"75"" Crystal UHD Signage",False,False,,VX,Store,Store
 QM75C#02,Samsung,LH75QMCEBGCXXS,0R3KHNIXA00086,"75"" Crystal UHD Signage",False,False,,VX,Store,Store
 QM75C#03,Samsung,LH75QMCEBGCXXS,0R3KHNIXA00093,"75"" Crystal UHD Signage",False,False,,VX,Store,Store

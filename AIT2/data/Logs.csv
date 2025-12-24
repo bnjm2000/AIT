@@ -1,12 +1,3 @@
-2025/11/13 13:48:41,bnjm2000,Added 1x L-Acoustics P1 model to event 80 (total: 1)
-2025/11/13 13:48:50,bnjm2000,Added 6x L-Acoustics LA4X model to event 80 (total: 6)
-2025/11/13 13:48:56,bnjm2000,Added 1x Sennheiser ME36 model to event 80 (total: 1)
-2025/11/13 13:48:59,bnjm2000,Added 1x Shure AD3 model to event 80 (total: 1)
-2025/11/13 13:49:00,bnjm2000,Added 1x Shure AD3 model to event 80 (total: 2)
-2025/11/13 13:49:11,bnjm2000,Assigned specific asset LA4X#01 to event 80
-2025/11/13 13:49:13,bnjm2000,Assigned specific asset LA4X#02 to event 80
-2025/11/13 13:49:14,bnjm2000,Assigned specific asset LA4X#03 to event 80
-2025/11/13 13:49:19,bnjm2000,Assigned specific asset LA4X#10 to event 80
 2025/11/13 13:49:22,bnjm2000,Assigned specific asset LA4X#09 to event 80
 2025/11/13 13:49:38,bnjm2000,Assigned specific asset DIABLO#01 to event 80
 2025/11/13 13:49:40,bnjm2000,Assigned specific asset DIABLO#02 to event 80
@@ -998,3 +989,12 @@
 2025/12/22 13:10:13,bnjm2000,Updated location for asset CDJ2000NXS2#01 from 'Avery Events' to 'Store'
 2025/12/22 13:10:13,bnjm2000,Removed Out of Commission status from asset CDJ2000NXS2#01
 2025/12/22 13:10:13,bnjm2000,Maintenance logged for asset CDJ2000NXS2#01: Equipment returned repaired - screen changed. ($320)
+2025/12/24 13:56:00,bnjm2000,User bnjm2000 logged in via web interface
+2025/12/24 13:56:26,bnjm2000,Created event 93: NS Temple via web interface
+2025/12/24 13:57:48,bnjm2000,Added 1x Yamaha MG06 model to event 93 (total: 1)
+2025/12/24 13:57:53,bnjm2000,Added 2x Yamaha DXR10 model to event 93 (total: 2)
+2025/12/24 14:00:07,bnjm2000,Assigned specific asset DXR10#01 to event 93
+2025/12/24 14:00:09,bnjm2000,Assigned specific asset DXR10#02 to event 93
+2025/12/24 14:00:11,bnjm2000,Assigned specific asset MG06#01 to event 93
+2025/12/24 14:00:19,bnjm2000,Assigned specific asset 40INCH#01 to event 93
+2025/12/24 14:00:33,bnjm2000,Assigned specific asset 40INCH#02 to event 93
