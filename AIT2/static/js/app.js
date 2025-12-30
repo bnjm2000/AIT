@@ -8991,8 +8991,17 @@ async function viewMaintenanceLog(assetId) {
       return;
     }
 
-    // Create and show the maintenance log modal
-    showMaintenanceLogModal(asset);
+    // Create and show the maintenance log modal (global-safe)
+    const fn =
+      (typeof window.showMaintenanceLogModal === 'function') ? window.showMaintenanceLogModal :
+      (typeof showMaintenanceLogModal === 'function') ? showMaintenanceLogModal :
+      null;
+
+    if (fn) {
+      fn(asset);
+    } else {
+      showNotification('error', 'Maintenance log modal UI is not available. Please hard refresh.');
+    }
 
   } catch (error) {
     console.error('Error viewing maintenance log:', error);
@@ -9301,6 +9310,10 @@ function showMaintenanceLogModal(asset) {
   }, 100);
 }
 
+if (typeof window !== 'undefined') {
+  window.showMaintenanceLogModal = showMaintenanceLogModal;
+}
+
 //WHAT IS LOVE, BABY DONT HURT ME, DONT HURT ME NO MOREEE
 window.viewMaintenanceLog = viewMaintenanceLog;
 window.openMaintenanceModal = openMaintenanceModal;
@@ -9327,47 +9340,6 @@ function addNewLogEntryFromModal(assetId) {
   
   // Open the maintenance modal with the asset pre-selected
   openMaintenanceModalForAsset(assetId);
-}
-
-async function refreshMaintenanceLogModal(assetId) {
-  try {
-    // Always pull fresh server state so OOC/Missing changes show immediately
-    const assetsResponse = await apiCall('/api/assets');
-    if (assetsResponse && assetsResponse.success) {
-      assets = assetsResponse.data || [];
-      // Keep any code that reads window.assets in sync too
-      window.assets = assets;
-
-      const updatedAsset = assets.find(a => a.id === assetId);
-      if (updatedAsset) {
-        // Prefer the window-exported function, but fallback to local if present
-        const modalFn =
-          (typeof window.showMaintenanceLogModal === 'function')
-            ? window.showMaintenanceLogModal
-            : (typeof showMaintenanceLogModal === 'function' ? showMaintenanceLogModal : null);
-
-        if (modalFn) {
-          modalFn(updatedAsset);
-          return true;
-        }
-      }
-    }
-  } catch (err) {
-    console.warn('refreshMaintenanceLogModal failed:', err);
-  }
-
-  // Fallback: don’t break the save/delete flow if the modal can’t be redrawn
-  try {
-    const closeFn =
-      (typeof window.closeMaintenanceLogModal === 'function')
-        ? window.closeMaintenanceLogModal
-        : (typeof closeMaintenanceLogModal === 'function' ? closeMaintenanceLogModal : null);
-
-    if (closeFn) closeFn();
-  } catch (_) {}
-
-  showNotification('info', 'Update saved. Please reopen the maintenance log to refresh.');
-  return false;
 }
 
 async function deleteMaintenanceLog(assetId, logIndex, logId) {
@@ -9399,9 +9371,33 @@ async function deleteMaintenanceLog(assetId, logIndex, logId) {
     
     if (response && response.success) {
       showNotification('success', 'Maintenance log deleted and asset status updated');
-
-      // PATCH: reload + redraw safely
-      await refreshMaintenanceLogModal(assetId);
+      
+      // Force reload from server to get fresh data including updated status
+      try {
+        const assetsResponse = await apiCall('/api/assets');
+        if (assetsResponse.success) {
+          // Update the global assets array
+          assets = assetsResponse.data;
+          const updatedAsset = assets.find(a => a.id === assetId);
+          if (updatedAsset) {
+            // Close any existing edit modals first
+            const editModal = document.getElementById('editMaintenanceLogModal');
+            if (editModal) {
+              editModal.remove();
+            }
+            
+            // Show refreshed maintenance log modal
+            showMaintenanceLogModal(updatedAsset);
+          }
+        } else {
+          closeMaintenanceLogModal();
+          showNotification('info', 'Please refresh the page to see updated logs');
+        }
+      } catch (reloadError) {
+        console.warn('Could not reload asset data:', reloadError);
+        closeMaintenanceLogModal();
+        showNotification('info', 'Log deleted. Please refresh the page to see updated logs and asset status');
+      }
     } else {
       console.error('API returned error or no response:', response);
       showNotification('error', (response && response.message) || 'Failed to delete maintenance log');
@@ -10487,12 +10483,26 @@ async function saveEnhancedMaintenanceLog(assetId, logIndex, logId) {
       
       // Refresh the maintenance log modal
       const asset = assets.find(a => a.id === assetId);
-      if (response.success) {
-        showNotification('success', 'Maintenance log updated successfully');
-        cancelEditMaintenanceLogModal();
+      if (asset) {
+        // Force reload from server to get fresh data
+        const assetsResponse = await apiCall('/api/assets');
+        if (assetsResponse.success) {
+          assets = assetsResponse.data;
+          const updatedAsset = assets.find(a => a.id === assetId);
+          if (updatedAsset) {
+            const fn =
+              (typeof window.showMaintenanceLogModal === 'function') ? window.showMaintenanceLogModal :
+              (typeof showMaintenanceLogModal === 'function') ? showMaintenanceLogModal :
+              null;
 
-        // PATCH: always reload + redraw safely (prevents showMaintenanceLogModal ReferenceError)
-        await refreshMaintenanceLogModal(assetId);
+            if (fn) {
+              fn(updatedAsset);
+            } else {
+              // avoid throwing a ReferenceError after a successful save
+              console.warn('showMaintenanceLogModal is not available; skipping modal refresh');
+            }
+          }
+        }
       }
     }
   } catch (error) {
