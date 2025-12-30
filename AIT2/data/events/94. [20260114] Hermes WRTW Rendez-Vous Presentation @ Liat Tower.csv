@@ -1,0 +1,2 @@
+EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,Tag,ForceStateOverride
+94,Hermes WRTW Rendez-Vous Presentation @ Liat Tower,20260114,20260115,[],[],[],Added,[],[],events,False

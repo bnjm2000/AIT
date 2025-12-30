@@ -1,17 +1,3 @@
-2025/11/13 13:52:58,bnjm2000,"Maintenance logged for asset ULXD2#11: Collected back from E&E, replaced battery contact pin and bumper"
-2025/11/13 13:54:35,bnjm2000,Updated location for asset 5XT#30 from '' to 'Store'
-2025/11/13 13:54:35,bnjm2000,Updated serial number for asset 5XT#30 from '260046715' to '260053861'
-2025/11/13 13:54:35,bnjm2000,Removed Out of Commission status from asset 5XT#30
-2025/11/13 13:54:35,bnjm2000,Maintenance logged for asset 5XT#30: Exchanged with Concept Systems for 1-to-1 swap. OLD SN: 260046715 NEW SN: 260053861
-2025/11/13 13:55:11,bnjm2000,Updated maintenance log for asset 5XT#30: 'Discovered dented when unboxing [Marked OOC]' -> 'Discovered dented when unboxing' (also: Marked OOC) (edited by bnjm2000)
-2025/11/13 13:55:50,bnjm2000,Deleted maintenance log for asset PB#52: 'Screen discovered messed up @ Hermes Silky Way F&F Night [Marked OOC]' (deleted by bnjm2000)
-2025/11/13 13:56:38,bnjm2000,Created event 81:  Wedding of Eamon & Mia @ Capella via web interface
-2025/11/13 13:56:49,bnjm2000,Added 4x L-Acoustics X12 model to event 81 (total: 4)
-2025/11/13 13:56:52,bnjm2000,Added 1x L-Acoustics SB18 model to event 81 (total: 1)
-2025/11/13 13:57:08,bnjm2000,Added 1x Sennheiser Base Station model to event 80 (total: 1)
-2025/11/13 13:57:27,bnjm2000,Added 4x Sennheiser SEK(UHF) model to event 80 (total: 4)
-2025/11/13 13:57:31,bnjm2000,Added 2x Sennheiser DAD(UHF) model to event 80 (total: 2)
-2025/11/13 13:57:53,bnjm2000,Assigned specific asset SBS#01 to event 80
 2025/11/13 13:57:59,bnjm2000,Assigned specific asset DAD#01 to event 80
 2025/11/13 13:58:01,bnjm2000,Assigned specific asset DAD#02 to event 80
 2025/11/13 13:58:12,bnjm2000,Added 1x Hollyland Solidcom C1 (Pro) 8-Slot Battery Charging Case model to event 80 (total: 1)
@@ -998,3 +984,17 @@
 2025/12/30 12:38:23,bnjm2000,Updated maintenance log for asset PB#09: 'Screen discovered not working when charging' -> 'Screen discovered not working when charging' (edited by bnjm2000)
 2025/12/30 13:11:15,bnjm2000,Updated maintenance log for asset PB#09: 'Screen discovered not working when charging' -> 'Screen discovered not working when charging' (edited by bnjm2000)
 2025/12/30 13:11:25,bnjm2000,Updated maintenance log for asset PB#09: 'Screen discovered not working when charging' -> 'Screen discovered not working when charging' (also: Cleared OOC) (edited by bnjm2000)
+2025/12/30 13:22:03,bnjm2000,Updated maintenance log for asset PB#09: 'Screen discovered not working when charging [Cleared OOC]' -> 'Screen discovered not working when charging' (edited by bnjm2000)
+2025/12/30 13:22:13,bnjm2000,Updated maintenance log for asset PB#09: 'Screen discovered not working when charging' -> 'Screen discovered not working when charging' (edited by bnjm2000)
+2025/12/30 13:22:19,bnjm2000,Updated maintenance log for asset PB#09: 'Screen discovered not working when charging' -> 'Screen discovered not working when charging' (also: Cleared OOC) (edited by bnjm2000)
+2025/12/30 13:22:28,bnjm2000,Updated maintenance log for asset PB#09: 'Screen discovered not working when charging [Cleared OOC]' -> 'Screen discovered not working when charging' (edited by bnjm2000)
+2025/12/30 13:22:35,bnjm2000,Removed Out of Commission status from asset PB#09
+2025/12/30 13:22:35,bnjm2000,Maintenance logged for asset PB#09: sdfsg
+2025/12/30 13:22:39,bnjm2000,Updated maintenance log for asset PB#09: 'Screen discovered not working when charging' -> 'Screen discovered not working when charging' (also: Marked OOC) (edited by bnjm2000)
+2025/12/30 13:22:41,bnjm2000,Deleted maintenance log for asset PB#09: 'sdfsg [Cleared OOC]' (deleted by bnjm2000)
+2025/12/30 13:32:30,bnjm2000,Created event 95: Rolex at Hourglass Boutique Opening via web interface
+2025/12/30 13:43:58,bnjm2000,Created event 96:  STPI Symposium @ 72-13 via web interface
+2025/12/30 13:44:09,bnjm2000,Updated event 94: Hermes WRTW Rendez-Vous Presentation @ Liat Tower via web interface
+2025/12/30 13:44:37,bnjm2000,Updated event 95: Rolex at Hourglass Boutique Opening @ Raffles Hotel via web interface
+2025/12/30 13:44:45,bnjm2000,Removed L-Acoustics 5XT model from event 94
+2025/12/30 13:45:35,bnjm2000,Created event 97: Art SG 2026 - Belmond Booth @ MBS via web interface

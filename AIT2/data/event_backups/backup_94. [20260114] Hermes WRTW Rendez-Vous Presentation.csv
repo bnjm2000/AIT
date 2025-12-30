@@ -1,2 +1,2 @@
 EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,Tag,ForceStateOverride
-94,Hermes WRTW Rendez-Vous Presentation,20260114,20260215,[],"[""[MODEL]AX|L-Acoustics|5XT|4|5\"" passive coaxial enclosure, black""]",[],Planning,[],[],events,False
+94,Hermes WRTW Rendez-Vous Presentation,20260114,20260115,[],"[""[MODEL]AX|L-Acoustics|5XT|4|5\"" passive coaxial enclosure, black""]",[],Planning,[],[],events,False
