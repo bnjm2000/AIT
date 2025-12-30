@@ -8540,13 +8540,22 @@ function displayOOCAssets(oocAssets) {
                        asset.isOOC ? 'status-ooc' : 'status-missing';
     
     tableHTML += `
-      <tr class="ooc-asset-item ${isSelected ? 'selected' : ''}" data-asset-id="${asset.id}">
+      <tr class="ooc-asset-item ${isSelected ? 'selected' : ''}" data-asset-id="${escapeHtmlAttribute(asset.id)}">
         <td>
           <input type="checkbox" class="ooc-asset-checkbox" 
-                 ${isSelected ? 'checked' : ''} 
-                 onchange="toggleOOCAssetSelection('${asset.id}')">
+                ${isSelected ? 'checked' : ''} 
+                onchange="toggleOOCAssetSelection('${escapeJs(asset.id)}')">
         </td>
-        <td style="font-weight: 500;">${asset.id}</td>
+
+        <td style="font-weight: 500;">
+          <a href="#"
+            title="View maintenance log"
+            onclick="event.preventDefault(); event.stopPropagation(); viewMaintenanceLog('${escapeJs(asset.id)}');"
+            style="color: #667eea; text-decoration: underline; font-weight: 600;">
+            ${asset.id}
+          </a>
+        </td>
+
         <td>${asset.brand} ${asset.model}</td>
         <td>
           <span class="asset-badge ${statusClass}">${statusText}</span>
@@ -8554,7 +8563,7 @@ function displayOOCAssets(oocAssets) {
         <td>${asset.location || 'Store'}</td>
         <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis;">${asset.description || '-'}</td>
         <td>
-          <button class="btn btn-success btn-sm" onclick="clearSingleOOC('${asset.id}')" style="padding: 4px 8px; font-size: 11px;">
+          <button class="btn btn-success btn-sm" onclick="clearSingleOOC('${escapeJs(asset.id)}')" style="padding: 4px 8px; font-size: 11px;">
             Clear Status
           </button>
         </td>
@@ -8967,16 +8976,24 @@ async function processSingleOOCClear() {
 
 async function viewMaintenanceLog(assetId) {
   try {
+    // Ensure we have the latest assets in memory (so this works even when called from other pages/tabs)
+    if (!Array.isArray(assets) || assets.length === 0) {
+      const assetsResponse = await apiCall('/api/assets');
+      if (assetsResponse && assetsResponse.success) {
+        assets = assetsResponse.data;
+      }
+    }
+
     // Get the asset details
-    const asset = assets.find(a => a.id === assetId);
+    const asset = Array.isArray(assets) ? assets.find(a => a.id === assetId) : null;
     if (!asset) {
-      showNotification('error', 'Asset not found');
+      showNotification('error', `Asset not found: ${assetId}`);
       return;
     }
-    
+
     // Create and show the maintenance log modal
     showMaintenanceLogModal(asset);
-    
+
   } catch (error) {
     console.error('Error viewing maintenance log:', error);
     showNotification('error', 'Failed to load maintenance log');
@@ -9312,6 +9329,47 @@ function addNewLogEntryFromModal(assetId) {
   openMaintenanceModalForAsset(assetId);
 }
 
+async function refreshMaintenanceLogModal(assetId) {
+  try {
+    // Always pull fresh server state so OOC/Missing changes show immediately
+    const assetsResponse = await apiCall('/api/assets');
+    if (assetsResponse && assetsResponse.success) {
+      assets = assetsResponse.data || [];
+      // Keep any code that reads window.assets in sync too
+      window.assets = assets;
+
+      const updatedAsset = assets.find(a => a.id === assetId);
+      if (updatedAsset) {
+        // Prefer the window-exported function, but fallback to local if present
+        const modalFn =
+          (typeof window.showMaintenanceLogModal === 'function')
+            ? window.showMaintenanceLogModal
+            : (typeof showMaintenanceLogModal === 'function' ? showMaintenanceLogModal : null);
+
+        if (modalFn) {
+          modalFn(updatedAsset);
+          return true;
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('refreshMaintenanceLogModal failed:', err);
+  }
+
+  // Fallback: don’t break the save/delete flow if the modal can’t be redrawn
+  try {
+    const closeFn =
+      (typeof window.closeMaintenanceLogModal === 'function')
+        ? window.closeMaintenanceLogModal
+        : (typeof closeMaintenanceLogModal === 'function' ? closeMaintenanceLogModal : null);
+
+    if (closeFn) closeFn();
+  } catch (_) {}
+
+  showNotification('info', 'Update saved. Please reopen the maintenance log to refresh.');
+  return false;
+}
+
 async function deleteMaintenanceLog(assetId, logIndex, logId) {
   console.log('Delete button clicked!');
   console.log('Parameters:', { assetId, logIndex, logId });
@@ -9341,33 +9399,9 @@ async function deleteMaintenanceLog(assetId, logIndex, logId) {
     
     if (response && response.success) {
       showNotification('success', 'Maintenance log deleted and asset status updated');
-      
-      // Force reload from server to get fresh data including updated status
-      try {
-        const assetsResponse = await apiCall('/api/assets');
-        if (assetsResponse.success) {
-          // Update the global assets array
-          assets = assetsResponse.data;
-          const updatedAsset = assets.find(a => a.id === assetId);
-          if (updatedAsset) {
-            // Close any existing edit modals first
-            const editModal = document.getElementById('editMaintenanceLogModal');
-            if (editModal) {
-              editModal.remove();
-            }
-            
-            // Show refreshed maintenance log modal
-            showMaintenanceLogModal(updatedAsset);
-          }
-        } else {
-          closeMaintenanceLogModal();
-          showNotification('info', 'Please refresh the page to see updated logs');
-        }
-      } catch (reloadError) {
-        console.warn('Could not reload asset data:', reloadError);
-        closeMaintenanceLogModal();
-        showNotification('info', 'Log deleted. Please refresh the page to see updated logs and asset status');
-      }
+
+      // PATCH: reload + redraw safely
+      await refreshMaintenanceLogModal(assetId);
     } else {
       console.error('API returned error or no response:', response);
       showNotification('error', (response && response.message) || 'Failed to delete maintenance log');
@@ -10453,16 +10487,12 @@ async function saveEnhancedMaintenanceLog(assetId, logIndex, logId) {
       
       // Refresh the maintenance log modal
       const asset = assets.find(a => a.id === assetId);
-      if (asset) {
-        // Force reload from server to get fresh data
-        const assetsResponse = await apiCall('/api/assets');
-        if (assetsResponse.success) {
-          assets = assetsResponse.data;
-          const updatedAsset = assets.find(a => a.id === assetId);
-          if (updatedAsset) {
-            showMaintenanceLogModal(updatedAsset);
-          }
-        }
+      if (response.success) {
+        showNotification('success', 'Maintenance log updated successfully');
+        cancelEditMaintenanceLogModal();
+
+        // PATCH: always reload + redraw safely (prevents showMaintenanceLogModal ReferenceError)
+        await refreshMaintenanceLogModal(assetId);
       }
     }
   } catch (error) {
