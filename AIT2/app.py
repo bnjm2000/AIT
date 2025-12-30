@@ -1741,37 +1741,42 @@ def manage_event_models(event_id):
             if not brand or not model or not department:
                 return jsonify({'error': 'Brand, model, and department are required'}), 400
 
-            # Find and remove matching model assignments
             items_to_remove = []
-            description_to_match = data.get('description', '').strip()
+            # Find matching model assignments for this dept/brand/model
+            description_to_match = (data.get('description') or '').strip()
 
-            # If no description provided, get it from inventory
-            if not description_to_match:
-                for asset in data_manager.inventory.values():
-                    if (asset.brand == brand and 
-                        asset.model_number == model and 
-                        asset.department_code == department):
-                        description_to_match = asset.description
-                        break
-
+            candidates = []
             for item in event.prepared_items:
-                if item.startswith('[MODEL]'):
-                    parts = item[7:].split('|')
-                    if len(parts) >= 5:
-                        item_dept = parts[0]
-                        item_brand = parts[1] 
-                        item_model = parts[2]
-                        item_description = parts[4] if len(parts) > 4 else ''
-                        
-                        # Match on department, brand, model, AND description
-                        if (item_dept == department and 
-                            item_brand == brand and 
-                            item_model == model and
-                            item_description == description_to_match):
-                            items_to_remove.append(item)
+                if not item.startswith('[MODEL]'):
+                    continue
 
-            if not items_to_remove:
+                parts = item[7:].split('|')  # [MODEL]DEPT|BRAND|MODEL|QUANTITY|DESCRIPTION
+                if len(parts) < 4:
+                    continue
+
+                item_dept = parts[0]
+                item_brand = parts[1]
+                item_model = parts[2]
+                item_description = parts[4] if len(parts) > 4 else ''
+
+                if item_dept == department and item_brand == brand and item_model == model:
+                    candidates.append((item, item_description))
+
+            if not candidates:
                 return jsonify({'error': 'Model assignment not found'}), 404
+
+            # If description is not provided, only allow delete when unambiguous
+            if not description_to_match:
+                if len(candidates) == 1:
+                    items_to_remove = [candidates[0][0]]
+                else:
+                    return jsonify({
+                        'error': 'Multiple variants exist for this model. Description is required to remove a specific one.'
+                    }), 400
+            else:
+                items_to_remove = [it for (it, desc) in candidates if desc == description_to_match]
+                if not items_to_remove:
+                    return jsonify({'error': 'Model assignment not found'}), 404
 
             # Remove the items
             for item in items_to_remove:

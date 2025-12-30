@@ -6024,14 +6024,21 @@ async function updateModelRequirementsSection(eventId) {
                             <div style="color: #666; font-size: 12px; margin-left: 20px; margin-top: 2px;">${escapeHtml(model.description || '')}</div>
                         </div>
                         <div style="display: flex; gap: 8px;">
-                            <button class="btn btn-sm btn-outline-primary edit-model-qty-btn" 
-                                    data-event-id="${eventId}" data-brand="${escapeHtmlAttribute(model.brand)}" 
-                                    data-model="${escapeHtml(model.model)}" data-department="${escapeHtml(model.department)}"
-                                    style="padding: 4px 8px; font-size: 11px;">Edit Qty</button>
-                            <button class="btn btn-sm btn-danger remove-model-btn" 
-                                    data-event-id="${eventId}" data-brand="${escapeHtmlAttribute(model.brand)}" 
-                                    data-model="${escapeHtml(model.model)}" data-department="${escapeHtml(model.department)}"
-                                    style="padding: 4px 8px; font-size: 11px;">Remove</button>
+                            <button class="btn btn-sm btn-outline-primary edit-model-qty-btn"
+                                  data-event-id="${eventId}"
+                                  data-brand="${escapeHtmlAttribute(model.brand)}"
+                                  data-model="${escapeHtmlAttribute(model.model)}"
+                                  data-department="${escapeHtmlAttribute(model.department)}"
+                                  data-description="${escapeHtmlAttribute(model.description || '')}"
+                                  style="padding: 4px 8px; font-size: 11px;">Edit Qty</button>
+
+                          <button class="btn btn-sm btn-danger remove-model-btn"
+                                  data-event-id="${eventId}"
+                                  data-brand="${escapeHtmlAttribute(model.brand)}"
+                                  data-model="${escapeHtmlAttribute(model.model)}"
+                                  data-department="${escapeHtmlAttribute(model.department)}"
+                                  data-description="${escapeHtmlAttribute(model.description || '')}"
+                                  style="padding: 4px 8px; font-size: 11px;">Remove</button>
                         </div>
                     </div>
                 `;
@@ -6174,19 +6181,19 @@ async function addCustomAssetsToModelRequirements(eventId, existingContent = '')
   }
 }
 
-async function removeModelFromEvent(eventId, brand, model, department) {
-  if (!confirm(`Remove all ${brand} ${model} from this event?`)) {
-    return;
-  }
+async function removeModelFromEvent(eventId, brand, model, department, description = "") {
+  const label = `${brand} ${model}${description ? ` (${description})` : ""}`;
+  if (!confirm(`Remove ${label} from this event?`)) return;
 
   try {
     await apiCall(`/api/events/${eventId}/models`, "DELETE", {
-      brand: brand,
-      model: model,
-      department: department,
+      brand,
+      model,
+      department,
+      description, // <<< critical: disambiguates G52 vs L50
     });
-    
-    showNotification("success", `${brand} ${model} removed from event`);
+
+    showNotification("success", `${label} removed from event`);
 
     // Reload available assets to reflect the newly available items
     const response = await apiCall("/api/assets/available");
@@ -6196,40 +6203,38 @@ async function removeModelFromEvent(eventId, brand, model, department) {
     await updateModelRequirementsSection(eventId);
 
     // Refresh the search results to show the model as available again
-    const currentSearchTerm = document.querySelector('#edit-assets-tab input[placeholder*="Search available asset models"]')?.value;
+    const currentSearchTerm =
+      document.querySelector('#edit-assets-tab input[placeholder*="Search available asset models"]')?.value;
     if (currentSearchTerm && currentSearchTerm.length >= 2) {
       filterAvailableModels(currentSearchTerm);
     }
-    
   } catch (error) {
     showNotification("error", `Failed to remove model: ${error.message}`);
   }
 }
 
-function editModelQuantity(eventId, brand, model, department) {
-  // Get the description from the original model data, not DOM
+function editModelQuantity(eventId, brand, model, department, description = "") {
   let currentQuantity = 1;
-  let description = "";
-  
-  // Get it from the event data instead of DOM parsing
+
   fetch(`/api/events/${eventId}`)
     .then(r => r.json())
     .then(data => {
       const event = data.data;
       if (event.modelGroups) {
-        // Find the matching model
         const modelKey = Object.keys(event.modelGroups).find(key => {
-          const model_data = event.modelGroups[key];
-          return model_data.brand === brand && model_data.model === model && model_data.department === department;
+          const m = event.modelGroups[key];
+          return (
+            m.brand === brand &&
+            m.model === model &&
+            m.department === department &&
+            (m.description || "") === (description || "")
+          );
         });
-        
+
         if (modelKey) {
           const modelData = event.modelGroups[modelKey];
-          description = modelData.description || "";
           currentQuantity = modelData.requiredQuantity || 1;
-          
-          // Now populate the modal with the correct data
-          populateEditQuantityModal(eventId, brand, model, department, currentQuantity, description);
+          populateEditQuantityModal(eventId, brand, model, department, currentQuantity, (modelData.description || ""));
         }
       }
     });
@@ -6603,8 +6608,11 @@ async function updateCurrentAssetsOnly(eventId) {
                                             <div style="color: #999; font-size: 10px; font-style: italic; margin-top: 2px;">Specific assets will be assigned during preparation</div>
                                         </div>
                                         <div style="display: flex; gap: 5px;">
-                                            <button class="btn btn-warning" style="padding: 3px 6px; font-size: 10px;" onclick="editModelQuantity(${eventId}, '${escapeJs(brand)}', '${escapeJs(model)}', '${escapeJs(dept)}')">Edit Qty</button>
-                                            <button class="btn btn-danger" style="padding: 3px 6px; font-size: 10px;" onclick="removeModelFromEvent(${eventId}, '${escapeJs(brand)}', '${escapeJs(model)}', '${escapeJs(dept)}')">Remove</button>
+                                            <button class="btn btn-warning" style="padding: 3px 6px; font-size: 10px;"
+                                              onclick="editModelQuantity(${eventId}, '${escapeJs(brand)}', '${escapeJs(model)}', '${escapeJs(dept)}', '${escapeJs(description)}')">Edit Qty</button>
+
+                                            <button class="btn btn-danger" style="padding: 3px 6px; font-size: 10px;"
+                                              onclick="removeModelFromEvent(${eventId}, '${escapeJs(brand)}', '${escapeJs(model)}', '${escapeJs(dept)}', '${escapeJs(description)}')">Remove</button>
                                         </div>
                                     </div>
                                 `;
@@ -7455,20 +7463,22 @@ document.addEventListener("DOMContentLoaded", function () {
           const department = e.target.getAttribute('data-department');
           
           if (eventId && brand && model && department) {
-              editModelQuantity(eventId, brand, model, department);
+              const description = e.target.getAttribute('data-description') || '';
+              editModelQuantity(eventId, brand, model, department, description);
           }
       }
     
     if (e.target.classList.contains('remove-model-btn')) {
-        e.preventDefault();
-        const eventId = parseInt(e.target.getAttribute('data-event-id'));
-        const brand = e.target.getAttribute('data-brand');
-        const model = e.target.getAttribute('data-model');
-        const department = e.target.getAttribute('data-department');
-        
-        if (eventId && brand && model && department) {
-            removeModelFromEvent(eventId, brand, model, department);
-        }
+      e.preventDefault();
+      const eventId = parseInt(e.target.getAttribute('data-event-id'));
+      const brand = e.target.getAttribute('data-brand');
+      const model = e.target.getAttribute('data-model');
+      const department = e.target.getAttribute('data-department');
+      const description = e.target.getAttribute('data-description') || '';
+
+      if (eventId && brand && model && department) {
+          removeModelFromEvent(eventId, brand, model, department, description);
+      }
     }
     
     if (e.target.classList.contains('remove-asset-btn')) {

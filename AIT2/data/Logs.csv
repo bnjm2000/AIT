@@ -1,6 +1,3 @@
-2025/11/13 13:49:53,bnjm2000,Assigned specific asset DIABLO#12 to event 80
-2025/11/13 13:50:00,bnjm2000,Assigned specific asset CL5#01 to event 80
-2025/11/13 13:50:02,bnjm2000,Assigned specific asset QL5#01 to event 80
 2025/11/13 13:50:16,bnjm2000,Removed Sennheiser ME36 model from event 80
 2025/11/13 13:50:16,bnjm2000,Added 2x Sennheiser ME36 model to event 80 (total: 2)
 2025/11/13 13:50:33,bnjm2000,Assigned specific asset LAP1#01 to event 80
@@ -994,3 +991,6 @@
 2025/12/24 14:51:09,bnjm2000,Maintenance logged for asset MR-90A#06: Discovered to be buzzing (Franck Muller x Cortina High Jewellery Dinner @ Claudine Restaurant)
 2025/12/24 15:01:05,bnjm2000,Deleted event 94: Hermes WRTW Rendez-Vous Presentation via web interface. No asset locations to reset. Removed 6 related log entries.
 2025/12/24 15:01:19,bnjm2000,Created event 94: Hermes WRTW Rendez-Vous Presentation via web interface
+2025/12/30 11:58:20,system,Failed login attempt for username: bnjm2000
+2025/12/30 11:58:24,bnjm2000,User bnjm2000 logged in via web interface
+2025/12/30 12:25:03,bnjm2000,Deleted event 95: test via web interface. No asset locations to reset. Removed 17 related log entries.
