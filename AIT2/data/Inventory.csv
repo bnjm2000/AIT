@@ -667,7 +667,9 @@ AD3#04,Shure,AD3,3TH09460854,Plug-on Transmitter,False,False,,AX,Store,Store
 AD4D#01,Shure,AD4D,,Two-Channel Digital Wireless Receiver,False,False,,AX,Store,Store
 AD4Q#01,Shure,AD4Q,,Four-Channel Digital Wireless Receiver,False,False,,AX,Store,Store
 AD4Q#02,Shure,AD4Q,,Four-Channel Digital Wireless Receiver,False,False,,AX,Store,Store
-AD4Q#03,Shure,AD4Q,2CA25976600,Four-Channel Digital Wireless Receiver,False,True,"2025/11/20	bnjm2000	Sent to E&E for repairs [Location: E&E]|2025/11/16	bnjm2000	Discovered ""B"" antenna not working, even when connected directly to antenna (Wedding of Andrew Chua & Nicolette Ong @ TRCM) [Marked OOC]",AX,Store,E&E
+AD4Q#03,Shure,AD4Q,2CA25976600,Four-Channel Digital Wireless Receiver,False,True,"2025/11/20	bnjm2000	Sent to E&E for repairs [Location: E&E]|2025/11/16	bnjm2000	Discovered ""B"" antenna not working, even when connected directly to antenna (Wedding of Andrew Chua & Nicolette Ong @ TRCM) [Marked OOC]|2025/12/31	bnjm2000	Replaced 188A24072  AMPLIFIER,DRIVER,HI GAIN,0.25W,SOT-89 IC - $30
+Service charge - $120
+(Service report SR21913)",AX,Store,E&E
 AD4Q#04,Shure,AD4Q,,Four-Channel Digital Wireless Receiver,False,False,,AX,Store,Store
 P9R#01,Shure,P9R,,Bodypack Receiver [P7],False,False,,AX,Store,
 P9R#02,Shure,P9R,,Bodypack Receiver [P7],False,False,,AX,Store,
@@ -1121,7 +1123,7 @@ J48S#02,Radial Engineering,J48 Stereo,447219,Phantom Powered Active Direct Box,F
 J48S#03,Radial Engineering,J48 Stereo,1477169,Phantom Powered Active Direct Box,False,False,,AX,Store,Store
 J48S#04,Radial Engineering,J48 Stereo,1477195,Phantom Powered Active Direct Box,False,False,,AX,Store,Store
 J48S#05,Radial Engineering,J48 Stereo,1477239,Phantom Powered Active Direct Box,False,False,,AX,Store,Store
-J48S#06,Radial Engineering,J48 Stereo,1477193,Phantom Powered Active Direct Box,False,True,2025/10/18	bnjm2000	Reported R side no sound (Wedding of Matthew Chia & Teresa Su @ Capella) [Marked OOC],AX,Store,Store
+J48S#06,Radial Engineering,J48 Stereo,1477193,Phantom Powered Active Direct Box,False,False,2025/10/18	bnjm2000	Reported R side no sound (Wedding of Matthew Chia & Teresa Su @ Capella) [Marked OOC]|2025/12/22	bnjm2000	Tested working by Rafie. [Cleared OOC],AX,Store,Store
 USBPRO#01,Radial Engineering,USB-Pro,1550806,USB direct box,False,False,,AX,Store,
 USBPRO#02,Radial Engineering,USB-Pro,1550781,USB direct box,False,False,,AX,Store,
 USBPRO#03,Radial Engineering,USB-Pro,1550854,USB direct box,False,False,,AX,Store,
