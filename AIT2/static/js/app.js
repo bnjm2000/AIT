@@ -1947,7 +1947,7 @@ function renderCalendar(events) {
 
         eventLayersHTML.push(`
           <div class="calendar-event-layer" style="top: ${20 + (row * 18)}px; z-index: ${placement.spanClass === 'span-start' ? 10 : 5};">
-            <div class="${eventClass}" onclick="viewEvent(${placement.event.id})" title="${placement.event.name}" style="z-index: ${placement.spanClass === 'span-start' ? 10 : 5}; position: relative;">
+            <div class="${eventClass}" onclick="editEvent(${placement.event.id})" title="${placement.event.name}" style="z-index: ${placement.spanClass === 'span-start' ? 10 : 5}; position: relative;">
               ${eventText}
             </div>
           </div>
