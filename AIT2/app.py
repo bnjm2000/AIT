@@ -3086,25 +3086,182 @@ def search_assets():
         logger.error(f"Error searching assets: {e}")
         return jsonify({'error': 'Failed to search assets'}), 500
 
-
-@app.route('/api/containers', methods=['GET'])
+@app.route('/api/containers', methods=['GET', 'POST'])
 @require_auth
-def get_containers():
-    """Get all containers"""
+def containers_collection():
+    """List containers (GET) or create container (POST)"""
     try:
-        containers_data = []
-        for container in data_manager.containers.values():
-            containers_data.append({
-                'id': container.container_id,
-                'assetIds': container.asset_ids,
-                'assetCount': len(container.asset_ids)
+        if request.method == 'GET':
+            containers_data = []
+            for container in data_manager.containers.values():
+                containers_data.append({
+                    'id': container.container_id,
+                    'assetIds': container.asset_ids,
+                    'assetCount': len(container.asset_ids)
+                })
+            return jsonify({'success': True, 'data': containers_data})
+
+        # POST (create)
+        data = request.get_json(silent=True) or {}
+        container_id = (data.get('id') or data.get('containerId') or '').strip()
+        raw_asset_ids = data.get('assetIds') if 'assetIds' in data else data.get('asset_ids')
+
+        if not container_id:
+            return jsonify({'error': 'Container id is required'}), 400
+
+        if container_id in data_manager.containers:
+            return jsonify({'error': f"Container '{container_id}' already exists"}), 409
+
+        # normalize asset IDs (accept list OR newline/comma separated string)
+        asset_ids_in = []
+        if isinstance(raw_asset_ids, list):
+            asset_ids_in = [str(x).strip() for x in raw_asset_ids]
+        elif isinstance(raw_asset_ids, str):
+            asset_ids_in = [x.strip() for x in raw_asset_ids.replace(',', '\n').splitlines()]
+        elif raw_asset_ids is None:
+            asset_ids_in = []
+        else:
+            return jsonify({'error': 'assetIds must be a list or string'}), 400
+
+        # de-dupe (preserve order)
+        cleaned = []
+        seen = set()
+        for aid in asset_ids_in:
+            if not aid:
+                continue
+            if aid in seen:
+                continue
+            cleaned.append(aid)
+            seen.add(aid)
+
+        if not cleaned:
+            return jsonify({'error': 'Container must include at least 1 asset ID'}), 400
+
+        # validate assets exist
+        missing = [aid for aid in cleaned if aid not in data_manager.inventory]
+        if missing:
+            preview = ", ".join(missing[:15])
+            more = "" if len(missing) <= 15 else f" (+{len(missing)-15} more)"
+            return jsonify({'error': f"Unknown asset IDs in container: {preview}{more}"}), 400
+
+        new_container = Container(container_id, cleaned)
+        data_manager.containers[container_id] = new_container
+        data_manager.save_containers()
+        invalidate_cache()
+        log_action(f"Created container {container_id} ({len(cleaned)} assets)")
+
+        return jsonify({
+            'success': True,
+            'data': {'id': new_container.container_id, 'assetIds': new_container.asset_ids, 'assetCount': len(new_container.asset_ids)}
+        }), 201
+
+    except Exception as e:
+        logger.error(f"Error in containers_collection: {e}")
+        return jsonify({'error': 'Failed to process containers request'}), 500
+
+@app.route('/api/containers/<path:container_id>', methods=['GET', 'PUT', 'DELETE'])
+@require_auth
+def container_resource(container_id):
+    """Get one container (GET), update (PUT), delete (DELETE)"""
+    try:
+        container_id = unquote_plus(container_id).strip()
+        container = data_manager.containers.get(container_id)
+
+        if not container:
+            return jsonify({'error': 'Container not found'}), 404
+
+        if request.method == 'GET':
+            return jsonify({
+                'success': True,
+                'data': {'id': container.container_id, 'assetIds': container.asset_ids, 'assetCount': len(container.asset_ids)}
             })
 
-        return jsonify({'success': True, 'data': containers_data})
-    except Exception as e:
-        logger.error(f"Error getting containers: {e}")
-        return jsonify({'error': 'Failed to retrieve containers'}), 500
+        if request.method == 'PUT':
+            data = request.get_json(silent=True) or {}
 
+            # optional rename support
+            requested_new_id = (data.get('newId') or data.get('new_id') or data.get('id') or '').strip()
+
+            raw_asset_ids = data.get('assetIds') if 'assetIds' in data else data.get('asset_ids')
+
+            # normalize asset IDs only if provided; otherwise keep existing
+            if raw_asset_ids is None:
+                cleaned = list(container.asset_ids)
+            else:
+                asset_ids_in = []
+                if isinstance(raw_asset_ids, list):
+                    asset_ids_in = [str(x).strip() for x in raw_asset_ids]
+                elif isinstance(raw_asset_ids, str):
+                    asset_ids_in = [x.strip() for x in raw_asset_ids.replace(',', '\n').splitlines()]
+                else:
+                    return jsonify({'error': 'assetIds must be a list or string'}), 400
+
+                cleaned = []
+                seen = set()
+                for aid in asset_ids_in:
+                    if not aid:
+                        continue
+                    if aid in seen:
+                        continue
+                    cleaned.append(aid)
+                    seen.add(aid)
+
+            if not cleaned:
+                return jsonify({'error': 'Container must include at least 1 asset ID'}), 400
+
+            # validate assets exist
+            missing = [aid for aid in cleaned if aid not in data_manager.inventory]
+            if missing:
+                preview = ", ".join(missing[:15])
+                more = "" if len(missing) <= 15 else f" (+{len(missing)-15} more)"
+                return jsonify({'error': f"Unknown asset IDs in container: {preview}{more}"}), 400
+
+            old_id = container.container_id
+
+            # rename (if requested)
+            if requested_new_id and requested_new_id != container_id:
+                if requested_new_id in data_manager.containers:
+                    return jsonify({'error': f"Container '{requested_new_id}' already exists"}), 409
+
+                # re-key the dict and update object
+                del data_manager.containers[container_id]
+                container.container_id = requested_new_id
+                data_manager.containers[requested_new_id] = container
+                container_id = requested_new_id
+
+            # update asset list
+            container.asset_ids = cleaned
+            data_manager.save_containers()
+            invalidate_cache()
+
+            if old_id != container_id:
+                log_action(f"Renamed container {old_id} -> {container_id} ({len(cleaned)} assets)")
+            else:
+                log_action(f"Updated container {container_id} ({len(cleaned)} assets)")
+
+            return jsonify({
+                'success': True,
+                'data': {
+                    'id': container.container_id,
+                    'assetIds': container.asset_ids,
+                    'assetCount': len(container.asset_ids)
+                }
+            })
+
+        # DELETE
+        if not session.get('is_admin', False):
+            return jsonify({'error': 'Admin privileges required'}), 403
+
+        del data_manager.containers[container_id]
+        data_manager.save_containers()
+        invalidate_cache()
+        log_action(f"Deleted container {container_id}")
+
+        return jsonify({'success': True})
+
+    except Exception as e:
+        logger.error(f"Error in container_resource: {e}")
+        return jsonify({'error': 'Failed to process container request'}), 500
 
 @app.route('/api/logs', methods=['GET'])
 @require_auth

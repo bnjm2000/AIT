@@ -6,6 +6,35 @@ let containers = [];
 let logs = [];
 let stats = {};
 
+// ---------- containers cache ----------
+let selectedContainerAssets = new Set();
+let __containersCache = null;
+let __containersCacheTs = 0;
+
+// keep cache reasonably fresh
+async function refreshContainersCache(force = false) {
+  const now = Date.now();
+  if (!force && __containersCache && (now - __containersCacheTs) < 15000) {
+    return __containersCache;
+  }
+
+  const res = await apiCall('/api/containers');
+  const list = (res && res.data) ? res.data : [];
+  __containersCache = {};
+  list.forEach(c => { __containersCache[c.id] = c; });
+  __containersCacheTs = now;
+  return __containersCache;
+}
+
+async function getContainerById(containerId, force = false) {
+  if (!containerId) return null;
+  const cache = await refreshContainersCache(force);
+  return cache[containerId] || null;
+}
+
+// used to avoid container recursion
+window.__processingContainerBatch = false;
+
 // Global utility function for HTML escaping
 function escapeHtml(str) {
   if (!str) return '';
@@ -22,6 +51,27 @@ function escapeHtmlAttr(str) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+// status badge renderer (used by selectors)
+function getAssetStatusBadge(asset) {
+  const status = (asset?.status || '').toString().toLowerCase();
+
+  let statusClass = 'status-available';
+  let statusText  = 'Available';
+
+  if (status === 'missing') {
+    statusClass = 'status-missing';
+    statusText  = 'Missing';
+  } else if (status === 'ooc') {
+    statusClass = 'status-ooc';
+    statusText  = 'OOC';
+  } else if (status === 'deployed') {
+    statusClass = 'status-deployed';
+    statusText  = 'Deployed';
+  }
+
+  return `<span class="asset-badge ${statusClass}">${statusText}</span>`;
 }
 
 /* PATCH A — Delivery Order (DO) edit helpers */
@@ -1282,37 +1332,577 @@ function displayInventoryTable(assetsToShow) {
 }
 
 async function loadContainers() {
+  const root = document.getElementById("containers-list");
+  if (!root) return;
+  // remove the legacy "Add Container" button (blue) if your HTML template still has one
+  // (we keep the "+ New Container" button that this function renders)
+  const containersSection = document.getElementById('containers-section');
+  if (containersSection) {
+    const legacyBtn = Array.from(containersSection.querySelectorAll('button'))
+      .find(btn => btn.closest('#containers-list') === null && (
+        (btn.classList.contains('btn-primary') || btn.classList.contains('btn')) &&
+        (
+          (btn.getAttribute('onclick') || '').includes('createContainer') ||
+          (btn.getAttribute('onclick') || '').toLowerCase().includes('container') ||
+          /add\s+container/i.test(btn.textContent || '') ||
+          /new\s+container/i.test(btn.textContent || '')
+        )
+      ));
+    if (legacyBtn) legacyBtn.remove();
+  }
+
   try {
-    const response = await apiCall("/api/containers");
-    containers = response.data;
+    await refreshContainersCache(true);
+    const cache = await refreshContainersCache(false);
+    const list = Object.values(cache);
 
-    const container = document.getElementById("containers-list");
-    container.innerHTML = "";
+    // toolbar + cards wrapper
+    root.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <div style="font-size:20px;font-weight:700;">Containers</div>
+        <button class="btn btn-success" onclick="createContainer()">+ New Container</button>
+      </div>
+      <div id="containers-cards"></div>
+    `;
 
-    if (containers.length === 0) {
-      container.innerHTML =
-        '<p style="text-align: center; color: #666; padding: 40px;">No containers found.</p>';
+    const cards = document.getElementById("containers-cards");
+    if (!cards) return;
+
+    if (list.length === 0) {
+      cards.innerHTML = `<div style="padding:20px;color:#666;text-align:center;">No containers yet.</div>`;
       return;
     }
 
-    containers.forEach((cont) => {
-      const containerCard = document.createElement("div");
-      containerCard.className = "event-card";
-      containerCard.innerHTML = `
-                <div class="event-title">${cont.id}</div>
-                <div style="margin: 15px 0;">
-                    <small style="color: #666;">${cont.assetCount} assets in container</small>
-                </div>
-                <div class="event-actions">
-                    <button class="btn btn-primary" onclick="viewContainer('${cont.id}')">View Contents</button>
-                    <button class="btn btn-warning" onclick="editContainer('${cont.id}')">Edit</button>
-                </div>
-            `;
-      container.appendChild(containerCard);
-    });
-  } catch (error) {
-    document.getElementById("containers-list").innerHTML =
-      '<p style="color: red; text-align: center;">Error loading containers</p>';
+    list
+      .sort((a, b) => (a.id || '').localeCompare(b.id || ''))
+      .forEach(c => {
+        const card = document.createElement("div");
+        card.className = "card";
+        card.style.marginBottom = "12px";
+        card.innerHTML = `
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+            <div>
+              <div style="font-weight:700;font-size:16px;">${escapeHtml(c.id)}</div>
+              <div style="color:#666;font-size:13px;">${c.assetCount || (c.assetIds ? c.assetIds.length : 0)} assets</div>
+            </div>
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn-secondary btn-sm" onclick="viewContainer('${String(c.id).replace(/'/g, "\\'")}')">View</button>
+              <button class="btn btn-primary btn-sm" onclick="editContainer('${String(c.id).replace(/'/g, "\\'")}')">Edit</button>
+            </div>
+          </div>
+        `;
+        cards.appendChild(card);
+      });
+
+  } catch (e) {
+    console.error("loadContainers error:", e);
+    root.innerHTML = `<div style="padding:20px;color:#a00;">Failed to load containers: ${escapeHtml(e.message || String(e))}</div>`;
+  }
+}
+
+function ensureContainerCrudModal() {
+  if (document.getElementById("containerCrudModal")) return;
+
+  const modal = document.createElement("div");
+  modal.id = "containerCrudModal";
+  modal.className = "modal";
+  modal.innerHTML = `
+    <div class="modal-content" style="max-width:780px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <div id="containerCrudModalTitle" style="font-size:18px;font-weight:700;">Container</div>
+        <button class="btn btn-secondary btn-sm" onclick="closeModal('containerCrudModal')">Close</button>
+      </div>
+      <div id="containerCrudModalBody"></div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+}
+
+function parseAssetIdsFromTextarea(text) {
+  return (text || '')
+    .replace(/\r/g, '')
+    .split(/\n|,/)
+    .map(s => s.trim())
+    .filter(Boolean);
+}
+
+// ---------------- Container Asset Selector (same UX as Maintenance selector) ----------------
+// ---------------- Container Asset Selector (same UX as Maintenance selector) ----------------
+
+// stronger loader: ensures assets are actually the full inventory list (id/brand/model present)
+async function ensureAssetsLoadedForContainerSelector(force = false) {
+  const looksValid =
+    Array.isArray(assets) &&
+    assets.length > 0 &&
+    assets[0] &&
+    typeof assets[0].id !== "undefined" &&
+    typeof assets[0].brand !== "undefined" &&
+    typeof assets[0].model !== "undefined";
+
+  // If assets already look correct and not forcing refresh, do nothing
+  if (!force && looksValid) return true;
+
+  try {
+    const res = await apiCall("/api/assets");
+    assets = (res && res.data) ? res.data : [];
+    return Array.isArray(assets) && assets.length > 0;
+  } catch (e) {
+    console.error("Failed to load assets for container selector:", e);
+    showNotification("error", "Assets not loaded yet. Please refresh the page.");
+    return false;
+  }
+}
+
+// IMPORTANT: this prevents “typing but nothing happens” by:
+// - replacing the input node to wipe any stale listeners
+// - binding input events cleanly every time the modal opens
+
+async function initContainerAssetSelector(initialAssetIds = []) {
+  const resultsEl = document.getElementById("availableContainerAssets");
+  const searchElInitial = document.getElementById("containerAssetSearch");
+
+  // lock UI during load so user can’t type before assets + listeners are ready
+  if (searchElInitial) {
+    searchElInitial.disabled = true;
+    searchElInitial.placeholder = "Loading assets…";
+  }
+  if (resultsEl) {
+    resultsEl.innerHTML =
+      '<div style="padding:20px;text-align:center;color:#666;">Loading assets…</div>';
+  }
+
+  // FORCE refresh from /api/assets so selector always has correct asset objects
+  await ensureAssetsLoadedForContainerSelector(true);
+
+  // set selected assets
+  selectedContainerAssets = new Set(Array.isArray(initialAssetIds) ? initialAssetIds : []);
+  updateSelectedContainerAssetsDisplay();
+
+  // re-bind listeners reliably
+  const searchEl = bindContainerAssetSearchHandlers();
+
+  // enable once ready
+  if (searchEl) {
+    searchEl.disabled = false;
+    searchEl.placeholder = "Search by asset ID / brand / model / serial... (Press Enter for exact ID)";
+  }
+
+  // default panel message
+  if (resultsEl) {
+    resultsEl.innerHTML =
+      '<div style="padding:20px;text-align:center;color:#666;">Type at least 2 characters to search...</div>';
+  }
+
+  // if user already typed something quickly, render results
+  try { searchContainerAssets(); } catch (err) { console.error("Container search init failed:", err); }
+}
+
+// container modal asset-search: bind once per modal open, reliably
+let _containerAssetSearchAC = null;
+
+function bindContainerAssetSearchHandlers() {
+  const el = document.getElementById("containerAssetSearch");
+  if (!el) return null;
+
+  // remove any previous listeners from earlier opens
+  try { _containerAssetSearchAC?.abort(); } catch (_) {}
+  _containerAssetSearchAC = new AbortController();
+  const { signal } = _containerAssetSearchAC;
+
+  let t = null;
+  const scheduleSearch = () => {
+    if (t) clearTimeout(t);
+    t = setTimeout(() => {
+      try {
+        searchContainerAssets();
+      } catch (err) {
+        console.error("searchContainerAssets failed:", err);
+        const results = document.getElementById("availableContainerAssets");
+        if (results) {
+          results.innerHTML =
+            '<div style="padding:20px;text-align:center;color:#c00;">Search failed — check console.</div>';
+        }
+      }
+    }, 50);
+  };
+
+  // search live while typing (same behavior as maintenance selector)
+  el.addEventListener("input", scheduleSearch, { signal });
+  el.addEventListener("keyup", scheduleSearch, { signal });
+  el.addEventListener("paste", scheduleSearch, { signal });
+  el.addEventListener("change", scheduleSearch, { signal });
+
+  // Enter-to-add exact asset ID / serial / container ID
+  el.addEventListener(
+    "keydown",
+    (e) => {
+      if (e.key !== "Enter") return;
+      Promise.resolve(handleContainerAssetSearchKeypress(e)).catch((err) => {
+        console.error("handleContainerAssetSearchKeypress failed:", err);
+      });
+    },
+    { signal }
+  );
+
+  // run once in case there's already text in the field
+  scheduleSearch();
+
+  return el;
+}
+
+function updateSelectedContainerAssetsDisplay() {
+  const countElement = document.getElementById('selectedContainerAssetsCount');
+  const listElement = document.getElementById('selectedContainerAssetsList');
+  if (!countElement || !listElement) return;
+
+  countElement.textContent = selectedContainerAssets.size;
+
+  if (selectedContainerAssets.size === 0) {
+    listElement.innerHTML = '<span style="color:#666;font-style:italic;">No assets selected</span>';
+    return;
+  }
+
+  let html = '<div style="display:flex;flex-wrap:wrap;gap:8px;">';
+  selectedContainerAssets.forEach(assetId => {
+    const asset = Array.isArray(assets) ? assets.find(a => a.id === assetId) : null;
+    if (asset) {
+      html += `
+        <div style="background:#e7f3ff;border:1px solid #b3d9ff;border-radius:6px;padding:6px 10px;display:flex;align-items:center;gap:8px;font-size:13px;">
+          <span style="font-weight:500;">${escapeHtml(assetId)}</span>
+          <span style="color:#666;">- ${escapeHtml(asset.brand)} ${escapeHtml(asset.model)}</span>
+          <button onclick="removeAssetFromContainer('${escapeHtmlAttr(assetId)}')" style="background:none;border:none;color:#999;cursor:pointer;padding:0;margin-left:4px;font-size:14px;" title="Remove">×</button>
+        </div>
+      `;
+    } else {
+      html += `
+        <div style="background:#fff3cd;border:1px solid #ffeaa7;border-radius:6px;padding:6px 10px;display:flex;align-items:center;gap:8px;font-size:13px;">
+          <span style="font-weight:500;">${escapeHtml(assetId)}</span>
+          <span style="color:#666;">- Asset not found</span>
+          <button onclick="removeAssetFromContainer('${escapeHtmlAttr(assetId)}')" style="background:none;border:none;color:#999;cursor:pointer;padding:0;margin-left:4px;font-size:14px;" title="Remove">×</button>
+        </div>
+      `;
+    }
+  });
+  html += '</div>';
+  listElement.innerHTML = html;
+}
+
+function selectAssetForContainer(assetId) {
+  if (!assetId) return;
+  if (!Array.isArray(assets) || assets.length === 0) {
+    showNotification('error', 'Assets not loaded');
+    return;
+  }
+
+  const asset = assets.find(a => a.id === assetId);
+  if (!asset) {
+    showNotification('error', `Asset ${assetId} not found`);
+    return;
+  }
+
+  if (selectedContainerAssets.has(assetId)) {
+    showNotification('warning', `Asset ${assetId} is already selected`);
+    return;
+  }
+
+  selectedContainerAssets.add(assetId);
+  updateSelectedContainerAssetsDisplay();
+
+  const searchContainer = document.getElementById('availableContainerAssets');
+  if (searchContainer) {
+    searchContainer.innerHTML = '<div style="padding:20px;text-align:center;color:#666;">Asset added. Search for more assets to add to this container.</div>';
+  }
+
+  showNotification('success', `Added ${assetId} to container`);
+}
+
+function removeAssetFromContainer(assetId) {
+  selectedContainerAssets.delete(assetId);
+  updateSelectedContainerAssetsDisplay();
+  // refresh search results
+  searchContainerAssets();
+}
+
+function clearContainerSelection() {
+  selectedContainerAssets.clear();
+  updateSelectedContainerAssetsDisplay();
+  searchContainerAssets();
+}
+
+function searchContainerAssets() {
+  const searchEl = document.getElementById('containerAssetSearch');
+  const containerEl = document.getElementById('availableContainerAssets');
+  if (!searchEl || !containerEl) return;
+
+  const term = (searchEl.value || '').toLowerCase().trim();
+
+  if (!term || term.length < 2) {
+    containerEl.innerHTML = '<div style="padding:20px;text-align:center;color:#666;">Type at least 2 characters to search...</div>';
+    return;
+  }
+
+  if (!Array.isArray(assets) || assets.length === 0) {
+    containerEl.innerHTML = '<div style="padding:20px;text-align:center;color:#666;">No assets loaded. Please refresh the page.</div>';
+    return;
+  }
+
+  const filtered = assets.filter(asset => {
+    const searchableText =
+      `${asset.id} ${asset.brand} ${asset.model} ${asset.serial || ''} ${escapeJs(asset.description || '')}`
+        .toLowerCase();
+    return searchableText.includes(term) && !selectedContainerAssets.has(asset.id);
+  });
+
+  if (filtered.length === 0) {
+    containerEl.innerHTML = '<div style="padding:20px;text-align:center;color:#666;">No matching assets found.</div>';
+    return;
+  }
+
+  let html = '';
+  filtered.slice(0, 50).forEach(asset => {
+    const statusBadge = getAssetStatusBadge(asset);
+    const locationText = asset.location || 'Store';
+    html += `
+      <div class="container-asset-item" style="padding:12px;border-bottom:1px solid #f1f1f1;display:flex;justify-content:space-between;align-items:center;cursor:pointer;transition:background-color 0.2s;"
+           onmouseover="this.style.backgroundColor='#f8f9fa'"
+           onmouseout="this.style.backgroundColor='white'"
+           data-asset-id="${escapeHtml(asset.id)}">
+        <div style="flex:1;">
+          <div style="font-weight:500;margin-bottom:4px;">${escapeHtml(asset.id)}</div>
+          <div style="color:#666;font-size:13px;margin-bottom:2px;">${escapeHtml(asset.brand)} ${escapeHtml(asset.model)}</div>
+          <div style="color:#999;font-size:12px;">${escapeJs(asset.description || '')}</div>
+          <div style="margin-top:4px;">
+            ${statusBadge}
+            <span style="color:#999;font-size:11px;margin-left:8px;">📍 ${escapeHtml(locationText)}</span>
+          </div>
+        </div>
+        <button class="btn btn-primary select-container-btn" style="padding:6px 12px;font-size:12px;" data-asset-id="${escapeHtml(asset.id)}">Select</button>
+      </div>
+    `;
+  });
+
+  containerEl.innerHTML = html;
+}
+
+async function handleContainerAssetSearchKeypress(e) {
+  if (e.key !== 'Enter') return;
+  e.preventDefault();
+
+  const searchTerm = (e.target.value || '').trim();
+  if (!searchTerm) return;
+
+  // load assets on demand
+  await ensureAssetsLoadedForContainerSelector();
+  if (!Array.isArray(assets) || assets.length === 0) return;
+
+  // exact asset match first
+  const asset = assets.find(a =>
+    a.id.toLowerCase() === searchTerm.toLowerCase() ||
+    (a.serial && a.serial.toLowerCase() === searchTerm.toLowerCase())
+  );
+
+  if (asset) {
+    selectAssetForContainer(asset.id);
+    e.target.value = '';
+    return;
+  }
+
+  // container match (lets you type a container ID and add all its assets)
+  try {
+    const container = await getContainerById(searchTerm, true);
+    if (!container) {
+      showNotification('error', `Asset/Container '${searchTerm}' not found`);
+      return;
+    }
+
+    let added = 0;
+    let already = 0;
+
+    for (const aid of (container.assetIds || [])) {
+      if (!selectedContainerAssets.has(aid)) {
+        // only add if the asset exists in inventory
+        if (assets.find(a => a.id === aid)) {
+          selectedContainerAssets.add(aid);
+          added++;
+        }
+      } else {
+        already++;
+      }
+    }
+
+    updateSelectedContainerAssetsDisplay();
+    e.target.value = '';
+    showNotification('success', `Added container ${container.id}: ${added} added (${already} already selected)`);
+  } catch (err) {
+    showNotification('error', `Failed to load container: ${err.message}`);
+  }
+}
+
+async function createContainer() {
+  ensureContainerCrudModal();
+
+  document.getElementById("containerCrudModalTitle").textContent = "Create Container";
+  document.getElementById("containerCrudModalBody").innerHTML = `
+    <div class="form-group">
+      <label class="form-label">Container ID</label>
+      <input id="containerIdInput" class="form-input" placeholder="e.g. CASE-A01" />
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Assets in this container</label>
+      <div style="border:1px solid #e5e5e5;border-radius:8px;padding:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <div><strong>Selected Assets:</strong> <span id="selectedContainerAssetsCount">0</span></div>
+          <button class="btn btn-secondary btn-sm" onclick="clearContainerSelection()">Clear</button>
+        </div>
+        <div id="selectedContainerAssetsList"><span style="color:#666;font-style:italic;">No assets selected</span></div>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Search & add assets</label>
+      <input id="containerAssetSearch" class="form-input" placeholder="Loading assets…" disabled />
+      <div id="availableContainerAssets" style="border:1px solid #eee;border-radius:8px;overflow:auto;max-height:260px;margin-top:8px;"></div>
+      <div style="color:#666;font-size:12px;margin-top:6px;">Tip: type at least 2 characters to search. Press Enter to add an exact asset ID (or a container ID).</div>
+    </div>
+
+    <div style="display:flex;gap:10px;justify-content:flex-end;">
+      <button class="btn btn-secondary" onclick="closeModal('containerCrudModal')">Cancel</button>
+      <button class="btn btn-success" onclick="saveNewContainer()">Create</button>
+    </div>
+  `;
+
+  openModal("containerCrudModal");
+
+  await initContainerAssetSelector([]);
+  const searchEl = document.getElementById('containerAssetSearch');
+  if (searchEl) searchEl.focus();
+}
+
+async function saveNewContainer() {
+  const id = (document.getElementById("containerIdInput").value || '').trim();
+  const assetIds = Array.from(selectedContainerAssets);
+
+  if (!id) return showNotification('error', 'Container ID is required');
+  if (assetIds.length === 0) return showNotification('error', 'Add at least 1 asset ID');
+
+  try {
+    await apiCall('/api/containers', 'POST', { id, assetIds });
+    showNotification('success', `Created container ${id}`);
+    closeModal("containerCrudModal");
+    await loadContainers();
+    await refreshContainersCache(true);
+  } catch (e) {
+    showNotification('error', `Failed to create container: ${e.message}`);
+  }
+}
+
+async function viewContainer(containerId) {
+  ensureContainerCrudModal();
+  try {
+    const c = await getContainerById(containerId, true);
+    if (!c) return showNotification('error', `Container ${containerId} not found`);
+
+    document.getElementById("containerCrudModalTitle").textContent = `Container: ${c.id}`;
+    document.getElementById("containerCrudModalBody").innerHTML = `
+      <div style="color:#666;margin-bottom:10px;">${c.assetIds.length} assets</div>
+      <pre style="background:#111;color:#ddd;padding:12px;border-radius:8px;overflow:auto;max-height:420px;">${escapeHtml(c.assetIds.join('\n'))}</pre>
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:12px;">
+        <button class="btn btn-secondary" onclick="closeModal('containerCrudModal')">Close</button>
+        <button class="btn btn-primary" onclick="editContainer('${String(c.id).replace(/'/g, "\\'")}')">Edit</button>
+      </div>
+    `;
+
+    openModal("containerCrudModal");
+  } catch (e) {
+    showNotification('error', `Failed to load container: ${e.message}`);
+  }
+}
+
+async function editContainer(containerId) {
+  ensureContainerCrudModal();
+  try {
+    const c = await getContainerById(containerId, true);
+    if (!c) return showNotification('error', `Container ${containerId} not found`);
+
+    document.getElementById("containerCrudModalTitle").textContent = `Edit Container: ${c.id}`;
+    document.getElementById("containerCrudModalBody").innerHTML = `
+      <div class="form-group">
+        <label class="form-label">Container ID</label>
+        <input id="editContainerIdInput" class="form-input" value="${escapeHtml(c.id)}" />
+        <div style="color:#666;font-size:12px;margin-top:6px;">You can rename the container here. If you change the ID, the container will be renamed when you click Save.</div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Assets in this container</label>
+        <div style="border:1px solid #e5e5e5;border-radius:8px;padding:12px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <div><strong>Selected Assets:</strong> <span id="selectedContainerAssetsCount">0</span></div>
+            <button class="btn btn-secondary btn-sm" onclick="clearContainerSelection()">Clear</button>
+          </div>
+          <div id="selectedContainerAssetsList"><span style="color:#666;font-style:italic;">No assets selected</span></div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Search & add assets</label>
+        <input id="containerAssetSearch" class="form-input" placeholder="Loading assets…" disabled />
+        <div id="availableContainerAssets" style="border:1px solid #eee;border-radius:8px;overflow:auto;max-height:260px;margin-top:8px;"></div>
+        <div style="color:#666;font-size:12px;margin-top:6px;">Tip: type at least 2 characters to search. Press Enter to add an exact asset ID (or a container ID).</div>
+      </div>
+
+      <div style="display:flex;gap:10px;justify-content:space-between;">
+        <button class="btn btn-danger" onclick="deleteContainer('${String(c.id).replace(/'/g, "\\'")}')">Delete</button>
+        <div style="display:flex;gap:10px;">
+          <button class="btn btn-secondary" onclick="closeModal('containerCrudModal')">Cancel</button>
+          <button class="btn btn-success" onclick="saveContainerEdit('${String(c.id).replace(/'/g, "\\'")}')">Save</button>
+        </div>
+      </div>
+    `;
+
+    openModal("containerCrudModal");
+
+    await initContainerAssetSelector(c.assetIds || []);
+    const searchEl = document.getElementById('containerAssetSearch');
+    if (searchEl) searchEl.focus();
+  } catch (e) {
+    showNotification('error', `Failed to edit container: ${e.message}`);
+  }
+}
+
+async function saveContainerEdit(containerId) {
+  const newId = (document.getElementById('editContainerIdInput')?.value || '').trim();
+  const assetIds = Array.from(selectedContainerAssets);
+
+  if (!newId) return showNotification('error', 'Container ID is required');
+  if (assetIds.length === 0) return showNotification('error', 'Container must include at least 1 asset ID');
+
+  try {
+    await apiCall(`/api/containers/${encodeURIComponent(containerId)}`, 'PUT', { newId, assetIds });
+    if (newId !== containerId) {
+      showNotification('success', `Renamed container ${containerId} → ${newId}`);
+    } else {
+      showNotification('success', `Updated container ${containerId}`);
+    }
+    closeModal("containerCrudModal");
+    await refreshContainersCache(true);
+    await loadContainers();
+  } catch (e) {
+    showNotification('error', `Failed to update container: ${e.message}`);
+  }
+} 
+
+async function deleteContainer(containerId) {
+  if (!confirm(`Delete container ${containerId}?`)) return;
+
+  try {
+    await apiCall(`/api/containers/${encodeURIComponent(containerId)}`, 'DELETE');
+    showNotification('success', `Deleted container ${containerId}`);
+    closeModal("containerCrudModal");
+    await refreshContainersCache(true);
+    await loadContainers();
+  } catch (e) {
+    showNotification('error', `Failed to delete container: ${e.message}`);
   }
 }
 
@@ -3408,6 +3998,14 @@ async function processUniversalAsset(eventId) {
         showFeedback(feedbackDiv, 'warning', 'Please enter an asset ID');
         return;
     }
+
+    if (!window.__processingContainerBatch) {
+      const container = await getContainerById(assetId, true);
+      if (container) {
+        await processUniversalContainer(eventId, container.id);
+        return;
+      }
+    }
     
     try {
         // Get event details and available assets to check asset existence and model matching
@@ -3525,7 +4123,162 @@ async function processUniversalAsset(eventId) {
     }
 }
 
+async function processUniversalContainer(eventId, containerId) {
+  const feedbackDiv = document.getElementById('universal-asset-feedback');
+  const input = document.getElementById('universalAssetInput');
 
+  const container = await getContainerById(containerId, true);
+  if (!container) {
+    if (feedbackDiv) showFeedback(feedbackDiv, 'error', `Container ${containerId} not found`);
+    return;
+  }
+
+  const assetIds = (container.assetIds || [])
+    .map(a => String(a || '').trim())
+    .filter(Boolean);
+
+  if (assetIds.length === 0) {
+    if (feedbackDiv) showFeedback(feedbackDiv, 'warning', `Container ${containerId} has no assets`);
+    return;
+  }
+
+  if (feedbackDiv) {
+    showFeedback(
+      feedbackDiv,
+      'info',
+      `Processing container <strong>${escapeHtml(containerId)}</strong> (${assetIds.length} assets)…<br/>` +
+      `• Any assets not originally assigned to the event will be added as extra and prepared.`
+    );
+  }
+
+  // Pull current event state once, then keep local sets updated as we go
+  let event;
+  try {
+    const eventRes = await apiCall(`/api/events/${eventId}`);
+    event = eventRes.data || {};
+  } catch (e) {
+    if (feedbackDiv) showFeedback(feedbackDiv, 'error', `Failed to load event: ${escapeHtml(e.message || String(e))}`);
+    return;
+  }
+
+  const preparedSet = new Set(event.actuallyPrepared || []);
+  const returnedSet = new Set(event.returnedItems || []);
+
+  const results = {
+    prepared: [],
+    skippedPrepared: [],
+    skippedReturned: [],
+    failed: []
+  };
+
+  window.__processingContainerBatch = true;
+  try {
+    for (const aid of assetIds) {
+      // Skip returned assets (same behavior as manual processing)
+      if (returnedSet.has(aid)) {
+        results.skippedReturned.push(aid);
+        continue;
+      }
+
+      // Skip already prepared assets (avoid /assign-specific "already assigned" error)
+      if (preparedSet.has(aid)) {
+        results.skippedPrepared.push(aid);
+        continue;
+      }
+
+      try {
+        // This endpoint both assigns (adds to prepared_items if missing) and prepares (adds to actually_prepared)
+        await apiCall(`/api/events/${eventId}/assign-specific`, 'POST', { assetId: aid });
+        results.prepared.push(aid);
+        preparedSet.add(aid);
+      } catch (err) {
+        results.failed.push({ id: aid, error: err?.message || String(err) });
+      }
+    }
+  } finally {
+    window.__processingContainerBatch = false;
+
+    if (input) {
+      input.value = '';
+      input.focus();
+    }
+  }
+
+  // Build a compact summary + expandable details
+  const total = assetIds.length;
+  const ok = results.prepared.length;
+  const already = results.skippedPrepared.length;
+  const returned = results.skippedReturned.length;
+  const failed = results.failed.length;
+
+  let detailsHtml = `
+    <div style="margin-top:6px;">
+      <div><strong>Summary</strong> (Container ${escapeHtml(containerId)}):</div>
+      <div>✅ Prepared: <strong>${ok}</strong> / ${total}</div>
+      <div>ℹ️ Already prepared (skipped): <strong>${already}</strong></div>
+      <div>↩️ Returned in this event (skipped): <strong>${returned}</strong></div>
+      <div style="${failed ? 'color:#a00;' : ''}">⚠️ Failed: <strong>${failed}</strong></div>
+    </div>
+  `;
+
+  const listToHtml = (title, arr) => {
+    if (!arr || arr.length === 0) return '';
+    const items = arr.slice(0, 50).map(x => `<li>${escapeHtml(String(x))}</li>`).join('');
+    const more = arr.length > 50 ? `<div style="color:#666;font-size:12px;">…and ${arr.length - 50} more</div>` : '';
+    return `
+      <div style="margin-top:10px;">
+        <div style="font-weight:700;">${escapeHtml(title)}</div>
+        <ul style="margin:6px 0 0 18px;">${items}</ul>
+        ${more}
+      </div>
+    `;
+  };
+
+  const failuresToHtml = (arr) => {
+    if (!arr || arr.length === 0) return '';
+    const rows = arr.slice(0, 30).map(f =>
+      `<tr><td style="padding:4px 8px;border-bottom:1px solid #eee;">${escapeHtml(f.id)}</td>` +
+      `<td style="padding:4px 8px;border-bottom:1px solid #eee;color:#a00;">${escapeHtml(f.error)}</td></tr>`
+    ).join('');
+    const more = arr.length > 30 ? `<div style="color:#666;font-size:12px;margin-top:6px;">…and ${arr.length - 30} more failures</div>` : '';
+    return `
+      <div style="margin-top:10px;">
+        <div style="font-weight:700;color:#a00;">Failures</div>
+        <div style="border:1px solid #eee;border-radius:6px;overflow:hidden;">
+          <table style="width:100%;border-collapse:collapse;">
+            <thead>
+              <tr style="background:#f8f9fa;">
+                <th style="text-align:left;padding:6px 8px;">Asset ID</th>
+                <th style="text-align:left;padding:6px 8px;">Reason</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+        ${more}
+      </div>
+    `;
+  };
+
+  detailsHtml += `
+    <details style="margin-top:10px;">
+      <summary style="cursor:pointer;">Show details</summary>
+      ${listToHtml('Prepared', results.prepared)}
+      ${listToHtml('Skipped (already prepared)', results.skippedPrepared)}
+      ${listToHtml('Skipped (returned)', results.skippedReturned)}
+      ${failuresToHtml(results.failed)}
+    </details>
+  `;
+
+  if (feedbackDiv) {
+    showFeedback(feedbackDiv, failed ? 'warning' : 'success', detailsHtml);
+  }
+
+  // Refresh just the asset list section once at the end (same UX as manual input)
+  setTimeout(() => {
+    try { updateAssetListSection(eventId); } catch (e) {}
+  }, 400);
+}
 
 /**
  * ASSIGN + PREPARE in one step for extra assets
@@ -3660,83 +4413,95 @@ function updateModelSection(section, modelGroup, eventId) {
 }
 
 function updateAllAssetsSection(event, eventId) {
-    // Find the "All Assets Assigned to Event" container
-    const allAssetsContainer = document.querySelector('div[style*="All Assets Assigned to Event"]');
-    if (!allAssetsContainer) return;
-    
-    // Find the parent container that includes the border
-    const parentContainer = allAssetsContainer.closest('div[style*="border: 1px solid #e9ecef"]');
-    if (!parentContainer) return;
-    
-    let content = `
-        <div style="background: #f8f9fa; padding: 8px 12px; font-weight: bold; border-bottom: 1px solid #e9ecef;">
-            All Assets Assigned to Event
-        </div>
-    `;
-    
-    if (event.assetsByDepartment && Object.keys(event.assetsByDepartment).length > 0) {
-        Object.keys(event.assetsByDepartment).forEach(dept => {
-            const assets = event.assetsByDepartment[dept];
-            
-            // Add department header if there are non-model assets
-            const nonModelAssets = assets.filter(asset => !asset.id.startsWith('[MODEL]'));
-            if (nonModelAssets.length > 0) {
-                content += `
-                    <div style="background: #f1f3f4; padding: 6px 12px; font-weight: 500; font-size: 13px; border-bottom: 1px solid #e9ecef;">
-                        ${dept} Department
-                    </div>
-                `;
-            }
-            
-            assets.forEach(asset => {
-                if (!asset.id.startsWith('[MODEL]')) {
-                    const isPrepared = event.actuallyPrepared && event.actuallyPrepared.includes(asset.id);
-                    const isReturned = event.returnedItems && event.returnedItems.includes(asset.id);
-                    
-                    let statusIcon = '📋';
-                    let statusColor = '#6c757d';
-                    let statusText = 'Assigned';
-                    const safeAssetId = encodeURIComponent(asset.id);
-                    let actionButton = `<button class="btn btn-success asset-action-btn" 
-                                              data-event-id="${eventId}" 
-                                              data-asset-id="${safeAssetId}" 
-                                              data-action="prepare"
-                                              style="padding: 4px 8px; font-size: 11px;">Prepare</button>`;
+  // This container DOES exist in your modal markup:
+  // <div id="all-assigned-assets" ...></div>
+  const container = document.getElementById("all-assigned-assets");
+  if (!container) return;
 
-                    if (isReturned) {
-                        actionButton = '<span style="color: #dc3545; font-size: 11px;">Returned</span>';
-                    } else if (isPrepared) {
-                        actionButton = `<button class="btn btn-warning asset-action-btn" 
-                                              data-event-id="${eventId}" 
-                                              data-asset-id="${safeAssetId}" 
-                                              data-action="unprepare"
-                                              style="padding: 4px 8px; font-size: 11px;">Unprepare</button>`;
-                    }
-                    
-                    // Add extra asset indicator
-                    const extraBadge = asset.isExtra ? '<span style="background: #fff3cd; color: #856404; padding: 2px 6px; border-radius: 3px; font-size: 10px; margin-left: 10px;">EXTRA</span>' : '';
-                    
-                    content += `
-                        <div style="padding: 8px 12px; border-bottom: 1px solid #f1f1f1; display: flex; justify-content: space-between; align-items: center;">
-                            <div>
-                                <span style="font-weight: 500;">${statusIcon} ${asset.id}</span>
-                                <span style="color: #666; font-size: 12px; margin-left: 10px;">${asset.name || ''}</span>
-                                ${extraBadge}
-                                <div style="color: ${statusColor}; font-size: 11px; margin-top: 2px;">${statusText}</div>
-                            </div>
-                            <div>
-                                ${actionButton}
-                            </div>
-                        </div>
-                    `;
-                }
-            });
-        });
-    } else {
-        content += '<p style="text-align: center; color: #666; padding: 20px;">No individual assets assigned to this event.</p>';
-    }
-    
-    parentContainer.innerHTML = content;
+  let content = "";
+
+  // Rebuild the “All Assets Assigned to Event” inner list (header stays outside this div)
+  if (event.assetsByDepartment && Object.keys(event.assetsByDepartment).length > 0) {
+    Object.keys(event.assetsByDepartment).forEach((dept) => {
+      const deptAssets = event.assetsByDepartment[dept] || [];
+
+      // Only show real assets here (ignore [MODEL] rows)
+      const nonModelAssets = deptAssets.filter(
+        (a) => a && a.id && !a.id.startsWith("[MODEL]")
+      );
+
+      if (nonModelAssets.length > 0) {
+        content += `
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:#f1f3f4;border-bottom:1px solid #e9ecef;cursor:pointer;"
+               onclick="togglePrepareSection('assigned-dept-${dept}')">
+            <div style="font-weight:500;font-size:13px;">${dept} Department (${nonModelAssets.length} assets)</div>
+            <span class="toggle-icon" style="font-size:14px;font-weight:bold;color:#666;">▼</span>
+          </div>
+          <div id="assigned-dept-${dept}" style="display:block;">
+        `;
+      }
+
+      nonModelAssets.forEach((asset) => {
+        const assetId = asset.id;
+
+        const isPrepared = Array.isArray(event.actuallyPrepared) && event.actuallyPrepared.includes(assetId);
+        const isReturned = Array.isArray(event.returnedItems) && event.returnedItems.includes(assetId);
+        const isExtra = Array.isArray(event.extraAssets) && event.extraAssets.includes(assetId);
+
+        const statusIcon = isReturned ? "↩️" : (isPrepared ? "✅" : "⏳");
+        const statusColor = isReturned ? "#dc3545" : (isPrepared ? "#28a745" : "#ffc107");
+        const statusText = isReturned ? "Returned" : (isPrepared ? "Prepared" : "Pending");
+
+        const extraBadge = isExtra
+          ? '<span style="background:#fff3cd;color:#856404;padding:2px 6px;border-radius:3px;font-size:10px;margin-left:10px;">EXTRA</span>'
+          : "";
+
+        const safeAssetId = encodeURIComponent(assetId);
+
+        let actionButton = "";
+        if (isReturned) {
+          actionButton = '<span style="color:#dc3545;font-size:11px;">Returned</span>';
+        } else if (isPrepared) {
+          actionButton = `
+            <button class="btn btn-warning asset-action-btn"
+                    data-event-id="${eventId}"
+                    data-asset-id="${safeAssetId}"
+                    data-action="unprepare"
+                    style="padding:4px 8px;font-size:11px;">Unprepare</button>
+          `;
+        } else {
+          actionButton = `
+            <button class="btn btn-success asset-action-btn"
+                    data-event-id="${eventId}"
+                    data-asset-id="${safeAssetId}"
+                    data-action="prepare"
+                    style="padding:4px 8px;font-size:11px;">Prepare</button>
+          `;
+        }
+
+        content += `
+          <div style="padding:8px 12px;border-bottom:1px solid #f1f1f1;display:flex;justify-content:space-between;align-items:center;">
+            <div>
+              <span style="font-weight:500;">${statusIcon} ${assetId}</span>
+              <span style="color:#666;font-size:12px;margin-left:10px;">${asset.name || ""}</span>
+              ${extraBadge}
+              <div style="color:${statusColor};font-size:11px;margin-top:2px;">${statusText}</div>
+            </div>
+            <div>${actionButton}</div>
+          </div>
+        `;
+      });
+
+      if (nonModelAssets.length > 0) {
+        content += `</div>`;
+      }
+    });
+  } else {
+    content =
+      '<p style="text-align:center;color:#666;padding:20px;">No individual assets assigned to this event.</p>';
+  }
+
+  container.innerHTML = content;
 }
 
 async function updateAssetListSection(eventId) {
@@ -7245,24 +8010,6 @@ async function viewAsset(assetId) {
   openModal("assetDetailsModal");
 }
 
-async function editAsset(assetId) {
-  showNotification("info", `Edit asset ${assetId} - Feature coming soon`);
-}
-
-function viewContainer(containerId) {
-  showNotification(
-    "info",
-    `View container ${containerId} - Feature coming soon`
-  );
-}
-
-function editContainer(containerId) {
-  showNotification(
-    "info",
-    `Edit container ${containerId} - Feature coming soon`
-  );
-}
-
 async function refreshAssetsTabContent(eventId) {
   try {
     const response = await apiCall(`/api/events/${eventId}`);
@@ -7938,34 +8685,58 @@ document.addEventListener("DOMContentLoaded", function () {
     });
     
     // Add Enter key handler for direct asset ID selection
-    maintenanceAssetSearch.addEventListener("keypress", function (e) {
+    maintenanceAssetSearch.addEventListener("keypress", async function (e) {
       if (e.key === "Enter") {
         e.preventDefault();
         const searchTerm = e.target.value.trim();
-        
-        if (!searchTerm) {
+        if (!searchTerm) return;
+
+        if (!assets || assets.length === 0) {
+          showNotification('error', 'Assets not loaded yet');
           return;
         }
-        
-        // Try to find exact asset match
-        if (assets && assets.length > 0) {
-          const asset = assets.find(a => 
-            a.id.toLowerCase() === searchTerm.toLowerCase() || 
-            (a.serial && a.serial.toLowerCase() === searchTerm.toLowerCase())
-          );
-          
-          if (asset) {
-            if (!selectedMaintenanceAssets.has(asset.id)) {
-              selectAssetForMaintenance(asset.id);
-              e.target.value = '';
-            } else {
-              showNotification('warning', `Asset ${asset.id} is already selected`);
-            }
+
+        // exact asset match first
+        const asset = assets.find(a =>
+          a.id.toLowerCase() === searchTerm.toLowerCase() ||
+          (a.serial && a.serial.toLowerCase() === searchTerm.toLowerCase())
+        );
+
+        if (asset) {
+          if (!selectedMaintenanceAssets.has(asset.id)) {
+            selectAssetForMaintenance(asset.id);
+            e.target.value = '';
           } else {
-            showNotification('error', `Asset ID '${searchTerm}' not found`);
+            showNotification('warning', `Asset ${asset.id} is already selected`);
           }
-        } else {
-          showNotification('error', 'Assets not loaded yet');
+          return;
+        }
+
+        // ---------- NEW: container match ----------
+        try {
+          const container = await getContainerById(searchTerm, true);
+          if (!container) {
+            showNotification('error', `Asset/Container '${searchTerm}' not found`);
+            return;
+          }
+
+          let added = 0;
+          let already = 0;
+
+          for (const aid of (container.assetIds || [])) {
+            if (!selectedMaintenanceAssets.has(aid)) {
+              selectAssetForMaintenance(aid);
+              added++;
+            } else {
+              already++;
+            }
+          }
+
+          e.target.value = '';
+          showNotification('success', `Added container ${container.id}: ${added} added (${already} already selected)`);
+
+        } catch (err) {
+          showNotification('error', `Failed to load container: ${err.message}`);
         }
       }
     });
@@ -7993,7 +8764,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
   // Add to the existing event delegation
   document.addEventListener('click', function(e) {
-      // ... existing code ...
       
       if (e.target.classList.contains('select-maintenance-btn')) {
           e.preventDefault();
@@ -8009,6 +8779,24 @@ document.addEventListener("DOMContentLoaded", function () {
           if (assetId) {
               selectAssetForMaintenance(assetId);
           }
+      }
+        // Container selector (used in Containers create/edit modal)
+      const containerSelectBtn = e.target.closest && e.target.closest('.select-container-btn');
+      if (containerSelectBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        const assetId = containerSelectBtn.getAttribute('data-asset-id');
+        if (assetId) {
+          selectAssetForContainer(assetId);
+        }
+      }
+
+      const containerItem = e.target.closest && e.target.closest('.container-asset-item');
+      if (containerItem) {
+        const assetId = containerItem.getAttribute('data-asset-id');
+        if (assetId) {
+          selectAssetForContainer(assetId);
+        }
       }
   });
   
