@@ -1,41 +1,3 @@
-2025/11/13 13:58:42,bnjm2000,Added 16x Shure AD1 model to event 80 (total: 16)
-2025/11/13 13:58:46,bnjm2000,Added 16x Shure AD2 model to event 80 (total: 16)
-2025/11/13 13:58:52,bnjm2000,Assigned specific asset C1ProWHS#01 to event 80
-2025/11/13 13:58:54,bnjm2000,Assigned specific asset C1ProRHS#01 to event 80
-2025/11/13 13:58:55,bnjm2000,Assigned specific asset C1ProRHS#02 to event 80
-2025/11/13 13:58:57,bnjm2000,Assigned specific asset C1ProRHS#03 to event 80
-2025/11/13 13:58:57,bnjm2000,Assigned specific asset C1ProRHS#04 to event 80
-2025/11/13 13:58:59,bnjm2000,Assigned specific asset C1ProRHS#05 to event 80
-2025/11/13 13:58:59,bnjm2000,Assigned specific asset C1ProRHS#06 to event 80
-2025/11/13 13:59:01,bnjm2000,Assigned specific asset C1ProRHS#07 to event 80
-2025/11/13 13:59:01,bnjm2000,Assigned specific asset C1ProRHS#08 to event 80
-2025/11/13 13:59:03,bnjm2000,Assigned specific asset C1ProHub#01 to event 80
-2025/11/13 13:59:05,bnjm2000,Assigned specific asset C1ProCharger#01 to event 80
-2025/11/13 13:59:07,bnjm2000,Assigned specific asset HLBatt#01 to event 80
-2025/11/13 13:59:08,bnjm2000,Assigned specific asset HLBatt#02 to event 80
-2025/11/13 13:59:10,bnjm2000,Assigned specific asset HLBatt#03 to event 80
-2025/11/13 13:59:10,bnjm2000,Assigned specific asset HLBatt#04 to event 80
-2025/11/13 13:59:11,bnjm2000,Assigned specific asset HLBatt#05 to event 80
-2025/11/13 13:59:13,bnjm2000,Assigned specific asset HLBatt#06 to event 80
-2025/11/13 13:59:13,bnjm2000,Assigned specific asset HLBatt#07 to event 80
-2025/11/13 13:59:15,bnjm2000,Assigned specific asset HLBatt#08 to event 80
-2025/11/13 13:59:15,bnjm2000,Assigned specific asset HLBatt#09 to event 80
-2025/11/13 13:59:15,bnjm2000,Assigned specific asset HLBatt#10 to event 80
-2025/11/13 13:59:18,bnjm2000,Assigned specific asset HLBatt#11 to event 80
-2025/11/13 13:59:18,bnjm2000,Assigned specific asset HLBatt#12 to event 80
-2025/11/13 13:59:20,bnjm2000,Assigned specific asset HLBatt#13 to event 80
-2025/11/13 13:59:20,bnjm2000,Assigned specific asset HLBatt#14 to event 80
-2025/11/13 13:59:21,bnjm2000,Assigned specific asset HLBatt#15 to event 80
-2025/11/13 13:59:23,bnjm2000,Assigned specific asset HLBatt#16 to event 80
-2025/11/13 15:18:00,bnjm2000,Updated location for asset 5XT#30 from 'Store' to 'Store'
-2025/11/13 15:18:00,bnjm2000,Updated serial number for asset 5XT#30 from '260053861' to '260053861'
-2025/11/13 15:18:00,bnjm2000,Removed Out of Commission status from asset 5XT#30
-2025/11/13 15:18:00,bnjm2000,Maintenance logged for asset 5XT#30: Exchanged with Concept Systems for 1-to-1 swap. OLD SN: 260046715 NEW SN: 260053861
-2025/11/13 15:18:10,bnjm2000,"Deleted maintenance log for asset 5XT#30: 'Exchanged with Concept Systems for 1-to-1 swap. OLD SN: 260046715 NEW SN: 260053861 [Location: Store, Serial: 260053861, Cleared OOC, Cleared Missing]' (deleted by bnjm2000)"
-2025/11/13 15:18:20,bnjm2000,"Deleted maintenance log for asset 5XT#30: 'Exchanged with Concept Systems for 1-to-1 swap. OLD SN: 260046715 NEW SN: 260053861 [Location: Store, Serial: 260053861, Cleared OOC, Cleared Missing]' (deleted by bnjm2000)"
-2025/11/13 15:18:31,bnjm2000,Updated location for asset 5XT#30 from '' to 'Store'
-2025/11/13 15:18:31,bnjm2000,Updated serial number for asset 5XT#30 from '260053861' to '260053861'
-2025/11/13 15:18:31,bnjm2000,Removed Out of Commission status from asset 5XT#30
 2025/11/13 15:18:31,bnjm2000,Maintenance logged for asset 5XT#30: Exchanged with Concept Systems for 1-to-1 swap. OLD SN: 260046715 NEW SN: 260053861
 2025/11/13 15:20:30,bnjm2000,Marked asset PB#14 as Out of Commission
 2025/11/13 15:20:30,bnjm2000,Maintenance logged for asset PB#14: Discovered screen faulty (Franck Muller @ Claudine Restaurant)
@@ -998,3 +960,41 @@
 2025/12/31 11:10:39,bnjm2000,Removed Shure ULXD4Q model from event 98
 2025/12/31 11:10:44,bnjm2000,Added 2x Shure ULXD4D model to event 98 (total: 2)
 2025/12/31 11:11:07,bnjm2000,Added 1x Yamaha MG10 model to event 98 (total: 1)
+2025/12/31 12:31:37,bnjm2000,Assigned specific asset X12#01 to event 98
+2025/12/31 12:31:37,bnjm2000,Assigned specific asset X12#02 to event 98
+2025/12/31 12:31:48,bnjm2000,Completely removed asset X12#01 from event 98
+2025/12/31 12:31:49,bnjm2000,Completely removed asset X12#02 from event 98
+2025/12/31 13:51:21,bnjm2000,Assigned specific asset 5XT#01 to event 94
+2025/12/31 13:51:21,bnjm2000,Assigned specific asset 5XT#02 to event 94
+2025/12/31 13:51:21,bnjm2000,Assigned specific asset 5XT#03 to event 94
+2025/12/31 13:51:21,bnjm2000,Assigned specific asset 5XT#04 to event 94
+2025/12/31 13:51:21,bnjm2000,Assigned specific asset ETR5#01 to event 94
+2025/12/31 13:51:21,bnjm2000,Assigned specific asset ETR5#02 to event 94
+2025/12/31 13:51:21,bnjm2000,Assigned specific asset ETR5#03 to event 94
+2025/12/31 13:51:21,bnjm2000,Assigned specific asset ETR5#04 to event 94
+2025/12/31 13:51:49,bnjm2000,Completely removed asset 5XT#01 from event 94
+2025/12/31 13:51:50,bnjm2000,Completely removed asset 5XT#02 from event 94
+2025/12/31 13:51:50,bnjm2000,Completely removed asset 5XT#03 from event 94
+2025/12/31 13:51:51,bnjm2000,Completely removed asset 5XT#04 from event 94
+2025/12/31 13:51:51,bnjm2000,Completely removed asset ETR5#01 from event 94
+2025/12/31 13:51:52,bnjm2000,Completely removed asset ETR5#02 from event 94
+2025/12/31 13:51:53,bnjm2000,Completely removed asset ETR5#03 from event 94
+2025/12/31 13:51:53,bnjm2000,Completely removed asset ETR5#04 from event 94
+2025/12/31 13:58:31,bnjm2000,Updated event 93: NS Temple via web interface
+2025/12/31 13:58:59,bnjm2000,Updated event 98: SG Motorshow 2026 @ Suntec Hall 2 via web interface
+2025/12/31 15:12:10,bnjm2000,Assigned specific asset 5XT#01 to event 94
+2025/12/31 15:12:10,bnjm2000,Assigned specific asset 5XT#02 to event 94
+2025/12/31 15:12:10,bnjm2000,Assigned specific asset 5XT#03 to event 94
+2025/12/31 15:12:10,bnjm2000,Assigned specific asset 5XT#04 to event 94
+2025/12/31 15:12:10,bnjm2000,Assigned specific asset ETR5#01 to event 94
+2025/12/31 15:12:10,bnjm2000,Assigned specific asset ETR5#02 to event 94
+2025/12/31 15:12:10,bnjm2000,Assigned specific asset ETR5#03 to event 94
+2025/12/31 15:12:10,bnjm2000,Assigned specific asset ETR5#04 to event 94
+2025/12/31 15:12:16,bnjm2000,Completely removed asset 5XT#01 from event 94
+2025/12/31 15:12:17,bnjm2000,Completely removed asset 5XT#02 from event 94
+2025/12/31 15:12:17,bnjm2000,Completely removed asset 5XT#03 from event 94
+2025/12/31 15:12:18,bnjm2000,Completely removed asset 5XT#04 from event 94
+2025/12/31 15:12:18,bnjm2000,Completely removed asset ETR5#01 from event 94
+2025/12/31 15:12:18,bnjm2000,Completely removed asset ETR5#02 from event 94
+2025/12/31 15:12:20,bnjm2000,Completely removed asset ETR5#04 from event 94
+2025/12/31 15:12:20,bnjm2000,Completely removed asset ETR5#03 from event 94
