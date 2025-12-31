@@ -1,11 +1,3 @@
-2025/11/13 15:18:31,bnjm2000,Maintenance logged for asset 5XT#30: Exchanged with Concept Systems for 1-to-1 swap. OLD SN: 260046715 NEW SN: 260053861
-2025/11/13 15:20:30,bnjm2000,Marked asset PB#14 as Out of Commission
-2025/11/13 15:20:30,bnjm2000,Maintenance logged for asset PB#14: Discovered screen faulty (Franck Muller @ Claudine Restaurant)
-2025/11/20 11:05:48,system,Failed login attempt for username: bnjm2000
-2025/11/20 11:05:51,system,Failed login attempt for username: bnjm2000
-2025/11/20 11:05:55,bnjm2000,User bnjm2000 logged in via web interface
-2025/11/20 11:06:45,bnjm2000,Marked asset BA70#16 as Out of Commission
-2025/11/20 11:06:45,bnjm2000,Maintenance logged for asset BA70#16: Became faulty on use (Wedding of Justin & Amanda @ Raffles Sentosa)
 2025/11/20 11:11:36,bnjm2000,Updated location for asset BA70#16 from '' to 'Store'
 2025/11/20 11:11:36,bnjm2000,Updated serial number for asset BA70#16 from '0483001285' to '0483001888'
 2025/11/20 11:11:36,bnjm2000,Removed Out of Commission status from asset BA70#16
@@ -998,3 +990,11 @@
 2025/12/31 15:12:18,bnjm2000,Completely removed asset ETR5#02 from event 94
 2025/12/31 15:12:20,bnjm2000,Completely removed asset ETR5#04 from event 94
 2025/12/31 15:12:20,bnjm2000,Completely removed asset ETR5#03 from event 94
+2025/12/31 15:54:41,bnjm2000,Updated container ULXD Set #01 (2 assets)
+2025/12/31 15:54:55,bnjm2000,Updated container ULXD Set #02 (2 assets)
+2025/12/31 15:55:12,bnjm2000,Updated container ULXD Set #03 (2 assets)
+2025/12/31 15:55:45,bnjm2000,Updated container ULXD Set #04 (2 assets)
+2025/12/31 15:56:39,bnjm2000,Created container LA RAK #01 (5 assets)
+2025/12/31 15:57:02,bnjm2000,Created container LA RAK #02 (5 assets)
+2025/12/31 15:57:39,bnjm2000,Created container LA RAK #03 (5 assets)
+2025/12/31 15:57:56,bnjm2000,Created container LA RAK #04 (3 assets)
