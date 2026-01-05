@@ -2,7 +2,7 @@ import os
 import csv
 import json
 from models import User, InventoryItem, Container, Event, LogEntry, hash_password
-from utils import sanitize_filename
+from utils import sanitize_filename, open_csv_robust, clean_csv_cell
 
 # Constants
 MAX_LOG_LINES = 1000
@@ -66,16 +66,25 @@ class DataManager:
         filepath = os.path.join(self.data_folder, 'Users.csv')
         if not os.path.exists(filepath):
             return
-        with open(filepath, 'r', newline='') as f:
+
+        f, enc = open_csv_robust(filepath)
+        try:
+            if enc not in ("utf-8", "utf-8-sig"):
+                print(f"Warning: Users.csv decoded using {enc}. Consider re-saving as UTF-8.")
             reader = csv.reader(f)
             for row in reader:
                 if row:
-                    username, password_hash, salt, is_admin = row
+                    row = [clean_csv_cell(c) for c in row]
+                    if len(row) < 4:
+                        continue
+                    username, password_hash, salt, is_admin = row[:4]
                     self.users[username] = User(username, password_hash, salt, is_admin == 'True')
+        finally:
+            f.close()
 
     def save_users(self):
         filepath = os.path.join(self.data_folder, 'Users.csv')
-        with open(filepath, 'w', newline='') as f:
+        with open(filepath, 'w', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
             for user in self.users.values():
                 writer.writerow([user.username, user.password_hash, user.salt, user.is_admin])
@@ -84,30 +93,45 @@ class DataManager:
         filepath = os.path.join(self.data_folder, 'Inventory.csv')
         if not os.path.exists(filepath):
             return
-        with open(filepath, 'r', newline='', encoding='utf-8') as f:
+
+        f, enc = open_csv_robust(filepath)
+        try:
+            if enc not in ("utf-8", "utf-8-sig"):
+                print(f"Warning: Inventory.csv decoded using {enc}. Consider re-saving as UTF-8.")
             reader = csv.DictReader(f)
             for row in reader:
-                if row:
-                    maintenance_logs = row['MaintenanceLogs'].split('|') if row['MaintenanceLogs'] else []
-                    department_code = row.get('DepartmentCode', 'UN')
-                    is_ooc = row.get('IsOOC', 'False') == 'True'
-                    item = InventoryItem(
-                        asset_id=row['AssetID'],
-                        brand=row['Brand'],
-                        model_number=row['ModelNumber'],
-                        serial_number=row['SerialNumber'],
-                        description=row.get('Description',''),  # This should be the full description
-                        is_missing=row['IsMissing'] == 'True',
-                        is_ooc=is_ooc,
-                        maintenance_logs=maintenance_logs,
-                        department_code=department_code,
-                        default_location=row.get('DefaultLocation', 'Store'),
-                        current_location=row.get('CurrentLocation', '')
-                    )
+                if not row:
+                    continue
+
+                # clean all values
+                row = {k: clean_csv_cell(v) for k, v in row.items()}
+
+                maintenance_logs = row.get('MaintenanceLogs', '').split('|') if row.get('MaintenanceLogs') else []
+                department_code = row.get('DepartmentCode', 'UN')
+                is_ooc = row.get('IsOOC', 'False') == 'True'
+
+                item = InventoryItem(
+                    asset_id=row.get('AssetID', ''),
+                    brand=row.get('Brand', ''),
+                    model_number=row.get('ModelNumber', ''),
+                    serial_number=row.get('SerialNumber', ''),
+                    description=row.get('Description', ''),
+                    is_missing=row.get('IsMissing', 'False') == 'True',
+                    is_ooc=is_ooc,
+                    maintenance_logs=maintenance_logs,
+                    department_code=department_code,
+                    default_location=row.get('DefaultLocation', 'Store'),
+                    current_location=row.get('CurrentLocation', '')
+                )
+
+                if item.asset_id:
                     self.inventory[item.asset_id] = item
+        finally:
+            f.close()
+
     def save_inventory(self):
         filepath = os.path.join(self.data_folder, 'Inventory.csv')
-        with open(filepath, 'w', newline='') as f:
+        with open(filepath, 'w', newline='', encoding='utf-8') as f:
             fieldnames = [
                 'AssetID', 'Brand', 'ModelNumber', 'SerialNumber', 'Description',
                 'IsMissing', 'IsOOC', 'MaintenanceLogs', 'DepartmentCode', 'DefaultLocation', 'CurrentLocation'
@@ -129,21 +153,32 @@ class DataManager:
                     'CurrentLocation': item.current_location
                 })
 
+
     def load_containers(self):
         filepath = os.path.join(self.data_folder, 'Containers.csv')
         if not os.path.exists(filepath):
             return
-        with open(filepath, 'r', newline='') as f:
+
+        f, enc = open_csv_robust(filepath)
+        try:
+            if enc not in ("utf-8", "utf-8-sig"):
+                print(f"Warning: Containers.csv decoded using {enc}. Consider re-saving as UTF-8.")
             reader = csv.reader(f)
             for row in reader:
-                if row:
-                    container_id = row[0]
-                    asset_ids = row[1].split('|') if len(row) > 1 and row[1] else []
+                if not row:
+                    continue
+                row = [clean_csv_cell(c) for c in row]
+                container_id = row[0]
+                asset_ids = row[1].split('|') if len(row) > 1 and row[1] else []
+                asset_ids = [clean_csv_cell(a) for a in asset_ids if clean_csv_cell(a)]
+                if container_id:
                     self.containers[container_id] = Container(container_id, asset_ids)
+        finally:
+            f.close()
 
     def save_containers(self):
         filepath = os.path.join(self.data_folder, 'Containers.csv')
-        with open(filepath, 'w', newline='') as f:
+        with open(filepath, 'w', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
             for container in self.containers.values():
                 writer.writerow([container.container_id, '|'.join(container.asset_ids)])
@@ -153,91 +188,103 @@ class DataManager:
         self.event_file_map = {}
         if not os.path.exists(self.events_folder):
             return
+
         for filename in os.listdir(self.events_folder):
-            if filename.endswith('.csv'):
-                filepath = os.path.join(self.events_folder, filename)
-                with open(filepath, 'r', newline='') as f:
-                    reader = csv.DictReader(f)
-                    event_data = next(reader, None)
-                    if not event_data:
-                        print(f"Warning: Event file {filename} is empty or corrupted.")
-                        continue
-                    event_id = int(event_data['EventID'])
-                    name = event_data['Name']
-                    start_date = event_data.get('StartDate', event_data.get('Date', ''))
-                    end_date = event_data.get('EndDate', start_date)
-                    asset_models = []
-                    if event_data.get('AssetModels'):
-                        try:
-                            asset_models = eval(event_data['AssetModels'])
-                        except Exception as e:
-                            print(f"Error parsing 'AssetModels' in event file {filename}: {e}. Setting to empty list.")
-                            asset_models = []
+            if not filename.endswith('.csv'):
+                continue
 
-                    prepared_items = []
-                    if event_data.get('PreparedItems'):
-                        try:
-                            prepared_items = json.loads(event_data['PreparedItems'])
-                        except json.JSONDecodeError as e:
-                            print(f"Error parsing 'PreparedItems' in event file {filename}: {e}. Setting to empty list.")
-                            prepared_items = []
+            filepath = os.path.join(self.events_folder, filename)
+            f, enc = open_csv_robust(filepath)
+            try:
+                if enc not in ("utf-8", "utf-8-sig"):
+                    print(f"Warning: Event file {filename} decoded using {enc}. Consider re-saving as UTF-8.")
 
-                    returned_items = []
-                    if event_data.get('ReturnedItems'):
-                        try:
-                            returned_items = json.loads(event_data['ReturnedItems'])
-                        except json.JSONDecodeError as e:
-                            print(f"Error parsing 'ReturnedItems' in event file {filename}: {e}. Setting to empty list.")
-                            returned_items = []
+                reader = csv.DictReader(f)
+                event_data = next(reader, None)
+                if not event_data:
+                    print(f"Warning: Event file {filename} is empty or corrupted.")
+                    continue
 
-                    actually_prepared = []
-                    if event_data.get('ActuallyPrepared'):
-                        try:
-                            actually_prepared = json.loads(event_data['ActuallyPrepared'])
-                        except json.JSONDecodeError as e:
-                            print(f"Error parsing 'ActuallyPrepared' in event file {filename}: {e}. Setting to empty list.")
-                            actually_prepared = []
+                event_data = {k: clean_csv_cell(v) for k, v in event_data.items()}
 
-                    extra_assets = []
-                    if event_data.get('ExtraAssets'):
-                        try:
-                            extra_assets = json.loads(event_data['ExtraAssets'])
-                        except json.JSONDecodeError as e:
-                            print(f"Error parsing 'ExtraAssets' in event file {filename}: {e}. Setting to empty list.")
-                            extra_assets = []
+                try:
+                    event_id = int(event_data.get('EventID', '0') or '0')
+                except ValueError:
+                    print(f"Warning: Event file {filename} has invalid EventID: {event_data.get('EventID')}")
+                    continue
 
-                    state = event_data.get('State', 'Added')
-                    # Get tag from CSV, default to 'events' for backward compatibility
-                    tag = event_data.get('Tag', 'events')
-                    
-                    # Load force_state_override flag, default to False for backward compatibility
-                    force_state_override = event_data.get('ForceStateOverride', 'False') == 'True'
-                    
-                    event = Event(
-                        event_id=event_id,
-                        name=name,
-                        start_date=start_date,
-                        end_date=end_date,
-                        asset_models=asset_models,
-                        prepared_items=prepared_items,
-                        state=state,
-                        returned_items=returned_items,
-                        actually_prepared=actually_prepared,
-                        extra_assets=extra_assets,
-                        tag=tag,
-                        force_state_override=force_state_override
-                    )
-                    
-                    # Ensure the attributes are set (in case the Event constructor doesn't handle them properly)
-                    event.actually_prepared = actually_prepared
-                    event.extra_assets = extra_assets
-                    event.tag = tag
-                    event.force_state_override = force_state_override
-                    
-                    # print(f"DEBUG: Successfully loaded event {event_id} with {len(prepared_items)} prepared items")
-                    
-                    self.events[event_id] = event
-                    self.event_file_map[event_id] = filename
+                name = event_data.get('Name', '')
+                start_date = event_data.get('StartDate', event_data.get('Date', ''))
+                end_date = event_data.get('EndDate', start_date)
+
+                asset_models = []
+                if event_data.get('AssetModels'):
+                    try:
+                        asset_models = eval(event_data['AssetModels'])
+                    except Exception as e:
+                        print(f"Error parsing 'AssetModels' in event file {filename}: {e}. Setting to empty list.")
+                        asset_models = []
+
+                prepared_items = []
+                if event_data.get('PreparedItems'):
+                    try:
+                        prepared_items = json.loads(event_data['PreparedItems'])
+                    except json.JSONDecodeError as e:
+                        print(f"Error parsing 'PreparedItems' in event file {filename}: {e}. Setting to empty list.")
+                        prepared_items = []
+
+                returned_items = []
+                if event_data.get('ReturnedItems'):
+                    try:
+                        returned_items = json.loads(event_data['ReturnedItems'])
+                    except json.JSONDecodeError as e:
+                        print(f"Error parsing 'ReturnedItems' in event file {filename}: {e}. Setting to empty list.")
+                        returned_items = []
+
+                actually_prepared = []
+                if event_data.get('ActuallyPrepared'):
+                    try:
+                        actually_prepared = json.loads(event_data['ActuallyPrepared'])
+                    except json.JSONDecodeError as e:
+                        print(f"Error parsing 'ActuallyPrepared' in event file {filename}: {e}. Setting to empty list.")
+                        actually_prepared = []
+
+                extra_assets = []
+                if event_data.get('ExtraAssets'):
+                    try:
+                        extra_assets = json.loads(event_data['ExtraAssets'])
+                    except json.JSONDecodeError as e:
+                        print(f"Error parsing 'ExtraAssets' in event file {filename}: {e}. Setting to empty list.")
+                        extra_assets = []
+
+                state = event_data.get('State', 'Added')
+                tag = event_data.get('Tag', 'events')
+                force_state_override = event_data.get('ForceStateOverride', 'False') == 'True'
+
+                event = Event(
+                    event_id=event_id,
+                    name=name,
+                    start_date=start_date,
+                    end_date=end_date,
+                    asset_models=asset_models,
+                    prepared_items=prepared_items,
+                    state=state,
+                    returned_items=returned_items,
+                    actually_prepared=actually_prepared,
+                    extra_assets=extra_assets,
+                    tag=tag,
+                    force_state_override=force_state_override
+                )
+
+                event.actually_prepared = actually_prepared
+                event.extra_assets = extra_assets
+                event.tag = tag
+                event.force_state_override = force_state_override
+
+                self.events[event_id] = event
+                self.event_file_map[event_id] = filename
+            finally:
+                f.close()
 
     def save_event(self, event):
         # Create backup before saving
@@ -278,7 +325,7 @@ class DataManager:
             print(f"ERROR: NOT SAVING to prevent corruption!")
             return
         
-        with open(filepath, 'w', newline='') as f:
+        with open(filepath, 'w', newline='', encoding='utf-8') as f:
             fieldnames = ['EventID', 'Name', 'StartDate', 'EndDate', 'AssetModels', 'PreparedItems', 'ReturnedItems', 'State', 'ActuallyPrepared', 'ExtraAssets', 'Tag', 'ForceStateOverride']
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
@@ -322,16 +369,25 @@ class DataManager:
         filepath = os.path.join(self.data_folder, 'Logs.csv')
         if not os.path.exists(filepath):
             return
-        with open(filepath, 'r', newline='') as f:
+
+        f, enc = open_csv_robust(filepath)
+        try:
+            if enc not in ("utf-8", "utf-8-sig"):
+                print(f"Warning: Logs.csv decoded using {enc}. Consider re-saving as UTF-8.")
             reader = csv.reader(f)
             for row in reader:
                 if row:
-                    timestamp, user, action = row
+                    row = [clean_csv_cell(c) for c in row]
+                    if len(row) < 3:
+                        continue
+                    timestamp, user, action = row[:3]
                     self.logs.append(LogEntry(timestamp, user, action))
+        finally:
+            f.close()
 
     def save_logs(self):
         filepath = os.path.join(self.data_folder, 'Logs.csv')
-        with open(filepath, 'w', newline='') as f:
+        with open(filepath, 'w', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
             for log in self.logs[-MAX_LOG_LINES:]:
                 writer.writerow([log.timestamp, log.user, log.action])
@@ -345,8 +401,11 @@ class DataManager:
                 if not os.path.exists(backup_folder):
                     os.makedirs(backup_folder)
                 backup_path = os.path.join(backup_folder, f"backup_{filename}")
-                with open(filepath, 'r') as original, open(backup_path, 'w') as backup:
+
+                # binary copy so encoding can never break backups
+                with open(filepath, 'rb') as original, open(backup_path, 'wb') as backup:
                     backup.write(original.read())
+
                 print(f"Backup created at {backup_path}.")
             else:
                 print(f"Event file {filename} does not exist. No backup created.")
