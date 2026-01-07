@@ -20,14 +20,14 @@ def run_web():
     try:
         from app import app, init_data_manager
         print("Starting Avec Inventory Tracker Web Interface...")
-        print("Access the application at: http://192.168.0.209:5000")
+        print("Access the application at: http://192.168.0.209:80")
         print("Press Ctrl+C to stop the server")
         
         # Initialize data manager
         init_data_manager()
         
         # Run Flask app
-        app.run(debug=False, host='192.168.0.209', port=5000)
+        app.run(debug=False, host='192.168.0.209', port=80)
     except ImportError as e:
         print(f"Error: Missing required dependencies for web interface: {e}")
         print("Please install Flask and Flask-CORS:")
