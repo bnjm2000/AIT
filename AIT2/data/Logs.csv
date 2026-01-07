@@ -1,12 +1,3 @@
-2025/11/20 13:32:24,bnjm2000,"Maintenance logged for asset AD4Q#03: Discovered ""B"" antenna not working, even when connected directly to antenna"
-2025/11/20 16:27:46,bnjm2000,Updated location for asset PB#36 from 'Total Solutions' to 'Store'
-2025/11/20 16:27:46,bnjm2000,Removed Out of Commission status from asset PB#36
-2025/11/20 16:27:46,bnjm2000,"Maintenance logged for asset PB#36: Replaced Housing assembly, battery pack ($51,76), control board ($86.54), service charge ($150). Collected back."
-2025/11/20 16:28:19,bnjm2000,Updated location for asset PB#25 from 'Total Solutions' to 'Store'
-2025/11/20 16:28:19,bnjm2000,Removed Out of Commission status from asset PB#25
-2025/11/20 16:28:19,bnjm2000,Maintenance logged for asset PB#25: Replaced housing assembly ($FOC). Collected back.
-2025/11/21 13:49:27,system,Failed login attempt for username: bnjm2000
-2025/11/21 13:49:30,bnjm2000,User bnjm2000 logged in via web interface
 2025/11/21 13:50:11,bnjm2000,Returned all assets for department AX in event 80: 40 items
 2025/11/21 13:50:14,bnjm2000,Returned all assets for department LX in event 80: 8 items
 2025/11/21 13:50:22,bnjm2000,User bnjm2000 forced event 80 (Wedding of Andrew & Nicolette @ TRCM) state from Overdue to Closed
@@ -913,7 +904,6 @@
 2025/12/24 15:01:19,bnjm2000,Created event 94: Hermes WRTW Rendez-Vous Presentation via web interface
 2025/12/30 11:58:20,system,Failed login attempt for username: bnjm2000
 2025/12/30 11:58:24,bnjm2000,User bnjm2000 logged in via web interface
-2025/12/30 12:25:03,bnjm2000,Deleted event 95: test via web interface. No asset locations to reset. Removed 17 related log entries.
 2025/12/30 12:28:26,bnjm2000,Added 4x L-Acoustics 5XT model to event 94 (total: 4)
 2025/12/30 12:28:29,bnjm2000,Added 1x EV EVOLVE 50 model to event 94 (total: 1)
 2025/12/30 12:28:52,bnjm2000,Removed EV EVOLVE 50 model from event 94
@@ -933,24 +923,11 @@
 2025/12/30 13:22:35,bnjm2000,Maintenance logged for asset PB#09: sdfsg
 2025/12/30 13:22:39,bnjm2000,Updated maintenance log for asset PB#09: 'Screen discovered not working when charging' -> 'Screen discovered not working when charging' (also: Marked OOC) (edited by bnjm2000)
 2025/12/30 13:22:41,bnjm2000,Deleted maintenance log for asset PB#09: 'sdfsg [Cleared OOC]' (deleted by bnjm2000)
-2025/12/30 13:32:30,bnjm2000,Created event 95: Rolex at Hourglass Boutique Opening via web interface
 2025/12/30 13:43:58,bnjm2000,Created event 96:  STPI Symposium @ 72-13 via web interface
 2025/12/30 13:44:09,bnjm2000,Updated event 94: Hermes WRTW Rendez-Vous Presentation @ Liat Tower via web interface
-2025/12/30 13:44:37,bnjm2000,Updated event 95: Rolex at Hourglass Boutique Opening @ Raffles Hotel via web interface
 2025/12/30 13:44:45,bnjm2000,Removed L-Acoustics 5XT model from event 94
 2025/12/30 13:45:35,bnjm2000,Created event 97: Art SG 2026 - Belmond Booth @ MBS via web interface
-2025/12/30 15:26:38,bnjm2000,Created event 98:  SG Motorshow 2026 @ Suntec Hall 2 via web interface
-2025/12/30 15:27:38,bnjm2000,Added 1x Shure ULXD4Q model to event 98 (total: 1)
-2025/12/30 15:27:44,bnjm2000,Added 3x Shure ULXD2 model to event 98 (total: 3)
-2025/12/30 15:27:47,bnjm2000,Added 2x EV EVOLVE 50 model to event 98 (total: 2)
 2025/12/31 10:39:10,bnjm2000,User bnjm2000 logged in via web interface
-2025/12/31 11:10:39,bnjm2000,Removed Shure ULXD4Q model from event 98
-2025/12/31 11:10:44,bnjm2000,Added 2x Shure ULXD4D model to event 98 (total: 2)
-2025/12/31 11:11:07,bnjm2000,Added 1x Yamaha MG10 model to event 98 (total: 1)
-2025/12/31 12:31:37,bnjm2000,Assigned specific asset X12#01 to event 98
-2025/12/31 12:31:37,bnjm2000,Assigned specific asset X12#02 to event 98
-2025/12/31 12:31:48,bnjm2000,Completely removed asset X12#01 from event 98
-2025/12/31 12:31:49,bnjm2000,Completely removed asset X12#02 from event 98
 2025/12/31 13:51:21,bnjm2000,Assigned specific asset 5XT#01 to event 94
 2025/12/31 13:51:21,bnjm2000,Assigned specific asset 5XT#02 to event 94
 2025/12/31 13:51:21,bnjm2000,Assigned specific asset 5XT#03 to event 94
@@ -968,7 +945,6 @@
 2025/12/31 13:51:53,bnjm2000,Completely removed asset ETR5#03 from event 94
 2025/12/31 13:51:53,bnjm2000,Completely removed asset ETR5#04 from event 94
 2025/12/31 13:58:31,bnjm2000,Updated event 93: NS Temple via web interface
-2025/12/31 13:58:59,bnjm2000,Updated event 98: SG Motorshow 2026 @ Suntec Hall 2 via web interface
 2025/12/31 15:12:10,bnjm2000,Assigned specific asset 5XT#01 to event 94
 2025/12/31 15:12:10,bnjm2000,Assigned specific asset 5XT#02 to event 94
 2025/12/31 15:12:10,bnjm2000,Assigned specific asset 5XT#03 to event 94
@@ -1000,3 +976,27 @@ Service charge - $120
 2025/12/31 16:18:43,bnjm2000,Maintenance logged for asset J48S#06: Tested working by Rafie.
 2026/01/05 15:10:27,bnjm2000,Returned all assets for department AX in event 93: 3 items
 2026/01/05 15:10:28,bnjm2000,Returned all assets for department VX in event 93: 2 items
+2026/01/06 14:00:34,bnjm2000,User bnjm2000 logged in via web interface
+2026/01/06 14:30:11,bnjm2000,Added 4x L-Acoustics 5XT model to event 94 (total: 4)
+2026/01/06 14:30:13,bnjm2000,Added 4x L-Acoustics ETR5 model to event 94 (total: 4)
+2026/01/06 14:30:25,bnjm2000,Added 1x L-Acoustics LA2Xi model to event 94 (total: 1)
+2026/01/06 14:30:29,bnjm2000,Added 1x Yamaha MG10 model to event 94 (total: 1)
+2026/01/06 14:30:33,bnjm2000,Added 1x Apple IPAD model to event 94 (total: 1)
+2026/01/06 14:30:39,bnjm2000,Added 1x Interspace Industries PCBB3 model to event 94 (total: 1)
+2026/01/06 14:30:58,bnjm2000,Deleted event 98: SG Motorshow 2026 @ Suntec Hall 2 via web interface. No asset locations to reset. Removed 12 related log entries.
+2026/01/06 14:31:07,bnjm2000,Deleted event 95: Rolex at Hourglass Boutique Opening @ Raffles Hotel via web interface. No asset locations to reset. Removed 3 related log entries.
+2026/01/06 16:11:19,bnjm2000,Marked asset BA70#18 as Out of Commission
+2026/01/06 16:11:19,bnjm2000,Maintenance logged for asset BA70#18: Battery shows blinking green in charger but is unable to power on Spectera SEK beltpack (Siong Leng Gala Dinner @ Andaz Hotel)
+2026/01/07 12:22:42,bnjm2000,User bnjm2000 logged in via web interface
+2026/01/07 12:22:56,bnjm2000,Added 4x L-Acoustics X12 model to event 96 (total: 4)
+2026/01/07 12:23:01,bnjm2000,Added 1x L-Acoustics LA4X model to event 96 (total: 1)
+2026/01/07 12:23:04,bnjm2000,Added 1x Yamaha QL1 model to event 96 (total: 1)
+2026/01/07 12:23:17,bnjm2000,Added 2x Ayrton Diablo (W.DMX) model to event 96 (total: 2)
+2026/01/07 12:23:41,bnjm2000,Added 4x Robe Robin LEDBeam 350 Wash model to event 97 (total: 4)
+2026/01/07 12:23:46,bnjm2000,Removed Robe Robin LEDBeam 350 Wash model from event 97
+2026/01/07 12:23:54,bnjm2000,Added 4x Robe Robin LEDBeam 350 Wash model to event 96 (total: 4)
+2026/01/07 12:24:00,bnjm2000,Added 12x Silver Star Eclipse 1000 RGBAL SS847XAL model to event 96 (total: 12)
+2026/01/07 12:24:08,bnjm2000,Added 1x GrandMA3 Compact XT model to event 96 (total: 1)
+2026/01/07 12:24:21,bnjm2000,Added 1x 32A 3-Phase DB Custom DB model to event 96 (total: 1)
+2026/01/07 12:25:16,bnjm2000,Added 4x L-Acoustics X-US1215 model to event 96 (total: 4)
+2026/01/07 12:49:06,bnjm2000,Added 2x Samsung UN65TU8000F model to event 97 (total: 2)

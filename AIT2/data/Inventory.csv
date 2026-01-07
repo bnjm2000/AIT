@@ -1137,6 +1137,7 @@ DN200#01,Klark Teknik,DN200,,,False,False,,AX,Store,
 DN200#02,Klark Teknik,DN200,,,False,False,,AX,Store,
 DN200#03,Klark Teknik,DN200,,,False,False,,AX,Store,
 PULSE2#01,Analogue Way,Pulse 2,,Video Switcher,False,False,,VX,Store,
+ISOG2#01,Atem,Mini ISO G2,,Video Switcher,False,False,,VX,Store,
 40INCH#01,Sharp,,,"40"" TV",False,False,,VX,Store,Store
 40INCH#02,Sharp,,,"40"" TV",False,False,,VX,Store,Store
 46INCH#01,Sharp,,,"46"" TV",False,False,,VX,Store,
@@ -1218,7 +1219,7 @@ BA70#14,Sennheiser,BA70,0423000962,Lithium Ion rechargeable battery,False,False,
 BA70#15,Sennheiser,BA70,0483001284,Lithium Ion rechargeable battery,False,False,,AX,Store,
 BA70#16,Sennheiser,BA70,0483001888,Lithium Ion rechargeable battery,False,False,"2025/10/11	bnjm2000	Became faulty on use (Wedding of Justin & Amanda @ Raffles Sentosa) [Marked OOC]|2025/10/13	bnjm2000	1-to-1 swap with Concept Systems. Old SN:0483001285 New SN:0483001888 [Location: Store, Serial: 0483001888, Cleared OOC, Cleared Missing]",AX,Store,Store
 BA70#17,Sennheiser,BA70,0483001298,Lithium Ion rechargeable battery,False,False,,AX,Store,
-BA70#18,Sennheiser,BA70,0483001323,Lithium Ion rechargeable battery,False,False,,AX,Store,
+BA70#18,Sennheiser,BA70,0483001323,Lithium Ion rechargeable battery,False,True,2025/11/22	bnjm2000	Battery shows blinking green in charger but is unable to power on Spectera SEK beltpack (Siong Leng Gala Dinner @ Andaz Hotel) [Marked OOC],AX,Store,
 BA70#19,Sennheiser,BA70,0483001855,Lithium Ion rechargeable battery,False,False,,AX,Store,
 BA70#20,Sennheiser,BA70,0483001902,Lithium Ion rechargeable battery,False,False,,AX,Store,
 SG105#01,TP-Link,TL-SG105,22550WN008358,5-port network switch,False,False,,AX,Store,
