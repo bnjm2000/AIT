@@ -959,13 +959,13 @@ PB#04,Astera,Pixel Brick,047-0312670,Batt LED Uplighters,False,False,2024/12/05	
 PB#05,Astera,Pixel Brick,047-0312685,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2024/11/15	bnjm2000	Screen dim,LX,Store,Store
 PB#06,Astera,Pixel Brick,047-0312648,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,Store
 PB#07,Astera,Pixel Brick,047-0312686,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,Store
-PB#08,Astera,Pixel Brick,047-0313538,Batt LED Uplighters,False,True,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/12/04	bnjm2000	Display discovered not working (ESMO @ Capitol Kapinski) [Marked OOC],LX,Store,Store
-PB#09,Astera,Pixel Brick,047-0311934,Batt LED Uplighters,False,True,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/08/12	bnjm2000	Screen messed up after charging [Marked OOC]|2025/08/18	bnjm2000	Screen worked again when sending into Total Solutions [Cleared OOC]|2025/11/02	bnjm2000	Screen discovered not working when charging [Marked OOC]|2025/11/20	bnjm2000	Sent to Total Solutions [Location: Total Solutions],LX,Store,Total Solutions
+PB#08,Astera,Pixel Brick,047-0313538,Batt LED Uplighters,False,True,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/12/04	bnjm2000	Display discovered not working (ESMO @ Capitol Kapinski) [Marked OOC]|2026/01/08	bnjm2000	Sent in to TSM for servicing [Location: Total Solutions],LX,Store,Total Solutions
+PB#09,Astera,Pixel Brick,047-0311934,Batt LED Uplighters,False,False,"2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/08/12	bnjm2000	Screen messed up after charging [Marked OOC]|2025/08/18	bnjm2000	Screen worked again when sending into Total Solutions [Cleared OOC]|2025/11/02	bnjm2000	Screen discovered not working when charging [Marked OOC]|2025/11/20	bnjm2000	Sent to Total Solutions [Location: Total Solutions]|2026/01/08	bnjm2000	Replaced PB15-HOU-BC ($39.52) [Location: Store, Cleared OOC, Cleared Missing]",LX,Store,Store
 PB#10,Astera,Pixel Brick,047-0312696,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,Store
-PB#11,Astera,Pixel Brick,047-0313634,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2024/11/08	bnjm2000	LED screen cannot on|2025/11/01	bnjm2000	Screen discovered messed up when charging [Cleared OOC]|2025/11/20	bnjm2000	Sent to Total Solutions [Location: Total Solutions],LX,Store,Total Solutions
+PB#11,Astera,Pixel Brick,047-0313634,Batt LED Uplighters,False,False,"2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2024/11/08	bnjm2000	LED screen cannot on|2025/11/01	bnjm2000	Screen discovered messed up when charging [Marked OOC]|2025/11/20	bnjm2000	Sent to Total Solutions [Location: Total Solutions]|2026/01/08	bnjm2000	Replaced PB15-HOU-BC ($39.52) [Location: Store, Cleared OOC, Cleared Missing]",LX,Store,Store
 PB#12,Astera,Pixel Brick,047-0312725,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,Store
 PB#13,Astera,Pixel Brick,047-0312683,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2024/11/15	bnjm2000	Screen dim,LX,Store,Store
-PB#14,Astera,Pixel Brick,047-0312682,Batt LED Uplighters,False,True,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/11/05	bnjm2000	Discovered screen faulty (Franck Muller @ Claudine Restaurant) [Marked OOC]|2025/11/20	bnjm2000	Sent to Total Solutions [Location: Total Solutions],LX,Store,Total Solutions
+PB#14,Astera,Pixel Brick,047-0312682,Batt LED Uplighters,False,False,"2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/11/05	bnjm2000	Discovered screen faulty (Franck Muller @ Claudine Restaurant) [Marked OOC]|2025/11/20	bnjm2000	Sent to Total Solutions [Location: Total Solutions]|2026/01/08	bnjm2000	Replaced PB15-HOU-BC ($39.52) [Location: Store, Cleared OOC, Cleared Missing]",LX,Store,Store
 PB#15,Astera,Pixel Brick,047-0312734,Batt LED Uplighters,False,False,"2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/05/28	bnjm2000	Collected back from TSM, fixed screen",LX,Store,Store
 PB#16,Astera,Pixel Brick,047-0313677,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,Store
 PB#17,Astera,Pixel Brick,047-0312751,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,Store
@@ -980,9 +980,9 @@ PB#25,Astera,Pixel Brick,047-0313626,Batt LED Uplighters,False,False,"2024/12/05
 PB#26,Astera,Pixel Brick,047-0310053,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
 PB#27,Astera,Pixel Brick,047-0312635,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/11/15	bnjm2000	LED Screen cannot on,LX,Store,
 PB#28,Astera,Pixel Brick,047-0313638,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
-PB#29,Astera,Pixel Brick,047-0313596,Batt LED Uplighters,False,True,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/11/13	bnjm2000	Display discovered faulty when charging [Marked OOC]|2025/11/20	bnjm2000	Sent to Total Solutions [Location: Total Solutions],LX,Store,Total Solutions
+PB#29,Astera,Pixel Brick,047-0313596,Batt LED Uplighters,False,False,"2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/11/13	bnjm2000	Display discovered faulty when charging [Marked OOC]|2025/11/20	bnjm2000	Sent to Total Solutions [Location: Total Solutions]|2026/01/08	bnjm2000	Replaced PB15-HOU-BC ($39.52) [Location: Store, Cleared OOC, Cleared Missing]",LX,Store,Store
 PB#30,Astera,Pixel Brick,047-0313383,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
-PB#31,Astera,Pixel Brick,047-0315560,Batt LED Uplighters,False,True,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2024/11/01	bnjm2000	Cell 4 overvolt|2025/11/13	bnjm2000	Display discovered faulty when charging [Marked OOC]|2025/11/20	bnjm2000	Sent to Total Solutions [Location: Total Solutions],LX,Store,Total Solutions
+PB#31,Astera,Pixel Brick,047-0315560,Batt LED Uplighters,False,False,"2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2024/11/01	bnjm2000	Cell 4 overvolt|2025/11/13	bnjm2000	Display discovered faulty when charging [Marked OOC]|2025/11/20	bnjm2000	Sent to Total Solutions [Location: Total Solutions]|2026/01/08	bnjm2000	Replaced PB15-HOU-BC ($39.52) [Location: Store, Cleared OOC, Cleared Missing]",LX,Store,Store
 PB#32,Astera,Pixel Brick,047-0313519,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,
 PB#33,Astera,Pixel Brick,047-0312748,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,Store
 PB#34,Astera,Pixel Brick,047-0308768,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,Store
@@ -992,7 +992,7 @@ PB#37,Astera,Pixel Brick,047-0313949,Batt LED Uplighters,False,False,"2024/12/05
 Replaced PB15 Rear Housing Assembly",LX,Store,Store
 PB#38,Astera,Pixel Brick,047-0313663,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,Store
 PB#39,Astera,Pixel Brick,047-0312708,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,Store
-PB#40,Astera,Pixel Brick,047-0316706,Batt LED Uplighters,False,True,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/11/13	bnjm2000	Display discovered faulty when charging [Marked OOC]|2025/11/20	bnjm2000	Sent to Total Solutions [Location: Total Solutions],LX,Store,Total Solutions
+PB#40,Astera,Pixel Brick,047-0316706,Batt LED Uplighters,False,False,"2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/11/13	bnjm2000	Display discovered faulty when charging [Marked OOC]|2025/11/20	bnjm2000	Sent to Total Solutions [Location: Total Solutions]|2026/01/08	bnjm2000	Replaced PB15-HOU-BC ($39.52) [Location: Store, Cleared OOC, Cleared Missing]",LX,Store,Store
 PB#41,Astera,Pixel Brick,047-0308759,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2024/11/15	bnjm2000	Screen dim,LX,Store,Store
 PB#42,Astera,Pixel Brick,047-0313840,Batt LED Uplighters,False,False,"2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/05/02	bnjm2000	Handed over to TSM for repair, spoilt screen
 Replaced PB15 Rear Housing Assembly",LX,Store,Store
@@ -1042,7 +1042,7 @@ DX402A#01,Lite-Puter,DX-402A,07806R2066,4 Channel DMX Dimmer Pack,False,False,,L
 DX402A#02,Lite-Puter,DX-402A,14109R2041,4 Channel DMX Dimmer Pack,False,False,,LX,Store,Store
 CAMEO#01,Cameo,Unicon Remote Control,CK01900822,DMX/RDM Controller,False,False,,LX,Store,Store
 ECLIPSE#01,Silver Star,Eclipse 1000 RGBAL SS847XAL,MO18112100400034,300W LED Profile Spot,False,False,,LX,Store,Store
-ECLIPSE#02,Silver Star,Eclipse 1000 RGBAL SS847XAL,MO18112100400039,300W LED Profile Spot,False,False,,LX,Store,Store
+ECLIPSE#02,Silver Star,Eclipse 1000 RGBAL SS847XAL,MO18112100400039,300W LED Profile Spot,False,False,2026/01/08	bnjm2000	Screen not working but able to RDM,LX,Store,Store
 ECLIPSE#03,Silver Star,Eclipse 1000 RGBAL SS847XAL,MO18112100400030,300W LED Profile Spot,False,False,,LX,Store,Store
 ECLIPSE#04,Silver Star,Eclipse 1000 RGBAL SS847XAL,MO18112100400005,300W LED Profile Spot,False,False,,LX,Store,Store
 ECLIPSE#05,Silver Star,Eclipse 1000 RGBAL SS847XAL,MO18112100400026,300W LED Profile Spot,False,False,,LX,Store,Store
@@ -1219,7 +1219,9 @@ BA70#14,Sennheiser,BA70,0423000962,Lithium Ion rechargeable battery,False,False,
 BA70#15,Sennheiser,BA70,0483001284,Lithium Ion rechargeable battery,False,False,,AX,Store,
 BA70#16,Sennheiser,BA70,0483001888,Lithium Ion rechargeable battery,False,False,"2025/10/11	bnjm2000	Became faulty on use (Wedding of Justin & Amanda @ Raffles Sentosa) [Marked OOC]|2025/10/13	bnjm2000	1-to-1 swap with Concept Systems. Old SN:0483001285 New SN:0483001888 [Location: Store, Serial: 0483001888, Cleared OOC, Cleared Missing]",AX,Store,Store
 BA70#17,Sennheiser,BA70,0483001298,Lithium Ion rechargeable battery,False,False,,AX,Store,
-BA70#18,Sennheiser,BA70,0483001323,Lithium Ion rechargeable battery,False,True,2025/11/22	bnjm2000	Battery shows blinking green in charger but is unable to power on Spectera SEK beltpack (Siong Leng Gala Dinner @ Andaz Hotel) [Marked OOC],AX,Store,
+BA70#18,Sennheiser,BA70,0483001933,Lithium Ion rechargeable battery,False,False,"2025/11/22	bnjm2000	Battery shows blinking green in charger but is unable to power on Spectera SEK beltpack (Siong Leng Gala Dinner @ Andaz Hotel) [Marked OOC]|2026/01/07	bnjm2000	1-to-1 swap with Concept Systems Technologies
+Old SN: 0483001323
+New SN: 0483001933 [Location: Store, Serial: 0483001933, Cleared OOC, Cleared Missing]",AX,Store,Store
 BA70#19,Sennheiser,BA70,0483001855,Lithium Ion rechargeable battery,False,False,,AX,Store,
 BA70#20,Sennheiser,BA70,0483001902,Lithium Ion rechargeable battery,False,False,,AX,Store,
 SG105#01,TP-Link,TL-SG105,22550WN008358,5-port network switch,False,False,,AX,Store,
