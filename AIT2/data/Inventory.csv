@@ -650,7 +650,7 @@ AD2#04,Shure,AD2,2CC22174279,Handheld Microphone [G56],False,False,,AX,Store,Sto
 AD2#05,Shure,AD2,2SD04117263,Handheld Microphone [G56],False,False,,AX,Store,Store
 AD2#06,Shure,AD2,2SD04117249,Handheld Microphone [G56],False,False,2025/11/29	bnjm2000	Mic clip discovered to be broken,AX,Store,Store
 AD2#07,Shure,AD2,2SD04117504,Handheld Microphone [G56],False,True,"2025/06/24	bnjm2000	Replaced display bezel $25 
-Service charge $60 [Location: E&E, Marked OOC]|2025/07/10	bnjm2000	Collected from E&E [Location: Store, Cleared OOC, Cleared Missing]|2025/11/29	bnjm2000	Handheld died while in use. Cannot power on with rechargeable battery, shows empty bar when using brand new AA batteries (WSAudiology Town Hall @ 18 Tai Seng Street) [Marked OOC]",AX,Store,Store
+Service charge $60 [Location: E&E, Marked OOC]|2025/07/10	bnjm2000	Collected from E&E [Location: Store, Cleared OOC, Cleared Missing]|2025/11/29	bnjm2000	Handheld died while in use. Cannot power on with rechargeable battery, shows empty bar when using brand new AA batteries (WSAudiology Town Hall @ 18 Tai Seng Street) [Marked OOC]|2026/01/08	bnjm2000	Sent to E&E for servicing [Location: E&E]",AX,Store,E&E
 AD2#08,Shure,AD2,2CC22174281,Handheld Microphone [G56],False,False,,AX,Store,Store
 AD2#09,Shure,AD2,2CC22174116,Handheld Microphone [G56],False,False,,AX,Store,Store
 AD2#10,Shure,AD2,2CC22174130,Handheld Microphone [G56],False,False,,AX,Store,Store
@@ -751,7 +751,7 @@ ULXD2#01,Shure,ULXD2,2NK0071080-01,Handheld Microphone [L50],False,False,,AX,Sto
 ULXD2#02,Shure,ULXD2,2PH3049605,Handheld Microphone [L50],False,False,,AX,Store,Store
 ULXD2#03,Shure,ULXD2,2OB0659314-01,Handheld Microphone [L50],False,False,,AX,Store,Store
 ULXD2#04,Shure,ULXD2,2PK2362933,Handheld Microphone [L50],False,False,,AX,Store,Store
-ULXD2#05,Shure,ULXD2,20A1395239-01,Handheld Microphone [L50],False,True,2025/11/27	bnjm2000	Discovered capsule broken and sponge disintegrated (Loro Piana @ Jiak Kim House) [Marked OOC],AX,Store,Store
+ULXD2#05,Shure,ULXD2,20A1395239-01,Handheld Microphone [L50],False,True,2025/11/27	bnjm2000	Discovered capsule broken and sponge disintegrated (Loro Piana @ Jiak Kim House) [Marked OOC]|2026/01/08	bnjm2000	Sent to E&E for servicing [Location: E&E],AX,Store,E&E
 ULXD2#06,Shure,ULXD2,2PK2362926,Handheld Microphone [L50],False,False,,AX,Store,Store
 ULXD2#07,Shure,ULXD2,2QK2204370,Handheld Microphone [L50],False,False,,AX,Store,Store
 ULXD2#08,Shure,ULXD2,2OB0659317-01,Handheld Microphone [L50],False,False,,AX,Store,Store
