@@ -1,6 +1,6 @@
 AssetID,Brand,ModelNumber,SerialNumber,Description,IsMissing,IsOOC,MaintenanceLogs,DepartmentCode,DefaultLocation,CurrentLocation
 IPAD#01,Apple,IPAD,YVTP9HPX47,(10th Generation),False,False,,AX,Store,Store
-IPAD#02,Apple,IPAD,JX9KXKKPF4,(10th Generation),False,False,,AX,Store,Store
+IPAD#02,Apple,IPAD,JX9KXKKPF4,(10th Generation),False,False,,AX,Store,Hermes WRTW Rendez-Vous Presentation @ Liat Tower
 IPAD#03,Apple,IPAD,TFQYL2K0JW,(10th Generation),False,False,,AX,Store,Store
 AT8668#01,Audio Tecnica,AT8668,,Microphone Desk Stand,False,False,,AX,Store,Store
 AT8668#02,Audio Tecnica,AT8668,,Microphone Desk Stand,False,False,,AX,Store,Store
@@ -167,33 +167,33 @@ MAUI11#07,LD Systems,Maui 11,,Portable column system,False,False,,AX,Store,
 MAUI28#01,LD Systems,Maui 28,,Portable column system,False,False,,AX,Store,Store
 MAUI28#02,LD Systems,Maui 28,,Portable column system,False,False,,AX,Store,
 MAUI28#03,LD Systems,Maui 28,,Portable column system,False,False,,AX,Store,
-HLBatt#01,Hollyland,HL-BAT700,23060502575,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Store
-HLBatt#02,Hollyland,HL-BAT700,23060502934,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Store
-HLBatt#03,Hollyland,HL-BAT700,23060502956,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Store
-HLBatt#04,Hollyland,HL-BAT700,23060503026,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Store
-HLBatt#05,Hollyland,HL-BAT700,23060503040,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Store
-HLBatt#06,Hollyland,HL-BAT700,23060507138,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Store
-HLBatt#07,Hollyland,HL-BAT700,23060509410,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Store
-HLBatt#08,Hollyland,HL-BAT700,23060906641,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Store
-HLBatt#09,Hollyland,HL-BAT700,23061200043,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Store
-HLBatt#10,Hollyland,HL-BAT700,23061200118,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Store
-HLBatt#11,Hollyland,HL-BAT700,23061200226,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Store
-HLBatt#12,Hollyland,HL-BAT700,23061200233,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Store
-HLBatt#13,Hollyland,HL-BAT700,23061206791,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Store
-HLBatt#14,Hollyland,HL-BAT700,23061206889,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Store
-HLBatt#15,Hollyland,HL-BAT700,23061207192,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Store
-HLBatt#16,Hollyland,HL-BAT700,23061207991,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Store
-C1ProCharger#01,Hollyland,Solidcom C1 (Pro) 8-Slot Battery Charging Case,0223350C C001989,8-Slot Battery Charging Case,False,False,,AX,Store,Store
-C1ProHub#01,Hollyland,Solidcom C1 Pro Hub,0223350R C002984,,False,False,,AX,Store,Store
-C1ProRHS#01,Hollyland,Solidcom C1 Pro Remote Headset,222322OTXC00784E,,False,False,2025/11/28	bnjm2000	Discovered broken while in use (Doris Han's 90th Birthday Celebration @ St Regis),AX,Store,Store
-C1ProRHS#02,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC008783,,False,False,"2025/12/04	bnjm2000	Headset speaker foam disintegrated, replaced.",AX,Store,Store
-C1ProRHS#03,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC007B64,,False,False,"2025/12/04	bnjm2000	Headset speaker foam disintegrated, replaced.",AX,Store,Store
-C1ProRHS#04,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC0082CF,,False,False,,AX,Store,Store
-C1ProRHS#05,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC00800E,,False,False,"2025/12/04	bnjm2000	Headset speaker foam disintegrated, replaced.",AX,Store,Store
-C1ProRHS#06,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC00786C,,False,False,"2025/12/04	bnjm2000	Headset speaker foam disintegrated, replaced.",AX,Store,Store
-C1ProRHS#07,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC008667,,False,False,"2025/12/04	bnjm2000	Headset speaker foam disintegrated, replaced.|2025/11/28	bnjm2000	Mic foam lost (Doris Han's 90th Birthday Celebration @ St Regis)",AX,Store,Store
-C1ProRHS#08,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC007AB4,,False,False,"2025/12/04	bnjm2000	Headset speaker foam disintegrated, replaced.",AX,Store,Store
-C1ProWHS#01,Hollyland,Solidcom C1 Pro Wired Headset for Hub,2223170XX0D0036E,,False,False,,AX,Store,Store
+HLBatt#01,Hollyland,HL-BAT700,23060502575,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Dry Hire: Avery Events
+HLBatt#02,Hollyland,HL-BAT700,23060502934,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Dry Hire: Avery Events
+HLBatt#03,Hollyland,HL-BAT700,23060502956,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Dry Hire: Avery Events
+HLBatt#04,Hollyland,HL-BAT700,23060503026,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Dry Hire: Avery Events
+HLBatt#05,Hollyland,HL-BAT700,23060503040,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Dry Hire: Avery Events
+HLBatt#06,Hollyland,HL-BAT700,23060507138,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Dry Hire: Avery Events
+HLBatt#07,Hollyland,HL-BAT700,23060509410,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Dry Hire: Avery Events
+HLBatt#08,Hollyland,HL-BAT700,23060906641,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Dry Hire: Avery Events
+HLBatt#09,Hollyland,HL-BAT700,23061200043,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Dry Hire: Avery Events
+HLBatt#10,Hollyland,HL-BAT700,23061200118,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Dry Hire: Avery Events
+HLBatt#11,Hollyland,HL-BAT700,23061200226,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Dry Hire: Avery Events
+HLBatt#12,Hollyland,HL-BAT700,23061200233,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Dry Hire: Avery Events
+HLBatt#13,Hollyland,HL-BAT700,23061206791,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Dry Hire: Avery Events
+HLBatt#14,Hollyland,HL-BAT700,23061206889,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Dry Hire: Avery Events
+HLBatt#15,Hollyland,HL-BAT700,23061207192,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Dry Hire: Avery Events
+HLBatt#16,Hollyland,HL-BAT700,23061207991,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Dry Hire: Avery Events
+C1ProCharger#01,Hollyland,Solidcom C1 (Pro) 8-Slot Battery Charging Case,0223350C C001989,8-Slot Battery Charging Case,False,False,,AX,Store,Dry Hire: Avery Events
+C1ProHub#01,Hollyland,Solidcom C1 Pro Hub,0223350R C002984,,False,False,,AX,Store,Dry Hire: Avery Events
+C1ProRHS#01,Hollyland,Solidcom C1 Pro Remote Headset,222322OTXC00784E,,False,False,2025/11/28	bnjm2000	Discovered broken while in use (Doris Han's 90th Birthday Celebration @ St Regis),AX,Store,Dry Hire: Avery Events
+C1ProRHS#02,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC008783,,False,False,"2025/12/04	bnjm2000	Headset speaker foam disintegrated, replaced.",AX,Store,Dry Hire: Avery Events
+C1ProRHS#03,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC007B64,,False,False,"2025/12/04	bnjm2000	Headset speaker foam disintegrated, replaced.",AX,Store,Dry Hire: Avery Events
+C1ProRHS#04,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC0082CF,,False,False,,AX,Store,Dry Hire: Avery Events
+C1ProRHS#05,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC00800E,,False,False,"2025/12/04	bnjm2000	Headset speaker foam disintegrated, replaced.",AX,Store,Dry Hire: Avery Events
+C1ProRHS#06,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC00786C,,False,False,"2025/12/04	bnjm2000	Headset speaker foam disintegrated, replaced.",AX,Store,Dry Hire: Avery Events
+C1ProRHS#07,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC008667,,False,False,"2025/12/04	bnjm2000	Headset speaker foam disintegrated, replaced.|2025/11/28	bnjm2000	Mic foam lost (Doris Han's 90th Birthday Celebration @ St Regis)",AX,Store,Dry Hire: Avery Events
+C1ProRHS#08,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC007AB4,,False,False,"2025/12/04	bnjm2000	Headset speaker foam disintegrated, replaced.",AX,Store,Dry Hire: Avery Events
+C1ProWHS#01,Hollyland,Solidcom C1 Pro Wired Headset for Hub,2223170XX0D0036E,,False,False,,AX,Store,Dry Hire: Avery Events
 PCBB#01,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,Store
 PCBB#02,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,Store
 PCBB#03,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,
@@ -203,7 +203,7 @@ PCBB#06,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,Store
 PCBB#07,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,
 PCBB#08,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,
 PCBB#09,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,Store
-PCBB#10,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,Store
+PCBB#10,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,Hermes WRTW Rendez-Vous Presentation @ Liat Tower
 PCBB#11,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,Store
 PCBB#12,Interspace Industries,PCBB,,PC Balance Box,False,False,,AX,Store,
 PCBB#13,Interspace Industries,PCBB,,PC Balance Box,False,False,,AX,Store,Store
@@ -263,12 +263,12 @@ ETR5W#17,L-Acoustics,ETR5W,,Adjustable U-bracket: 5XTW,False,False,,AX,Store,Sto
 ETR5W#18,L-Acoustics,ETR5W,,Adjustable U-bracket: 5XTW,False,False,,AX,Store,Store
 ETR5W#19,L-Acoustics,ETR5W,44005187,Adjustable U-bracket: 5XTW,False,False,,AX,Store,Store
 ETR5W#20,L-Acoustics,ETR5W,,Adjustable U-bracket: 5XTW,False,False,,AX,Store,Store
-5XT#01,L-Acoustics,5XT,260038164,"5"" passive coaxial enclosure, black",False,False,,AX,Store,Store
-5XT#02,L-Acoustics,5XT,260044263,"5"" passive coaxial enclosure, black",False,False,,AX,Store,Store
-5XT#03,L-Acoustics,5XT,260044264,"5"" passive coaxial enclosure, black",False,False,,AX,Store,Store
-5XT#04,L-Acoustics,5XT,260044265,"5"" passive coaxial enclosure, black",False,False,,AX,Store,Store
-5XT#05,L-Acoustics,5XT,260044285,"5"" passive coaxial enclosure, black",False,False,,AX,Store,
-5XT#06,L-Acoustics,5XT,260044288,"5"" passive coaxial enclosure, black",False,False,,AX,Store,Store
+5XT#01,L-Acoustics,5XT,260038164,"5"" passive coaxial enclosure, black",False,False,,AX,Store,Hermes WRTW Rendez-Vous Presentation @ Liat Tower
+5XT#02,L-Acoustics,5XT,260044263,"5"" passive coaxial enclosure, black",False,False,,AX,Store,Hermes WRTW Rendez-Vous Presentation @ Liat Tower
+5XT#03,L-Acoustics,5XT,260044264,"5"" passive coaxial enclosure, black",False,False,,AX,Store,Hermes WRTW Rendez-Vous Presentation @ Liat Tower
+5XT#04,L-Acoustics,5XT,260044265,"5"" passive coaxial enclosure, black",False,False,,AX,Store,Hermes WRTW Rendez-Vous Presentation @ Liat Tower
+5XT#05,L-Acoustics,5XT,260044285,"5"" passive coaxial enclosure, black",False,False,,AX,Store,Hermes WRTW Rendez-Vous Presentation @ Liat Tower
+5XT#06,L-Acoustics,5XT,260044288,"5"" passive coaxial enclosure, black",False,False,,AX,Store,Hermes WRTW Rendez-Vous Presentation @ Liat Tower
 5XT#07,L-Acoustics,5XT,260044300,"5"" passive coaxial enclosure, black",False,False,,AX,Store,Store
 5XT#08,L-Acoustics,5XT,260044302,"5"" passive coaxial enclosure, black",False,False,,AX,Store,
 5XT#09,L-Acoustics,5XT,260044304,"5"" passive coaxial enclosure, black",False,False,,AX,Store,
@@ -331,12 +331,12 @@ ETR5W#20,L-Acoustics,ETR5W,,Adjustable U-bracket: 5XTW,False,False,,AX,Store,Sto
 5XT#66,L-Acoustics,5XT,260053860,"5"" passive coaxial enclosure, black",False,False,,AX,Store,
 5XT#67,L-Acoustics,5XT,260053869,"5"" passive coaxial enclosure, black",False,False,,AX,Store,
 5XT#68,L-Acoustics,5XT,260053893,"5"" passive coaxial enclosure, black",False,False,,AX,Store,
-ETR5#01,L-Acoustics,ETR5,440027215,Adjustable U-bracket: 5XT,False,False,,AX,Store,Store
-ETR5#02,L-Acoustics,ETR5,440027236,Adjustable U-bracket: 5XT,False,False,,AX,Store,Store
-ETR5#03,L-Acoustics,ETR5,440031349,Adjustable U-bracket: 5XT,False,False,,AX,Store,Store
-ETR5#04,L-Acoustics,ETR5,440031356,Adjustable U-bracket: 5XT,False,False,,AX,Store,Store
-ETR5#05,L-Acoustics,ETR5,440031388,Adjustable U-bracket: 5XT,False,False,,AX,Store,
-ETR5#06,L-Acoustics,ETR5,440031793,Adjustable U-bracket: 5XT,False,False,,AX,Store,Store
+ETR5#01,L-Acoustics,ETR5,440027215,Adjustable U-bracket: 5XT,False,False,,AX,Store,Hermes WRTW Rendez-Vous Presentation @ Liat Tower
+ETR5#02,L-Acoustics,ETR5,440027236,Adjustable U-bracket: 5XT,False,False,,AX,Store,Hermes WRTW Rendez-Vous Presentation @ Liat Tower
+ETR5#03,L-Acoustics,ETR5,440031349,Adjustable U-bracket: 5XT,False,False,,AX,Store,Hermes WRTW Rendez-Vous Presentation @ Liat Tower
+ETR5#04,L-Acoustics,ETR5,440031356,Adjustable U-bracket: 5XT,False,False,,AX,Store,Hermes WRTW Rendez-Vous Presentation @ Liat Tower
+ETR5#05,L-Acoustics,ETR5,440031388,Adjustable U-bracket: 5XT,False,False,,AX,Store,Hermes WRTW Rendez-Vous Presentation @ Liat Tower
+ETR5#06,L-Acoustics,ETR5,440031793,Adjustable U-bracket: 5XT,False,False,,AX,Store,Hermes WRTW Rendez-Vous Presentation @ Liat Tower
 ETR5#07,L-Acoustics,ETR5,440031849,Adjustable U-bracket: 5XT,False,False,,AX,Store,Store
 ETR5#08,L-Acoustics,ETR5,440031851,Adjustable U-bracket: 5XT,False,False,,AX,Store,
 ETR5#09,L-Acoustics,ETR5,440032582,Adjustable U-bracket: 5XT,False,False,,AX,Store,
@@ -399,7 +399,7 @@ ETR5#65,L-Acoustics,ETR5,440041134,Adjustable U-bracket: 5XT,False,False,,AX,Sto
 ETR5#66,L-Acoustics,ETR5,440041150,Adjustable U-bracket: 5XT,False,False,,AX,Store,
 ETR5#67,L-Acoustics,ETR5,440041156,Adjustable U-bracket: 5XT,False,False,,AX,Store,
 ETR5#68,L-Acoustics,ETR5,440041158,Adjustable U-bracket: 5XT,False,False,,AX,Store,
-LA2XI#01,L-Acoustics,LA2Xi,1730003008,Amplified controller,False,False,,AX,Store,Store
+LA2XI#01,L-Acoustics,LA2Xi,1730003008,Amplified controller,False,False,,AX,Store,Hermes WRTW Rendez-Vous Presentation @ Liat Tower
 LA2XI#02,L-Acoustics,LA2Xi,1730003010,Amplified controller,False,False,,AX,Store,Store
 LA2XI#03,L-Acoustics,LA2Xi,1730003047,Amplified controller,False,False,,AX,Store,Store
 LA2XI#04,L-Acoustics,LA2Xi,1730005059,Amplified controller,False,False,,AX,Store,Store
@@ -767,13 +767,13 @@ ULXD2#15,Shure,ULXD2,3CC16145063,Handheld Microphone [G52],False,False,,AX,Store
 ULXD2#16,Shure,ULXD2,3CC16145013,Handheld Microphone [G52],False,False,,AX,Store,Store
 ULXD2#17,Shure,ULXD2,3CC16145099,Handheld Microphone [G52],False,False,,AX,Store,Store
 ULXD2#18,Shure,ULXD2,3CC16145049,Handheld Microphone [G52],False,False,,AX,Store,Store
-ULXD4D#01,Shure,ULXD4D,,Dual Channel Receiver [L50],False,False,,AX,Store,Store
+ULXD4D#01,Shure,ULXD4D,,Dual Channel Receiver [L50],False,False,,AX,Store,STPI Symposium @ 72-13
 ULXD4D#02,Shure,ULXD4D,,Dual Channel Receiver [L50],False,False,,AX,Store,Store
 ULXD4D#03,Shure,ULXD4D,,Dual Channel Receiver [L50],False,False,,AX,Store,Store
 ULXD4D#04,Shure,ULXD4D,,Dual Channel Receiver [L50],False,False,,AX,Store,Store
 ULXD4D#05,Shure,ULXD4D,3BH26487024,Dual Channel Receiver [G52],False,False,,AX,Store,Store
 ULXD4D#06,Shure,ULXD4D,3BH26487098,Dual Channel Receiver [G52],False,False,,AX,Store,Store
-ULXD4Q#01,Shure,ULXD4Q,,Quad Channel Receiver [L50],False,False,,AX,Store,Store
+ULXD4Q#01,Shure,ULXD4Q,,Quad Channel Receiver [L50],False,False,,AX,Store,STPI Symposium @ 72-13
 ULXD4Q#02,Shure,ULXD4Q,3BF11462545,Quad Channel Receiver [G52],False,False,,AX,Store,Store
 ULXD4Q#03,Shure,ULXD4Q,3BF11462711,Quad Channel Receiver [G52],False,False,,AX,Store,Store
 WL184#01,Shure,WL184,,supercardioid condenser lavalier microphone,False,False,,AX,Store,
@@ -818,7 +818,7 @@ CL5#01,Yamaha,CL5,WTASK01015,Digital Mixer,False,False,"2024/09/12	bnjm2000	Sent
 Replaced DNTU PCB ($672)
 Replaced FFC Cable ($10) [Cleared OOC]|2025/02/13	bnjm2000	Dante clock suddenly unlocked and could not lock back, phantom noise on both inputs and outputs
 (Wedding of Aim and Singhis @ TCP) [Location: Yamaha Service Center]|2025/02/27	bnjm2000	Replaced DSP PCB ($1011) [Location: Store, Cleared OOC]",AX,Store,Store
-DM3#01,Yamaha,DM3,BGDK01029,Digital Mixer,False,False,2024/09/04	bnjm2000	Reported cannot power on from Niche [Marked OOC]|2024/09/12	bnjm2000	sent to Yamaha for servicing [Location: Yamaha Service Center]|2024/10/24	bnjm2000	Replaced PCB (report no. PA842034) $586.84 [Cleared OOC]|2024/11/07	bnjm2000	Collected from Yamaha [Location: Store],AX,Store,Store
+DM3#01,Yamaha,DM3,BGDK01029,Digital Mixer,False,False,2024/09/04	bnjm2000	Reported cannot power on from Niche [Marked OOC]|2024/09/12	bnjm2000	sent to Yamaha for servicing [Location: Yamaha Service Center]|2024/10/24	bnjm2000	Replaced PCB (report no. PA842034) $586.84 [Cleared OOC]|2024/11/07	bnjm2000	Collected from Yamaha [Location: Store],AX,Store,Hermes WRTW Rendez-Vous Presentation @ Liat Tower
 DM3#02,Yamaha,DM3,BGDI01076,Digital Mixer,False,False,,AX,Store,Store
 DM7#01,Yamaha,DM7,21EGEI01036,Digital Mixer,False,False,,AX,Store,Store
 DXR8#01,Yamaha,DXR8,EESM01180,"Active80"" Speaker",False,False,,AX,Store,
@@ -1154,6 +1154,10 @@ QM85C#03,Samsung,LH85QMCEBGCXXS,0R3NHNIX600095,"85"" Crystal UHD Signage",False,
 QM85C#04,Samsung,LH85QMCEBGCXXS,0R3NHNIX600098,"85"" Crystal UHD Signage",False,False,,VX,Store,
 SAMSUNG65#01,Samsung,UN65TU8000F,09L33CSN302823E,"65"" Crystal UHD 4K Smart TV (2020)",False,False,,VX,Store,
 SAMSUNG65#02,Samsung,UN65TU8000F,09L33CSNB02041F,"65"" Crystal UHD 4K Smart TV (2020)",False,False,,VX,Store,
+SAMSUNG65#03,Samsung,,,"65"" Crystal UHD 4K Smart TV",False,False,,VX,Store,
+SAMSUNG65#04,Samsung,,,"65"" Crystal UHD 4K Smart TV",False,False,,VX,Store,
+SAMSUNG65#05,Samsung,,,"65"" Crystal UHD 4K Smart TV",False,False,,VX,Store,
+SAMSUNG65#06,Samsung,,,"65"" Crystal UHD 4K Smart TV",False,False,,VX,Store,
 SAMSUNG55#01,Samsung,UN55TU8000F,09KY3CTN800725V,"55"" Crystal UHD 4K Smart TV (2020)",False,False,,VX,Store,
 SAMSUNG55#02,Samsung,UN55TU8000F,09KY3CNNB02495L,"55"" Crystal UHD 4K Smart TV (2020)",False,False,,VX,Store,
 SAMSUNG55#03,Samsung,UN55TU8000F,09KY3CAR102988N,"55"" Crystal UHD 4K Smart TV (2020)",False,False,,VX,Store,
