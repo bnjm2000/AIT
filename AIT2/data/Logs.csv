@@ -1,93 +1,3 @@
-2025/11/21 14:32:53,bnjm2000,Removed Shure ULXD1 model from event 82
-2025/11/21 14:32:53,bnjm2000,Added 5x Shure ULXD1 model to event 82 (total: 5)
-2025/11/21 14:32:59,bnjm2000,Removed Shure ULXD2 model from event 82
-2025/11/21 14:32:59,bnjm2000,Added 5x Shure ULXD2 model to event 82 (total: 5)
-2025/11/21 14:34:44,bnjm2000,Assigned specific asset LA4X#08 to event 82
-2025/11/21 14:34:52,bnjm2000,Assigned specific asset IPAD#01 to event 82
-2025/11/21 14:35:16,bnjm2000,Assigned specific asset X12#01 to event 81
-2025/11/21 14:35:17,bnjm2000,Assigned specific asset X12#02 to event 81
-2025/11/21 14:35:29,bnjm2000,Removed Apple IPAD model from event 81
-2025/11/21 14:35:29,bnjm2000,Added 2x Apple IPAD model to event 81 (total: 2)
-2025/11/21 14:35:35,bnjm2000,Assigned specific asset IPAD#02 to event 81
-2025/11/21 14:35:35,bnjm2000,Assigned specific asset IPAD#03 to event 81
-2025/11/21 14:35:41,bnjm2000,Assigned specific asset B52A#01 to event 81
-2025/11/21 14:35:44,bnjm2000,Assigned specific asset ME36#02 to event 81
-2025/11/21 14:35:46,bnjm2000,Assigned specific asset ME36#01 to event 81
-2025/11/21 14:35:54,bnjm2000,Assigned specific asset QL5#01 to event 81
-2025/11/21 14:35:57,bnjm2000,Assigned specific asset B91A#01 to event 81
-2025/11/21 14:36:07,bnjm2000,Assigned specific asset LEDBEAM#01 to event 81
-2025/11/21 14:36:07,bnjm2000,Assigned specific asset LEDBEAM#02 to event 81
-2025/11/21 14:36:09,bnjm2000,Assigned specific asset LEDBEAM#03 to event 81
-2025/11/21 14:36:11,bnjm2000,Assigned specific asset LEDBEAM#04 to event 81
-2025/11/21 14:36:15,bnjm2000,Assigned specific asset LEDBEAM#09 to event 81
-2025/11/21 14:36:15,bnjm2000,Assigned specific asset LEDBEAM#10 to event 81
-2025/11/21 14:36:18,bnjm2000,Assigned specific asset LEDBEAM#11 to event 81
-2025/11/21 14:36:18,bnjm2000,Assigned specific asset LEDBEAM#12 to event 81
-2025/11/21 14:36:23,bnjm2000,Assigned specific asset LEDBEAM#21 to event 81
-2025/11/21 14:36:24,bnjm2000,Assigned specific asset LEDBEAM#22 to event 81
-2025/11/21 14:36:26,bnjm2000,Assigned specific asset LEDBEAM#23 to event 81
-2025/11/21 14:36:27,bnjm2000,Assigned specific asset LEDBEAM#24 to event 81
-2025/11/21 14:36:31,bnjm2000,Assigned specific asset COMPACTXT#01 to event 81
-2025/11/21 14:39:34,bnjm2000,Assigned specific asset J48M#06 to event 81
-2025/11/21 14:39:42,bnjm2000,Assigned specific asset J48S#02 to event 81
-2025/11/21 14:39:42,bnjm2000,Assigned specific asset J48S#03 to event 81
-2025/11/21 14:40:10,bnjm2000,Assigned specific asset E904#02 to event 81
-2025/11/21 14:40:11,bnjm2000,Assigned specific asset E904#03 to event 81
-2025/11/21 14:40:12,bnjm2000,Assigned specific asset E904#04 to event 81
-2025/11/21 14:40:50,bnjm2000,Assigned specific asset SM58S#03 to event 81
-2025/11/21 14:41:06,bnjm2000,Assigned specific asset SM58S#04 to event 81
-2025/11/21 14:41:22,bnjm2000,Assigned specific asset SM57#01 to event 81
-2025/11/21 14:41:23,bnjm2000,Assigned specific asset SM57#02 to event 81
-2025/11/21 14:42:54,bnjm2000,Marked asset J48S#06 as Out of Commission
-2025/11/21 14:42:54,bnjm2000,Maintenance logged for asset J48S#06: Reported R side no sound (Wedding of Matthew Chia & Teresa Su @ Capella)
-2025/11/21 14:47:24,bnjm2000,Assigned specific asset LEDBEAM#05 to event 81
-2025/11/21 14:47:25,bnjm2000,Assigned specific asset LEDBEAM#06 to event 81
-2025/11/21 14:47:27,bnjm2000,Assigned specific asset LEDBEAM#07 to event 81
-2025/11/21 14:47:27,bnjm2000,Assigned specific asset LEDBEAM#08 to event 81
-2025/11/21 14:47:36,bnjm2000,Assigned specific asset PB#41 to event 81
-2025/11/21 14:47:36,bnjm2000,Assigned specific asset PB#42 to event 81
-2025/11/21 14:47:43,bnjm2000,Assigned specific asset PB#43 to event 81
-2025/11/21 14:47:44,bnjm2000,Assigned specific asset PB#44 to event 81
-2025/11/21 14:47:53,bnjm2000,Assigned specific asset PB#45 to event 81
-2025/11/21 14:47:53,bnjm2000,Assigned specific asset PB#46 to event 81
-2025/11/21 14:48:03,bnjm2000,Assigned specific asset PB#47 to event 81
-2025/11/21 14:48:04,bnjm2000,Assigned specific asset PB#48 to event 81
-2025/11/21 14:48:15,bnjm2000,Assigned specific asset PB#49 to event 81
-2025/11/21 14:48:16,bnjm2000,Assigned specific asset PB#50 to event 81
-2025/11/21 14:48:21,bnjm2000,Assigned specific asset PB#51 to event 81
-2025/11/21 14:48:21,bnjm2000,Assigned specific asset PB#52 to event 81
-2025/11/21 14:48:29,bnjm2000,Assigned specific asset PB#53 to event 81
-2025/11/21 14:48:30,bnjm2000,Assigned specific asset PB#54 to event 81
-2025/11/21 14:48:39,bnjm2000,Assigned specific asset PB#55 to event 81
-2025/11/21 14:48:40,bnjm2000,Assigned specific asset PB#56 to event 81
-2025/11/21 14:48:47,bnjm2000,Assigned specific asset PB#57 to event 81
-2025/11/21 14:48:47,bnjm2000,Assigned specific asset PB#58 to event 81
-2025/11/21 14:48:54,bnjm2000,Assigned specific asset PB#59 to event 81
-2025/11/21 14:48:55,bnjm2000,Assigned specific asset PB#60 to event 81
-2025/11/21 14:49:01,bnjm2000,Assigned specific asset PB#61 to event 81
-2025/11/21 14:49:02,bnjm2000,Assigned specific asset PB#62 to event 81
-2025/11/21 14:49:07,bnjm2000,Assigned specific asset PB#63 to event 81
-2025/11/21 14:49:07,bnjm2000,Assigned specific asset PB#64 to event 81
-2025/11/21 14:50:00,bnjm2000,Assigned specific asset PB#17 to event 81
-2025/11/21 14:50:00,bnjm2000,Assigned specific asset PB#18 to event 81
-2025/11/21 14:50:01,bnjm2000,Assigned specific asset PB#19 to event 81
-2025/11/21 14:50:07,bnjm2000,Assigned specific asset PB#20 to event 81
-2025/11/21 14:50:08,bnjm2000,Assigned specific asset PB#21 to event 81
-2025/11/21 14:50:13,bnjm2000,Assigned specific asset PB#22 to event 81
-2025/11/21 14:50:13,bnjm2000,Assigned specific asset PB#23 to event 81
-2025/11/21 14:50:14,bnjm2000,Assigned specific asset PB#24 to event 81
-2025/11/21 14:50:28,bnjm2000,Added 1x Le Maitre MVS Hazer model to event 82 (total: 1)
-2025/11/21 14:50:35,bnjm2000,Added 1x Lumenradio Aurora model to event 81 (total: 1)
-2025/11/21 14:50:43,bnjm2000,Assigned specific asset MVSHAZER#02 to event 82
-2025/11/21 14:50:52,bnjm2000,Assigned specific asset AURORA#02 to event 81
-2025/11/21 14:51:13,bnjm2000,Assigned specific asset C451B#04 to event 81
-2025/11/21 14:51:16,bnjm2000,Assigned specific asset C451B#01 to event 81
-2025/11/21 14:51:20,bnjm2000,Assigned specific asset C451B#09 to event 81
-2025/11/21 14:59:17,bnjm2000,Assigned specific asset X8#01 to event 81
-2025/11/21 14:59:17,bnjm2000,Assigned specific asset X8#02 to event 81
-2025/11/21 14:59:20,bnjm2000,Assigned specific asset X8#03 to event 81
-2025/11/21 14:59:21,bnjm2000,Assigned specific asset X8#04 to event 81
-2025/11/21 14:59:24,bnjm2000,Assigned specific asset X8#05 to event 81
 2025/11/21 14:59:24,bnjm2000,Assigned specific asset X8#06 to event 81
 2025/11/21 14:59:28,bnjm2000,Assigned specific asset X8#07 to event 81
 2025/11/21 14:59:29,bnjm2000,Assigned specific asset X8#08 to event 81
@@ -1015,3 +925,125 @@ Service charge - $120
 (Service report SR21913)' -> 'SR21913:
 Replaced 188A24072  AMPLIFIER,DRIVER,HI GAIN,0.25W,SOT-89 IC - $30
 Service charge - $120' (also: Cleared OOC) (edited by bnjm2000)"
+2026/01/15 15:58:46,bnjm2000,Completely removed asset DM3#01 from event 94
+2026/01/15 15:58:50,bnjm2000,Assigned specific asset DM3#02 to event 94
+2026/01/15 16:14:18,bnjm2000,Added 2x L-Acoustics SB18 model to event 96 (total: 2)
+2026/01/15 16:14:33,bnjm2000,Removed L-Acoustics LA4X model from event 96
+2026/01/15 16:14:33,bnjm2000,Added 2x L-Acoustics LA4X model to event 96 (total: 2)
+2026/01/15 16:15:55,bnjm2000,Added 2x MiPro MR-90 model to event 99 (total: 2)
+2026/01/15 16:15:56,bnjm2000,Added 1x MiPro MT-90A model to event 99 (total: 1)
+2026/01/15 16:33:21,bnjm2000,Updated event 98: Dry Hire: Avery Events via web interface
+2026/01/15 18:24:17,bnjm2000,Returned all assets for department AX in event 94: 16 items
+2026/01/15 18:37:38,bnjm2000,Added 1x Apple IPAD model to event 99 (total: 1)
+2026/01/15 18:37:44,bnjm2000,Added 2x Interspace Industries PCBB3 model to event 99 (total: 2)
+2026/01/15 18:37:55,bnjm2000,Added 1x Yamaha DM3 model to event 99 (total: 1)
+2026/01/15 18:38:11,bnjm2000,Added 1x Apple IPAD model to event 96 (total: 1)
+2026/01/15 18:38:18,bnjm2000,Added 3x Interspace Industries PCBB3 model to event 96 (total: 3)
+2026/01/16 13:48:42,bnjm2000,User bnjm2000 logged in via web interface
+2026/01/16 14:09:23,bnjm2000,"Updated maintenance log for asset CL5#01: 'Replaced Dante Module ($631)
+Replaced DNTU PCB ($672)
+Replaced FFC Cable ($10) [Cleared OOC]' -> 'Replaced Dante Module ($631)
+Replaced DNTU PCB ($672)
+Replaced FFC Cable ($10)
+Service fee ($FOC)' (edited by bnjm2000)"
+2026/01/16 14:09:41,bnjm2000,"Updated maintenance log for asset CL5#01: 'Replaced DSP PCB ($1011) [Location: Store, Cleared OOC]' -> 'Replaced DSP PCB ($1011)
+Service Fee ($FOC)' (also: Location: Store, Cleared OOC) (edited by bnjm2000)"
+2026/01/16 14:11:26,bnjm2000,"Updated maintenance log for asset CL5#01: 'Replaced DSP PCB ($1011)
+Service Fee ($FOC) [Location: Store, Cleared OOC]' -> 'Replaced DSP PCB ($1011)
+Service Fee ($FOC)' (also: Location: Store, Cleared OOC) (edited by bnjm2000)"
+2026/01/16 14:11:30,bnjm2000,"Updated maintenance log for asset CL5#01: 'Replaced DSP PCB ($1011)
+Service Fee ($FOC) [Location: Store, Cleared OOC]' -> 'Replaced DSP PCB ($1011)
+Service Fee ($FOC)' (also: Location: Store) (edited by bnjm2000)"
+2026/01/16 14:11:32,bnjm2000,"Updated maintenance log for asset CL5#01: 'Replaced DSP PCB ($1011)
+Service Fee ($FOC) [Location: Store]' -> 'Replaced DSP PCB ($1011)
+Service Fee ($FOC)' (also: Location: Store, Cleared OOC) (edited by bnjm2000)"
+2026/01/16 14:11:47,bnjm2000,"Updated maintenance log for asset CL5#01: 'Replaced Dante Module ($631)
+Replaced DNTU PCB ($672)
+Replaced FFC Cable ($10)
+Service fee ($FOC)' -> 'Replaced Dante Module ($631)
+Replaced DNTU PCB ($672)
+Replaced FFC Cable ($10)
+Service fee ($FOC)' (also: Cleared OOC) (edited by bnjm2000)"
+2026/01/16 14:12:00,bnjm2000,"Updated maintenance log for asset CL5#01: 'Replaced Dante Module ($631)
+Replaced DNTU PCB ($672)
+Replaced FFC Cable ($10)
+Service fee ($FOC) [Cleared OOC]' -> 'Replaced Dante Module ($631)
+Replaced DNTU PCB ($672)
+Replaced FFC Cable ($10)
+Service fee ($FOC)' (also: Location: Store, Cleared OOC) (edited by bnjm2000)"
+2026/01/16 15:10:31,bnjm2000,"Updated maintenance log for asset CL5#01: 'Dante clock suddenly unlocked and could not lock back, phantom noise on both inputs and outputs
+(Wedding of Aim and Singhis @ TCP) [Location: Yamaha Service Center]' -> 'Dante clock suddenly unlocked and could not lock back, phantom noise on both inputs and outputs
+(Wedding of Aim and Singhis @ TCP)' (also: Location: Yamaha Service Center) (edited by bnjm2000)"
+2026/01/16 15:10:37,bnjm2000,"Updated maintenance log for asset CL5#01: 'Replaced DSP PCB ($1011)
+Service Fee ($FOC) [Location: Store, Cleared OOC]' -> 'Replaced DSP PCB ($1011)
+Service Fee ($FOC)' (also: Location: Store, Cleared OOC) (edited by bnjm2000)"
+2026/01/16 15:11:23,bnjm2000,"Updated maintenance log for asset CL5#01: 'Dante clock suddenly unlocked and could not lock back, phantom noise on both inputs and outputs
+(Wedding of Aim and Singhis @ TCP) [Location: Yamaha Service Center]' -> 'Dante clock suddenly unlocked and could not lock back, phantom noise on both inputs and outputs
+(Wedding of Aim and Singhis @ TCP)' (also: Location: Yamaha Service Center, Marked OOC) (edited by bnjm2000)"
+2026/01/16 15:11:32,bnjm2000,"Updated maintenance log for asset CL5#01: 'Replaced DSP PCB ($1011)
+Service Fee ($FOC) [Location: Store, Cleared OOC]' -> 'Replaced DSP PCB ($1011)
+Service Fee ($FOC)' (also: Location: Store, Cleared OOC) (edited by bnjm2000)"
+2026/01/16 15:11:41,bnjm2000,"Updated maintenance log for asset CL5#01: 'Replaced faulty faders: CH 1-8, 9-16, Centralogic CH 7,8 ($684) Service fee ($369.73) [Location: Store, Cleared OOC, Cleared Missing]' -> 'Replaced faulty faders: CH 1-8, 9-16, Centralogic CH 7,8 ($684) Service fee ($369.73)' (also: Location: Store, Cleared OOC) (edited by bnjm2000)"
+2026/01/16 15:16:37,bnjm2000,Created container 5XT Case #06 (12 assets)
+2026/01/16 15:17:37,bnjm2000,Created container 5XT Case #07 (12 assets)
+2026/01/16 15:18:38,bnjm2000,Created container 5XT Case #08 (12 assets)
+2026/01/16 15:19:31,bnjm2000,Created container 5XT Case #09 (12 assets)
+2026/01/16 15:20:22,bnjm2000,Created container 5XT Case #10 (12 assets)
+2026/01/16 15:21:14,bnjm2000,Created container 5XT Case #11 (8 assets)
+2026/01/16 15:27:10,bnjm2000,Created container 5XT Case #12 (8 assets)
+2026/01/16 15:27:45,bnjm2000,Returned all assets for department AX in event 98: 27 items
+2026/01/19 13:12:41,bnjm2000,User bnjm2000 logged in via web interface
+2026/01/19 13:12:52,bnjm2000,Assigned specific asset COMPACTXT#01 to event 96
+2026/01/19 13:13:09,bnjm2000,Assigned specific asset QL1#02 to event 96
+2026/01/19 13:14:42,bnjm2000,Assigned specific asset X12#07 to event 96
+2026/01/19 13:14:42,bnjm2000,Assigned specific asset X12#08 to event 96
+2026/01/19 13:14:43,bnjm2000,Assigned specific asset X12#05 to event 96
+2026/01/19 13:14:43,bnjm2000,Assigned specific asset X12#06 to event 96
+2026/01/19 13:15:01,bnjm2000,Assigned specific asset PCBB#06 to event 96
+2026/01/19 13:15:16,bnjm2000,Assigned specific asset PCBB#10 to event 96
+2026/01/19 13:16:25,bnjm2000,Assigned specific asset PCBB#14 to event 96
+2026/01/19 13:16:29,bnjm2000,Assigned specific asset ULXD2#08 to event 96
+2026/01/19 13:16:30,bnjm2000,Assigned specific asset ULXD2#11 to event 96
+2026/01/19 13:16:55,bnjm2000,Assigned specific asset ULXD2#12 to event 96
+2026/01/19 13:17:11,bnjm2000,Assigned specific asset ULXD2#04 to event 96
+2026/01/19 13:17:32,bnjm2000,Assigned specific asset ULXD2#02 to event 96
+2026/01/19 13:18:35,bnjm2000,Assigned specific asset ULXD2#06 to event 96
+2026/01/19 13:20:01,bnjm2000,Assigned specific asset IPAD#02 to event 96
+2026/01/19 13:20:20,bnjm2000,Assigned specific asset X-US1215#06 to event 96
+2026/01/19 13:20:20,bnjm2000,Assigned specific asset X-US1215#03 to event 96
+2026/01/19 13:20:22,bnjm2000,Assigned specific asset X-US1215#02 to event 96
+2026/01/19 13:20:23,bnjm2000,Assigned specific asset X-US1215#01 to event 96
+2026/01/19 13:21:18,bnjm2000,Assigned specific asset SB18#03 to event 96
+2026/01/19 13:21:20,bnjm2000,Assigned specific asset SB18#01 to event 96
+2026/01/19 13:21:56,bnjm2000,Removed Interspace Industries PCBB3 model from event 96
+2026/01/19 13:21:56,bnjm2000,Added 2x Interspace Industries PCBB3 model to event 96 (total: 2)
+2026/01/19 13:22:01,bnjm2000,Added 1x Interspace Industries PCBB model to event 96 (total: 1)
+2026/01/19 13:22:12,bnjm2000,Assigned specific asset 32ADB#01 to event 96
+2026/01/19 13:23:27,bnjm2000,Removed Ayrton Diablo (W.DMX) model from event 96
+2026/01/19 13:24:01,bnjm2000,Added 2x Ayrton Diablo Profile model to event 96 (total: 2)
+2026/01/19 13:24:07,bnjm2000,Assigned specific asset LEDBEAM#01 to event 96
+2026/01/19 13:24:09,bnjm2000,Assigned specific asset LEDBEAM#02 to event 96
+2026/01/19 13:24:09,bnjm2000,Assigned specific asset LEDBEAM#03 to event 96
+2026/01/19 13:24:12,bnjm2000,Assigned specific asset LEDBEAM#04 to event 96
+2026/01/19 13:24:18,bnjm2000,Assigned specific asset DIABLO#13 to event 96
+2026/01/19 13:24:19,bnjm2000,Assigned specific asset DIABLO#14 to event 96
+2026/01/19 13:24:21,bnjm2000,Assigned specific asset DIABLO#15 to event 96
+2026/01/19 13:24:22,bnjm2000,Assigned specific asset DIABLO#16 to event 96
+2026/01/19 13:24:48,bnjm2000,Removed Silver Star Eclipse 1000 RGBAL SS847XAL model from event 96
+2026/01/19 13:25:02,bnjm2000,Assigned specific asset LA4X#09 to event 96
+2026/01/19 13:25:02,bnjm2000,Assigned specific asset LA4X#10 to event 96
+2026/01/19 13:25:34,bnjm2000,Created event 100: Dry Hire: Avery Events via web interface
+2026/01/19 13:25:38,bnjm2000,Updated event 100: Dry Hire: Avery Events via web interface
+2026/01/19 13:25:44,bnjm2000,Updated event 98: Dry Hire: Avery Events via web interface
+2026/01/19 13:26:08,bnjm2000,Added 4x DPA DAD 6010 model to event 100 (total: 4)
+2026/01/19 13:31:21,bnjm2000,Created event 101:  Wedding of Jewel & Maanas @ Fiasco via web interface
+2026/01/19 13:31:27,bnjm2000,Added 1x Yamaha DM3 model to event 101 (total: 1)
+2026/01/19 13:32:18,bnjm2000,Added 2x Shure ULXD2 model to event 101 (total: 2)
+2026/01/19 13:32:23,bnjm2000,Added 1x Shure ULXD4D model to event 101 (total: 1)
+2026/01/19 13:32:30,bnjm2000,Added 1x Apple IPAD model to event 101 (total: 1)
+2026/01/19 13:32:36,bnjm2000,Added 2x Interspace Industries PCBB3 model to event 101 (total: 2)
+2026/01/19 16:12:30,bnjm2000,Assigned specific asset DAD6010#41 to event 100
+2026/01/19 16:12:48,bnjm2000,Assigned specific asset DAD6010#45 to event 100
+2026/01/19 16:12:57,bnjm2000,Assigned specific asset DAD6010#37 to event 100
+2026/01/19 16:13:03,bnjm2000,Assigned specific asset DAD6010#43 to event 100
+2026/01/19 16:13:11,bnjm2000,Returned all assets for department AX in event 100: 4 items

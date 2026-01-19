@@ -1,0 +1,2 @@
+EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,Tag,ForceStateOverride
+100,Dry Hire: Avery Events,20260117,20260119,[],"[""[MODEL]AX|DPA|DAD 6010|4|MicroDot to TA4F Adapter"", ""DAD6010#41"", ""DAD6010#45"", ""DAD6010#37"", ""DAD6010#43""]",[],Ongoing,"[""DAD6010#41"", ""DAD6010#45"", ""DAD6010#37"", ""DAD6010#43""]","[""DAD6010#43""]",dry hire,False
