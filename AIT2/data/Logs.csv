@@ -1,45 +1,3 @@
-2025/11/21 14:59:24,bnjm2000,Assigned specific asset X8#06 to event 81
-2025/11/21 14:59:28,bnjm2000,Assigned specific asset X8#07 to event 81
-2025/11/21 14:59:29,bnjm2000,Assigned specific asset X8#08 to event 81
-2025/11/21 14:59:47,bnjm2000,Assigned specific asset LA4X#01 to event 81
-2025/11/21 14:59:48,bnjm2000,Assigned specific asset LA4X#02 to event 81
-2025/11/21 14:59:48,bnjm2000,Assigned specific asset LA4X#03 to event 81
-2025/11/24 18:15:55,bnjm2000,User bnjm2000 logged in via web interface
-2025/11/24 18:17:23,bnjm2000,Updated location for asset PB#11 from 'Store' to 'Total Solutions'
-2025/11/24 18:17:23,bnjm2000,Maintenance logged for asset PB#11: Sent to Total Solutions
-2025/11/24 18:17:23,bnjm2000,Updated location for asset PB#14 from 'Store' to 'Total Solutions'
-2025/11/24 18:17:23,bnjm2000,Maintenance logged for asset PB#14: Sent to Total Solutions
-2025/11/24 18:17:23,bnjm2000,Updated location for asset PB#29 from '' to 'Total Solutions'
-2025/11/24 18:17:23,bnjm2000,Maintenance logged for asset PB#29: Sent to Total Solutions
-2025/11/24 18:17:23,bnjm2000,Updated location for asset PB#31 from '' to 'Total Solutions'
-2025/11/24 18:17:23,bnjm2000,Maintenance logged for asset PB#31: Sent to Total Solutions
-2025/11/24 18:17:23,bnjm2000,Updated location for asset PB#40 from '' to 'Total Solutions'
-2025/11/24 18:17:23,bnjm2000,Maintenance logged for asset PB#40: Sent to Total Solutions
-2025/11/24 18:17:39,bnjm2000,Returned all assets for department AX in event 82: 56 items
-2025/11/24 18:17:40,bnjm2000,Returned all assets for department LX in event 82: 10 items
-2025/11/24 18:18:00,bnjm2000,User bnjm2000 forced event 81 (Wedding of Eamon & Mia @ Capella) state from Overdue to Preparing
-2025/11/24 18:18:22,bnjm2000,Assigned specific asset LA4X#08 to event 81
-2025/11/24 18:18:39,bnjm2000,Assigned specific asset X12#03 to event 81
-2025/11/24 18:18:41,bnjm2000,Assigned specific asset X12#04 to event 81
-2025/11/24 18:19:05,bnjm2000,Assigned specific asset DIABLO#01 to event 81
-2025/11/24 18:19:08,bnjm2000,Assigned specific asset DIABLO#02 to event 81
-2025/11/24 18:19:10,bnjm2000,Assigned specific asset DIABLO#03 to event 81
-2025/11/24 18:19:13,bnjm2000,Assigned specific asset DIABLO#04 to event 81
-2025/11/24 18:19:37,bnjm2000,Assigned specific asset DIABLO#09 to event 81
-2025/11/24 18:19:37,bnjm2000,Assigned specific asset DIABLO#10 to event 81
-2025/11/24 18:19:38,bnjm2000,Assigned specific asset DIABLO#11 to event 81
-2025/11/24 18:19:49,bnjm2000,Assigned specific asset DIABLO#12 to event 81
-2025/11/24 18:20:01,bnjm2000,Removed Audio Tecnica AT8668 model from event 81
-2025/11/24 18:20:08,bnjm2000,Removed AKG C451B model from event 81
-2025/11/24 18:20:08,bnjm2000,Added 3x AKG C451B model to event 81 (total: 3)
-2025/11/24 18:20:12,bnjm2000,Removed L-Acoustics SB18 model from event 81
-2025/11/24 18:20:19,bnjm2000,Removed Sennheiser E904 model from event 81
-2025/11/24 18:20:20,bnjm2000,Added 3x Sennheiser E904 model to event 81 (total: 3)
-2025/11/24 18:20:24,bnjm2000,Removed Shure Beta 58A model from event 81
-2025/11/24 18:20:31,bnjm2000,User bnjm2000 removed forced state override for event 81 (Wedding of Eamon & Mia @ Capella): Preparing -> Overdue
-2025/11/24 18:20:34,bnjm2000,Returned all assets for department LX in event 81: 58 items
-2025/11/24 18:20:36,bnjm2000,Returned all assets for department AX in event 81: 36 items
-2025/11/24 18:20:43,bnjm2000,User bnjm2000 forced event 82 (Siong Leng Gala Dinner @ Andaz Hotel) state from Overdue to Closed
 2025/11/24 18:20:52,bnjm2000,Assigned specific asset 5XTW#07 to event 83
 2025/11/24 18:20:57,bnjm2000,Assigned specific asset 5XTW#08 to event 83
 2025/11/24 18:20:57,bnjm2000,Assigned specific asset 5XTW#09 to event 83
@@ -1047,3 +1005,45 @@ Service Fee ($FOC)' (also: Location: Store, Cleared OOC) (edited by bnjm2000)"
 2026/01/19 16:12:57,bnjm2000,Assigned specific asset DAD6010#37 to event 100
 2026/01/19 16:13:03,bnjm2000,Assigned specific asset DAD6010#43 to event 100
 2026/01/19 16:13:11,bnjm2000,Returned all assets for department AX in event 100: 4 items
+2026/01/20 11:08:57,bnjm2000,User bnjm2000 logged in via web interface
+2026/01/20 11:09:15,bnjm2000,Completely removed asset LA4X#10 from event 96
+2026/01/20 11:09:16,bnjm2000,Completely removed asset LA4X#09 from event 96
+2026/01/20 11:09:18,bnjm2000,Assigned specific asset LA4X#07 to event 96
+2026/01/20 11:09:18,bnjm2000,Assigned specific asset LA4X#08 to event 96
+2026/01/20 13:21:20,bnjm2000,Added 1x Atem Mini Extreme ISO G2 model to event 96 (total: 1)
+2026/01/20 13:21:31,bnjm2000,Added 1x Panasonic PT-DZ13K model to event 96 (total: 1)
+2026/01/20 13:21:38,bnjm2000,Assigned specific asset ISOG2#01 to event 96
+2026/01/20 13:21:39,bnjm2000,Assigned specific asset DZ13K#01 to event 96
+2026/01/20 13:22:15,bnjm2000,Assigned specific asset DM3#02 to event 99
+2026/01/20 13:22:41,bnjm2000,Assigned specific asset MT-90A#02 to event 99
+2026/01/20 13:23:15,bnjm2000,Assigned specific asset IPAD#03 to event 99
+2026/01/20 13:23:31,bnjm2000,Assigned specific asset PCBB#04 to event 99
+2026/01/20 13:23:32,bnjm2000,Assigned specific asset PCBB#09 to event 99
+2026/01/20 13:23:52,bnjm2000,Assigned specific asset MR-90A#01 to event 99
+2026/01/20 13:23:55,bnjm2000,Assigned specific asset MR-90A#04 to event 99
+2026/01/20 13:24:10,bnjm2000,Assigned specific asset ULXD2#07 to event 99
+2026/01/20 13:24:22,bnjm2000,Assigned specific asset ULXD2#03 to event 99
+2026/01/20 13:24:28,bnjm2000,Assigned specific asset EVOLVE50#05 to event 99
+2026/01/20 13:24:28,bnjm2000,Assigned specific asset EVOLVE50#06 to event 99
+2026/01/20 13:25:04,bnjm2000,Assigned specific asset ULXD4D#04 to event 99
+2026/01/20 13:37:54,bnjm2000,Added 2x EV EVOLVE 50 model to event 101 (total: 2)
+2026/01/20 13:48:34,bnjm2000,Removed Samsung UN65TU8000F model from event 97
+2026/01/20 13:48:42,bnjm2000,Added 2x Samsung SOME SHIT MODEL model to event 97 (total: 2)
+2026/01/20 13:48:48,bnjm2000,Assigned specific asset SAMSUNG65#05 to event 97
+2026/01/20 13:48:48,bnjm2000,Assigned specific asset SAMSUNG65#06 to event 97
+2026/01/20 13:49:38,bnjm2000,Added 2x MiPro MR-90 model to event 99 (total: 4)
+2026/01/20 13:49:40,bnjm2000,Added 1x MiPro MT-90A model to event 99 (total: 2)
+2026/01/20 13:50:06,bnjm2000,Removed MiPro MR-90 model from event 99
+2026/01/20 13:50:06,bnjm2000,Added 2x MiPro MR-90 model to event 99 (total: 2)
+2026/01/20 13:50:09,bnjm2000,Removed MiPro MT-90A model from event 99
+2026/01/20 13:50:09,bnjm2000,Added 1x MiPro MT-90A model to event 99 (total: 1)
+2026/01/20 13:50:16,bnjm2000,Added 2x MiPro MR-90 model to event 101 (total: 2)
+2026/01/20 13:50:17,bnjm2000,Added 1x MiPro MT-90A model to event 101 (total: 1)
+2026/01/20 14:04:27,bnjm2000,Created event 102: SG Airshow 2026 - Anduril Booth (Ultimus) @ Changi Exhibition Centre via web interface
+2026/01/20 14:05:03,bnjm2000,Created event 103: SG Air Show 2026 (Bencon) @ Changi Exhibition Centre via web interface
+2026/01/20 14:05:15,bnjm2000,Added 2x Samsung LH50QHCEBGCXXS model to event 103 (total: 2)
+2026/01/21 16:08:26,bnjm2000,User bnjm2000 logged in via web interface
+2026/01/21 16:08:40,bnjm2000,Removed Samsung SOME SHIT MODEL model from event 97
+2026/01/21 16:08:45,bnjm2000,Added 2x Samsung UN65TU8000F model to event 97 (total: 2)
+2026/01/21 16:09:06,bnjm2000,Updated event 97: Art SG 2026 - Belmond Booth @ MBS via web interface
+2026/01/21 16:09:39,bnjm2000,Updated event 102: SG Airshow 2026 - Anduril Booth (Ultimus) @ Changi Exhibition Centre via web interface
