@@ -1,38 +1,3 @@
-2025/11/24 18:20:52,bnjm2000,Assigned specific asset 5XTW#07 to event 83
-2025/11/24 18:20:57,bnjm2000,Assigned specific asset 5XTW#08 to event 83
-2025/11/24 18:20:57,bnjm2000,Assigned specific asset 5XTW#09 to event 83
-2025/11/24 18:21:03,bnjm2000,Assigned specific asset 5XTW#10 to event 83
-2025/11/24 18:21:06,bnjm2000,Assigned specific asset 5XTW#11 to event 83
-2025/11/24 18:21:10,bnjm2000,Assigned specific asset 5XTW#12 to event 83
-2025/11/24 18:21:11,bnjm2000,Assigned specific asset 5XTW#13 to event 83
-2025/11/24 18:21:15,bnjm2000,Assigned specific asset 5XTW#14 to event 83
-2025/11/24 18:21:19,bnjm2000,Assigned specific asset 5XTW#15 to event 83
-2025/11/24 18:21:22,bnjm2000,Assigned specific asset 5XTW#16 to event 83
-2025/11/24 18:21:22,bnjm2000,Assigned specific asset 5XTW#17 to event 83
-2025/11/24 18:21:26,bnjm2000,Assigned specific asset 5XTW#18 to event 83
-2025/11/24 18:21:29,bnjm2000,Assigned specific asset 5XTW#19 to event 83
-2025/11/24 18:21:29,bnjm2000,Assigned specific asset 5XTW#20 to event 83
-2025/11/24 18:21:33,bnjm2000,Assigned specific asset ETR5W#07 to event 83
-2025/11/24 18:21:37,bnjm2000,Assigned specific asset ETR5W#08 to event 83
-2025/11/24 18:21:38,bnjm2000,Assigned specific asset ETR5W#09 to event 83
-2025/11/24 18:21:42,bnjm2000,Assigned specific asset ETR5W#12 to event 83
-2025/11/24 18:21:47,bnjm2000,Assigned specific asset ETR5W#10 to event 83
-2025/11/24 18:21:47,bnjm2000,Assigned specific asset ETR5W#11 to event 83
-2025/11/24 18:21:51,bnjm2000,Assigned specific asset ETR5W#13 to event 83
-2025/11/24 18:21:52,bnjm2000,Assigned specific asset ETR5W#14 to event 83
-2025/11/24 18:21:55,bnjm2000,Assigned specific asset ETR5W#15 to event 83
-2025/11/24 18:21:55,bnjm2000,Assigned specific asset ETR5W#16 to event 83
-2025/11/24 18:21:58,bnjm2000,Assigned specific asset ETR5W#17 to event 83
-2025/11/24 18:22:01,bnjm2000,Assigned specific asset ETR5W#18 to event 83
-2025/11/24 18:22:05,bnjm2000,Assigned specific asset ETR5W#19 to event 83
-2025/11/24 18:22:05,bnjm2000,Assigned specific asset ETR5W#20 to event 83
-2025/11/24 18:22:09,bnjm2000,Assigned specific asset LA2XI#01 to event 83
-2025/11/24 18:22:11,bnjm2000,Assigned specific asset LA2XI#02 to event 83
-2025/11/24 18:22:28,bnjm2000,Assigned specific asset ULXD4Q#01 to event 83
-2025/11/24 18:22:32,bnjm2000,Assigned specific asset ULXD4D#01 to event 83
-2025/11/24 18:22:35,bnjm2000,Assigned specific asset ULXD4D#02 to event 83
-2025/11/24 18:22:52,bnjm2000,Assigned specific asset DM3#01 to event 83
-2025/11/24 18:23:00,bnjm2000,Completely removed asset ULXD4D#02 from event 83
 2025/11/24 18:23:08,bnjm2000,Completely removed asset ULXD4D#01 from event 83
 2025/11/24 18:23:20,bnjm2000,Prepared asset ULXD4D#01 for event 83
 2025/11/24 18:23:21,bnjm2000,Prepared asset ULXD4D#02 for event 83
@@ -1047,3 +1012,38 @@ Service Fee ($FOC)' (also: Location: Store, Cleared OOC) (edited by bnjm2000)"
 2026/01/21 16:08:45,bnjm2000,Added 2x Samsung UN65TU8000F model to event 97 (total: 2)
 2026/01/21 16:09:06,bnjm2000,Updated event 97: Art SG 2026 - Belmond Booth @ MBS via web interface
 2026/01/21 16:09:39,bnjm2000,Updated event 102: SG Airshow 2026 - Anduril Booth (Ultimus) @ Changi Exhibition Centre via web interface
+2026/01/24 21:14:54,bnjm2000,User bnjm2000 logged in via web interface
+2026/01/24 21:15:24,bnjm2000,Returned all assets for department VX in event 96: 1 items
+2026/01/24 21:15:25,bnjm2000,Returned all assets for department AX in event 96: 25 items
+2026/01/24 21:15:26,bnjm2000,Returned all assets for department LX in event 96: 10 items
+2026/01/24 21:15:31,bnjm2000,Returned all assets for department STORE in event 96: 1 items
+2026/01/24 21:16:07,bnjm2000,Returned all assets for department AX in event 99: 12 items
+2026/01/24 21:16:14,bnjm2000,Assigned specific asset IPAD#03 to event 101
+2026/01/24 21:16:18,bnjm2000,Assigned specific asset EVOLVE50#05 to event 101
+2026/01/24 21:16:18,bnjm2000,Assigned specific asset EVOLVE50#03 to event 101
+2026/01/24 21:16:20,bnjm2000,Completely removed asset EVOLVE50#03 from event 101
+2026/01/24 21:16:23,bnjm2000,Assigned specific asset EVOLVE50#06 to event 101
+2026/01/24 21:16:45,bnjm2000,Assigned specific asset PCBB#04 to event 101
+2026/01/24 21:16:46,bnjm2000,Assigned specific asset PCBB#09 to event 101
+2026/01/24 21:16:49,bnjm2000,Assigned specific asset MR-90A#01 to event 101
+2026/01/24 21:16:51,bnjm2000,Assigned specific asset MR-90A#04 to event 101
+2026/01/24 21:17:04,bnjm2000,Assigned specific asset ULXD4D#04 to event 101
+2026/01/24 21:17:06,bnjm2000,Assigned specific asset DM3#02 to event 101
+2026/01/24 21:17:15,bnjm2000,Assigned specific asset ULXD2#03 to event 101
+2026/01/24 21:17:17,bnjm2000,Assigned specific asset ULXD2#07 to event 101
+2026/01/24 21:17:29,bnjm2000,Assigned specific asset MT-90A#02 to event 101
+2026/01/24 21:18:12,bnjm2000,Updated maintenance log for asset MR-90A#04: '2024/11/20 - Send to MiPro for testing' -> '2024/11/20 - Send to MiPro for testing' (edited by bnjm2000)
+2026/01/24 21:18:35,bnjm2000,"Updated maintenance log for asset MR-90A#04: '2024/11/05 - Low RF, AF cutting in and out (Dior @ ION Orchard) [Marked OOC]' -> '2024/11/05 - Low RF, AF cutting in and out (Dior @ ION Orchard)' (also: Cleared OOC) (edited by bnjm2000)"
+2026/01/24 21:18:39,bnjm2000,"Updated maintenance log for asset MR-90A#04: '2024/11/05 - Low RF, AF cutting in and out (Dior @ ION Orchard) [Cleared OOC]' -> '2024/11/05 - Low RF, AF cutting in and out (Dior @ ION Orchard)' (also: Marked OOC) (edited by bnjm2000)"
+2026/01/24 21:18:45,bnjm2000,Updated maintenance log for asset MR-90A#04: '2024/11/12 - repaired by MiPro [Cleared OOC]' -> '2024/11/12 - repaired by MiPro' (also: Cleared OOC) (edited by bnjm2000)
+2026/01/24 21:18:53,bnjm2000,Updated maintenance log for asset MR-90A#04: '2024/11/12 - repaired by MiPro [Cleared OOC]' -> '2024/11/12 - repaired by MiPro' (edited by bnjm2000)
+2026/01/24 21:18:55,bnjm2000,Updated maintenance log for asset MR-90A#04: '2024/11/12 - repaired by MiPro' -> '2024/11/12 - repaired by MiPro' (also: Cleared OOC) (edited by bnjm2000)
+2026/01/24 21:19:43,bnjm2000,Maintenance logged for asset MR-90A#04: Receiver observed in used with some buzzing (Wedding of Jewel & Maanas @ Fiasco)
+2026/01/24 21:20:31,bnjm2000,Marked asset LEDBEAM#04 as Out of Commission
+2026/01/24 21:20:31,bnjm2000,Maintenance logged for asset LEDBEAM#04: Unit became unresponsive mid-show (STPI Symposium @ 72-13)
+2026/01/24 21:22:24,bnjm2000,Removed Panasonic PT-DZ13K model from event 96
+2026/01/24 21:22:31,bnjm2000,Added 1x Panasonic PT-DZ13K model to event 96 (total: 1)
+2026/01/24 21:22:43,bnjm2000,User bnjm2000 forced event 96 (STPI Symposium @ 72-13) state from Closed to Preparing
+2026/01/24 21:22:54,bnjm2000,User bnjm2000 removed forced state override for event 96 (STPI Symposium @ 72-13): Preparing -> Closed
+2026/01/24 21:37:20,bnjm2000,Assigned asset [MISC]Silver Star Roxcyc;12 to event 102 (unprepared)
+2026/01/24 21:37:52,bnjm2000,"Assigned asset [LOAN]55"" Touchscreen TV;4 to event 103 (unprepared)"
