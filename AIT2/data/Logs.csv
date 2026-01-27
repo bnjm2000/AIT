@@ -1,45 +1,3 @@
-2025/11/24 18:23:08,bnjm2000,Completely removed asset ULXD4D#01 from event 83
-2025/11/24 18:23:20,bnjm2000,Prepared asset ULXD4D#01 for event 83
-2025/11/24 18:23:21,bnjm2000,Prepared asset ULXD4D#02 for event 83
-2025/11/24 18:23:23,bnjm2000,Completely removed asset ULXD4D#01 from event 83
-2025/11/24 18:23:40,bnjm2000,Assigned specific asset QL1#02 to event 84
-2025/11/24 18:24:32,bnjm2000,Marked asset PB#52 as Out of Commission
-2025/11/24 18:24:32,bnjm2000,Maintenance logged for asset PB#52: Discovered screen haywire (Wedding of Eamon & Mia @ Capella)
-2025/11/24 18:24:50,bnjm2000,Removed Shure ULXD4Q model from event 84
-2025/11/24 18:24:52,bnjm2000,Removed Shure ULXD4D model from event 84
-2025/11/24 18:24:54,bnjm2000,Removed Shure ULXD2 model from event 84
-2025/11/24 18:24:56,bnjm2000,Removed Shure ULXD1 model from event 84
-2025/11/24 18:25:00,bnjm2000,Added 3x Shure AD4Q model to event 84 (total: 3)
-2025/11/24 18:25:05,bnjm2000,Added 16x Shure AD1 model to event 84 (total: 16)
-2025/11/24 18:25:09,bnjm2000,Added 16x Shure AD2 model to event 84 (total: 16)
-2025/11/24 18:25:16,bnjm2000,Added 5x DPA 4488 model to event 84 (total: 5)
-2025/11/27 16:52:33,system,Failed login attempt for username: bnjm2000
-2025/11/27 16:52:37,bnjm2000,User bnjm2000 logged in via web interface
-2025/11/27 16:52:59,bnjm2000,User bnjm2000 forced event 84 (WSAudiology Town Hall @ 18 Tai Seng) state from Overdue to Preparing
-2025/11/27 16:53:06,bnjm2000,Assigned specific asset EVOLVE50#03 to event 84
-2025/11/27 16:53:06,bnjm2000,Assigned specific asset EVOLVE50#04 to event 84
-2025/11/27 16:53:08,bnjm2000,Assigned specific asset 4488#01 to event 84
-2025/11/27 16:53:11,bnjm2000,Assigned specific asset IPAD#02 to event 84
-2025/11/27 16:53:17,bnjm2000,Assigned specific asset AD4Q#01 to event 84
-2025/11/27 16:53:17,bnjm2000,Assigned specific asset AD4Q#02 to event 84
-2025/11/27 16:53:21,bnjm2000,Assigned specific asset AD4Q#04 to event 84
-2025/11/27 16:53:25,bnjm2000,Assigned specific asset AD2#01 to event 84
-2025/11/27 16:53:25,bnjm2000,Assigned specific asset AD2#02 to event 84
-2025/11/27 16:53:27,bnjm2000,Assigned specific asset AD2#03 to event 84
-2025/11/27 16:53:27,bnjm2000,Assigned specific asset AD2#04 to event 84
-2025/11/27 16:53:30,bnjm2000,Assigned specific asset AD2#05 to event 84
-2025/11/27 16:53:30,bnjm2000,Assigned specific asset AD2#06 to event 84
-2025/11/27 16:53:32,bnjm2000,Assigned specific asset AD2#07 to event 84
-2025/11/27 16:53:34,bnjm2000,Assigned specific asset AD2#08 to event 84
-2025/11/27 16:53:34,bnjm2000,Assigned specific asset AD2#09 to event 84
-2025/11/27 16:53:36,bnjm2000,Assigned specific asset AD2#10 to event 84
-2025/11/27 16:53:36,bnjm2000,Assigned specific asset AD2#11 to event 84
-2025/11/27 16:53:37,bnjm2000,Assigned specific asset AD2#12 to event 84
-2025/11/27 16:53:38,bnjm2000,Assigned specific asset AD2#13 to event 84
-2025/11/27 16:53:39,bnjm2000,Assigned specific asset AD2#14 to event 84
-2025/11/27 16:53:40,bnjm2000,Assigned specific asset AD2#15 to event 84
-2025/11/27 16:53:41,bnjm2000,Assigned specific asset AD2#16 to event 84
-2025/11/27 16:53:43,bnjm2000,Assigned specific asset AD1#01 to event 84
 2025/11/27 16:53:44,bnjm2000,Assigned specific asset AD1#02 to event 84
 2025/11/27 16:53:45,bnjm2000,Assigned specific asset AD1#03 to event 84
 2025/11/27 16:53:46,bnjm2000,Assigned specific asset AD1#04 to event 84
@@ -1047,3 +1005,46 @@ Service Fee ($FOC)' (also: Location: Store, Cleared OOC) (edited by bnjm2000)"
 2026/01/24 21:22:54,bnjm2000,User bnjm2000 removed forced state override for event 96 (STPI Symposium @ 72-13): Preparing -> Closed
 2026/01/24 21:37:20,bnjm2000,Assigned asset [MISC]Silver Star Roxcyc;12 to event 102 (unprepared)
 2026/01/24 21:37:52,bnjm2000,"Assigned asset [LOAN]55"" Touchscreen TV;4 to event 103 (unprepared)"
+2026/01/27 12:28:44,bnjm2000,User bnjm2000 logged in via web interface
+2026/01/27 12:28:55,bnjm2000,Returned all assets for department VX in event 97: 2 items
+2026/01/27 12:28:57,bnjm2000,Returned all assets for department AX in event 101: 12 items
+2026/01/27 12:45:02,bnjm2000,Updated location for asset AD2#07 from 'E&E' to 'Store'
+2026/01/27 12:45:02,bnjm2000,Removed Out of Commission status from asset AD2#07
+2026/01/27 12:45:02,bnjm2000,Maintenance logged for asset AD2#07: Collected back from E&E. Tested working.
+2026/01/27 12:55:00,bnjm2000,Assigned asset [MISC]16A Power cable - 20m to event 102 (unprepared)
+2026/01/27 12:55:12,bnjm2000,Assigned asset [MISC]16A to PowerCon to event 102 (unprepared)
+2026/01/27 12:55:18,bnjm2000,Assigned asset [MISC]PowerCon to 16A to event 102 (unprepared)
+2026/01/27 12:55:24,bnjm2000,Prepared asset [MISC]16A to PowerCon for event 102
+2026/01/27 12:55:25,bnjm2000,Prepared asset [MISC]PowerCon to 16A for event 102
+2026/01/27 12:55:26,bnjm2000,Prepared asset [MISC]16A Power cable - 20m for event 102
+2026/01/27 12:58:14,bnjm2000,Created event 104:  Loewe Dinner via web interface
+2026/01/27 12:58:26,bnjm2000,Updated event 104: Loewe Dinner @ New Bahru via web interface
+2026/01/27 12:58:35,bnjm2000,Added 2x Samsung UN65TU8000F model to event 104 (total: 2)
+2026/01/27 12:59:01,bnjm2000,Created event 105: Performance Motor CNY Dinner @ St Regis via web interface
+2026/01/27 12:59:06,bnjm2000,Added 1x Analogue Way Pulse 2 model to event 105 (total: 1)
+2026/01/27 14:01:52,bnjm2000,Completely removed asset [MISC]16A Power cable - 20m from event 102
+2026/01/27 14:01:53,bnjm2000,Completely removed asset [MISC]16A to PowerCon from event 102
+2026/01/27 14:01:55,bnjm2000,Completely removed asset [MISC]PowerCon to 16A from event 102
+2026/01/27 14:02:14,bnjm2000,Assigned asset [MISC]16A to PowerCon to event 102 (unprepared)
+2026/01/27 14:02:31,bnjm2000,Removed custom asset [MISC]16A to PowerCon from event 102
+2026/01/27 14:02:41,bnjm2000,Assigned asset [MISC]16A to PowerCon - 20m to event 102 (unprepared)
+2026/01/27 14:04:26,bnjm2000,Prepared asset [MISC]16A to PowerCon - 20m for event 102
+2026/01/27 14:39:47,bnjm2000,Updated location for asset ULXD2#05 from 'E&E' to 'Store'
+2026/01/27 14:39:47,bnjm2000,Removed Out of Commission status from asset ULXD2#05
+2026/01/27 14:39:47,bnjm2000,"Maintenance logged for asset ULXD2#05: Purchased new B58A Capsule to replace.
+Capsule SN: 3EH15266104"
+2026/01/27 14:40:50,bnjm2000,Added 3x DSAN PerfectCue Mini model to event 96 (total: 3)
+2026/01/27 14:41:01,bnjm2000,User bnjm2000 forced event 96 (STPI Symposium @ 72-13) state from Closed to Preparing
+2026/01/27 14:41:09,bnjm2000,Assigned specific asset CLICKER#01 to event 96
+2026/01/27 14:41:09,bnjm2000,Assigned specific asset CLICKER#02 to event 96
+2026/01/27 14:41:10,bnjm2000,Assigned specific asset PERFECTCUE#01 to event 96
+2026/01/27 14:41:15,bnjm2000,Returned all assets for department VX in event 96: 3 items
+2026/01/27 14:41:19,bnjm2000,User bnjm2000 removed forced state override for event 96 (STPI Symposium @ 72-13): Preparing -> Closed
+2026/01/27 14:42:34,bnjm2000,Marked asset CLICKER#01 as Out of Commission
+2026/01/27 14:42:34,bnjm2000,Maintenance logged for asset CLICKER#01: Discovered that battery was dead (STPI Symposium @ 72-13)
+2026/01/27 14:42:52,bnjm2000,Removed Out of Commission status from asset CLICKER#01
+2026/01/27 14:42:52,bnjm2000,Maintenance logged for asset CLICKER#01: Replaced battery. Tested working
+2026/01/27 14:43:03,bnjm2000,Maintenance logged for asset CLICKER#02: Replaced battery.
+2026/01/27 15:02:40,bnjm2000,Updated location for asset AD4Q#03 from 'E&E' to 'Store'
+2026/01/27 15:02:40,bnjm2000,Removed Out of Commission status from asset AD4Q#03
+2026/01/27 15:02:40,bnjm2000,"Maintenance logged for asset AD4Q#03: Collected back from E&E, tested working."

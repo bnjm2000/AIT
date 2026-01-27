@@ -1,0 +1,2 @@
+EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,Tag,ForceStateOverride
+105,Performance Motor CNY Dinner @ St Regis,20260205,20260205,[],"[""[MODEL]VX|Analogue Way|Pulse 2|1|Video Switcher""]",[],Planning,[],[],events,False
