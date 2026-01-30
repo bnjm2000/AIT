@@ -1,2 +1,2 @@
 EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,Tag,ForceStateOverride
-103,SG Air Show 2026 (Bencon) @ Changi Exhibition Centre,20260129,20260209,[],"[""[MODEL]VX|Samsung|LH50QHCEBGCXXS|2|50\"" Crystal UHD Signage""]",[],Planning,[],[],events,False
+103,SG Air Show 2026 (Bencon) @ Changi Exhibition Centre,20260129,20260209,[],"[""[MODEL]VX|Samsung|LH50QHCEBGCXXS|2|50\"" Crystal UHD Signage"", ""[LOAN]55\"" Touchscreen TV;4""]",[],Planning,[],[],events,False

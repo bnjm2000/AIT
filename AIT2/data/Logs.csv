@@ -1,18 +1,3 @@
-2025/11/27 16:53:44,bnjm2000,Assigned specific asset AD1#02 to event 84
-2025/11/27 16:53:45,bnjm2000,Assigned specific asset AD1#03 to event 84
-2025/11/27 16:53:46,bnjm2000,Assigned specific asset AD1#04 to event 84
-2025/11/27 16:53:46,bnjm2000,Assigned specific asset AD1#05 to event 84
-2025/11/27 16:53:48,bnjm2000,Assigned specific asset AD1#06 to event 84
-2025/11/27 16:53:49,bnjm2000,Assigned specific asset AD1#07 to event 84
-2025/11/27 16:53:49,bnjm2000,Assigned specific asset AD1#08 to event 84
-2025/11/27 16:53:51,bnjm2000,Assigned specific asset AD1#09 to event 84
-2025/11/27 16:53:52,bnjm2000,Assigned specific asset AD1#10 to event 84
-2025/11/27 16:53:52,bnjm2000,Assigned specific asset AD1#11 to event 84
-2025/11/27 16:53:56,bnjm2000,Assigned specific asset AD1#12 to event 84
-2025/11/27 16:53:56,bnjm2000,Assigned specific asset AD1#13 to event 84
-2025/11/27 16:53:58,bnjm2000,Assigned specific asset AD1#14 to event 84
-2025/11/27 16:53:59,bnjm2000,Assigned specific asset AD1#15 to event 84
-2025/11/27 16:53:59,bnjm2000,Assigned specific asset AD1#16 to event 84
 2025/11/27 16:54:15,bnjm2000,User bnjm2000 removed forced state override for event 84 (WSAudiology Town Hall @ 18 Tai Seng): Preparing -> Overdue
 2025/11/27 16:54:18,bnjm2000,Returned all assets for department AX in event 84: 40 items
 2025/11/27 16:54:29,bnjm2000,Removed DPA 4488 model from event 84
@@ -1048,3 +1033,18 @@ Capsule SN: 3EH15266104"
 2026/01/27 15:02:40,bnjm2000,Updated location for asset AD4Q#03 from 'E&E' to 'Store'
 2026/01/27 15:02:40,bnjm2000,Removed Out of Commission status from asset AD4Q#03
 2026/01/27 15:02:40,bnjm2000,"Maintenance logged for asset AD4Q#03: Collected back from E&E, tested working."
+2026/01/30 10:50:00,bnjm2000,User bnjm2000 logged in via web interface
+2026/01/30 10:50:40,bnjm2000,Updated location for asset LEDBEAM#04 from 'Store' to 'Robe Service Centre'
+2026/01/30 10:50:40,bnjm2000,Maintenance logged for asset LEDBEAM#04: Sent in to Robe Service Centre for servicing
+2026/01/30 11:17:23,bnjm2000,"Prepared asset [LOAN]55"" Touchscreen TV;4 for event 103"
+2026/01/30 11:17:35,bnjm2000,Updated custom asset quantity: [MISC]Silver Star Roxcyc;12 -> [MISC]Silver Star Roxcyc;24 for event 102
+2026/01/30 11:17:41,bnjm2000,Completely removed asset [MISC]16A to PowerCon - 20m from event 102
+2026/01/30 11:17:42,bnjm2000,Prepared asset [MISC]16A to PowerCon - 20m for event 102
+2026/01/30 11:17:42,bnjm2000,Prepared asset [MISC]Silver Star Roxcyc;24 for event 102
+2026/01/30 13:17:47,bnjm2000,Created event 106: Dry Hire: Avery Events via web interface
+2026/01/30 13:18:13,bnjm2000,Assigned asset [MISC]4-core TS to TS Cable - 2m to event 106 (unprepared)
+2026/01/30 13:19:03,bnjm2000,Added 1x L-Acoustics 5XT model to event 106 (total: 1)
+2026/01/30 13:19:06,bnjm2000,Removed L-Acoustics 5XT model from event 106
+2026/01/30 13:21:17,bnjm2000,Added 1x Audix D6 model to event 106 (total: 1)
+2026/01/30 13:21:23,bnjm2000,Prepared asset [MISC]4-core TS to TS Cable - 2m for event 106
+2026/01/30 13:21:26,bnjm2000,Assigned specific asset D6#01 to event 106

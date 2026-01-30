@@ -907,7 +907,7 @@ ESPRITE#24,Robe,ESPRITE,S2400924714,Profile LED,False,False,,LX,Store,
 LEDBEAM#01,Robe,Robin LEDBeam 350 Wash,2300840058,Wash LED,False,False,,LX,Store,Store
 LEDBEAM#02,Robe,Robin LEDBeam 350 Wash,2300840052,Wash LED,False,False,,LX,Store,Store
 LEDBEAM#03,Robe,Robin LEDBeam 350 Wash,2300840055,Wash LED,False,False,,LX,Store,Store
-LEDBEAM#04,Robe,Robin LEDBeam 350 Wash,2300877279,Wash LED,False,True,2026/01/24	bnjm2000	Unit became unresponsive mid-show (STPI Symposium @ 72-13) [Marked OOC],LX,Store,Store
+LEDBEAM#04,Robe,Robin LEDBeam 350 Wash,2300877279,Wash LED,False,True,2026/01/24	bnjm2000	Unit became unresponsive mid-show (STPI Symposium @ 72-13) [Marked OOC]|2026/01/28	bnjm2000	Sent in to Robe Service Centre for servicing [Location: Robe Service Centre],LX,Store,Robe Service Centre
 LEDBEAM#05,Robe,Robin LEDBeam 350 Wash,2300877292,Wash LED,False,False,,LX,Store,Store
 LEDBEAM#06,Robe,Robin LEDBeam 350 Wash,2300840057,Wash LED,False,False,,LX,Store,Store
 LEDBEAM#07,Robe,Robin LEDBeam 350 Wash,2300840405,Wash LED,False,False,,LX,Store,Store
@@ -1254,3 +1254,11 @@ PS15#02,Nexo,PS15,,"15"" passive enclosure",False,False,,AX,Store,Store
 PS15#03,Nexo,PS15,,"15"" passive enclosure",False,False,,AX,Store,
 PS15#04,Nexo,PS15,,"15"" passive enclosure",False,False,,AX,Store,
 DZ13K#01,Panasonic,PT-DZ13K,SW5342008,3DLP - 12000 lumens - WUXGA - 2Lamps Projector,False,False,,VX,STORE,
+D1#01,Audix,D1,,Professional Dynamic Instrument Microphone,False,False,,AX,Store,
+D2#01,Audix,D2,,Professional Dynamic Instrument Microphone,False,False,,AX,Store,
+D2#02,Audix,D2,,Professional Dynamic Instrument Microphone,False,False,,AX,Store,
+D3#01,Audix,D3,,Professional Dynamic Instrument Microphone,False,False,,AX,Store,
+D3#02,Audix,D3,,Professional Dynamic Instrument Microphone,False,False,,AX,Store,
+D4#01,Audix,D4,,Professional Dynamic Instrument Microphone,False,False,,AX,Store,
+D4#02,Audix,D4,,Professional Dynamic Instrument Microphone,False,False,,AX,Store,
+D6#01,Audix,D6,,Professional Dynamic Instrument Microphone,False,False,,AX,Store,Dry Hire: Avery Events
