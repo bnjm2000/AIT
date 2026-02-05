@@ -9847,6 +9847,8 @@ function showMaintenanceLogModal(asset) {
   // console.log('Total maintenance logs count:', asset.maintenanceLogs ? asset.maintenanceLogs.length : 0);
   
   // Start building modal content
+  const assetSafeId = asset.id.replace(/[^a-zA-Z0-9]/g, '_');
+  const eventHistoryContainerId = `assetEventHistory_${assetSafeId}`;
   let modalContent = `
     <div class="modal" id="maintenanceLogModal" style="display: flex; align-items: center; justify-content: center;">
       <div class="modal-content" style="max-width: 1200px; width: 95%; height: 95vh; display: flex; flex-direction: column; overflow: hidden; padding: 20px;">
@@ -9876,7 +9878,14 @@ function showMaintenanceLogModal(asset) {
               </div>
             </div>
           </div>
-          
+          <!-- Prepared Event / Dry Hire History -->
+          <div style="background: #fff; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #e9ecef; flex-shrink: 0;">
+            <h4 style="margin: 0 0 10px 0; color: #495057;">Prepared Event / Dry Hire History</h4>
+            <div id="${eventHistoryContainerId}" style="max-height: 220px; overflow-y: auto; border: 1px solid #e9ecef; border-radius: 8px; background: #ffffff;">
+              <div style="padding: 12px; color: #6c757d; font-style: italic;">Loading…</div>
+            </div>
+          </div>
+
           <!-- Maintenance Logs -->
           <div style="flex: 1; display: flex; flex-direction: column; min-height: 0;">
             <h4 style="margin-bottom: 15px; color: #495057; flex-shrink: 0;">
@@ -10065,6 +10074,8 @@ function showMaintenanceLogModal(asset) {
   // Show modal
   const modal = document.getElementById('maintenanceLogModal');
   modal.style.display = 'flex';
+    // Load prepared event/dry hire history
+  setTimeout(() => loadAssetEventHistory(asset.id, eventHistoryContainerId), 0);
   
   // Add event listener for clicking outside modal
   modal.addEventListener('click', function(e) {
@@ -10096,6 +10107,70 @@ function showMaintenanceLogModal(asset) {
       };
     });
   }, 100);
+}
+
+async function loadAssetEventHistory(assetId, containerId) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+
+  container.innerHTML = `<div style="padding: 12px; color: #6c757d; font-style: italic;">Loading…</div>`;
+
+  try {
+    const resp = await apiCall(`/api/assets/${encodeURIComponent(assetId)}/event-history`);
+    const rows = (resp && resp.success && Array.isArray(resp.data)) ? resp.data : [];
+
+    if (rows.length === 0) {
+      container.innerHTML = `<div style="padding: 12px; color: #6c757d; font-style: italic;">No prepared event/dry hire history found for this asset.</div>`;
+      return;
+    }
+
+    const bodyRows = rows.map(ev => {
+      const tag = ev.tag || 'events';
+      const tagStyle = getTagStyle(tag);
+      const tagLabel = getTagDisplay(tag);
+
+      const dateRange =
+        (ev.startDate && ev.endDate && ev.startDate !== ev.endDate)
+          ? `${ev.startDate} → ${ev.endDate}`
+          : (ev.startDate || ev.endDate || '');
+
+      const statusBadge = ev.returned
+        ? '<span style="background:#e6ffed;color:#1e7e34;padding:2px 8px;border-radius:12px;font-size:12px;font-weight:600;">Returned</span>'
+        : '<span style="background:#fff3cd;color:#856404;padding:2px 8px;border-radius:12px;font-size:12px;font-weight:600;">Out</span>';
+
+      return `
+        <tr style="border-bottom: 1px solid #f1f1f1;">
+          <td style="padding: 10px; width: 90px; white-space: nowrap;">
+            <span style="padding: 2px 8px; border-radius: 12px; font-size: 10px; font-weight: bold; ${tagStyle}">
+              ${tagLabel}
+            </span>
+          </td>
+          <td style="padding: 10px; width: 70px; font-weight: 600;">${ev.id}</td>
+          <td style="padding: 10px;">${escapeHtml(ev.name || '')}</td>
+          <td style="padding: 10px; width: 160px; white-space: nowrap; font-size: 13px;">${escapeHtml(dateRange)}</td>
+          <td style="padding: 10px; width: 110px; text-align: center;">${statusBadge}</td>
+        </tr>
+      `;
+    }).join('');
+
+    container.innerHTML = `
+      <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+        <thead style="position: sticky; top: 0; background: #f8f9fa; z-index: 5;">
+          <tr>
+            <th style="padding: 10px; text-align: left; width: 90px; border-bottom: 2px solid #e9ecef;">Type</th>
+            <th style="padding: 10px; text-align: left; width: 70px; border-bottom: 2px solid #e9ecef;">ID</th>
+            <th style="padding: 10px; text-align: left; border-bottom: 2px solid #e9ecef;">Name</th>
+            <th style="padding: 10px; text-align: left; width: 160px; border-bottom: 2px solid #e9ecef;">Dates</th>
+            <th style="padding: 10px; text-align: center; width: 110px; border-bottom: 2px solid #e9ecef;">Status</th>
+          </tr>
+        </thead>
+        <tbody>${bodyRows}</tbody>
+      </table>
+    `;
+  } catch (err) {
+    console.error('Failed to load asset event history:', err);
+    container.innerHTML = `<div style="padding: 12px; color: #dc3545;">Failed to load event/dry hire history.</div>`;
+  }
 }
 
 if (typeof window !== 'undefined') {
@@ -11121,6 +11196,8 @@ function editMaintenanceLog(assetId, logIndex, logId) {
   // Show modal
   const modal = document.getElementById('editMaintenanceLogModal');
   modal.style.display = 'flex';
+    // Load prepared event/dry hire history
+  setTimeout(() => loadAssetEventHistory(asset.id, eventHistoryContainerId), 0);
   
   // Add form submit handler
   const form = document.getElementById('editMaintenanceLogForm');

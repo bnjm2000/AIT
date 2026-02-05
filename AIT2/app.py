@@ -2874,6 +2874,66 @@ def maintain_asset(asset_id):
         logger.error(f"Traceback: {traceback.format_exc()}")
         return jsonify({'error': f'Failed to log maintenance: {str(e)}'}), 500
 
+@app.route('/api/assets/<asset_id>/event-history', methods=['GET'])
+@require_auth
+def get_asset_event_history(asset_id):
+    """Return events/dry hires where this asset was ACTUALLY out (prepared and/or returned)."""
+    try:
+        asset_id = unquote_plus(asset_id).strip()
+
+        if asset_id not in data_manager.inventory:
+            return jsonify({'error': 'Asset not found'}), 404
+
+        def safe_fmt(d):
+            try:
+                return format_date_output(d)
+            except Exception:
+                return d or ''
+
+        history = []
+
+        for event in data_manager.events.values():
+            # Ensure lists exist (backward compatibility)
+            ap = getattr(event, 'actually_prepared', []) or []
+            ri = getattr(event, 'returned_items', []) or []
+
+            # Normalize (strip) in case older data has whitespace
+            ap_set = {str(x).strip() for x in ap}
+            ri_set = {str(x).strip() for x in ri}
+
+            # ✅ "Ever went out" = currently out OR returned
+            ever_out_set = ap_set | ri_set
+
+            if asset_id in ever_out_set:
+                raw_start = getattr(event, 'start_date', '') or ''
+                raw_end = getattr(event, 'end_date', raw_start) or raw_start
+
+                history.append({
+                    'id': event.event_id,
+                    'name': event.name,
+                    'startDate': safe_fmt(raw_start),
+                    'endDate': safe_fmt(raw_end),
+                    'state': getattr(event, 'state', 'Added'),
+                    'tag': getattr(event, 'tag', 'events'),
+                    'returned': asset_id in ri_set,
+                    '_sortEnd': raw_end,
+                    '_sortStart': raw_start
+                })
+
+        history.sort(
+            key=lambda x: (x.get('_sortEnd', ''), x.get('_sortStart', ''), x.get('id', 0)),
+            reverse=True
+        )
+        for h in history:
+            h.pop('_sortEnd', None)
+            h.pop('_sortStart', None)
+
+        return jsonify({'success': True, 'data': history})
+
+    except Exception as e:
+        logger.error(f"Error getting event history for asset {asset_id}: {e}")
+        return jsonify({'error': 'Failed to retrieve asset event history'}), 500
+
 @app.route('/api/assets/<asset_id>/maintenance-log-enhanced/<int:log_index>', methods=['PUT'])
 @require_auth
 def update_maintenance_log_enhanced(asset_id, log_index):
