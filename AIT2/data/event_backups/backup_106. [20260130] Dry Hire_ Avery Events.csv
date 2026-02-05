@@ -1,2 +1,2 @@
 EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,Tag,ForceStateOverride
-106,Dry Hire: Avery Events,20260130,20260130,[],"[""[MISC]4-core TS to TS Cable - 2m"", ""[MODEL]AX|Audix|D6|1|Professional Dynamic Instrument Microphone""]",[],Planning,"[""[MISC]4-core TS to TS Cable - 2m""]",[],dry hire,False
+106,Dry Hire: Avery Events,20260130,20260130,[],"[""[MISC]4-core TS to TS Cable - 2m"", ""[MODEL]AX|Audix|D6|1|Professional Dynamic Instrument Microphone"", ""D6#01"", ""[MODEL]AX|Audix|D4|1|Professional Dynamic Instrument Microphone"", ""D4#01""]","[""[MISC]4-core TS to TS Cable - 2m""]",Overdue,"[""[MISC]4-core TS to TS Cable - 2m"", ""D6#01"", ""D4#01""]",[],dry hire,False

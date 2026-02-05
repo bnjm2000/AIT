@@ -1,51 +1,3 @@
-2025/11/27 16:57:56,bnjm2000,Assigned specific asset ULXD1#08 to event 83
-2025/11/27 16:57:58,bnjm2000,Assigned specific asset ULXD1#10 to event 83
-2025/11/27 16:58:21,bnjm2000,Added 1x Yamaha QL1 model to event 85 (total: 1)
-2025/11/27 17:00:29,bnjm2000,Returned asset ULXD2#05 from event 83
-2025/11/27 17:01:50,bnjm2000,Marked asset ULXD2#05 as Out of Commission
-2025/11/27 17:01:50,bnjm2000,Maintenance logged for asset ULXD2#05: Discovered capsule broken and sponge disintegrated (Loro Piana @ Jiak Kim House)
-2025/11/27 17:03:32,bnjm2000,Created event 87: Dry Hire: Wes Sound Works via web interface
-2025/11/27 17:03:38,bnjm2000,Added 1x Sennheiser Base Station model to event 87 (total: 1)
-2025/11/27 17:03:44,bnjm2000,Added 10x Sennheiser SEK(UHF) model to event 87 (total: 10)
-2025/11/27 17:03:48,bnjm2000,Added 2x Sennheiser DAD(UHF) model to event 87 (total: 2)
-2025/11/27 17:03:57,bnjm2000,Added 4x Shure ULXD2 model to event 87 (total: 4)
-2025/11/27 17:04:08,bnjm2000,Added 2x Shure ULXD4D model to event 87 (total: 2)
-2025/11/27 17:05:24,bnjm2000,Added 1x Hollyland Solidcom C1 (Pro) 8-Slot Battery Charging Case model to event 85 (total: 1)
-2025/11/27 17:05:25,bnjm2000,Added 1x Hollyland Solidcom C1 Pro Hub model to event 85 (total: 1)
-2025/11/27 17:05:28,bnjm2000,Added 8x Hollyland Solidcom C1 Pro Remote Headset model to event 85 (total: 8)
-2025/11/27 17:05:29,bnjm2000,Added 1x Hollyland Solidcom C1 Pro Wired Headset for Hub model to event 85 (total: 1)
-2025/11/27 17:05:30,bnjm2000,Added 16x Hollyland HL-BAT700 model to event 85 (total: 16)
-2025/11/27 17:05:39,bnjm2000,Added 16x Shure AD2 model to event 85 (total: 16)
-2025/11/27 17:05:43,bnjm2000,Added 16x Shure AD1 model to event 85 (total: 16)
-2025/11/27 17:05:49,bnjm2000,Added 3x Shure AD4Q model to event 85 (total: 3)
-2025/11/27 17:06:10,bnjm2000,Added 1x Sennheiser Base Station model to event 85 (total: 1)
-2025/11/27 17:06:13,bnjm2000,Added 2x Sennheiser DAD(UHF) model to event 85 (total: 2)
-2025/11/27 17:06:24,bnjm2000,Added 7x Sennheiser SEK(UHF) model to event 85 (total: 7)
-2025/11/27 17:06:35,bnjm2000,Added 2x L-Acoustics LA4X model to event 86 (total: 2)
-2025/11/27 17:06:48,bnjm2000,Added 3x L-Acoustics LA12X model to event 85 (total: 3)
-2025/11/27 17:06:52,bnjm2000,Added 2x L-Acoustics LA4X model to event 85 (total: 2)
-2025/11/27 17:07:04,bnjm2000,Assigned specific asset LA4X#07 to event 85
-2025/11/27 17:07:07,bnjm2000,Assigned specific asset LA4X#08 to event 85
-2025/11/27 17:07:09,bnjm2000,Assigned specific asset LA12X#01 to event 85
-2025/11/27 17:07:12,bnjm2000,Assigned specific asset LA12X#02 to event 85
-2025/11/27 17:07:15,bnjm2000,Assigned specific asset LA12X#03 to event 85
-2025/11/27 17:07:20,bnjm2000,Added 1x L-Acoustics P1 model to event 85 (total: 1)
-2025/11/29 16:33:44,bnjm2000,User bnjm2000 logged in via web interface
-2025/11/29 16:34:00,bnjm2000,Assigned specific asset LA4X#05 to event 86
-2025/11/29 16:34:01,bnjm2000,Assigned specific asset LA4X#06 to event 86
-2025/11/29 16:34:02,bnjm2000,Assigned specific asset LA4X#09 to event 86
-2025/11/29 16:34:06,bnjm2000,Completely removed asset LA4X#09 from event 86
-2025/11/29 16:34:07,bnjm2000,Completely removed asset LA4X#05 from event 86
-2025/11/29 16:34:07,bnjm2000,Completely removed asset LA4X#06 from event 86
-2025/11/29 16:34:23,bnjm2000,Assigned specific asset LA4X#09 to event 86
-2025/11/29 16:34:23,bnjm2000,Assigned specific asset LA4X#10 to event 86
-2025/11/29 16:34:32,bnjm2000,Assigned specific asset X12#05 to event 86
-2025/11/29 16:34:37,bnjm2000,Assigned specific asset X12#06 to event 86
-2025/11/29 16:34:39,bnjm2000,Assigned specific asset X12#07 to event 86
-2025/11/29 16:34:42,bnjm2000,Assigned specific asset X12#08 to event 86
-2025/11/29 16:34:57,bnjm2000,Removed L-Acoustics X8 model from event 86
-2025/11/29 16:35:04,bnjm2000,Removed Shure ULXD2 model from event 86
-2025/11/29 16:35:04,bnjm2000,Added 4x Shure ULXD2 model to event 86 (total: 4)
 2025/11/29 16:35:11,bnjm2000,Removed Shure ULXD4D model from event 86
 2025/11/29 16:35:11,bnjm2000,Added 2x Shure ULXD4D model to event 86 (total: 2)
 2025/11/29 16:35:22,bnjm2000,User bnjm2000 forced event 86 (Zendesk End of Year Celebration 2025 @ Andaz) state from Overdue to Preparing
@@ -1048,3 +1000,51 @@ Capsule SN: 3EH15266104"
 2026/01/30 13:46:01,bnjm2000,Assigned specific asset ROXCYC#23 to event 102
 2026/01/30 13:46:02,bnjm2000,Assigned specific asset ROXCYC#22 to event 102
 2026/01/30 13:46:03,bnjm2000,Assigned specific asset ROXCYC#24 to event 102
+2026/01/30 14:04:39,bnjm2000,Added 1x Audix D4 model to event 106 (total: 1)
+2026/01/30 14:04:52,bnjm2000,Assigned specific asset D4#01 to event 106
+2026/01/30 15:39:56,bnjm2000,Added 1x Swisson XRC-200 model to event 102 (total: 1)
+2026/01/30 15:40:00,bnjm2000,Removed Swisson XRC-200 model from event 102
+2026/01/30 15:40:26,bnjm2000,Added 1x Swisson XRC-200 model to event 102 (total: 1)
+2026/01/30 15:40:37,bnjm2000,Assigned specific asset DMX RECORDER #01 to event 102
+2026/01/30 16:24:39,bnjm2000,Assigned specific asset QM50C#03 to event 103
+2026/01/30 16:24:41,bnjm2000,Assigned specific asset QM50C#04 to event 103
+2026/02/02 10:49:26,system,Failed login attempt for username: bnjm2000
+2026/02/02 10:49:30,bnjm2000,User bnjm2000 logged in via web interface
+2026/02/03 13:11:46,bnjm2000,User bnjm2000 logged in via web interface
+2026/02/03 13:12:20,bnjm2000,Created event 107:  Anderson Tanoto Birthday Party @  Anderson Tanoto Birthday Party via web interface
+2026/02/03 13:12:34,bnjm2000,Added 8x Astera Titan Tube model to event 107 (total: 8)
+2026/02/03 14:08:59,bnjm2000,Updated event 107: Anderson Tanoto Birthday Party @ 17 Margoliouth Road via web interface
+2026/02/03 14:09:51,bnjm2000,Created container TT Case #01 (8 assets)
+2026/02/03 14:10:28,bnjm2000,Created container TT Case #02 (8 assets)
+2026/02/04 15:18:28,bnjm2000,User bnjm2000 logged in via web interface
+2026/02/05 12:52:28,bnjm2000,User bnjm2000 logged in via web interface
+2026/02/05 12:53:01,bnjm2000,Created event 108: Dry Hire: Wes Sound Works via web interface
+2026/02/05 12:53:10,bnjm2000,Added 1x Radial Engineering J48 Mono model to event 108 (total: 1)
+2026/02/05 12:53:26,bnjm2000,Added 1x Klark Teknik DN200 model to event 108 (total: 1)
+2026/02/05 12:53:36,bnjm2000,Assigned specific asset DN200#03 to event 108
+2026/02/05 12:53:41,bnjm2000,Assigned specific asset J48M#01 to event 108
+2026/02/05 12:53:56,bnjm2000,Assigned specific asset PULSE2#01 to event 105
+2026/02/05 12:54:15,bnjm2000,Assigned specific asset TT#01 to event 107
+2026/02/05 12:54:16,bnjm2000,Assigned specific asset TT#02 to event 107
+2026/02/05 12:54:17,bnjm2000,Assigned specific asset TT#03 to event 107
+2026/02/05 12:54:18,bnjm2000,Assigned specific asset TT#04 to event 107
+2026/02/05 12:54:19,bnjm2000,Assigned specific asset TT#05 to event 107
+2026/02/05 12:54:20,bnjm2000,Assigned specific asset TT#07 to event 107
+2026/02/05 12:54:21,bnjm2000,Assigned specific asset TT#06 to event 107
+2026/02/05 12:54:23,bnjm2000,Assigned specific asset TT#08 to event 107
+2026/02/05 12:54:40,bnjm2000,Added 3x Lumenradio Aurora model to event 107 (total: 3)
+2026/02/05 12:54:46,bnjm2000,Assigned specific asset AURORA#01 to event 107
+2026/02/05 12:54:48,bnjm2000,Assigned specific asset AURORA#02 to event 107
+2026/02/05 12:54:50,bnjm2000,Assigned specific asset AURORA#03 to event 107
+2026/02/05 12:58:35,bnjm2000,Created event 109: Standard Chartered Bank CNY Dinner @ Shangri-La Island Ballroom via web interface
+2026/02/05 12:58:47,bnjm2000,Added 24x L-Acoustics KARAII model to event 109 (total: 24)
+2026/02/05 12:58:48,bnjm2000,Added 4x L-Acoustics M-BUMP model to event 109 (total: 4)
+2026/02/05 12:58:59,bnjm2000,Added 6x L-Acoustics SB18 model to event 109 (total: 6)
+2026/02/05 12:59:17,bnjm2000,Added 6x L-Acoustics LA12X model to event 109 (total: 6)
+2026/02/05 16:43:38,bnjm2000,Added 3x DSAN PerfectCue Mini model to event 105 (total: 3)
+2026/02/05 16:43:47,bnjm2000,Assigned specific asset PERFECTCUE#01 to event 105
+2026/02/05 16:43:48,bnjm2000,Assigned specific asset CLICKER#02 to event 105
+2026/02/05 16:43:48,bnjm2000,Assigned specific asset CLICKER#01 to event 105
+2026/02/05 17:36:52,bnjm2000,User bnjm2000 logged in via web interface
+2026/02/05 17:37:04,bnjm2000,Returned all assets for department MISC in event 106: 1 items
+2026/02/05 17:37:04,bnjm2000,Returned all assets for department AX in event 106: 2 items

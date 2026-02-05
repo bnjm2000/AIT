@@ -1,0 +1,2 @@
+EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,Tag,ForceStateOverride
+109,Standard Chartered Bank CNY Dinner @ Shangri-La Island Ballroom,20260223,20260224,[],"[""[MODEL]AX|L-Acoustics|KARAII|24|Long Throw Concert Sound Loudspeaker"", ""[MODEL]AX|L-Acoustics|M-BUMP|4|Bumper for flying or stacking KARA (II)/SB18"", ""[MODEL]AX|L-Acoustics|SB18|6|High power compact subwoofer: 1 x 18\"""", ""[MODEL]AX|L-Acoustics|LA12X|6|Amplified controller""]",[],Planning,[],[],events,False

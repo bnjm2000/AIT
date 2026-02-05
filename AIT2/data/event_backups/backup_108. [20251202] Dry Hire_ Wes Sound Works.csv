@@ -1,0 +1,2 @@
+EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,Tag,ForceStateOverride
+108,Dry Hire: Wes Sound Works,20251202,20260224,[],"[""[MODEL]AX|Radial Engineering|J48 Mono|1|Phantom Powered Active Direct Box"", ""[MODEL]AX|Klark Teknik|DN200|1|"", ""DN200#03""]",[],Preparing,"[""DN200#03""]","[""DN200#03""]",dry hire,False
