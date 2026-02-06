@@ -1,23 +1,3 @@
-2025/11/29 16:35:11,bnjm2000,Removed Shure ULXD4D model from event 86
-2025/11/29 16:35:11,bnjm2000,Added 2x Shure ULXD4D model to event 86 (total: 2)
-2025/11/29 16:35:22,bnjm2000,User bnjm2000 forced event 86 (Zendesk End of Year Celebration 2025 @ Andaz) state from Overdue to Preparing
-2025/11/29 16:35:29,bnjm2000,Added 2x Interspace Industries PCBB3 model to event 86 (total: 2)
-2025/11/29 16:35:43,bnjm2000,Assigned specific asset PCBB#04 to event 86
-2025/11/29 16:35:55,bnjm2000,Assigned specific asset PCBB#13 to event 86
-2025/11/29 16:36:56,bnjm2000,Removed Shure ULXD2 model from event 86
-2025/11/29 16:36:56,bnjm2000,Added 1x Shure ULXD2 model to event 86 (total: 1)
-2025/11/29 16:37:12,bnjm2000,Added 4x Shure ULXD2 model to event 86 (total: 4)
-2025/11/29 16:37:16,bnjm2000,Removed Shure ULXD2 model from event 86
-2025/11/29 16:37:23,bnjm2000,Added 1x Shure ULXD2 model to event 86 (total: 2)
-2025/11/29 16:37:34,bnjm2000,Removed Shure ULXD2 model from event 86
-2025/11/29 16:37:34,bnjm2000,Added 1x Shure ULXD2 model to event 86 (total: 1)
-2025/11/29 16:37:37,bnjm2000,Added 4x Shure ULXD2 model to event 86 (total: 4)
-2025/11/29 16:37:43,bnjm2000,Added 1x Shure ULXD4D model to event 86 (total: 1)
-2025/11/29 16:37:44,bnjm2000,Added 1x Shure ULXD4D model to event 86 (total: 2)
-2025/11/29 16:37:49,bnjm2000,Removed Shure ULXD4D model from event 86
-2025/11/29 16:37:52,bnjm2000,Added 1x Shure ULXD4D model to event 86 (total: 1)
-2025/11/29 16:37:53,bnjm2000,Added 1x Shure ULXD4D model to event 86 (total: 2)
-2025/11/29 16:37:57,bnjm2000,Removed Shure ULXD4D model from event 86
 2025/11/29 16:37:59,bnjm2000,Added 1x Shure ULXD4D model to event 86 (total: 1)
 2025/11/29 16:38:00,bnjm2000,Added 1x Shure ULXD4D model to event 86 (total: 2)
 2025/11/29 16:38:15,bnjm2000,Assigned specific asset ULXD2#04 to event 86
@@ -1048,3 +1028,23 @@ Capsule SN: 3EH15266104"
 2026/02/05 17:36:52,bnjm2000,User bnjm2000 logged in via web interface
 2026/02/05 17:37:04,bnjm2000,Returned all assets for department MISC in event 106: 1 items
 2026/02/05 17:37:04,bnjm2000,Returned all assets for department AX in event 106: 2 items
+2026/02/06 13:47:04,bnjm2000,User bnjm2000 logged in via web interface
+2026/02/06 13:49:16,bnjm2000,Assigned specific asset SAMSUNG65#05 to event 104
+2026/02/06 13:49:24,bnjm2000,Removed Samsung UN65TU8000F model from event 104
+2026/02/06 13:49:24,bnjm2000,Added 1x Samsung UN65TU8000F model to event 104 (total: 1)
+2026/02/06 13:49:32,bnjm2000,Returned all assets for department VX in event 105: 4 items
+2026/02/06 13:49:34,bnjm2000,Returned all assets for department VX in event 104: 1 items
+2026/02/06 13:49:41,bnjm2000,Added 1x GrandMA3 Compact XT model to event 107 (total: 1)
+2026/02/06 13:49:45,bnjm2000,Assigned specific asset COMPACTXT#01 to event 107
+2026/02/06 14:42:13,bnjm2000,Added 1x Le Maitre MVS Hazer model to event 107 (total: 1)
+2026/02/06 14:48:06,bnjm2000,Added 8x Astera Pixel Brick model to event 107 (total: 8)
+2026/02/06 14:53:13,bnjm2000,Assigned specific asset PB#57 to event 107
+2026/02/06 14:53:13,bnjm2000,Assigned specific asset PB#58 to event 107
+2026/02/06 14:53:13,bnjm2000,Assigned specific asset PB#59 to event 107
+2026/02/06 14:53:13,bnjm2000,Assigned specific asset PB#60 to event 107
+2026/02/06 14:53:13,bnjm2000,Assigned specific asset PB#61 to event 107
+2026/02/06 14:53:13,bnjm2000,Assigned specific asset PB#62 to event 107
+2026/02/06 14:53:13,bnjm2000,Assigned specific asset PB#63 to event 107
+2026/02/06 14:53:13,bnjm2000,Assigned specific asset PB#64 to event 107
+2026/02/06 14:55:23,bnjm2000,Assigned specific asset MVSHAZER#01 to event 107
+2026/02/06 16:10:37,bnjm2000,"Maintenance logged for asset ROXCYC#21: Somewhere in the centre, white bulb is spoilt (SG Airshow 2026 - Anduril Booth @ SG CEC)"
