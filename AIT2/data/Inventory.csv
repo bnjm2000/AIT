@@ -742,7 +742,7 @@ ULXD1#08,Shure,ULXD1,1ND2342622-01,Beltpack [L50],False,False,,AX,Store,Store
 ULXD1#09,Shure,ULXD1,1ML0246482-01,Beltpack [L50],False,False,,AX,Store,Store
 ULXD1#10,Shure,ULXD1,1ND2342618-01,Beltpack [L50],False,False,,AX,Store,Store
 ULXD1#11,Shure,ULXD1,2QJ0777983,Beltpack [L50],False,False,,AX,Store,Store
-ULXD1#12,Shure,ULXD1,,Beltpack [L50],False,False,,AX,Store,
+ULXD1#12,Shure,ULXD1,,Beltpack [L50],True,False,,AX,Store,
 ULXD1#13,Shure,ULXD1,3BI28076309,Beltpack [G52],False,False,,AX,Store,Store
 ULXD1#14,Shure,ULXD1,3BI28074129,Beltpack [G52],False,False,,AX,Store,Store
 ULXD1#15,Shure,ULXD1,3BI28076513,Beltpack [G52],False,False,,AX,Store,Store
@@ -1210,6 +1210,9 @@ MASTER4KRX#03,Accsoon,Cineview Master 4K RX,WIT07-1377-BE0B,Wireless SDI/HDMI Re
 PERFECTCUE#01,DSAN,PerfectCue Mini,24-24582,Professional Wireless Clicker,False,False,,VX,Store,Store
 CLICKER#01,DSAN,PerfectCue Mini,,Professional Wireless Clicker,False,False,2026/01/22	bnjm2000	Discovered that battery was dead (STPI Symposium @ 72-13) [Marked OOC]|2026/01/27	bnjm2000	Replaced battery. Tested working [Cleared OOC],VX,Store,Store
 CLICKER#02,DSAN,PerfectCue Mini,,Professional Wireless Clicker,False,False,2026/01/27	bnjm2000	Replaced battery.,VX,Store,Store
+PERFECTCUE#02,DSAN,PerfectCue Mini,15-8294,Professional Wireless Clicker,False,False,,VX,Store,Store
+CLICKER#03,DSAN,PerfectCue Mini,,Professional Wireless Clicker,False,False,,VX,Store,Store
+CLICKER#04,DSAN,PerfectCue Mini,,Professional Wireless Clicker,False,False,,VX,Store,Store
 SBS#01,Sennheiser,Base Station,1205000475,1RU Spectera Base Station,False,False,,AX,Store,Store
 SEK#01,Sennheiser,SEK(UHF),1165001727,Bidirectional bodypack,False,False,,AX,Store,Store
 SEK#02,Sennheiser,SEK(UHF),1165001729,Bidirectional bodypack,False,False,,AX,Store,Store
@@ -1300,3 +1303,4 @@ LEGION#03,Lenovo,Legion 5 Pro,PF4LVD48,16inch Windows Laptop,False,False,,VX,Sto
 LEGION#04,Lenovo,Legion 5 Pro,PF4LW7B4,16inch Windows Laptop,False,False,,VX,Store,Store
 MACBOOK#01,Apple,Macbook Pro (A1707),C02WG8EHHTD5,16inch Macbook Pro,False,False,,VX,Store,Store
 MACBOOK#02,Apple,Macbook Pro (A2442),M5P2V176XD,14inch Macbook Pro M1 Pro,False,False,,AX,Store,
+LUMINODE12,Luminex,Luminode 12,,12 DMX Interface,False,False,,LX,Store,Standard Chartered Bank CNY Dinner @ Shangri-La Island Ballroom
