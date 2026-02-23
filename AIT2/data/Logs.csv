@@ -1,71 +1,3 @@
-2025/12/04 16:55:18,bnjm2000,Assigned specific asset AD2#11 to event 89
-2025/12/04 16:55:18,bnjm2000,Assigned specific asset AD2#12 to event 89
-2025/12/04 16:55:20,bnjm2000,Assigned specific asset AD2#13 to event 89
-2025/12/04 16:55:21,bnjm2000,Assigned specific asset AD2#14 to event 89
-2025/12/04 16:55:22,bnjm2000,Assigned specific asset AD2#15 to event 89
-2025/12/04 16:55:23,bnjm2000,Assigned specific asset AD2#16 to event 89
-2025/12/04 16:55:26,bnjm2000,Assigned specific asset AD4Q#01 to event 89
-2025/12/04 16:55:27,bnjm2000,Assigned specific asset AD4Q#02 to event 89
-2025/12/04 16:55:28,bnjm2000,Assigned specific asset AD4Q#04 to event 89
-2025/12/04 16:55:30,bnjm2000,Assigned specific asset QL5#01 to event 89
-2025/12/04 16:55:32,bnjm2000,Assigned specific asset RIO1608-D #01 to event 89
-2025/12/04 16:55:36,bnjm2000,Assigned specific asset RIO1608-D2 #01 to event 90
-2025/12/04 16:55:46,bnjm2000,Assigned specific asset ULXD4Q#01 to event 90
-2025/12/04 16:55:47,bnjm2000,Assigned specific asset ULXD4D#01 to event 90
-2025/12/04 16:55:48,bnjm2000,Assigned specific asset ULXD4D#02 to event 90
-2025/12/04 16:55:49,bnjm2000,Assigned specific asset ULXD4D#03 to event 90
-2025/12/04 16:55:51,bnjm2000,Assigned specific asset ULXD4D#04 to event 90
-2025/12/04 16:56:20,bnjm2000,Added 1x Shure ULXD4Q model to event 89 (total: 1)
-2025/12/04 16:56:24,bnjm2000,Added 1x Shure ULXD4Q model to event 89 (total: 1)
-2025/12/04 16:56:34,bnjm2000,Removed Shure ULXD4Q model from event 89
-2025/12/04 16:56:54,bnjm2000,Assigned specific asset ULXD4Q#03 to event 89
-2025/12/09 13:35:13,bnjm2000,User bnjm2000 forced event 90 (ESMO @ Capitol Kapinski) state from Overdue to Preparing
-2025/12/09 13:35:16,bnjm2000,User bnjm2000 forced event 89 (ESMO @ Mandarin Oriental) state from Overdue to Preparing
-2025/12/09 13:35:34,bnjm2000,Assigned specific asset EVOLVE50#03 to event 89
-2025/12/09 13:35:41,bnjm2000,Assigned specific asset EVOLVE50#04 to event 89
-2025/12/09 13:35:56,bnjm2000,Returned all assets for department AX in event 90: 6 items
-2025/12/09 13:35:59,bnjm2000,Returned all assets for department AX in event 89: 41 items
-2025/12/09 13:36:01,bnjm2000,Returned all assets for department AX in event 88: 5 items
-2025/12/09 13:36:04,bnjm2000,User bnjm2000 removed forced state override for event 90 (ESMO @ Capitol Kapinski): Preparing -> Preparing
-2025/12/09 13:36:05,bnjm2000,User bnjm2000 removed forced state override for event 89 (ESMO @ Mandarin Oriental): Preparing -> Preparing
-2025/12/09 13:36:09,bnjm2000,User bnjm2000 forced event 88 (ESMO @ JW Mariott) state from Overdue to Closed
-2025/12/09 13:36:13,bnjm2000,User bnjm2000 forced event 89 (ESMO @ Mandarin Oriental) state from Preparing to Closed
-2025/12/09 13:36:16,bnjm2000,User bnjm2000 forced event 90 (ESMO @ Capitol Kapinski) state from Preparing to Closed
-2025/12/09 13:36:42,bnjm2000,Created event 91: Birthday Celebration of Laurent Junique @ Burnt Ends via web interface
-2025/12/09 13:36:51,bnjm2000,Added 5x Sennheiser SEK(UHF) model to event 91 (total: 5)
-2025/12/09 13:36:57,bnjm2000,Added 6x EV EVOLVE 50 model to event 91 (total: 6)
-2025/12/09 13:37:04,bnjm2000,Added 4x Turbosound IP1000 model to event 91 (total: 4)
-2025/12/09 13:37:07,bnjm2000,Added 1x Yamaha QL1 model to event 91 (total: 1)
-2025/12/09 13:37:13,bnjm2000,Added 2x Sennheiser DAD(UHF) model to event 91 (total: 2)
-2025/12/09 13:37:20,bnjm2000,Added 1x Sennheiser Base Station model to event 91 (total: 1)
-2025/12/09 13:37:31,bnjm2000,Added 2x Radial Engineering J48 Stereo model to event 91 (total: 2)
-2025/12/09 13:38:07,bnjm2000,Added 6x Shure ULXD2 model to event 91 (total: 6)
-2025/12/09 13:38:14,bnjm2000,Added 1x Shure ULXD4D model to event 91 (total: 1)
-2025/12/09 13:38:17,bnjm2000,Added 1x Shure ULXD4Q model to event 91 (total: 1)
-2025/12/09 13:38:27,bnjm2000,Added 8x Ayrton Diablo (W.DMX) model to event 91 (total: 8)
-2025/12/09 13:38:34,bnjm2000,Added 24x Astera Pixel Brick model to event 91 (total: 24)
-2025/12/09 13:39:26,bnjm2000,Added 4x Lumenradio Aurora model to event 91 (total: 4)
-2025/12/09 13:39:39,bnjm2000,Added 2x Avolites Quartz model to event 91 (total: 2)
-2025/12/09 13:39:45,bnjm2000,Assigned specific asset SBS#01 to event 91
-2025/12/09 13:39:51,bnjm2000,Assigned specific asset EVOLVE50#01 to event 91
-2025/12/09 13:39:53,bnjm2000,Assigned specific asset EVOLVE50#02 to event 91
-2025/12/09 13:39:53,bnjm2000,Assigned specific asset EVOLVE50#03 to event 91
-2025/12/09 13:39:55,bnjm2000,Assigned specific asset EVOLVE50#04 to event 91
-2025/12/09 13:39:56,bnjm2000,Assigned specific asset EVOLVE50#05 to event 91
-2025/12/09 13:39:56,bnjm2000,Assigned specific asset EVOLVE50#06 to event 91
-2025/12/09 13:39:59,bnjm2000,Assigned specific asset DAD#01 to event 91
-2025/12/09 13:40:02,bnjm2000,Assigned specific asset DAD#02 to event 91
-2025/12/09 13:40:07,bnjm2000,Assigned specific asset ULXD4D#01 to event 91
-2025/12/09 13:40:09,bnjm2000,Assigned specific asset ULXD4Q#01 to event 91
-2025/12/09 13:40:20,bnjm2000,Assigned specific asset AURORA#01 to event 91
-2025/12/09 13:40:20,bnjm2000,Assigned specific asset AURORA#02 to event 91
-2025/12/09 13:40:21,bnjm2000,Assigned specific asset AURORA#03 to event 91
-2025/12/09 13:40:22,bnjm2000,Assigned specific asset AURORA#04 to event 91
-2025/12/09 13:40:43,bnjm2000,Assigned specific asset PB#07 to event 91
-2025/12/09 13:40:45,bnjm2000,Assigned specific asset PB#06 to event 91
-2025/12/09 13:40:46,bnjm2000,Assigned specific asset PB#05 to event 91
-2025/12/09 13:40:47,bnjm2000,Assigned specific asset PB#10 to event 91
-2025/12/09 13:40:48,bnjm2000,Assigned specific asset PB#16 to event 91
 2025/12/09 13:40:49,bnjm2000,Assigned specific asset PB#15 to event 91
 2025/12/09 13:40:51,bnjm2000,Assigned specific asset PB#12 to event 91
 2025/12/09 13:40:53,bnjm2000,Assigned specific asset PB#13 to event 91
@@ -1048,3 +980,71 @@ Capsule SN: 3EH15266104"
 2026/02/23 20:20:47,bnjm2000,Removed Astera Pixel Brick model from event 109
 2026/02/23 20:29:38,bnjm2000,Added 1x Luminex Luminode 12 model to event 109 (total: 1)
 2026/02/23 20:29:47,bnjm2000,Assigned specific asset LUMINODE12 to event 109
+2026/02/23 22:26:49,bnjm2000,User bnjm2000 logged in via web interface
+2026/02/23 22:27:01,bnjm2000,Assigned specific asset 6061#14 to event 109
+2026/02/23 22:27:09,bnjm2000,Assigned specific asset DAD#01 to event 109
+2026/02/23 22:27:11,bnjm2000,Assigned specific asset DAD#02 to event 109
+2026/02/23 22:27:22,bnjm2000,Assigned specific asset 4099#14 to event 109
+2026/02/23 22:27:43,bnjm2000,Assigned specific asset AD3#01 to event 109
+2026/02/23 22:27:56,bnjm2000,Assigned specific asset AD3#02 to event 109
+2026/02/23 22:28:15,bnjm2000,Assigned specific asset SEK#06 to event 109
+2026/02/23 22:28:32,bnjm2000,Assigned specific asset SEK#09 to event 109
+2026/02/23 22:28:45,bnjm2000,Assigned specific asset SEK#10 to event 109
+2026/02/23 22:28:56,bnjm2000,Assigned specific asset SEK#03 to event 109
+2026/02/23 22:29:13,bnjm2000,Assigned specific asset ULXD1#05 to event 109
+2026/02/23 22:29:25,bnjm2000,Assigned specific asset ULXD1#19 to event 109
+2026/02/23 22:29:47,bnjm2000,Assigned specific asset MR-90A#05 to event 109
+2026/02/23 22:29:54,bnjm2000,Assigned specific asset MR-90A#03 to event 109
+2026/02/23 22:30:17,bnjm2000,Assigned specific asset MR-90A#02 to event 109
+2026/02/23 22:30:20,bnjm2000,Assigned specific asset MR-90A#06 to event 109
+2026/02/23 22:31:04,bnjm2000,Assigned specific asset MT-90A#02 to event 109
+2026/02/23 22:31:43,bnjm2000,Assigned specific asset PCBB#04 to event 109
+2026/02/23 22:31:51,bnjm2000,Assigned specific asset PCBB#11 to event 109
+2026/02/23 22:32:19,bnjm2000,Assigned specific asset PCBB#09 to event 109
+2026/02/23 22:32:28,bnjm2000,Assigned specific asset PCBB#07 to event 109
+2026/02/23 22:32:49,bnjm2000,Assigned specific asset ULXD2#07 to event 109
+2026/02/23 22:33:05,bnjm2000,Assigned specific asset ULXD2#08 to event 109
+2026/02/23 22:33:32,bnjm2000,Assigned specific asset ULXD2#05 to event 109
+2026/02/23 22:33:52,bnjm2000,Assigned specific asset ULXD2#03 to event 109
+2026/02/23 22:34:12,bnjm2000,Assigned specific asset ULXD2#06 to event 109
+2026/02/23 22:34:29,bnjm2000,Assigned specific asset ULXD2#02 to event 109
+2026/02/23 22:36:50,bnjm2000,Assigned specific asset LEDBEAM#09 to event 109
+2026/02/23 22:36:54,bnjm2000,Assigned specific asset LEDBEAM#10 to event 109
+2026/02/23 22:36:59,bnjm2000,Assigned specific asset LEDBEAM#11 to event 109
+2026/02/23 22:37:02,bnjm2000,Assigned specific asset LEDBEAM#12 to event 109
+2026/02/23 22:37:12,bnjm2000,Assigned specific asset LEDBEAM#13 to event 109
+2026/02/23 22:37:17,bnjm2000,Assigned specific asset LEDBEAM#14 to event 109
+2026/02/23 22:37:20,bnjm2000,Assigned specific asset LEDBEAM#15 to event 109
+2026/02/23 22:37:24,bnjm2000,Assigned specific asset LEDBEAM#16 to event 109
+2026/02/23 22:37:49,bnjm2000,Assigned specific asset LEDBEAM#17 to event 109
+2026/02/23 22:37:52,bnjm2000,Assigned specific asset LEDBEAM#18 to event 109
+2026/02/23 22:37:55,bnjm2000,Assigned specific asset LEDBEAM#19 to event 109
+2026/02/23 22:37:58,bnjm2000,Assigned specific asset LEDBEAM#20 to event 109
+2026/02/23 22:38:00,bnjm2000,Assigned specific asset LEDBEAM#21 to event 109
+2026/02/23 22:38:04,bnjm2000,Assigned specific asset LEDBEAM#22 to event 109
+2026/02/23 22:38:06,bnjm2000,Assigned specific asset LEDBEAM#23 to event 109
+2026/02/23 22:38:07,bnjm2000,Assigned specific asset LEDBEAM#24 to event 109
+2026/02/23 22:39:12,bnjm2000,Removed Ayrton Diablo (W.DMX) model from event 109
+2026/02/23 22:39:12,bnjm2000,Added 4x Ayrton Diablo (W.DMX) model to event 109 (total: 4)
+2026/02/23 22:39:18,bnjm2000,Removed Ayrton Diablo Profile model from event 109
+2026/02/23 22:39:18,bnjm2000,Added 12x Ayrton Diablo Profile model to event 109 (total: 12)
+2026/02/23 22:39:33,bnjm2000,Assigned specific asset DIABLO#09 to event 109
+2026/02/23 22:39:36,bnjm2000,Assigned specific asset DIABLO#10 to event 109
+2026/02/23 22:39:38,bnjm2000,Assigned specific asset DIABLO#11 to event 109
+2026/02/23 22:39:41,bnjm2000,Assigned specific asset DIABLO#12 to event 109
+2026/02/23 22:39:46,bnjm2000,Assigned specific asset DIABLO#13 to event 109
+2026/02/23 22:39:46,bnjm2000,Assigned specific asset DIABLO#14 to event 109
+2026/02/23 22:39:48,bnjm2000,Assigned specific asset DIABLO#15 to event 109
+2026/02/23 22:39:49,bnjm2000,Assigned specific asset DIABLO#16 to event 109
+2026/02/23 22:39:51,bnjm2000,Assigned specific asset DIABLO#17 to event 109
+2026/02/23 22:39:53,bnjm2000,Assigned specific asset DIABLO#18 to event 109
+2026/02/23 22:39:53,bnjm2000,Assigned specific asset DIABLO#19 to event 109
+2026/02/23 22:39:54,bnjm2000,Assigned specific asset DIABLO#20 to event 109
+2026/02/23 22:39:55,bnjm2000,Assigned specific asset DIABLO#21 to event 109
+2026/02/23 22:39:56,bnjm2000,Assigned specific asset DIABLO#22 to event 109
+2026/02/23 22:39:58,bnjm2000,Assigned specific asset DIABLO#23 to event 109
+2026/02/23 22:39:58,bnjm2000,Assigned specific asset DIABLO#24 to event 109
+2026/02/23 22:41:04,bnjm2000,Removed Shure ULXD2 model from event 109
+2026/02/23 22:41:04,bnjm2000,Added 6x Shure ULXD2 model to event 109 (total: 6)
+2026/02/23 22:41:19,bnjm2000,Removed MiPro MR-90 model from event 109
+2026/02/23 22:41:19,bnjm2000,Added 4x MiPro MR-90 model to event 109 (total: 4)

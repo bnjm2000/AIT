@@ -41,7 +41,7 @@ CT3#01,DBX,CT3,11065310806,advanced cable tester,False,False,,AX,Store,
 4099#11,DPA,4099,EC3615,Instrument Microphone,False,False,"2025/07/14	bnjm2000	inventory check, cable a little exposed",AX,Store,
 4099#12,DPA,4099,EC5708,Instrument Microphone,False,False,"2025/07/14	bnjm2000	Inventory check, cable is exposed, sponge is going|2025/09/10	bnjm2000	Sponge replaced [Cleared OOC]",AX,Store,
 4099#13,DPA,4099,EC5709,Instrument Microphone,False,False,"2025/07/14	bnjm2000	Inventory check, sponge spoilt, cable exposed [Marked OOC]|2025/09/10	bnjm2000	Sponge replaced [Cleared OOC]",AX,Store,Store
-4099#14,DPA,4099,EC5730,Instrument Microphone,False,False,,AX,Store,Store
+4099#14,DPA,4099,EC5730,Instrument Microphone,False,False,,AX,Store,Standard Chartered Bank CNY Dinner @ Shangri-La Island Ballroom
 4099#15,DPA,4099,ED0511,Instrument Microphone,False,False,"2025/07/14	bnjm2000	Inventory check, cable a little exposed",AX,Store,Store
 4099#16,DPA,4099,EG3923,Instrument Microphone,False,False,,AX,Store,Store
 4099#17,DPA,4099,EG3977,Instrument Microphone,False,False,,AX,Store,Store
@@ -78,7 +78,7 @@ CT3#01,DBX,CT3,11065310806,advanced cable tester,False,False,,AX,Store,
 6061#11,DPA,6061,R317534,Omni Submini Lavalier Microphone (beige),False,False,,AX,Store,
 6061#12,DPA,6061,R317535,Omni Submini Lavalier Microphone (beige),False,False,,AX,Store,
 6061#13,DPA,6061,R283616,Omni Submini Lavalier Microphone (black),False,False,,AX,Store,Store
-6061#14,DPA,6061,R283623,Omni Submini Lavalier Microphone (black),False,False,,AX,Store,Store
+6061#14,DPA,6061,R283623,Omni Submini Lavalier Microphone (black),False,False,,AX,Store,Standard Chartered Bank CNY Dinner @ Shangri-La Island Ballroom
 6061#15,DPA,6061,R283625,Omni Submini Lavalier Microphone (black),False,False,,AX,Store,Store
 6061#16,DPA,6061,R283632,Omni Submini Lavalier Microphone (black),False,False,,AX,Store,Store
 4061#01,DPA,4061,R238770,Omni Submini Lavalier Microphone,False,True,2024/11/19	bnjm2000	Sleeving disintegrated/tore after removing from instrument (SLMA @ Jia He Grand Restaurant) [Marked OOC],AX,Store,
@@ -197,14 +197,14 @@ C1ProWHS#01,Hollyland,Solidcom C1 Pro Wired Headset for Hub,2223170XX0D0036E,,Fa
 PCBB#01,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,Store
 PCBB#02,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,Store
 PCBB#03,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,
-PCBB#04,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,Store
+PCBB#04,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,Standard Chartered Bank CNY Dinner @ Shangri-La Island Ballroom
 PCBB#05,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,
 PCBB#06,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,Store
-PCBB#07,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,
+PCBB#07,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,Standard Chartered Bank CNY Dinner @ Shangri-La Island Ballroom
 PCBB#08,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,
-PCBB#09,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,Store
+PCBB#09,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,Standard Chartered Bank CNY Dinner @ Shangri-La Island Ballroom
 PCBB#10,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,Store
-PCBB#11,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,Store
+PCBB#11,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,Standard Chartered Bank CNY Dinner @ Shangri-La Island Ballroom
 PCBB#12,Interspace Industries,PCBB,,PC Balance Box,False,False,,AX,Store,
 PCBB#13,Interspace Industries,PCBB,,PC Balance Box,False,False,,AX,Store,Store
 PCBB#14,Interspace Industries,PCBB,,PC Balance Box,False,False,,AX,Store,Store
@@ -582,13 +582,13 @@ LPClaw#02,Latin Percussion,LP592A,,The Claw,False,False,,AX,Store,
 LPClaw#03,Latin Percussion,LP592A,,The Claw,False,False,,AX,Store,
 LPClaw#04,Latin Percussion,LP592A,,The Claw,False,False,,AX,Store,
 MR-90A#01,MiPro,MR-90,878292429A,Interlink receiver,False,False,2024/11/26	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	2024/11/26 - Collected back from MiPro after testing,AX,Store,Store
-MR-90A#02,MiPro,MR-90,878292430A,Interlink receiver,False,False,2024/11/26	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	2024/11/26 - Collected back from MiPro after testing,AX,Store,Store
-MR-90A#03,MiPro,MR-90,878292432A,Interlink receiver,False,False,"2024/11/01	bnjm2000	discovered no output (Dior @ ION Orchard (demo)) [Marked OOC]|2024/11/11	bnjm2000	Handed over to MiPro for repair|2024/11/12	bnjm2000	repaired by MiPro [Cleared OOC]|2024/11/13	bnjm2000	Collected back from MiPro|2024/11/20	bnjm2000	Send to MiPro for testing|2024/11/21	bnjm2000	Issue with RF B, sent to Taiwan for repair [Location: MiPro Taiwan, Marked OOC]|2025/06/26	bnjm2000	Collected back from MiPro [Location: Store, Cleared OOC]",AX,Store,Store
+MR-90A#02,MiPro,MR-90,878292430A,Interlink receiver,False,False,2024/11/26	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	2024/11/26 - Collected back from MiPro after testing,AX,Store,Standard Chartered Bank CNY Dinner @ Shangri-La Island Ballroom
+MR-90A#03,MiPro,MR-90,878292432A,Interlink receiver,False,False,"2024/11/01	bnjm2000	discovered no output (Dior @ ION Orchard (demo)) [Marked OOC]|2024/11/11	bnjm2000	Handed over to MiPro for repair|2024/11/12	bnjm2000	repaired by MiPro [Cleared OOC]|2024/11/13	bnjm2000	Collected back from MiPro|2024/11/20	bnjm2000	Send to MiPro for testing|2024/11/21	bnjm2000	Issue with RF B, sent to Taiwan for repair [Location: MiPro Taiwan, Marked OOC]|2025/06/26	bnjm2000	Collected back from MiPro [Location: Store, Cleared OOC]",AX,Store,Standard Chartered Bank CNY Dinner @ Shangri-La Island Ballroom
 MR-90A#04,MiPro,MR-90,878292434A,Interlink receiver,False,False,"2024/11/05	bnjm2000	2024/11/05 - Low RF, AF cutting in and out (Dior @ ION Orchard) [Marked OOC]|2024/11/11	bnjm2000	2024/11/11 - Handed over to MiPro for repair|2024/11/12	bnjm2000	2024/11/12 - repaired by MiPro [Cleared OOC]|2024/11/13	bnjm2000	2024/11/13 - Collected back from MiPro|2024/11/20	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	2024/11/26 - Collected back from MiPro after testing|2026/01/24	bnjm2000	Receiver observed in used with some buzzing (Wedding of Jewel & Maanas @ Fiasco)",AX,Store,Store
-MR-90A#05,MiPro,MR-90,878292431A,Interlink receiver,False,False,"2024/10/29	bnjm2000	discovered no output (Hermes @ Takashimaya) [Marked OOC]|2024/11/11	bnjm2000	2024/11/11 - Handed over to MiPro for repair|2024/11/13	bnjm2000	2024/11/13 - Collected back from MiPro [Cleared OOC]|2024/11/26	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	2024/11/26 - Tested in MiPro office with RF Dropout, remain with MiPro for further testing/repair [Marked OOC]|2025/05/21	bnjm2000	Send in to Mipro, no RF receiving|2025/05/22	bnjm2000	Technician tested working, went to MiPro office to check before collecting. Audio came through but unit kept skipping channels. MiPro did a 1-to-1 swap. New SN: 878292431A Old SN:878292435A [Cleared OOC]",AX,Store,Store
-MR-90A#06,MiPro,MR-90,878292436A,Interlink receiver,False,False,2024/11/26	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	2024/11/26 - Collected back from MiPro after testing|2025/11/05	bnjm2000	Discovered to be buzzing (Franck Muller x Cortina High Jewellery Dinner @ Claudine Restaurant),AX,Store,Store
+MR-90A#05,MiPro,MR-90,878292431A,Interlink receiver,False,False,"2024/10/29	bnjm2000	discovered no output (Hermes @ Takashimaya) [Marked OOC]|2024/11/11	bnjm2000	2024/11/11 - Handed over to MiPro for repair|2024/11/13	bnjm2000	2024/11/13 - Collected back from MiPro [Cleared OOC]|2024/11/26	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	2024/11/26 - Tested in MiPro office with RF Dropout, remain with MiPro for further testing/repair [Marked OOC]|2025/05/21	bnjm2000	Send in to Mipro, no RF receiving|2025/05/22	bnjm2000	Technician tested working, went to MiPro office to check before collecting. Audio came through but unit kept skipping channels. MiPro did a 1-to-1 swap. New SN: 878292431A Old SN:878292435A [Cleared OOC]",AX,Store,Standard Chartered Bank CNY Dinner @ Shangri-La Island Ballroom
+MR-90A#06,MiPro,MR-90,878292436A,Interlink receiver,False,False,2024/11/26	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	2024/11/26 - Collected back from MiPro after testing|2025/11/05	bnjm2000	Discovered to be buzzing (Franck Muller x Cortina High Jewellery Dinner @ Claudine Restaurant),AX,Store,Standard Chartered Bank CNY Dinner @ Shangri-La Island Ballroom
 MT-90A#01,MiPro,MT-90A,858290901A,Interlink Transmitter,False,False,2024/11/26	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	2024/11/26 - Collected back from MiPro after testing,AX,Store,Store
-MT-90A#02,MiPro,MT-90A,858290902A,Interlink Transmitter,False,False,2024/11/26	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	2024/11/26 - Collected back from MiPro after testing,AX,Store,Store
+MT-90A#02,MiPro,MT-90A,858290902A,Interlink Transmitter,False,False,2024/11/26	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	2024/11/26 - Collected back from MiPro after testing,AX,Store,Standard Chartered Bank CNY Dinner @ Shangri-La Island Ballroom
 MT-90A#03,MiPro,MT-90A,858290899A,Interlink Transmitter,False,False,2024/11/26	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	changed transmitter to same type (Old S/N: 809264158A)|2024/11/26	bnjm2000	2024/11/26 - Collected back from MiPro after testing,AX,Store,
 MT-90A#04,MiPro,MT-90A,858290898A,Interlink Transmitter,False,False,"2024/11/20	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	2024/11/26 - Collected back from MiPro after testing|2024/10/15	bnjm2000	Device keeps restarting, suspect PSU faulty (Wedding of Kenneth and Wong Mei Yin) [Marked OOC]|2025/10/24	bnjm2000	Handed over to MiPro for PSU testing [Location: MiPro]|2024/11/13	bnjm2000	Collected back from MiPro [Location: Store, Cleared OOC]",AX,Store,Store
 GSM4212P#01,Netgear,GSM4212P,6VB52B51A0392,Managed Switch,False,False,,AX,Store,Store
@@ -663,8 +663,8 @@ AD2#13,Shure,AD2,2CC22174217,Handheld Microphone [G56],False,False,2025/07/10	bn
 AD2#14,Shure,AD2,2CC22173949,Handheld Microphone [G56],False,False,,AX,Store,Store
 AD2#15,Shure,AD2,2CC22174180,Handheld Microphone [G56],False,False,,AX,Store,Store
 AD2#16,Shure,AD2,2SC0752116,Handheld Microphone [G56],False,False,,AX,Store,Store
-AD3#01,Shure,AD3,3CE17731585,Plug-on Transmitter,False,False,,AX,Store,Store
-AD3#02,Shure,AD3,3CB24309820,Plug-on Transmitter,False,False,,AX,Store,Store
+AD3#01,Shure,AD3,3CE17731585,Plug-on Transmitter,False,False,,AX,Store,Standard Chartered Bank CNY Dinner @ Shangri-La Island Ballroom
+AD3#02,Shure,AD3,3CB24309820,Plug-on Transmitter,False,False,,AX,Store,Standard Chartered Bank CNY Dinner @ Shangri-La Island Ballroom
 AD3#03,Shure,AD3,3B21414454,Plug-on Transmitter,False,False,,AX,Store,Store
 AD3#04,Shure,AD3,3TH09460854,Plug-on Transmitter,False,False,,AX,Store,Store
 AD4D#01,Shure,AD4D,,Two-Channel Digital Wireless Receiver,False,False,,AX,Store,Store
@@ -735,7 +735,7 @@ ULXD1#01,Shure,ULXD1,1ND2342330-01,Beltpack [L50],False,False,,AX,Store,Store
 ULXD1#02,Shure,ULXD1,1ML0246448,Beltpack [L50],False,False,,AX,Store,Store
 ULXD1#03,Shure,ULXD1,1NB0326366-01,Beltpack [L50],False,False,,AX,Store,
 ULXD1#04,Shure,ULXD1,1ND2342613-01,Beltpack [L50],False,False,,AX,Store,Store
-ULXD1#05,Shure,ULXD1,1ND23423459-01,Beltpack [L50],False,False,,AX,Store,Store
+ULXD1#05,Shure,ULXD1,1ND23423459-01,Beltpack [L50],False,False,,AX,Store,Standard Chartered Bank CNY Dinner @ Shangri-La Island Ballroom
 ULXD1#06,Shure,ULXD1,1ND2342323-01,Beltpack [L50],False,False,,AX,Store,Store
 ULXD1#07,Shure,ULXD1,1ND2342445-01,Beltpack [L50],False,False,,AX,Store,Store
 ULXD1#08,Shure,ULXD1,1ND2342622-01,Beltpack [L50],False,False,,AX,Store,Store
@@ -749,18 +749,18 @@ ULXD1#15,Shure,ULXD1,3BI28076513,Beltpack [G52],False,False,,AX,Store,Store
 ULXD1#16,Shure,ULXD1,3BI28076373,Beltpack [G52],False,False,,AX,Store,Store
 ULXD1#17,Shure,ULXD1,3BI28076436,Beltpack [G52],False,False,,AX,Store,Store
 ULXD1#18,Shure,ULXD1,3BI28078539,Beltpack [G52],False,False,,AX,Store,
-ULXD1#19,Shure,ULXD1,3EC18480865,Beltpack [L50],False,False,,AX,Store,Store
+ULXD1#19,Shure,ULXD1,3EC18480865,Beltpack [L50],False,False,,AX,Store,Standard Chartered Bank CNY Dinner @ Shangri-La Island Ballroom
 ULXD2#01,Shure,ULXD2,2NK0071080-01,Handheld Microphone [L50],False,False,,AX,Store,Store
-ULXD2#02,Shure,ULXD2,2PH3049605,Handheld Microphone [L50],False,False,,AX,Store,Store
-ULXD2#03,Shure,ULXD2,2OB0659314-01,Handheld Microphone [L50],False,False,,AX,Store,Store
+ULXD2#02,Shure,ULXD2,2PH3049605,Handheld Microphone [L50],False,False,,AX,Store,Standard Chartered Bank CNY Dinner @ Shangri-La Island Ballroom
+ULXD2#03,Shure,ULXD2,2OB0659314-01,Handheld Microphone [L50],False,False,,AX,Store,Standard Chartered Bank CNY Dinner @ Shangri-La Island Ballroom
 ULXD2#04,Shure,ULXD2,2PK2362933,Handheld Microphone [L50],False,False,,AX,Store,Store
 ULXD2#05,Shure,ULXD2,20A1395239-01,Handheld Microphone [L50],False,False,"2025/11/27	bnjm2000	Discovered capsule broken and sponge disintegrated (Loro Piana @ Jiak Kim House) [Marked OOC]|2026/01/08	bnjm2000	Sent to E&E for servicing [Location: E&E]|2026/01/12	bnjm2000	SR22011:
 E&E quoted to replace capsule ($267), with service fee ($120).
 Decided to cancel repair and buy the capsule from Sales ($214).|2026/01/27	bnjm2000	Purchased new B58A Capsule to replace.
-Capsule SN: 3EH15266104 [Location: Store, Cleared OOC, Cleared Missing]",AX,Store,Store
-ULXD2#06,Shure,ULXD2,2PK2362926,Handheld Microphone [L50],False,False,,AX,Store,Store
-ULXD2#07,Shure,ULXD2,2QK2204370,Handheld Microphone [L50],False,False,,AX,Store,Store
-ULXD2#08,Shure,ULXD2,2OB0659317-01,Handheld Microphone [L50],False,False,,AX,Store,Store
+Capsule SN: 3EH15266104 [Location: Store, Cleared OOC, Cleared Missing]",AX,Store,Standard Chartered Bank CNY Dinner @ Shangri-La Island Ballroom
+ULXD2#06,Shure,ULXD2,2PK2362926,Handheld Microphone [L50],False,False,,AX,Store,Standard Chartered Bank CNY Dinner @ Shangri-La Island Ballroom
+ULXD2#07,Shure,ULXD2,2QK2204370,Handheld Microphone [L50],False,False,,AX,Store,Standard Chartered Bank CNY Dinner @ Shangri-La Island Ballroom
+ULXD2#08,Shure,ULXD2,2OB0659317-01,Handheld Microphone [L50],False,False,,AX,Store,Standard Chartered Bank CNY Dinner @ Shangri-La Island Ballroom
 ULXD2#09,Shure,ULXD2,2NK0771081-01,Handheld Microphone [L50],False,False,,AX,Store,Store
 ULXD2#10,Shure,ULXD2,2PK2362922,Handheld Microphone [L50],False,False,,AX,Store,Store
 ULXD2#11,Shure,ULXD2,2RC0141727,Handheld Microphone [L50],False,False,"2025/06/21	bnjm2000	Battery prong dropped out, unable to turn on (Wedding of Jeremy and Julia @ The Pyramid Club) [Location: Store, Marked OOC]|2025/07/10	bnjm2000	Sent to E&E for service. [Location: E&E]|2025/09/11	bnjm2000	Replace battery pin $5
@@ -912,28 +912,28 @@ LEDBEAM#05,Robe,Robin LEDBeam 350 Wash,2300877292,Wash LED,False,False,,LX,Store
 LEDBEAM#06,Robe,Robin LEDBeam 350 Wash,2300840057,Wash LED,False,False,,LX,Store,Store
 LEDBEAM#07,Robe,Robin LEDBeam 350 Wash,2300840405,Wash LED,False,False,,LX,Store,Store
 LEDBEAM#08,Robe,Robin LEDBeam 350 Wash,2300840053,Wash LED,False,False,,LX,Store,Store
-LEDBEAM#09,Robe,Robin LEDBeam 350 Wash,2300840065,Wash LED,False,False,,LX,Store,Store
-LEDBEAM#10,Robe,Robin LEDBeam 350 Wash,2300840399,Wash LED,False,False,,LX,Store,Store
-LEDBEAM#11,Robe,Robin LEDBeam 350 Wash,2300840404,Wash LED,False,False,,LX,Store,Store
-LEDBEAM#12,Robe,Robin LEDBeam 350 Wash,2300840401,Wash LED,False,False,,LX,Store,Store
-LEDBEAM#13,Robe,Robin LEDBeam 350 Wash,2300840396,Wash LED,False,False,,LX,Store,Store
-LEDBEAM#14,Robe,Robin LEDBeam 350 Wash,2300840051,Wash LED,False,False,,LX,Store,Store
+LEDBEAM#09,Robe,Robin LEDBeam 350 Wash,2300840065,Wash LED,False,False,,LX,Store,Standard Chartered Bank CNY Dinner @ Shangri-La Island Ballroom
+LEDBEAM#10,Robe,Robin LEDBeam 350 Wash,2300840399,Wash LED,False,False,,LX,Store,Standard Chartered Bank CNY Dinner @ Shangri-La Island Ballroom
+LEDBEAM#11,Robe,Robin LEDBeam 350 Wash,2300840404,Wash LED,False,False,,LX,Store,Standard Chartered Bank CNY Dinner @ Shangri-La Island Ballroom
+LEDBEAM#12,Robe,Robin LEDBeam 350 Wash,2300840401,Wash LED,False,False,,LX,Store,Standard Chartered Bank CNY Dinner @ Shangri-La Island Ballroom
+LEDBEAM#13,Robe,Robin LEDBeam 350 Wash,2300840396,Wash LED,False,False,,LX,Store,Standard Chartered Bank CNY Dinner @ Shangri-La Island Ballroom
+LEDBEAM#14,Robe,Robin LEDBeam 350 Wash,2300840051,Wash LED,False,False,,LX,Store,Standard Chartered Bank CNY Dinner @ Shangri-La Island Ballroom
 LEDBEAM#15,Robe,Robin LEDBeam 350 Wash,2300877277,Wash LED,False,False,"2025/04/04	bnjm2000	Intermittent can't power up
-Replaced power supply - $217.69 (but FOC)",LX,Store,Store
-LEDBEAM#16,Robe,Robin LEDBeam 350 Wash,2300877284,Wash LED,False,False,,LX,Store,Store
+Replaced power supply - $217.69 (but FOC)",LX,Store,Standard Chartered Bank CNY Dinner @ Shangri-La Island Ballroom
+LEDBEAM#16,Robe,Robin LEDBeam 350 Wash,2300877284,Wash LED,False,False,,LX,Store,Standard Chartered Bank CNY Dinner @ Shangri-La Island Ballroom
 LEDBEAM#17,Robe,Robin LEDBeam 350 Wash,2300877283,Wash LED,False,False,"2025/04/04	bnjm2000	Intermittent can't power up
-Replaced power supply - $217.69 (but FOC)",LX,Store,Store
-LEDBEAM#18,Robe,Robin LEDBeam 350 Wash,2300877278,Wash LED,False,False,,LX,Store,Store
-LEDBEAM#19,Robe,Robin LEDBeam 350 Wash,2300840054,Wash LED,False,False,,LX,Store,Store
-LEDBEAM#20,Robe,Robin LEDBeam 350 Wash,2300877265,Wash LED,False,False,,LX,Store,Store
+Replaced power supply - $217.69 (but FOC)",LX,Store,Standard Chartered Bank CNY Dinner @ Shangri-La Island Ballroom
+LEDBEAM#18,Robe,Robin LEDBeam 350 Wash,2300877278,Wash LED,False,False,,LX,Store,Standard Chartered Bank CNY Dinner @ Shangri-La Island Ballroom
+LEDBEAM#19,Robe,Robin LEDBeam 350 Wash,2300840054,Wash LED,False,False,,LX,Store,Standard Chartered Bank CNY Dinner @ Shangri-La Island Ballroom
+LEDBEAM#20,Robe,Robin LEDBeam 350 Wash,2300877265,Wash LED,False,False,,LX,Store,Standard Chartered Bank CNY Dinner @ Shangri-La Island Ballroom
 LEDBEAM#21,Robe,Robin LEDBeam 350 Wash,2300840400,Wash LED,False,False,"2025/04/04	bnjm2000	Intermittent can't power up
-Replaced power supply - $217.69 (but FOC)",LX,Store,Store
+Replaced power supply - $217.69 (but FOC)",LX,Store,Standard Chartered Bank CNY Dinner @ Shangri-La Island Ballroom
 LEDBEAM#22,Robe,Robin LEDBeam 350 Wash,2300840398,Wash LED,False,False,"2025/04/04	bnjm2000	Intermittent can't power up
-Replaced power supply - $217.69 (but FOC)",LX,Store,Store
+Replaced power supply - $217.69 (but FOC)",LX,Store,Standard Chartered Bank CNY Dinner @ Shangri-La Island Ballroom
 LEDBEAM#23,Robe,Robin LEDBeam 350 Wash,2300077264,Wash LED,False,False,"2025/04/04	bnjm2000	Intermittent can't power up
-Replaced power supply - $217.69 (but FOC)",LX,Store,Store
+Replaced power supply - $217.69 (but FOC)",LX,Store,Standard Chartered Bank CNY Dinner @ Shangri-La Island Ballroom
 LEDBEAM#24,Robe,Robin LEDBeam 350 Wash,2300840397,Wash LED,False,False,"2025/04/04	bnjm2000	Intermittent can't power up
-Replaced power supply - $217.69 (but FOC)",LX,Store,Store
+Replaced power supply - $217.69 (but FOC)",LX,Store,Standard Chartered Bank CNY Dinner @ Shangri-La Island Ballroom
 DIABLO#01,Ayrton,Diablo (W.DMX),DB2935040,Profile LED,False,False,,LX,Store,Store
 DIABLO#02,Ayrton,Diablo (W.DMX),DB2935047,Profile LED,False,False,"2025/05/25	bnjm2000	Discovered fan error (Wedding of Micheal and Cindy) [Location: Total Solutions, Marked OOC]|2025/06/05	bnjm2000	Sent to TSM, reset connector tested okay - $80 [Location: Store, Cleared OOC]",LX,Store,Store
 DIABLO#03,Ayrton,Diablo (W.DMX),DB2935098,Profile LED,False,False,,LX,Store,Store
@@ -942,24 +942,24 @@ DIABLO#05,Ayrton,Diablo (W.DMX),DB2953048,Profile LED,False,False,,LX,Store,Stor
 DIABLO#06,Ayrton,Diablo (W.DMX),DB2935001,Profile LED,False,False,,LX,Store,Store
 DIABLO#07,Ayrton,Diablo (W.DMX),DB2935033,Profile LED,False,False,,LX,Store,Store
 DIABLO#08,Ayrton,Diablo (W.DMX),DB2935002,Profile LED,False,False,,LX,Store,Store
-DIABLO#09,Ayrton,Diablo (W.DMX),DB2935036,Profile LED,False,False,,LX,Store,Store
-DIABLO#10,Ayrton,Diablo (W.DMX),DB2935057,Profile LED,False,False,2025/06/05	bnjm2000	Replaced Pan/Tilt Board - $222.87,LX,Store,Store
+DIABLO#09,Ayrton,Diablo (W.DMX),DB2935036,Profile LED,False,False,,LX,Store,Standard Chartered Bank CNY Dinner @ Shangri-La Island Ballroom
+DIABLO#10,Ayrton,Diablo (W.DMX),DB2935057,Profile LED,False,False,2025/06/05	bnjm2000	Replaced Pan/Tilt Board - $222.87,LX,Store,Standard Chartered Bank CNY Dinner @ Shangri-La Island Ballroom
 DIABLO#11,Ayrton,Diablo (W.DMX),DB2935034,Profile LED,False,False,"2025/06/05	bnjm2000	Replaced Pan/Tilt board - $222.87
-CMY Driver Board - $195.84",LX,Store,Store
-DIABLO#12,Ayrton,Diablo (W.DMX),DB2935019,Profile LED,False,False,2025/06/05	bnjm2000	Replaced Pan/Tilt Board - $222.87,LX,Store,Store
-DIABLO#13,Ayrton,Diablo Profile,DB5309007,Profile LED,False,False,"2025/06/30	Deano	Gobo error [Marked OOC]|2025/07/08	Deano	Repaired by Technician Dean [Location: Store, Cleared OOC]",LX,Store,Store
-DIABLO#14,Ayrton,Diablo Profile,DB5309023,Profile LED,False,False,,LX,Store,Store
-DIABLO#15,Ayrton,Diablo Profile,DB5309005,Profile LED,False,False,2025/06/26	bnjm2000	Many error (Wedding of Micheal and Cindy) [Marked OOC]|2025/06/05	bnjm2000	Replaced Zoom/Focus Driver Board - $FOC [Cleared OOC],LX,Store,Store
-DIABLO#16,Ayrton,Diablo Profile,DB5309027,Profile LED,False,False,,LX,Store,Store
-DIABLO#17,Ayrton,Diablo Profile,DB5309010,Profile LED,False,False,,LX,Store,Store
-DIABLO#18,Ayrton,Diablo Profile,DB5309016,Profile LED,False,False,,LX,Store,Store
-DIABLO#19,Ayrton,Diablo Profile,DB5309034,Profile LED,False,False,,LX,Store,Store
-DIABLO#20,Ayrton,Diablo Profile,DB5309017,Profile LED,False,False,,LX,Store,Store
-DIABLO#21,Ayrton,Diablo Profile,DB5309028,Profile LED,False,False,,LX,Store,Store
-DIABLO#22,Ayrton,Diablo Profile,DB5309015,Profile LED,False,False,,LX,Store,Store
+CMY Driver Board - $195.84",LX,Store,Standard Chartered Bank CNY Dinner @ Shangri-La Island Ballroom
+DIABLO#12,Ayrton,Diablo (W.DMX),DB2935019,Profile LED,False,False,2025/06/05	bnjm2000	Replaced Pan/Tilt Board - $222.87,LX,Store,Standard Chartered Bank CNY Dinner @ Shangri-La Island Ballroom
+DIABLO#13,Ayrton,Diablo Profile,DB5309007,Profile LED,False,False,"2025/06/30	Deano	Gobo error [Marked OOC]|2025/07/08	Deano	Repaired by Technician Dean [Location: Store, Cleared OOC]",LX,Store,Standard Chartered Bank CNY Dinner @ Shangri-La Island Ballroom
+DIABLO#14,Ayrton,Diablo Profile,DB5309023,Profile LED,False,False,,LX,Store,Standard Chartered Bank CNY Dinner @ Shangri-La Island Ballroom
+DIABLO#15,Ayrton,Diablo Profile,DB5309005,Profile LED,False,False,2025/06/26	bnjm2000	Many error (Wedding of Micheal and Cindy) [Marked OOC]|2025/06/05	bnjm2000	Replaced Zoom/Focus Driver Board - $FOC [Cleared OOC],LX,Store,Standard Chartered Bank CNY Dinner @ Shangri-La Island Ballroom
+DIABLO#16,Ayrton,Diablo Profile,DB5309027,Profile LED,False,False,,LX,Store,Standard Chartered Bank CNY Dinner @ Shangri-La Island Ballroom
+DIABLO#17,Ayrton,Diablo Profile,DB5309010,Profile LED,False,False,,LX,Store,Standard Chartered Bank CNY Dinner @ Shangri-La Island Ballroom
+DIABLO#18,Ayrton,Diablo Profile,DB5309016,Profile LED,False,False,,LX,Store,Standard Chartered Bank CNY Dinner @ Shangri-La Island Ballroom
+DIABLO#19,Ayrton,Diablo Profile,DB5309034,Profile LED,False,False,,LX,Store,Standard Chartered Bank CNY Dinner @ Shangri-La Island Ballroom
+DIABLO#20,Ayrton,Diablo Profile,DB5309017,Profile LED,False,False,,LX,Store,Standard Chartered Bank CNY Dinner @ Shangri-La Island Ballroom
+DIABLO#21,Ayrton,Diablo Profile,DB5309028,Profile LED,False,False,,LX,Store,Standard Chartered Bank CNY Dinner @ Shangri-La Island Ballroom
+DIABLO#22,Ayrton,Diablo Profile,DB5309015,Profile LED,False,False,,LX,Store,Standard Chartered Bank CNY Dinner @ Shangri-La Island Ballroom
 DIABLO#23,Ayrton,Diablo Profile,DB5309008,Profile LED,False,False,"2025/09/02	bnjm2000	Discovered screw thread rounded when doing cleaning
--Jacky",LX,Store,Store
-DIABLO#24,Ayrton,Diablo Profile,DB5309042,Profile LED,False,False,,LX,Store,Store
+-Jacky",LX,Store,Standard Chartered Bank CNY Dinner @ Shangri-La Island Ballroom
+DIABLO#24,Ayrton,Diablo Profile,DB5309042,Profile LED,False,False,,LX,Store,Standard Chartered Bank CNY Dinner @ Shangri-La Island Ballroom
 PB#01,Astera,Pixel Brick,047-0312660,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,Store
 PB#02,Astera,Pixel Brick,047-0312797,Batt LED Uplighters,False,False,"2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/08/12	bnjm2000	Screen messed up after charging [Marked OOC]|2025/08/14	bnjm2000	Sent in to Total Solutions [Location: Total Solutions]|2025/08/27	bnjm2000	Replaced PB15 rear housing assembly, sent back to us by TSM [Location: Store, Cleared OOC, Cleared Missing]",LX,Store,Store
 PB#03,Astera,Pixel Brick,047-0312711,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,Store
@@ -1216,16 +1216,16 @@ CLICKER#04,DSAN,PerfectCue Mini,,Professional Wireless Clicker,False,False,,VX,S
 SBS#01,Sennheiser,Base Station,1205000475,1RU Spectera Base Station,False,False,,AX,Store,Store
 SEK#01,Sennheiser,SEK(UHF),1165001727,Bidirectional bodypack,False,False,,AX,Store,Store
 SEK#02,Sennheiser,SEK(UHF),1165001729,Bidirectional bodypack,False,False,,AX,Store,Store
-SEK#03,Sennheiser,SEK(UHF),1195001949,Bidirectional bodypack,False,False,,AX,Store,Store
+SEK#03,Sennheiser,SEK(UHF),1195001949,Bidirectional bodypack,False,False,,AX,Store,Standard Chartered Bank CNY Dinner @ Shangri-La Island Ballroom
 SEK#04,Sennheiser,SEK(UHF),1195001964,Bidirectional bodypack,False,False,,AX,Store,Store
 SEK#05,Sennheiser,SEK(UHF),1195001965,Bidirectional bodypack,False,False,,AX,Store,Store
-SEK#06,Sennheiser,SEK(UHF),1195001966,Bidirectional bodypack,False,False,,AX,Store,Store
+SEK#06,Sennheiser,SEK(UHF),1195001966,Bidirectional bodypack,False,False,,AX,Store,Standard Chartered Bank CNY Dinner @ Shangri-La Island Ballroom
 SEK#07,Sennheiser,SEK(UHF),1195001968,Bidirectional bodypack,False,False,,AX,Store,Store
 SEK#08,Sennheiser,SEK(UHF),1195001986,Bidirectional bodypack,False,False,,AX,Store,Store
-SEK#09,Sennheiser,SEK(UHF),1195002041,Bidirectional bodypack,False,False,,AX,Store,Store
-SEK#10,Sennheiser,SEK(UHF),1195002042,Bidirectional bodypack,False,False,,AX,Store,Store
-DAD#01,Sennheiser,DAD(UHF),1185001690,Bidirectional digital antenna,False,False,,AX,Store,Store
-DAD#02,Sennheiser,DAD(UHF),1185001691,Bidirectional digital antenna,False,False,,AX,Store,Store
+SEK#09,Sennheiser,SEK(UHF),1195002041,Bidirectional bodypack,False,False,,AX,Store,Standard Chartered Bank CNY Dinner @ Shangri-La Island Ballroom
+SEK#10,Sennheiser,SEK(UHF),1195002042,Bidirectional bodypack,False,False,,AX,Store,Standard Chartered Bank CNY Dinner @ Shangri-La Island Ballroom
+DAD#01,Sennheiser,DAD(UHF),1185001690,Bidirectional digital antenna,False,False,,AX,Store,Standard Chartered Bank CNY Dinner @ Shangri-La Island Ballroom
+DAD#02,Sennheiser,DAD(UHF),1185001691,Bidirectional digital antenna,False,False,,AX,Store,Standard Chartered Bank CNY Dinner @ Shangri-La Island Ballroom
 L6000#01,Sennheiser,L6000,1134005936,Rackmount Charger,False,False,,AX,Store,
 LM6070#01,Sennheiser,LM6070,,Charging module for the L 6000 rack-mount charger,False,False,,AX,Store,
 LM6070#02,Sennheiser,LM6070,,Charging module for the L 6000 rack-mount charger,False,False,,AX,Store,
