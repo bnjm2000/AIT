@@ -1,101 +1,3 @@
-2025/11/29 16:37:59,bnjm2000,Added 1x Shure ULXD4D model to event 86 (total: 1)
-2025/11/29 16:38:00,bnjm2000,Added 1x Shure ULXD4D model to event 86 (total: 2)
-2025/11/29 16:38:15,bnjm2000,Assigned specific asset ULXD2#04 to event 86
-2025/11/29 16:38:35,bnjm2000,Assigned specific asset ULXD2#11 to event 86
-2025/11/29 16:38:55,bnjm2000,Assigned specific asset ULXD2#07 to event 86
-2025/11/29 16:39:14,bnjm2000,Assigned specific asset ULXD2#09 to event 86
-2025/11/29 16:39:40,bnjm2000,Assigned specific asset QL1#01 to event 86
-2025/11/29 16:39:52,bnjm2000,Added 1x Interspace Industries PCBB model to event 86 (total: 1)
-2025/11/29 16:39:57,bnjm2000,Removed Interspace Industries PCBB3 model from event 86
-2025/11/29 16:39:57,bnjm2000,Added 1x Interspace Industries PCBB3 model to event 86 (total: 1)
-2025/11/29 16:40:21,bnjm2000,Removed Shure ULXD4D model from event 86
-2025/11/29 16:40:21,bnjm2000,Added 1x Shure ULXD4D model to event 86 (total: 1)
-2025/11/29 16:41:21,bnjm2000,Completely removed asset ULXD4D#02 from event 83
-2025/11/29 16:41:27,bnjm2000,Assigned specific asset ULXD4D#01 to event 83
-2025/11/29 16:41:31,bnjm2000,Assigned specific asset ULXD4D#02 to event 86
-2025/11/29 16:41:35,bnjm2000,Assigned specific asset ULXD4D#03 to event 86
-2025/11/29 16:41:48,bnjm2000,User bnjm2000 removed forced state override for event 86 (Zendesk End of Year Celebration 2025 @ Andaz): Preparing -> Overdue
-2025/11/29 16:41:58,bnjm2000,User bnjm2000 forced event 85 (Doris Han's 90th Birthday Celebration) state from Overdue to Preparing
-2025/11/29 16:42:04,bnjm2000,Assigned specific asset HLBatt#01 to event 85
-2025/11/29 16:42:05,bnjm2000,Assigned specific asset HLBatt#02 to event 85
-2025/11/29 16:42:06,bnjm2000,Assigned specific asset HLBatt#03 to event 85
-2025/11/29 16:42:08,bnjm2000,Assigned specific asset HLBatt#04 to event 85
-2025/11/29 16:42:10,bnjm2000,Assigned specific asset HLBatt#05 to event 85
-2025/11/29 16:42:10,bnjm2000,Assigned specific asset HLBatt#06 to event 85
-2025/11/29 16:42:11,bnjm2000,Assigned specific asset HLBatt#07 to event 85
-2025/11/29 16:42:11,bnjm2000,Assigned specific asset HLBatt#08 to event 85
-2025/11/29 16:42:13,bnjm2000,Assigned specific asset HLBatt#09 to event 85
-2025/11/29 16:42:13,bnjm2000,Assigned specific asset HLBatt#10 to event 85
-2025/11/29 16:42:14,bnjm2000,Assigned specific asset HLBatt#11 to event 85
-2025/11/29 16:42:16,bnjm2000,Assigned specific asset HLBatt#12 to event 85
-2025/11/29 16:42:17,bnjm2000,Assigned specific asset HLBatt#13 to event 85
-2025/11/29 16:42:18,bnjm2000,Assigned specific asset HLBatt#14 to event 85
-2025/11/29 16:42:19,bnjm2000,Assigned specific asset HLBatt#15 to event 85
-2025/11/29 16:42:21,bnjm2000,Assigned specific asset HLBatt#16 to event 85
-2025/11/29 16:42:22,bnjm2000,Assigned specific asset C1ProCharger#01 to event 85
-2025/11/29 16:42:24,bnjm2000,Assigned specific asset C1ProHub#01 to event 85
-2025/11/29 16:42:26,bnjm2000,Assigned specific asset C1ProRHS#01 to event 85
-2025/11/29 16:42:26,bnjm2000,Assigned specific asset C1ProRHS#02 to event 85
-2025/11/29 16:42:28,bnjm2000,Assigned specific asset C1ProRHS#03 to event 85
-2025/11/29 16:42:29,bnjm2000,Assigned specific asset C1ProRHS#04 to event 85
-2025/11/29 16:42:29,bnjm2000,Assigned specific asset C1ProRHS#05 to event 85
-2025/11/29 16:42:31,bnjm2000,Assigned specific asset C1ProRHS#06 to event 85
-2025/11/29 16:42:32,bnjm2000,Assigned specific asset C1ProRHS#07 to event 85
-2025/11/29 16:42:32,bnjm2000,Assigned specific asset C1ProRHS#08 to event 85
-2025/11/29 16:42:34,bnjm2000,Assigned specific asset C1ProWHS#01 to event 85
-2025/11/29 16:42:41,bnjm2000,Assigned specific asset SBS#01 to event 85
-2025/11/29 16:42:44,bnjm2000,Assigned specific asset DAD#01 to event 85
-2025/11/29 16:42:45,bnjm2000,Assigned specific asset DAD#02 to event 85
-2025/11/29 16:42:49,bnjm2000,Assigned specific asset AD1#01 to event 85
-2025/11/29 16:42:51,bnjm2000,Assigned specific asset AD1#02 to event 85
-2025/11/29 16:42:52,bnjm2000,Assigned specific asset AD1#03 to event 85
-2025/11/29 16:42:53,bnjm2000,Assigned specific asset AD1#04 to event 85
-2025/11/29 16:42:57,bnjm2000,Assigned specific asset AD1#05 to event 85
-2025/11/29 16:42:57,bnjm2000,Assigned specific asset AD1#06 to event 85
-2025/11/29 16:42:57,bnjm2000,Assigned specific asset AD1#07 to event 85
-2025/11/29 16:43:00,bnjm2000,Assigned specific asset AD1#08 to event 85
-2025/11/29 16:43:02,bnjm2000,Assigned specific asset AD1#09 to event 85
-2025/11/29 16:43:03,bnjm2000,Assigned specific asset AD1#10 to event 85
-2025/11/29 16:43:03,bnjm2000,Assigned specific asset AD1#11 to event 85
-2025/11/29 16:43:07,bnjm2000,Assigned specific asset AD1#12 to event 85
-2025/11/29 16:43:08,bnjm2000,Assigned specific asset AD1#13 to event 85
-2025/11/29 16:43:08,bnjm2000,Assigned specific asset AD1#14 to event 85
-2025/11/29 16:43:11,bnjm2000,Assigned specific asset AD1#15 to event 85
-2025/11/29 16:43:12,bnjm2000,Assigned specific asset AD1#16 to event 85
-2025/11/29 16:43:14,bnjm2000,Assigned specific asset AD2#01 to event 85
-2025/11/29 16:43:15,bnjm2000,Assigned specific asset AD2#02 to event 85
-2025/11/29 16:43:15,bnjm2000,Assigned specific asset AD2#03 to event 85
-2025/11/29 16:43:19,bnjm2000,Assigned specific asset AD2#04 to event 85
-2025/11/29 16:43:19,bnjm2000,Assigned specific asset AD2#05 to event 85
-2025/11/29 16:43:20,bnjm2000,Assigned specific asset AD2#06 to event 85
-2025/11/29 16:43:23,bnjm2000,Assigned specific asset AD2#07 to event 85
-2025/11/29 16:43:24,bnjm2000,Assigned specific asset AD2#08 to event 85
-2025/11/29 16:43:24,bnjm2000,Assigned specific asset AD2#09 to event 85
-2025/11/29 16:43:28,bnjm2000,Assigned specific asset AD2#10 to event 85
-2025/11/29 16:43:28,bnjm2000,Assigned specific asset AD2#11 to event 85
-2025/11/29 16:43:29,bnjm2000,Assigned specific asset AD2#12 to event 85
-2025/11/29 16:43:32,bnjm2000,Assigned specific asset AD2#13 to event 85
-2025/11/29 16:43:33,bnjm2000,Assigned specific asset AD2#14 to event 85
-2025/11/29 16:43:33,bnjm2000,Assigned specific asset AD2#15 to event 85
-2025/11/29 16:43:36,bnjm2000,Assigned specific asset AD2#16 to event 85
-2025/11/29 16:43:42,bnjm2000,Assigned specific asset AD4Q#01 to event 85
-2025/11/29 16:43:43,bnjm2000,Assigned specific asset AD4Q#02 to event 85
-2025/11/29 16:43:43,bnjm2000,Assigned specific asset AD4Q#04 to event 85
-2025/11/29 16:43:46,bnjm2000,Assigned specific asset QL1#02 to event 85
-2025/11/29 16:43:49,bnjm2000,Assigned specific asset QL5#01 to event 85
-2025/11/29 16:43:52,bnjm2000,Assigned specific asset RIO3224-D2 #01 to event 85
-2025/11/29 16:43:56,bnjm2000,User bnjm2000 removed forced state override for event 85 (Doris Han's 90th Birthday Celebration): Preparing -> Overdue
-2025/11/29 16:44:01,bnjm2000,Returned all assets for department AX in event 85: 73 items
-2025/11/29 16:44:04,bnjm2000,Returned all assets for department AX in event 86: 15 items
-2025/11/29 16:44:11,bnjm2000,User bnjm2000 forced event 85 (Doris Han's 90th Birthday Celebration) state from Overdue to Closed
-2025/11/29 16:54:47,bnjm2000,Added 2x Behringher P1 model to event 87 (total: 2)
-2025/11/29 16:54:54,bnjm2000,Removed Shure ULXD2 model from event 87
-2025/11/29 16:54:56,bnjm2000,Removed Shure ULXD4D model from event 87
-2025/11/29 16:55:04,bnjm2000,Added 1x Shure ULXD2 model to event 87 (total: 1)
-2025/11/29 16:55:08,bnjm2000,Added 1x Shure ULXD2 model to event 87 (total: 2)
-2025/11/29 16:55:11,bnjm2000,Added 1x Shure ULXD4D model to event 87 (total: 1)
-2025/11/29 16:55:18,bnjm2000,Removed Shure ULXD4D model from event 87
-2025/11/29 16:55:18,bnjm2000,Added 2x Shure ULXD4D model to event 87 (total: 2)
 2025/11/29 16:55:33,bnjm2000,Added 3x DPA 4099 model to event 87 (total: 3)
 2025/11/29 16:55:39,bnjm2000,Added 2x DPA 4488 model to event 87 (total: 2)
 2025/11/29 16:55:57,bnjm2000,Added 1x DPA 6061 model to event 87 (total: 1)
@@ -1048,3 +950,101 @@ Capsule SN: 3EH15266104"
 2026/02/06 14:53:13,bnjm2000,Assigned specific asset PB#64 to event 107
 2026/02/06 14:55:23,bnjm2000,Assigned specific asset MVSHAZER#01 to event 107
 2026/02/06 16:10:37,bnjm2000,"Maintenance logged for asset ROXCYC#21: Somewhere in the centre, white bulb is spoilt (SG Airshow 2026 - Anduril Booth @ SG CEC)"
+2026/02/09 12:42:34,bnjm2000,User bnjm2000 logged in via web interface
+2026/02/09 12:42:40,bnjm2000,Returned all assets for department LX in event 107: 21 items
+2026/02/09 12:43:17,bnjm2000,Added 2x Lenovo Legion 5 Pro model to event 103 (total: 2)
+2026/02/09 12:43:27,bnjm2000,Added 1x Lenovo Legion 5 Pro model to event 105 (total: 1)
+2026/02/09 12:43:30,bnjm2000,Added 1x Apple Macbook Pro (A1707) model to event 105 (total: 1)
+2026/02/09 12:44:16,bnjm2000,Added 1x Lenovo Legion 5 Pro model to event 104 (total: 1)
+2026/02/09 12:45:02,bnjm2000,User bnjm2000 forced event 102 (SG Airshow 2026 - Anduril Booth (Ultimus) @ Changi Exhibition Centre) state from Ongoing to Preparing
+2026/02/09 12:45:07,bnjm2000,User bnjm2000 forced event 104 (Loewe Dinner @ New Bahru) state from Closed to Preparing
+2026/02/09 12:45:11,bnjm2000,User bnjm2000 forced event 105 (Performance Motor CNY Dinner @ St Regis) state from Closed to Preparing
+2026/02/09 12:45:18,bnjm2000,Assigned specific asset Macbook#01 to event 105
+2026/02/09 12:46:00,bnjm2000,Assigned specific asset Laptop#03 to event 104
+2026/02/09 12:46:43,bnjm2000,Assigned specific asset Laptop#04 to event 105
+2026/02/09 12:46:59,bnjm2000,Assigned specific asset Laptop#02 to event 103
+2026/02/09 12:47:01,bnjm2000,Assigned specific asset Laptop#01 to event 103
+2026/02/09 12:47:09,bnjm2000,Returned all assets for department LX in event 102: 25 items
+2026/02/09 12:47:12,bnjm2000,Returned all assets for department VX in event 104: 1 items
+2026/02/09 12:47:18,bnjm2000,Returned all assets for department VX in event 105: 2 items
+2026/02/09 12:47:21,bnjm2000,Returned all assets for department LOAN in event 103: 1 items
+2026/02/09 12:47:22,bnjm2000,Returned all assets for department VX in event 103: 4 items
+2026/02/09 12:47:26,bnjm2000,User bnjm2000 removed forced state override for event 105 (Performance Motor CNY Dinner @ St Regis): Preparing -> Closed
+2026/02/09 12:47:27,bnjm2000,User bnjm2000 removed forced state override for event 104 (Loewe Dinner @ New Bahru): Preparing -> Closed
+2026/02/09 12:47:29,bnjm2000,User bnjm2000 removed forced state override for event 102 (SG Airshow 2026 - Anduril Booth (Ultimus) @ Changi Exhibition Centre): Preparing -> Closed
+2026/02/10 10:26:55,bnjm2000,User bnjm2000 logged in via web interface
+2026/02/10 10:52:39,bnjm2000,Added 1x Yamaha QL5 model to event 109 (total: 1)
+2026/02/10 10:53:15,bnjm2000,Added 1x L-Acoustics P1 model to event 109 (total: 1)
+2026/02/10 12:57:11,bnjm2000,Added 12x Ayrton Diablo (W.DMX) model to event 109 (total: 12)
+2026/02/10 12:57:16,bnjm2000,Added 8x Ayrton Diablo Profile model to event 109 (total: 8)
+2026/02/10 12:57:21,bnjm2000,Added 16x Robe Robin LEDBeam 350 Wash model to event 109 (total: 16)
+2026/02/10 12:57:33,bnjm2000,Added 8x Astera Pixel Brick model to event 109 (total: 8)
+2026/02/10 12:57:51,bnjm2000,Added 12x Chain Master D8 model to event 109 (total: 12)
+2026/02/10 12:58:14,bnjm2000,Added 1x GrandMA3 Compact XT model to event 109 (total: 1)
+2026/02/10 13:08:50,bnjm2000,Added 1x DPA 4099 model to event 109 (total: 1)
+2026/02/10 13:08:55,bnjm2000,Added 1x DPA 6061 model to event 109 (total: 1)
+2026/02/10 13:09:07,bnjm2000,Added 5x Shure ULXD2 model to event 109 (total: 5)
+2026/02/10 13:09:16,bnjm2000,Added 1x Shure ULXD4Q model to event 109 (total: 1)
+2026/02/10 13:09:16,bnjm2000,Added 1x Shure ULXD4D model to event 109 (total: 1)
+2026/02/10 13:09:27,bnjm2000,Added 1x Shure ULXD1 model to event 109 (total: 1)
+2026/02/10 14:06:38,bnjm2000,Added 1x Sennheiser Base Station model to event 109 (total: 1)
+2026/02/10 14:06:42,bnjm2000,Added 2x Sennheiser DAD(UHF) model to event 109 (total: 2)
+2026/02/10 14:06:47,bnjm2000,Added 3x Sennheiser SEK(UHF) model to event 109 (total: 3)
+2026/02/10 14:06:58,bnjm2000,Added 1x Apple Macbook Pro (A2442) model to event 109 (total: 1)
+2026/02/10 14:07:15,bnjm2000,Added 1x Shure AD4D model to event 109 (total: 1)
+2026/02/10 14:07:19,bnjm2000,Added 2x Shure AD3 model to event 109 (total: 2)
+2026/02/10 14:07:33,bnjm2000,Added 2x Sennheiser ME36 model to event 109 (total: 2)
+2026/02/10 14:07:49,bnjm2000,Added 4x Interspace Industries PCBB3 model to event 109 (total: 4)
+2026/02/10 14:07:53,bnjm2000,Added 2x Apple IPAD model to event 109 (total: 2)
+2026/02/10 14:08:01,bnjm2000,Added 1x Hollyland Solidcom C1 (Pro) 8-Slot Battery Charging Case model to event 109 (total: 1)
+2026/02/10 14:08:02,bnjm2000,Added 1x Hollyland Solidcom C1 Pro Hub model to event 109 (total: 1)
+2026/02/10 14:08:05,bnjm2000,Added 8x Hollyland Solidcom C1 Pro Remote Headset model to event 109 (total: 8)
+2026/02/10 14:08:05,bnjm2000,Added 1x Hollyland Solidcom C1 Pro Wired Headset for Hub model to event 109 (total: 1)
+2026/02/10 14:08:07,bnjm2000,Added 16x Hollyland HL-BAT700 model to event 109 (total: 16)
+2026/02/10 14:08:49,bnjm2000,Added 2x Le Maitre MVS Hazer model to event 109 (total: 2)
+2026/02/10 14:09:16,bnjm2000,Added 2x 63A 3-Phase DB Custom DB model to event 109 (total: 2)
+2026/02/10 14:09:20,bnjm2000,Added 1x 32A 3-Phase DB Custom DB model to event 109 (total: 1)
+2026/02/10 14:09:41,bnjm2000,Added 4x L-Acoustics X8 model to event 109 (total: 4)
+2026/02/10 14:09:44,bnjm2000,Added 1x L-Acoustics LA4X model to event 109 (total: 1)
+2026/02/10 14:12:42,bnjm2000,Removed Shure ULXD1 model from event 109
+2026/02/10 14:14:12,bnjm2000,Added 24x Silverstar Roxcyc model to event 109 (total: 24)
+2026/02/10 16:27:44,bnjm2000,Created event 110: Louis Vuitton Spring Summer Trunk Show 2026 @ Japanese Garden via web interface
+2026/02/10 16:27:52,bnjm2000,Added 6x L-Acoustics X-US1215 model to event 110 (total: 6)
+2026/02/10 16:27:54,bnjm2000,Added 6x L-Acoustics X12 model to event 110 (total: 6)
+2026/02/10 16:28:01,bnjm2000,Added 16x L-Acoustics X8 model to event 110 (total: 16)
+2026/02/10 16:28:07,bnjm2000,Added 10x L-Acoustics X-US8 model to event 110 (total: 10)
+2026/02/10 16:28:10,bnjm2000,Added 5x L-Acoustics X-UL8 model to event 110 (total: 5)
+2026/02/10 16:28:38,bnjm2000,Added 3x L-Acoustics LA12X model to event 110 (total: 3)
+2026/02/10 16:28:41,bnjm2000,Added 1x Yamaha QL1 model to event 110 (total: 1)
+2026/02/10 16:29:16,bnjm2000,Added 4x EV EVOLVE 50 model to event 110 (total: 4)
+2026/02/10 16:29:25,bnjm2000,Added 4x L-Acoustics Syva model to event 110 (total: 4)
+2026/02/10 16:29:28,bnjm2000,Added 4x L-Acoustics Syva Low model to event 110 (total: 4)
+2026/02/10 16:29:36,bnjm2000,Added 6x L-Acoustics SB18 model to event 110 (total: 6)
+2026/02/10 16:29:49,bnjm2000,Removed L-Acoustics LA12X model from event 110
+2026/02/10 16:29:49,bnjm2000,Added 4x L-Acoustics LA12X model to event 110 (total: 4)
+2026/02/10 16:30:03,bnjm2000,Added 3x Interspace Industries PCBB3 model to event 110 (total: 3)
+2026/02/10 16:30:08,bnjm2000,Added 2x Apple IPAD model to event 110 (total: 2)
+2026/02/10 16:30:16,bnjm2000,Added 1x Yamaha DM3 model to event 110 (total: 1)
+2026/02/10 16:30:22,bnjm2000,Added 2x L-Acoustics LA4X model to event 110 (total: 2)
+2026/02/10 16:30:28,bnjm2000,Added 1x MiPro MT-90A model to event 110 (total: 1)
+2026/02/10 16:30:31,bnjm2000,Added 4x MiPro MR-90 model to event 110 (total: 4)
+2026/02/10 16:31:32,bnjm2000,Added 1x GrandMA3 Compact XT model to event 110 (total: 1)
+2026/02/10 16:32:10,bnjm2000,Added 8x Ayrton Diablo (W.DMX) model to event 110 (total: 8)
+2026/02/10 16:32:16,bnjm2000,Added 1x Avolites Quartz model to event 110 (total: 1)
+2026/02/10 16:32:29,bnjm2000,Removed L-Acoustics LA4X model from event 110
+2026/02/10 16:32:29,bnjm2000,Added 3x L-Acoustics LA4X model to event 110 (total: 3)
+2026/02/10 16:32:41,bnjm2000,Added 8x Astera Pixel Brick model to event 110 (total: 8)
+2026/02/10 16:33:18,bnjm2000,Added 1x 63A 3-Phase DB Custom DB model to event 110 (total: 1)
+2026/02/23 17:55:31,system,Failed login attempt for username: bnjm2000
+2026/02/23 17:55:34,bnjm2000,User bnjm2000 logged in via web interface
+2026/02/23 17:55:48,bnjm2000,Removed L-Acoustics LA12X model from event 109
+2026/02/23 17:55:48,bnjm2000,Added 7x L-Acoustics LA12X model to event 109 (total: 7)
+2026/02/23 17:55:52,bnjm2000,Removed L-Acoustics LA4X model from event 109
+2026/02/23 17:56:03,bnjm2000,Removed Sennheiser SEK(UHF) model from event 109
+2026/02/23 17:56:03,bnjm2000,Added 4x Sennheiser SEK(UHF) model to event 109 (total: 4)
+2026/02/23 17:56:12,bnjm2000,Added 2x EV EVOLVE 50 model to event 109 (total: 2)
+2026/02/23 17:56:17,bnjm2000,Added 3x MiPro MR-90 model to event 109 (total: 3)
+2026/02/23 17:56:19,bnjm2000,Added 1x MiPro MT-90A model to event 109 (total: 1)
+2026/02/23 17:56:56,bnjm2000,Added 1x Custom Chain Hoist Controller model to event 109 (total: 1)
+2026/02/23 18:02:07,bnjm2000,Removed Ayrton Diablo Profile model from event 109
+2026/02/23 18:02:07,bnjm2000,Added 4x Ayrton Diablo Profile model to event 109 (total: 4)
