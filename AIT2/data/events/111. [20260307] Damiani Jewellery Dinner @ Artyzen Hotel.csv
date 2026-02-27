@@ -1,0 +1,2 @@
+EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,Tag,ForceStateOverride
+111,Damiani Jewellery Dinner @ Artyzen Hotel,20260307,20260307,[],[],[],Added,[],[],events,False
