@@ -1,0 +1,2 @@
+EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,Tag,ForceStateOverride
+114,Dry Hire: Avery Events,20260308,20260308,[],"[""[MODEL]LX|Astera|Titan Tube|8|LED tube"", ""TT#01"", ""TT#02"", ""TT#03"", ""TT#04"", ""TT#05"", ""TT#06"", ""TT#07"", ""TT#08""]",[],Ready,"[""TT#01"", ""TT#02"", ""TT#03"", ""TT#04"", ""TT#05"", ""TT#06"", ""TT#07"", ""TT#08""]","[""TT#08""]",dry hire,False

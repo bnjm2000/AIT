@@ -1,129 +1,3 @@
-2026/01/07 12:24:00,bnjm2000,Added 12x Silver Star Eclipse 1000 RGBAL SS847XAL model to event 96 (total: 12)
-2026/01/07 12:24:08,bnjm2000,Added 1x GrandMA3 Compact XT model to event 96 (total: 1)
-2026/01/07 12:24:21,bnjm2000,Added 1x 32A 3-Phase DB Custom DB model to event 96 (total: 1)
-2026/01/07 12:25:16,bnjm2000,Added 4x L-Acoustics X-US1215 model to event 96 (total: 4)
-2026/01/07 12:49:06,bnjm2000,Added 2x Samsung UN65TU8000F model to event 97 (total: 2)
-2026/01/08 09:54:26,system,Failed login attempt for username: bnjm2000
-2026/01/08 09:54:30,bnjm2000,User bnjm2000 logged in via web interface
-2026/01/08 09:54:46,bnjm2000,Removed L-Acoustics ETR5 model from event 94
-2026/01/08 09:54:47,bnjm2000,Added 6x L-Acoustics ETR5 model to event 94 (total: 6)
-2026/01/08 09:54:51,bnjm2000,Removed L-Acoustics 5XT model from event 94
-2026/01/08 09:54:51,bnjm2000,Added 6x L-Acoustics 5XT model to event 94 (total: 6)
-2026/01/08 09:56:10,bnjm2000,Updated container 5XT Case #01 (12 assets)
-2026/01/08 09:57:25,bnjm2000,Updated container 5XT Case #02 (12 assets)
-2026/01/08 09:58:04,bnjm2000,Updated container 5XT Case #03 (12 assets)
-2026/01/08 09:59:16,bnjm2000,Created container 5XTW Case #01 (12 assets)
-2026/01/08 10:00:31,bnjm2000,Created container 5XT Case #04 (11 assets)
-2026/01/08 10:00:47,bnjm2000,Updated container 5XT Case #04 (12 assets)
-2026/01/08 10:06:16,bnjm2000,Updated location for asset BA70#18 from '' to 'Store'
-2026/01/08 10:06:16,bnjm2000,Updated serial number for asset BA70#18 from '0483001323' to '0483001933'
-2026/01/08 10:06:16,bnjm2000,Removed Out of Commission status from asset BA70#18
-2026/01/08 10:06:16,bnjm2000,"Maintenance logged for asset BA70#18: 1-to-1 swap with Concept Systems Technologies
-Old SN: 0483001323
-New SN: 0483001933"
-2026/01/08 14:40:55,bnjm2000,Updated maintenance log for asset PB#11: 'Screen discovered messed up when charging [Cleared OOC]' -> 'Screen discovered messed up when charging' (also: Marked OOC) (edited by bnjm2000)
-2026/01/08 14:41:45,bnjm2000,Updated location for asset PB#09 from 'Total Solutions' to 'Store'
-2026/01/08 14:41:45,bnjm2000,Removed Out of Commission status from asset PB#09
-2026/01/08 14:41:45,bnjm2000,Maintenance logged for asset PB#09: Replaced PB15-HOU-BC ($39.52)
-2026/01/08 14:41:49,bnjm2000,Updated location for asset PB#11 from 'Total Solutions' to 'Store'
-2026/01/08 14:41:49,bnjm2000,Removed Out of Commission status from asset PB#11
-2026/01/08 14:41:49,bnjm2000,Maintenance logged for asset PB#11: Replaced PB15-HOU-BC ($39.52)
-2026/01/08 14:41:52,bnjm2000,Updated location for asset PB#14 from 'Total Solutions' to 'Store'
-2026/01/08 14:41:52,bnjm2000,Removed Out of Commission status from asset PB#14
-2026/01/08 14:41:52,bnjm2000,Maintenance logged for asset PB#14: Replaced PB15-HOU-BC ($39.52)
-2026/01/08 14:41:55,bnjm2000,Updated location for asset PB#29 from 'Total Solutions' to 'Store'
-2026/01/08 14:41:55,bnjm2000,Removed Out of Commission status from asset PB#29
-2026/01/08 14:41:55,bnjm2000,Maintenance logged for asset PB#29: Replaced PB15-HOU-BC ($39.52)
-2026/01/08 14:41:58,bnjm2000,Updated location for asset PB#31 from 'Total Solutions' to 'Store'
-2026/01/08 14:41:58,bnjm2000,Removed Out of Commission status from asset PB#31
-2026/01/08 14:41:58,bnjm2000,Maintenance logged for asset PB#31: Replaced PB15-HOU-BC ($39.52)
-2026/01/08 14:42:01,bnjm2000,Updated location for asset PB#40 from 'Total Solutions' to 'Store'
-2026/01/08 14:42:01,bnjm2000,Removed Out of Commission status from asset PB#40
-2026/01/08 14:42:01,bnjm2000,Maintenance logged for asset PB#40: Replaced PB15-HOU-BC ($39.52)
-2026/01/08 14:42:19,bnjm2000,Updated location for asset PB#08 from 'Store' to 'Total Solutions'
-2026/01/08 14:42:19,bnjm2000,Maintenance logged for asset PB#08: Sent in to TSM for servicing
-2026/01/08 14:42:56,bnjm2000,Maintenance logged for asset ECLIPSE#02: Screen not working but able to RDM
-2026/01/08 14:46:54,bnjm2000,Updated location for asset ULXD2#05 from 'Store' to 'E&E'
-2026/01/08 14:46:54,bnjm2000,Maintenance logged for asset ULXD2#05: Sent to E&E for servicing
-2026/01/08 14:46:54,bnjm2000,Updated location for asset AD2#07 from 'Store' to 'E&E'
-2026/01/08 14:46:54,bnjm2000,Maintenance logged for asset AD2#07: Sent to E&E for servicing
-2026/01/09 17:18:43,system,Failed login attempt for username: bnjm2000
-2026/01/09 17:18:47,bnjm2000,User bnjm2000 logged in via web interface
-2026/01/09 17:21:55,bnjm2000,Assigned specific asset IPAD#02 to event 94
-2026/01/09 17:21:58,bnjm2000,Assigned specific asset PCBB#10 to event 94
-2026/01/09 17:22:11,bnjm2000,Assigned specific asset 5XT#01 to event 94
-2026/01/09 17:22:11,bnjm2000,Assigned specific asset 5XT#02 to event 94
-2026/01/09 17:22:11,bnjm2000,Assigned specific asset 5XT#03 to event 94
-2026/01/09 17:22:11,bnjm2000,Assigned specific asset 5XT#04 to event 94
-2026/01/09 17:22:11,bnjm2000,Assigned specific asset 5XT#05 to event 94
-2026/01/09 17:22:11,bnjm2000,Assigned specific asset 5XT#06 to event 94
-2026/01/09 17:22:11,bnjm2000,Assigned specific asset ETR5#01 to event 94
-2026/01/09 17:22:11,bnjm2000,Assigned specific asset ETR5#02 to event 94
-2026/01/09 17:22:11,bnjm2000,Assigned specific asset ETR5#03 to event 94
-2026/01/09 17:22:11,bnjm2000,Assigned specific asset ETR5#04 to event 94
-2026/01/09 17:22:11,bnjm2000,Assigned specific asset ETR5#05 to event 94
-2026/01/09 17:22:12,bnjm2000,Assigned specific asset ETR5#06 to event 94
-2026/01/09 17:22:19,bnjm2000,Assigned specific asset LA2XI#01 to event 94
-2026/01/09 17:22:27,bnjm2000,Removed Yamaha MG10 model from event 94
-2026/01/09 17:22:30,bnjm2000,Added 1x Yamaha DM3 model to event 94 (total: 1)
-2026/01/09 17:22:37,bnjm2000,Assigned specific asset DM3#01 to event 94
-2026/01/13 10:13:47,bnjm2000,User bnjm2000 logged in via web interface
-2026/01/13 10:14:21,bnjm2000,Created event 98: Dry Hire: Avery Events via web interface
-2026/01/13 10:15:00,bnjm2000,Assigned specific asset HLBatt#01 to event 98
-2026/01/13 10:15:00,bnjm2000,Assigned specific asset HLBatt#03 to event 98
-2026/01/13 10:15:00,bnjm2000,Assigned specific asset HLBatt#05 to event 98
-2026/01/13 10:15:00,bnjm2000,Assigned specific asset HLBatt#07 to event 98
-2026/01/13 10:15:00,bnjm2000,Assigned specific asset HLBatt#09 to event 98
-2026/01/13 10:15:00,bnjm2000,Assigned specific asset HLBatt#11 to event 98
-2026/01/13 10:15:00,bnjm2000,Assigned specific asset HLBatt#13 to event 98
-2026/01/13 10:15:00,bnjm2000,Assigned specific asset HLBatt#15 to event 98
-2026/01/13 10:15:00,bnjm2000,Assigned specific asset C1ProCharger#01 to event 98
-2026/01/13 10:15:00,bnjm2000,Assigned specific asset C1ProRHS#01 to event 98
-2026/01/13 10:15:00,bnjm2000,Assigned specific asset C1ProRHS#03 to event 98
-2026/01/13 10:15:00,bnjm2000,Assigned specific asset C1ProRHS#05 to event 98
-2026/01/13 10:15:01,bnjm2000,Assigned specific asset C1ProRHS#07 to event 98
-2026/01/13 10:15:01,bnjm2000,Assigned specific asset C1ProWHS#01 to event 98
-2026/01/13 10:15:01,bnjm2000,Assigned specific asset HLBatt#02 to event 98
-2026/01/13 10:15:01,bnjm2000,Assigned specific asset HLBatt#04 to event 98
-2026/01/13 10:15:01,bnjm2000,Assigned specific asset HLBatt#06 to event 98
-2026/01/13 10:15:01,bnjm2000,Assigned specific asset HLBatt#08 to event 98
-2026/01/13 10:15:01,bnjm2000,Assigned specific asset HLBatt#10 to event 98
-2026/01/13 10:15:01,bnjm2000,Assigned specific asset HLBatt#12 to event 98
-2026/01/13 10:15:01,bnjm2000,Assigned specific asset HLBatt#14 to event 98
-2026/01/13 10:15:01,bnjm2000,Assigned specific asset HLBatt#16 to event 98
-2026/01/13 10:15:01,bnjm2000,Assigned specific asset C1ProHub#01 to event 98
-2026/01/13 10:15:01,bnjm2000,Assigned specific asset C1ProRHS#02 to event 98
-2026/01/13 10:15:01,bnjm2000,Assigned specific asset C1ProRHS#04 to event 98
-2026/01/13 10:15:01,bnjm2000,Assigned specific asset C1ProRHS#06 to event 98
-2026/01/13 10:15:01,bnjm2000,Assigned specific asset C1ProRHS#08 to event 98
-2026/01/13 10:20:20,bnjm2000,Removed Samsung UN65TU8000F model from event 97
-2026/01/13 10:25:50,bnjm2000,Added 1x Hollyland Solidcom C1 (Pro) 8-Slot Battery Charging Case model to event 98 (total: 1)
-2026/01/13 10:25:51,bnjm2000,Added 1x Hollyland Solidcom C1 Pro Hub model to event 98 (total: 1)
-2026/01/13 10:25:54,bnjm2000,Added 8x Hollyland Solidcom C1 Pro Remote Headset model to event 98 (total: 8)
-2026/01/13 10:25:55,bnjm2000,Added 1x Hollyland Solidcom C1 Pro Wired Headset for Hub model to event 98 (total: 1)
-2026/01/13 10:25:57,bnjm2000,Added 16x Hollyland HL-BAT700 model to event 98 (total: 16)
-2026/01/13 13:07:11,bnjm2000,Added 6x Shure ULXD2 model to event 96 (total: 6)
-2026/01/13 13:07:16,bnjm2000,Added 1x Shure ULXD4D model to event 96 (total: 1)
-2026/01/13 13:07:18,bnjm2000,Added 1x Shure ULXD4Q model to event 96 (total: 1)
-2026/01/13 13:08:02,bnjm2000,Assigned specific asset ULXD4D#01 to event 96
-2026/01/13 13:08:04,bnjm2000,Assigned specific asset ULXD4Q#01 to event 96
-2026/01/13 13:08:14,bnjm2000,Added 2x Samsung UN65TU8000F model to event 97 (total: 2)
-2026/01/13 13:08:32,bnjm2000,Created event 99: Patek Philippe ICS Launch via web interface
-2026/01/13 13:08:54,bnjm2000,Updated event 99: Patek Philippe ICS Launch @ Wheelock Place via web interface
-2026/01/13 13:18:03,bnjm2000,Assigned specific asset QL1#01 to event 96
-2026/01/13 13:18:07,bnjm2000,Completely removed asset QL1#01 from event 96
-2026/01/13 13:29:28,bnjm2000,"Maintenance logged for asset AD2#07: Replaced PCB-L3 BASIC HH AUDIO, AD2  (190A25389) - $72
-65D25724A BEZEL, DISPLAY, G56, AD2 - $20
-Service charge - $60"
-2026/01/15 15:11:13,bnjm2000,User bnjm2000 logged in via web interface
-2026/01/15 15:11:32,bnjm2000,Added 2x EV EVOLVE 50 model to event 99 (total: 2)
-2026/01/15 15:11:37,bnjm2000,Added 1x Shure ULXD4D model to event 99 (total: 1)
-2026/01/15 15:11:43,bnjm2000,Added 2x Shure ULXD2 model to event 99 (total: 2)
-2026/01/15 15:13:49,bnjm2000,Created container 5XT Case #05 (12 assets)
-2026/01/15 15:15:01,bnjm2000,Created container 5XTW Case #02 (12 assets)
-2026/01/15 15:15:37,bnjm2000,Created container 5XTW Case #03 (8 assets)
-2026/01/15 15:16:42,bnjm2000,Created container 5XTW Case #04 (8 assets)
-2026/01/15 15:17:28,bnjm2000,Updated container DIABLO CASE #01 (4 assets)
 2026/01/15 15:17:54,bnjm2000,Updated container DIABLO CASE #02 (4 assets)
 2026/01/15 15:18:18,bnjm2000,Updated container DIABLO CASE #03 (4 assets)
 2026/01/15 15:18:46,bnjm2000,Updated container DIABLO CASE #04 (4 assets)
@@ -1046,3 +920,125 @@ Capsule SN: 3EH15266104"
 2026/03/02 16:37:38,bnjm2000,Removed 32A 3-Phase DB Custom DB model from event 110
 2026/03/02 16:37:40,bnjm2000,Removed 63A 3-Phase DB Custom DB model from event 110
 2026/03/02 17:11:09,bnjm2000,Assigned specific asset SB18#04 to event 110
+2026/03/02 18:39:48,bnjm2000,Removed Behringher P1 model from event 112
+2026/03/03 10:44:55,bnjm2000,Returned asset X-US8#01 from event 110
+2026/03/03 10:46:34,bnjm2000,Marked asset X-US8#01 as Out of Commission
+2026/03/03 10:46:34,bnjm2000,Maintenance logged for asset X-US8#01: Discovered bracket foam is mouldy/disintegrated (Louis Vuitton Spring Summer Trunk Show @ Jurong Lake Gardens)
+2026/03/03 16:14:13,bnjm2000,Assigned specific asset MT-90A#02 to event 110
+2026/03/03 16:14:35,bnjm2000,Assigned specific asset AURORA#02 to event 110
+2026/03/04 15:28:20,bnjm2000,Assigned specific asset STRIKEM#02 to event 110
+2026/03/04 15:28:23,bnjm2000,Assigned specific asset STRIKEM#05 to event 110
+2026/03/04 15:28:26,bnjm2000,Assigned specific asset STRIKEM#06 to event 110
+2026/03/04 15:28:28,bnjm2000,Assigned specific asset STRIKEM#07 to event 110
+2026/03/04 15:28:33,bnjm2000,Assigned specific asset MR-90A#01 to event 110
+2026/03/04 15:28:35,bnjm2000,Assigned specific asset MR-90A#02 to event 110
+2026/03/04 15:28:37,bnjm2000,Assigned specific asset MR-90A#03 to event 110
+2026/03/04 15:28:39,bnjm2000,Assigned specific asset MR-90A#04 to event 110
+2026/03/04 15:28:40,bnjm2000,Assigned specific asset MR-90A#05 to event 110
+2026/03/04 15:28:41,bnjm2000,Assigned specific asset MR-90A#06 to event 110
+2026/03/04 15:32:10,bnjm2000,Marked asset MR-90A#04 as Out of Commission
+2026/03/04 15:32:10,bnjm2000,Maintenance logged for asset MR-90A#04: Receiver observed in use with some buzzing (LV @ Japanese Garden
+2026/03/04 15:33:13,bnjm2000,Updated location for asset PB#08 from 'Total Solutions' to 'Store'
+2026/03/04 15:33:13,bnjm2000,Removed Out of Commission status from asset PB#08
+2026/03/04 15:33:13,bnjm2000,Maintenance logged for asset PB#08: Collected back from TSM.
+2026/03/04 15:35:08,bnjm2000,Added 2x EV EVOLVE 50 model to event 111 (total: 2)
+2026/03/04 15:35:25,bnjm2000,Added 1x Shure ULXD4D model to event 110 (total: 1)
+2026/03/04 15:35:30,bnjm2000,Added 2x Shure ULXD2 model to event 110 (total: 2)
+2026/03/04 15:35:54,bnjm2000,Assigned specific asset ULXD2#04 to event 110
+2026/03/04 15:36:44,bnjm2000,Assigned specific asset ULXD2#12 to event 110
+2026/03/04 15:36:47,bnjm2000,Assigned specific asset ULXD4D#04 to event 110
+2026/03/04 16:53:53,bnjm2000,Added 3x Shure ULXD2 model to event 111 (total: 3)
+2026/03/04 16:54:06,bnjm2000,Added 2x Shure ULXD4D model to event 111 (total: 2)
+2026/03/04 16:54:09,bnjm2000,Added 1x Yamaha DM3 model to event 111 (total: 1)
+2026/03/04 16:54:12,bnjm2000,Added 1x Apple IPAD model to event 111 (total: 1)
+2026/03/04 17:04:46,bnjm2000,Assigned specific asset IPAD#01 to event 111
+2026/03/04 17:05:03,bnjm2000,Added 2x Interspace Industries PCBB3 model to event 111 (total: 2)
+2026/03/04 17:05:11,bnjm2000,Removed Shure ULXD2 model from event 111
+2026/03/04 17:05:11,bnjm2000,Added 4x Shure ULXD2 model to event 111 (total: 4)
+2026/03/04 17:05:35,bnjm2000,Assigned specific asset PCBB#06 to event 111
+2026/03/04 17:05:37,bnjm2000,Assigned specific asset PCBB#07 to event 111
+2026/03/04 17:05:48,bnjm2000,Assigned specific asset ULXD2#02 to event 111
+2026/03/04 17:05:50,bnjm2000,Assigned specific asset ULXD2#05 to event 111
+2026/03/04 17:05:51,bnjm2000,Assigned specific asset ULXD2#06 to event 111
+2026/03/04 17:05:53,bnjm2000,Assigned specific asset ULXD2#08 to event 111
+2026/03/04 17:06:01,bnjm2000,Assigned specific asset ULXD4D#03 to event 111
+2026/03/04 17:06:04,bnjm2000,Assigned specific asset ULXD4D#02 to event 111
+2026/03/04 17:06:11,bnjm2000,Assigned specific asset DM3#01 to event 111
+2026/03/04 17:06:16,bnjm2000,Assigned specific asset EVOLVE50#01 to event 111
+2026/03/04 17:06:17,bnjm2000,Assigned specific asset EVOLVE50#02 to event 111
+2026/03/04 17:06:42,bnjm2000,Completely removed asset SYVALOW#07 from event 110
+2026/03/04 17:06:43,bnjm2000,Completely removed asset SYVALOW#08 from event 110
+2026/03/04 17:06:48,bnjm2000,Completely removed asset SYVA#05 from event 110
+2026/03/04 17:06:49,bnjm2000,Completely removed asset SYVA#06 from event 110
+2026/03/04 17:06:59,bnjm2000,Removed L-Acoustics Syva Low model from event 110
+2026/03/04 17:06:59,bnjm2000,Added 2x L-Acoustics Syva Low model to event 110 (total: 2)
+2026/03/04 17:07:03,bnjm2000,Removed L-Acoustics Syva model from event 110
+2026/03/04 17:07:03,bnjm2000,Added 2x L-Acoustics Syva model to event 110 (total: 2)
+2026/03/04 19:24:49,bnjm2000,Created event 113: Dry Hire: Avery Events via web interface
+2026/03/04 19:24:58,bnjm2000,Added 2x Samsung LH85QMCEBGCXXS model to event 113 (total: 2)
+2026/03/04 19:25:02,bnjm2000,Added 1x Yamaha DM3 model to event 113 (total: 1)
+2026/03/06 10:44:18,bnjm2000,Added 1x Apple Macbook Pro (A2442) model to event 110 (total: 1)
+2026/03/06 10:44:25,bnjm2000,Added 2x Silver Star Eclipse 1000 RGBAL SS847XAL model to event 110 (total: 2)
+2026/03/06 10:44:35,bnjm2000,Assigned specific asset ECLIPSE#12 to event 110
+2026/03/06 10:44:39,bnjm2000,Assigned specific asset ECLIPSE#14 to event 110
+2026/03/06 10:44:42,bnjm2000,Assigned specific asset MACBOOK#02 to event 110
+2026/03/06 10:44:55,bnjm2000,Returned all assets for department AX in event 110: 115 items
+2026/03/06 10:44:56,bnjm2000,Returned all assets for department LX in event 110: 26 items
+2026/03/06 10:45:13,bnjm2000,Added 3x MiPro MR-90 model to event 111 (total: 3)
+2026/03/06 10:45:14,bnjm2000,Added 2x MiPro MT-90A model to event 111 (total: 2)
+2026/03/06 10:46:31,bnjm2000,Maintenance logged for asset PB#63: Screen haywire (Standard Chartered CNY Dinner @ Shangri-La Island Ballroom)
+2026/03/06 10:46:55,bnjm2000,Added 1x Yamaha DXR8 model to event 111 (total: 1)
+2026/03/07 16:26:55,bnjm2000,User bnjm2000 logged out from web interface
+2026/03/07 16:26:59,system,Failed login attempt for username: bnjm2000
+2026/03/07 16:27:02,bnjm2000,User bnjm2000 logged in via web interface
+2026/03/07 16:27:38,bnjm2000,Maintenance logged for asset IPAD#03: Found without 3.5mm adapter. Replaced
+2026/03/07 16:28:02,bnjm2000,Removed Apple IPAD model from event 111
+2026/03/07 16:28:02,bnjm2000,Added 2x Apple IPAD model to event 111 (total: 2)
+2026/03/07 16:28:09,bnjm2000,Assigned specific asset MT-90A#03 to event 111
+2026/03/07 16:28:13,bnjm2000,Assigned specific asset MT-90A#04 to event 111
+2026/03/07 16:28:16,bnjm2000,Assigned specific asset DXR8#01 to event 111
+2026/03/07 16:28:24,bnjm2000,Assigned specific asset IPAD#02 to event 111
+2026/03/07 16:29:04,bnjm2000,Created event 114: Dry Hire: Avery Events via web interface
+2026/03/07 16:29:12,bnjm2000,Added 8x Astera Titan Tube model to event 114 (total: 8)
+2026/03/07 16:29:35,bnjm2000,Assigned specific asset TT#01 to event 114
+2026/03/07 16:29:37,bnjm2000,Assigned specific asset TT#02 to event 114
+2026/03/07 16:29:38,bnjm2000,Assigned specific asset TT#03 to event 114
+2026/03/07 16:29:39,bnjm2000,Assigned specific asset TT#04 to event 114
+2026/03/07 16:29:39,bnjm2000,Assigned specific asset TT#05 to event 114
+2026/03/07 16:29:40,bnjm2000,Assigned specific asset TT#06 to event 114
+2026/03/07 16:29:40,bnjm2000,Assigned specific asset TT#07 to event 114
+2026/03/07 16:29:41,bnjm2000,Assigned specific asset TT#08 to event 114
+2026/03/07 16:38:46,bnjm2000,Created event 115: Dry Hire: Avery Events via web interface
+2026/03/07 16:38:55,bnjm2000,Added 1x Accsoon Cineview Master 4K RX model to event 115 (total: 1)
+2026/03/07 17:19:34,bnjm2000,Assigned specific asset MR-90A#05 to event 111
+2026/03/07 17:19:36,bnjm2000,Assigned specific asset MR-90A#01 to event 111
+2026/03/07 17:19:37,bnjm2000,Assigned specific asset MR-90A#03 to event 111
+2026/03/07 17:21:11,bnjm2000,Completely removed asset DXR8#01 from event 111
+2026/03/07 17:21:18,bnjm2000,Removed Yamaha DXR8 model from event 111
+2026/03/07 17:21:22,bnjm2000,Added 1x Yamaha DXR8 model to event 111 (total: 1)
+2026/03/07 17:21:30,bnjm2000,Assigned specific asset DXR8#01 to event 111
+2026/03/07 17:22:12,bnjm2000,Added 2x Yamaha DXR10 model to event 110 (total: 2)
+2026/03/07 17:22:24,bnjm2000,User bnjm2000 forced event 110 (Louis Vuitton Spring Summer Trunk Show 2026 @ Japanese Garden) state from Closed to Preparing
+2026/03/07 17:22:30,bnjm2000,Assigned specific asset DXR10#01 to event 110
+2026/03/07 17:22:32,bnjm2000,Assigned specific asset DXR10#02 to event 110
+2026/03/07 17:22:37,bnjm2000,User bnjm2000 removed forced state override for event 110 (Louis Vuitton Spring Summer Trunk Show 2026 @ Japanese Garden): Preparing -> Overdue
+2026/03/07 17:22:44,bnjm2000,Returned all assets for department AX in event 110: 2 items
+2026/03/07 17:23:05,bnjm2000,Updated event 108: Dry Hire: Wes Sound Works via web interface
+2026/03/07 17:24:05,bnjm2000,Created event 116: Wedding of Russell & Cassandra @ Shangri-La Island Ballroom via web interface
+2026/03/07 17:24:12,bnjm2000,Added 8x L-Acoustics X12 model to event 116 (total: 8)
+2026/03/07 17:24:19,bnjm2000,Added 7x Sennheiser SEK(UHF) model to event 116 (total: 7)
+2026/03/07 17:24:22,bnjm2000,Added 2x Sennheiser DAD(UHF) model to event 116 (total: 2)
+2026/03/07 17:24:27,bnjm2000,Added 1x Sennheiser Base Station model to event 116 (total: 1)
+2026/03/07 17:24:32,bnjm2000,Added 1x Yamaha QL5 model to event 116 (total: 1)
+2026/03/07 17:25:07,bnjm2000,Added 4x L-Acoustics X8 model to event 116 (total: 4)
+2026/03/07 17:25:25,bnjm2000,Added 2x L-Acoustics SB18 model to event 116 (total: 2)
+2026/03/07 17:25:35,bnjm2000,Added 6x Shure ULXD2 model to event 116 (total: 6)
+2026/03/07 17:25:46,bnjm2000,Added 1x Shure ULXD4Q model to event 116 (total: 1)
+2026/03/07 17:25:54,bnjm2000,Added 1x Shure ULXD4D model to event 116 (total: 1)
+2026/03/07 17:26:05,bnjm2000,Added 2x Shure AD3 model to event 116 (total: 2)
+2026/03/07 17:26:11,bnjm2000,Added 1x Shure AD4D model to event 116 (total: 1)
+2026/03/07 17:26:17,bnjm2000,Added 2x Sennheiser ME36 model to event 116 (total: 2)
+2026/03/07 17:26:36,bnjm2000,Added 3x L-Acoustics LA4X model to event 116 (total: 3)
+2026/03/07 17:27:18,bnjm2000,Removed L-Acoustics LA4X model from event 116
+2026/03/07 17:27:18,bnjm2000,Added 4x L-Acoustics LA4X model to event 116 (total: 4)
+2026/03/07 17:27:26,bnjm2000,Added 1x L-Acoustics P1 model to event 116 (total: 1)
