@@ -1,2 +1,2 @@
 EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,Tag,ForceStateOverride
-113,Dry Hire: Avery Events,20260310,20260311,[],"[""[MODEL]VX|Samsung|LH85QMCEBGCXXS|2|85\"" Crystal UHD Signage""]",[],Planning,[],[],dry hire,False
+113,Dry Hire: Avery Events,20260310,20260311,[],"[""[MODEL]VX|Samsung|LH85QMCEBGCXXS|2|85\"" Crystal UHD Signage"", ""[MODEL]AX|Yamaha|DM3|1|Digital Mixer""]",[],Planning,[],[],dry hire,False

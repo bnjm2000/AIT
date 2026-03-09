@@ -3885,7 +3885,7 @@ if __name__ == '__main__':
             logger.info("Background thread started successfully after data_manager initialization")
 
         # Run the Flask app
-        app.run(debug=True, host='127.0.0.1', port=5000)
+        app.run(debug=True, host='192.168.0.110', port=5000)
         logger.info("app starteded")
     except Exception as e:
         logger.error(f"Failed to start application: {e}")
