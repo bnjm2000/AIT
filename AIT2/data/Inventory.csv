@@ -47,7 +47,7 @@ CT3#01,DBX,CT3,11065310806,advanced cable tester,False,False,,AX,Store,
 4099#17,DPA,4099,EG3977,Instrument Microphone,False,False,,AX,Store,Interwoven《绚》@ SCCC
 4288#01,DPA,4288,,Directional Headset,False,False,,AX,Store,
 4288#02,DPA,4288,,Directional Headset,False,False,,AX,Store,
-4466#01,DPA,4466,C073762,"Omnidirectional Headset, beige",False,False,,AX,Store,Interwoven《绚》@ SCCC
+4466#01,DPA,4466,C073762,"Omnidirectional Headset, beige",False,False,2026/03/14	bnjm2000	Noted sound muffled (Interwoven《绚》@ SCCC) by Engineer Wei Zheng,AX,Store,Interwoven《绚》@ SCCC
 4466#02,DPA,4466,C074934,"Omnidirectional Headset, beige",False,False,,AX,Store,Interwoven《绚》@ SCCC
 4466#03,DPA,4466,C075186,"Omnidirectional Headset, beige",False,False,,AX,Store,Interwoven《绚》@ SCCC
 4466#04,DPA,4466,C056003,"Omnidirectional Headset, beige",False,False,,AX,Store,Interwoven《绚》@ SCCC
@@ -686,7 +686,7 @@ P9T#02,Shure,P9T,,Wireless Transmitter,False,False,,AX,Store,Store
 P9T#03,Shure,P9T,,Wireless Transmitter,False,False,,AX,Store,Store
 P9T#04,Shure,P9T,,Wireless Transmitter,False,False,,AX,Store,Store
 P9T#05,Shure,P9T,3KD1452613-02,Wireless Transmitter,False,False,,AX,Store,Store
-P1#01,Behringher,P1,S1403222AZM,Wired IEM beltpack,False,False,,AX,Store,Interwoven《绚》@ SCCC
+P1#01,Behringher,P1,S1403222AZM,Wired IEM beltpack,False,True,2026/03/12	bnjm2000	Discovered not working with 9V battery (Interwoven《绚》@ SCCC) [Marked OOC],AX,Store,Interwoven《绚》@ SCCC
 P1#02,Behringher,P1,S1403409AZM,Wired IEM beltpack,False,False,,AX,Store,Interwoven《绚》@ SCCC
 P1#03,Behringher,P1,S1403575AZM,Wired IEM beltpack,False,False,,AX,Store,Interwoven《绚》@ SCCC
 P1#04,Behringher,P1,S1403579AZM,Wired IEM beltpack,False,False,,AX,Store,
@@ -1215,19 +1215,19 @@ CLICKER#02,DSAN,PerfectCue Mini,,Professional Wireless Clicker,False,False,2026/
 PERFECTCUE#02,DSAN,PerfectCue Mini,15-8294,Professional Wireless Clicker,False,False,,VX,Store,Store
 CLICKER#03,DSAN,PerfectCue Mini,,Professional Wireless Clicker,False,False,,VX,Store,Store
 CLICKER#04,DSAN,PerfectCue Mini,,Professional Wireless Clicker,False,False,,VX,Store,Store
-SBS#01,Sennheiser,Base Station,1205000475,1RU Spectera Base Station,False,False,,AX,Store,Interwoven《绚》@ SCCC
-SEK#01,Sennheiser,SEK(UHF),1165001727,Bidirectional bodypack,False,False,,AX,Store,Interwoven《绚》@ SCCC
-SEK#02,Sennheiser,SEK(UHF),1165001729,Bidirectional bodypack,False,False,,AX,Store,Interwoven《绚》@ SCCC
-SEK#03,Sennheiser,SEK(UHF),1195001949,Bidirectional bodypack,False,False,,AX,Store,Interwoven《绚》@ SCCC
-SEK#04,Sennheiser,SEK(UHF),1195001964,Bidirectional bodypack,False,False,,AX,Store,Interwoven《绚》@ SCCC
-SEK#05,Sennheiser,SEK(UHF),1195001965,Bidirectional bodypack,False,False,,AX,Store,Interwoven《绚》@ SCCC
-SEK#06,Sennheiser,SEK(UHF),1195001966,Bidirectional bodypack,False,False,,AX,Store,Interwoven《绚》@ SCCC
-SEK#07,Sennheiser,SEK(UHF),1195001968,Bidirectional bodypack,False,False,,AX,Store,Interwoven《绚》@ SCCC
-SEK#08,Sennheiser,SEK(UHF),1195001986,Bidirectional bodypack,False,False,,AX,Store,Interwoven《绚》@ SCCC
-SEK#09,Sennheiser,SEK(UHF),1195002041,Bidirectional bodypack,False,False,,AX,Store,Interwoven《绚》@ SCCC
-SEK#10,Sennheiser,SEK(UHF),1195002042,Bidirectional bodypack,False,False,,AX,Store,Interwoven《绚》@ SCCC
-DAD#01,Sennheiser,DAD(UHF),1185001690,Bidirectional digital antenna,False,False,,AX,Store,Interwoven《绚》@ SCCC
-DAD#02,Sennheiser,DAD(UHF),1185001691,Bidirectional digital antenna,False,False,,AX,Store,Interwoven《绚》@ SCCC
+SBS#01,Sennheiser,Base Station,1205000475,1RU Spectera Base Station,False,False,2026/03/12	bnjm2000	Updated to v1.2.6,AX,Store,Interwoven《绚》@ SCCC
+SEK#01,Sennheiser,SEK(UHF),1165001727,Bidirectional bodypack,False,False,2026/03/12	bnjm2000	Updated to v1.2.6,AX,Store,Interwoven《绚》@ SCCC
+SEK#02,Sennheiser,SEK(UHF),1165001729,Bidirectional bodypack,False,False,2026/03/12	bnjm2000	Updated to v1.2.6,AX,Store,Interwoven《绚》@ SCCC
+SEK#03,Sennheiser,SEK(UHF),1195001949,Bidirectional bodypack,False,False,2026/03/12	bnjm2000	Updated to v1.2.6,AX,Store,Interwoven《绚》@ SCCC
+SEK#04,Sennheiser,SEK(UHF),1195001964,Bidirectional bodypack,False,False,2026/03/12	bnjm2000	Updated to v1.2.6,AX,Store,Interwoven《绚》@ SCCC
+SEK#05,Sennheiser,SEK(UHF),1195001965,Bidirectional bodypack,False,False,2026/03/12	bnjm2000	Updated to v1.2.6,AX,Store,Interwoven《绚》@ SCCC
+SEK#06,Sennheiser,SEK(UHF),1195001966,Bidirectional bodypack,False,False,2026/03/12	bnjm2000	Updated to v1.2.6,AX,Store,Interwoven《绚》@ SCCC
+SEK#07,Sennheiser,SEK(UHF),1195001968,Bidirectional bodypack,False,False,2026/03/12	bnjm2000	Updated to v1.2.6,AX,Store,Interwoven《绚》@ SCCC
+SEK#08,Sennheiser,SEK(UHF),1195001986,Bidirectional bodypack,False,False,2026/03/12	bnjm2000	Updated to v1.2.6,AX,Store,Interwoven《绚》@ SCCC
+SEK#09,Sennheiser,SEK(UHF),1195002041,Bidirectional bodypack,False,False,2026/03/12	bnjm2000	Updated to v1.2.6,AX,Store,Interwoven《绚》@ SCCC
+SEK#10,Sennheiser,SEK(UHF),1195002042,Bidirectional bodypack,False,False,2026/03/12	bnjm2000	Updated to v1.2.6,AX,Store,Interwoven《绚》@ SCCC
+DAD#01,Sennheiser,DAD(UHF),1185001690,Bidirectional digital antenna,False,False,2026/03/12	bnjm2000	Updated to v1.2.6,AX,Store,Interwoven《绚》@ SCCC
+DAD#02,Sennheiser,DAD(UHF),1185001691,Bidirectional digital antenna,False,False,2026/03/12	bnjm2000	Updated to v1.2.6,AX,Store,Interwoven《绚》@ SCCC
 L6000#01,Sennheiser,L6000,1134005936,Rackmount Charger,False,False,,AX,Store,
 LM6070#01,Sennheiser,LM6070,,Charging module for the L 6000 rack-mount charger,False,False,,AX,Store,
 LM6070#02,Sennheiser,LM6070,,Charging module for the L 6000 rack-mount charger,False,False,,AX,Store,
