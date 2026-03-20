@@ -1,115 +1,3 @@
-2026/01/30 13:45:40,bnjm2000,Assigned specific asset ROXCYC#01 to event 102
-2026/01/30 13:45:41,bnjm2000,Assigned specific asset ROXCYC#02 to event 102
-2026/01/30 13:45:42,bnjm2000,Assigned specific asset ROXCYC#03 to event 102
-2026/01/30 13:45:43,bnjm2000,Assigned specific asset ROXCYC#04 to event 102
-2026/01/30 13:45:44,bnjm2000,Assigned specific asset ROXCYC#05 to event 102
-2026/01/30 13:45:45,bnjm2000,Assigned specific asset ROXCYC#07 to event 102
-2026/01/30 13:45:46,bnjm2000,Assigned specific asset ROXCYC#06 to event 102
-2026/01/30 13:45:46,bnjm2000,Assigned specific asset ROXCYC#09 to event 102
-2026/01/30 13:45:47,bnjm2000,Assigned specific asset ROXCYC#10 to event 102
-2026/01/30 13:45:48,bnjm2000,Assigned specific asset ROXCYC#11 to event 102
-2026/01/30 13:45:49,bnjm2000,Assigned specific asset ROXCYC#08 to event 102
-2026/01/30 13:45:52,bnjm2000,Assigned specific asset ROXCYC#14 to event 102
-2026/01/30 13:45:52,bnjm2000,Assigned specific asset ROXCYC#13 to event 102
-2026/01/30 13:45:54,bnjm2000,Assigned specific asset ROXCYC#16 to event 102
-2026/01/30 13:45:55,bnjm2000,Assigned specific asset ROXCYC#15 to event 102
-2026/01/30 13:45:56,bnjm2000,Assigned specific asset ROXCYC#18 to event 102
-2026/01/30 13:45:56,bnjm2000,Assigned specific asset ROXCYC#17 to event 102
-2026/01/30 13:45:58,bnjm2000,Assigned specific asset ROXCYC#12 to event 102
-2026/01/30 13:45:58,bnjm2000,Assigned specific asset ROXCYC#19 to event 102
-2026/01/30 13:45:59,bnjm2000,Assigned specific asset ROXCYC#20 to event 102
-2026/01/30 13:46:00,bnjm2000,Assigned specific asset ROXCYC#21 to event 102
-2026/01/30 13:46:01,bnjm2000,Assigned specific asset ROXCYC#23 to event 102
-2026/01/30 13:46:02,bnjm2000,Assigned specific asset ROXCYC#22 to event 102
-2026/01/30 13:46:03,bnjm2000,Assigned specific asset ROXCYC#24 to event 102
-2026/01/30 14:04:39,bnjm2000,Added 1x Audix D4 model to event 106 (total: 1)
-2026/01/30 14:04:52,bnjm2000,Assigned specific asset D4#01 to event 106
-2026/01/30 15:39:56,bnjm2000,Added 1x Swisson XRC-200 model to event 102 (total: 1)
-2026/01/30 15:40:00,bnjm2000,Removed Swisson XRC-200 model from event 102
-2026/01/30 15:40:26,bnjm2000,Added 1x Swisson XRC-200 model to event 102 (total: 1)
-2026/01/30 15:40:37,bnjm2000,Assigned specific asset DMX RECORDER #01 to event 102
-2026/01/30 16:24:39,bnjm2000,Assigned specific asset QM50C#03 to event 103
-2026/01/30 16:24:41,bnjm2000,Assigned specific asset QM50C#04 to event 103
-2026/02/02 10:49:26,system,Failed login attempt for username: bnjm2000
-2026/02/02 10:49:30,bnjm2000,User bnjm2000 logged in via web interface
-2026/02/03 13:11:46,bnjm2000,User bnjm2000 logged in via web interface
-2026/02/03 13:12:20,bnjm2000,Created event 107:  Anderson Tanoto Birthday Party @  Anderson Tanoto Birthday Party via web interface
-2026/02/03 13:12:34,bnjm2000,Added 8x Astera Titan Tube model to event 107 (total: 8)
-2026/02/03 14:08:59,bnjm2000,Updated event 107: Anderson Tanoto Birthday Party @ 17 Margoliouth Road via web interface
-2026/02/03 14:09:51,bnjm2000,Created container TT Case #01 (8 assets)
-2026/02/03 14:10:28,bnjm2000,Created container TT Case #02 (8 assets)
-2026/02/04 15:18:28,bnjm2000,User bnjm2000 logged in via web interface
-2026/02/05 12:52:28,bnjm2000,User bnjm2000 logged in via web interface
-2026/02/05 12:53:01,bnjm2000,Created event 108: Dry Hire: Wes Sound Works via web interface
-2026/02/05 12:53:10,bnjm2000,Added 1x Radial Engineering J48 Mono model to event 108 (total: 1)
-2026/02/05 12:53:26,bnjm2000,Added 1x Klark Teknik DN200 model to event 108 (total: 1)
-2026/02/05 12:53:36,bnjm2000,Assigned specific asset DN200#03 to event 108
-2026/02/05 12:53:41,bnjm2000,Assigned specific asset J48M#01 to event 108
-2026/02/05 12:53:56,bnjm2000,Assigned specific asset PULSE2#01 to event 105
-2026/02/05 12:54:15,bnjm2000,Assigned specific asset TT#01 to event 107
-2026/02/05 12:54:16,bnjm2000,Assigned specific asset TT#02 to event 107
-2026/02/05 12:54:17,bnjm2000,Assigned specific asset TT#03 to event 107
-2026/02/05 12:54:18,bnjm2000,Assigned specific asset TT#04 to event 107
-2026/02/05 12:54:19,bnjm2000,Assigned specific asset TT#05 to event 107
-2026/02/05 12:54:20,bnjm2000,Assigned specific asset TT#07 to event 107
-2026/02/05 12:54:21,bnjm2000,Assigned specific asset TT#06 to event 107
-2026/02/05 12:54:23,bnjm2000,Assigned specific asset TT#08 to event 107
-2026/02/05 12:54:40,bnjm2000,Added 3x Lumenradio Aurora model to event 107 (total: 3)
-2026/02/05 12:54:46,bnjm2000,Assigned specific asset AURORA#01 to event 107
-2026/02/05 12:54:48,bnjm2000,Assigned specific asset AURORA#02 to event 107
-2026/02/05 12:54:50,bnjm2000,Assigned specific asset AURORA#03 to event 107
-2026/02/05 12:58:35,bnjm2000,Created event 109: Standard Chartered Bank CNY Dinner @ Shangri-La Island Ballroom via web interface
-2026/02/05 12:58:47,bnjm2000,Added 24x L-Acoustics KARAII model to event 109 (total: 24)
-2026/02/05 12:58:48,bnjm2000,Added 4x L-Acoustics M-BUMP model to event 109 (total: 4)
-2026/02/05 12:58:59,bnjm2000,Added 6x L-Acoustics SB18 model to event 109 (total: 6)
-2026/02/05 12:59:17,bnjm2000,Added 6x L-Acoustics LA12X model to event 109 (total: 6)
-2026/02/05 16:43:38,bnjm2000,Added 3x DSAN PerfectCue Mini model to event 105 (total: 3)
-2026/02/05 16:43:47,bnjm2000,Assigned specific asset PERFECTCUE#01 to event 105
-2026/02/05 16:43:48,bnjm2000,Assigned specific asset CLICKER#02 to event 105
-2026/02/05 16:43:48,bnjm2000,Assigned specific asset CLICKER#01 to event 105
-2026/02/05 17:36:52,bnjm2000,User bnjm2000 logged in via web interface
-2026/02/05 17:37:04,bnjm2000,Returned all assets for department MISC in event 106: 1 items
-2026/02/05 17:37:04,bnjm2000,Returned all assets for department AX in event 106: 2 items
-2026/02/06 13:47:04,bnjm2000,User bnjm2000 logged in via web interface
-2026/02/06 13:49:16,bnjm2000,Assigned specific asset SAMSUNG65#05 to event 104
-2026/02/06 13:49:24,bnjm2000,Removed Samsung UN65TU8000F model from event 104
-2026/02/06 13:49:24,bnjm2000,Added 1x Samsung UN65TU8000F model to event 104 (total: 1)
-2026/02/06 13:49:32,bnjm2000,Returned all assets for department VX in event 105: 4 items
-2026/02/06 13:49:34,bnjm2000,Returned all assets for department VX in event 104: 1 items
-2026/02/06 13:49:41,bnjm2000,Added 1x GrandMA3 Compact XT model to event 107 (total: 1)
-2026/02/06 13:49:45,bnjm2000,Assigned specific asset COMPACTXT#01 to event 107
-2026/02/06 14:42:13,bnjm2000,Added 1x Le Maitre MVS Hazer model to event 107 (total: 1)
-2026/02/06 14:48:06,bnjm2000,Added 8x Astera Pixel Brick model to event 107 (total: 8)
-2026/02/06 14:53:13,bnjm2000,Assigned specific asset PB#57 to event 107
-2026/02/06 14:53:13,bnjm2000,Assigned specific asset PB#58 to event 107
-2026/02/06 14:53:13,bnjm2000,Assigned specific asset PB#59 to event 107
-2026/02/06 14:53:13,bnjm2000,Assigned specific asset PB#60 to event 107
-2026/02/06 14:53:13,bnjm2000,Assigned specific asset PB#61 to event 107
-2026/02/06 14:53:13,bnjm2000,Assigned specific asset PB#62 to event 107
-2026/02/06 14:53:13,bnjm2000,Assigned specific asset PB#63 to event 107
-2026/02/06 14:53:13,bnjm2000,Assigned specific asset PB#64 to event 107
-2026/02/06 14:55:23,bnjm2000,Assigned specific asset MVSHAZER#01 to event 107
-2026/02/06 16:10:37,bnjm2000,"Maintenance logged for asset ROXCYC#21: Somewhere in the centre, white bulb is spoilt (SG Airshow 2026 - Anduril Booth @ SG CEC)"
-2026/02/09 12:42:34,bnjm2000,User bnjm2000 logged in via web interface
-2026/02/09 12:42:40,bnjm2000,Returned all assets for department LX in event 107: 21 items
-2026/02/09 12:43:17,bnjm2000,Added 2x Lenovo Legion 5 Pro model to event 103 (total: 2)
-2026/02/09 12:43:27,bnjm2000,Added 1x Lenovo Legion 5 Pro model to event 105 (total: 1)
-2026/02/09 12:43:30,bnjm2000,Added 1x Apple Macbook Pro (A1707) model to event 105 (total: 1)
-2026/02/09 12:44:16,bnjm2000,Added 1x Lenovo Legion 5 Pro model to event 104 (total: 1)
-2026/02/09 12:45:02,bnjm2000,User bnjm2000 forced event 102 (SG Airshow 2026 - Anduril Booth (Ultimus) @ Changi Exhibition Centre) state from Ongoing to Preparing
-2026/02/09 12:45:07,bnjm2000,User bnjm2000 forced event 104 (Loewe Dinner @ New Bahru) state from Closed to Preparing
-2026/02/09 12:45:11,bnjm2000,User bnjm2000 forced event 105 (Performance Motor CNY Dinner @ St Regis) state from Closed to Preparing
-2026/02/09 12:45:18,bnjm2000,Assigned specific asset Macbook#01 to event 105
-2026/02/09 12:46:00,bnjm2000,Assigned specific asset Laptop#03 to event 104
-2026/02/09 12:46:43,bnjm2000,Assigned specific asset Laptop#04 to event 105
-2026/02/09 12:46:59,bnjm2000,Assigned specific asset Laptop#02 to event 103
-2026/02/09 12:47:01,bnjm2000,Assigned specific asset Laptop#01 to event 103
-2026/02/09 12:47:09,bnjm2000,Returned all assets for department LX in event 102: 25 items
-2026/02/09 12:47:12,bnjm2000,Returned all assets for department VX in event 104: 1 items
-2026/02/09 12:47:18,bnjm2000,Returned all assets for department VX in event 105: 2 items
-2026/02/09 12:47:21,bnjm2000,Returned all assets for department LOAN in event 103: 1 items
-2026/02/09 12:47:22,bnjm2000,Returned all assets for department VX in event 103: 4 items
-2026/02/09 12:47:26,bnjm2000,User bnjm2000 removed forced state override for event 105 (Performance Motor CNY Dinner @ St Regis): Preparing -> Closed
 2026/02/09 12:47:27,bnjm2000,User bnjm2000 removed forced state override for event 104 (Loewe Dinner @ New Bahru): Preparing -> Closed
 2026/02/09 12:47:29,bnjm2000,User bnjm2000 removed forced state override for event 102 (SG Airshow 2026 - Anduril Booth (Ultimus) @ Changi Exhibition Centre): Preparing -> Closed
 2026/02/10 10:26:55,bnjm2000,User bnjm2000 logged in via web interface
@@ -1003,3 +891,115 @@ Total SGD 401.15 (incl GST)"
 2026/03/18 13:36:37,bnjm2000,Added 2x Samsung UN55TU8000F model to event 120 (total: 2)
 2026/03/18 13:36:45,bnjm2000,Assigned specific asset SAMSUNG55#03 to event 120
 2026/03/18 13:36:46,bnjm2000,Assigned specific asset SAMSUNG55#04 to event 120
+2026/03/18 14:50:32,bnjm2000,Removed L-Acoustics LA2Xi model from event 116
+2026/03/18 14:50:32,bnjm2000,Added 1x L-Acoustics LA2Xi model to event 116 (total: 1)
+2026/03/18 16:27:41,bnjm2000,Assigned specific asset LEDBEAM#21 to event 116
+2026/03/18 16:27:41,bnjm2000,Assigned specific asset LEDBEAM#22 to event 116
+2026/03/18 16:27:41,bnjm2000,Assigned specific asset LEDBEAM#23 to event 116
+2026/03/18 16:27:41,bnjm2000,Assigned specific asset LEDBEAM#24 to event 116
+2026/03/18 16:27:55,bnjm2000,Removed Ayrton Diablo Profile model from event 116
+2026/03/18 16:28:02,bnjm2000,Added 8x Ayrton Diablo (W.DMX) model to event 116 (total: 8)
+2026/03/18 16:28:09,bnjm2000,Assigned specific asset MVSHAZER#01 to event 116
+2026/03/18 16:28:15,bnjm2000,Assigned specific asset COMPACTXT#01 to event 116
+2026/03/18 16:28:16,bnjm2000,Assigned specific asset 32ADB#01 to event 116
+2026/03/18 16:28:18,bnjm2000,Assigned specific asset 32ADB#02 to event 116
+2026/03/18 16:28:22,bnjm2000,Assigned specific asset CONTROLLER#01 to event 116
+2026/03/18 16:28:25,bnjm2000,Assigned specific asset PULSE2#01 to event 116
+2026/03/18 16:46:13,bnjm2000,Assigned specific asset DIABLO#01 to event 116
+2026/03/18 16:46:13,bnjm2000,Assigned specific asset DIABLO#02 to event 116
+2026/03/18 16:46:13,bnjm2000,Assigned specific asset DIABLO#03 to event 116
+2026/03/18 16:46:13,bnjm2000,Assigned specific asset DIABLO#04 to event 116
+2026/03/18 16:46:22,bnjm2000,Assigned specific asset DIABLO#05 to event 116
+2026/03/18 16:46:22,bnjm2000,Assigned specific asset DIABLO#06 to event 116
+2026/03/18 16:46:22,bnjm2000,Assigned specific asset DIABLO#07 to event 116
+2026/03/18 16:46:22,bnjm2000,Assigned specific asset DIABLO#08 to event 116
+2026/03/18 16:46:31,bnjm2000,Assigned specific asset CMD8#12 to event 116
+2026/03/18 16:46:37,bnjm2000,Assigned specific asset CMD8#07 to event 116
+2026/03/18 16:47:04,bnjm2000,Added 1x Yamaha Rio3224-d model to event 116 (total: 1)
+2026/03/18 16:47:15,bnjm2000,Assigned specific asset RIO3224-D #01 to event 116
+2026/03/18 16:47:26,bnjm2000,Assigned specific asset 5XT#68 to event 116
+2026/03/18 16:47:26,bnjm2000,Assigned specific asset 5XT#67 to event 116
+2026/03/18 16:47:43,bnjm2000,Assigned specific asset 5XT#66 to event 116
+2026/03/18 16:47:43,bnjm2000,Assigned specific asset 5XT#65 to event 116
+2026/03/18 16:48:28,bnjm2000,Completely removed asset C1ProRHS#01 from event 116
+2026/03/18 16:49:05,bnjm2000,Updated location for asset C1ProRHS#01 from 'Store' to 'Matrix Resource'
+2026/03/18 16:49:05,bnjm2000,Maintenance logged for asset C1ProRHS#01: Handed over to Terence to pass to Matrix Resource for repair
+2026/03/18 17:16:09,bnjm2000,Renamed container PB case 01 -> PB case #01 (8 assets)
+2026/03/18 17:16:58,bnjm2000,Renamed container PB case #01 -> PB Case #01 (8 assets)
+2026/03/18 17:17:18,bnjm2000,Assigned specific asset PB#01 to event 116
+2026/03/18 17:17:18,bnjm2000,Assigned specific asset PB#02 to event 116
+2026/03/18 17:17:18,bnjm2000,Assigned specific asset PB#03 to event 116
+2026/03/18 17:17:18,bnjm2000,Assigned specific asset PB#04 to event 116
+2026/03/18 17:17:18,bnjm2000,Assigned specific asset PB#05 to event 116
+2026/03/18 17:17:18,bnjm2000,Assigned specific asset PB#06 to event 116
+2026/03/18 17:17:18,bnjm2000,Assigned specific asset PB#07 to event 116
+2026/03/18 17:17:19,bnjm2000,Assigned specific asset PB#08 to event 116
+2026/03/18 17:17:25,bnjm2000,Assigned specific asset PB#09 to event 116
+2026/03/18 17:17:25,bnjm2000,Assigned specific asset PB#10 to event 116
+2026/03/18 17:17:26,bnjm2000,Assigned specific asset PB#11 to event 116
+2026/03/18 17:17:26,bnjm2000,Assigned specific asset PB#12 to event 116
+2026/03/18 17:17:26,bnjm2000,Assigned specific asset PB#13 to event 116
+2026/03/18 17:17:26,bnjm2000,Assigned specific asset PB#14 to event 116
+2026/03/18 17:17:26,bnjm2000,Assigned specific asset PB#15 to event 116
+2026/03/18 17:17:26,bnjm2000,Assigned specific asset PB#16 to event 116
+2026/03/18 17:17:30,bnjm2000,Assigned specific asset PB#17 to event 116
+2026/03/18 17:17:30,bnjm2000,Assigned specific asset PB#18 to event 116
+2026/03/18 17:17:30,bnjm2000,Assigned specific asset PB#19 to event 116
+2026/03/18 17:17:31,bnjm2000,Assigned specific asset PB#20 to event 116
+2026/03/18 17:17:31,bnjm2000,Assigned specific asset PB#21 to event 116
+2026/03/18 17:17:31,bnjm2000,Assigned specific asset PB#22 to event 116
+2026/03/18 17:17:31,bnjm2000,Assigned specific asset PB#24 to event 116
+2026/03/18 17:17:31,bnjm2000,Assigned specific asset PB#23 to event 116
+2026/03/20 10:38:02,bnjm2000,User bnjm2000 logged in via web interface
+2026/03/20 10:38:12,bnjm2000,Returned all assets for department AX in event 108: 2 items
+2026/03/20 10:38:26,bnjm2000,Updated event 108: Dry Hire: Wes Sound Works via web interface
+2026/03/20 10:38:33,bnjm2000,Returned all assets for department VX in event 115: 2 items
+2026/03/20 10:38:53,bnjm2000,Added 1x Yamaha CL5 model to event 116 (total: 1)
+2026/03/20 10:39:08,bnjm2000,Assigned specific asset CL5#01 to event 116
+2026/03/20 10:59:07,bnjm2000,Updated event 120: Tiffany & Co. Event @ Ion Orchard via web interface
+2026/03/20 11:31:53,bnjm2000,Added 1x Yamaha Rio1608-d2 model to event 116 (total: 1)
+2026/03/20 11:32:00,bnjm2000,Added 2x Yamaha DXR10 model to event 116 (total: 2)
+2026/03/20 11:32:12,bnjm2000,Assigned specific asset RIO1608-D2 #01 to event 116
+2026/03/20 11:32:13,bnjm2000,Assigned specific asset DXR10#01 to event 116
+2026/03/20 11:32:17,bnjm2000,Assigned specific asset DXR10#02 to event 116
+2026/03/20 11:37:17,bnjm2000,Added 2x L-Acoustics SB18 model to event 116 (total: 4)
+2026/03/20 11:38:05,bnjm2000,Removed L-Acoustics SB18 model from event 116
+2026/03/20 11:38:05,bnjm2000,Added 2x L-Acoustics SB18 model to event 116 (total: 2)
+2026/03/20 11:38:13,bnjm2000,Added 2x L-Acoustics SB18 model to event 117 (total: 2)
+2026/03/20 14:56:41,bnjm2000,Assigned specific asset LA4X#07 to event 116
+2026/03/20 14:57:40,bnjm2000,Added 1x DPA DAD 6010 model to event 116 (total: 1)
+2026/03/20 15:03:45,bnjm2000,Removed Hollyland Solidcom C1 Pro Remote Headset model from event 116
+2026/03/20 15:03:45,bnjm2000,Added 7x Hollyland Solidcom C1 Pro Remote Headset model to event 116 (total: 7)
+2026/03/20 15:04:08,bnjm2000,Updated maintenance log for asset C1ProRHS#01: 'Handed over to Terence to pass to Matrix Resource for repair [Location: Matrix Resource]' -> 'Handed over to Terence to pass to Matrix Resource for repair' (also: Location: Matrix Resource) (edited by bnjm2000)
+2026/03/20 15:55:04,bnjm2000,Assigned specific asset JDIS#03 to event 116
+2026/03/20 15:55:09,bnjm2000,Assigned specific asset JDIS#04 to event 116
+2026/03/20 15:55:15,bnjm2000,Assigned specific asset J48M#05 to event 116
+2026/03/20 15:55:28,bnjm2000,Assigned specific asset J48M#04 to event 116
+2026/03/20 15:55:33,bnjm2000,Assigned specific asset ULXD2#01 to event 116
+2026/03/20 15:55:51,bnjm2000,Assigned specific asset ULXD2#09 to event 116
+2026/03/20 15:56:04,bnjm2000,Assigned specific asset ULXD2#06 to event 116
+2026/03/20 15:56:27,bnjm2000,Assigned specific asset ULXD2#03 to event 116
+2026/03/20 15:56:47,bnjm2000,Assigned specific asset ULXD2#02 to event 116
+2026/03/20 15:57:01,bnjm2000,Assigned specific asset ULXD2#08 to event 116
+2026/03/20 15:57:21,bnjm2000,Assigned specific asset DAD6001#05 to event 116
+2026/03/20 15:57:51,bnjm2000,Assigned specific asset DAD6010#28 to event 116
+2026/03/20 15:58:19,bnjm2000,Assigned specific asset 4099#17 to event 116
+2026/03/20 15:58:32,bnjm2000,Assigned specific asset SEK#03 to event 116
+2026/03/20 15:58:54,bnjm2000,Assigned specific asset SEK#01 to event 116
+2026/03/20 15:59:12,bnjm2000,Assigned specific asset SEK#02 to event 116
+2026/03/20 15:59:26,bnjm2000,Assigned specific asset SEK#10 to event 116
+2026/03/20 15:59:44,bnjm2000,Assigned specific asset SEK#05 to event 116
+2026/03/20 15:59:55,bnjm2000,Assigned specific asset SEK#04 to event 116
+2026/03/20 16:00:12,bnjm2000,Assigned specific asset SEK#07 to event 116
+2026/03/20 16:00:23,bnjm2000,Assigned specific asset SEK#08 to event 116
+2026/03/20 16:01:01,bnjm2000,Assigned specific asset IPAD#03 to event 116
+2026/03/20 16:01:15,bnjm2000,Assigned specific asset IPAD#01 to event 116
+2026/03/20 16:01:45,bnjm2000,Assigned specific asset SB18#10 to event 116
+2026/03/20 16:01:50,bnjm2000,Assigned specific asset SB18#09 to event 116
+2026/03/20 16:02:22,bnjm2000,Assigned specific asset LA2XI#01 to event 116
+2026/03/20 16:03:11,bnjm2000,Assigned specific asset GSM4212P#01 to event 116
+2026/03/20 16:05:40,bnjm2000,Completely removed asset 32ADB#01 from event 116
+2026/03/20 16:05:58,bnjm2000,Removed 32A 3-Phase DB Custom DB model from event 116
+2026/03/20 16:05:58,bnjm2000,Added 1x 32A 3-Phase DB Custom DB model to event 116 (total: 1)
+2026/03/20 16:06:17,bnjm2000,Removed L-Acoustics 5XT model from event 116
+2026/03/20 16:06:17,bnjm2000,Added 4x L-Acoustics 5XT model to event 116 (total: 4)
