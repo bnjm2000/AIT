@@ -853,7 +853,7 @@ QL5#01,Yamaha,QL5,,Digital Mixer,False,False,,AX,Store,Store
 RO8-D #01,Yamaha,Ro8-d,,8-channel Remote Output Rack,False,False,,AX,Store,=Dreams Gala @ =Dreams Campus
 RIO1608-D #01,Yamaha,Rio1608-d,,High Performance I/O Rack,False,False,2024/11/13	bnjm2000	2024/11/13 - Updated firmware version to v5.80,AX,Store,Store
 RIO1608-D2 #01,Yamaha,Rio1608-d2,EEYP01258,High Performance I/O Rack,False,False,2024/11/13	bnjm2000	2024/11/13 - Updated firmware version to v1.85,AX,Store,Store
-RIO3224-D #01,Yamaha,Rio3224-d,,High Performance I/O Rack,False,False,2024/11/13	bnjm2000	2024/11/13 - Updated firmware to v5.80,AX,Store,Dry Hire: SCM
+RIO3224-D #01,Yamaha,Rio3224-d,,High Performance I/O Rack,False,False,"2024/11/13	bnjm2000	2024/11/13 - Updated firmware to v5.80|2026/03/27	bnjm2000	Channel 14 reported softer than the rest by T2, Dol operator. (Dry Rental: SCM)",AX,Store,Dry Hire: SCM
 RIO3224-D #02,Yamaha,Rio3224-d,,High Performance I/O Rack,False,False,2024/11/13	bnjm2000	2024/11/13 - Updated firmware to v5.80,AX,Store,Store
 RIO3224-D2 #01,Yamaha,Rio3224-d2,EEDX01062,High Performance I/O Rack,False,False,2024/11/13	bnjm2000	2024/11/13 - Updated firmware to v1.85,AX,Store,Store
 SBC800#01,Shure,SBC800,,8-bay battery charger,False,False,,AX,Store,
@@ -1116,7 +1116,7 @@ LX TREE #04,Versa-Stand,,,Winch Up Lighting Stand,False,False,,LX,Store,
 LX TREE #05,Versa-Stand,,,Winch Up Lighting Stand,False,False,,LX,Store,
 AURORA#01,Lumenradio,Aurora,MAURA100000710,Single Universe DMX/RDM transceiver with WiFi and Bluetooth,False,False,"2025/07/30	bnjm2000	Send in to TSM for checking, repair. Signal weak [Location: Total Solutions]|2025/08/14	bnjm2000	Collected back from TSM, tested to 5m working. [Location: Store]",LX,Store,Store
 AURORA#02,Lumenradio,Aurora,MAURA100000707,Single Universe DMX/RDM transceiver with WiFi and Bluetooth,False,False,"2025/07/30	bnjm2000	Send in to TSM for checking, repair. Signal weak [Location: Total Solutions]|2025/08/14	bnjm2000	Collected back from TSM, tested to 5m working. [Location: Store]",LX,Store,Store
-AURORA#03,Lumenradio,Aurora,MAURA100000648,Single Universe DMX/RDM transceiver with WiFi and Bluetooth,False,False,"2025/08/14	bnjm2000	Sent into TSM for testing, range issue [Location: Total Solutions]|2025/08/27	bnjm2000	Tested working ok, sent back to us by TSM [Location: Store]",LX,Store,Store
+AURORA#03,Lumenradio,Aurora,MAURA100000648,Single Universe DMX/RDM transceiver with WiFi and Bluetooth,False,False,"2025/08/14	bnjm2000	Sent into TSM for testing, range issue [Location: Total Solutions]|2025/08/27	bnjm2000	Tested working ok, sent back to us by TSM [Location: Store]",LX,Store,=Dreams Gala @ =Dreams Campus
 AURORA#04,Lumenradio,Aurora,MAURA100000981,Single Universe DMX/RDM transceiver with WiFi and Bluetooth,False,False,"2025/08/14	bnjm2000	Sent into TSM for testing, range issue [Location: Total Solutions]|2025/08/27	bnjm2000	Tested working ok, sent back to us by TSM [Location: Store]",LX,Store,Store
 DMX RECORDER #01,Swisson,XRC-200,2304738,DMX Recorder,False,False,,LX,Store,Store
 MOONLITE WDMX #01,Lumenradio,MoonLite,JMRFO000000087,,False,False,,LX,Store,
