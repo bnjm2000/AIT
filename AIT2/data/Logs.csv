@@ -1,9 +1,3 @@
-2026/02/23 20:19:22,bnjm2000,Assigned specific asset CMD8#06 to event 109
-2026/02/23 20:19:22,bnjm2000,Assigned specific asset CMD8#07 to event 109
-2026/02/23 20:19:29,bnjm2000,Assigned specific asset CMD8#08 to event 109
-2026/02/23 20:19:29,bnjm2000,Assigned specific asset CMD8#09 to event 109
-2026/02/23 20:19:29,bnjm2000,Assigned specific asset CMD8#10 to event 109
-2026/02/23 20:19:34,bnjm2000,Assigned specific asset CMD8#11 to event 109
 2026/02/23 20:19:35,bnjm2000,Assigned specific asset CMD8#12 to event 109
 2026/02/23 20:19:38,bnjm2000,Assigned specific asset CONTROLLER#01 to event 109
 2026/02/23 20:20:47,bnjm2000,Removed Astera Pixel Brick model from event 109
@@ -1003,3 +997,9 @@ Total SGD 401.15 (incl GST)"
 2026/03/28 12:05:40,bnjm2000,Returned all assets for department AX in event 117: 64 items
 2026/03/28 12:06:35,bnjm2000,Maintenance logged for asset ESPRITE#01: Ah Heng reported gobo rotate will stutter
 2026/03/28 12:07:09,bnjm2000,"Maintenance logged for asset ESPRITE#03: Jacky reported rust on motor, cleaned off."
+2026/03/28 12:09:42,bnjm2000,User bnjm2000 forced event 117 (=Dreams Gala @ =Dreams Campus) state from Returning to Preparing
+2026/03/28 12:09:49,bnjm2000,Removed Lumenradio Aurora model from event 117
+2026/03/28 12:09:49,bnjm2000,Added 1x Lumenradio Aurora model to event 117 (total: 1)
+2026/03/28 12:09:56,bnjm2000,Assigned specific asset AURORA#03 to event 117
+2026/03/28 12:10:01,bnjm2000,Returned asset AURORA#03 from event 117
+2026/03/28 12:10:05,bnjm2000,User bnjm2000 removed forced state override for event 117 (=Dreams Gala @ =Dreams Campus): Preparing -> Closed
