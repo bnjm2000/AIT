@@ -1,47 +1,3 @@
-2026/02/23 22:28:56,bnjm2000,Assigned specific asset SEK#03 to event 109
-2026/02/23 22:29:13,bnjm2000,Assigned specific asset ULXD1#05 to event 109
-2026/02/23 22:29:25,bnjm2000,Assigned specific asset ULXD1#19 to event 109
-2026/02/23 22:29:47,bnjm2000,Assigned specific asset MR-90A#05 to event 109
-2026/02/23 22:29:54,bnjm2000,Assigned specific asset MR-90A#03 to event 109
-2026/02/23 22:30:17,bnjm2000,Assigned specific asset MR-90A#02 to event 109
-2026/02/23 22:30:20,bnjm2000,Assigned specific asset MR-90A#06 to event 109
-2026/02/23 22:31:04,bnjm2000,Assigned specific asset MT-90A#02 to event 109
-2026/02/23 22:31:43,bnjm2000,Assigned specific asset PCBB#04 to event 109
-2026/02/23 22:31:51,bnjm2000,Assigned specific asset PCBB#11 to event 109
-2026/02/23 22:32:19,bnjm2000,Assigned specific asset PCBB#09 to event 109
-2026/02/23 22:32:28,bnjm2000,Assigned specific asset PCBB#07 to event 109
-2026/02/23 22:32:49,bnjm2000,Assigned specific asset ULXD2#07 to event 109
-2026/02/23 22:33:05,bnjm2000,Assigned specific asset ULXD2#08 to event 109
-2026/02/23 22:33:32,bnjm2000,Assigned specific asset ULXD2#05 to event 109
-2026/02/23 22:33:52,bnjm2000,Assigned specific asset ULXD2#03 to event 109
-2026/02/23 22:34:12,bnjm2000,Assigned specific asset ULXD2#06 to event 109
-2026/02/23 22:34:29,bnjm2000,Assigned specific asset ULXD2#02 to event 109
-2026/02/23 22:36:50,bnjm2000,Assigned specific asset LEDBEAM#09 to event 109
-2026/02/23 22:36:54,bnjm2000,Assigned specific asset LEDBEAM#10 to event 109
-2026/02/23 22:36:59,bnjm2000,Assigned specific asset LEDBEAM#11 to event 109
-2026/02/23 22:37:02,bnjm2000,Assigned specific asset LEDBEAM#12 to event 109
-2026/02/23 22:37:12,bnjm2000,Assigned specific asset LEDBEAM#13 to event 109
-2026/02/23 22:37:17,bnjm2000,Assigned specific asset LEDBEAM#14 to event 109
-2026/02/23 22:37:20,bnjm2000,Assigned specific asset LEDBEAM#15 to event 109
-2026/02/23 22:37:24,bnjm2000,Assigned specific asset LEDBEAM#16 to event 109
-2026/02/23 22:37:49,bnjm2000,Assigned specific asset LEDBEAM#17 to event 109
-2026/02/23 22:37:52,bnjm2000,Assigned specific asset LEDBEAM#18 to event 109
-2026/02/23 22:37:55,bnjm2000,Assigned specific asset LEDBEAM#19 to event 109
-2026/02/23 22:37:58,bnjm2000,Assigned specific asset LEDBEAM#20 to event 109
-2026/02/23 22:38:00,bnjm2000,Assigned specific asset LEDBEAM#21 to event 109
-2026/02/23 22:38:04,bnjm2000,Assigned specific asset LEDBEAM#22 to event 109
-2026/02/23 22:38:06,bnjm2000,Assigned specific asset LEDBEAM#23 to event 109
-2026/02/23 22:38:07,bnjm2000,Assigned specific asset LEDBEAM#24 to event 109
-2026/02/23 22:39:12,bnjm2000,Removed Ayrton Diablo (W.DMX) model from event 109
-2026/02/23 22:39:12,bnjm2000,Added 4x Ayrton Diablo (W.DMX) model to event 109 (total: 4)
-2026/02/23 22:39:18,bnjm2000,Removed Ayrton Diablo Profile model from event 109
-2026/02/23 22:39:18,bnjm2000,Added 12x Ayrton Diablo Profile model to event 109 (total: 12)
-2026/02/23 22:39:33,bnjm2000,Assigned specific asset DIABLO#09 to event 109
-2026/02/23 22:39:36,bnjm2000,Assigned specific asset DIABLO#10 to event 109
-2026/02/23 22:39:38,bnjm2000,Assigned specific asset DIABLO#11 to event 109
-2026/02/23 22:39:41,bnjm2000,Assigned specific asset DIABLO#12 to event 109
-2026/02/23 22:39:46,bnjm2000,Assigned specific asset DIABLO#13 to event 109
-2026/02/23 22:39:46,bnjm2000,Assigned specific asset DIABLO#14 to event 109
 2026/02/23 22:39:48,bnjm2000,Assigned specific asset DIABLO#15 to event 109
 2026/02/23 22:39:49,bnjm2000,Assigned specific asset DIABLO#16 to event 109
 2026/02/23 22:39:51,bnjm2000,Assigned specific asset DIABLO#17 to event 109
@@ -1003,3 +959,47 @@ Total SGD 401.15 (incl GST)"
 2026/03/31 10:41:54,bnjm2000,Assigned specific asset ESPRITE#05 to event 118
 2026/03/31 10:41:54,bnjm2000,Assigned specific asset ESPRITE#06 to event 118
 2026/03/31 15:33:44,bnjm2000,Updated event 118: End of the World and Hard-Boiled Wonderland @ Esplanade Theatre via web interface
+2026/03/31 15:41:37,bnjm2000,Marked asset PB#48 as Out of Commission
+2026/03/31 15:41:37,bnjm2000,Maintenance logged for asset PB#48: Screen died while charging
+2026/04/01 15:17:12,bnjm2000,User bnjm2000 logged in via web interface
+2026/04/01 15:17:27,bnjm2000,Created event 123: Dry Hire: Show Productions via web interface
+2026/04/01 15:17:33,bnjm2000,Added 1x Hollyland Solidcom C1 (Pro) 8-Slot Battery Charging Case model to event 123 (total: 1)
+2026/04/01 15:17:34,bnjm2000,Added 1x Hollyland Solidcom C1 Pro Hub model to event 123 (total: 1)
+2026/04/01 15:17:39,bnjm2000,Added 7x Hollyland Solidcom C1 Pro Remote Headset model to event 123 (total: 7)
+2026/04/01 15:17:39,bnjm2000,Added 1x Hollyland Solidcom C1 Pro Remote Headset model to event 123 (total: 8)
+2026/04/01 15:17:40,bnjm2000,Added 1x Hollyland Solidcom C1 Pro Wired Headset for Hub model to event 123 (total: 1)
+2026/04/01 15:17:43,bnjm2000,Added 16x Hollyland HL-BAT700 model to event 123 (total: 16)
+2026/04/01 15:17:47,bnjm2000,Removed Hollyland Solidcom C1 Pro Remote Headset model from event 123
+2026/04/01 15:17:47,bnjm2000,Added 7x Hollyland Solidcom C1 Pro Remote Headset model to event 123 (total: 7)
+2026/04/01 15:17:57,bnjm2000,Assigned specific asset HLBatt#01 to event 123
+2026/04/01 15:17:57,bnjm2000,Assigned specific asset HLBatt#03 to event 123
+2026/04/01 15:17:57,bnjm2000,Assigned specific asset HLBatt#05 to event 123
+2026/04/01 15:17:57,bnjm2000,Assigned specific asset HLBatt#07 to event 123
+2026/04/01 15:17:58,bnjm2000,Assigned specific asset HLBatt#09 to event 123
+2026/04/01 15:17:58,bnjm2000,Assigned specific asset HLBatt#11 to event 123
+2026/04/01 15:17:58,bnjm2000,Assigned specific asset HLBatt#13 to event 123
+2026/04/01 15:17:58,bnjm2000,Assigned specific asset HLBatt#15 to event 123
+2026/04/01 15:17:58,bnjm2000,Assigned specific asset C1ProCharger#01 to event 123
+2026/04/01 15:17:58,bnjm2000,Assigned specific asset C1ProRHS#01 to event 123
+2026/04/01 15:17:58,bnjm2000,Assigned specific asset C1ProRHS#03 to event 123
+2026/04/01 15:17:58,bnjm2000,Assigned specific asset C1ProRHS#05 to event 123
+2026/04/01 15:17:58,bnjm2000,Assigned specific asset C1ProRHS#07 to event 123
+2026/04/01 15:17:58,bnjm2000,Assigned specific asset C1ProWHS#01 to event 123
+2026/04/01 15:17:58,bnjm2000,Assigned specific asset HLBatt#02 to event 123
+2026/04/01 15:17:58,bnjm2000,Assigned specific asset HLBatt#04 to event 123
+2026/04/01 15:17:58,bnjm2000,Assigned specific asset HLBatt#06 to event 123
+2026/04/01 15:17:58,bnjm2000,Assigned specific asset HLBatt#08 to event 123
+2026/04/01 15:17:58,bnjm2000,Assigned specific asset HLBatt#10 to event 123
+2026/04/01 15:17:58,bnjm2000,Assigned specific asset HLBatt#12 to event 123
+2026/04/01 15:17:59,bnjm2000,Assigned specific asset HLBatt#14 to event 123
+2026/04/01 15:17:59,bnjm2000,Assigned specific asset HLBatt#16 to event 123
+2026/04/01 15:17:59,bnjm2000,Assigned specific asset C1ProHub#01 to event 123
+2026/04/01 15:17:59,bnjm2000,Assigned specific asset C1ProRHS#02 to event 123
+2026/04/01 15:17:59,bnjm2000,Assigned specific asset C1ProRHS#04 to event 123
+2026/04/01 15:17:59,bnjm2000,Assigned specific asset C1ProRHS#06 to event 123
+2026/04/01 15:17:59,bnjm2000,Assigned specific asset C1ProRHS#08 to event 123
+2026/04/01 15:18:06,bnjm2000,Completely removed asset C1ProRHS#01 from event 123
+2026/04/01 16:13:53,bnjm2000,Updated location for asset LEDBEAM#04 from 'Robe Service Centre' to 'Store'
+2026/04/01 16:13:53,bnjm2000,Removed Out of Commission status from asset LEDBEAM#04
+2026/04/01 16:13:53,bnjm2000,Maintenance logged for asset LEDBEAM#04: Collected back from Robe
+2026/04/01 16:14:33,bnjm2000,Maintenance logged for asset ESPRITE#01: Dean checked and discovered gobo holder feels sandy. Robe failed to repair - ordered new part.

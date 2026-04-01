@@ -167,33 +167,33 @@ MAUI11#07,LD Systems,Maui 11,,Portable column system,False,False,,AX,Store,
 MAUI28#01,LD Systems,Maui 28,,Portable column system,False,False,,AX,Store,Store
 MAUI28#02,LD Systems,Maui 28,,Portable column system,False,False,,AX,Store,
 MAUI28#03,LD Systems,Maui 28,,Portable column system,False,False,,AX,Store,
-HLBatt#01,Hollyland,HL-BAT700,23060502575,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Store
-HLBatt#02,Hollyland,HL-BAT700,23060502934,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Store
-HLBatt#03,Hollyland,HL-BAT700,23060502956,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Store
-HLBatt#04,Hollyland,HL-BAT700,23060503026,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Store
-HLBatt#05,Hollyland,HL-BAT700,23060503040,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Store
-HLBatt#06,Hollyland,HL-BAT700,23060507138,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Store
-HLBatt#07,Hollyland,HL-BAT700,23060509410,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Store
-HLBatt#08,Hollyland,HL-BAT700,23060906641,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Store
-HLBatt#09,Hollyland,HL-BAT700,23061200043,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Store
-HLBatt#10,Hollyland,HL-BAT700,23061200118,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Store
-HLBatt#11,Hollyland,HL-BAT700,23061200226,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Store
-HLBatt#12,Hollyland,HL-BAT700,23061200233,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Store
-HLBatt#13,Hollyland,HL-BAT700,23061206791,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Store
-HLBatt#14,Hollyland,HL-BAT700,23061206889,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Store
-HLBatt#15,Hollyland,HL-BAT700,23061207192,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Store
-HLBatt#16,Hollyland,HL-BAT700,23061207991,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Store
-C1ProCharger#01,Hollyland,Solidcom C1 (Pro) 8-Slot Battery Charging Case,0223350C C001989,8-Slot Battery Charging Case,False,False,,AX,Store,Store
-C1ProHub#01,Hollyland,Solidcom C1 Pro Hub,0223350R C002984,,False,False,,AX,Store,Store
+HLBatt#01,Hollyland,HL-BAT700,23060502575,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Dry Hire: Show Productions
+HLBatt#02,Hollyland,HL-BAT700,23060502934,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Dry Hire: Show Productions
+HLBatt#03,Hollyland,HL-BAT700,23060502956,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Dry Hire: Show Productions
+HLBatt#04,Hollyland,HL-BAT700,23060503026,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Dry Hire: Show Productions
+HLBatt#05,Hollyland,HL-BAT700,23060503040,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Dry Hire: Show Productions
+HLBatt#06,Hollyland,HL-BAT700,23060507138,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Dry Hire: Show Productions
+HLBatt#07,Hollyland,HL-BAT700,23060509410,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Dry Hire: Show Productions
+HLBatt#08,Hollyland,HL-BAT700,23060906641,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Dry Hire: Show Productions
+HLBatt#09,Hollyland,HL-BAT700,23061200043,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Dry Hire: Show Productions
+HLBatt#10,Hollyland,HL-BAT700,23061200118,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Dry Hire: Show Productions
+HLBatt#11,Hollyland,HL-BAT700,23061200226,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Dry Hire: Show Productions
+HLBatt#12,Hollyland,HL-BAT700,23061200233,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Dry Hire: Show Productions
+HLBatt#13,Hollyland,HL-BAT700,23061206791,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Dry Hire: Show Productions
+HLBatt#14,Hollyland,HL-BAT700,23061206889,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Dry Hire: Show Productions
+HLBatt#15,Hollyland,HL-BAT700,23061207192,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Dry Hire: Show Productions
+HLBatt#16,Hollyland,HL-BAT700,23061207991,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Dry Hire: Show Productions
+C1ProCharger#01,Hollyland,Solidcom C1 (Pro) 8-Slot Battery Charging Case,0223350C C001989,8-Slot Battery Charging Case,False,False,,AX,Store,Dry Hire: Show Productions
+C1ProHub#01,Hollyland,Solidcom C1 Pro Hub,0223350R C002984,,False,False,,AX,Store,Dry Hire: Show Productions
 C1ProRHS#01,Hollyland,Solidcom C1 Pro Remote Headset,222322OTXC00784E,,False,False,2025/11/28	bnjm2000	Discovered broken while in use (Doris Han's 90th Birthday Celebration @ St Regis)|2026/03/20	bnjm2000	Handed over to Terence to pass to Matrix Resource for repair [Location: Matrix Resource],AX,Store,Store
-C1ProRHS#02,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC008783,,False,False,"2025/12/04	bnjm2000	Headset speaker foam disintegrated, replaced.",AX,Store,Store
-C1ProRHS#03,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC007B64,,False,False,"2025/12/04	bnjm2000	Headset speaker foam disintegrated, replaced.",AX,Store,Store
-C1ProRHS#04,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC0082CF,,False,False,,AX,Store,Store
-C1ProRHS#05,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC00800E,,False,False,"2025/12/04	bnjm2000	Headset speaker foam disintegrated, replaced.",AX,Store,Store
-C1ProRHS#06,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC00786C,,False,False,"2025/12/04	bnjm2000	Headset speaker foam disintegrated, replaced.",AX,Store,Store
-C1ProRHS#07,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC008667,,False,False,"2025/12/04	bnjm2000	Headset speaker foam disintegrated, replaced.|2025/11/28	bnjm2000	Mic foam lost (Doris Han's 90th Birthday Celebration @ St Regis)",AX,Store,Store
-C1ProRHS#08,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC007AB4,,False,False,"2025/12/04	bnjm2000	Headset speaker foam disintegrated, replaced.",AX,Store,Store
-C1ProWHS#01,Hollyland,Solidcom C1 Pro Wired Headset for Hub,2223170XX0D0036E,,False,False,,AX,Store,Store
+C1ProRHS#02,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC008783,,False,False,"2025/12/04	bnjm2000	Headset speaker foam disintegrated, replaced.",AX,Store,Dry Hire: Show Productions
+C1ProRHS#03,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC007B64,,False,False,"2025/12/04	bnjm2000	Headset speaker foam disintegrated, replaced.",AX,Store,Dry Hire: Show Productions
+C1ProRHS#04,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC0082CF,,False,False,,AX,Store,Dry Hire: Show Productions
+C1ProRHS#05,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC00800E,,False,False,"2025/12/04	bnjm2000	Headset speaker foam disintegrated, replaced.",AX,Store,Dry Hire: Show Productions
+C1ProRHS#06,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC00786C,,False,False,"2025/12/04	bnjm2000	Headset speaker foam disintegrated, replaced.",AX,Store,Dry Hire: Show Productions
+C1ProRHS#07,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC008667,,False,False,"2025/12/04	bnjm2000	Headset speaker foam disintegrated, replaced.|2025/11/28	bnjm2000	Mic foam lost (Doris Han's 90th Birthday Celebration @ St Regis)",AX,Store,Dry Hire: Show Productions
+C1ProRHS#08,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC007AB4,,False,False,"2025/12/04	bnjm2000	Headset speaker foam disintegrated, replaced.",AX,Store,Dry Hire: Show Productions
+C1ProWHS#01,Hollyland,Solidcom C1 Pro Wired Headset for Hub,2223170XX0D0036E,,False,False,,AX,Store,Dry Hire: Show Productions
 PCBB#01,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,Store
 PCBB#02,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,Store
 PCBB#03,Interspace Industries,PCBB3,,PC Balance Box,False,False,,AX,Store,Store
@@ -881,7 +881,7 @@ PEARL2010#01,Avolites,Pearl 2010,,Console,False,False,,LX,Store,
 TIGERTOUCH2#01,Avolites,Tiger Touch 2,,Console,False,False,,LX,Store,Store
 QUARTZ#01,Avolites,Quartz,QTZHS23122602C,Console,False,False,,LX,Store,Store
 QUARTZ#02,Avolites,Quartz,QTZHS23122701C,Console,False,False,,LX,Store,Store
-ESPRITE#01,Robe,ESPRITE,S2200820358,Profile LED,False,False,2026/03/27	bnjm2000	Ah Heng reported gobo rotate will stutter,LX,Store,Store
+ESPRITE#01,Robe,ESPRITE,S2200820358,Profile LED,False,False,2026/03/27	bnjm2000	Ah Heng reported gobo rotate will stutter|2026/04/01	bnjm2000	Dean checked and discovered gobo holder feels sandy. Robe failed to repair - ordered new part.,LX,Store,Store
 ESPRITE#02,Robe,ESPRITE,S2200820724,Profile LED,False,False,,LX,Store,Store
 ESPRITE#03,Robe,ESPRITE,S2200821218,Profile LED,False,False,"2026/01/23	bnjm2000	Jacky reported rust on motor, cleaned off.",LX,Store,Store
 ESPRITE#04,Robe,ESPRITE,S2200821219,Profile LED,False,False,,LX,Store,Store
@@ -908,12 +908,12 @@ ESPRITE#24,Robe,ESPRITE,S2400924714,Profile LED,False,False,,LX,Store,End of the
 LEDBEAM#01,Robe,Robin LEDBeam 350 Wash,2300840058,Wash LED,False,False,,LX,Store,Store
 LEDBEAM#02,Robe,Robin LEDBeam 350 Wash,2300840052,Wash LED,False,False,,LX,Store,Store
 LEDBEAM#03,Robe,Robin LEDBeam 350 Wash,2300840055,Wash LED,False,False,,LX,Store,Store
-LEDBEAM#04,Robe,Robin LEDBeam 350 Wash,2300877279,Wash LED,False,True,"2026/01/24	bnjm2000	Unit became unresponsive mid-show (STPI Symposium @ 72-13) [Marked OOC]|2026/01/28	bnjm2000	Sent in to Robe Service Centre for servicing [Location: Robe Service Centre]|2026/02/23	bnjm2000	Ticket Number: TT629:
+LEDBEAM#04,Robe,Robin LEDBeam 350 Wash,2300877279,Wash LED,False,False,"2026/01/24	bnjm2000	Unit became unresponsive mid-show (STPI Symposium @ 72-13) [Marked OOC]|2026/01/28	bnjm2000	Sent in to Robe Service Centre for servicing [Location: Robe Service Centre]|2026/02/23	bnjm2000	Ticket Number: TT629:
 
 13020118-01 Power Supply Delta PJL-48V400WBAAR parallel/LLC ($217.69)
 17030874 Air filter 80x52mm ($0.34)
 S-INHADHOC Service Inhouse (Adhoc) ($150)
-Total SGD 401.15 (incl GST)",LX,Store,Robe Service Centre
+Total SGD 401.15 (incl GST)|2026/04/01	bnjm2000	Collected back from Robe [Location: Store, Cleared OOC, Cleared Missing]",LX,Store,Store
 LEDBEAM#05,Robe,Robin LEDBeam 350 Wash,2300877292,Wash LED,False,False,,LX,Store,Store
 LEDBEAM#06,Robe,Robin LEDBeam 350 Wash,2300840057,Wash LED,False,False,,LX,Store,Store
 LEDBEAM#07,Robe,Robin LEDBeam 350 Wash,2300840405,Wash LED,False,False,,LX,Store,Store
@@ -1015,7 +1015,7 @@ PB#44,Astera,Pixel Brick,047-0313874,Batt LED Uplighters,False,False,2024/12/05	
 PB#45,Astera,Pixel Brick,047-0312073,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,Store
 PB#46,Astera,Pixel Brick,047-0311942,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,Store
 PB#47,Astera,Pixel Brick,047-0312764,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,Store
-PB#48,Astera,Pixel Brick,047-0313867,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/12/20	bnjm2000	Screed discovered a bit haywire (Wedding of Sabir Ansari & Daniele Lee @ TCP),LX,Store,Store
+PB#48,Astera,Pixel Brick,047-0313867,Batt LED Uplighters,False,True,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/12/20	bnjm2000	Screed discovered a bit haywire (Wedding of Sabir Ansari & Daniele Lee @ TCP)|2026/03/31	bnjm2000	Screen died while charging [Marked OOC],LX,Store,Store
 PB#49,Astera,Pixel Brick,047-0312714,Batt LED Uplighters,False,False,"2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM|2025/05/28	bnjm2000	Collected back from TSM, fixed screen",LX,Store,Store
 PB#50,Astera,Pixel Brick,047-0313681,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,Store
 PB#51,Astera,Pixel Brick,047-0312716,Batt LED Uplighters,False,False,2024/12/05	feezahmnsr	2024/12/04 - Full Maintenance By TSM,LX,Store,Store
