@@ -1,14 +1,3 @@
-2026/02/23 22:39:48,bnjm2000,Assigned specific asset DIABLO#15 to event 109
-2026/02/23 22:39:49,bnjm2000,Assigned specific asset DIABLO#16 to event 109
-2026/02/23 22:39:51,bnjm2000,Assigned specific asset DIABLO#17 to event 109
-2026/02/23 22:39:53,bnjm2000,Assigned specific asset DIABLO#18 to event 109
-2026/02/23 22:39:53,bnjm2000,Assigned specific asset DIABLO#19 to event 109
-2026/02/23 22:39:54,bnjm2000,Assigned specific asset DIABLO#20 to event 109
-2026/02/23 22:39:55,bnjm2000,Assigned specific asset DIABLO#21 to event 109
-2026/02/23 22:39:56,bnjm2000,Assigned specific asset DIABLO#22 to event 109
-2026/02/23 22:39:58,bnjm2000,Assigned specific asset DIABLO#23 to event 109
-2026/02/23 22:39:58,bnjm2000,Assigned specific asset DIABLO#24 to event 109
-2026/02/23 22:41:04,bnjm2000,Removed Shure ULXD2 model from event 109
 2026/02/23 22:41:04,bnjm2000,Added 6x Shure ULXD2 model to event 109 (total: 6)
 2026/02/23 22:41:19,bnjm2000,Removed MiPro MR-90 model from event 109
 2026/02/23 22:41:19,bnjm2000,Added 4x MiPro MR-90 model to event 109 (total: 4)
@@ -1003,3 +992,22 @@ Total SGD 401.15 (incl GST)"
 2026/04/01 16:13:53,bnjm2000,Removed Out of Commission status from asset LEDBEAM#04
 2026/04/01 16:13:53,bnjm2000,Maintenance logged for asset LEDBEAM#04: Collected back from Robe
 2026/04/01 16:14:33,bnjm2000,Maintenance logged for asset ESPRITE#01: Dean checked and discovered gobo holder feels sandy. Robe failed to repair - ordered new part.
+2026/04/02 10:32:04,bnjm2000,User bnjm2000 logged in via web interface
+2026/04/02 11:33:10,bnjm2000,Maintenance logged for asset PB#53: Left side port discovered not working when charging
+2026/04/02 16:45:37,bnjm2000,Marked asset PB#43 as Out of Commission
+2026/04/02 16:45:37,bnjm2000,Maintenance logged for asset PB#43: Cell 3 overvolt
+2026/04/02 16:46:00,bnjm2000,Removed Out of Commission status from asset X-US8#01
+2026/04/02 16:46:00,bnjm2000,Maintenance logged for asset X-US8#01: Repaired and collected back from Concept Systems
+2026/04/02 16:46:46,bnjm2000,Updated maintenance log for asset PB#63: 'Screen haywire (Standard Chartered CNY Dinner @ Shangri-La Island Ballroom)' -> 'Screen haywire (Standard Chartered CNY Dinner @ Shangri-La Island Ballroom)' (also: Marked OOC) (edited by bnjm2000)
+2026/04/02 16:50:18,bnjm2000,"Updated maintenance log for asset PB#42: 'Handed over to TSM for repair, spoilt screen
+Replaced PB15 Rear Housing Assembly' -> 'Handed over to TSM for repair, spoilt screen
+Replaced PB15 Rear Housing Assembly' (also: Location: Total Solutions) (edited by bnjm2000)"
+2026/04/02 16:50:52,bnjm2000,"Updated maintenance log for asset PB#37: 'Handed over to TSM for repair, spoilt screen
+Replaced PB15 Rear Housing Assembly' -> 'Handed over to TSM for repair, spoilt screen
+Replaced PB15 Rear Housing Assembly' (also: Location: Total Solutions) (edited by bnjm2000)"
+2026/04/02 16:53:05,bnjm2000,"Updated maintenance log for asset PB#42: 'Handed over to TSM for repair, spoilt screen
+Replaced PB15 Rear Housing Assembly [Location: Total Solutions]' -> 'Handed over to TSM for repair, spoilt screen
+Replaced PB15 Rear Housing Assembly' (also: Location: Store, Cleared OOC) (edited by bnjm2000)"
+2026/04/02 16:53:22,bnjm2000,"Updated maintenance log for asset PB#37: 'Handed over to TSM for repair, spoilt screen
+Replaced PB15 Rear Housing Assembly [Location: Total Solutions]' -> 'Handed over to TSM for repair, spoilt screen
+Replaced PB15 Rear Housing Assembly' (also: Location: Store, Cleared OOC) (edited by bnjm2000)"
