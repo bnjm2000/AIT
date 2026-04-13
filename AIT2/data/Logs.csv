@@ -1,104 +1,3 @@
-2026/02/23 22:41:04,bnjm2000,Added 6x Shure ULXD2 model to event 109 (total: 6)
-2026/02/23 22:41:19,bnjm2000,Removed MiPro MR-90 model from event 109
-2026/02/23 22:41:19,bnjm2000,Added 4x MiPro MR-90 model to event 109 (total: 4)
-2026/02/23 22:42:08,bnjm2000,Added 1x Apple Macbook Pro (A1707) model to event 109 (total: 1)
-2026/02/24 14:42:00,bnjm2000,Added 16x Astera Pixel Brick model to event 109 (total: 16)
-2026/02/24 14:42:10,bnjm2000,Assigned specific asset PB#17 to event 109
-2026/02/24 14:42:10,bnjm2000,Assigned specific asset PB#18 to event 109
-2026/02/24 14:42:10,bnjm2000,Assigned specific asset PB#19 to event 109
-2026/02/24 14:42:10,bnjm2000,Assigned specific asset PB#20 to event 109
-2026/02/24 14:42:10,bnjm2000,Assigned specific asset PB#21 to event 109
-2026/02/24 14:42:10,bnjm2000,Assigned specific asset PB#22 to event 109
-2026/02/24 14:42:10,bnjm2000,Assigned specific asset PB#24 to event 109
-2026/02/24 14:42:22,bnjm2000,Assigned specific asset PB#57 to event 109
-2026/02/24 14:42:22,bnjm2000,Assigned specific asset PB#58 to event 109
-2026/02/24 14:42:22,bnjm2000,Assigned specific asset PB#59 to event 109
-2026/02/24 14:42:22,bnjm2000,Assigned specific asset PB#60 to event 109
-2026/02/24 14:42:22,bnjm2000,Assigned specific asset PB#61 to event 109
-2026/02/24 14:42:22,bnjm2000,Assigned specific asset PB#62 to event 109
-2026/02/24 14:42:22,bnjm2000,Assigned specific asset PB#63 to event 109
-2026/02/24 14:42:22,bnjm2000,Assigned specific asset PB#64 to event 109
-2026/02/24 14:42:58,bnjm2000,Assigned specific asset PB#23 to event 109
-2026/02/24 14:43:16,bnjm2000,Updated container PB Case #03 (8 assets)
-2026/02/26 14:07:46,bnjm2000,User bnjm2000 logged in via web interface
-2026/02/26 14:08:08,bnjm2000,Returned all assets for department SK in event 109: 13 items
-2026/02/26 14:08:09,bnjm2000,Returned all assets for department LX in event 109: 79 items
-2026/02/26 14:08:09,bnjm2000,Returned all assets for department AX in event 109: 112 items
-2026/02/26 14:10:04,bnjm2000,Removed L-Acoustics LA4X model from event 110
-2026/02/26 14:10:04,bnjm2000,Added 2x L-Acoustics LA4X model to event 110 (total: 2)
-2026/02/26 14:10:53,bnjm2000,Added 1x Hollyland Solidcom C1 (Pro) 8-Slot Battery Charging Case model to event 110 (total: 1)
-2026/02/26 14:10:53,bnjm2000,Added 1x Hollyland Solidcom C1 Pro Hub model to event 110 (total: 1)
-2026/02/26 14:10:56,bnjm2000,Added 8x Hollyland Solidcom C1 Pro Remote Headset model to event 110 (total: 8)
-2026/02/26 14:10:56,bnjm2000,Added 1x Hollyland Solidcom C1 Pro Wired Headset for Hub model to event 110 (total: 1)
-2026/02/26 14:10:58,bnjm2000,Added 16x Hollyland HL-BAT700 model to event 110 (total: 16)
-2026/02/26 14:12:03,bnjm2000,Added 2x Pioneer CDJ3000 model to event 110 (total: 2)
-2026/02/26 14:12:06,bnjm2000,Added 1x Pioneer DJM-A9 model to event 110 (total: 1)
-2026/02/26 14:12:18,bnjm2000,Removed Avolites Quartz model from event 110
-2026/02/26 14:12:26,bnjm2000,Added 1x Avolites Tiger Touch 2 model to event 110 (total: 1)
-2026/02/26 14:12:37,bnjm2000,Removed Ayrton Diablo (W.DMX) model from event 110
-2026/02/26 14:12:37,bnjm2000,Added 4x Ayrton Diablo (W.DMX) model to event 110 (total: 4)
-2026/02/26 14:12:45,bnjm2000,Added 4x Robe Robin LEDBeam 350 Wash model to event 110 (total: 4)
-2026/02/26 14:12:54,bnjm2000,Added 1x Lumenradio Aurora model to event 110 (total: 1)
-2026/02/26 14:12:58,bnjm2000,Added 1x Le Maitre MVS Hazer model to event 110 (total: 1)
-2026/02/26 14:13:18,bnjm2000,Added 1x 63A 3-Phase DB Custom DB model to event 110 (total: 2)
-2026/02/26 14:13:21,bnjm2000,Added 1x 32A 3-Phase DB Custom DB model to event 110 (total: 1)
-2026/02/26 14:13:33,bnjm2000,Updated event 110: Louis Vuitton Spring Summer Trunk Show 2026 @ Japanese Garden via web interface
-2026/02/26 14:15:39,bnjm2000,Assigned specific asset HLBatt#01 to event 110
-2026/02/26 14:15:39,bnjm2000,Assigned specific asset HLBatt#03 to event 110
-2026/02/26 14:15:39,bnjm2000,Assigned specific asset HLBatt#05 to event 110
-2026/02/26 14:15:39,bnjm2000,Assigned specific asset HLBatt#07 to event 110
-2026/02/26 14:15:39,bnjm2000,Assigned specific asset HLBatt#09 to event 110
-2026/02/26 14:15:39,bnjm2000,Assigned specific asset HLBatt#11 to event 110
-2026/02/26 14:15:39,bnjm2000,Assigned specific asset HLBatt#13 to event 110
-2026/02/26 14:15:39,bnjm2000,Assigned specific asset HLBatt#15 to event 110
-2026/02/26 14:15:39,bnjm2000,Assigned specific asset C1ProCharger#01 to event 110
-2026/02/26 14:15:39,bnjm2000,Assigned specific asset C1ProRHS#01 to event 110
-2026/02/26 14:15:39,bnjm2000,Assigned specific asset C1ProRHS#03 to event 110
-2026/02/26 14:15:39,bnjm2000,Assigned specific asset C1ProRHS#05 to event 110
-2026/02/26 14:15:39,bnjm2000,Assigned specific asset C1ProRHS#07 to event 110
-2026/02/26 14:15:39,bnjm2000,Assigned specific asset C1ProWHS#01 to event 110
-2026/02/26 14:15:39,bnjm2000,Assigned specific asset HLBatt#02 to event 110
-2026/02/26 14:15:39,bnjm2000,Assigned specific asset HLBatt#04 to event 110
-2026/02/26 14:15:39,bnjm2000,Assigned specific asset HLBatt#06 to event 110
-2026/02/26 14:15:39,bnjm2000,Assigned specific asset HLBatt#08 to event 110
-2026/02/26 14:15:39,bnjm2000,Assigned specific asset HLBatt#10 to event 110
-2026/02/26 14:15:39,bnjm2000,Assigned specific asset HLBatt#12 to event 110
-2026/02/26 14:15:39,bnjm2000,Assigned specific asset HLBatt#14 to event 110
-2026/02/26 14:15:39,bnjm2000,Assigned specific asset HLBatt#16 to event 110
-2026/02/26 14:15:39,bnjm2000,Assigned specific asset C1ProHub#01 to event 110
-2026/02/26 14:15:39,bnjm2000,Assigned specific asset C1ProRHS#02 to event 110
-2026/02/26 14:15:39,bnjm2000,Assigned specific asset C1ProRHS#04 to event 110
-2026/02/26 14:15:39,bnjm2000,Assigned specific asset C1ProRHS#06 to event 110
-2026/02/26 14:15:39,bnjm2000,Assigned specific asset C1ProRHS#08 to event 110
-2026/02/26 14:16:32,bnjm2000,Removed Apple Macbook Pro (A1707) model from event 109
-2026/02/26 14:16:42,bnjm2000,Removed L-Acoustics X-US8 model from event 110
-2026/02/26 14:16:42,bnjm2000,Added 5x L-Acoustics X-US8 model to event 110 (total: 5)
-2026/02/26 14:16:48,bnjm2000,Removed L-Acoustics X-UL8 model from event 110
-2026/02/26 14:16:48,bnjm2000,Added 10x L-Acoustics X-UL8 model to event 110 (total: 10)
-2026/02/26 15:20:58,bnjm2000,Created event 111: Damiani Jewellery Dinner @ Artyzen Hotel via web interface
-2026/02/26 15:21:04,bnjm2000,Updated event 111: Damiani Jewellery Dinner @ Artyzen Hotel via web interface
-2026/02/26 15:21:37,bnjm2000,Created event 112: Interwoven《绚》@ SCCC via web interface
-2026/02/26 15:31:17,bnjm2000,Added 1x Sennheiser Base Station model to event 112 (total: 1)
-2026/02/26 15:31:21,bnjm2000,Added 2x Sennheiser DAD(UHF) model to event 112 (total: 2)
-2026/02/26 15:31:25,bnjm2000,Added 10x Sennheiser SEK(UHF) model to event 112 (total: 10)
-2026/02/26 15:56:40,bnjm2000,Added 4x DPA 4099 model to event 112 (total: 4)
-2026/02/26 15:57:03,bnjm2000,Added 4x DPA DAD 6001 model to event 112 (total: 4)
-2026/02/26 15:57:32,bnjm2000,Added 6x DPA 4466 model to event 112 (total: 6)
-2026/02/26 15:57:37,bnjm2000,Added 1x DPA 6061 model to event 112 (total: 1)
-2026/02/26 15:57:55,bnjm2000,Added 4x Behringher P1 model to event 112 (total: 4)
-2026/02/26 15:58:03,bnjm2000,Added 4x Neumann KM184 model to event 112 (total: 4)
-2026/02/26 15:58:15,bnjm2000,Added 1x Yamaha Rio3224-d2 model to event 112 (total: 1)
-2026/02/26 16:00:21,bnjm2000,User bnjm2000 forced event 104 (Loewe Dinner @ New Bahru) state from Closed to Preparing
-2026/02/26 16:03:39,bnjm2000,Assigned specific asset LEGION#03 to event 104
-2026/02/26 16:03:54,bnjm2000,Returned asset LEGION#03 from event 104
-2026/02/26 16:04:00,bnjm2000,User bnjm2000 removed forced state override for event 104 (Loewe Dinner @ New Bahru): Preparing -> Closed
-2026/02/26 16:05:23,bnjm2000,Created container LEDBEAM Case #01 (4 assets)
-2026/02/26 16:06:24,bnjm2000,Created container LEDBEAM Case #02 (4 assets)
-2026/02/26 16:06:53,bnjm2000,Created container LEDBEAM Case #03 (4 assets)
-2026/02/26 16:07:50,bnjm2000,Created container LEDBEAM Case #04 (4 assets)
-2026/02/26 16:08:17,bnjm2000,Created container LEDBEAM Case #05 (4 assets)
-2026/02/26 16:08:40,bnjm2000,Created container LEDBEAM Case #06 (4 assets)
-2026/02/26 16:09:18,bnjm2000,User bnjm2000 forced event 109 (Standard Chartered Bank CNY Dinner @ Shangri-La Island Ballroom) state from Closed to Preparing
 2026/02/26 16:09:29,bnjm2000,Removed L-Acoustics LA12X model from event 109
 2026/02/26 16:09:29,bnjm2000,Added 4x L-Acoustics LA12X model to event 109 (total: 4)
 2026/02/26 16:10:10,bnjm2000,Completely removed asset LA12X#04 from event 109
@@ -1011,3 +910,116 @@ Replaced PB15 Rear Housing Assembly' (also: Location: Store, Cleared OOC) (edite
 2026/04/02 16:53:22,bnjm2000,"Updated maintenance log for asset PB#37: 'Handed over to TSM for repair, spoilt screen
 Replaced PB15 Rear Housing Assembly [Location: Total Solutions]' -> 'Handed over to TSM for repair, spoilt screen
 Replaced PB15 Rear Housing Assembly' (also: Location: Store, Cleared OOC) (edited by bnjm2000)"
+2026/04/06 10:24:12,bnjm2000,User bnjm2000 logged in via web interface
+2026/04/06 10:24:17,bnjm2000,Returned all assets for department AX in event 123: 26 items
+2026/04/06 10:24:20,bnjm2000,Returned all assets for department LX in event 118: 12 items
+2026/04/10 12:44:28,admin,User admin logged in via web interface
+2026/04/10 12:45:23,admin,Created event 124: Dry Hire: XC Lighting via web interface
+2026/04/10 12:45:50,admin,Added 2x Fenix HERCULES 8 model to event 124 (total: 2)
+2026/04/10 12:47:06,admin,Saved client Xiang Ju Chan
+2026/04/10 16:45:27,admin,Created event 125: Dior Store Event @ ION Orchard  via web interface
+2026/04/10 16:46:36,admin,Created event 126: Hermes Dinner @ Liat Towers via web interface
+2026/04/10 16:47:54,admin,Created event 127: Wedding of Avinash & Rachel @ Capella via web interface
+2026/04/10 16:48:09,admin,Assigned specific asset HERCULES 8#01 to event 124
+2026/04/10 16:48:11,admin,Assigned specific asset HERCULES 8#02 to event 124
+2026/04/13 10:30:14,bnjm2000,User bnjm2000 logged in via web interface
+2026/04/13 10:31:30,bnjm2000,Added 2x Turbosound IP1000 model to event 125 (total: 2)
+2026/04/13 10:32:40,bnjm2000,Added 1x Yamaha MG06 model to event 125 (total: 1)
+2026/04/13 10:33:00,bnjm2000,Added 1x Shure ULXD2 model to event 125 (total: 1)
+2026/04/13 10:33:05,bnjm2000,Added 1x Shure ULXD4D model to event 125 (total: 1)
+2026/04/13 10:33:09,bnjm2000,Added 1x Interspace Industries PCBB3 model to event 125 (total: 1)
+2026/04/13 14:27:09,bnjm2000,Assigned specific asset IP1000#05 to event 125
+2026/04/13 14:27:19,bnjm2000,Assigned specific asset ULXD2#08 to event 125
+2026/04/13 14:27:22,bnjm2000,Assigned specific asset PCBB#06 to event 125
+2026/04/13 14:27:26,bnjm2000,Assigned specific asset MG06#01 to event 125
+2026/04/13 14:27:33,bnjm2000,Removed Shure ULXD4D model from event 125
+2026/04/13 14:27:40,bnjm2000,Added 1x Shure ULXD4D model to event 125 (total: 1)
+2026/04/13 14:27:47,bnjm2000,Removed Turbosound IP1000 model from event 125
+2026/04/13 14:27:47,bnjm2000,Added 1x Turbosound IP1000 model to event 125 (total: 1)
+2026/04/13 14:27:53,bnjm2000,Assigned specific asset ULXD4D#04 to event 125
+2026/04/13 14:38:12,bnjm2000,Updated maintenance log for asset PB#19: 'Display will turn off after a while' -> 'Display dim' (edited by bnjm2000)
+2026/04/13 14:49:20,bnjm2000,"Updated maintenance log for asset PB#34: 'Display seems dim' -> 'Display turns off after a while, dim' (edited by bnjm2000)"
+2026/04/13 15:10:55,bnjm2000,Maintenance logged for asset PB#01: Updated to version V5.16.26
+2026/04/13 15:10:56,bnjm2000,Maintenance logged for asset PB#02: Updated to version V5.16.26
+2026/04/13 15:10:56,bnjm2000,Maintenance logged for asset PB#03: Updated to version V5.16.26
+2026/04/13 15:10:56,bnjm2000,Maintenance logged for asset PB#04: Updated to version V5.16.26
+2026/04/13 15:10:56,bnjm2000,Maintenance logged for asset PB#05: Updated to version V5.16.26
+2026/04/13 15:10:56,bnjm2000,Maintenance logged for asset PB#06: Updated to version V5.16.26
+2026/04/13 15:10:56,bnjm2000,Maintenance logged for asset PB#07: Updated to version V5.16.26
+2026/04/13 15:10:56,bnjm2000,Maintenance logged for asset PB#08: Updated to version V5.16.26
+2026/04/13 15:10:56,bnjm2000,Maintenance logged for asset PB#09: Updated to version V5.16.26
+2026/04/13 15:10:56,bnjm2000,Maintenance logged for asset PB#10: Updated to version V5.16.26
+2026/04/13 15:10:56,bnjm2000,Maintenance logged for asset PB#11: Updated to version V5.16.26
+2026/04/13 15:10:56,bnjm2000,Maintenance logged for asset PB#12: Updated to version V5.16.26
+2026/04/13 15:10:56,bnjm2000,Maintenance logged for asset PB#13: Updated to version V5.16.26
+2026/04/13 15:10:56,bnjm2000,Maintenance logged for asset PB#14: Updated to version V5.16.26
+2026/04/13 15:10:56,bnjm2000,Maintenance logged for asset PB#15: Updated to version V5.16.26
+2026/04/13 15:10:56,bnjm2000,Maintenance logged for asset PB#16: Updated to version V5.16.26
+2026/04/13 15:10:56,bnjm2000,Maintenance logged for asset PB#17: Updated to version V5.16.26
+2026/04/13 15:10:56,bnjm2000,Maintenance logged for asset PB#18: Updated to version V5.16.26
+2026/04/13 15:10:56,bnjm2000,Maintenance logged for asset PB#19: Updated to version V5.16.26
+2026/04/13 15:10:56,bnjm2000,Maintenance logged for asset PB#20: Updated to version V5.16.26
+2026/04/13 15:10:56,bnjm2000,Maintenance logged for asset PB#21: Updated to version V5.16.26
+2026/04/13 15:10:56,bnjm2000,Maintenance logged for asset PB#22: Updated to version V5.16.26
+2026/04/13 15:10:56,bnjm2000,Maintenance logged for asset PB#23: Updated to version V5.16.26
+2026/04/13 15:10:56,bnjm2000,Maintenance logged for asset PB#24: Updated to version V5.16.26
+2026/04/13 15:10:56,bnjm2000,Maintenance logged for asset PB#25: Updated to version V5.16.26
+2026/04/13 15:10:57,bnjm2000,Maintenance logged for asset PB#26: Updated to version V5.16.26
+2026/04/13 15:10:57,bnjm2000,Maintenance logged for asset PB#27: Updated to version V5.16.26
+2026/04/13 15:10:57,bnjm2000,Maintenance logged for asset PB#28: Updated to version V5.16.26
+2026/04/13 15:10:57,bnjm2000,Maintenance logged for asset PB#29: Updated to version V5.16.26
+2026/04/13 15:10:57,bnjm2000,Maintenance logged for asset PB#30: Updated to version V5.16.26
+2026/04/13 15:10:57,bnjm2000,Maintenance logged for asset PB#31: Updated to version V5.16.26
+2026/04/13 15:10:57,bnjm2000,Maintenance logged for asset PB#32: Updated to version V5.16.26
+2026/04/13 15:10:57,bnjm2000,Maintenance logged for asset PB#33: Updated to version V5.16.26
+2026/04/13 15:10:57,bnjm2000,Maintenance logged for asset PB#34: Updated to version V5.16.26
+2026/04/13 15:10:57,bnjm2000,Maintenance logged for asset PB#35: Updated to version V5.16.26
+2026/04/13 15:10:57,bnjm2000,Maintenance logged for asset PB#36: Updated to version V5.16.26
+2026/04/13 15:10:57,bnjm2000,Maintenance logged for asset PB#37: Updated to version V5.16.26
+2026/04/13 15:10:57,bnjm2000,Maintenance logged for asset PB#38: Updated to version V5.16.26
+2026/04/13 15:10:57,bnjm2000,Maintenance logged for asset PB#39: Updated to version V5.16.26
+2026/04/13 15:10:57,bnjm2000,Maintenance logged for asset PB#40: Updated to version V5.16.26
+2026/04/13 15:10:57,bnjm2000,Maintenance logged for asset PB#41: Updated to version V5.16.26
+2026/04/13 15:10:57,bnjm2000,Maintenance logged for asset PB#42: Updated to version V5.16.26
+2026/04/13 15:10:57,bnjm2000,Maintenance logged for asset PB#43: Updated to version V5.16.26
+2026/04/13 15:10:57,bnjm2000,Maintenance logged for asset PB#44: Updated to version V5.16.26
+2026/04/13 15:10:57,bnjm2000,Maintenance logged for asset PB#45: Updated to version V5.16.26
+2026/04/13 15:10:57,bnjm2000,Maintenance logged for asset PB#46: Updated to version V5.16.26
+2026/04/13 15:10:57,bnjm2000,Maintenance logged for asset PB#47: Updated to version V5.16.26
+2026/04/13 15:10:57,bnjm2000,Maintenance logged for asset PB#48: Updated to version V5.16.26
+2026/04/13 15:10:57,bnjm2000,Maintenance logged for asset PB#49: Updated to version V5.16.26
+2026/04/13 15:10:57,bnjm2000,Maintenance logged for asset PB#50: Updated to version V5.16.26
+2026/04/13 15:10:57,bnjm2000,Maintenance logged for asset PB#51: Updated to version V5.16.26
+2026/04/13 15:10:57,bnjm2000,Maintenance logged for asset PB#52: Updated to version V5.16.26
+2026/04/13 15:10:57,bnjm2000,Maintenance logged for asset PB#53: Updated to version V5.16.26
+2026/04/13 15:10:58,bnjm2000,Maintenance logged for asset PB#54: Updated to version V5.16.26
+2026/04/13 15:10:58,bnjm2000,Maintenance logged for asset PB#55: Updated to version V5.16.26
+2026/04/13 15:10:58,bnjm2000,Maintenance logged for asset PB#56: Updated to version V5.16.26
+2026/04/13 15:10:58,bnjm2000,Maintenance logged for asset PB#57: Updated to version V5.16.26
+2026/04/13 15:10:58,bnjm2000,Maintenance logged for asset PB#58: Updated to version V5.16.26
+2026/04/13 15:10:58,bnjm2000,Maintenance logged for asset PB#59: Updated to version V5.16.26
+2026/04/13 15:10:58,bnjm2000,Maintenance logged for asset PB#60: Updated to version V5.16.26
+2026/04/13 15:10:58,bnjm2000,Maintenance logged for asset PB#61: Updated to version V5.16.26
+2026/04/13 15:10:58,bnjm2000,Maintenance logged for asset PB#62: Updated to version V5.16.26
+2026/04/13 15:10:58,bnjm2000,Maintenance logged for asset PB#63: Updated to version V5.16.26
+2026/04/13 15:10:58,bnjm2000,Maintenance logged for asset PB#64: Updated to version V5.16.26
+2026/04/13 15:11:55,bnjm2000,"Updated maintenance log for asset PB#63: 'Updated to version V5.16.26' -> 'Sent to TSM, Changed PB15 Housing
+Updated to version V5.16.26' (also: Cleared OOC) (edited by bnjm2000)"
+2026/04/13 15:12:08,bnjm2000,"Updated maintenance log for asset PB#52: 'Updated to version V5.16.26' -> 'Sent to TSM, Changed PB15 Housing
+Updated to version V5.16.26' (also: Cleared OOC) (edited by bnjm2000)"
+2026/04/13 15:12:19,bnjm2000,"Updated maintenance log for asset PB#48: 'Updated to version V5.16.26' -> 'Sent to TSM, Changed PB15 Housing
+Updated to version V5.16.26' (also: Cleared OOC) (edited by bnjm2000)"
+2026/04/13 15:12:32,bnjm2000,"Updated maintenance log for asset PB#43: 'Updated to version V5.16.26' -> 'Sent to TSM, 
+Updated to version V5.16.26' (also: Cleared OOC) (edited by bnjm2000)"
+2026/04/13 15:12:51,bnjm2000,"Updated maintenance log for asset PB#43: 'Sent to TSM, 
+Updated to version V5.16.26 [Cleared OOC]' -> 'Sent to TSM, 
+Updated to version V5.16.26' (also: Cleared OOC) (edited by bnjm2000)"
+2026/04/13 15:12:58,bnjm2000,"Updated maintenance log for asset PB#48: 'Sent to TSM, Changed PB15 Housing
+Updated to version V5.16.26 [Cleared OOC]' -> 'Sent to TSM, Changed PB15 Housing
+Updated to version V5.16.26' (also: Cleared OOC) (edited by bnjm2000)"
+2026/04/13 15:13:03,bnjm2000,"Updated maintenance log for asset PB#52: 'Sent to TSM, Changed PB15 Housing
+Updated to version V5.16.26 [Cleared OOC]' -> 'Sent to TSM, Changed PB15 Housing
+Updated to version V5.16.26' (also: Cleared OOC) (edited by bnjm2000)"
+2026/04/13 15:13:08,bnjm2000,"Updated maintenance log for asset PB#63: 'Sent to TSM, Changed PB15 Housing
+Updated to version V5.16.26 [Cleared OOC]' -> 'Sent to TSM, Changed PB15 Housing
+Updated to version V5.16.26' (also: Cleared OOC) (edited by bnjm2000)"
