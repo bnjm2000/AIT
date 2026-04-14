@@ -719,31 +719,64 @@ function sortEventsStartDateFutureTop(list) {
   });
 }
 
+function renderAllEventsList(eventsToRender = null) {
+  const container = document.getElementById('all-events');
+  if (!container) return;
+
+  const eventSearch = document.getElementById("event-search");
+  const searchTerm = eventSearch ? eventSearch.value.toLowerCase().trim() : "";
+
+  let list = Array.isArray(eventsToRender) ? eventsToRender : events;
+
+  if (searchTerm) {
+    list = list.filter(event => {
+      const searchableText = `
+        ${event.id}
+        ${event.name || ''}
+        ${event.state || ''}
+        ${event.tag || ''}
+        ${event.startDate || ''}
+        ${event.endDate || ''}
+      `.toLowerCase();
+
+      return searchableText.includes(searchTerm);
+    });
+  }
+
+  const sorted = sortEventsStartDateFutureTop(list);
+
+  container.innerHTML = "";
+
+  if (!sorted || sorted.length === 0) {
+    container.innerHTML = '<p style="text-align: center; color: #666; padding: 40px;">No matching events found.</p>';
+    return;
+  }
+
+  sorted.forEach(event => {
+    container.appendChild(createEventCard(event));
+  });
+}
+
 async function loadAllEvents() {
   try {
     const response = await apiCall('/api/events');
     events = response.data;
 
-    // Update overdue counter (unchanged)
     const overdueCount = countOverdueEvents(events);
     updateOverdueCounter(overdueCount);
 
-    const container = document.getElementById('all-events');
-    container.innerHTML = '';
-
     if (!events || events.length === 0) {
-      container.innerHTML = '<p style="text-align: center; color: #666; padding: 40px;">No events found.</p>';
+      const container = document.getElementById('all-events');
+      if (container) {
+        container.innerHTML = '<p style="text-align: center; color: #666; padding: 40px;">No events found.</p>';
+      }
       return;
     }
 
-    // NEW: sort by start date with future events on top
-    const sorted = sortEventsStartDateFutureTop(events);
-
-    sorted.forEach(event => {
-      container.appendChild(createEventCard(event));
-    });
+    renderAllEventsList(events);
   } catch (error) {
-    document.getElementById('all-events').innerHTML = '<p style="color: red; text-align: center;">Error loading events</p>';
+    document.getElementById('all-events').innerHTML =
+      '<p style="color: red; text-align: center;">Error loading events</p>';
   }
 }
 
@@ -8644,19 +8677,8 @@ document.addEventListener("DOMContentLoaded", function () {
   // Search functionality
   const eventSearch = document.getElementById("event-search");
   if (eventSearch) {
-    eventSearch.addEventListener("input", function (e) {
-      const searchTerm = e.target.value.toLowerCase();
-      const filteredEvents = events.filter(
-        (event) =>
-          event.name.toLowerCase().includes(searchTerm) ||
-          event.state.toLowerCase().includes(searchTerm)
-      );
-
-      const container = document.getElementById("all-events");
-      container.innerHTML = "";
-      filteredEvents.forEach((event) => {
-        container.appendChild(createEventCard(event));
-      });
+    eventSearch.addEventListener("input", function () {
+      renderAllEventsList(events);
     });
   }
 
@@ -11022,14 +11044,36 @@ function editMaintenanceLog(assetId, logIndex, logId) {
   // Convert date format from YYYY/MM/DD to YYYY-MM-DD for HTML date input
   const dateForInput = currentDate.replace(/\//g, '-');
   
-  // Determine current asset status for radio button pre-selection
+  // Determine status radio button from THIS log entry, not current asset status
   let defaultStatusValue = 'nochange';
-  if (asset.isOOC && asset.isMissing) {
-    defaultStatusValue = 'nochange'; // Both statuses - let user choose
-  } else if (asset.isOOC) {
-    defaultStatusValue = 'clearooc'; // Currently OOC, suggest clearing it
-  } else if (asset.isMissing) {
-    defaultStatusValue = 'clearmissing'; // Currently missing, suggest clearing it
+  const statusLower = (existingStatusChanges || '').toLowerCase();
+
+  if (
+    statusLower.includes('cleared ooc') ||
+    statusLower.includes('clear ooc') ||
+    statusLower.includes('removed ooc') ||
+    statusLower.includes('unmarked ooc') ||
+    statusLower.includes('unmark ooc')
+  ) {
+    defaultStatusValue = 'clearooc';
+  } else if (
+    statusLower.includes('marked ooc') ||
+    statusLower.includes('mark ooc')
+  ) {
+    defaultStatusValue = 'ooc';
+  } else if (
+    statusLower.includes('cleared missing') ||
+    statusLower.includes('clear missing') ||
+    statusLower.includes('removed missing') ||
+    statusLower.includes('unmarked missing') ||
+    statusLower.includes('unmark missing')
+  ) {
+    defaultStatusValue = 'clearmissing';
+  } else if (
+    statusLower.includes('marked missing') ||
+    statusLower.includes('mark missing')
+  ) {
+    defaultStatusValue = 'missing';
   }
   
   // Create the enhanced edit modal

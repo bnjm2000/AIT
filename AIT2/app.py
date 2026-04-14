@@ -1378,77 +1378,93 @@ def delete_maintenance_log(asset_id, log_index):
         return jsonify({'error': f'Failed to delete maintenance log: {str(e)}'}), 500
 
 def recalculate_asset_status_from_logs(asset):
-    """Recalculate asset OOC, Missing status, and location based on maintenance logs"""
+    """Recalculate asset OOC, Missing status, serial, and location based on maintenance logs."""
     try:
-        # Reset status to defaults
         asset.is_ooc = False
         asset.is_missing = False
-        
-        # Reset location to default (Store), will be updated if logs contain location changes
-        asset.current_location = ''  # Empty string represents "Store"
-        
-        # Sort logs by date to ensure chronological processing
+        asset.current_location = ''
+
         sorted_logs = []
         for i, log_entry in enumerate(asset.maintenance_logs):
             parts = log_entry.split('\t')
             if len(parts) >= 3:
                 date_str = parts[0]
-                # Convert date to comparable format for sorting
                 try:
                     date_obj = datetime.strptime(date_str, "%Y/%m/%d")
-                    sorted_logs.append((date_obj, i, log_entry))
                 except ValueError:
-                    # If date parsing fails, treat as very old date
                     logger.warning(f"Invalid date format in log: {date_str}")
-                    sorted_logs.append((datetime.min, i, log_entry))
-        
-        # Sort by date (chronological order - oldest first for processing)
-        sorted_logs.sort(key=lambda x: x[0])
-        
-        logger.info(f"Processing {len(sorted_logs)} logs for {asset.asset_id} in chronological order")
-        
-        # Process logs in chronological order to determine final status and location
+                    date_obj = datetime.min
+
+                sorted_logs.append((date_obj, i, log_entry))
+
+        sorted_logs.sort(key=lambda x: (x[0], x[1]))
+
         for date_obj, log_index, log_entry in sorted_logs:
             parts = log_entry.split('\t')
-            if len(parts) >= 3:
-                description = '\t'.join(parts[2:])
-                date_str = parts[0]
-                
-                logger.info(f"Processing log {log_index} ({date_str}): {description[:50]}...")
-                
-                # Check for status changes in the log description
-                if '[' in description and ']' in description:
-                    # Extract status changes from brackets
-                    import re
-                    status_match = re.search(r'\[(.*?)\]', description)
-                    if status_match:
-                        status_info = status_match.group(1)
-                        status_parts = [part.strip() for part in status_info.split(',')]
-                        
-                        for part in status_parts:
-                            if part.startswith('Location:'):
-                                new_location = part.replace('Location:', '').strip()
-                                asset.current_location = new_location
-                                logger.info(f"Updated location to: {new_location}")
-                            elif part.startswith('Serial:'):
-                                new_serial = part.replace('Serial:', '').strip()
-                                asset.serial_number = new_serial
-                                logger.info(f"Updated serial to: {new_serial}")
-                            elif part == 'Marked OOC':
-                                asset.is_ooc = True
-                                logger.info("Marked asset as OOC")
-                            elif part == 'Unmarked OOC':
-                                asset.is_ooc = False
-                                logger.info("Unmarked asset as OOC")
-                            elif part == 'Marked Missing':
-                                asset.is_missing = True
-                                logger.info("Marked asset as Missing")
-                            elif part == 'Unmarked Missing':
-                                asset.is_missing = False
-                                logger.info("Unmarked asset as Missing")
-                        
-        logger.info(f"Final status for {asset.asset_id}: OOC={asset.is_ooc}, Missing={asset.is_missing}, Location='{asset.current_location}'")
-        
+            if len(parts) < 3:
+                continue
+
+            description = '\t'.join(parts[2:])
+
+            if '[' not in description or ']' not in description:
+                continue
+
+            import re
+            status_match = re.search(r'\[(.*?)\]', description)
+            if not status_match:
+                continue
+
+            status_info = status_match.group(1)
+            status_parts = [part.strip() for part in status_info.split(',')]
+
+            for part in status_parts:
+                part_lower = part.lower()
+
+                if part_lower.startswith('location:'):
+                    asset.current_location = part.split(':', 1)[1].strip()
+
+                elif part_lower.startswith('serial:'):
+                    asset.serial_number = part.split(':', 1)[1].strip()
+
+                elif part_lower in (
+                    'cleared ooc',
+                    'clear ooc',
+                    'removed ooc',
+                    'unmarked ooc',
+                    'unmark ooc',
+                    'cleared out of commission',
+                    'removed out of commission'
+                ):
+                    asset.is_ooc = False
+
+                elif part_lower in (
+                    'marked ooc',
+                    'mark ooc',
+                    'marked out of commission',
+                    'mark out of commission'
+                ):
+                    asset.is_ooc = True
+
+                elif part_lower in (
+                    'cleared missing',
+                    'clear missing',
+                    'removed missing',
+                    'unmarked missing',
+                    'unmark missing'
+                ):
+                    asset.is_missing = False
+
+                elif part_lower in (
+                    'marked missing',
+                    'mark missing'
+                ):
+                    asset.is_missing = True
+
+        logger.info(
+            f"Final status for {asset.asset_id}: "
+            f"OOC={asset.is_ooc}, Missing={asset.is_missing}, Location='{asset.current_location}'"
+        )
+
     except Exception as e:
         logger.error(f"Error recalculating asset status from logs for {asset.asset_id}: {e}")
         import traceback
@@ -3031,39 +3047,18 @@ def update_maintenance_log_enhanced(asset_id, log_index):
         logger.info(f"Current asset status: OOC={asset.is_ooc}, Missing={asset.is_missing}")
         
         # Apply OOC status changes
+        # Store the selected status action in the log, regardless of current asset status.
+        # The final asset status is recalculated from all logs below.
         if mark_ooc:
-            if not asset.is_ooc:
-                asset.is_ooc = True
-                changes_made.append("Marked OOC")
-                logger.info("Marked asset as OOC")
-            else:
-                logger.info("Asset already OOC, no change needed")
+            changes_made.append("Marked OOC")
         elif unmark_ooc:
-            # Always add to changes_made when explicitly clearing, even if already clear
             changes_made.append("Cleared OOC")
-            if asset.is_ooc:
-                asset.is_ooc = False
-                logger.info("Cleared OOC status")
-            else:
-                logger.info("Confirmed OOC status cleared (was already clear)")
-                
-        # Apply Missing status changes
+
         if mark_missing:
-            if not asset.is_missing:
-                asset.is_missing = True
-                changes_made.append("Marked Missing")
-                logger.info("Marked asset as Missing")
-            else:
-                logger.info("Asset already Missing, no change needed")
+            changes_made.append("Marked Missing")
         elif unmark_missing:
-            # Always add to changes_made when explicitly clearing, even if already clear
             changes_made.append("Cleared Missing")
-            if asset.is_missing:
-                asset.is_missing = False
-                logger.info("Cleared Missing status")
-            else:
-                logger.info("Confirmed Missing status cleared (was already clear)")
-        
+            
         logger.info(f"Final changes made: {changes_made}")
         logger.info(f"Final asset status: OOC={asset.is_ooc}, Missing={asset.is_missing}")
         

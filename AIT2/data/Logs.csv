@@ -1,89 +1,3 @@
-2026/02/26 16:09:29,bnjm2000,Removed L-Acoustics LA12X model from event 109
-2026/02/26 16:09:29,bnjm2000,Added 4x L-Acoustics LA12X model to event 109 (total: 4)
-2026/02/26 16:10:10,bnjm2000,Completely removed asset LA12X#04 from event 109
-2026/02/26 16:10:13,bnjm2000,Completely removed asset LA12X#05 from event 109
-2026/02/26 16:10:14,bnjm2000,Completely removed asset LA12X#06 from event 109
-2026/02/26 16:10:49,bnjm2000,Added 3x L-Acoustics LA4X model to event 109 (total: 3)
-2026/02/26 16:10:59,bnjm2000,Assigned specific asset LA4X#04 to event 109
-2026/02/26 16:11:02,bnjm2000,Assigned specific asset LA4X#05 to event 109
-2026/02/26 16:11:04,bnjm2000,Assigned specific asset LA4X#06 to event 109
-2026/02/26 16:11:23,bnjm2000,Returned all assets for department AX in event 109: 3 items
-2026/02/26 16:11:33,bnjm2000,Added 2x L-Acoustics LS10 model to event 109 (total: 2)
-2026/02/26 16:11:41,bnjm2000,Assigned specific asset LS10#01 to event 109
-2026/02/26 16:11:43,bnjm2000,Assigned specific asset LS10#02 to event 109
-2026/02/26 16:11:48,bnjm2000,Returned all assets for department AX in event 109: 2 items
-2026/02/26 16:11:54,bnjm2000,User bnjm2000 removed forced state override for event 109 (Standard Chartered Bank CNY Dinner @ Shangri-La Island Ballroom): Preparing -> Closed
-2026/02/26 20:23:14,bnjm2000,Added 12x Ayrton Diablo Profile model to event 112 (total: 12)
-2026/03/01 16:16:52,bnjm2000,Assigned specific asset X-US8#01 to event 110
-2026/03/01 16:16:54,bnjm2000,Assigned specific asset X-US8#02 to event 110
-2026/03/01 16:16:58,bnjm2000,Assigned specific asset X-US8#04 to event 110
-2026/03/01 16:17:01,bnjm2000,Assigned specific asset X-US8#05 to event 110
-2026/03/01 16:17:07,bnjm2000,Assigned specific asset X-US8#03 to event 110
-2026/03/01 16:17:35,bnjm2000,Assigned specific asset X-US1215#02 to event 110
-2026/03/01 16:17:37,bnjm2000,Assigned specific asset X-US1215#06 to event 110
-2026/03/01 16:17:41,bnjm2000,Assigned specific asset X-US1215#08 to event 110
-2026/03/01 16:17:43,bnjm2000,Assigned specific asset X-US1215#03 to event 110
-2026/03/01 16:17:45,bnjm2000,Assigned specific asset X-US1215#01 to event 110
-2026/03/01 16:17:52,bnjm2000,Assigned specific asset X-US1215#07 to event 110
-2026/03/01 16:18:03,bnjm2000,Assigned specific asset X-UL8#12 to event 110
-2026/03/01 16:18:03,bnjm2000,Assigned specific asset X-UL8#11 to event 110
-2026/03/01 16:18:05,bnjm2000,Assigned specific asset X-UL8#10 to event 110
-2026/03/01 16:18:07,bnjm2000,Assigned specific asset X-UL8#09 to event 110
-2026/03/01 16:18:09,bnjm2000,Assigned specific asset X-UL8#08 to event 110
-2026/03/01 16:18:14,bnjm2000,Assigned specific asset X-UL8#07 to event 110
-2026/03/01 16:18:16,bnjm2000,Assigned specific asset X-UL8#06 to event 110
-2026/03/01 16:18:16,bnjm2000,Assigned specific asset X-UL8#05 to event 110
-2026/03/01 16:18:18,bnjm2000,Assigned specific asset X-UL8#04 to event 110
-2026/03/01 16:18:18,bnjm2000,Assigned specific asset X-UL8#03 to event 110
-2026/03/01 16:18:21,bnjm2000,Assigned specific asset X-UL8#02 to event 110
-2026/03/01 16:18:22,bnjm2000,Assigned specific asset X-UL8#01 to event 110
-2026/03/01 16:18:37,bnjm2000,Assigned specific asset SB18#10 to event 110
-2026/03/01 16:18:42,bnjm2000,Assigned specific asset SB18#09 to event 110
-2026/03/01 16:19:09,bnjm2000,Assigned specific asset EVOLVE50#03 to event 110
-2026/03/01 16:19:09,bnjm2000,Assigned specific asset EVOLVE50#04 to event 110
-2026/03/01 16:19:24,bnjm2000,Assigned specific asset EVOLVE50#05 to event 110
-2026/03/01 16:19:24,bnjm2000,Assigned specific asset EVOLVE50#06 to event 110
-2026/03/01 16:19:37,bnjm2000,Assigned specific asset DJMA9#01 to event 110
-2026/03/01 16:19:41,bnjm2000,Assigned specific asset CDJ3000#01 to event 110
-2026/03/01 16:19:42,bnjm2000,Assigned specific asset CDJ3000#02 to event 110
-2026/03/01 16:20:00,bnjm2000,Assigned specific asset DM3#02 to event 110
-2026/03/01 16:20:49,bnjm2000,Assigned specific asset SYVA#03 to event 110
-2026/03/01 16:20:49,bnjm2000,Assigned specific asset SYVA#04 to event 110
-2026/03/01 16:20:52,bnjm2000,Assigned specific asset SYVA#05 to event 110
-2026/03/01 16:20:53,bnjm2000,Assigned specific asset SYVA#06 to event 110
-2026/03/01 16:21:36,bnjm2000,Assigned specific asset SM58S#01 to event 110
-2026/03/01 16:21:58,bnjm2000,Assigned specific asset SM58S#04 to event 110
-2026/03/01 16:22:16,bnjm2000,Assigned specific asset IPAD#03 to event 110
-2026/03/01 16:22:27,bnjm2000,Assigned specific asset IPAD#02 to event 110
-2026/03/01 16:23:06,bnjm2000,Assigned specific asset PCBB#02 to event 110
-2026/03/01 16:23:18,bnjm2000,Assigned specific asset PCBB#03 to event 110
-2026/03/01 16:23:28,bnjm2000,Assigned specific asset PCBB#05 to event 110
-2026/03/01 16:23:39,bnjm2000,Assigned specific asset PCBB#04 to event 110
-2026/03/01 16:24:07,bnjm2000,Assigned specific asset X12#07 to event 110
-2026/03/01 16:24:07,bnjm2000,Assigned specific asset X12#08 to event 110
-2026/03/01 16:24:10,bnjm2000,Assigned specific asset X12#05 to event 110
-2026/03/01 16:24:10,bnjm2000,Assigned specific asset X12#06 to event 110
-2026/03/01 16:24:14,bnjm2000,Assigned specific asset X12#03 to event 110
-2026/03/01 16:24:14,bnjm2000,Assigned specific asset X12#04 to event 110
-2026/03/01 16:24:28,bnjm2000,Assigned specific asset LA12X#07 to event 110
-2026/03/01 16:25:14,bnjm2000,Assigned specific asset LA4X#09 to event 110
-2026/03/01 16:25:15,bnjm2000,Assigned specific asset LA4X#10 to event 110
-2026/03/01 16:25:19,bnjm2000,Assigned specific asset LA12X#01 to event 110
-2026/03/01 16:25:20,bnjm2000,Assigned specific asset LA12X#02 to event 110
-2026/03/01 16:25:20,bnjm2000,Assigned specific asset LA12X#03 to event 110
-2026/03/01 16:25:29,bnjm2000,Assigned specific asset SYVALOW#08 to event 110
-2026/03/01 16:25:31,bnjm2000,Assigned specific asset SYVALOW#07 to event 110
-2026/03/01 16:25:32,bnjm2000,Assigned specific asset SYVALOW#06 to event 110
-2026/03/01 16:25:36,bnjm2000,Assigned specific asset SYVALOW#05 to event 110
-2026/03/01 16:25:41,bnjm2000,Assigned specific asset X8#01 to event 110
-2026/03/01 16:25:42,bnjm2000,Assigned specific asset X8#02 to event 110
-2026/03/01 16:25:44,bnjm2000,Assigned specific asset X8#03 to event 110
-2026/03/01 16:25:45,bnjm2000,Assigned specific asset X8#04 to event 110
-2026/03/01 16:25:46,bnjm2000,Assigned specific asset X8#05 to event 110
-2026/03/01 16:25:48,bnjm2000,Assigned specific asset X8#06 to event 110
-2026/03/01 16:25:49,bnjm2000,Assigned specific asset X8#07 to event 110
-2026/03/01 16:25:50,bnjm2000,Assigned specific asset X8#08 to event 110
-2026/03/01 16:25:52,bnjm2000,Assigned specific asset X8#09 to event 110
 2026/03/01 16:25:53,bnjm2000,Assigned specific asset X8#10 to event 110
 2026/03/01 16:25:54,bnjm2000,Assigned specific asset X8#11 to event 110
 2026/03/01 16:25:55,bnjm2000,Assigned specific asset X8#12 to event 110
@@ -1023,3 +937,115 @@ Updated to version V5.16.26' (also: Cleared OOC) (edited by bnjm2000)"
 2026/04/13 15:13:08,bnjm2000,"Updated maintenance log for asset PB#63: 'Sent to TSM, Changed PB15 Housing
 Updated to version V5.16.26 [Cleared OOC]' -> 'Sent to TSM, Changed PB15 Housing
 Updated to version V5.16.26' (also: Cleared OOC) (edited by bnjm2000)"
+2026/04/14 13:08:24,bnjm2000,User bnjm2000 logged in via web interface
+2026/04/14 13:08:57,bnjm2000,Added 1x Yamaha QL1 model to event 126 (total: 1)
+2026/04/14 13:09:06,bnjm2000,Added 2x Shure ULXD2 model to event 126 (total: 2)
+2026/04/14 13:09:11,bnjm2000,Added 1x Shure ULXD4D model to event 126 (total: 1)
+2026/04/14 13:09:16,bnjm2000,Added 1x Sennheiser Base Station model to event 126 (total: 1)
+2026/04/14 13:09:19,bnjm2000,Added 2x Sennheiser DAD(UHF) model to event 126 (total: 2)
+2026/04/14 13:09:23,bnjm2000,Added 1x Sennheiser SEK(UHF) model to event 126 (total: 1)
+2026/04/14 13:09:26,bnjm2000,Added 1x DPA 4099 model to event 126 (total: 1)
+2026/04/14 13:09:33,bnjm2000,Added 6x Turbosound IP1000 model to event 126 (total: 6)
+2026/04/14 13:09:41,bnjm2000,Added 2x MiPro MT-90A model to event 126 (total: 2)
+2026/04/14 13:09:42,bnjm2000,Added 4x MiPro MR-90 model to event 126 (total: 4)
+2026/04/14 13:09:50,bnjm2000,Added 4x DPA 4488 model to event 126 (total: 4)
+2026/04/14 13:10:05,bnjm2000,Added 1x Apple IPAD model to event 126 (total: 1)
+2026/04/14 13:10:09,bnjm2000,Added 1x Interspace Industries PCBB3 model to event 126 (total: 1)
+2026/04/14 13:10:16,bnjm2000,Added 18x L-Acoustics KARAII model to event 127 (total: 18)
+2026/04/14 13:10:23,bnjm2000,Added 3x L-Acoustics LA12X model to event 127 (total: 3)
+2026/04/14 13:16:31,bnjm2000,Updated maintenance log for asset MR-90A#04: 'Receiver observed in use with some buzzing (LV @ Japanese Garden [Marked OOC]' -> 'Receiver observed in use with some buzzing (LV @ Japanese Garden)' (also: Cleared OOC) (edited by bnjm2000)
+2026/04/14 13:16:34,bnjm2000,Updated maintenance log for asset MR-90A#04: 'Receiver observed in use with some buzzing (LV @ Japanese Garden) [Cleared OOC]' -> 'Receiver observed in use with some buzzing (LV @ Japanese Garden)' (also: Cleared OOC) (edited by bnjm2000)
+2026/04/14 13:16:39,bnjm2000,Updated maintenance log for asset MR-90A#04: 'Receiver observed in use with some buzzing (LV @ Japanese Garden) [Cleared OOC]' -> 'Receiver observed in use with some buzzing (LV @ Japanese Garden)' (edited by bnjm2000)
+2026/04/14 13:16:41,bnjm2000,Updated maintenance log for asset MR-90A#04: 'Receiver observed in use with some buzzing (LV @ Japanese Garden)' -> 'Receiver observed in use with some buzzing (LV @ Japanese Garden)' (edited by bnjm2000)
+2026/04/14 13:16:47,bnjm2000,Updated maintenance log for asset MR-90A#04: 'Receiver observed in use with some buzzing (LV @ Japanese Garden)' -> 'Receiver observed in use with some buzzing (LV @ Japanese Garden)' (also: Cleared OOC) (edited by bnjm2000)
+2026/04/14 13:16:51,bnjm2000,Deleted maintenance log for asset MR-90A#04: 'Receiver observed in use with some buzzing (LV @ Japanese Garden) [Cleared OOC]' (deleted by bnjm2000)
+2026/04/14 13:16:56,bnjm2000,Maintenance logged for asset MR-90A#04: Receiver observed in use with some buzzing (LV @ Japanese Garden)
+2026/04/14 13:17:07,bnjm2000,Deleted maintenance log for asset MR-90A#06: 'Discovered to be buzzing (Franck Muller x Cortina High Jewellery Dinner @ Claudine Restaurant) [Marked OOC]' (deleted by bnjm2000)
+2026/04/14 13:17:13,bnjm2000,Marked asset MR-90A#06 as Out of Commission
+2026/04/14 13:17:13,bnjm2000,Maintenance logged for asset MR-90A#06: Discovered to be buzzing (Franck Muller x Cortina High Jewellery Dinner @ Claudine Restaurant)
+2026/04/14 13:17:20,bnjm2000,Updated maintenance log for asset MR-90A#04: 'Receiver observed in use with some buzzing (LV @ Japanese Garden)' -> 'Receiver observed in use with some buzzing (LV @ Japanese Garden)' (also: Cleared OOC) (edited by bnjm2000)
+2026/04/14 13:17:21,bnjm2000,Deleted maintenance log for asset MR-90A#04: 'Receiver observed in use with some buzzing (LV @ Japanese Garden) [Cleared OOC]' (deleted by bnjm2000)
+2026/04/14 13:17:26,bnjm2000,Maintenance logged for asset MR-90A#04: Receiver observed in use with some buzzing (LV @ Japanese Garden)
+2026/04/14 13:52:52,bnjm2000,Updated location for asset MR-90A#04 from '' to 'MiPro'
+2026/04/14 13:52:52,bnjm2000,Maintenance logged for asset MR-90A#04: Sent to MiPro for servicing
+2026/04/14 13:52:52,bnjm2000,Updated location for asset MR-90A#06 from '' to 'MiPro'
+2026/04/14 13:52:52,bnjm2000,Maintenance logged for asset MR-90A#06: Sent to MiPro for servicing
+2026/04/14 13:53:24,bnjm2000,Deleted maintenance log for asset MR-90A#06: 'Discovered to be buzzing (Franck Muller x Cortina High Jewellery Dinner @ Claudine Restaurant) [Marked OOC]' (deleted by bnjm2000)
+2026/04/14 13:53:34,bnjm2000,Marked asset MR-90A#06 as Out of Commission
+2026/04/14 13:53:34,bnjm2000,Maintenance logged for asset MR-90A#06: Discovered to be buzzing (Franck Muller x Cortina High Jewellery Dinner @ Claudine Restaurant)
+2026/04/14 14:23:30,admin,User admin logged in via web interface
+2026/04/14 14:25:24,admin,Updated event 121: Dry Hire: SCM via web interface
+2026/04/14 15:35:13,admin,Added 24x Astera Pixel Brick model to event 126 (total: 24)
+2026/04/14 16:35:39,bnjm2000,"Updated maintenance log for asset PB#43: 'Sent to TSM, 
+Updated to version V5.16.26 [Cleared OOC]' -> 'Sent to TSM, 
+Updated to version V5.16.26' (also: Cleared OOC) (edited by bnjm2000)"
+2026/04/14 16:35:58,bnjm2000,Updated maintenance log for asset PB#43: 'Cell 3 overvolt [Marked OOC]' -> 'Cell 3 overvolt' (also: Marked OOC) (edited by bnjm2000)
+2026/04/14 16:36:07,bnjm2000,Updated maintenance log for asset PB#43: 'Cell 3 overvolt [Marked OOC]' -> 'Cell 3 overvolt when charging' (also: Marked OOC) (edited by bnjm2000)
+2026/04/14 16:37:54,bnjm2000,"Updated maintenance log for asset PB#48: 'Sent to TSM, Changed PB15 Housing
+Updated to version V5.16.26 [Cleared OOC]' -> 'Sent to TSM, Changed PB15 Housing
+Updated to version V5.16.26 ($140)' (also: Cleared OOC) (edited by bnjm2000)"
+2026/04/14 16:38:41,bnjm2000,"Updated maintenance log for asset PB#43: 'Sent to TSM, 
+Updated to version V5.16.26 [Cleared OOC]' -> 'Sent to TSM, 
+Updated to version V5.16.26
+Replace PB15-BAT - $52
+Service fee - $100' (also: Cleared OOC) (edited by bnjm2000)"
+2026/04/14 16:39:38,bnjm2000,"Updated maintenance log for asset PB#48: 'Sent to TSM, Changed PB15 Housing
+Updated to version V5.16.26 ($140) [Cleared OOC]' -> 'Sent to TSM
+Updated to version V5.16.26 
+Replaced PB15 Rear Housing -$40
+Service Fee - $100' (also: Cleared OOC) (edited by bnjm2000)"
+2026/04/14 16:39:48,bnjm2000,"Updated maintenance log for asset PB#48: 'Sent to TSM
+Updated to version V5.16.26 
+Replaced PB15 Rear Housing -$40
+Service Fee - $100 [Cleared OOC]' -> 'Sent to TSM
+Updated to version V5.16.26 
+Replaced PB15 Rear Housing - $40
+Service Fee - $100' (also: Cleared OOC) (edited by bnjm2000)"
+2026/04/14 16:39:57,bnjm2000,"Updated maintenance log for asset PB#52: 'Sent to TSM, Changed PB15 Housing
+Updated to version V5.16.26 [Cleared OOC]' -> 'Sent to TSM
+Updated to version V5.16.26 
+Replaced PB15 Rear Housing - $40
+Service Fee - $100' (also: Cleared OOC) (edited by bnjm2000)"
+2026/04/14 16:40:06,bnjm2000,"Updated maintenance log for asset PB#63: 'Sent to TSM, Changed PB15 Housing
+Updated to version V5.16.26 [Cleared OOC]' -> 'Sent to TSM
+Updated to version V5.16.26 
+Replaced PB15 Rear Housing - $40
+Service Fee - $100' (also: Cleared OOC) (edited by bnjm2000)"
+2026/04/14 16:41:12,bnjm2000,Marked asset PB#49 as Out of Commission
+2026/04/14 16:41:12,bnjm2000,Maintenance logged for asset PB#49: Discovered screen died
+2026/04/14 16:44:03,bnjm2000,Added 12x Robe Robin LEDBeam 350 Wash model to event 127 (total: 12)
+2026/04/14 16:44:13,bnjm2000,Added 8x Ayrton Diablo Profile model to event 127 (total: 8)
+2026/04/14 16:44:16,bnjm2000,Added 1x GrandMA3 Compact XT model to event 127 (total: 1)
+2026/04/14 16:44:21,bnjm2000,Added 2x Le Maitre MVS Hazer model to event 127 (total: 2)
+2026/04/14 16:44:34,bnjm2000,Added 1x 32A 3-Phase DB Custom DB model to event 127 (total: 1)
+2026/04/14 16:46:31,bnjm2000,Removed 32A 3-Phase DB Custom DB model from event 127
+2026/04/14 16:46:35,bnjm2000,Added 1x 63A 3-Phase DB Custom DB model to event 127 (total: 1)
+2026/04/14 16:47:47,bnjm2000,Added 6x L-Acoustics SB18 model to event 127 (total: 6)
+2026/04/14 16:47:55,bnjm2000,Added 6x EV EVOLVE 50 model to event 127 (total: 6)
+2026/04/14 16:48:02,bnjm2000,Added 1x Yamaha CL5 model to event 127 (total: 1)
+2026/04/14 16:48:05,bnjm2000,Added 1x Yamaha QL1 model to event 127 (total: 1)
+2026/04/14 16:48:11,bnjm2000,Added 2x L-Acoustics LA4X model to event 127 (total: 2)
+2026/04/14 16:48:17,bnjm2000,Added 4x Shure AD4Q model to event 127 (total: 4)
+2026/04/14 16:48:23,bnjm2000,Added 16x Shure AD2 model to event 127 (total: 16)
+2026/04/14 16:48:27,bnjm2000,Added 16x Shure AD1 model to event 127 (total: 16)
+2026/04/14 16:48:32,bnjm2000,Added 1x Hollyland Solidcom C1 (Pro) 8-Slot Battery Charging Case model to event 127 (total: 1)
+2026/04/14 16:48:34,bnjm2000,Added 1x Hollyland Solidcom C1 Pro Hub model to event 127 (total: 1)
+2026/04/14 16:48:41,bnjm2000,Added 2x Pioneer CDJ2000NXS2 model to event 127 (total: 2)
+2026/04/14 16:48:42,bnjm2000,Added 2x Pioneer CDJ3000 model to event 127 (total: 2)
+2026/04/14 16:48:46,bnjm2000,Added 1x Pioneer DJM-900NXS2 model to event 127 (total: 1)
+2026/04/14 16:48:47,bnjm2000,Added 1x Pioneer DJM-A9 model to event 127 (total: 1)
+2026/04/14 16:48:55,bnjm2000,Added 2x L-Acoustics X12 model to event 127 (total: 2)
+2026/04/14 16:49:01,bnjm2000,Added 4x L-Acoustics X8 model to event 127 (total: 4)
+2026/04/14 16:49:11,bnjm2000,Added 1x Yamaha DM3 model to event 127 (total: 1)
+2026/04/14 16:49:16,bnjm2000,Added 2x Apple IPAD model to event 127 (total: 2)
+2026/04/14 16:49:23,bnjm2000,Added 5x Interspace Industries PCBB3 model to event 127 (total: 5)
+2026/04/14 16:49:46,bnjm2000,Added 2x L-Acoustics M-BUMP model to event 127 (total: 2)
+2026/04/14 16:50:10,bnjm2000,Added 10x Sennheiser SEK(UHF) model to event 127 (total: 10)
+2026/04/14 16:50:35,bnjm2000,Removed Sennheiser SEK(UHF) model from event 126
+2026/04/14 16:51:09,bnjm2000,Added 1x Yamaha Rio1608-d2 model to event 127 (total: 1)
+2026/04/14 16:51:11,bnjm2000,Added 1x Yamaha Rio3224-d2 model to event 127 (total: 1)
+2026/04/14 16:51:12,bnjm2000,Added 1x Yamaha Rio3224-d model to event 127 (total: 1)
+2026/04/14 16:51:57,bnjm2000,Added 4x Shure ULXD2 model to event 127 (total: 4)
+2026/04/14 16:52:03,bnjm2000,Added 2x Shure ULXD4D model to event 127 (total: 2)
+2026/04/14 16:57:39,bnjm2000,Updated event 126: Hermes Dinner @ Liat Towers via web interface
+2026/04/14 17:10:44,bnjm2000,Updated maintenance log for asset MR-90A#04: 'Receiver observed in used with some buzzing (Wedding of Jewel & Maanas @ Fiasco)' -> 'Receiver observed in use with some buzzing (Wedding of Jewel & Maanas @ Fiasco)' (edited by bnjm2000)
