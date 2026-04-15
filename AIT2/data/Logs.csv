@@ -1,18 +1,3 @@
-2026/03/01 16:25:53,bnjm2000,Assigned specific asset X8#10 to event 110
-2026/03/01 16:25:54,bnjm2000,Assigned specific asset X8#11 to event 110
-2026/03/01 16:25:55,bnjm2000,Assigned specific asset X8#12 to event 110
-2026/03/01 16:25:56,bnjm2000,Assigned specific asset X8#13 to event 110
-2026/03/01 16:25:58,bnjm2000,Assigned specific asset X8#14 to event 110
-2026/03/01 16:25:59,bnjm2000,Assigned specific asset X8#15 to event 110
-2026/03/01 16:26:00,bnjm2000,Assigned specific asset X8#16 to event 110
-2026/03/01 16:26:06,bnjm2000,Assigned specific asset QL1#02 to event 110
-2026/03/01 16:26:18,bnjm2000,Assigned specific asset TIGERTOUCH2#01 to event 110
-2026/03/01 16:26:25,bnjm2000,Assigned specific asset COMPACTXT#01 to event 110
-2026/03/01 16:26:45,bnjm2000,Assigned specific asset DIABLO#09 to event 110
-2026/03/01 16:26:49,bnjm2000,Assigned specific asset DIABLO#10 to event 110
-2026/03/01 16:26:51,bnjm2000,Assigned specific asset DIABLO#11 to event 110
-2026/03/01 16:26:53,bnjm2000,Assigned specific asset DIABLO#12 to event 110
-2026/03/01 16:27:02,bnjm2000,Assigned specific asset MVSHAZER#01 to event 110
 2026/03/01 16:27:24,bnjm2000,Assigned specific asset LEDBEAM#24 to event 110
 2026/03/01 16:27:29,bnjm2000,Assigned specific asset LEDBEAM#23 to event 110
 2026/03/01 16:27:31,bnjm2000,Assigned specific asset LEDBEAM#22 to event 110
@@ -1049,3 +1034,38 @@ Service Fee - $100' (also: Cleared OOC) (edited by bnjm2000)"
 2026/04/14 16:52:03,bnjm2000,Added 2x Shure ULXD4D model to event 127 (total: 2)
 2026/04/14 16:57:39,bnjm2000,Updated event 126: Hermes Dinner @ Liat Towers via web interface
 2026/04/14 17:10:44,bnjm2000,Updated maintenance log for asset MR-90A#04: 'Receiver observed in used with some buzzing (Wedding of Jewel & Maanas @ Fiasco)' -> 'Receiver observed in use with some buzzing (Wedding of Jewel & Maanas @ Fiasco)' (edited by bnjm2000)
+2026/04/15 10:52:24,bnjm2000,User bnjm2000 logged in via web interface
+2026/04/15 10:54:24,bnjm2000,"Updated maintenance log for asset PB#14: 'Replaced PB15-HOU-BC ($39.52) [Location: Store, Cleared OOC, Cleared Missing]' -> 'Replaced PB15-HOU-BC ($39.52)' (also: Location: Store, Cleared OOC) (edited by bnjm2000)"
+2026/04/15 11:59:34,bnjm2000,Maintenance logged for asset IPAD#02: Updated to iPadOS 26.4.1
+2026/04/15 11:59:34,bnjm2000,Maintenance logged for asset IPAD#03: Updated to iPadOS 26.4.1
+2026/04/15 13:24:59,bnjm2000,Added 1x Yamaha Rio1608-d model to event 127 (total: 1)
+2026/04/15 13:25:09,bnjm2000,Added 6x Interspace Industries PCBB3 model to event 127 (total: 11)
+2026/04/15 14:54:43,bnjm2000,"Updated maintenance log for asset PB#63: 'Sent to TSM
+Updated to version V5.16.26 
+Replaced PB15 Rear Housing - $40
+Service Fee - $100 [Cleared OOC]' -> 'Sent to TSM
+Updated to version V5.16.26 
+Replaced PB15 Rear Housing - $40
+Service Fee - $80' (also: Cleared OOC) (edited by bnjm2000)"
+2026/04/15 14:54:54,bnjm2000,"Updated maintenance log for asset PB#52: 'Sent to TSM
+Updated to version V5.16.26 
+Replaced PB15 Rear Housing - $40
+Service Fee - $100 [Cleared OOC]' -> 'Sent to TSM
+Updated to version V5.16.26 
+Replaced PB15 Rear Housing - $40
+Service Fee - $80' (also: Cleared OOC) (edited by bnjm2000)"
+2026/04/15 14:55:07,bnjm2000,"Updated maintenance log for asset PB#48: 'Sent to TSM
+Updated to version V5.16.26 
+Replaced PB15 Rear Housing - $40
+Service Fee - $100 [Cleared OOC]' -> 'Sent to TSM
+Updated to version V5.16.26 
+Replaced PB15 Rear Housing - $40
+Service Fee - $80' (also: Cleared OOC) (edited by bnjm2000)"
+2026/04/15 15:00:13,bnjm2000,Maintenance logged for asset ART7#01: Updated to V5.14.69
+2026/04/15 15:00:13,bnjm2000,Maintenance logged for asset ART7#02: Updated to V5.14.69
+2026/04/15 16:20:48,bnjm2000,Maintenance logged for asset PB#49: Screen died
+2026/04/15 16:20:54,bnjm2000,"Updated maintenance log for asset PB#49: 'Collected back from TSM, fixed screen' -> 'Collected back from TSM, fixed screen' (also: Cleared OOC) (edited by bnjm2000)"
+2026/04/15 16:21:23,bnjm2000,"Updated maintenance log for asset PB#49: 'Collected back from TSM, fixed screen [Cleared OOC]' -> 'Collected back from TSM, fixed screen
+PB15-HOU-BC - $40
+Workmanship - $50' (also: Cleared OOC) (edited by bnjm2000)"
+2026/04/15 16:33:22,bnjm2000,Returned all assets for department AX in event 121: 2 items

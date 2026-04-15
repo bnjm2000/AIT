@@ -1,2 +1,2 @@
 EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,Tag,ForceStateOverride
-121,Dry Hire: SCM,20260326,20260331,[],"[""[MODEL]AX|Yamaha|CL5|1|Digital Mixer"", ""[MODEL]AX|Yamaha|Rio3224-d|1|High Performance I/O Rack"", ""CL5#01"", ""RIO3224-D #01""]",[],Overdue,"[""CL5#01"", ""RIO3224-D #01""]",[],dry hire,False
+121,Dry Hire: SCM,20260326,20260331,[],"[""[MODEL]AX|Yamaha|CL5|1|Digital Mixer"", ""[MODEL]AX|Yamaha|Rio3224-d|1|High Performance I/O Rack"", ""CL5#01"", ""RIO3224-D #01""]","[""RIO3224-D #01"", ""CL5#01""]",Closed,[],[],dry hire,False
