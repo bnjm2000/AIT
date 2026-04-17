@@ -1,47 +1,3 @@
-2026/03/01 16:27:24,bnjm2000,Assigned specific asset LEDBEAM#24 to event 110
-2026/03/01 16:27:29,bnjm2000,Assigned specific asset LEDBEAM#23 to event 110
-2026/03/01 16:27:31,bnjm2000,Assigned specific asset LEDBEAM#22 to event 110
-2026/03/01 16:27:33,bnjm2000,Assigned specific asset LEDBEAM#21 to event 110
-2026/03/01 16:27:59,bnjm2000,Assigned specific asset 63ADB#01 to event 110
-2026/03/01 16:28:01,bnjm2000,Assigned specific asset 63ADB#02 to event 110
-2026/03/01 16:28:02,bnjm2000,Assigned specific asset 32ADB#01 to event 110
-2026/03/01 16:28:33,bnjm2000,Assigned specific asset PB#57 to event 110
-2026/03/01 16:28:33,bnjm2000,Assigned specific asset PB#58 to event 110
-2026/03/01 16:28:33,bnjm2000,Assigned specific asset PB#59 to event 110
-2026/03/01 16:28:33,bnjm2000,Assigned specific asset PB#60 to event 110
-2026/03/01 16:28:33,bnjm2000,Assigned specific asset PB#61 to event 110
-2026/03/01 16:28:33,bnjm2000,Assigned specific asset PB#62 to event 110
-2026/03/01 16:28:33,bnjm2000,Assigned specific asset PB#63 to event 110
-2026/03/01 16:28:33,bnjm2000,Assigned specific asset PB#64 to event 110
-2026/03/02 16:34:21,bnjm2000,Assigned specific asset SB18#02 to event 110
-2026/03/02 16:34:23,bnjm2000,Assigned specific asset SB18#05 to event 110
-2026/03/02 16:34:24,bnjm2000,Assigned specific asset SB18#06 to event 110
-2026/03/02 16:37:14,bnjm2000,Added 4x Pomelo Photon Strike M model to event 110 (total: 4)
-2026/03/02 16:37:23,bnjm2000,Completely removed asset 32ADB#01 from event 110
-2026/03/02 16:37:25,bnjm2000,Completely removed asset 63ADB#01 from event 110
-2026/03/02 16:37:26,bnjm2000,Completely removed asset 63ADB#02 from event 110
-2026/03/02 16:37:38,bnjm2000,Removed 32A 3-Phase DB Custom DB model from event 110
-2026/03/02 16:37:40,bnjm2000,Removed 63A 3-Phase DB Custom DB model from event 110
-2026/03/02 17:11:09,bnjm2000,Assigned specific asset SB18#04 to event 110
-2026/03/02 18:39:48,bnjm2000,Removed Behringher P1 model from event 112
-2026/03/03 10:44:55,bnjm2000,Returned asset X-US8#01 from event 110
-2026/03/03 10:46:34,bnjm2000,Marked asset X-US8#01 as Out of Commission
-2026/03/03 10:46:34,bnjm2000,Maintenance logged for asset X-US8#01: Discovered bracket foam is mouldy/disintegrated (Louis Vuitton Spring Summer Trunk Show @ Jurong Lake Gardens)
-2026/03/03 16:14:13,bnjm2000,Assigned specific asset MT-90A#02 to event 110
-2026/03/03 16:14:35,bnjm2000,Assigned specific asset AURORA#02 to event 110
-2026/03/04 15:28:20,bnjm2000,Assigned specific asset STRIKEM#02 to event 110
-2026/03/04 15:28:23,bnjm2000,Assigned specific asset STRIKEM#05 to event 110
-2026/03/04 15:28:26,bnjm2000,Assigned specific asset STRIKEM#06 to event 110
-2026/03/04 15:28:28,bnjm2000,Assigned specific asset STRIKEM#07 to event 110
-2026/03/04 15:28:33,bnjm2000,Assigned specific asset MR-90A#01 to event 110
-2026/03/04 15:28:35,bnjm2000,Assigned specific asset MR-90A#02 to event 110
-2026/03/04 15:28:37,bnjm2000,Assigned specific asset MR-90A#03 to event 110
-2026/03/04 15:28:39,bnjm2000,Assigned specific asset MR-90A#04 to event 110
-2026/03/04 15:28:40,bnjm2000,Assigned specific asset MR-90A#05 to event 110
-2026/03/04 15:28:41,bnjm2000,Assigned specific asset MR-90A#06 to event 110
-2026/03/04 15:32:10,bnjm2000,Marked asset MR-90A#04 as Out of Commission
-2026/03/04 15:32:10,bnjm2000,Maintenance logged for asset MR-90A#04: Receiver observed in use with some buzzing (LV @ Japanese Garden
-2026/03/04 15:33:13,bnjm2000,Updated location for asset PB#08 from 'Total Solutions' to 'Store'
 2026/03/04 15:33:13,bnjm2000,Removed Out of Commission status from asset PB#08
 2026/03/04 15:33:13,bnjm2000,Maintenance logged for asset PB#08: Collected back from TSM.
 2026/03/04 15:35:08,bnjm2000,Added 2x EV EVOLVE 50 model to event 111 (total: 2)
@@ -1069,3 +1025,53 @@ Service Fee - $80' (also: Cleared OOC) (edited by bnjm2000)"
 PB15-HOU-BC - $40
 Workmanship - $50' (also: Cleared OOC) (edited by bnjm2000)"
 2026/04/15 16:33:22,bnjm2000,Returned all assets for department AX in event 121: 2 items
+2026/04/17 11:16:04,bnjm2000,User bnjm2000 logged in via web interface
+2026/04/17 11:16:12,bnjm2000,Returned all assets for department AX in event 125: 5 items
+2026/04/17 11:17:05,bnjm2000,Updated location for asset MR-90A#04 from 'MiPro' to 'Store'
+2026/04/17 11:17:05,bnjm2000,Removed Out of Commission status from asset MR-90A#04
+2026/04/17 11:17:05,bnjm2000,"Maintenance logged for asset MR-90A#04: Collected back from MiPro, repaired
+XLR connector loosed, soldered back - $40"
+2026/04/17 11:17:05,bnjm2000,Updated location for asset MR-90A#06 from 'MiPro' to 'Store'
+2026/04/17 11:17:05,bnjm2000,Removed Out of Commission status from asset MR-90A#06
+2026/04/17 11:17:06,bnjm2000,"Maintenance logged for asset MR-90A#06: Collected back from MiPro, repaired
+XLR connector loosed, soldered back - $40"
+2026/04/17 11:18:08,bnjm2000,Removed Out of Commission status from asset PB#49
+2026/04/17 11:18:08,bnjm2000,"Maintenance logged for asset PB#49: Sent to TSM, serviced on the spot.
+Replaced PB15 Rear Housing"
+2026/04/17 14:17:44,bnjm2000,"Updated maintenance log for asset PB#49: 'Sent to TSM, serviced on the spot.
+Replaced PB15 Rear Housing [Cleared OOC]' -> 'Sent to TSM, serviced on the spot.
+Replaced PB15 Rear Housing - $39.52
+Service Fee - $80' (also: Cleared OOC) (edited by bnjm2000)"
+2026/04/17 14:22:45,bnjm2000,Added 1x Shure P9T model to event 126 (total: 1)
+2026/04/17 14:22:49,bnjm2000,Added 1x RF Venue Combine4 model to event 126 (total: 1)
+2026/04/17 14:22:57,bnjm2000,Added 4x Shure P9RA model to event 126 (total: 4)
+2026/04/17 14:22:58,bnjm2000,Added 1x Shure P9R model to event 126 (total: 1)
+2026/04/17 14:23:09,bnjm2000,Removed Shure ULXD2 model from event 126
+2026/04/17 14:23:13,bnjm2000,Removed Shure ULXD4D model from event 126
+2026/04/17 14:23:20,bnjm2000,Added 1x Shure ULXD2 model to event 126 (total: 1)
+2026/04/17 14:23:24,bnjm2000,Added 1x Shure ULXD4D model to event 126 (total: 1)
+2026/04/17 14:23:53,bnjm2000,Assigned specific asset PB#25 to event 126
+2026/04/17 14:23:53,bnjm2000,Assigned specific asset PB#26 to event 126
+2026/04/17 14:23:53,bnjm2000,Assigned specific asset PB#27 to event 126
+2026/04/17 14:23:53,bnjm2000,Assigned specific asset PB#28 to event 126
+2026/04/17 14:23:53,bnjm2000,Assigned specific asset PB#29 to event 126
+2026/04/17 14:23:53,bnjm2000,Assigned specific asset PB#30 to event 126
+2026/04/17 14:23:53,bnjm2000,Assigned specific asset PB#31 to event 126
+2026/04/17 14:23:53,bnjm2000,Assigned specific asset PB#32 to event 126
+2026/04/17 14:23:58,bnjm2000,Assigned specific asset PB#33 to event 126
+2026/04/17 14:23:58,bnjm2000,Assigned specific asset PB#34 to event 126
+2026/04/17 14:23:58,bnjm2000,Assigned specific asset PB#35 to event 126
+2026/04/17 14:23:58,bnjm2000,Assigned specific asset PB#36 to event 126
+2026/04/17 14:23:58,bnjm2000,Assigned specific asset PB#37 to event 126
+2026/04/17 14:23:58,bnjm2000,Assigned specific asset PB#38 to event 126
+2026/04/17 14:23:59,bnjm2000,Assigned specific asset PB#39 to event 126
+2026/04/17 14:23:59,bnjm2000,Assigned specific asset PB#40 to event 126
+2026/04/17 14:24:04,bnjm2000,Assigned specific asset PB#41 to event 126
+2026/04/17 14:24:04,bnjm2000,Assigned specific asset PB#42 to event 126
+2026/04/17 14:24:04,bnjm2000,Assigned specific asset PB#43 to event 126
+2026/04/17 14:24:04,bnjm2000,Assigned specific asset PB#44 to event 126
+2026/04/17 14:24:04,bnjm2000,Assigned specific asset PB#45 to event 126
+2026/04/17 14:24:04,bnjm2000,Assigned specific asset PB#46 to event 126
+2026/04/17 14:24:04,bnjm2000,Assigned specific asset PB#47 to event 126
+2026/04/17 14:24:04,bnjm2000,Assigned specific asset PB#48 to event 126
+2026/04/17 14:24:39,bnjm2000,Updated event 126: Hermes Sorry it was yesterday @ Liat Towers via web interface
