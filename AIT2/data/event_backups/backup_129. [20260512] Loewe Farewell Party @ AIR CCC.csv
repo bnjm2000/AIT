@@ -1,0 +1,2 @@
+EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,Tag,ForceStateOverride
+129,Loewe Farewell Party @ AIR CCC,20260512,20260512,[],"[""[MODEL]LX|Ayrton|Diablo Profile|4|Profile LED"", ""[MODEL]AX|EV|EVOLVE 50|4|Portable column system"", ""[MODEL]AX|Turbosound|IP1000|4|Powered Column Loudspeaker"", ""[MODEL]AX|Yamaha|DM3|1|Digital Mixer"", ""[MODEL]AX|Apple|IPAD|1|(10th Generation)""]",[],Planning,[],[],events,False
