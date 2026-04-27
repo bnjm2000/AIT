@@ -1,0 +1,2 @@
+EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,Tag,ForceStateOverride
+130,Dry Hire: Avery Events,20260429,20260818,[],"[""[MODEL]AX|Yamaha|DXR12|6|Active 12\"" Speaker"", ""DXR12#01"", ""DXR12#02"", ""DXR12#03"", ""DXR12#04"", ""DXR12#05""]",[],Preparing,"[""DXR12#01"", ""DXR12#02"", ""DXR12#03"", ""DXR12#04"", ""DXR12#05""]","[""DXR12#05""]",dry hire,False
