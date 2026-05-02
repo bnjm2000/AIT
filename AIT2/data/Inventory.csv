@@ -157,16 +157,6 @@ EVOLVE50#03,EV,EVOLVE 50,405294795801160374,Portable column system,False,False,,
 EVOLVE50#04,EV,EVOLVE 50,405294795801160383,Portable column system,False,False,,AX,Store,Store
 EVOLVE50#05,EV,EVOLVE 50,405294795801160390,Portable column system,False,False,,AX,Store,Store
 EVOLVE50#06,EV,EVOLVE 50,405294781901280231,Portable column system,False,False,,AX,Store,Store
-MAUI11#01,LD Systems,Maui 11,,Portable column system,False,False,,AX,Store,
-MAUI11#02,LD Systems,Maui 11,,Portable column system,False,False,,AX,Store,
-MAUI11#03,LD Systems,Maui 11,,Portable column system,False,False,,AX,Store,
-MAUI11#04,LD Systems,Maui 11,,Portable column system,False,False,,AX,Store,
-MAUI11#05,LD Systems,Maui 11,,Portable column system,False,False,,AX,Store,
-MAUI11#06,LD Systems,Maui 11,,Portable column system,False,False,,AX,Store,
-MAUI11#07,LD Systems,Maui 11,,Portable column system,False,False,,AX,Store,
-MAUI28#01,LD Systems,Maui 28,,Portable column system,False,False,,AX,Store,Store
-MAUI28#02,LD Systems,Maui 28,,Portable column system,False,False,,AX,Store,
-MAUI28#03,LD Systems,Maui 28,,Portable column system,False,False,,AX,Store,
 HLBatt#01,Hollyland,HL-BAT700,23060502575,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Store
 HLBatt#02,Hollyland,HL-BAT700,23060502934,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Store
 HLBatt#03,Hollyland,HL-BAT700,23060502956,Solidcom C1 (Pro) Battery,False,False,,AX,Store,Store
@@ -586,13 +576,13 @@ MR-90A#02,MiPro,MR-90,878292430A,Interlink receiver,False,False,2024/11/26	bnjm2
 MR-90A#03,MiPro,MR-90,878292432A,Interlink receiver,False,False,"2024/11/01	bnjm2000	discovered no output (Dior @ ION Orchard (demo)) [Marked OOC]|2024/11/11	bnjm2000	Handed over to MiPro for repair|2024/11/12	bnjm2000	repaired by MiPro [Cleared OOC]|2024/11/13	bnjm2000	Collected back from MiPro|2024/11/20	bnjm2000	Send to MiPro for testing|2024/11/21	bnjm2000	Issue with RF B, sent to Taiwan for repair [Location: MiPro Taiwan, Marked OOC]|2025/06/26	bnjm2000	Collected back from MiPro [Location: Store, Cleared OOC]",AX,Store,Store
 MR-90A#04,MiPro,MR-90,878292434A,Interlink receiver,False,False,"2024/11/05	bnjm2000	2024/11/05 - Low RF, AF cutting in and out (Dior @ ION Orchard) [Marked OOC]|2024/11/11	bnjm2000	2024/11/11 - Handed over to MiPro for repair|2024/11/12	bnjm2000	2024/11/12 - repaired by MiPro [Cleared OOC]|2024/11/13	bnjm2000	2024/11/13 - Collected back from MiPro|2024/11/20	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	2024/11/26 - Collected back from MiPro after testing|2026/01/24	bnjm2000	Receiver observed in use with some buzzing (Wedding of Jewel & Maanas @ Fiasco)|2026/04/03	bnjm2000	Receiver observed in use with some buzzing (LV @ Japanese Garden) [Marked OOC]|2026/04/14	bnjm2000	Sent to MiPro for servicing [Location: MiPro]|2026/04/17	bnjm2000	Collected back from MiPro, repaired
 XLR connector loosed, soldered back - $40 [Location: Store, Cleared OOC]",AX,Store,Store
-MR-90A#05,MiPro,MR-90,878292431A,Interlink receiver,False,False,"2024/10/29	bnjm2000	discovered no output (Hermes @ Takashimaya) [Marked OOC]|2024/11/11	bnjm2000	2024/11/11 - Handed over to MiPro for repair|2024/11/13	bnjm2000	2024/11/13 - Collected back from MiPro [Cleared OOC]|2024/11/26	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	2024/11/26 - Tested in MiPro office with RF Dropout, remain with MiPro for further testing/repair [Marked OOC]|2025/05/21	bnjm2000	Send in to Mipro, no RF receiving|2025/05/22	bnjm2000	Technician tested working, went to MiPro office to check before collecting. Audio came through but unit kept skipping channels. MiPro did a 1-to-1 swap. New SN: 878292431A Old SN:878292435A [Cleared OOC]",AX,Store,Store
+MR-90A#05,MiPro,MR-90,878292431A,Interlink receiver,False,False,"2024/10/29	bnjm2000	discovered no output (Hermes @ Takashimaya) [Marked OOC]|2024/11/11	bnjm2000	2024/11/11 - Handed over to MiPro for repair|2024/11/13	bnjm2000	2024/11/13 - Collected back from MiPro [Cleared OOC]|2024/11/26	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	2024/11/26 - Tested in MiPro office with RF Dropout, remain with MiPro for further testing/repair [Marked OOC]|2025/05/21	bnjm2000	Send in to Mipro, no RF receiving|2025/05/22	bnjm2000	Technician tested working, went to MiPro office to check before collecting. Audio came through but unit kept skipping channels. MiPro did a 1-to-1 swap. New SN: 878292431A Old SN:878292435A [Serial: 878292431A, Cleared OOC]",AX,Store,
 MR-90A#06,MiPro,MR-90,878292436A,Interlink receiver,False,False,"2024/11/26	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	2024/11/26 - Collected back from MiPro after testing|2026/04/14	bnjm2000	Sent to MiPro for servicing [Location: MiPro]|2025/11/05	bnjm2000	Discovered to be buzzing (Franck Muller x Cortina High Jewellery Dinner @ Claudine Restaurant) [Marked OOC]|2026/04/17	bnjm2000	Collected back from MiPro, repaired
 XLR connector loosed, soldered back - $40 [Location: Store, Cleared OOC]",AX,Store,Store
 MT-90A#01,MiPro,MT-90A,858290901A,Interlink Transmitter,False,False,2024/11/26	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	2024/11/26 - Collected back from MiPro after testing,AX,Store,Store
 MT-90A#02,MiPro,MT-90A,858290902A,Interlink Transmitter,False,False,2024/11/26	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	2024/11/26 - Collected back from MiPro after testing,AX,Store,Store
 MT-90A#03,MiPro,MT-90A,858290899A,Interlink Transmitter,False,False,2024/11/26	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	changed transmitter to same type (Old S/N: 809264158A)|2024/11/26	bnjm2000	2024/11/26 - Collected back from MiPro after testing,AX,Store,Store
-MT-90A#04,MiPro,MT-90A,858290898A,Interlink Transmitter,False,False,"2024/11/20	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	2024/11/26 - Collected back from MiPro after testing|2024/10/15	bnjm2000	Device keeps restarting, suspect PSU faulty (Wedding of Kenneth and Wong Mei Yin) [Marked OOC]|2025/10/24	bnjm2000	Handed over to MiPro for PSU testing [Location: MiPro]|2024/11/13	bnjm2000	Collected back from MiPro [Location: Store, Cleared OOC]",AX,Store,Store
+MT-90A#04,MiPro,MT-90A,858290898A,Interlink Transmitter,False,False,"2024/11/20	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	2024/11/26 - Collected back from MiPro after testing|2024/10/15	bnjm2000	Device keeps restarting, suspect PSU faulty (Wedding of Kenneth and Wong Mei Yin) [Marked OOC]|2024/10/24	bnjm2000	Handed over to MiPro for PSU testing [Location: MiPro]|2024/11/13	bnjm2000	Collected back from MiPro [Location: Store, Cleared OOC]",AX,Store,Store
 GSM4212P#01,Netgear,GSM4212P,6VB52B51A0392,Managed Switch,False,False,,AX,Store,Store
 GSM4212P#02,Netgear,GSM4212P,6VB52B5AA039B,Managed Switch,False,False,,AX,Store,Store
 GSM4212P#03,Netgear,GSM4212P,6VB52B5CA03B9,Managed Switch,False,False,,AX,Store,Store
@@ -767,7 +757,7 @@ ULXD2#09,Shure,ULXD2,2NK0771081-01,Handheld Microphone [L50],False,False,,AX,Sto
 ULXD2#10,Shure,ULXD2,2PK2362922,Handheld Microphone [L50],False,False,,AX,Store,Store
 ULXD2#11,Shure,ULXD2,2RC0141727,Handheld Microphone [L50],False,False,"2025/06/21	bnjm2000	Battery prong dropped out, unable to turn on (Wedding of Jeremy and Julia @ The Pyramid Club) [Location: Store, Marked OOC]|2025/07/10	bnjm2000	Sent to E&E for service. [Location: E&E]|2025/09/11	bnjm2000	Replace battery pin $5
 Replace rubber slot $5
-Service charge $60|2025/11/12	bnjm2000	Collected back from E&E, replaced battery contact pin and bumper [Location: Store, Cleared OOC, Cleared Missing]",AX,Store,Store
+Service charge $60|2025/11/12	bnjm2000	Collected back from E&E, replaced battery contact pin and bumper [Location: Store, Cleared OOC]",AX,Store,Store
 ULXD2#12,Shure,ULXD2,2NK0771082-01,Handheld Microphone [L50],False,False,,AX,Store,Store
 ULXD2#13,Shure,ULXD2,3CC16144846,Handheld Microphone [G52],False,False,,AX,Store,Store
 ULXD2#14,Shure,ULXD2,3CC16144872,Handheld Microphone [G52],False,False,,AX,Store,Store
@@ -1241,7 +1231,7 @@ CLICKER#02,DSAN,PerfectCue Mini,,Professional Wireless Clicker,False,False,2026/
 PERFECTCUE#02,DSAN,PerfectCue Mini,15-8294,Professional Wireless Clicker,False,False,,VX,Store,Store
 CLICKER#03,DSAN,PerfectCue Mini,,Professional Wireless Clicker,False,False,,VX,Store,Store
 CLICKER#04,DSAN,PerfectCue Mini,,Professional Wireless Clicker,False,False,,VX,Store,Store
-SBS#01,Sennheiser,Base Station,1205000475,1RU Spectera Base Station,False,False,2026/03/12	bnjm2000	Updated to v1.2.6,AX,Store,Store
+SBS#01,Sennheiser,Base Station,1205000475,1RU Spectera Base Station,False,False,2026/03/12	bnjm2000	Updated to v1.2.6|2026/04/20	bnjm2000	Updated to v1.3.0|2026/05/02	bnjm2000	Installed MADI slot card,AX,Store,Store
 SEK#01,Sennheiser,SEK(UHF),1165001727,Bidirectional bodypack,False,False,2026/03/12	bnjm2000	Updated to v1.2.6,AX,Store,Store
 SEK#02,Sennheiser,SEK(UHF),1165001729,Bidirectional bodypack,False,False,2026/03/12	bnjm2000	Updated to v1.2.6,AX,Store,Store
 SEK#03,Sennheiser,SEK(UHF),1195001949,Bidirectional bodypack,False,False,2026/03/12	bnjm2000	Updated to v1.2.6,AX,Store,Store
