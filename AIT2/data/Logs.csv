@@ -1,42 +1,3 @@
-2026/03/24 14:02:20,bnjm2000,Assigned specific asset PB#17 to event 117
-2026/03/24 14:02:20,bnjm2000,Assigned specific asset PB#18 to event 117
-2026/03/24 14:02:20,bnjm2000,Assigned specific asset PB#19 to event 117
-2026/03/24 14:02:20,bnjm2000,Assigned specific asset PB#20 to event 117
-2026/03/24 14:02:20,bnjm2000,Assigned specific asset PB#21 to event 117
-2026/03/24 14:02:20,bnjm2000,Assigned specific asset PB#22 to event 117
-2026/03/24 14:02:20,bnjm2000,Assigned specific asset PB#24 to event 117
-2026/03/24 14:02:21,bnjm2000,Assigned specific asset PB#23 to event 117
-2026/03/24 14:02:37,bnjm2000,Assigned specific asset COMPACTXT#01 to event 117
-2026/03/24 14:02:58,bnjm2000,Added 8x Ayrton Diablo (W.DMX) model to event 117 (total: 8)
-2026/03/24 14:03:03,bnjm2000,Removed Ayrton Diablo Profile model from event 117
-2026/03/24 14:03:25,bnjm2000,Assigned specific asset HLBatt#01 to event 117
-2026/03/24 14:03:25,bnjm2000,Assigned specific asset HLBatt#03 to event 117
-2026/03/24 14:03:25,bnjm2000,Assigned specific asset HLBatt#05 to event 117
-2026/03/24 14:03:25,bnjm2000,Assigned specific asset HLBatt#07 to event 117
-2026/03/24 14:03:26,bnjm2000,Assigned specific asset HLBatt#09 to event 117
-2026/03/24 14:03:26,bnjm2000,Assigned specific asset HLBatt#11 to event 117
-2026/03/24 14:03:26,bnjm2000,Assigned specific asset HLBatt#13 to event 117
-2026/03/24 14:03:26,bnjm2000,Assigned specific asset HLBatt#15 to event 117
-2026/03/24 14:03:26,bnjm2000,Assigned specific asset C1ProCharger#01 to event 117
-2026/03/24 14:03:26,bnjm2000,Assigned specific asset C1ProRHS#01 to event 117
-2026/03/24 14:03:26,bnjm2000,Assigned specific asset C1ProRHS#03 to event 117
-2026/03/24 14:03:26,bnjm2000,Assigned specific asset C1ProRHS#05 to event 117
-2026/03/24 14:03:26,bnjm2000,Assigned specific asset C1ProRHS#07 to event 117
-2026/03/24 14:03:26,bnjm2000,Assigned specific asset C1ProWHS#01 to event 117
-2026/03/24 14:03:26,bnjm2000,Assigned specific asset HLBatt#02 to event 117
-2026/03/24 14:03:26,bnjm2000,Assigned specific asset HLBatt#04 to event 117
-2026/03/24 14:03:26,bnjm2000,Assigned specific asset HLBatt#06 to event 117
-2026/03/24 14:03:26,bnjm2000,Assigned specific asset HLBatt#08 to event 117
-2026/03/24 14:03:26,bnjm2000,Assigned specific asset HLBatt#10 to event 117
-2026/03/24 14:03:26,bnjm2000,Assigned specific asset HLBatt#12 to event 117
-2026/03/24 14:03:26,bnjm2000,Assigned specific asset HLBatt#14 to event 117
-2026/03/24 14:03:26,bnjm2000,Assigned specific asset HLBatt#16 to event 117
-2026/03/24 14:03:26,bnjm2000,Assigned specific asset C1ProHub#01 to event 117
-2026/03/24 14:03:26,bnjm2000,Assigned specific asset C1ProRHS#02 to event 117
-2026/03/24 14:03:26,bnjm2000,Assigned specific asset C1ProRHS#04 to event 117
-2026/03/24 14:03:26,bnjm2000,Assigned specific asset C1ProRHS#06 to event 117
-2026/03/24 14:03:26,bnjm2000,Assigned specific asset C1ProRHS#08 to event 117
-2026/03/24 14:03:44,bnjm2000,Completely removed asset C1ProRHS#01 from event 117
 2026/03/24 15:17:55,bnjm2000,Assigned specific asset LEDBEAM#05 to event 117
 2026/03/24 15:17:55,bnjm2000,Assigned specific asset LEDBEAM#06 to event 117
 2026/03/24 15:17:55,bnjm2000,Assigned specific asset LEDBEAM#07 to event 117
@@ -1070,3 +1031,42 @@ Service Fee - $80' (also: Cleared OOC) (edited by bnjm2000)"
 2026/05/02 16:23:38,bnjm2000,Completely removed asset LA4X#01 from event 131
 2026/05/04 16:31:15,bnjm2000,User bnjm2000 logged in via web interface
 2026/05/04 16:31:37,bnjm2000,Updated maintenance log for asset SBS#01: 'Installed MADI slot card' -> 'Installed MADI slot card SN: 1445001225' (edited by bnjm2000)
+2026/05/05 10:54:30,bnjm2000,User bnjm2000 logged in via web interface
+2026/05/05 10:57:09,bnjm2000,Created event 133: Dry Hire: T2 via web interface
+2026/05/05 10:57:15,bnjm2000,Added 2x MiPro MT-90A model to event 133 (total: 2)
+2026/05/05 10:57:17,bnjm2000,Added 2x MiPro MR-90 model to event 133 (total: 2)
+2026/05/05 10:57:28,bnjm2000,Assigned specific asset MR-90A#06 to event 133
+2026/05/05 10:57:30,bnjm2000,Assigned specific asset MR-90A#04 to event 133
+2026/05/05 10:57:37,bnjm2000,Assigned specific asset MT-90A#03 to event 133
+2026/05/05 10:57:37,bnjm2000,Assigned specific asset MT-90A#04 to event 133
+2026/05/05 10:58:48,bnjm2000,Saved client Terence Wong
+2026/05/05 11:14:36,bnjm2000,Added 1x RF Venue Combine4 model to event 133 (total: 1)
+2026/05/05 11:14:57,bnjm2000,Added 1x RF Venue Combine4 model to event 127 (total: 1)
+2026/05/05 11:15:44,bnjm2000,Removed RF Venue Combine4 model from event 127
+2026/05/05 11:17:15,bnjm2000,Added 1x RF Venue Combine4 model to event 111 (total: 1)
+2026/05/05 11:17:46,bnjm2000,User bnjm2000 forced event 111 (Damiani Jewellery Dinner @ Artyzen Hotel) state from Closed to Preparing
+2026/05/05 11:17:50,bnjm2000,Assigned specific asset COMBINE4#01 to event 111
+2026/05/05 11:17:54,bnjm2000,Returned asset COMBINE4#01 from event 111
+2026/05/05 11:17:58,bnjm2000,User bnjm2000 removed forced state override for event 111 (Damiani Jewellery Dinner @ Artyzen Hotel): Preparing -> Closed
+2026/05/05 11:18:44,bnjm2000,Added 1x RF Venue Combine4 model to event 29 (total: 1)
+2026/05/05 11:18:51,bnjm2000,User bnjm2000 forced event 29 (dearGENTLEFOLK @ Restaurant Born) state from Closed to Preparing
+2026/05/05 11:18:55,bnjm2000,Assigned specific asset COMBINE4#01 to event 29
+2026/05/05 11:18:59,bnjm2000,User bnjm2000 removed forced state override for event 29 (dearGENTLEFOLK @ Restaurant Born): Preparing -> Overdue
+2026/05/05 11:19:03,bnjm2000,Returned asset COMBINE4#01 from event 29
+2026/05/05 11:20:27,bnjm2000,Added 12x Chain Master D8 model to event 132 (total: 12)
+2026/05/05 11:20:33,bnjm2000,Added 1x Custom Chain Hoist Controller model to event 132 (total: 1)
+2026/05/05 11:22:02,bnjm2000,Added 1x RF Venue Combine4 model to event 129 (total: 1)
+2026/05/05 11:22:18,bnjm2000,Added 1x RF Venue Combine4 model to event 131 (total: 1)
+2026/05/05 11:23:13,bnjm2000,Updated event 55: Dry Hire: Variety Communications via web interface
+2026/05/05 11:23:17,bnjm2000,Updated event 23: Dry Hire: Variety Communications via web interface
+2026/05/05 11:37:37,bnjm2000,Assigned asset [MISC]Media Player;5 to event 133 (unprepared)
+2026/05/05 11:37:43,bnjm2000,Assigned specific asset COMBINE4#01 to event 133
+2026/05/05 11:37:46,bnjm2000,Prepared asset [MISC]Media Player;5 for event 133
+2026/05/05 15:42:22,bnjm2000,Marked asset PB#34 as Out of Commission
+2026/05/05 15:42:22,bnjm2000,Maintenance logged for asset PB#34: Screen died while charging
+2026/05/05 15:42:22,bnjm2000,Marked asset PB#60 as Out of Commission
+2026/05/05 15:42:22,bnjm2000,Maintenance logged for asset PB#60: Screen died while charging
+2026/05/05 15:42:58,bnjm2000,Removed Out of Commission status from asset PB#34
+2026/05/05 15:42:58,bnjm2000,Maintenance logged for asset PB#34: Ben changed PB15-HOU-BC - $39.52
+2026/05/05 15:42:58,bnjm2000,Removed Out of Commission status from asset PB#60
+2026/05/05 15:42:58,bnjm2000,Maintenance logged for asset PB#60: Ben changed PB15-HOU-BC - $39.52
