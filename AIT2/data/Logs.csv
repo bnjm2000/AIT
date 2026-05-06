@@ -1,43 +1,3 @@
-2026/03/24 15:17:55,bnjm2000,Assigned specific asset LEDBEAM#06 to event 117
-2026/03/24 15:17:55,bnjm2000,Assigned specific asset LEDBEAM#07 to event 117
-2026/03/24 15:17:55,bnjm2000,Assigned specific asset LEDBEAM#08 to event 117
-2026/03/24 15:19:14,bnjm2000,Removed L-Acoustics LA4X model from event 117
-2026/03/24 15:19:14,bnjm2000,Added 2x L-Acoustics LA4X model to event 117 (total: 2)
-2026/03/25 10:41:06,bnjm2000,User bnjm2000 logged in via web interface
-2026/03/25 10:52:45,bnjm2000,Added 1x 32A 3-Phase DB Custom DB model to event 117 (total: 1)
-2026/03/25 10:53:03,bnjm2000,Assigned specific asset 32ADB#02 to event 117
-2026/03/25 10:53:28,bnjm2000,Added 2x Shure AD3 model to event 117 (total: 2)
-2026/03/25 10:53:31,bnjm2000,Added 1x Shure AD4D model to event 117 (total: 1)
-2026/03/25 10:53:37,bnjm2000,Added 2x Sennheiser ME36 model to event 117 (total: 2)
-2026/03/25 10:53:51,bnjm2000,Assigned specific asset ME36#01 to event 117
-2026/03/25 10:53:51,bnjm2000,Assigned specific asset ME36#02 to event 117
-2026/03/25 10:53:57,bnjm2000,Assigned specific asset AD4D#01 to event 117
-2026/03/25 10:54:02,bnjm2000,Assigned specific asset ULXD4D#01 to event 117
-2026/03/25 10:54:05,bnjm2000,Assigned specific asset ULXD4D#04 to event 117
-2026/03/25 10:54:07,bnjm2000,Assigned specific asset ULXD4Q#01 to event 117
-2026/03/25 10:58:08,bnjm2000,Added 1x Yamaha Ro8-d model to event 117 (total: 1)
-2026/03/25 10:58:26,bnjm2000,Assigned specific asset RO8-D #01 to event 117
-2026/03/25 12:19:46,bnjm2000,Assigned specific asset PCBB#11 to event 117
-2026/03/25 12:19:51,bnjm2000,Assigned specific asset PCBB#05 to event 117
-2026/03/25 12:19:59,bnjm2000,Assigned specific asset PCBB#04 to event 117
-2026/03/25 12:20:06,bnjm2000,Assigned specific asset PCBB#06 to event 117
-2026/03/25 12:20:26,bnjm2000,Assigned specific asset ULXD2#07 to event 117
-2026/03/25 12:20:50,bnjm2000,Assigned specific asset ULXD2#06 to event 117
-2026/03/25 12:21:09,bnjm2000,Assigned specific asset ULXD2#04 to event 117
-2026/03/25 12:21:37,bnjm2000,Assigned specific asset ULXD2#05 to event 117
-2026/03/25 12:21:57,bnjm2000,Assigned specific asset ULXD2#12 to event 117
-2026/03/25 12:22:19,bnjm2000,Assigned specific asset ULXD2#09 to event 117
-2026/03/25 12:22:56,bnjm2000,Assigned specific asset ULXD2#01 to event 117
-2026/03/25 12:23:14,bnjm2000,Assigned specific asset ULXD2#08 to event 117
-2026/03/25 12:24:04,bnjm2000,Assigned specific asset AD3#01 to event 117
-2026/03/25 12:24:19,bnjm2000,Assigned specific asset AD3#02 to event 117
-2026/03/25 12:24:56,bnjm2000,Assigned specific asset IPAD#02 to event 117
-2026/03/25 12:25:05,bnjm2000,Assigned specific asset IPAD#03 to event 117
-2026/03/25 12:26:07,bnjm2000,Assigned specific asset X12#03 to event 117
-2026/03/25 12:26:07,bnjm2000,Assigned specific asset X12#04 to event 117
-2026/03/25 12:26:12,bnjm2000,Assigned specific asset X12#05 to event 117
-2026/03/25 12:26:12,bnjm2000,Assigned specific asset X12#06 to event 117
-2026/03/25 12:26:18,bnjm2000,Assigned specific asset SB18#10 to event 117
 2026/03/25 12:26:21,bnjm2000,Assigned specific asset SB18#09 to event 117
 2026/03/25 12:26:40,bnjm2000,Added 4x L-Acoustics X8 model to event 117 (total: 4)
 2026/03/25 12:36:37,bnjm2000,Assigned specific asset LA4X#10 to event 117
@@ -1070,3 +1030,43 @@ Service Fee - $80' (also: Cleared OOC) (edited by bnjm2000)"
 2026/05/05 15:42:58,bnjm2000,Removed Out of Commission status from asset PB#60
 2026/05/05 15:42:58,bnjm2000,Maintenance logged for asset PB#60: Ben changed PB15-HOU-BC - $39.52
 2026/05/05 16:03:24,bnjm2000,Updated event 133: Dry Hire: Variety Communications via web interface
+2026/05/06 10:30:45,bnjm2000,User bnjm2000 logged in via web interface
+2026/05/06 10:35:35,bnjm2000,Added 1x Shure HA-8091 model to event 129 (total: 1)
+2026/05/06 10:35:56,bnjm2000,Added 1x Shure HA-8091 model to event 127 (total: 1)
+2026/05/06 10:36:13,bnjm2000,Added 1x Shure PA805SWB model to event 126 (total: 1)
+2026/05/06 10:36:18,bnjm2000,User bnjm2000 forced event 126 (Hermes Sorry it was yesterday @ Liat Towers) state from Closed to Preparing
+2026/05/06 10:36:22,bnjm2000,User bnjm2000 forced event 127 (Wedding of Avinash & Rachel @ Capella) state from Closed to Preparing
+2026/05/06 10:36:29,bnjm2000,Assigned specific asset PA805SWB#01 to event 126
+2026/05/06 10:36:39,bnjm2000,Assigned specific asset HA8091#01 to event 127
+2026/05/06 10:36:52,bnjm2000,Returned asset HA8091#01 from event 127
+2026/05/06 10:36:55,bnjm2000,Returned asset PA805SWB#01 from event 126
+2026/05/06 10:37:00,bnjm2000,User bnjm2000 removed forced state override for event 127 (Wedding of Avinash & Rachel @ Capella): Preparing -> Closed
+2026/05/06 10:37:01,bnjm2000,User bnjm2000 removed forced state override for event 126 (Hermes Sorry it was yesterday @ Liat Towers): Preparing -> Closed
+2026/05/06 10:38:29,bnjm2000,Added 1x Shure HA-8091 model to event 110 (total: 1)
+2026/05/06 10:38:32,bnjm2000,User bnjm2000 forced event 110 (Louis Vuitton Spring Summer Trunk Show 2026 @ Japanese Garden) state from Closed to Preparing
+2026/05/06 10:39:14,bnjm2000,User bnjm2000 forced event 105 (Performance Motor CNY Dinner @ St Regis) state from Closed to Preparing
+2026/05/06 10:40:14,bnjm2000,Assigned specific asset MACBOOK#01 to event 105
+2026/05/06 10:40:21,bnjm2000,Assigned specific asset HA8091#01 to event 110
+2026/05/06 10:40:32,bnjm2000,Returned all assets for department AX in event 110: 1 items
+2026/05/06 10:40:33,bnjm2000,Returned asset MACBOOK#01 from event 105
+2026/05/06 10:40:39,bnjm2000,User bnjm2000 removed forced state override for event 110 (Louis Vuitton Spring Summer Trunk Show 2026 @ Japanese Garden): Preparing -> Closed
+2026/05/06 10:40:41,bnjm2000,User bnjm2000 removed forced state override for event 105 (Performance Motor CNY Dinner @ St Regis): Preparing -> Preparing
+2026/05/06 10:41:19,bnjm2000,Removed Lenovo Legion 5 Pro model from event 105
+2026/05/06 12:50:54,bnjm2000,Removed L-Acoustics X8 model from event 131
+2026/05/06 12:52:51,bnjm2000,Added 1x Sennheiser Base Station model to event 131 (total: 1)
+2026/05/06 12:52:57,bnjm2000,Added 2x Sennheiser DAD(UHF) model to event 131 (total: 2)
+2026/05/06 12:53:04,bnjm2000,Added 7x Sennheiser SEK(UHF) model to event 131 (total: 7)
+2026/05/06 12:53:28,bnjm2000,Removed L-Acoustics 5XTW model from event 132
+2026/05/06 12:53:49,bnjm2000,Added 8x L-Acoustics X-UL8 model to event 132 (total: 8)
+2026/05/06 12:54:09,bnjm2000,Added 8x L-Acoustics 5XT model to event 132 (total: 8)
+2026/05/06 12:54:17,bnjm2000,Added 8x L-Acoustics ETR5 model to event 132 (total: 8)
+2026/05/06 12:56:11,bnjm2000,Removed L-Acoustics LA4X model from event 132
+2026/05/06 12:56:11,bnjm2000,Added 2x L-Acoustics LA4X model to event 132 (total: 2)
+2026/05/06 13:00:36,bnjm2000,Created event 134: Wedding of Henry & Janet @ Capella via web interface
+2026/05/06 13:14:24,bnjm2000,Created container ALL PIXEL BRICKS (64 assets)
+2026/05/06 13:16:31,bnjm2000,Renamed container LEDBEAM Case #01 -> LEDBeam Case #01 (4 assets)
+2026/05/06 13:16:38,bnjm2000,Renamed container LEDBEAM Case #02 -> LEDBeam Case #02 (4 assets)
+2026/05/06 13:16:49,bnjm2000,Renamed container LEDBEAM Case #03 -> LEDBeam Case #03 (4 assets)
+2026/05/06 13:16:57,bnjm2000,Renamed container LEDBEAM Case #04 -> LEDBeam Case #04 (4 assets)
+2026/05/06 13:17:03,bnjm2000,Renamed container LEDBEAM Case #05 -> LEDBeam Case #05 (4 assets)
+2026/05/06 13:17:09,bnjm2000,Renamed container LEDBEAM Case #06 -> LEDBeam Case #06 (4 assets)

@@ -686,7 +686,8 @@ P1#05,Behringher,P1,S1403649AZM,Wired IEM beltpack,False,False,,AX,Store,Store
 P1#06,Behringher,P1,S1506343AZM,Wired IEM beltpack,False,False,,AX,Store,Store
 P1#07,Behringher,P1,S1506350AZM,Wired IEM beltpack,False,False,,AX,Store,Store
 PA421A#01,Shure,PA421A,1112383 4407,4-Port Antenna Combiner,False,False,,AX,Store,
-PA805SWB#01,Shure,PA805SWB,,Passive Directional Antenna,False,False,,AX,Store,
+PA805SWB#01,Shure,PA805SWB,,Passive Directional Antenna,False,False,,AX,Store,Store
+HA8091#01,Shure,HA-8091,,Passive Domed Helical Antenna,False,False,,AX,Store,Store
 SE215#01,Shure,SE215,3CA17269504,"sound-isolating earphones, black",False,False,,AX,Store,Store
 SE215#02,Shure,SE215,3CA17269112,"sound-isolating earphones, black",False,False,,AX,Store,Store
 SE215#03,Shure,SE215,3CA17269299,"sound-isolating earphones, black",False,False,,AX,Store,Store
