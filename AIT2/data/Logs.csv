@@ -1,9 +1,3 @@
-2026/03/26 09:25:32,bnjm2000,Added 6x Radial Engineering J48 Mono model to event 122 (total: 6)
-2026/03/26 09:25:33,bnjm2000,Added 1x Radial Engineering J48 Stereo model to event 122 (total: 1)
-2026/03/26 09:25:42,bnjm2000,Assigned specific asset J48S#06 to event 122
-2026/03/26 09:25:44,bnjm2000,Assigned specific asset J48M#04 to event 122
-2026/03/26 09:25:44,bnjm2000,Assigned specific asset J48M#10 to event 122
-2026/03/26 09:25:45,bnjm2000,Assigned specific asset J48M#09 to event 122
 2026/03/26 09:25:46,bnjm2000,Assigned specific asset J48M#08 to event 122
 2026/03/26 09:25:47,bnjm2000,Assigned specific asset J48M#07 to event 122
 2026/03/26 09:25:47,bnjm2000,Assigned specific asset J48M#03 to event 122
@@ -1070,3 +1064,9 @@ Service Fee - $80' (also: Cleared OOC) (edited by bnjm2000)"
 2026/05/08 14:47:04,system,Failed login attempt for username: tjacky
 2026/05/08 14:47:11,tjacky,User tjacky logged in via web interface
 2026/05/08 14:47:21,tjacky,User tjacky logged out from web interface
+2026/05/08 16:02:27,bnjm2000,User bnjm2000 logged out from web interface
+2026/05/08 16:02:32,bnjm2000,User bnjm2000 logged in via web interface
+2026/05/08 16:19:14,bnjm2000,Updated asset 32ADB#01 -> 32ADB #01; applyTo=single; updatedAssets=1; eventsUpdated=3; containersUpdated=0
+2026/05/08 16:19:43,bnjm2000,Updated asset 32ADB #01 -> 32ADB#01; applyTo=single; updatedAssets=1; eventsUpdated=3; containersUpdated=0
+2026/05/08 16:20:09,bnjm2000,Updated asset 32ADB#01 -> 32A DB#01; applyTo=single; updatedAssets=1; eventsUpdated=3; containersUpdated=0
+2026/05/08 16:20:21,bnjm2000,Updated asset 32A DB#01 -> 32ADB#01; applyTo=single; updatedAssets=1; eventsUpdated=3; containersUpdated=0

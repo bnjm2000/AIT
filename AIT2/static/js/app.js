@@ -523,23 +523,30 @@ async function setupAdminUserManagementTab() {
 function ensureUsersNavItem() {
   if (document.querySelector(`[onclick="showSection('users')"]`)) return;
 
-  const firstNavItem = document.querySelector('.nav-item');
-  const navContainer = firstNavItem ? firstNavItem.parentElement : null;
+  const settingsSection = Array.from(document.querySelectorAll('.nav-section'))
+    .find(section => {
+      const heading = section.querySelector('h3');
+      return heading && heading.textContent.trim() === 'Settings';
+    });
 
-  if (!navContainer) {
-    console.warn('Could not find left navigation container for Users tab');
+  if (!settingsSection) {
+    console.warn('Could not find Settings section for Users tab');
     return;
   }
 
-  const usersTab = document.createElement('div');
+  const usersTab = document.createElement('button');
+  usersTab.type = 'button';
   usersTab.className = 'nav-item';
   usersTab.setAttribute('onclick', "showSection('users')");
-  usersTab.innerHTML = `
-    <span>👤</span>
-    <span>Users</span>
-  `;
+  usersTab.innerHTML = `👤 Users`;
 
-  navContainer.appendChild(usersTab);
+  const logoutButton = settingsSection.querySelector(`[onclick="logout()"]`);
+
+  if (logoutButton) {
+    settingsSection.insertBefore(usersTab, logoutButton);
+  } else {
+    settingsSection.appendChild(usersTab);
+  }
 }
 
 function ensureUsersSection() {
@@ -1097,21 +1104,11 @@ function updateUpcomingEventsCounter(count) {
     }
 }
 
-// load the dashboard
-async function loadDashboard() {
+async function loadStatsCards() {
   try {
-    await apiCall('/api/events/update-states', 'POST');
-    const response = await apiCall('/api/events');
-    
-    // Count and update overdue events counter
-    const overdueCount = countOverdueEvents(response.data);
-    updateOverdueCounter(overdueCount);
-    
-    // Load stats
     const statsResponse = await apiCall("/api/stats");
-    stats = statsResponse.data;
+    stats = statsResponse.data || {};
 
-    // Update statistics with element checking
     const totalEventsEl = document.getElementById("total-events");
     const activeEventsEl = document.getElementById("active-events");
     const totalAssetsEl = document.getElementById("total-assets");
@@ -1120,13 +1117,24 @@ async function loadDashboard() {
     if (totalEventsEl) totalEventsEl.textContent = stats.totalEvents || 0;
     if (activeEventsEl) activeEventsEl.textContent = stats.activeEvents || 0;
     if (totalAssetsEl) totalAssetsEl.textContent = stats.totalAssets || 0;
-    if (deployedAssetsEl)
-      deployedAssetsEl.textContent = stats.deployedAssets || 0;
+    if (deployedAssetsEl) deployedAssetsEl.textContent = stats.deployedAssets || 0;
+  } catch (error) {
+    console.error("Error loading stats:", error);
+  }
+}
 
-    // Load ongoing events with a delay to ensure elements exist
+// load the dashboard
+async function loadDashboard() {
+  try {
+    await apiCall('/api/events/update-states', 'POST');
+    const response = await apiCall('/api/events');
+
+    const overdueCount = countOverdueEvents(response.data);
+    updateOverdueCounter(overdueCount);
+
     setTimeout(async () => {
       await loadOngoingEvents();
-      await loadUpcomingEvents(); // Also load upcoming events to update counter
+      await loadUpcomingEvents();
     }, 300);
   } catch (error) {
     console.error("Error loading dashboard:", error);
@@ -1214,6 +1222,8 @@ function renderAllEventsList(eventsToRender = null) {
 
 async function loadAllEvents() {
   try {
+    await loadStatsCards();
+
     const response = await apiCall('/api/events');
     events = response.data;
 
@@ -1765,6 +1775,8 @@ function displayInventoryTable(assetsToShow) {
     return;
   }
 
+  const isAdmin = currentUser && currentUser.isAdmin;
+
   let tableHTML = `
         <table class="table">
             <thead>
@@ -1772,6 +1784,7 @@ function displayInventoryTable(assetsToShow) {
                     <th>Asset ID</th>
                     <th>Brand</th>
                     <th>Model</th>
+                    <th>Description</th>
                     <th>Serial</th>
                     <th>Department</th>
                     <th>Status</th>
@@ -1784,28 +1797,42 @@ function displayInventoryTable(assetsToShow) {
     `;
 
   assetsToShow.forEach((asset) => {
+    const encodedAssetId = encodeURIComponent(asset.id);
+
     tableHTML += `
             <tr>
-                <td>${asset.id}</td>
-                <td>${asset.brand}</td>
-                <td>${asset.model}</td>
-                <td>${asset.serial || "N/A"}</td>
-                <td><span class="asset-badge dept-${asset.department.toLowerCase()}">${
-      asset.department
-    }</span></td>
-                <td><span class="asset-badge status-${asset.status}">${
-      asset.status
-    }</span></td>
-                <td>${asset.location || "Store"}</td>
+                <td>${escapeHtml(asset.id)}</td>
+                <td>${escapeHtml(asset.brand)}</td>
+                <td>${escapeHtml(asset.model)}</td>
+                <td>${escapeHtml(asset.description || "")}</td>
+                <td>${escapeHtml(asset.serial || "N/A")}</td>
+                <td>
+                  <span class="asset-badge dept-${escapeHtmlAttr((asset.department || 'un').toLowerCase())}">
+                    ${escapeHtml(asset.department || "UN")}
+                  </span>
+                </td>
+                <td>
+                  <span class="asset-badge status-${escapeHtmlAttr(asset.status || 'available')}">
+                    ${escapeHtml(asset.status || "available")}
+                  </span>
+                </td>
+                <td>${escapeHtml(asset.location || "Store")}</td>
                 <td>
                     <span class="asset-badge ${asset.isOOC ? 'status-ooc' : 'status-available'}">
                         ${asset.isOOC ? 'Out of Commission' : 'Available'}
                     </span>
                 </td>
                 <td>
-                    <button class="btn btn-primary btn-sm" onclick="viewMaintenanceLog('${asset.id}')" title="View maintenance log">
+                    <button class="btn btn-primary btn-sm" onclick="viewMaintenanceLog('${encodedAssetId}')" title="View maintenance log">
                         View Log
                     </button>
+                    ${
+                      isAdmin
+                        ? `<button class="btn btn-warning btn-sm" onclick="openEditAssetModal('${encodedAssetId}')" title="Edit asset attributes">
+                             Edit
+                           </button>`
+                        : ''
+                    }
                 </td>
             </tr>
         `;
@@ -1817,6 +1844,241 @@ function displayInventoryTable(assetsToShow) {
     `;
 
   container.innerHTML = tableHTML;
+}
+
+function normalizeAssetGroupValue(value, uppercase = false) {
+  const cleaned = String(value ?? '').trim();
+  return uppercase ? cleaned.toUpperCase() : cleaned;
+}
+
+function sameAssetGroup(asset, group) {
+  return (
+    normalizeAssetGroupValue(asset.department, true) === normalizeAssetGroupValue(group.department, true) &&
+    normalizeAssetGroupValue(asset.brand) === normalizeAssetGroupValue(group.brand) &&
+    normalizeAssetGroupValue(asset.model, true) === normalizeAssetGroupValue(group.model, true) &&
+    normalizeAssetGroupValue(asset.description) === normalizeAssetGroupValue(group.description)
+  );
+}
+
+function ensureAssetEditModal() {
+  if (document.getElementById('editAssetModal')) return;
+
+  const modal = document.createElement('div');
+  modal.id = 'editAssetModal';
+  modal.className = 'modal';
+
+  modal.innerHTML = `
+    <div class="modal-content" style="max-width:760px;">
+      <div class="modal-header">
+        <h3 class="modal-title">Edit Asset</h3>
+        <button class="close-btn" onclick="closeModal('editAssetModal')">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        <div style="background:#fff3cd;border:1px solid #ffeaa7;color:#856404;padding:12px;border-radius:8px;margin-bottom:16px;">
+          Admin-only edit. If Asset ID is changed, it will be updated across all events and containers.
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;">
+          <div class="form-group">
+            <label class="form-label">Asset ID</label>
+            <input id="editAssetId" class="form-input">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Brand</label>
+            <input id="editAssetBrand" class="form-input">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Model</label>
+            <input id="editAssetModel" class="form-input">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Serial</label>
+            <input id="editAssetSerial" class="form-input">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Department</label>
+            <input id="editAssetDepartment" class="form-input" placeholder="AX / LX / VX / UN">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Default Location</label>
+            <input id="editAssetDefaultLocation" class="form-input" placeholder="Store">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Current Location</label>
+            <input id="editAssetCurrentLocation" class="form-input" placeholder="Leave blank for default">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Description</label>
+          <textarea id="editAssetDescription" class="form-input" rows="3"></textarea>
+        </div>
+
+        <div style="display:flex;gap:20px;align-items:center;flex-wrap:wrap;margin-top:8px;">
+          <label style="display:flex;gap:8px;align-items:center;">
+            <input id="editAssetIsMissing" type="checkbox">
+            Missing
+          </label>
+
+          <label style="display:flex;gap:8px;align-items:center;">
+            <input id="editAssetIsOOC" type="checkbox">
+            Out of Commission
+          </label>
+        </div>
+      </div>
+
+      <div class="modal-footer" style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
+        <button class="btn btn-secondary" onclick="closeModal('editAssetModal')">Cancel</button>
+        <button class="btn btn-success" onclick="saveAssetEditModal()">Save Changes</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+}
+
+function openEditAssetModal(encodedAssetId) {
+  if (!currentUser || !currentUser.isAdmin) {
+    showNotification('error', 'Admin privileges required');
+    return;
+  }
+
+  ensureAssetEditModal();
+
+  const assetId = decodeURIComponent(encodedAssetId);
+  const asset = assets.find(a => a.id === assetId);
+
+  if (!asset) {
+    showNotification('error', `Asset ${assetId} not found`);
+    return;
+  }
+
+  const modal = document.getElementById('editAssetModal');
+
+  modal.dataset.originalAsset = JSON.stringify({
+    id: asset.id,
+    brand: asset.brand || '',
+    model: asset.model || '',
+    description: asset.description || '',
+    department: asset.department || ''
+  });
+
+  document.getElementById('editAssetId').value = asset.id || '';
+  document.getElementById('editAssetBrand').value = asset.brand || '';
+  document.getElementById('editAssetModel').value = asset.model || '';
+  document.getElementById('editAssetSerial').value = asset.serial || '';
+  document.getElementById('editAssetDescription').value = asset.description || '';
+  document.getElementById('editAssetDepartment').value = asset.department || 'UN';
+  document.getElementById('editAssetDefaultLocation').value = asset.defaultLocation || 'Store';
+  document.getElementById('editAssetCurrentLocation').value = asset.currentLocation || '';
+  document.getElementById('editAssetIsMissing').checked = !!asset.isMissing;
+  document.getElementById('editAssetIsOOC').checked = !!asset.isOOC;
+
+  openModal('editAssetModal');
+}
+
+async function saveAssetEditModal() {
+  if (!currentUser || !currentUser.isAdmin) {
+    showNotification('error', 'Admin privileges required');
+    return;
+  }
+
+  const modal = document.getElementById('editAssetModal');
+  const original = JSON.parse(modal.dataset.originalAsset || '{}');
+
+  const payload = {
+    id: document.getElementById('editAssetId').value.trim(),
+    brand: document.getElementById('editAssetBrand').value.trim(),
+    model: document.getElementById('editAssetModel').value.trim(),
+    serial: document.getElementById('editAssetSerial').value.trim(),
+    description: document.getElementById('editAssetDescription').value.trim(),
+    department: document.getElementById('editAssetDepartment').value.trim().toUpperCase(),
+    defaultLocation: document.getElementById('editAssetDefaultLocation').value.trim(),
+    currentLocation: document.getElementById('editAssetCurrentLocation').value.trim(),
+    isMissing: document.getElementById('editAssetIsMissing').checked,
+    isOOC: document.getElementById('editAssetIsOOC').checked,
+    applyTo: 'single'
+  };
+
+  if (!payload.id) {
+    showNotification('warning', 'Asset ID cannot be empty');
+    return;
+  }
+
+  if (!payload.brand) {
+    showNotification('warning', 'Brand cannot be empty');
+    return;
+  }
+
+  if (!payload.model) {
+    showNotification('warning', 'Model cannot be empty');
+    return;
+  }
+
+  if (!payload.department) {
+    showNotification('warning', 'Department cannot be empty');
+    return;
+  }
+
+  const modelOrDescriptionChanged =
+    normalizeAssetGroupValue(payload.model, true) !== normalizeAssetGroupValue(original.model, true) ||
+    normalizeAssetGroupValue(payload.description) !== normalizeAssetGroupValue(original.description);
+
+  const sameOriginalGroupAssets = assets.filter(asset => sameAssetGroup(asset, original));
+
+  if (modelOrDescriptionChanged && sameOriginalGroupAssets.length > 1) {
+    const changeAll = confirm(
+      `This asset belongs to a group of ${sameOriginalGroupAssets.length} asset(s) with the same model/description.\n\n` +
+      `Click OK to change all assets of this same model/description type.\n` +
+      `Click Cancel to change only this specific asset.`
+    );
+
+    payload.applyTo = changeAll ? 'allSimilar' : 'single';
+  }
+
+  try {
+    const res = await apiCall(
+      `/api/assets/${encodeURIComponent(original.id)}`,
+      'PUT',
+      payload
+    );
+
+    const data = res.data || {};
+
+    closeModal('editAssetModal');
+
+    let message = `Asset updated`;
+
+    if (data.updatedAssets && data.updatedAssets > 1) {
+      message += ` (${data.updatedAssets} matching assets updated)`;
+    }
+
+    if (data.eventsUpdated) {
+      message += `; ${data.eventsUpdated} event(s) updated`;
+    }
+
+    if (data.containersUpdated) {
+      message += `; ${data.containersUpdated} container(s) updated`;
+    }
+
+    showNotification('success', message);
+
+    await loadInventory();
+
+    if (document.getElementById('events-section')?.classList.contains('active')) {
+      await loadAllEvents();
+    }
+
+  } catch (error) {
+    showNotification('error', `Failed to update asset: ${error.message}`);
+  }
 }
 
 async function loadContainers() {
@@ -2898,6 +3160,8 @@ function switchAllEventsTab(tabName) {
   contentDiv.classList.add('active');
   contentDiv.style.display = 'block';
   
+  loadStatsCards();
+
   // Load appropriate data
   if (tabName === "list") {
     loadAllEvents();
@@ -13752,7 +14016,7 @@ async function initializeApp() {
     // Add a small delay to ensure all DOM elements are ready
     setTimeout(async () => {
       // Load initial data
-      await loadDashboard();
+      await loadAllEvents();
     }, 200);
   } catch (error) {
     console.error("Error initializing application:", error);

@@ -292,6 +292,128 @@ def log_asset_change(event_id, asset_id, action, details=""):
     logger.warning(log_message)
     print(log_message)
 
+def _asset_group_from_item(asset):
+    return {
+        'department': (asset.department_code or '').strip().upper(),
+        'brand': (asset.brand or '').strip(),
+        'model': (asset.model_number or '').strip().upper(),
+        'description': (asset.description or '').strip()
+    }
+
+
+def _asset_matches_group(asset, group):
+    return (
+        (asset.department_code or '').strip().upper() == group['department'] and
+        (asset.brand or '').strip() == group['brand'] and
+        (asset.model_number or '').strip().upper() == group['model'] and
+        (asset.description or '').strip() == group['description']
+    )
+
+
+def _is_real_asset_ref(value):
+    if not isinstance(value, str):
+        return False
+
+    blocked_prefixes = (
+        '[MODEL]',
+        '[LOAN]',
+        '[MISC]',
+        'loan|',
+        'misc|'
+    )
+
+    return not value.startswith(blocked_prefixes)
+
+
+def _replace_asset_id_in_list(values, old_asset_id, new_asset_id):
+    if not isinstance(values, list):
+        return 0
+
+    changed = 0
+
+    for index, value in enumerate(values):
+        if value == old_asset_id:
+            values[index] = new_asset_id
+            changed += 1
+
+    return changed
+
+
+def _parse_model_marker(value):
+    if not isinstance(value, str) or not value.startswith('[MODEL]'):
+        return None
+
+    parts = value[7:].split('|')
+
+    if len(parts) < 4:
+        return None
+
+    return {
+        'department': parts[0].strip().upper(),
+        'brand': parts[1].strip(),
+        'model': parts[2].strip().upper(),
+        'quantity': parts[3].strip(),
+        'description': '|'.join(parts[4:]).strip() if len(parts) > 4 else ''
+    }
+
+
+def _make_model_marker(group, quantity):
+    return (
+        f"[MODEL]{group['department']}|"
+        f"{group['brand']}|"
+        f"{group['model']}|"
+        f"{quantity}|"
+        f"{group['description']}"
+    )
+
+
+def _display_model_description(group):
+    return f"[{group['department']}] {group['brand']} {group['model']} {group['description']}".strip()
+
+
+def _model_marker_matches_group(marker, group):
+    return (
+        marker and
+        marker['department'] == group['department'] and
+        marker['brand'] == group['brand'] and
+        marker['model'] == group['model'] and
+        marker['description'] == group['description']
+    )
+
+
+def _update_event_model_group_references(event, old_group, new_group):
+    """
+    Updates event-level model requirement rows when admin chooses
+    to update all assets of the same model/description group.
+    """
+    changed = 0
+
+    # Newer web workflow: [MODEL]DEPT|BRAND|MODEL|QTY|DESCRIPTION
+    if hasattr(event, 'prepared_items') and isinstance(event.prepared_items, list):
+        for index, item in enumerate(event.prepared_items):
+            marker = _parse_model_marker(item)
+
+            if _model_marker_matches_group(marker, old_group):
+                event.prepared_items[index] = _make_model_marker(new_group, marker['quantity'])
+                changed += 1
+
+    # Older/CLI workflow: asset_models list with model_description
+    old_display = _display_model_description(old_group)
+    new_display = _display_model_description(new_group)
+
+    if hasattr(event, 'asset_models') and isinstance(event.asset_models, list):
+        for model_row in event.asset_models:
+            if not isinstance(model_row, dict):
+                continue
+
+            current_description = str(model_row.get('model_description', '')).strip()
+
+            if current_description == old_display:
+                model_row['model_description'] = new_display
+                changed += 1
+
+    return changed
+
 def validate_event_data(data):
     """Validate event data"""
     errors = []
@@ -2960,46 +3082,193 @@ def create_asset():
         return jsonify({'error': 'Failed to create asset'}), 500
 
 
-@app.route('/api/assets/<asset_id>', methods=['PUT'])
-@require_auth
+@app.route('/api/assets/<path:asset_id>', methods=['PUT'])
+@require_admin
 def update_asset(asset_id):
-    """Update an existing asset"""
+    """
+    Admin-only asset edit.
+
+    Supports:
+    - renaming Asset ID and cascading it through all event files and containers
+    - editing one asset only
+    - editing all assets that originally shared the same department/brand/model/description group
+    """
     try:
-        asset = data_manager.inventory.get(asset_id)
+        old_asset_id = unquote_plus(asset_id)
+        asset = data_manager.inventory.get(old_asset_id)
+
         if not asset:
             return jsonify({'error': 'Asset not found'}), 404
 
-        data = request.get_json()
+        data = request.get_json() or {}
+        apply_to = (data.get('applyTo') or 'single').strip()
 
-        # Update asset properties
-        if 'brand' in data:
-            asset.brand = data['brand'].strip()
-        if 'model' in data:
-            asset.model_number = data['model'].upper().strip()
+        if apply_to not in ('single', 'allSimilar'):
+            return jsonify({'error': 'Invalid applyTo value'}), 400
+
+        old_group = _asset_group_from_item(asset)
+
+        new_asset_id = (
+            data.get('id') or
+            data.get('assetId') or
+            data.get('newId') or
+            old_asset_id
+        ).strip()
+
+        if not new_asset_id:
+            return jsonify({'error': 'Asset ID cannot be empty'}), 400
+
+        if new_asset_id != old_asset_id and new_asset_id in data_manager.inventory:
+            return jsonify({'error': f'Asset ID {new_asset_id} already exists'}), 409
+
+        new_group = {
+            'department': (data.get('department', old_group['department']) or '').strip().upper(),
+            'brand': (data.get('brand', old_group['brand']) or '').strip(),
+            'model': (data.get('model', old_group['model']) or '').strip().upper(),
+            'description': (data.get('description', old_group['description']) or '').strip()
+        }
+
+        if not new_group['brand']:
+            return jsonify({'error': 'Brand is required'}), 400
+
+        if not new_group['model']:
+            return jsonify({'error': 'Model is required'}), 400
+
+        if not new_group['department']:
+            return jsonify({'error': 'Department is required'}), 400
+
+        group_changed = new_group != old_group
+
+        # Which inventory rows should receive the shared model/description change?
+        if apply_to == 'allSimilar':
+            target_assets = [
+                item for item in data_manager.inventory.values()
+                if _asset_matches_group(item, old_group)
+            ]
+        else:
+            target_assets = [asset]
+
+        # Apply shared fields.
+        # These are safe to apply to all same-type assets when admin chooses "all".
+        for target in target_assets:
+            target.department_code = new_group['department']
+            target.brand = new_group['brand']
+            target.model_number = new_group['model']
+            target.description = new_group['description']
+
+        # Apply unique fields only to the selected asset.
         if 'serial' in data:
-            asset.serial_number = data['serial'].strip()
-        if 'description' in data:
-            asset.description = data['description'].strip()
-        if 'department' in data:
-            asset.department_code = data['department'].strip()
+            asset.serial_number = (data.get('serial') or '').strip()
+
+        if 'defaultLocation' in data:
+            asset.default_location = (data.get('defaultLocation') or '').strip()
+
+        if 'currentLocation' in data:
+            asset.current_location = (data.get('currentLocation') or '').strip()
+
         if 'isMissing' in data:
-            asset.is_missing = bool(data['isMissing'])
+            asset.is_missing = bool(data.get('isMissing'))
+
         if 'isOOC' in data:
-            asset.is_ooc = bool(data['isOOC'])
+            asset.is_ooc = bool(data.get('isOOC'))
 
-        # Save asset
+        # Rename selected asset ID if needed.
+        id_references_changed = 0
+        containers_updated = 0
+
+        if new_asset_id != old_asset_id:
+            del data_manager.inventory[old_asset_id]
+            asset.asset_id = new_asset_id
+            data_manager.inventory[new_asset_id] = asset
+
+            # Cascade asset ID through containers.
+            for container in data_manager.containers.values():
+                container_changed = _replace_asset_id_in_list(
+                    container.asset_ids,
+                    old_asset_id,
+                    new_asset_id
+                )
+
+                if container_changed:
+                    id_references_changed += container_changed
+                    containers_updated += 1
+
+            if containers_updated:
+                data_manager.save_containers()
+
+        # Cascade through every event file.
+        events_updated = 0
+        model_references_changed = 0
+
+        for event in data_manager.events.values():
+            event_changed = 0
+
+            if new_asset_id != old_asset_id:
+                event_changed += _replace_asset_id_in_list(
+                    getattr(event, 'prepared_items', []),
+                    old_asset_id,
+                    new_asset_id
+                )
+                event_changed += _replace_asset_id_in_list(
+                    getattr(event, 'returned_items', []),
+                    old_asset_id,
+                    new_asset_id
+                )
+                event_changed += _replace_asset_id_in_list(
+                    getattr(event, 'actually_prepared', []),
+                    old_asset_id,
+                    new_asset_id
+                )
+                event_changed += _replace_asset_id_in_list(
+                    getattr(event, 'extra_assets', []),
+                    old_asset_id,
+                    new_asset_id
+                )
+
+            # Only rewrite model requirement rows if admin chose to update all
+            # assets of the old model/description group.
+            if apply_to == 'allSimilar' and group_changed:
+                model_changes = _update_event_model_group_references(
+                    event,
+                    old_group,
+                    new_group
+                )
+                event_changed += model_changes
+                model_references_changed += model_changes
+
+            if event_changed:
+                id_references_changed += event_changed
+                update_event_state(event)
+                data_manager.save_event(event)
+                events_updated += 1
+
         data_manager.save_inventory()
-
-        # Invalidate cache
         invalidate_cache()
 
-        log_action(f"Updated asset {asset_id} via web interface")
+        log_action(
+            f"Updated asset {old_asset_id}"
+            f"{' -> ' + new_asset_id if new_asset_id != old_asset_id else ''}; "
+            f"applyTo={apply_to}; updatedAssets={len(target_assets)}; "
+            f"eventsUpdated={events_updated}; containersUpdated={containers_updated}"
+        )
 
-        return jsonify({'success': True, 'message': 'Asset updated successfully'})
+        return jsonify({
+            'success': True,
+            'message': 'Asset updated successfully',
+            'data': {
+                'assetId': new_asset_id,
+                'updatedAssets': len(target_assets),
+                'eventsUpdated': events_updated,
+                'containersUpdated': containers_updated,
+                'idReferencesChanged': id_references_changed,
+                'modelReferencesChanged': model_references_changed
+            }
+        })
+
     except Exception as e:
-        logger.error(f"Error updating asset {asset_id}: {e}")
+        logger.error(f"Error updating asset {asset_id}: {e}", exc_info=True)
         return jsonify({'error': 'Failed to update asset'}), 500
-
+    
 @app.route('/api/assets/<asset_id>/maintain', methods=['POST'])
 @require_auth
 def maintain_asset(asset_id):

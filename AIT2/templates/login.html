@@ -160,12 +160,6 @@
         <p class="login-subtitle">Please sign in to continue</p>
       </div>
 
-      <div class="demo-info">
-        <strong>Demo Credentials:</strong>
-        Username: admin<br />
-        Password: admin
-      </div>
-
       <div class="error-message" id="error-message"></div>
 
       <form id="loginForm">
@@ -252,8 +246,8 @@
 
       // Fill demo credentials on page load
       document.addEventListener("DOMContentLoaded", function () {
-        document.getElementById("username").value = "admin";
-        document.getElementById("password").value = "admin";
+        document.getElementById("username").value = "";
+        document.getElementById("password").value = "";
       });
     </script>
   </body>

@@ -1116,7 +1116,6 @@ MVSHAZER#01,Le Maitre,MVS Hazer,5317,Hazer machine,False,False,,LX,Store,Store
 MVSHAZER#02,Le Maitre,MVS Hazer,2222,Hazer machine,False,False,,LX,Store,Store
 63ADB#01,63A 3-Phase DB,Custom DB,,,False,False,,LX,Store,Store
 63ADB#02,63A 3-Phase DB,Custom DB,,,False,False,,LX,Store,Store
-32ADB#01,32A 3-Phase DB,Custom DB,,,False,False,,LX,Store,Store
 32ADB#02,32A 3-Phase DB,Custom DB,,,False,False,,LX,Store,Store
 LX TREE #01,Versa-Stand,,,Winch Up Lighting Stand,False,False,,LX,Store,
 LX TREE #02,Versa-Stand,,,Winch Up Lighting Stand,False,False,,LX,Store,
@@ -1323,3 +1322,4 @@ LEGION#04,Lenovo,Legion 5 Pro,PF4LW7B4,16inch Windows Laptop,False,False,,VX,Sto
 MACBOOK#01,Apple,Macbook Pro (A1707),C02WG8EHHTD5,16inch Macbook Pro,False,False,,VX,Store,Store
 MACBOOK#02,Apple,Macbook Pro (A2442),M5P2V176XD,14inch Macbook Pro M1 Pro,False,False,,AX,Store,Store
 LUMINODE12,Luminex,Luminode 12,,12 DMX Interface,False,False,,LX,Store,Store
+32ADB#01,32A 3-Phase DB,CUSTOM DB,,,False,False,,LX,Store,Store

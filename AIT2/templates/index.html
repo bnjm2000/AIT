@@ -1568,24 +1568,19 @@
       <div class="sidebar">
           <div class="nav-section">
             <h3>Events</h3>
-            <button class="nav-item active" onclick="showSection('dashboard')">
-              📊 Dashboard
-            </button>
-            <button class="nav-item" onclick="showSection('events')">
+
+            <button class="nav-item active" onclick="showSection('events')">
               📅 All Events
             </button>
-            <button class="nav-item" onclick="openModal('addEventModal')">
-              ➕ Add Event
-            </button>
+
             <button class="nav-item" onclick="showSection('prepare')">
               🔧 Prepare Events
             </button>
-            <button class="nav-item" onclick="showSection('delivery-order')" id="delivery-order-tab">
-              📄 Delivery Order
-            </button>
+
             <button class="nav-item" onclick="showSection('return')" title="Return Assets - Click to view overdue items">
               ↩️ Return Assets <span id="overdue-counter" style="background: #dc3545; color: white; border-radius: 50%; padding: 2px 8px; font-size: 12px; margin-left: 8px; display: none;" title="Overdue events requiring asset returns">0</span>
             </button>
+
             <button class="nav-item" onclick="showSection('transfer')">
               🔄 Transfer Assets
             </button>
@@ -1624,7 +1619,7 @@
         </div>
       <div class="main-content">
         <div class="content-area">
-        <div id="dashboard-section" class="content-section active">
+        <div id="dashboard-section" class="content-section">
           <div class="content-header">
             <h2 class="content-title">Dashboard</h2>
             <button
@@ -1633,25 +1628,6 @@
             >
               Add New Event
             </button>
-            </div>
-
-            <div class="stats-grid">
-              <div class="stat-card">
-                <div class="stat-number" id="total-events">0</div>
-                <div class="stat-label">Total Events</div>
-              </div>
-              <div class="stat-card">
-                <div class="stat-number" id="active-events">0</div>
-                <div class="stat-label">Active Events</div>
-              </div>
-              <div class="stat-card">
-                <div class="stat-number" id="total-assets">0</div>
-                <div class="stat-label">Total Assets</div>
-              </div>
-              <div class="stat-card">
-                <div class="stat-number" id="deployed-assets">0</div>
-                <div class="stat-label">Assets Deployed</div>
-              </div>
             </div>
 
             <!-- Events Tabs -->
@@ -1717,7 +1693,7 @@
             </div>
           </div>
 
-    <div id="events-section" class="content-section">
+    <div id="events-section" class="content-section active">
       <div class="content-header">
         <h2 class="content-title">All Events</h2>
         <button
@@ -1726,6 +1702,25 @@
         >
           Add Event
         </button>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-number" id="total-events">0</div>
+          <div class="stat-label">Total Events</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number" id="active-events">0</div>
+          <div class="stat-label">Active Events</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number" id="total-assets">0</div>
+          <div class="stat-label">Total Assets</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number" id="deployed-assets">0</div>
+          <div class="stat-label">Assets Deployed</div>
+        </div>
       </div>
 
       <!-- All Events Tabs -->
