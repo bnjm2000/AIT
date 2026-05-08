@@ -2080,90 +2080,809 @@ async function saveAssetEditModal() {
   }
 }
 
+function ensureContainerUiStyles() {
+  if (document.getElementById('container-ui-styles')) return;
+
+  const style = document.createElement('style');
+  style.id = 'container-ui-styles';
+  style.textContent = `
+    .containers-dashboard {
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .container-hero {
+      background: linear-gradient(135deg, rgba(102,126,234,0.12), rgba(118,75,162,0.12));
+      border: 1px solid rgba(118,75,162,0.18);
+      border-radius: 18px;
+      padding: 20px;
+    }
+
+    .container-hero-title {
+      font-size: 22px;
+      font-weight: 800;
+      color: #4b2f65;
+      margin-bottom: 6px;
+    }
+
+    .container-hero-subtitle {
+      color: #666;
+      font-size: 14px;
+    }
+
+    .container-stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 12px;
+    }
+
+    .container-stat-card {
+      background: white;
+      border: 1px solid #edf0f5;
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.06);
+    }
+
+    .container-stat-value {
+      font-size: 28px;
+      font-weight: 800;
+      color: #667eea;
+      line-height: 1;
+      margin-bottom: 6px;
+    }
+
+    .container-stat-label {
+      color: #666;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: .7px;
+    }
+
+    .container-toolbar {
+      background: white;
+      border: 1px solid #edf0f5;
+      border-radius: 16px;
+      padding: 14px;
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) 180px auto;
+      gap: 10px;
+      align-items: center;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.05);
+    }
+
+    .container-search-input {
+      width: 100%;
+      border: 1px solid #dfe3ea;
+      border-radius: 999px;
+      padding: 11px 16px;
+      font-size: 14px;
+      outline: none;
+    }
+
+    .container-search-input:focus {
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102,126,234,0.12);
+    }
+
+    .container-sort-select {
+      border: 1px solid #dfe3ea;
+      border-radius: 999px;
+      padding: 11px 14px;
+      font-size: 14px;
+      background: white;
+      outline: none;
+    }
+
+    .container-cards-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 16px;
+    }
+
+    .container-card-modern {
+      background: white;
+      border: 1px solid #edf0f5;
+      border-radius: 18px;
+      padding: 18px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.07);
+      transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+    }
+
+    .container-card-modern:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 14px 34px rgba(0,0,0,0.11);
+      border-color: rgba(102,126,234,0.35);
+    }
+
+    .container-card-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: flex-start;
+      margin-bottom: 14px;
+    }
+
+    .container-id-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 16px;
+      font-weight: 800;
+      color: #333;
+      word-break: break-word;
+    }
+
+    .container-count-pill {
+      background: #eef1ff;
+      color: #4f5edb;
+      border-radius: 999px;
+      padding: 5px 10px;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .container-meta-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 10px 0 14px;
+    }
+
+    .container-meta-pill {
+      background: #f8f9fb;
+      border: 1px solid #edf0f5;
+      color: #555;
+      border-radius: 999px;
+      padding: 5px 9px;
+      font-size: 12px;
+    }
+
+    .container-preview-list {
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+      min-height: 42px;
+      margin-bottom: 14px;
+    }
+
+    .container-preview-item {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      align-items: center;
+      background: #fafbfc;
+      border: 1px solid #edf0f5;
+      border-radius: 10px;
+      padding: 8px 10px;
+      font-size: 13px;
+    }
+
+    .container-preview-main {
+      min-width: 0;
+    }
+
+    .container-preview-id {
+      font-weight: 700;
+      color: #333;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .container-preview-desc {
+      color: #777;
+      font-size: 12px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-top: 2px;
+    }
+
+    .container-card-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+      border-top: 1px solid #f0f2f5;
+      padding-top: 12px;
+    }
+
+    .container-empty-state {
+      background: white;
+      border: 1px dashed #ccd2dd;
+      border-radius: 18px;
+      padding: 40px;
+      text-align: center;
+      color: #666;
+    }
+
+    .container-modal-layout {
+      display: grid;
+      grid-template-columns: minmax(260px, 0.9fr) minmax(320px, 1.1fr);
+      gap: 18px;
+      align-items: start;
+    }
+
+    .container-panel {
+      border: 1px solid #edf0f5;
+      border-radius: 16px;
+      padding: 14px;
+      background: #fafbfc;
+    }
+
+    .container-panel.white {
+      background: white;
+    }
+
+    .container-panel-title {
+      font-size: 15px;
+      font-weight: 800;
+      color: #333;
+      margin-bottom: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .selected-container-assets-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 330px;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+
+    .selected-container-chip {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      background: white;
+      border: 1px solid #dfe8ff;
+      border-left: 4px solid #667eea;
+      border-radius: 12px;
+      padding: 10px;
+    }
+
+    .selected-container-chip-id {
+      font-weight: 800;
+      color: #333;
+      font-size: 13px;
+    }
+
+    .selected-container-chip-desc {
+      color: #666;
+      font-size: 12px;
+      margin-top: 2px;
+    }
+
+    .selected-container-chip button {
+      border: none;
+      background: #fff0f0;
+      color: #b42318;
+      border-radius: 999px;
+      width: 26px;
+      height: 26px;
+      cursor: pointer;
+      font-weight: 800;
+    }
+
+    .container-search-result {
+      padding: 12px;
+      border-bottom: 1px solid #edf0f5;
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      cursor: pointer;
+      transition: background .15s ease;
+    }
+
+    .container-search-result:hover {
+      background: #f6f7ff;
+    }
+
+    .container-assets-table-wrap {
+      max-height: 520px;
+      overflow: auto;
+      border: 1px solid #edf0f5;
+      border-radius: 14px;
+    }
+
+    .container-assets-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    .container-assets-table th {
+      position: sticky;
+      top: 0;
+      background: #f8f9fb;
+      z-index: 1;
+      text-align: left;
+      padding: 10px;
+      border-bottom: 1px solid #edf0f5;
+      color: #555;
+    }
+
+    .container-assets-table td {
+      padding: 10px;
+      border-bottom: 1px solid #f0f2f5;
+      vertical-align: top;
+    }
+
+    @media (max-width: 900px) {
+      .container-toolbar {
+        grid-template-columns: 1fr;
+      }
+
+      .container-modal-layout {
+        grid-template-columns: 1fr;
+      }
+    }
+  `;
+
+  document.head.appendChild(style);
+}
+
+function getAssetFromCache(assetId) {
+  if (!Array.isArray(assets)) return null;
+  return assets.find(a => a.id === assetId) || null;
+}
+
+function getContainerStats(containerList) {
+  const totalContainers = containerList.length;
+  const totalAssets = containerList.reduce((sum, c) => sum + ((c.assetIds || []).length), 0);
+  const largest = containerList.reduce((max, c) => Math.max(max, (c.assetIds || []).length), 0);
+
+  const uniqueAssetIds = new Set();
+  containerList.forEach(c => (c.assetIds || []).forEach(id => uniqueAssetIds.add(id)));
+
+  return {
+    totalContainers,
+    totalAssets,
+    uniqueAssets: uniqueAssetIds.size,
+    largest
+  };
+}
+
+function getContainerDepartments(container) {
+  const counts = {};
+
+  (container.assetIds || []).forEach(assetId => {
+    const asset = getAssetFromCache(assetId);
+    const dept = asset ? (asset.department || 'UN') : 'Unknown';
+    counts[dept] = (counts[dept] || 0) + 1;
+  });
+
+  return counts;
+}
+
+function containerMatchesSearch(container, term) {
+  if (!term) return true;
+
+  const searchTextParts = [
+    container.id,
+    ...(container.assetIds || [])
+  ];
+
+  (container.assetIds || []).forEach(assetId => {
+    const asset = getAssetFromCache(assetId);
+    if (asset) {
+      searchTextParts.push(
+        asset.brand,
+        asset.model,
+        asset.serial,
+        asset.description,
+        asset.department
+      );
+    }
+  });
+
+  return searchTextParts.join(' ').toLowerCase().includes(term.toLowerCase());
+}
+
+function sortContainerList(containerList, sortBy) {
+  const list = [...containerList];
+
+  if (sortBy === 'assets-desc') {
+    return list.sort((a, b) => (b.assetIds || []).length - (a.assetIds || []).length);
+  }
+
+  if (sortBy === 'assets-asc') {
+    return list.sort((a, b) => (a.assetIds || []).length - (b.assetIds || []).length);
+  }
+
+  return list.sort((a, b) => String(a.id || '').localeCompare(String(b.id || ''), undefined, {
+    numeric: true,
+    sensitivity: 'base'
+  }));
+}
+
+function renderContainerPreview(container) {
+  const assetIds = container.assetIds || [];
+
+  if (assetIds.length === 0) {
+    return `<div style="color:#777;font-size:13px;">No assets in this container.</div>`;
+  }
+
+  let html = '';
+
+  assetIds.slice(0, 4).forEach(assetId => {
+    const asset = getAssetFromCache(assetId);
+
+    html += `
+      <div class="container-preview-item">
+        <div class="container-preview-main">
+          <div class="container-preview-id">${escapeHtml(assetId)}</div>
+          <div class="container-preview-desc">
+            ${
+              asset
+                ? `${escapeHtml(asset.brand || '')} ${escapeHtml(asset.model || '')}${asset.serial ? ` • SN: ${escapeHtml(asset.serial)}` : ''}`
+                : 'Asset not found in inventory'
+            }
+          </div>
+        </div>
+        ${
+          asset
+            ? `<span class="asset-badge dept-${escapeHtmlAttr((asset.department || 'un').toLowerCase())}">${escapeHtml(asset.department || 'UN')}</span>`
+            : `<span class="asset-badge status-missing">Missing</span>`
+        }
+      </div>
+    `;
+  });
+
+  if (assetIds.length > 4) {
+    html += `
+      <div style="color:#667eea;font-size:12px;font-weight:700;padding:2px 4px;">
+        +${assetIds.length - 4} more asset(s)
+      </div>
+    `;
+  }
+
+  return html;
+}
+
+function renderContainerCards(containerList) {
+  const root = document.getElementById('containerCardsGrid');
+  const countLabel = document.getElementById('containerVisibleCount');
+  if (!root) return;
+
+  const searchTerm = document.getElementById('containerSearchInput')?.value.trim() || '';
+  const sortBy = document.getElementById('containerSortSelect')?.value || 'id';
+
+  const visible = sortContainerList(
+    containerList.filter(c => containerMatchesSearch(c, searchTerm)),
+    sortBy
+  );
+
+  if (countLabel) {
+    countLabel.textContent = `${visible.length} of ${containerList.length} container(s)`;
+  }
+
+  if (visible.length === 0) {
+    root.innerHTML = `
+      <div class="container-empty-state" style="grid-column:1 / -1;">
+        <div style="font-size:34px;margin-bottom:8px;">🔍</div>
+        <div style="font-weight:800;color:#333;margin-bottom:4px;">No containers found</div>
+        <div>Try a different container ID, asset ID, brand, model, serial number, or department.</div>
+      </div>
+    `;
+    return;
+  }
+
+  root.innerHTML = visible.map(container => {
+    const deptCounts = getContainerDepartments(container);
+    const deptPills = Object.keys(deptCounts).sort().map(dept => {
+      return `<span class="container-meta-pill">${escapeHtml(dept)}: ${deptCounts[dept]}</span>`;
+    }).join('');
+
+    const safeId = escapeHtmlAttr(container.id);
+    const jsId = String(container.id).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+
+    return `
+      <div class="container-card-modern">
+        <div class="container-card-top">
+          <div class="container-id-badge">
+            <span>📦</span>
+            <span>${escapeHtml(container.id)}</span>
+          </div>
+          <div class="container-count-pill">${(container.assetIds || []).length} asset(s)</div>
+        </div>
+
+        <div class="container-meta-row">
+          ${deptPills || '<span class="container-meta-pill">No assets</span>'}
+        </div>
+
+        <div class="container-preview-list">
+          ${renderContainerPreview(container)}
+        </div>
+
+        <div class="container-card-actions">
+          <button class="btn btn-secondary btn-sm" onclick="viewContainer('${jsId}')">View</button>
+          <button class="btn btn-primary btn-sm" onclick="editContainer('${jsId}')">Edit</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderContainerAssetsTable(assetIds) {
+  if (!assetIds || assetIds.length === 0) {
+    return `<div style="padding:20px;text-align:center;color:#666;">No assets in this container.</div>`;
+  }
+
+  const rows = assetIds.map(assetId => {
+    const asset = getAssetFromCache(assetId);
+
+    if (!asset) {
+      return `
+        <tr>
+          <td><strong>${escapeHtml(assetId)}</strong></td>
+          <td colspan="5"><span class="asset-badge status-missing">Asset not found in inventory</span></td>
+        </tr>
+      `;
+    }
+
+    return `
+      <tr>
+        <td><strong>${escapeHtml(asset.id)}</strong></td>
+        <td>${escapeHtml(asset.brand || '')}</td>
+        <td>${escapeHtml(asset.model || '')}</td>
+        <td>${escapeHtml(asset.serial || 'N/A')}</td>
+        <td><span class="asset-badge dept-${escapeHtmlAttr((asset.department || 'un').toLowerCase())}">${escapeHtml(asset.department || 'UN')}</span></td>
+        <td>${escapeHtml(asset.description || '')}</td>
+      </tr>
+    `;
+  }).join('');
+
+  return `
+    <div class="container-assets-table-wrap">
+      <table class="container-assets-table">
+        <thead>
+          <tr>
+            <th>Asset ID</th>
+            <th>Brand</th>
+            <th>Model</th>
+            <th>Serial</th>
+            <th>Dept</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+function makeContainerEditorHtml(mode, container = null) {
+  const isEdit = mode === 'edit';
+  const containerId = container ? container.id : '';
+  const title = isEdit ? `Edit Container: ${escapeHtml(containerId)}` : 'Create New Container';
+
+  return `
+    <div class="container-modal-layout">
+      <div class="container-panel white">
+        <div class="container-panel-title">
+          <span>${title}</span>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Container ID</label>
+          <input
+            id="${isEdit ? 'editContainerIdInput' : 'containerIdInput'}"
+            class="form-input"
+            value="${escapeHtmlAttr(containerId)}"
+            placeholder="e.g. AX-RACK-01 / CASE-A01"
+          >
+          <div style="color:#666;font-size:12px;margin-top:6px;">
+            Use a clear name that is easy to scan, like CASE-A01, RF-RACK, or LX-DISTRO-01.
+          </div>
+        </div>
+
+        <div class="container-panel" style="margin-top:14px;">
+          <div class="container-panel-title">
+            <span>Selected Assets</span>
+            <span class="container-count-pill"><span id="selectedContainerAssetsCount">0</span></span>
+          </div>
+
+          <div id="selectedContainerAssetsList" class="selected-container-assets-grid">
+            <span style="color:#666;font-style:italic;">No assets selected</span>
+          </div>
+
+          <button class="btn btn-secondary btn-sm" onclick="clearContainerSelection()" style="margin-top:12px;">
+            Clear Selection
+          </button>
+        </div>
+      </div>
+
+      <div class="container-panel white">
+        <div class="container-panel-title">
+          <span>Add Assets</span>
+        </div>
+
+        <input
+          id="containerAssetSearch"
+          class="container-search-input"
+          placeholder="Loading assets…"
+          disabled
+        >
+
+        <div style="color:#666;font-size:12px;margin:8px 0 12px;">
+          Search by asset ID, brand, model, serial, description, or press Enter on a container ID to add all assets from that container.
+        </div>
+
+        <div
+          id="availableContainerAssets"
+          style="border:1px solid #edf0f5;border-radius:14px;overflow:auto;max-height:420px;background:white;"
+        ></div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:10px;justify-content:space-between;margin-top:18px;">
+      ${
+        isEdit
+          ? `<button class="btn btn-danger" onclick="deleteContainer('${String(containerId).replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')">Delete Container</button>`
+          : `<div></div>`
+      }
+      <div style="display:flex;gap:10px;">
+        <button class="btn btn-secondary" onclick="closeModal('containerCrudModal')">Cancel</button>
+        ${
+          isEdit
+            ? `<button class="btn btn-success" onclick="saveContainerEdit('${String(containerId).replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')">Save Changes</button>`
+            : `<button class="btn btn-success" onclick="saveNewContainer()">Create Container</button>`
+        }
+      </div>
+    </div>
+  `;
+}
+
 async function loadContainers() {
   const root = document.getElementById("containers-list");
   if (!root) return;
-  // remove the legacy "Add Container" button (blue) if your HTML template still has one
-  // (we keep the "+ New Container" button that this function renders)
-  const containersSection = document.getElementById('containers-section');
-  if (containersSection) {
-    const legacyBtn = Array.from(containersSection.querySelectorAll('button'))
-      .find(btn => btn.closest('#containers-list') === null && (
-        (btn.classList.contains('btn-primary') || btn.classList.contains('btn')) &&
-        (
-          (btn.getAttribute('onclick') || '').includes('createContainer') ||
-          (btn.getAttribute('onclick') || '').toLowerCase().includes('container') ||
-          /add\s+container/i.test(btn.textContent || '') ||
-          /new\s+container/i.test(btn.textContent || '')
-        )
-      ));
-    if (legacyBtn) legacyBtn.remove();
+
+  ensureContainerUiStyles();
+
+  const headerBtn = document.querySelector('#containers-section .content-header button');
+  if (headerBtn) {
+    headerBtn.textContent = '+ New Container';
+    headerBtn.className = 'btn btn-success';
+    headerBtn.onclick = createContainer;
   }
 
+  root.innerHTML = `
+    <div class="containers-dashboard">
+      <div class="container-hero">
+        <div class="container-hero-title">Container Management</div>
+        <div class="container-hero-subtitle">
+          Create, view, and edit containers. Search by container ID, asset ID, brand, model, serial number, or department.
+        </div>
+      </div>
+
+      <div class="container-stats-grid">
+        <div class="container-stat-card">
+          <div class="container-stat-value" id="containersTotalCount">0</div>
+          <div class="container-stat-label">Containers</div>
+        </div>
+        <div class="container-stat-card">
+          <div class="container-stat-value" id="containersAssetCount">0</div>
+          <div class="container-stat-label">Asset References</div>
+        </div>
+        <div class="container-stat-card">
+          <div class="container-stat-value" id="containersUniqueAssets">0</div>
+          <div class="container-stat-label">Unique Assets</div>
+        </div>
+        <div class="container-stat-card">
+          <div class="container-stat-value" id="containersLargestCount">0</div>
+          <div class="container-stat-label">Largest Container</div>
+        </div>
+      </div>
+
+      <div class="container-toolbar">
+        <input
+          id="containerSearchInput"
+          class="container-search-input"
+          placeholder="Search containers or contained assets..."
+        >
+
+        <select id="containerSortSelect" class="container-sort-select">
+          <option value="id">Sort by Container ID</option>
+          <option value="assets-desc">Most assets first</option>
+          <option value="assets-asc">Fewest assets first</option>
+        </select>
+
+        <div id="containerVisibleCount" style="color:#666;font-size:13px;text-align:right;"></div>
+      </div>
+
+      <div id="containerCardsGrid" class="container-cards-grid">
+        <div class="loading">Loading containers...</div>
+      </div>
+    </div>
+  `;
+
   try {
+    await ensureAssetsLoadedForContainerSelector(true);
     await refreshContainersCache(true);
+
     const cache = await refreshContainersCache(false);
     const list = Object.values(cache);
 
-    // toolbar + cards wrapper
-    root.innerHTML = `
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-        <div style="font-size:20px;font-weight:700;">Containers</div>
-        <button class="btn btn-success" onclick="createContainer()">+ New Container</button>
-      </div>
-      <div id="containers-cards"></div>
-    `;
+    containers = list;
+    window.__containersList = list;
 
-    const cards = document.getElementById("containers-cards");
-    if (!cards) return;
+    const stats = getContainerStats(list);
+
+    document.getElementById('containersTotalCount').textContent = stats.totalContainers;
+    document.getElementById('containersAssetCount').textContent = stats.totalAssets;
+    document.getElementById('containersUniqueAssets').textContent = stats.uniqueAssets;
+    document.getElementById('containersLargestCount').textContent = stats.largest;
+
+    document.getElementById('containerSearchInput')?.addEventListener('input', () => {
+      renderContainerCards(window.__containersList || []);
+    });
+
+    document.getElementById('containerSortSelect')?.addEventListener('change', () => {
+      renderContainerCards(window.__containersList || []);
+    });
 
     if (list.length === 0) {
-      cards.innerHTML = `<div style="padding:20px;color:#666;text-align:center;">No containers yet.</div>`;
+      document.getElementById('containerCardsGrid').innerHTML = `
+        <div class="container-empty-state" style="grid-column:1 / -1;">
+          <div style="font-size:38px;margin-bottom:8px;">📦</div>
+          <div style="font-weight:800;color:#333;margin-bottom:4px;">No containers yet</div>
+          <div style="margin-bottom:16px;">Create your first container to group assets like cases, racks, or kits.</div>
+          <button class="btn btn-success" onclick="createContainer()">+ New Container</button>
+        </div>
+      `;
+      document.getElementById('containerVisibleCount').textContent = '0 containers';
       return;
     }
 
-    list
-      .sort((a, b) => (a.id || '').localeCompare(b.id || ''))
-      .forEach(c => {
-        const card = document.createElement("div");
-        card.className = "card";
-        card.style.marginBottom = "12px";
-        card.innerHTML = `
-          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
-            <div>
-              <div style="font-weight:700;font-size:16px;">${escapeHtml(c.id)}</div>
-              <div style="color:#666;font-size:13px;">${c.assetCount || (c.assetIds ? c.assetIds.length : 0)} assets</div>
-            </div>
-            <div style="display:flex;gap:8px;">
-              <button class="btn btn-secondary btn-sm" onclick="viewContainer('${String(c.id).replace(/'/g, "\\'")}')">View</button>
-              <button class="btn btn-primary btn-sm" onclick="editContainer('${String(c.id).replace(/'/g, "\\'")}')">Edit</button>
-            </div>
-          </div>
-        `;
-        cards.appendChild(card);
-      });
+    renderContainerCards(list);
 
-  } catch (e) {
-    console.error("loadContainers error:", e);
-    root.innerHTML = `<div style="padding:20px;color:#a00;">Failed to load containers: ${escapeHtml(e.message || String(e))}</div>`;
+  } catch (error) {
+    root.innerHTML = `
+      <div class="container-empty-state">
+        <div style="font-size:34px;margin-bottom:8px;">⚠️</div>
+        <div style="font-weight:800;color:#333;margin-bottom:4px;">Failed to load containers</div>
+        <div style="color:#a00;margin-bottom:14px;">${escapeHtml(error.message || String(error))}</div>
+        <button class="btn btn-primary" onclick="loadContainers()">Retry</button>
+      </div>
+    `;
   }
 }
 
 function ensureContainerCrudModal() {
+  ensureContainerUiStyles();
+
   if (document.getElementById("containerCrudModal")) return;
 
   const modal = document.createElement("div");
   modal.id = "containerCrudModal";
   modal.className = "modal";
+
   modal.innerHTML = `
-    <div class="modal-content" style="max-width:780px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-        <div id="containerCrudModalTitle" style="font-size:18px;font-weight:700;">Container</div>
-        <button class="btn btn-secondary btn-sm" onclick="closeModal('containerCrudModal')">Close</button>
+    <div class="modal-content" style="max-width:1100px;width:94%;">
+      <div class="modal-header">
+        <h3 id="containerCrudModalTitle" class="modal-title">Container</h3>
+        <button class="close-btn" onclick="closeModal('containerCrudModal')">&times;</button>
       </div>
       <div id="containerCrudModalBody"></div>
     </div>
   `;
+
+  modal.addEventListener('click', function(e) {
+    if (e.target === modal) {
+      closeModal('containerCrudModal');
+    }
+  });
+
   document.body.appendChild(modal);
 }
 
@@ -2386,7 +3105,12 @@ function searchContainerAssets() {
   const term = (searchEl.value || '').toLowerCase().trim();
 
   if (!term || term.length < 2) {
-    containerEl.innerHTML = '<div style="padding:20px;text-align:center;color:#666;">Type at least 2 characters to search...</div>';
+    containerEl.innerHTML = `
+      <div style="padding:24px;text-align:center;color:#666;">
+        <div style="font-size:28px;margin-bottom:6px;">🔎</div>
+        Type at least 2 characters to search assets.
+      </div>
+    `;
     return;
   }
 
@@ -2397,38 +3121,60 @@ function searchContainerAssets() {
 
   const filtered = assets.filter(asset => {
     const searchableText =
-      `${asset.id} ${asset.brand} ${asset.model} ${asset.serial || ''} ${escapeJs(asset.description || '')}`
+      `${asset.id} ${asset.brand} ${asset.model} ${asset.serial || ''} ${asset.description || ''} ${asset.department || ''}`
         .toLowerCase();
+
     return searchableText.includes(term) && !selectedContainerAssets.has(asset.id);
   });
 
   if (filtered.length === 0) {
-    containerEl.innerHTML = '<div style="padding:20px;text-align:center;color:#666;">No matching assets found.</div>';
+    containerEl.innerHTML = `
+      <div style="padding:24px;text-align:center;color:#666;">
+        <div style="font-size:28px;margin-bottom:6px;">📭</div>
+        No matching assets found.
+      </div>
+    `;
     return;
   }
 
   let html = '';
-  filtered.slice(0, 50).forEach(asset => {
+
+  filtered.slice(0, 60).forEach(asset => {
     const statusBadge = getAssetStatusBadge(asset);
     const locationText = asset.location || 'Store';
+
     html += `
-      <div class="container-asset-item" style="padding:12px;border-bottom:1px solid #f1f1f1;display:flex;justify-content:space-between;align-items:center;cursor:pointer;transition:background-color 0.2s;"
-           onmouseover="this.style.backgroundColor='#f8f9fa'"
-           onmouseout="this.style.backgroundColor='white'"
-           data-asset-id="${escapeHtml(asset.id)}">
-        <div style="flex:1;">
-          <div style="font-weight:500;margin-bottom:4px;">${escapeHtml(asset.id)}</div>
-          <div style="color:#666;font-size:13px;margin-bottom:2px;">${escapeHtml(asset.brand)} ${escapeHtml(asset.model)}</div>
-          <div style="color:#999;font-size:12px;">${escapeJs(asset.description || '')}</div>
-          <div style="margin-top:4px;">
+      <div class="container-search-result container-asset-item" data-asset-id="${escapeHtmlAttr(asset.id)}">
+        <div style="min-width:0;flex:1;">
+          <div style="font-weight:800;color:#333;margin-bottom:3px;">${escapeHtml(asset.id)}</div>
+          <div style="color:#555;font-size:13px;margin-bottom:2px;">
+            ${escapeHtml(asset.brand || '')} ${escapeHtml(asset.model || '')}
+            ${asset.serial ? `• SN: ${escapeHtml(asset.serial)}` : ''}
+          </div>
+          <div style="color:#888;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+            ${escapeHtml(asset.description || '')}
+          </div>
+          <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
             ${statusBadge}
-            <span style="color:#999;font-size:11px;margin-left:8px;">📍 ${escapeHtml(locationText)}</span>
+            <span class="asset-badge dept-${escapeHtmlAttr((asset.department || 'un').toLowerCase())}">${escapeHtml(asset.department || 'UN')}</span>
+            <span style="color:#999;font-size:11px;">📍 ${escapeHtml(locationText)}</span>
           </div>
         </div>
-        <button class="btn btn-primary select-container-btn" style="padding:6px 12px;font-size:12px;" data-asset-id="${escapeHtml(asset.id)}">Select</button>
+
+        <button class="btn btn-primary btn-sm select-container-btn" data-asset-id="${escapeHtmlAttr(asset.id)}">
+          Add
+        </button>
       </div>
     `;
   });
+
+  if (filtered.length > 60) {
+    html += `
+      <div style="padding:10px 12px;color:#666;font-size:12px;text-align:center;background:#fafbfc;">
+        Showing first 60 results. Type more to narrow your search.
+      </div>
+    `;
+  }
 
   containerEl.innerHTML = html;
 }
@@ -2491,41 +3237,12 @@ async function createContainer() {
   ensureContainerCrudModal();
 
   document.getElementById("containerCrudModalTitle").textContent = "Create Container";
-  document.getElementById("containerCrudModalBody").innerHTML = `
-    <div class="form-group">
-      <label class="form-label">Container ID</label>
-      <input id="containerIdInput" class="form-input" placeholder="e.g. CASE-A01" />
-    </div>
-
-    <div class="form-group">
-      <label class="form-label">Assets in this container</label>
-      <div style="border:1px solid #e5e5e5;border-radius:8px;padding:12px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-          <div><strong>Selected Assets:</strong> <span id="selectedContainerAssetsCount">0</span></div>
-          <button class="btn btn-secondary btn-sm" onclick="clearContainerSelection()">Clear</button>
-        </div>
-        <div id="selectedContainerAssetsList"><span style="color:#666;font-style:italic;">No assets selected</span></div>
-      </div>
-    </div>
-
-    <div class="form-group">
-      <label class="form-label">Search & add assets</label>
-      <input id="containerAssetSearch" class="form-input" placeholder="Loading assets…" disabled />
-      <div id="availableContainerAssets" style="border:1px solid #eee;border-radius:8px;overflow:auto;max-height:260px;margin-top:8px;"></div>
-      <div style="color:#666;font-size:12px;margin-top:6px;">Tip: type at least 2 characters to search. Press Enter to add an exact asset ID (or a container ID).</div>
-    </div>
-
-    <div style="display:flex;gap:10px;justify-content:flex-end;">
-      <button class="btn btn-secondary" onclick="closeModal('containerCrudModal')">Cancel</button>
-      <button class="btn btn-success" onclick="saveNewContainer()">Create</button>
-    </div>
-  `;
+  document.getElementById("containerCrudModalBody").innerHTML = makeContainerEditorHtml('create');
 
   openModal("containerCrudModal");
 
   await initContainerAssetSelector([]);
-  const searchEl = document.getElementById('containerAssetSearch');
-  if (searchEl) searchEl.focus();
+  document.getElementById('containerAssetSearch')?.focus();
 }
 
 async function saveNewContainer() {
@@ -2539,8 +3256,8 @@ async function saveNewContainer() {
     await apiCall('/api/containers', 'POST', { id, assetIds });
     showNotification('success', `Created container ${id}`);
     closeModal("containerCrudModal");
-    await loadContainers();
     await refreshContainersCache(true);
+    await loadContainers();
   } catch (e) {
     showNotification('error', `Failed to create container: ${e.message}`);
   }
@@ -2548,21 +3265,44 @@ async function saveNewContainer() {
 
 async function viewContainer(containerId) {
   ensureContainerCrudModal();
+
   try {
+    await ensureAssetsLoadedForContainerSelector(true);
+
     const c = await getContainerById(containerId, true);
     if (!c) return showNotification('error', `Container ${containerId} not found`);
 
+    const deptCounts = getContainerDepartments(c);
+    const deptPills = Object.keys(deptCounts).sort().map(dept => {
+      return `<span class="container-meta-pill">${escapeHtml(dept)}: ${deptCounts[dept]}</span>`;
+    }).join('');
+
     document.getElementById("containerCrudModalTitle").textContent = `Container: ${c.id}`;
+
     document.getElementById("containerCrudModalBody").innerHTML = `
-      <div style="color:#666;margin-bottom:10px;">${c.assetIds.length} assets</div>
-      <pre style="background:#111;color:#ddd;padding:12px;border-radius:8px;overflow:auto;max-height:420px;">${escapeHtml(c.assetIds.join('\n'))}</pre>
-      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:12px;">
-        <button class="btn btn-secondary" onclick="closeModal('containerCrudModal')">Close</button>
-        <button class="btn btn-primary" onclick="editContainer('${String(c.id).replace(/'/g, "\\'")}')">Edit</button>
+      <div class="container-hero" style="margin-bottom:16px;">
+        <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;">
+          <div>
+            <div class="container-hero-title">📦 ${escapeHtml(c.id)}</div>
+            <div class="container-hero-subtitle">${(c.assetIds || []).length} asset(s) in this container</div>
+          </div>
+
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn btn-primary" onclick="editContainer('${String(c.id).replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')">Edit Container</button>
+            <button class="btn btn-secondary" onclick="closeModal('containerCrudModal')">Close</button>
+          </div>
+        </div>
+
+        <div class="container-meta-row" style="margin-bottom:0;">
+          ${deptPills || '<span class="container-meta-pill">No department data</span>'}
+        </div>
       </div>
+
+      ${renderContainerAssetsTable(c.assetIds || [])}
     `;
 
     openModal("containerCrudModal");
+
   } catch (e) {
     showNotification('error', `Failed to load container: ${e.message}`);
   }
@@ -2570,50 +3310,21 @@ async function viewContainer(containerId) {
 
 async function editContainer(containerId) {
   ensureContainerCrudModal();
+
   try {
+    await ensureAssetsLoadedForContainerSelector(true);
+
     const c = await getContainerById(containerId, true);
     if (!c) return showNotification('error', `Container ${containerId} not found`);
 
     document.getElementById("containerCrudModalTitle").textContent = `Edit Container: ${c.id}`;
-    document.getElementById("containerCrudModalBody").innerHTML = `
-      <div class="form-group">
-        <label class="form-label">Container ID</label>
-        <input id="editContainerIdInput" class="form-input" value="${escapeHtml(c.id)}" />
-        <div style="color:#666;font-size:12px;margin-top:6px;">You can rename the container here. If you change the ID, the container will be renamed when you click Save.</div>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Assets in this container</label>
-        <div style="border:1px solid #e5e5e5;border-radius:8px;padding:12px;">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-            <div><strong>Selected Assets:</strong> <span id="selectedContainerAssetsCount">0</span></div>
-            <button class="btn btn-secondary btn-sm" onclick="clearContainerSelection()">Clear</button>
-          </div>
-          <div id="selectedContainerAssetsList"><span style="color:#666;font-style:italic;">No assets selected</span></div>
-        </div>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Search & add assets</label>
-        <input id="containerAssetSearch" class="form-input" placeholder="Loading assets…" disabled />
-        <div id="availableContainerAssets" style="border:1px solid #eee;border-radius:8px;overflow:auto;max-height:260px;margin-top:8px;"></div>
-        <div style="color:#666;font-size:12px;margin-top:6px;">Tip: type at least 2 characters to search. Press Enter to add an exact asset ID (or a container ID).</div>
-      </div>
-
-      <div style="display:flex;gap:10px;justify-content:space-between;">
-        <button class="btn btn-danger" onclick="deleteContainer('${String(c.id).replace(/'/g, "\\'")}')">Delete</button>
-        <div style="display:flex;gap:10px;">
-          <button class="btn btn-secondary" onclick="closeModal('containerCrudModal')">Cancel</button>
-          <button class="btn btn-success" onclick="saveContainerEdit('${String(c.id).replace(/'/g, "\\'")}')">Save</button>
-        </div>
-      </div>
-    `;
+    document.getElementById("containerCrudModalBody").innerHTML = makeContainerEditorHtml('edit', c);
 
     openModal("containerCrudModal");
 
     await initContainerAssetSelector(c.assetIds || []);
-    const searchEl = document.getElementById('containerAssetSearch');
-    if (searchEl) searchEl.focus();
+    document.getElementById('containerAssetSearch')?.focus();
+
   } catch (e) {
     showNotification('error', `Failed to edit container: ${e.message}`);
   }
@@ -9759,45 +10470,41 @@ function removeAssetFromMaintenance(assetId) {
   showNotification('info', `Removed ${assetId} from selection`);
 }
 
-function updateSelectedAssetsDisplay() {
-  const countElement = document.getElementById('selectedAssetsCount');
-  const listElement = document.getElementById('selectedAssetsList');
-  
-  if (!countElement || !listElement) {
-    console.error('Selected assets display elements not found');
+function updateSelectedContainerAssetsDisplay() {
+  const countElement = document.getElementById('selectedContainerAssetsCount');
+  const listElement = document.getElementById('selectedContainerAssetsList');
+  if (!countElement || !listElement) return;
+
+  countElement.textContent = selectedContainerAssets.size;
+
+  if (selectedContainerAssets.size === 0) {
+    listElement.innerHTML = '<span style="color:#666;font-style:italic;">No assets selected</span>';
     return;
   }
-  
-  countElement.textContent = selectedMaintenanceAssets.size;
-  
-  if (selectedMaintenanceAssets.size === 0) {
-    listElement.innerHTML = '<span style="color: #666; font-style: italic;">No assets selected</span>';
-    return;
-  }
-  
-  let html = '<div style="display: flex; flex-wrap: wrap; gap: 8px;">';
-  selectedMaintenanceAssets.forEach(assetId => {
-    const asset = assets ? assets.find(a => a.id === assetId) : null;
-    if (asset) {
-      html += `
-        <div style="background: #e7f3ff; border: 1px solid #b3d9ff; border-radius: 6px; padding: 6px 10px; display: flex; align-items: center; gap: 8px; font-size: 13px;">
-          <span style="font-weight: 500;">${assetId}</span>
-          <span style="color: #666;">- ${asset.brand} ${asset.model}</span>
-          <button onclick="removeAssetFromMaintenance('${assetId}')" style="background: none; border: none; color: #999; cursor: pointer; padding: 0; margin-left: 4px; font-size: 14px;" title="Remove">×</button>
+
+  let html = '';
+
+  Array.from(selectedContainerAssets).forEach(assetId => {
+    const asset = getAssetFromCache(assetId);
+
+    html += `
+      <div class="selected-container-chip">
+        <div style="min-width:0;">
+          <div class="selected-container-chip-id">${escapeHtml(assetId)}</div>
+          <div class="selected-container-chip-desc">
+            ${
+              asset
+                ? `${escapeHtml(asset.brand || '')} ${escapeHtml(asset.model || '')}${asset.serial ? ` • SN: ${escapeHtml(asset.serial)}` : ''}`
+                : 'Asset not found in inventory'
+            }
+          </div>
         </div>
-      `;
-    } else {
-      html += `
-        <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 6px; padding: 6px 10px; display: flex; align-items: center; gap: 8px; font-size: 13px;">
-          <span style="font-weight: 500;">${assetId}</span>
-          <span style="color: #666;">- Asset not found</span>
-          <button onclick="removeAssetFromMaintenance('${assetId}')" style="background: none; border: none; color: #999; cursor: pointer; padding: 0; margin-left: 4px; font-size: 14px;" title="Remove">×</button>
-        </div>
-      `;
-    }
+
+        <button onclick="removeAssetFromContainer('${escapeHtmlAttr(assetId)}')" title="Remove">×</button>
+      </div>
+    `;
   });
-  html += '</div>';
-  
+
   listElement.innerHTML = html;
 }
 
