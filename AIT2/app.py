@@ -2862,72 +2862,446 @@ def remove_asset_from_event_post(event_id):
         logger.error(f"Error removing asset from event {event_id}: {e}")
         return jsonify({'error': 'Failed to remove asset from event'}), 500
 
+# ---------------- Transfer Assets helpers and routes ----------------
+
+TRANSFER_SOURCE_STATES = {'ongoing', 'overdue'}
+TRANSFER_TARGET_STATES = {'planning', 'preparing'}
+
+
+def _ensure_event_lists(event):
+    """Make old event files safe to work with."""
+    if not hasattr(event, 'prepared_items') or event.prepared_items is None:
+        event.prepared_items = []
+    if not hasattr(event, 'returned_items') or event.returned_items is None:
+        event.returned_items = []
+    if not hasattr(event, 'actually_prepared') or event.actually_prepared is None:
+        event.actually_prepared = []
+    if not hasattr(event, 'extra_assets') or event.extra_assets is None:
+        event.extra_assets = []
+
+
+def _event_summary_for_transfer(event):
+    _ensure_event_lists(event)
+    unreturned_count = len(_get_unreturned_real_asset_ids(event))
+    return {
+        'id': event.event_id,
+        'name': event.name,
+        'startDate': format_date_output(event.start_date),
+        'endDate': format_date_output(event.end_date),
+        'state': event.state,
+        'tag': getattr(event, 'tag', 'events'),
+        'unreturnedCount': unreturned_count,
+        'assetCount': len([x for x in event.prepared_items if isinstance(x, str) and not x.startswith('[MODEL]')])
+    }
+
+
+def _norm(value, uppercase=False):
+    value = str(value or '').strip()
+    return value.upper() if uppercase else value.casefold()
+
+
+def _asset_match_key(asset):
+    return (
+        _norm(getattr(asset, 'department_code', ''), True),
+        _norm(getattr(asset, 'brand', '')),
+        _norm(getattr(asset, 'model_number', '')),
+        _norm(getattr(asset, 'description', '')),
+    )
+
+
+def _model_marker_to_requirement(marker):
+    parsed = _parse_model_marker(marker)
+    if not parsed:
+        return None
+
+    try:
+        quantity = int(parsed.get('quantity') or 0)
+    except Exception:
+        quantity = 0
+
+    if quantity <= 0:
+        return None
+
+    return {
+        'department': parsed['department'],
+        'brand': parsed['brand'],
+        'model': parsed['model'],
+        'description': parsed.get('description', ''),
+        'quantity': quantity,
+        'key': (
+            _norm(parsed['department'], True),
+            _norm(parsed['brand']),
+            _norm(parsed['model']),
+            _norm(parsed.get('description', '')),
+        )
+    }
+
+
+def _get_unreturned_real_asset_ids(event):
+    """Return real inventory asset IDs that are still physically out for an event."""
+    _ensure_event_lists(event)
+    returned = set(event.returned_items)
+
+    # Most current web workflows put prepared physical assets in actually_prepared.
+    # Keep prepared_items as a fallback for older event files.
+    candidates = []
+    for asset_id in list(event.actually_prepared) + list(event.prepared_items):
+        if not _is_real_asset_ref(asset_id):
+            continue
+        if asset_id in returned:
+            continue
+        if asset_id not in data_manager.inventory:
+            continue
+        if asset_id not in candidates:
+            candidates.append(asset_id)
+
+    return candidates
+
+
+def _target_model_requirements(event):
+    """Return target [MODEL] requirements with already-prepared counts and remaining counts."""
+    _ensure_event_lists(event)
+
+    requirements = {}
+    for item in event.prepared_items:
+        requirement = _model_marker_to_requirement(item)
+        if not requirement:
+            continue
+
+        key = requirement['key']
+        if key not in requirements:
+            requirements[key] = {
+                'department': requirement['department'],
+                'brand': requirement['brand'],
+                'model': requirement['model'],
+                'description': requirement['description'],
+                'required': 0,
+                'prepared': 0,
+                'remaining': 0,
+            }
+        requirements[key]['required'] += requirement['quantity']
+
+    # Count real assets that are already prepared for the target and not returned.
+    for asset_id in _get_unreturned_real_asset_ids(event):
+        asset = data_manager.inventory.get(asset_id)
+        if not asset:
+            continue
+        key = _asset_match_key(asset)
+        if key in requirements:
+            requirements[key]['prepared'] += 1
+
+    for requirement in requirements.values():
+        requirement['remaining'] = max(requirement['required'] - requirement['prepared'], 0)
+
+    return requirements
+
+
+def _asset_fulfills_event_model_requirement(event, asset):
+    requirements = _target_model_requirements(event)
+    return _asset_match_key(asset) in requirements
+
+
+def _get_transfer_candidates(from_event, to_event):
+    """
+    Find source assets that can fill the destination event's remaining model requirements.
+    Source must be Ongoing/Overdue. Destination must be Planning/Preparing.
+    """
+    _ensure_event_lists(from_event)
+    _ensure_event_lists(to_event)
+
+    source_state = str(from_event.state or '').strip().lower()
+    target_state = str(to_event.state or '').strip().lower()
+
+    if source_state not in TRANSFER_SOURCE_STATES:
+        return []
+    if target_state not in TRANSFER_TARGET_STATES:
+        return []
+
+    requirements = _target_model_requirements(to_event)
+    remaining_by_key = {
+        key: req['remaining'] for key, req in requirements.items() if req['remaining'] > 0
+    }
+
+    if not remaining_by_key:
+        return []
+
+    candidates = []
+
+    for asset_id in _get_unreturned_real_asset_ids(from_event):
+        asset = data_manager.inventory.get(asset_id)
+        if not asset:
+            continue
+        if getattr(asset, 'is_missing', False) or getattr(asset, 'is_ooc', False):
+            continue
+
+        key = _asset_match_key(asset)
+        if remaining_by_key.get(key, 0) <= 0:
+            continue
+
+        req = requirements[key]
+        candidates.append({
+            'assetId': asset.asset_id,
+            'department': asset.department_code,
+            'brand': asset.brand,
+            'model': asset.model_number,
+            'description': asset.description,
+            'serial': asset.serial_number,
+            'currentLocation': asset.current_location or from_event.name,
+            'matchLabel': f"[{asset.department_code}] {asset.brand} {asset.model_number} {asset.description}".strip(),
+            'targetRequired': req['required'],
+            'targetPrepared': req['prepared'],
+            'targetRemainingBeforeThisAsset': remaining_by_key[key],
+        })
+        remaining_by_key[key] -= 1
+
+    candidates.sort(key=lambda x: (x['department'], x['brand'], x['model'], x['description'], x['assetId']))
+    return candidates
+
+
+def _transfer_one_asset(from_event, to_event, asset_id):
+    _ensure_event_lists(from_event)
+    _ensure_event_lists(to_event)
+
+    if not _is_real_asset_ref(asset_id):
+        raise ValueError('Only real inventory assets can be transferred here')
+
+    asset = data_manager.inventory.get(asset_id)
+    if not asset:
+        raise ValueError(f'Asset {asset_id} not found')
+
+    if asset_id in from_event.returned_items:
+        raise ValueError(f'Asset {asset_id} has already been returned from the source event')
+
+    if asset_id not in from_event.prepared_items and asset_id not in from_event.actually_prepared:
+        raise ValueError(f'Asset {asset_id} is not currently prepared for the source event')
+
+    # Return it from the source event.
+    if asset_id not in from_event.returned_items:
+        from_event.returned_items.append(asset_id)
+    if asset_id in from_event.actually_prepared:
+        from_event.actually_prepared.remove(asset_id)
+
+    # Prepare it immediately for the destination event.
+    if asset_id not in to_event.prepared_items:
+        to_event.prepared_items.append(asset_id)
+    if asset_id in to_event.returned_items:
+        to_event.returned_items.remove(asset_id)
+    if asset_id not in to_event.actually_prepared:
+        to_event.actually_prepared.append(asset_id)
+
+    # Keep extra asset tracking correct.
+    if _asset_fulfills_event_model_requirement(to_event, asset):
+        if asset_id in to_event.extra_assets:
+            to_event.extra_assets.remove(asset_id)
+    elif asset_id not in to_event.extra_assets:
+        to_event.extra_assets.append(asset_id)
+
+    # The physical location should now show the destination event.
+    asset.current_location = to_event.name
+
+    return {
+        'assetId': asset.asset_id,
+        'brand': asset.brand,
+        'model': asset.model_number,
+        'description': asset.description,
+        'department': asset.department_code,
+        'serial': asset.serial_number,
+    }
+
+
+@app.route('/api/transfers/options', methods=['GET'])
+@require_auth
+def get_transfer_options():
+    """Return valid source and destination events for the Transfer Assets page."""
+    try:
+        # Make sure Ready/Ongoing/Overdue states are current before filtering.
+        for event in data_manager.events.values():
+            old_state = event.state
+            update_event_state(event)
+            if event.state != old_state:
+                data_manager.save_event(event)
+
+        source_events = []
+        target_events = []
+
+        for event in data_manager.events.values():
+            state = str(event.state or '').strip().lower()
+            summary = _event_summary_for_transfer(event)
+
+            if state in TRANSFER_SOURCE_STATES and summary['unreturnedCount'] > 0:
+                source_events.append(summary)
+            if state in TRANSFER_TARGET_STATES:
+                target_events.append(summary)
+
+        source_events.sort(key=lambda x: (x['state'] != 'Overdue', x['endDate'], x['id']))
+        target_events.sort(key=lambda x: (x['startDate'], x['id']))
+
+        return jsonify({
+            'success': True,
+            'data': {
+                'sourceEvents': source_events,
+                'targetEvents': target_events,
+            }
+        })
+    except Exception as e:
+        logger.error(f"Error getting transfer options: {e}")
+        return jsonify({'error': 'Failed to load transfer options'}), 500
+
+
+@app.route('/api/transfers/candidates', methods=['GET'])
+@require_auth
+def get_transfer_candidates():
+    """Return assets from the source event that match the destination event's remaining requirements."""
+    try:
+        from_event_id = request.args.get('fromEventId', type=int)
+        to_event_id = request.args.get('toEventId', type=int)
+
+        if not from_event_id or not to_event_id:
+            return jsonify({'error': 'Source and destination events are required'}), 400
+        if from_event_id == to_event_id:
+            return jsonify({'error': 'Source and destination events cannot be the same'}), 400
+
+        from_event = data_manager.events.get(from_event_id)
+        to_event = data_manager.events.get(to_event_id)
+
+        if not from_event or not to_event:
+            return jsonify({'error': 'Event not found'}), 404
+
+        candidates = _get_transfer_candidates(from_event, to_event)
+
+        return jsonify({
+            'success': True,
+            'data': {
+                'fromEvent': _event_summary_for_transfer(from_event),
+                'toEvent': _event_summary_for_transfer(to_event),
+                'candidates': candidates,
+                'candidateCount': len(candidates),
+            }
+        })
+    except Exception as e:
+        logger.error(f"Error getting transfer candidates: {e}")
+        return jsonify({'error': 'Failed to load transfer candidates'}), 500
+
+
+@app.route('/api/transfers/execute', methods=['POST'])
+@require_auth
+def execute_transfer_assets():
+    """Bulk transfer selected matching assets from one event to another."""
+    try:
+        data = request.get_json() or {}
+        from_event_id = data.get('fromEventId')
+        to_event_id = data.get('toEventId')
+        asset_ids = data.get('assetIds') or []
+
+        if not from_event_id or not to_event_id:
+            return jsonify({'error': 'Source and destination events are required'}), 400
+        if int(from_event_id) == int(to_event_id):
+            return jsonify({'error': 'Source and destination events cannot be the same'}), 400
+        if not isinstance(asset_ids, list) or not asset_ids:
+            return jsonify({'error': 'Select at least one asset to transfer'}), 400
+
+        from_event = data_manager.events.get(int(from_event_id))
+        to_event = data_manager.events.get(int(to_event_id))
+
+        if not from_event or not to_event:
+            return jsonify({'error': 'Event not found'}), 404
+
+        if str(from_event.state or '').strip().lower() not in TRANSFER_SOURCE_STATES:
+            return jsonify({'error': 'Source event must be Ongoing or Overdue'}), 400
+        if str(to_event.state or '').strip().lower() not in TRANSFER_TARGET_STATES:
+            return jsonify({'error': 'Destination event must be Planning or Preparing'}), 400
+
+        valid_candidate_ids = {
+            candidate['assetId'] for candidate in _get_transfer_candidates(from_event, to_event)
+        }
+
+        transferred = []
+        skipped = []
+
+        for raw_asset_id in asset_ids:
+            asset_id = str(raw_asset_id or '').strip()
+            if not asset_id:
+                continue
+            if asset_id not in valid_candidate_ids:
+                skipped.append({'assetId': asset_id, 'reason': 'Asset no longer matches an open destination requirement'})
+                continue
+            try:
+                transferred.append(_transfer_one_asset(from_event, to_event, asset_id))
+            except ValueError as e:
+                skipped.append({'assetId': asset_id, 'reason': str(e)})
+
+        if not transferred:
+            return jsonify({'error': 'No assets were transferred', 'skipped': skipped}), 400
+
+        data_manager.save_inventory()
+        update_event_state(from_event)
+        update_event_state(to_event)
+        data_manager.save_event(from_event)
+        data_manager.save_event(to_event)
+        invalidate_cache()
+
+        log_action(
+            f"Transferred {len(transferred)} asset(s) from event {from_event.event_id} to event {to_event.event_id}: "
+            f"{', '.join([item['assetId'] for item in transferred])}"
+        )
+
+        return jsonify({
+            'success': True,
+            'message': f"Transferred {len(transferred)} asset(s)",
+            'data': {
+                'transferred': transferred,
+                'skipped': skipped,
+                'fromEvent': _event_summary_for_transfer(from_event),
+                'toEvent': _event_summary_for_transfer(to_event),
+            }
+        })
+    except Exception as e:
+        logger.error(f"Error executing transfer: {e}")
+        import traceback
+        logger.error(f"Transfer traceback: {traceback.format_exc()}")
+        return jsonify({'error': 'Failed to transfer assets'}), 500
+
+
 @app.route('/api/events/<int:event_id>/transfer', methods=['POST'])
 @require_auth
 def transfer_asset_between_events(event_id):
-    """Transfer an asset from one event to another"""
+    """Transfer one asset from one event to another. Kept for the existing manual modal."""
     try:
-        data = request.get_json()
+        data = request.get_json() or {}
         from_event_id = data.get('fromEventId')
-        asset_id = data.get('assetId', '').strip()
+        asset_id = str(data.get('assetId', '')).strip()
 
         if not from_event_id or not asset_id:
             return jsonify({'error': 'From event ID and asset ID are required'}), 400
 
-        # Get events
-        from_event = data_manager.events.get(from_event_id)
+        from_event = data_manager.events.get(int(from_event_id))
         to_event = data_manager.events.get(event_id)
 
         if not from_event or not to_event:
             return jsonify({'error': 'Event not found'}), 404
 
-        # Initialize actually_prepared for both events if needed
-        if not hasattr(from_event, 'actually_prepared'):
-            from_event.actually_prepared = []
-        if not hasattr(to_event, 'actually_prepared'):
-            to_event.actually_prepared = []
+        transferred = _transfer_one_asset(from_event, to_event, asset_id)
 
-        # Check if asset is assigned to from_event
-        if asset_id not in from_event.prepared_items or asset_id in from_event.returned_items:
-            return jsonify({'error': 'Asset is not currently assigned to the source event'}), 400
-
-        # Transfer the asset
-        from_event.returned_items.append(asset_id)
-
-        # Remove from actually_prepared in source event
-        if asset_id in from_event.actually_prepared:
-            from_event.actually_prepared.remove(asset_id)
-
-        # Add to destination event
-        if asset_id in to_event.prepared_items and asset_id in to_event.returned_items:
-            to_event.returned_items.remove(asset_id)
-        elif asset_id not in to_event.prepared_items:
-            to_event.prepared_items.append(asset_id)
-
-        # For regular assets, update location
-        if not (asset_id.startswith('[LOAN]') or asset_id.startswith('[MISC]')):
-            asset = data_manager.inventory.get(asset_id)
-            if asset:
-                asset.current_location = to_event.name
-                data_manager.save_inventory()
-
-        # Update event states
+        data_manager.save_inventory()
         update_event_state(from_event)
         update_event_state(to_event)
-
-        # Save changes
         data_manager.save_event(from_event)
         data_manager.save_event(to_event)
-
-        # Invalidate cache
         invalidate_cache()
 
-        log_action(
-            f"Transferred asset {asset_id} from event {from_event_id} to event {event_id}")
+        log_action(f"Transferred asset {asset_id} from event {from_event_id} to event {event_id}")
 
-        return jsonify({'success': True, 'message': f'Asset {asset_id} transferred successfully'})
+        return jsonify({
+            'success': True,
+            'message': f'Asset {asset_id} transferred successfully',
+            'data': transferred
+        })
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
     except Exception as e:
         logger.error(f"Error transferring asset: {e}")
+        import traceback
+        logger.error(f"Transfer traceback: {traceback.format_exc()}")
         return jsonify({'error': 'Failed to transfer asset'}), 500
 
 

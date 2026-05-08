@@ -598,7 +598,7 @@ class InventoryManagementApp:
             brand = input("Brand (type 'exit' to return): ").strip()
             if brand.lower() == 'exit':
                 break
-            model_number = input("Model number: ").strip().upper()
+            model_number = input("Model number: ").strip()
             description = input("Description (optional): ").strip()
             department_code = input("Department code (e.g., AX, LX): ").strip().upper()
             if not department_code:

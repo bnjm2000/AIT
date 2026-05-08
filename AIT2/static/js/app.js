@@ -1766,7 +1766,71 @@ function clearFilters() {
   displayFilteredInventory();
 }
 
+function ensureInventoryTableStyles() {
+  if (document.getElementById('inventory-compact-table-styles')) return;
+
+  const style = document.createElement('style');
+  style.id = 'inventory-compact-table-styles';
+
+  style.textContent = `
+    .inventory-compact-table {
+      table-layout: auto;
+      width: 100%;
+    }
+
+    .inventory-compact-table th,
+    .inventory-compact-table td {
+      padding: 8px 10px;
+      vertical-align: top;
+      height: auto;
+      line-height: 1.25;
+    }
+
+    .inventory-compact-table tbody tr {
+      height: auto;
+    }
+
+    .inventory-compact-table .asset-id-cell {
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .inventory-compact-table .asset-description-cell {
+      max-width: 420px;
+      white-space: normal;
+      word-break: normal;
+      overflow-wrap: anywhere;
+    }
+
+    .inventory-compact-table .asset-description-text {
+      display: inline;
+      line-height: 1.3;
+    }
+
+    .inventory-compact-table .asset-description-empty {
+      color: #aaa;
+    }
+
+    .inventory-actions-cell {
+      white-space: nowrap;
+      display: flex;
+      gap: 6px;
+      flex-wrap: nowrap;
+      align-items: flex-start;
+    }
+
+    .inventory-compact-table .btn-sm {
+      padding: 5px 9px;
+      font-size: 12px;
+    }
+  `;
+
+  document.head.appendChild(style);
+}
+
 function displayInventoryTable(assetsToShow) {
+  ensureInventoryTableStyles();
+
   const container = document.getElementById("inventory-table-container");
 
   if (assetsToShow.length === 0) {
@@ -1778,70 +1842,85 @@ function displayInventoryTable(assetsToShow) {
   const isAdmin = currentUser && currentUser.isAdmin;
 
   let tableHTML = `
-        <table class="table">
-            <thead>
-                <tr>
-                    <th>Asset ID</th>
-                    <th>Brand</th>
-                    <th>Model</th>
-                    <th>Description</th>
-                    <th>Serial</th>
-                    <th>Department</th>
-                    <th>Status</th>
-                    <th>Location</th>
-                    <th>OOC Status</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-    `;
+    <table class="table inventory-compact-table">
+      <thead>
+        <tr>
+          <th>Asset ID</th>
+          <th>Brand</th>
+          <th>Model</th>
+          <th>Description</th>
+          <th>Serial</th>
+          <th>Department</th>
+          <th>Status</th>
+          <th>Location</th>
+          <th>OOC</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+  `;
 
   assetsToShow.forEach((asset) => {
     const encodedAssetId = encodeURIComponent(asset.id);
+    const description = asset.description || "";
 
     tableHTML += `
-            <tr>
-                <td>${escapeHtml(asset.id)}</td>
-                <td>${escapeHtml(asset.brand)}</td>
-                <td>${escapeHtml(asset.model)}</td>
-                <td>${escapeHtml(asset.description || "")}</td>
-                <td>${escapeHtml(asset.serial || "N/A")}</td>
-                <td>
-                  <span class="asset-badge dept-${escapeHtmlAttr((asset.department || 'un').toLowerCase())}">
-                    ${escapeHtml(asset.department || "UN")}
-                  </span>
-                </td>
-                <td>
-                  <span class="asset-badge status-${escapeHtmlAttr(asset.status || 'available')}">
-                    ${escapeHtml(asset.status || "available")}
-                  </span>
-                </td>
-                <td>${escapeHtml(asset.location || "Store")}</td>
-                <td>
-                    <span class="asset-badge ${asset.isOOC ? 'status-ooc' : 'status-available'}">
-                        ${asset.isOOC ? 'Out of Commission' : 'Available'}
-                    </span>
-                </td>
-                <td>
-                    <button class="btn btn-primary btn-sm" onclick="viewMaintenanceLog('${encodedAssetId}')" title="View maintenance log">
-                        View Log
-                    </button>
-                    ${
-                      isAdmin
-                        ? `<button class="btn btn-warning btn-sm" onclick="openEditAssetModal('${encodedAssetId}')" title="Edit asset attributes">
-                             Edit
-                           </button>`
-                        : ''
-                    }
-                </td>
-            </tr>
-        `;
+      <tr>
+        <td class="asset-id-cell">${escapeHtml(asset.id)}</td>
+        <td>${escapeHtml(asset.brand || "")}</td>
+        <td>${escapeHtml(asset.model || "")}</td>
+
+        <td class="asset-description-cell">
+          ${
+            description
+              ? `<span class="asset-description-text">${escapeHtml(description)}</span>`
+              : `<span class="asset-description-empty">—</span>`
+          }
+        </td>
+
+        <td>${escapeHtml(asset.serial || "N/A")}</td>
+
+        <td>
+          <span class="asset-badge dept-${escapeHtmlAttr((asset.department || 'un').toLowerCase())}">
+            ${escapeHtml(asset.department || "UN")}
+          </span>
+        </td>
+
+        <td>
+          <span class="asset-badge status-${escapeHtmlAttr(asset.status || 'available')}">
+            ${escapeHtml(asset.status || "available")}
+          </span>
+        </td>
+
+        <td>${escapeHtml(asset.location || "Store")}</td>
+
+        <td>
+          <span class="asset-badge ${asset.isOOC ? 'status-ooc' : 'status-available'}">
+            ${asset.isOOC ? 'OOC' : 'OK'}
+          </span>
+        </td>
+
+        <td class="inventory-actions-cell">
+          <button class="btn btn-primary btn-sm" onclick="viewMaintenanceLog('${encodedAssetId}')" title="View maintenance log">
+            View Log
+          </button>
+
+          ${
+            isAdmin
+              ? `<button class="btn btn-warning btn-sm" onclick="openEditAssetModal('${encodedAssetId}')" title="Edit asset attributes">
+                   Edit
+                 </button>`
+              : ''
+          }
+        </td>
+      </tr>
+    `;
   });
 
   tableHTML += `
-            </tbody>
-        </table>
-    `;
+      </tbody>
+    </table>
+  `;
 
   container.innerHTML = tableHTML;
 }
@@ -6793,82 +6872,329 @@ async function returnManualAssetNew() {
     }
 }
 
+let transferOptionsCache = null;
+let transferCandidateCache = [];
+
 async function loadTransferHistory() {
+  const container = document.getElementById("transfer-history");
+  if (!container) return;
+
+  container.innerHTML = '<div class="loading">Loading transfer options...</div>';
+
   try {
-    const response = await apiCall("/api/events");
-    const overdueCount = countOverdueEvents(response.data);
+    // Keep event states fresh so Ready events become Ongoing and ended events become Overdue.
+    try { await apiCall('/api/events/update-states', 'POST'); } catch (e) { console.warn('State refresh skipped:', e); }
+
+    const response = await apiCall('/api/transfers/options');
+    transferOptionsCache = response.data || { sourceEvents: [], targetEvents: [] };
+
+    const overdueCount = (transferOptionsCache.sourceEvents || []).filter(e => e.state === 'Overdue').length;
     updateOverdueCounter(overdueCount);
-    const activeEvents = response.data.filter((event) => {
-      // An event is transferable if:
-      // 1. It's not closed
-      // 2. It has assets assigned
-      // 3. It has unreturned assets (prepared but not returned)
-      const hasAssets = event.assetCount > 0;
-      const hasUnreturnedAssets = event.preparedCount > event.returnedCount;
-      
-      return event.state !== "Closed" && hasAssets && hasUnreturnedAssets;
-    });
 
-    const container = document.getElementById("transfer-history");
-    container.innerHTML = `
-            <h3 style="margin-bottom: 20px; color: #764ba2;">Active Events Available for Transfer</h3>
-            <div class="events-grid" id="transfer-events-list"></div>
-        `;
+    renderTransferWorkspace();
+    populateTransferDropdowns(transferOptionsCache);
 
-    const eventsList = document.getElementById("transfer-events-list");
+    const sourceSelect = document.getElementById('transferSourceSelect');
+    const targetSelect = document.getElementById('transferTargetSelect');
 
-    if (activeEvents.length === 0) {
-      eventsList.innerHTML =
-        '<p style="text-align: center; color: #666; padding: 40px;">No active events with unreturned assets available for transfer.</p>';
-      return;
+    if (sourceSelect && targetSelect && sourceSelect.value && targetSelect.value) {
+      await loadTransferCandidates();
     }
-
-    activeEvents.forEach((event) => {
-      const card = createTransferEventCard(event);
-      eventsList.appendChild(card);
-    });
-
-    // Populate transfer modal dropdowns
-    populateTransferDropdowns(activeEvents);
   } catch (error) {
-    document.getElementById("transfer-history").innerHTML =
-      '<p style="color: red; text-align: center;">Error loading events</p>';
+    container.innerHTML = `
+      <div style="padding:30px;text-align:center;color:#a00;">
+        Failed to load transfer options: ${escapeHtml(error.message || String(error))}
+        <br><br>
+        <button class="btn btn-primary" onclick="loadTransferHistory()">Retry</button>
+      </div>
+    `;
   }
 }
 
-function createTransferEventCard(event) {
-  const card = document.createElement("div");
-  card.className = `event-card state-${event.state.toLowerCase()}`;
+function renderTransferWorkspace() {
+  const container = document.getElementById('transfer-history');
+  if (!container) return;
 
-  // Helper function to escape HTML
-  const escapeHtml = (str) => {
-    if (!str) return '';
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
-  };
+  const sourceEvents = transferOptionsCache?.sourceEvents || [];
+  const targetEvents = transferOptionsCache?.targetEvents || [];
 
-  const dateRange =
-    event.startDate === event.endDate
+  const sourceOptions = sourceEvents.map(event => {
+    const tagPrefix = event.tag === 'dry hire' ? '[DH]' : '[E]';
+    const dateRange = event.startDate === event.endDate
       ? formatDate(event.startDate)
       : `${formatDate(event.startDate)} - ${formatDate(event.endDate)}`;
 
-  card.innerHTML = `
-        <div class="event-header">
-            <div class="event-id">ID: ${event.id}</div>
-            <div class="event-state state-${event.state.toLowerCase()}">${escapeHtml(event.state)}</div>
-        </div>
-        <div class="event-title">${escapeHtml(event.name)}</div>
-        <div class="event-date">${escapeHtml(dateRange)}</div>
-        <div style="margin: 15px 0;">
-            <small style="color: #666;">${event.assetCount || 0} assets assigned</small>
-        </div>
-        <div class="event-actions">
-            <button class="btn btn-primary" onclick="viewEvent(${event.id})">View Assets</button>
-        </div>
+    return `
+      <option value="${event.id}">
+        ${tagPrefix} ${event.id}: ${escapeHtml(event.name)} • ${event.state} • ${event.unreturnedCount || 0} out • ${dateRange}
+      </option>
     `;
+  }).join('');
 
-  return card;
+  const targetOptions = targetEvents.map(event => {
+    const tagPrefix = event.tag === 'dry hire' ? '[DH]' : '[E]';
+    const dateRange = event.startDate === event.endDate
+      ? formatDate(event.startDate)
+      : `${formatDate(event.startDate)} - ${formatDate(event.endDate)}`;
+
+    return `
+      <option value="${event.id}">
+        ${tagPrefix} ${event.id}: ${escapeHtml(event.name)} • ${event.state} • ${dateRange}
+      </option>
+    `;
+  }).join('');
+
+  container.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:18px;">
+      <div style="background:linear-gradient(135deg,rgba(102,126,234,.10),rgba(118,75,162,.10));border:1px solid rgba(118,75,162,.18);border-radius:16px;padding:18px;">
+        <h3 style="margin:0 0 6px;color:#4b2f65;">Transfer Assets Directly Between Events</h3>
+        <p style="margin:0;color:#666;line-height:1.4;">
+          Select a source event that is <strong>Ongoing</strong> or <strong>Overdue</strong>, then select a destination event that is <strong>Planning</strong> or <strong>Preparing</strong>.
+          Matching assets will be returned from the source and immediately prepared for the destination.
+        </p>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;align-items:end;background:white;border:1px solid #edf0f5;border-radius:16px;padding:16px;box-shadow:0 6px 18px rgba(0,0,0,.05);">
+        <div class="form-group" style="margin:0;">
+          <label class="form-label">From Event — Ongoing / Overdue</label>
+          <select id="transferSourceSelect" class="form-input" onchange="loadTransferCandidates()">
+            <option value="">Select source event...</option>
+            ${sourceOptions}
+          </select>
+          <div style="font-size:12px;color:#666;margin-top:6px;">${sourceEvents.length} eligible source event(s)</div>
+        </div>
+
+        <div class="form-group" style="margin:0;">
+          <label class="form-label">To Event — Planning / Preparing</label>
+          <select id="transferTargetSelect" class="form-input" onchange="loadTransferCandidates()">
+            <option value="">Select destination event...</option>
+            ${targetOptions}
+          </select>
+          <div style="font-size:12px;color:#666;margin-top:6px;">${targetEvents.length} eligible destination event(s)</div>
+        </div>
+
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-primary" onclick="loadTransferCandidates()">Find Matching Assets</button>
+          <button class="btn btn-secondary" onclick="openManualTransferModal()">Manual Transfer</button>
+        </div>
+      </div>
+
+      <div id="transfer-candidates-panel" style="background:white;border:1px solid #edf0f5;border-radius:16px;padding:16px;box-shadow:0 6px 18px rgba(0,0,0,.05);">
+        ${renderTransferInitialMessage(sourceEvents, targetEvents)}
+      </div>
+    </div>
+  `;
+}
+
+function renderTransferInitialMessage(sourceEvents, targetEvents) {
+  if (!sourceEvents.length && !targetEvents.length) {
+    return '<p style="text-align:center;color:#666;padding:28px;">No eligible source or destination events found.</p>';
+  }
+  if (!sourceEvents.length) {
+    return '<p style="text-align:center;color:#666;padding:28px;">No Ongoing or Overdue events with unreturned assets found.</p>';
+  }
+  if (!targetEvents.length) {
+    return '<p style="text-align:center;color:#666;padding:28px;">No Planning or Preparing destination events found.</p>';
+  }
+  return '<p style="text-align:center;color:#666;padding:28px;">Choose both events to see assets that match the destination requirements.</p>';
+}
+
+async function loadTransferCandidates() {
+  const sourceSelect = document.getElementById('transferSourceSelect');
+  const targetSelect = document.getElementById('transferTargetSelect');
+  const panel = document.getElementById('transfer-candidates-panel');
+  if (!sourceSelect || !targetSelect || !panel) return;
+
+  const fromEventId = sourceSelect.value;
+  const toEventId = targetSelect.value;
+
+  if (!fromEventId || !toEventId) {
+    panel.innerHTML = '<p style="text-align:center;color:#666;padding:28px;">Choose both events to see assets that match the destination requirements.</p>';
+    return;
+  }
+
+  if (fromEventId === toEventId) {
+    panel.innerHTML = '<p style="text-align:center;color:#a00;padding:28px;">Source and destination events cannot be the same.</p>';
+    return;
+  }
+
+  panel.innerHTML = '<div class="loading">Finding matching transferable assets...</div>';
+
+  try {
+    const response = await apiCall(`/api/transfers/candidates?fromEventId=${encodeURIComponent(fromEventId)}&toEventId=${encodeURIComponent(toEventId)}`);
+    transferCandidateCache = response.data?.candidates || [];
+    renderTransferCandidates(response.data || {});
+  } catch (error) {
+    panel.innerHTML = `
+      <div style="padding:28px;text-align:center;color:#a00;">
+        Failed to load transfer candidates: ${escapeHtml(error.message || String(error))}
+      </div>
+    `;
+  }
+}
+
+function renderTransferCandidates(data) {
+  const panel = document.getElementById('transfer-candidates-panel');
+  if (!panel) return;
+
+  const candidates = data.candidates || [];
+  const fromEvent = data.fromEvent || {};
+  const toEvent = data.toEvent || {};
+
+  if (!candidates.length) {
+    panel.innerHTML = `
+      <div style="text-align:center;padding:34px;color:#666;">
+        <div style="font-size:32px;margin-bottom:8px;">🔍</div>
+        <div style="font-weight:700;color:#333;margin-bottom:4px;">No matching assets found</div>
+        <div>There are no unreturned source assets that match the destination event’s remaining model requirements.</div>
+      </div>
+    `;
+    return;
+  }
+
+  const groupedCounts = candidates.reduce((acc, item) => {
+    const key = item.matchLabel || `${item.department} ${item.brand} ${item.model}`;
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {});
+
+  const groupSummary = Object.entries(groupedCounts).map(([label, count]) => {
+    return `<span style="display:inline-block;background:#eef1ff;color:#4f5edb;border-radius:999px;padding:5px 10px;font-size:12px;font-weight:700;margin:3px;">${count}× ${escapeHtml(label)}</span>`;
+  }).join('');
+
+  const rows = candidates.map(candidate => {
+    return `
+      <tr>
+        <td style="width:36px;">
+          <input type="checkbox" class="transfer-candidate-checkbox" data-asset-id="${escapeHtmlAttr(candidate.assetId)}" checked>
+        </td>
+        <td><strong>${escapeHtml(candidate.assetId)}</strong></td>
+        <td>${escapeHtml(candidate.serial || 'N/A')}</td>
+        <td>
+          <span class="asset-badge dept-${escapeHtmlAttr((candidate.department || 'un').toLowerCase())}">${escapeHtml(candidate.department || 'UN')}</span>
+        </td>
+        <td>${escapeHtml(candidate.brand || '')}</td>
+        <td>${escapeHtml(candidate.model || '')}</td>
+        <td>${escapeHtml(candidate.description || '')}</td>
+        <td style="color:#666;font-size:12px;">
+          Destination still needs ${candidate.targetRemainingBeforeThisAsset} before this asset
+        </td>
+        <td>
+          <button class="btn btn-success btn-sm" onclick="executeSingleTransfer('${encodeURIComponent(candidate.assetId)}')">Transfer</button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  panel.innerHTML = `
+    <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;margin-bottom:14px;">
+      <div>
+        <h3 style="margin:0;color:#764ba2;">${candidates.length} transferable asset(s)</h3>
+        <div style="color:#666;font-size:13px;margin-top:4px;">
+          From <strong>${escapeHtml(fromEvent.name || '')}</strong> → To <strong>${escapeHtml(toEvent.name || '')}</strong>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-secondary btn-sm" onclick="toggleAllTransferCandidates(true)">Select All</button>
+        <button class="btn btn-secondary btn-sm" onclick="toggleAllTransferCandidates(false)">Clear</button>
+        <button class="btn btn-success" onclick="executeSelectedTransfers()">Transfer Selected</button>
+      </div>
+    </div>
+
+    <div style="margin-bottom:14px;">${groupSummary}</div>
+
+    <div style="overflow:auto;border:1px solid #edf0f5;border-radius:12px;">
+      <table class="table" style="margin-top:0;">
+        <thead>
+          <tr>
+            <th></th>
+            <th>Asset ID</th>
+            <th>Serial</th>
+            <th>Dept</th>
+            <th>Brand</th>
+            <th>Model</th>
+            <th>Description</th>
+            <th>Match</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+function toggleAllTransferCandidates(checked) {
+  document.querySelectorAll('.transfer-candidate-checkbox').forEach(cb => {
+    cb.checked = checked;
+  });
+}
+
+async function executeSingleTransfer(encodedAssetId) {
+  const assetId = decodeURIComponent(encodedAssetId);
+  await executeTransfers([assetId]);
+}
+
+async function executeSelectedTransfers() {
+  const selected = Array.from(document.querySelectorAll('.transfer-candidate-checkbox:checked'))
+    .map(cb => cb.dataset.assetId)
+    .filter(Boolean);
+
+  if (!selected.length) {
+    showNotification('warning', 'Select at least one asset to transfer');
+    return;
+  }
+
+  await executeTransfers(selected);
+}
+
+async function executeTransfers(assetIds) {
+  const fromEventId = document.getElementById('transferSourceSelect')?.value;
+  const toEventId = document.getElementById('transferTargetSelect')?.value;
+
+  if (!fromEventId || !toEventId) {
+    showNotification('warning', 'Select both source and destination events');
+    return;
+  }
+
+  const message = assetIds.length === 1
+    ? `Transfer ${assetIds[0]} to the destination event?`
+    : `Transfer ${assetIds.length} selected assets to the destination event?`;
+
+  if (!confirm(message)) return;
+
+  try {
+    const response = await apiCall('/api/transfers/execute', 'POST', {
+      fromEventId: parseInt(fromEventId, 10),
+      toEventId: parseInt(toEventId, 10),
+      assetIds
+    });
+
+    const transferred = response.data?.transferred || [];
+    const skipped = response.data?.skipped || [];
+
+    let msg = `Transferred ${transferred.length} asset(s)`;
+    if (skipped.length) msg += `; ${skipped.length} skipped`;
+    showNotification('success', msg);
+
+    await loadTransferHistory();
+
+    if (document.getElementById('prepare-section')?.classList.contains('active')) await loadPrepareEvents();
+    if (document.getElementById('return-section')?.classList.contains('active')) await loadReturnEvents();
+    if (document.getElementById('events-section')?.classList.contains('active')) await loadAllEvents();
+  } catch (error) {
+    showNotification('error', `Failed to transfer assets: ${error.message}`);
+  }
+}
+
+async function openManualTransferModal() {
+  if (!transferOptionsCache) {
+    const response = await apiCall('/api/transfers/options');
+    transferOptionsCache = response.data || { sourceEvents: [], targetEvents: [] };
+  }
+  populateTransferDropdowns(transferOptionsCache);
+  openModal('transferModal');
 }
 
 async function viewEvent(eventId) {
@@ -7440,25 +7766,31 @@ function openMaintenanceModalForAsset(assetId) {
   }, 200);
 }
 
-function populateTransferDropdowns(events) {
+function populateTransferDropdowns(options) {
   const fromSelect = document.getElementById("transferFromEvent");
   const toSelect = document.getElementById("transferToEvent");
+  if (!fromSelect || !toSelect) return;
 
-  // Clear existing options
+  const sourceEvents = Array.isArray(options) ? options : (options?.sourceEvents || []);
+  const targetEvents = Array.isArray(options) ? options : (options?.targetEvents || []);
+
   fromSelect.innerHTML = '<option value="">Select source event...</option>';
   toSelect.innerHTML = '<option value="">Select destination event...</option>';
 
-  events.forEach((event) => {
+  sourceEvents.forEach((event) => {
     const tagPrefix = event.tag === 'dry hire' ? '[DH]' : '[E]';
-    const option1 = document.createElement("option");
-    option1.value = event.id;
-    option1.textContent = `${tagPrefix} ${event.id}: ${event.name}`;
-    fromSelect.appendChild(option1);
+    const option = document.createElement("option");
+    option.value = event.id;
+    option.textContent = `${tagPrefix} ${event.id}: ${event.name} (${event.state})`;
+    fromSelect.appendChild(option);
+  });
 
-    const option2 = document.createElement("option");
-    option2.value = event.id;
-    option2.textContent = `${tagPrefix} ${event.id}: ${event.name}`;
-    toSelect.appendChild(option2);
+  targetEvents.forEach((event) => {
+    const tagPrefix = event.tag === 'dry hire' ? '[DH]' : '[E]';
+    const option = document.createElement("option");
+    option.value = event.id;
+    option.textContent = `${tagPrefix} ${event.id}: ${event.name} (${event.state})`;
+    toSelect.appendChild(option);
   });
 }
 
