@@ -1766,71 +1766,7 @@ function clearFilters() {
   displayFilteredInventory();
 }
 
-function ensureInventoryTableStyles() {
-  if (document.getElementById('inventory-compact-table-styles')) return;
-
-  const style = document.createElement('style');
-  style.id = 'inventory-compact-table-styles';
-
-  style.textContent = `
-    .inventory-compact-table {
-      table-layout: auto;
-      width: 100%;
-    }
-
-    .inventory-compact-table th,
-    .inventory-compact-table td {
-      padding: 8px 10px;
-      vertical-align: top;
-      height: auto;
-      line-height: 1.25;
-    }
-
-    .inventory-compact-table tbody tr {
-      height: auto;
-    }
-
-    .inventory-compact-table .asset-id-cell {
-      font-weight: 700;
-      white-space: nowrap;
-    }
-
-    .inventory-compact-table .asset-description-cell {
-      max-width: 420px;
-      white-space: normal;
-      word-break: normal;
-      overflow-wrap: anywhere;
-    }
-
-    .inventory-compact-table .asset-description-text {
-      display: inline;
-      line-height: 1.3;
-    }
-
-    .inventory-compact-table .asset-description-empty {
-      color: #aaa;
-    }
-
-    .inventory-actions-cell {
-      white-space: nowrap;
-      display: flex;
-      gap: 6px;
-      flex-wrap: nowrap;
-      align-items: flex-start;
-    }
-
-    .inventory-compact-table .btn-sm {
-      padding: 5px 9px;
-      font-size: 12px;
-    }
-  `;
-
-  document.head.appendChild(style);
-}
-
 function displayInventoryTable(assetsToShow) {
-  ensureInventoryTableStyles();
-
   const container = document.getElementById("inventory-table-container");
 
   if (assetsToShow.length === 0) {
@@ -1842,85 +1778,70 @@ function displayInventoryTable(assetsToShow) {
   const isAdmin = currentUser && currentUser.isAdmin;
 
   let tableHTML = `
-    <table class="table inventory-compact-table">
-      <thead>
-        <tr>
-          <th>Asset ID</th>
-          <th>Brand</th>
-          <th>Model</th>
-          <th>Description</th>
-          <th>Serial</th>
-          <th>Department</th>
-          <th>Status</th>
-          <th>Location</th>
-          <th>OOC</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-  `;
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Asset ID</th>
+                    <th>Brand</th>
+                    <th>Model</th>
+                    <th>Description</th>
+                    <th>Serial</th>
+                    <th>Department</th>
+                    <th>Status</th>
+                    <th>Location</th>
+                    <th>OOC Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
 
   assetsToShow.forEach((asset) => {
     const encodedAssetId = encodeURIComponent(asset.id);
-    const description = asset.description || "";
 
     tableHTML += `
-      <tr>
-        <td class="asset-id-cell">${escapeHtml(asset.id)}</td>
-        <td>${escapeHtml(asset.brand || "")}</td>
-        <td>${escapeHtml(asset.model || "")}</td>
-
-        <td class="asset-description-cell">
-          ${
-            description
-              ? `<span class="asset-description-text">${escapeHtml(description)}</span>`
-              : `<span class="asset-description-empty">—</span>`
-          }
-        </td>
-
-        <td>${escapeHtml(asset.serial || "N/A")}</td>
-
-        <td>
-          <span class="asset-badge dept-${escapeHtmlAttr((asset.department || 'un').toLowerCase())}">
-            ${escapeHtml(asset.department || "UN")}
-          </span>
-        </td>
-
-        <td>
-          <span class="asset-badge status-${escapeHtmlAttr(asset.status || 'available')}">
-            ${escapeHtml(asset.status || "available")}
-          </span>
-        </td>
-
-        <td>${escapeHtml(asset.location || "Store")}</td>
-
-        <td>
-          <span class="asset-badge ${asset.isOOC ? 'status-ooc' : 'status-available'}">
-            ${asset.isOOC ? 'OOC' : 'OK'}
-          </span>
-        </td>
-
-        <td class="inventory-actions-cell">
-          <button class="btn btn-primary btn-sm" onclick="viewMaintenanceLog('${encodedAssetId}')" title="View maintenance log">
-            View Log
-          </button>
-
-          ${
-            isAdmin
-              ? `<button class="btn btn-warning btn-sm" onclick="openEditAssetModal('${encodedAssetId}')" title="Edit asset attributes">
-                   Edit
-                 </button>`
-              : ''
-          }
-        </td>
-      </tr>
-    `;
+            <tr>
+                <td>${escapeHtml(asset.id)}</td>
+                <td>${escapeHtml(asset.brand)}</td>
+                <td>${escapeHtml(asset.model)}</td>
+                <td>${escapeHtml(asset.description || "")}</td>
+                <td>${escapeHtml(asset.serial || "N/A")}</td>
+                <td>
+                  <span class="asset-badge dept-${escapeHtmlAttr((asset.department || 'un').toLowerCase())}">
+                    ${escapeHtml(asset.department || "UN")}
+                  </span>
+                </td>
+                <td>
+                  <span class="asset-badge status-${escapeHtmlAttr(asset.status || 'available')}">
+                    ${escapeHtml(asset.status || "available")}
+                  </span>
+                </td>
+                <td>${escapeHtml(asset.location || "Store")}</td>
+                <td>
+                    <span class="asset-badge ${asset.isOOC ? 'status-ooc' : 'status-available'}">
+                        ${asset.isOOC ? 'Out of Commission' : 'Available'}
+                    </span>
+                </td>
+                <td>
+                    <button class="btn btn-primary btn-sm" onclick="viewMaintenanceLog('${encodedAssetId}')" title="View maintenance log">
+                        View Log
+                    </button>
+                    ${
+                      isAdmin
+                        ? `<button class="btn btn-warning btn-sm" onclick="openEditAssetModal('${encodedAssetId}')" title="Edit asset attributes">
+                             Edit
+                           </button>`
+                        : ''
+                    }
+                </td>
+            </tr>
+        `;
   });
 
   tableHTML += `
-      </tbody>
-    </table>
-  `;
+            </tbody>
+        </table>
+    `;
 
   container.innerHTML = tableHTML;
 }
@@ -6456,31 +6377,26 @@ async function loadEventAssetsForReturn() {
         
         console.log(`Loading assets for event ${eventId}:`, event);
 
-        // Calculate total counts including custom assets from preparedItems
-        let totalPrepared = event.preparedCount || 0;
-        let totalReturned = event.returnedCount || 0;
-        
-        // Count custom assets from preparedItems
-        let customAssetsCount = 0;
-        let customReturnedCount = 0;
-        
-        if (event.preparedItems) {
-            const customItems = event.preparedItems.filter(item => 
-                item.startsWith('[LOAN]') || item.startsWith('[MISC]')
-            );
-            customAssetsCount = customItems.length;
-            
-            if (event.returnedItems) {
-                customReturnedCount = customItems.filter(item => 
-                    event.returnedItems.includes(item)
-                ).length;
-            }
+        // Calculate return summary from the same source used by department counts.
+        // This only affects the displayed summary numbers, not the return logic.
+        let returnAssets = [];
+
+        if (event.assetsByDepartment) {
+            Object.values(event.assetsByDepartment).forEach(deptAssets => {
+                (deptAssets || []).forEach(asset => {
+                    if (!asset || !asset.id) return;
+
+                    // Ignore virtual model requirement rows if any ever appear here.
+                    if (String(asset.id).startsWith('[MODEL]')) return;
+
+                    returnAssets.push(asset);
+                });
+            });
         }
-        
-        // Add custom assets to totals
-        const totalAssetsIncludingCustom = totalPrepared + customAssetsCount;
-        const totalReturnedIncludingCustom = totalReturned + customReturnedCount;
-        const remaining = totalAssetsIncludingCustom - totalReturnedIncludingCustom;
+
+        const totalAssetsIncludingCustom = returnAssets.length;
+        const totalReturnedIncludingCustom = returnAssets.filter(asset => asset.status === 'returned').length;
+        const remaining = returnAssets.filter(asset => asset.status !== 'returned').length;
 
         // Show event summary
         const summaryDiv = document.getElementById('event-summary');
