@@ -10505,36 +10505,45 @@ async function processSingleOOCClear() {
 
 async function viewMaintenanceLog(assetId) {
   try {
-    // Ensure we have the latest assets in memory (so this works even when called from other pages/tabs)
-    if (!Array.isArray(assets) || assets.length === 0) {
-      const assetsResponse = await apiCall('/api/assets');
-      if (assetsResponse && assetsResponse.success) {
-        assets = assetsResponse.data;
-      }
+    // Accept both raw IDs and encodeURIComponent IDs
+    let decodedAssetId = String(assetId || '');
+
+    try {
+      decodedAssetId = decodeURIComponent(decodedAssetId);
+    } catch (e) {
+      // Keep original if it was not encoded
     }
 
-    // Get the asset details
-    const asset = Array.isArray(assets) ? assets.find(a => a.id === assetId) : null;
+    // Always refresh from backend so logs are current
+    const assetsResponse = await apiCall('/api/assets');
+    if (assetsResponse && assetsResponse.success) {
+      assets = assetsResponse.data || [];
+    }
+
+    const asset = Array.isArray(assets)
+      ? assets.find(a => String(a.id) === decodedAssetId)
+      : null;
+
     if (!asset) {
-      showNotification('error', `Asset not found: ${assetId}`);
+      showNotification('error', `Asset not found: ${decodedAssetId}`);
       return;
     }
 
-    // Create and show the maintenance log modal (global-safe)
-    const fn =
-      (typeof window.showMaintenanceLogModal === 'function') ? window.showMaintenanceLogModal :
-      (typeof showMaintenanceLogModal === 'function') ? showMaintenanceLogModal :
-      null;
-
-    if (fn) {
-      fn(asset);
-    } else {
-      showNotification('error', 'Maintenance log modal UI is not available. Please hard refresh.');
+    if (typeof window.showMaintenanceLogModal === 'function') {
+      window.showMaintenanceLogModal(asset);
+      return;
     }
+
+    if (typeof showMaintenanceLogModal === 'function') {
+      showMaintenanceLogModal(asset);
+      return;
+    }
+
+    showNotification('error', 'Maintenance log modal UI is not available. Please hard refresh.');
 
   } catch (error) {
     console.error('Error viewing maintenance log:', error);
-    showNotification('error', 'Failed to load maintenance log');
+    showNotification('error', `Failed to load maintenance log: ${error.message}`);
   }
 }
 
