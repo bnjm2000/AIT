@@ -296,7 +296,7 @@ def _asset_group_from_item(asset):
     return {
         'department': (asset.department_code or '').strip().upper(),
         'brand': (asset.brand or '').strip(),
-        'model': (asset.model_number or '').strip().upper(),
+        'model': (asset.model_number or '').strip(),
         'description': (asset.description or '').strip()
     }
 
@@ -305,7 +305,7 @@ def _asset_matches_group(asset, group):
     return (
         (asset.department_code or '').strip().upper() == group['department'] and
         (asset.brand or '').strip() == group['brand'] and
-        (asset.model_number or '').strip().upper() == group['model'] and
+        (asset.model_number or '').strip() == group['model'] and
         (asset.description or '').strip() == group['description']
     )
 
@@ -351,7 +351,7 @@ def _parse_model_marker(value):
     return {
         'department': parts[0].strip().upper(),
         'brand': parts[1].strip(),
-        'model': parts[2].strip().upper(),
+        'model': parts[2].strip(),
         'quantity': parts[3].strip(),
         'description': '|'.join(parts[4:]).strip() if len(parts) > 4 else ''
     }
@@ -3046,9 +3046,11 @@ def create_asset():
             return jsonify({'error': f'Missing required fields: {", ".join(missing_fields)}'}), 400
 
         # Generate asset ID
-        model_number = data['model'].upper().strip()
-        existing_items = [item for item in data_manager.inventory.values(
-        ) if item.model_number == model_number]
+        model_number = data['model'].strip()
+        existing_items = [
+            item for item in data_manager.inventory.values()
+            if item.model_number.lower() == model_number.lower()
+        ]
         next_number = len(existing_items) + 1
         asset_id = f"{model_number}#{next_number:02d}"
 
@@ -3124,7 +3126,7 @@ def update_asset(asset_id):
         new_group = {
             'department': (data.get('department', old_group['department']) or '').strip().upper(),
             'brand': (data.get('brand', old_group['brand']) or '').strip(),
-            'model': (data.get('model', old_group['model']) or '').strip().upper(),
+            'model': (data.get('model', old_group['model']) or '').strip(),
             'description': (data.get('description', old_group['description']) or '').strip()
         }
 

@@ -1848,14 +1848,13 @@ function displayInventoryTable(assetsToShow) {
 
 function normalizeAssetGroupValue(value, uppercase = false) {
   const cleaned = String(value ?? '').trim();
-  return uppercase ? cleaned.toUpperCase() : cleaned;
 }
 
 function sameAssetGroup(asset, group) {
   return (
     normalizeAssetGroupValue(asset.department, true) === normalizeAssetGroupValue(group.department, true) &&
     normalizeAssetGroupValue(asset.brand) === normalizeAssetGroupValue(group.brand) &&
-    normalizeAssetGroupValue(asset.model, true) === normalizeAssetGroupValue(group.model, true) &&
+    normalizeAssetGroupValue(asset.model) === normalizeAssetGroupValue(group.model) &&
     normalizeAssetGroupValue(asset.description) === normalizeAssetGroupValue(group.description)
   );
 }
@@ -2028,7 +2027,7 @@ async function saveAssetEditModal() {
   }
 
   const modelOrDescriptionChanged =
-    normalizeAssetGroupValue(payload.model, true) !== normalizeAssetGroupValue(original.model, true) ||
+    normalizeAssetGroupValue(payload.model) !== normalizeAssetGroupValue(original.model) ||
     normalizeAssetGroupValue(payload.description) !== normalizeAssetGroupValue(original.description);
 
   const sameOriginalGroupAssets = assets.filter(asset => sameAssetGroup(asset, original));
