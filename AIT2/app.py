@@ -69,8 +69,15 @@ def require_auth(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if 'user' not in session:
-            return jsonify({'error': 'Not authenticated'}), 401
+            # API requests should still return JSON
+            if request.path.startswith('/api/'):
+                return jsonify({'error': 'Not authenticated'}), 401
+
+            # Normal browser page requests should go to login page
+            return redirect(url_for('login'))
+
         return f(*args, **kwargs)
+
     return decorated_function
 
 @app.route('/api/assets/available-for-event/<int:event_id>', methods=['GET'])
@@ -643,8 +650,9 @@ def index():
 def login():
     """Handle user authentication"""
     if request.method == 'GET':
+        if 'user' in session:
+            return redirect(url_for('index'))
         return render_template('login.html')
-
     try:
         data = request.get_json()
         username = data.get('username', '').strip()
@@ -661,7 +669,11 @@ def login():
                 session['is_admin'] = user.is_admin
 
                 log_action(f"User {username} logged in via web interface")
-                return jsonify({'success': True, 'message': 'Login successful'})
+                return jsonify({
+                    'success': True,
+                    'message': 'Login successful',
+                    'redirect': url_for('index')
+                })
 
         # Log failed attempt
         log_action(f"Failed login attempt for username: {username}")
@@ -3880,7 +3892,12 @@ if __name__ == '__main__':
             logger.info("Background thread started successfully after data_manager initialization")
 
         # Run the Flask app
-        app.run(debug=True, host='192.168.0.110', port=5000)
+        app.run(
+            debug=False,
+            host='192.168.0.110',
+            port=5443,
+            ssl_context='adhoc'
+        )
         logger.info("app starteded")
     except Exception as e:
         logger.error(f"Failed to start application: {e}")

@@ -27,7 +27,12 @@ def run_web():
         init_data_manager()
         
         # Run Flask app
-        app.run(debug=False, host='192.168.0.110', port=5000)
+        app.run(
+            debug=False,
+            host='192.168.0.110',
+            port=5443,
+            ssl_context='adhoc'
+        )
     except ImportError as e:
         print(f"Error: Missing required dependencies for web interface: {e}")
         print("Please install Flask and Flask-CORS:")
