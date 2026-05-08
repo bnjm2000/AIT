@@ -11,6 +11,7 @@ from collections import defaultdict
 import logging
 import threading
 import time
+import secrets
 
 # Import your existing modules
 from models import User, InventoryItem, Container, Event, LogEntry, hash_password, format_date_output, dates_overlap
@@ -69,11 +70,18 @@ def require_auth(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if 'user' not in session:
-            # API requests should still return JSON
             if request.path.startswith('/api/'):
                 return jsonify({'error': 'Not authenticated'}), 401
+            return redirect(url_for('login'))
 
-            # Normal browser page requests should go to login page
+        username = session.get('user')
+        user = data_manager.users.get(username) if data_manager else None
+
+        # If the user was deleted or deactivated after login, force logout
+        if not user or not getattr(user, 'is_active', True):
+            session.clear()
+            if request.path.startswith('/api/'):
+                return jsonify({'error': 'Account inactive'}), 401
             return redirect(url_for('login'))
 
         return f(*args, **kwargs)
@@ -245,11 +253,23 @@ def require_admin(f):
     def decorated_function(*args, **kwargs):
         if 'user' not in session:
             return jsonify({'error': 'Not authenticated'}), 401
-        if not session.get('is_admin', False):
-            return jsonify({'error': 'Admin privileges required'}), 403
-        return f(*args, **kwargs)
-    return decorated_function
 
+        username = session.get('user')
+        user = data_manager.users.get(username) if data_manager else None
+
+        if not user or not getattr(user, 'is_active', True):
+            session.clear()
+            return jsonify({'error': 'Account inactive'}), 401
+
+        if not getattr(user, 'is_admin', False):
+            return jsonify({'error': 'Admin privileges required'}), 403
+
+        # Keep the session value updated too
+        session['is_admin'] = user.is_admin
+
+        return f(*args, **kwargs)
+
+    return decorated_function
 
 def log_action(action):
     """Helper function to log actions"""
@@ -653,6 +673,7 @@ def login():
         if 'user' in session:
             return redirect(url_for('index'))
         return render_template('login.html')
+
     try:
         data = request.get_json()
         username = data.get('username', '').strip()
@@ -663,7 +684,16 @@ def login():
 
         if username in data_manager.users:
             user = data_manager.users[username]
+
+            if not getattr(user, 'is_active', True):
+                log_action(f"Inactive login attempt for username: {username}")
+                return jsonify({
+                    'success': False,
+                    'message': 'This account is inactive. Please contact an admin.'
+                }), 403
+
             hashed_input = hash_password(password, user.salt)
+
             if hashed_input == user.password_hash:
                 session['user'] = username
                 session['is_admin'] = user.is_admin
@@ -675,14 +705,12 @@ def login():
                     'redirect': url_for('index')
                 })
 
-        # Log failed attempt
         log_action(f"Failed login attempt for username: {username}")
         return jsonify({'success': False, 'message': 'Invalid credentials'}), 401
 
     except Exception as e:
         logger.error(f"Login error: {e}")
         return jsonify({'success': False, 'message': 'Login failed'}), 500
-
 
 @app.route('/logout')
 def logout():
@@ -694,6 +722,153 @@ def logout():
 
     return redirect(url_for('login'))
 
+@app.route('/api/current-user', methods=['GET'])
+@require_auth
+def get_current_user():
+    """Get the currently logged-in user"""
+    username = session.get('user')
+    user = data_manager.users.get(username)
+
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+
+    return jsonify({
+        'success': True,
+        'data': {
+            'username': user.username,
+            'isAdmin': user.is_admin,
+            'isActive': getattr(user, 'is_active', True)
+        }
+    })
+
+
+@app.route('/api/users', methods=['GET'])
+@require_admin
+def get_users():
+    """Admin: list users"""
+    users_data = []
+
+    for user in sorted(data_manager.users.values(), key=lambda u: u.username.lower()):
+        users_data.append({
+            'username': user.username,
+            'isAdmin': user.is_admin,
+            'isActive': getattr(user, 'is_active', True)
+        })
+
+    return jsonify({'success': True, 'data': users_data})
+
+
+@app.route('/api/users', methods=['POST'])
+@require_admin
+def create_user():
+    """Admin: create user"""
+    try:
+        data = request.get_json() or {}
+
+        username = (data.get('username') or '').strip()
+        password = data.get('password') or ''
+        is_admin = bool(data.get('isAdmin', False))
+        is_active = bool(data.get('isActive', True))
+
+        if not username:
+            return jsonify({'error': 'Username is required'}), 400
+
+        if not password:
+            return jsonify({'error': 'Password is required'}), 400
+
+        if username in data_manager.users:
+            return jsonify({'error': 'User already exists'}), 409
+
+        salt = secrets.token_hex(16)
+        password_hash = hash_password(password, salt)
+
+        data_manager.users[username] = User(
+            username=username,
+            password_hash=password_hash,
+            salt=salt,
+            is_admin=is_admin,
+            is_active=is_active
+        )
+
+        data_manager.save_users()
+        log_action(f"Created user {username}")
+
+        return jsonify({'success': True, 'message': 'User created successfully'})
+
+    except Exception as e:
+        logger.error(f"Error creating user: {e}")
+        return jsonify({'error': 'Failed to create user'}), 500
+
+
+@app.route('/api/users/<username>', methods=['PUT'])
+@require_admin
+def update_user(username):
+    """Admin: update user privilege / active state"""
+    try:
+        username = unquote_plus(username)
+
+        user = data_manager.users.get(username)
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+
+        data = request.get_json() or {}
+
+        if 'isAdmin' in data:
+            new_is_admin = bool(data.get('isAdmin'))
+
+            # Prevent locking yourself out of admin access
+            if username == session.get('user') and not new_is_admin:
+                return jsonify({'error': 'You cannot remove your own admin privilege'}), 400
+
+            user.is_admin = new_is_admin
+
+        if 'isActive' in data:
+            new_is_active = bool(data.get('isActive'))
+
+            # Prevent deactivating yourself
+            if username == session.get('user') and not new_is_active:
+                return jsonify({'error': 'You cannot deactivate your own account'}), 400
+
+            user.is_active = new_is_active
+
+        data_manager.save_users()
+        log_action(f"Updated user {username}")
+
+        return jsonify({'success': True, 'message': 'User updated successfully'})
+
+    except Exception as e:
+        logger.error(f"Error updating user {username}: {e}")
+        return jsonify({'error': 'Failed to update user'}), 500
+
+
+@app.route('/api/users/<username>/password', methods=['PUT'])
+@require_admin
+def reset_user_password(username):
+    """Admin: reset user password"""
+    try:
+        username = unquote_plus(username)
+
+        user = data_manager.users.get(username)
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+
+        data = request.get_json() or {}
+        new_password = data.get('password') or ''
+
+        if not new_password:
+            return jsonify({'error': 'New password is required'}), 400
+
+        user.salt = secrets.token_hex(16)
+        user.password_hash = hash_password(new_password, user.salt)
+
+        data_manager.save_users()
+        log_action(f"Reset password for user {username}")
+
+        return jsonify({'success': True, 'message': 'Password reset successfully'})
+
+    except Exception as e:
+        logger.error(f"Error resetting password for user {username}: {e}")
+        return jsonify({'error': 'Failed to reset password'}), 500
 # API Routes
 
 

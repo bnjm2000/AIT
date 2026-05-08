@@ -53,16 +53,25 @@ class InventoryManagementApp:
     def authenticate_user(self):
         clear_screen()
         print("Welcome to Avec Inventory Tracker.")
+
         while True:
             username = input("Username: ").strip()
             password = getpass.getpass("Password: ").strip()
+
             if username in self.data_manager.users:
                 user = self.data_manager.users[username]
+
+                if not getattr(user, 'is_active', True):
+                    print("This account is inactive. Please contact an admin.")
+                    continue
+
                 hashed_input = hash_password(password, user.salt)
+
                 if hashed_input == user.password_hash:
                     self.current_user = user
                     self.log_action(f"User {username} logged in.")
                     return
+
             print("Invalid username or password. Please try again.")
 
     def main_menu(self):

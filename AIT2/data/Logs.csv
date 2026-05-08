@@ -1,16 +1,3 @@
-2026/03/25 12:36:58,bnjm2000,Assigned specific asset IP1000#06 to event 117
-2026/03/25 12:37:42,bnjm2000,Assigned specific asset X8#16 to event 117
-2026/03/25 12:37:42,bnjm2000,Assigned specific asset X8#15 to event 117
-2026/03/25 12:37:46,bnjm2000,Assigned specific asset X8#14 to event 117
-2026/03/25 12:37:46,bnjm2000,Assigned specific asset X8#13 to event 117
-2026/03/25 12:51:24,bnjm2000,Marked asset ULXD2#03 as Out of Commission
-2026/03/25 12:51:24,bnjm2000,"Maintenance logged for asset ULXD2#03: Handheld dropped by emcee, capsule broke off (Wedding of Russell & Cassandra @ Shangri-La Island Ballroom)"
-2026/03/25 12:57:42,bnjm2000,Created event 121: Dry Hire: SCM via web interface
-2026/03/25 12:57:46,bnjm2000,Added 1x Yamaha CL5 model to event 121 (total: 1)
-2026/03/25 12:57:50,bnjm2000,Added 1x Yamaha Rio3224-d model to event 121 (total: 1)
-2026/03/25 13:01:46,bnjm2000,Assigned specific asset CL5#01 to event 121
-2026/03/25 13:01:49,bnjm2000,Assigned specific asset RIO3224-D #01 to event 121
-2026/03/25 13:13:55,bnjm2000,"Updated maintenance log for asset PB#13: 'Screen dim' -> 'Screen dim, sent to fix' (edited by bnjm2000)"
 2026/03/25 13:17:36,bnjm2000,"Maintenance logged for asset PB#26: Screen died, sent to replace"
 2026/03/25 13:17:58,bnjm2000,"Updated maintenance log for asset PB#41: 'Screen dim' -> 'Screen dim, sent to replace' (edited by bnjm2000)"
 2026/03/25 13:18:11,bnjm2000,"Updated maintenance log for asset PB#58: 'Screen dim' -> 'Screen dim, sent to replace' (edited by bnjm2000)"
@@ -1070,3 +1057,16 @@ Service Fee - $80' (also: Cleared OOC) (edited by bnjm2000)"
 2026/05/08 13:56:08,bnjm2000,User bnjm2000 logged in via web interface
 2026/05/08 13:59:11,bnjm2000,User bnjm2000 logged out from web interface
 2026/05/08 14:01:55,admin,User admin logged in via web interface
+2026/05/08 14:16:35,bnjm2000,User bnjm2000 logged in via web interface
+2026/05/08 14:22:03,bnjm2000,User bnjm2000 logged out from web interface
+2026/05/08 14:22:56,system,Failed login attempt for username: bnjm2000
+2026/05/08 14:23:02,bnjm2000,User bnjm2000 logged in via web interface
+2026/05/08 14:23:16,bnjm2000,User bnjm2000 logged out from web interface
+2026/05/08 14:23:38,bnjm2000,User bnjm2000 logged in via web interface
+2026/05/08 14:29:28,bnjm2000,Updated user feezahmnsr
+2026/05/08 14:29:29,bnjm2000,Updated user admin
+2026/05/08 14:29:31,bnjm2000,Updated user admin
+2026/05/08 14:29:40,bnjm2000,User bnjm2000 logged out from web interface
+2026/05/08 14:29:42,system,Inactive login attempt for username: admin
+2026/05/08 14:30:25,bnjm2000,User bnjm2000 logged in via web interface
+2026/05/08 14:31:12,bnjm2000,User bnjm2000 logged out from web interface

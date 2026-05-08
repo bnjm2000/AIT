@@ -443,6 +443,9 @@ function showSection(sectionName) {
     case "asset-check":
       loadAssetCheck();
       break;
+    case "users":
+      loadUsersAdmin();
+      break;
     case "delivery-order":
       break;
   }
@@ -499,6 +502,274 @@ async function apiCall(endpoint, method = "GET", data = null) {
     showNotification("error", error.message);
     throw error;
   }
+}
+
+// ---------------- Admin User Management ----------------
+
+async function setupAdminUserManagementTab() {
+  try {
+    const res = await apiCall('/api/current-user');
+    currentUser = res.data;
+
+    if (!currentUser || !currentUser.isAdmin) return;
+
+    ensureUsersNavItem();
+    ensureUsersSection();
+  } catch (error) {
+    console.warn('User management tab not loaded:', error);
+  }
+}
+
+function ensureUsersNavItem() {
+  if (document.querySelector(`[onclick="showSection('users')"]`)) return;
+
+  const firstNavItem = document.querySelector('.nav-item');
+  const navContainer = firstNavItem ? firstNavItem.parentElement : null;
+
+  if (!navContainer) {
+    console.warn('Could not find left navigation container for Users tab');
+    return;
+  }
+
+  const usersTab = document.createElement('div');
+  usersTab.className = 'nav-item';
+  usersTab.setAttribute('onclick', "showSection('users')");
+  usersTab.innerHTML = `
+    <span>👤</span>
+    <span>Users</span>
+  `;
+
+  navContainer.appendChild(usersTab);
+}
+
+function ensureUsersSection() {
+  if (document.getElementById('users-section')) return;
+
+  const firstSection = document.querySelector('.content-section');
+  const sectionParent = firstSection ? firstSection.parentElement : document.body;
+
+  const section = document.createElement('div');
+  section.id = 'users-section';
+  section.className = 'content-section';
+
+  section.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+      <div>
+        <h2 style="margin:0;">User Management</h2>
+        <p style="margin:5px 0 0;color:#666;">Create users, edit admin privileges, reset passwords, and deactivate accounts.</p>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:20px;">
+      <h3 style="margin-bottom:15px;">Create New User</h3>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;align-items:end;">
+        <div class="form-group">
+          <label class="form-label">Username</label>
+          <input id="newUserUsername" class="form-input" placeholder="Username">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Password</label>
+          <input id="newUserPassword" type="password" class="form-input" placeholder="Password">
+        </div>
+
+        <label style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">
+          <input id="newUserIsAdmin" type="checkbox">
+          Admin
+        </label>
+
+        <label style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">
+          <input id="newUserIsActive" type="checkbox" checked>
+          Active
+        </label>
+
+        <button class="btn btn-success" onclick="createUserAdmin()">Create User</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px;">
+        <h3 style="margin:0;">Existing Users</h3>
+        <button class="btn btn-secondary btn-sm" onclick="loadUsersAdmin()">Refresh</button>
+      </div>
+
+      <div id="users-admin-table-container">
+        <p style="text-align:center;color:#666;padding:30px;">Loading users...</p>
+      </div>
+    </div>
+  `;
+
+  sectionParent.appendChild(section);
+}
+
+async function loadUsersAdmin() {
+  const container = document.getElementById('users-admin-table-container');
+  if (!container) return;
+
+  container.innerHTML = '<p style="text-align:center;color:#666;padding:30px;">Loading users...</p>';
+
+  try {
+    const res = await apiCall('/api/users');
+    const users = res.data || [];
+
+    if (users.length === 0) {
+      container.innerHTML = '<p style="text-align:center;color:#666;padding:30px;">No users found.</p>';
+      return;
+    }
+
+    let html = `
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Username</th>
+            <th>Admin</th>
+            <th>Active</th>
+            <th>Reset Password</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+    `;
+
+    users.forEach(user => {
+      const safeUsername = escapeHtmlAttr(user.username);
+      const displayUsername = escapeHtml(user.username);
+      const isSelf = currentUser && currentUser.username === user.username;
+
+      html += `
+        <tr>
+          <td>
+            <strong>${displayUsername}</strong>
+            ${isSelf ? '<span style="font-size:11px;color:#666;margin-left:6px;">(you)</span>' : ''}
+          </td>
+
+          <td>
+            <label style="display:flex;gap:8px;align-items:center;">
+              <input type="checkbox" id="admin-${safeUsername}" ${user.isAdmin ? 'checked' : ''} ${isSelf ? 'disabled' : ''}>
+              Admin
+            </label>
+          </td>
+
+          <td>
+            <label style="display:flex;gap:8px;align-items:center;">
+              <input type="checkbox" id="active-${safeUsername}" ${user.isActive ? 'checked' : ''} ${isSelf ? 'disabled' : ''}>
+              Active
+            </label>
+          </td>
+
+          <td>
+            <input type="password" id="password-${safeUsername}" class="form-input" placeholder="New password" style="max-width:220px;">
+          </td>
+
+          <td>
+            <button class="btn btn-primary btn-sm" onclick="saveUserAdmin('${safeUsername}')">Save</button>
+            <button class="btn btn-warning btn-sm" onclick="resetUserPasswordAdmin('${safeUsername}')">Reset Password</button>
+          </td>
+        </tr>
+      `;
+    });
+
+    html += `
+        </tbody>
+      </table>
+    `;
+
+    container.innerHTML = html;
+
+  } catch (error) {
+    container.innerHTML = `<p style="color:red;text-align:center;padding:30px;">Failed to load users: ${escapeHtml(error.message)}</p>`;
+  }
+}
+
+async function createUserAdmin() {
+  const username = document.getElementById('newUserUsername')?.value.trim();
+  const password = document.getElementById('newUserPassword')?.value;
+  const isAdmin = document.getElementById('newUserIsAdmin')?.checked || false;
+  const isActive = document.getElementById('newUserIsActive')?.checked || false;
+
+  if (!username) {
+    showNotification('warning', 'Username is required');
+    return;
+  }
+
+  if (!password) {
+    showNotification('warning', 'Password is required');
+    return;
+  }
+
+  try {
+    await apiCall('/api/users', 'POST', {
+      username,
+      password,
+      isAdmin,
+      isActive
+    });
+
+    showNotification('success', `User ${username} created`);
+
+    document.getElementById('newUserUsername').value = '';
+    document.getElementById('newUserPassword').value = '';
+    document.getElementById('newUserIsAdmin').checked = false;
+    document.getElementById('newUserIsActive').checked = true;
+
+    await loadUsersAdmin();
+
+  } catch (error) {
+    showNotification('error', `Failed to create user: ${error.message}`);
+  }
+}
+
+async function saveUserAdmin(username) {
+  const decodedUsername = decodeHtmlAttr(username);
+
+  const isAdmin = document.getElementById(`admin-${username}`)?.checked || false;
+  const isActive = document.getElementById(`active-${username}`)?.checked || false;
+
+  try {
+    await apiCall(`/api/users/${encodeURIComponent(decodedUsername)}`, 'PUT', {
+      isAdmin,
+      isActive
+    });
+
+    showNotification('success', `Updated ${decodedUsername}`);
+    await loadUsersAdmin();
+
+  } catch (error) {
+    showNotification('error', `Failed to update user: ${error.message}`);
+    await loadUsersAdmin();
+  }
+}
+
+async function resetUserPasswordAdmin(username) {
+  const decodedUsername = decodeHtmlAttr(username);
+  const passwordInput = document.getElementById(`password-${username}`);
+  const password = passwordInput ? passwordInput.value : '';
+
+  if (!password) {
+    showNotification('warning', 'Enter a new password first');
+    return;
+  }
+
+  if (!confirm(`Reset password for ${decodedUsername}?`)) return;
+
+  try {
+    await apiCall(`/api/users/${encodeURIComponent(decodedUsername)}/password`, 'PUT', {
+      password
+    });
+
+    showNotification('success', `Password reset for ${decodedUsername}`);
+    passwordInput.value = '';
+
+  } catch (error) {
+    showNotification('error', `Failed to reset password: ${error.message}`);
+  }
+}
+
+function decodeHtmlAttr(str) {
+  const textarea = document.createElement('textarea');
+  textarea.innerHTML = str;
+  return textarea.value;
 }
 
 // Tab switching functionality
@@ -13290,6 +13561,9 @@ async function initializeApp() {
     
     if (editStartDateEl) editStartDateEl.value = today;
     if (editEndDateEl) editEndDateEl.value = today;
+
+    // Add admin-only Users tab if the logged-in user is an admin
+    await setupAdminUserManagementTab();
 
     // Add a small delay to ensure all DOM elements are ready
     setTimeout(async () => {

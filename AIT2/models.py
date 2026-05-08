@@ -28,11 +28,12 @@ def dates_overlap(start1, end1, start2, end2):
     return max(start1, start2) <= min(end1, end2)
 
 class User:
-    def __init__(self, username, password_hash, salt, is_admin):
+    def __init__(self, username, password_hash, salt, is_admin, is_active=True):
         self.username = username
         self.password_hash = password_hash
         self.salt = salt
         self.is_admin = is_admin
+        self.is_active = is_active
 
 class Client:
     def __init__(self, name, company='', address1='', address2='', address3='', postal_code='', phone=''):

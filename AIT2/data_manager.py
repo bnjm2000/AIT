@@ -49,7 +49,7 @@ class DataManager:
         if os.path.getsize(users_file) == 0:
             salt = 'admin'
             password_hash = hash_password('admin', salt)
-            self.users['admin'] = User('admin', password_hash, salt, True)
+            self.users['admin'] = User('admin', password_hash, salt, True, True)
             self.save_users()
             print("Default admin user created.")
         print("Required files have been initialized.")
@@ -67,27 +67,62 @@ class DataManager:
         if not os.path.exists(filepath):
             return
 
-        f, enc = open_csv_robust(filepath)
-        try:
-            if enc not in ("utf-8", "utf-8-sig"):
-                print(f"Warning: Users.csv decoded using {enc}. Consider re-saving as UTF-8.")
+        needs_save = False
+
+        with open(filepath, 'r', newline='') as f:
             reader = csv.reader(f)
             for row in reader:
-                if row:
-                    row = [clean_csv_cell(c) for c in row]
-                    if len(row) < 4:
-                        continue
-                    username, password_hash, salt, is_admin = row[:4]
-                    self.users[username] = User(username, password_hash, salt, is_admin == 'True')
-        finally:
-            f.close()
+                if not row:
+                    continue
+
+                # Optional: skip header row if one ever gets added manually
+                if row[0].strip().lower() == 'username':
+                    continue
+
+                # Old format:
+                # username,password_hash,salt,is_admin
+                #
+                # New format:
+                # username,password_hash,salt,is_admin,is_active
+                if len(row) < 4:
+                    continue
+
+                username = row[0].strip()
+                password_hash = row[1]
+                salt = row[2]
+
+                def parse_bool(value, default=False):
+                    if value is None:
+                        return default
+                    return str(value).strip().lower() in ('true', '1', 'yes', 'y', 'admin')
+
+                is_admin = parse_bool(row[3], False)
+
+                if len(row) >= 5:
+                    is_active = parse_bool(row[4], True)
+                else:
+                    # Backward compatibility: old existing users stay active
+                    is_active = True
+                    needs_save = True
+
+                self.users[username] = User(username, password_hash, salt, is_admin, is_active)
+
+        # Auto-upgrade Users.csv from 4 columns to 5 columns
+        if needs_save:
+            self.save_users()
 
     def save_users(self):
         filepath = os.path.join(self.data_folder, 'Users.csv')
-        with open(filepath, 'w', newline='', encoding='utf-8') as f:
+        with open(filepath, 'w', newline='') as f:
             writer = csv.writer(f)
             for user in self.users.values():
-                writer.writerow([user.username, user.password_hash, user.salt, user.is_admin])
+                writer.writerow([
+                    user.username,
+                    user.password_hash,
+                    user.salt,
+                    user.is_admin,
+                    getattr(user, 'is_active', True)
+                ])
 
     def load_inventory(self):
         filepath = os.path.join(self.data_folder, 'Inventory.csv')
