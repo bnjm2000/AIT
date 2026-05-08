@@ -607,6 +607,8 @@ async function loadUsersAdmin() {
   const container = document.getElementById('users-admin-table-container');
   if (!container) return;
 
+  ensureUserAdminStyles();
+
   container.innerHTML = '<p style="text-align:center;color:#666;padding:30px;">Loading users...</p>';
 
   try {
@@ -625,46 +627,59 @@ async function loadUsersAdmin() {
             <th>Username</th>
             <th>Admin</th>
             <th>Active</th>
-            <th>Reset Password</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody>
     `;
 
-    users.forEach(user => {
-      const safeUsername = escapeHtmlAttr(user.username);
-      const displayUsername = escapeHtml(user.username);
+    users.forEach((user, index) => {
+      const rowId = `userrow-${index}`;
+      const encodedOriginalUsername = encodeURIComponent(user.username);
       const isSelf = currentUser && currentUser.username === user.username;
 
       html += `
         <tr>
           <td>
-            <strong>${displayUsername}</strong>
+            <input
+              type="text"
+              id="username-${rowId}"
+              class="form-input user-admin-username-input"
+              value="${escapeHtmlAttr(user.username)}"
+            >
             ${isSelf ? '<span style="font-size:11px;color:#666;margin-left:6px;">(you)</span>' : ''}
           </td>
 
           <td>
-            <label style="display:flex;gap:8px;align-items:center;">
-              <input type="checkbox" id="admin-${safeUsername}" ${user.isAdmin ? 'checked' : ''} ${isSelf ? 'disabled' : ''}>
-              Admin
+            <label class="user-admin-switch">
+              <input
+                type="checkbox"
+                id="admin-${rowId}"
+                ${user.isAdmin ? 'checked' : ''}
+                ${isSelf ? 'disabled' : ''}
+              >
+              <span class="user-admin-switch-slider"></span>
+              <span class="user-admin-switch-text">Admin</span>
             </label>
           </td>
 
           <td>
-            <label style="display:flex;gap:8px;align-items:center;">
-              <input type="checkbox" id="active-${safeUsername}" ${user.isActive ? 'checked' : ''} ${isSelf ? 'disabled' : ''}>
-              Active
+            <label class="user-admin-switch">
+              <input
+                type="checkbox"
+                id="active-${rowId}"
+                ${user.isActive ? 'checked' : ''}
+                ${isSelf ? 'disabled' : ''}
+              >
+              <span class="user-admin-switch-slider"></span>
+              <span class="user-admin-switch-text">Active</span>
             </label>
           </td>
 
           <td>
-            <input type="password" id="password-${safeUsername}" class="form-input" placeholder="New password" style="max-width:220px;">
-          </td>
-
-          <td>
-            <button class="btn btn-primary btn-sm" onclick="saveUserAdmin('${safeUsername}')">Save</button>
-            <button class="btn btn-warning btn-sm" onclick="resetUserPasswordAdmin('${safeUsername}')">Reset Password</button>
+            <button class="btn btn-primary btn-sm" onclick="saveUserAdmin('${encodedOriginalUsername}', '${rowId}')">Save</button>
+            <button class="btn btn-warning btn-sm" onclick="openResetPasswordModal('${encodedOriginalUsername}')">Reset Password</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteUserAdmin('${encodedOriginalUsername}')" ${isSelf ? 'disabled title="You cannot delete your own account"' : ''}>Delete</button>
           </td>
         </tr>
       `;
@@ -720,19 +735,34 @@ async function createUserAdmin() {
   }
 }
 
-async function saveUserAdmin(username) {
-  const decodedUsername = decodeHtmlAttr(username);
+async function saveUserAdmin(encodedOriginalUsername, rowId) {
+  const originalUsername = decodeURIComponent(encodedOriginalUsername);
 
-  const isAdmin = document.getElementById(`admin-${username}`)?.checked || false;
-  const isActive = document.getElementById(`active-${username}`)?.checked || false;
+  const newUsername = document.getElementById(`username-${rowId}`)?.value.trim();
+  const isAdmin = document.getElementById(`admin-${rowId}`)?.checked || false;
+  const isActive = document.getElementById(`active-${rowId}`)?.checked || false;
+
+  if (!newUsername) {
+    showNotification('warning', 'Username cannot be empty');
+    return;
+  }
 
   try {
-    await apiCall(`/api/users/${encodeURIComponent(decodedUsername)}`, 'PUT', {
+    await apiCall(`/api/users/${encodeURIComponent(originalUsername)}`, 'PUT', {
+      username: newUsername,
       isAdmin,
       isActive
     });
 
-    showNotification('success', `Updated ${decodedUsername}`);
+    // Refresh current-user data in case the logged-in admin renamed themselves
+    try {
+      const currentUserRes = await apiCall('/api/current-user');
+      currentUser = currentUserRes.data;
+    } catch (e) {
+      console.warn('Could not refresh current user:', e);
+    }
+
+    showNotification('success', `Updated ${newUsername}`);
     await loadUsersAdmin();
 
   } catch (error) {
@@ -741,28 +771,111 @@ async function saveUserAdmin(username) {
   }
 }
 
-async function resetUserPasswordAdmin(username) {
-  const decodedUsername = decodeHtmlAttr(username);
-  const passwordInput = document.getElementById(`password-${username}`);
-  const password = passwordInput ? passwordInput.value : '';
+async function resetUserPasswordAdmin(encodedOriginalUsername, newPassword) {
+  const originalUsername = decodeURIComponent(encodedOriginalUsername);
 
-  if (!password) {
+  if (!newPassword) {
     showNotification('warning', 'Enter a new password first');
     return;
   }
 
-  if (!confirm(`Reset password for ${decodedUsername}?`)) return;
-
   try {
-    await apiCall(`/api/users/${encodeURIComponent(decodedUsername)}/password`, 'PUT', {
-      password
+    await apiCall(`/api/users/${encodeURIComponent(originalUsername)}/password`, 'PUT', {
+      password: newPassword
     });
 
-    showNotification('success', `Password reset for ${decodedUsername}`);
-    passwordInput.value = '';
+    showNotification('success', `Password reset for ${originalUsername}`);
+    closeModal('resetUserPasswordModal');
 
   } catch (error) {
     showNotification('error', `Failed to reset password: ${error.message}`);
+  }
+}
+
+function ensureResetPasswordModal() {
+  if (document.getElementById('resetUserPasswordModal')) return;
+
+  const modal = document.createElement('div');
+  modal.id = 'resetUserPasswordModal';
+  modal.className = 'modal';
+
+  modal.innerHTML = `
+    <div class="modal-content" style="max-width:420px;">
+      <div class="modal-header">
+        <h3>Reset User Password</h3>
+      </div>
+
+      <div class="modal-body">
+        <p style="margin-bottom:12px;">
+          Enter a new password for <strong id="resetPasswordUsernameLabel"></strong>.
+        </p>
+
+        <div class="form-group">
+          <label class="form-label">New Password</label>
+          <input
+            id="resetUserPasswordInput"
+            type="password"
+            class="form-input"
+            placeholder="Enter new password"
+            onkeypress="if(event.key==='Enter') confirmResetPasswordModal()"
+          >
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('resetUserPasswordModal')">Cancel</button>
+        <button class="btn btn-warning" onclick="confirmResetPasswordModal()">Reset Password</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+}
+
+function openResetPasswordModal(encodedOriginalUsername) {
+  ensureResetPasswordModal();
+
+  const username = decodeURIComponent(encodedOriginalUsername);
+
+  document.getElementById('resetPasswordUsernameLabel').textContent = username;
+  document.getElementById('resetUserPasswordInput').value = '';
+
+  const modal = document.getElementById('resetUserPasswordModal');
+  modal.dataset.encodedUsername = encodedOriginalUsername;
+
+  openModal('resetUserPasswordModal');
+
+  setTimeout(() => {
+    document.getElementById('resetUserPasswordInput')?.focus();
+  }, 100);
+}
+
+function confirmResetPasswordModal() {
+  const modal = document.getElementById('resetUserPasswordModal');
+  const encodedOriginalUsername = modal.dataset.encodedUsername;
+  const newPassword = document.getElementById('resetUserPasswordInput')?.value || '';
+
+  resetUserPasswordAdmin(encodedOriginalUsername, newPassword);
+}
+
+async function deleteUserAdmin(encodedOriginalUsername) {
+  const username = decodeURIComponent(encodedOriginalUsername);
+
+  if (currentUser && currentUser.username === username) {
+    showNotification('warning', 'You cannot delete your own account');
+    return;
+  }
+
+  if (!confirm(`Delete user "${username}"? This cannot be undone.`)) return;
+
+  try {
+    await apiCall(`/api/users/${encodeURIComponent(username)}`, 'DELETE');
+
+    showNotification('success', `Deleted user ${username}`);
+    await loadUsersAdmin();
+
+  } catch (error) {
+    showNotification('error', `Failed to delete user: ${error.message}`);
   }
 }
 
@@ -770,6 +883,77 @@ function decodeHtmlAttr(str) {
   const textarea = document.createElement('textarea');
   textarea.innerHTML = str;
   return textarea.value;
+}
+
+function ensureUserAdminStyles() {
+  if (document.getElementById('user-admin-switch-styles')) return;
+
+  const style = document.createElement('style');
+  style.id = 'user-admin-switch-styles';
+  style.textContent = `
+    .user-admin-switch {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .user-admin-switch input {
+      position: absolute;
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .user-admin-switch-slider {
+      position: relative;
+      width: 46px;
+      height: 24px;
+      border-radius: 999px;
+      background: #ccc;
+      transition: background 0.2s ease;
+      flex-shrink: 0;
+    }
+
+    .user-admin-switch-slider::before {
+      content: "";
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      left: 2px;
+      top: 2px;
+      border-radius: 50%;
+      background: white;
+      transition: transform 0.2s ease;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    }
+
+    .user-admin-switch input:checked + .user-admin-switch-slider {
+      background: #28a745;
+    }
+
+    .user-admin-switch input:checked + .user-admin-switch-slider::before {
+      transform: translateX(22px);
+    }
+
+    .user-admin-switch input:disabled + .user-admin-switch-slider {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .user-admin-switch-text {
+      font-size: 13px;
+      color: #333;
+    }
+
+    .user-admin-username-input {
+      max-width: 220px;
+      min-width: 160px;
+    }
+  `;
+
+  document.head.appendChild(style);
 }
 
 // Tab switching functionality

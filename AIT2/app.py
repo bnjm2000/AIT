@@ -803,38 +803,68 @@ def create_user():
 @app.route('/api/users/<username>', methods=['PUT'])
 @require_admin
 def update_user(username):
-    """Admin: update user privilege / active state"""
+    """Admin: update username, privilege, and active state"""
     try:
-        username = unquote_plus(username)
+        old_username = unquote_plus(username)
 
-        user = data_manager.users.get(username)
+        user = data_manager.users.get(old_username)
         if not user:
             return jsonify({'error': 'User not found'}), 404
 
         data = request.get_json() or {}
 
+        # Rename user
+        if 'username' in data:
+            new_username = (data.get('username') or '').strip()
+
+            if not new_username:
+                return jsonify({'error': 'Username cannot be empty'}), 400
+
+            if new_username != old_username and new_username in data_manager.users:
+                return jsonify({'error': 'Username already exists'}), 409
+
+            if new_username != old_username:
+                del data_manager.users[old_username]
+                user.username = new_username
+                data_manager.users[new_username] = user
+
+                # If admin renamed themselves, keep session valid
+                if session.get('user') == old_username:
+                    session['user'] = new_username
+
+        # Update admin privilege
         if 'isAdmin' in data:
             new_is_admin = bool(data.get('isAdmin'))
 
             # Prevent locking yourself out of admin access
-            if username == session.get('user') and not new_is_admin:
+            if user.username == session.get('user') and not new_is_admin:
                 return jsonify({'error': 'You cannot remove your own admin privilege'}), 400
 
             user.is_admin = new_is_admin
+            session['is_admin'] = user.is_admin if user.username == session.get('user') else session.get('is_admin', False)
 
+        # Update active state
         if 'isActive' in data:
             new_is_active = bool(data.get('isActive'))
 
             # Prevent deactivating yourself
-            if username == session.get('user') and not new_is_active:
+            if user.username == session.get('user') and not new_is_active:
                 return jsonify({'error': 'You cannot deactivate your own account'}), 400
 
             user.is_active = new_is_active
 
         data_manager.save_users()
-        log_action(f"Updated user {username}")
+        log_action(f"Updated user {user.username}")
 
-        return jsonify({'success': True, 'message': 'User updated successfully'})
+        return jsonify({
+            'success': True,
+            'message': 'User updated successfully',
+            'data': {
+                'username': user.username,
+                'isAdmin': user.is_admin,
+                'isActive': getattr(user, 'is_active', True)
+            }
+        })
 
     except Exception as e:
         logger.error(f"Error updating user {username}: {e}")
@@ -871,6 +901,33 @@ def reset_user_password(username):
         return jsonify({'error': 'Failed to reset password'}), 500
 # API Routes
 
+@app.route('/api/users/<username>', methods=['DELETE'])
+@require_admin
+def delete_user(username):
+    """Admin: delete user"""
+    try:
+        username = unquote_plus(username)
+
+        if username == session.get('user'):
+            return jsonify({'error': 'You cannot delete your own account'}), 400
+
+        user = data_manager.users.get(username)
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+
+        del data_manager.users[username]
+        data_manager.save_users()
+
+        log_action(f"Deleted user {username}")
+
+        return jsonify({
+            'success': True,
+            'message': 'User deleted successfully'
+        })
+
+    except Exception as e:
+        logger.error(f"Error deleting user {username}: {e}")
+        return jsonify({'error': 'Failed to delete user'}), 500
 
 @app.route('/api/events', methods=['GET'])
 @require_auth

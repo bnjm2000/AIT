@@ -1,5 +1,3 @@
-2026/03/25 13:17:36,bnjm2000,"Maintenance logged for asset PB#26: Screen died, sent to replace"
-2026/03/25 13:17:58,bnjm2000,"Updated maintenance log for asset PB#41: 'Screen dim' -> 'Screen dim, sent to replace' (edited by bnjm2000)"
 2026/03/25 13:18:11,bnjm2000,"Updated maintenance log for asset PB#58: 'Screen dim' -> 'Screen dim, sent to replace' (edited by bnjm2000)"
 2026/03/25 13:20:20,bnjm2000,Updated maintenance log for asset MR-90A#04: 'Receiver observed in use with some buzzing (LV @ Japanese Garden [Marked OOC]' -> 'Receiver observed in use with some buzzing (LV @ Japanese Garden)' (also: Cleared OOC) (edited by bnjm2000)
 2026/03/25 13:26:41,bnjm2000,Maintenance logged for asset PB#19: Display will turn off after a while
@@ -1070,3 +1068,5 @@ Service Fee - $80' (also: Cleared OOC) (edited by bnjm2000)"
 2026/05/08 14:29:42,system,Inactive login attempt for username: admin
 2026/05/08 14:30:25,bnjm2000,User bnjm2000 logged in via web interface
 2026/05/08 14:31:12,bnjm2000,User bnjm2000 logged out from web interface
+2026/05/08 14:34:39,bnjm2000,User bnjm2000 logged in via web interface
+2026/05/08 14:39:26,bnjm2000,Deleted user admin
