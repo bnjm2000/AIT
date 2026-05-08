@@ -8477,7 +8477,7 @@ document.addEventListener("DOMContentLoaded", function () {
             const maintenanceData = {
               logEntry,
               maintenanceDate, // Include the selected date
-              newLocation: newLocation || "Store",
+              newLocation: newLocation || null,
               markOOC: false,
               unmarkOOC: true,  // Clear OOC status
               markMissing: false,
@@ -8499,8 +8499,8 @@ document.addEventListener("DOMContentLoaded", function () {
         closeModal("bulkOOCModal");
         
         if (successCount > 0) {
-          const locationText = newLocation ? `and moved to ${newLocation}` : "and moved to Store";
-          showNotification("success", `Cleared OOC/Missing status for ${successCount} asset${successCount > 1 ? 's' : ''} ${locationText}`);
+          const locationText = newLocation ? ` and moved to ${newLocation}` : "";
+          showNotification("success", `Cleared OOC/Missing status for ${successCount} asset${successCount > 1 ? 's' : ''}${locationText}`);
         }
         
         if (errorCount > 0) {
@@ -9418,7 +9418,7 @@ async function toggleOOCStatus(assetId, isOOC) {
     
     const maintenanceData = {
           logEntry,
-          newLocation: newLocation || "Store",
+          newLocation: newLocation || null,
           markOOC: false,
           unmarkOOC: true,
           markMissing: false,

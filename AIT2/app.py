@@ -3028,9 +3028,9 @@ def update_maintenance_log_enhanced(asset_id, log_index):
                 if location_match:
                     original_log_location_change = location_match.group(1).strip()
 
-        if new_location is not None:
-            # User provided a location (even if empty string, meaning they want to set it explicitly)
-            new_location_clean = new_location.strip() if new_location.strip() else 'Store'
+        if new_location is not None and new_location.strip():
+            # Only update location if the user actually typed one
+            new_location_clean = new_location.strip()
             changes_made.append(f"Location: {new_location_clean}")
             logger.info(f"User set location to: '{new_location_clean}'")
         elif original_log_location_change is not None:
