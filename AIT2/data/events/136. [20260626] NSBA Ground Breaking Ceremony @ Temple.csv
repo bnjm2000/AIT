@@ -1,0 +1,2 @@
+EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,Tag,ForceStateOverride
+136,NSBA Ground Breaking Ceremony @ Temple,20260626,20260628,[],[],[],Added,[],[],events,False

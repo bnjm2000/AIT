@@ -1,40 +1,3 @@
-2026/03/28 12:04:47,system,Failed login attempt for username: bnjm2000
-2026/03/28 12:04:50,bnjm2000,User bnjm2000 logged in via web interface
-2026/03/28 12:05:39,bnjm2000,Returned all assets for department LX in event 117: 46 items
-2026/03/28 12:05:40,bnjm2000,Returned all assets for department AX in event 117: 64 items
-2026/03/28 12:06:35,bnjm2000,Maintenance logged for asset ESPRITE#01: Ah Heng reported gobo rotate will stutter
-2026/03/28 12:07:09,bnjm2000,"Maintenance logged for asset ESPRITE#03: Jacky reported rust on motor, cleaned off."
-2026/03/28 12:09:42,bnjm2000,User bnjm2000 forced event 117 (=Dreams Gala @ =Dreams Campus) state from Returning to Preparing
-2026/03/28 12:09:49,bnjm2000,Removed Lumenradio Aurora model from event 117
-2026/03/28 12:09:49,bnjm2000,Added 1x Lumenradio Aurora model to event 117 (total: 1)
-2026/03/28 12:09:56,bnjm2000,Assigned specific asset AURORA#03 to event 117
-2026/03/28 12:10:01,bnjm2000,Returned asset AURORA#03 from event 117
-2026/03/28 12:10:05,bnjm2000,User bnjm2000 removed forced state override for event 117 (=Dreams Gala @ =Dreams Campus): Preparing -> Closed
-2026/03/31 10:40:50,bnjm2000,User bnjm2000 logged in via web interface
-2026/03/31 10:41:00,bnjm2000,Returned all assets for department AX in event 122: 7 items
-2026/03/31 10:41:23,bnjm2000,Assigned specific asset ESPRITE#21 to event 118
-2026/03/31 10:41:23,bnjm2000,Assigned specific asset ESPRITE#22 to event 118
-2026/03/31 10:41:36,bnjm2000,Assigned specific asset ESPRITE#23 to event 118
-2026/03/31 10:41:36,bnjm2000,Assigned specific asset ESPRITE#24 to event 118
-2026/03/31 10:41:41,bnjm2000,Assigned specific asset ESPRITE#17 to event 118
-2026/03/31 10:41:41,bnjm2000,Assigned specific asset ESPRITE#18 to event 118
-2026/03/31 10:41:45,bnjm2000,Assigned specific asset ESPRITE#09 to event 118
-2026/03/31 10:41:45,bnjm2000,Assigned specific asset ESPRITE#10 to event 118
-2026/03/31 10:41:49,bnjm2000,Assigned specific asset ESPRITE#19 to event 118
-2026/03/31 10:41:49,bnjm2000,Assigned specific asset ESPRITE#20 to event 118
-2026/03/31 10:41:54,bnjm2000,Assigned specific asset ESPRITE#05 to event 118
-2026/03/31 10:41:54,bnjm2000,Assigned specific asset ESPRITE#06 to event 118
-2026/03/31 15:33:44,bnjm2000,Updated event 118: End of the World and Hard-Boiled Wonderland @ Esplanade Theatre via web interface
-2026/03/31 15:41:37,bnjm2000,Marked asset PB#48 as Out of Commission
-2026/03/31 15:41:37,bnjm2000,Maintenance logged for asset PB#48: Screen died while charging
-2026/04/01 15:17:12,bnjm2000,User bnjm2000 logged in via web interface
-2026/04/01 15:17:27,bnjm2000,Created event 123: Dry Hire: Show Productions via web interface
-2026/04/01 15:17:33,bnjm2000,Added 1x Hollyland Solidcom C1 (Pro) 8-Slot Battery Charging Case model to event 123 (total: 1)
-2026/04/01 15:17:34,bnjm2000,Added 1x Hollyland Solidcom C1 Pro Hub model to event 123 (total: 1)
-2026/04/01 15:17:39,bnjm2000,Added 7x Hollyland Solidcom C1 Pro Remote Headset model to event 123 (total: 7)
-2026/04/01 15:17:39,bnjm2000,Added 1x Hollyland Solidcom C1 Pro Remote Headset model to event 123 (total: 8)
-2026/04/01 15:17:40,bnjm2000,Added 1x Hollyland Solidcom C1 Pro Wired Headset for Hub model to event 123 (total: 1)
-2026/04/01 15:17:43,bnjm2000,Added 16x Hollyland HL-BAT700 model to event 123 (total: 16)
 2026/04/01 15:17:47,bnjm2000,Removed Hollyland Solidcom C1 Pro Remote Headset model from event 123
 2026/04/01 15:17:47,bnjm2000,Added 7x Hollyland Solidcom C1 Pro Remote Headset model to event 123 (total: 7)
 2026/04/01 15:17:57,bnjm2000,Assigned specific asset HLBatt#01 to event 123
@@ -1070,3 +1033,40 @@ Service Fee - $80' (also: Cleared OOC) (edited by bnjm2000)"
 2026/05/08 16:47:36,bnjm2000,Updated asset C1ProCharger#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
 2026/05/08 17:18:22,bnjm2000,User bnjm2000 logged in via web interface
 2026/05/08 17:45:03,bnjm2000,Updated event 133: Dry Hire: T2 via web interface
+2026/05/08 18:41:34,bnjm2000,User bnjm2000 logged in via web interface
+2026/05/08 18:42:14,bnjm2000,Updated user cterence
+2026/05/08 18:42:19,bnjm2000,Updated user feezahmnsr
+2026/05/09 14:21:14,bnjm2000,Returned all assets for department MISC in event 133: 1 items
+2026/05/09 14:21:15,bnjm2000,Returned all assets for department AX in event 133: 5 items
+2026/05/09 14:22:40,bnjm2000,Updated event 93: Countdown @ NS Temple via web interface
+2026/05/09 20:04:29,bnjm2000,Created event 135: NSBA Ground Breaking Ceremony @ Senja Close via web interface
+2026/05/09 20:04:46,bnjm2000,Created event 136: NSBA Ground Breaking Ceremony @ Temple via web interface
+2026/05/09 20:05:18,bnjm2000,Created event 137: ArunDitha Performance via web interface
+2026/05/09 20:05:26,bnjm2000,Updated event 137: ArunDitha Performance @ STPI via web interface
+2026/05/09 20:07:07,bnjm2000,Removed L-Acoustics ETR5 model from event 132
+2026/05/09 20:07:07,bnjm2000,Added 6x L-Acoustics ETR5 model to event 132 (total: 6)
+2026/05/09 20:07:15,bnjm2000,Removed L-Acoustics 5XT model from event 132
+2026/05/09 20:07:15,bnjm2000,Added 6x L-Acoustics 5XT model to event 132 (total: 6)
+2026/05/09 20:07:23,bnjm2000,Removed L-Acoustics LA2Xi model from event 132
+2026/05/09 20:07:23,bnjm2000,Added 1x L-Acoustics LA2Xi model to event 132 (total: 1)
+2026/05/09 20:07:27,bnjm2000,Removed L-Acoustics LA4X model from event 132
+2026/05/09 20:07:27,bnjm2000,Added 1x L-Acoustics LA4X model to event 132 (total: 1)
+2026/05/09 20:07:34,bnjm2000,Removed L-Acoustics X-UL8 model from event 132
+2026/05/09 20:07:36,bnjm2000,Removed L-Acoustics X8 model from event 132
+2026/05/09 20:07:48,bnjm2000,Removed L-Acoustics LA2Xi model from event 132
+2026/05/09 20:07:48,bnjm2000,Added 2x L-Acoustics LA2Xi model to event 132 (total: 2)
+2026/05/09 20:08:06,bnjm2000,Updated asset IPAD#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/05/09 20:08:11,bnjm2000,Updated asset IPAD#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/05/09 20:08:16,bnjm2000,Updated asset IPAD#03; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/05/09 20:08:30,bnjm2000,Removed Apple IPAD model from event 129
+2026/05/09 20:08:33,bnjm2000,Added 1x Apple iPad model to event 129 (total: 1)
+2026/05/09 20:08:39,bnjm2000,Removed Apple IPAD model from event 131
+2026/05/09 20:08:43,bnjm2000,Added 2x Apple iPad model to event 131 (total: 2)
+2026/05/09 20:08:47,bnjm2000,Removed Apple IPAD model from event 132
+2026/05/09 20:08:52,bnjm2000,Added 2x Apple iPad model to event 132 (total: 2)
+2026/05/09 20:09:35,bnjm2000,Updated asset IPAD#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/05/09 20:09:39,bnjm2000,Updated asset IPAD#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/05/09 20:09:42,bnjm2000,Updated asset IPAD#03; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/05/09 20:13:14,bnjm2000,Updated asset C1ProCharger#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/05/09 20:13:33,bnjm2000,Updated asset C1ProCharger#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/05/09 20:14:21,bnjm2000,Updated asset C1ProCharger#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0

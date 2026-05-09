@@ -1,0 +1,2 @@
+EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,Tag,ForceStateOverride
+135,NSBA Ground Breaking Ceremony @ Senja Close,20260626,20260628,[],[],[],Added,[],[],events,False
