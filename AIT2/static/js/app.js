@@ -1927,6 +1927,7 @@ function displayInventoryTable(assetsToShow) {
 
 function normalizeAssetGroupValue(value, uppercase = false) {
   const cleaned = String(value ?? '').trim();
+  return uppercase ? cleaned.toUpperCase() : cleaned;
 }
 
 function sameAssetGroup(asset, group) {

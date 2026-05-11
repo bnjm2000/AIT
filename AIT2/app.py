@@ -414,6 +414,152 @@ def _update_event_model_group_references(event, old_group, new_group):
 
     return changed
 
+def _event_has_asset_reference(event, asset_id):
+    """
+    True if this specific asset appears anywhere in the event history.
+
+    This covers:
+    - prepared_items: assigned / directly attached assets
+    - actually_prepared: assets that were physically prepared
+    - returned_items: assets that were returned later
+    - extra_assets: assets marked as extra
+    """
+    if not asset_id:
+        return False
+
+    lists_to_check = (
+        getattr(event, 'prepared_items', []) or [],
+        getattr(event, 'actually_prepared', []) or [],
+        getattr(event, 'returned_items', []) or [],
+        getattr(event, 'extra_assets', []) or []
+    )
+
+    return any(asset_id in values for values in lists_to_check if isinstance(values, list))
+
+
+def _add_or_increment_model_marker(prepared_items, group, quantity_to_add=1):
+    """
+    Add quantity to an existing [MODEL] marker if it already exists.
+    Otherwise append a new [MODEL] marker.
+    """
+    for index, item in enumerate(prepared_items):
+        marker = _parse_model_marker(item)
+
+        if _model_marker_matches_group(marker, group):
+            try:
+                current_qty = int(marker['quantity'])
+            except Exception:
+                current_qty = 0
+
+            prepared_items[index] = _make_model_marker(group, current_qty + quantity_to_add)
+            return 1
+
+    prepared_items.append(_make_model_marker(group, quantity_to_add))
+    return 1
+
+
+def _add_or_increment_asset_model_row(asset_models, group, quantity_to_add=1):
+    """
+    Add quantity to an existing old CLI-style asset_models row if it already exists.
+    Otherwise append a new row.
+    """
+    new_display = _display_model_description(group)
+
+    for row in asset_models:
+        if not isinstance(row, dict):
+            continue
+
+        if str(row.get('model_description', '')).strip() == new_display:
+            try:
+                row['quantity'] = int(row.get('quantity', 0)) + quantity_to_add
+            except Exception:
+                row['quantity'] = quantity_to_add
+            return 1
+
+    asset_models.append({
+        'model_description': new_display,
+        'quantity': quantity_to_add
+    })
+    return 1
+
+
+def _update_single_asset_event_model_references(event, old_group, new_group):
+    """
+    For a single asset edit, update only one unit of the old model/description
+    requirement inside events where that exact asset was prepared/returned before.
+
+    Example:
+    Old event has:
+        [MODEL]AX|Yamaha|QL5|2|Console
+
+    One prepared asset later changes to:
+        Yamaha DM7 Compact
+
+    Event becomes:
+        [MODEL]AX|Yamaha|QL5|1|Console
+        [MODEL]AX|Yamaha|DM7 Compact|1|Console
+
+    This preserves total quantity and does not affect return logic.
+    """
+    changed = 0
+
+    # Newer web workflow: prepared_items contains [MODEL] rows.
+    prepared_items = getattr(event, 'prepared_items', []) or []
+
+    if isinstance(prepared_items, list):
+        for index, item in enumerate(list(prepared_items)):
+            marker = _parse_model_marker(item)
+
+            if not _model_marker_matches_group(marker, old_group):
+                continue
+
+            try:
+                old_qty = int(marker['quantity'])
+            except Exception:
+                old_qty = 1
+
+            if old_qty <= 1:
+                prepared_items[index] = _make_model_marker(new_group, 1)
+                changed += 1
+            else:
+                prepared_items[index] = _make_model_marker(old_group, old_qty - 1)
+                changed += 1
+                changed += _add_or_increment_model_marker(prepared_items, new_group, 1)
+
+            # Only move ONE unit because only ONE asset was edited.
+            break
+
+    # Older/CLI workflow: asset_models contains display rows.
+    asset_models = getattr(event, 'asset_models', []) or []
+    old_display = _display_model_description(old_group)
+
+    if isinstance(asset_models, list):
+        for index, row in enumerate(list(asset_models)):
+            if not isinstance(row, dict):
+                continue
+
+            if str(row.get('model_description', '')).strip() != old_display:
+                continue
+
+            try:
+                old_qty = int(row.get('quantity', 1))
+            except Exception:
+                old_qty = 1
+
+            if old_qty <= 1:
+                row['model_description'] = _display_model_description(new_group)
+                row['quantity'] = 1
+                changed += 1
+            else:
+                row['quantity'] = old_qty - 1
+                changed += 1
+                changed += _add_or_increment_asset_model_row(asset_models, new_group, 1)
+
+            # Only move ONE unit because only ONE asset was edited.
+            break
+
+    return changed
+
 def validate_event_data(data):
     """Validate event data"""
     errors = []
@@ -3524,6 +3670,18 @@ def update_asset(asset_id):
         else:
             target_assets = [asset]
 
+        # For single-asset model/description edits, remember which events this
+        # exact asset appeared in BEFORE changing the inventory object.
+        #
+        # This lets old prepared/returned events follow the edited asset,
+        # similar to how an Asset ID rename already follows the same asset.
+        single_asset_event_ids_to_rewrite = set()
+
+        if apply_to == 'single' and group_changed:
+            for event in data_manager.events.values():
+                if _event_has_asset_reference(event, old_asset_id):
+                    single_asset_event_ids_to_rewrite.add(event.event_id)
+
         # Apply shared fields.
         # These are safe to apply to all same-type assets when admin chooses "all".
         for target in target_assets:
@@ -3603,12 +3761,30 @@ def update_asset(asset_id):
 
             # Only rewrite model requirement rows if admin chose to update all
             # assets of the old model/description group.
-            if apply_to == 'allSimilar' and group_changed:
-                model_changes = _update_event_model_group_references(
-                    event,
-                    old_group,
-                    new_group
-                )
+            # Rewrite model requirement rows when model/description changes.
+            #
+            # allSimilar:
+            #   Rewrite the whole old model/description group everywhere.
+            #
+            # single:
+            #   Rewrite only ONE unit in events where this exact asset was
+            #   previously prepared/returned/assigned.
+            if group_changed:
+                if apply_to == 'allSimilar':
+                    model_changes = _update_event_model_group_references(
+                        event,
+                        old_group,
+                        new_group
+                    )
+                elif event.event_id in single_asset_event_ids_to_rewrite:
+                    model_changes = _update_single_asset_event_model_references(
+                        event,
+                        old_group,
+                        new_group
+                    )
+                else:
+                    model_changes = 0
+
                 event_changed += model_changes
                 model_references_changed += model_changes
 
