@@ -64,6 +64,82 @@ def invalidate_cache():
     _cache = {'assigned_assets': None,
               'available_assets': None, 'cache_timestamp': None}
 
+def _clean_group_value(value, uppercase=False):
+    cleaned = str(value or '').strip()
+    return cleaned.upper() if uppercase else cleaned
+
+
+def _asset_group_key(asset):
+    """
+    Exact model group key.
+
+    This intentionally includes description so variants like:
+    - Shure ULXD4D Dual Channel Receiver [L50]
+    - Shure ULXD4D Dual Channel Receiver [G52]
+
+    are counted separately.
+    """
+    return (
+        _clean_group_value(getattr(asset, 'department_code', ''), True),
+        _clean_group_value(getattr(asset, 'brand', '')),
+        _clean_group_value(getattr(asset, 'model_number', '')),
+        _clean_group_value(getattr(asset, 'description', ''))
+    )
+
+
+def _parse_model_assignment_key(value):
+    """
+    Parses:
+    [MODEL]DEPT|BRAND|MODEL|QTY|DESCRIPTION
+
+    Returns:
+    (key, quantity)
+    """
+    if not isinstance(value, str) or not value.startswith('[MODEL]'):
+        return None, 0
+
+    parts = value[7:].split('|', 4)
+
+    if len(parts) < 4:
+        return None, 0
+
+    try:
+        quantity = int(parts[3])
+    except Exception:
+        quantity = 0
+
+    description = parts[4] if len(parts) > 4 else ''
+
+    key = (
+        _clean_group_value(parts[0], True),
+        _clean_group_value(parts[1]),
+        _clean_group_value(parts[2]),
+        _clean_group_value(description)
+    )
+
+    return key, quantity
+
+
+def _asset_to_available_dict(asset):
+    status = 'available'
+
+    if getattr(asset, 'is_missing', False):
+        status = 'missing'
+    elif getattr(asset, 'is_ooc', False):
+        status = 'ooc'
+
+    return {
+        'id': asset.asset_id,
+        'brand': asset.brand,
+        'model': asset.model_number,
+        'description': asset.description or '',
+        'serial': asset.serial_number,
+        'department': asset.department_code,
+        'location': asset.current_location or asset.default_location,
+        'status': status,
+        'isMissing': getattr(asset, 'is_missing', False),
+        'isOOC': getattr(asset, 'is_ooc', False)
+    }
 
 def require_auth(f):
     """Decorator to require authentication"""
@@ -684,10 +760,12 @@ def update_event_state(event):
                             
                             for specific_asset_id in all_assigned_assets:
                                 specific_asset = data_manager.inventory.get(specific_asset_id)
+                                description = parts[4] if len(parts) > 4 else ''
                                 if (specific_asset and 
                                     specific_asset.brand == brand and 
                                     specific_asset.model_number == model and
-                                    specific_asset.department_code == dept):
+                                    specific_asset.department_code == dept and
+                                    (specific_asset.description or '') == (description or '')):
                                     
                                     assigned_to_this_model += 1
                                     if specific_asset_id in event.returned_items:
@@ -1528,9 +1606,12 @@ def get_event(event_id):
                                 logger.info(f"Asset {specific_asset_id}: brand={specific_asset.brand}, model={specific_asset.model_number}, dept={specific_asset.department_code}")
                                 logger.info(f"Looking for: brand={brand}, model={model}, dept={dept}")
                                 
-                                if (specific_asset.brand == brand and
+                                description = parts[4] if len(parts) > 4 else ''
+                                if (specific_asset and 
+                                    specific_asset.brand == brand and 
                                     specific_asset.model_number == model and
-                                    specific_asset.department_code == dept):
+                                    specific_asset.department_code == dept and
+                                    (specific_asset.description or '') == (description or '')):
 
                                     # Check if this asset is returned
                                     asset_status = 'returned' if specific_asset_id in event.returned_items else 'prepared'
@@ -1622,125 +1703,133 @@ def get_event(event_id):
 @require_auth
 def get_event_model_availability(event_id):
     """
-    For a given event, compute availability per (dept, brand, model), ignoring description for overlap math:
-      global_physical(∑ across desc)
-      - used_here_models(∑ across desc for THIS event)
-      - overlapping_demand(∑ across desc for OTHER overlapping events,
-                           taken as max(models_qty_sum, specific_assets_count))
-    For display per description row, we clamp to the per-description physical with:
-      available_for_desc = max(0, min(global_adjusted, physical_for_desc))
+    Compute model availability for an event.
 
-    We DO NOT block adding when available < 1; UI just shows the number in red.
+    Rules:
+    - Group by department + brand + model + description.
+    - Exclude Missing assets.
+    - Include OOC assets as inventory because they may be fixed by event day.
+    - Subtract current event's requested quantity.
+    - Subtract overlapping events' requested quantity.
+    - Still return rows with 0 availability so the frontend can show them.
     """
     try:
         event = data_manager.events.get(event_id)
         if not event:
             return jsonify({'error': 'Event not found'}), 404
 
-        from collections import defaultdict
+        physical_by_key = defaultdict(int)
 
-        # ---------- 1) PHYSICAL ----------
-        # per-desc: key4 = (dept, brand, model, desc)
-        # desc-agnostic: key3 = (dept, brand, model)
-        physical_by4 = defaultdict(int)
-        physical_by3 = defaultdict(int)
-
+        # Physical inventory: exclude Missing only, include OOC
         for asset in data_manager.inventory.values():
             if not asset:
                 continue
-            if getattr(asset, 'is_missing', False) or getattr(asset, 'is_ooc', False):
+
+            if getattr(asset, 'is_missing', False):
                 continue
-            k4 = (asset.department_code, asset.brand, asset.model_number, asset.description or '')
-            k3 = (asset.department_code, asset.brand, asset.model_number)
-            physical_by4[k4] += 1
-            physical_by3[k3] += 1
 
-        # ---------- 2) USED IN THIS EVENT (MODEL LINES), desc-agnostic ----------
-        used_here_by3 = defaultdict(int)
-        for it in getattr(event, 'prepared_items', []) or []:
-            if isinstance(it, str) and it.startswith('[MODEL]'):
-                parts = it[7:].split('|')  # dept|brand|model|qty|desc?
-                if len(parts) >= 4:
-                    dept = parts[0]; brand = parts[1]; model = parts[2]
-                    try:
-                        qty = int(parts[3])
-                    except Exception:
-                        qty = 0
-                    used_here_by3[(dept, brand, model)] += qty
+            key = _asset_group_key(asset)
+            physical_by_key[key] += 1
 
-        # ---------- 3) OVERLAPPING DEMAND (OTHER EVENTS), desc-agnostic ----------
-        overlap_by3 = defaultdict(int)
-        my_s, my_e = getattr(event, 'start_date', ''), getattr(event, 'end_date', '')
+        # Quantity already requested in this same event
+        used_here_by_key = defaultdict(int)
+
+        for item in getattr(event, 'prepared_items', []) or []:
+            key, quantity = _parse_model_assignment_key(item)
+
+            if key:
+                used_here_by_key[key] += quantity
+
+        # Demand from overlapping events
+        overlap_by_key = defaultdict(int)
+
+        my_start = getattr(event, 'start_date', '')
+        my_end = getattr(event, 'end_date', '')
 
         for other in data_manager.events.values():
             if not other or other.event_id == event_id:
                 continue
-            if not _ranges_overlap(my_s, my_e, getattr(other, 'start_date', ''), getattr(other, 'end_date', '')):
+
+            if not _ranges_overlap(
+                my_start,
+                my_end,
+                getattr(other, 'start_date', ''),
+                getattr(other, 'end_date', '')
+            ):
                 continue
 
-            # Sum MODEL qty across descriptions
-            other_models_by3 = defaultdict(int)
-            # Count specific assets (not returned)
-            other_specific_by3 = defaultdict(int)
+            other_model_qty_by_key = defaultdict(int)
+            other_specific_by_key = defaultdict(int)
             returned_other = set(getattr(other, 'returned_items', []) or [])
 
-            for it in getattr(other, 'prepared_items', []) or []:
-                if isinstance(it, str) and it.startswith('[MODEL]'):
-                    p = it[7:].split('|')  # dept|brand|model|qty|desc?
-                    if len(p) >= 4:
-                        k3 = (p[0], p[1], p[2])
-                        try:
-                            other_models_by3[k3] += int(p[3])
-                        except Exception:
-                            pass
+            for item in getattr(other, 'prepared_items', []) or []:
+                key, quantity = _parse_model_assignment_key(item)
+
+                if key:
+                    other_model_qty_by_key[key] += quantity
                     continue
 
-                # Specific asset IDs (exclude virtual markers)
-                if isinstance(it, str) and not (it.startswith('[MODEL]') or it.startswith('[LOAN]') or it.startswith('[MISC]')):
-                    if it in returned_other:
-                        continue
-                    a = data_manager.inventory.get(it)
-                    if not a or getattr(a, 'is_missing', False) or getattr(a, 'is_ooc', False):
-                        continue
-                    k3 = (a.department_code, a.brand, a.model_number)
-                    other_specific_by3[k3] += 1
+                if not isinstance(item, str):
+                    continue
 
-            # For each key3 present, overlap demand += max(models_sum, specific_count)
-            for k3 in set(other_models_by3.keys()) | set(other_specific_by3.keys()):
-                overlap_by3[k3] += max(other_models_by3.get(k3, 0), other_specific_by3.get(k3, 0))
+                if item.startswith('[LOAN]') or item.startswith('[MISC]') or item.startswith('loan|') or item.startswith('misc|'):
+                    continue
 
-        # ---------- 4) Build response per description row ----------
+                if item in returned_other:
+                    continue
+
+                asset = data_manager.inventory.get(item)
+
+                if not asset:
+                    continue
+
+                # Missing assets should not count as usable inventory.
+                if getattr(asset, 'is_missing', False):
+                    continue
+
+                other_specific_by_key[_asset_group_key(asset)] += 1
+
+            for key in set(other_model_qty_by_key.keys()) | set(other_specific_by_key.keys()):
+                overlap_by_key[key] += max(
+                    other_model_qty_by_key.get(key, 0),
+                    other_specific_by_key.get(key, 0)
+                )
+
         result = []
-        # Iterate every description variant we physically have; that’s what UI lists/searches
-        for k4, physical_desc in physical_by4.items():
-            dept, brand, model, desc = k4
-            k3 = (dept, brand, model)
-            physical_global = physical_by3.get(k3, 0)
-            used_here = used_here_by3.get(k3, 0)
-            overlap = overlap_by3.get(k3, 0)
 
-            global_adjusted = physical_global - used_here - overlap
-            # show per-desc availability but never above that desc’s own physical
-            available_for_desc = max(0, min(global_adjusted, physical_desc))
+        for key, physical in physical_by_key.items():
+            department, brand, model, description = key
+
+            used_here = used_here_by_key.get(key, 0)
+            overlap = overlap_by_key.get(key, 0)
+            available = max(physical - used_here - overlap, 0)
 
             result.append({
-                'department': dept,
+                'department': department,
                 'brand': brand,
                 'model': model,
-                'description': desc,
-                'physical': physical_desc,             # physical for THIS description
-                'physicalGlobal': physical_global,     # physical across all desc
-                'usedInThisEvent': used_here,          # desc-agnostic
-                'overlappingDemand': overlap,          # desc-agnostic
-                'available': available_for_desc,       # final display value for THIS description
-                'adjustedGlobal': max(global_adjusted, 0)
+                'description': description,
+                'physical': physical,
+                'physicalGlobal': physical,
+                'usedInThisEvent': used_here,
+                'overlappingDemand': overlap,
+                'available': available,
+                'adjustedGlobal': available
             })
 
+        result.sort(key=lambda x: (
+            x['department'],
+            x['brand'].lower(),
+            x['model'].lower(),
+            x['description'].lower()
+        ))
+
         return jsonify({'success': True, 'data': result})
+
     except Exception as e:
         logger.error(f"Error computing model availability for event {event_id}: {e}")
         return jsonify({'error': 'Failed to compute availability'}), 500
-
+    
 @app.route('/api/events', methods=['POST'])
 @require_auth
 def create_event():
@@ -2093,9 +2182,6 @@ def add_asset_to_event(event_id):
             if asset.is_missing:
                 return jsonify({'error': 'Cannot assign missing asset'}), 400
 
-            if asset.is_ooc:
-                return jsonify({'error': 'Cannot assign out-of-commission asset'}), 400
-
         # Add the asset as UNPREPARED (just assigned to event)
         event.prepared_items.append(asset_id)
 
@@ -2138,38 +2224,9 @@ def manage_event_models(event_id):
             # Add model assignment
             brand = data.get('brand', '').strip()
             model = data.get('model', '').strip()
-            department = data.get('department', '').strip()
+            department = data.get('department', '').strip().upper()
             provided_description = data.get('description', '').strip()
-            quantity = int(data.get('quantity', 1))
-
-            # --- server-side cap: total assigned for this brand/model/dept cannot exceed physical inventory ---
-            # Count how many you physically own (ignore deployments), excluding Missing/OOC
-            inv_count = sum(
-                1 for a in data_manager.inventory.values()
-                if (a.brand == brand and a.model_number == model and a.department_code == department
-                    and not a.is_missing and not a.is_ooc)
-            )
-
-            # Current total of this brand/model/dept already requested in this event (across all descriptions)
-            current_total = 0
-            for item in event.prepared_items:
-                if item.startswith('[MODEL]'):
-                    parts = item[7:].split('|')
-                    if len(parts) >= 4 and parts[0] == department and parts[1] == brand and parts[2] == model:
-                        try:
-                            current_total += int(parts[3])
-                        except Exception:
-                            pass
-
-            requested_total = current_total + quantity
-            if requested_total > inv_count:
-                return jsonify({
-                    'error': (
-                        f"Quantity exceeds inventory: you have {inv_count} units of {brand} {model} "
-                        f"in {department}. Already assigned here: {current_total}. Requested additional: {quantity}."
-                    )
-                }), 400
-
+            quantity = max(1, int(data.get('quantity', 1)))
 
             logger.info(f"=== ADD MODEL REQUEST ===")
             logger.info(f"Brand: '{brand}', Model: '{model}', Dept: '{department}'")
@@ -2194,6 +2251,44 @@ def manage_event_models(event_id):
                         break
 
             logger.info(f"Final description for {brand} {model}: '{full_description}' (length: {len(full_description)})")
+
+            group_key = (
+                _clean_group_value(department, True),
+                _clean_group_value(brand),
+                _clean_group_value(model),
+                _clean_group_value(full_description)
+            )
+
+            # Server-side hard cap:
+            # Users may overbook against clashing events, but they may not request
+            # more than the physical inventory for this exact model/description group.
+            # Missing assets are excluded. OOC assets are included.
+            inv_count = sum(
+                1 for asset in data_manager.inventory.values()
+                if asset
+                and not getattr(asset, 'is_missing', False)
+                and _asset_group_key(asset) == group_key
+            )
+
+            current_total = 0
+
+            for item in getattr(event, 'prepared_items', []) or []:
+                existing_key, existing_quantity = _parse_model_assignment_key(item)
+
+                if existing_key == group_key:
+                    current_total += existing_quantity
+
+            requested_total = current_total + quantity
+
+            if requested_total > inv_count:
+                return jsonify({
+                    'error': (
+                        f"Quantity exceeds inventory for {brand} {model}"
+                        f"{f' ({full_description})' if full_description else ''}: "
+                        f"you have {inv_count} unit(s), already requested here: {current_total}, "
+                        f"requested additional: {quantity}."
+                    )
+                }), 400
             
             # Log current prepared_items
             logger.info(f"Current prepared_items: {event.prepared_items}")
@@ -3495,30 +3590,39 @@ def get_assets():
 @require_auth
 def get_available_assets():
     """
-    Get assets that are assignable, ignoring whether they are already assigned
-    to other events. We only exclude Missing / OOC here.
+    Get assets that can be requested for future events.
+
+    Rules:
+    - Exclude Missing assets.
+    - Include OOC assets because they may be repaired before the event date.
+    - Do not subtract clashing events here; event-date availability is handled by
+      /api/events/<event_id>/availability.
     """
     try:
         available_assets = []
-        for asset in data_manager.inventory.values():
-            if not asset.is_missing and not asset.is_ooc:
-                available_assets.append({
-                    'id': asset.asset_id,
-                    'brand': asset.brand,
-                    'model': asset.model_number,
-                    'description': asset.description,
-                    'serial': asset.serial_number,
-                    'department': asset.department_code,
-                    'location': asset.current_location or asset.default_location
-                })
 
-        # keep the same sort as before to avoid UI surprises
-        available_assets.sort(key=lambda x: (x['department'], x['id']))
+        for asset in data_manager.inventory.values():
+            if not asset:
+                continue
+
+            if getattr(asset, 'is_missing', False):
+                continue
+
+            available_assets.append(_asset_to_available_dict(asset))
+
+        available_assets.sort(key=lambda x: (
+            x['department'],
+            x['brand'].lower(),
+            x['model'].lower(),
+            x['description'].lower(),
+            x['id']
+        ))
+
         return jsonify({'success': True, 'data': available_assets})
+
     except Exception as e:
         logger.error(f"Error getting available assets: {e}")
         return jsonify({'error': 'Failed to retrieve available assets'}), 500
-
 
 @app.route('/api/events/<int:event_id>/assets', methods=['GET'])
 def get_event_assets(event_id):

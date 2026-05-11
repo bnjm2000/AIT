@@ -101,6 +101,13 @@ function makeModelKey(mg) {
   return `MG|${mg.department||''}|${mg.brand||''}|${mg.model||''}|${mg.description||''}`;
 }
 
+function makeQtyInputId(department, brand, model, description = '') {
+  const raw = `${department || ''}|${brand || ''}|${model || ''}|${description || ''}`;
+
+  return `qty-${encodeURIComponent(raw)
+    .replace(/%/g, '_')
+    .replace(/[^A-Za-z0-9_-]/g, '_')}`;
+}
 
 let isClickHandlerSetup = false;
 let processingAssets = new Set();
@@ -8439,86 +8446,101 @@ async function loadAvailableAssetsForEdit(eventId) {
   }
 }
 
-async function addModelToEvent(eventId, brand, model, department, description) {
+async function addModelToEvent(eventId, brand, model, department, description = '') {
   try {
-    // Get the quantity from the input field - use a safer method
-    const cleanBrand = brand.replace(/\s+/g, "");
-    const cleanModel = model.replace(/\s+/g, "");
-    const qtyInputId = `qty-${cleanBrand}-${cleanModel}`;
+    const cleanDescription = description || '';
+    const qtyInputId = makeQtyInputId(department, brand, model, cleanDescription);
     const qtyInput = document.getElementById(qtyInputId);
-    const requestedQuantity = parseInt(qtyInput?.value) || 1;
+    const requestedQuantity = Math.max(1, parseInt(qtyInput?.value, 10) || 1);
 
-    // Check available assets
     const availableAssets = window.currentEditAvailableAssets || [];
-    const modelAssets = availableAssets.filter(
-      (a) => a.brand === brand && a.model === model
-    );
-    const availableCount = modelAssets.length;
+    const availabilityList = window.currentEditAvailabilityList || [];
 
-    // Check if this model is already assigned to the event
-    let currentlyAssigned = 0;
-    const modelElements = document.querySelectorAll(".model-assignment");
-    for (let element of modelElements) {
-      const text = element.textContent;
-      if (text.includes(`${brand} ${model}`)) {
-        const qtyMatch = text.match(/(\d+)x/);
-        if (qtyMatch) {
-          currentlyAssigned = parseInt(qtyMatch[1]);
-          break;
-        }
-      }
+    let eventData = window.currentEditEvent;
+
+    if (!eventData || Number(eventData.id) !== Number(eventId)) {
+      const eventResponse = await apiCall(`/api/events/${eventId}`);
+      eventData = eventResponse.data;
+      window.currentEditEvent = eventData;
     }
 
-    // Calculate how many we can actually add
-    const maxCanAdd = availableCount;
+    const availabilityEntry = availabilityList.find(entry =>
+      entry.department === department &&
+      entry.brand === brand &&
+      entry.model === model &&
+      (entry.description || '') === cleanDescription
+    );
 
-    if (requestedQuantity > maxCanAdd) {
+    const physicalCount = availabilityEntry
+      ? Number(availabilityEntry.physical || 0)
+      : availableAssets.filter(asset =>
+          asset.department === department &&
+          asset.brand === brand &&
+          asset.model === model &&
+          (asset.description || '') === cleanDescription
+        ).length;
+
+    const currentGroup = Object.values(eventData.modelGroups || {}).find(group =>
+      group.department === department &&
+      group.brand === brand &&
+      group.model === model &&
+      (group.description || '') === cleanDescription
+    );
+
+    const currentlyRequestedHere = Number(currentGroup?.requiredQuantity || 0);
+
+    if (physicalCount <= 0) {
       showNotification(
-        "error",
-        `Only ${maxCanAdd} ${brand} ${model} available. Try reducing the quantity.`
+        'error',
+        `No inventory found for ${brand} ${model}${cleanDescription ? ` (${cleanDescription})` : ''}.`
       );
       return;
     }
 
-    // Add model to event
-    await apiCall(`/api/events/${eventId}/models`, "POST", {
-      brand: brand,
-      model: model,
-      department: department,
-      description: description,
+    if (currentlyRequestedHere + requestedQuantity > physicalCount) {
+      showNotification(
+        'error',
+        `Cannot add ${requestedQuantity}. You only have ${physicalCount} total ${brand} ${model}${cleanDescription ? ` (${cleanDescription})` : ''} in inventory, and this event already requests ${currentlyRequestedHere}.`
+      );
+      return;
+    }
+
+    await apiCall(`/api/events/${eventId}/models`, 'POST', {
+      brand,
+      model,
+      department,
+      description: cleanDescription,
       quantity: requestedQuantity,
     });
 
-    showNotification("success", `${requestedQuantity}x ${brand} ${model} added to event`);
+    showNotification(
+      'success',
+      `${requestedQuantity}x ${brand} ${model}${cleanDescription ? ` (${cleanDescription})` : ''} added to event`
+    );
 
-    // Clear the quantity input
     if (qtyInput) {
       qtyInput.value = 1;
     }
 
-    // Update available assets by removing the assigned ones
-    if (window.currentEditAvailableAssets) {
-      let removedCount = 0;
-      window.currentEditAvailableAssets = window.currentEditAvailableAssets.filter((asset) => {
-        if (asset.brand === brand && asset.model === model && removedCount < requestedQuantity) {
-          removedCount++;
-          return false;
-        }
-        return true;
-      });
-    }
+    const [eventResponse, availabilityResponse] = await Promise.all([
+      apiCall(`/api/events/${eventId}`),
+      apiCall(`/api/events/${eventId}/availability`)
+    ]);
 
-    // IMPORTANT: Use updateModelRequirementsSection to ensure buttons are present
+    window.currentEditEvent = eventResponse.data;
+    window.currentEditAvailabilityList = availabilityResponse.data || [];
+
     await updateModelRequirementsSection(eventId);
 
-    // Remove this model from the search results since it now has fewer available
-    const currentSearchTerm = document.querySelector('#edit-assets-tab input[placeholder*="Search available asset models"]')?.value;
+    const currentSearchTerm =
+      document.querySelector('#edit-assets-tab input[placeholder*="Search available asset models"]')?.value;
+
     if (currentSearchTerm && currentSearchTerm.length >= 2) {
       filterAvailableModels(currentSearchTerm);
     }
 
   } catch (error) {
-    showNotification("error", `Failed to add model: ${error.message}`);
+    showNotification('error', `Failed to add model: ${error.message}`);
   }
 }
 
@@ -8526,6 +8548,7 @@ async function updateModelRequirementsSection(eventId) {
   try {
     const eventResponse = await apiCall(`/api/events/${eventId}`);
     const event = eventResponse.data;
+    window.currentEditEvent = event;
 
     const modelsContainer = document.getElementById("current-asset-models");
     if (!modelsContainer) return;
@@ -8796,12 +8819,25 @@ function editModelQuantity(eventId, brand, model, department, description = "") 
 }
 
 function populateEditQuantityModal(eventId, brand, model, department, currentQuantity, description) {
-  // Calculate available assets
+  const cleanDescription = description || '';
   const availableAssets = window.currentEditAvailableAssets || [];
-  const modelAssets = availableAssets.filter(
-    (a) => a.brand === brand && a.model === model
+  const availabilityList = window.currentEditAvailabilityList || [];
+
+  const availabilityEntry = availabilityList.find(entry =>
+    entry.department === department &&
+    entry.brand === brand &&
+    entry.model === model &&
+    (entry.description || '') === cleanDescription
   );
-  const maxQuantity = currentQuantity + modelAssets.length;
+
+  const maxQuantity = availabilityEntry
+    ? Number(availabilityEntry.physical || 0)
+    : availableAssets.filter(asset =>
+        asset.department === department &&
+        asset.brand === brand &&
+        asset.model === model &&
+        (asset.description || '') === cleanDescription
+      ).length;
 
   // Populate modal
   document.getElementById("editQuantityTitle").textContent = `Edit Quantity - ${brand} ${model}`;
@@ -8877,6 +8913,16 @@ function validateEditQuantityInput() {
 
 async function updateModelQuantity(eventId, brand, model, department, newQuantity, currentQuantity, description = "") {
   try {
+    const maxQuantity = parseInt(document.getElementById("editQuantityInput")?.max || "0", 10);
+
+    if (newQuantity > maxQuantity) {
+      showNotification(
+        "error",
+        `Cannot set quantity to ${newQuantity}. Only ${maxQuantity} total units exist in inventory.`
+      );
+      return;
+    }
+
     // Remove the old model assignment
     await apiCall(`/api/events/${eventId}/models`, "DELETE", {
       brand: brand,
@@ -8934,6 +8980,7 @@ async function updateModelQuantity(eventId, brand, model, department, newQuantit
     showNotification("error", `Failed to update model quantity: ${error.message}`);
   }
 }
+
 function preserveModalState(callback) {
     // Save which sections are expanded
     const expandedSections = [];
@@ -9655,9 +9702,12 @@ function filterAvailableModels(searchTerm) {
 
   let html = '';
   filteredModels.slice(0, 20).forEach(model => {
-    const cleanBrand = model.brand.replace(/\s+/g, "");
-    const cleanModel = model.model.replace(/\s+/g, "");
-    const qtyInputId = `qty-${cleanBrand}-${cleanModel}`;
+    const qtyInputId = makeQtyInputId(
+      model.department,
+      model.brand,
+      model.model,
+      model.description || ''
+    );
 
     const { adjusted, physical } = adjustedAvailFor(model);
     const displayCount = Math.max(0, adjusted);
@@ -9673,15 +9723,18 @@ function filterAvailableModels(searchTerm) {
         <div style="display: flex; align-items: center; gap: 10px;">
           <!-- IMPORTANT: we keep max bound to PHYSICAL so we do NOT prevent adding when adjusted < 1 -->
           <input type="number" id="${qtyInputId}" min="1" max="${physical}" value="1"
-                 style="width: 60px; padding: 4px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;"
-                 oninput="validateQuantityInput('${qtyInputId}', ${physical})"
-                 onblur="handleQuantityBlur('${qtyInputId}', ${physical})"
-                 onkeydown="handleQuantityKeydown(event)">
-          <button class="btn btn-primary add-model-btn" style="padding: 6px 12px; font-size: 12px;"
-                  data-event-id="${eventId}" data-brand="${model.brand}" data-model="${model.model}"
-                  data-department="${model.department}" data-description="${escapeHtmlAttribute(model.description)}">
-            Add
-          </button>
+              style="width: 60px; padding: 4px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;"
+              oninput="validateQuantityInput('${qtyInputId}', ${physical})"
+              onblur="handleQuantityBlur('${qtyInputId}', ${physical})"
+              onkeydown="handleQuantityKeydown(event)">
+        <button class="btn btn-primary add-model-btn" style="padding: 6px 12px; font-size: 12px;"
+                data-event-id="${eventId}"
+                data-brand="${escapeHtmlAttribute(model.brand)}"
+                data-model="${escapeHtmlAttribute(model.model)}"
+                data-department="${escapeHtmlAttribute(model.department)}"
+                data-description="${escapeHtmlAttribute(model.description || '')}">
+          Add
+        </button>
         </div>
       </div>
     `;
