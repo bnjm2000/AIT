@@ -1,35 +1,3 @@
-2026/04/13 15:10:57,bnjm2000,Maintenance logged for asset PB#44: Updated to version V5.16.26
-2026/04/13 15:10:57,bnjm2000,Maintenance logged for asset PB#45: Updated to version V5.16.26
-2026/04/13 15:10:57,bnjm2000,Maintenance logged for asset PB#46: Updated to version V5.16.26
-2026/04/13 15:10:57,bnjm2000,Maintenance logged for asset PB#47: Updated to version V5.16.26
-2026/04/13 15:10:57,bnjm2000,Maintenance logged for asset PB#48: Updated to version V5.16.26
-2026/04/13 15:10:57,bnjm2000,Maintenance logged for asset PB#49: Updated to version V5.16.26
-2026/04/13 15:10:57,bnjm2000,Maintenance logged for asset PB#50: Updated to version V5.16.26
-2026/04/13 15:10:57,bnjm2000,Maintenance logged for asset PB#51: Updated to version V5.16.26
-2026/04/13 15:10:57,bnjm2000,Maintenance logged for asset PB#52: Updated to version V5.16.26
-2026/04/13 15:10:57,bnjm2000,Maintenance logged for asset PB#53: Updated to version V5.16.26
-2026/04/13 15:10:58,bnjm2000,Maintenance logged for asset PB#54: Updated to version V5.16.26
-2026/04/13 15:10:58,bnjm2000,Maintenance logged for asset PB#55: Updated to version V5.16.26
-2026/04/13 15:10:58,bnjm2000,Maintenance logged for asset PB#56: Updated to version V5.16.26
-2026/04/13 15:10:58,bnjm2000,Maintenance logged for asset PB#57: Updated to version V5.16.26
-2026/04/13 15:10:58,bnjm2000,Maintenance logged for asset PB#58: Updated to version V5.16.26
-2026/04/13 15:10:58,bnjm2000,Maintenance logged for asset PB#59: Updated to version V5.16.26
-2026/04/13 15:10:58,bnjm2000,Maintenance logged for asset PB#60: Updated to version V5.16.26
-2026/04/13 15:10:58,bnjm2000,Maintenance logged for asset PB#61: Updated to version V5.16.26
-2026/04/13 15:10:58,bnjm2000,Maintenance logged for asset PB#62: Updated to version V5.16.26
-2026/04/13 15:10:58,bnjm2000,Maintenance logged for asset PB#63: Updated to version V5.16.26
-2026/04/13 15:10:58,bnjm2000,Maintenance logged for asset PB#64: Updated to version V5.16.26
-2026/04/13 15:11:55,bnjm2000,"Updated maintenance log for asset PB#63: 'Updated to version V5.16.26' -> 'Sent to TSM, Changed PB15 Housing
-Updated to version V5.16.26' (also: Cleared OOC) (edited by bnjm2000)"
-2026/04/13 15:12:08,bnjm2000,"Updated maintenance log for asset PB#52: 'Updated to version V5.16.26' -> 'Sent to TSM, Changed PB15 Housing
-Updated to version V5.16.26' (also: Cleared OOC) (edited by bnjm2000)"
-2026/04/13 15:12:19,bnjm2000,"Updated maintenance log for asset PB#48: 'Updated to version V5.16.26' -> 'Sent to TSM, Changed PB15 Housing
-Updated to version V5.16.26' (also: Cleared OOC) (edited by bnjm2000)"
-2026/04/13 15:12:32,bnjm2000,"Updated maintenance log for asset PB#43: 'Updated to version V5.16.26' -> 'Sent to TSM, 
-Updated to version V5.16.26' (also: Cleared OOC) (edited by bnjm2000)"
-2026/04/13 15:12:51,bnjm2000,"Updated maintenance log for asset PB#43: 'Sent to TSM, 
-Updated to version V5.16.26 [Cleared OOC]' -> 'Sent to TSM, 
-Updated to version V5.16.26' (also: Cleared OOC) (edited by bnjm2000)"
 2026/04/13 15:12:58,bnjm2000,"Updated maintenance log for asset PB#48: 'Sent to TSM, Changed PB15 Housing
 Updated to version V5.16.26 [Cleared OOC]' -> 'Sent to TSM, Changed PB15 Housing
 Updated to version V5.16.26' (also: Cleared OOC) (edited by bnjm2000)"
@@ -1062,3 +1030,29 @@ Service Fee - $80' (also: Cleared OOC) (edited by bnjm2000)"
 2026/05/11 16:53:41,bnjm2000,Updated asset BULK-0011; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
 2026/05/11 16:54:17,bnjm2000,Added asset BULK-0014 via web interface
 2026/05/11 16:54:24,bnjm2000,Updated asset BULK-0014; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/05/11 16:58:54,bnjm2000,Added 12x Global Truss F34 Corner Block (Silver) model to event 132 (total: 12)
+2026/05/11 16:59:10,bnjm2000,Added 3x Global Truss F34 Truss - 0.5m (Silver) model to event 132 (total: 3)
+2026/05/11 16:59:18,bnjm2000,Added 2x Global Truss F34 Truss - 1m (Silver) model to event 132 (total: 2)
+2026/05/11 16:59:27,bnjm2000,Added 6x Global Truss F34 Truss - 1.5m (Silver) model to event 132 (total: 6)
+2026/05/11 16:59:37,bnjm2000,Added 15x Global Truss F34 Truss - 2m (Silver) model to event 132 (total: 15)
+2026/05/11 16:59:53,bnjm2000,Added 4x Global Truss F34 Truss - 2.5m (Silver) model to event 132 (total: 4)
+2026/05/11 17:00:02,bnjm2000,Added 9x Global Truss F34 Truss - 3m (Silver) model to event 132 (total: 9)
+2026/05/11 17:00:46,bnjm2000,Added 1x Global Truss F34 Truss - 3m (Silver) model to event 131 (total: 1)
+2026/05/11 17:00:47,bnjm2000,Added 1x Global Truss F34 Truss - 2m (Silver) model to event 131 (total: 1)
+2026/05/11 17:01:29,bnjm2000,Added 6x Global Truss F34 Truss - 0.5m (Silver) model to event 127 (total: 6)
+2026/05/11 17:01:40,bnjm2000,Added 7x Global Truss F34 Truss - 1m (Silver) model to event 127 (total: 7)
+2026/05/11 17:01:53,bnjm2000,Added 5x Global Truss F34 Truss - 1.5m (Silver) model to event 127 (total: 5)
+2026/05/11 17:02:05,bnjm2000,Added 8x Global Truss F34 Truss - 2m (Silver) model to event 127 (total: 16)
+2026/05/11 17:02:15,bnjm2000,Added 1x Global Truss F34 Truss - 2m (Silver) model to event 127 (total: 17)
+2026/05/11 17:02:16,bnjm2000,Added 1x Global Truss F34 Truss - 3m (Silver) model to event 127 (total: 1)
+2026/05/11 17:03:49,bnjm2000,Removed Global Truss F34 Truss - 2m (Silver) model from event 127
+2026/05/11 17:03:49,bnjm2000,Added 9x Global Truss F34 Truss - 2m (Silver) model to event 127 (total: 9)
+2026/05/11 17:05:08,bnjm2000,User bnjm2000 forced event 127 (Wedding of Avinash & Rachel @ Capella) state from Closed to Preparing
+2026/05/11 17:05:22,bnjm2000,Prepared 1x bulk asset Global Truss F34 Truss - 3m (Silver) for event 127
+2026/05/11 17:05:24,bnjm2000,Prepared 9x bulk asset Global Truss F34 Truss - 2m (Silver) for event 127
+2026/05/11 17:05:26,bnjm2000,Prepared 7x bulk asset Global Truss F34 Truss - 1m (Silver) for event 127
+2026/05/11 17:05:27,bnjm2000,Prepared 5x bulk asset Global Truss F34 Truss - 1.5m (Silver) for event 127
+2026/05/11 17:05:28,bnjm2000,Prepared 6x bulk asset Global Truss F34 Truss - 0.5m (Silver) for event 127
+2026/05/11 17:05:56,bnjm2000,User bnjm2000 forced event 127 (Wedding of Avinash & Rachel @ Capella) state from Preparing to Returning
+2026/05/11 17:06:09,bnjm2000,Returned all assets for department SK in event 127: 5 items
+2026/05/11 17:06:17,bnjm2000,User bnjm2000 removed forced state override for event 127 (Wedding of Avinash & Rachel @ Capella): Returning -> Closed
