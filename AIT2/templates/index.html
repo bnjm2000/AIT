@@ -246,15 +246,15 @@
       }
 
       .event-card.state-added {
-        border-left-color: #007bff;
+        border-left-color: #ff69b4; /* Pink */
       }
 
       .event-card.state-planning {
-        border-left-color: #fd7e14;
+        border-left-color: #6f42c1; /* Purple */
       }
 
       .event-card.state-preparing {
-        border-left-color: #ffc107;
+        border-left-color: #007bff; /* Blue */
       }
 
       .event-card.state-ready {
@@ -262,11 +262,15 @@
       }
 
       .event-card.state-returning {
-        border-left-color: #6f42c1;
+        border-left-color: #007c15;
       }
 
       .event-card.state-closed {
         border-left-color: #6c757d;
+      }
+
+      .event-card.state-last-day {
+        border-left-color: #fd7e14; /* Orange */
       }
 
       .event-card.state-overdue {
@@ -652,17 +656,25 @@
       }
 
       .state-added {
-        background: #cce5ff;
+        background: #ffe0f0;
+        color: #9b0a50;
+      }
+
+      .state-planning {
+        background: #eadcf8;
+        color: #3d176b;
+      }
+
+      .state-preparing {
+        background: #d8ebff;
         color: #004085;
       }
-      .state-planning {
-        background: #ffe8cc;
-        color: #8a4a00;
+
+      .state-last-day {
+        background: #ffe5cc;
+        color: #8a3d00;
       }
-      .state-preparing {
-        background: #fff3cd;
-        color: #856404;
-      }
+
       .state-ready {
         background: #d4edda;
         color: #155724;
@@ -683,8 +695,8 @@
       }
 
       .state-returning {
-        background: #e2d9f3;
-        color: #44297a;
+        background: #d9f3e0;
+        color: #007c15;
       }
       .state-closed {
         background: #e2e3e5;

@@ -723,6 +723,7 @@ def update_event_state(event):
             
         # Get current date for overdue checks
         current_date = datetime.now().strftime('%Y%m%d')
+        is_last_day = str(getattr(event, 'end_date', '')) == current_date
         
         # Initialize actually_prepared if it doesn't exist
         if not hasattr(event, 'actually_prepared'):
@@ -787,9 +788,14 @@ def update_event_state(event):
                 total_returned == total_specific_assignments):
                 event.state = 'Closed'
                 #logger.info(f"Event {event.event_id} set to Closed: all assets returned")
-            # 2. CHECK FOR OVERDUE - event ended but still has unreturned assets
+
+            # 2. CHECK FOR LAST DAY - today is the event end date
+            elif is_last_day:
+                event.state = 'Last Day'
+
+            # 3. CHECK FOR OVERDUE - event ended but still has unreturned assets
             elif (total_specific_assignments > total_returned and 
-                  current_date > event.end_date):
+                current_date > event.end_date):
                 event.state = 'Overdue'
                 #logger.info(f"Event {event.event_id} set to Overdue: past end date with unreturned assets")
             # 3. No requirements set yet
@@ -837,9 +843,14 @@ def update_event_state(event):
             if (total_actually_prepared > 0 and all_actually_prepared_returned):
                 event.state = 'Closed'
                 #logger.info(f"Event {event.event_id} set to Closed: all actually prepared assets returned")
-            # 2. CHECK FOR OVERDUE - event ended but still has unreturned assets (HIGH PRIORITY)
+
+            # 2. CHECK FOR LAST DAY - today is the event end date
+            elif is_last_day:
+                event.state = 'Last Day'
+
+            # 3. CHECK FOR OVERDUE - event ended but still has unreturned assets
             elif (total_actually_prepared > total_returned and 
-                  current_date > event.end_date):
+                current_date > event.end_date):
                 event.state = 'Overdue'
                 # logger.info(f"Event {event.event_id} set to Overdue: past end date with unreturned assets")
             # 3. No assets assigned yet
@@ -3105,7 +3116,7 @@ def remove_asset_from_event_post(event_id):
 
 # ---------------- Transfer Assets helpers and routes ----------------
 
-TRANSFER_SOURCE_STATES = {'ongoing', 'overdue'}
+TRANSFER_SOURCE_STATES = {'ongoing', 'last day', 'overdue', 'ready'}
 TRANSFER_TARGET_STATES = {'planning', 'preparing'}
 
 
@@ -3448,7 +3459,7 @@ def execute_transfer_assets():
             return jsonify({'error': 'Event not found'}), 404
 
         if str(from_event.state or '').strip().lower() not in TRANSFER_SOURCE_STATES:
-            return jsonify({'error': 'Source event must be Ongoing or Overdue'}), 400
+            return jsonify({'error': 'Source event must be Ongoing, Last Day, or Overdue'}), 400
         if str(to_event.state or '').strip().lower() not in TRANSFER_TARGET_STATES:
             return jsonify({'error': 'Destination event must be Planning or Preparing'}), 400
 
@@ -4799,7 +4810,7 @@ def force_event_state(event_id):
         new_state = data.get('state')
         
         # Validate state
-        valid_states = ['Added', 'Planning', 'Preparing', 'Ready', 'Ongoing', 'Returning', 'Closed', 'Overdue']
+        valid_states = ['Added', 'Planning', 'Preparing', 'Ready', 'Ongoing', 'Last Day', 'Returning', 'Closed', 'Overdue']
         if new_state not in valid_states:
             return jsonify({'error': f'Invalid state. Must be one of: {valid_states}'}), 400
             

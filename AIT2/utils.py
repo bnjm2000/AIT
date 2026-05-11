@@ -23,17 +23,23 @@ def play_sound(success=True):
 
 def get_state_color(state):
     if state == 'Added':
-        return '\033[94m'  # Blue
+        return '\033[95m'  # Pink / Magenta
+    elif state == 'Planning':
+        return '\033[35m'  # Purple
     elif state == 'Preparing':
-        return '\033[93m'  # Yellow
+        return '\033[94m'  # Blue
+    elif state == 'Last Day':
+        return '\033[93m'  # Orange/Yellow in terminal
     elif state == 'Ready':
         return '\033[92m'  # Green
     elif state == 'Returning':
         return '\033[95m'  # Magenta
     elif state == 'Closed':
         return '\033[90m'  # Gray
+    elif state == 'Overdue':
+        return '\033[91m'  # Red
     else:
-        return '\033[0m'   # Default
+        return '\033[0m'
 
 def get_colored_item_description(model_description):
     # Define color codes

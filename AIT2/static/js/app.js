@@ -43,6 +43,13 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+function getEventStateClass(state) {
+  return `state-${String(state || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '-')}`;
+}
+
 // PATCH: attribute-safe HTML escaper (handles quotes too)
 function escapeHtmlAttr(str) {
   return String(str ?? '')
@@ -1254,7 +1261,7 @@ async function loadAllEvents() {
 
 function createEventCard(event) {
     const card = document.createElement('div');
-    card.className = `event-card state-${event.state.toLowerCase()}`;
+    card.className = `event-card ${getEventStateClass(event.state)}`;
     
     // Helper function to escape HTML
     const escapeHtml = (str) => {
@@ -1288,7 +1295,7 @@ function createEventCard(event) {
                     ${getTagDisplay(event.tag || 'events')}
                 </span>
             </div>
-            <div class="event-state state-${event.state.toLowerCase()}">${escapeHtml(event.state)}</div>
+            <div class="event-state ${getEventStateClass(event.state)}">${escapeHtml(event.state)}</div>
         </div>
         <div class="event-title">${escapeHtml(event.name)}</div>
         <div class="event-date">${escapeHtml(dateRange)}</div>
@@ -1418,6 +1425,7 @@ function showForceStateModal(eventId, currentState) {
                                 <option value="Preparing">Preparing</option>
                                 <option value="Ready">Ready</option>
                                 <option value="Ongoing">Ongoing</option>
+                                <option value="Last Day">Last Day</option>
                                 <option value="Returning">Returning</option>
                                 <option value="Closed">Closed</option>
                                 <option value="Overdue">Overdue</option>
@@ -1502,6 +1510,7 @@ function showForceStateModal(eventId, currentState) {
                                 <option value="Preparing">Preparing</option>
                                 <option value="Ready">Ready</option>
                                 <option value="Ongoing">Ongoing</option>
+                                <option value="Last Day">Last Day</option>
                                 <option value="Returning">Returning</option>
                                 <option value="Closed">Closed</option>
                                 <option value="Overdue">Overdue</option>
@@ -3532,7 +3541,7 @@ async function loadPrepareEvents() {
 
 function createPrepareEventCard(event) {
   const card = document.createElement("div");
-  card.className = `event-card state-${event.state.toLowerCase()}`;
+  card.className = `event-card ${getEventStateClass(event.state)}`;
 
   // Helper function to escape HTML
   const escapeHtml = (str) => {
@@ -3592,7 +3601,7 @@ function createPrepareEventCard(event) {
                     ${event.tag === 'dry hire' ? 'DRY HIRE' : 'EVENT'}
                 </span>
             </div>
-            <div class="event-state state-${event.state.toLowerCase()}">${escapeHtml(event.state)}</div>
+            <div class="event-state ${getEventStateClass(event.state)}">${escapeHtml(event.state)}</div>
         </div>
         <div class="event-title">${escapeHtml(event.name)}</div>
         <div class="event-date">${escapeHtml(dateRange)}</div>
@@ -4076,7 +4085,7 @@ function renderCalendar(events) {
     for (let row = 0; row < 4; row++) {
       const placement = dayPlacements.find(p => p.row === row);
       if (placement) {
-        const eventClass = `calendar-event state-${placement.event.state.toLowerCase()}${placement.event.tag === 'dry hire' ? ' dry-hire' : ''} ${placement.spanClass}`;
+        const eventClass = `calendar-event ${getEventStateClass(placement.event.state)}${placement.event.tag === 'dry hire' ? ' dry-hire' : ''} ${placement.spanClass}`;
         
         // Only show text on the first day of the event span or if it's a single day event
         let eventText = '';
@@ -4288,7 +4297,7 @@ function showDayEvents(event, dayIndex, dateString) {
   popup.className = 'day-events-popup';
   
   const eventsHTML = dayEvents.map(event => {
-    const eventClass = `day-event-item state-${event.state.toLowerCase()}${event.tag === 'dry hire' ? ' dry-hire' : ''}`;
+    const eventClass = `day-event-item ${getEventStateClass(event.state)}${event.tag === 'dry hire' ? ' dry-hire' : ''}`;
     return `<div class="${eventClass}" onclick="viewEvent(${event.id}); closeDayEventsPopup();" title="${event.name}">${event.name}</div>`;
   }).join('');
   
@@ -6179,7 +6188,7 @@ async function loadReturnEvents() {
 
 function createReturnEventCard(event) {
   const card = document.createElement("div");
-  card.className = `event-card state-${event.state.toLowerCase()}`;
+  card.className = `event-card ${getEventStateClass(event.state)}`;
 
   // Helper function to escape HTML
   const escapeHtml = (str) => {
@@ -6218,7 +6227,7 @@ function createReturnEventCard(event) {
                   ${event.tag === 'dry hire' ? 'DRY HIRE' : 'EVENT'}
               </span>
           </div>
-          <div class="event-state state-${event.state.toLowerCase()}">${escapeHtml(event.state)}</div>
+          <div class="event-state ${getEventStateClass(event.state)}">${escapeHtml(event.state)}</div>
       </div>
       <div class="event-title">${escapeHtml(event.name)}</div>
       <div class="event-date">${escapeHtml(dateRange)}</div>
@@ -6957,14 +6966,14 @@ function renderTransferWorkspace() {
       <div style="background:linear-gradient(135deg,rgba(102,126,234,.10),rgba(118,75,162,.10));border:1px solid rgba(118,75,162,.18);border-radius:16px;padding:18px;">
         <h3 style="margin:0 0 6px;color:#4b2f65;">Transfer Assets Directly Between Events</h3>
         <p style="margin:0;color:#666;line-height:1.4;">
-          Select a source event that is <strong>Ongoing</strong> or <strong>Overdue</strong>, then select a destination event that is <strong>Planning</strong> or <strong>Preparing</strong>.
+          Select a source event that is <strong>Ongoing</strong>, <strong>Last Day</strong>, or <strong>Overdue</strong>, then select a destination event that is <strong>Planning</strong> or <strong>Preparing</strong>.
           Matching assets will be returned from the source and immediately prepared for the destination.
         </p>
       </div>
 
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;align-items:end;background:white;border:1px solid #edf0f5;border-radius:16px;padding:16px;box-shadow:0 6px 18px rgba(0,0,0,.05);">
         <div class="form-group" style="margin:0;">
-          <label class="form-label">From Event — Ongoing / Overdue</label>
+          <label class="form-label">From Event — Ongoing / Last Day / Overdue</label>
           <select id="transferSourceSelect" class="form-input" onchange="loadTransferCandidates()">
             <option value="">Select source event...</option>
             ${sourceOptions}
