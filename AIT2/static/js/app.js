@@ -13784,16 +13784,117 @@ function generatePdfDO(data) {
             @page { margin: 0; }
             html, body { margin: 0 !important; padding: 7mm !important; }
         }
+        
+                /* PATCH: Delivery Order measured pagination */
+        body {
+            margin: 0;
+            padding: 0;
+            background: white;
+        }
 
+        .page {
+            width: 210mm;
+            height: 297mm;
+            min-height: 297mm;
+            position: relative;
+            padding: 7mm 7mm 14mm 7mm;
+            overflow: hidden;
+            page-break-after: always;
+            break-after: page;
+            background: white;
+        }
+
+        .page:last-child {
+            page-break-after: auto;
+            break-after: auto;
+        }
+
+        .page-break {
+            display: none !important;
+        }
+
+        .page-break + .page {
+            padding-top: 7mm;
+        }
+
+        .items-table {
+            margin-bottom: 0;
+        }
+
+        .comments-section {
+            position: absolute;
+            left: 7mm;
+            right: 7mm;
+            bottom: 39mm;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            margin: 0;
+        }
+
+        .signature-holder {
+            position: absolute;
+            right: 7mm;
+            bottom: 18mm;
+        }
+
+        .footer {
+            position: absolute;
+            bottom: 7mm;
+            left: 7mm;
+            right: 7mm;
+            text-align: center;
+            font-family: 'Calibri', sans-serif;
+            font-size: 7pt;
+            color: black;
+            line-height: 1.2;
+            z-index: 100;
+        }
+
+        .page-number {
+            position: absolute;
+            bottom: 3mm;
+            right: 7mm;
+            margin-right: 0;
+            font-family: 'Century Gothic', sans-serif;
+            font-size: 7pt;
+            color: black;
+        }
+
+        @media print {
+            @page {
+                size: A4;
+                margin: 0;
+            }
+
+            html,
+            body {
+                margin: 0 !important;
+                padding: 0 !important;
+                width: 210mm;
+                background: white;
+            }
+
+            .page {
+                width: 210mm;
+                height: 297mm;
+                min-height: 297mm;
+                padding: 7mm 7mm 14mm 7mm;
+                page-break-after: always;
+                break-after: page;
+                page-break-inside: avoid;
+                break-inside: avoid;
+            }
+
+            .page:last-child {
+                page-break-after: auto;
+                break-after: auto;
+            }
+        }
     </style>
 </head>
 <body>
     ${pagesContent}
-    
-    <div class="footer">
-        AVEC VISION PRIVATE LIMITED<br>
-        601 SIMS DRIVE PAN-I COMPLEX #04-10 SINGAPORE 387382 TEL 65.9743.3660 CO REG 202122775G
-    </div>
     
     <script>
         // Calculate total pages and update page numbers
@@ -13835,127 +13936,416 @@ function generatePdfDO(data) {
 
 function generatePagesContent(data, formattedDate) {
     const departments = groupItemsByDepartment(data.event);
-    const maxRowsPerPage = 24;
-    let pages = [];
-    let currentPageItems = [];
-    let currentRowCount = 1; 
-    
-    // Check if we have any content
-    const allItems = Object.values(departments).flat();
-    if (allItems.length === 0) {
-        pages.push([]);
-    } else {
-        // Process each department
-        Object.keys(departments).forEach(dept => {
-            if (departments[dept].length > 0) {
-                const deptItems = departments[dept];
-                
-                // Check if we need to add department header
-                if (currentRowCount + 1 > maxRowsPerPage && currentPageItems.length > 0) {
-                    // Start new page
-                    pages.push([...currentPageItems]);
-                    currentPageItems = [];
-                    currentRowCount = 1;
-                }
-                
-                // Add department header
-                currentPageItems.push({
-                    type: 'department',
-                    name: dept,
-                    items: []
-                });
-                currentRowCount += 1;
-                
-                // Add items one by one
-                // Add items one by one
-                deptItems.forEach(item => {
-                    console.log(`Processing item in ${dept}:`, item);
-                    
-                    // Calculate how many rows this item will take (base + asset IDs if enabled)
-                    let itemRowCount = 1; // Base row
-                    let itemAssetIds = [];
-                    
-                    if (data.showAssetIds) {
-                        console.log('showAssetIds is enabled, getting asset IDs...');
-                        itemAssetIds = getAssetIdsByItem(data.event, item, dept);
-                        console.log(`Found ${itemAssetIds.length} asset IDs for this item:`, itemAssetIds);
-                        if (itemAssetIds.length > 0) {
-                            // Add rows for asset IDs (roughly 6-8 asset IDs per row)
-                            itemRowCount += Math.ceil(itemAssetIds.length / 7);
-                        }
-                    } else {
-                        console.log('showAssetIds is disabled');
-                    }
-                    
-                    if (currentRowCount + itemRowCount > maxRowsPerPage) {
-                        // Start new page
-                        pages.push([...currentPageItems]);
-                        currentPageItems = [];
-                        currentRowCount = 1; // Reset for job title row
-                        
-                        // Add department header to new page
-                        currentPageItems.push({
-                            type: 'department',
-                            name: dept,
-                            items: []
-                        });
-                        currentRowCount += 1;
-                    }
-                    
-                    // Add item to current department on current page
-                    const currentDept = currentPageItems[currentPageItems.length - 1];
-                    currentDept.items.push({
-                        ...item,
-                        assetIds: data.showAssetIds ? itemAssetIds : []
-                    });
-                    currentRowCount += itemRowCount;
-                });
+
+    const mmToPx = (mm) => (mm * 96) / 25.4;
+
+    // A4 is 210mm x 297mm.
+    // Page padding is 7mm top/left/right and 14mm bottom.
+    // Normal pages reserve only footer/page-number space.
+    // Last page reserves comments + signature + footer space.
+    const PAGE_BODY_HEIGHT_MM = 276;
+
+    // Normal pages can be allowed to run closer to the footer.
+    // Increase this to squeeze more rows onto normal pages only.
+    const NORMAL_PAGE_EXTRA_MM = 14;
+
+    // Keep this at 0 because NORMAL_PAGE_EXTRA_MM now controls the squeeze.
+    const NORMAL_RESERVED_MM = 0;
+
+    // Last page still reserves space for comments + signature.
+    const LAST_RESERVED_MM = 52;
+
+    const FOOTER_HTML = `
+        <div class="footer">
+            AVEC VISION PRIVATE LIMITED<br>
+            601 SIMS DRIVE PAN-I COMPLEX #04-10 SINGAPORE 387382 TEL 65.9743.3660 CO REG 202122775G
+        </div>
+    `;
+
+    const safe = (value) => escapeHtml(String(value ?? ''));
+
+    const renderAssetIdsLine = (assetIds) => {
+        if (!assetIds || assetIds.length === 0) return '';
+
+        return `
+            <br>
+            <span style="font-size:8px;color:#666;font-style:italic;">
+                Asset IDs: ${assetIds.map(id => safe(id)).join(', ')}
+            </span>
+        `;
+    };
+
+    const renderItemRow = (record) => {
+        return `
+            <tr>
+                <td>
+                    ${safe(record.item.description)}
+                    ${renderAssetIdsLine(record.item.assetIds)}
+                </td>
+                <td class="quantity-col">${safe(record.item.quantity)}</td>
+            </tr>
+        `;
+    };
+
+    const renderDeptRow = (dept) => {
+        return `
+            <tr>
+                <td class="department-header" colspan="2">${safe(dept)}:</td>
+            </tr>
+        `;
+    };
+
+    // Hidden measuring box: lets the browser calculate real row heights
+    // instead of guessing based on row count.
+    const measureBox = document.createElement('div');
+    measureBox.id = '__doMeasureBox';
+    measureBox.style.cssText = `
+        position:absolute;
+        left:-10000px;
+        top:0;
+        visibility:hidden;
+        width:196mm;
+        font-family:'Century Gothic', sans-serif;
+        font-size:9pt;
+        line-height:1.2;
+        background:white;
+        z-index:-1;
+    `;
+
+    measureBox.innerHTML = `
+        <style>
+            #__doMeasureBox * {
+                box-sizing: border-box;
             }
+
+            #__doMeasureBox .do-logo-row {
+                display: flex;
+                justify-content: flex-end;
+                margin-bottom: 7px;
+                height: 39px;
+            }
+
+            #__doMeasureBox .header {
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-start;
+                margin-bottom: 25px;
+            }
+
+            #__doMeasureBox .header-left {
+                flex: 1;
+            }
+
+            #__doMeasureBox .header-right {
+                display: flex;
+                flex-direction: column;
+                align-items: flex-end;
+                gap: 5px;
+                margin-right: 0;
+                margin-top: -5px;
+                margin-bottom: 2px;
+            }
+
+            #__doMeasureBox .delivery-order-title {
+                font-family: 'Century Gothic', sans-serif;
+                font-size: 14pt;
+                font-weight: bold;
+                color: black;
+                margin-bottom: 5px;
+                text-align: right;
+                margin-top: 5px;
+            }
+
+            #__doMeasureBox .do-number,
+            #__doMeasureBox .deliver-to,
+            #__doMeasureBox .client-info,
+            #__doMeasureBox .client-phone {
+                font-family: 'Century Gothic', sans-serif;
+                font-size: 9pt;
+                color: black;
+                font-weight: bold;
+            }
+
+            #__doMeasureBox .items-table,
+            #__doMeasureBox .do-measure-table {
+                width: 100%;
+                border-collapse: collapse;
+                border: 2px solid black;
+                margin-bottom: 0;
+            }
+
+            #__doMeasureBox .items-table th,
+            #__doMeasureBox .do-measure-table th {
+                background-color: #333;
+                color: white;
+                padding: 8px;
+                text-align: left;
+                font-family: 'Century Gothic', sans-serif;
+                font-size: 9pt;
+                font-weight: bold;
+                border: 1px solid #333;
+            }
+
+            #__doMeasureBox .items-table td,
+            #__doMeasureBox .do-measure-table td {
+                padding: 6px 8px;
+                font-family: 'Century Gothic', sans-serif;
+                font-size: 9pt;
+                color: black;
+                vertical-align: top;
+            }
+
+            #__doMeasureBox .items-table td:first-child,
+            #__doMeasureBox .do-measure-table td:first-child {
+                border-right: 1px solid black;
+                border-left: 1px solid black;
+            }
+
+            #__doMeasureBox .items-table td:last-child,
+            #__doMeasureBox .do-measure-table td:last-child {
+                border-right: 1px solid black;
+            }
+
+            #__doMeasureBox .job-title {
+                font-weight: bold;
+                background-color: #f5f5f5;
+            }
+
+            #__doMeasureBox .department-header {
+                font-weight: bold;
+                color: black;
+                background-color: #f0f0f0;
+            }
+
+            #__doMeasureBox .quantity-col {
+                text-align: center;
+                width: 80px;
+            }
+        </style>
+
+        <div id="__doBaseMeasure">
+            <div class="do-logo-row"></div>
+
+            <div class="header">
+                <div class="header-left">
+                    <div class="deliver-to">DELIVER TO:</div>
+                    <div class="client-info">
+                        ${safe(data.clientName)}<br>
+                        ${data.clientCompany ? safe(data.clientCompany) + '<br>' : ''}
+                        ${data.deliveryAddress1 ? safe(data.deliveryAddress1) + '<br>' : ''}
+                        ${data.deliveryAddress2 ? safe(data.deliveryAddress2) + '<br>' : ''}
+                        ${data.deliveryAddress3 ? safe(data.deliveryAddress3) + '<br>' : ''}
+                    </div>
+                    ${data.clientPhone ? `<div class="client-phone">Tel : ${safe(data.clientPhone)}</div>` : '<div class="client-phone">Tel : N/A</div>'}
+                </div>
+
+                <div class="header-right">
+                    <div class="delivery-order-title">DELIVERY ORDER</div>
+                    <div class="do-number">
+                        No. : ${safe(data.doNumber)}<br>
+                        Date : ${safe(formattedDate)}
+                    </div>
+                </div>
+            </div>
+
+            <table class="items-table">
+                <thead>
+                    <tr>
+                        <th class="description-header">DESCRIPTION</th>
+                        <th class="quantity-header">QUANTITY</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="job-title">
+                            Job Title : ${safe(data.jobTitle)}
+                            ${data.jobLocation ? '<br>' + safe(data.jobLocation) : ''}
+                        </td>
+                        <td class="quantity-col"></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <table class="do-measure-table">
+            <tbody id="__doMeasureBody"></tbody>
+        </table>
+    `;
+
+    document.body.appendChild(measureBox);
+
+    const measureBody = measureBox.querySelector('#__doMeasureBody');
+    const baseHeight = measureBox.querySelector('#__doBaseMeasure').getBoundingClientRect().height;
+
+    const normalPageRowBudget = Math.max(
+        50,
+        mmToPx(PAGE_BODY_HEIGHT_MM - NORMAL_RESERVED_MM + NORMAL_PAGE_EXTRA_MM) - baseHeight
+    );
+
+    const lastPageRowBudget = Math.max(
+        50,
+        mmToPx(PAGE_BODY_HEIGHT_MM - LAST_RESERVED_MM) - baseHeight
+    );
+
+    function measureRow(rowHtml) {
+        measureBody.innerHTML = rowHtml;
+        const row = measureBody.querySelector('tr');
+        return row ? row.getBoundingClientRect().height : 0;
+    }
+
+    const deptHeights = {};
+    const records = [];
+
+    Object.keys(departments).forEach(dept => {
+        const deptItems = departments[dept] || [];
+        if (deptItems.length === 0) return;
+
+        deptHeights[dept] = measureRow(renderDeptRow(dept));
+
+        deptItems.forEach(item => {
+            const assetIds = data.showAssetIds
+                ? getAssetIdsByItem(data.event, item, dept)
+                : [];
+
+            const record = {
+                dept,
+                item: {
+                    ...item,
+                    assetIds
+                },
+                height: 0
+            };
+
+            record.height = measureRow(renderItemRow(record));
+            records.push(record);
         });
-        
-        // Add the last page if it has items
-        if (currentPageItems.length > 0) {
-            pages.push(currentPageItems);
+    });
+
+    measureBox.remove();
+
+    function costToAdd(page, record) {
+        const needsDeptHeader = page.lastDept !== record.dept;
+        return (needsDeptHeader ? deptHeights[record.dept] : 0) + record.height;
+    }
+
+    function canFitRemaining(startIndex, budget) {
+        const testPage = {
+            records: [],
+            height: 0,
+            lastDept: null
+        };
+
+        for (let i = startIndex; i < records.length; i++) {
+            const record = records[i];
+            const cost = costToAdd(testPage, record);
+
+            if (testPage.height + cost > budget) {
+                return false;
+            }
+
+            testPage.records.push(record);
+            testPage.height += cost;
+            testPage.lastDept = record.dept;
+        }
+
+        return true;
+    }
+
+    function fillPage(startIndex, budget) {
+        const page = {
+            records: [],
+            height: 0,
+            lastDept: null
+        };
+
+        let i = startIndex;
+
+        while (i < records.length) {
+            const record = records[i];
+            const cost = costToAdd(page, record);
+
+            if (page.records.length > 0 && page.height + cost > budget) {
+                break;
+            }
+
+            // If one single row is taller than the available area,
+            // keep it on the page instead of creating an infinite loop.
+            if (page.records.length === 0 && cost > budget) {
+                page.records.push(record);
+                page.height += cost;
+                page.lastDept = record.dept;
+                i++;
+                break;
+            }
+
+            page.records.push(record);
+            page.height += cost;
+            page.lastDept = record.dept;
+            i++;
+        }
+
+        return {
+            page,
+            nextIndex: i
+        };
+    }
+
+    const pages = [];
+
+    if (records.length === 0) {
+        pages.push({
+            records: [],
+            height: 0,
+            lastDept: null
+        });
+    } else {
+        let index = 0;
+
+        while (index < records.length) {
+            const remainingCanBeLastPage = canFitRemaining(index, lastPageRowBudget);
+            const budget = remainingCanBeLastPage ? lastPageRowBudget : normalPageRowBudget;
+
+            const result = fillPage(index, budget);
+            pages.push(result.page);
+            index = result.nextIndex;
         }
     }
-    
-    // Generate HTML for all pages
+
     let pagesHtml = '';
-    
-    pages.forEach((pageItems, pageIndex) => {
-        const isFirstPage = pageIndex === 0;
-        const isLastPage = pageIndex === pages.length - 1;
-        
-        if (!isFirstPage) {
-            pagesHtml += '<div class="page-break"></div>';
-        }
-        
-       pagesHtml += `
+    const totalPages = pages.length;
+
+    pages.forEach((page, pageIndex) => {
+        const isLastPage = pageIndex === totalPages - 1;
+        const pageNumber = pageIndex + 1;
+
+        pagesHtml += `
             <div class="page">
-                <div style="display: flex; justify-content: flex-end; margin-bottom: 7px;">
-                    <img src="/static/images/logo.png" alt="Company Logo" id="company-logo" style="height: 39px; width: auto; object-fit: contain"/>
+                <div style="display:flex;justify-content:flex-end;margin-bottom:7px;">
+                    <img src="/static/images/logo.png" alt="Company Logo" id="company-logo" style="height:39px;width:auto;object-fit:contain">
                 </div>
+
                 <div class="header">
                     <div class="header-left">
                         <div class="deliver-to">DELIVER TO:</div>
                         <div class="client-info">
-                            ${data.clientName}<br>
-                            ${data.clientCompany ? data.clientCompany + '<br>' : ''}
-                            ${data.deliveryAddress1 ? data.deliveryAddress1 + '<br>' : ''}
-                            ${data.deliveryAddress2 ? data.deliveryAddress2 + '<br>' : ''}
-                            ${data.deliveryAddress3 ? data.deliveryAddress3 + '<br>' : ''}
+                            ${safe(data.clientName)}<br>
+                            ${data.clientCompany ? safe(data.clientCompany) + '<br>' : ''}
+                            ${data.deliveryAddress1 ? safe(data.deliveryAddress1) + '<br>' : ''}
+                            ${data.deliveryAddress2 ? safe(data.deliveryAddress2) + '<br>' : ''}
+                            ${data.deliveryAddress3 ? safe(data.deliveryAddress3) + '<br>' : ''}
                         </div>
-                        ${data.clientPhone ? `<div class="client-phone">Tel : ${data.clientPhone}</div>` : '<div class="client-phone">Tel : N/A</div>'}
+                        ${data.clientPhone ? `<div class="client-phone">Tel : ${safe(data.clientPhone)}</div>` : '<div class="client-phone">Tel : N/A</div>'}
                     </div>
+
                     <div class="header-right">
                         <div class="delivery-order-title">DELIVERY ORDER</div>
                         <div class="do-number">
-                            No. : ${data.doNumber}<br>
-                            Date : ${formattedDate}
+                            No. : ${safe(data.doNumber)}<br>
+                            Date : ${safe(formattedDate)}
                         </div>
                     </div>
                 </div>
-                
+
                 <table class="items-table">
                     <thead>
                         <tr>
@@ -13965,51 +14355,52 @@ function generatePagesContent(data, formattedDate) {
                     </thead>
                     <tbody>
                         <tr>
-                            <td class="job-title">Job Title : ${data.jobTitle}${data.jobLocation ? '<br>' + data.jobLocation : ''}</td>
+                            <td class="job-title">
+                                Job Title : ${safe(data.jobTitle)}
+                                ${data.jobLocation ? '<br>' + safe(data.jobLocation) : ''}
+                            </td>
                             <td class="quantity-col"></td>
                         </tr>
         `;
-        
-        // Add items for this page
-        pageItems.forEach(pageItem => {
-            if (pageItem.type === 'department') {
-                pagesHtml += `<tr><td class="department-header" colspan="2">${pageItem.name}:</td></tr>`;
-                pageItem.items.forEach(item => {
-                    pagesHtml += `
-                        <tr>
-                            <td>${item.description}${item.assetIds && item.assetIds.length > 0 ? '<br><span style="font-size: 8px; color: #666; font-style: italic;">Asset IDs: ' + item.assetIds.join(', ') + '</span>' : ''}</td>
-                            <td class="quantity-col">${item.quantity}</td>
-                        </tr>
-                    `;
-                });
+
+        let currentDept = null;
+
+        page.records.forEach(record => {
+            if (record.dept !== currentDept) {
+                pagesHtml += renderDeptRow(record.dept);
+                currentDept = record.dept;
             }
+
+            pagesHtml += renderItemRow(record);
         });
-        
+
         pagesHtml += `
                     </tbody>
                 </table>
         `;
-        
-        // Add comments section only on last page
+
         if (isLastPage) {
             pagesHtml += `
                 <div class="comments-section">
-                    <div class="other-comments">Other Comments: ${data.additionalComments || ''}</div>
+                    <div class="other-comments">Other Comments: ${safe(data.additionalComments || '')}</div>
                     <div class="received-text">Received in good order & condition</div>
                 </div>
-                <div style="position: absolute; bottom: -10mm; right: 0;">
+
+                <div class="signature-holder">
                     <div class="signature-line">
                         Company's Stamp & Signature
                     </div>
                 </div>
             `;
         }
-        
+
         pagesHtml += `
+                ${FOOTER_HTML}
+                <div class="page-number">Page ${pageNumber} of ${totalPages}</div>
             </div>
         `;
     });
-    
+
     return pagesHtml;
 }
 
