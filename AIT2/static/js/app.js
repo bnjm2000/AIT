@@ -61,6 +61,51 @@ function escapeHtmlAttr(str) {
 }
 
 // status badge renderer (used by selectors)
+
+function getAssignedQuantity(modelGroup) {
+  if (!modelGroup) return 0;
+  if (typeof modelGroup.assignedQuantity !== 'undefined') {
+    return Number(modelGroup.assignedQuantity || 0);
+  }
+  return (modelGroup.assignedAssets || []).reduce((sum, asset) => sum + Number(asset.quantity || 1), 0);
+}
+
+function getPreparedQuantity(modelGroup) {
+  if (!modelGroup) return 0;
+  if (typeof modelGroup.preparedQuantity !== 'undefined') {
+    return Number(modelGroup.preparedQuantity || 0);
+  }
+  return (modelGroup.assignedAssets || [])
+    .filter(asset => asset.status !== 'returned')
+    .reduce((sum, asset) => sum + Number(asset.quantity || 1), 0);
+}
+
+function getReturnedQuantity(modelGroup) {
+  if (!modelGroup) return 0;
+  if (typeof modelGroup.returnedQuantity !== 'undefined') {
+    return Number(modelGroup.returnedQuantity || 0);
+  }
+  return (modelGroup.assignedAssets || [])
+    .filter(asset => asset.status === 'returned')
+    .reduce((sum, asset) => sum + Number(asset.quantity || 1), 0);
+}
+
+function getAssetIdentifierForApi(asset) {
+  return asset?.internalId || asset?.bulkId || asset?.id || '';
+}
+
+function getAssetDisplayId(asset) {
+  if (!asset) return '';
+  if (asset.isBulk) return 'Bulk Item';
+  return asset.displayId || asset.id || asset.internalId || '';
+}
+
+function getAssignedAssetDisplay(asset) {
+  if (!asset) return '';
+  if (asset.isBulk) return `${asset.name || 'Bulk Item'} (Qty: ${asset.quantity || 1})`;
+  return asset.id || '';
+}
+
 function getAssetStatusBadge(asset) {
   const status = (asset?.status || '').toString().toLowerCase();
 
@@ -1866,6 +1911,7 @@ function displayInventoryTable(assetsToShow) {
           <th>Model</th>
           <th>Description</th>
           <th>Serial</th>
+          <th>Qty</th>
           <th>Department</th>
           <th>Status</th>
           <th>Location</th>
@@ -1877,12 +1923,12 @@ function displayInventoryTable(assetsToShow) {
   `;
 
   assetsToShow.forEach((asset) => {
-    const encodedAssetId = encodeURIComponent(asset.id);
+    const encodedAssetId = encodeURIComponent(getAssetIdentifierForApi(asset));
     const description = asset.description || "";
 
     tableHTML += `
       <tr>
-        <td class="asset-id-cell">${escapeHtml(asset.id)}</td>
+        <td class="asset-id-cell">${asset.isBulk ? '<span class="asset-badge status-available">Bulk Item</span>' : escapeHtml(asset.id)}</td>
         <td>${escapeHtml(asset.brand || "")}</td>
         <td>${escapeHtml(asset.model || "")}</td>
 
@@ -1894,7 +1940,9 @@ function displayInventoryTable(assetsToShow) {
           }
         </td>
 
-        <td>${escapeHtml(asset.serial || "N/A")}</td>
+        <td>${asset.isBulk ? '—' : escapeHtml(asset.serial || "N/A")}</td>
+
+        <td>${asset.isBulk ? `${escapeHtml(String(asset.availableQuantity ?? asset.quantity ?? 1))}/${escapeHtml(String(asset.quantity ?? 1))}` : '1'}</td>
 
         <td>
           <span class="asset-badge dept-${escapeHtmlAttr((asset.department || 'un').toLowerCase())}">
@@ -1917,9 +1965,9 @@ function displayInventoryTable(assetsToShow) {
         </td>
 
         <td class="inventory-actions-cell">
-          <button class="btn btn-primary btn-sm" onclick="viewMaintenanceLog('${encodedAssetId}')" title="View maintenance log">
+          ${asset.isBulk ? '' : `<button class="btn btn-primary btn-sm" onclick="viewMaintenanceLog('${encodedAssetId}')" title="View maintenance log">
             View Log
-          </button>
+          </button>`}
 
           ${
             isAdmin
@@ -1978,6 +2026,7 @@ function ensureAssetEditModal() {
           <div class="form-group">
             <label class="form-label">Asset ID</label>
             <input id="editAssetId" class="form-input">
+            <div id="editAssetBulkNote" style="display:none;color:#666;font-size:12px;margin-top:5px;">Bulk quantity assets do not have a visible Asset ID. This internal ID is kept only for system tracking.</div>
           </div>
 
           <div class="form-group">
@@ -1990,9 +2039,14 @@ function ensureAssetEditModal() {
             <input id="editAssetModel" class="form-input">
           </div>
 
-          <div class="form-group">
+          <div class="form-group" id="editAssetSerialGroup">
             <label class="form-label">Serial</label>
             <input id="editAssetSerial" class="form-input">
+          </div>
+
+          <div class="form-group" id="editAssetQuantityGroup" style="display:none;">
+            <label class="form-label">Bulk Quantity</label>
+            <input id="editAssetQuantity" type="number" min="1" class="form-input">
           </div>
 
           <div class="form-group">
@@ -2048,7 +2102,7 @@ function openEditAssetModal(encodedAssetId) {
   ensureAssetEditModal();
 
   const assetId = decodeURIComponent(encodedAssetId);
-  const asset = assets.find(a => a.id === assetId);
+  const asset = assets.find(a => getAssetIdentifierForApi(a) === assetId);
 
   if (!asset) {
     showNotification('error', `Asset ${assetId} not found`);
@@ -2058,14 +2112,20 @@ function openEditAssetModal(encodedAssetId) {
   const modal = document.getElementById('editAssetModal');
 
   modal.dataset.originalAsset = JSON.stringify({
-    id: asset.id,
+    id: getAssetIdentifierForApi(asset),
+    isBulk: !!asset.isBulk,
     brand: asset.brand || '',
     model: asset.model || '',
     description: asset.description || '',
     department: asset.department || ''
   });
 
-  document.getElementById('editAssetId').value = asset.id || '';
+  document.getElementById('editAssetId').value = getAssetIdentifierForApi(asset) || '';
+  document.getElementById('editAssetId').readOnly = !!asset.isBulk;
+  document.getElementById('editAssetBulkNote').style.display = asset.isBulk ? 'block' : 'none';
+  document.getElementById('editAssetSerialGroup').style.display = asset.isBulk ? 'none' : 'block';
+  document.getElementById('editAssetQuantityGroup').style.display = asset.isBulk ? 'block' : 'none';
+  document.getElementById('editAssetQuantity').value = asset.quantity || 1;
   document.getElementById('editAssetBrand').value = asset.brand || '';
   document.getElementById('editAssetModel').value = asset.model || '';
   document.getElementById('editAssetSerial').value = asset.serial || '';
@@ -2090,6 +2150,7 @@ async function saveAssetEditModal() {
 
   const payload = {
     id: document.getElementById('editAssetId').value.trim(),
+    internalId: original.id,
     brand: document.getElementById('editAssetBrand').value.trim(),
     model: document.getElementById('editAssetModel').value.trim(),
     serial: document.getElementById('editAssetSerial').value.trim(),
@@ -2099,12 +2160,17 @@ async function saveAssetEditModal() {
     currentLocation: document.getElementById('editAssetCurrentLocation').value.trim(),
     isMissing: document.getElementById('editAssetIsMissing').checked,
     isOOC: document.getElementById('editAssetIsOOC').checked,
+    quantity: parseInt(document.getElementById('editAssetQuantity')?.value || '1', 10) || 1,
     applyTo: 'single'
   };
 
-  if (!payload.id) {
+  if (!payload.id && !original.isBulk) {
     showNotification('warning', 'Asset ID cannot be empty');
     return;
+  }
+
+  if (original.isBulk) {
+    payload.id = original.id;
   }
 
   if (!payload.brand) {
@@ -3566,7 +3632,7 @@ function createPrepareEventCard(event) {
 
     models.forEach((model) => {
       totalRequired += model.requiredQuantity;
-      totalAssigned += model.assignedAssets.length;
+      totalAssigned += getPreparedQuantity(model);
     });
 
     // Show first 2 models as preview
@@ -3574,7 +3640,7 @@ function createPrepareEventCard(event) {
       '<div style="margin: 10px 0; font-size: 12px; color: #666;">';
     models.slice(0, 2).forEach((model) => {
       const statusIcon = getModelStatusIcon(model.status);
-      const assignedCount = model.assignedAssets.length;
+      const assignedCount = getPreparedQuantity(model);
       modelSummary += `<div>${statusIcon} ${model.requiredQuantity}x ${escapeHtml(model.brand)} ${escapeHtml(model.model)} (${assignedCount}/${model.requiredQuantity})</div>`;
     });
 
@@ -3732,7 +3798,7 @@ async function openPrepareEventModal(eventId) {
 
                 modelGroups.forEach(modelGroup => {
                     totalRequired += modelGroup.requiredQuantity;
-                    totalAssigned += modelGroup.assignedAssets.length;
+                    totalAssigned += getPreparedQuantity(modelGroup);
                 });
 
                 const progressPercent = totalRequired > 0 ? Math.round((totalAssigned / totalRequired) * 100) : 0;
@@ -4869,7 +4935,7 @@ function moveAssetFromAvailableToAssigned(eventId, assetId) {
                                     </span>
                                     <div style="color: #155724; font-size: 13px; margin-top: 3px;">${serialText} • Required</div>
                                 </div>
-                                <button class="btn btn-warning" style="padding: 6px 12px; font-size: 12px;" onclick="unprepareSpecificAsset(${eventId}, '${assetId}')">Unprepare</button>
+                                <button class="btn btn-warning" style="padding: 6px 12px; font-size: 12px;" onclick="unprepareSpecificAsset(${eventId}, '${escapeJs(assetId)}')">Unprepare</button>
                             </div>
                         `;
                         
@@ -5298,7 +5364,7 @@ function updateModelProgressBars(event) {
     // Update progress bars in model sections
     if (event.modelGroups) {
         Object.values(event.modelGroups).forEach(modelGroup => {
-            const assignedCount = modelGroup.assignedAssets.length;
+            const assignedCount = getPreparedQuantity(modelGroup);
             const requiredQty = modelGroup.requiredQuantity;
             const progressPercent = Math.round((assignedCount / requiredQty) * 100);
             
@@ -5923,7 +5989,7 @@ function updateModelGroupsSection(event, eventId) {
 }
 
 function updateModelSection(section, modelGroup, eventId) {
-    const assignedCount = modelGroup.assignedAssets.length;
+    const assignedCount = getPreparedQuantity(modelGroup);
     const requiredQty = modelGroup.requiredQuantity;
     const progressPercent = Math.round((assignedCount / requiredQty) * 100);
     
@@ -6490,9 +6556,9 @@ async function loadEventAssetsForReturn() {
             });
         }
 
-        const totalAssetsIncludingCustom = returnAssets.length;
-        const totalReturnedIncludingCustom = returnAssets.filter(asset => asset.status === 'returned').length;
-        const remaining = returnAssets.filter(asset => asset.status !== 'returned').length;
+        const totalAssetsIncludingCustom = returnAssets.reduce((sum, asset) => sum + Number(asset.quantity || 1), 0);
+        const totalReturnedIncludingCustom = returnAssets.filter(asset => asset.status === 'returned').reduce((sum, asset) => sum + Number(asset.quantity || 1), 0);
+        const remaining = returnAssets.filter(asset => asset.status !== 'returned').reduce((sum, asset) => sum + Number(asset.quantity || 1), 0);
 
         // Show event summary
         const summaryDiv = document.getElementById('event-summary');
@@ -6526,12 +6592,13 @@ async function loadEventAssetsForReturn() {
           depts.forEach((dept) => {
               const items = event.assetsByDepartment[dept] || [];
               const unreturned = items.filter(a => a.status !== 'returned');
-              if (unreturned.length > 0) {
+              const unreturnedQty = unreturned.reduce((sum, a) => sum + Number(a.quantity || 1), 0);
+              if (unreturnedQty > 0) {
                   rows.push(`
                       <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; border:1px solid #e9ecef; border-radius:8px; margin-bottom:8px;">
                           <div style="font-weight:600;">${dept}</div>
                           <div style="display:flex; align-items:center; gap:10px;">
-                              <span style="font-size:12px; color:#6c757d;">${unreturned.length} to return</span>
+                              <span style="font-size:12px; color:#6c757d;">${unreturnedQty} to return</span>
                               <button class="btn btn-success btn-sm" onclick="returnAllForDepartment(${eventId}, '${dept.replace(/'/g, "\\'")}')">Return all</button>
                           </div>
                       </div>
@@ -6554,7 +6621,20 @@ async function loadEventAssetsForReturn() {
             const assetGroups = {};
             
             event.preparedAssets.forEach(asset => {
-                if (!asset.id.startsWith('[LOAN]') && !asset.id.startsWith('[MISC]')) {
+                if (asset.isBulk) {
+                    const assetType = `${asset.brand} ${asset.model} ${asset.description || ''}`.trim();
+                    if (!assetGroups[assetType]) {
+                        assetGroups[assetType] = {
+                            type: assetType,
+                            assets: [],
+                            brand: asset.brand,
+                            model: asset.model,
+                            description: asset.description,
+                            isBulk: true
+                        };
+                    }
+                    assetGroups[assetType].assets.push(asset);
+                } else if (!asset.id.startsWith('[LOAN]') && !asset.id.startsWith('[MISC]')) {
                     const assetType = asset.id.split('#')[0];
                     if (!assetGroups[assetType]) {
                         assetGroups[assetType] = {
@@ -6581,7 +6661,7 @@ async function loadEventAssetsForReturn() {
                                         <small style="color: #6c757d;">${group.description || ''}</small>
                                     </div>
                                     <div style="text-align: right;">
-                                        <div style="font-size: 18px; font-weight: bold; color: #ffc107;">${unreturnedAssets.length}</div>
+                                        <div style="font-size: 18px; font-weight: bold; color: #ffc107;">${unreturnedAssets.reduce((sum, a) => sum + Number(a.quantity || 1), 0)}</div>
                                         <small style="color: #6c757d;">to return</small>
                                     </div>
                                 </div>
@@ -6593,12 +6673,12 @@ async function loadEventAssetsForReturn() {
                         assetsContent += `
                             <div class="return-asset-item" style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background: ${index % 2 === 0 ? '#f8f9fa' : 'white'}; border-radius: 6px; margin-bottom: 8px;">
                                 <div>
-                                    <div style="font-weight: 500; font-size: 14px;">${asset.id}</div>
-                                    ${asset.serial ? `<div style="color: #999; font-size: 11px;">SN: ${asset.serial}</div>` : ''}
+                                    <div style="font-weight: 500; font-size: 14px;">${asset.isBulk ? `${escapeHtml(asset.brand || '')} ${escapeHtml(asset.model || '')} (Qty: ${escapeHtml(String(asset.quantity || 1))})` : escapeHtml(asset.id)}</div>
+                                    ${asset.isBulk ? '<div style="color: #999; font-size: 11px;">Bulk quantity item</div>' : (asset.serial ? `<div style="color: #999; font-size: 11px;">SN: ${asset.serial}</div>` : '')}
                                     ${asset.location ? `<div style="color: #007bff; font-size: 11px;">📍 ${asset.location}</div>` : ''}
                                 </div>
                                 <div style="margin-left: 15px;">
-                                    <button class="btn btn-warning return-asset-btn" style="padding: 6px 12px; font-size: 12px;" onclick="returnSpecificAssetNew(${eventId}, '${asset.id}')">
+                                    <button class="btn btn-warning return-asset-btn" style="padding: 6px 12px; font-size: 12px;" onclick="returnSpecificAssetNew(${eventId}, '${escapeJs(asset.id)}')">
                                         Return
                                     </button>
                                 </div>
@@ -7330,7 +7410,7 @@ async function viewEvent(eventId) {
 
         models.forEach((model, index) => {
           const statusIcon = getModelStatusIcon(model.status);
-          const assignedCount = model.assignedAssets.length;
+          const assignedCount = getPreparedQuantity(model);
           const modelId = `model-${dept}-${index}`;
           const progressPercent = model.requiredQuantity > 0 ? Math.round((assignedCount / model.requiredQuantity) * 100) : 0;
           
@@ -8585,7 +8665,7 @@ async function updateModelRequirementsSection(eventId) {
 
         Object.keys(modelsByDept).sort().forEach((dept) => {
             const models = modelsByDept[dept];
-            const totalAssigned = models.reduce((sum, model) => sum + (model.assignedAssets ? model.assignedAssets.length : 0), 0);
+            const totalAssigned = models.reduce((sum, model) => sum + getPreparedQuantity(model), 0);
             const totalRequired = models.reduce((sum, model) => sum + model.requiredQuantity, 0);
             const deptInfo = getDepartmentInfo(dept);
 
@@ -8597,7 +8677,7 @@ async function updateModelRequirementsSection(eventId) {
             `;
 
             models.forEach((model) => {
-                const assignedCount = model.assignedAssets ? model.assignedAssets.length : 0;
+                const assignedCount = getPreparedQuantity(model);
                 const statusIcon = assignedCount >= model.requiredQuantity ? "✅" : "⚠️";
                 
                 content += `
@@ -9660,7 +9740,7 @@ function filterAvailableModels(searchTerm) {
         assets: []
       };
     }
-    modelGroups[modelKey].count += 1;
+    modelGroups[modelKey].count += asset.isBulk ? Number(asset.quantity || 1) : 1;
     modelGroups[modelKey].assets.push(asset);
   });
 
@@ -9977,6 +10057,21 @@ document.addEventListener("DOMContentLoaded", function () {
       }
     });
 
+  const assetIsBulkToggle = document.getElementById('assetIsBulk');
+  if (assetIsBulkToggle) {
+    const updateBulkAssetFields = () => {
+      const isBulk = assetIsBulkToggle.checked;
+      const serialGroup = document.getElementById('assetSerialGroup');
+      const quantityGroup = document.getElementById('assetQuantityGroup');
+      const serialInput = document.getElementById('assetSerial');
+      if (serialGroup) serialGroup.style.display = isBulk ? 'none' : 'block';
+      if (quantityGroup) quantityGroup.style.display = isBulk ? 'block' : 'none';
+      if (serialInput && isBulk) serialInput.value = '';
+    };
+    assetIsBulkToggle.addEventListener('change', updateBulkAssetFields);
+    updateBulkAssetFields();
+  }
+
   // Add Asset Form
   document
     .getElementById("addAssetForm")
@@ -9989,6 +10084,8 @@ document.addEventListener("DOMContentLoaded", function () {
         serial: document.getElementById("assetSerial").value,
         description: document.getElementById("assetDescription").value,
         department: document.getElementById("assetDepartment").value,
+        isBulk: document.getElementById("assetIsBulk")?.checked || false,
+        quantity: parseInt(document.getElementById("assetQuantity")?.value || "1", 10) || 1,
       };
 
       try {
@@ -10010,6 +10107,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
         // Reset form
         document.getElementById("addAssetForm").reset();
+        if (document.getElementById("assetQuantity")) document.getElementById("assetQuantity").value = 1;
+        if (document.getElementById("assetQuantityGroup")) document.getElementById("assetQuantityGroup").style.display = "none";
+        if (document.getElementById("assetSerialGroup")) document.getElementById("assetSerialGroup").style.display = "block";
       } catch (error) {
         showNotification("error", "Failed to add asset");
       }
@@ -13348,7 +13448,7 @@ function showNotification(type, message) {
 }
 
 function createModelPreparationSection(eventId, brand, model, description, requiredQty, availableAssets, assignedAssets) {
-    const assignedCount = assignedAssets.length;
+    const assignedCount = (assignedAssets || []).reduce((sum, a) => sum + Number(a.quantity || 1), 0);
     const progressPercent = Math.round((assignedCount / requiredQty) * 100);
     const modelId = `model-${brand.replace(/\s+/g, '').replace(/[^a-zA-Z0-9]/g, '')}-${model.replace(/\s+/g, '').replace(/[^a-zA-Z0-9]/g, '')}-${eventId}`;
     
@@ -13385,20 +13485,24 @@ function createModelPreparationSection(eventId, brand, model, description, requi
         `;
         
           availableAssets.forEach(asset => {
-              // Check if this asset is already assigned (handle both formats)
+              const apiId = getAssetIdentifierForApi(asset);
               const isAlreadyAssigned = assignedAssets.some(assigned => 
-                  typeof assigned === 'string' ? assigned === asset.id : assigned.id === asset.id
+                  typeof assigned === 'string' ? assigned === apiId : (assigned.id === apiId || assigned.bulkId === apiId)
               );
               const buttonText = isAlreadyAssigned ? 'Assigned ✓' : 'Prepare';
               const buttonClass = isAlreadyAssigned ? 'btn-secondary' : 'btn-success';
-              const buttonAction = isAlreadyAssigned ? '' : `assignSpecificAsset(${eventId}, '${escapeJs(asset.id)}', '${escapeJs(brand)}', '${escapeJs(model)}')`;
+              const buttonAction = isAlreadyAssigned ? '' : `assignSpecificAsset(${eventId}, '${escapeJs(apiId)}', '${escapeJs(brand)}', '${escapeJs(model)}')`;
               const disabled = isAlreadyAssigned ? 'disabled' : '';
+              const availableQtyText = asset.isBulk
+                ? `Available Qty: ${escapeHtml(String(asset.availableQuantity ?? asset.quantity ?? 0))}/${escapeHtml(String(asset.quantity ?? 0))}`
+                : `SN: ${escapeHtml(asset.serial || 'N/A')}`;
+              const displayId = asset.isBulk ? 'Bulk quantity item' : escapeHtml(asset.id);
             
             section += `
                 <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; background: white; border-radius: 4px; margin-bottom: 5px; border: 1px solid #c3e6cb;">
                     <div>
-                        <div style="font-weight: 500; font-size: 14px;">${escapeHtml(asset.id)}</div>
-                        <div style="color: #666; font-size: 12px;">SN: ${escapeHtml(asset.serial || 'N/A')}</div>
+                        <div style="font-weight: 500; font-size: 14px;">${displayId}</div>
+                        <div style="color: #666; font-size: 12px;">${availableQtyText}</div>
                     </div>
                     <button class="btn ${buttonClass}" style="padding: 4px 10px; font-size: 11px;" onclick="${buttonAction}" ${disabled}>${buttonText}</button>
                 </div>
@@ -13428,7 +13532,8 @@ function createModelPreparationSection(eventId, brand, model, description, requi
         assignedAssets.forEach((asset, index) => {
             // Handle both old format (just ID strings) and new format (asset objects)
             const assetId = typeof asset === 'string' ? asset : asset.id;
-            const assetSerial = typeof asset === 'string' ? 'N/A' : (asset.serial || 'N/A');
+            const assetSerial = typeof asset === 'string' ? 'N/A' : (asset.isBulk ? `Qty: ${asset.quantity || 1}` : (asset.serial || 'N/A'));
+            const assetLabel = typeof asset === 'string' ? assetId : getAssignedAssetDisplay(asset);
             
             const isExtra = index >= requiredQty;
             const bgColor = isExtra ? '#fff3cd' : '#d4edda';
@@ -13440,9 +13545,9 @@ function createModelPreparationSection(eventId, brand, model, description, requi
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; padding: 10px 12px; background: ${bgColor}; border-radius: 4px; border: 1px solid ${isExtra ? '#ffeaa7' : '#c3e6cb'};">
                     <div>
                         <span style="color: ${textColor}; font-weight: 500; font-size: 15px;">
-                            ${statusIcon} ${escapeHtml(assetId)} 
+                            ${statusIcon} ${escapeHtml(assetLabel)} 
                         </span>
-                        <div style="color: ${textColor}; font-size: 13px; margin-top: 3px;">SN: ${escapeHtml(assetSerial)} • ${statusText}</div>
+                        <div style="color: ${textColor}; font-size: 13px; margin-top: 3px;">${asset.isBulk ? escapeHtml(assetSerial) : `SN: ${escapeHtml(assetSerial)}`} • ${statusText}</div>
                     </div>
                     <button class="btn btn-warning" style="padding: 6px 12px; font-size: 12px;" onclick="unprepareSpecificAsset(${eventId}, '${assetId}')">Unprepare</button>
                 </div>
@@ -15395,7 +15500,7 @@ function getAssetIdsByItem(event, item, department) {
             // Find assets that match this brand/model combination
             departmentAssets.forEach(asset => {
                 // Skip custom assets (they don't have brand/model)
-                if (asset.id.startsWith('[MISC]') || asset.id.startsWith('[LOAN]')) {
+                if (asset.isBulk || asset.id.startsWith('[BULK]') || asset.id.startsWith('[MISC]') || asset.id.startsWith('[LOAN]')) {
                     console.log(`Skipping custom asset: ${asset.id}`);
                     return;
                 }

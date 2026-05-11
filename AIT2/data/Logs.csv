@@ -1,47 +1,3 @@
-2026/04/13 14:27:09,bnjm2000,Assigned specific asset IP1000#05 to event 125
-2026/04/13 14:27:19,bnjm2000,Assigned specific asset ULXD2#08 to event 125
-2026/04/13 14:27:22,bnjm2000,Assigned specific asset PCBB#06 to event 125
-2026/04/13 14:27:26,bnjm2000,Assigned specific asset MG06#01 to event 125
-2026/04/13 14:27:33,bnjm2000,Removed Shure ULXD4D model from event 125
-2026/04/13 14:27:40,bnjm2000,Added 1x Shure ULXD4D model to event 125 (total: 1)
-2026/04/13 14:27:47,bnjm2000,Removed Turbosound IP1000 model from event 125
-2026/04/13 14:27:47,bnjm2000,Added 1x Turbosound IP1000 model to event 125 (total: 1)
-2026/04/13 14:27:53,bnjm2000,Assigned specific asset ULXD4D#04 to event 125
-2026/04/13 14:38:12,bnjm2000,Updated maintenance log for asset PB#19: 'Display will turn off after a while' -> 'Display dim' (edited by bnjm2000)
-2026/04/13 14:49:20,bnjm2000,"Updated maintenance log for asset PB#34: 'Display seems dim' -> 'Display turns off after a while, dim' (edited by bnjm2000)"
-2026/04/13 15:10:55,bnjm2000,Maintenance logged for asset PB#01: Updated to version V5.16.26
-2026/04/13 15:10:56,bnjm2000,Maintenance logged for asset PB#02: Updated to version V5.16.26
-2026/04/13 15:10:56,bnjm2000,Maintenance logged for asset PB#03: Updated to version V5.16.26
-2026/04/13 15:10:56,bnjm2000,Maintenance logged for asset PB#04: Updated to version V5.16.26
-2026/04/13 15:10:56,bnjm2000,Maintenance logged for asset PB#05: Updated to version V5.16.26
-2026/04/13 15:10:56,bnjm2000,Maintenance logged for asset PB#06: Updated to version V5.16.26
-2026/04/13 15:10:56,bnjm2000,Maintenance logged for asset PB#07: Updated to version V5.16.26
-2026/04/13 15:10:56,bnjm2000,Maintenance logged for asset PB#08: Updated to version V5.16.26
-2026/04/13 15:10:56,bnjm2000,Maintenance logged for asset PB#09: Updated to version V5.16.26
-2026/04/13 15:10:56,bnjm2000,Maintenance logged for asset PB#10: Updated to version V5.16.26
-2026/04/13 15:10:56,bnjm2000,Maintenance logged for asset PB#11: Updated to version V5.16.26
-2026/04/13 15:10:56,bnjm2000,Maintenance logged for asset PB#12: Updated to version V5.16.26
-2026/04/13 15:10:56,bnjm2000,Maintenance logged for asset PB#13: Updated to version V5.16.26
-2026/04/13 15:10:56,bnjm2000,Maintenance logged for asset PB#14: Updated to version V5.16.26
-2026/04/13 15:10:56,bnjm2000,Maintenance logged for asset PB#15: Updated to version V5.16.26
-2026/04/13 15:10:56,bnjm2000,Maintenance logged for asset PB#16: Updated to version V5.16.26
-2026/04/13 15:10:56,bnjm2000,Maintenance logged for asset PB#17: Updated to version V5.16.26
-2026/04/13 15:10:56,bnjm2000,Maintenance logged for asset PB#18: Updated to version V5.16.26
-2026/04/13 15:10:56,bnjm2000,Maintenance logged for asset PB#19: Updated to version V5.16.26
-2026/04/13 15:10:56,bnjm2000,Maintenance logged for asset PB#20: Updated to version V5.16.26
-2026/04/13 15:10:56,bnjm2000,Maintenance logged for asset PB#21: Updated to version V5.16.26
-2026/04/13 15:10:56,bnjm2000,Maintenance logged for asset PB#22: Updated to version V5.16.26
-2026/04/13 15:10:56,bnjm2000,Maintenance logged for asset PB#23: Updated to version V5.16.26
-2026/04/13 15:10:56,bnjm2000,Maintenance logged for asset PB#24: Updated to version V5.16.26
-2026/04/13 15:10:56,bnjm2000,Maintenance logged for asset PB#25: Updated to version V5.16.26
-2026/04/13 15:10:57,bnjm2000,Maintenance logged for asset PB#26: Updated to version V5.16.26
-2026/04/13 15:10:57,bnjm2000,Maintenance logged for asset PB#27: Updated to version V5.16.26
-2026/04/13 15:10:57,bnjm2000,Maintenance logged for asset PB#28: Updated to version V5.16.26
-2026/04/13 15:10:57,bnjm2000,Maintenance logged for asset PB#29: Updated to version V5.16.26
-2026/04/13 15:10:57,bnjm2000,Maintenance logged for asset PB#30: Updated to version V5.16.26
-2026/04/13 15:10:57,bnjm2000,Maintenance logged for asset PB#31: Updated to version V5.16.26
-2026/04/13 15:10:57,bnjm2000,Maintenance logged for asset PB#32: Updated to version V5.16.26
-2026/04/13 15:10:57,bnjm2000,Maintenance logged for asset PB#33: Updated to version V5.16.26
 2026/04/13 15:10:57,bnjm2000,Maintenance logged for asset PB#34: Updated to version V5.16.26
 2026/04/13 15:10:57,bnjm2000,Maintenance logged for asset PB#35: Updated to version V5.16.26
 2026/04/13 15:10:57,bnjm2000,Maintenance logged for asset PB#36: Updated to version V5.16.26
@@ -1062,3 +1018,47 @@ Service Fee - $80' (also: Cleared OOC) (edited by bnjm2000)"
 2026/05/11 14:02:47,bnjm2000,Assigned specific asset IPAD#02 to event 131
 2026/05/11 14:03:04,bnjm2000,Completely removed asset IPAD#02 from event 131
 2026/05/11 15:46:50,bnjm2000,Returned all assets for department VX in event 128: 2 items
+2026/05/11 16:22:14,bnjm2000,Updated asset 4466#01; applyTo=allSimilar; updatedAssets=6; eventsUpdated=3; containersUpdated=0
+2026/05/11 16:22:25,bnjm2000,Updated asset 4488#01; applyTo=allSimilar; updatedAssets=12; eventsUpdated=12; containersUpdated=0
+2026/05/11 16:22:40,bnjm2000,Updated asset 5XT#01; applyTo=allSimilar; updatedAssets=68; eventsUpdated=12; containersUpdated=0
+2026/05/11 16:22:54,bnjm2000,Updated asset 5XTW#01; applyTo=allSimilar; updatedAssets=20; eventsUpdated=3; containersUpdated=0
+2026/05/11 16:23:16,bnjm2000,Updated asset CDJ2000NXS2#02; applyTo=allSimilar; updatedAssets=2; eventsUpdated=2; containersUpdated=0
+2026/05/11 16:30:25,bnjm2000,Removed L-Acoustics LA2Xi model from event 132
+2026/05/11 16:30:25,bnjm2000,Added 1x L-Acoustics LA2Xi model to event 132 (total: 1)
+2026/05/11 16:30:29,bnjm2000,Removed L-Acoustics 5XT model from event 132
+2026/05/11 16:30:29,bnjm2000,Added 4x L-Acoustics 5XT model to event 132 (total: 4)
+2026/05/11 16:30:32,bnjm2000,Removed L-Acoustics ETR5 model from event 132
+2026/05/11 16:30:33,bnjm2000,Added 4x L-Acoustics ETR5 model to event 132 (total: 4)
+2026/05/11 16:31:26,bnjm2000,Removed Interspace Industries PCBB3 model from event 132
+2026/05/11 16:31:26,bnjm2000,Added 2x Interspace Industries PCBB3 model to event 132 (total: 2)
+2026/05/11 16:31:35,bnjm2000,Added 1x Yamaha DXR8 model to event 132 (total: 1)
+2026/05/11 16:34:54,bnjm2000,Added asset BULK-0001 via web interface
+2026/05/11 16:35:07,bnjm2000,Updated asset BULK-0001; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/05/11 16:36:26,bnjm2000,Updated asset BULK-0001; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/05/11 16:38:27,bnjm2000,Added asset BULK-0002 via web interface
+2026/05/11 16:38:48,bnjm2000,Updated asset BULK-0002; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/05/11 16:39:02,bnjm2000,Updated asset BULK-0002; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/05/11 16:39:32,bnjm2000,Added asset BULK-0003 via web interface
+2026/05/11 16:39:42,bnjm2000,Updated asset BULK-0003; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/05/11 16:40:20,bnjm2000,Added 8x Global Truss F34 Truss - 2m (Silver) model to event 127 (total: 8)
+2026/05/11 16:40:26,bnjm2000,User bnjm2000 forced event 127 (Wedding of Avinash & Rachel @ Capella) state from Closed to Preparing
+2026/05/11 16:41:00,bnjm2000,Prepared 8x bulk asset Global Truss F34 Truss - 2m (Silver) for event 127
+2026/05/11 16:41:34,bnjm2000,User bnjm2000 forced event 127 (Wedding of Avinash & Rachel @ Capella) state from Preparing to Returning
+2026/05/11 16:41:59,bnjm2000,Returned bulk asset marker [BULK]BULK-0002|8 from event 127
+2026/05/11 16:42:21,bnjm2000,User bnjm2000 removed forced state override for event 127 (Wedding of Avinash & Rachel @ Capella): Returning -> Closed
+2026/05/11 16:43:16,bnjm2000,Added asset BULK-0004 via web interface
+2026/05/11 16:43:48,bnjm2000,Added asset BULK-0005 via web interface
+2026/05/11 16:44:18,bnjm2000,Added asset BULK-0006 via web interface
+2026/05/11 16:44:40,bnjm2000,Added asset BULK-0007 via web interface
+2026/05/11 16:44:48,bnjm2000,Updated asset BULK-0004; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/05/11 16:44:54,bnjm2000,Updated asset BULK-0005; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/05/11 16:44:58,bnjm2000,Updated asset BULK-0006; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/05/11 16:45:03,bnjm2000,Updated asset BULK-0007; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/05/11 16:45:13,bnjm2000,Updated asset BULK-0007; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/05/11 16:46:32,bnjm2000,Added asset BULK-0008 via web interface
+2026/05/11 16:46:42,bnjm2000,Updated asset BULK-0008; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/05/11 16:47:14,bnjm2000,Added asset BULK-0009 via web interface
+2026/05/11 16:47:48,bnjm2000,Added asset BULK-0010 via web interface
+2026/05/11 16:47:55,bnjm2000,Updated asset BULK-0009; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/05/11 16:48:00,bnjm2000,Updated asset BULK-0010; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/05/11 16:48:29,bnjm2000,Updated asset BULK-0010; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0

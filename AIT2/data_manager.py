@@ -144,6 +144,11 @@ class DataManager:
                 maintenance_logs = row.get('MaintenanceLogs', '').split('|') if row.get('MaintenanceLogs') else []
                 department_code = row.get('DepartmentCode', 'UN')
                 is_ooc = row.get('IsOOC', 'False') == 'True'
+                is_bulk = row.get('IsBulk', 'False') == 'True'
+                try:
+                    quantity = int(row.get('Quantity', '1') or '1')
+                except ValueError:
+                    quantity = 1
 
                 item = InventoryItem(
                     asset_id=row.get('AssetID', ''),
@@ -156,7 +161,9 @@ class DataManager:
                     maintenance_logs=maintenance_logs,
                     department_code=department_code,
                     default_location=row.get('DefaultLocation', 'Store'),
-                    current_location=row.get('CurrentLocation', '')
+                    current_location=row.get('CurrentLocation', ''),
+                    is_bulk=is_bulk,
+                    quantity=quantity
                 )
 
                 if item.asset_id:
@@ -169,7 +176,7 @@ class DataManager:
         with open(filepath, 'w', newline='', encoding='utf-8') as f:
             fieldnames = [
                 'AssetID', 'Brand', 'ModelNumber', 'SerialNumber', 'Description',
-                'IsMissing', 'IsOOC', 'MaintenanceLogs', 'DepartmentCode', 'DefaultLocation', 'CurrentLocation'
+                'IsMissing', 'IsOOC', 'IsBulk', 'Quantity', 'MaintenanceLogs', 'DepartmentCode', 'DefaultLocation', 'CurrentLocation'
             ]
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
@@ -182,6 +189,8 @@ class DataManager:
                     'Description': item.description,
                     'IsMissing': item.is_missing,
                     'IsOOC': item.is_ooc,
+                    'IsBulk': getattr(item, 'is_bulk', False),
+                    'Quantity': getattr(item, 'quantity', 1),
                     'MaintenanceLogs': '|'.join(item.maintenance_logs),
                     'DepartmentCode': item.department_code,
                     'DefaultLocation': item.default_location,

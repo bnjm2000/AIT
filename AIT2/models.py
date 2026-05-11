@@ -46,7 +46,7 @@ class Client:
         self.phone = phone
 
 class InventoryItem:
-    def __init__(self, asset_id, brand, model_number, serial_number, description, is_missing, maintenance_logs, department_code, default_location='', current_location='', is_ooc=False):
+    def __init__(self, asset_id, brand, model_number, serial_number, description, is_missing, maintenance_logs, department_code, default_location='', current_location='', is_ooc=False, is_bulk=False, quantity=1):
         self.asset_id = asset_id
         self.brand = brand
         self.model_number = model_number
@@ -58,6 +58,11 @@ class InventoryItem:
         self.department_code = department_code.upper()
         self.default_location = default_location
         self.current_location = current_location
+        self.is_bulk = is_bulk
+        try:
+            self.quantity = max(1, int(quantity)) if is_bulk else 1
+        except (TypeError, ValueError):
+            self.quantity = 1
 
 class Container:
     def __init__(self, container_id, asset_ids):

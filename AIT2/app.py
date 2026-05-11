@@ -87,6 +87,222 @@ def _asset_group_key(asset):
     )
 
 
+
+
+def _is_bulk_asset(asset):
+    return bool(getattr(asset, 'is_bulk', False))
+
+
+def _safe_int(value, default=0):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _bulk_marker(bulk_id, quantity):
+    return f"[BULK]{bulk_id}|{max(1, _safe_int(quantity, 1))}"
+
+
+def _parse_bulk_marker(value):
+    if not isinstance(value, str) or not value.startswith('[BULK]'):
+        return None
+
+    raw = value[6:]
+    if '|' in raw:
+        bulk_id, quantity = raw.split('|', 1)
+    else:
+        bulk_id, quantity = raw, '1'
+
+    bulk_id = bulk_id.strip()
+    quantity = max(1, _safe_int(quantity, 1))
+
+    if not bulk_id:
+        return None
+
+    return {'bulkId': bulk_id, 'quantity': quantity}
+
+
+def _is_bulk_ref(value):
+    return _parse_bulk_marker(value) is not None
+
+
+def _model_key_from_parts(dept, brand, model, description=''):
+    return (
+        _clean_group_value(dept, True),
+        _clean_group_value(brand),
+        _clean_group_value(model),
+        _clean_group_value(description)
+    )
+
+
+def _bulk_quantity_in_values_for_key(values, group_key):
+    total = 0
+    for value in values or []:
+        marker = _parse_bulk_marker(value)
+        if not marker:
+            continue
+
+        bulk_asset = data_manager.inventory.get(marker['bulkId']) if data_manager else None
+        if not bulk_asset or not _is_bulk_asset(bulk_asset):
+            continue
+
+        if _asset_group_key(bulk_asset) == group_key:
+            total += marker['quantity']
+
+    return total
+
+
+def _bulk_quantity_for_asset_in_values(values, bulk_id):
+    total = 0
+    for value in values or []:
+        marker = _parse_bulk_marker(value)
+        if marker and marker['bulkId'] == bulk_id:
+            total += marker['quantity']
+    return total
+
+
+def _sum_assigned_quantity(model_group):
+    total = 0
+    for asset in model_group.get('assignedAssets', []) or []:
+        total += max(1, _safe_int(asset.get('quantity', 1), 1))
+    return total
+
+
+def _sum_returned_quantity(model_group):
+    total = 0
+    for asset in model_group.get('assignedAssets', []) or []:
+        if asset.get('status') == 'returned':
+            total += max(1, _safe_int(asset.get('quantity', 1), 1))
+    return total
+
+
+def _refresh_model_group_statuses(model_groups):
+    for group in (model_groups or {}).values():
+        required = max(0, _safe_int(group.get('requiredQuantity', 0), 0))
+        assigned = _sum_assigned_quantity(group)
+        returned = _sum_returned_quantity(group)
+        prepared = max(assigned - returned, 0)
+
+        group['assignedQuantity'] = assigned
+        group['returnedQuantity'] = returned
+        group['preparedQuantity'] = prepared
+
+        if returned >= required and assigned > 0:
+            group['status'] = 'returned'
+        elif prepared >= required and required > 0:
+            group['status'] = 'ready'
+        elif prepared > 0:
+            group['status'] = 'partial'
+        else:
+            group['status'] = 'pending'
+
+
+def _append_bulk_assignments_to_model_groups(model_groups, event):
+    if not model_groups:
+        return
+
+    returned_values = set(getattr(event, 'returned_items', []) or [])
+    seen = set()
+
+    for value in getattr(event, 'actually_prepared', []) or []:
+        marker = _parse_bulk_marker(value)
+        if not marker:
+            continue
+
+        bulk_asset = data_manager.inventory.get(marker['bulkId']) if data_manager else None
+        if not bulk_asset or not _is_bulk_asset(bulk_asset):
+            continue
+
+        group_key = '|'.join(_asset_group_key(bulk_asset))
+        if group_key not in model_groups:
+            continue
+
+        unique_key = (value, group_key)
+        if unique_key in seen:
+            continue
+        seen.add(unique_key)
+
+        model_groups[group_key]['assignedAssets'].append({
+            'id': value,
+            'bulkId': marker['bulkId'],
+            'serial': '',
+            'status': 'returned' if value in returned_values else 'prepared',
+            'location': bulk_asset.current_location or bulk_asset.default_location or '',
+            'quantity': marker['quantity'],
+            'isBulk': True,
+            'displayId': '',
+            'name': f"{bulk_asset.brand} {bulk_asset.model_number} {bulk_asset.description}".strip()
+        })
+
+
+def _bulk_remaining_for_event_group(event, bulk_asset):
+    group_key = _asset_group_key(bulk_asset)
+    required = 0
+    for item in getattr(event, 'prepared_items', []) or []:
+        key, quantity = _parse_model_assignment_key(item)
+        if key == group_key:
+            required += quantity
+
+    prepared = _bulk_quantity_in_values_for_key(getattr(event, 'actually_prepared', []) or [], group_key)
+    return max(required - prepared, 0)
+
+
+def _bulk_available_quantity_for_event(bulk_asset, target_event):
+    if not bulk_asset or not _is_bulk_asset(bulk_asset):
+        return 0
+
+    total = max(1, _safe_int(getattr(bulk_asset, 'quantity', 1), 1))
+    if getattr(bulk_asset, 'is_missing', False):
+        return 0
+
+    busy = 0
+    my_start = getattr(target_event, 'start_date', '')
+    my_end = getattr(target_event, 'end_date', '')
+
+    for other in data_manager.events.values():
+        if not other or other.event_id == target_event.event_id:
+            continue
+        if not _ranges_overlap(my_start, my_end, getattr(other, 'start_date', ''), getattr(other, 'end_date', '')):
+            continue
+
+        prepared_qty = _bulk_quantity_for_asset_in_values(getattr(other, 'actually_prepared', []) or [], bulk_asset.asset_id)
+        returned_qty = _bulk_quantity_for_asset_in_values(getattr(other, 'returned_items', []) or [], bulk_asset.asset_id)
+        busy += max(prepared_qty - returned_qty, 0)
+
+    return max(total - busy, 0)
+
+
+def _bulk_asset_to_available_dict(asset, target_event=None):
+    status = 'available'
+    if getattr(asset, 'is_missing', False):
+        status = 'missing'
+    elif getattr(asset, 'is_ooc', False):
+        status = 'ooc'
+
+    available_quantity = (
+        _bulk_available_quantity_for_event(asset, target_event)
+        if target_event is not None else max(1, _safe_int(getattr(asset, 'quantity', 1), 1))
+    )
+
+    return {
+        'id': asset.asset_id,
+        'bulkId': asset.asset_id,
+        'displayId': '',
+        'brand': asset.brand,
+        'model': asset.model_number,
+        'description': asset.description or '',
+        'serial': '',
+        'department': asset.department_code,
+        'location': asset.current_location or asset.default_location,
+        'status': status,
+        'isMissing': getattr(asset, 'is_missing', False),
+        'isOOC': getattr(asset, 'is_ooc', False),
+        'isBulk': True,
+        'quantity': max(1, _safe_int(getattr(asset, 'quantity', 1), 1)),
+        'availableQuantity': available_quantity
+    }
+
 def _parse_model_assignment_key(value):
     """
     Parses:
@@ -121,6 +337,9 @@ def _parse_model_assignment_key(value):
 
 
 def _asset_to_available_dict(asset):
+    if _is_bulk_asset(asset):
+        return _bulk_asset_to_available_dict(asset)
+
     status = 'available'
 
     if getattr(asset, 'is_missing', False):
@@ -138,7 +357,10 @@ def _asset_to_available_dict(asset):
         'location': asset.current_location or asset.default_location,
         'status': status,
         'isMissing': getattr(asset, 'is_missing', False),
-        'isOOC': getattr(asset, 'is_ooc', False)
+        'isOOC': getattr(asset, 'is_ooc', False),
+        'isBulk': False,
+        'quantity': 1,
+        'availableQuantity': 1
     }
 
 def require_auth(f):
@@ -193,6 +415,8 @@ def get_available_assets_for_event(event_id):
 
         for a_id, a in data_manager.inventory.items():
             if not a:
+                continue
+            if _is_bulk_asset(a):
                 continue
             if getattr(a, 'is_missing', False) or getattr(a, 'is_ooc', False):
                 continue
@@ -318,6 +542,14 @@ def get_available_assets_for_event(event_id):
 
         # Shape into the same structure the frontend expects
         final_list = [asset_info[aid] for aid in sorted(final_ids)]
+
+        for bulk_asset in data_manager.inventory.values():
+            if not _is_bulk_asset(bulk_asset):
+                continue
+            if getattr(bulk_asset, 'is_missing', False):
+                continue
+            final_list.append(_bulk_asset_to_available_dict(bulk_asset, event))
+
         return jsonify({'success': True, 'data': final_list})
     except Exception as e:
         logger.error(f"Error computing available-for-event({event_id}): {e}")
@@ -694,7 +926,7 @@ def get_assigned_assets():
                     
                 for asset_id in event.prepared_items:
                     if (asset_id not in event.returned_items and
-                            not (asset_id.startswith('[LOAN]') or asset_id.startswith('[MISC]'))):
+                            not (asset_id.startswith('[MODEL]') or asset_id.startswith('[BULK]') or asset_id.startswith('[LOAN]') or asset_id.startswith('[MISC]'))):
                         assigned_assets.add(asset_id)
                         
             except Exception as e:
@@ -750,11 +982,13 @@ def update_event_state(event):
                             model = parts[2]
                             required_quantity = int(parts[3])
                       
+                            description = parts[4] if len(parts) > 4 else ''
                             total_model_requirements += required_quantity
+                            group_key = _model_key_from_parts(dept, brand, model, description)
                             
-                            # Count specific assets assigned to this model
-                            assigned_to_this_model = 0
-                            returned_for_this_model = 0
+                            # Count specific and bulk quantities assigned to this model
+                            assigned_to_this_model = _bulk_quantity_in_values_for_key(event.actually_prepared, group_key)
+                            returned_for_this_model = _bulk_quantity_in_values_for_key(event.returned_items, group_key)
                             
                             # Get all assets that were ever assigned to this model
                             all_assigned_assets = set(event.actually_prepared + event.returned_items)
@@ -1360,6 +1594,9 @@ def get_events():
                         logger.error(f"Error parsing model assignment {asset_id}: {e}")
                         continue
 
+            _append_bulk_assignments_to_model_groups(model_groups, event)
+            _refresh_model_group_statuses(model_groups)
+
             # Calculate totals - ONLY use model-based logic for events with model assignments
             if has_model_assignments:
                 total_required = 0
@@ -1369,8 +1606,8 @@ def get_events():
                 # Count from model groups for accurate totals
                 for model_group in model_groups.values():
                     total_required += model_group['requiredQuantity']
-                    total_prepared += len(model_group['assignedAssets'])
-                    total_returned += len([a for a in model_group['assignedAssets'] if a['status'] == 'returned'])
+                    total_prepared += _sum_assigned_quantity(model_group)
+                    total_returned += _sum_returned_quantity(model_group)
             else:
                 # Use old logic for events without model assignments
                 total_required = len(event.prepared_items)
@@ -1656,6 +1893,48 @@ def get_event(event_id):
                 except Exception as e:
                     logger.error(f"Error parsing model assignment {asset_id}: {e}")
 
+        _append_bulk_assignments_to_model_groups(model_groups, event)
+        _refresh_model_group_statuses(model_groups)
+
+        # Add prepared/returned bulk quantity markers to the department asset lists.
+        for bulk_value in getattr(event, 'actually_prepared', []) or []:
+            marker = _parse_bulk_marker(bulk_value)
+            if not marker:
+                continue
+            bulk_asset = data_manager.inventory.get(marker['bulkId'])
+            if not bulk_asset or not _is_bulk_asset(bulk_asset):
+                continue
+            status = 'returned' if bulk_value in getattr(event, 'returned_items', []) else 'prepared'
+            bulk_info = {
+                'id': bulk_value,
+                'bulkId': marker['bulkId'],
+                'displayId': '',
+                'name': f"{bulk_asset.brand} {bulk_asset.model_number} - {bulk_asset.description} (Qty: {marker['quantity']})",
+                'brand': bulk_asset.brand,
+                'model': bulk_asset.model_number,
+                'description': bulk_asset.description,
+                'serial': '',
+                'status': status,
+                'location': bulk_asset.current_location or bulk_asset.default_location,
+                'isMissing': bulk_asset.is_missing,
+                'isOOC': bulk_asset.is_ooc,
+                'isLoanOrMisc': False,
+                'isExtra': False,
+                'isBulk': True,
+                'quantity': marker['quantity']
+            }
+            assets_by_department[bulk_asset.department_code].append(bulk_info)
+            if status == 'returned':
+                returned_assets.append(bulk_info)
+            else:
+                prepared_assets.append(bulk_info)
+
+        # Re-sort departments after adding bulk markers.
+        sorted_departments = {}
+        for dept in sorted(assets_by_department.keys()):
+            sorted_departments[dept] = sorted(
+                assets_by_department[dept], key=lambda x: x.get('id', ''))
+
         # Calculate totals based on model requirements vs specific assignments
         has_model_assignments = len(model_groups) > 0
         
@@ -1668,8 +1947,8 @@ def get_event(event_id):
             for model_group in model_groups.values():
                 total_required += model_group['requiredQuantity']
                 # Count only non-returned assigned assets as prepared
-                prepared_assets_count = len([a for a in model_group['assignedAssets'] if a['status'] != 'returned'])
-                returned_assets_count = len([a for a in model_group['assignedAssets'] if a['status'] == 'returned'])
+                prepared_assets_count = max(_sum_assigned_quantity(model_group) - _sum_returned_quantity(model_group), 0)
+                returned_assets_count = _sum_returned_quantity(model_group)
                 total_prepared += prepared_assets_count
                 total_returned += returned_assets_count
         else:
@@ -1740,7 +2019,7 @@ def get_event_model_availability(event_id):
                 continue
 
             key = _asset_group_key(asset)
-            physical_by_key[key] += 1
+            physical_by_key[key] += max(1, _safe_int(getattr(asset, 'quantity', 1), 1)) if _is_bulk_asset(asset) else 1
 
         # Quantity already requested in this same event
         used_here_by_key = defaultdict(int)
@@ -2275,7 +2554,8 @@ def manage_event_models(event_id):
             # more than the physical inventory for this exact model/description group.
             # Missing assets are excluded. OOC assets are included.
             inv_count = sum(
-                1 for asset in data_manager.inventory.values()
+                (max(1, _safe_int(getattr(asset, 'quantity', 1), 1)) if _is_bulk_asset(asset) else 1)
+                for asset in data_manager.inventory.values()
                 if asset
                 and not getattr(asset, 'is_missing', False)
                 and _asset_group_key(asset) == group_key
@@ -2613,6 +2893,21 @@ def unprepare_event_asset(event_id):
         if not asset_id:
             return jsonify({'error': 'Asset ID is required'}), 400
 
+        if _is_bulk_ref(asset_id):
+            if not hasattr(event, 'actually_prepared'):
+                event.actually_prepared = []
+            if asset_id in event.actually_prepared:
+                event.actually_prepared.remove(asset_id)
+            if asset_id in event.returned_items:
+                event.returned_items.remove(asset_id)
+            if hasattr(event, 'extra_assets') and asset_id in event.extra_assets:
+                event.extra_assets.remove(asset_id)
+            update_event_state(event)
+            data_manager.save_event(event)
+            invalidate_cache()
+            log_action(f"Unprepared bulk asset marker {asset_id} from event {event_id}")
+            return jsonify({'success': True, 'message': 'Bulk quantity asset unprepared'})
+
         # Initialize actually_prepared if it doesn't exist
         if not hasattr(event, 'actually_prepared'):
             event.actually_prepared = []
@@ -2672,6 +2967,18 @@ def return_event_asset(event_id):
 
         if not asset_id:
             return jsonify({'error': 'Asset ID is required'}), 400
+
+        if _is_bulk_ref(asset_id):
+            if asset_id not in getattr(event, 'actually_prepared', []) and asset_id not in getattr(event, 'prepared_items', []):
+                return jsonify({'error': 'Bulk asset is not prepared for this event'}), 400
+            if asset_id in event.returned_items:
+                return jsonify({'error': 'Asset is already returned'}), 400
+            event.returned_items.append(asset_id)
+            update_event_state(event)
+            data_manager.save_event(event)
+            invalidate_cache()
+            log_action(f"Returned bulk asset marker {asset_id} from event {event_id}")
+            return jsonify({'success': True, 'message': 'Bulk quantity asset returned successfully'})
 
         # Check if asset is prepared for this event
         if asset_id not in event.prepared_items:
@@ -2758,6 +3065,14 @@ def return_department_assets(event_id):
         for asset_id in set(event.actually_prepared + specific_ids_in_prepared):
             if asset_id in already_returned:
                 continue
+
+            if _is_bulk_ref(asset_id):
+                marker = _parse_bulk_marker(asset_id)
+                bulk_asset = data_manager.inventory.get(marker['bulkId']) if marker else None
+                if bulk_asset and _is_bulk_asset(bulk_asset) and bulk_asset.department_code == department:
+                    targets.append(asset_id)
+                continue
+
             asset = data_manager.inventory.get(asset_id)
             if not asset:
                 continue
@@ -2782,6 +3097,10 @@ def return_department_assets(event_id):
             # Mark returned
             event.returned_items.append(asset_id)
             returned_now.append(asset_id)
+
+            # Bulk quantity assets: keep the prepared marker for history/state math.
+            if _is_bulk_ref(asset_id):
+                continue
 
             # Regular assets: remove from actually_prepared + reset location
             if not (asset_id.startswith('[LOAN]') or asset_id.startswith('[MISC]')):
@@ -2821,6 +3140,38 @@ def assign_specific_asset_to_model(event_id):
 
         if not asset_id:
             return jsonify({'error': 'Asset ID is required'}), 400
+
+        bulk_asset = data_manager.inventory.get(asset_id)
+        if bulk_asset and _is_bulk_asset(bulk_asset):
+            if getattr(bulk_asset, 'is_missing', False):
+                return jsonify({'error': 'Bulk asset is marked as missing'}), 400
+
+            if not hasattr(event, 'actually_prepared'):
+                event.actually_prepared = []
+            if not hasattr(event, 'extra_assets'):
+                event.extra_assets = []
+
+            quantity = _safe_int(data.get('quantity'), 0)
+            if quantity <= 0:
+                quantity = _bulk_remaining_for_event_group(event, bulk_asset)
+            if quantity <= 0:
+                quantity = 1
+            quantity = min(quantity, max(1, _safe_int(getattr(bulk_asset, 'quantity', 1), 1)))
+
+            marker = _bulk_marker(asset_id, quantity)
+            if marker in event.actually_prepared and marker not in event.returned_items:
+                return jsonify({'error': 'Bulk asset is already prepared for this event'}), 400
+
+            if marker in event.returned_items:
+                event.returned_items.remove(marker)
+            if marker not in event.actually_prepared:
+                event.actually_prepared.append(marker)
+
+            update_event_state(event)
+            data_manager.save_event(event)
+            invalidate_cache()
+            log_action(f"Prepared {quantity}x bulk asset {bulk_asset.brand} {bulk_asset.model_number} for event {event_id}")
+            return jsonify({'success': True, 'message': f'Prepared {quantity}x {bulk_asset.brand} {bulk_asset.model_number}'})
 
         # Initialize lists if they don't exist
         if not hasattr(event, 'actually_prepared'):
@@ -2931,6 +3282,21 @@ def unassign_specific_asset_from_model(event_id):
 
         if not asset_id:
             return jsonify({'error': 'Asset ID is required'}), 400
+
+        if _is_bulk_ref(asset_id):
+            if not hasattr(event, 'actually_prepared'):
+                event.actually_prepared = []
+            if asset_id in event.actually_prepared:
+                event.actually_prepared.remove(asset_id)
+            if asset_id in event.returned_items:
+                event.returned_items.remove(asset_id)
+            if hasattr(event, 'extra_assets') and asset_id in event.extra_assets:
+                event.extra_assets.remove(asset_id)
+            update_event_state(event)
+            data_manager.save_event(event)
+            invalidate_cache()
+            log_action(f"Unassigned bulk asset marker {asset_id} from event {event_id}")
+            return jsonify({'success': True, 'message': 'Bulk quantity asset unassigned from event'})
 
         # Initialize actually_prepared if it doesn't exist
         if not hasattr(event, 'actually_prepared'):
@@ -3572,11 +3938,23 @@ def get_assets():
                 status = 'missing'
             elif asset.is_ooc:
                 status = 'ooc'
+            elif _is_bulk_asset(asset):
+                out_qty = 0
+                for ev in data_manager.events.values():
+                    out_qty += max(
+                        _bulk_quantity_for_asset_in_values(getattr(ev, 'actually_prepared', []) or [], asset.asset_id) -
+                        _bulk_quantity_for_asset_in_values(getattr(ev, 'returned_items', []) or [], asset.asset_id),
+                        0
+                    )
+                status = 'deployed' if out_qty > 0 else 'available'
             elif asset.asset_id in assigned_assets:
                 status = 'deployed'
 
             assets_data.append({
-                'id': asset.asset_id,
+                'id': '' if _is_bulk_asset(asset) else asset.asset_id,
+                'internalId': asset.asset_id,
+                'bulkId': asset.asset_id if _is_bulk_asset(asset) else '',
+                'displayId': '' if _is_bulk_asset(asset) else asset.asset_id,
                 'brand': asset.brand,
                 'model': asset.model_number,
                 'serial': asset.serial_number,
@@ -3588,7 +3966,10 @@ def get_assets():
                 'isOOC': asset.is_ooc,
                 'defaultLocation': asset.default_location,
                 'currentLocation': asset.current_location,
-                'maintenanceLogs': asset.maintenance_logs
+                'maintenanceLogs': [] if _is_bulk_asset(asset) else asset.maintenance_logs,
+                'isBulk': _is_bulk_asset(asset),
+                'quantity': max(1, _safe_int(getattr(asset, 'quantity', 1), 1)) if _is_bulk_asset(asset) else 1,
+                'availableQuantity': max(0, max(1, _safe_int(getattr(asset, 'quantity', 1), 1)) - sum(max(_bulk_quantity_for_asset_in_values(getattr(ev, 'actually_prepared', []) or [], asset.asset_id) - _bulk_quantity_for_asset_in_values(getattr(ev, 'returned_items', []) or [], asset.asset_id), 0) for ev in data_manager.events.values())) if _is_bulk_asset(asset) else 1
             })
 
         return jsonify({'success': True, 'data': assets_data})
@@ -3680,28 +4061,43 @@ def create_asset():
         if missing_fields:
             return jsonify({'error': f'Missing required fields: {", ".join(missing_fields)}'}), 400
 
-        # Generate asset ID
+        # Generate asset ID. Bulk assets use an internal ID only; it is not shown as an asset ID in the UI.
         model_number = data['model'].strip()
-        existing_items = [
-            item for item in data_manager.inventory.values()
-            if item.model_number.lower() == model_number.lower()
-        ]
-        next_number = len(existing_items) + 1
-        asset_id = f"{model_number}#{next_number:02d}"
+        is_bulk = bool(data.get('isBulk', False))
+
+        if is_bulk:
+            existing_bulk_numbers = []
+            for item_id in data_manager.inventory.keys():
+                if str(item_id).startswith('BULK-'):
+                    existing_bulk_numbers.append(_safe_int(str(item_id).replace('BULK-', ''), 0))
+            asset_id = f"BULK-{(max(existing_bulk_numbers, default=0) + 1):04d}"
+            quantity = max(1, _safe_int(data.get('quantity', 1), 1))
+            serial_number = ''
+        else:
+            existing_items = [
+                item for item in data_manager.inventory.values()
+                if not _is_bulk_asset(item) and item.model_number.lower() == model_number.lower()
+            ]
+            next_number = len(existing_items) + 1
+            asset_id = f"{model_number}#{next_number:02d}"
+            quantity = 1
+            serial_number = data.get('serial', '').strip()
 
         # Create new asset
         asset = InventoryItem(
             asset_id=asset_id,
             brand=data['brand'].strip(),
             model_number=model_number,
-            serial_number=data.get('serial', '').strip(),
+            serial_number=serial_number,
             description=data.get('description', '').strip(),
             is_missing=False,
             is_ooc=False,
             maintenance_logs=[],
             department_code=data.get('department', 'UN').strip(),
             default_location='Store',
-            current_location=''
+            current_location='',
+            is_bulk=is_bulk,
+            quantity=quantity
         )
 
         # Save asset
@@ -3746,6 +4142,7 @@ def update_asset(asset_id):
         old_group = _asset_group_from_item(asset)
 
         new_asset_id = (
+            data.get('internalId') or
             data.get('id') or
             data.get('assetId') or
             data.get('newId') or
@@ -3820,6 +4217,11 @@ def update_asset(asset_id):
 
         if 'isOOC' in data:
             asset.is_ooc = bool(data.get('isOOC'))
+
+        if _is_bulk_asset(asset) and 'quantity' in data:
+            asset.quantity = max(1, _safe_int(data.get('quantity'), getattr(asset, 'quantity', 1)))
+            asset.serial_number = ''
+            asset.maintenance_logs = []
 
         # Rename selected asset ID if needed.
         id_references_changed = 0
@@ -3953,6 +4355,9 @@ def maintain_asset(asset_id):
             logger.error(f"Asset not found: '{asset_id}'. Available assets: {list(data_manager.inventory.keys())[:10]}")
             return jsonify({'error': 'Asset not found'}), 404
 
+        if _is_bulk_asset(asset):
+            return jsonify({'error': 'Bulk quantity assets do not support maintenance logs'}), 400
+
         data = request.get_json()
         logger.info(f"Received data: {data}")
         
@@ -4079,6 +4484,9 @@ def get_asset_event_history(asset_id):
 
         if asset_id not in data_manager.inventory:
             return jsonify({'error': 'Asset not found'}), 404
+
+        if _is_bulk_asset(data_manager.inventory[asset_id]):
+            return jsonify({'error': 'Bulk quantity assets do not have individual event history'}), 400
 
         def safe_fmt(d):
             try:
