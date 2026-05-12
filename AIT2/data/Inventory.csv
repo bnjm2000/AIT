@@ -1232,18 +1232,18 @@ PERFECTCUE#02,DSAN,PerfectCue Mini,15-8294,Professional Wireless Clicker,False,F
 CLICKER#03,DSAN,PerfectCue Mini,,Professional Wireless Clicker,False,False,False,1,,VX,Store,Store
 CLICKER#04,DSAN,PerfectCue Mini,,Professional Wireless Clicker,False,False,False,1,,VX,Store,Store
 SBS#01,Sennheiser,Base Station,1205000475,1RU Spectera Base Station,False,False,False,1,2026/03/12	bnjm2000	Updated to v1.2.6|2026/04/20	bnjm2000	Updated to v1.3.0|2026/05/02	bnjm2000	Installed MADI slot card SN: 1445001225,AX,Store,
-SEK#01,Sennheiser,SEK(UHF),1165001727,Bidirectional bodypack,False,False,False,1,2026/03/12	bnjm2000	Updated to v1.2.6,AX,Store,Store
-SEK#02,Sennheiser,SEK(UHF),1165001729,Bidirectional bodypack,False,False,False,1,2026/03/12	bnjm2000	Updated to v1.2.6,AX,Store,Store
-SEK#03,Sennheiser,SEK(UHF),1195001949,Bidirectional bodypack,False,False,False,1,2026/03/12	bnjm2000	Updated to v1.2.6,AX,Store,Store
-SEK#04,Sennheiser,SEK(UHF),1195001964,Bidirectional bodypack,False,False,False,1,2026/03/12	bnjm2000	Updated to v1.2.6,AX,Store,Store
-SEK#05,Sennheiser,SEK(UHF),1195001965,Bidirectional bodypack,False,False,False,1,2026/03/12	bnjm2000	Updated to v1.2.6,AX,Store,Store
-SEK#06,Sennheiser,SEK(UHF),1195001966,Bidirectional bodypack,False,False,False,1,2026/03/12	bnjm2000	Updated to v1.2.6,AX,Store,Store
-SEK#07,Sennheiser,SEK(UHF),1195001968,Bidirectional bodypack,False,False,False,1,2026/03/12	bnjm2000	Updated to v1.2.6,AX,Store,Store
-SEK#08,Sennheiser,SEK(UHF),1195001986,Bidirectional bodypack,False,False,False,1,2026/03/12	bnjm2000	Updated to v1.2.6,AX,Store,Store
-SEK#09,Sennheiser,SEK(UHF),1195002041,Bidirectional bodypack,False,False,False,1,2026/03/12	bnjm2000	Updated to v1.2.6,AX,Store,Store
-SEK#10,Sennheiser,SEK(UHF),1195002042,Bidirectional bodypack,False,False,False,1,2026/03/12	bnjm2000	Updated to v1.2.6,AX,Store,Store
-DAD#01,Sennheiser,DAD(UHF),1185001690,Bidirectional digital antenna,False,False,False,1,2026/03/12	bnjm2000	Updated to v1.2.6,AX,Store,Store
-DAD#02,Sennheiser,DAD(UHF),1185001691,Bidirectional digital antenna,False,False,False,1,2026/03/12	bnjm2000	Updated to v1.2.6,AX,Store,Store
+SEK#01,Sennheiser,SEK(UHF),1165001727,Spectera Bidirectional bodypack,False,False,False,1,2026/03/12	bnjm2000	Updated to v1.2.6,AX,Store,Store
+SEK#02,Sennheiser,SEK(UHF),1165001729,Spectera Bidirectional bodypack,False,False,False,1,2026/03/12	bnjm2000	Updated to v1.2.6,AX,Store,Store
+SEK#03,Sennheiser,SEK(UHF),1195001949,Spectera Bidirectional bodypack,False,False,False,1,2026/03/12	bnjm2000	Updated to v1.2.6,AX,Store,Store
+SEK#04,Sennheiser,SEK(UHF),1195001964,Spectera Bidirectional bodypack,False,False,False,1,2026/03/12	bnjm2000	Updated to v1.2.6,AX,Store,Store
+SEK#05,Sennheiser,SEK(UHF),1195001965,Spectera Bidirectional bodypack,False,False,False,1,2026/03/12	bnjm2000	Updated to v1.2.6,AX,Store,Store
+SEK#06,Sennheiser,SEK(UHF),1195001966,Spectera Bidirectional bodypack,False,False,False,1,2026/03/12	bnjm2000	Updated to v1.2.6,AX,Store,Store
+SEK#07,Sennheiser,SEK(UHF),1195001968,Spectera Bidirectional bodypack,False,False,False,1,2026/03/12	bnjm2000	Updated to v1.2.6,AX,Store,Store
+SEK#08,Sennheiser,SEK(UHF),1195001986,Spectera Bidirectional bodypack,False,False,False,1,2026/03/12	bnjm2000	Updated to v1.2.6,AX,Store,Store
+SEK#09,Sennheiser,SEK(UHF),1195002041,Spectera Bidirectional bodypack,False,False,False,1,2026/03/12	bnjm2000	Updated to v1.2.6,AX,Store,Store
+SEK#10,Sennheiser,SEK(UHF),1195002042,Spectera Bidirectional bodypack,False,False,False,1,2026/03/12	bnjm2000	Updated to v1.2.6,AX,Store,Store
+DAD#01,Sennheiser,DAD(UHF),1185001690,Spectera Bidirectional digital antenna,False,False,False,1,2026/03/12	bnjm2000	Updated to v1.2.6,AX,Store,Store
+DAD#02,Sennheiser,DAD(UHF),1185001691,Spectera Bidirectional digital antenna,False,False,False,1,2026/03/12	bnjm2000	Updated to v1.2.6,AX,Store,Store
 L6000#01,Sennheiser,L6000,1134005936,Rackmount Charger,False,False,False,1,,AX,Store,
 LM6070#01,Sennheiser,LM6070,,Charging module for the L 6000 rack-mount charger,False,False,False,1,,AX,Store,
 LM6070#02,Sennheiser,LM6070,,Charging module for the L 6000 rack-mount charger,False,False,False,1,,AX,Store,
