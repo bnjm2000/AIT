@@ -1,7 +1,7 @@
 AssetID,Brand,ModelNumber,SerialNumber,Description,IsMissing,IsOOC,IsBulk,Quantity,MaintenanceLogs,DepartmentCode,DefaultLocation,CurrentLocation
-IPAD#01,Apple,iPad,YVTP9HPX47,(10th Generation),False,False,False,1,,AX,Store,Loewe Farewell Party @ AIR CCC
+IPAD#01,Apple,iPad,YVTP9HPX47,(10th Generation),False,False,False,1,,AX,Store,Store
 IPAD#02,Apple,iPad,JX9KXKKPF4,(10th Generation),False,False,False,1,2026/04/15	bnjm2000	Updated to iPadOS 26.4.1,AX,Store,Store
-IPAD#03,Apple,iPad,TFQYL2K0JW,(10th Generation),False,False,False,1,2026/03/04	bnjm2000	Found without 3.5mm adapter. Replaced (110: Louis Vuitton Spring Summer Trunk Show 2026 @ Japanese Garden)|2026/04/15	bnjm2000	Updated to iPadOS 26.4.1,AX,Store,Loewe Farewell Party @ AIR CCC
+IPAD#03,Apple,iPad,TFQYL2K0JW,(10th Generation),False,False,False,1,2026/03/04	bnjm2000	Found without 3.5mm adapter. Replaced (110: Louis Vuitton Spring Summer Trunk Show 2026 @ Japanese Garden)|2026/04/15	bnjm2000	Updated to iPadOS 26.4.1,AX,Store,Store
 AT8668#01,Audio Tecnica,AT8668,,Microphone Desk Stand,False,False,False,1,,AX,Store,Store
 AT8668#02,Audio Tecnica,AT8668,,Microphone Desk Stand,False,False,False,1,,AX,Store,Store
 AT8668#03,Audio Tecnica,AT8668,,Microphone Desk Stand,False,False,False,1,,AX,Store,
@@ -151,10 +151,10 @@ DAD9003#07,DPA,DAD 9003,,MicroLock to 3-pin LEMO,False,False,False,1,,AX,Store,S
 DAD9003#08,DPA,DAD 9003,,MicroLock to 3-pin LEMO,False,False,False,1,,AX,Store,Store
 DAD9003#09,DPA,DAD 9003,,MicroLock to 3-pin LEMO,False,False,False,1,,AX,Store,Store
 DAD9003#10,DPA,DAD 9003,,MicroLock to 3-pin LEMO,False,False,False,1,,AX,Store,Store
-EVOLVE50#01,EV,EVOLVE 50,405294795801150521,Portable column system,False,False,False,1,,AX,Store,Loewe Farewell Party @ AIR CCC
-EVOLVE50#02,EV,EVOLVE 50,405294795801160310,Portable column system,False,False,False,1,,AX,Store,Loewe Farewell Party @ AIR CCC
-EVOLVE50#03,EV,EVOLVE 50,405294795801160374,Portable column system,False,False,False,1,,AX,Store,Loewe Farewell Party @ AIR CCC
-EVOLVE50#04,EV,EVOLVE 50,405294795801160383,Portable column system,False,False,False,1,,AX,Store,Loewe Farewell Party @ AIR CCC
+EVOLVE50#01,EV,EVOLVE 50,405294795801150521,Portable column system,False,False,False,1,,AX,Store,Store
+EVOLVE50#02,EV,EVOLVE 50,405294795801160310,Portable column system,False,False,False,1,,AX,Store,Store
+EVOLVE50#03,EV,EVOLVE 50,405294795801160374,Portable column system,False,False,False,1,,AX,Store,Store
+EVOLVE50#04,EV,EVOLVE 50,405294795801160383,Portable column system,False,False,False,1,,AX,Store,Store
 EVOLVE50#05,EV,EVOLVE 50,405294795801160390,Portable column system,False,False,False,1,,AX,Store,Store
 EVOLVE50#06,EV,EVOLVE 50,405294781901280231,Portable column system,False,False,False,1,,AX,Store,Store
 HLBatt#01,Hollyland,HL-BAT700,23060502575,Solidcom C1 (Pro) Battery,False,False,False,1,,AX,Store,Store
@@ -189,12 +189,12 @@ PCBB#02,Interspace Industries,PCBB3,,PC Balance Box,False,False,False,1,,AX,Stor
 PCBB#03,Interspace Industries,PCBB3,,PC Balance Box,False,False,False,1,,AX,Store,Store
 PCBB#04,Interspace Industries,PCBB3,,PC Balance Box,False,False,False,1,,AX,Store,Store
 PCBB#05,Interspace Industries,PCBB3,,PC Balance Box,False,False,False,1,,AX,Store,Store
-PCBB#06,Interspace Industries,PCBB3,,PC Balance Box,False,False,False,1,,AX,Store,Loewe Farewell Party @ AIR CCC
+PCBB#06,Interspace Industries,PCBB3,,PC Balance Box,False,False,False,1,,AX,Store,Store
 PCBB#07,Interspace Industries,PCBB3,,PC Balance Box,False,False,False,1,,AX,Store,Store
 PCBB#08,Interspace Industries,PCBB3,,PC Balance Box,False,False,False,1,,AX,Store,
 PCBB#09,Interspace Industries,PCBB3,,PC Balance Box,False,False,False,1,,AX,Store,Store
 PCBB#10,Interspace Industries,PCBB3,,PC Balance Box,False,False,False,1,,AX,Store,Store
-PCBB#11,Interspace Industries,PCBB3,,PC Balance Box,False,False,False,1,,AX,Store,Loewe Farewell Party @ AIR CCC
+PCBB#11,Interspace Industries,PCBB3,,PC Balance Box,False,False,False,1,,AX,Store,Store
 PCBB#12,Interspace Industries,PCBB,,PC Balance Box,False,False,False,1,,AX,Store,
 PCBB#13,Interspace Industries,PCBB,,PC Balance Box,False,False,False,1,,AX,Store,Store
 PCBB#14,Interspace Industries,PCBB,,PC Balance Box,False,False,False,1,,AX,Store,Store
@@ -571,18 +571,18 @@ LPClaw#01,Latin Percussion,LP592A,,The Claw,False,False,False,1,,AX,Store,
 LPClaw#02,Latin Percussion,LP592A,,The Claw,False,False,False,1,,AX,Store,
 LPClaw#03,Latin Percussion,LP592A,,The Claw,False,False,False,1,,AX,Store,
 LPClaw#04,Latin Percussion,LP592A,,The Claw,False,False,False,1,,AX,Store,
-MR-90A#01,MiPro,MR-90,878292429A,Interlink receiver,False,False,False,1,2024/11/26	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	2024/11/26 - Collected back from MiPro after testing,AX,Store,Loewe Farewell Party @ AIR CCC
-MR-90A#02,MiPro,MR-90,878292430A,Interlink receiver,False,False,False,1,2024/11/26	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	2024/11/26 - Collected back from MiPro after testing,AX,Store,Loewe Farewell Party @ AIR CCC
-MR-90A#03,MiPro,MR-90,878292432A,Interlink receiver,False,False,False,1,"2024/11/01	bnjm2000	discovered no output (Dior @ ION Orchard (demo)) [Marked OOC]|2024/11/11	bnjm2000	Handed over to MiPro for repair|2024/11/12	bnjm2000	repaired by MiPro [Cleared OOC]|2024/11/13	bnjm2000	Collected back from MiPro|2024/11/20	bnjm2000	Send to MiPro for testing|2024/11/21	bnjm2000	Issue with RF B, sent to Taiwan for repair [Location: MiPro Taiwan, Marked OOC]|2025/06/26	bnjm2000	Collected back from MiPro [Location: Store, Cleared OOC]",AX,Store,Loewe Farewell Party @ AIR CCC
+MR-90A#01,MiPro,MR-90,878292429A,Interlink receiver,False,False,False,1,2024/11/26	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	2024/11/26 - Collected back from MiPro after testing,AX,Store,Store
+MR-90A#02,MiPro,MR-90,878292430A,Interlink receiver,False,False,False,1,2024/11/26	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	2024/11/26 - Collected back from MiPro after testing,AX,Store,Store
+MR-90A#03,MiPro,MR-90,878292432A,Interlink receiver,False,False,False,1,"2024/11/01	bnjm2000	discovered no output (Dior @ ION Orchard (demo)) [Marked OOC]|2024/11/11	bnjm2000	Handed over to MiPro for repair|2024/11/12	bnjm2000	repaired by MiPro [Cleared OOC]|2024/11/13	bnjm2000	Collected back from MiPro|2024/11/20	bnjm2000	Send to MiPro for testing|2024/11/21	bnjm2000	Issue with RF B, sent to Taiwan for repair [Location: MiPro Taiwan, Marked OOC]|2025/06/26	bnjm2000	Collected back from MiPro [Location: Store, Cleared OOC]",AX,Store,Store
 MR-90A#04,MiPro,MR-90,878292434A,Interlink receiver,False,False,False,1,"2024/11/05	bnjm2000	2024/11/05 - Low RF, AF cutting in and out (Dior @ ION Orchard) [Marked OOC]|2024/11/11	bnjm2000	2024/11/11 - Handed over to MiPro for repair|2024/11/12	bnjm2000	2024/11/12 - repaired by MiPro [Cleared OOC]|2024/11/13	bnjm2000	2024/11/13 - Collected back from MiPro|2024/11/20	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	2024/11/26 - Collected back from MiPro after testing|2026/01/24	bnjm2000	Receiver observed in use with some buzzing (Wedding of Jewel & Maanas @ Fiasco)|2026/04/03	bnjm2000	Receiver observed in use with some buzzing (LV @ Japanese Garden) [Marked OOC]|2026/04/14	bnjm2000	Sent to MiPro for servicing [Location: MiPro]|2026/04/17	bnjm2000	Collected back from MiPro, repaired
-XLR connector loosed, soldered back - $40 [Location: Store, Cleared OOC]",AX,Store,Loewe Farewell Party @ AIR CCC
-MR-90A#05,MiPro,MR-90,878292431A,Interlink receiver,False,False,False,1,"2024/10/29	bnjm2000	discovered no output (Hermes @ Takashimaya) [Marked OOC]|2024/11/11	bnjm2000	2024/11/11 - Handed over to MiPro for repair|2024/11/13	bnjm2000	2024/11/13 - Collected back from MiPro [Cleared OOC]|2024/11/26	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	2024/11/26 - Tested in MiPro office with RF Dropout, remain with MiPro for further testing/repair [Marked OOC]|2025/05/21	bnjm2000	Send in to Mipro, no RF receiving|2025/05/22	bnjm2000	Technician tested working, went to MiPro office to check before collecting. Audio came through but unit kept skipping channels. MiPro did a 1-to-1 swap. New SN: 878292431A Old SN:878292435A [Serial: 878292431A, Cleared OOC]",AX,Store,Loewe Farewell Party @ AIR CCC
+XLR connector loosed, soldered back - $40 [Location: Store, Cleared OOC]",AX,Store,Store
+MR-90A#05,MiPro,MR-90,878292431A,Interlink receiver,False,False,False,1,"2024/10/29	bnjm2000	discovered no output (Hermes @ Takashimaya) [Marked OOC]|2024/11/11	bnjm2000	2024/11/11 - Handed over to MiPro for repair|2024/11/13	bnjm2000	2024/11/13 - Collected back from MiPro [Cleared OOC]|2024/11/26	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	2024/11/26 - Tested in MiPro office with RF Dropout, remain with MiPro for further testing/repair [Marked OOC]|2025/05/21	bnjm2000	Send in to Mipro, no RF receiving|2025/05/22	bnjm2000	Technician tested working, went to MiPro office to check before collecting. Audio came through but unit kept skipping channels. MiPro did a 1-to-1 swap. New SN: 878292431A Old SN:878292435A [Serial: 878292431A, Cleared OOC]",AX,Store,Store
 MR-90A#06,MiPro,MR-90,878292436A,Interlink receiver,False,False,False,1,"2024/11/26	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	2024/11/26 - Collected back from MiPro after testing|2026/04/14	bnjm2000	Sent to MiPro for servicing [Location: MiPro]|2025/11/05	bnjm2000	Discovered to be buzzing (Franck Muller x Cortina High Jewellery Dinner @ Claudine Restaurant) [Marked OOC]|2026/04/17	bnjm2000	Collected back from MiPro, repaired
-XLR connector loosed, soldered back - $40 [Location: Store, Cleared OOC]",AX,Store,Loewe Farewell Party @ AIR CCC
+XLR connector loosed, soldered back - $40 [Location: Store, Cleared OOC]",AX,Store,Store
 MT-90A#01,MiPro,MT-90A,858290901A,Interlink Transmitter,False,False,False,1,2024/11/26	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	2024/11/26 - Collected back from MiPro after testing,AX,Store,Store
 MT-90A#02,MiPro,MT-90A,858290902A,Interlink Transmitter,False,False,False,1,2024/11/26	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	2024/11/26 - Collected back from MiPro after testing,AX,Store,Store
-MT-90A#03,MiPro,MT-90A,858290899A,Interlink Transmitter,False,False,False,1,2024/11/26	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	changed transmitter to same type (Old S/N: 809264158A)|2024/11/26	bnjm2000	2024/11/26 - Collected back from MiPro after testing,AX,Store,Loewe Farewell Party @ AIR CCC
-MT-90A#04,MiPro,MT-90A,858290898A,Interlink Transmitter,False,False,False,1,"2024/11/20	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	2024/11/26 - Collected back from MiPro after testing|2024/10/15	bnjm2000	Device keeps restarting, suspect PSU faulty (Wedding of Kenneth and Wong Mei Yin) [Marked OOC]|2024/10/24	bnjm2000	Handed over to MiPro for PSU testing [Location: MiPro]|2024/11/13	bnjm2000	Collected back from MiPro [Location: Store, Cleared OOC]",AX,Store,Loewe Farewell Party @ AIR CCC
+MT-90A#03,MiPro,MT-90A,858290899A,Interlink Transmitter,False,False,False,1,2024/11/26	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	changed transmitter to same type (Old S/N: 809264158A)|2024/11/26	bnjm2000	2024/11/26 - Collected back from MiPro after testing,AX,Store,Store
+MT-90A#04,MiPro,MT-90A,858290898A,Interlink Transmitter,False,False,False,1,"2024/11/20	bnjm2000	2024/11/20 - Send to MiPro for testing|2024/11/26	bnjm2000	2024/11/26 - Collected back from MiPro after testing|2024/10/15	bnjm2000	Device keeps restarting, suspect PSU faulty (Wedding of Kenneth and Wong Mei Yin) [Marked OOC]|2024/10/24	bnjm2000	Handed over to MiPro for PSU testing [Location: MiPro]|2024/11/13	bnjm2000	Collected back from MiPro [Location: Store, Cleared OOC]",AX,Store,Store
 GSM4212P#01,Netgear,GSM4212P,6VB52B51A0392,Managed Switch,False,False,False,1,,AX,Store,Store
 GSM4212P#02,Netgear,GSM4212P,6VB52B5AA039B,Managed Switch,False,False,False,1,,AX,Store,Store
 GSM4212P#03,Netgear,GSM4212P,6VB52B5CA03B9,Managed Switch,False,False,False,1,,AX,Store,Store
@@ -603,7 +603,7 @@ CDJ3000#02,Pioneer,CDJ3000,CDMP038159EH,Professional DJ multi player (Black),Fal
 DJM900NXS#01,Pioneer,DJM-900NXS,,DJ Mixer,False,False,False,1,,AX,Store,
 DJM900NXS2#01,Pioneer,DJM-900NXS2,,4-channel pro-DJ mixer,False,False,False,1,,AX,Store,Store
 DJMA9#01,Pioneer,DJM-A9,,4-channel pro-DJ mixer,False,False,False,1,,AX,Store,Store
-COMBINE4#01,RF Venue,Combine4,J6803014t2d4-124,active transmitter combiner,False,False,False,1,,AX,Store,Loewe Farewell Party @ AIR CCC
+COMBINE4#01,RF Venue,Combine4,J6803014t2d4-124,active transmitter combiner,False,False,False,1,,AX,Store,Store
 E904#01,Sennheiser,E904,1471264124,Dynamic cardioid instrument microphone,False,False,False,1,,AX,Store,Store
 E904#02,Sennheiser,E904,,Dynamic cardioid instrument microphone,False,False,False,1,,AX,Store,Store
 E904#03,Sennheiser,E904,,Dynamic cardioid instrument microphone,False,False,False,1,,AX,Store,Store
@@ -687,7 +687,7 @@ P1#06,Behringher,P1,S1506343AZM,Wired IEM beltpack,False,False,False,1,,AX,Store
 P1#07,Behringher,P1,S1506350AZM,Wired IEM beltpack,False,False,False,1,,AX,Store,Store
 PA421A#01,Shure,PA421A,1112383 4407,4-Port Antenna Combiner,False,False,False,1,,AX,Store,
 PA805SWB#01,Shure,PA805SWB,,Passive Directional Antenna,False,False,False,1,,AX,Store,Store
-HA8091#01,Shure,HA-8091,,Passive Domed Helical Antenna,False,False,False,1,,AX,Store,Loewe Farewell Party @ AIR CCC
+HA8091#01,Shure,HA-8091,,Passive Domed Helical Antenna,False,False,False,1,,AX,Store,Store
 SE215#01,Shure,SE215,3CA17269504,"sound-isolating earphones, black",False,False,False,1,,AX,Store,Store
 SE215#02,Shure,SE215,3CA17269112,"sound-isolating earphones, black",False,False,False,1,,AX,Store,Store
 SE215#03,Shure,SE215,3CA17269299,"sound-isolating earphones, black",False,False,False,1,,AX,Store,Store
@@ -788,10 +788,10 @@ TALENTCELL#04,TalentCell,YB1208300-USB,20240527004,Lithuim ion battery pack,Fals
 TALENTCELL#06,TalentCell,YB1208300-USB,20240527006,Lithuim ion battery pack,False,False,False,1,,AX,Store,
 TALENTCELL#07,TalentCell,YB1208300-USB,20240527007,Lithuim ion battery pack,False,False,False,1,,AX,Store,
 TALENTCELL#08,TalentCell,YB1208300-USB,20240527008,Lithuim ion battery pack,False,False,False,1,,AX,Store,
-IP1000#01,Turbosound,IP1000,S231100118DCW,Powered Column Loudspeaker,False,False,False,1,,AX,Store,Loewe Farewell Party @ AIR CCC
-IP1000#02,Turbosound,IP1000,S231100129DCW,Powered Column Loudspeaker,False,False,False,1,,AX,Store,Loewe Farewell Party @ AIR CCC
-IP1000#03,Turbosound,IP1000,S211200024DCW,Powered Column Loudspeaker,False,False,False,1,,AX,Store,Loewe Farewell Party @ AIR CCC
-IP1000#04,Turbosound,IP1000,S231100119DCW,Powered Column Loudspeaker,False,False,False,1,,AX,Store,Loewe Farewell Party @ AIR CCC
+IP1000#01,Turbosound,IP1000,S231100118DCW,Powered Column Loudspeaker,False,False,False,1,,AX,Store,Store
+IP1000#02,Turbosound,IP1000,S231100129DCW,Powered Column Loudspeaker,False,False,False,1,,AX,Store,Store
+IP1000#03,Turbosound,IP1000,S211200024DCW,Powered Column Loudspeaker,False,False,False,1,,AX,Store,Store
+IP1000#04,Turbosound,IP1000,S231100119DCW,Powered Column Loudspeaker,False,False,False,1,,AX,Store,Store
 IP1000#05,Turbosound,IP1000,S211200022DCW,Powered Column Loudspeaker,False,False,False,1,,AX,Store,Store
 IP1000#06,Turbosound,IP1000,S231100120DCW,Powered Column Loudspeaker,False,False,False,1,,AX,Store,Store
 IP1000#07,Turbosound,IP1000,S231100118DCW,Powered Column Loudspeaker,False,False,False,1,,AX,Store,Store
@@ -819,7 +819,7 @@ Replaced FFC Cable ($10)
 Service fee ($FOC) [Location: Store, Cleared OOC]|2025/02/13	bnjm2000	Dante clock suddenly unlocked and could not lock back, phantom noise on both inputs and outputs
 (Wedding of Aim and Singhis @ TCP) [Location: Yamaha Service Center, Marked OOC]|2025/02/27	bnjm2000	Replaced DSP PCB ($1011)
 Service Fee ($FOC) [Location: Store, Cleared OOC]",AX,Store,Store
-DM3#01,Yamaha,DM3,BGDK01029,Digital Mixer,False,False,False,1,2024/09/04	bnjm2000	Reported cannot power on from Niche [Marked OOC]|2024/09/12	bnjm2000	sent to Yamaha for servicing [Location: Yamaha Service Center]|2024/10/24	bnjm2000	Replaced PCB (report no. PA842034) $586.84 [Cleared OOC]|2024/11/07	bnjm2000	Collected from Yamaha [Location: Store],AX,Store,Loewe Farewell Party @ AIR CCC
+DM3#01,Yamaha,DM3,BGDK01029,Digital Mixer,False,False,False,1,2024/09/04	bnjm2000	Reported cannot power on from Niche [Marked OOC]|2024/09/12	bnjm2000	sent to Yamaha for servicing [Location: Yamaha Service Center]|2024/10/24	bnjm2000	Replaced PCB (report no. PA842034) $586.84 [Cleared OOC]|2024/11/07	bnjm2000	Collected from Yamaha [Location: Store],AX,Store,Store
 DM3#02,Yamaha,DM3,BGDI01076,Digital Mixer,False,False,False,1,,AX,Store,Store
 DM7#01,Yamaha,DM7,21EGEI01036,Digital Mixer,False,False,False,1,,AX,Store,Store
 DXR8#01,Yamaha,DXR8,EESM01180,"Active 8"" Speaker",False,False,False,1,,AX,Store,Store
@@ -1339,3 +1339,4 @@ BULK-0011,Global Truss,F34 Truss - 1.5m (Black),,1.5m truss (black),False,False,
 BULK-0012,Global Truss,F34 Truss - 1m (Black),,1m truss (silver),False,False,True,17,,SK,Store,
 BULK-0013,Global Truss,F34 Truss - 0.5m (Black),,0.5m truss (black),False,False,True,18,,SK,Store,
 BULK-0014,Global Truss,F34 Corner Block (Black),,Corner Block (black),False,False,True,17,,SK,Store,
+BULK-0015,Custom,Sandbag,,Sandbag - 6kg,False,False,True,20,,UN,Store,
