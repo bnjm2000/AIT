@@ -222,6 +222,22 @@ def _replace_department_in_model_description(value, old_code, new_code):
 
     return value, False
 
+
+def _replace_department_in_custom_marker(value, old_code, new_code):
+    custom = _parse_custom_marker(value) if isinstance(value, str) else None
+    if not custom or custom.get('legacy'):
+        return value, False
+    if _normalise_department_code(custom.get('department')) != old_code:
+        return value, False
+    return _make_custom_marker(
+        custom.get('type'),
+        custom.get('name'),
+        custom.get('quantity'),
+        new_code,
+        custom.get('company'),
+        uid=custom.get('uid') or None
+    ), True
+
 def _clean_group_value(value, uppercase=False):
     cleaned = str(value or '').strip()
     return cleaned.upper() if uppercase else cleaned
@@ -279,6 +295,272 @@ def _parse_bulk_marker(value):
         return None
 
     return {'bulkId': bulk_id, 'quantity': quantity}
+
+
+CUSTOM_ASSET_PREFIX = '[CUSTOM]'
+
+
+def _ensure_event_custom_lists(event):
+    if not hasattr(event, 'prepared_items') or event.prepared_items is None:
+        event.prepared_items = []
+    if not hasattr(event, 'actually_prepared') or event.actually_prepared is None:
+        event.actually_prepared = []
+    if not hasattr(event, 'returned_items') or event.returned_items is None:
+        event.returned_items = []
+    if not hasattr(event, 'extra_assets') or event.extra_assets is None:
+        event.extra_assets = []
+    if not hasattr(event, 'custom_collected') or event.custom_collected is None:
+        event.custom_collected = []
+
+
+def _normalise_custom_type(asset_type):
+    value = str(asset_type or 'MISC').strip().upper()
+    return 'LOAN' if value in ('LOAN', 'RENTAL', 'LOAN/RENTAL', 'RENT') else 'MISC'
+
+
+def _make_custom_marker(asset_type, name, quantity=1, department='UN', company='', uid=None):
+    payload = {
+        'uid': str(uid or secrets.token_hex(8)),
+        'type': _normalise_custom_type(asset_type),
+        'name': str(name or '').strip(),
+        'quantity': max(1, _safe_int(quantity, 1)),
+        'department': _normalise_department_code(department) or 'UN',
+        'company': str(company or '').strip(),
+        'version': 2
+    }
+    return CUSTOM_ASSET_PREFIX + json.dumps(payload, separators=(',', ':'), sort_keys=True)
+
+
+def _parse_legacy_custom_marker(value):
+    if not isinstance(value, str):
+        return None
+
+    raw_value = value.strip()
+    lowered = raw_value.lower()
+
+    # Very old CLI markers sometimes used loan|... or misc|...
+    if lowered.startswith('loan|') or lowered.startswith('misc|'):
+        fallback_type, remainder = raw_value.split('|', 1)
+        parsed = _parse_legacy_custom_marker(remainder)
+        if parsed:
+            parsed['type'] = _normalise_custom_type(fallback_type)
+            return parsed
+
+    if raw_value.startswith('[MISC]'):
+        asset_type = 'MISC'
+        raw = raw_value[len('[MISC]'):]
+    elif raw_value.startswith('[LOAN]'):
+        asset_type = 'LOAN'
+        raw = raw_value[len('[LOAN]'):]
+    else:
+        return None
+
+    name = raw.strip()
+    quantity = 1
+    if ';' in raw:
+        maybe_name, maybe_quantity = raw.rsplit(';', 1)
+        parsed_quantity = _safe_int(maybe_quantity, 0)
+        if parsed_quantity > 0:
+            name = maybe_name.strip()
+            quantity = parsed_quantity
+
+    return {
+        'id': value,
+        'uid': '',
+        'type': asset_type,
+        'name': name or ('Loan/Rental Item' if asset_type == 'LOAN' else 'Misc Item'),
+        'quantity': max(1, quantity),
+        'department': 'UN',
+        'company': '',
+        'version': 1,
+        'legacy': True
+    }
+
+
+def _parse_custom_marker(value):
+    if not isinstance(value, str):
+        return None
+
+    if value.startswith(CUSTOM_ASSET_PREFIX):
+        try:
+            payload = json.loads(value[len(CUSTOM_ASSET_PREFIX):])
+        except Exception:
+            return None
+
+        asset_type = _normalise_custom_type(payload.get('type'))
+        name = str(payload.get('name') or '').strip() or ('Loan/Rental Item' if asset_type == 'LOAN' else 'Misc Item')
+        quantity = max(1, _safe_int(payload.get('quantity'), 1))
+        department = _normalise_department_code(payload.get('department')) or 'UN'
+        company = str(payload.get('company') or '').strip()
+
+        return {
+            'id': value,
+            'uid': str(payload.get('uid') or ''),
+            'type': asset_type,
+            'name': name,
+            'quantity': quantity,
+            'department': department,
+            'company': company,
+            'version': _safe_int(payload.get('version'), 2),
+            'legacy': False
+        }
+
+    return _parse_legacy_custom_marker(value)
+
+
+def _is_custom_ref(value):
+    return _parse_custom_marker(value) is not None
+
+
+def _custom_display_name(custom):
+    qty = max(1, _safe_int(custom.get('quantity'), 1))
+    name = str(custom.get('name') or '').strip()
+    return f"{qty}x {name}" if qty > 1 else name
+
+
+def _custom_status(event, marker):
+    _ensure_event_custom_lists(event)
+    custom = _parse_custom_marker(marker)
+    if not custom:
+        return 'assigned'
+
+    if marker in event.returned_items:
+        return 'returned'
+    if marker in event.actually_prepared:
+        return 'prepared'
+    if custom['type'] == 'LOAN' and marker in event.custom_collected:
+        return 'collected'
+    return 'assigned'
+
+
+def _custom_counts_for_event(event):
+    _ensure_event_custom_lists(event)
+    required = 0
+    prepared_active = 0
+    prepared_ever = 0
+    returned = 0
+    started = 0
+    collected = 0
+
+    for marker in event.prepared_items:
+        custom = _parse_custom_marker(marker)
+        if not custom:
+            continue
+
+        qty = max(1, _safe_int(custom.get('quantity'), 1))
+        required += qty
+        is_returned = marker in event.returned_items
+        is_prepared = marker in event.actually_prepared
+        is_collected = custom['type'] == 'LOAN' and marker in event.custom_collected
+
+        if is_collected:
+            collected += qty
+            started += qty
+        if is_prepared or is_returned:
+            prepared_ever += qty
+            started += qty
+        if is_prepared and not is_returned:
+            prepared_active += qty
+        if is_returned:
+            returned += qty
+
+    return {
+        'required': required,
+        'preparedActive': prepared_active,
+        'preparedEver': prepared_ever,
+        'returned': returned,
+        'started': started,
+        'collected': collected
+    }
+
+
+def _event_returnable_counts(event):
+    """Return quantity counts for items that can currently be returned.
+
+    This intentionally treats collected loan/rental items as returnable even if
+    they were never finally prepared, because once they are collected from a
+    rental company, they may still need to be returned.
+    """
+    _ensure_event_custom_lists(event)
+
+    returned_values = set(getattr(event, 'returned_items', []) or [])
+    active_refs = []
+    seen_active = set()
+
+    def add_active(ref):
+        if not isinstance(ref, str) or not ref or ref in returned_values or ref in seen_active:
+            return
+        active_refs.append(ref)
+        seen_active.add(ref)
+
+    # Anything actually prepared is returnable unless already returned.
+    for ref in getattr(event, 'actually_prepared', []) or []:
+        add_active(ref)
+
+    # Loan/rental items become returnable as soon as they are collected.
+    for ref in getattr(event, 'prepared_items', []) or []:
+        custom = _parse_custom_marker(ref)
+        if not custom:
+            continue
+        if custom.get('type') == 'LOAN' and ref in getattr(event, 'custom_collected', []):
+            add_active(ref)
+
+    def ref_quantity(ref):
+        custom = _parse_custom_marker(ref)
+        if custom:
+            return max(1, _safe_int(custom.get('quantity'), 1))
+
+        bulk = _parse_bulk_marker(ref)
+        if bulk:
+            return max(1, _safe_int(bulk.get('quantity'), 1))
+
+        return 1
+
+    active_quantity = sum(ref_quantity(ref) for ref in active_refs)
+    returned_quantity = sum(ref_quantity(ref) for ref in returned_values)
+
+    return {
+        'returnable': active_quantity,
+        'returned': returned_quantity,
+        'total': active_quantity + returned_quantity,
+        'refs': active_refs
+    }
+
+
+def _event_specific_counts(event):
+    """Counts non-model, non-custom, non-bulk direct asset rows for legacy/direct workflows."""
+    _ensure_event_custom_lists(event)
+    required = 0
+    prepared_active = 0
+    prepared_ever = 0
+    returned = 0
+
+    for item in event.prepared_items:
+        if not isinstance(item, str):
+            continue
+        if item.startswith('[MODEL]') or _is_bulk_ref(item) or _is_custom_ref(item):
+            continue
+        required += 1
+
+    all_seen = set(event.actually_prepared or []) | set(event.returned_items or [])
+    for item in all_seen:
+        if not isinstance(item, str):
+            continue
+        if item.startswith('[MODEL]') or _is_bulk_ref(item) or _is_custom_ref(item):
+            continue
+        if item in event.returned_items:
+            returned += 1
+            prepared_ever += 1
+        elif item in event.actually_prepared:
+            prepared_active += 1
+            prepared_ever += 1
+
+    return {
+        'required': required,
+        'preparedActive': prepared_active,
+        'preparedEver': prepared_ever,
+        'returned': returned
+    }
 
 
 def _is_bulk_ref(value):
@@ -625,7 +907,7 @@ def get_available_assets_for_event(event_id):
                     continue
 
                 # specific asset id
-                if it.startswith('[LOAN]') or it.startswith('[MISC]'):
+                if _is_custom_ref(it):
                     # ignore custom lines here
                     continue
 
@@ -659,7 +941,7 @@ def get_available_assets_for_event(event_id):
             for it in getattr(other, 'prepared_items', []) or []:
                 if not isinstance(it, str):
                     continue
-                if it.startswith('[MODEL]') or it.startswith('[LOAN]') or it.startswith('[MISC]'):
+                if it.startswith('[MODEL]') or _is_custom_ref(it):
                     continue
                 if it in returned_other:
                     continue
@@ -676,7 +958,7 @@ def get_available_assets_for_event(event_id):
         # Also remove assets this *current* event already has assigned (so we don't offer them again)
         current_assigned = set()
         for it in getattr(event, 'prepared_items', []) or []:
-            if isinstance(it, str) and not it.startswith('[MODEL]') and not it.startswith('[LOAN]') and not it.startswith('[MISC]'):
+            if isinstance(it, str) and not it.startswith('[MODEL]') and not _is_custom_ref(it):
                 current_assigned.add(it)
 
         # For each k3, grab extra_needed assets from free pool and mark as busy
@@ -782,6 +1064,7 @@ def _is_real_asset_ref(value):
 
     blocked_prefixes = (
         '[MODEL]',
+        '[CUSTOM]',
         '[LOAN]',
         '[MISC]',
         'loan|',
@@ -1084,7 +1367,7 @@ def get_assigned_assets():
                     
                 for asset_id in event.prepared_items:
                     if (asset_id not in event.returned_items and
-                            not (asset_id.startswith('[MODEL]') or asset_id.startswith('[BULK]') or asset_id.startswith('[LOAN]') or asset_id.startswith('[MISC]'))):
+                            not (asset_id.startswith('[MODEL]') or asset_id.startswith('[BULK]') or _is_custom_ref(asset_id))):
                         assigned_assets.add(asset_id)
                         
             except Exception as e:
@@ -1104,171 +1387,134 @@ def get_assigned_assets():
         return set()  # Return empty set on error
 
 def update_event_state(event):
-    """Update the state of an event based on its prepared and returned items"""
+    """Update the state of an event based on model, bulk, regular, and custom preparation."""
     try:
-        # Check if state is manually forced - if so, don't auto-update
         if getattr(event, 'force_state_override', False):
             logger.debug(f"Event {event.event_id} has forced state override, skipping automatic update")
             return
-            
-        # Get current date for overdue checks
+
+        _ensure_event_custom_lists(event)
+
         current_date = datetime.now().strftime('%Y%m%d')
         is_last_day = str(getattr(event, 'end_date', '')) == current_date
-        
-        # Initialize actually_prepared if it doesn't exist
-        if not hasattr(event, 'actually_prepared'):
-            event.actually_prepared = []
-        
-        # Check if this event has model assignments
-        has_model_assignments = any(item.startswith('[MODEL]') for item in event.prepared_items)
-        
+
+        has_model_assignments = any(
+            isinstance(item, str) and item.startswith('[MODEL]')
+            for item in event.prepared_items
+        )
+
+        required_total = 0
+        prepared_active_total = 0
+        prepared_ever_total = 0
+        returned_total = 0
+        started_total = 0
+
         if has_model_assignments:
-            # Use model-based logic only for events with model assignments
-            total_model_requirements = 0
-            total_specific_assignments = 0
-            total_returned = 0
-            
-            # Process model assignments
             for item_id in event.prepared_items:
-                if item_id.startswith('[MODEL]'):
-                    try:
-                        # Parse: [MODEL]DEPT|BRAND|MODEL|QUANTITY|DESCRIPTION
-                        parts = item_id[7:].split('|')
-                        if len(parts) >= 4:
-                            dept = parts[0]
-                            brand = parts[1]
-                            model = parts[2]
-                            required_quantity = int(parts[3])
-                      
-                            description = parts[4] if len(parts) > 4 else ''
-                            total_model_requirements += required_quantity
-                            group_key = _model_key_from_parts(dept, brand, model, description)
-                            
-                            # Count specific and bulk quantities assigned to this model
-                            assigned_to_this_model = _bulk_quantity_in_values_for_key(event.actually_prepared, group_key)
-                            returned_for_this_model = _bulk_quantity_in_values_for_key(event.returned_items, group_key)
-                            
-                            # Get all assets that were ever assigned to this model
-                            all_assigned_assets = set(event.actually_prepared + event.returned_items)
-                            
-                            for specific_asset_id in all_assigned_assets:
-                                specific_asset = data_manager.inventory.get(specific_asset_id)
-                                description = parts[4] if len(parts) > 4 else ''
-                                if (specific_asset and 
-                                    specific_asset.brand == brand and 
-                                    specific_asset.model_number == model and
-                                    specific_asset.department_code == dept and
-                                    (specific_asset.description or '') == (description or '')):
-                                    
-                                    assigned_to_this_model += 1
-                                    if specific_asset_id in event.returned_items:
-                                        returned_for_this_model += 1
-                            
-                            total_specific_assignments += assigned_to_this_model
-                            total_returned += returned_for_this_model
-                            
-                    except Exception as e:
-                        logger.error(f"Error parsing model assignment {item_id}: {e}")
+                if not (isinstance(item_id, str) and item_id.startswith('[MODEL]')):
+                    continue
+
+                try:
+                    parts = item_id[7:].split('|')
+                    if len(parts) < 4:
                         continue
-            
-            # Apply model-based state logic WITH PROPER PRECEDENCE
-            logger.debug(f"Event {event.event_id}: requirements={total_model_requirements}, assigned={total_specific_assignments}, returned={total_returned}")
-            
-            # 1. CHECK FOR AUTO-CLOSE FIRST - all required assets returned
-            if (total_model_requirements > 0 and 
-                total_specific_assignments >= total_model_requirements and 
-                total_returned == total_specific_assignments):
-                event.state = 'Closed'
-                #logger.info(f"Event {event.event_id} set to Closed: all assets returned")
 
-            # 2. CHECK FOR LAST DAY - today is the event end date
-            elif is_last_day:
-                event.state = 'Last Day'
+                    dept = parts[0]
+                    brand = parts[1]
+                    model = parts[2]
+                    required_quantity = max(0, _safe_int(parts[3], 0))
+                    description = parts[4] if len(parts) > 4 else ''
+                    group_key = _model_key_from_parts(dept, brand, model, description)
 
-            # 3. CHECK FOR OVERDUE - event ended but still has unreturned assets
-            elif (total_specific_assignments > total_returned and 
-                current_date > event.end_date):
-                event.state = 'Overdue'
-                #logger.info(f"Event {event.event_id} set to Overdue: past end date with unreturned assets")
-            # 3. No requirements set yet
-            elif total_model_requirements == 0:
-                event.state = 'Added'
-            # 4. Requirements set but no assets assigned
-            elif total_specific_assignments == 0:
-                event.state = 'Planning'
-            # 5. Some assets assigned but not enough, no returns yet
-            elif total_specific_assignments < total_model_requirements and total_returned == 0:
-                event.state = 'Preparing'
-            # 6. All requirements met, no returns yet
-            elif total_specific_assignments >= total_model_requirements and total_returned == 0:
-                # Check if ready event is within its date range to make it ongoing
-                if event.start_date <= current_date <= event.end_date:
-                    event.state = 'Ongoing'
-                else:
-                    event.state = 'Ready'
-            # 7. Some assets returned but not all
-            elif total_returned > 0 and total_returned < total_specific_assignments:
-                event.state = 'Returning'
-            # 8. Fallback - shouldn't reach here with proper logic above
-            else:
-                logger.warning(f"Event {event.event_id} fell through to fallback case - keeping current state {event.state}")
-                # Don't change state if we can't determine what it should be
+                    required_total += required_quantity
+
+                    assigned_to_this_model = _bulk_quantity_in_values_for_key(event.actually_prepared, group_key)
+                    returned_for_this_model = _bulk_quantity_in_values_for_key(event.returned_items, group_key)
+
+                    all_assigned_assets = set(event.actually_prepared + event.returned_items)
+                    for specific_asset_id in all_assigned_assets:
+                        if _is_bulk_ref(specific_asset_id) or _is_custom_ref(specific_asset_id):
+                            continue
+
+                        specific_asset = data_manager.inventory.get(specific_asset_id)
+                        if (specific_asset and
+                            specific_asset.brand == brand and
+                            specific_asset.model_number == model and
+                            specific_asset.department_code == dept and
+                            (specific_asset.description or '') == (description or '')):
+
+                            assigned_to_this_model += 1
+                            if specific_asset_id in event.returned_items:
+                                returned_for_this_model += 1
+
+                    prepared_ever_total += assigned_to_this_model
+                    returned_total += returned_for_this_model
+                    prepared_active_total += max(assigned_to_this_model - returned_for_this_model, 0)
+                    if assigned_to_this_model > 0:
+                        started_total += assigned_to_this_model
+
+                except Exception as e:
+                    logger.error(f"Error parsing model assignment {item_id}: {e}")
+                    continue
         else:
-            # Use logic for events without model assignments (includes custom assets like LOAN/MISC)
-            total_prepared_items = len([item for item in event.prepared_items if not item.startswith('[MODEL]')])
-            total_actually_prepared = len(event.actually_prepared)
-            total_returned = len(event.returned_items)
-            
-            logger.info(f"Event {event.event_id} state calculation - Prepared items: {total_prepared_items}, Actually prepared: {total_actually_prepared}, Returned: {total_returned}")
-            
-            # For custom assets, check if all items in actually_prepared are also in returned_items
-            all_actually_prepared_returned = True
-            if total_actually_prepared > 0:
-                for item in event.actually_prepared:
-                    if item not in event.returned_items:
-                        all_actually_prepared_returned = False
-                        break
-            else:
-                all_actually_prepared_returned = False
-            
-            # 1. CHECK FOR AUTO-CLOSE FIRST - all actually prepared assets returned
-            if (total_actually_prepared > 0 and all_actually_prepared_returned):
-                event.state = 'Closed'
-                #logger.info(f"Event {event.event_id} set to Closed: all actually prepared assets returned")
+            specific_counts = _event_specific_counts(event)
+            required_total += specific_counts['required']
+            prepared_active_total += specific_counts['preparedActive']
+            prepared_ever_total += specific_counts['preparedEver']
+            returned_total += specific_counts['returned']
+            started_total += specific_counts['preparedEver']
 
-            # 2. CHECK FOR LAST DAY - today is the event end date
-            elif is_last_day:
-                event.state = 'Last Day'
+        custom_counts = _custom_counts_for_event(event)
+        required_total += custom_counts['required']
+        prepared_active_total += custom_counts['preparedActive']
+        prepared_ever_total += custom_counts['preparedEver']
+        returned_total += custom_counts['returned']
+        started_total += custom_counts['started']
 
-            # 3. CHECK FOR OVERDUE - event ended but still has unreturned assets
-            elif (total_actually_prepared > total_returned and 
-                current_date > event.end_date):
-                event.state = 'Overdue'
-                # logger.info(f"Event {event.event_id} set to Overdue: past end date with unreturned assets")
-            # 3. No assets assigned yet
-            elif total_prepared_items == 0:
-                event.state = 'Added'
-            # 4. Assets assigned but none prepared yet
-            elif total_prepared_items > 0 and total_actually_prepared == 0:
-                event.state = 'Planning'
-            # 5. Some assets prepared but not all
-            elif total_actually_prepared > 0 and total_actually_prepared < total_prepared_items and total_returned == 0:
-                event.state = 'Preparing'
-            # 6. All assets prepared, none returned yet - check if event is active
-            elif total_actually_prepared >= total_prepared_items and total_returned == 0:
-                # Check if event is within its date range
-                if event.start_date <= current_date <= event.end_date:
-                    event.state = 'Ongoing'
-                else:
-                    event.state = 'Ready'
-            # 7. Some assets returned but not all
-            elif total_returned > 0 and not all_actually_prepared_returned:
-                event.state = 'Returning'
-            # 8. Fallback - keep current state if we can't determine what it should be
+        logger.debug(
+            f"Event {event.event_id} state calculation - "
+            f"required={required_total}, activePrepared={prepared_active_total}, "
+            f"everPrepared={prepared_ever_total}, returned={returned_total}, started={started_total}"
+        )
+
+        # 1. All required items have been prepared at some point and all prepared items are returned.
+        if required_total > 0 and prepared_ever_total >= required_total and returned_total >= prepared_ever_total:
+            event.state = 'Closed'
+
+        # 2. Last day should take visual priority while the event is still active.
+        elif is_last_day:
+            event.state = 'Last Day'
+
+        # 3. Overdue: event ended with prepared, unreturned items.
+        elif prepared_ever_total > returned_total and current_date > event.end_date:
+            event.state = 'Overdue'
+
+        # 4. No requirements at all.
+        elif required_total == 0:
+            event.state = 'Added'
+
+        # 5. Requirements exist, but nothing has been collected/prepared yet.
+        elif started_total == 0:
+            event.state = 'Planning'
+
+        # 6. Some collection/preparation happened, but requirements are not fully prepared.
+        elif prepared_active_total < required_total and returned_total == 0:
+            event.state = 'Preparing'
+
+        # 7. Required quantity is fully prepared and none returned yet.
+        elif prepared_active_total >= required_total and returned_total == 0:
+            if event.start_date <= current_date <= event.end_date:
+                event.state = 'Ongoing'
             else:
-                logger.warning(f"Event {event.event_id} fell through to fallback case - keeping current state {event.state}")
-                # Don't change state if we can't determine what it should be
-                
+                event.state = 'Ready'
+
+        # 8. Some items have been returned, but not all.
+        elif returned_total > 0 and returned_total < prepared_ever_total:
+            event.state = 'Returning'
+
+        else:
+            logger.warning(f"Event {event.event_id} fell through state calculation; keeping {event.state}")
+
     except Exception as e:
         logger.error(f"Error updating event state for event {event.event_id}: {e}")
         import traceback
@@ -1600,6 +1846,8 @@ def update_department(department_code):
             for event in data_manager.events.values():
                 changed = 0
 
+                custom_replacements = {}
+
                 if isinstance(getattr(event, 'prepared_items', None), list):
                     for index, item in enumerate(list(event.prepared_items)):
                         replacement, did_change = _replace_department_in_model_marker(item, old_code, new_code)
@@ -1607,6 +1855,22 @@ def update_department(department_code):
                             event.prepared_items[index] = replacement
                             changed += 1
                             model_markers_updated += 1
+                            continue
+
+                        replacement, did_change = _replace_department_in_custom_marker(item, old_code, new_code)
+                        if did_change:
+                            event.prepared_items[index] = replacement
+                            custom_replacements[item] = replacement
+                            changed += 1
+
+                if custom_replacements:
+                    for list_name in ('actually_prepared', 'returned_items', 'extra_assets', 'custom_collected'):
+                        values = getattr(event, list_name, None)
+                        if not isinstance(values, list):
+                            continue
+                        for i, value in enumerate(list(values)):
+                            if value in custom_replacements:
+                                values[i] = custom_replacements[value]
 
                 if isinstance(getattr(event, 'asset_models', None), list):
                     for row in event.asset_models:
@@ -1918,22 +2182,28 @@ def get_events():
             _append_bulk_assignments_to_model_groups(model_groups, event)
             _refresh_model_group_statuses(model_groups)
 
-            # Calculate totals - ONLY use model-based logic for events with model assignments
+            # Calculate totals including custom item quantities.
+            custom_counts = _custom_counts_for_event(event)
             if has_model_assignments:
                 total_required = 0
                 total_prepared = 0
                 total_returned = 0
-                
-                # Count from model groups for accurate totals
+
                 for model_group in model_groups.values():
                     total_required += model_group['requiredQuantity']
-                    total_prepared += _sum_assigned_quantity(model_group)
+                    total_prepared += max(_sum_assigned_quantity(model_group) - _sum_returned_quantity(model_group), 0)
                     total_returned += _sum_returned_quantity(model_group)
+
+                total_required += custom_counts['required']
+                total_prepared += custom_counts['preparedActive']
+                total_returned += custom_counts['returned']
             else:
-                # Use old logic for events without model assignments
-                total_required = len(event.prepared_items)
-                total_prepared = len(event.actually_prepared)
-                total_returned = len(event.returned_items)
+                specific_counts = _event_specific_counts(event)
+                total_required = specific_counts['required'] + custom_counts['required']
+                total_prepared = specific_counts['preparedActive'] + custom_counts['preparedActive']
+                total_returned = specific_counts['returned'] + custom_counts['returned']
+
+            returnable_counts = _event_returnable_counts(event)
 
             events_data.append({
                 'id': event.event_id,
@@ -1948,6 +2218,10 @@ def get_events():
                 'assetModels': event.asset_models,
                 'preparedItems': event.prepared_items,
                 'returnedItems': event.returned_items,
+                'customCollected': getattr(event, 'custom_collected', []),
+                'returnableCount': returnable_counts['returnable'],
+                'returnableTotalCount': returnable_counts['total'],
+                'returnableRefs': returnable_counts['refs'],
                 'modelGroups': model_groups,
                 'hasModelAssignments': has_model_assignments,  # Flag to know which logic to use
                 'forceStateOverride': getattr(event, 'force_state_override', False)
@@ -1986,27 +2260,29 @@ def get_event(event_id):
         for asset_id in event.prepared_items:
             asset_info = None
 
-            if asset_id.startswith('[LOAN]') or asset_id.startswith('[MISC]'):
-                # Handle loan/misc items
-                dept = 'LOAN' if asset_id.startswith('[LOAN]') else 'MISC'
-                name = asset_id.replace(f'[{dept}]', '').strip()
-                if ';' in name:
-                    name, quantity = name.split(';', 1)
-                    name = f"{name} (Qty: {quantity})"
-
-                # Determine status for loan/misc items
-                if asset_id in event.returned_items:
-                    status = 'returned'
-                elif asset_id in event.actually_prepared:
-                    status = 'prepared'
-                else:
-                    status = 'assigned'
-
+            custom = _parse_custom_marker(asset_id)
+            if custom:
+                # Structured or legacy custom item. Legacy [LOAN]/[MISC] rows default to UN.
+                dept = custom.get('department') or 'UN'
+                status = _custom_status(event, asset_id)
+                is_collected = asset_id in getattr(event, 'custom_collected', [])
                 asset_info = {
                     'id': asset_id,
-                    'name': name,
+                    'name': _custom_display_name(custom),
+                    'displayName': _custom_display_name(custom),
+                    'brand': '',
+                    'model': custom.get('name', ''),
+                    'description': custom.get('company', '') if custom.get('type') == 'LOAN' else '',
+                    'serial': '',
+                    'department': dept,
+                    'company': custom.get('company', ''),
+                    'quantity': custom.get('quantity', 1),
                     'status': status,
+                    'customType': custom.get('type'),
+                    'isCustom': True,
                     'isLoanOrMisc': True,
+                    'isCollected': is_collected,
+                    'needsCollection': custom.get('type') == 'LOAN',
                     'isExtra': asset_id in event.extra_assets
                 }
             elif asset_id.startswith('[MODEL]'):
@@ -2256,31 +2532,35 @@ def get_event(event_id):
             sorted_departments[dept] = sorted(
                 assets_by_department[dept], key=lambda x: x.get('id', ''))
 
-        # Calculate totals based on model requirements vs specific assignments
+        # Calculate totals based on model requirements, direct assets, and custom item quantities.
         has_model_assignments = len(model_groups) > 0
-        
+        custom_counts = _custom_counts_for_event(event)
+
         if has_model_assignments:
             total_required = 0
             total_prepared = 0
             total_returned = 0
-            
-            # Count from model groups for accurate totals
+
             for model_group in model_groups.values():
                 total_required += model_group['requiredQuantity']
-                # Count only non-returned assigned assets as prepared
                 prepared_assets_count = max(_sum_assigned_quantity(model_group) - _sum_returned_quantity(model_group), 0)
                 returned_assets_count = _sum_returned_quantity(model_group)
                 total_prepared += prepared_assets_count
                 total_returned += returned_assets_count
+
+            total_required += custom_counts['required']
+            total_prepared += custom_counts['preparedActive']
+            total_returned += custom_counts['returned']
         else:
-            # Use old logic for events without model assignments
-            # Count all items in prepared_items except [MODEL] items (includes [LOAN] and [MISC])
-            total_required = len([item for item in event.prepared_items if not item.startswith('[MODEL]')])
-            total_prepared = len([item for item in event.actually_prepared if item not in event.returned_items])
-            total_returned = len(event.returned_items)
+            specific_counts = _event_specific_counts(event)
+            total_required = specific_counts['required'] + custom_counts['required']
+            total_prepared = specific_counts['preparedActive'] + custom_counts['preparedActive']
+            total_returned = specific_counts['returned'] + custom_counts['returned']
 
         logger.info(f"Event {event_id} final asset counts - Required: {total_required}, Prepared: {total_prepared}, Returned: {total_returned}, Extra assets in list: {len(event.extra_assets)}")
             
+        returnable_counts = _event_returnable_counts(event)
+
         event_data = {
             'id': event.event_id,
             'name': event.name,
@@ -2293,6 +2573,10 @@ def get_event(event_id):
             'actuallyPrepared': event.actually_prepared,
             'returnedItems': event.returned_items,
             'extraAssets': event.extra_assets,
+            'customCollected': getattr(event, 'custom_collected', []),
+            'returnableCount': returnable_counts['returnable'],
+            'returnableTotalCount': returnable_counts['total'],
+            'returnableRefs': returnable_counts['refs'],
             'assetsByDepartment': sorted_departments,
             'assignedAssets': assigned_assets,
             'preparedAssets': prepared_assets,
@@ -2383,7 +2667,7 @@ def get_event_model_availability(event_id):
                 if not isinstance(item, str):
                     continue
 
-                if item.startswith('[LOAN]') or item.startswith('[MISC]') or item.startswith('loan|') or item.startswith('misc|'):
+                if _is_custom_ref(item):
                     continue
 
                 if item in returned_other:
@@ -2701,7 +2985,7 @@ def delete_event(event_id):
         
         # Reset assets from prepared_items
         for asset_id in event.prepared_items.copy():
-            if not (asset_id.startswith('[LOAN]') or asset_id.startswith('[MISC]') or asset_id.startswith('[MODEL]')):
+            if not (_is_custom_ref(asset_id) or asset_id.startswith('[MODEL]')):
                 asset = data_manager.inventory.get(asset_id)
                 if asset:
                     old_location = asset.current_location
@@ -2712,7 +2996,7 @@ def delete_event(event_id):
         # Reset assets from actually_prepared (in case there are any not in prepared_items)
         if hasattr(event, 'actually_prepared'):
             for asset_id in event.actually_prepared.copy():
-                if not (asset_id.startswith('[LOAN]') or asset_id.startswith('[MISC]')):
+                if not _is_custom_ref(asset_id):
                     asset = data_manager.inventory.get(asset_id)
                     if asset and asset_id not in event.prepared_items:
                         old_location = asset.current_location
@@ -2784,8 +3068,21 @@ def add_asset_to_event(event_id):
         if asset_id in event.prepared_items:
             return jsonify({'error': 'Asset is already assigned to this event'}), 400
 
+        # Structured/legacy custom assets are assigned only; they are not automatically prepared.
+        if _is_custom_ref(asset_id):
+            _ensure_event_custom_lists(event)
+            if asset_id not in event.prepared_items:
+                event.prepared_items.append(asset_id)
+            if asset_id in event.returned_items:
+                event.returned_items.remove(asset_id)
+            update_event_state(event)
+            data_manager.save_event(event)
+            invalidate_cache()
+            log_action(f"Assigned custom asset {_custom_display_name(_parse_custom_marker(asset_id))} to event {event_id}")
+            return jsonify({'success': True, 'message': 'Custom asset assigned to event'})
+
         # For regular assets, perform additional checks
-        if not (asset_id.startswith('[LOAN]') or asset_id.startswith('[MISC]')):
+        if not _is_custom_ref(asset_id):
             asset = data_manager.inventory.get(asset_id)
             if not asset:
                 return jsonify({'error': 'Asset not found'}), 404
@@ -3066,8 +3363,24 @@ def prepare_event_asset(event_id):
         if asset_id in event.actually_prepared:
             return jsonify({'error': 'Asset is already prepared'}), 400
 
+        custom = _parse_custom_marker(asset_id)
+        if custom:
+            _ensure_event_custom_lists(event)
+            if asset_id not in event.prepared_items:
+                return jsonify({'error': 'Custom asset is not assigned to this event'}), 400
+            if asset_id in event.returned_items:
+                event.returned_items.remove(asset_id)
+            if custom['type'] == 'LOAN' and asset_id not in event.custom_collected:
+                return jsonify({'error': 'Loan/Rental item must be collected before it can be prepared'}), 400
+            event.actually_prepared.append(asset_id)
+            update_event_state(event)
+            data_manager.save_event(event)
+            invalidate_cache()
+            log_action(f"Prepared custom item {_custom_display_name(custom)} for event {event_id}")
+            return jsonify({'success': True, 'message': f"{_custom_display_name(custom)} prepared for event"})
+
         # For regular assets, perform additional checks
-        if not (asset_id.startswith('[LOAN]') or asset_id.startswith('[MISC]')):
+        if not _is_custom_ref(asset_id):
             asset = data_manager.inventory.get(asset_id)
             if not asset:
                 return jsonify({'error': 'Asset not found'}), 404
@@ -3145,60 +3458,114 @@ def prepare_event_asset(event_id):
 @app.route('/api/events/<int:event_id>/custom-assets', methods=['POST'])
 @require_auth
 def add_custom_asset_to_event(event_id):
-    """Add a custom asset (LOAN/MISC) to an event"""
+    """Add a structured custom asset (LOAN/MISC) to an event without auto-preparing it."""
     try:
         event = data_manager.events.get(event_id)
         if not event:
             return jsonify({'error': 'Event not found'}), 404
 
-        data = request.get_json()
-        name = data.get('name', '').strip()
-        quantity = int(data.get('quantity', 1))
-        asset_type = data.get('type', 'MISC').upper()
-        
+        data = request.get_json() or {}
+        name = str(data.get('name', '')).strip()
+        quantity = max(1, _safe_int(data.get('quantity'), 1))
+        asset_type = _normalise_custom_type(data.get('type', 'MISC'))
+        department = _normalise_department_code(data.get('department')) or 'UN'
+        company = str(data.get('company') or '').strip()
+
         if not name:
             return jsonify({'error': 'Asset name is required'}), 400
-            
-        if asset_type not in ['LOAN', 'MISC']:
-            return jsonify({'error': 'Invalid asset type'}), 400
-        
-        # Create custom asset ID
-        custom_asset_id = f"[{asset_type}]{name}"
-        if quantity > 1:
-            custom_asset_id += f";{quantity}"
-        
-        # Add to event
-        if custom_asset_id not in event.prepared_items:
-            event.prepared_items.append(custom_asset_id)
-        
-        # Initialize actually_prepared if it doesn't exist
-        if not hasattr(event, 'actually_prepared'):
-            event.actually_prepared = []
-            
-        # Custom assets are automatically "prepared" when added since they don't require physical preparation
-        if custom_asset_id not in event.actually_prepared:
-            event.actually_prepared.append(custom_asset_id)
-        
-        # Update event state
+        if asset_type == 'LOAN' and not company:
+            # Keep this as a warning-level validation so the data remains useful on the DO and prep screen.
+            return jsonify({'error': 'Loan/Rental company is required'}), 400
+
+        _ensure_event_custom_lists(event)
+        custom_asset_id = _make_custom_marker(asset_type, name, quantity, department, company)
+
+        event.prepared_items.append(custom_asset_id)
+
         update_event_state(event)
-        
-        # Save changes
         data_manager.save_event(event)
-        
-        # Invalidate cache
         invalidate_cache()
-        
-        log_action(f"Added custom asset '{name}' to event {event_id}")
-        
+
+        log_action(f"Added {asset_type} custom asset '{name}' ({quantity}x, dept {department}) to event {event_id}")
+
         return jsonify({
-            'success': True, 
-            'message': f'Custom asset "{name}" added to event'
+            'success': True,
+            'message': f'Custom asset "{name}" added to event',
+            'data': {'assetId': custom_asset_id}
         })
-        
+
     except Exception as e:
-        logger.error(f"Error adding custom asset to event {event_id}: {e}")
+        logger.error(f"Error adding custom asset to event {event_id}: {e}", exc_info=True)
         return jsonify({'error': 'Failed to add custom asset'}), 500
-    
+
+@app.route('/api/events/<int:event_id>/custom-assets/collect', methods=['POST'])
+@require_auth
+def collect_custom_asset(event_id):
+    """Mark a loan/rental custom item as collected."""
+    try:
+        event = data_manager.events.get(event_id)
+        if not event:
+            return jsonify({'error': 'Event not found'}), 404
+
+        data = request.get_json() or {}
+        asset_id = str(data.get('assetId', '')).strip()
+        custom = _parse_custom_marker(asset_id)
+        if not custom:
+            return jsonify({'error': 'Custom asset not found'}), 400
+        if custom['type'] != 'LOAN':
+            return jsonify({'error': 'Only loan/rental items can be collected'}), 400
+
+        _ensure_event_custom_lists(event)
+        if asset_id not in event.prepared_items:
+            return jsonify({'error': 'Custom asset is not assigned to this event'}), 400
+        if asset_id in event.returned_items:
+            return jsonify({'error': 'Returned items cannot be collected'}), 400
+        if asset_id not in event.custom_collected:
+            event.custom_collected.append(asset_id)
+
+        update_event_state(event)
+        data_manager.save_event(event)
+        invalidate_cache()
+        log_action(f"Collected loan/rental item {_custom_display_name(custom)} for event {event_id}")
+        return jsonify({'success': True, 'message': 'Loan/Rental item collected'})
+    except Exception as e:
+        logger.error(f"Error collecting custom asset for event {event_id}: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to collect custom asset'}), 500
+
+@app.route('/api/events/<int:event_id>/custom-assets/uncollect', methods=['POST'])
+@require_auth
+def uncollect_custom_asset(event_id):
+    """Undo collection for a loan/rental custom item. This also unprepares it."""
+    try:
+        event = data_manager.events.get(event_id)
+        if not event:
+            return jsonify({'error': 'Event not found'}), 404
+
+        data = request.get_json() or {}
+        asset_id = str(data.get('assetId', '')).strip()
+        custom = _parse_custom_marker(asset_id)
+        if not custom:
+            return jsonify({'error': 'Custom asset not found'}), 400
+        if custom['type'] != 'LOAN':
+            return jsonify({'error': 'Only loan/rental items can be uncollected'}), 400
+
+        _ensure_event_custom_lists(event)
+        if asset_id in event.custom_collected:
+            event.custom_collected.remove(asset_id)
+        if asset_id in event.actually_prepared:
+            event.actually_prepared.remove(asset_id)
+        if asset_id in event.returned_items:
+            event.returned_items.remove(asset_id)
+
+        update_event_state(event)
+        data_manager.save_event(event)
+        invalidate_cache()
+        log_action(f"Uncollected loan/rental item {_custom_display_name(custom)} for event {event_id}")
+        return jsonify({'success': True, 'message': 'Loan/Rental item uncollected'})
+    except Exception as e:
+        logger.error(f"Error uncollecting custom asset for event {event_id}: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to uncollect custom asset'}), 500
+
 @app.route('/api/events/<int:event_id>/unprepare', methods=['POST'])
 @require_auth
 def unprepare_event_asset(event_id):
@@ -3229,6 +3596,21 @@ def unprepare_event_asset(event_id):
             log_action(f"Unprepared bulk asset marker {asset_id} from event {event_id}")
             return jsonify({'success': True, 'message': 'Bulk quantity asset unprepared'})
 
+        custom = _parse_custom_marker(asset_id)
+        if custom:
+            _ensure_event_custom_lists(event)
+            if asset_id not in event.prepared_items:
+                return jsonify({'error': 'Custom asset is not assigned to this event'}), 400
+            if asset_id in event.actually_prepared:
+                event.actually_prepared.remove(asset_id)
+            if asset_id in event.returned_items:
+                event.returned_items.remove(asset_id)
+            update_event_state(event)
+            data_manager.save_event(event)
+            invalidate_cache()
+            log_action(f"Unprepared custom item {_custom_display_name(custom)} from event {event_id}")
+            return jsonify({'success': True, 'message': 'Custom item unprepared'})
+
         # Initialize actually_prepared if it doesn't exist
         if not hasattr(event, 'actually_prepared'):
             event.actually_prepared = []
@@ -3252,7 +3634,7 @@ def unprepare_event_asset(event_id):
             event.extra_assets.remove(asset_id)
 
         # For regular assets, reset location to default
-        if not (asset_id.startswith('[LOAN]') or asset_id.startswith('[MISC]')):
+        if not _is_custom_ref(asset_id):
             asset = data_manager.inventory.get(asset_id)
             if asset:
                 asset.current_location = asset.default_location or ''
@@ -3301,6 +3683,25 @@ def return_event_asset(event_id):
             log_action(f"Returned bulk asset marker {asset_id} from event {event_id}")
             return jsonify({'success': True, 'message': 'Bulk quantity asset returned successfully'})
 
+        custom = _parse_custom_marker(asset_id)
+        if custom:
+            _ensure_event_custom_lists(event)
+            if asset_id not in event.prepared_items:
+                return jsonify({'error': 'Custom asset is not assigned to this event'}), 400
+            if asset_id in event.returned_items:
+                return jsonify({'error': 'Asset is already returned'}), 400
+            is_prepared = asset_id in event.actually_prepared
+            is_collected_loan = custom.get('type') == 'LOAN' and asset_id in getattr(event, 'custom_collected', [])
+            if not (is_prepared or is_collected_loan):
+                return jsonify({'error': 'Custom asset must be prepared before it can be returned'}), 400
+
+            event.returned_items.append(asset_id)
+            update_event_state(event)
+            data_manager.save_event(event)
+            invalidate_cache()
+            log_action(f"Returned custom item {_custom_display_name(custom)} from event {event_id}")
+            return jsonify({'success': True, 'message': f"{_custom_display_name(custom)} returned successfully"})
+
         # Check if asset is prepared for this event
         if asset_id not in event.prepared_items:
             return jsonify({'error': 'Asset is not assigned to this event'}), 400
@@ -3316,18 +3717,12 @@ def return_event_asset(event_id):
         if not hasattr(event, 'actually_prepared'):
             event.actually_prepared = []
 
-        # IMPORTANT: Do NOT remove custom assets from actually_prepared when returning them
-        # Custom assets (LOAN/MISC) should remain in actually_prepared for proper state calculation
-        # Only remove regular inventory assets from actually_prepared when they're returned
-        if not (asset_id.startswith('[LOAN]') or asset_id.startswith('[MISC]')):
-            # For regular assets, remove from actually_prepared when returned
-            if asset_id in event.actually_prepared:
-                event.actually_prepared.remove(asset_id)
-        # For custom assets, keep them in actually_prepared - the state logic will check
-        # if they're in returned_items to determine closure
+        # For regular assets, remove from actually_prepared when returned
+        if asset_id in event.actually_prepared:
+            event.actually_prepared.remove(asset_id)
 
         # For regular assets, update location
-        if not (asset_id.startswith('[LOAN]') or asset_id.startswith('[MISC]')):
+        if not _is_custom_ref(asset_id):
             asset = data_manager.inventory.get(asset_id)
             if asset:
                 asset.current_location = asset.default_location or ''
@@ -3381,7 +3776,7 @@ def return_department_assets(event_id):
         # 1) Regular inventory assets (match department)
         specific_ids_in_prepared = [
             aid for aid in event.prepared_items
-            if not (aid.startswith('[LOAN]') or aid.startswith('[MISC]') or aid.startswith('[MODEL]'))
+            if not (_is_custom_ref(aid) or aid.startswith('[MODEL]'))
         ]
         for asset_id in set(event.actually_prepared + specific_ids_in_prepared):
             if asset_id in already_returned:
@@ -3400,11 +3795,15 @@ def return_department_assets(event_id):
             if asset.department_code == department:
                 targets.append(asset_id)
 
-        # 2) Custom assets (LOAN/MISC)
-        if department in ('LOAN', 'MISC'):
-            for item in event.prepared_items:
-                if item.startswith(f'[{department}]') and item not in already_returned:
-                    targets.append(item)
+        # 2) Custom assets now belong to their tagged department.
+        for item in event.prepared_items:
+            custom = _parse_custom_marker(item)
+            if not custom or item in already_returned:
+                continue
+            is_prepared = item in event.actually_prepared
+            is_collected_loan = custom.get('type') == 'LOAN' and item in getattr(event, 'custom_collected', [])
+            if custom.get('department') == department and (is_prepared or is_collected_loan):
+                targets.append(item)
 
         if not targets:
             return jsonify({'success': True, 'message': f'No pending items for department {department}', 'returned': []})
@@ -3424,7 +3823,7 @@ def return_department_assets(event_id):
                 continue
 
             # Regular assets: remove from actually_prepared + reset location
-            if not (asset_id.startswith('[LOAN]') or asset_id.startswith('[MISC]')):
+            if not _is_custom_ref(asset_id):
                 if asset_id in event.actually_prepared:
                     event.actually_prepared.remove(asset_id)
                 asset = data_manager.inventory.get(asset_id)
@@ -3505,7 +3904,7 @@ def assign_specific_asset_to_model(event_id):
             return jsonify({'error': 'Asset is already assigned to this event'}), 400
 
         # For regular assets, perform checks
-        if not (asset_id.startswith('[LOAN]') or asset_id.startswith('[MISC]')):
+        if not _is_custom_ref(asset_id):
             asset = data_manager.inventory.get(asset_id)
             if not asset:
                 return jsonify({'error': 'Asset not found'}), 404
@@ -3631,7 +4030,7 @@ def unassign_specific_asset_from_model(event_id):
         event.actually_prepared.remove(asset_id)
 
         # For regular assets, reset location
-        if not (asset_id.startswith('[LOAN]') or asset_id.startswith('[MISC]')):
+        if not _is_custom_ref(asset_id):
             asset = data_manager.inventory.get(asset_id)
             if asset:
                 asset.current_location = asset.default_location or ''
@@ -3703,7 +4102,7 @@ def remove_asset_from_event_body(event_id):
             log_asset_change(event_id, asset_id, "REMOVING", "from extra_assets", "remove_asset_from_event_body")
 
         # For regular assets, update location
-        if not (asset_id.startswith('[LOAN]') or asset_id.startswith('[MISC]')):
+        if not _is_custom_ref(asset_id):
             asset = data_manager.inventory.get(asset_id)
             if asset:
                 asset.current_location = asset.default_location or ''
@@ -3778,7 +4177,7 @@ def remove_asset_from_event_post(event_id):
             logger.info(f"Removed '{asset_id}' from extra_assets")
 
         # For regular assets, update location
-        if not (asset_id.startswith('[LOAN]') or asset_id.startswith('[MISC]')):
+        if not _is_custom_ref(asset_id):
             asset = data_manager.inventory.get(asset_id)
             if asset:
                 asset.current_location = asset.default_location or ''
@@ -4630,7 +5029,7 @@ def get_event_assets(event_id):
 
     event_assets = []
     for asset_id in event.prepared_items:
-        if not (asset_id.startswith('[LOAN]') or asset_id.startswith('[MISC]')):
+        if not _is_custom_ref(asset_id):
             asset = data_manager.inventory.get(asset_id)
             if asset:
                 event_assets.append({
@@ -5608,120 +6007,59 @@ def get_stats():
 @app.route('/api/events/<int:event_id>/custom-assets/update-quantity', methods=['PUT'])
 @require_auth
 def update_custom_asset_quantity(event_id):
-    """Update the quantity of a custom asset in an event"""
+    """Update the quantity of a custom asset in an event while preserving department/company metadata."""
     try:
-        data = request.get_json()
-        old_asset_id = data.get('assetId')
-        new_quantity = data.get('newQuantity')
-        
-        logger.info(f"Updating custom asset quantity: {old_asset_id} -> {new_quantity} for event {event_id}")
-        
-        if not old_asset_id or not new_quantity:
-            return jsonify({'success': False, 'error': 'assetId and newQuantity are required'}), 400
-        
-        # Validate new_quantity is a positive integer
-        try:
-            new_quantity = int(new_quantity)
-            if new_quantity < 1:
-                return jsonify({'success': False, 'error': 'newQuantity must be a positive integer'}), 400
-        except (ValueError, TypeError):
-            return jsonify({'success': False, 'error': 'newQuantity must be a valid integer'}), 400
-        
-        # Get the event using your existing data manager
+        data = request.get_json() or {}
+        old_asset_id = str(data.get('assetId') or '').strip()
+        new_quantity = max(1, _safe_int(data.get('newQuantity'), 1))
+
         event = data_manager.events.get(event_id)
         if not event:
             return jsonify({'success': False, 'error': 'Event not found'}), 404
-        
-        logger.info(f"Found event: {event.name}")
-        
-        # Check if the old asset exists in prepared_items
+
+        _ensure_event_custom_lists(event)
+        custom = _parse_custom_marker(old_asset_id)
+        if not custom:
+            return jsonify({'success': False, 'error': 'Unsupported custom asset format'}), 400
         if old_asset_id not in event.prepared_items:
-            return jsonify({'success': False, 'error': f'Custom asset {old_asset_id} not found in event'}), 404
-        
-        logger.info(f"Found old asset in prepared_items")
-        
-        # Parse the old asset ID to extract name and type
-        if not old_asset_id.startswith('['):
-            return jsonify({'success': False, 'error': 'Invalid custom asset format'}), 400
-        
-        try:
-            if old_asset_id.startswith('[MISC]'):
-                asset_type = 'MISC'
-                name_part = old_asset_id[6:]  # Remove '[MISC]'
-            elif old_asset_id.startswith('[LOAN]'):
-                asset_type = 'LOAN'
-                name_part = old_asset_id[6:]  # Remove '[LOAN]'
-            else:
-                return jsonify({'success': False, 'error': 'Unsupported custom asset type'}), 400
-            
-            # Remove existing quantity if present
-            if ';' in name_part:
-                asset_name = name_part.split(';')[0]
-            else:
-                asset_name = name_part
-                
-        except Exception as e:
-            logger.error(f"Error parsing asset ID: {e}")
-            return jsonify({'success': False, 'error': f'Error parsing asset ID: {str(e)}'}), 400
-        
-        logger.info(f"Parsed asset: type={asset_type}, name={asset_name}")
-        
-        # Create the new asset ID with updated quantity
-        if new_quantity > 1:
-            new_asset_id = f'[{asset_type}]{asset_name};{new_quantity}'
-        else:
-            new_asset_id = f'[{asset_type}]{asset_name}'
-        
-        logger.info(f"New asset ID: {new_asset_id}")
-        
-        # Find and replace the old asset ID in prepared_items
-        old_asset_index = event.prepared_items.index(old_asset_id)
-        event.prepared_items[old_asset_index] = new_asset_id
-        
-        # Initialize actually_prepared if it doesn't exist
-        if not hasattr(event, 'actually_prepared'):
-            event.actually_prepared = []
-        
-        # Update actually_prepared if the old asset was there
-        if old_asset_id in event.actually_prepared:
-            actually_prepared_index = event.actually_prepared.index(old_asset_id)
-            event.actually_prepared[actually_prepared_index] = new_asset_id
-            logger.info(f"Updated asset in actually_prepared")
-        
-        # Update returned_items if the old asset was there
-        if old_asset_id in event.returned_items:
-            returned_index = event.returned_items.index(old_asset_id)
-            event.returned_items[returned_index] = new_asset_id
-            logger.info(f"Updated asset in returned_items")
-        
-        # Update event state
+            return jsonify({'success': False, 'error': 'Custom asset not found in event'}), 404
+
+        new_asset_id = _make_custom_marker(
+            custom['type'],
+            custom['name'],
+            new_quantity,
+            custom.get('department') or 'UN',
+            custom.get('company') or '',
+            uid=custom.get('uid') or None
+        )
+
+        def replace_in_list(values):
+            for i, value in enumerate(list(values)):
+                if value == old_asset_id:
+                    values[i] = new_asset_id
+
+        replace_in_list(event.prepared_items)
+        replace_in_list(event.actually_prepared)
+        replace_in_list(event.returned_items)
+        replace_in_list(event.extra_assets)
+        replace_in_list(event.custom_collected)
+
         update_event_state(event)
-        
-        # Save the event using your existing data manager
         data_manager.save_event(event)
-        
-        # Invalidate cache
         invalidate_cache()
-        
-        # Log the activity
-        log_action(f'Updated custom asset quantity: {old_asset_id} -> {new_asset_id} for event {event_id}')
-        
-        logger.info(f"Successfully updated custom asset quantity")
-        
+        log_action(f"Updated custom asset quantity: {_custom_display_name(custom)} -> {new_quantity}x for event {event_id}")
+
         return jsonify({
             'success': True,
-            'message': f'Custom asset quantity updated from {old_asset_id} to {new_asset_id}',
+            'message': 'Custom asset quantity updated',
             'oldAssetId': old_asset_id,
             'newAssetId': new_asset_id,
             'newQuantity': new_quantity
         })
-        
     except Exception as e:
-        logger.error(f"Error updating custom asset quantity: {str(e)}")
-        import traceback
-        traceback.print_exc()
+        logger.error(f"Error updating custom asset quantity: {e}", exc_info=True)
         return jsonify({'success': False, 'error': 'An unexpected error occurred'}), 500
-    
+
 @app.route('/api/events/<int:event_id>/custom-assets/remove', methods=['POST'])
 @require_auth
 def remove_custom_asset_from_event(event_id):
@@ -5740,7 +6078,7 @@ def remove_custom_asset_from_event(event_id):
             return jsonify({'error': 'Event not found'}), 404
 
         # Verify this is a custom asset
-        if not (asset_id.startswith('[MISC]') or asset_id.startswith('[LOAN]')):
+        if not _is_custom_ref(asset_id):
             return jsonify({'error': 'This endpoint is only for custom assets'}), 400
 
         # Check if asset is in this event
@@ -5771,6 +6109,11 @@ def remove_custom_asset_from_event(event_id):
         if asset_id in event.extra_assets:
             event.extra_assets.remove(asset_id)
             logger.info(f"Removed {asset_id} from extra_assets")
+
+        # Remove from custom collected list if it was there
+        if hasattr(event, 'custom_collected') and asset_id in event.custom_collected:
+            event.custom_collected.remove(asset_id)
+            logger.info(f"Removed {asset_id} from custom_collected")
 
         # Update event state
         update_event_state(event)

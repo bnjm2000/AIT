@@ -1,70 +1,3 @@
-2026/04/14 16:37:54,bnjm2000,"Updated maintenance log for asset PB#48: 'Sent to TSM, Changed PB15 Housing
-Updated to version V5.16.26 [Cleared OOC]' -> 'Sent to TSM, Changed PB15 Housing
-Updated to version V5.16.26 ($140)' (also: Cleared OOC) (edited by bnjm2000)"
-2026/04/14 16:38:41,bnjm2000,"Updated maintenance log for asset PB#43: 'Sent to TSM, 
-Updated to version V5.16.26 [Cleared OOC]' -> 'Sent to TSM, 
-Updated to version V5.16.26
-Replace PB15-BAT - $52
-Service fee - $100' (also: Cleared OOC) (edited by bnjm2000)"
-2026/04/14 16:39:38,bnjm2000,"Updated maintenance log for asset PB#48: 'Sent to TSM, Changed PB15 Housing
-Updated to version V5.16.26 ($140) [Cleared OOC]' -> 'Sent to TSM
-Updated to version V5.16.26 
-Replaced PB15 Rear Housing -$40
-Service Fee - $100' (also: Cleared OOC) (edited by bnjm2000)"
-2026/04/14 16:39:48,bnjm2000,"Updated maintenance log for asset PB#48: 'Sent to TSM
-Updated to version V5.16.26 
-Replaced PB15 Rear Housing -$40
-Service Fee - $100 [Cleared OOC]' -> 'Sent to TSM
-Updated to version V5.16.26 
-Replaced PB15 Rear Housing - $40
-Service Fee - $100' (also: Cleared OOC) (edited by bnjm2000)"
-2026/04/14 16:39:57,bnjm2000,"Updated maintenance log for asset PB#52: 'Sent to TSM, Changed PB15 Housing
-Updated to version V5.16.26 [Cleared OOC]' -> 'Sent to TSM
-Updated to version V5.16.26 
-Replaced PB15 Rear Housing - $40
-Service Fee - $100' (also: Cleared OOC) (edited by bnjm2000)"
-2026/04/14 16:40:06,bnjm2000,"Updated maintenance log for asset PB#63: 'Sent to TSM, Changed PB15 Housing
-Updated to version V5.16.26 [Cleared OOC]' -> 'Sent to TSM
-Updated to version V5.16.26 
-Replaced PB15 Rear Housing - $40
-Service Fee - $100' (also: Cleared OOC) (edited by bnjm2000)"
-2026/04/14 16:41:12,bnjm2000,Marked asset PB#49 as Out of Commission
-2026/04/14 16:41:12,bnjm2000,Maintenance logged for asset PB#49: Discovered screen died
-2026/04/14 16:44:03,bnjm2000,Added 12x Robe Robin LEDBeam 350 Wash model to event 127 (total: 12)
-2026/04/14 16:44:13,bnjm2000,Added 8x Ayrton Diablo Profile model to event 127 (total: 8)
-2026/04/14 16:44:16,bnjm2000,Added 1x GrandMA3 Compact XT model to event 127 (total: 1)
-2026/04/14 16:44:21,bnjm2000,Added 2x Le Maitre MVS Hazer model to event 127 (total: 2)
-2026/04/14 16:44:34,bnjm2000,Added 1x 32A 3-Phase DB Custom DB model to event 127 (total: 1)
-2026/04/14 16:46:31,bnjm2000,Removed 32A 3-Phase DB Custom DB model from event 127
-2026/04/14 16:46:35,bnjm2000,Added 1x 63A 3-Phase DB Custom DB model to event 127 (total: 1)
-2026/04/14 16:47:47,bnjm2000,Added 6x L-Acoustics SB18 model to event 127 (total: 6)
-2026/04/14 16:47:55,bnjm2000,Added 6x EV EVOLVE 50 model to event 127 (total: 6)
-2026/04/14 16:48:02,bnjm2000,Added 1x Yamaha CL5 model to event 127 (total: 1)
-2026/04/14 16:48:05,bnjm2000,Added 1x Yamaha QL1 model to event 127 (total: 1)
-2026/04/14 16:48:11,bnjm2000,Added 2x L-Acoustics LA4X model to event 127 (total: 2)
-2026/04/14 16:48:17,bnjm2000,Added 4x Shure AD4Q model to event 127 (total: 4)
-2026/04/14 16:48:23,bnjm2000,Added 16x Shure AD2 model to event 127 (total: 16)
-2026/04/14 16:48:27,bnjm2000,Added 16x Shure AD1 model to event 127 (total: 16)
-2026/04/14 16:48:32,bnjm2000,Added 1x Hollyland Solidcom C1 (Pro) 8-Slot Battery Charging Case model to event 127 (total: 1)
-2026/04/14 16:48:34,bnjm2000,Added 1x Hollyland Solidcom C1 Pro Hub model to event 127 (total: 1)
-2026/04/14 16:48:41,bnjm2000,Added 2x Pioneer CDJ2000NXS2 model to event 127 (total: 2)
-2026/04/14 16:48:42,bnjm2000,Added 2x Pioneer CDJ3000 model to event 127 (total: 2)
-2026/04/14 16:48:46,bnjm2000,Added 1x Pioneer DJM-900NXS2 model to event 127 (total: 1)
-2026/04/14 16:48:47,bnjm2000,Added 1x Pioneer DJM-A9 model to event 127 (total: 1)
-2026/04/14 16:48:55,bnjm2000,Added 2x L-Acoustics X12 model to event 127 (total: 2)
-2026/04/14 16:49:01,bnjm2000,Added 4x L-Acoustics X8 model to event 127 (total: 4)
-2026/04/14 16:49:11,bnjm2000,Added 1x Yamaha DM3 model to event 127 (total: 1)
-2026/04/14 16:49:16,bnjm2000,Added 2x Apple IPAD model to event 127 (total: 2)
-2026/04/14 16:49:23,bnjm2000,Added 5x Interspace Industries PCBB3 model to event 127 (total: 5)
-2026/04/14 16:49:46,bnjm2000,Added 2x L-Acoustics M-BUMP model to event 127 (total: 2)
-2026/04/14 16:50:10,bnjm2000,Added 10x Sennheiser SEK(UHF) model to event 127 (total: 10)
-2026/04/14 16:50:35,bnjm2000,Removed Sennheiser SEK(UHF) model from event 126
-2026/04/14 16:51:09,bnjm2000,Added 1x Yamaha Rio1608-d2 model to event 127 (total: 1)
-2026/04/14 16:51:11,bnjm2000,Added 1x Yamaha Rio3224-d2 model to event 127 (total: 1)
-2026/04/14 16:51:12,bnjm2000,Added 1x Yamaha Rio3224-d model to event 127 (total: 1)
-2026/04/14 16:51:57,bnjm2000,Added 4x Shure ULXD2 model to event 127 (total: 4)
-2026/04/14 16:52:03,bnjm2000,Added 2x Shure ULXD4D model to event 127 (total: 2)
-2026/04/14 16:57:39,bnjm2000,Updated event 126: Hermes Dinner @ Liat Towers via web interface
 2026/04/14 17:10:44,bnjm2000,Updated maintenance log for asset MR-90A#04: 'Receiver observed in used with some buzzing (Wedding of Jewel & Maanas @ Fiasco)' -> 'Receiver observed in use with some buzzing (Wedding of Jewel & Maanas @ Fiasco)' (edited by bnjm2000)
 2026/04/15 10:52:24,bnjm2000,User bnjm2000 logged in via web interface
 2026/04/15 10:54:24,bnjm2000,"Updated maintenance log for asset PB#14: 'Replaced PB15-HOU-BC ($39.52) [Location: Store, Cleared OOC, Cleared Missing]' -> 'Replaced PB15-HOU-BC ($39.52)' (also: Location: Store, Cleared OOC) (edited by bnjm2000)"
@@ -1048,3 +981,46 @@ Service Fee - $80' (also: Cleared OOC) (edited by bnjm2000)"
 2026/05/13 12:38:34,bnjm2000,Prepared 20x bulk asset Custom Sandbag for event 138
 2026/05/13 12:38:37,bnjm2000,Returned bulk asset marker [BULK]BULK-0015|20 from event 138
 2026/05/13 12:47:10,bnjm2000,Updated department SK -> STG; name='SK' -> 'Staging'; assetsUpdated=28; eventsUpdated=9
+2026/05/13 14:17:13,bnjm2000,"Added LOAN custom asset 'Rosco Braq Cube' (2x, dept LX) to event 131"
+2026/05/13 14:17:24,bnjm2000,Collected loan/rental item 2x Rosco Braq Cube for event 131
+2026/05/13 14:17:27,bnjm2000,Prepared custom item 2x Rosco Braq Cube for event 131
+2026/05/13 14:17:30,bnjm2000,Uncollected loan/rental item 2x Rosco Braq Cube for event 131
+2026/05/13 14:17:58,bnjm2000,"Added MISC custom asset 'Speaker stand with skirting' (4x, dept AX) to event 131"
+2026/05/13 14:18:01,bnjm2000,Prepared custom item 4x Speaker stand with skirting for event 131
+2026/05/13 14:18:02,bnjm2000,Unprepared custom item 4x Speaker stand with skirting from event 131
+2026/05/13 14:20:01,bnjm2000,"Removed custom asset [CUSTOM]{""company"":""Avery Events and Entertainment LLP"",""department"":""LX"",""name"":""Rosco Braq Cube"",""quantity"":2,""type"":""LOAN"",""uid"":""bef78d5c3e3058e4"",""version"":2} from event 131"
+2026/05/13 14:20:05,bnjm2000,"Removed custom asset [CUSTOM]{""company"":"""",""department"":""AX"",""name"":""Speaker stand with skirting"",""quantity"":4,""type"":""MISC"",""uid"":""5ad9d5cc5eb02aac"",""version"":2} from event 131"
+2026/05/13 14:44:01,bnjm2000,"Added LOAN custom asset 'Rosco Braq Cube' (2x, dept LX) to event 131"
+2026/05/13 14:44:24,bnjm2000,Collected loan/rental item 2x Rosco Braq Cube for event 131
+2026/05/13 14:44:33,bnjm2000,Prepared custom item 2x Rosco Braq Cube for event 131
+2026/05/13 14:44:36,bnjm2000,Uncollected loan/rental item 2x Rosco Braq Cube for event 131
+2026/05/13 14:45:05,bnjm2000,"Removed custom asset [CUSTOM]{""company"":""Avery Events and Entertainment LLP"",""department"":""LX"",""name"":""Rosco Braq Cube"",""quantity"":2,""type"":""LOAN"",""uid"":""8c5d9b7e2fd0bdc5"",""version"":2} from event 131"
+2026/05/13 14:45:39,bnjm2000,"Added MISC custom asset 'Speaker stand' (8x, dept AX) to event 130"
+2026/05/13 14:45:46,bnjm2000,Prepared custom item 8x Speaker stand for event 130
+2026/05/13 14:51:36,bnjm2000,Unprepared custom item 8x Speaker stand from event 130
+2026/05/13 14:52:10,bnjm2000,"Added LOAN custom asset 'Rosco Braq Cube' (2x, dept LX) to event 131"
+2026/05/13 14:54:55,bnjm2000,Prepared 1x bulk asset Global Truss F34 Truss - 2m (Silver) for event 131
+2026/05/13 14:55:10,bnjm2000,Unprepared bulk asset marker [BULK]BULK-0003|1 from event 131
+2026/05/13 14:59:02,bnjm2000,Collected loan/rental item 2x Rosco Braq Cube for event 131
+2026/05/13 14:59:05,bnjm2000,Prepared custom item 2x Rosco Braq Cube for event 131
+2026/05/13 14:59:08,bnjm2000,Uncollected loan/rental item 2x Rosco Braq Cube for event 131
+2026/05/13 14:59:16,bnjm2000,Prepared custom item 8x Speaker stand for event 130
+2026/05/13 14:59:18,bnjm2000,Unprepared custom item 8x Speaker stand from event 130
+2026/05/13 15:16:35,bnjm2000,Prepared 1x bulk asset Global Truss F34 Truss - 2m (Silver) for event 131
+2026/05/13 15:16:40,bnjm2000,Unprepared bulk asset marker [BULK]BULK-0003|1 from event 131
+2026/05/13 15:16:49,bnjm2000,Collected loan/rental item 2x Rosco Braq Cube for event 131
+2026/05/13 15:16:52,bnjm2000,Uncollected loan/rental item 2x Rosco Braq Cube for event 131
+2026/05/13 15:17:00,bnjm2000,Prepared custom item 8x Speaker stand for event 130
+2026/05/13 15:17:29,bnjm2000,Prepared 12x bulk asset Global Truss F34 Corner Block (Black) for event 132
+2026/05/13 15:17:32,bnjm2000,Unprepared bulk asset marker [BULK]BULK-0014|12 from event 132
+2026/05/13 15:18:54,bnjm2000,"Added LOAN custom asset 'Spectera Base Station' (1x, dept AX) to event 127"
+2026/05/13 15:19:20,bnjm2000,"Added LOAN custom asset 'Sennheiser DAD(UHF)' (2x, dept AX) to event 127"
+2026/05/13 15:19:34,bnjm2000,User bnjm2000 forced event 127 (Wedding of Avinash & Rachel @ Capella) state from Closed to Preparing
+2026/05/13 15:19:47,bnjm2000,Collected loan/rental item 2x Sennheiser DAD(UHF) for event 127
+2026/05/13 15:19:48,bnjm2000,Collected loan/rental item Spectera Base Station for event 127
+2026/05/13 15:19:54,bnjm2000,Prepared custom item 2x Sennheiser DAD(UHF) for event 127
+2026/05/13 15:19:55,bnjm2000,Prepared custom item Spectera Base Station for event 127
+2026/05/13 15:20:13,bnjm2000,User bnjm2000 removed forced state override for event 127 (Wedding of Avinash & Rachel @ Capella): Preparing -> Overdue
+2026/05/13 15:20:28,bnjm2000,User bnjm2000 forced event 127 (Wedding of Avinash & Rachel @ Capella) state from Overdue to Returning
+2026/05/13 15:21:02,bnjm2000,User bnjm2000 removed forced state override for event 127 (Wedding of Avinash & Rachel @ Capella): Returning -> Overdue
+2026/05/13 15:28:26,bnjm2000,Returned all assets for department AX in event 127: 2 items

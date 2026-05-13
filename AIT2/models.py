@@ -70,7 +70,7 @@ class Container:
         self.asset_ids = asset_ids  # List of asset IDs
 
 class Event:
-    def __init__(self, event_id, name, start_date, end_date, asset_models, prepared_items=None, state='Added', returned_items=None, actually_prepared=None, extra_assets=None, tag='event', force_state_override=False):
+    def __init__(self, event_id, name, start_date, end_date, asset_models, prepared_items=None, state='Added', returned_items=None, actually_prepared=None, extra_assets=None, tag='event', force_state_override=False, custom_collected=None):
         self.event_id = event_id
         self.name = name
         self.start_date = start_date
@@ -81,6 +81,9 @@ class Event:
         self.state = state  # Event state
         self.actually_prepared = actually_prepared if actually_prepared is not None else []  # List of actually prepared assets
         self.extra_assets = extra_assets if extra_assets is not None else [] 
+        # Structured custom loan/rental items use this list to track the "collected" step.
+        # The actual marker still lives in prepared_items; final preparation lives in actually_prepared.
+        self.custom_collected = custom_collected if custom_collected is not None else []
         self.tag = tag
         self.force_state_override = force_state_override  # Flag to track if state was manually forced
 

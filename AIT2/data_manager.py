@@ -301,6 +301,14 @@ class DataManager:
                         print(f"Error parsing 'ExtraAssets' in event file {filename}: {e}. Setting to empty list.")
                         extra_assets = []
 
+                custom_collected = []
+                if event_data.get('CustomCollected'):
+                    try:
+                        custom_collected = json.loads(event_data['CustomCollected'])
+                    except json.JSONDecodeError as e:
+                        print(f"Error parsing 'CustomCollected' in event file {filename}: {e}. Setting to empty list.")
+                        custom_collected = []
+
                 state = event_data.get('State', 'Added')
                 tag = event_data.get('Tag', 'events')
                 force_state_override = event_data.get('ForceStateOverride', 'False') == 'True'
@@ -317,13 +325,15 @@ class DataManager:
                     actually_prepared=actually_prepared,
                     extra_assets=extra_assets,
                     tag=tag,
-                    force_state_override=force_state_override
+                    force_state_override=force_state_override,
+                    custom_collected=custom_collected
                 )
 
                 event.actually_prepared = actually_prepared
                 event.extra_assets = extra_assets
                 event.tag = tag
                 event.force_state_override = force_state_override
+                event.custom_collected = custom_collected
 
                 self.events[event_id] = event
                 self.event_file_map[event_id] = filename
@@ -344,6 +354,7 @@ class DataManager:
         extra_assets = getattr(event, 'extra_assets', [])
         tag = getattr(event, 'tag', 'events')
         force_state_override = getattr(event, 'force_state_override', False)
+        custom_collected = getattr(event, 'custom_collected', [])
         
         # VALIDATION: Don't save if critical data is missing
         if not hasattr(event, 'prepared_items'):
@@ -363,6 +374,7 @@ class DataManager:
             returned_items_json = json.dumps(event.returned_items)
             actually_prepared_json = json.dumps(actually_prepared)
             extra_assets_json = json.dumps(extra_assets)
+            custom_collected_json = json.dumps(custom_collected)
         except (TypeError, ValueError) as e:
             print(f"ERROR: Cannot serialize event {event.event_id} data to JSON: {e}")
             print(f"ERROR: prepared_items: {event.prepared_items}")
@@ -370,7 +382,7 @@ class DataManager:
             return
         
         with open(filepath, 'w', newline='', encoding='utf-8') as f:
-            fieldnames = ['EventID', 'Name', 'StartDate', 'EndDate', 'AssetModels', 'PreparedItems', 'ReturnedItems', 'State', 'ActuallyPrepared', 'ExtraAssets', 'Tag', 'ForceStateOverride']
+            fieldnames = ['EventID', 'Name', 'StartDate', 'EndDate', 'AssetModels', 'PreparedItems', 'ReturnedItems', 'State', 'ActuallyPrepared', 'ExtraAssets', 'CustomCollected', 'Tag', 'ForceStateOverride']
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
             
@@ -385,6 +397,7 @@ class DataManager:
                 'State': event.state,
                 'ActuallyPrepared': actually_prepared_json,
                 'ExtraAssets': extra_assets_json,
+                'CustomCollected': custom_collected_json,
                 'Tag': tag,
                 'ForceStateOverride': str(force_state_override)
             }

@@ -62,6 +62,139 @@ function escapeHtmlAttr(str) {
     .replace(/'/g, '&#39;');
 }
 
+
+const CUSTOM_ASSET_PREFIX = '[CUSTOM]';
+
+function parseCustomAsset(assetId, asset = null) {
+  const raw = String(assetId || asset?.id || '');
+
+  if (asset && (asset.isCustom || asset.isLoanOrMisc)) {
+    const type = normalizeCustomType(asset.customType || (raw.startsWith('[LOAN]') ? 'LOAN' : 'MISC'));
+    return {
+      id: raw,
+      type,
+      name: asset.model || asset.name || asset.displayName || (type === 'LOAN' ? 'Loan/Rental Item' : 'Misc Item'),
+      quantity: Math.max(1, parseInt(asset.quantity || 1, 10) || 1),
+      department: normalizeDepartmentCode(asset.department || 'UN'),
+      company: asset.company || asset.description || '',
+      legacy: raw.startsWith('[LOAN]') || raw.startsWith('[MISC]') || raw.toLowerCase().startsWith('loan|') || raw.toLowerCase().startsWith('misc|')
+    };
+  }
+
+  if (raw.startsWith(CUSTOM_ASSET_PREFIX)) {
+    try {
+      const data = JSON.parse(raw.slice(CUSTOM_ASSET_PREFIX.length));
+      const type = normalizeCustomType(data.type || 'MISC');
+      return {
+        id: raw,
+        uid: data.uid || '',
+        type,
+        name: String(data.name || (type === 'LOAN' ? 'Loan/Rental Item' : 'Misc Item')).trim(),
+        quantity: Math.max(1, parseInt(data.quantity || 1, 10) || 1),
+        department: normalizeDepartmentCode(data.department || 'UN'),
+        company: String(data.company || '').trim(),
+        legacy: false
+      };
+    } catch (e) {
+      return null;
+    }
+  }
+
+  const lower = raw.toLowerCase();
+  if (lower.startsWith('loan|') || lower.startsWith('misc|')) {
+    const fallbackType = lower.startsWith('loan|') ? 'LOAN' : 'MISC';
+    const parsed = parseCustomAsset(raw.slice(raw.indexOf('|') + 1));
+    if (parsed) parsed.type = fallbackType;
+    return parsed;
+  }
+
+  let type = null;
+  let rest = '';
+  if (raw.startsWith('[LOAN]')) {
+    type = 'LOAN';
+    rest = raw.slice('[LOAN]'.length);
+  } else if (raw.startsWith('[MISC]')) {
+    type = 'MISC';
+    rest = raw.slice('[MISC]'.length);
+  }
+
+  if (!type) return null;
+
+  let name = rest.trim();
+  let quantity = 1;
+  const semi = rest.lastIndexOf(';');
+  if (semi >= 0) {
+    const possibleQty = parseInt(rest.slice(semi + 1), 10);
+    if (Number.isFinite(possibleQty) && possibleQty > 0) {
+      quantity = possibleQty;
+      name = rest.slice(0, semi).trim();
+    }
+  }
+
+  return {
+    id: raw,
+    type,
+    name: name || (type === 'LOAN' ? 'Loan/Rental Item' : 'Misc Item'),
+    quantity,
+    department: 'UN',
+    company: '',
+    legacy: true
+  };
+}
+
+function normalizeCustomType(type) {
+  const value = String(type || 'MISC').trim().toUpperCase();
+  return (value === 'LOAN' || value === 'RENTAL' || value === 'LOAN/RENTAL') ? 'LOAN' : 'MISC';
+}
+
+function isCustomAssetId(assetId) {
+  return !!parseCustomAsset(assetId);
+}
+
+function customAssetDisplayName(custom, includeQuantity = true) {
+  if (!custom) return '';
+  const qty = Math.max(1, parseInt(custom.quantity || 1, 10) || 1);
+  const name = String(custom.name || '').trim();
+  return includeQuantity && qty > 1 ? `${qty}x ${name}` : name;
+}
+
+function customAssetTypeBadge(custom) {
+  if (!custom) return '';
+  if (custom.type === 'LOAN') {
+    return '<span class="asset-badge status-deployed" style="margin-left:8px;">Loan/Rental</span>';
+  }
+  return '<span class="asset-badge status-available" style="margin-left:8px;">Misc</span>';
+}
+
+function customAssetLabelFromId(assetId, asset = null) {
+  const custom = parseCustomAsset(assetId, asset);
+  return custom ? customAssetDisplayName(custom) : String(assetId || '');
+}
+
+function customDepartmentOptionsHtml(selected = 'UN') {
+  const list = (typeof sortedDepartmentList === 'function' ? sortedDepartmentList() : Object.values(departments || {}));
+  const fallback = list && list.length ? list : [
+    { code: 'AX', name: 'Audio' },
+    { code: 'LX', name: 'Lighting' },
+    { code: 'VX', name: 'Video' },
+    { code: 'UN', name: 'Unknown' }
+  ];
+  const selectedCode = normalizeDepartmentCode(selected || 'UN');
+  return fallback.map(dept => {
+    const code = normalizeDepartmentCode(dept.code);
+    const title = dept.name && dept.name !== code ? `${code} - ${dept.name}` : code;
+    return `<option value="${escapeHtmlAttr(code)}" title="${escapeHtmlAttr(title)}" ${code === selectedCode ? 'selected' : ''}>${escapeHtml(code)}</option>`;
+  }).join('');
+}
+
+function departmentCodeToDoName(code) {
+  const normalized = normalizeDepartmentCode(code);
+  if (normalized === 'AX') return 'Audio';
+  if (normalized === 'LX') return 'Lighting';
+  if (normalized === 'VX') return 'Video';
+  return 'MISC';
+}
+
 // status badge renderer (used by selectors)
 
 function getAssignedQuantity(modelGroup) {
@@ -4131,49 +4264,61 @@ async function openPrepareEventModal(eventId) {
                         <!-- Quick Add Custom Asset -->
                         <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
                             <h5 style="margin-bottom: 10px;">Quick Add Custom Asset</h5>
-                            <div style="display: flex; gap: 10px; align-items: center;">
-                                <input type="text" id="prepareCustomAssetName" placeholder="Custom asset name" 
-                                      style="flex: 1; padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px;">
-                                <select id="prepareCustomAssetType" style="padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px;">
+                            <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center; max-width: 100%;">
+                                <input type="text" id="prepareCustomAssetName" placeholder="Custom asset name"
+                                      style="flex: 1 1 220px; min-width: 170px; padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px;">
+                                <input type="number" id="prepareCustomAssetQuantity" placeholder="Qty" min="1" value="1"
+                                      style="flex: 0 0 70px; width: 70px; padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px;">
+                                <select id="prepareCustomAssetType" style="flex: 0 1 140px; min-width: 125px; padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px;">
                                     <option value="MISC">Misc Item</option>
                                     <option value="LOAN">Loan/Rental</option>
                                 </select>
-                                <button type="button" class="btn btn-success" onclick="addAndPrepareCustomAsset(${event.id})" 
-                                        style="padding: 8px 16px; white-space: nowrap;">
-                                    Add & Prepare
+                                <select id="prepareCustomAssetDepartment" style="flex: 0 0 82px; width: 82px; padding: 8px 10px; border: 1px solid #ccc; border-radius: 4px;">
+                                    ${customDepartmentOptionsHtml('AX')}
+                                </select>
+                                <input type="text" id="prepareCustomAssetCompany" placeholder="Company (loan/rental only)"
+                                      style="flex: 1 1 210px; min-width: 160px; padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px;">
+                                <button type="button" class="btn btn-success" onclick="addAndPrepareCustomAsset(${event.id})"
+                                        style="flex: 0 0 auto; padding: 8px 16px; white-space: nowrap;">
+                                    Add Custom Asset
                                 </button>
                             </div>
                         </div>
                         
-                        <!-- Existing Custom Assets -->
-                        ${generateCustomAssetsSection(event)}
+                        <!-- Existing custom assets are rendered inside their tagged department below. -->
                     </div>
                 </div>
         `;
         
-        // Process model assignments and show preparation interface
+        // Process model assignments and custom assets together, grouped by department.
+        const customAssetsByDeptForPrepare = groupCustomAssetsByDepartment(event);
+        const renderedCustomDepartments = new Set();
+        let renderedAnyRequirementRows = false;
+
         if (event.modelGroups && Object.keys(event.modelGroups).length > 0) {
-            // Group model groups by department
             const modelGroupsByDept = {};
             Object.values(event.modelGroups).forEach(modelGroup => {
-                const dept = modelGroup.department;
-                if (!modelGroupsByDept[dept]) {
-                    modelGroupsByDept[dept] = [];
-                }
+                const dept = normalizeDepartmentCode(modelGroup.department || 'UN');
+                if (!modelGroupsByDept[dept]) modelGroupsByDept[dept] = [];
                 modelGroupsByDept[dept].push(modelGroup);
             });
 
-            Object.keys(modelGroupsByDept).forEach(dept => {
+            Object.keys(modelGroupsByDept).sort().forEach(dept => {
                 const modelGroups = modelGroupsByDept[dept];
-                
-                // Count total assets for this department
+                const customAssetsForDept = customAssetsByDeptForPrepare[dept] || [];
+                renderedCustomDepartments.add(dept);
+                renderedAnyRequirementRows = true;
+
                 let totalRequired = 0;
                 let totalAssigned = 0;
 
                 modelGroups.forEach(modelGroup => {
-                    totalRequired += modelGroup.requiredQuantity;
+                    totalRequired += Number(modelGroup.requiredQuantity || 0);
                     totalAssigned += getPreparedQuantity(modelGroup);
                 });
+
+                totalRequired += getCustomRequiredQuantityForProgress(customAssetsForDept);
+                totalAssigned += getCustomPreparedQuantityForProgress(customAssetsForDept);
 
                 const progressPercent = totalRequired > 0 ? Math.round((totalAssigned / totalRequired) * 100) : 0;
                 const progressColor = totalAssigned >= totalRequired ? '#28a745' : '#ffc107';
@@ -4181,11 +4326,11 @@ async function openPrepareEventModal(eventId) {
                 content += `
                     <div class="dept-section" style="margin-bottom: 20px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: #f1f3f4; border-radius: 6px; cursor: pointer; margin-bottom: 10px;" onclick="togglePrepareSection('dept-${dept}')">
-                            <h5 style="margin: 0; color: #495057; font-size: 14px;">${dept} Department</h5>
+                            <h5 style="margin: 0; color: #495057; font-size: 14px;">${departmentBadgeHtml(dept, true)} Department</h5>
                             <div style="display: flex; align-items: center; gap: 10px;">
                                 <div style="text-align: right;">
                                     <div style="font-size: 12px; font-weight: 500; color: ${progressColor};">
-                                        ${totalAssigned}/${totalRequired} assigned
+                                        ${totalAssigned}/${totalRequired} prepared
                                     </div>
                                     <div style="background: #e9ecef; border-radius: 8px; height: 3px; width: 100px; overflow: hidden; margin-top: 2px;">
                                         <div style="background: ${progressColor}; height: 100%; width: ${Math.min(progressPercent, 100)}%; transition: width 0.3s ease;"></div>
@@ -4196,94 +4341,69 @@ async function openPrepareEventModal(eventId) {
                         </div>
                         <div id="dept-${dept}" style="display: block; padding: 0 10px;">
                 `;
-                
+
                 modelGroups.forEach(modelGroup => {
-                    // Find available assets of this model
                     const modelAvailableAssets = availableAssets.filter(a => 
                         a.brand === modelGroup.brand && 
                         a.model === modelGroup.model && 
                         a.department === modelGroup.department &&
                         (a.description || '') === (modelGroup.description || '')
                     );
-                    
-                    // Get assigned assets for this model
-                    const assignedAssets = modelGroup.assignedAssets;
 
-                    content += createModelPreparationSection(
-                        eventId, modelGroup.brand, modelGroup.model, modelGroup.description, 
-                        modelGroup.requiredQuantity, modelAvailableAssets, assignedAssets
-                    );
+                    if (isBulkModelGroupForPrepare(modelGroup, modelAvailableAssets, modelGroup.assignedAssets || [])) {
+                        content += createBulkPreparationSection(eventId, modelGroup, modelAvailableAssets, modelGroup.assignedAssets || []);
+                    } else {
+                        content += createModelPreparationSection(
+                            eventId,
+                            modelGroup.brand,
+                            modelGroup.model,
+                            modelGroup.description,
+                            modelGroup.requiredQuantity,
+                            modelAvailableAssets,
+                            modelGroup.assignedAssets || []
+                        );
+                    }
                 });
-                
+
+                content += createCustomPreparationSection(eventId, customAssetsForDept, event);
                 content += '</div></div>';
             });
         }
-        
-        // Only use assetsByDepartment fallback if modelGroups is empty or doesn't exist
-        if ((!event.modelGroups || Object.keys(event.modelGroups).length === 0) && 
-            event.assetsByDepartment && Object.keys(event.assetsByDepartment).length > 0) {
-            
-            Object.keys(event.assetsByDepartment).forEach(dept => {
-                const assets = event.assetsByDepartment[dept];
-                
-                const modelAssets = assets.filter(asset => asset.id && asset.id.startsWith('[MODEL]'));
-                
-                if (modelAssets.length > 0) {
-                    let hasAddedDeptHeader = false;
-                    
-                    modelAssets.forEach(asset => {
-                        try {
-                            const parts = asset.id.substring(7).split('|');
-                            if (parts.length >= 4) {
-                                const brand = parts[1];
-                                const model = parts[2];
-                                const requiredQty = parseInt(parts[3]) || 1;
-                                const description = parts[4] || '';
-                                
-                                if (!hasAddedDeptHeader) {
-                                    content += `
-                                        <div style="margin-bottom: 25px;">
-                                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 15px; background: #f8f9fa; border-radius: 8px 8px 0 0; border-bottom: 1px solid #e9ecef;">
-                                                <h4 style="margin: 0; color: #495057;">${dept} Department</h4>
-                                            </div>
-                                            <div style="border: 1px solid #e9ecef; border-top: none; border-radius: 0 0 8px 8px;">
-                                    `;
-                                    hasAddedDeptHeader = true;
-                                }
 
-                                const modelAvailableAssets = availableAssets.filter(a => 
-                                    a.brand === brand && a.model === model && a.department === dept &&
-                                    (a.description || '') === description
-                                );
+        Object.keys(customAssetsByDeptForPrepare).sort().forEach(dept => {
+            if (renderedCustomDepartments.has(dept)) return;
 
-                                const assignedAssets = event.actuallyPrepared ? 
-                                  event.actuallyPrepared.filter(assetId => {
-                                      const availableAsset = availableAssets.find(a => a.id === assetId);
-                                      return availableAsset && availableAsset.brand === brand && availableAsset.model === model && 
-                                            (availableAsset.description || '') === description;
-                                  }) : [];
+            const customAssetsForDept = customAssetsByDeptForPrepare[dept] || [];
+            const totalRequired = getCustomRequiredQuantityForProgress(customAssetsForDept);
+            const totalAssigned = getCustomPreparedQuantityForProgress(customAssetsForDept);
+            const progressPercent = totalRequired > 0 ? Math.round((totalAssigned / totalRequired) * 100) : 0;
+            const progressColor = totalAssigned >= totalRequired ? '#28a745' : '#ffc107';
+            renderedAnyRequirementRows = true;
 
-                                content += createModelPreparationSection(
-                                    eventId, brand, model, description, requiredQty, 
-                                    modelAvailableAssets, assignedAssets
-                                );
-                            }
-                        } catch (e) {
-                            console.error('Error parsing model assignment:', e);
-                        }
-                    });
-                    
-                    if (hasAddedDeptHeader) {
-                        content += '</div></div>';
-                    }
-                }
-            });
+            content += `
+                <div class="dept-section" style="margin-bottom: 20px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: #f1f3f4; border-radius: 6px; cursor: pointer; margin-bottom: 10px;" onclick="togglePrepareSection('dept-${dept}')">
+                        <h5 style="margin: 0; color: #495057; font-size: 14px;">${departmentBadgeHtml(dept, true)} Department</h5>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <div style="text-align: right;">
+                                <div style="font-size: 12px; font-weight: 500; color: ${progressColor};">${totalAssigned}/${totalRequired} prepared</div>
+                                <div style="background: #e9ecef; border-radius: 8px; height: 3px; width: 100px; overflow: hidden; margin-top: 2px;">
+                                    <div style="background: ${progressColor}; height: 100%; width: ${Math.min(progressPercent, 100)}%; transition: width 0.3s ease;"></div>
+                                </div>
+                            </div>
+                            <span class="toggle-icon" style="font-size: 14px; font-weight: bold; color: #666;">▼</span>
+                        </div>
+                    </div>
+                    <div id="dept-${dept}" style="display: block; padding: 0 10px;">
+                        ${createCustomPreparationSection(eventId, customAssetsForDept, event)}
+                    </div>
+                </div>
+            `;
+        });
+
+        if (!renderedAnyRequirementRows) {
+            content += '<p style="text-align: center; color: #666; padding: 40px;">No model or custom asset assignments found for this event.</p>';
         }
-        
-        if (!event.modelGroups || Object.keys(event.modelGroups).length === 0) {
-            content += '<p style="text-align: center; color: #666; padding: 40px;">No model assignments found for this event.</p>';
-        }
-        
         content += `
                     </div>
                 </div>
@@ -4315,33 +4435,55 @@ async function openPrepareEventModal(eventId) {
                 
                 assets.forEach(asset => {
                     if (!asset.id.startsWith('[MODEL]')) {
+                        const custom = parseCustomAsset(asset.id, asset);
+                        const isReturned = event.returnedItems && event.returnedItems.includes(asset.id);
                         const isPrepared = event.actuallyPrepared && event.actuallyPrepared.includes(asset.id);
-                        const statusIcon = isPrepared ? '✅' : '⏳';
-                        const statusColor = isPrepared ? '#28a745' : '#ffc107';
-                        const statusText = isPrepared ? 'Prepared' : 'Pending';
+                        const isCollected = custom && custom.type === 'LOAN' && event.customCollected && event.customCollected.includes(asset.id);
+                        let statusIcon = isReturned ? '↩️' : (isPrepared ? '✅' : (isCollected ? '📥' : '⏳'));
+                        let statusColor = isReturned ? '#dc3545' : (isPrepared ? '#28a745' : (isCollected ? '#17a2b8' : '#ffc107'));
+                        let statusText = isReturned ? 'Returned' : (isPrepared ? 'Prepared' : (isCollected ? 'Collected' : 'Pending'));
                         const isExtra = event.extraAssets && event.extraAssets.includes(asset.id);
-                        console.log(`Asset ${asset.id}: extraAssets=`, event.extraAssets, `isExtra=${isExtra}`);
                         const extraBadge = isExtra ? 
                             '<span style="background: #fff3cd; color: #856404; padding: 2px 6px; border-radius: 3px; font-size: 10px; margin-left: 10px;">EXTRA</span>' : '';
                         const safeAssetId = encodeURIComponent(asset.id);
-                        const actionButton = isPrepared ? 
-                            `<button class="btn btn-warning asset-action-btn" 
-                                    data-event-id="${eventId}" 
-                                    data-asset-id="${safeAssetId}" 
-                                    data-action="unprepare"
-                                    style="padding: 4px 8px; font-size: 11px;">Unprepare</button>` :
-                            `<button class="btn btn-success asset-action-btn" 
-                                    data-event-id="${eventId}" 
-                                    data-asset-id="${safeAssetId}" 
-                                    data-action="prepare"
-                                    style="padding: 4px 8px; font-size: 11px;">Prepare</button>`;
+                        const displayName = custom ? customAssetDisplayName(custom) : (asset.isBulk ? (asset.name || `${asset.brand || ''} ${asset.model || ''}`.trim() || asset.id) : asset.id);
+                        const detailText = custom ? (custom.type === 'LOAN' ? custom.company : '') : (asset.isBulk ? (asset.description || '') : (asset.name || ''));
+                        const typeBadge = custom ? customAssetTypeBadge(custom) : '';
+                        let actionButton = '';
+                        if (isReturned) {
+                            actionButton = '<span style="color:#dc3545;font-size:11px;">Returned</span>';
+                        } else if (custom) {
+                            const encodedCustomId = escapeHtmlAttr(safeAssetId);
+                            if (custom.type === 'LOAN') {
+                                if (isPrepared) {
+                                    actionButton = `
+                                        <button class="btn btn-warning asset-action-btn" data-event-id="${eventId}" data-asset-id="${encodedCustomId}" data-action="unprepare" style="padding: 4px 8px; font-size: 11px;">Unprepare</button>
+                                        <button class="btn btn-secondary btn-sm" onclick="uncollectCustomAsset(${eventId}, '${escapeJs(safeAssetId)}')" style="padding: 4px 8px; font-size: 11px;">Uncollect</button>
+                                    `;
+                                } else if (isCollected) {
+                                    actionButton = `
+                                        <button class="btn btn-success asset-action-btn" data-event-id="${eventId}" data-asset-id="${encodedCustomId}" data-action="prepare" style="padding: 4px 8px; font-size: 11px;">Prepare</button>
+                                        <button class="btn btn-secondary btn-sm" onclick="uncollectCustomAsset(${eventId}, '${escapeJs(safeAssetId)}')" style="padding: 4px 8px; font-size: 11px;">Uncollect</button>
+                                    `;
+                                } else {
+                                    actionButton = `<button class="btn btn-primary btn-sm" onclick="collectCustomAsset(${eventId}, '${escapeJs(safeAssetId)}')" style="padding: 4px 8px; font-size: 11px;">Collect</button>`;
+                                }
+                            } else {
+                                actionButton = isPrepared ?
+                                    `<button class="btn btn-warning asset-action-btn" data-event-id="${eventId}" data-asset-id="${encodedCustomId}" data-action="unprepare" style="padding: 4px 8px; font-size: 11px;">Unprepare</button>` :
+                                    `<button class="btn btn-success asset-action-btn" data-event-id="${eventId}" data-asset-id="${encodedCustomId}" data-action="prepare" style="padding: 4px 8px; font-size: 11px;">Prepare</button>`;
+                            }
+                        } else {
+                            actionButton = isPrepared ? 
+                                `<button class="btn btn-warning asset-action-btn" data-event-id="${eventId}" data-asset-id="${safeAssetId}" data-action="unprepare" style="padding: 4px 8px; font-size: 11px;">Unprepare</button>` :
+                                `<button class="btn btn-success asset-action-btn" data-event-id="${eventId}" data-asset-id="${safeAssetId}" data-action="prepare" style="padding: 4px 8px; font-size: 11px;">Prepare</button>`;
+                        }
 
-                        let isProcessingClick = false;
                         content += `
                             <div style="padding: 8px 12px; border-bottom: 1px solid #f1f1f1; display: flex; justify-content: space-between; align-items: center;">
                                 <div>
-                                    <span style="font-weight: 500;">${statusIcon} ${asset.id}</span>
-                                    <span style="color: #666; font-size: 12px; margin-left: 10px;">${asset.name || ''}</span>
+                                    <span style="font-weight: 500;">${custom ? '' : statusIcon + ' '}${escapeHtml(displayName)} ${typeBadge}</span>
+                                    <span style="color: #666; font-size: 12px; margin-left: 10px;">${escapeHtml(detailText || '')}</span>
                                     ${extraBadge}
                                     <div style="color: ${statusColor}; font-size: 11px; margin-top: 2px;">${statusText}</div>
                                 </div>
@@ -4804,83 +4946,237 @@ function handleAssetActionClick(event) {
     }
 }
 
-function generateCustomAssetsSection(event) {
-    let content = '';
-    
-    if (event.assetsByDepartment) {
-        ['LOAN', 'MISC'].forEach(dept => {
-            if (event.assetsByDepartment[dept] && event.assetsByDepartment[dept].length > 0) {
-                const customAssets = event.assetsByDepartment[dept];
-                const deptDisplayName = dept === 'LOAN' ? '🏪 Loan/Rental Items' : '🔧 Misc Items';
-                
-                content += `
-                    <div style="border: 1px solid #e9ecef; border-radius: 8px; margin-bottom: 10px;">
-                        <div style="background: #f8f9fa; padding: 10px; font-weight: bold; border-radius: 8px 8px 0 0;">
-                            ${deptDisplayName} (${customAssets.length})
-                        </div>
-                        <div style="padding: 10px;">
+function groupCustomAssetsByDepartment(event) {
+    const grouped = {};
+    getCustomAssetsFromEvent(event).forEach(asset => {
+        const custom = asset.parsedCustom || parseCustomAsset(asset.id, asset);
+        if (!custom) return;
+        const dept = normalizeDepartmentCode(custom.department || asset.department || 'UN');
+        if (!grouped[dept]) grouped[dept] = [];
+        grouped[dept].push({ ...asset, parsedCustom: custom, department: dept });
+    });
+    return grouped;
+}
+
+function getCustomPreparedQuantityForProgress(customAssets) {
+    return (customAssets || []).reduce((sum, asset) => {
+        const custom = asset.parsedCustom || parseCustomAsset(asset.id, asset);
+        if (!custom) return sum;
+        return sum + (asset.status === 'prepared' ? Number(custom.quantity || 1) : 0);
+    }, 0);
+}
+
+function getCustomRequiredQuantityForProgress(customAssets) {
+    return (customAssets || []).reduce((sum, asset) => {
+        const custom = asset.parsedCustom || parseCustomAsset(asset.id, asset);
+        return sum + (custom ? Number(custom.quantity || 1) : 0);
+    }, 0);
+}
+
+function createCustomPreparationSection(eventId, customAssets, event) {
+    if (!customAssets || customAssets.length === 0) return '';
+
+    return customAssets.map((asset) => {
+        const custom = asset.parsedCustom || parseCustomAsset(asset.id, asset);
+        if (!custom) return '';
+
+        const encodedId = encodeURIComponent(asset.id);
+        const safeEncodedId = escapeHtmlAttr(encodedId);
+        const isReturned = asset.status === 'returned' || (event.returnedItems || []).includes(asset.id);
+        const isPrepared = asset.status === 'prepared' || (event.actuallyPrepared || []).includes(asset.id);
+        const isCollected = custom.type === 'LOAN' && (asset.status === 'collected' || asset.isCollected || (event.customCollected || []).includes(asset.id));
+
+        let statusText = 'Pending';
+        let statusColor = '#ffc107';
+
+        if (isReturned) {
+            statusText = 'Returned';
+            statusColor = '#dc3545';
+        } else if (isPrepared) {
+            statusText = 'Prepared';
+            statusColor = '#28a745';
+        } else if (isCollected) {
+            statusText = 'Collected';
+            statusColor = '#17a2b8';
+        }
+
+        let actionButtons = '';
+        if (isReturned) {
+            actionButtons = '<span style="color:#dc3545; font-size:11px;">Returned</span>';
+        } else if (custom.type === 'LOAN') {
+            if (isPrepared) {
+                actionButtons = `
+                    <button class="btn btn-warning btn-sm asset-action-btn" data-event-id="${eventId}" data-asset-id="${safeEncodedId}" data-action="unprepare" style="padding:4px 8px; font-size:11px;">Unprepare</button>
+                    <button class="btn btn-secondary btn-sm" onclick="uncollectCustomAsset(${eventId}, '${escapeJs(encodedId)}')" style="padding:4px 8px; font-size:11px;">Uncollect</button>
                 `;
-                
-                customAssets.forEach(asset => {
-                    // Use the same logic as regular assets - check actuallyPrepared array
-                    const isPrepared = event.actuallyPrepared && event.actuallyPrepared.includes(asset.id);
-                    const isReturned = event.returnedItems && event.returnedItems.includes(asset.id);
-                    
-                    let statusIcon, statusText;
-                    if (isReturned) {
-                        statusIcon = "↩️";
-                        statusText = "Returned";
-                    } else if (isPrepared) {
-                        statusIcon = "✅";
-                        statusText = "Prepared";
-                    } else {
-                        statusIcon = "📋";
-                        statusText = "Pending";
-                    }
-                    
-                    const safeAssetId = encodeURIComponent(asset.id);
-                    
-                    // Generate action button based on actual status
-                    let actionButton;
-                    if (isReturned) {
-                        actionButton = '<span style="color: #dc3545; font-size: 11px;">Returned</span>';
-                    } else if (isPrepared) {
-                        actionButton = `<button class="btn btn-warning btn-sm asset-action-btn" 
-                                               data-event-id="${event.id}" 
-                                               data-asset-id="${safeAssetId}" 
-                                               data-action="unprepare"
-                                               style="margin-right: 5px;">Unprepare</button>`;
-                    } else {
-                        actionButton = `<button class="btn btn-success btn-sm asset-action-btn" 
-                                               data-event-id="${event.id}" 
-                                               data-asset-id="${safeAssetId}" 
-                                               data-action="prepare"
-                                               style="margin-right: 5px;">Prepare</button>`;
-                    }
-                    
-                    content += `
-                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px; margin-bottom: 5px; border: 1px solid #e9ecef; border-radius: 4px;">
-                            <span>${statusIcon} ${escapeHtml(asset.name)}</span>
-                            <div>
-                                ${actionButton}
-                            </div>
-                        </div>
-                    `;
-                });
-                
-                content += `
-                        </div>
-                    </div>
+            } else if (isCollected) {
+                actionButtons = `
+                    <button class="btn btn-success btn-sm asset-action-btn" data-event-id="${eventId}" data-asset-id="${safeEncodedId}" data-action="prepare" style="padding:4px 8px; font-size:11px;">Prepare</button>
+                    <button class="btn btn-secondary btn-sm" onclick="uncollectCustomAsset(${eventId}, '${escapeJs(encodedId)}')" style="padding:4px 8px; font-size:11px;">Uncollect</button>
                 `;
+            } else {
+                actionButtons = `<button class="btn btn-primary btn-sm" onclick="collectCustomAsset(${eventId}, '${escapeJs(encodedId)}')" style="padding:4px 8px; font-size:11px;">Collect</button>`;
             }
+        } else {
+            actionButtons = isPrepared
+                ? `<button class="btn btn-warning btn-sm asset-action-btn" data-event-id="${eventId}" data-asset-id="${safeEncodedId}" data-action="unprepare" style="padding:4px 8px; font-size:11px;">Unprepare</button>`
+                : `<button class="btn btn-success btn-sm asset-action-btn" data-event-id="${eventId}" data-asset-id="${safeEncodedId}" data-action="prepare" style="padding:4px 8px; font-size:11px;">Prepare</button>`;
+        }
+
+        const descriptionLine = custom.type === 'LOAN' && custom.company
+            ? `<div style="color:#666; font-size:12px; margin-top:2px; overflow-wrap:anywhere;">${escapeHtml(custom.company)}</div>`
+            : '';
+
+        return `
+            <div class="model-prep-section custom-prep-flat-section" style="border: 1px solid #e9ecef; border-radius: 8px; padding: 0; margin-bottom: 15px; overflow:hidden;">
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:15px; padding:15px; background:#f8f9fa; border-radius:8px;">
+                    <div style="min-width:0; flex:1;">
+                        <h5 style="margin:0; color:#495057; font-size:14px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                            <span>${escapeHtml(customAssetDisplayName(custom))}</span>
+                            ${customAssetTypeBadge(custom)}
+                        </h5>
+                        ${descriptionLine}
+                        <div style="color:${statusColor}; font-size:12px; margin-top:2px; font-weight:500;">${statusText}</div>
+                    </div>
+                    <div style="display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; align-items:center; flex-shrink:0;">
+                        ${actionButtons}
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function getCustomAssetsFromEvent(event) {
+    const list = [];
+    if (!event || !event.assetsByDepartment) return list;
+
+    Object.keys(event.assetsByDepartment).forEach(dept => {
+        (event.assetsByDepartment[dept] || []).forEach(asset => {
+            const custom = parseCustomAsset(asset.id, asset);
+            if (!custom) return;
+            list.push({ ...asset, parsedCustom: custom, department: custom.department || dept });
         });
+    });
+
+    return list;
+}
+
+function generateCustomAssetsSection(event) {
+    const customAssets = getCustomAssetsFromEvent(event);
+
+    if (customAssets.length === 0) {
+        return '<div style="text-align: center; color: #666; padding: 20px;">No custom assets assigned to this event.</div>';
     }
-    
-    if (!content) {
-        content = '<div style="text-align: center; color: #666; padding: 20px;">No custom assets assigned to this event.</div>';
-    }
-    
+
+    const byDept = {};
+    customAssets.forEach(asset => {
+        const dept = normalizeDepartmentCode(asset.department || asset.parsedCustom.department || 'UN');
+        if (!byDept[dept]) byDept[dept] = [];
+        byDept[dept].push(asset);
+    });
+
+    let content = '';
+
+    Object.keys(byDept).sort().forEach(dept => {
+        const deptMeta = getDepartmentMeta(dept);
+        const assetsInDept = byDept[dept];
+        content += `
+            <div style="border: 1px solid #e9ecef; border-radius: 8px; margin-bottom: 10px; overflow:hidden;">
+                <div style="background: #f8f9fa; padding: 10px; font-weight: bold; border-bottom:1px solid #e9ecef; display:flex; align-items:center; gap:8px;">
+                    ${departmentBadgeHtml(dept, true)}
+                    <span>Custom Assets (${assetsInDept.length})</span>
+                </div>
+                <div style="padding: 10px;">
+        `;
+
+        assetsInDept.forEach(asset => {
+            const custom = asset.parsedCustom;
+            const isReturned = asset.status === 'returned' || (event.returnedItems || []).includes(asset.id);
+            const isPrepared = asset.status === 'prepared' || (event.actuallyPrepared || []).includes(asset.id);
+            const isCollected = asset.status === 'collected' || asset.isCollected || (event.customCollected || []).includes(asset.id);
+            const safeAssetId = encodeURIComponent(asset.id);
+
+            let statusIcon = '📋';
+            let statusText = 'Pending';
+            let statusColor = '#ffc107';
+            if (isReturned) {
+                statusIcon = '↩️';
+                statusText = 'Returned';
+                statusColor = '#dc3545';
+            } else if (isPrepared) {
+                statusIcon = '✅';
+                statusText = 'Prepared';
+                statusColor = '#28a745';
+            } else if (custom.type === 'LOAN' && isCollected) {
+                statusIcon = '📥';
+                statusText = 'Collected';
+                statusColor = '#17a2b8';
+            }
+
+            let actionButtons = '';
+            if (isReturned) {
+                actionButtons = '<span style="color:#dc3545;font-size:11px;">Returned</span>';
+            } else if (custom.type === 'LOAN') {
+                if (!isCollected) {
+                    actionButtons = `
+                        <button class="btn btn-primary btn-sm" onclick="collectCustomAsset(${event.id}, '${safeAssetId}')">Collect</button>
+                    `;
+                } else if (!isPrepared) {
+                    actionButtons = `
+                        <button class="btn btn-secondary btn-sm" onclick="uncollectCustomAsset(${event.id}, '${safeAssetId}')">Uncollect</button>
+                        <button class="btn btn-success btn-sm" onclick="prepareSpecificAsset(${event.id}, decodeURIComponent('${safeAssetId}'))">Prepare</button>
+                    `;
+                } else {
+                    actionButtons = `
+                        <button class="btn btn-warning btn-sm" onclick="unprepareSpecificAsset(${event.id}, decodeURIComponent('${safeAssetId}'))">Unprepare</button>
+                        <button class="btn btn-secondary btn-sm" onclick="uncollectCustomAsset(${event.id}, '${safeAssetId}')">Uncollect</button>
+                    `;
+                }
+            } else {
+                actionButtons = isPrepared
+                    ? `<button class="btn btn-warning btn-sm" onclick="unprepareSpecificAsset(${event.id}, decodeURIComponent('${safeAssetId}'))">Unprepare</button>`
+                    : `<button class="btn btn-success btn-sm" onclick="prepareSpecificAsset(${event.id}, decodeURIComponent('${safeAssetId}'))">Prepare</button>`;
+            }
+
+            content += `
+                <div style="display: flex; justify-content: space-between; align-items: center; gap:12px; padding: 10px; margin-bottom: 6px; border: 1px solid #e9ecef; border-radius: 6px; background:white;">
+                    <div style="min-width:0; flex:1;">
+                        <div style="font-weight:600;">${statusIcon} ${escapeHtml(customAssetDisplayName(custom))} ${customAssetTypeBadge(custom)}</div>
+                        <div style="color:${statusColor}; font-size: 11px; margin-top: 3px;">${statusText}</div>
+                        ${custom.type === 'LOAN' && custom.company ? `<div style="color:#666; font-size:12px; margin-top:3px;">Company: ${escapeHtml(custom.company)}</div>` : ''}
+                    </div>
+                    <div style="display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end;">${actionButtons}</div>
+                </div>
+            `;
+        });
+
+        content += '</div></div>';
+    });
+
     return content;
+}
+
+async function collectCustomAsset(eventId, encodedAssetId) {
+    const assetId = decodeURIComponent(encodedAssetId);
+    try {
+        await apiCall(`/api/events/${eventId}/custom-assets/collect`, 'POST', { assetId });
+        showNotification('success', `${customAssetLabelFromId(assetId)} collected`);
+        setTimeout(() => openPrepareEventModal(eventId), 250);
+    } catch (error) {
+        showNotification('error', `Failed to collect item: ${error.message}`);
+    }
+}
+
+async function uncollectCustomAsset(eventId, encodedAssetId) {
+    const assetId = decodeURIComponent(encodedAssetId);
+    try {
+        await apiCall(`/api/events/${eventId}/custom-assets/uncollect`, 'POST', { assetId });
+        showNotification('success', `${customAssetLabelFromId(assetId)} uncollected`);
+        setTimeout(() => openPrepareEventModal(eventId), 250);
+    } catch (error) {
+        showNotification('error', `Failed to uncollect item: ${error.message}`);
+    }
 }
 
 function handleCustomAssetClick(event) {
@@ -4920,40 +5216,47 @@ function generateActionButton(eventId, asset, isPrepared) {
 // Add function to handle adding custom assets in prepare modal
 async function addAndPrepareCustomAsset(eventId) {
     const nameInput = document.getElementById("prepareCustomAssetName");
+    const quantityInput = document.getElementById("prepareCustomAssetQuantity");
     const typeSelect = document.getElementById("prepareCustomAssetType");
-    
+    const departmentSelect = document.getElementById("prepareCustomAssetDepartment");
+    const companyInput = document.getElementById("prepareCustomAssetCompany");
+
     const name = nameInput.value.trim();
-    const type = typeSelect.value;
-    
+    const quantity = Math.max(1, parseInt(quantityInput?.value || '1', 10) || 1);
+    const type = normalizeCustomType(typeSelect.value);
+    const department = normalizeDepartmentCode(departmentSelect?.value || 'UN');
+    const company = (companyInput?.value || '').trim();
+
     if (!name) {
         showNotification("error", "Please enter a custom asset name");
         return;
     }
-    
-    // Validate asset name - check for problematic characters
-    if (name.includes('"') || name.includes("'") || name.includes(';') || name.includes('`')) {
-        showNotification("error", "Asset name cannot contain quotes, semicolons, or backticks");
+
+    if (type === 'LOAN' && !company) {
+        showNotification("warning", "Please enter the loan/rental company");
+        companyInput?.focus();
         return;
     }
-    
+
     try {
-        // Create single custom asset (quantity 1 for quick add)
         await apiCall(`/api/events/${eventId}/custom-assets`, "POST", {
-            name: name,
-            quantity: 1,
-            type: type
+            name,
+            quantity,
+            type,
+            department,
+            company
         });
-        
-        showNotification("success", `Custom asset "${name}" added and prepared`);
-        
-        // Clear inputs
+
+        showNotification("success", `Custom asset "${name}" added. Prepare it from the Custom Assets section.`);
+
         nameInput.value = "";
-        
-        // Refresh the modal
+        if (quantityInput) quantityInput.value = "1";
+        if (companyInput) companyInput.value = "";
+
         setTimeout(() => {
             openPrepareEventModal(eventId);
-        }, 500);
-        
+        }, 300);
+
     } catch (error) {
         showNotification("error", `Failed to add custom asset: ${error.message}`);
     }
@@ -5097,8 +5400,11 @@ async function prepareSpecificAsset(eventId, assetId) {
     
     try {
         await apiCall(`/api/events/${eventId}/prepare`, 'POST', { assetId });
-        showNotification('success', `${assetId} marked as prepared`);
+        showNotification('success', `${customAssetLabelFromId(assetId)} marked as prepared`);
         updateAllButtonsForAsset(assetId, true);
+        if (isCustomAssetId(assetId)) {
+            setTimeout(() => openPrepareEventModal(eventId), 250);
+        }
         
     } catch (error) {
         console.error('Error in prepareSpecificAsset:', error);
@@ -5156,8 +5462,11 @@ async function unprepareSpecificAsset(eventId, assetId) {
     
     try {
         await apiCall(`/api/events/${eventId}/unprepare`, 'POST', { assetId });
-        showNotification('success', `${assetId} unprepared`);
+        showNotification('success', `${customAssetLabelFromId(assetId)} unprepared`);
         updateAllButtonsForAsset(assetId, false);
+        if (isCustomAssetId(assetId)) {
+            setTimeout(() => openPrepareEventModal(eventId), 250);
+        }
         
     } catch (error) {
         console.error('Error in unprepareSpecificAsset:', error);
@@ -6441,29 +6750,59 @@ function updateAllAssetsSection(event, eventId) {
 
       nonModelAssets.forEach((asset) => {
         const assetId = asset.id;
+        const custom = parseCustomAsset(assetId, asset);
+        const isBulk = !!asset.isBulk;
 
         const isPrepared = Array.isArray(event.actuallyPrepared) && event.actuallyPrepared.includes(assetId);
         const isReturned = Array.isArray(event.returnedItems) && event.returnedItems.includes(assetId);
+        const isCollected = custom && custom.type === 'LOAN' && Array.isArray(event.customCollected) && event.customCollected.includes(assetId);
         const isExtra = Array.isArray(event.extraAssets) && event.extraAssets.includes(assetId);
 
-        const statusIcon = isReturned ? "↩️" : (isPrepared ? "✅" : "⏳");
-        const statusColor = isReturned ? "#dc3545" : (isPrepared ? "#28a745" : "#ffc107");
-        const statusText = isReturned ? "Returned" : (isPrepared ? "Prepared" : "Pending");
+        const statusIcon = isReturned ? "↩️" : (isPrepared ? "✅" : (isCollected ? "" : "⏳"));
+        const statusColor = isReturned ? "#dc3545" : (isPrepared ? "#28a745" : (isCollected ? "#17a2b8" : "#ffc107"));
+        const statusText = isReturned ? "Returned" : (isPrepared ? "Prepared" : (isCollected ? "Collected" : "Pending"));
 
         const extraBadge = isExtra
           ? '<span style="background:#fff3cd;color:#856404;padding:2px 6px;border-radius:3px;font-size:10px;margin-left:10px;">EXTRA</span>'
           : "";
 
         const safeAssetId = encodeURIComponent(assetId);
+        const safeEncodedId = escapeHtmlAttr(safeAssetId);
+        const displayName = custom
+          ? customAssetDisplayName(custom)
+          : (isBulk ? (asset.name || `${asset.brand || ''} ${asset.model || ''}`.trim() || 'Bulk quantity item') : assetId);
+        const detailText = custom
+          ? (custom.type === 'LOAN' ? custom.company : '')
+          : (isBulk ? (asset.description || `Qty: ${asset.quantity || 1}`) : (asset.name || ""));
+        const typeBadge = custom ? customAssetTypeBadge(custom) : '';
+        const prefix = custom || isBulk ? '' : `${statusIcon} `;
 
         let actionButton = "";
         if (isReturned) {
           actionButton = '<span style="color:#dc3545;font-size:11px;">Returned</span>';
-        } else if (isPrepared) {
+        } else if (custom && custom.type === 'LOAN') {
+          if (isPrepared) {
+            actionButton = `
+              <button class="btn btn-warning asset-action-btn" data-event-id="${eventId}" data-asset-id="${safeEncodedId}" data-action="unprepare" style="padding:4px 8px;font-size:11px;">Unprepare</button>
+              <button class="btn btn-secondary btn-sm" onclick="uncollectCustomAsset(${eventId}, '${escapeJs(safeAssetId)}')" style="padding:4px 8px;font-size:11px;">Uncollect</button>
+            `;
+          } else if (isCollected) {
+            actionButton = `
+              <button class="btn btn-success asset-action-btn" data-event-id="${eventId}" data-asset-id="${safeEncodedId}" data-action="prepare" style="padding:4px 8px;font-size:11px;">Prepare</button>
+              <button class="btn btn-secondary btn-sm" onclick="uncollectCustomAsset(${eventId}, '${escapeJs(safeAssetId)}')" style="padding:4px 8px;font-size:11px;">Uncollect</button>
+            `;
+          } else {
+            actionButton = `<button class="btn btn-primary btn-sm" onclick="collectCustomAsset(${eventId}, '${escapeJs(safeAssetId)}')" style="padding:4px 8px;font-size:11px;">Collect</button>`;
+          }
+        } else if (custom) {
+          actionButton = isPrepared
+            ? `<button class="btn btn-warning asset-action-btn" data-event-id="${eventId}" data-asset-id="${safeEncodedId}" data-action="unprepare" style="padding:4px 8px;font-size:11px;">Unprepare</button>`
+            : `<button class="btn btn-success asset-action-btn" data-event-id="${eventId}" data-asset-id="${safeEncodedId}" data-action="prepare" style="padding:4px 8px;font-size:11px;">Prepare</button>`;
+        } else if (isPrepared || isBulk) {
           actionButton = `
             <button class="btn btn-warning asset-action-btn"
                     data-event-id="${eventId}"
-                    data-asset-id="${safeAssetId}"
+                    data-asset-id="${safeEncodedId}"
                     data-action="unprepare"
                     style="padding:4px 8px;font-size:11px;">Unprepare</button>
           `;
@@ -6471,7 +6810,7 @@ function updateAllAssetsSection(event, eventId) {
           actionButton = `
             <button class="btn btn-success asset-action-btn"
                     data-event-id="${eventId}"
-                    data-asset-id="${safeAssetId}"
+                    data-asset-id="${safeEncodedId}"
                     data-action="prepare"
                     style="padding:4px 8px;font-size:11px;">Prepare</button>
           `;
@@ -6480,12 +6819,12 @@ function updateAllAssetsSection(event, eventId) {
         content += `
           <div style="padding:8px 12px;border-bottom:1px solid #f1f1f1;display:flex;justify-content:space-between;align-items:center;">
             <div>
-              <span style="font-weight:500;">${statusIcon} ${assetId}</span>
-              <span style="color:#666;font-size:12px;margin-left:10px;">${asset.name || ""}</span>
+              <span style="font-weight:500;">${prefix}${escapeHtml(displayName)} ${typeBadge}</span>
+              <span style="color:#666;font-size:12px;margin-left:10px;">${escapeHtml(detailText || "")}</span>
               ${extraBadge}
               <div style="color:${statusColor};font-size:11px;margin-top:2px;">${statusText}</div>
             </div>
-            <div>${actionButton}</div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;">${actionButton}</div>
           </div>
         `;
       });
@@ -6569,6 +6908,61 @@ function clearUniversalFeedback() {
     feedbackDiv.innerHTML = '';
 }
 
+function getEventReturnableCount(event) {
+  const direct = Number(event?.returnableCount ?? 0);
+  if (Number.isFinite(direct) && direct > 0) return direct;
+
+  // Fallback for older backend responses. This keeps the Return page working
+  // even if /api/events does not include the new returnableCount field yet.
+  let count = 0;
+
+  if (Number(event?.preparedCount || 0) > Number(event?.returnedCount || 0)) {
+    count += Math.max(Number(event.preparedCount || 0) - Number(event.returnedCount || 0), 0);
+  }
+
+  const returned = new Set(event?.returnedItems || []);
+  const collected = new Set(event?.customCollected || []);
+
+  (event?.preparedItems || []).forEach(item => {
+    if (!isCustomAssetId(item) || returned.has(item)) return;
+    const custom = parseCustomAsset(item);
+    if (!custom) return;
+
+    const isPrepared = (event?.actuallyPrepared || []).includes(item);
+    const isCollectedLoan = custom.type === 'LOAN' && collected.has(item);
+
+    if (isPrepared || isCollectedLoan) {
+      count += Number(custom.quantity || 1);
+    }
+  });
+
+  return count;
+}
+
+function getEventReturnTotalCount(event) {
+  const direct = Number(event?.returnableTotalCount ?? 0);
+  if (Number.isFinite(direct) && direct > 0) return direct;
+
+  return getEventReturnableCount(event) + Number(event?.returnedCount || 0);
+}
+
+function isAssetReturnableFromEventDetail(asset, event) {
+  if (!asset || !asset.id || asset.status === 'returned') return false;
+
+  const id = asset.id;
+  const custom = parseCustomAsset(id, asset);
+  const actuallyPrepared = new Set(event?.actuallyPrepared || []);
+  const customCollected = new Set(event?.customCollected || []);
+
+  if (custom) {
+    const isPrepared = asset.status === 'prepared' || actuallyPrepared.has(id);
+    const isCollectedLoan = custom.type === 'LOAN' && (asset.status === 'collected' || asset.isCollected || customCollected.has(id));
+    return isPrepared || isCollectedLoan;
+  }
+
+  return asset.status === 'prepared' || actuallyPrepared.has(id);
+}
+
 async function loadReturnEvents() {
   try {
     const response = await apiCall('/api/events');
@@ -6578,33 +6972,7 @@ async function loadReturnEvents() {
     updateOverdueCounter(overdueCount);
     
     const returnableEvents = response.data.filter((event) => {
-      // Check for regular prepared assets
-      const hasPreparedAssets = event.preparedCount > 0;
-      const hasUnreturnedAssets = event.preparedCount > event.returnedCount;
-      
-      // Also check for custom assets (LOAN/MISC)
-      let hasCustomAssets = false;
-      let hasUnreturnedCustomAssets = false;
-      
-      if (event.assetsByDepartment) {
-        ['LOAN', 'MISC'].forEach(dept => {
-          if (event.assetsByDepartment[dept] && event.assetsByDepartment[dept].length > 0) {
-            hasCustomAssets = true;
-            const unreturnedCustom = event.assetsByDepartment[dept].filter(asset => 
-              asset.status !== 'returned'
-            );
-            if (unreturnedCustom.length > 0) {
-              hasUnreturnedCustomAssets = true;
-            }
-          }
-        });
-      }
-      
-      // Include events that have assets that can be returned, regardless of state
-      const isReturnable = (hasPreparedAssets && hasUnreturnedAssets) || 
-                          (hasCustomAssets && hasUnreturnedCustomAssets);
-      
-      return isReturnable && event.state !== 'Closed';
+      return getEventReturnableCount(event) > 0 && event.state !== 'Closed';
     });
 
     const container = document.getElementById("return-events");
@@ -6643,21 +7011,8 @@ function createReturnEventCard(event) {
       ? formatDate(event.startDate)
       : `${formatDate(event.startDate)} - ${formatDate(event.endDate)}`;
 
-  // Calculate total counts including custom assets
-  let returnedCount = event.returnedCount || 0;
-  let totalCount = event.preparedCount || 0;
-  
-  // Add custom assets to the counts
-  if (event.assetsByDepartment) {
-    ['LOAN', 'MISC'].forEach(dept => {
-      if (event.assetsByDepartment[dept]) {
-        const deptAssets = event.assetsByDepartment[dept];
-        totalCount += deptAssets.length;
-        const returnedCustom = deptAssets.filter(asset => asset.status === 'returned');
-        returnedCount += returnedCustom.length;
-      }
-    });
-  }
+  const returnedCount = Number(event.returnedCount || 0);
+  const totalCount = Math.max(getEventReturnTotalCount(event), returnedCount + getEventReturnableCount(event));
 
   card.innerHTML = `
       <div class="event-header">
@@ -6713,90 +7068,7 @@ async function openReturnAssetsModal() {
         console.log('All events from API:', response.data);
         
         const returnableEvents = response.data.filter(event => {
-            // Debug: Log each event's key properties
-            console.log(`Event ${event.id}:`, {
-                preparedCount: event.preparedCount,
-                returnedCount: event.returnedCount,
-                state: event.state,
-                assetsByDepartment: event.assetsByDepartment,
-                preparedItems: event.preparedItems,
-                actuallyPrepared: event.actuallyPrepared,
-                returnedItems: event.returnedItems
-            });
-            
-            // Check for regular prepared assets
-            const hasPreparedAssets = event.preparedCount > 0;
-            const hasUnreturnedAssets = event.preparedCount > event.returnedCount;
-            
-            // Check for custom assets in multiple places
-            let hasCustomAssets = false;
-            let hasUnreturnedCustomAssets = false;
-            
-            // Check 1: assetsByDepartment
-            if (event.assetsByDepartment) {
-                ['LOAN', 'MISC'].forEach(dept => {
-                    if (event.assetsByDepartment[dept] && event.assetsByDepartment[dept].length > 0) {
-                        hasCustomAssets = true;
-                        const unreturnedCustom = event.assetsByDepartment[dept].filter(asset => 
-                            asset.status !== 'returned'
-                        );
-                        if (unreturnedCustom.length > 0) {
-                            hasUnreturnedCustomAssets = true;
-                        }
-                    }
-                });
-            }
-            
-            // Check 2: preparedItems for custom assets
-            if (event.preparedItems && event.preparedItems.length > 0) {
-                const customItemsInPrepared = event.preparedItems.filter(item => 
-                    item.startsWith('[LOAN]') || item.startsWith('[MISC]')
-                );
-                if (customItemsInPrepared.length > 0) {
-                    hasCustomAssets = true;
-                    
-                    // Check if any are not returned
-                    const unreturnedCustomItems = customItemsInPrepared.filter(item => 
-                        !event.returnedItems || !event.returnedItems.includes(item)
-                    );
-                    if (unreturnedCustomItems.length > 0) {
-                        hasUnreturnedCustomAssets = true;
-                    }
-                }
-            }
-            
-            // Check 3: actuallyPrepared for custom assets
-            if (event.actuallyPrepared && event.actuallyPrepared.length > 0) {
-                const customItemsActuallyPrepared = event.actuallyPrepared.filter(item => 
-                    item.startsWith('[LOAN]') || item.startsWith('[MISC]')
-                );
-                if (customItemsActuallyPrepared.length > 0) {
-                    hasCustomAssets = true;
-                    
-                    // Check if any are not returned
-                    const unreturnedCustomItems = customItemsActuallyPrepared.filter(item => 
-                        !event.returnedItems || !event.returnedItems.includes(item)
-                    );
-                    if (unreturnedCustomItems.length > 0) {
-                        hasUnreturnedCustomAssets = true;
-                    }
-                }
-            }
-            
-            console.log(`Event ${event.id} analysis:`, {
-                hasPreparedAssets,
-                hasUnreturnedAssets,
-                hasCustomAssets,
-                hasUnreturnedCustomAssets
-            });
-            
-            // Event is returnable if it has unreturned regular assets OR unreturned custom assets
-            const isReturnable = (hasPreparedAssets && hasUnreturnedAssets) || 
-                                (hasCustomAssets && hasUnreturnedCustomAssets);
-            
-            console.log(`Event ${event.id} is returnable: ${isReturnable}`);
-            
-            return isReturnable && event.state !== 'Closed';
+            return getEventReturnableCount(event) > 0 && event.state !== 'Closed';
         });
 
         console.log('Filtered returnable events:', returnableEvents);
@@ -6818,32 +7090,7 @@ async function openReturnAssetsModal() {
             
             const statusBadge = event.state === 'Overdue' ? ' 🔴 OVERDUE' : '';
             
-            // Calculate total unreturned (including custom assets)
-            let totalUnreturned = (event.preparedCount || 0) - (event.returnedCount || 0);
-            
-            // Add custom assets count from various sources
-            if (event.assetsByDepartment) {
-                ['LOAN', 'MISC'].forEach(dept => {
-                    if (event.assetsByDepartment[dept]) {
-                        const unreturnedCustom = event.assetsByDepartment[dept].filter(asset => 
-                            asset.status !== 'returned'
-                        );
-                        totalUnreturned += unreturnedCustom.length;
-                    }
-                });
-            }
-            
-            // Also count from preparedItems and actuallyPrepared
-            if (event.preparedItems) {
-                const customInPrepared = event.preparedItems.filter(item => 
-                    (item.startsWith('[LOAN]') || item.startsWith('[MISC]')) &&
-                    (!event.returnedItems || !event.returnedItems.includes(item))
-                );
-                // Don't double count if already counted in assetsByDepartment
-                if (!event.assetsByDepartment || !event.assetsByDepartment.LOAN && !event.assetsByDepartment.MISC) {
-                    totalUnreturned += customInPrepared.length;
-                }
-            }
+            const totalUnreturned = getEventReturnableCount(event);
             
             content += `
                 <option value="${event.id}">
@@ -6930,9 +7177,9 @@ async function loadEventAssetsForReturn() {
             });
         }
 
-        const totalAssetsIncludingCustom = returnAssets.reduce((sum, asset) => sum + Number(asset.quantity || 1), 0);
         const totalReturnedIncludingCustom = returnAssets.filter(asset => asset.status === 'returned').reduce((sum, asset) => sum + Number(asset.quantity || 1), 0);
-        const remaining = returnAssets.filter(asset => asset.status !== 'returned').reduce((sum, asset) => sum + Number(asset.quantity || 1), 0);
+        const remaining = returnAssets.filter(asset => isAssetReturnableFromEventDetail(asset, event)).reduce((sum, asset) => sum + Number(asset.quantity || 1), 0);
+        const totalAssetsIncludingCustom = Math.max(Number(event.returnableTotalCount || 0), totalReturnedIncludingCustom + remaining);
 
         // Show event summary
         const summaryDiv = document.getElementById('event-summary');
@@ -6965,7 +7212,7 @@ async function loadEventAssetsForReturn() {
           const rows = [];
           depts.forEach((dept) => {
               const items = event.assetsByDepartment[dept] || [];
-              const unreturned = items.filter(a => a.status !== 'returned');
+              const unreturned = items.filter(a => isAssetReturnableFromEventDetail(a, event));
               const unreturnedQty = unreturned.reduce((sum, a) => sum + Number(a.quantity || 1), 0);
               if (unreturnedQty > 0) {
                   rows.push(`
@@ -7008,7 +7255,7 @@ async function loadEventAssetsForReturn() {
                         };
                     }
                     assetGroups[assetType].assets.push(asset);
-                } else if (!asset.id.startsWith('[LOAN]') && !asset.id.startsWith('[MISC]')) {
+                } else if (!isCustomAssetId(asset.id)) {
                     const assetType = asset.id.split('#')[0];
                     if (!assetGroups[assetType]) {
                         assetGroups[assetType] = {
@@ -7064,74 +7311,69 @@ async function loadEventAssetsForReturn() {
             });
         }
         
-        // Process custom assets from preparedItems
-        if (event.preparedItems && event.preparedItems.length > 0) {
-            const customItems = event.preparedItems.filter(item => 
-                item.startsWith('[LOAN]') || item.startsWith('[MISC]')
-            );
-            
-            if (customItems.length > 0) {
-                // Group custom items by type
-                const loanItems = customItems.filter(item => item.startsWith('[LOAN]'));
-                const miscItems = customItems.filter(item => item.startsWith('[MISC]'));
-                
-                [
-                    { items: loanItems, title: '🏪 Loan/Rental Items', type: 'LOAN' },
-                    { items: miscItems, title: '🔧 Misc Items', type: 'MISC' }
-                ].forEach(({ items, title, type }) => {
-                    if (items.length > 0) {
-                        // Filter out returned items
-                        const unreturnedItems = items.filter(item => 
-                            !event.returnedItems || !event.returnedItems.includes(item)
-                        );
-                        
-                        if (unreturnedItems.length > 0) {
-                            assetsContent += `
-                                <div class="asset-type-group" style="margin-bottom: 25px; border: 1px solid #e9ecef; border-radius: 8px;">
-                                    <div style="background: #f8f9fa; padding: 15px; border-radius: 8px 8px 0 0; border-bottom: 1px solid #e9ecef;">
-                                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                                            <div>
-                                                <h5 style="margin: 0; color: #495057;">${title}</h5>
-                                                <small style="color: #6c757d;">Custom assets</small>
-                                            </div>
-                                            <div style="text-align: right;">
-                                                <div style="font-size: 18px; font-weight: bold; color: #ffc107;">${unreturnedItems.length}</div>
-                                                <small style="color: #6c757d;">to return</small>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div style="padding: 15px;">
-                            `;
-
-                            unreturnedItems.forEach((item, index) => {
-                                // Parse custom asset format: [LOAN]name;quantity or [MISC]name;quantity
-                                const prefix = `[${type}]`;
-                                const itemContent = item.substring(prefix.length);
-                                const [name, quantity] = itemContent.split(';');
-                                const displayName = quantity ? `${name} (Qty: ${quantity})` : name;
-                                
-                                assetsContent += `
-                                    <div class="return-asset-item" style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background: ${index % 2 === 0 ? '#f8f9fa' : 'white'}; border-radius: 6px; margin-bottom: 8px;">
-                                        <div>
-                                            <div style="font-weight: 500; font-size: 14px;">${displayName}</div>
-                                            <div style="color: #666; font-size: 11px;">Custom Asset ID: ${item}</div>
-                                        </div>
-                                        <div style="margin-left: 15px;">
-                                            <button class="btn btn-warning return-asset-btn" style="padding: 6px 12px; font-size: 12px;" onclick="returnSpecificAssetNew(${eventId}, '${item}')">
-                                                Return
-                                            </button>
-                                        </div>
-                                    </div>
-                                `;
-                            });
-                            
-                            assetsContent += '</div></div>';
-                        }
-                    }
+        // Process custom assets from assetsByDepartment. Company is shown here for staff prep/return, but hidden on DO.
+        const customReturnItems = [];
+        if (event.assetsByDepartment) {
+            Object.values(event.assetsByDepartment).forEach(deptAssets => {
+                (deptAssets || []).forEach(asset => {
+                    const custom = parseCustomAsset(asset.id, asset);
+                    if (!custom) return;
+                    if (!isAssetReturnableFromEventDetail(asset, event)) return;
+                    customReturnItems.push({ ...asset, parsedCustom: custom });
                 });
-            }
+            });
         }
-        
+
+        if (customReturnItems.length > 0) {
+            const byDept = {};
+            customReturnItems.forEach(asset => {
+                const dept = normalizeDepartmentCode(asset.parsedCustom.department || asset.department || 'UN');
+                if (!byDept[dept]) byDept[dept] = [];
+                byDept[dept].push(asset);
+            });
+
+            Object.keys(byDept).sort().forEach(dept => {
+                const items = byDept[dept];
+                const totalQty = items.reduce((sum, asset) => sum + Number(asset.parsedCustom.quantity || 1), 0);
+                assetsContent += `
+                    <div class="asset-type-group" style="margin-bottom: 25px; border: 1px solid #e9ecef; border-radius: 8px;">
+                        <div style="background: #f8f9fa; padding: 15px; border-radius: 8px 8px 0 0; border-bottom: 1px solid #e9ecef;">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <div>
+                                    <h5 style="margin: 0; color: #495057;">Custom Items — ${departmentBadgeHtml(dept, true)}</h5>
+                                    <small style="color: #6c757d;">Loan/Rental and Misc items</small>
+                                </div>
+                                <div style="text-align: right;">
+                                    <div style="font-size: 18px; font-weight: bold; color: #ffc107;">${totalQty}</div>
+                                    <small style="color: #6c757d;">to return</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div style="padding: 15px;">
+                `;
+
+                items.forEach((asset, index) => {
+                    const custom = asset.parsedCustom;
+                    const safeId = escapeJs(asset.id);
+                    assetsContent += `
+                        <div class="return-asset-item" style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background: ${index % 2 === 0 ? '#f8f9fa' : 'white'}; border-radius: 6px; margin-bottom: 8px;">
+                            <div>
+                                <div style="font-weight: 500; font-size: 14px;">${escapeHtml(customAssetDisplayName(custom))} ${customAssetTypeBadge(custom)}</div>
+                                ${custom.type === 'LOAN' && custom.company ? `<div style="color: #666; font-size: 11px;">Company: ${escapeHtml(custom.company)}</div>` : ''}
+                            </div>
+                            <div style="margin-left: 15px;">
+                                <button class="btn btn-warning return-asset-btn" style="padding: 6px 12px; font-size: 12px;" onclick="returnSpecificAssetNew(${eventId}, '${safeId}')">
+                                    Return
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                });
+
+                assetsContent += '</div></div>';
+            });
+        }
+
         if (!assetsContent) {
             assetsContent = '<p style="text-align: center; color: #666; padding: 40px;">No assets available for return.</p>';
         }
@@ -7913,15 +8155,19 @@ async function viewEvent(eventId) {
 
               const extraBadge = asset.isExtra ? 
                 '<span style="background: #fff3cd; color: #856404; padding: 2px 6px; border-radius: 3px; font-size: 9px; margin-left: 8px; font-weight: 500;">EXTRA</span>' : '';
+              const custom = parseCustomAsset(asset.id, asset);
+              const displayId = custom ? customAssetDisplayName(custom) : asset.id;
+              const secondaryLine = custom ? (custom.type === 'LOAN' ? custom.company : '') : (asset.name || '');
+              const customBadge = custom ? customAssetTypeBadge(custom) : '';
 
               content += `
                     <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: #f8f9fa; border-radius: 6px;">
                         <div style="flex: 1;">
                             <div style="font-weight: 500; font-size: 13px; margin-bottom: 2px;">
-                                ${statusIcon} ${escapeHtml(asset.id)}${extraBadge}
+                                ${statusIcon} ${escapeHtml(displayId)}${customBadge}${extraBadge}
                             </div>
-                            <div style="color: #666; font-size: 11px;">${escapeHtml(asset.name || '')}</div>
-                            ${asset.serial ? `<div style="color: #999; font-size: 10px;">SN: ${escapeHtml(asset.serial)}</div>` : ''}
+                            <div style="color: #666; font-size: 11px;">${escapeHtml(secondaryLine || '')}</div>
+                            ${!custom && asset.serial ? `<div style="color: #999; font-size: 10px;">SN: ${escapeHtml(asset.serial)}</div>` : ''}
                         </div>
                         <div style="text-align: right;">
                             <span style="color: ${statusColor}; font-size: 11px; font-weight: 500;">${statusText}</span>
@@ -9074,17 +9320,22 @@ async function editEvent(eventId) {
                     <!-- Add Custom Asset Section -->
                     <div style="margin-bottom: 30px;">
                         <h4 style="color: #495057; margin-bottom: 15px;">🛠️ Add Custom Assets</h4>
-                        <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 15px;">
-                            <input type="text" id="customAssetName" placeholder="Enter custom asset name" 
-                                   style="flex: 1; padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
+                        <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center; max-width: 100%; margin-bottom: 15px;">
+                            <input type="text" id="customAssetName" placeholder="Asset name, e.g. XLR Cable - 3m"
+                                   style="flex: 1 1 220px; min-width: 170px; padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
                             <input type="number" id="customAssetQuantity" placeholder="Qty" min="1" value="1"
-                                   style="width: 60px; padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
-                            <select id="customAssetType" style="padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
+                                   style="flex: 0 0 70px; width: 70px; padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
+                            <select id="customAssetType" style="flex: 0 1 140px; min-width: 125px; padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
                                 <option value="MISC">Misc Item</option>
                                 <option value="LOAN">Loan/Rental</option>
                             </select>
-                            <button type="button" class="btn btn-success" onclick="addCustomAssetToEvent(${eventId})" 
-                                    style="padding: 8px 16px; white-space: nowrap;">
+                            <select id="customAssetDepartment" style="flex: 0 0 82px; width: 82px; padding: 8px 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
+                                ${customDepartmentOptionsHtml('AX')}
+                            </select>
+                            <input type="text" id="customAssetCompany" placeholder="Company (loan/rental only)"
+                                   style="flex: 1 1 210px; min-width: 160px; padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
+                            <button type="button" class="btn btn-success" onclick="addCustomAssetToEvent(${eventId})"
+                                    style="flex: 0 0 auto; padding: 8px 16px; white-space: nowrap;">
                                 Add Custom Asset
                             </button>
                         </div>
@@ -9211,17 +9462,22 @@ async function loadEditEventAssets(eventId) {
                 <!-- Add Custom Assets Section -->
                 <div style="background: #fff3cd; border: 2px solid #ffc107; border-radius: 8px; padding: 20px; margin-bottom: 30px;">
                     <h4 style="color: #856404; margin: 0 0 15px 0; font-weight: 600;">➕ Add Custom Assets</h4>
-                    <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-                        <input type="text" id="customAssetName" placeholder="Asset Name" 
-                               style="flex: 1; min-width: 200px; padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
+                    <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center; max-width: 100%;">
+                        <input type="text" id="customAssetName" placeholder="Asset Name"
+                               style="flex: 1 1 220px; min-width: 170px; padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
                         <input type="number" id="customAssetQuantity" placeholder="Qty" min="1" value="1"
-                               style="width: 60px; padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
-                        <select id="customAssetType" style="padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
+                               style="flex: 0 0 70px; width: 70px; padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
+                        <select id="customAssetType" style="flex: 0 1 140px; min-width: 125px; padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
                             <option value="MISC">Misc Item</option>
                             <option value="LOAN">Loan/Rental</option>
                         </select>
-                        <button type="button" class="btn btn-success" onclick="addCustomAssetToEvent(${eventId})" 
-                                style="padding: 8px 16px; white-space: nowrap;">
+                        <select id="customAssetDepartment" style="flex: 0 0 82px; width: 82px; padding: 8px 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
+                            ${customDepartmentOptionsHtml('AX')}
+                        </select>
+                        <input type="text" id="customAssetCompany" placeholder="Company (loan/rental only)"
+                               style="flex: 1 1 210px; min-width: 160px; padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
+                        <button type="button" class="btn btn-success" onclick="addCustomAssetToEvent(${eventId})"
+                                style="flex: 0 0 auto; padding: 8px 16px; white-space: nowrap;">
                             Add Custom Asset
                         </button>
                     </div>
@@ -9259,35 +9515,44 @@ async function addCustomAssetToEvent(eventId) {
   const nameInput = document.getElementById("customAssetName");
   const quantityInput = document.getElementById("customAssetQuantity");
   const typeSelect = document.getElementById("customAssetType");
-  
+  const departmentSelect = document.getElementById("customAssetDepartment");
+  const companyInput = document.getElementById("customAssetCompany");
+
   const name = nameInput.value.trim();
-  const quantity = parseInt(quantityInput.value) || 1;
-  const type = typeSelect.value;
-  
+  const quantity = Math.max(1, parseInt(quantityInput.value, 10) || 1);
+  const type = normalizeCustomType(typeSelect.value);
+  const department = normalizeDepartmentCode(departmentSelect?.value || 'UN');
+  const company = (companyInput?.value || '').trim();
+
   if (!name) {
     showNotification("error", "Please enter a custom asset name");
     return;
   }
-  
+
+  if (type === 'LOAN' && !company) {
+    showNotification("warning", "Please enter the loan/rental company");
+    companyInput?.focus();
+    return;
+  }
+
   try {
-    // Create the custom asset ID based on type
-    // Use semicolon format for quantities > 1: [TYPE]name;quantity
-    const customAssetId = quantity > 1 ? `[${type}]${name};${quantity}` : `[${type}]${name}`;
-    
-    await apiCall(`/api/events/${eventId}/assets`, "POST", {
-      assetId: customAssetId,
+    await apiCall(`/api/events/${eventId}/custom-assets`, "POST", {
+      name,
+      quantity,
+      type,
+      department,
+      company
     });
-    
-    const quantityText = quantity > 1 ? ` (Qty: ${quantity})` : '';
-    showNotification("success", `Custom asset "${name}"${quantityText} added to event`);
-    
-    // Clear the inputs
+
+    const quantityText = quantity > 1 ? ` (${quantity}x)` : '';
+    showNotification("success", `${type === 'LOAN' ? 'Loan/Rental' : 'Misc'} item "${name}"${quantityText} added`);
+
     nameInput.value = "";
     quantityInput.value = "1";
-    
-    // Update the model requirements section to show the new custom asset
+    if (companyInput) companyInput.value = "";
+
     await updateModelRequirementsSection(eventId);
-    
+
   } catch (error) {
     showNotification("error", `Failed to add custom asset: ${error.message}`);
   }
@@ -9492,82 +9757,121 @@ async function updateModelRequirementsSection(eventId) {
     const modelsContainer = document.getElementById("current-asset-models");
     if (!modelsContainer) return;
 
-    // Helper function to escape HTML
-    const escapeHtml = (str) => {
-      if (!str) return '';
-      const div = document.createElement('div');
-      div.textContent = str;
-      return div.innerHTML;
-    };
+    const modelsByDept = {};
+    Object.values(event.modelGroups || {}).forEach((model) => {
+      const dept = normalizeDepartmentCode(model.department || 'UN');
+      if (!modelsByDept[dept]) modelsByDept[dept] = [];
+      modelsByDept[dept].push(model);
+    });
+
+    const customAssetsByDept = groupCustomAssetsByDepartment(event);
+    const allDepartments = Array.from(new Set([
+      ...Object.keys(modelsByDept),
+      ...Object.keys(customAssetsByDept)
+    ])).sort();
 
     let content = '';
 
-    // Display current model assignments
-    if (event.modelGroups && Object.keys(event.modelGroups).length > 0) {
-        // Group by department
-        const modelsByDept = {};
-        Object.values(event.modelGroups).forEach((model) => {
-            if (!modelsByDept[model.department]) {
-                modelsByDept[model.department] = [];
-            }
-            modelsByDept[model.department].push(model);
-        });
+    allDepartments.forEach((dept) => {
+      const models = modelsByDept[dept] || [];
+      const customAssets = customAssetsByDept[dept] || [];
 
-        Object.keys(modelsByDept).sort().forEach((dept) => {
-            const models = modelsByDept[dept];
-            const totalAssigned = models.reduce((sum, model) => sum + getPreparedQuantity(model), 0);
-            const totalRequired = models.reduce((sum, model) => sum + model.requiredQuantity, 0);
-            const deptInfo = getDepartmentInfo(dept);
+      const modelAssigned = models.reduce((sum, model) => sum + getPreparedQuantity(model), 0);
+      const modelRequired = models.reduce((sum, model) => sum + Number(model.requiredQuantity || 0), 0);
+      const customAssigned = getCustomPreparedQuantityForProgress(customAssets);
+      const customRequired = getCustomRequiredQuantityForProgress(customAssets);
+      const totalAssigned = modelAssigned + customAssigned;
+      const totalRequired = modelRequired + customRequired;
+      const deptInfo = getDepartmentInfo(dept);
 
-            content += `
-                <div style="background: ${deptInfo.bgColor}; padding: 12px; border-bottom: 1px solid #e9ecef; font-weight: bold;">
-                    ${deptInfo.name} (${totalAssigned}/${totalRequired} assigned)
-                </div>
-                <div style="padding: 12px;">
-            `;
+      content += `
+        <div style="background: ${deptInfo.bgColor}; padding: 12px; border-bottom: 1px solid #e9ecef; font-weight: bold; display:flex; align-items:center; gap:8px; justify-content:space-between;">
+          <span>${departmentBadgeHtml(dept, true)}</span>
+          <span>${totalAssigned}/${totalRequired} prepared</span>
+        </div>
+        <div style="padding: 12px;">
+      `;
 
-            models.forEach((model) => {
-                const assignedCount = getPreparedQuantity(model);
-                const statusIcon = assignedCount >= model.requiredQuantity ? "✅" : "⚠️";
-                
-                content += `
-                    <div class="model-assignment" style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #f1f1f1;">
-                        <div style="flex: 1;">
-                            <div style="display: flex; align-items: center;">
-                                <span style="margin-right: 8px;">${statusIcon}</span>
-                                <span style="font-weight: 500;">${model.requiredQuantity}x ${escapeHtml(model.brand)} ${escapeHtml(model.model)}</span>
-                                <span style="color: #666; margin-left: 8px;">(${assignedCount} assigned)</span>
-                            </div>
-                            <div style="color: #666; font-size: 12px; margin-left: 20px; margin-top: 2px;">${escapeHtml(model.description || '')}</div>
-                        </div>
-                        <div style="display: flex; gap: 8px;">
-                            <button class="btn btn-sm btn-outline-primary edit-model-qty-btn"
-                                  data-event-id="${eventId}"
-                                  data-brand="${escapeHtmlAttribute(model.brand)}"
-                                  data-model="${escapeHtmlAttribute(model.model)}"
-                                  data-department="${escapeHtmlAttribute(model.department)}"
-                                  data-description="${escapeHtmlAttribute(model.description || '')}"
-                                  style="padding: 4px 8px; font-size: 11px;">Edit Qty</button>
+      models.forEach((model) => {
+        const assignedCount = getPreparedQuantity(model);
+        const statusIcon = assignedCount >= model.requiredQuantity ? "✅" : "⚠️";
 
-                          <button class="btn btn-sm btn-danger remove-model-btn"
-                                  data-event-id="${eventId}"
-                                  data-brand="${escapeHtmlAttribute(model.brand)}"
-                                  data-model="${escapeHtmlAttribute(model.model)}"
-                                  data-department="${escapeHtmlAttribute(model.department)}"
-                                  data-description="${escapeHtmlAttribute(model.description || '')}"
-                                  style="padding: 4px 8px; font-size: 11px;">Remove</button>
-                        </div>
-                    </div>
-                `;
-            });
+        content += `
+          <div class="model-assignment" style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #f1f1f1; gap:12px;">
+            <div style="flex: 1; min-width:0;">
+              <div style="display: flex; align-items: center; flex-wrap:wrap; gap:6px;">
+                <span>${statusIcon}</span>
+                <span style="font-weight: 500;">${Number(model.requiredQuantity || 0)}x ${escapeHtml(model.brand)} ${escapeHtml(model.model)}</span>
+                <span style="color: #666;">(${assignedCount} assigned)</span>
+              </div>
+              <div style="color: #666; font-size: 12px; margin-left: 22px; margin-top: 2px;">${escapeHtml(model.description || '')}</div>
+            </div>
+            <div style="display: flex; gap: 8px; flex-wrap:wrap; justify-content:flex-end;">
+              <button class="btn btn-sm btn-outline-primary edit-model-qty-btn"
+                      data-event-id="${eventId}"
+                      data-brand="${escapeHtmlAttribute(model.brand)}"
+                      data-model="${escapeHtmlAttribute(model.model)}"
+                      data-department="${escapeHtmlAttribute(model.department)}"
+                      data-description="${escapeHtmlAttribute(model.description || '')}"
+                      style="padding: 4px 8px; font-size: 11px;">Edit Qty</button>
+              <button class="btn btn-sm btn-danger remove-model-btn"
+                      data-event-id="${eventId}"
+                      data-brand="${escapeHtmlAttribute(model.brand)}"
+                      data-model="${escapeHtmlAttribute(model.model)}"
+                      data-department="${escapeHtmlAttribute(model.department)}"
+                      data-description="${escapeHtmlAttribute(model.description || '')}"
+                      style="padding: 4px 8px; font-size: 11px;">Remove</button>
+            </div>
+          </div>
+        `;
+      });
 
-            content += `</div>`;
-        });
+      customAssets.forEach(asset => {
+        const custom = asset.parsedCustom;
+        const statusIcon = asset.status === "returned" ? "↩️"
+                         : asset.status === "prepared" ? "✅"
+                         : asset.status === "collected" ? "📥"
+                         : "📋";
+        const displayName = customAssetDisplayName(custom);
+        const safeId = escapeHtmlAttr(asset.id);
+        const safeName = escapeHtmlAttr(custom.name);
+
+        content += `
+          <div class="custom-assignment" style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #f1f1f1; gap:12px;">
+            <div style="min-width:0; flex:1;">
+              <div style="display: flex; align-items: center; flex-wrap:wrap; gap:6px;">
+                <span>${statusIcon}</span>
+                <span style="font-weight: 500;">${escapeHtml(displayName)}</span>
+                ${customAssetTypeBadge(custom)}
+              </div>
+              ${custom.type === 'LOAN' && custom.company ? `<div style="color:#666;font-size:12px;margin-left:24px;margin-top:2px;">${escapeHtml(custom.company)}</div>` : ''}
+            </div>
+            <div style="display: flex; gap: 8px; flex-wrap:wrap; justify-content:flex-end;">
+              <button class="btn btn-sm btn-outline-primary edit-custom-qty-btn"
+                      data-event-id="${eventId}" data-asset-id="${safeId}"
+                      data-asset-name="${safeName}" data-asset-type="${custom.type}"
+                      style="padding: 4px 8px; font-size: 11px;">Edit Qty</button>
+              <button class="btn btn-danger btn-sm remove-asset-btn"
+                      data-event-id="${eventId}" data-asset-id="${safeId}"
+                      style="padding: 4px 8px; font-size: 11px;">Remove</button>
+            </div>
+          </div>
+        `;
+      });
+
+      content += '</div>';
+    });
+
+    if (!content.trim()) {
+      content = `
+        <div style="text-align: center; padding: 40px; color: #666;">
+          No assets assigned to this event
+        </div>
+      `;
     }
 
-    // Always add custom assets section, regardless of whether there are model groups
-    await addCustomAssetsToModelRequirements(eventId, content);
-    
+    modelsContainer.innerHTML = content;
+
   } catch (error) {
     console.error("Error updating model requirements:", error);
   }
@@ -9579,110 +9883,68 @@ async function addCustomAssetsToModelRequirements(eventId, existingContent = '')
     const eventResponse = await apiCall(`/api/events/${eventId}`);
     const event = eventResponse.data;
     const modelsContainer = document.getElementById("current-asset-models");
-    
     if (!modelsContainer) return;
 
-    // Helper function to escape HTML
-    const escapeHtml = (str) => {
-      if (!str) return '';
-      const div = document.createElement('div');
-      div.textContent = str;
-      return div.innerHTML;
-    };
-
-    // Helper function to parse custom asset name and quantity
-    const parseCustomAsset = (assetId, assetName) => {
-      let name = assetName;
-      let quantity = 1;
-      
-      // Check if the asset ID has quantity in format [TYPE]name;quantity
-      if (assetId.includes(';')) {
-        const parts = assetId.split(';');
-        if (parts.length === 2) {
-          quantity = parseInt(parts[1]) || 1;
-          // Extract the base name from the ID
-          const namePart = parts[0];
-          if (namePart.startsWith('[MISC]')) {
-            name = namePart.replace('[MISC]', '');
-          } else if (namePart.startsWith('[LOAN]')) {
-            name = namePart.replace('[LOAN]', '');
-          }
-        }
-      }
-      
-      return { name, quantity };
-    };
-
     let content = existingContent;
+    const customAssets = getCustomAssetsFromEvent(event);
 
-    // Process custom assets (those starting with [MISC] or [LOAN])
-    if (event.assignedAssets) {
-      const customAssets = event.assignedAssets.filter(asset => 
-        asset.id && (asset.id.startsWith('[MISC]') || asset.id.startsWith('[LOAN]'))
-      );
+    if (customAssets.length > 0) {
+      const byDept = {};
+      customAssets.forEach(asset => {
+        const custom = asset.parsedCustom;
+        const dept = normalizeDepartmentCode(custom.department || asset.department || 'UN');
+        if (!byDept[dept]) byDept[dept] = [];
+        byDept[dept].push(asset);
+      });
 
-      if (customAssets.length > 0) {
-        // Group custom assets by type
-        const customAssetsByType = {};
-        customAssets.forEach(asset => {
-          const type = asset.id.startsWith('[MISC]') ? 'MISC' : 'LOAN';
-          if (!customAssetsByType[type]) {
-            customAssetsByType[type] = [];
-          }
-          customAssetsByType[type].push(asset);
-        });
+      Object.keys(byDept).sort().forEach(dept => {
+        const assetsOfDept = byDept[dept];
+        const totalQty = assetsOfDept.reduce((sum, asset) => sum + Number(asset.parsedCustom.quantity || 1), 0);
 
-        // Add each type section
-        Object.keys(customAssetsByType).forEach(type => {
-          const assetsOfType = customAssetsByType[type];
-          const deptDisplayName = type === 'LOAN' ? '🏪 Loan/Rental Items' : '🔧 Misc Items';
-          
-          // Calculate total quantity for this type
-          let totalQuantity = 0;
-          assetsOfType.forEach(asset => {
-            const parsed = parseCustomAsset(asset.id, asset.name);
-            totalQuantity += parsed.quantity;
-          });
-          
-          content += `
-            <div data-custom-section="true" style="border-top: 1px solid #e9ecef; margin-top: 20px; padding-top: 20px;">
-              <div style="background: #f8f9fa; padding: 12px; border-bottom: 1px solid #e9ecef; font-weight: bold;">
-                ${deptDisplayName} (${totalQuantity} total qty, ${assetsOfType.length} items)
-              </div>
-              <div style="padding: 12px;">
-                ${assetsOfType.map(asset => {
-                  const statusIcon = asset.status === "returned" ? "↩️" 
-                                 : asset.status === "prepared" ? "✅" 
-                                 : "📋";
-                  const parsed = parseCustomAsset(asset.id, asset.name);
-                  const displayName = parsed.quantity > 1 ? `${parsed.quantity}x ${parsed.name}` : parsed.name;
-                  
-                  return `
-                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #f1f1f1;">
-                      <div style="display: flex; align-items: center;">
-                        <span style="margin-right: 8px;">${statusIcon}</span>
-                        <span style="font-weight: 500;">${escapeHtml(displayName)}</span>
-                      </div>
-                      <div style="display: flex; gap: 8px;">
-                        <button class="btn btn-sm btn-outline-primary edit-custom-qty-btn" 
-                                data-event-id="${eventId}" data-asset-id="${escapeHtml(asset.id)}" 
-                                data-asset-name="${escapeHtml(parsed.name)}" data-asset-type="${type}"
-                                style="padding: 4px 8px; font-size: 11px;">Edit Qty</button>
-                        <button class="btn btn-danger btn-sm remove-asset-btn" 
-                                data-event-id="${eventId}" data-asset-id="${escapeHtml(asset.id)}"
-                                style="padding: 4px 8px; font-size: 11px;">Remove</button>
-                      </div>
-                    </div>
-                  `;
-                }).join('')}
-              </div>
+        content += `
+          <div data-custom-section="true" style="border-top: 1px solid #e9ecef; margin-top: 20px; padding-top: 20px;">
+            <div style="background: #f8f9fa; padding: 12px; border-bottom: 1px solid #e9ecef; font-weight: bold; display:flex; align-items:center; gap:8px;">
+              ${departmentBadgeHtml(dept, true)}
+              <span>Custom Assets (${totalQty} total qty, ${assetsOfDept.length} line item${assetsOfDept.length === 1 ? '' : 's'})</span>
             </div>
-          `;
-        });
-      }
+            <div style="padding: 12px;">
+              ${assetsOfDept.map(asset => {
+                const custom = asset.parsedCustom;
+                const statusIcon = asset.status === "returned" ? "↩️"
+                               : asset.status === "prepared" ? "✅"
+                               : asset.status === "collected" ? "📥"
+                               : "📋";
+                const displayName = customAssetDisplayName(custom);
+                const safeId = escapeHtmlAttr(asset.id);
+                const safeName = escapeHtmlAttr(custom.name);
+                return `
+                  <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #f1f1f1; gap:12px;">
+                    <div style="min-width:0; flex:1;">
+                      <div style="display: flex; align-items: center; flex-wrap:wrap; gap:6px;">
+                        <span>${statusIcon}</span>
+                        <span style="font-weight: 500;">${escapeHtml(displayName)}</span>
+                        ${customAssetTypeBadge(custom)}
+                      </div>
+                      ${custom.type === 'LOAN' && custom.company ? `<div style="color:#666;font-size:12px;margin-left:24px;margin-top:2px;">${escapeHtml(custom.company)}</div>` : ''}
+                    </div>
+                    <div style="display: flex; gap: 8px; flex-wrap:wrap; justify-content:flex-end;">
+                      <button class="btn btn-sm btn-outline-primary edit-custom-qty-btn"
+                              data-event-id="${eventId}" data-asset-id="${safeId}"
+                              data-asset-name="${safeName}" data-asset-type="${custom.type}"
+                              style="padding: 4px 8px; font-size: 11px;">Edit Qty</button>
+                      <button class="btn btn-danger btn-sm remove-asset-btn"
+                              data-event-id="${eventId}" data-asset-id="${safeId}"
+                              style="padding: 4px 8px; font-size: 11px;">Remove</button>
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </div>
+        `;
+      });
     }
 
-    // If no content at all, show empty state
     if (!content.trim()) {
       content = `
         <div style="text-align: center; padding: 40px; color: #666;">
@@ -9692,7 +9954,6 @@ async function addCustomAssetsToModelRequirements(eventId, existingContent = '')
     }
 
     modelsContainer.innerHTML = content;
-    
   } catch (error) {
     console.error("Error adding custom assets to model requirements:", error);
   }
@@ -10520,7 +10781,7 @@ async function removeAssetFromEvent(eventId, assetId) {
         let endpoint;
         
         // Use different endpoints for custom vs regular assets
-        if (assetId.startsWith('[MISC]') || assetId.startsWith('[LOAN]')) {
+        if (isCustomAssetId(assetId)) {
             endpoint = `/api/events/${eventId}/custom-assets/remove`;
             console.log('Using custom asset removal endpoint');
         } else {
@@ -10536,10 +10797,15 @@ async function removeAssetFromEvent(eventId, assetId) {
         if (response.success) {
             console.log('Asset removed successfully');
             
-            // Remove the asset element from UI
-            const assetElements = document.querySelectorAll(`[data-asset-id="${assetId}"]`);
+            // Remove matching elements from UI without building an unsafe CSS selector from JSON custom IDs.
+            const assetElements = Array.from(document.querySelectorAll('[data-asset-id]')).filter(element => {
+                const raw = element.getAttribute('data-asset-id') || '';
+                let decoded = raw;
+                try { decoded = decodeURIComponent(raw); } catch (_) {}
+                return raw === assetId || decoded === assetId;
+            });
             assetElements.forEach(element => {
-                const assetRow = element.closest('div[style*="display: flex"]');
+                const assetRow = element.closest('div[style*="display: flex"]') || element.closest('tr');
                 if (assetRow) {
                     assetRow.remove();
                 }
@@ -13451,18 +13717,12 @@ function updateSelectedOOCDisplay() {
 }});
 
 function editCustomAssetQuantity(eventId, assetId, assetName, assetType) {
-  // Parse current quantity from asset ID
-  let currentQuantity = 1;
-  if (assetId.includes(';')) {
-    const parts = assetId.split(';');
-    if (parts.length === 2) {
-      currentQuantity = parseInt(parts[1]) || 1;
-    }
-  }
+  const custom = parseCustomAsset(assetId) || { name: assetName, quantity: 1, type: assetType };
+  const currentQuantity = Math.max(1, parseInt(custom.quantity || 1, 10) || 1);
 
   // Populate modal - reuse the existing edit quantity modal
   document.getElementById("editQuantityTitle").textContent = `Edit Custom Asset Quantity`;
-  document.getElementById("editQuantityLabel").textContent = `Editing: ${assetName} (${assetType === 'LOAN' ? 'Loan/Rental' : 'Misc'})`;
+  document.getElementById("editQuantityLabel").textContent = `Editing: ${custom.name || assetName} (${custom.type === 'LOAN' ? 'Loan/Rental' : 'Misc'})`;
   document.getElementById("editQuantityInput").value = currentQuantity;
   document.getElementById("editQuantityInput").min = 1;
   document.getElementById("editQuantityInput").max = 999; // No limit for custom assets
@@ -13481,8 +13741,8 @@ function editCustomAssetQuantity(eventId, assetId, assetName, assetType) {
   // Store values in hidden fields (repurpose existing ones)
   document.getElementById("editQuantityEventId").value = eventId;
   document.getElementById("editQuantityBrand").value = assetId; // Store full asset ID here
-  document.getElementById("editQuantityModel").value = assetName;
-  document.getElementById("editQuantityDepartment").value = assetType;
+  document.getElementById("editQuantityModel").value = custom.name || assetName;
+  document.getElementById("editQuantityDepartment").value = custom.type || assetType;
   document.getElementById("editQuantityCurrentQty").value = currentQuantity;
 
   // Mark this as custom asset edit by setting a flag
@@ -14295,6 +14555,64 @@ function showNotification(type, message) {
       }
     }, 300);
   }, 3000);
+}
+
+
+function isBulkModelGroupForPrepare(modelGroup, availableAssets = [], assignedAssets = []) {
+    return (availableAssets || []).some(asset => asset && asset.isBulk) ||
+           (assignedAssets || []).some(asset => asset && typeof asset !== 'string' && asset.isBulk);
+}
+
+function createBulkPreparationSection(eventId, modelGroup, availableAssets = [], assignedAssets = []) {
+    const requiredQty = Math.max(1, Number(modelGroup.requiredQuantity || 1));
+    const assignedQty = (assignedAssets || []).reduce((sum, asset) => sum + Number((asset && asset.quantity) || 1), 0);
+    const isPrepared = assignedQty >= requiredQty;
+    const statusText = isPrepared ? 'Prepared' : (assignedQty > 0 ? `Partial (${assignedQty}/${requiredQty})` : 'Pending');
+    const statusColor = isPrepared ? '#28a745' : (assignedQty > 0 ? '#17a2b8' : '#ffc107');
+    const availableBulkSource = (availableAssets || []).find(asset => asset && asset.isBulk) || null;
+    const assignedBulkSource = (assignedAssets || []).find(asset => asset && typeof asset !== 'string' && asset.isBulk) || null;
+    const bulkId = getAssetIdentifierForApi(availableBulkSource) || availableBulkSource?.bulkId || assignedBulkSource?.bulkId || '';
+    const displayName = `${requiredQty}x ${[modelGroup.brand, modelGroup.model].filter(Boolean).join(' ')}`.trim();
+    const description = modelGroup.description || availableBulkSource?.description || assignedBulkSource?.description || '';
+    const availableQuantity = availableBulkSource ? Number(availableBulkSource.availableQuantity ?? availableBulkSource.quantity ?? 0) : 0;
+
+    let actionButtons = '';
+    if (assignedAssets && assignedAssets.length > 0) {
+        actionButtons += (assignedAssets || []).map(asset => {
+            const preparedId = typeof asset === 'string' ? asset : asset.id;
+            if (!preparedId) return '';
+            const safePreparedId = escapeHtmlAttr(encodeURIComponent(preparedId));
+            return `<button class="btn btn-warning btn-sm asset-action-btn" data-event-id="${eventId}" data-asset-id="${safePreparedId}" data-action="unprepare" style="padding:4px 8px; font-size:11px;">Unprepare</button>`;
+        }).join('');
+    }
+
+    if (!isPrepared && bulkId && availableQuantity !== 0) {
+        actionButtons += `<button class="btn btn-success btn-sm" onclick="assignSpecificAsset(${eventId}, '${escapeJs(bulkId)}', '${escapeJs(modelGroup.brand || '')}', '${escapeJs(modelGroup.model || '')}')" style="padding:4px 8px; font-size:11px;">Prepare</button>`;
+    }
+
+    if (!actionButtons) {
+        actionButtons = '<span style="color:#777; font-size:11px;">No action available</span>';
+    }
+
+    const quantityLine = availableBulkSource
+        ? `<div style="color:#666; font-size:12px; margin-top:2px;">Available Qty: ${escapeHtml(String(availableQuantity))}/${escapeHtml(String(availableBulkSource.quantity ?? requiredQty))}</div>`
+        : (assignedBulkSource ? `<div style="color:#666; font-size:12px; margin-top:2px;">Prepared Qty: ${escapeHtml(String(assignedQty))}</div>` : '');
+
+    return `
+        <div class="model-prep-section bulk-prep-flat-section" style="border: 1px solid #e9ecef; border-radius: 8px; padding: 0; margin-bottom: 15px; overflow:hidden;">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:15px; padding:15px; background:#f8f9fa; border-radius:8px;">
+                <div style="min-width:0; flex:1;">
+                    <h5 style="margin:0; color:#495057; font-size:14px;">${escapeHtml(displayName)}</h5>
+                    ${description ? `<div style="color:#666; font-size:12px; margin-top:2px; overflow-wrap:anywhere;">${escapeHtml(description)}</div>` : ''}
+                    ${quantityLine}
+                    <div style="color:${statusColor}; font-size:12px; margin-top:2px; font-weight:500;">${escapeHtml(statusText)}</div>
+                </div>
+                <div style="display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; align-items:center; flex-shrink:0;">
+                    ${actionButtons}
+                </div>
+            </div>
+        </div>
+    `;
 }
 
 function createModelPreparationSection(eventId, brand, model, description, requiredQty, availableAssets, assignedAssets) {
@@ -16191,13 +16509,13 @@ async function populateDeliveryItemsPreview(event) {
 
 function groupItemsByDepartment(event) {
   const departments = { Audio: [], Lighting: [], Video: [], MISC: [] };
-  const deptName = (code) => (code === 'AX' ? 'Audio' : code === 'LX' ? 'Lighting' : code === 'VX' ? 'Video' : 'MISC');
+  const deptName = (code) => departmentCodeToDoName(code);
 
   // 1) Base groups from modelGroups (what the job actually asked for)
   if (event.modelGroups && Object.keys(event.modelGroups).length) {
     Object.values(event.modelGroups).forEach(mg => {
       const dname = deptName(mg.department);
-      const baseDesc = `${mg.brand||''} ${mg.model||''}${mg.description ? ' - ' + mg.description : ''}`.trim();
+      const baseDesc = `${mg.brand || ''} ${mg.model || ''}${mg.description ? ' - ' + mg.description : ''}`.trim();
       departments[dname].push({
         key: makeModelKey(mg),
         description: baseDesc,
@@ -16207,68 +16525,49 @@ function groupItemsByDepartment(event) {
     });
   }
 
-  // 2) Custom assets already assigned to the event via prepared_items ([MISC]/[LOAN]) → placed under MISC
-  if (Array.isArray(event.prepared_items) && event.prepared_items.length) {
-    const grouped = {};
-    event.prepared_items.forEach(id => {
-      if (typeof id !== 'string') return;
-      if (id.startsWith('[MISC]') || id.startsWith('[LOAN]')) {
-        const type = id.startsWith('[MISC]') ? 'MISC' : 'LOAN';
-        const parts = id.substring(type.length + 2 /* [] */).split(';');
-        const desc = (parts[0] || (type === 'MISC' ? 'Misc Item' : 'Loan Item')).trim();
-        const qty = parseInt(parts[1], 10) || 1;
-        grouped[desc] = (grouped[desc] || 0) + qty;
-      }
-    });
-    let idx = 0;
-    Object.entries(grouped).forEach(([desc, qty]) => {
-      departments.MISC.push({
-        key: `CA|MISC|${idx++}|${desc}`,
-        description: desc,
-        quantity: String(qty),
-        source: 'custom-prepared'
-      });
-    });
-  }
-
-  // 3) Also check assetsByDepartment for custom assets (MISC department)
-  if (event.assetsByDepartment && event.assetsByDepartment.MISC) {
-    const customAssetsFromDept = {};
-    event.assetsByDepartment.MISC.forEach(asset => {
-      if (asset.id && (asset.id.startsWith('[MISC]') || asset.id.startsWith('[LOAN]'))) {
-        const type = asset.id.startsWith('[MISC]') ? 'MISC' : 'LOAN';
-        const parts = asset.id.substring(type.length + 2).split(';');
-        const desc = (parts[0] || (type === 'MISC' ? 'Misc Item' : 'Loan Item')).trim();
-        const qty = parseInt(parts[1], 10) || 1;
-        
-        // Check if this custom asset is already counted from prepared_items
-        const alreadyCounted = departments.MISC.some(item => 
-          item.description === desc && item.source === 'custom-prepared'
-        );
-        
-        if (!alreadyCounted) {
-          customAssetsFromDept[desc] = (customAssetsFromDept[desc] || 0) + qty;
+  // 2) Custom assets assigned to the event. Company is intentionally hidden on the DO.
+  const groupedCustom = {};
+  const addCustomToDo = (custom) => {
+    if (!custom) return;
+    const dname = deptName(custom.department || 'UN');
+    const desc = custom.name || (custom.type === 'LOAN' ? 'Loan/Rental Item' : 'Misc Item');
+    const key = `CUSTOM|${dname}|${custom.type}|${desc}`;
+    if (!groupedCustom[key]) {
+      groupedCustom[key] = {
+        dept: dname,
+        item: {
+          key,
+          description: desc,
+          quantity: 0,
+          source: 'custom-prepared'
         }
-      }
-    });
-    
-    let idx = departments.MISC.length;
-    Object.entries(customAssetsFromDept).forEach(([desc, qty]) => {
-      departments.MISC.push({
-        key: `CA|MISC|${idx++}|${desc}`,
-        description: desc,
-        quantity: String(qty),
-        source: 'custom-assets-dept'
+      };
+    }
+    groupedCustom[key].item.quantity += Number(custom.quantity || 1);
+  };
+
+  const preparedList = event.preparedItems || event.prepared_items || [];
+  preparedList.forEach(id => addCustomToDo(parseCustomAsset(id)));
+
+  // Fallback for any event object that only has assetsByDepartment populated.
+  if (event.assetsByDepartment) {
+    Object.values(event.assetsByDepartment).forEach(list => {
+      (list || []).forEach(asset => {
+        const custom = parseCustomAsset(asset.id, asset);
+        if (custom && !preparedList.includes(asset.id)) addCustomToDo(custom);
       });
     });
   }
 
-  // 4) Apply DO display overrides + DO-only custom additions (stored locally per event)
+  Object.values(groupedCustom).forEach(({ dept, item }) => {
+    departments[dept].push({ ...item, quantity: String(item.quantity) });
+  });
+
+  // 3) Apply DO display overrides + DO-only custom additions (stored locally per event)
   const eventId = event.id || event.event_id || event.eventId || window.currentEventId || '0';
   const edits = getDoEdits(eventId);
 
-  // 4a) Apply overrides (by item.key)
-  ['Audio','Lighting','Video','MISC'].forEach(d => {
+  ['Audio', 'Lighting', 'Video', 'MISC'].forEach(d => {
     departments[d].forEach((item) => {
       const ov = edits.overrides[item.key];
       if (ov) {
@@ -16278,9 +16577,8 @@ function groupItemsByDepartment(event) {
     });
   });
 
-  // 4b) Append DO-only customs (user added just for DO printout)
   if (edits && edits.custom) {
-    ['Audio','Lighting','Video','MISC'].forEach(d => {
+    ['Audio', 'Lighting', 'Video', 'MISC'].forEach(d => {
       (edits.custom[d] || []).forEach((ci, i) => {
         departments[d].push({
           key: `DOCUSTOM|${d}|${i}`,
@@ -16292,8 +16590,7 @@ function groupItemsByDepartment(event) {
     });
   }
 
-  // 5) Apply custom ordering if it exists
-  ['Audio','Lighting','Video','MISC'].forEach(d => {
+  ['Audio', 'Lighting', 'Video', 'MISC'].forEach(d => {
     departments[d] = applyDoOrdering(departments[d], d, eventId);
   });
 
@@ -16350,7 +16647,7 @@ function getAssetIdsByItem(event, item, department) {
             // Find assets that match this brand/model combination
             departmentAssets.forEach(asset => {
                 // Skip custom assets (they don't have brand/model)
-                if (asset.isBulk || asset.id.startsWith('[BULK]') || asset.id.startsWith('[MISC]') || asset.id.startsWith('[LOAN]')) {
+                if (asset.isBulk || asset.id.startsWith('[BULK]') || isCustomAssetId(asset.id)) {
                     console.log(`Skipping custom asset: ${asset.id}`);
                     return;
                 }
