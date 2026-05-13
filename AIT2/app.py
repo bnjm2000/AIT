@@ -2,6 +2,7 @@ from flask import Flask, render_template, request, jsonify, session, redirect, u
 import csv
 from urllib.parse import unquote_plus
 import os
+import re
 from flask_cors import CORS
 from functools import wraps
 import os
@@ -63,6 +64,163 @@ def invalidate_cache():
     global _cache
     _cache = {'assigned_assets': None,
               'available_assets': None, 'cache_timestamp': None}
+
+
+# ---------------- Department configuration helpers ----------------
+# Departments used to be hard-coded in CSS and in dropdowns.  These helpers keep
+# the existing DepartmentCode value as the stable key, while allowing admins to
+# add/rename department codes and change badge colours without editing code.
+DEFAULT_DEPARTMENTS = {
+    'AX':   {'code': 'AX',   'name': 'Audio',    'color': '#cce5ff', 'textColor': '#004085'},
+    'LX':   {'code': 'LX',   'name': 'Lighting', 'color': '#d4edda', 'textColor': '#155724'},
+    'VX':   {'code': 'VX',   'name': 'Video',    'color': '#e2d9f3', 'textColor': '#44297a'},
+    'LOAN': {'code': 'LOAN', 'name': 'Loan',     'color': '#f8d7da', 'textColor': '#721c24'},
+    'MISC': {'code': 'MISC', 'name': 'Misc',     'color': '#fff3cd', 'textColor': '#856404'},
+    'UN':   {'code': 'UN',   'name': 'Unknown',  'color': '#e2e3e5', 'textColor': '#383d41'},
+}
+
+
+def _normalise_department_code(code):
+    code = str(code or '').strip().upper()
+    code = re.sub(r'[^A-Z0-9_-]+', '', code)
+    return code
+
+
+def _normalise_hex_colour(value, fallback='#e2e3e5'):
+    value = str(value or '').strip()
+    if re.match(r'^#[0-9a-fA-F]{6}$', value):
+        return value.upper()
+    if re.match(r'^[0-9a-fA-F]{6}$', value):
+        return f'#{value.upper()}'
+    return fallback
+
+
+def _best_text_colour(background):
+    colour = _normalise_hex_colour(background)
+    try:
+        r = int(colour[1:3], 16)
+        g = int(colour[3:5], 16)
+        b = int(colour[5:7], 16)
+        # Perceived brightness. Light backgrounds get dark text; dark backgrounds get white text.
+        brightness = (r * 299 + g * 587 + b * 114) / 1000
+        return '#111827' if brightness > 150 else '#FFFFFF'
+    except Exception:
+        return '#111827'
+
+
+def _departments_csv_path():
+    if not data_manager:
+        return os.path.join('.', 'Departments.csv')
+    return os.path.join(data_manager.data_folder, 'Departments.csv')
+
+
+def _department_record(code, name=None, colour=None, text_colour=None):
+    code = _normalise_department_code(code) or 'UN'
+    defaults = DEFAULT_DEPARTMENTS.get(code, {})
+    colour = _normalise_hex_colour(colour or defaults.get('color', '#e2e3e5'))
+    return {
+        'code': code,
+        'name': str(name if name is not None else defaults.get('name', code)).strip() or code,
+        'color': colour,
+        'textColor': _normalise_hex_colour(text_colour or defaults.get('textColor') or _best_text_colour(colour), _best_text_colour(colour))
+    }
+
+
+def _save_departments(departments):
+    filepath = _departments_csv_path()
+    folder = os.path.dirname(filepath)
+    if folder and not os.path.exists(folder):
+        os.makedirs(folder)
+
+    with open(filepath, 'w', newline='', encoding='utf-8') as f:
+        writer = csv.DictWriter(f, fieldnames=['Code', 'Name', 'Color', 'TextColor'])
+        writer.writeheader()
+        for code in sorted(departments.keys()):
+            dept = _department_record(
+                code,
+                departments[code].get('name'),
+                departments[code].get('color'),
+                departments[code].get('textColor')
+            )
+            writer.writerow({
+                'Code': dept['code'],
+                'Name': dept['name'],
+                'Color': dept['color'],
+                'TextColor': dept['textColor']
+            })
+
+
+def _load_departments():
+    filepath = _departments_csv_path()
+    departments = {}
+    changed = False
+
+    if os.path.exists(filepath) and os.path.getsize(filepath) > 0:
+        try:
+            with open(filepath, 'r', newline='', encoding='utf-8-sig') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    code = _normalise_department_code(row.get('Code') or row.get('code'))
+                    if not code:
+                        continue
+                    departments[code] = _department_record(
+                        code,
+                        row.get('Name') or row.get('name') or code,
+                        row.get('Color') or row.get('color'),
+                        row.get('TextColor') or row.get('textColor')
+                    )
+        except Exception as e:
+            logger.warning(f"Failed to read Departments.csv, rebuilding defaults: {e}")
+            departments = {}
+            changed = True
+
+    # Always keep the defaults available, unless the admin has already changed them.
+    for code, dept in DEFAULT_DEPARTMENTS.items():
+        if code not in departments:
+            departments[code] = dept.copy()
+            changed = True
+
+    # Auto-register any existing inventory department codes so old CSVs keep working.
+    if data_manager and getattr(data_manager, 'inventory', None):
+        for asset in data_manager.inventory.values():
+            code = _normalise_department_code(getattr(asset, 'department_code', 'UN')) or 'UN'
+            if code not in departments:
+                departments[code] = _department_record(code)
+                changed = True
+
+    if changed or not os.path.exists(filepath):
+        _save_departments(departments)
+
+    return departments
+
+
+def _department_payload(code, departments=None):
+    departments = departments or _load_departments()
+    code = _normalise_department_code(code) or 'UN'
+    return departments.get(code) or _department_record(code)
+
+
+def _replace_department_in_model_marker(value, old_code, new_code):
+    if not isinstance(value, str) or not value.startswith('[MODEL]'):
+        return value, False
+
+    parts = value[7:].split('|', 4)
+    if not parts or _normalise_department_code(parts[0]) != old_code:
+        return value, False
+
+    parts[0] = new_code
+    return '[MODEL]' + '|'.join(parts), True
+
+
+def _replace_department_in_model_description(value, old_code, new_code):
+    if not isinstance(value, str):
+        return value, False
+
+    prefix = f'[{old_code}]'
+    if value.startswith(prefix):
+        return f'[{new_code}]' + value[len(prefix):], True
+
+    return value, False
 
 def _clean_group_value(value, uppercase=False):
     cleaned = str(value or '').strip()
@@ -1331,6 +1489,169 @@ def get_current_user():
             'isActive': getattr(user, 'is_active', True)
         }
     })
+
+
+
+@app.route('/api/departments', methods=['GET'])
+@require_auth
+def get_departments():
+    """Return the configurable department list used by filters and badges."""
+    try:
+        departments = _load_departments()
+        usage_counts = defaultdict(int)
+
+        for asset in data_manager.inventory.values():
+            code = _normalise_department_code(getattr(asset, 'department_code', 'UN')) or 'UN'
+            usage_counts[code] += 1
+
+        data = []
+        for code in sorted(departments.keys()):
+            dept = _department_payload(code, departments)
+            data.append({
+                'code': dept['code'],
+                'name': dept['name'],
+                'color': dept['color'],
+                'textColor': dept['textColor'],
+                'assetCount': usage_counts.get(code, 0)
+            })
+
+        return jsonify({'success': True, 'data': data})
+    except Exception as e:
+        logger.error(f"Error loading departments: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to load departments'}), 500
+
+
+@app.route('/api/departments', methods=['POST'])
+@require_admin
+def create_department():
+    """Admin: create a new department code/name/colour."""
+    try:
+        data = request.get_json() or {}
+        code = _normalise_department_code(data.get('code'))
+        name = str(data.get('name') or '').strip()
+        colour = _normalise_hex_colour(data.get('color'))
+
+        if not code:
+            return jsonify({'error': 'Department code is required'}), 400
+
+        departments = _load_departments()
+        if code in departments:
+            return jsonify({'error': f'Department {code} already exists'}), 409
+
+        departments[code] = _department_record(code, name or code, colour)
+        _save_departments(departments)
+
+        log_action(f"Created department {code} ({name or code})")
+
+        return jsonify({'success': True, 'message': 'Department created successfully', 'data': departments[code]})
+    except Exception as e:
+        logger.error(f"Error creating department: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to create department'}), 500
+
+
+@app.route('/api/departments/<path:department_code>', methods=['PUT'])
+@require_admin
+def update_department(department_code):
+    """Admin: rename a department code, change display name, or change colour.
+
+    If the code changes, all inventory rows and model requirement markers in event
+    CSV files are updated so old events remain linked correctly.
+    """
+    try:
+        old_code = _normalise_department_code(unquote_plus(department_code))
+        data = request.get_json() or {}
+        new_code = _normalise_department_code(data.get('code') or old_code)
+        raw_name = data.get('name')
+        raw_colour = data.get('color')
+
+        if not old_code:
+            return jsonify({'error': 'Department code is required'}), 400
+
+        if not new_code:
+            return jsonify({'error': 'New department code is required'}), 400
+
+        departments = _load_departments()
+        if old_code not in departments:
+            # Allow repair of legacy codes that exist in inventory but not in Departments.csv.
+            if not any(_normalise_department_code(getattr(a, 'department_code', '')) == old_code for a in data_manager.inventory.values()):
+                return jsonify({'error': f'Department {old_code} not found'}), 404
+            departments[old_code] = _department_record(old_code)
+
+        if new_code != old_code and new_code in departments:
+            return jsonify({'error': f'Department {new_code} already exists'}), 409
+
+        previous = departments.pop(old_code)
+        name = str(raw_name if raw_name is not None else previous.get('name', new_code)).strip() or new_code
+        colour = _normalise_hex_colour(raw_colour, previous.get('color', '#e2e3e5'))
+        departments[new_code] = _department_record(new_code, name, colour, _best_text_colour(colour))
+        _save_departments(departments)
+
+        assets_updated = 0
+        events_updated = 0
+        model_markers_updated = 0
+        asset_model_rows_updated = 0
+
+        if new_code != old_code:
+            for asset in data_manager.inventory.values():
+                if _normalise_department_code(getattr(asset, 'department_code', '')) == old_code:
+                    asset.department_code = new_code
+                    assets_updated += 1
+
+            for event in data_manager.events.values():
+                changed = 0
+
+                if isinstance(getattr(event, 'prepared_items', None), list):
+                    for index, item in enumerate(list(event.prepared_items)):
+                        replacement, did_change = _replace_department_in_model_marker(item, old_code, new_code)
+                        if did_change:
+                            event.prepared_items[index] = replacement
+                            changed += 1
+                            model_markers_updated += 1
+
+                if isinstance(getattr(event, 'asset_models', None), list):
+                    for row in event.asset_models:
+                        if not isinstance(row, dict):
+                            continue
+                        replacement, did_change = _replace_department_in_model_description(
+                            str(row.get('model_description', '')),
+                            old_code,
+                            new_code
+                        )
+                        if did_change:
+                            row['model_description'] = replacement
+                            changed += 1
+                            asset_model_rows_updated += 1
+
+                if changed:
+                    update_event_state(event)
+                    data_manager.save_event(event)
+                    events_updated += 1
+
+            if assets_updated:
+                data_manager.save_inventory()
+
+        invalidate_cache()
+
+        log_action(
+            f"Updated department {old_code} -> {new_code}; "
+            f"name='{previous.get('name')}' -> '{name}'; "
+            f"assetsUpdated={assets_updated}; eventsUpdated={events_updated}"
+        )
+
+        return jsonify({
+            'success': True,
+            'message': 'Department updated successfully',
+            'data': {
+                'department': departments[new_code],
+                'assetsUpdated': assets_updated,
+                'eventsUpdated': events_updated,
+                'modelMarkersUpdated': model_markers_updated,
+                'assetModelRowsUpdated': asset_model_rows_updated
+            }
+        })
+    except Exception as e:
+        logger.error(f"Error updating department {department_code}: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to update department'}), 500
 
 
 @app.route('/api/users', methods=['GET'])
@@ -3930,6 +4251,7 @@ def get_assets():
     try:
         assets_data = []
         assigned_assets = get_assigned_assets()
+        departments = _load_departments()
 
         for asset in data_manager.inventory.values():
             # Determine current status
@@ -3960,6 +4282,9 @@ def get_assets():
                 'serial': asset.serial_number,
                 'description': asset.description,
                 'department': asset.department_code,
+                'departmentName': _department_payload(asset.department_code, departments)['name'],
+                'departmentColor': _department_payload(asset.department_code, departments)['color'],
+                'departmentTextColor': _department_payload(asset.department_code, departments)['textColor'],
                 'status': status,
                 'location': asset.current_location or asset.default_location,
                 'isMissing': asset.is_missing,
@@ -4381,6 +4706,13 @@ def create_asset():
         data_manager.inventory[asset_id] = asset
         data_manager.save_inventory()
 
+        # Auto-register the asset's department if it is new.
+        departments = _load_departments()
+        dept_code = _normalise_department_code(asset.department_code) or 'UN'
+        if dept_code not in departments:
+            departments[dept_code] = _department_record(dept_code)
+            _save_departments(departments)
+
         # Invalidate cache
         invalidate_cache()
 
@@ -4589,6 +4921,14 @@ def update_asset(asset_id):
                 events_updated += 1
 
         data_manager.save_inventory()
+
+        # Auto-register the new/edited department so filters and badges can use it immediately.
+        departments = _load_departments()
+        dept_code = _normalise_department_code(new_group['department']) or 'UN'
+        if dept_code not in departments:
+            departments[dept_code] = _department_record(dept_code)
+            _save_departments(departments)
+
         invalidate_cache()
 
         log_action(

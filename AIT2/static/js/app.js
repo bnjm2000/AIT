@@ -5,6 +5,8 @@ let assets = [];
 let containers = [];
 let logs = [];
 let stats = {};
+let departments = {};
+let departmentsLoaded = false;
 
 // ---------- containers cache ----------
 let selectedContainerAssets = new Set();
@@ -562,6 +564,360 @@ async function apiCall(endpoint, method = "GET", data = null) {
     throw error;
   }
 }
+
+
+// ---------------- Department Management ----------------
+function normalizeDepartmentCode(code) {
+  const cleaned = String(code || 'UN').trim().toUpperCase().replace(/[^A-Z0-9_-]+/g, '');
+  return cleaned || 'UN';
+}
+
+function departmentClassName(code) {
+  return `dept-${normalizeDepartmentCode(code).toLowerCase().replace(/[^a-z0-9_-]+/g, '-')}`;
+}
+
+function getDepartmentMeta(code) {
+  const normalized = normalizeDepartmentCode(code);
+  return departments[normalized] || {
+    code: normalized,
+    name: normalized,
+    color: '#e2e3e5',
+    textColor: '#383d41',
+    assetCount: 0
+  };
+}
+
+function departmentBadgeHtml(code, showName = false) {
+  const dept = getDepartmentMeta(code);
+  const label = showName && dept.name && dept.name !== dept.code
+    ? `${dept.code} - ${dept.name}`
+    : dept.code;
+
+  return `<span class="asset-badge ${departmentClassName(dept.code)}" title="${escapeHtmlAttr(dept.name || dept.code)}">${escapeHtml(label)}</span>`;
+}
+
+function applyDepartmentStyles() {
+  let style = document.getElementById('dynamic-department-styles');
+  if (!style) {
+    style = document.createElement('style');
+    style.id = 'dynamic-department-styles';
+    document.head.appendChild(style);
+  }
+
+  const rules = Object.values(departments).map(dept => {
+    const cls = departmentClassName(dept.code);
+    const bg = /^#[0-9A-Fa-f]{6}$/.test(dept.color || '') ? dept.color : '#e2e3e5';
+    const fg = /^#[0-9A-Fa-f]{6}$/.test(dept.textColor || '') ? dept.textColor : '#383d41';
+    return `.${cls} { background: ${bg} !important; color: ${fg} !important; }`;
+  });
+
+  style.textContent = rules.join('\n');
+}
+
+async function loadDepartments(force = false) {
+  if (departmentsLoaded && !force) return departments;
+
+  const res = await apiCall('/api/departments');
+  const list = res.data || [];
+  departments = {};
+  list.forEach(dept => {
+    const code = normalizeDepartmentCode(dept.code);
+    departments[code] = {
+      code,
+      name: dept.name || code,
+      color: dept.color || '#e2e3e5',
+      textColor: dept.textColor || '#383d41',
+      assetCount: Number(dept.assetCount || 0)
+    };
+  });
+
+  departmentsLoaded = true;
+  applyDepartmentStyles();
+  populateDepartmentSelects();
+  renderDepartmentManager();
+  return departments;
+}
+
+function sortedDepartmentList() {
+  return Object.values(departments).sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true }));
+}
+
+function populateDepartmentSelects() {
+  const list = sortedDepartmentList();
+
+  const filter = document.getElementById('department-filter');
+  if (filter) {
+    const current = filter.value;
+    filter.innerHTML = '<option value="">All Departments</option>' + list.map(dept => (
+      `<option value="${escapeHtmlAttr(dept.code)}">${escapeHtml(dept.code)} - ${escapeHtml(dept.name || dept.code)}</option>`
+    )).join('');
+    filter.value = current && list.some(dept => dept.code === current) ? current : '';
+  }
+
+  const assetDeptSelect = document.getElementById('assetDepartment');
+  if (assetDeptSelect) {
+    const current = assetDeptSelect.value || 'UN';
+    assetDeptSelect.innerHTML = list.map(dept => (
+      `<option value="${escapeHtmlAttr(dept.code)}">${escapeHtml(dept.code)} - ${escapeHtml(dept.name || dept.code)}</option>`
+    )).join('');
+    assetDeptSelect.value = list.some(dept => dept.code === current) ? current : (list[0]?.code || 'UN');
+  }
+
+  ensureDepartmentDatalist();
+}
+
+function ensureDepartmentDatalist() {
+  let datalist = document.getElementById('department-code-options');
+  if (!datalist) {
+    datalist = document.createElement('datalist');
+    datalist.id = 'department-code-options';
+    document.body.appendChild(datalist);
+  }
+
+  datalist.innerHTML = sortedDepartmentList().map(dept => (
+    `<option value="${escapeHtmlAttr(dept.code)}">${escapeHtml(dept.name || dept.code)}</option>`
+  )).join('');
+}
+
+function ensureDepartmentManagerPanel() {
+  if (!currentUser || !currentUser.isAdmin) return;
+  if (document.getElementById('department-admin-panel')) return;
+
+  const inventorySection = document.getElementById('inventory-section');
+  const controls = inventorySection?.querySelector('.inventory-controls');
+  if (!inventorySection || !controls) return;
+
+  const panel = document.createElement('div');
+  panel.id = 'department-admin-panel';
+  panel.className = 'card';
+  panel.style.cssText = 'margin-bottom:20px;background:white;border-radius:12px;padding:18px;box-shadow:0 4px 15px rgba(0,0,0,0.08);';
+  panel.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px;">
+      <div>
+        <h3 style="margin:0;color:#333;">Department Management</h3>
+        <p style="margin:4px 0 0;color:#666;font-size:13px;">Admin-only: add departments, rename department codes/names, and change badge colours.</p>
+      </div>
+      <button class="btn btn-success" onclick="openDepartmentModal()">+ Add Department</button>
+    </div>
+    <div id="department-admin-table"></div>
+  `;
+
+  controls.parentNode.insertBefore(panel, controls);
+}
+
+function renderDepartmentManager() {
+  if (!currentUser || !currentUser.isAdmin) return;
+  ensureDepartmentManagerPanel();
+
+  const container = document.getElementById('department-admin-table');
+  if (!container) return;
+
+  const list = sortedDepartmentList();
+  if (list.length === 0) {
+    container.innerHTML = '<p style="color:#666;text-align:center;padding:20px;">No departments found.</p>';
+    return;
+  }
+
+  container.innerHTML = `
+    <table class="table" style="margin-top:0;">
+      <thead>
+        <tr>
+          <th>Code</th>
+          <th>Name</th>
+          <th>Preview</th>
+          <th>Colour</th>
+          <th>Assets</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${list.map(dept => `
+          <tr>
+            <td><strong>${escapeHtml(dept.code)}</strong></td>
+            <td>${escapeHtml(dept.name || dept.code)}</td>
+            <td>${departmentBadgeHtml(dept.code, true)}</td>
+            <td><span style="display:inline-flex;align-items:center;gap:8px;"><span style="width:22px;height:22px;border-radius:6px;border:1px solid #ccc;background:${escapeHtmlAttr(dept.color || '#e2e3e5')};display:inline-block;"></span>${escapeHtml(dept.color || '')}</span></td>
+            <td>${Number(dept.assetCount || 0)}</td>
+            <td><button class="btn btn-warning btn-sm" onclick="openDepartmentModal('${encodeURIComponent(dept.code)}')">Edit</button></td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+function ensureDepartmentModal() {
+  if (document.getElementById('departmentModal')) return;
+
+  const modal = document.createElement('div');
+  modal.id = 'departmentModal';
+  modal.className = 'modal';
+  modal.innerHTML = `
+    <div class="modal-content" style="max-width:520px;">
+      <div class="modal-header">
+        <h3 class="modal-title" id="departmentModalTitle">Department</h3>
+        <button class="close-btn" onclick="closeModal('departmentModal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="departmentRenameWarning" style="display:none;background:#fff3cd;border:1px solid #ffeaa7;color:#856404;padding:12px;border-radius:8px;margin-bottom:14px;">
+          Renaming the department code will update matching inventory rows and event model requirements so old events stay linked.
+        </div>
+        <div class="form-group">
+          <label class="form-label">Department Code</label>
+          <input id="departmentCodeInput" class="form-input" placeholder="AX / LX / VIDEO" style="text-transform:uppercase;">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Display Name</label>
+          <input id="departmentNameInput" class="form-input" placeholder="Audio / Lighting / Video">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Badge Colour</label>
+          <div style="display:flex;gap:10px;align-items:center;">
+            <input id="departmentColorInput" type="color" class="form-input" style="width:80px;padding:4px;height:44px;">
+            <input id="departmentColorTextInput" class="form-input" placeholder="#667EEA">
+          </div>
+        </div>
+        <div style="margin-top:10px;">
+          <span style="color:#666;font-size:13px;margin-right:8px;">Preview:</span>
+          <span id="departmentPreviewBadge" class="asset-badge">DEPT</span>
+        </div>
+      </div>
+      <div class="modal-footer" style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
+        <button class="btn btn-secondary" onclick="closeModal('departmentModal')">Cancel</button>
+        <button class="btn btn-success" onclick="saveDepartmentModal()">Save Department</button>
+      </div>
+    </div>
+  `;
+
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) closeModal('departmentModal');
+  });
+
+  document.body.appendChild(modal);
+
+  const colorInput = document.getElementById('departmentColorInput');
+  const colorTextInput = document.getElementById('departmentColorTextInput');
+  const codeInput = document.getElementById('departmentCodeInput');
+  const nameInput = document.getElementById('departmentNameInput');
+
+  colorInput.addEventListener('input', () => {
+    colorTextInput.value = colorInput.value.toUpperCase();
+    updateDepartmentPreview();
+  });
+  colorTextInput.addEventListener('input', () => {
+    if (/^#[0-9A-Fa-f]{6}$/.test(colorTextInput.value.trim())) {
+      colorInput.value = colorTextInput.value.trim();
+    }
+    updateDepartmentPreview();
+  });
+  codeInput.addEventListener('input', updateDepartmentPreview);
+  nameInput.addEventListener('input', updateDepartmentPreview);
+}
+
+function updateDepartmentPreview() {
+  const badge = document.getElementById('departmentPreviewBadge');
+  if (!badge) return;
+
+  const code = normalizeDepartmentCode(document.getElementById('departmentCodeInput')?.value || 'DEPT');
+  const name = document.getElementById('departmentNameInput')?.value.trim() || code;
+  const colour = document.getElementById('departmentColorTextInput')?.value.trim() || '#e2e3e5';
+
+  badge.textContent = name && name !== code ? `${code} - ${name}` : code;
+  const safeColour = /^#[0-9A-Fa-f]{6}$/.test(colour) ? colour : '#e2e3e5';
+  badge.style.background = safeColour;
+  badge.style.color = getReadableTextColour(safeColour);
+}
+
+function getReadableTextColour(colour) {
+  // Supports hex input. Browser rgb() fallback uses dark text.
+  if (!/^#[0-9A-Fa-f]{6}$/.test(colour || '')) return '#111827';
+  const r = parseInt(colour.slice(1, 3), 16);
+  const g = parseInt(colour.slice(3, 5), 16);
+  const b = parseInt(colour.slice(5, 7), 16);
+  const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+  return brightness > 150 ? '#111827' : '#FFFFFF';
+}
+
+function openDepartmentModal(encodedCode = '') {
+  if (!currentUser || !currentUser.isAdmin) {
+    showNotification('error', 'Admin privileges required');
+    return;
+  }
+
+  ensureDepartmentModal();
+
+  const modal = document.getElementById('departmentModal');
+  const originalCode = encodedCode ? decodeURIComponent(encodedCode) : '';
+  const dept = originalCode ? getDepartmentMeta(originalCode) : { code: '', name: '', color: '#667eea' };
+
+  modal.dataset.originalCode = originalCode;
+  document.getElementById('departmentModalTitle').textContent = originalCode ? `Edit Department: ${originalCode}` : 'Add Department';
+  document.getElementById('departmentRenameWarning').style.display = originalCode ? 'block' : 'none';
+  document.getElementById('departmentCodeInput').value = dept.code || '';
+  document.getElementById('departmentNameInput').value = dept.name || '';
+  document.getElementById('departmentColorInput').value = dept.color || '#667eea';
+  document.getElementById('departmentColorTextInput').value = (dept.color || '#667eea').toUpperCase();
+
+  updateDepartmentPreview();
+  openModal('departmentModal');
+  setTimeout(() => document.getElementById('departmentCodeInput')?.focus(), 100);
+}
+
+async function saveDepartmentModal() {
+  if (!currentUser || !currentUser.isAdmin) {
+    showNotification('error', 'Admin privileges required');
+    return;
+  }
+
+  const modal = document.getElementById('departmentModal');
+  const originalCode = modal.dataset.originalCode || '';
+  const code = normalizeDepartmentCode(document.getElementById('departmentCodeInput')?.value);
+  const name = document.getElementById('departmentNameInput')?.value.trim();
+  const color = document.getElementById('departmentColorTextInput')?.value.trim();
+
+  if (!code) {
+    showNotification('warning', 'Department code is required');
+    return;
+  }
+
+  if (!name) {
+    showNotification('warning', 'Department display name is required');
+    return;
+  }
+
+  if (!/^#[0-9A-Fa-f]{6}$/.test(color || '')) {
+    showNotification('warning', 'Colour must be a valid hex colour, e.g. #667EEA');
+    return;
+  }
+
+  if (originalCode && code !== normalizeDepartmentCode(originalCode)) {
+    const ok = confirm(`Rename department code "${originalCode}" to "${code}"?\n\nThis will update matching inventory rows and event model requirements.`);
+    if (!ok) return;
+  }
+
+  try {
+    const endpoint = originalCode
+      ? `/api/departments/${encodeURIComponent(originalCode)}`
+      : '/api/departments';
+    const method = originalCode ? 'PUT' : 'POST';
+
+    const res = await apiCall(endpoint, method, { code, name, color });
+    closeModal('departmentModal');
+
+    const data = res.data || {};
+    let message = originalCode ? 'Department updated' : 'Department created';
+    if (data.assetsUpdated) message += `; ${data.assetsUpdated} asset(s) updated`;
+    if (data.eventsUpdated) message += `; ${data.eventsUpdated} event(s) updated`;
+    showNotification('success', message);
+
+    departmentsLoaded = false;
+    await loadDepartments(true);
+    await loadInventory();
+  } catch (error) {
+    showNotification('error', `Failed to save department: ${error.message}`);
+  }
+}
+
 
 // ---------------- Admin User Management ----------------
 
@@ -1722,8 +2078,25 @@ function getModelStatusIcon(status) {
 
 async function loadInventory() {
   try {
+    if (!currentUser) {
+      try {
+        const currentUserRes = await apiCall('/api/current-user');
+        currentUser = currentUserRes.data;
+      } catch (e) {
+        console.warn('Could not load current user for inventory permissions:', e);
+      }
+    }
+
+    await loadDepartments(true);
+
     const response = await apiCall("/api/assets");
     assets = response.data;
+
+    // Asset counts may have changed, so refresh department metadata once more.
+    await loadDepartments(true);
+
+    ensureDepartmentManagerPanel();
+    renderDepartmentManager();
 
     // Set up event listeners for filters and sorting
     setupInventoryFilters();
@@ -1781,9 +2154,10 @@ function displayFilteredInventory() {
   // Filter assets
   let filteredAssets = assets.filter((asset) => {
     // Search filter
+    const deptMeta = getDepartmentMeta(asset.department);
     const searchableText = `${asset.id} ${asset.brand} ${asset.model} ${
       asset.description || ""
-    }`.toLowerCase();
+    } ${asset.department || ""} ${deptMeta.name || ""}`.toLowerCase();
     const matchesSearch = !searchTerm || searchableText.includes(searchTerm);
 
     // Department filter
@@ -1945,9 +2319,7 @@ function displayInventoryTable(assetsToShow) {
         <td>${asset.isBulk ? `${escapeHtml(String(asset.availableQuantity ?? asset.quantity ?? 1))}/${escapeHtml(String(asset.quantity ?? 1))}` : '1'}</td>
 
         <td>
-          <span class="asset-badge dept-${escapeHtmlAttr((asset.department || 'un').toLowerCase())}">
-            ${escapeHtml(asset.department || "UN")}
-          </span>
+          ${departmentBadgeHtml(asset.department)}
         </td>
 
         <td>
@@ -2100,6 +2472,8 @@ function openEditAssetModal(encodedAssetId) {
   }
 
   ensureAssetEditModal();
+  ensureDepartmentDatalist();
+  document.getElementById('editAssetDepartment')?.setAttribute('list', 'department-code-options');
 
   const assetId = decodeURIComponent(encodedAssetId);
   const asset = assets.find(a => getAssetIdentifierForApi(a) === assetId);
@@ -16089,6 +16463,13 @@ async function initializeApp() {
 
     // Add admin-only Users tab if the logged-in user is an admin
     await setupAdminUserManagementTab();
+
+    // Load configurable department names/colours for badges and dropdowns.
+    try {
+      await loadDepartments(true);
+    } catch (departmentError) {
+      console.warn('Departments not loaded during startup:', departmentError);
+    }
 
     // Add a small delay to ensure all DOM elements are ready
     setTimeout(async () => {

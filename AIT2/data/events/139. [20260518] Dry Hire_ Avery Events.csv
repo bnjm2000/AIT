@@ -1,2 +1,2 @@
 EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,Tag,ForceStateOverride
-139,Dry Hire: Avery Events,20260518,20260521,[],"[""[MODEL]SK|Global Truss|F34 Corner Block (Silver)|4|Corner Block (silver)""]",[],Planning,[],[],dry hire,False
+139,Dry Hire: Avery Events,20260518,20260521,[],"[""[MODEL]STG|Global Truss|F34 Corner Block (Silver)|4|Corner Block (silver)""]",[],Planning,[],[],dry hire,False

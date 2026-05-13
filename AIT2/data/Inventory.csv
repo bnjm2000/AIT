@@ -1205,19 +1205,19 @@ LG50#01,LG,50NANO75TPA,104INZY62629,"50"" Crystal UHD 4K Smart TV (2020)",False,
 LG50#02,LG,50NANO75TPA,209INHZ4B729,"50"" Crystal UHD 4K Smart TV (2020)",False,False,False,1,,VX,Store,
 LG50#03,LG,50NANO75TPA,209INVM4B727,"50"" Crystal UHD 4K Smart TV (2020)",False,False,False,1,,VX,Store,
 LG50#04,LG,50NANO75TPA,209INPT4B728,"50"" Crystal UHD 4K Smart TV (2020)",False,False,False,1,,VX,Store,
-CMD8#01,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,False,1,2025/09/09	bnjm2000	Maintenance done - greased chain,SK,Store,Store
-CMD8#02,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,False,1,2025/09/09	bnjm2000	Maintenance done - greased chain,SK,Store,Store
-CMD8#03,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,False,1,2025/09/09	bnjm2000	Maintenance done - greased chain,SK,Store,Store
-CMD8#04,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,False,1,2025/09/09	bnjm2000	Maintenance done - greased chain,SK,Store,Store
-CMD8#05,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,False,1,2025/09/09	bnjm2000	Maintenance done - greased chain,SK,Store,Store
-CMD8#06,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,False,1,2025/09/09	bnjm2000	Maintenance done - greased chain,SK,Store,Store
-CMD8#07,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,False,1,2025/09/09	bnjm2000	Maintenance done - greased chain,SK,Store,Store
-CMD8#08,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,False,1,2025/09/09	bnjm2000	Maintenance done - greased chain,SK,Store,Store
-CMD8#09,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,False,1,2025/09/09	bnjm2000	Maintenance done - greased chain,SK,Store,Store
-CMD8#10,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,False,1,2025/09/09	bnjm2000	Maintenance done - greased chain,SK,Store,Store
-CMD8#11,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,False,1,2025/09/09	bnjm2000	Maintenance done - greased chain,SK,Store,Store
-CMD8#12,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,False,1,2025/09/09	bnjm2000	Maintenance done - greased chain,SK,Store,Store
-CONTROLLER#01,Custom,Chain Hoist Controller,,Chain Hoist Controller,False,False,False,1,,SK,Store,Store
+CMD8#01,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,False,1,2025/09/09	bnjm2000	Maintenance done - greased chain,STG,Store,Store
+CMD8#02,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,False,1,2025/09/09	bnjm2000	Maintenance done - greased chain,STG,Store,Store
+CMD8#03,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,False,1,2025/09/09	bnjm2000	Maintenance done - greased chain,STG,Store,Store
+CMD8#04,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,False,1,2025/09/09	bnjm2000	Maintenance done - greased chain,STG,Store,Store
+CMD8#05,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,False,1,2025/09/09	bnjm2000	Maintenance done - greased chain,STG,Store,Store
+CMD8#06,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,False,1,2025/09/09	bnjm2000	Maintenance done - greased chain,STG,Store,Store
+CMD8#07,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,False,1,2025/09/09	bnjm2000	Maintenance done - greased chain,STG,Store,Store
+CMD8#08,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,False,1,2025/09/09	bnjm2000	Maintenance done - greased chain,STG,Store,Store
+CMD8#09,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,False,1,2025/09/09	bnjm2000	Maintenance done - greased chain,STG,Store,Store
+CMD8#10,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,False,1,2025/09/09	bnjm2000	Maintenance done - greased chain,STG,Store,Store
+CMD8#11,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,False,1,2025/09/09	bnjm2000	Maintenance done - greased chain,STG,Store,Store
+CMD8#12,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,False,1,2025/09/09	bnjm2000	Maintenance done - greased chain,STG,Store,Store
+CONTROLLER#01,Custom,Chain Hoist Controller,,Chain Hoist Controller,False,False,False,1,,STG,Store,Store
 HERCULES 8#01,Fenix,HERCULES 8,180439_30,Frontal lifting tower array lifter,False,False,False,1,"2025/07/03	bnjm2000	Discovered frayed metal cable during BBC 2025 @ GBTB [Marked OOC]|2025/07/09	bnjm2000	Sent to LSD or servicing (Service order no. 1636) [Location: LSD SG]|2025/09/16	bnjm2000	Collected back from LSD, tested working [Location: Store, Cleared OOC, Cleared Missing]|2026/04/21	bnjm2000	Scratched arm and bent handle (Dry Rental: XC Lighting)",AX,Store,Store
 HERCULES 8#02,Fenix,HERCULES 8,180439_28,Frontal lifting tower array lifter,False,False,False,1,2026/04/21	bnjm2000	Missing securing pin and 2 stopper (Dry Rental: XC Lighting),AX,Store,Store
 MASTER4KTX#01,Accsoon,Cineview Master 4K TX,WIT07-0137-BE0F,Wireless SDI/HDMI Transmitter,False,False,False,1,,VX,Store,Store
@@ -1325,18 +1325,18 @@ LUMINODE12,Luminex,Luminode 12,,12 DMX Interface,False,False,False,1,,LX,Store,S
 32ADB#01,32A 3-Phase DB,Custom DB,,,False,False,False,1,,LX,Store,Store
 ME36#03,Sennheiser,ME36,,Gooseneck mic,False,False,False,1,,AX,Store,
 ME36#04,Sennheiser,ME36,,Gooseneck mic,False,False,False,1,,AX,Store,
-BULK-0001,Global Truss,F34 Truss - 3m (Silver),,3m truss (silver),False,False,True,10,,SK,Store,
-BULK-0002,Global Truss,F34 Truss - 2.5m (Silver),,2.5m truss (silver),False,False,True,10,,SK,Store,
-BULK-0003,Global Truss,F34 Truss - 2m (Silver),,2m truss (silver),False,False,True,25,,SK,Store,
-BULK-0004,Global Truss,F34 Truss - 1.5m (Silver),,1.5m truss (silver),False,False,True,20,,SK,Store,
-BULK-0005,Global Truss,F34 Truss - 1m (Silver),,1.5m truss (silver),False,False,True,7,,SK,Store,
-BULK-0006,Global Truss,F34 Truss - 0.5m (Silver),,0.5m truss (silver),False,False,True,10,,SK,Store,
-BULK-0007,Global Truss,F34 Corner Block (Silver),,Corner Block (silver),False,False,True,21,,SK,Store,
-BULK-0008,Global Truss,F34 Truss - 3m (Black),,3m truss (black),False,False,True,78,,SK,Store,
-BULK-0009,Global Truss,F34 Truss - 2.5m (Black),,2.5m truss (black),False,False,True,4,,SK,Store,
-BULK-0010,Global Truss,F34 Truss - 2m (Black),,2m truss (black),False,False,True,25,,SK,Store,
-BULK-0011,Global Truss,F34 Truss - 1.5m (Black),,1.5m truss (black),False,False,True,6,,SK,Store,
-BULK-0012,Global Truss,F34 Truss - 1m (Black),,1m truss (silver),False,False,True,17,,SK,Store,
-BULK-0013,Global Truss,F34 Truss - 0.5m (Black),,0.5m truss (black),False,False,True,18,,SK,Store,
-BULK-0014,Global Truss,F34 Corner Block (Black),,Corner Block (black),False,False,True,17,,SK,Store,
-BULK-0015,Custom,Sandbag,,Sandbag - 6kg,False,False,True,20,,UN,Store,
+BULK-0001,Global Truss,F34 Truss - 3m (Silver),,3m truss (silver),False,False,True,10,,STG,Store,
+BULK-0002,Global Truss,F34 Truss - 2.5m (Silver),,2.5m truss (silver),False,False,True,10,,STG,Store,
+BULK-0003,Global Truss,F34 Truss - 2m (Silver),,2m truss (silver),False,False,True,25,,STG,Store,
+BULK-0004,Global Truss,F34 Truss - 1.5m (Silver),,1.5m truss (silver),False,False,True,20,,STG,Store,
+BULK-0005,Global Truss,F34 Truss - 1m (Silver),,1.5m truss (silver),False,False,True,7,,STG,Store,
+BULK-0006,Global Truss,F34 Truss - 0.5m (Silver),,0.5m truss (silver),False,False,True,10,,STG,Store,
+BULK-0007,Global Truss,F34 Corner Block (Silver),,Corner Block (silver),False,False,True,21,,STG,Store,
+BULK-0008,Global Truss,F34 Truss - 3m (Black),,3m truss (black),False,False,True,78,,STG,Store,
+BULK-0009,Global Truss,F34 Truss - 2.5m (Black),,2.5m truss (black),False,False,True,4,,STG,Store,
+BULK-0010,Global Truss,F34 Truss - 2m (Black),,2m truss (black),False,False,True,25,,STG,Store,
+BULK-0011,Global Truss,F34 Truss - 1.5m (Black),,1.5m truss (black),False,False,True,6,,STG,Store,
+BULK-0012,Global Truss,F34 Truss - 1m (Black),,1m truss (silver),False,False,True,17,,STG,Store,
+BULK-0013,Global Truss,F34 Truss - 0.5m (Black),,0.5m truss (black),False,False,True,18,,STG,Store,
+BULK-0014,Global Truss,F34 Corner Block (Black),,Corner Block (black),False,False,True,17,,STG,Store,
+BULK-0015,Custom,Sandbag,,Sandbag - 6kg,False,False,True,20,,STG,Store,
