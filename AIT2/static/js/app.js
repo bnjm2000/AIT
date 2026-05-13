@@ -7741,15 +7741,201 @@ function displayMaintenanceAssets(assetsToShow) {
   container.innerHTML = tableHTML;
 }
 
+let assetCheckState = {
+  group: null,
+  assets: [],
+  checked: new Set(),
+  seedIdentifier: ''
+};
+
+function ensureAssetCheckStyles() {
+  if (document.getElementById('asset-check-styles')) return;
+
+  const style = document.createElement('style');
+  style.id = 'asset-check-styles';
+  style.textContent = `
+    .asset-check-panel {
+      background: #fff;
+      border: 1px solid #e9ecef;
+      border-radius: 14px;
+      padding: 20px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.06);
+      margin-bottom: 18px;
+    }
+
+    .asset-check-scan-row {
+      display: grid;
+      grid-template-columns: minmax(240px, 1fr) auto auto;
+      gap: 10px;
+      align-items: end;
+    }
+
+    .asset-check-summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 12px;
+      margin: 16px 0;
+    }
+
+    .asset-check-summary-card {
+      background: #f8f9fa;
+      border: 1px solid #e9ecef;
+      border-radius: 12px;
+      padding: 14px;
+    }
+
+    .asset-check-summary-value {
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: #764ba2;
+      margin-bottom: 4px;
+    }
+
+    .asset-check-summary-label {
+      color: #666;
+      font-size: 13px;
+    }
+
+    .asset-check-table-wrap {
+      overflow-x: auto;
+      border: 1px solid #e9ecef;
+      border-radius: 12px;
+      background: #fff;
+    }
+
+    .asset-check-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .asset-check-table th,
+    .asset-check-table td {
+      padding: 10px 12px;
+      border-bottom: 1px solid #f1f1f1;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    .asset-check-table th {
+      background: #f8f9fa;
+      font-weight: 700;
+      color: #495057;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+
+    .asset-check-row-checked {
+      background: #eefaf1;
+    }
+
+    .asset-check-row-excluded {
+      background: #f8f9fa;
+      color: #777;
+    }
+
+    .asset-check-row-missing {
+      background: #fff3cd;
+      color: #856404;
+    }
+
+    .asset-check-row-flash {
+      outline: 3px solid #667eea;
+      outline-offset: -3px;
+      transition: outline 0.3s ease;
+    }
+
+    .asset-check-badge {
+      display: inline-block;
+      padding: 4px 9px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .asset-check-badge.checked { background: #d4edda; color: #155724; }
+    .asset-check-badge.pending { background: #e2e3e5; color: #383d41; }
+    .asset-check-badge.ooc { background: #fff3cd; color: #856404; }
+    .asset-check-badge.excluded { background: #e9ecef; color: #495057; }
+    .asset-check-badge.missing { background: #f8d7da; color: #721c24; }
+    .asset-check-badge.deployed { background: #cce5ff; color: #004085; }
+    .asset-check-badge.away { background: #d1ecf1; color: #0c5460; }
+
+    .asset-check-help {
+      color: #666;
+      font-size: 13px;
+      line-height: 1.45;
+      margin-top: 6px;
+    }
+
+    .asset-check-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    @media (max-width: 850px) {
+      .asset-check-scan-row {
+        grid-template-columns: 1fr;
+      }
+    }
+  `;
+
+  document.head.appendChild(style);
+}
+
+function resetAssetCheckState() {
+  assetCheckState = {
+    group: null,
+    assets: [],
+    checked: new Set(),
+    seedIdentifier: ''
+  };
+}
+
 function loadAssetCheck() {
+  ensureAssetCheckStyles();
+  resetAssetCheckState();
+
   const container = document.getElementById("asset-check-content");
+  if (!container) return;
+
   container.innerHTML = `
-        <div style="text-align: center; padding: 20px;">
-            <h3>Asset Check Process</h3>
-            <p>Verify physical inventory by scanning or entering asset IDs.</p>
-            <button class="btn btn-success" onclick="startAssetCheck()" style="margin: 20px;">Start Asset Check</button>
+    <div class="asset-check-panel">
+      <h3 style="margin-bottom: 8px;">Asset Check</h3>
+      <p style="color:#666;margin-bottom:18px;">
+        Scan one Asset ID first. The system will load every asset with the same department, brand, model, and description.
+      </p>
+
+      <div class="asset-check-scan-row">
+        <div class="form-group" style="margin-bottom:0;">
+          <label class="form-label">First Asset ID or Serial Number</label>
+          <input
+            type="text"
+            class="form-input"
+            id="assetCheckSeedInput"
+            placeholder="Scan or type the first asset..."
+            autocomplete="off"
+          >
+          <div class="asset-check-help">
+            Assets currently out on show or away from Store will still be shown, but they will be excluded from the missing check.
+          </div>
         </div>
-    `;
+
+        <button class="btn btn-success" onclick="startAssetCheck()">Start Check</button>
+        <button class="btn btn-secondary" onclick="loadAssetCheck()">Reset</button>
+      </div>
+    </div>
+  `;
+
+  const input = document.getElementById('assetCheckSeedInput');
+  if (input) {
+    input.focus();
+    input.addEventListener('keypress', function (e) {
+      if (e.key === 'Enter') startAssetCheck();
+    });
+  }
 }
 
 // Event handler functions
@@ -7891,37 +8077,327 @@ function populateTransferDropdowns(options) {
   });
 }
 
-function startAssetCheck() {
-  const container = document.getElementById("asset-check-content");
+async function startAssetCheck() {
+  const input = document.getElementById('assetCheckSeedInput') || document.getElementById('assetCheckInput');
+  const identifier = input ? input.value.trim() : '';
+
+  if (!identifier) {
+    showNotification('warning', 'Scan or enter an Asset ID first');
+    input?.focus();
+    return;
+  }
+
+  try {
+    const response = await apiCall('/api/asset-check/group', 'POST', { identifier });
+    const data = response.data || {};
+
+    assetCheckState.group = data.group || null;
+    assetCheckState.assets = Array.isArray(data.assets) ? data.assets : [];
+    assetCheckState.checked = new Set();
+    assetCheckState.seedIdentifier = identifier;
+
+    const scannedAsset = data.scannedAsset;
+    if (scannedAsset && scannedAsset.checkEligible && scannedAsset.id) {
+      assetCheckState.checked.add(scannedAsset.id);
+    }
+
+    renderAssetCheckSession();
+
+    if (scannedAsset && scannedAsset.checkEligible) {
+      showNotification('success', `${scannedAsset.id} checked. Loaded ${assetCheckState.assets.length} matching assets.`);
+    } else if (scannedAsset) {
+      showNotification('warning', `${scannedAsset.id || identifier} loaded, but it is excluded from the check: ${scannedAsset.exclusionReason || 'Not checkable'}`);
+    }
+  } catch (error) {
+    showNotification('error', `Failed to start Asset Check: ${error.message}`);
+    input?.focus();
+  }
+}
+
+function renderAssetCheckSession() {
+  ensureAssetCheckStyles();
+
+  const container = document.getElementById('asset-check-content');
+  if (!container) return;
+
+  const group = assetCheckState.group || {};
+  const checkableAssets = assetCheckState.assets.filter(asset => asset.checkEligible);
+  const checkedCount = checkableAssets.filter(asset => asset.id && assetCheckState.checked.has(asset.id)).length;
+  const uncheckedCount = Math.max(checkableAssets.length - checkedCount, 0);
+  const excludedCount = assetCheckState.assets.filter(asset => asset.excluded && !asset.isMissing).length;
+  const missingCount = assetCheckState.assets.filter(asset => asset.isMissing).length;
+
   container.innerHTML = `
-        <div style="max-width: 600px; margin: 0 auto;">
-            <h3>Asset Check in Progress</h3>
-            <div class="form-group">
-                <label class="form-label">Enter Asset ID or Serial Number</label>
-                <input type="text" class="form-input" id="assetCheckInput" placeholder="Scan or type asset ID...">
-            </div>
-            <div class="form-group">
-                <button class="btn btn-success" onclick="checkAsset()">Check Asset</button>
-                <button class="btn btn-secondary" onclick="finishAssetCheck()">Finish Check</button>
-            </div>
-            <div id="assetCheckResults" style="margin-top: 20px;">
-                <h4>Checked Assets:</h4>
-                <ul id="checkedAssetsList" style="list-style: none; padding: 0;"></ul>
-            </div>
+    <div class="asset-check-panel">
+      <div style="display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap;">
+        <div>
+          <h3 style="margin-bottom:6px;">${escapeHtml(group.displayName || 'Asset Check')}</h3>
+          <div style="color:#666;font-size:14px;">
+            Scan or click each item that is physically present in Store.
+          </div>
         </div>
-    `;
+        <div class="asset-check-actions">
+          <button class="btn btn-danger" onclick="markUncheckedAssetCheckMissing()" ${uncheckedCount === 0 ? 'disabled' : ''}>
+            Mark Unchecked as Missing
+          </button>
+          <button class="btn btn-secondary" onclick="loadAssetCheck()">Start New Check</button>
+        </div>
+      </div>
 
-  // Focus on input
-  document.getElementById("assetCheckInput").focus();
+      <div class="asset-check-summary-grid">
+        <div class="asset-check-summary-card">
+          <div class="asset-check-summary-value">${checkedCount}</div>
+          <div class="asset-check-summary-label">Checked in Store</div>
+        </div>
+        <div class="asset-check-summary-card">
+          <div class="asset-check-summary-value">${uncheckedCount}</div>
+          <div class="asset-check-summary-label">Unchecked in Store</div>
+        </div>
+        <div class="asset-check-summary-card">
+          <div class="asset-check-summary-value">${excludedCount}</div>
+          <div class="asset-check-summary-label">Excluded but Shown</div>
+        </div>
+        <div class="asset-check-summary-card">
+          <div class="asset-check-summary-value">${missingCount}</div>
+          <div class="asset-check-summary-label">Already Missing</div>
+        </div>
+      </div>
 
-  // Add enter key listener
-  document
-    .getElementById("assetCheckInput")
-    .addEventListener("keypress", function (e) {
-      if (e.key === "Enter") {
-        checkAsset();
-      }
+      <div class="asset-check-scan-row" style="margin-top: 12px;">
+        <div class="form-group" style="margin-bottom:0;">
+          <label class="form-label">Continue Scanning Asset ID or Serial Number</label>
+          <input
+            type="text"
+            class="form-input"
+            id="assetCheckScanInput"
+            placeholder="Scan the next matching asset..."
+            autocomplete="off"
+          >
+        </div>
+        <button class="btn btn-success" onclick="checkAsset()">Check Asset</button>
+        <button class="btn btn-secondary" onclick="renderAssetCheckSession()">Refresh View</button>
+      </div>
+    </div>
+
+    <div class="asset-check-table-wrap">
+      <table class="asset-check-table">
+        <thead>
+          <tr>
+            <th style="width:130px;">Asset ID</th>
+            <th>Serial</th>
+            <th>Status</th>
+            <th>Location</th>
+            <th>Notes</th>
+            <th style="width:120px;">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${assetCheckState.assets.map(renderAssetCheckRow).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  const scanInput = document.getElementById('assetCheckScanInput');
+  if (scanInput) {
+    scanInput.focus();
+    scanInput.addEventListener('keypress', function (e) {
+      if (e.key === 'Enter') checkAsset();
     });
+  }
+}
+
+function renderAssetCheckRow(asset) {
+  const assetId = asset.id || asset.internalId || '';
+  const encodedAssetId = encodeURIComponent(assetId);
+  const isChecked = asset.checkEligible && assetId && assetCheckState.checked.has(assetId);
+
+  let rowClass = '';
+  if (asset.isMissing) rowClass = 'asset-check-row-missing';
+  else if (asset.excluded) rowClass = 'asset-check-row-excluded';
+  else if (isChecked) rowClass = 'asset-check-row-checked';
+
+  return `
+    <tr id="asset-check-row-${escapeHtmlAttr(encodedAssetId)}" class="${rowClass}">
+      <td><strong>${escapeHtml(assetId || 'Bulk Item')}</strong></td>
+      <td>${escapeHtml(asset.serial || '-')}</td>
+      <td>${getAssetCheckStatusBadge(asset, isChecked)}</td>
+      <td>${escapeHtml(asset.location || 'Store')}</td>
+      <td>${escapeHtml(asset.exclusionReason || (asset.isOOC ? 'OOC, but still checkable because it is in Store' : ''))}</td>
+      <td>
+        ${asset.checkEligible ? `
+          <button class="btn ${isChecked ? 'btn-secondary' : 'btn-success'} btn-sm" onclick="toggleAssetCheck('${escapeHtmlAttr(encodedAssetId)}')">
+            ${isChecked ? 'Undo' : 'Check'}
+          </button>
+        ` : '<span style="font-size:12px;color:#777;">Excluded</span>'}
+      </td>
+    </tr>
+  `;
+}
+
+function getAssetCheckStatusBadge(asset, isChecked) {
+  if (isChecked) return '<span class="asset-check-badge checked">Checked</span>';
+  if (asset.isMissing) return '<span class="asset-check-badge missing">Missing</span>';
+  if (asset.status === 'deployed') return '<span class="asset-check-badge deployed">Out on Show</span>';
+  if (asset.status === 'away') return '<span class="asset-check-badge away">Away</span>';
+  if (asset.status === 'bulk') return '<span class="asset-check-badge excluded">Bulk</span>';
+  if (asset.status === 'ooc') return '<span class="asset-check-badge ooc">OOC / Checkable</span>';
+  if (asset.excluded) return '<span class="asset-check-badge excluded">Excluded</span>';
+  return '<span class="asset-check-badge pending">Unchecked</span>';
+}
+
+function toggleAssetCheck(encodedAssetId) {
+  const assetId = decodeURIComponent(encodedAssetId || '');
+  const asset = assetCheckState.assets.find(item => item.id === assetId);
+
+  if (!asset) {
+    showNotification('warning', 'Asset not found in this check group');
+    return;
+  }
+
+  if (!asset.checkEligible) {
+    showNotification('warning', `${assetId} is excluded: ${asset.exclusionReason || 'Not checkable'}`);
+    flashAssetCheckRow(assetId);
+    return;
+  }
+
+  if (assetCheckState.checked.has(assetId)) {
+    assetCheckState.checked.delete(assetId);
+  } else {
+    assetCheckState.checked.add(assetId);
+  }
+
+  renderAssetCheckSession();
+  flashAssetCheckRow(assetId);
+}
+
+function checkAsset() {
+  const input = document.getElementById('assetCheckScanInput');
+  const identifier = input ? input.value.trim() : '';
+
+  if (!assetCheckState.group) {
+    showNotification('warning', 'Start an Asset Check first');
+    loadAssetCheck();
+    return;
+  }
+
+  if (!identifier) {
+    showNotification('warning', 'Scan or enter an Asset ID');
+    input?.focus();
+    return;
+  }
+
+  const identifierLower = identifier.toLowerCase();
+  const asset = assetCheckState.assets.find(item =>
+    String(item.id || '').toLowerCase() === identifierLower ||
+    String(item.internalId || '').toLowerCase() === identifierLower ||
+    (item.serial && String(item.serial).toLowerCase() === identifierLower)
+  );
+
+  if (!asset) {
+    showNotification('warning', `${identifier} is not part of this model/description group`);
+    input.value = '';
+    input.focus();
+    return;
+  }
+
+  if (!asset.checkEligible) {
+    showNotification('warning', `${asset.id || identifier} is excluded: ${asset.exclusionReason || 'Not checkable'}`);
+    input.value = '';
+    renderAssetCheckSession();
+    flashAssetCheckRow(asset.id || asset.internalId || identifier);
+    return;
+  }
+
+  assetCheckState.checked.add(asset.id);
+  showNotification('success', `${asset.id} checked`);
+  input.value = '';
+  renderAssetCheckSession();
+  flashAssetCheckRow(asset.id);
+}
+
+function flashAssetCheckRow(assetId) {
+  const encodedAssetId = encodeURIComponent(assetId || '');
+  setTimeout(() => {
+    const row = document.getElementById(`asset-check-row-${encodedAssetId}`);
+    if (!row) return;
+    row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    row.classList.add('asset-check-row-flash');
+    setTimeout(() => row.classList.remove('asset-check-row-flash'), 1200);
+  }, 50);
+}
+
+async function refreshAssetCheckGroup(keepChecked = true) {
+  if (!assetCheckState.seedIdentifier) return;
+
+  const existingChecked = new Set(assetCheckState.checked);
+  const response = await apiCall('/api/asset-check/group', 'POST', {
+    identifier: assetCheckState.seedIdentifier
+  });
+
+  const data = response.data || {};
+  assetCheckState.group = data.group || assetCheckState.group;
+  assetCheckState.assets = Array.isArray(data.assets) ? data.assets : [];
+  assetCheckState.checked = keepChecked ? existingChecked : new Set();
+}
+
+async function markUncheckedAssetCheckMissing() {
+  if (!assetCheckState.group) {
+    showNotification('warning', 'Start an Asset Check first');
+    return;
+  }
+
+  const uncheckedAssets = assetCheckState.assets.filter(asset =>
+    asset.checkEligible && asset.id && !assetCheckState.checked.has(asset.id)
+  );
+
+  if (uncheckedAssets.length === 0) {
+    showNotification('success', 'There are no unchecked in-store assets to mark as missing');
+    return;
+  }
+
+  const preview = uncheckedAssets.slice(0, 12).map(asset => asset.id).join(', ');
+  const extra = uncheckedAssets.length > 12 ? ` and ${uncheckedAssets.length - 12} more` : '';
+  const confirmed = confirm(
+    `Mark ${uncheckedAssets.length} unchecked in-store asset(s) as Missing?
+
+` +
+    `${preview}${extra}
+
+` +
+    `Assets that are out on show or away from Store are excluded and will not be marked missing.`
+  );
+
+  if (!confirmed) return;
+
+  try {
+    const response = await apiCall('/api/asset-check/mark-missing', 'POST', {
+      assetIds: uncheckedAssets.map(asset => asset.id),
+      groupKey: assetCheckState.group.key,
+      confirm: true
+    });
+
+    const marked = response.data?.marked || [];
+    const skipped = response.data?.skipped || [];
+
+    await refreshAssetCheckGroup(true);
+    renderAssetCheckSession();
+
+    if (skipped.length > 0) {
+      showNotification('warning', `Marked ${marked.length} as Missing. Skipped ${skipped.length} item(s) that were no longer eligible.`);
+      console.warn('Asset Check skipped items:', skipped);
+    } else {
+      showNotification('success', `Marked ${marked.length} unchecked asset(s) as Missing`);
+    }
+  } catch (error) {
+    showNotification('error', `Failed to mark unchecked assets as missing: ${error.message}`);
+  }
+}
+
+function finishAssetCheck() {
+  const checkedCount = assetCheckState.assets.filter(asset => asset.checkEligible && asset.id && assetCheckState.checked.has(asset.id)).length;
+  showNotification('success', `Asset Check finished. ${checkedCount} asset(s) checked.`);
+  loadAssetCheck();
 }
 
 async function prepareAsset(eventId, assetId) {

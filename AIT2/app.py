@@ -3978,6 +3978,283 @@ def get_assets():
         return jsonify({'error': 'Failed to retrieve assets'}), 500
 
 
+def _asset_check_find_asset(identifier):
+    """Find an asset by Asset ID or Serial Number for Asset Check."""
+    identifier = str(identifier or '').strip()
+    if not identifier:
+        return None
+
+    # Exact asset ID match first.
+    if identifier in data_manager.inventory:
+        return data_manager.inventory[identifier]
+
+    identifier_lower = identifier.lower()
+
+    # Case-insensitive Asset ID / Serial Number fallback for scanner inconsistencies.
+    for asset in data_manager.inventory.values():
+        if not asset:
+            continue
+        if str(getattr(asset, 'asset_id', '') or '').lower() == identifier_lower:
+            return asset
+        serial = str(getattr(asset, 'serial_number', '') or '').strip()
+        if serial and serial.lower() == identifier_lower:
+            return asset
+
+    return None
+
+
+def _asset_check_is_store_location(asset):
+    """Asset Check only counts items that are physically in Store."""
+    location = str(
+        getattr(asset, 'current_location', '') or
+        getattr(asset, 'default_location', '') or
+        'Store'
+    ).strip()
+
+    return not location or location.lower() == 'store'
+
+
+def _asset_check_deployment(asset_id):
+    """Return active event information if the asset is currently out on show/dry hire."""
+    if not asset_id:
+        return None
+
+    for event in data_manager.events.values():
+        returned_items = {str(x).strip() for x in (getattr(event, 'returned_items', []) or [])}
+
+        active_refs = []
+        for value in (getattr(event, 'actually_prepared', []) or []):
+            if isinstance(value, str) and _is_real_asset_ref(value):
+                active_refs.append(value.strip())
+
+        # Older files may only have direct asset IDs in prepared_items.
+        for value in (getattr(event, 'prepared_items', []) or []):
+            if isinstance(value, str) and _is_real_asset_ref(value):
+                active_refs.append(value.strip())
+
+        if asset_id in active_refs and asset_id not in returned_items:
+            return {
+                'eventId': event.event_id,
+                'eventName': getattr(event, 'name', ''),
+                'eventState': getattr(event, 'state', ''),
+                'eventTag': getattr(event, 'tag', 'event')
+            }
+
+    return None
+
+
+def _asset_check_group_display_from_key(group_key):
+    dept, brand, model, description = group_key
+    return f"[{dept}] {brand} {model} {description}".strip()
+
+
+def _asset_check_asset_to_dict(asset, group_key):
+    location = str(
+        getattr(asset, 'current_location', '') or
+        getattr(asset, 'default_location', '') or
+        'Store'
+    ).strip() or 'Store'
+
+    deployment = None if _is_bulk_asset(asset) else _asset_check_deployment(asset.asset_id)
+
+    excluded = False
+    exclusion_reason = ''
+    status = 'unchecked'
+
+    if _is_bulk_asset(asset):
+        excluded = True
+        exclusion_reason = 'Bulk quantity asset - no individual Asset ID to check'
+        status = 'bulk'
+    elif getattr(asset, 'is_missing', False):
+        excluded = True
+        exclusion_reason = 'Already marked Missing'
+        status = 'missing'
+    elif deployment:
+        excluded = True
+        tag = 'Dry Hire' if deployment.get('eventTag') == 'dry hire' else 'Event'
+        exclusion_reason = f"Out on {tag} {deployment.get('eventId')}: {deployment.get('eventName')}"
+        status = 'deployed'
+    elif not _asset_check_is_store_location(asset):
+        excluded = True
+        exclusion_reason = f"Away from Store: {location}"
+        status = 'away'
+    elif getattr(asset, 'is_ooc', False):
+        # OOC items that are still in Store can still be physically checked.
+        status = 'ooc'
+
+    return {
+        'id': '' if _is_bulk_asset(asset) else asset.asset_id,
+        'internalId': asset.asset_id,
+        'brand': asset.brand,
+        'model': asset.model_number,
+        'description': asset.description or '',
+        'serial': asset.serial_number or '',
+        'department': asset.department_code,
+        'location': location,
+        'defaultLocation': getattr(asset, 'default_location', '') or 'Store',
+        'currentLocation': getattr(asset, 'current_location', '') or '',
+        'isMissing': bool(getattr(asset, 'is_missing', False)),
+        'isOOC': bool(getattr(asset, 'is_ooc', False)),
+        'isBulk': bool(_is_bulk_asset(asset)),
+        'deployment': deployment,
+        'status': status,
+        'checkEligible': not excluded,
+        'excluded': excluded,
+        'exclusionReason': exclusion_reason,
+        'groupKey': '|'.join(group_key),
+        'groupDisplay': _asset_check_group_display_from_key(group_key)
+    }
+
+
+def _asset_check_build_group(seed_asset):
+    if not seed_asset:
+        raise ValueError('Asset not found')
+
+    group_key = _asset_group_key(seed_asset)
+    group_assets = [
+        asset for asset in data_manager.inventory.values()
+        if asset and _asset_group_key(asset) == group_key
+    ]
+
+    group_assets.sort(key=lambda a: (
+        bool(getattr(a, 'is_missing', False)),
+        str(getattr(a, 'asset_id', '') or '').lower()
+    ))
+
+    assets_payload = [_asset_check_asset_to_dict(asset, group_key) for asset in group_assets]
+
+    summary = {
+        'total': len(assets_payload),
+        'checkable': len([a for a in assets_payload if a['checkEligible']]),
+        'excluded': len([a for a in assets_payload if a['excluded'] and not a['isMissing']]),
+        'missing': len([a for a in assets_payload if a['isMissing']]),
+    }
+
+    dept, brand, model, description = group_key
+
+    return {
+        'group': {
+            'key': '|'.join(group_key),
+            'department': dept,
+            'brand': brand,
+            'model': model,
+            'description': description,
+            'displayName': _asset_check_group_display_from_key(group_key)
+        },
+        'assets': assets_payload,
+        'summary': summary,
+        'scannedAsset': _asset_check_asset_to_dict(seed_asset, group_key)
+    }
+
+
+@app.route('/api/asset-check/group', methods=['POST'])
+@require_auth
+def asset_check_group():
+    """Start/refresh an asset check group from a scanned Asset ID or Serial Number."""
+    try:
+        data = request.get_json() or {}
+        identifier = str(data.get('identifier', '')).strip()
+
+        if not identifier:
+            return jsonify({'error': 'Asset ID or Serial Number is required'}), 400
+
+        seed_asset = _asset_check_find_asset(identifier)
+        if not seed_asset:
+            return jsonify({'error': f'Asset or serial number not found: {identifier}'}), 404
+
+        if _is_bulk_asset(seed_asset):
+            return jsonify({'error': 'Bulk quantity assets cannot start an Asset Check because they do not have individual Asset IDs'}), 400
+
+        return jsonify({'success': True, 'data': _asset_check_build_group(seed_asset)})
+
+    except Exception as e:
+        logger.error(f"Error starting asset check: {e}")
+        import traceback
+        logger.error(f"Asset check traceback: {traceback.format_exc()}")
+        return jsonify({'error': 'Failed to start Asset Check'}), 500
+
+
+@app.route('/api/asset-check/mark-missing', methods=['POST'])
+@require_auth
+def asset_check_mark_missing():
+    """Mark unchecked, eligible Asset Check items as Missing after frontend confirmation."""
+    try:
+        data = request.get_json() or {}
+
+        if not data.get('confirm'):
+            return jsonify({'error': 'Confirmation is required before marking assets as missing'}), 400
+
+        asset_ids = data.get('assetIds') or []
+        group_key = str(data.get('groupKey', '') or '').strip()
+
+        if not isinstance(asset_ids, list):
+            return jsonify({'error': 'assetIds must be a list'}), 400
+
+        asset_ids = [str(asset_id or '').strip() for asset_id in asset_ids if str(asset_id or '').strip()]
+        if not asset_ids:
+            return jsonify({'success': True, 'message': 'No unchecked assets to mark as missing', 'data': {'marked': [], 'skipped': []}})
+
+        marked = []
+        skipped = []
+        today = datetime.now().strftime("%Y/%m/%d")
+        username = session.get('user', 'system')
+
+        for asset_id in asset_ids:
+            asset = data_manager.inventory.get(asset_id)
+
+            if not asset:
+                skipped.append({'assetId': asset_id, 'reason': 'Asset not found'})
+                continue
+
+            if _is_bulk_asset(asset):
+                skipped.append({'assetId': asset_id, 'reason': 'Bulk quantity asset cannot be marked missing by Asset Check'})
+                continue
+
+            if group_key and '|'.join(_asset_group_key(asset)) != group_key:
+                skipped.append({'assetId': asset_id, 'reason': 'Asset no longer matches this Asset Check group'})
+                continue
+
+            if getattr(asset, 'is_missing', False):
+                skipped.append({'assetId': asset_id, 'reason': 'Already marked Missing'})
+                continue
+
+            deployment = _asset_check_deployment(asset.asset_id)
+            if deployment:
+                skipped.append({'assetId': asset_id, 'reason': f"Currently out on Event {deployment.get('eventId')}"})
+                continue
+
+            if not _asset_check_is_store_location(asset):
+                location = str(getattr(asset, 'current_location', '') or getattr(asset, 'default_location', '') or 'Store').strip() or 'Store'
+                skipped.append({'assetId': asset_id, 'reason': f'Away from Store: {location}'})
+                continue
+
+            asset.is_missing = True
+            asset.maintenance_logs.append(
+                f"{today}\t{username}\tAsset Check - marked missing because this item was not checked [Marked Missing]"
+            )
+            marked.append(asset_id)
+
+        if marked:
+            data_manager.save_inventory()
+            invalidate_cache()
+            log_action(f"Asset Check marked {len(marked)} asset(s) as Missing: {', '.join(marked)}")
+
+        return jsonify({
+            'success': True,
+            'message': f"Marked {len(marked)} asset(s) as Missing",
+            'data': {
+                'marked': marked,
+                'skipped': skipped
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"Error marking Asset Check missing assets: {e}")
+        import traceback
+        logger.error(f"Asset check mark missing traceback: {traceback.format_exc()}")
+        return jsonify({'error': 'Failed to mark unchecked assets as Missing'}), 500
+
+
 @app.route('/api/assets/available', methods=['GET'])
 @require_auth
 def get_available_assets():
@@ -5470,9 +5747,9 @@ if __name__ == '__main__':
         # Run the Flask app
         app.run(
             debug=False,
-            host='192.168.0.110',
+            host='127.0.0.1',
             port=5443,
-            ssl_context='adhoc'
+            #ssl_context='adhoc'
         )
         logger.info("app starteded")
     except Exception as e:
