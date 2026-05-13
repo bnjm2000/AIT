@@ -1,0 +1,2 @@
+EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,Tag,ForceStateOverride
+139,Dry Hire: Avery Events,20260518,20260521,[],[],[],Added,[],[],dry hire,False
