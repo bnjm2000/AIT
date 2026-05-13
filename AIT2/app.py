@@ -830,55 +830,56 @@ def require_auth(f):
 @require_auth
 def get_available_assets_for_event(event_id):
     """
-    Return the list of *asset objects* that are free for this event, after subtracting:
-      - assets specifically assigned (and not returned) to overlapping events, and
-      - additional assets equal to the *model quantity* reserved in those overlapping events
-        (even if no specific IDs have been attached there yet).
+    Return event-aware assets for the prepare dropdown.
 
-    Matching/comparison is done by (department, brand, model) — description is ignored for the overlap math.
-    We DO NOT prevent anything on the client — this only adjusts the 'available' list/counts shown to the user.
+    This endpoint intentionally shows only assets that can actually be prepared
+    for this event:
+      - not missing
+      - not out of commission
+      - not already prepared/assigned to this same event
+      - not specifically out for another overlapping event and not returned
+
+    It does NOT reserve/hide assets simply because another overlapping event has
+    an unprepared [MODEL] requirement.  Model requirements are planning demand;
+    only a specific prepared asset ID means the physical unit is unavailable.
     """
     try:
-        # --- Load target event & its dates ---
         event = data_manager.events.get(event_id)
         if not event:
             return jsonify({'error': 'Event not found'}), 404
 
         my_start = getattr(event, 'start_date', '')
-        my_end   = getattr(event, 'end_date', '')
+        my_end = getattr(event, 'end_date', '')
 
-        from collections import defaultdict
+        def is_physical_asset_ref(value):
+            """True only for real inventory asset IDs, not model/custom/bulk markers."""
+            if not isinstance(value, str) or not value:
+                return False
+            return not (
+                value.startswith('[MODEL]') or
+                value.startswith('[BULK]') or
+                _is_custom_ref(value)
+            )
 
-        # --- Build a pool of all physical assets (not missing/OOC) grouped by model key (dept, brand, model) ---
-        assets_by_k3 = defaultdict(list)   # (dept, brand, model) -> [asset_id, ...]
-        asset_info = {}                    # id -> { id, brand, model, description, department, serial, ... }
+        def active_physical_refs_for_event(source_event):
+            """Specific physical asset IDs attached/prepared for an event and not returned."""
+            returned = set(getattr(source_event, 'returned_items', []) or [])
+            refs = set()
 
-        for a_id, a in data_manager.inventory.items():
-            if not a:
-                continue
-            if _is_bulk_asset(a):
-                continue
-            if getattr(a, 'is_missing', False) or getattr(a, 'is_ooc', False):
-                continue
-            k3 = (a.department_code, a.brand, a.model_number)
-            assets_by_k3[k3].append(a_id)
-            # shape it to what your frontend expects
-            asset_info[a_id] = {
-                'id': a_id,
-                'brand': a.brand,
-                'model': a.model_number,
-                'description': getattr(a, 'description', '') or '',
-                'department': a.department_code,
-                'serial': (getattr(a, 'serial_number', None) or getattr(a, 'serial', None) or ''),
-                # add any other fields your UI shows here if needed
-            }
+            # Legacy/direct workflows can store real asset IDs in prepared_items.
+            for ref in getattr(source_event, 'prepared_items', []) or []:
+                if is_physical_asset_ref(ref) and ref not in returned:
+                    refs.add(ref)
 
-        # --- Tally overlapping events' demand ---
-        #   For each overlapping event:
-        #     event_demand_by_k3 = max( MODEL qty sum by k3 , count of specific assets assigned & not returned by k3 )
-        #   Sum across all overlapping events.
-        total_specific_by_k3 = defaultdict(int)
-        total_event_demand_by_k3 = defaultdict(int)
+            # Model workflow stores scanned/prepared physical IDs here.
+            for ref in getattr(source_event, 'actually_prepared', []) or []:
+                if is_physical_asset_ref(ref) and ref not in returned:
+                    refs.add(ref)
+
+            return refs
+
+        current_event_refs = active_physical_refs_for_event(event)
+        busy_elsewhere = set()
 
         for other in data_manager.events.values():
             if not other or other.event_id == event_id:
@@ -886,113 +887,55 @@ def get_available_assets_for_event(event_id):
             if not _ranges_overlap(my_start, my_end, getattr(other, 'start_date', ''), getattr(other, 'end_date', '')):
                 continue
 
-            returned_other = set(getattr(other, 'returned_items', []) or [])
-            other_specific_by_k3 = defaultdict(int)
-            other_model_qty_by_k3 = defaultdict(int)
+            busy_elsewhere.update(active_physical_refs_for_event(other))
 
-            for it in getattr(other, 'prepared_items', []) or []:
-                if not isinstance(it, str):
-                    continue
+        final_list = []
 
-                # [MODEL]dept|brand|model|qty|desc?
-                if it.startswith('[MODEL]'):
-                    parts = it[7:].split('|')
-                    if len(parts) >= 4:
-                        dept = parts[0]; brand = parts[1]; model = parts[2]
-                        try:
-                            qty = int(parts[3])
-                        except Exception:
-                            qty = 0
-                        other_model_qty_by_k3[(dept, brand, model)] += qty
-                    continue
-
-                # specific asset id
-                if _is_custom_ref(it):
-                    # ignore custom lines here
-                    continue
-
-                # count only if not returned
-                if it in returned_other:
-                    continue
-                a = data_manager.inventory.get(it)
-                if not a or getattr(a, 'is_missing', False) or getattr(a, 'is_ooc', False):
-                    continue
-                k3 = (a.department_code, a.brand, a.model_number)
-                other_specific_by_k3[k3] += 1
-
-            # accumulate totals
-            for k3 in set(other_model_qty_by_k3.keys()) | set(other_specific_by_k3.keys()):
-                ev_specific = other_specific_by_k3.get(k3, 0)
-                ev_models   = other_model_qty_by_k3.get(k3, 0)
-                ev_demand   = max(ev_models, ev_specific)
-                total_specific_by_k3[k3] += ev_specific
-                total_event_demand_by_k3[k3] += ev_demand
-
-        # --- Build a set of "busy" asset IDs we must exclude from availability ---
-        busy_assets = set()
-
-        # 1) Add specifically assigned assets from overlapping events (not returned)
-        for other in data_manager.events.values():
-            if not other or other.event_id == event_id:
+        for asset_id, asset in sorted(data_manager.inventory.items(), key=lambda pair: pair[0]):
+            if not asset:
                 continue
-            if not _ranges_overlap(my_start, my_end, getattr(other, 'start_date', ''), getattr(other, 'end_date', '')):
-                continue
-            returned_other = set(getattr(other, 'returned_items', []) or [])
-            for it in getattr(other, 'prepared_items', []) or []:
-                if not isinstance(it, str):
+
+            if _is_bulk_asset(asset):
+                # Bulk assets have quantity-based availability.  Keep this branch
+                # separate so partially available bulk items can still appear.
+                if getattr(asset, 'is_missing', False) or getattr(asset, 'is_ooc', False):
                     continue
-                if it.startswith('[MODEL]') or _is_custom_ref(it):
+
+                available_quantity = _bulk_available_quantity_for_event(asset, event)
+                if available_quantity <= 0:
                     continue
-                if it in returned_other:
-                    continue
-                # it's a specific asset id
-                busy_assets.add(it)
 
-        # 2) For the remaining "pure model qty" demand, reserve additional assets by k3
-        #    extra_needed_by_k3 = total_event_demand_by_k3 - total_specific_by_k3
-        extra_needed_by_k3 = {
-            k3: max(total_event_demand_by_k3.get(k3, 0) - total_specific_by_k3.get(k3, 0), 0)
-            for k3 in set(total_event_demand_by_k3.keys()) | set(total_specific_by_k3.keys())
-        }
-
-        # Also remove assets this *current* event already has assigned (so we don't offer them again)
-        current_assigned = set()
-        for it in getattr(event, 'prepared_items', []) or []:
-            if isinstance(it, str) and not it.startswith('[MODEL]') and not _is_custom_ref(it):
-                current_assigned.add(it)
-
-        # For each k3, grab extra_needed assets from free pool and mark as busy
-        for k3, need in extra_needed_by_k3.items():
-            if need <= 0:
+                final_list.append(_bulk_asset_to_available_dict(asset, event))
                 continue
-            # candidate pool = all assets of this k3 minus already busy minus already in this event
-            pool = [aid for aid in assets_by_k3.get(k3, [])
-                    if aid not in busy_assets and aid not in current_assigned]
-            # pick any 'need' assets (stable order by id)
-            pool.sort()
-            for aid in pool[:need]:
-                busy_assets.add(aid)
 
-        # --- Now compute the final list of assets that are free for this event ---
-        # Base pool = all physical assets minus busy assets minus those already in this event
-        final_ids = [aid for aid in asset_info.keys()
-                     if aid not in busy_assets and aid not in current_assigned]
-
-        # Optionally, if you previously excluded anything else in /api/assets/available (like maintenance), do it here too.
-
-        # Shape into the same structure the frontend expects
-        final_list = [asset_info[aid] for aid in sorted(final_ids)]
-
-        for bulk_asset in data_manager.inventory.values():
-            if not _is_bulk_asset(bulk_asset):
+            if getattr(asset, 'is_missing', False) or getattr(asset, 'is_ooc', False):
                 continue
-            if getattr(bulk_asset, 'is_missing', False):
+
+            if asset_id in current_event_refs:
                 continue
-            final_list.append(_bulk_asset_to_available_dict(bulk_asset, event))
+
+            if asset_id in busy_elsewhere:
+                continue
+
+            final_list.append({
+                'id': asset_id,
+                'brand': asset.brand,
+                'model': asset.model_number,
+                'description': getattr(asset, 'description', '') or '',
+                'department': asset.department_code,
+                'serial': (getattr(asset, 'serial_number', None) or getattr(asset, 'serial', None) or ''),
+                'location': asset.current_location or asset.default_location or '',
+                'status': 'available',
+                'isMissing': False,
+                'isOOC': False,
+                'isBulk': False,
+                'quantity': 1,
+                'availableQuantity': 1
+            })
 
         return jsonify({'success': True, 'data': final_list})
     except Exception as e:
-        logger.error(f"Error computing available-for-event({event_id}): {e}")
+        logger.error(f"Error computing available-for-event({event_id}): {e}", exc_info=True)
         return jsonify({'error': 'Failed to compute event-aware availability'}), 500
     
 def require_admin(f):

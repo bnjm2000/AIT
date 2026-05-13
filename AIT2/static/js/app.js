@@ -155,7 +155,37 @@ function customAssetDisplayName(custom, includeQuantity = true) {
   if (!custom) return '';
   const qty = Math.max(1, parseInt(custom.quantity || 1, 10) || 1);
   const name = String(custom.name || '').trim();
-  return includeQuantity && qty > 1 ? `${qty}x ${name}` : name;
+  return includeQuantity ? `${qty}x ${name}` : name;
+}
+
+function customAssetSortName(custom) {
+  if (!custom) return '';
+  return String(custom.name || '').trim().toLowerCase();
+}
+
+function modelGroupSortName(modelGroup) {
+  if (!modelGroup) return '';
+  return `${modelGroup.brand || ''} ${modelGroup.model || ''} ${modelGroup.description || ''}`
+    .trim()
+    .toLowerCase();
+}
+
+function assetDisplaySortName(asset) {
+  if (!asset) return '';
+  const custom = asset.parsedCustom || parseCustomAsset(asset.id, asset);
+  if (custom) return customAssetSortName(custom);
+
+  if (asset.isBulk || String(asset.id || '').startsWith('[BULK]')) {
+    return `${asset.brand || ''} ${asset.model || ''} ${asset.description || ''}`.trim().toLowerCase();
+  }
+
+  return `${asset.brand || ''} ${asset.model || ''} ${asset.description || ''} ${asset.id || ''}`
+    .trim()
+    .toLowerCase();
+}
+
+function compareDisplayNames(a, b) {
+  return String(a || '').localeCompare(String(b || ''), undefined, { numeric: true, sensitivity: 'base' });
 }
 
 function customAssetTypeBadge(custom) {
@@ -188,11 +218,79 @@ function customDepartmentOptionsHtml(selected = 'UN') {
 }
 
 function departmentCodeToDoName(code) {
-  const normalized = normalizeDepartmentCode(code);
+  const raw = String(code || '').trim();
+  if (!raw) return 'MISC';
+
+  // Existing DO labels should stay stable.
+  if (['Audio', 'Lighting', 'Video', 'MISC'].includes(raw)) return raw;
+
+  const normalized = normalizeDepartmentCode(raw);
   if (normalized === 'AX') return 'Audio';
   if (normalized === 'LX') return 'Lighting';
   if (normalized === 'VX') return 'Video';
-  return 'MISC';
+  if (normalized === 'MISC' || normalized === 'LOAN' || normalized === 'UN') return 'MISC';
+
+  // For admin-created departments such as STG, keep them as their own DO section
+  // instead of falling back to MISC.
+  const dept = departments && departments[normalized] ? departments[normalized] : null;
+  if (dept && dept.name && dept.name !== normalized && !['Unknown', 'Misc', 'Loan'].includes(dept.name)) {
+    return dept.name;
+  }
+
+  return normalized;
+}
+
+function getDefaultDoDepartments() {
+  return ['Audio', 'Lighting', 'Video', 'MISC'];
+}
+
+function ensureDoEditBuckets(data, deptNames = []) {
+  data.overrides ||= {};
+  data.custom ||= {};
+  data.ordering ||= {};
+
+  const dynamicDeptNames = [];
+  try {
+    Object.values(departments || {}).forEach(dept => {
+      const name = departmentCodeToDoName(dept.code || dept.name);
+      if (name && !dynamicDeptNames.includes(name)) dynamicDeptNames.push(name);
+    });
+  } catch {}
+
+  [...getDefaultDoDepartments(), ...dynamicDeptNames, ...deptNames].forEach(dept => {
+    if (!dept) return;
+    data.custom[dept] ||= [];
+  });
+
+  return data;
+}
+
+function getDoDepartmentList(groupedDepartments = {}, edits = null) {
+  const names = new Set(getDefaultDoDepartments());
+  Object.keys(groupedDepartments || {}).forEach(name => names.add(name));
+  Object.keys((edits && edits.custom) || {}).forEach(name => names.add(name));
+
+  const preferred = getDefaultDoDepartments();
+  return Array.from(names).sort((a, b) => {
+    const ai = preferred.indexOf(a);
+    const bi = preferred.indexOf(b);
+    if (ai !== -1 || bi !== -1) {
+      if (ai === -1) return 1;
+      if (bi === -1) return -1;
+      return ai - bi;
+    }
+    return String(a).localeCompare(String(b), undefined, { numeric: true });
+  });
+}
+
+function getDepartmentCodeForDoName(name) {
+  if (name === 'Audio') return 'AX';
+  if (name === 'Lighting') return 'LX';
+  if (name === 'Video') return 'VX';
+  if (name === 'MISC') return 'MISC';
+
+  const found = Object.values(departments || {}).find(dept => departmentCodeToDoName(dept.code) === name);
+  return found ? normalizeDepartmentCode(found.code) : normalizeDepartmentCode(name);
 }
 
 // status badge renderer (used by selectors)
@@ -262,23 +360,17 @@ function getAssetStatusBadge(asset) {
 }
 
 /* PATCH A — Delivery Order (DO) edit helpers */
-function getDoEdits(eventId) {
-  const blank = { 
-    overrides: {}, 
-    custom: { Audio: [], Lighting: [], Video: [], MISC: [] } 
-  };
+function getDoEdits(eventId, deptNames = []) {
+  const blank = ensureDoEditBuckets({ overrides: {}, custom: {}, ordering: {} }, deptNames);
   try {
     const raw = localStorage.getItem(`doEdits/${eventId}`);
     if (!raw) return blank;
     const data = JSON.parse(raw);
-    data.overrides ||= {};
-    data.custom ||= {};
-    ['Audio','Lighting','Video','MISC'].forEach(d => data.custom[d] ||= []);
-    return data;
+    return ensureDoEditBuckets(data, deptNames);
   } catch { return blank; }
 }
 function saveDoEdits(eventId, data) {
-  localStorage.setItem(`doEdits/${eventId}`, JSON.stringify(data));
+  localStorage.setItem(`doEdits/${eventId}`, JSON.stringify(ensureDoEditBuckets(data)));
 }
 function clearDoEdits(eventId) {
   localStorage.removeItem(`doEdits/${eventId}`);
@@ -4102,7 +4194,7 @@ async function loadPrepareEvents() {
       return;
     }
 
-    preparableEvents.forEach((event) => {
+    sortEventsStartDateFutureTop(preparableEvents).forEach((event) => {
       const card = createPrepareEventCard(event);
       container.appendChild(card);
     });
@@ -4342,7 +4434,29 @@ async function openPrepareEventModal(eventId) {
                         <div id="dept-${dept}" style="display: block; padding: 0 10px;">
                 `;
 
-                modelGroups.forEach(modelGroup => {
+                const departmentRows = [
+                    ...modelGroups.map(modelGroup => ({
+                        type: 'model',
+                        modelGroup,
+                        sortName: modelGroupSortName(modelGroup)
+                    })),
+                    ...customAssetsForDept.map(asset => {
+                        const custom = asset.parsedCustom || parseCustomAsset(asset.id, asset);
+                        return {
+                            type: 'custom',
+                            asset,
+                            sortName: customAssetSortName(custom)
+                        };
+                    })
+                ].sort((a, b) => compareDisplayNames(a.sortName, b.sortName));
+
+                departmentRows.forEach(row => {
+                    if (row.type === 'custom') {
+                        content += createCustomPreparationSection(eventId, [row.asset], event);
+                        return;
+                    }
+
+                    const modelGroup = row.modelGroup;
                     const modelAvailableAssets = availableAssets.filter(a => 
                         a.brand === modelGroup.brand && 
                         a.model === modelGroup.model && 
@@ -4355,6 +4469,7 @@ async function openPrepareEventModal(eventId) {
                     } else {
                         content += createModelPreparationSection(
                             eventId,
+                            modelGroup.department,
                             modelGroup.brand,
                             modelGroup.model,
                             modelGroup.description,
@@ -4364,8 +4479,6 @@ async function openPrepareEventModal(eventId) {
                         );
                     }
                 });
-
-                content += createCustomPreparationSection(eventId, customAssetsForDept, event);
                 content += '</div></div>';
             });
         }
@@ -4422,7 +4535,9 @@ async function openPrepareEventModal(eventId) {
                 const assets = event.assetsByDepartment[dept];
                 
                 // Add department header if there are non-model assets
-                const nonModelAssets = assets.filter(asset => !asset.id.startsWith('[MODEL]'));
+                const nonModelAssets = assets
+                    .filter(asset => !asset.id.startsWith('[MODEL]'))
+                    .sort((a, b) => compareDisplayNames(assetDisplaySortName(a), assetDisplaySortName(b)));
                 if (nonModelAssets.length > 0) {
                     content += `
                         <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: #f1f3f4; border-bottom: 1px solid #e9ecef; cursor: pointer;" onclick="togglePrepareSection('assigned-dept-${dept}')">
@@ -4433,8 +4548,7 @@ async function openPrepareEventModal(eventId) {
                     `;
                 }
                 
-                assets.forEach(asset => {
-                    if (!asset.id.startsWith('[MODEL]')) {
+                nonModelAssets.forEach(asset => {
                         const custom = parseCustomAsset(asset.id, asset);
                         const isReturned = event.returnedItems && event.returnedItems.includes(asset.id);
                         const isPrepared = event.actuallyPrepared && event.actuallyPrepared.includes(asset.id);
@@ -4492,7 +4606,6 @@ async function openPrepareEventModal(eventId) {
                                 </div>
                             </div>
                         `;
-                    }
                 });
                 
                 if (nonModelAssets.length > 0) {
@@ -4976,7 +5089,13 @@ function getCustomRequiredQuantityForProgress(customAssets) {
 function createCustomPreparationSection(eventId, customAssets, event) {
     if (!customAssets || customAssets.length === 0) return '';
 
-    return customAssets.map((asset) => {
+    const sortedCustomAssets = [...customAssets].sort((a, b) => {
+        const aCustom = a.parsedCustom || parseCustomAsset(a.id, a);
+        const bCustom = b.parsedCustom || parseCustomAsset(b.id, b);
+        return compareDisplayNames(customAssetSortName(aCustom), customAssetSortName(bCustom));
+    });
+
+    return sortedCustomAssets.map((asset) => {
         const custom = asset.parsedCustom || parseCustomAsset(asset.id, asset);
         if (!custom) return '';
 
@@ -5080,7 +5199,11 @@ function generateCustomAssetsSection(event) {
 
     Object.keys(byDept).sort().forEach(dept => {
         const deptMeta = getDepartmentMeta(dept);
-        const assetsInDept = byDept[dept];
+        const assetsInDept = (byDept[dept] || []).sort((a, b) => {
+            const aCustom = a.parsedCustom || parseCustomAsset(a.id, a);
+            const bCustom = b.parsedCustom || parseCustomAsset(b.id, b);
+            return compareDisplayNames(customAssetSortName(aCustom), customAssetSortName(bCustom));
+        });
         content += `
             <div style="border: 1px solid #e9ecef; border-radius: 8px; margin-bottom: 10px; overflow:hidden;">
                 <div style="background: #f8f9fa; padding: 10px; font-weight: bold; border-bottom:1px solid #e9ecef; display:flex; align-items:center; gap:8px;">
@@ -6733,9 +6856,9 @@ function updateAllAssetsSection(event, eventId) {
       const deptAssets = event.assetsByDepartment[dept] || [];
 
       // Only show real assets here (ignore [MODEL] rows)
-      const nonModelAssets = deptAssets.filter(
-        (a) => a && a.id && !a.id.startsWith("[MODEL]")
-      );
+      const nonModelAssets = deptAssets
+        .filter((a) => a && a.id && !a.id.startsWith("[MODEL]"))
+        .sort((a, b) => compareDisplayNames(assetDisplaySortName(a), assetDisplaySortName(b)));
 
       if (nonModelAssets.length > 0) {
         content += `
@@ -6984,7 +7107,7 @@ async function loadReturnEvents() {
       return;
     }
 
-    returnableEvents.forEach((event) => {
+    sortEventsStartDateFutureTop(returnableEvents).forEach((event) => {
       const card = createReturnEventCard(event);
       container.appendChild(card);
     });
@@ -7083,10 +7206,10 @@ async function openReturnAssetsModal() {
                             <option value="">Select an event...</option>
         `;
 
-        returnableEvents.forEach(event => {
+        sortEventsStartDateFutureTop(returnableEvents).forEach(event => {
             const dateRange = event.startDate === event.endDate 
-                ? new Date(event.startDate).toLocaleDateString()
-                : `${new Date(event.startDate).toLocaleDateString()} - ${new Date(event.endDate).toLocaleDateString()}`;
+                ? formatDate(event.startDate)
+                : `${formatDate(event.startDate)} - ${formatDate(event.endDate)}`;
             
             const statusBadge = event.state === 'Overdue' ? ' 🔴 OVERDUE' : '';
             
@@ -7094,7 +7217,7 @@ async function openReturnAssetsModal() {
             
             content += `
                 <option value="${event.id}">
-                    Event ${event.id}: ${event.name} (${totalUnreturned} assets to return) ${statusBadge}
+                    Event ${event.id}: ${event.name} (${totalUnreturned} assets to return) • ${dateRange}${statusBadge}
                 </option>
             `;
         });
@@ -7146,7 +7269,7 @@ async function openReturnAssetsModal() {
 
 async function loadEventAssetsForReturn() {
     const selectElement = document.getElementById('returnEventSelect');
-    const eventId = selectElement.value;
+    const eventId = selectElement?.value;
     
     if (!eventId) {
         document.getElementById('event-summary').style.display = 'none';
@@ -7157,31 +7280,24 @@ async function loadEventAssetsForReturn() {
     try {
         const response = await apiCall(`/api/events/${eventId}`);
         const event = response.data;
-        
-        console.log(`Loading assets for event ${eventId}:`, event);
 
-        // Calculate return summary from the same source used by department counts.
-        // This only affects the displayed summary numbers, not the return logic.
-        let returnAssets = [];
-
+        const returnAssets = [];
         if (event.assetsByDepartment) {
-            Object.values(event.assetsByDepartment).forEach(deptAssets => {
+            Object.entries(event.assetsByDepartment).forEach(([dept, deptAssets]) => {
                 (deptAssets || []).forEach(asset => {
-                    if (!asset || !asset.id) return;
-
-                    // Ignore virtual model requirement rows if any ever appear here.
-                    if (String(asset.id).startsWith('[MODEL]')) return;
-
-                    returnAssets.push(asset);
+                    if (!asset || !asset.id || String(asset.id).startsWith('[MODEL]')) return;
+                    returnAssets.push({ ...asset, department: asset.department || dept });
                 });
             });
         }
 
-        const totalReturnedIncludingCustom = returnAssets.filter(asset => asset.status === 'returned').reduce((sum, asset) => sum + Number(asset.quantity || 1), 0);
-        const remaining = returnAssets.filter(asset => isAssetReturnableFromEventDetail(asset, event)).reduce((sum, asset) => sum + Number(asset.quantity || 1), 0);
+        const totalReturnedIncludingCustom = returnAssets
+            .filter(asset => asset.status === 'returned')
+            .reduce((sum, asset) => sum + Number(asset.quantity || 1), 0);
+        const remainingAssets = returnAssets.filter(asset => isAssetReturnableFromEventDetail(asset, event));
+        const remaining = remainingAssets.reduce((sum, asset) => sum + Number(asset.quantity || 1), 0);
         const totalAssetsIncludingCustom = Math.max(Number(event.returnableTotalCount || 0), totalReturnedIncludingCustom + remaining);
 
-        // Show event summary
         const summaryDiv = document.getElementById('event-summary');
         summaryDiv.style.display = 'block';
         summaryDiv.innerHTML = `
@@ -7201,178 +7317,96 @@ async function loadEventAssetsForReturn() {
             </div>
         `;
 
-        // Show assets return section
         const assetsSection = document.getElementById('assets-return-section');
         assetsSection.style.display = 'block';
 
+        const byDept = {};
+        remainingAssets.forEach(asset => {
+            const custom = parseCustomAsset(asset.id, asset);
+            const dept = normalizeDepartmentCode(custom?.department || asset.department || 'UN');
+            if (!byDept[dept]) byDept[dept] = [];
+            byDept[dept].push({ ...asset, parsedCustom: custom });
+        });
+
+        const deptCodes = Object.keys(byDept).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+
         let assetsContent = '';
-        // Department quick actions: compute unreturned counts per department
-        if (event.assetsByDepartment) {
-          const depts = Object.keys(event.assetsByDepartment);
-          const rows = [];
-          depts.forEach((dept) => {
-              const items = event.assetsByDepartment[dept] || [];
-              const unreturned = items.filter(a => isAssetReturnableFromEventDetail(a, event));
-              const unreturnedQty = unreturned.reduce((sum, a) => sum + Number(a.quantity || 1), 0);
-              if (unreturnedQty > 0) {
-                  rows.push(`
-                      <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; border:1px solid #e9ecef; border-radius:8px; margin-bottom:8px;">
-                          <div style="font-weight:600;">${dept}</div>
-                          <div style="display:flex; align-items:center; gap:10px;">
-                              <span style="font-size:12px; color:#6c757d;">${unreturnedQty} to return</span>
-                              <button class="btn btn-success btn-sm" onclick="returnAllForDepartment(${eventId}, '${dept.replace(/'/g, "\\'")}')">Return all</button>
-                          </div>
-                      </div>
-                  `);
-              }
-          });
-          if (rows.length > 0) {
-              assetsContent += `
-                  <div style="margin-bottom:16px;">
-                      <div style="font-weight:600; margin-bottom:6px;">Department quick actions</div>
-                      ${rows.join('')}
-                  </div>
-              `;
-          }
-        }
 
-        // Process regular assets (from preparedAssets if available)
-        if (event.preparedAssets && event.preparedAssets.length > 0) {
-            // Group regular assets by type
-            const assetGroups = {};
-            
-            event.preparedAssets.forEach(asset => {
-                if (asset.isBulk) {
-                    const assetType = `${asset.brand} ${asset.model} ${asset.description || ''}`.trim();
-                    if (!assetGroups[assetType]) {
-                        assetGroups[assetType] = {
-                            type: assetType,
-                            assets: [],
-                            brand: asset.brand,
-                            model: asset.model,
-                            description: asset.description,
-                            isBulk: true
-                        };
-                    }
-                    assetGroups[assetType].assets.push(asset);
-                } else if (!isCustomAssetId(asset.id)) {
-                    const assetType = asset.id.split('#')[0];
-                    if (!assetGroups[assetType]) {
-                        assetGroups[assetType] = {
-                            type: assetType,
-                            assets: [],
-                            brand: asset.brand,
-                            model: asset.model,
-                            description: asset.description
-                        };
-                    }
-                    assetGroups[assetType].assets.push(asset);
-                }
-            });
-
-            Object.values(assetGroups).forEach(group => {
-                const unreturnedAssets = group.assets.filter(asset => asset.status !== 'returned');
-                if (unreturnedAssets.length > 0) {
-                    assetsContent += `
-                        <div class="asset-type-group" style="margin-bottom: 25px; border: 1px solid #e9ecef; border-radius: 8px;">
-                            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px 8px 0 0; border-bottom: 1px solid #e9ecef;">
-                                <div style="display: flex; justify-content: space-between; align-items: center;">
-                                    <div>
-                                        <h5 style="margin: 0; color: #495057;">${group.brand} ${group.model}</h5>
-                                        <small style="color: #6c757d;">${group.description || ''}</small>
-                                    </div>
-                                    <div style="text-align: right;">
-                                        <div style="font-size: 18px; font-weight: bold; color: #ffc107;">${unreturnedAssets.reduce((sum, a) => sum + Number(a.quantity || 1), 0)}</div>
-                                        <small style="color: #6c757d;">to return</small>
-                                    </div>
-                                </div>
-                            </div>
-                            <div style="padding: 15px;">
-                    `;
-
-                    unreturnedAssets.forEach((asset, index) => {
-                        assetsContent += `
-                            <div class="return-asset-item" style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background: ${index % 2 === 0 ? '#f8f9fa' : 'white'}; border-radius: 6px; margin-bottom: 8px;">
-                                <div>
-                                    <div style="font-weight: 500; font-size: 14px;">${asset.isBulk ? `${escapeHtml(asset.brand || '')} ${escapeHtml(asset.model || '')} (Qty: ${escapeHtml(String(asset.quantity || 1))})` : escapeHtml(asset.id)}</div>
-                                    ${asset.isBulk ? '<div style="color: #999; font-size: 11px;">Bulk quantity item</div>' : (asset.serial ? `<div style="color: #999; font-size: 11px;">SN: ${asset.serial}</div>` : '')}
-                                    ${asset.location ? `<div style="color: #007bff; font-size: 11px;">📍 ${asset.location}</div>` : ''}
-                                </div>
-                                <div style="margin-left: 15px;">
-                                    <button class="btn btn-warning return-asset-btn" style="padding: 6px 12px; font-size: 12px;" onclick="returnSpecificAssetNew(${eventId}, '${escapeJs(asset.id)}')">
-                                        Return
-                                    </button>
-                                </div>
-                            </div>
-                        `;
-                    });
-                    assetsContent += '</div></div>';
-                }
-            });
-        }
-        
-        // Process custom assets from assetsByDepartment. Company is shown here for staff prep/return, but hidden on DO.
-        const customReturnItems = [];
-        if (event.assetsByDepartment) {
-            Object.values(event.assetsByDepartment).forEach(deptAssets => {
-                (deptAssets || []).forEach(asset => {
-                    const custom = parseCustomAsset(asset.id, asset);
-                    if (!custom) return;
-                    if (!isAssetReturnableFromEventDetail(asset, event)) return;
-                    customReturnItems.push({ ...asset, parsedCustom: custom });
-                });
-            });
-        }
-
-        if (customReturnItems.length > 0) {
-            const byDept = {};
-            customReturnItems.forEach(asset => {
-                const dept = normalizeDepartmentCode(asset.parsedCustom.department || asset.department || 'UN');
-                if (!byDept[dept]) byDept[dept] = [];
-                byDept[dept].push(asset);
-            });
-
-            Object.keys(byDept).sort().forEach(dept => {
-                const items = byDept[dept];
-                const totalQty = items.reduce((sum, asset) => sum + Number(asset.parsedCustom.quantity || 1), 0);
-                assetsContent += `
-                    <div class="asset-type-group" style="margin-bottom: 25px; border: 1px solid #e9ecef; border-radius: 8px;">
-                        <div style="background: #f8f9fa; padding: 15px; border-radius: 8px 8px 0 0; border-bottom: 1px solid #e9ecef;">
-                            <div style="display: flex; justify-content: space-between; align-items: center;">
-                                <div>
-                                    <h5 style="margin: 0; color: #495057;">Custom Items — ${departmentBadgeHtml(dept, true)}</h5>
-                                    <small style="color: #6c757d;">Loan/Rental and Misc items</small>
-                                </div>
-                                <div style="text-align: right;">
-                                    <div style="font-size: 18px; font-weight: bold; color: #ffc107;">${totalQty}</div>
-                                    <small style="color: #6c757d;">to return</small>
-                                </div>
-                            </div>
+        if (deptCodes.length > 0) {
+            const quickRows = deptCodes.map(dept => {
+                const items = byDept[dept] || [];
+                const unreturnedQty = items.reduce((sum, a) => sum + Number(a.quantity || a.parsedCustom?.quantity || 1), 0);
+                return `
+                    <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; border:1px solid #e9ecef; border-radius:8px; margin-bottom:8px; background:white;">
+                        <div style="font-weight:600;">${departmentBadgeHtml(dept, true)}</div>
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            <span style="font-size:12px; color:#6c757d;">${unreturnedQty} to return</span>
+                            <button class="btn btn-success btn-sm" onclick="returnAllForDepartment(${eventId}, '${escapeJs(dept)}')">Return all</button>
                         </div>
-                        <div style="padding: 15px;">
+                    </div>
                 `;
+            }).join('');
 
-                items.forEach((asset, index) => {
-                    const custom = asset.parsedCustom;
-                    const safeId = escapeJs(asset.id);
-                    assetsContent += `
-                        <div class="return-asset-item" style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background: ${index % 2 === 0 ? '#f8f9fa' : 'white'}; border-radius: 6px; margin-bottom: 8px;">
-                            <div>
-                                <div style="font-weight: 500; font-size: 14px;">${escapeHtml(customAssetDisplayName(custom))} ${customAssetTypeBadge(custom)}</div>
-                                ${custom.type === 'LOAN' && custom.company ? `<div style="color: #666; font-size: 11px;">Company: ${escapeHtml(custom.company)}</div>` : ''}
-                            </div>
-                            <div style="margin-left: 15px;">
-                                <button class="btn btn-warning return-asset-btn" style="padding: 6px 12px; font-size: 12px;" onclick="returnSpecificAssetNew(${eventId}, '${safeId}')">
-                                    Return
-                                </button>
-                            </div>
-                        </div>
-                    `;
-                });
-
-                assetsContent += '</div></div>';
-            });
+            assetsContent += `
+                <div style="margin-bottom:16px; padding:12px; background:#f8f9fa; border:1px solid #e9ecef; border-radius:10px;">
+                    <div style="font-weight:600; margin-bottom:8px; color:#495057;">Department quick actions</div>
+                    ${quickRows}
+                </div>
+            `;
         }
+
+        deptCodes.forEach(dept => {
+            const items = (byDept[dept] || []).sort((a, b) => {
+                return compareDisplayNames(assetDisplaySortName(a), assetDisplaySortName(b));
+            });
+            const totalQty = items.reduce((sum, a) => sum + Number(a.quantity || a.parsedCustom?.quantity || 1), 0);
+
+            assetsContent += `
+                <div class="dept-section" style="margin-bottom: 20px; border: 1px solid #e9ecef; border-radius: 8px; overflow:hidden;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 15px; background:#f1f3f4; border-bottom:1px solid #e9ecef;">
+                        <h5 style="margin:0; color:#495057; font-size:14px;">${departmentBadgeHtml(dept, true)} Department</h5>
+                        <div style="font-size:12px; font-weight:600; color:#ffc107;">${totalQty} to return</div>
+                    </div>
+                    <div style="padding:10px; background:white;">
+            `;
+
+            items.forEach((asset, index) => {
+                const custom = asset.parsedCustom;
+                const isBulk = asset.isBulk || String(asset.id || '').startsWith('[BULK]');
+                const safeId = escapeJs(asset.id);
+                const rowBg = index % 2 === 0 ? '#f8f9fa' : 'white';
+                let title = '';
+                let subtitle = '';
+                let badge = '';
+
+                if (custom) {
+                    title = customAssetDisplayName(custom);
+                    badge = customAssetTypeBadge(custom);
+                    subtitle = custom.type === 'LOAN' && custom.company ? `Company: ${custom.company}` : '';
+                } else if (isBulk) {
+                    title = `${asset.brand || ''} ${asset.model || ''}`.trim() || 'Bulk Item';
+                    subtitle = `${asset.description || ''}${asset.description ? ' • ' : ''}Bulk quantity item • Qty: ${asset.quantity || 1}`;
+                } else {
+                    title = asset.id || 'Asset';
+                    const desc = `${asset.brand || ''} ${asset.model || ''}${asset.description ? ' - ' + asset.description : ''}`.trim();
+                    subtitle = [desc, asset.serial ? `SN: ${asset.serial}` : '', asset.location ? `Location: ${asset.location}` : ''].filter(Boolean).join(' • ');
+                }
+
+                assetsContent += `
+                    <div class="return-asset-item" style="display:flex; justify-content:space-between; align-items:center; gap:12px; padding:12px; background:${rowBg}; border-radius:6px; margin-bottom:8px; border:1px solid #eef0f2;">
+                        <div style="min-width:0; flex:1;">
+                            <div style="font-weight:500; font-size:14px; color:#333; overflow-wrap:anywhere;">${escapeHtml(title)} ${badge}</div>
+                            ${subtitle ? `<div style="color:#666; font-size:11px; margin-top:2px; overflow-wrap:anywhere;">${escapeHtml(subtitle)}</div>` : ''}
+                        </div>
+                        <div style="display:flex; align-items:center; gap:8px; flex-shrink:0;">
+                            <button class="btn btn-warning return-asset-btn" style="padding:6px 12px; font-size:12px;" onclick="returnSpecificAssetNew(${eventId}, '${safeId}')">Return</button>
+                        </div>
+                    </div>
+                `;
+            });
+
+            assetsContent += '</div></div>';
+        });
 
         if (!assetsContent) {
             assetsContent = '<p style="text-align: center; color: #666; padding: 40px;">No assets available for return.</p>';
@@ -7689,6 +7723,7 @@ function renderTransferWorkspace() {
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
           <button class="btn btn-primary" onclick="loadTransferCandidates()">Find Matching Assets</button>
           <button class="btn btn-secondary" onclick="openManualTransferModal()">Manual Transfer</button>
+          <button class="btn btn-success" onclick="generateTransferPdf()">Export PDF</button>
         </div>
       </div>
 
@@ -7811,6 +7846,7 @@ function renderTransferCandidates(data) {
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
         <button class="btn btn-secondary btn-sm" onclick="toggleAllTransferCandidates(true)">Select All</button>
         <button class="btn btn-secondary btn-sm" onclick="toggleAllTransferCandidates(false)">Clear</button>
+        <button class="btn btn-primary" onclick="generateTransferPdf()">Export PDF</button>
         <button class="btn btn-success" onclick="executeSelectedTransfers()">Transfer Selected</button>
       </div>
     </div>
@@ -7836,6 +7872,130 @@ function renderTransferCandidates(data) {
       </table>
     </div>
   `;
+}
+
+function generateTransferPdf() {
+  const fromEventId = document.getElementById('transferSourceSelect')?.value;
+  const toEventId = document.getElementById('transferTargetSelect')?.value;
+  const fromEvent = (transferOptionsCache?.sourceEvents || []).find(e => String(e.id) === String(fromEventId)) || {};
+  const toEvent = (transferOptionsCache?.targetEvents || []).find(e => String(e.id) === String(toEventId)) || {};
+  const candidates = transferCandidateCache || [];
+
+  if (!fromEventId || !toEventId) {
+    showNotification('warning', 'Select both source and destination events first');
+    return;
+  }
+
+  const selectedIds = new Set(Array.from(document.querySelectorAll('.transfer-candidate-checkbox:checked')).map(cb => cb.dataset.assetId));
+  const safe = (value) => escapeHtml(String(value ?? ''));
+  const dateRange = (event) => {
+    if (!event || !event.startDate) return '';
+    return event.startDate === event.endDate ? formatDate(event.startDate) : `${formatDate(event.startDate)} - ${formatDate(event.endDate)}`;
+  };
+
+  const rows = candidates.length ? candidates.map((candidate, index) => `
+    <tr>
+      <td>${index + 1}</td>
+      <td><strong>${safe(candidate.assetId)}</strong>${candidate.serial ? `<br><span style="font-size:8pt;color:#666;">SN: ${safe(candidate.serial)}</span>` : ''}</td>
+      <td>${safe(candidate.department || 'UN')}</td>
+      <td>${safe(candidate.brand || '')} ${safe(candidate.model || '')}</td>
+      <td>${safe(candidate.description || '')}</td>
+      <td>${safe(candidate.matchLabel || `Destination still needs ${candidate.targetRemainingBeforeThisAsset || ''}`)}</td>
+      <td>${selectedIds.has(candidate.assetId) ? 'Yes' : 'No'}</td>
+    </tr>
+  `).join('') : `
+    <tr><td colspan="7" style="text-align:center;color:#666;padding:18px;">No matching assets currently shown.</td></tr>
+  `;
+
+  const now = new Date();
+  const formattedDate = now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  const transferNumber = `TR-${now.getFullYear()}${String(fromEventId).padStart(4, '0')}-${String(toEventId).padStart(4, '0')}`;
+
+  const win = window.open('', '_blank', 'width=900,height=1000');
+  if (!win) {
+    showNotification('error', 'Pop-up blocked. Please allow pop-ups to export the transfer PDF.');
+    return;
+  }
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Transfer Assets - ${safe(fromEvent.name || '')} to ${safe(toEvent.name || '')}</title>
+  <style>
+    @page { size: A4; margin: 0; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: 'Century Gothic', Arial, sans-serif; color: #000; background: #f0f0f0; }
+    .page { width: 210mm; min-height: 297mm; margin: 0 auto; padding: 7mm 7mm 14mm 7mm; background: white; position: relative; page-break-after: always; }
+    .logo-row { display:flex; justify-content:flex-end; margin-bottom:7px; height:39px; }
+    .logo-row img { height:39px; width:auto; object-fit:contain; }
+    .header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:20px; }
+    .header-left { flex:1; font-size:9pt; font-weight:bold; line-height:1.35; }
+    .header-right { text-align:right; font-size:9pt; font-weight:bold; }
+    .transfer-title { font-size:14pt; font-weight:bold; margin-bottom:5px; }
+    .summary-table, .items-table { width:100%; border-collapse:collapse; border:2px solid black; margin-bottom:16px; }
+    .summary-table td { border:1px solid #333; padding:7px; font-size:9pt; vertical-align:top; }
+    .items-table th { background:#333; color:white; padding:8px; text-align:left; font-size:8.5pt; border:1px solid #333; }
+    .items-table td { border:1px solid #333; padding:6px; font-size:8.5pt; vertical-align:top; line-height:1.25; }
+    .footer { position:absolute; bottom:5mm; left:7mm; right:7mm; text-align:center; font-size:7pt; font-weight:bold; line-height:1.2; }
+    .print-btn { position:fixed; top:20px; right:20px; background:#667eea; color:white; border:none; padding:10px 18px; border-radius:6px; cursor:pointer; z-index:999; }
+    @media print { body { background:white; } .page { margin:0; page-break-after:auto; } .print-btn { display:none; } }
+  </style>
+</head>
+<body>
+  <button class="print-btn" onclick="window.print()">Print / Save as PDF</button>
+  <div class="page">
+    <div class="logo-row"><img src="/static/images/logo.png" alt="Company Logo"></div>
+    <div class="header">
+      <div class="header-left">
+        FROM EVENT:<br>
+        ${safe(fromEvent.id || fromEventId)} — ${safe(fromEvent.name || '')}<br>
+        ${safe(fromEvent.state || '')}${dateRange(fromEvent) ? ' • ' + safe(dateRange(fromEvent)) : ''}<br><br>
+        TO EVENT:<br>
+        ${safe(toEvent.id || toEventId)} — ${safe(toEvent.name || '')}<br>
+        ${safe(toEvent.state || '')}${dateRange(toEvent) ? ' • ' + safe(dateRange(toEvent)) : ''}
+      </div>
+      <div class="header-right">
+        <div class="transfer-title">TRANSFER ASSETS</div>
+        No. : ${safe(transferNumber)}<br>
+        Date : ${safe(formattedDate)}
+      </div>
+    </div>
+
+    <table class="summary-table">
+      <tr>
+        <td><strong>Source unreturned assets:</strong><br>${safe(fromEvent.unreturnedCount || 0)}</td>
+        <td><strong>Matching assets shown:</strong><br>${safe(candidates.length)}</td>
+        <td><strong>Selected for transfer:</strong><br>${safe(selectedIds.size || 0)}</td>
+      </tr>
+    </table>
+
+    <table class="items-table">
+      <thead>
+        <tr>
+          <th style="width:8mm;">#</th>
+          <th style="width:32mm;">Asset ID / Serial</th>
+          <th style="width:18mm;">Dept</th>
+          <th style="width:36mm;">Brand / Model</th>
+          <th>Description</th>
+          <th style="width:38mm;">Match</th>
+          <th style="width:18mm;">Selected</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+
+    <div class="footer">
+      AVEC VISION PRIVATE LIMITED<br>
+      601 SIMS DRIVE PAN-I COMPLEX #04-10 SINGAPORE 387382 TEL 65.9743.3660 CO REG 202122775G
+    </div>
+  </div>
+</body>
+</html>`;
+
+  win.document.write(html);
+  win.document.close();
+  win.focus();
 }
 
 function toggleAllTransferCandidates(checked) {
@@ -8124,7 +8284,9 @@ async function viewEvent(eventId) {
 
         Object.keys(event.assetsByDepartment).sort().forEach((dept) => {
           const assets = event.assetsByDepartment[dept];
-          const individualAssets = assets.filter(asset => !asset.id.startsWith('[MODEL]'));
+          const individualAssets = assets
+            .filter(asset => !asset.id.startsWith('[MODEL]'))
+            .sort((a, b) => compareDisplayNames(assetDisplaySortName(a), assetDisplaySortName(b)));
           
           if (individualAssets.length > 0) {
             content += `
@@ -9792,42 +9954,62 @@ async function updateModelRequirementsSection(eventId) {
         <div style="padding: 12px;">
       `;
 
-      models.forEach((model) => {
-        const assignedCount = getPreparedQuantity(model);
-        const statusIcon = assignedCount >= model.requiredQuantity ? "✅" : "⚠️";
+      const departmentRows = [
+        ...models.map(model => ({
+          type: 'model',
+          model,
+          sortName: modelGroupSortName(model)
+        })),
+        ...customAssets.map(asset => {
+          const custom = asset.parsedCustom || parseCustomAsset(asset.id, asset);
+          return {
+            type: 'custom',
+            asset,
+            custom,
+            sortName: customAssetSortName(custom)
+          };
+        })
+      ].sort((a, b) => compareDisplayNames(a.sortName, b.sortName));
 
-        content += `
-          <div class="model-assignment" style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #f1f1f1; gap:12px;">
-            <div style="flex: 1; min-width:0;">
-              <div style="display: flex; align-items: center; flex-wrap:wrap; gap:6px;">
-                <span>${statusIcon}</span>
-                <span style="font-weight: 500;">${Number(model.requiredQuantity || 0)}x ${escapeHtml(model.brand)} ${escapeHtml(model.model)}</span>
-                <span style="color: #666;">(${assignedCount} assigned)</span>
+      departmentRows.forEach(row => {
+        if (row.type === 'model') {
+          const model = row.model;
+          const assignedCount = getPreparedQuantity(model);
+          const statusIcon = assignedCount >= model.requiredQuantity ? "✅" : "⚠️";
+
+          content += `
+            <div class="model-assignment" style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #f1f1f1; gap:12px;">
+              <div style="flex: 1; min-width:0;">
+                <div style="display: flex; align-items: center; flex-wrap:wrap; gap:6px;">
+                  <span>${statusIcon}</span>
+                  <span style="font-weight: 500;">${Number(model.requiredQuantity || 0)}x ${escapeHtml(model.brand)} ${escapeHtml(model.model)}</span>
+                  <span style="color: #666;">(${assignedCount} assigned)</span>
+                </div>
+                <div style="color: #666; font-size: 12px; margin-left: 22px; margin-top: 2px;">${escapeHtml(model.description || '')}</div>
               </div>
-              <div style="color: #666; font-size: 12px; margin-left: 22px; margin-top: 2px;">${escapeHtml(model.description || '')}</div>
+              <div style="display: flex; gap: 8px; flex-wrap:wrap; justify-content:flex-end;">
+                <button class="btn btn-sm btn-outline-primary edit-model-qty-btn"
+                        data-event-id="${eventId}"
+                        data-brand="${escapeHtmlAttribute(model.brand)}"
+                        data-model="${escapeHtmlAttribute(model.model)}"
+                        data-department="${escapeHtmlAttribute(model.department)}"
+                        data-description="${escapeHtmlAttribute(model.description || '')}"
+                        style="padding: 4px 8px; font-size: 11px;">Edit Qty</button>
+                <button class="btn btn-sm btn-danger remove-model-btn"
+                        data-event-id="${eventId}"
+                        data-brand="${escapeHtmlAttribute(model.brand)}"
+                        data-model="${escapeHtmlAttribute(model.model)}"
+                        data-department="${escapeHtmlAttribute(model.department)}"
+                        data-description="${escapeHtmlAttribute(model.description || '')}"
+                        style="padding: 4px 8px; font-size: 11px;">Remove</button>
+              </div>
             </div>
-            <div style="display: flex; gap: 8px; flex-wrap:wrap; justify-content:flex-end;">
-              <button class="btn btn-sm btn-outline-primary edit-model-qty-btn"
-                      data-event-id="${eventId}"
-                      data-brand="${escapeHtmlAttribute(model.brand)}"
-                      data-model="${escapeHtmlAttribute(model.model)}"
-                      data-department="${escapeHtmlAttribute(model.department)}"
-                      data-description="${escapeHtmlAttribute(model.description || '')}"
-                      style="padding: 4px 8px; font-size: 11px;">Edit Qty</button>
-              <button class="btn btn-sm btn-danger remove-model-btn"
-                      data-event-id="${eventId}"
-                      data-brand="${escapeHtmlAttribute(model.brand)}"
-                      data-model="${escapeHtmlAttribute(model.model)}"
-                      data-department="${escapeHtmlAttribute(model.department)}"
-                      data-description="${escapeHtmlAttribute(model.description || '')}"
-                      style="padding: 4px 8px; font-size: 11px;">Remove</button>
-            </div>
-          </div>
-        `;
-      });
+          `;
+          return;
+        }
 
-      customAssets.forEach(asset => {
-        const custom = asset.parsedCustom;
+        const asset = row.asset;
+        const custom = row.custom || asset.parsedCustom;
         const statusIcon = asset.status === "returned" ? "↩️"
                          : asset.status === "prepared" ? "✅"
                          : asset.status === "collected" ? "📥"
@@ -9898,7 +10080,9 @@ async function addCustomAssetsToModelRequirements(eventId, existingContent = '')
       });
 
       Object.keys(byDept).sort().forEach(dept => {
-        const assetsOfDept = byDept[dept];
+        const assetsOfDept = (byDept[dept] || []).sort((a, b) => {
+          return compareDisplayNames(customAssetSortName(a.parsedCustom), customAssetSortName(b.parsedCustom));
+        });
         const totalQty = assetsOfDept.reduce((sum, asset) => sum + Number(asset.parsedCustom.quantity || 1), 0);
 
         content += `
@@ -14615,10 +14799,13 @@ function createBulkPreparationSection(eventId, modelGroup, availableAssets = [],
     `;
 }
 
-function createModelPreparationSection(eventId, brand, model, description, requiredQty, availableAssets, assignedAssets) {
+function createModelPreparationSection(eventId, department, brand, model, description, requiredQty, availableAssets, assignedAssets) {
     const assignedCount = (assignedAssets || []).reduce((sum, a) => sum + Number(a.quantity || 1), 0);
     const progressPercent = Math.round((assignedCount / requiredQty) * 100);
-    const modelId = `model-${brand.replace(/\s+/g, '').replace(/[^a-zA-Z0-9]/g, '')}-${model.replace(/\s+/g, '').replace(/[^a-zA-Z0-9]/g, '')}-${eventId}`;
+    const makeDomSafe = (value) => String(value || '')
+        .replace(/\s+/g, '')
+        .replace(/[^a-zA-Z0-9_-]/g, '');
+    const modelId = `model-${makeDomSafe(department)}-${makeDomSafe(brand)}-${makeDomSafe(model)}-${makeDomSafe(description)}-${eventId}`;
     
     let section = `
         <div class="model-prep-section" style="border: 1px solid #e9ecef; border-radius: 8px; padding: 0; margin-bottom: 15px;">
@@ -16138,8 +16325,10 @@ async function populateDeliveryItemsPreview(event) {
           padding: 15px 20px;
           border-bottom: 1px solid #e9ecef;
           display: flex;
-          gap: 15px;
+          gap: 12px;
           align-items: center;
+          justify-content: space-between;
+          flex-wrap: wrap;
         }
         .do-toolbar label {
           display: flex;
@@ -16237,6 +16426,7 @@ async function populateDeliveryItemsPreview(event) {
           display: flex;
           gap: 10px;
           align-items: center;
+          flex-wrap: wrap;
         }
         .do-add-description {
           flex: 1;
@@ -16276,13 +16466,19 @@ async function populateDeliveryItemsPreview(event) {
 
       <div class="do-items-container">
         <div class="do-toolbar">
-          <label>
-            <input type="checkbox" id="doEditToggle"${editMode ? ' checked' : ''}> 
-            <span>Edit items for delivery order</span>
-          </label>
-          <button class="btn btn-secondary" id="doResetEdits" title="Reset all edits and return to original items">
-            Reset Edits
-          </button>
+          <div>
+            <div style="font-weight:700;color:#495057;">Delivery Order Item Editor</div>
+            <div style="font-size:12px;color:#6c757d;margin-top:2px;">Review departments, edit quantities/descriptions, add DO-only rows, and drag to reorder while edit mode is on.</div>
+          </div>
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+            <label>
+              <input type="checkbox" id="doEditToggle"${editMode ? ' checked' : ''}> 
+              <span>Edit mode</span>
+            </label>
+            <button class="btn btn-secondary" id="doResetEdits" title="Reset all edits and return to original items">
+              Reset Edits
+            </button>
+          </div>
         </div>
     `;
 
@@ -16292,8 +16488,8 @@ async function populateDeliveryItemsPreview(event) {
     // Generate department sections
     const section = (deptName, items) => {
       const rows = items.map((item, i) => {
-        const isCustom = item.source?.startsWith('do-custom') || item.source === 'custom-prepared' || item.source === 'custom-assets-dept';
-        const canDelete = editMode && isCustom;
+        const isDoCustom = item.source?.startsWith('do-custom');
+        const canDelete = editMode && isDoCustom;
         
         if (editMode) {
           return `
@@ -16357,8 +16553,8 @@ async function populateDeliveryItemsPreview(event) {
     };
 
     let body = '';
-    ['Audio', 'Lighting', 'Video', 'MISC'].forEach(dept => {
-      if ((depts[dept] || []).length > 0 || (edits.custom[dept] || []).length > 0 || editMode) {
+    getDoDepartmentList(depts, edits).forEach(dept => {
+      if ((depts[dept] || []).length > 0 || ((edits.custom || {})[dept] || []).length > 0 || (editMode && dept !== 'MISC')) {
         body += section(dept, depts[dept] || []);
       }
     });
@@ -16407,7 +16603,8 @@ async function populateDeliveryItemsPreview(event) {
         const state = getDoEdits(eventId);
         if (kind === 'do-custom') {
           const i = parseInt(idxStr, 10);
-          if (Number.isInteger(i) && state.custom[dept] && state.custom[dept][i]) {
+          state.custom[dept] ||= [];
+          if (Number.isInteger(i) && state.custom[dept][i]) {
             state.custom[dept][i] = { description: desc, quantity: qty };
           }
         } else {
@@ -16437,6 +16634,7 @@ async function populateDeliveryItemsPreview(event) {
         const i = parseInt(idxStr, 10);
         const state = getDoEdits(eventId);
         
+        state.custom[dept] ||= [];
         if (Number.isInteger(i) && state.custom[dept]) {
           state.custom[dept].splice(i, 1);
           saveDoEdits(eventId, state);
@@ -16462,6 +16660,7 @@ async function populateDeliveryItemsPreview(event) {
         }
 
         const state = getDoEdits(eventId);
+        state.custom[dept] ||= [];
         state.custom[dept].push({ description: desc, quantity: qty });
         saveDoEdits(eventId, state);
         
@@ -16508,13 +16707,19 @@ async function populateDeliveryItemsPreview(event) {
 }
 
 function groupItemsByDepartment(event) {
-  const departments = { Audio: [], Lighting: [], Video: [], MISC: [] };
-  const deptName = (code) => departmentCodeToDoName(code);
+  const departments = {};
+  const ensureDept = (dept) => {
+    const name = departmentCodeToDoName(dept);
+    if (!departments[name]) departments[name] = [];
+    return name;
+  };
+
+  getDefaultDoDepartments().forEach(ensureDept);
 
   // 1) Base groups from modelGroups (what the job actually asked for)
   if (event.modelGroups && Object.keys(event.modelGroups).length) {
     Object.values(event.modelGroups).forEach(mg => {
-      const dname = deptName(mg.department);
+      const dname = ensureDept(mg.department);
       const baseDesc = `${mg.brand || ''} ${mg.model || ''}${mg.description ? ' - ' + mg.description : ''}`.trim();
       departments[dname].push({
         key: makeModelKey(mg),
@@ -16529,7 +16734,7 @@ function groupItemsByDepartment(event) {
   const groupedCustom = {};
   const addCustomToDo = (custom) => {
     if (!custom) return;
-    const dname = deptName(custom.department || 'UN');
+    const dname = ensureDept(custom.department || 'UN');
     const desc = custom.name || (custom.type === 'LOAN' ? 'Loan/Rental Item' : 'Misc Item');
     const key = `CUSTOM|${dname}|${custom.type}|${desc}`;
     if (!groupedCustom[key]) {
@@ -16560,14 +16765,15 @@ function groupItemsByDepartment(event) {
   }
 
   Object.values(groupedCustom).forEach(({ dept, item }) => {
+    if (!departments[dept]) departments[dept] = [];
     departments[dept].push({ ...item, quantity: String(item.quantity) });
   });
 
   // 3) Apply DO display overrides + DO-only custom additions (stored locally per event)
   const eventId = event.id || event.event_id || event.eventId || window.currentEventId || '0';
-  const edits = getDoEdits(eventId);
+  const edits = getDoEdits(eventId, Object.keys(departments));
 
-  ['Audio', 'Lighting', 'Video', 'MISC'].forEach(d => {
+  Object.keys(departments).forEach(d => {
     departments[d].forEach((item) => {
       const ov = edits.overrides[item.key];
       if (ov) {
@@ -16578,7 +16784,8 @@ function groupItemsByDepartment(event) {
   });
 
   if (edits && edits.custom) {
-    ['Audio', 'Lighting', 'Video', 'MISC'].forEach(d => {
+    Object.keys(edits.custom).forEach(d => {
+      if (!departments[d]) departments[d] = [];
       (edits.custom[d] || []).forEach((ci, i) => {
         departments[d].push({
           key: `DOCUSTOM|${d}|${i}`,
@@ -16590,93 +16797,40 @@ function groupItemsByDepartment(event) {
     });
   }
 
-  ['Audio', 'Lighting', 'Video', 'MISC'].forEach(d => {
-    departments[d] = applyDoOrdering(departments[d], d, eventId);
+  getDoDepartmentList(departments, edits).forEach(d => {
+    departments[d] ||= [];
+    const sortedItems = [...departments[d]].sort((a, b) => compareDisplayNames(a.description, b.description));
+    departments[d] = applyDoOrdering(sortedItems, d, eventId);
   });
 
-  console.log('Final grouped departments:', departments);
   return departments;
 }
 
 function getAssetIdsByItem(event, item, department) {
-    console.log('=== getAssetIdsByItem Debug ===');
-    console.log('Department:', department);
-    console.log('Item:', item);
-    console.log('Item key:', item.key);
-    console.log('Item source:', item.source);
-    
     const assetIds = [];
-    
-    if (!event.assetsByDepartment) {
-        console.log('No assetsByDepartment found in event');
-        return assetIds;
-    }
-    
-    console.log('Available departments:', Object.keys(event.assetsByDepartment));
-    
-    // Map department names to their codes
-    const deptCodeMap = {
-        'Audio': 'AX',
-        'Lighting': 'LX', 
-        'Video': 'VX',
-        'MISC': 'MISC'
-    };
-    
-    const deptCode = deptCodeMap[department] || department;
-    console.log(`Mapped department "${department}" to code "${deptCode}"`);
-    
-    if (!event.assetsByDepartment[deptCode]) {
-        console.log(`No assets found for department code: ${deptCode}`);
-        return assetIds;
-    }
-    
-    const departmentAssets = event.assetsByDepartment[deptCode];
-    console.log(`Found ${departmentAssets.length} assets in ${deptCode} department:`, departmentAssets);
-    
-    // For regular inventory items, find assets that match the item description
-    if (item.source === 'model') {
-        const itemKey = item.key;
-        const keyParts = itemKey.split('|');
-        console.log('Key parts:', keyParts);
-        
-        if (keyParts.length >= 3) {
-            const brand = keyParts[2]; // Brand is at index 2
-            const model = keyParts[3]; // Model is at index 3
-            console.log(`Looking for assets with brand: "${brand}", model: "${model}"`);
-            
-            // Find assets that match this brand/model combination
-            departmentAssets.forEach(asset => {
-                // Skip custom assets (they don't have brand/model)
-                if (asset.isBulk || asset.id.startsWith('[BULK]') || isCustomAssetId(asset.id)) {
-                    console.log(`Skipping custom asset: ${asset.id}`);
-                    return;
-                }
-                
-                console.log(`Checking asset ${asset.id}:`, {
-                    id: asset.id,
-                    brand: asset.brand,
-                    model: asset.model,
-                    startsWithModel: asset.id.startsWith('[MODEL]')
-                });
-                
-                if (!asset.id.startsWith('[MODEL]') && 
-                    asset.brand === brand && 
-                    asset.model === model) {
-                    console.log(`✓ Match found: ${asset.id}`);
-                    assetIds.push(asset.id);
-                } else {
-                    console.log(`✗ No match for ${asset.id} (brand: "${asset.brand}" vs "${brand}", model: "${asset.model}" vs "${model}")`);
-                }
-            });
+    if (!event.assetsByDepartment || !item || item.source !== 'model') return assetIds;
+
+    const keyParts = String(item.key || '').split('|');
+    if (keyParts.length < 4) return assetIds;
+
+    // makeModelKey format: MG|department|brand|model|description
+    const deptCodeFromKey = normalizeDepartmentCode(keyParts[1] || getDepartmentCodeForDoName(department));
+    const brand = keyParts[2] || '';
+    const model = keyParts[3] || '';
+    const description = keyParts.slice(4).join('|') || '';
+
+    const departmentAssets = event.assetsByDepartment[deptCodeFromKey] || [];
+    departmentAssets.forEach(asset => {
+        if (!asset || !asset.id) return;
+        if (asset.isBulk || String(asset.id).startsWith('[BULK]') || isCustomAssetId(asset.id) || String(asset.id).startsWith('[MODEL]')) return;
+        if (asset.status === 'returned') return;
+
+        if (asset.brand === brand && asset.model === model && String(asset.description || '') === String(description || '')) {
+            assetIds.push(asset.id);
         }
-    } else {
-        console.log(`Item source is "${item.source}", not "model" - skipping asset ID lookup`);
-    }
-    
-    console.log('Final asset IDs:', assetIds);
-    console.log('=== End Debug ===');
-    
-    return assetIds.sort();
+    });
+
+    return assetIds.sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }));
 }
 
 function exportLogs() {
