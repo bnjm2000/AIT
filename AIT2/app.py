@@ -7,7 +7,7 @@ from flask_cors import CORS
 from functools import wraps
 import os
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from collections import defaultdict
 import logging
 import threading
@@ -961,6 +961,67 @@ def require_admin(f):
         return f(*args, **kwargs)
 
     return decorated_function
+
+
+def _current_user_obj():
+    """Return the logged-in User object, or None if the session is stale."""
+    username = session.get('user')
+    if not username or not data_manager:
+        return None
+    return data_manager.users.get(username)
+
+
+def _current_user_is_admin():
+    user = _current_user_obj()
+    return bool(user and getattr(user, 'is_admin', False))
+
+
+def _parse_maintenance_log_date(log_entry):
+    """Parse the date at the start of a maintenance log entry."""
+    parts = str(log_entry or '').split('\t')
+    raw_date = parts[0].strip() if parts else ''
+    for fmt in ("%Y/%m/%d", "%Y-%m-%d", "%Y%m%d"):
+        try:
+            return datetime.strptime(raw_date, fmt).date()
+        except ValueError:
+            pass
+    return None
+
+
+def _maintenance_log_permission(asset, log_index, allow_admin=True):
+    """Return (allowed, message) for editing/deleting a maintenance log.
+
+    Normal users may only edit logs they wrote, and only within 7 days of the
+    log date. Admins may edit/delete any maintenance log.
+    """
+    if allow_admin and _current_user_is_admin():
+        return True, ''
+
+    username = session.get('user')
+    if not username:
+        return False, 'Not authenticated'
+
+    logs = getattr(asset, 'maintenance_logs', []) or []
+    if log_index < 0 or log_index >= len(logs):
+        return False, 'Invalid log index'
+
+    original_log = logs[log_index]
+    parts = original_log.split('\t')
+    original_user = parts[1].strip() if len(parts) >= 2 else ''
+
+    if original_user != username:
+        return False, 'You can only modify maintenance logs that you wrote'
+
+    log_date = _parse_maintenance_log_date(original_log)
+    if not log_date:
+        return False, 'This maintenance log has an invalid date and cannot be modified by a normal user'
+
+    today = datetime.now().date()
+    age_days = (today - log_date).days
+    if age_days < 0 or age_days > 7:
+        return False, 'Normal users can only modify their own maintenance logs within 7 days'
+
+    return True, ''
 
 def log_action(action):
     """Helper function to log actions"""
@@ -2669,7 +2730,7 @@ def get_event_model_availability(event_id):
         return jsonify({'error': 'Failed to compute availability'}), 500
     
 @app.route('/api/events', methods=['POST'])
-@require_auth
+@require_admin
 def create_event():
     """Create a new event"""
     try:
@@ -2720,7 +2781,7 @@ def create_event():
 
 
 @app.route('/api/events/<int:event_id>', methods=['PUT'])
-@require_auth
+@require_admin
 def update_event(event_id):
     """Update an existing event"""
     try:
@@ -2790,6 +2851,11 @@ def delete_maintenance_log(asset_id, log_index):
         if not asset.maintenance_logs or log_index < 0 or log_index >= len(asset.maintenance_logs):
             return jsonify({'error': 'Invalid log index'}), 400
         
+        # Only admins may delete maintenance logs. Normal users may edit their
+        # own recent logs, but deletion is intentionally admin-only.
+        if not _current_user_is_admin():
+            return jsonify({'error': 'Admin privileges required to delete maintenance logs'}), 403
+
         # Get the log entry that will be deleted for logging purposes
         deleted_log = asset.maintenance_logs[log_index]
         log_parts = deleted_log.split('\t')
@@ -2989,7 +3055,7 @@ def delete_event(event_id):
         return jsonify({'error': f'Failed to delete event: {str(e)}'}), 500
 
 @app.route('/api/events/<int:event_id>/assets', methods=['POST'])
-@require_auth
+@require_admin
 def add_asset_to_event(event_id):
     """Add an asset to an event (unprepared by default)"""
     try:
@@ -3059,7 +3125,7 @@ def add_asset_to_event(event_id):
 
 
 @app.route('/api/events/<int:event_id>/models', methods=['POST', 'DELETE'])
-@require_auth
+@require_admin
 def manage_event_models(event_id):
     """Add or remove model assignments to/from events"""
     try:
@@ -3399,7 +3465,7 @@ def prepare_event_asset(event_id):
         logger.error(f"Error preparing asset for event {event_id}: {e}")
         return jsonify({'error': 'Failed to prepare asset'}), 500
 @app.route('/api/events/<int:event_id>/custom-assets', methods=['POST'])
-@require_auth
+@require_admin
 def add_custom_asset_to_event(event_id):
     """Add a structured custom asset (LOAN/MISC) to an event without auto-preparing it."""
     try:
@@ -3690,7 +3756,7 @@ def return_event_asset(event_id):
         return jsonify({'error': 'Failed to return asset'}), 500
     
 @app.route('/api/events/<int:event_id>/return-department', methods=['POST'])
-@require_auth
+@require_admin
 def return_department_assets(event_id):
     """Return all unreturned assets for a given department in this event.
     Includes regular inventory assets from actually_prepared that match the department,
@@ -3999,7 +4065,7 @@ def unassign_specific_asset_from_model(event_id):
         return jsonify({'error': 'Failed to unassign asset'}), 500
     
 @app.route('/api/events/<int:event_id>/remove-asset', methods=['POST'])
-@require_auth
+@require_admin
 def remove_asset_from_event_body(event_id):
     """Remove an asset from an event (with asset ID in request body)"""
     try:
@@ -4068,7 +4134,7 @@ def remove_asset_from_event_body(event_id):
         return jsonify({'error': 'Failed to remove asset from event'}), 500
 
 @app.route('/api/events/<int:event_id>/remove-asset', methods=['POST'])
-@require_auth
+@require_admin
 def remove_asset_from_event_post(event_id):
     """Remove an asset from an event - uses POST body to avoid URL encoding issues"""
     try:
@@ -5533,12 +5599,27 @@ def update_maintenance_log_enhanced(asset_id, log_index):
         if not asset.maintenance_logs or log_index < 0 or log_index >= len(asset.maintenance_logs):
             return jsonify({'error': 'Invalid log index'}), 400
         
+        # Normal users may only edit logs they wrote within 7 days.
+        allowed, permission_error = _maintenance_log_permission(asset, log_index, allow_admin=True)
+        if not allowed:
+            return jsonify({'error': permission_error}), 403
+
+        if not _current_user_is_admin():
+            # Do not let normal users reassign authorship.
+            new_user = session.get('user', '').strip()
+
         # Convert date format from YYYY-MM-DD to YYYY/MM/DD
         try:
             parsed_date = datetime.strptime(new_date, '%Y-%m-%d')
             formatted_date = parsed_date.strftime("%Y/%m/%d")
         except ValueError:
             return jsonify({'error': 'Invalid date format'}), 400
+
+        if not _current_user_is_admin():
+            # The edited date must also remain inside the same 7-day window.
+            age_days = (datetime.now().date() - parsed_date.date()).days
+            if age_days < 0 or age_days > 7:
+                return jsonify({'error': 'Normal users can only set maintenance log dates within the last 7 days'}), 403
         
         # Get original log for logging purposes
         original_log = asset.maintenance_logs[log_index]
@@ -5948,7 +6029,7 @@ def get_stats():
         return jsonify({'error': 'Failed to retrieve statistics'}), 500
     
 @app.route('/api/events/<int:event_id>/custom-assets/update-quantity', methods=['PUT'])
-@require_auth
+@require_admin
 def update_custom_asset_quantity(event_id):
     """Update the quantity of a custom asset in an event while preserving department/company metadata."""
     try:
@@ -6004,7 +6085,7 @@ def update_custom_asset_quantity(event_id):
         return jsonify({'success': False, 'error': 'An unexpected error occurred'}), 500
 
 @app.route('/api/events/<int:event_id>/custom-assets/remove', methods=['POST'])
-@require_auth
+@require_admin
 def remove_custom_asset_from_event(event_id):
     """Remove a custom asset (LOAN/MISC) from an event"""
     try:
@@ -6113,7 +6194,7 @@ def update_all_event_states():
         return jsonify({'error': 'Failed to update event states'}), 500
 
 @app.route('/api/events/<int:event_id>/force-state', methods=['POST'])
-@require_auth
+@require_admin
 def force_event_state(event_id):
     """Force an event to a specific state"""
     try:
@@ -6162,7 +6243,7 @@ def force_event_state(event_id):
         return jsonify({'error': 'Failed to force event state'}), 500
 
 @app.route('/api/events/<int:event_id>/remove-force-state', methods=['POST'])
-@require_auth
+@require_admin
 def remove_force_state(event_id):
     """Remove forced state override and return to automatic state management"""
     try:

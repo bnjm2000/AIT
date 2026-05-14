@@ -52,6 +52,61 @@ function getEventStateClass(state) {
     .replace(/\s+/g, '-')}`;
 }
 
+function isAdminUser() {
+  return !!(currentUser && currentUser.isAdmin);
+}
+
+function applyPermissionUi() {
+  const adminOnlySelectors = [
+    ".admin-only",
+    "[data-admin-only='true']"
+  ];
+
+  adminOnlySelectors.forEach(selector => {
+    document.querySelectorAll(selector).forEach(el => {
+      el.style.display = isAdminUser() ? '' : 'none';
+    });
+  });
+
+  // Older hard-coded Add Event buttons do not all have a class, so hide them by onclick.
+  document.querySelectorAll('button').forEach(button => {
+    if (button.getAttribute('onclick') === "openModal('addEventModal')") {
+      button.style.display = isAdminUser() ? '' : 'none';
+    }
+  });
+}
+
+function openEventFromCalendar(eventId) {
+  if (isAdminUser()) {
+    editEvent(eventId);
+  } else {
+    viewEvent(eventId);
+  }
+}
+
+function parseMaintenanceLogDateForPermission(dateStr) {
+  if (!dateStr) return null;
+  const parts = String(dateStr).trim().split(/[\/\-]/).map(Number);
+  if (parts.length !== 3 || parts.some(n => !Number.isFinite(n))) return null;
+  return new Date(parts[0], parts[1] - 1, parts[2]);
+}
+
+function canCurrentUserModifyMaintenanceLog(log) {
+  if (isAdminUser()) return true;
+  if (!currentUser || !log) return false;
+  if (String(log.user || '') !== String(currentUser.username || '')) return false;
+
+  const logDate = parseMaintenanceLogDateForPermission(log.date);
+  if (!logDate || Number.isNaN(logDate.getTime())) return false;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  logDate.setHours(0, 0, 0, 0);
+  const ageDays = Math.floor((today - logDate) / (1000 * 60 * 60 * 24));
+  return ageDays >= 0 && ageDays <= 7;
+}
+
+
 // PATCH: attribute-safe HTML escaper (handles quotes too)
 function escapeHtmlAttr(str) {
   return String(str ?? '')
@@ -155,37 +210,7 @@ function customAssetDisplayName(custom, includeQuantity = true) {
   if (!custom) return '';
   const qty = Math.max(1, parseInt(custom.quantity || 1, 10) || 1);
   const name = String(custom.name || '').trim();
-  return includeQuantity ? `${qty}x ${name}` : name;
-}
-
-function customAssetSortName(custom) {
-  if (!custom) return '';
-  return String(custom.name || '').trim().toLowerCase();
-}
-
-function modelGroupSortName(modelGroup) {
-  if (!modelGroup) return '';
-  return `${modelGroup.brand || ''} ${modelGroup.model || ''} ${modelGroup.description || ''}`
-    .trim()
-    .toLowerCase();
-}
-
-function assetDisplaySortName(asset) {
-  if (!asset) return '';
-  const custom = asset.parsedCustom || parseCustomAsset(asset.id, asset);
-  if (custom) return customAssetSortName(custom);
-
-  if (asset.isBulk || String(asset.id || '').startsWith('[BULK]')) {
-    return `${asset.brand || ''} ${asset.model || ''} ${asset.description || ''}`.trim().toLowerCase();
-  }
-
-  return `${asset.brand || ''} ${asset.model || ''} ${asset.description || ''} ${asset.id || ''}`
-    .trim()
-    .toLowerCase();
-}
-
-function compareDisplayNames(a, b) {
-  return String(a || '').localeCompare(String(b || ''), undefined, { numeric: true, sensitivity: 'base' });
+  return includeQuantity && qty > 1 ? `${qty}x ${name}` : name;
 }
 
 function customAssetTypeBadge(custom) {
@@ -1930,9 +1955,11 @@ function createEventCard(event) {
         </div>
         <div class="event-actions">
             <button class="btn btn-primary" onclick="viewEvent(${event.id})">View</button>
-            <button class="btn btn-warning" onclick="editEvent(${event.id})">Edit</button>
-            <button class="btn btn-secondary" onclick="showForceStateModal(${event.id}, '${event.state}')">Force State</button>
-            <button class="btn btn-danger" onclick="deleteEvent(${event.id})">Delete</button>
+            ${isAdminUser() ? `
+              <button class="btn btn-warning" onclick="editEvent(${event.id})">Edit</button>
+              <button class="btn btn-secondary" onclick="showForceStateModal(${event.id}, '${event.state}')">Force State</button>
+              <button class="btn btn-danger" onclick="deleteEvent(${event.id})">Delete</button>
+            ` : ''}
         </div>
     `;
 
@@ -1967,6 +1994,11 @@ async function updateAllEventStates() {
 
 // Force event state
 async function forceEventState(eventId, newState) {
+    if (!isAdminUser()) {
+        showNotification('error', 'Admin privileges required');
+        return;
+    }
+
     try {
         const response = await apiCall(`/api/events/${eventId}/force-state`, 'POST', { state: newState });
         
@@ -1997,6 +2029,11 @@ async function forceEventState(eventId, newState) {
 
 // Remove forced state override
 async function removeForcedState(eventId) {
+    if (!isAdminUser()) {
+        showNotification('error', 'Admin privileges required');
+        return;
+    }
+
     try {
         const response = await apiCall(`/api/events/${eventId}/remove-force-state`, 'POST');
         
@@ -2027,6 +2064,11 @@ async function removeForcedState(eventId) {
 
 // Show force state modal
 function showForceStateModal(eventId, currentState) {
+    if (!isAdminUser()) {
+        showNotification('error', 'Admin privileges required');
+        return;
+    }
+
     // Create modal HTML if it doesn't exist
     let modal = document.getElementById('forceStateModal');
     if (!modal) {
@@ -2112,6 +2154,11 @@ function showForceStateModal(eventId, currentState) {
 
 // Show force state modal - Updated to show current force status
 function showForceStateModal(eventId, currentState) {
+    if (!isAdminUser()) {
+        showNotification('error', 'Admin privileges required');
+        return;
+    }
+
     // Create modal HTML if it doesn't exist
     let modal = document.getElementById('forceStateModal');
     if (!modal) {
@@ -4434,29 +4481,7 @@ async function openPrepareEventModal(eventId) {
                         <div id="dept-${dept}" style="display: block; padding: 0 10px;">
                 `;
 
-                const departmentRows = [
-                    ...modelGroups.map(modelGroup => ({
-                        type: 'model',
-                        modelGroup,
-                        sortName: modelGroupSortName(modelGroup)
-                    })),
-                    ...customAssetsForDept.map(asset => {
-                        const custom = asset.parsedCustom || parseCustomAsset(asset.id, asset);
-                        return {
-                            type: 'custom',
-                            asset,
-                            sortName: customAssetSortName(custom)
-                        };
-                    })
-                ].sort((a, b) => compareDisplayNames(a.sortName, b.sortName));
-
-                departmentRows.forEach(row => {
-                    if (row.type === 'custom') {
-                        content += createCustomPreparationSection(eventId, [row.asset], event);
-                        return;
-                    }
-
-                    const modelGroup = row.modelGroup;
+                modelGroups.forEach(modelGroup => {
                     const modelAvailableAssets = availableAssets.filter(a => 
                         a.brand === modelGroup.brand && 
                         a.model === modelGroup.model && 
@@ -4479,6 +4504,8 @@ async function openPrepareEventModal(eventId) {
                         );
                     }
                 });
+
+                content += createCustomPreparationSection(eventId, customAssetsForDept, event);
                 content += '</div></div>';
             });
         }
@@ -4535,9 +4562,7 @@ async function openPrepareEventModal(eventId) {
                 const assets = event.assetsByDepartment[dept];
                 
                 // Add department header if there are non-model assets
-                const nonModelAssets = assets
-                    .filter(asset => !asset.id.startsWith('[MODEL]'))
-                    .sort((a, b) => compareDisplayNames(assetDisplaySortName(a), assetDisplaySortName(b)));
+                const nonModelAssets = assets.filter(asset => !asset.id.startsWith('[MODEL]'));
                 if (nonModelAssets.length > 0) {
                     content += `
                         <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: #f1f3f4; border-bottom: 1px solid #e9ecef; cursor: pointer;" onclick="togglePrepareSection('assigned-dept-${dept}')">
@@ -4548,7 +4573,8 @@ async function openPrepareEventModal(eventId) {
                     `;
                 }
                 
-                nonModelAssets.forEach(asset => {
+                assets.forEach(asset => {
+                    if (!asset.id.startsWith('[MODEL]')) {
                         const custom = parseCustomAsset(asset.id, asset);
                         const isReturned = event.returnedItems && event.returnedItems.includes(asset.id);
                         const isPrepared = event.actuallyPrepared && event.actuallyPrepared.includes(asset.id);
@@ -4606,6 +4632,7 @@ async function openPrepareEventModal(eventId) {
                                 </div>
                             </div>
                         `;
+                    }
                 });
                 
                 if (nonModelAssets.length > 0) {
@@ -4790,7 +4817,7 @@ function renderCalendar(events) {
 
         eventLayersHTML.push(`
           <div class="calendar-event-layer" style="top: ${20 + (row * 18)}px; z-index: ${placement.spanClass === 'span-start' ? 10 : 5};">
-            <div class="${eventClass}" onclick="editEvent(${placement.event.id})" title="${placement.event.name}" style="z-index: ${placement.spanClass === 'span-start' ? 10 : 5}; position: relative;">
+            <div class="${eventClass}" onclick="openEventFromCalendar(${placement.event.id})" title="${placement.event.name}" style="z-index: ${placement.spanClass === 'span-start' ? 10 : 5}; position: relative;">
               ${eventText}
             </div>
           </div>
@@ -5089,13 +5116,7 @@ function getCustomRequiredQuantityForProgress(customAssets) {
 function createCustomPreparationSection(eventId, customAssets, event) {
     if (!customAssets || customAssets.length === 0) return '';
 
-    const sortedCustomAssets = [...customAssets].sort((a, b) => {
-        const aCustom = a.parsedCustom || parseCustomAsset(a.id, a);
-        const bCustom = b.parsedCustom || parseCustomAsset(b.id, b);
-        return compareDisplayNames(customAssetSortName(aCustom), customAssetSortName(bCustom));
-    });
-
-    return sortedCustomAssets.map((asset) => {
+    return customAssets.map((asset) => {
         const custom = asset.parsedCustom || parseCustomAsset(asset.id, asset);
         if (!custom) return '';
 
@@ -5199,11 +5220,7 @@ function generateCustomAssetsSection(event) {
 
     Object.keys(byDept).sort().forEach(dept => {
         const deptMeta = getDepartmentMeta(dept);
-        const assetsInDept = (byDept[dept] || []).sort((a, b) => {
-            const aCustom = a.parsedCustom || parseCustomAsset(a.id, a);
-            const bCustom = b.parsedCustom || parseCustomAsset(b.id, b);
-            return compareDisplayNames(customAssetSortName(aCustom), customAssetSortName(bCustom));
-        });
+        const assetsInDept = byDept[dept];
         content += `
             <div style="border: 1px solid #e9ecef; border-radius: 8px; margin-bottom: 10px; overflow:hidden;">
                 <div style="background: #f8f9fa; padding: 10px; font-weight: bold; border-bottom:1px solid #e9ecef; display:flex; align-items:center; gap:8px;">
@@ -6856,9 +6873,9 @@ function updateAllAssetsSection(event, eventId) {
       const deptAssets = event.assetsByDepartment[dept] || [];
 
       // Only show real assets here (ignore [MODEL] rows)
-      const nonModelAssets = deptAssets
-        .filter((a) => a && a.id && !a.id.startsWith("[MODEL]"))
-        .sort((a, b) => compareDisplayNames(assetDisplaySortName(a), assetDisplaySortName(b)));
+      const nonModelAssets = deptAssets.filter(
+        (a) => a && a.id && !a.id.startsWith("[MODEL]")
+      );
 
       if (nonModelAssets.length > 0) {
         content += `
@@ -7341,7 +7358,7 @@ async function loadEventAssetsForReturn() {
                         <div style="font-weight:600;">${departmentBadgeHtml(dept, true)}</div>
                         <div style="display:flex; align-items:center; gap:10px;">
                             <span style="font-size:12px; color:#6c757d;">${unreturnedQty} to return</span>
-                            <button class="btn btn-success btn-sm" onclick="returnAllForDepartment(${eventId}, '${escapeJs(dept)}')">Return all</button>
+                            ${isAdminUser() ? `<button class="btn btn-success btn-sm" onclick="returnAllForDepartment(${eventId}, '${escapeJs(dept)}')">Return all</button>` : ''}
                         </div>
                     </div>
                 `;
@@ -7357,7 +7374,9 @@ async function loadEventAssetsForReturn() {
 
         deptCodes.forEach(dept => {
             const items = (byDept[dept] || []).sort((a, b) => {
-                return compareDisplayNames(assetDisplaySortName(a), assetDisplaySortName(b));
+                const aName = a.parsedCustom ? customAssetDisplayName(a.parsedCustom) : `${a.brand || ''} ${a.model || ''} ${a.description || ''} ${a.id || ''}`;
+                const bName = b.parsedCustom ? customAssetDisplayName(b.parsedCustom) : `${b.brand || ''} ${b.model || ''} ${b.description || ''} ${b.id || ''}`;
+                return aName.localeCompare(bName, undefined, { numeric: true });
             });
             const totalQty = items.reduce((sum, a) => sum + Number(a.quantity || a.parsedCustom?.quantity || 1), 0);
 
@@ -7540,6 +7559,11 @@ async function returnSpecificAssetNew(eventId, assetId) {
 }
 
 async function returnAllForDepartment(eventId, department) {
+  if (!isAdminUser()) {
+      showNotification('error', 'Admin privileges required to use Return all');
+      return;
+  }
+
   try {
       // Best-effort disable of the clicked button
       const btn = document.querySelector(`[onclick*="returnAllForDepartment(${eventId}, '${department.replace("'", "\\'")}')"]`);
@@ -8284,9 +8308,7 @@ async function viewEvent(eventId) {
 
         Object.keys(event.assetsByDepartment).sort().forEach((dept) => {
           const assets = event.assetsByDepartment[dept];
-          const individualAssets = assets
-            .filter(asset => !asset.id.startsWith('[MODEL]'))
-            .sort((a, b) => compareDisplayNames(assetDisplaySortName(a), assetDisplaySortName(b)));
+          const individualAssets = assets.filter(asset => !asset.id.startsWith('[MODEL]'));
           
           if (individualAssets.length > 0) {
             content += `
@@ -9398,6 +9420,11 @@ async function createEventLogViewer(eventId, eventName) {
 }
 
 async function editEvent(eventId) {
+  if (!isAdminUser()) {
+    viewEvent(eventId);
+    return;
+  }
+
   try {
     const response = await apiCall(`/api/events/${eventId}`);
     const event = response.data;
@@ -9954,62 +9981,42 @@ async function updateModelRequirementsSection(eventId) {
         <div style="padding: 12px;">
       `;
 
-      const departmentRows = [
-        ...models.map(model => ({
-          type: 'model',
-          model,
-          sortName: modelGroupSortName(model)
-        })),
-        ...customAssets.map(asset => {
-          const custom = asset.parsedCustom || parseCustomAsset(asset.id, asset);
-          return {
-            type: 'custom',
-            asset,
-            custom,
-            sortName: customAssetSortName(custom)
-          };
-        })
-      ].sort((a, b) => compareDisplayNames(a.sortName, b.sortName));
+      models.forEach((model) => {
+        const assignedCount = getPreparedQuantity(model);
+        const statusIcon = assignedCount >= model.requiredQuantity ? "✅" : "⚠️";
 
-      departmentRows.forEach(row => {
-        if (row.type === 'model') {
-          const model = row.model;
-          const assignedCount = getPreparedQuantity(model);
-          const statusIcon = assignedCount >= model.requiredQuantity ? "✅" : "⚠️";
-
-          content += `
-            <div class="model-assignment" style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #f1f1f1; gap:12px;">
-              <div style="flex: 1; min-width:0;">
-                <div style="display: flex; align-items: center; flex-wrap:wrap; gap:6px;">
-                  <span>${statusIcon}</span>
-                  <span style="font-weight: 500;">${Number(model.requiredQuantity || 0)}x ${escapeHtml(model.brand)} ${escapeHtml(model.model)}</span>
-                  <span style="color: #666;">(${assignedCount} assigned)</span>
-                </div>
-                <div style="color: #666; font-size: 12px; margin-left: 22px; margin-top: 2px;">${escapeHtml(model.description || '')}</div>
+        content += `
+          <div class="model-assignment" style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #f1f1f1; gap:12px;">
+            <div style="flex: 1; min-width:0;">
+              <div style="display: flex; align-items: center; flex-wrap:wrap; gap:6px;">
+                <span>${statusIcon}</span>
+                <span style="font-weight: 500;">${Number(model.requiredQuantity || 0)}x ${escapeHtml(model.brand)} ${escapeHtml(model.model)}</span>
+                <span style="color: #666;">(${assignedCount} assigned)</span>
               </div>
-              <div style="display: flex; gap: 8px; flex-wrap:wrap; justify-content:flex-end;">
-                <button class="btn btn-sm btn-outline-primary edit-model-qty-btn"
-                        data-event-id="${eventId}"
-                        data-brand="${escapeHtmlAttribute(model.brand)}"
-                        data-model="${escapeHtmlAttribute(model.model)}"
-                        data-department="${escapeHtmlAttribute(model.department)}"
-                        data-description="${escapeHtmlAttribute(model.description || '')}"
-                        style="padding: 4px 8px; font-size: 11px;">Edit Qty</button>
-                <button class="btn btn-sm btn-danger remove-model-btn"
-                        data-event-id="${eventId}"
-                        data-brand="${escapeHtmlAttribute(model.brand)}"
-                        data-model="${escapeHtmlAttribute(model.model)}"
-                        data-department="${escapeHtmlAttribute(model.department)}"
-                        data-description="${escapeHtmlAttribute(model.description || '')}"
-                        style="padding: 4px 8px; font-size: 11px;">Remove</button>
-              </div>
+              <div style="color: #666; font-size: 12px; margin-left: 22px; margin-top: 2px;">${escapeHtml(model.description || '')}</div>
             </div>
-          `;
-          return;
-        }
+            <div style="display: flex; gap: 8px; flex-wrap:wrap; justify-content:flex-end;">
+              <button class="btn btn-sm btn-outline-primary edit-model-qty-btn"
+                      data-event-id="${eventId}"
+                      data-brand="${escapeHtmlAttribute(model.brand)}"
+                      data-model="${escapeHtmlAttribute(model.model)}"
+                      data-department="${escapeHtmlAttribute(model.department)}"
+                      data-description="${escapeHtmlAttribute(model.description || '')}"
+                      style="padding: 4px 8px; font-size: 11px;">Edit Qty</button>
+              <button class="btn btn-sm btn-danger remove-model-btn"
+                      data-event-id="${eventId}"
+                      data-brand="${escapeHtmlAttribute(model.brand)}"
+                      data-model="${escapeHtmlAttribute(model.model)}"
+                      data-department="${escapeHtmlAttribute(model.department)}"
+                      data-description="${escapeHtmlAttribute(model.description || '')}"
+                      style="padding: 4px 8px; font-size: 11px;">Remove</button>
+            </div>
+          </div>
+        `;
+      });
 
-        const asset = row.asset;
-        const custom = row.custom || asset.parsedCustom;
+      customAssets.forEach(asset => {
+        const custom = asset.parsedCustom;
         const statusIcon = asset.status === "returned" ? "↩️"
                          : asset.status === "prepared" ? "✅"
                          : asset.status === "collected" ? "📥"
@@ -10080,9 +10087,7 @@ async function addCustomAssetsToModelRequirements(eventId, existingContent = '')
       });
 
       Object.keys(byDept).sort().forEach(dept => {
-        const assetsOfDept = (byDept[dept] || []).sort((a, b) => {
-          return compareDisplayNames(customAssetSortName(a.parsedCustom), customAssetSortName(b.parsedCustom));
-        });
+        const assetsOfDept = byDept[dept];
         const totalQty = assetsOfDept.reduce((sum, asset) => sum + Number(asset.parsedCustom.quantity || 1), 0);
 
         content += `
@@ -11149,6 +11154,11 @@ function toggleModelDetailsInEdit(modelId) {
 }
 
 async function deleteEvent(eventId) {
+  if (!isAdminUser()) {
+    showNotification('error', 'Admin privileges required');
+    return;
+  }
+
   if (
     !confirm(
       "Are you sure you want to delete this event? This action cannot be undone."
@@ -11324,6 +11334,11 @@ document.addEventListener("DOMContentLoaded", function () {
     .getElementById("addEventForm")
     .addEventListener("submit", async function (e) {
       e.preventDefault();
+
+      if (!isAdminUser()) {
+        showNotification("error", "Admin privileges required to add events");
+        return;
+      }
 
       const eventData = {
         name: document.getElementById("eventName").value,
@@ -13243,20 +13258,12 @@ function showMaintenanceLogModal(asset) {
         statusChangesDisplay = '<span style="color: #999; font-style: italic; font-size: 12px;">No changes</span>';
       }
       
-      modalContent += `
-        <tr style="border-bottom: 1px solid #f1f1f1;">
-          <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; vertical-align: top; font-weight: 500; text-align: center;">${displayNumber}</td>
-          <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; vertical-align: top; font-size: 13px;">${log.date}</td>
-          <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; vertical-align: top; font-size: 13px;">${escapeHtml(log.user)}</td>
-          <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; vertical-align: top;">
-            <div id="${logId}_display" style="display: block; cursor: pointer;" onclick="editMaintenanceLog('${asset.id}', ${log.originalIndex}, '${logId}')">
-              ${escapeHtml(mainDescription)}
-            </div>
-          </td>
-          <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; vertical-align: top; word-wrap: break-word; overflow-wrap: break-word; max-width: 200px;">
-            ${statusChangesDisplay}
-          </td>
-          <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; vertical-align: top; text-align: center;">
+      const canEditThisLog = canCurrentUserModifyMaintenanceLog(log);
+      const canDeleteThisLog = isAdminUser();
+      const descriptionAttrs = canEditThisLog
+        ? `style="display: block; cursor: pointer;" onclick="editMaintenanceLog('${asset.id}', ${log.originalIndex}, '${logId}')" title="Edit this maintenance log"`
+        : `style="display: block; cursor: default;" title="Normal users can only edit their own logs within 7 days"`;
+      const deleteButtonHtml = canDeleteThisLog ? `
             <button 
               type="button"
               class="delete-log-btn" 
@@ -13269,6 +13276,23 @@ function showMaintenanceLogModal(asset) {
               onmouseout="this.style.backgroundColor='transparent'">
               ×
             </button>
+      ` : '';
+
+      modalContent += `
+        <tr style="border-bottom: 1px solid #f1f1f1;">
+          <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; vertical-align: top; font-weight: 500; text-align: center;">${displayNumber}</td>
+          <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; vertical-align: top; font-size: 13px;">${log.date}</td>
+          <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; vertical-align: top; font-size: 13px;">${escapeHtml(log.user)}</td>
+          <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; vertical-align: top;">
+            <div id="${logId}_display" ${descriptionAttrs}>
+              ${escapeHtml(mainDescription)}
+            </div>
+          </td>
+          <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; vertical-align: top; word-wrap: break-word; overflow-wrap: break-word; max-width: 200px;">
+            ${statusChangesDisplay}
+          </td>
+          <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; vertical-align: top; text-align: center;">
+            ${deleteButtonHtml}
           </td>
         </tr>
       `;
@@ -13333,6 +13357,7 @@ function showMaintenanceLogModal(asset) {
   // Add event listeners for delete buttons
 
   setTimeout(() => {
+    if (!isAdminUser()) return;
     const deleteButtons = modal.querySelectorAll('.delete-log-btn');
     console.log('Found delete buttons:', deleteButtons.length);
     
@@ -13452,6 +13477,11 @@ function addNewLogEntryFromModal(assetId) {
 }
 
 async function deleteMaintenanceLog(assetId, logIndex, logId) {
+  if (!isAdminUser()) {
+    showNotification('error', 'Admin privileges required to delete maintenance logs');
+    return;
+  }
+
   console.log('Delete button clicked!');
   console.log('Parameters:', { assetId, logIndex, logId });
   
@@ -14228,6 +14258,18 @@ function editMaintenanceLog(assetId, logIndex, logId) {
     showNotification('error', 'Maintenance log not found');
     return;
   }
+
+  const permissionLogParts = asset.maintenanceLogs[logIndex].split('	');
+  const permissionLog = {
+    date: permissionLogParts[0] || '',
+    user: permissionLogParts[1] || '',
+    description: permissionLogParts.slice(2).join('	') || ''
+  };
+
+  if (!canCurrentUserModifyMaintenanceLog(permissionLog)) {
+    showNotification('error', 'You can only edit maintenance logs that you wrote within the last 7 days');
+    return;
+  }
   
   // Parse the current log entry
   const logEntry = asset.maintenanceLogs[logIndex];
@@ -14351,6 +14393,7 @@ function editMaintenanceLog(assetId, logIndex, logId) {
                 id="editMaintenanceUser"
                 value="${escapeHtml(currentUser)}"
                 required
+                ${isAdminUser() ? '' : 'readonly'}
                 placeholder="Enter username"
               />
             </div>
@@ -14428,6 +14471,7 @@ function editMaintenanceLog(assetId, logIndex, logId) {
                 Cancel
               </button>
 
+              ${isAdminUser() ? `
               <button 
                 type="button" 
                 class="btn btn-danger" 
@@ -14435,7 +14479,7 @@ function editMaintenanceLog(assetId, logIndex, logId) {
                 style="margin-right: auto;"
               >
                 Delete Log
-              </button>
+              </button>` : '<span style="margin-right:auto;color:#6c757d;font-size:12px;">Delete is admin-only</span>'}
               <button type="submit" class="btn btn-primary">
                 Save Changes
               </button>
@@ -14533,7 +14577,9 @@ async function saveEnhancedMaintenanceLog(assetId, logIndex, logId) {
     
     // Get form values
     const date = document.getElementById('editMaintenanceDate').value;
-    const user = document.getElementById('editMaintenanceUser').value.trim();
+    const user = isAdminUser()
+      ? document.getElementById('editMaintenanceUser').value.trim()
+      : (currentUser?.username || document.getElementById('editMaintenanceUser').value.trim());
     const description = document.getElementById('editMaintenanceDescription').value.trim();
     const newLocation = document.getElementById('editMaintenanceNewLocation').value.trim();
     const newSerial = document.getElementById('editMaintenanceNewSerial').value.trim();
@@ -16799,8 +16845,7 @@ function groupItemsByDepartment(event) {
 
   getDoDepartmentList(departments, edits).forEach(d => {
     departments[d] ||= [];
-    const sortedItems = [...departments[d]].sort((a, b) => compareDisplayNames(a.description, b.description));
-    departments[d] = applyDoOrdering(sortedItems, d, eventId);
+    departments[d] = applyDoOrdering(departments[d], d, eventId);
   });
 
   return departments;
@@ -16912,8 +16957,9 @@ async function initializeApp() {
     if (editStartDateEl) editStartDateEl.value = today;
     if (editEndDateEl) editEndDateEl.value = today;
 
-    // Add admin-only Users tab if the logged-in user is an admin
+    // Load the current user and add admin-only Users tab if the logged-in user is an admin.
     await setupAdminUserManagementTab();
+    applyPermissionUi();
 
     // Load configurable department names/colours for badges and dropdowns.
     try {
