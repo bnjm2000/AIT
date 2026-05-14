@@ -4449,10 +4449,67 @@ def _asset_fulfills_event_model_requirement(event, asset):
     return _asset_match_key(asset) in requirements
 
 
+def _transfer_asset_payload(asset, state='', from_event=None, to_event=None, reason='', requirement=None, source_quantity=0, return_quantity=0):
+    """Build a transfer-page asset payload.
+
+    state is intentionally server-side so multiple browser/device sessions see
+    the same action result after refreshing the comparison.
+    """
+    requirement = requirement or {}
+    target_remaining = int(requirement.get('remaining', 0) or 0)
+    return {
+        'assetId': asset.asset_id,
+        'department': asset.department_code,
+        'brand': asset.brand,
+        'model': asset.model_number,
+        'description': asset.description,
+        'serial': asset.serial_number,
+        'currentLocation': asset.current_location or (getattr(from_event, 'name', '') if from_event else ''),
+        'matchLabel': f"[{asset.department_code}] {asset.brand} {asset.model_number} {asset.description}".strip(),
+        'targetRequired': int(requirement.get('required', 0) or 0),
+        'targetPrepared': int(requirement.get('prepared', 0) or 0),
+        'targetRemainingBeforeThisAsset': target_remaining,
+        'targetRemaining': target_remaining,
+        'sourceQuantity': int(source_quantity or 0),
+        'returnQuantity': int(return_quantity or 0),
+        'reason': reason,
+        'transferState': state,
+    }
+
+
+def _real_source_asset_ids_including_returned(event):
+    """Return real inventory asset IDs connected to a source event.
+
+    Unlike _get_unreturned_real_asset_ids(), this intentionally keeps returned
+    IDs so the transfer page can keep showing already-transferred / returned-to-
+    office assets with an Undo button after the server-side refresh.
+    """
+    _ensure_event_lists(event)
+    ids = []
+    for asset_id in list(event.actually_prepared) + list(event.prepared_items):
+        if not _is_real_asset_ref(asset_id):
+            continue
+        if asset_id not in data_manager.inventory:
+            continue
+        if asset_id not in ids:
+            ids.append(asset_id)
+    return ids
+
+
+def _asset_is_active_on_destination(asset_id, to_event):
+    _ensure_event_lists(to_event)
+    return (
+        asset_id in (getattr(to_event, 'actually_prepared', []) or [])
+        and asset_id not in (getattr(to_event, 'returned_items', []) or [])
+    )
+
+
 def _get_transfer_candidates(from_event, to_event):
     """
-    Find source assets that can fill the destination event's remaining model requirements.
-    Source must be Ongoing/Overdue. Destination must be Planning/Preparing.
+    Find source assets that can fill the destination event's remaining model
+    requirements. Already-transferred assets are included too, marked with
+    transferState='transferred', so every device can show them with Undo instead
+    of disappearing after refresh.
     """
     _ensure_event_lists(from_event)
     _ensure_event_lists(to_event)
@@ -4460,67 +4517,84 @@ def _get_transfer_candidates(from_event, to_event):
     source_state = str(from_event.state or '').strip().lower()
     target_state = str(to_event.state or '').strip().lower()
 
-    if source_state not in TRANSFER_SOURCE_STATES:
-        return []
-    if target_state not in TRANSFER_TARGET_STATES:
-        return []
+    # Keep normal source/target validation for new transfers, but still allow
+    # already-transferred assets to be surfaced for undo in this comparison.
+    allow_new_transfers = source_state in TRANSFER_SOURCE_STATES and target_state in TRANSFER_TARGET_STATES
 
     requirements = _target_model_requirements(to_event)
-    remaining_by_key = {
-        key: req['remaining'] for key, req in requirements.items() if req['remaining'] > 0
-    }
-
-    if not remaining_by_key:
-        return []
+    remaining_by_key = {key: req['remaining'] for key, req in requirements.items() if req['remaining'] > 0}
 
     candidates = []
+    seen = set()
 
-    for asset_id in _get_unreturned_real_asset_ids(from_event):
+    # 1) Active source assets that may still be transferred.
+    if allow_new_transfers and remaining_by_key:
+        for asset_id in _get_unreturned_real_asset_ids(from_event):
+            asset = data_manager.inventory.get(asset_id)
+            if not asset:
+                continue
+            if getattr(asset, 'is_missing', False) or getattr(asset, 'is_ooc', False):
+                continue
+
+            key = _asset_match_key(asset)
+            if remaining_by_key.get(key, 0) <= 0:
+                continue
+
+            req = requirements[key]
+            candidates.append(_transfer_asset_payload(
+                asset,
+                state='',
+                from_event=from_event,
+                to_event=to_event,
+                requirement=req,
+            ))
+            seen.add(asset.asset_id)
+
+    # 2) Assets already moved from this source to this destination. These must
+    # stay visible in Common / Transferable with an Undo button, and must not be
+    # available in Return to Office.
+    for asset_id in _real_source_asset_ids_including_returned(from_event):
+        if asset_id in seen:
+            continue
+        if asset_id not in (getattr(from_event, 'returned_items', []) or []):
+            continue
+        if not _asset_is_active_on_destination(asset_id, to_event):
+            continue
+
         asset = data_manager.inventory.get(asset_id)
         if not asset:
             continue
-        if getattr(asset, 'is_missing', False) or getattr(asset, 'is_ooc', False):
-            continue
 
         key = _asset_match_key(asset)
-        if remaining_by_key.get(key, 0) <= 0:
-            continue
-
-        req = requirements[key]
-        # Return every matching source asset for this model type, not just the
-        # first N assets. The UI groups by model and lets the user choose exactly
-        # which physical units should transfer.
-        candidates.append({
-            'assetId': asset.asset_id,
-            'department': asset.department_code,
-            'brand': asset.brand,
-            'model': asset.model_number,
-            'description': asset.description,
-            'serial': asset.serial_number,
-            'currentLocation': asset.current_location or from_event.name,
-            'matchLabel': f"[{asset.department_code}] {asset.brand} {asset.model_number} {asset.description}".strip(),
-            'targetRequired': req['required'],
-            'targetPrepared': req['prepared'],
-            'targetRemainingBeforeThisAsset': remaining_by_key[key],
+        req = requirements.get(key, {
+            'required': 0,
+            'prepared': 0,
+            'remaining': 0,
         })
+        candidates.append(_transfer_asset_payload(
+            asset,
+            state='transferred',
+            from_event=from_event,
+            to_event=to_event,
+            requirement=req,
+            reason='Already transferred to destination event',
+        ))
+        seen.add(asset.asset_id)
 
     candidates.sort(key=lambda x: (x['department'], x['brand'], x['model'], x['description'], x['assetId']))
     return candidates
 
 
-
 def _get_transfer_return_to_office_assets(from_event, to_event):
     """Return source assets that should go back to office.
 
-    This is quantity-based by asset type:
-    - if the destination has no matching requirement, all source units go back
-    - if the destination needs fewer units than the source event currently has,
-      only the excess quantity goes back
-
-    The response still includes the physical source asset options so the UI can
-    let the user choose exactly which units are transferred or returned, but it
-    also includes returnQuantity so the grouped view/PDF shows only the excess
-    count, e.g. source has 15 and destination needs 12 => 3x return to office.
+    This is quantity-based by asset type and server-state aware:
+    - transferred assets are excluded from this view
+    - already-returned-to-office assets remain visible with transferState
+      'returnedOffice' so users can Undo from any device
+    - the grouped quantity remains the true excess count, e.g. source has 15
+      and destination only needs 12 => 3x should go back, even after one of the
+      three has already been marked returned.
     """
     _ensure_event_lists(from_event)
     _ensure_event_lists(to_event)
@@ -4528,9 +4602,13 @@ def _get_transfer_return_to_office_assets(from_event, to_event):
     target_requirements = _target_model_requirements(to_event)
 
     source_groups = defaultdict(list)
-    for asset_id in _get_unreturned_real_asset_ids(from_event):
+    for asset_id in _real_source_asset_ids_including_returned(from_event):
         asset = data_manager.inventory.get(asset_id)
         if not asset:
+            continue
+        # If this exact unit was transferred to the destination, it belongs only
+        # in Common / Transferable with Undo, not in Return to Office.
+        if _asset_is_active_on_destination(asset_id, to_event):
             continue
         source_groups[_asset_match_key(asset)].append(asset)
 
@@ -4559,26 +4637,24 @@ def _get_transfer_return_to_office_assets(from_event, to_event):
             target_required = 0
             target_prepared = 0
 
-        # Include all possible physical units in the dropdown so the user can
-        # decide which exact units go back, while the grouped quantity remains
-        # limited to returnQuantity.
+        req_payload = {
+            'required': target_required,
+            'prepared': target_prepared,
+            'remaining': target_remaining,
+        }
+
         for asset in group_assets:
-            going_back.append({
-                'assetId': asset.asset_id,
-                'department': asset.department_code,
-                'brand': asset.brand,
-                'model': asset.model_number,
-                'description': asset.description,
-                'serial': asset.serial_number,
-                'currentLocation': asset.current_location or from_event.name,
-                'matchLabel': f"[{asset.department_code}] {asset.brand} {asset.model_number} {asset.description}".strip(),
-                'reason': reason,
-                'sourceQuantity': source_quantity,
-                'targetRequired': target_required,
-                'targetPrepared': target_prepared,
-                'targetRemaining': target_remaining,
-                'returnQuantity': return_quantity,
-            })
+            state = 'returnedOffice' if asset.asset_id in (getattr(from_event, 'returned_items', []) or []) else ''
+            going_back.append(_transfer_asset_payload(
+                asset,
+                state=state,
+                from_event=from_event,
+                to_event=to_event,
+                requirement=req_payload,
+                reason=reason,
+                source_quantity=source_quantity,
+                return_quantity=return_quantity,
+            ))
 
     going_back.sort(key=lambda x: (x['department'], x['brand'], x['model'], x['description'], x['assetId']))
     return going_back

@@ -18677,3 +18677,368 @@ function generateTransferPdf() {
   win.document.close();
   win.focus();
 }
+
+// PATCH 2026-05-14C: preserve prepare/transfer dropdowns and make transfer/return state server-visible.
+function __aitCapturePrepareOpenState() {
+  const state = {
+    expandedSections: [],
+    visiblePanels: [],
+    openDetails: [],
+    scrollTop: 0,
+    activeTabText: ''
+  };
+
+  document.querySelectorAll('[onclick*="togglePrepareSection"]').forEach(el => {
+    const onclickAttr = el.getAttribute('onclick') || '';
+    const match = onclickAttr.match(/togglePrepareSection\('([^']+)'\)/);
+    if (!match) return;
+    const section = document.getElementById(match[1]);
+    if (section && section.style.display !== 'none') {
+      state.expandedSections.push(match[1]);
+    }
+  });
+
+  document.querySelectorAll('#prepareEventContent [id]').forEach(el => {
+    const id = el.id || '';
+    if (!id) return;
+    const looksLikeDropdown = id.startsWith('model-') || id.startsWith('dept-') || id.startsWith('assigned-dept-') || id === 'model-requirements' || id === 'custom-assets' || id === 'all-assigned-assets';
+    if (looksLikeDropdown && el.style && el.style.display && el.style.display !== 'none') {
+      state.visiblePanels.push(id);
+    }
+  });
+
+  document.querySelectorAll('#prepareEventContent details[open]').forEach(details => {
+    if (details.id) state.openDetails.push(details.id);
+  });
+
+  const modalContent = document.getElementById('prepareEventContent');
+  state.scrollTop = modalContent ? modalContent.scrollTop : 0;
+
+  const activeTab = document.querySelector('.nav-link.active');
+  state.activeTabText = activeTab ? activeTab.textContent.trim() : '';
+  return state;
+}
+
+function __aitRestorePrepareOpenState(state) {
+  if (!state) return;
+  const idsToOpen = Array.from(new Set([...(state.expandedSections || []), ...(state.visiblePanels || [])]));
+  idsToOpen.forEach(sectionId => {
+    const section = document.getElementById(sectionId);
+    if (!section) return;
+    section.style.display = 'block';
+    const toggleIcon = document.querySelector(`[onclick*="togglePrepareSection('${sectionId}')"] .toggle-icon`);
+    if (toggleIcon) toggleIcon.textContent = '▼';
+  });
+
+  (state.openDetails || []).forEach(id => {
+    const details = document.getElementById(id);
+    if (details && details.tagName && details.tagName.toLowerCase() === 'details') {
+      details.open = true;
+    }
+  });
+
+  const modalContent = document.getElementById('prepareEventContent');
+  if (modalContent) modalContent.scrollTop = state.scrollTop || 0;
+
+  if (state.activeTabText) {
+    document.querySelectorAll('.nav-link').forEach(tab => {
+      if (tab.textContent.trim() === state.activeTabText) tab.classList.add('active');
+    });
+  }
+}
+
+function preserveModalState(callback) {
+  const state = __aitCapturePrepareOpenState();
+  const result = typeof callback === 'function' ? callback() : null;
+  Promise.resolve(result)
+    .catch(err => console.error('preserveModalState callback failed:', err))
+    .finally(() => {
+      setTimeout(() => __aitRestorePrepareOpenState(state), 120);
+      setTimeout(() => __aitRestorePrepareOpenState(state), 350);
+    });
+  return result;
+}
+
+function getTransferActionState(assetOrId) {
+  if (assetOrId && typeof assetOrId === 'object') {
+    return assetOrId.transferState || assetOrId.actionState || window.__transferActionState?.[String(assetOrId.assetId || '')] || '';
+  }
+  return window.__transferActionState?.[String(assetOrId || '')] || '';
+}
+
+function getTransferItemState(item) {
+  return getTransferActionState(item) || item?.transferState || item?.actionState || '';
+}
+
+function transferGroupDetailsId(group) {
+  const raw = `${group.mode || ''}|${group.key || ''}`;
+  return `transfer-group-${encodeURIComponent(raw).replace(/%/g, '_').replace(/[^A-Za-z0-9_-]/g, '_')}`;
+}
+
+function getOpenTransferDropdownIds() {
+  return Array.from(document.querySelectorAll('#transfer-candidates-panel details[open]'))
+    .map(details => details.id)
+    .filter(Boolean);
+}
+
+function restoreOpenTransferDropdownIds(ids) {
+  (ids || []).forEach(id => {
+    const details = document.getElementById(id);
+    if (details && details.tagName && details.tagName.toLowerCase() === 'details') {
+      details.open = true;
+    }
+  });
+}
+
+async function loadTransferCandidates(options = {}) {
+  const sourceSelect = document.getElementById('transferSourceSelect');
+  const targetSelect = document.getElementById('transferTargetSelect');
+  const panel = document.getElementById('transfer-candidates-panel');
+  if (!sourceSelect || !targetSelect || !panel) return;
+
+  const fromEventId = sourceSelect.value;
+  const toEventId = targetSelect.value;
+  const pairKey = `${fromEventId || ''}|${toEventId || ''}`;
+  const openDropdowns = options.openDropdowns || getOpenTransferDropdownIds();
+
+  if (window.__lastTransferPairKey !== pairKey) {
+    resetTransferActionState();
+    window.__lastTransferPairKey = pairKey;
+  }
+
+  if (!fromEventId || !toEventId) {
+    panel.innerHTML = '<p style="text-align:center;color:#666;padding:28px;">Choose both events to compare transfer and return-to-office assets.</p>';
+    return;
+  }
+  if (fromEventId === toEventId) {
+    panel.innerHTML = '<p style="text-align:center;color:#a00;padding:28px;">Source and destination events cannot be the same.</p>';
+    return;
+  }
+
+  if (!options.quiet) {
+    panel.innerHTML = '<div class="loading">Comparing events...</div>';
+  }
+
+  try {
+    const response = await apiCall(`/api/transfers/candidates?fromEventId=${encodeURIComponent(fromEventId)}&toEventId=${encodeURIComponent(toEventId)}`);
+    transferCandidateCache = response.data?.candidates || [];
+    transferReturnToOfficeCache = response.data?.returnToOffice || [];
+    renderTransferCandidates(response.data || {});
+    setTimeout(() => restoreOpenTransferDropdownIds(openDropdowns), 50);
+    setTimeout(() => restoreOpenTransferDropdownIds(openDropdowns), 200);
+  } catch (error) {
+    panel.innerHTML = `<div style="padding:28px;text-align:center;color:#a00;">Failed to compare events: ${escapeHtml(error.message || String(error))}</div>`;
+  }
+}
+
+function buildTransferGroups(items, mode) {
+  const map = new Map();
+
+  (items || []).forEach(item => {
+    const key = transferAssetTypeKey(item);
+    if (!map.has(key)) {
+      const remaining = Math.max(0, Number(item.targetRemainingBeforeThisAsset || item.targetRemaining || 0));
+      map.set(key, {
+        key,
+        mode,
+        department: normalizeDepartmentCode(item.department || 'UN'),
+        brand: item.brand || '',
+        model: item.model || '',
+        description: item.description || '',
+        reason: item.reason || '',
+        targetRequired: Number(item.targetRequired || 0),
+        targetPrepared: Number(item.targetPrepared || 0),
+        targetRemaining: remaining,
+        returnQuantity: Number(item.returnQuantity || 0),
+        sourceQuantity: Number(item.sourceQuantity || 0),
+        items: []
+      });
+    }
+
+    const group = map.get(key);
+    group.items.push(item);
+    group.targetRemaining = Math.max(group.targetRemaining || 0, Number(item.targetRemainingBeforeThisAsset || item.targetRemaining || 0));
+    group.targetRequired = Math.max(group.targetRequired || 0, Number(item.targetRequired || 0));
+    group.targetPrepared = Math.max(group.targetPrepared || 0, Number(item.targetPrepared || 0));
+    group.returnQuantity = Math.max(group.returnQuantity || 0, Number(item.returnQuantity || 0));
+    group.sourceQuantity = Math.max(group.sourceQuantity || 0, Number(item.sourceQuantity || 0));
+    if (item.reason && !group.reason) group.reason = item.reason;
+  });
+
+  const groups = Array.from(map.values()).map(group => {
+    group.items.sort((a, b) => String(a.assetId || '').localeCompare(String(b.assetId || ''), undefined, { numeric: true, sensitivity: 'base' }));
+
+    if (mode === 'common') {
+      group.doneQty = group.items.filter(item => getTransferItemState(item) === 'transferred').length;
+      const currentRemaining = Math.max(0, Number(group.targetRemaining || 0));
+      const totalNeededForThisComparison = group.doneQty + currentRemaining;
+      group.actionQty = Math.min(group.items.length, Math.max(group.doneQty, totalNeededForThisComparison, group.doneQty ? group.doneQty : 1));
+      group.progressLabel = `${group.doneQty}/${group.actionQty} transferred`;
+      group.helpText = `${group.items.length} source option(s) available${currentRemaining ? `; destination still needs ${currentRemaining}` : ''}.`;
+    } else {
+      const returnQty = group.returnQuantity > 0 ? group.returnQuantity : group.items.length;
+      group.doneQty = group.items.filter(item => getTransferItemState(item) === 'returnedOffice').length;
+      group.actionQty = Math.min(group.items.length, Math.max(group.doneQty, returnQty));
+      group.progressLabel = `${group.doneQty}/${group.actionQty} marked to return`;
+      group.helpText = group.reason || (group.targetRemaining > 0
+        ? `Destination needs ${group.targetRemaining}; source has ${group.sourceQuantity || group.items.length}; ${group.actionQty} should return to office.`
+        : 'Not required by destination event.');
+    }
+
+    return group;
+  });
+
+  return groups.sort((a, b) => (
+    a.department.localeCompare(b.department, undefined, { numeric: true }) ||
+    a.brand.localeCompare(b.brand, undefined, { numeric: true, sensitivity: 'base' }) ||
+    a.model.localeCompare(b.model, undefined, { numeric: true, sensitivity: 'base' }) ||
+    a.description.localeCompare(b.description, undefined, { numeric: true, sensitivity: 'base' })
+  ));
+}
+
+function transferAssetDropdownRows(group) {
+  const transferLimitReached = group.mode === 'common' && group.doneQty >= group.actionQty;
+  const returnLimitReached = group.mode !== 'common' && group.doneQty >= group.actionQty;
+
+  return group.items.map(item => {
+    const encodedAssetId = encodeURIComponent(item.assetId || '');
+    const state = getTransferItemState(item);
+    const isTransferred = state === 'transferred';
+    const isReturnedOffice = state === 'returnedOffice';
+
+    let actionHtml = '';
+    let statusHtml = '<span class="asset-badge status-available">Ready</span>';
+
+    if (group.mode === 'common') {
+      if (isTransferred) {
+        statusHtml = '<span class="asset-badge status-deployed">Transferred</span>';
+        actionHtml = `<button class="btn btn-warning btn-sm" onclick="undoTransferDropdownAsset('${encodedAssetId}')">Undo</button>`;
+      } else if (isReturnedOffice) {
+        statusHtml = '<span class="asset-badge status-deployed">Return to Office</span>';
+        actionHtml = `<button class="btn btn-secondary btn-sm" disabled title="This asset has already been returned to office">Transfer</button>`;
+      } else {
+        actionHtml = `<button class="btn btn-success btn-sm" ${transferLimitReached ? 'disabled title="Required transfer quantity reached"' : ''} onclick="transferDropdownAsset('${encodedAssetId}')">Transfer</button>`;
+      }
+    } else {
+      if (isReturnedOffice) {
+        statusHtml = '<span class="asset-badge status-deployed">Return to Office</span>';
+        actionHtml = `<button class="btn btn-warning btn-sm" onclick="undoReturnOfficeDropdownAsset('${encodedAssetId}')">Undo</button>`;
+      } else if (isTransferred) {
+        statusHtml = '<span class="asset-badge status-deployed">Transferred</span>';
+        actionHtml = `<button class="btn btn-secondary btn-sm" disabled title="This asset has already been transferred">Return</button>`;
+      } else {
+        actionHtml = `<button class="btn btn-primary btn-sm" ${returnLimitReached ? 'disabled title="Required return quantity reached"' : ''} onclick="returnOfficeDropdownAsset('${encodedAssetId}')">Return</button>`;
+      }
+    }
+
+    return `
+      <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;padding:9px 10px;border-bottom:1px solid #f1f1f1;background:white;">
+        <div style="min-width:0;">
+          <div style="font-weight:700;color:#333;">${escapeHtml(item.assetId || '')}</div>
+          <div style="font-size:12px;color:#666;">${item.serial ? `SN: ${escapeHtml(item.serial)}` : 'No serial'}${item.currentLocation ? ` • ${escapeHtml(item.currentLocation)}` : ''}</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;white-space:nowrap;">
+          ${statusHtml}
+          ${actionHtml}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderTransferGroupCard(group, index) {
+  const qtyLabel = group.actionQty;
+  const title = `${qtyLabel}x ${transferAssetTypeName(group)}`;
+  const detailsId = transferGroupDetailsId(group);
+  const badge = departmentBadgeHtml(group.department || 'UN', true);
+
+  return `
+    <div style="margin-bottom:14px;border:1px solid #e9ecef;border-radius:12px;overflow:hidden;background:#fff;box-shadow:0 3px 10px rgba(0,0,0,.04);">
+      <div style="padding:12px;background:#f1f3f4;">
+        <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;">
+          <div style="min-width:260px;">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;">
+              ${badge}
+              <strong style="font-size:14px;color:#333;">${escapeHtml(title)}</strong>
+            </div>
+            <div style="font-size:12px;color:#666;">${escapeHtml(group.helpText || '')}</div>
+          </div>
+          <div style="min-width:180px;">${transferProgressHtml(group.doneQty, group.actionQty)}</div>
+        </div>
+      </div>
+      <details id="${detailsId}">
+        <summary style="cursor:pointer;padding:10px 12px;background:#fafafa;border-top:1px solid #e9ecef;font-weight:700;color:#555;">
+          Choose exact asset(s) (${group.items.length} available; ${group.actionQty} needed)
+        </summary>
+        <div>${transferAssetDropdownRows(group)}</div>
+      </details>
+    </div>
+  `;
+}
+
+async function __aitRefreshTransferAfterAction() {
+  const openDropdowns = getOpenTransferDropdownIds();
+  await loadTransferCandidates({ quiet: true, openDropdowns });
+}
+
+async function transferDropdownAsset(encodedAssetId) {
+  const assetId = decodeURIComponent(encodedAssetId);
+  const fromEventId = document.getElementById('transferSourceSelect')?.value;
+  const toEventId = document.getElementById('transferTargetSelect')?.value;
+  if (!fromEventId || !toEventId || !assetId) return;
+  try {
+    await apiCall('/api/transfers/execute', 'POST', { fromEventId: Number(fromEventId), toEventId: Number(toEventId), assetIds: [assetId] });
+    setTransferActionState(assetId, 'transferred');
+    showNotification('success', `${assetId} transferred`);
+    await __aitRefreshTransferAfterAction();
+  } catch (error) {
+    showNotification('error', `Failed to transfer ${assetId}: ${error.message}`);
+    await __aitRefreshTransferAfterAction();
+  }
+}
+
+async function undoTransferDropdownAsset(encodedAssetId) {
+  const assetId = decodeURIComponent(encodedAssetId);
+  const fromEventId = document.getElementById('transferSourceSelect')?.value;
+  const toEventId = document.getElementById('transferTargetSelect')?.value;
+  if (!fromEventId || !toEventId || !assetId) return;
+  try {
+    await apiCall('/api/transfers/undo', 'POST', { fromEventId: Number(fromEventId), toEventId: Number(toEventId), assetIds: [assetId] });
+    setTransferActionState(assetId, '');
+    showNotification('success', `${assetId} transfer undone`);
+    await __aitRefreshTransferAfterAction();
+  } catch (error) {
+    showNotification('error', `Failed to undo transfer for ${assetId}: ${error.message}`);
+    await __aitRefreshTransferAfterAction();
+  }
+}
+
+async function returnOfficeDropdownAsset(encodedAssetId) {
+  const assetId = decodeURIComponent(encodedAssetId);
+  const fromEventId = document.getElementById('transferSourceSelect')?.value;
+  if (!fromEventId || !assetId) return;
+  try {
+    await apiCall('/api/transfers/return-office', 'POST', { fromEventId: Number(fromEventId), assetIds: [assetId] });
+    setTransferActionState(assetId, 'returnedOffice');
+    showNotification('success', `${assetId} marked to return to office`);
+    await __aitRefreshTransferAfterAction();
+  } catch (error) {
+    showNotification('error', `Failed to return ${assetId}: ${error.message}`);
+    await __aitRefreshTransferAfterAction();
+  }
+}
+
+async function undoReturnOfficeDropdownAsset(encodedAssetId) {
+  const assetId = decodeURIComponent(encodedAssetId);
+  const fromEventId = document.getElementById('transferSourceSelect')?.value;
+  if (!fromEventId || !assetId) return;
+  try {
+    await apiCall('/api/transfers/undo-return-office', 'POST', { fromEventId: Number(fromEventId), assetIds: [assetId] });
+    setTransferActionState(assetId, '');
+    showNotification('success', `${assetId} return-to-office undone`);
+    await __aitRefreshTransferAfterAction();
+  } catch (error) {
+    showNotification('error', `Failed to undo return for ${assetId}: ${error.message}`);
+    await __aitRefreshTransferAfterAction();
+  }
+}
