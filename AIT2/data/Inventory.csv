@@ -1114,9 +1114,9 @@ NICKWASH#11,DTS,NickWash 600,,self-contained compact high-output LED moving head
 NICKWASH#12,DTS,NickWash 600,,self-contained compact high-output LED moving head projector,False,True,False,1,,LX,Store,
 MVSHAZER#01,Le Maitre,MVS Hazer,5317,Hazer machine,False,False,False,1,,LX,Store,Store
 MVSHAZER#02,Le Maitre,MVS Hazer,2222,Hazer machine,False,False,False,1,,LX,Store,Store
-63ADB#01,63A 3-Phase DB,Custom DB,,,False,False,False,1,,LX,Store,Store
-63ADB#02,63A 3-Phase DB,Custom DB,,,False,False,False,1,,LX,Store,Store
-32ADB#02,32A 3-Phase DB,Custom DB,,,False,False,False,1,,LX,Store,Store
+63ADB#01,Custom,63A 3-Phase DB,,,False,False,False,1,,LX,Store,Store
+63ADB#02,Custom,63A 3-Phase DB,,,False,False,False,1,,LX,Store,Store
+32ADB#02,Custom,32A 3-Phase DB,,,False,False,False,1,,LX,Store,Store
 LX TREE #01,Versa-Stand,,,Winch Up Lighting Stand,False,False,False,1,,LX,Store,
 LX TREE #02,Versa-Stand,,,Winch Up Lighting Stand,False,False,False,1,,LX,Store,
 LX TREE #03,Versa-Stand,,,Winch Up Lighting Stand,False,False,False,1,,LX,Store,
@@ -1322,7 +1322,7 @@ LEGION#04,Lenovo,Legion 5 Pro,PF4LW7B4,16inch Windows Laptop,False,False,False,1
 MACBOOK#01,Apple,Macbook Pro (A1707),C02WG8EHHTD5,16inch Macbook Pro,False,False,False,1,,VX,Store,Store
 MACBOOK#02,Apple,Macbook Pro (A2442),M5P2V176XD,14inch Macbook Pro M1 Pro,False,False,False,1,,AX,Store,Store
 LUMINODE12,Luminex,Luminode 12,,12 DMX Interface,False,False,False,1,,LX,Store,Store
-32ADB#01,32A 3-Phase DB,Custom DB,,,False,False,False,1,,LX,Store,Store
+32ADB#01,Custom,32A 3-Phase DB,,,False,False,False,1,,LX,Store,Store
 ME36#03,Sennheiser,ME36,,Gooseneck mic,False,False,False,1,,AX,Store,
 ME36#04,Sennheiser,ME36,,Gooseneck mic,False,False,False,1,,AX,Store,
 BULK-0001,Global Truss,F34 Truss - 3m (Silver),,3m truss (silver),False,False,True,10,,STG,Store,
@@ -1340,3 +1340,5 @@ BULK-0012,Global Truss,F34 Truss - 1m (Black),,1m truss (silver),False,False,Tru
 BULK-0013,Global Truss,F34 Truss - 0.5m (Black),,0.5m truss (black),False,False,True,18,,STG,Store,
 BULK-0014,Global Truss,F34 Corner Block (Black),,Corner Block (black),False,False,True,17,,STG,Store,
 BULK-0015,Custom,Sandbag,,Sandbag - 6kg,False,False,True,20,,STG,Store,
+BULK-0016,Custom,600mm Base plate (carpeted),,,False,False,True,18,,STG,Store,
+BULK-0017,Custom,600mm Base plate,,,False,False,True,12,,STG,Store,

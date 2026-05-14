@@ -941,3 +941,10 @@
 2026/05/14 14:32:15,bnjm2000,Removed Astera Pixel Brick model from event 134
 2026/05/14 15:35:08,bnjm2000,User bnjm2000 forced event 102 (SG Airshow 2026 - Anduril Booth (Ultimus) @ Changi Exhibition Centre) state from Overdue to Closed
 2026/05/14 16:39:33,bnjm2000,"Deleted event 140: test via web interface. Reset 9 asset locations: ULXD2#13 (from 'test' to 'Store'), ULXD2#14 (from 'test' to 'Store'), ULXD2#15 (from 'test' to 'Store'), ULXD2#01 (from 'test' to 'Store'), ULXD2#02 (from 'test' to 'Store').... Removed 38 related log entries."
+2026/05/14 22:00:02,bnjm2000,Updated asset 32ADB#01; applyTo=allSimilar; updatedAssets=2; eventsUpdated=6; containersUpdated=0
+2026/05/14 22:00:14,bnjm2000,Updated asset 63ADB#01; applyTo=allSimilar; updatedAssets=2; eventsUpdated=5; containersUpdated=0
+2026/05/14 22:06:40,bnjm2000,Added asset BULK-0016 via web interface
+2026/05/14 22:06:55,bnjm2000,Added asset BULK-0017 via web interface
+2026/05/14 22:07:17,bnjm2000,Added 1x Custom 600mm Base plate model to event 131 (total: 1)
+2026/05/14 22:07:28,bnjm2000,Removed Custom 600mm Base plate model from event 131
+2026/05/14 22:07:39,bnjm2000,Added 1x Custom 600mm Base plate (carpeted) model to event 131 (total: 1)

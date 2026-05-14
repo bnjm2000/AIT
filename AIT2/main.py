@@ -29,9 +29,9 @@ def run_web():
         # Run Flask app
         app.run(
             debug=False,
-            host='192.168.0.110',
+            host='127.0.0.1',
             port=5443,
-            ssl_context='adhoc'
+            #ssl_context='adhoc'
         )
     except ImportError as e:
         print(f"Error: Missing required dependencies for web interface: {e}")
