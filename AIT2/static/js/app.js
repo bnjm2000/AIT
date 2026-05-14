@@ -728,6 +728,57 @@ function getTagDisplay(tag) {
 }
 
 // Navigation functions
+function isMobileNavigationViewport() {
+  return window.matchMedia && window.matchMedia("(max-width: 768px)").matches;
+}
+
+function setMobileNavigation(open) {
+  const shell = document.getElementById("appShell");
+  const toggle = document.getElementById("mobileNavToggle");
+  const sidebar = document.getElementById("appSidebar");
+
+  if (!shell || !toggle || !sidebar) return;
+
+  shell.classList.toggle("nav-collapsed", !open);
+  toggle.setAttribute("aria-expanded", String(open));
+  sidebar.setAttribute("aria-hidden", String(!open && isMobileNavigationViewport()));
+}
+
+function toggleMobileNavigation() {
+  const shell = document.getElementById("appShell");
+  if (!shell) return;
+
+  setMobileNavigation(shell.classList.contains("nav-collapsed"));
+}
+
+function closeMobileNavigation() {
+  if (isMobileNavigationViewport()) {
+    setMobileNavigation(false);
+  }
+}
+
+function setupMobileNavigation() {
+  const shell = document.getElementById("appShell");
+  if (!shell) return;
+
+  const sync = () => {
+    setMobileNavigation(!isMobileNavigationViewport());
+  };
+
+  sync();
+
+  if (window.matchMedia) {
+    const media = window.matchMedia("(max-width: 768px)");
+    if (media.addEventListener) {
+      media.addEventListener("change", sync);
+    } else if (media.addListener) {
+      media.addListener(sync);
+    }
+  } else {
+    window.addEventListener("resize", sync);
+  }
+}
+
 function showSection(sectionName) {
   // Hide all sections
   document.querySelectorAll(".content-section").forEach((section) => {
@@ -742,15 +793,12 @@ function showSection(sectionName) {
   // Show selected section
   document.getElementById(sectionName + "-section").classList.add("active");
 
-  // Add active class to clicked nav item
-  if (event && event.target) {
-    event.target.classList.add("active");
-  } else {
-    // Fallback: find the nav item by section name
-    document
-      .querySelector(`[onclick="showSection('${sectionName}')"]`)
-      ?.classList.add("active");
-  }
+  // Add active class to the matching nav item
+  document
+    .querySelector(`[onclick="showSection('${sectionName}')"]`)
+    ?.classList.add("active");
+
+  closeMobileNavigation();
 
   // Load section data
   switch (sectionName) {
@@ -802,6 +850,10 @@ function openModal(modalId) {
   const modal = document.getElementById(modalId);
   if (modal) {
     modal.classList.add("active");
+    modal.setAttribute("role", "dialog");
+    modal.setAttribute("aria-modal", "true");
+    modal.setAttribute("aria-hidden", "false");
+    enhanceModalAccessibility(modal);
 
     if (modalId === "editQuantityModal") {
       modal.style.zIndex = "1100";
@@ -818,7 +870,16 @@ function generateRemoveButton(eventId, assetId) {
 }
 
 function closeModal(modalId) {
-  document.getElementById(modalId).classList.remove("active");
+  const modal = document.getElementById(modalId);
+  if (!modal) return;
+  modal.classList.remove("active");
+  modal.setAttribute("aria-hidden", "true");
+}
+
+function enhanceModalAccessibility(root = document) {
+  root.querySelectorAll(".close-btn:not([aria-label]), .close:not([aria-label])").forEach((button) => {
+    button.setAttribute("aria-label", "Close dialog");
+  });
 }
 
 // API functions
@@ -2518,6 +2579,7 @@ function ensureInventoryTableStyles() {
     .inventory-compact-table {
       table-layout: auto;
       width: 100%;
+      min-width: 780px;
     }
 
     .inventory-compact-table th,
@@ -2564,6 +2626,22 @@ function ensureInventoryTableStyles() {
     .inventory-compact-table .btn-sm {
       padding: 5px 9px;
       font-size: 12px;
+    }
+
+    .responsive-table-wrap {
+      max-width: 100%;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    @media (max-width: 768px) {
+      .inventory-compact-table {
+        min-width: 680px;
+      }
+
+      .inventory-actions-cell {
+        flex-wrap: wrap;
+      }
     }
   `;
 
@@ -2665,7 +2743,7 @@ function displayInventoryTable(assetsToShow) {
     </table>
   `;
 
-  container.innerHTML = tableHTML;
+  container.innerHTML = `<div class="responsive-table-wrap">${tableHTML}</div>`;
 }
 
 function normalizeAssetGroupValue(value, uppercase = false) {
@@ -3020,7 +3098,7 @@ function ensureContainerUiStyles() {
 
     .container-cards-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
       gap: 16px;
     }
 
@@ -3267,6 +3345,39 @@ function ensureContainerUiStyles() {
 
       .container-modal-layout {
         grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 520px) {
+      .container-hero,
+      .container-stat-card,
+      .container-card-modern,
+      .container-panel {
+        border-radius: 12px;
+        padding: 14px;
+      }
+
+      .container-stats-grid {
+        grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      }
+
+      .container-toolbar {
+        padding: 12px;
+      }
+
+      .container-card-top,
+      .container-search-result,
+      .selected-container-chip {
+        align-items: flex-start;
+        flex-wrap: wrap;
+      }
+
+      .container-card-actions .btn {
+        flex: 1 1 100%;
+      }
+
+      .container-assets-table {
+        min-width: 620px;
       }
     }
   `;
@@ -8646,6 +8757,7 @@ function ensureAssetCheckStyles() {
 
     .asset-check-table {
       width: 100%;
+      min-width: 680px;
       border-collapse: collapse;
     }
 
@@ -8719,6 +8831,23 @@ function ensureAssetCheckStyles() {
     @media (max-width: 850px) {
       .asset-check-scan-row {
         grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .asset-check-panel {
+        padding: 14px;
+        border-radius: 12px;
+      }
+
+      .asset-check-actions {
+        display: grid;
+        grid-template-columns: 1fr;
+        width: 100%;
+      }
+
+      .asset-check-table {
+        min-width: 620px;
       }
     }
   `;
@@ -17077,6 +17206,8 @@ setInterval(async () => {
 }, 6000);
 
 document.addEventListener('DOMContentLoaded', function() {
+    setupMobileNavigation();
+    enhanceModalAccessibility();
     setupSingleAssetClickHandler();
 });
 
