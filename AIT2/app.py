@@ -539,8 +539,14 @@ def _event_returnable_counts(event):
 
 
 def _event_specific_counts(event):
-    """Counts non-model, non-custom, non-bulk direct asset rows for legacy/direct workflows."""
+    """Counts non-model, non-custom, non-bulk direct asset rows for legacy/direct workflows.
+
+    Assets explicitly marked as extra are deliberately excluded from these totals.
+    This keeps manually over-prepared assets visible without letting them raise
+    the event's required count or complete an otherwise incomplete event.
+    """
     _ensure_event_custom_lists(event)
+    extra_assets = set(getattr(event, 'extra_assets', []) or [])
     required = 0
     prepared_active = 0
     prepared_ever = 0
@@ -549,6 +555,8 @@ def _event_specific_counts(event):
     for item in event.prepared_items:
         if not isinstance(item, str):
             continue
+        if item in extra_assets:
+            continue
         if item.startswith('[MODEL]') or _is_bulk_ref(item) or _is_custom_ref(item):
             continue
         required += 1
@@ -556,6 +564,8 @@ def _event_specific_counts(event):
     all_seen = set(event.actually_prepared or []) | set(event.returned_items or [])
     for item in all_seen:
         if not isinstance(item, str):
+            continue
+        if item in extra_assets:
             continue
         if item.startswith('[MODEL]') or _is_bulk_ref(item) or _is_custom_ref(item):
             continue
@@ -572,6 +582,38 @@ def _event_specific_counts(event):
         'preparedEver': prepared_ever,
         'returned': returned
     }
+
+
+def _event_extra_asset_quantity(event):
+    """Active manual extras for the Event Summary card.
+
+    Returned extras are no longer active extras. Custom and bulk quantities are
+    respected if they are ever marked extra. Regular physical assets count as 1.
+    """
+    _ensure_event_custom_lists(event)
+    returned_values = set(getattr(event, 'returned_items', []) or [])
+    active_values = set(getattr(event, 'actually_prepared', []) or []) | set(getattr(event, 'prepared_items', []) or [])
+    total = 0
+
+    for ref in getattr(event, 'extra_assets', []) or []:
+        if ref in returned_values:
+            continue
+        if ref not in active_values:
+            continue
+
+        custom = _parse_custom_marker(ref)
+        if custom:
+            total += max(1, _safe_int(custom.get('quantity'), 1))
+            continue
+
+        bulk = _parse_bulk_marker(ref)
+        if bulk:
+            total += max(1, _safe_int(bulk.get('quantity'), 1))
+            continue
+
+        total += 1
+
+    return total
 
 
 def _is_bulk_ref(value):
@@ -613,37 +655,80 @@ def _bulk_quantity_for_asset_in_values(values, bulk_id):
     return total
 
 
-def _sum_assigned_quantity(model_group):
+def _sum_assigned_quantity(model_group, include_extra=True):
+    """Quantity assigned to a model group.
+
+    include_extra=True is used for the model card itself, so it can show
+    values such as 5/3 assigned (+2 extra). include_extra=False is used for
+    event/department readiness totals, where manual extras must not complete
+    missing required assets.
+    """
     total = 0
     for asset in model_group.get('assignedAssets', []) or []:
+        if not include_extra and asset.get('isExtra'):
+            continue
         total += max(1, _safe_int(asset.get('quantity', 1), 1))
     return total
 
 
-def _sum_returned_quantity(model_group):
+def _sum_returned_quantity(model_group, include_extra=True):
     total = 0
     for asset in model_group.get('assignedAssets', []) or []:
+        if not include_extra and asset.get('isExtra'):
+            continue
         if asset.get('status') == 'returned':
             total += max(1, _safe_int(asset.get('quantity', 1), 1))
+    return total
+
+
+def _sum_prepared_quantity(model_group, include_extra=True):
+    assigned = _sum_assigned_quantity(model_group, include_extra=include_extra)
+    returned = _sum_returned_quantity(model_group, include_extra=include_extra)
+    return max(assigned - returned, 0)
+
+
+def _sum_extra_prepared_quantity(model_group):
+    total = 0
+    for asset in model_group.get('assignedAssets', []) or []:
+        if not asset.get('isExtra'):
+            continue
+        if asset.get('status') == 'returned':
+            continue
+        total += max(1, _safe_int(asset.get('quantity', 1), 1))
     return total
 
 
 def _refresh_model_group_statuses(model_groups):
     for group in (model_groups or {}).values():
         required = max(0, _safe_int(group.get('requiredQuantity', 0), 0))
-        assigned = _sum_assigned_quantity(group)
-        returned = _sum_returned_quantity(group)
+
+        # Display quantities include extras so each model section can show
+        # "5/3 assigned (+2 extra)" and list the extra assets under Assigned Assets.
+        assigned = _sum_assigned_quantity(group, include_extra=True)
+        returned = _sum_returned_quantity(group, include_extra=True)
         prepared = max(assigned - returned, 0)
+
+        # Countable quantities exclude manual extras. These drive readiness,
+        # event totals, and department progress totals.
+        countable_assigned = _sum_assigned_quantity(group, include_extra=False)
+        countable_returned = _sum_returned_quantity(group, include_extra=False)
+        countable_prepared = max(countable_assigned - countable_returned, 0)
 
         group['assignedQuantity'] = assigned
         group['returnedQuantity'] = returned
         group['preparedQuantity'] = prepared
+        group['countableAssignedQuantity'] = countable_assigned
+        group['countableReturnedQuantity'] = countable_returned
+        group['countablePreparedQuantity'] = min(countable_prepared, required) if required > 0 else countable_prepared
+        group['extraPreparedQuantity'] = _sum_extra_prepared_quantity(group)
 
-        if returned >= required and assigned > 0:
+        # Status must be based only on required/countable assets. Extras should
+        # never make an incomplete requirement look ready.
+        if required > 0 and countable_returned >= required and countable_assigned > 0:
             group['status'] = 'returned'
-        elif prepared >= required and required > 0:
+        elif required > 0 and countable_prepared >= required:
             group['status'] = 'ready'
-        elif prepared > 0:
+        elif countable_prepared > 0:
             group['status'] = 'partial'
         else:
             group['status'] = 'pending'
@@ -1289,21 +1374,25 @@ def _event_model_requirement_quantity_for_group(event, group):
 
 
 def _event_real_asset_count_for_group(event, group):
-    """Count real physical assets from this exact group already tied to the event.
+    """Count non-extra real physical assets from this exact group already tied to the event.
 
-    Includes active prepared assets and returned assets so an event's model
-    requirement stays large enough for the physical units that have passed
-    through it.
+    Manual over-prepared assets stay in event.extra_assets and should not make a
+    later container scan raise the model requirement for those earlier manual
+    extras. Container scans still raise the requirement for the container asset
+    currently being processed.
     """
     if not event or not group:
         return 0
 
+    extra_assets = set(getattr(event, 'extra_assets', []) or [])
     seen = set()
     for values in (
         getattr(event, 'actually_prepared', []) or [],
         getattr(event, 'returned_items', []) or [],
     ):
         for asset_id in values:
+            if asset_id in extra_assets:
+                continue
             if not _is_real_asset_ref(asset_id):
                 continue
             if asset_id in seen:
@@ -1313,6 +1402,24 @@ def _event_real_asset_count_for_group(event, group):
                 seen.add(asset_id)
 
     return len(seen)
+
+
+def _event_model_requirement_remaining_for_asset(event, asset):
+    """Return open requirement slots for this exact asset model group.
+
+    This deliberately excludes event.extra_assets so a manual over-prepared
+    asset does not consume a required slot or cause the requirement to grow.
+    """
+    if not event or not asset:
+        return 0
+
+    group = _asset_group_from_item(asset)
+    required = _event_model_requirement_quantity_for_group(event, group)
+    if required <= 0:
+        return 0
+
+    non_extra_prepared_or_returned = _event_real_asset_count_for_group(event, group)
+    return max(required - non_extra_prepared_or_returned, 0)
 
 
 def _ensure_event_model_requirement_covers_asset(event, asset, additional_quantity=1):
@@ -1522,6 +1629,8 @@ def update_event_state(event):
         returned_total = 0
         started_total = 0
 
+        extra_asset_ids = set(getattr(event, 'extra_assets', []) or [])
+
         if has_model_assignments:
             for item_id in event.prepared_items:
                 if not (isinstance(item_id, str) and item_id.startswith('[MODEL]')):
@@ -1546,6 +1655,8 @@ def update_event_state(event):
 
                     all_assigned_assets = set(event.actually_prepared + event.returned_items)
                     for specific_asset_id in all_assigned_assets:
+                        if specific_asset_id in extra_asset_ids:
+                            continue
                         if _is_bulk_ref(specific_asset_id) or _is_custom_ref(specific_asset_id):
                             continue
 
@@ -2228,6 +2339,9 @@ def get_events():
             # Initialize actually_prepared if missing
             if not hasattr(event, 'actually_prepared'):
                 event.actually_prepared = []
+            if not hasattr(event, 'extra_assets'):
+                event.extra_assets = []
+            extra_asset_ids = set(getattr(event, 'extra_assets', []) or [])
 
             # Build model groups for this event
             model_groups = {}
@@ -2258,13 +2372,19 @@ def get_events():
                                     'status': 'pending'
                                 }
                             
-                            # Find assigned specific assets for this model
-                            for specific_asset_id in event.actually_prepared:
+                            # Find assigned specific assets for this model.
+                            # Extras are included in assignedAssets so model cards can show
+                            # values like 5/3 assigned (+2 extra), but they are flagged and
+                            # excluded later from event/department readiness totals.
+                            all_model_asset_ids = set(event.actually_prepared or []) | set(event.returned_items or [])
+                            for specific_asset_id in all_model_asset_ids:
+                                is_extra_asset = specific_asset_id in extra_asset_ids
                                 specific_asset = data_manager.inventory.get(specific_asset_id)
                                 if (specific_asset and 
                                     specific_asset.brand == brand and 
                                     specific_asset.model_number == model and
-                                    specific_asset.department_code == dept):
+                                    specific_asset.department_code == dept and
+                                    (specific_asset.description or '') == (description or '')):
                                     
                                     asset_status = 'returned' if specific_asset_id in event.returned_items else 'prepared'
                                     
@@ -2272,7 +2392,9 @@ def get_events():
                                         'id': specific_asset_id,
                                         'serial': specific_asset.serial_number,
                                         'status': asset_status,
-                                        'location': specific_asset.current_location
+                                        'location': specific_asset.current_location,
+                                        'quantity': 1,
+                                        'isExtra': is_extra_asset
                                     })
                             
                             # Determine overall model status - FIXED LOGIC
@@ -2303,9 +2425,14 @@ def get_events():
                 total_returned = 0
 
                 for model_group in model_groups.values():
-                    total_required += model_group['requiredQuantity']
-                    total_prepared += max(_sum_assigned_quantity(model_group) - _sum_returned_quantity(model_group), 0)
-                    total_returned += _sum_returned_quantity(model_group)
+                    required_quantity = max(0, _safe_int(model_group.get('requiredQuantity', 0), 0))
+                    total_required += required_quantity
+
+                    prepared_assets_count = max(0, _safe_int(model_group.get('countablePreparedQuantity', 0), 0))
+                    returned_assets_count = max(0, _safe_int(model_group.get('countableReturnedQuantity', 0), 0))
+
+                    total_prepared += min(prepared_assets_count, required_quantity) if required_quantity > 0 else prepared_assets_count
+                    total_returned += min(returned_assets_count, required_quantity) if required_quantity > 0 else returned_assets_count
 
                 total_required += custom_counts['required']
                 total_prepared += custom_counts['preparedActive']
@@ -2328,6 +2455,7 @@ def get_events():
                 'assetCount': total_required,
                 'preparedCount': total_prepared,
                 'returnedCount': total_returned,
+                'extraCount': _event_extra_asset_quantity(event),
                 'assetModels': event.asset_models,
                 'preparedItems': event.prepared_items,
                 'returnedItems': event.returned_items,
@@ -2414,34 +2542,11 @@ def get_event(event_id):
                     else:
                         status = 'assigned'
 
-                    # Check if this is an extra asset
+                    # Keep the explicit extra marker. A manual over-prepared asset
+                    # may match an existing model row, but it should still display
+                    # as extra unless a container scan intentionally raised the
+                    # requirement and removed it from event.extra_assets.
                     is_extra = asset_id in event.extra_assets
-                    
-                    # However, if this asset fulfills a model requirement, it should NOT be extra
-                    # regardless of what's in the extra_assets list
-                    if is_extra:
-                        for model_assignment in event.prepared_items:
-                            if model_assignment.startswith('[MODEL]'):
-                                try:
-                                    parts = model_assignment[7:].split('|')
-                                    if len(parts) >= 4:
-                                        req_dept = parts[0]
-                                        req_brand = parts[1]
-                                        req_model = parts[2]
-                                        req_description = parts[4] if len(parts) > 4 else ''
-                                        
-                                        if (asset.department_code == req_dept and 
-                                            asset.brand == req_brand and 
-                                            asset.model_number == req_model and
-                                            asset.description == req_description):
-                                            is_extra = False
-                                            # Also clean up the extra_assets list
-                                            if asset_id in event.extra_assets:
-                                                event.extra_assets.remove(asset_id)
-                                            break
-                                except Exception as e:
-                                    logger.error(f"Error checking model fulfillment: {e}")
-                                    continue
 
                     asset_info = {
                         'id': asset.asset_id,
@@ -2557,7 +2662,9 @@ def get_event(event_id):
                         
                         logger.info(f"Checking assets for model {brand} {model}: {all_potential_assets}")
                         
+                        extra_asset_ids = set(getattr(event, 'extra_assets', []) or [])
                         for specific_asset_id in all_potential_assets:
+                            is_extra_asset = specific_asset_id in extra_asset_ids
                             specific_asset = data_manager.inventory.get(specific_asset_id)
                             
                             if specific_asset:
@@ -2579,7 +2686,9 @@ def get_event(event_id):
                                         'id': specific_asset_id,
                                         'serial': specific_asset.serial_number,
                                         'status': asset_status,
-                                        'location': specific_asset.current_location
+                                        'location': specific_asset.current_location,
+                                        'quantity': 1,
+                                        'isExtra': is_extra_asset
                                     })
 
                         # Determine overall model status - FIXED LOGIC
@@ -2655,11 +2764,15 @@ def get_event(event_id):
             total_returned = 0
 
             for model_group in model_groups.values():
-                total_required += model_group['requiredQuantity']
-                prepared_assets_count = max(_sum_assigned_quantity(model_group) - _sum_returned_quantity(model_group), 0)
-                returned_assets_count = _sum_returned_quantity(model_group)
-                total_prepared += prepared_assets_count
-                total_returned += returned_assets_count
+                required_quantity = max(0, _safe_int(model_group.get('requiredQuantity', 0), 0))
+                total_required += required_quantity
+
+                # Event/department totals must not include manual extras.
+                prepared_assets_count = max(0, _safe_int(model_group.get('countablePreparedQuantity', 0), 0))
+                returned_assets_count = max(0, _safe_int(model_group.get('countableReturnedQuantity', 0), 0))
+
+                total_prepared += min(prepared_assets_count, required_quantity) if required_quantity > 0 else prepared_assets_count
+                total_returned += min(returned_assets_count, required_quantity) if required_quantity > 0 else returned_assets_count
 
             total_required += custom_counts['required']
             total_prepared += custom_counts['preparedActive']
@@ -2670,7 +2783,13 @@ def get_event(event_id):
             total_prepared = specific_counts['preparedActive'] + custom_counts['preparedActive']
             total_returned = specific_counts['returned'] + custom_counts['returned']
 
-        logger.info(f"Event {event_id} final asset counts - Required: {total_required}, Prepared: {total_prepared}, Returned: {total_returned}, Extra assets in list: {len(event.extra_assets)}")
+        total_extra_assets = _event_extra_asset_quantity(event)
+
+        logger.info(
+            f"Event {event_id} final asset counts - Required: {total_required}, "
+            f"Prepared: {total_prepared}, Returned: {total_returned}, "
+            f"Active extras: {total_extra_assets}, Extra assets in list: {len(event.extra_assets)}"
+        )
             
         returnable_counts = _event_returnable_counts(event)
 
@@ -2697,6 +2816,7 @@ def get_event(event_id):
             'totalAssets': total_required,
             'totalPrepared': total_prepared,
             'totalReturned': total_returned,
+            'totalExtraAssets': total_extra_assets,
             'modelGroups': model_groups,
             'forceStateOverride': getattr(event, 'force_state_override', False)
         }
@@ -3509,47 +3629,28 @@ def prepare_event_asset(event_id):
             if asset.is_ooc:
                 return jsonify({'error': 'Asset is out of commission'}), 400
 
-            # Check if this asset fulfills a model requirement
-            fulfills_model_requirement = False
+            # A manual/individual prepare only fills an existing open model slot.
+            # If the matching model requirement is already full, or if this asset
+            # was not originally required, keep it as an extra asset instead of
+            # increasing the event requirement.
+            fulfills_model_requirement = _event_model_requirement_remaining_for_asset(event, asset) > 0
+            logger.info(
+                f"Manual prepare {asset_id}: fillsExistingRequirement={fulfills_model_requirement}"
+            )
             
-            # Check if this asset fulfills any model requirement
-            for prepared_item in event.prepared_items:
-                if prepared_item.startswith('[MODEL]'):
-                    try:
-                        parts = prepared_item[7:].split('|')
-                        if len(parts) >= 4:
-                            dept = parts[0]
-                            brand = parts[1]
-                            model = parts[2]
-                            description = parts[4]
-
-                            # Check if this asset matches the model requirement
-                            if (asset.department_code == dept and 
-                                asset.brand == brand and 
-                                asset.model_number == model and
-                                asset.description == description):
-                                fulfills_model_requirement = True
-                                logger.info(f"Asset {asset_id} fulfills model requirement {prepared_item}")
-                                break
-                    except Exception as e:
-                        logger.error(f"Error parsing model assignment: {e}")
-                        continue
-            
-            # Add to prepared_items if not already there
+            # Add to prepared_items if not already there. This keeps the physical
+            # asset visible in the event detail list without changing model demand.
             if asset_id not in event.prepared_items:
                 event.prepared_items.append(asset_id)
             
-            # Handle extra_assets logic based on whether it fulfills a model requirement
             if fulfills_model_requirement:
-                # If it fulfills a requirement, ensure it's NOT marked as extra
                 if asset_id in event.extra_assets:
                     event.extra_assets.remove(asset_id)
-                    logger.info(f"Removed {asset_id} from extra_assets (fulfills model requirement). Extra assets: {event.extra_assets}")
+                    logger.info(f"Removed {asset_id} from extra_assets (fills open model requirement). Extra assets: {event.extra_assets}")
             else:
-                # Only add to extra_assets if it doesn't fulfill any model requirement
                 if asset_id not in event.extra_assets:
                     event.extra_assets.append(asset_id)
-                    logger.info(f"Added extra asset {asset_id} to event {event_id}. Extra assets: {event.extra_assets}")
+                    logger.info(f"Added manual extra asset {asset_id} to event {event_id}. Extra assets: {event.extra_assets}")
 
             # Update asset location now that it's prepared
             asset.current_location = event.name
@@ -4043,22 +4144,37 @@ def assign_specific_asset_to_model(event_id):
                         asset_id not in other_event.returned_items):
                         return jsonify({'error': f'Asset is already assigned to event {other_event_id}: {other_event.name}'}), 400
 
-            # Ensure the event's model requirement quantity covers this physical asset.
-            # This is intentionally done for every scanned/prepared asset, not only
-            # the first item of a new type. Container contents are processed one
-            # asset at a time, so a container with 6 of the same new model must
-            # increase the model requirement to 6 rather than leaving the last 5
-            # displayed as extras.
-            added_requirement_units = _ensure_event_model_requirement_covers_asset(event, asset, 1)
-            fulfills_model_requirement = True
+            prepare_source = str(
+                data.get('source') or data.get('prepareSource') or ''
+            ).strip().lower()
+            from_container = bool(
+                data.get('fromContainer') or
+                data.get('isContainerBatch') or
+                prepare_source == 'container'
+            )
 
-            if added_requirement_units:
-                logger.info(
-                    f"Added {added_requirement_units} model requirement unit(s) for container/manual asset {asset_id}: "
-                    f"[{asset.department_code}] {asset.brand} {asset.model_number} {asset.description}"
-                )
+            if from_container:
+                # Container prepares are allowed to raise the requirement so the
+                # whole container contents become part of the event packing list.
+                added_requirement_units = _ensure_event_model_requirement_covers_asset(event, asset, 1)
+                fills_existing_requirement = True
 
-            logger.info(f"Asset {asset_id} fulfills model requirement: {fulfills_model_requirement}; addedUnits={added_requirement_units}")
+                if added_requirement_units:
+                    logger.info(
+                        f"Added {added_requirement_units} model requirement unit(s) for container asset {asset_id}: "
+                        f"[{asset.department_code}] {asset.brand} {asset.model_number} {asset.description}"
+                    )
+            else:
+                # Individual/manual prepares do NOT raise requirements. They only
+                # fill an open slot; if the event already has enough of that model,
+                # the physical asset is tracked as extra.
+                added_requirement_units = 0
+                fills_existing_requirement = _event_model_requirement_remaining_for_asset(event, asset) > 0
+
+            logger.info(
+                f"Asset {asset_id}: fromContainer={from_container}; "
+                f"fillsExistingRequirement={fills_existing_requirement}; addedUnits={added_requirement_units}"
+            )
             
             # Keep the specific asset linked to the event. Model rows track the
             # requested type/quantity; this direct reference keeps the prepared
@@ -4067,11 +4183,14 @@ def assign_specific_asset_to_model(event_id):
                 event.prepared_items.append(asset_id)
                 logger.info(f"Added {asset_id} to prepared_items")
             
-            # A specific asset that now has a matching model requirement should
-            # not be shown as an unrelated extra item.
-            if asset_id in event.extra_assets:
-                event.extra_assets.remove(asset_id)
-                logger.info(f"Removed {asset_id} from extra_assets. Extra assets: {event.extra_assets}")
+            if fills_existing_requirement:
+                if asset_id in event.extra_assets:
+                    event.extra_assets.remove(asset_id)
+                    logger.info(f"Removed {asset_id} from extra_assets. Extra assets: {event.extra_assets}")
+            else:
+                if asset_id not in event.extra_assets:
+                    event.extra_assets.append(asset_id)
+                    logger.info(f"Added individual extra asset {asset_id}. Extra assets: {event.extra_assets}")
 
             asset.current_location = event.name
             data_manager.save_inventory()

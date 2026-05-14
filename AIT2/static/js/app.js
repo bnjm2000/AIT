@@ -338,6 +338,41 @@ function getPreparedQuantity(modelGroup) {
     .reduce((sum, asset) => sum + Number(asset.quantity || 1), 0);
 }
 
+function getCountablePreparedQuantity(modelGroup) {
+  if (!modelGroup) return 0;
+  if (typeof modelGroup.countablePreparedQuantity !== 'undefined') {
+    return Number(modelGroup.countablePreparedQuantity || 0);
+  }
+
+  const required = Number(modelGroup.requiredQuantity || 0);
+  const prepared = (modelGroup.assignedAssets || [])
+    .filter(asset => !asset.isExtra && asset.status !== 'returned')
+    .reduce((sum, asset) => sum + Number(asset.quantity || 1), 0);
+
+  return required > 0 ? Math.min(prepared, required) : prepared;
+}
+
+function getExtraPreparedQuantity(modelGroup) {
+  if (!modelGroup) return 0;
+  if (typeof modelGroup.extraPreparedQuantity !== 'undefined') {
+    return Number(modelGroup.extraPreparedQuantity || 0);
+  }
+  return (modelGroup.assignedAssets || [])
+    .filter(asset => asset.isExtra && asset.status !== 'returned')
+    .reduce((sum, asset) => sum + Number(asset.quantity || 1), 0);
+}
+
+function getEventExtraQuantity(event) {
+  if (!event) return 0;
+  if (typeof event.totalExtraAssets !== 'undefined') {
+    return Number(event.totalExtraAssets || 0);
+  }
+  if (typeof event.extraCount !== 'undefined') {
+    return Number(event.extraCount || 0);
+  }
+  return Array.isArray(event.extraAssets) ? event.extraAssets.length : 0;
+}
+
 function getReturnedQuantity(modelGroup) {
   if (!modelGroup) return 0;
   if (typeof modelGroup.returnedQuantity !== 'undefined') {
@@ -4278,7 +4313,7 @@ function createPrepareEventCard(event) {
 
     models.forEach((model) => {
       totalRequired += model.requiredQuantity;
-      totalAssigned += getPreparedQuantity(model);
+      totalAssigned += getCountablePreparedQuantity(model);
     });
 
     // Show first 2 models as preview
@@ -4363,7 +4398,7 @@ async function openPrepareEventModal(eventId) {
                             <div style="color: #666; font-size: 12px;">Prepared</div>
                         </div>
                         <div>
-                            <div style="font-size: 20px; font-weight: bold; color: #6c757d;">${event.totalPrepared - event.totalAssets > 0 ? event.totalPrepared - event.totalAssets : 0}</div>
+                            <div style="font-size: 20px; font-weight: bold; color: #6c757d;">${getEventExtraQuantity(event)}</div>
                             <div style="color: #666; font-size: 12px;">Extra</div>
                         </div>
                     </div>
@@ -4453,7 +4488,7 @@ async function openPrepareEventModal(eventId) {
 
                 modelGroups.forEach(modelGroup => {
                     totalRequired += Number(modelGroup.requiredQuantity || 0);
-                    totalAssigned += getPreparedQuantity(modelGroup);
+                    totalAssigned += getCountablePreparedQuantity(modelGroup);
                 });
 
                 totalRequired += getCustomRequiredQuantityForProgress(customAssetsForDept);
@@ -5485,9 +5520,7 @@ async function assignAdditionalAsset(eventId, assetId) {
         console.log('About to refresh modal with state preservation...');
         // Refresh modal while preserving UI state
         setTimeout(() => {
-            preserveModalState(() => {
-                openPrepareEventModal(eventId);
-            });
+            preserveModalState(() => openPrepareEventModal(eventId));
         }, 200);
         
     } catch (error) {
@@ -5523,9 +5556,7 @@ async function prepareAssignedAsset(eventId) {
         console.log('About to refresh modal with state preservation...');
         // Refresh modal while preserving UI state
         setTimeout(() => {
-            preserveModalState(() => {
-                openPrepareEventModal(eventId);
-            });
+            preserveModalState(() => openPrepareEventModal(eventId));
         }, 200);
         
     } catch (error) {
@@ -6179,7 +6210,7 @@ function updateEventSummaryInModal(event) {
     if (summaryDivs.length >= 3) {
         summaryDivs[0].textContent = event.totalAssets || 0; // Required
         summaryDivs[1].textContent = event.totalPrepared || 0; // Prepared
-        summaryDivs[2].textContent = Math.max(0, (event.totalPrepared || 0) - (event.totalAssets || 0)); // Extra
+        summaryDivs[2].textContent = getEventExtraQuantity(event); // Extra
     }
 }
 
@@ -6339,7 +6370,7 @@ function updateDepartmentProgressBars(event) {
                 deptProgress[dept] = { required: 0, assigned: 0 };
             }
             deptProgress[dept].required += modelGroup.requiredQuantity;
-            deptProgress[dept].assigned += modelGroup.assignedAssets.length;
+            deptProgress[dept].assigned += getCountablePreparedQuantity(modelGroup);
         });
         
         // Update the department progress bars
@@ -6411,9 +6442,7 @@ async function unassignSpecificAsset(eventId, assetId, brand, model) {
 
     // Refresh the preparation modal with state preservation
     setTimeout(() => {
-      preserveModalState(() => {
-        openPrepareEventModal(eventId);
-      });
+      preserveModalState(() => openPrepareEventModal(eventId));
     }, 200);
   } catch (error) {
     showNotification("error", `Failed to unassign asset: ${error.message}`);
@@ -6594,7 +6623,7 @@ async function processUniversalContainer(eventId, containerId) {
       feedbackDiv,
       'info',
       `Processing container <strong>${escapeHtml(containerId)}</strong> (${assetIds.length} assets)…<br/>` +
-      `• Any assets not originally assigned to the event will be added as extra and prepared.`
+      `• Any asset types found in the container will be added to this event's requirements and prepared.`
     );
   }
 
@@ -6635,7 +6664,11 @@ async function processUniversalContainer(eventId, containerId) {
 
       try {
         // This endpoint both assigns (adds to prepared_items if missing) and prepares (adds to actually_prepared)
-        await apiCall(`/api/events/${eventId}/assign-specific`, 'POST', { assetId: aid });
+        await apiCall(`/api/events/${eventId}/assign-specific`, 'POST', {
+          assetId: aid,
+          fromContainer: true,
+          source: 'container'
+        });
         results.prepared.push(aid);
         preparedSet.add(aid);
       } catch (err) {
@@ -6757,9 +6790,7 @@ async function assignAndPrepareAsset(eventId, assetId) {
         console.log('About to refresh modal with state preservation...');
         // Refresh modal while preserving UI state
         setTimeout(() => {
-            preserveModalState(() => {
-                openPrepareEventModal(eventId);
-            });
+            preserveModalState(() => openPrepareEventModal(eventId));
         }, 200);
         
     } catch (error) {
@@ -6780,7 +6811,7 @@ function updateEventSummary(event) {
     
     if (requiredEl) requiredEl.textContent = event.totalAssets;
     if (preparedEl) preparedEl.textContent = event.totalPrepared;
-    if (extraEl) extraEl.textContent = Math.max(0, event.totalPrepared - event.totalAssets);
+    if (extraEl) extraEl.textContent = getEventExtraQuantity(event);
 }
 
 function updateModelGroupsSection(event, eventId) {
@@ -6814,16 +6845,18 @@ function updateModelGroupsSection(event, eventId) {
 function updateModelSection(section, modelGroup, eventId) {
     const assignedCount = getPreparedQuantity(modelGroup);
     const requiredQty = modelGroup.requiredQuantity;
-    const progressPercent = Math.round((assignedCount / requiredQty) * 100);
+    const countableAssignedCount = getCountablePreparedQuantity(modelGroup);
+    const extraAssignedCount = getExtraPreparedQuantity(modelGroup);
+    const progressPercent = requiredQty > 0 ? Math.round((assignedCount / requiredQty) * 100) : 0;
     
     // Update the progress info
     const statusDiv = section.querySelector('div[style*="text-align: right"] div:first-child');
     if (statusDiv) {
-        const color = assignedCount >= requiredQty ? '#28a745' : '#ffc107';
+        const color = countableAssignedCount >= requiredQty ? '#28a745' : '#ffc107';
         statusDiv.innerHTML = `
             <div style="font-size: 14px; font-weight: 500; color: ${color};">
                 ${assignedCount}/${requiredQty} assigned
-                ${assignedCount > requiredQty ? ` (+${assignedCount - requiredQty} extra)` : ''}
+                ${extraAssignedCount > 0 ? ` (+${extraAssignedCount} extra)` : ''}
             </div>
         `;
     }
@@ -6831,7 +6864,7 @@ function updateModelSection(section, modelGroup, eventId) {
     // Update the progress bar
     const progressBar = section.querySelector('div[style*="background: #e9ecef"] div');
     if (progressBar) {
-        const color = assignedCount >= requiredQty ? '#28a745' : '#ffc107';
+        const color = countableAssignedCount >= requiredQty ? '#28a745' : '#ffc107';
         progressBar.style.background = color;
         progressBar.style.width = `${Math.min(progressPercent, 100)}%`;
     }
@@ -6840,8 +6873,12 @@ function updateModelSection(section, modelGroup, eventId) {
     const assignedContainer = section.querySelector('div[style*="background: #d4edda"]');
     if (assignedContainer && modelGroup.assignedAssets.length > 0) {
         let content = '';
-        modelGroup.assignedAssets.forEach((asset, index) => {
-            const isExtra = index >= requiredQty;
+        const assignedAssetsForDisplay = [...(modelGroup.assignedAssets || [])].sort((a, b) => {
+            if (!!a.isExtra !== !!b.isExtra) return a.isExtra ? 1 : -1;
+            return String(a.id || '').localeCompare(String(b.id || ''), undefined, { numeric: true, sensitivity: 'base' });
+        });
+        assignedAssetsForDisplay.forEach((asset, index) => {
+            const isExtra = !!asset.isExtra || index >= requiredQty;
             const bgColor = isExtra ? '#fff3cd' : '#d4edda';
             const textColor = isExtra ? '#856404' : '#155724';
             
@@ -7249,13 +7286,8 @@ async function openReturnAssetsModal() {
 
                 <!-- Assets to Return (hidden until event is selected) -->
                 <div id="assets-return-section" style="display: none;">
-                    <h4 style="color: #495057; margin-bottom: 15px;">Assets Available for Return</h4>
-                    <div id="return-assets-list">
-                        <!-- Assets will be populated when event is selected -->
-                    </div>
-
                     <!-- Manual Return -->
-                    <div style="margin-top: 30px; padding-top: 20px; border-top: 2px solid #e9ecef;">
+                    <div style="margin-bottom: 24px; padding-bottom: 20px; border-bottom: 2px solid #e9ecef;">
                         <h4 style="color: #495057; margin-bottom: 15px;">Manual Return</h4>
                         <p style="color: #666; font-size: 14px; margin-bottom: 15px;">Scan or enter any asset ID to return it</p>
                         <div class="form-group" style="display: flex; gap: 10px;">
@@ -7265,6 +7297,11 @@ async function openReturnAssetsModal() {
                                    style="flex: 1;">
                             <button class="btn btn-warning" onclick="returnManualAssetNew()">Return Asset</button>
                         </div>
+                    </div>
+
+                    <h4 style="color: #495057; margin-bottom: 15px;">Assets Available for Return</h4>
+                    <div id="return-assets-list">
+                        <!-- Assets will be populated when event is selected -->
                     </div>
                 </div>
 
@@ -10882,9 +10919,7 @@ async function assignSpecificAsset(eventId, assetId, brand, model) {
         console.log('About to refresh modal with state preservation...');
         // Refresh modal while preserving UI state
         setTimeout(() => {
-            preserveModalState(() => {
-                openPrepareEventModal(eventId);
-            });
+            preserveModalState(() => openPrepareEventModal(eventId));
         }, 200);
         
         // Also refresh other views if they're active
@@ -10914,10 +10949,10 @@ async function unassignSpecificAsset(eventId, assetId, brand, model) {
     });
     showNotification("success", `Unassigned ${assetId} from event`);
 
-    // Refresh the preparation modal
+    // Refresh the preparation modal while keeping the currently-open dropdown open.
     setTimeout(() => {
-      openPrepareEventModal(eventId);
-    }, 500);
+      preserveModalState(() => openPrepareEventModal(eventId));
+    }, 200);
   } catch (error) {
     showNotification("error", `Failed to unassign asset: ${error.message}`);
   }
@@ -14846,8 +14881,17 @@ function createBulkPreparationSection(eventId, modelGroup, availableAssets = [],
 }
 
 function createModelPreparationSection(eventId, department, brand, model, description, requiredQty, availableAssets, assignedAssets) {
-    const assignedCount = (assignedAssets || []).reduce((sum, a) => sum + Number(a.quantity || 1), 0);
-    const progressPercent = Math.round((assignedCount / requiredQty) * 100);
+    const assignedCount = (assignedAssets || [])
+        .filter(a => (typeof a === 'string') || a.status !== 'returned')
+        .reduce((sum, a) => sum + Number(a.quantity || 1), 0);
+    const countableAssignedCount = (assignedAssets || [])
+        .filter(a => (typeof a === 'string') || (!a.isExtra && a.status !== 'returned'))
+        .reduce((sum, a) => sum + Number(a.quantity || 1), 0);
+    const extraAssignedCount = (assignedAssets || [])
+        .filter(a => typeof a !== 'string' && a.isExtra && a.status !== 'returned')
+        .reduce((sum, a) => sum + Number(a.quantity || 1), 0);
+    const progressPercent = requiredQty > 0 ? Math.round((assignedCount / requiredQty) * 100) : 0;
+    const modelProgressColor = countableAssignedCount >= requiredQty ? '#28a745' : '#ffc107';
     const makeDomSafe = (value) => String(value || '')
         .replace(/\s+/g, '')
         .replace(/[^a-zA-Z0-9_-]/g, '');
@@ -14862,12 +14906,12 @@ function createModelPreparationSection(eventId, department, brand, model, descri
                 </div>
                 <div style="display: flex; align-items: center; gap: 15px;">
                     <div style="text-align: right;">
-                        <div style="font-size: 14px; font-weight: 500; color: ${assignedCount >= requiredQty ? '#28a745' : '#ffc107'};">
+                        <div style="font-size: 14px; font-weight: 500; color: ${modelProgressColor};">
                             ${assignedCount}/${requiredQty} assigned
-                            ${assignedCount > requiredQty ? ` (+${assignedCount - requiredQty} extra)` : ''}
+                            ${extraAssignedCount > 0 ? ` (+${extraAssignedCount} extra)` : ''}
                         </div>
                         <div style="background: #e9ecef; border-radius: 10px; height: 4px; width: 120px; overflow: hidden; margin-top: 4px;">
-                            <div style="background: ${assignedCount >= requiredQty ? '#28a745' : '#ffc107'}; height: 100%; width: ${Math.min(progressPercent, 100)}%; transition: width 0.3s ease;"></div>
+                            <div style="background: ${modelProgressColor}; height: 100%; width: ${Math.min(progressPercent, 100)}%; transition: width 0.3s ease;"></div>
                         </div>
                     </div>
                     <span class="toggle-icon" style="font-size: 16px; font-weight: bold; color: #666;">▼</span>
@@ -14923,20 +14967,29 @@ function createModelPreparationSection(eventId, department, brand, model, descri
     }
     
     // Assigned/Prepared assets section (made bigger)
-    if (assignedAssets.length > 0) {
+    const assignedAssetsForDisplay = [...(assignedAssets || [])].sort((a, b) => {
+        const aExtra = typeof a === 'string' ? false : !!a.isExtra;
+        const bExtra = typeof b === 'string' ? false : !!b.isExtra;
+        if (aExtra !== bExtra) return aExtra ? 1 : -1;
+        const aId = typeof a === 'string' ? a : (a.id || a.bulkId || '');
+        const bId = typeof b === 'string' ? b : (b.id || b.bulkId || '');
+        return String(aId).localeCompare(String(bId), undefined, { numeric: true, sensitivity: 'base' });
+    });
+
+    if (assignedAssetsForDisplay.length > 0) {
         section += `
             <div>
-                <h6 style="color: #495057; margin-bottom: 10px; font-size: 13px;">Assigned Assets (${assignedAssets.length})</h6>
+                <h6 style="color: #495057; margin-bottom: 10px; font-size: 13px;">Assigned Assets (${assignedAssetsForDisplay.length})</h6>
                 <div style="background: #d4edda; border-radius: 6px; padding: 12px;">
         `;
         
-        assignedAssets.forEach((asset, index) => {
+        assignedAssetsForDisplay.forEach((asset, index) => {
             // Handle both old format (just ID strings) and new format (asset objects)
             const assetId = typeof asset === 'string' ? asset : asset.id;
             const assetSerial = typeof asset === 'string' ? 'N/A' : (asset.isBulk ? `Qty: ${asset.quantity || 1}` : (asset.serial || 'N/A'));
             const assetLabel = typeof asset === 'string' ? assetId : getAssignedAssetDisplay(asset);
             
-            const isExtra = index >= requiredQty;
+            const isExtra = (typeof asset !== 'string' && !!asset.isExtra) || index >= requiredQty;
             const bgColor = isExtra ? '#fff3cd' : '#d4edda';
             const textColor = isExtra ? '#856404' : '#155724';
             const statusIcon = isExtra ? '➕' : '✅';
@@ -17907,7 +17960,11 @@ async function processUniversalContainer(eventId, containerId) {
       if (returnedSet.has(aid)) { results.skippedReturned.push(aid); continue; }
       if (preparedSet.has(aid)) { results.skippedPrepared.push(aid); continue; }
       try {
-        await apiCall(`/api/events/${eventId}/assign-specific`, 'POST', { assetId: aid });
+        await apiCall(`/api/events/${eventId}/assign-specific`, 'POST', {
+          assetId: aid,
+          fromContainer: true,
+          source: 'container'
+        });
         results.prepared.push(aid);
         preparedSet.add(aid);
       } catch (err) {
@@ -18753,8 +18810,11 @@ function preserveModalState(callback) {
   Promise.resolve(result)
     .catch(err => console.error('preserveModalState callback failed:', err))
     .finally(() => {
-      setTimeout(() => __aitRestorePrepareOpenState(state), 120);
-      setTimeout(() => __aitRestorePrepareOpenState(state), 350);
+      // Restore more than once because the modal content is rebuilt after an async API refresh.
+      // This keeps the same model/department dropdown open after Prepare/Unprepare clicks.
+      [50, 180, 400, 800].forEach(delay => {
+        setTimeout(() => __aitRestorePrepareOpenState(state), delay);
+      });
     });
   return result;
 }

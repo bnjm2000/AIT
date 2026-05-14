@@ -939,4 +939,5 @@
 2026/05/14 13:32:21,bnjm2000,Completely removed asset PB#02 from event 134
 2026/05/14 13:32:24,bnjm2000,Completely removed asset PB#06 from event 134
 2026/05/14 14:32:15,bnjm2000,Removed Astera Pixel Brick model from event 134
-2026/05/14 15:00:37,bnjm2000,"Deleted event 140: test via web interface. Reset 38 asset locations: PB#01 (from 'test' to 'Store'), PB#02 (from 'test' to 'Store'), PB#03 (from 'test' to 'Store'), PB#04 (from 'test' to 'Store'), PB#05 (from 'test' to 'Store').... Removed 97 related log entries."
+2026/05/14 15:35:08,bnjm2000,User bnjm2000 forced event 102 (SG Airshow 2026 - Anduril Booth (Ultimus) @ Changi Exhibition Centre) state from Overdue to Closed
+2026/05/14 16:39:33,bnjm2000,"Deleted event 140: test via web interface. Reset 9 asset locations: ULXD2#13 (from 'test' to 'Store'), ULXD2#14 (from 'test' to 'Store'), ULXD2#15 (from 'test' to 'Store'), ULXD2#01 (from 'test' to 'Store'), ULXD2#02 (from 'test' to 'Store').... Removed 38 related log entries."
