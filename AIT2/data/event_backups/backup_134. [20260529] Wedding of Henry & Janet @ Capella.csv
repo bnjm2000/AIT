@@ -1,0 +1,2 @@
+EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,CustomCollected,Tag,ForceStateOverride
+134,Wedding of Henry & Janet @ Capella,20260529,20260530,"[{'model_description': '[LX] Astera Pixel Brick Batt LED Uplighters', 'quantity': 1}]","[""[MODEL]LX|Astera|Pixel Brick|1|Batt LED Uplighters""]",[],Planning,[],[],[],events,False

@@ -17398,3 +17398,1282 @@ async function openClientsManager() {
   // Initial load
   await refreshList('');
 }
+
+// PATCH 2026-05-14: event list views, refresh after unprepare, container model additions, and transfer return-to-office view
+let transferReturnToOfficeCache = [];
+let transferPanelMode = 'common';
+
+function ensureEventListViewStyles() {
+  if (document.getElementById('event-list-view-styles')) return;
+  const style = document.createElement('style');
+  style.id = 'event-list-view-styles';
+  style.textContent = `
+    .event-view-toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 16px;
+      background: #fff;
+      border: 1px solid #edf0f5;
+      border-radius: 12px;
+      padding: 12px;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.04);
+    }
+    .event-view-toggle { display: flex; gap: 6px; flex-wrap: wrap; }
+    .event-view-toggle .btn.active { background: #764ba2; color: white; }
+    .event-list-table-wrap { overflow: auto; border: 1px solid #edf0f5; border-radius: 12px; background: white; }
+    .event-list-table { width: 100%; border-collapse: collapse; margin: 0; }
+    .event-list-table th { background: #f8f9fa; color: #495057; font-weight: 700; padding: 10px 12px; border-bottom: 1px solid #e9ecef; text-align: left; white-space: nowrap; }
+    .event-list-table td { padding: 10px 12px; border-bottom: 1px solid #f1f1f1; vertical-align: top; }
+    .event-list-table tr:hover { background: #f8f9fa; }
+    .event-list-title { font-weight: 700; color: #333; min-width: 220px; }
+    .event-progress-track { background: #e9ecef; border-radius: 999px; height: 6px; width: 120px; overflow: hidden; margin-top: 4px; }
+    .event-progress-bar { background: #28a745; height: 100%; transition: width .2s ease; }
+  `;
+  document.head.appendChild(style);
+}
+
+function getEventSortMode(scope) {
+  const idMap = {
+    all: 'allEventsSortSelect',
+    prepare: 'prepareEventsSortSelect',
+    return: 'returnEventsSortSelect'
+  };
+  return document.getElementById(idMap[scope])?.value || 'startDate';
+}
+
+function parseEventDateForSort(value) {
+  if (!value) return new Date(0);
+  const raw = String(value).trim();
+  const norm = raw.includes('/') ? (() => {
+    const [y, m, d] = raw.split('/');
+    return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  })() : raw;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(norm)) return new Date(`${norm}T12:00:00`);
+  const parsed = new Date(norm);
+  return Number.isNaN(parsed.getTime()) ? new Date(0) : parsed;
+}
+
+function sortEventsForView(list, scope = 'all') {
+  const mode = getEventSortMode(scope);
+  const arr = [...(list || [])];
+  if (mode === 'eventId') {
+    return arr.sort((a, b) => Number(b.id || 0) - Number(a.id || 0));
+  }
+  return sortEventsStartDateFutureTop(arr);
+}
+
+function eventDateRangeText(event) {
+  return event.startDate === event.endDate
+    ? formatDate(event.startDate)
+    : `${formatDate(event.startDate)} - ${formatDate(event.endDate)}`;
+}
+
+function eventTagBadgeHtml(event) {
+  return `<span style="padding:2px 8px;border-radius:12px;font-size:10px;font-weight:bold;${getTagStyle(event.tag || 'events')}">${getTagDisplay(event.tag || 'events')}</span>`;
+}
+
+function eventStateBadgeHtml(event) {
+  return `<span class="event-state ${getEventStateClass(event.state)}">${escapeHtml(event.state || '')}</span>`;
+}
+
+function renderProgressCell(done, total) {
+  const safeTotal = Math.max(Number(total || 0), 0);
+  const safeDone = Math.max(Number(done || 0), 0);
+  const pct = safeTotal > 0 ? Math.min(100, Math.round((safeDone / safeTotal) * 100)) : 0;
+  return `
+    <div style="white-space:nowrap;">${safeDone}/${safeTotal}</div>
+    <div class="event-progress-track"><div class="event-progress-bar" style="width:${pct}%;"></div></div>
+  `;
+}
+
+function ensureAllEventsViewTabs() {
+  ensureEventListViewStyles();
+  const tabs = document.querySelector('.all-events-tabs');
+  const contentWrap = document.querySelector('.all-events-tab-content');
+  if (!tabs || !contentWrap) return;
+
+  const firstTab = tabs.querySelector('.all-events-tab');
+  if (firstTab && firstTab.dataset.tab !== 'card') {
+    firstTab.dataset.tab = 'card';
+    firstTab.setAttribute('onclick', "switchAllEventsTab('card')");
+    firstTab.innerHTML = '▦ Card View';
+  }
+
+  if (!tabs.querySelector('[data-tab="event-list"]')) {
+    const listBtn = document.createElement('button');
+    listBtn.className = 'all-events-tab';
+    listBtn.dataset.tab = 'event-list';
+    listBtn.setAttribute('onclick', "switchAllEventsTab('event-list')");
+    listBtn.style.cssText = firstTab ? firstTab.getAttribute('style') || '' : 'flex:1;padding:15px 20px;border:none;background:none;font-size:16px;font-weight:500;cursor:pointer;border-bottom:3px solid transparent;transition:all .3s ease;';
+    listBtn.innerHTML = '☰ List View';
+    const calendarBtn = tabs.querySelector('[data-tab="calendar"]');
+    tabs.insertBefore(listBtn, calendarBtn || null);
+  }
+
+  if (!document.getElementById('all-events-toolbar')) {
+    const toolbar = document.createElement('div');
+    toolbar.id = 'all-events-toolbar';
+    toolbar.className = 'event-view-toolbar';
+    toolbar.innerHTML = `
+      <div style="color:#666;font-size:13px;">Choose how events are sorted in Card View and List View.</div>
+      <label style="display:flex;align-items:center;gap:8px;color:#555;font-size:13px;">
+        Sort by
+        <select id="allEventsSortSelect" class="form-input" style="width:auto;min-width:160px;" onchange="loadAllEvents()">
+          <option value="startDate">Start Date</option>
+          <option value="eventId">Event ID</option>
+        </select>
+      </label>
+    `;
+    contentWrap.parentNode.insertBefore(toolbar, contentWrap);
+  }
+
+  if (!document.getElementById('all-events-table-view')) {
+    const listView = document.createElement('div');
+    listView.id = 'all-events-table-view';
+    listView.className = 'all-events-content';
+    listView.style.display = 'none';
+    listView.innerHTML = '<div id="all-events-table-container"></div>';
+    contentWrap.appendChild(listView);
+  }
+}
+
+function getActiveAllEventsTab() {
+  ensureAllEventsViewTabs();
+  return document.querySelector('.all-events-tab.active')?.dataset.tab || 'card';
+}
+
+function filterEventsBySearch(list) {
+  const eventSearch = document.getElementById('event-search');
+  const searchTerm = eventSearch ? eventSearch.value.toLowerCase().trim() : '';
+  if (!searchTerm) return list;
+  return (list || []).filter(event => (`${event.id} ${event.name || ''} ${event.state || ''} ${event.tag || ''} ${event.startDate || ''} ${event.endDate || ''}`).toLowerCase().includes(searchTerm));
+}
+
+function renderAllEventsCards(list) {
+  const container = document.getElementById('all-events');
+  if (!container) return;
+  const sorted = sortEventsForView(filterEventsBySearch(list || events), 'all');
+  container.innerHTML = '';
+  if (!sorted.length) {
+    container.innerHTML = '<p style="text-align:center;color:#666;padding:40px;">No matching events found.</p>';
+    return;
+  }
+  sorted.forEach(event => container.appendChild(createEventCard(event)));
+}
+
+function renderAllEventsTable(list) {
+  const container = document.getElementById('all-events-table-container');
+  if (!container) return;
+  const sorted = sortEventsForView(filterEventsBySearch(list || events), 'all');
+  if (!sorted.length) {
+    container.innerHTML = '<p style="text-align:center;color:#666;padding:40px;">No matching events found.</p>';
+    return;
+  }
+  const rows = sorted.map(event => `
+    <tr>
+      <td><strong>${escapeHtml(String(event.id))}</strong></td>
+      <td>${eventTagBadgeHtml(event)}</td>
+      <td class="event-list-title">${escapeHtml(event.name || '')}</td>
+      <td>${escapeHtml(eventDateRangeText(event))}</td>
+      <td>${eventStateBadgeHtml(event)}</td>
+      <td>${Number(event.assetCount || 0)} assets assigned</td>
+      <td style="white-space:nowrap;">
+        <button class="btn btn-primary btn-sm" onclick="viewEvent(${event.id})">View</button>
+        ${isAdminUser() ? `<button class="btn btn-warning btn-sm" onclick="editEvent(${event.id})">Edit</button> <button class="btn btn-secondary btn-sm" onclick="showForceStateModal(${event.id}, '${escapeHtmlAttr(event.state || '')}')">Force State</button> <button class="btn btn-danger btn-sm" onclick="deleteEvent(${event.id})">Delete</button>` : ''}
+      </td>
+    </tr>
+  `).join('');
+  container.innerHTML = `
+    <div class="event-list-table-wrap">
+      <table class="event-list-table">
+        <thead><tr><th>ID</th><th>Type</th><th>Name</th><th>Date</th><th>State</th><th>Assets</th><th>Actions</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderAllEventsList(eventsToRender = null) {
+  const active = getActiveAllEventsTab();
+  if (active === 'event-list') renderAllEventsTable(eventsToRender || events);
+  else renderAllEventsCards(eventsToRender || events);
+}
+
+async function loadAllEvents() {
+  try {
+    ensureAllEventsViewTabs();
+    await loadStatsCards();
+    const response = await apiCall('/api/events');
+    events = response.data || [];
+    updateOverdueCounter(countOverdueEvents(events));
+
+    if (!events.length) {
+      const active = getActiveAllEventsTab();
+      const target = active === 'event-list' ? document.getElementById('all-events-table-container') : document.getElementById('all-events');
+      if (target) target.innerHTML = '<p style="text-align:center;color:#666;padding:40px;">No events found.</p>';
+      return;
+    }
+
+    renderAllEventsList(events);
+  } catch (error) {
+    const active = getActiveAllEventsTab();
+    const target = active === 'event-list' ? document.getElementById('all-events-table-container') : document.getElementById('all-events');
+    if (target) target.innerHTML = '<p style="color:red;text-align:center;">Error loading events</p>';
+  }
+}
+
+function switchAllEventsTab(tabName) {
+  ensureAllEventsViewTabs();
+  document.querySelectorAll('.all-events-tab').forEach(tab => tab.classList.remove('active'));
+  document.querySelectorAll('.all-events-content').forEach(content => {
+    content.classList.remove('active');
+    content.style.display = 'none';
+  });
+
+  const tab = document.querySelector(`[data-tab="${tabName}"]`);
+  if (tab) tab.classList.add('active');
+
+  const idMap = {
+    card: 'all-events-list-view',
+    'event-list': 'all-events-table-view',
+    calendar: 'all-events-calendar-view'
+  };
+  const contentDiv = document.getElementById(idMap[tabName] || 'all-events-list-view');
+  if (contentDiv) {
+    contentDiv.classList.add('active');
+    contentDiv.style.display = 'block';
+  }
+
+  loadStatsCards();
+  if (tabName === 'calendar') loadCalendarView();
+  else loadAllEvents();
+}
+
+function ensureEventPageToolbar(scope) {
+  ensureEventListViewStyles();
+  const containerId = scope === 'prepare' ? 'prepare-events' : 'return-events';
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  const toolbarId = `${scope}-events-toolbar`;
+  if (document.getElementById(toolbarId)) return;
+
+  const toolbar = document.createElement('div');
+  toolbar.id = toolbarId;
+  toolbar.className = 'event-view-toolbar';
+  toolbar.innerHTML = `
+    <div class="event-view-toggle">
+      <button class="btn btn-secondary active" id="${scope}CardViewBtn" onclick="setEventPageView('${scope}', 'card')">▦ Card View</button>
+      <button class="btn btn-secondary" id="${scope}ListViewBtn" onclick="setEventPageView('${scope}', 'list')">☰ List View</button>
+    </div>
+    <label style="display:flex;align-items:center;gap:8px;color:#555;font-size:13px;">
+      Sort by
+      <select id="${scope}EventsSortSelect" class="form-input" style="width:auto;min-width:160px;" onchange="${scope === 'prepare' ? 'loadPrepareEvents()' : 'loadReturnEvents()'}">
+        <option value="startDate">Start Date</option>
+        <option value="eventId">Event ID</option>
+      </select>
+    </label>
+  `;
+  container.parentNode.insertBefore(toolbar, container);
+}
+
+function getEventPageView(scope) {
+  return localStorage.getItem(`${scope}EventsView`) || 'card';
+}
+
+function setEventPageView(scope, view) {
+  localStorage.setItem(`${scope}EventsView`, view);
+  if (scope === 'prepare') loadPrepareEvents();
+  if (scope === 'return') loadReturnEvents();
+}
+
+function updateEventPageToolbarState(scope) {
+  const view = getEventPageView(scope);
+  document.getElementById(`${scope}CardViewBtn`)?.classList.toggle('active', view === 'card');
+  document.getElementById(`${scope}ListViewBtn`)?.classList.toggle('active', view === 'list');
+}
+
+function renderPrepareEventsTable(list) {
+  const container = document.getElementById('prepare-events');
+  if (!container) return;
+  container.classList.remove('events-grid');
+  const sorted = sortEventsForView(list, 'prepare');
+  if (!sorted.length) {
+    container.innerHTML = '<p style="text-align:center;color:#666;padding:40px;">No events available for preparation.</p>';
+    return;
+  }
+  const rows = sorted.map(event => {
+    let totalRequired = 0;
+    let totalAssigned = 0;
+    if (event.modelGroups && Object.keys(event.modelGroups).length > 0) {
+      Object.values(event.modelGroups).forEach(model => {
+        totalRequired += Number(model.requiredQuantity || 0);
+        totalAssigned += getPreparedQuantity(model);
+      });
+    } else {
+      totalRequired = Number(event.assetCount || 0);
+      totalAssigned = Number(event.preparedCount || 0);
+    }
+    return `
+      <tr>
+        <td><strong>${escapeHtml(String(event.id))}</strong></td>
+        <td>${eventTagBadgeHtml(event)}</td>
+        <td class="event-list-title">${escapeHtml(event.name || '')}</td>
+        <td>${escapeHtml(eventDateRangeText(event))}</td>
+        <td>${eventStateBadgeHtml(event)}</td>
+        <td>${renderProgressCell(totalAssigned, totalRequired)}</td>
+        <td style="white-space:nowrap;"><button class="btn btn-success btn-sm" onclick="openPrepareEventModal(${event.id})">Prepare Assets</button> <button class="btn btn-primary btn-sm" onclick="viewEvent(${event.id})">View Details</button></td>
+      </tr>
+    `;
+  }).join('');
+  container.innerHTML = `
+    <div class="event-list-table-wrap">
+      <table class="event-list-table">
+        <thead><tr><th>ID</th><th>Type</th><th>Name</th><th>Date</th><th>State</th><th>Progress</th><th>Actions</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderPrepareEventsCards(list) {
+  const container = document.getElementById('prepare-events');
+  if (!container) return;
+  container.classList.add('events-grid');
+  container.innerHTML = '';
+  const sorted = sortEventsForView(list, 'prepare');
+  if (!sorted.length) {
+    container.innerHTML = '<p style="text-align:center;color:#666;padding:40px;">No events available for preparation.</p>';
+    return;
+  }
+  sorted.forEach(event => container.appendChild(createPrepareEventCard(event)));
+}
+
+async function loadPrepareEvents() {
+  try {
+    ensureEventPageToolbar('prepare');
+    updateEventPageToolbarState('prepare');
+    const response = await apiCall('/api/events');
+    updateOverdueCounter(countOverdueEvents(response.data || []));
+    const preparableEvents = (response.data || []).filter(event => event.state !== 'Closed' && event.state !== 'Overdue' && event.assetCount >= 0);
+    if (getEventPageView('prepare') === 'list') renderPrepareEventsTable(preparableEvents);
+    else renderPrepareEventsCards(preparableEvents);
+  } catch (error) {
+    const container = document.getElementById('prepare-events');
+    if (container) container.innerHTML = '<p style="color:red;text-align:center;">Error loading events</p>';
+  }
+}
+
+function renderReturnEventsTable(list) {
+  const container = document.getElementById('return-events');
+  if (!container) return;
+  container.classList.remove('events-grid');
+  const sorted = sortEventsForView(list, 'return');
+  if (!sorted.length) {
+    container.innerHTML = '<p style="text-align:center;color:#666;padding:40px;">No events with assets to return.</p>';
+    return;
+  }
+  const rows = sorted.map(event => {
+    const returnedCount = Number(event.returnedCount || 0);
+    const totalCount = Math.max(getEventReturnTotalCount(event), returnedCount + getEventReturnableCount(event));
+    return `
+      <tr>
+        <td><strong>${escapeHtml(String(event.id))}</strong></td>
+        <td>${eventTagBadgeHtml(event)}</td>
+        <td class="event-list-title">${escapeHtml(event.name || '')}</td>
+        <td>${escapeHtml(eventDateRangeText(event))}</td>
+        <td>${eventStateBadgeHtml(event)}</td>
+        <td>${renderProgressCell(returnedCount, totalCount)}</td>
+        <td style="white-space:nowrap;"><button class="btn btn-primary btn-sm" onclick="viewEvent(${event.id})">View Assets</button> <button class="btn btn-warning btn-sm" onclick="openReturnAssetsModalWithEvent(${event.id})">Return</button></td>
+      </tr>
+    `;
+  }).join('');
+  container.innerHTML = `
+    <div class="event-list-table-wrap">
+      <table class="event-list-table">
+        <thead><tr><th>ID</th><th>Type</th><th>Name</th><th>Date</th><th>State</th><th>Returned</th><th>Actions</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderReturnEventsCards(list) {
+  const container = document.getElementById('return-events');
+  if (!container) return;
+  container.classList.add('events-grid');
+  container.innerHTML = '';
+  const sorted = sortEventsForView(list, 'return');
+  if (!sorted.length) {
+    container.innerHTML = '<p style="text-align:center;color:#666;padding:40px;">No events with assets to return.</p>';
+    return;
+  }
+  sorted.forEach(event => container.appendChild(createReturnEventCard(event)));
+}
+
+async function loadReturnEvents() {
+  try {
+    ensureEventPageToolbar('return');
+    updateEventPageToolbarState('return');
+    const response = await apiCall('/api/events');
+    updateOverdueCounter(countOverdueEvents(response.data || []));
+    const returnableEvents = (response.data || []).filter(event => getEventReturnableCount(event) > 0 && event.state !== 'Closed');
+    if (getEventPageView('return') === 'list') renderReturnEventsTable(returnableEvents);
+    else renderReturnEventsCards(returnableEvents);
+  } catch (error) {
+    const container = document.getElementById('return-events');
+    if (container) container.innerHTML = '<p style="color:red;text-align:center;">Error loading events</p>';
+  }
+}
+
+async function prepareSpecificAsset(eventId, assetId) {
+  console.log(`=== PATCHED prepareSpecificAsset CALLED ===`, { eventId, assetId });
+  try {
+    await apiCall(`/api/events/${eventId}/prepare`, 'POST', { assetId });
+    showNotification('success', `${customAssetLabelFromId(assetId)} marked as prepared`);
+    updateAllButtonsForAsset(assetId, true);
+    setTimeout(() => {
+      preserveModalState(() => openPrepareEventModal(eventId));
+      if (document.getElementById('prepare-section')?.classList.contains('active')) loadPrepareEvents();
+      if (document.getElementById('events-section')?.classList.contains('active')) loadAllEvents();
+    }, 250);
+  } catch (error) {
+    console.error('Error in prepareSpecificAsset:', error);
+    showNotification('error', `Failed to prepare asset: ${error.message}`);
+    updateAllButtonsForAsset(assetId, false);
+  }
+}
+
+async function unprepareSpecificAsset(eventId, assetId) {
+  console.log(`=== PATCHED unprepareSpecificAsset CALLED ===`, { eventId, assetId });
+  try {
+    await apiCall(`/api/events/${eventId}/unprepare`, 'POST', { assetId });
+    showNotification('success', `${customAssetLabelFromId(assetId)} unprepared`);
+    updateAllButtonsForAsset(assetId, false);
+    setTimeout(() => {
+      preserveModalState(() => openPrepareEventModal(eventId));
+      if (document.getElementById('prepare-section')?.classList.contains('active')) loadPrepareEvents();
+      if (document.getElementById('events-section')?.classList.contains('active')) loadAllEvents();
+    }, 250);
+  } catch (error) {
+    console.error('Error in unprepareSpecificAsset:', error);
+    showNotification('error', `Failed to unprepare asset: ${error.message}`);
+    updateAllButtonsForAsset(assetId, true);
+  }
+}
+
+async function processUniversalContainer(eventId, containerId) {
+  const feedbackDiv = document.getElementById('universal-asset-feedback');
+  const input = document.getElementById('universalAssetInput');
+  const container = await getContainerById(containerId, true);
+  if (!container) {
+    if (feedbackDiv) showFeedback(feedbackDiv, 'error', `Container ${containerId} not found`);
+    return;
+  }
+
+  const assetIds = (container.assetIds || []).map(a => String(a || '').trim()).filter(Boolean);
+  if (!assetIds.length) {
+    if (feedbackDiv) showFeedback(feedbackDiv, 'warning', `Container ${containerId} has no assets`);
+    return;
+  }
+
+  if (feedbackDiv) {
+    showFeedback(
+      feedbackDiv,
+      'info',
+      `Processing container <strong>${escapeHtml(containerId)}</strong> (${assetIds.length} assets)…<br>` +
+      `New asset types found in the container will be added to this event automatically.`
+    );
+  }
+
+  let event;
+  try {
+    const eventRes = await apiCall(`/api/events/${eventId}`);
+    event = eventRes.data || {};
+  } catch (e) {
+    if (feedbackDiv) showFeedback(feedbackDiv, 'error', `Failed to load event: ${escapeHtml(e.message || String(e))}`);
+    return;
+  }
+
+  const preparedSet = new Set(event.actuallyPrepared || []);
+  const returnedSet = new Set(event.returnedItems || []);
+  const results = { prepared: [], skippedPrepared: [], skippedReturned: [], failed: [] };
+
+  window.__processingContainerBatch = true;
+  try {
+    for (const aid of assetIds) {
+      if (returnedSet.has(aid)) { results.skippedReturned.push(aid); continue; }
+      if (preparedSet.has(aid)) { results.skippedPrepared.push(aid); continue; }
+      try {
+        await apiCall(`/api/events/${eventId}/assign-specific`, 'POST', { assetId: aid });
+        results.prepared.push(aid);
+        preparedSet.add(aid);
+      } catch (err) {
+        results.failed.push({ id: aid, error: err?.message || String(err) });
+      }
+    }
+  } finally {
+    window.__processingContainerBatch = false;
+    if (input) { input.value = ''; input.focus(); }
+  }
+
+  const total = assetIds.length;
+  const failed = results.failed.length;
+  const listToHtml = (title, arr) => arr && arr.length ? `<div style="margin-top:10px;"><div style="font-weight:700;">${escapeHtml(title)}</div><ul style="margin:6px 0 0 18px;">${arr.slice(0, 50).map(x => `<li>${escapeHtml(String(x))}</li>`).join('')}</ul>${arr.length > 50 ? `<div style="color:#666;font-size:12px;">…and ${arr.length - 50} more</div>` : ''}</div>` : '';
+  const failuresToHtml = (arr) => arr && arr.length ? `<div style="margin-top:10px;"><div style="font-weight:700;color:#a00;">Failures</div>${arr.slice(0, 30).map(f => `<div style="font-size:12px;color:#a00;">${escapeHtml(f.id)} — ${escapeHtml(f.error)}</div>`).join('')}${arr.length > 30 ? `<div style="color:#666;font-size:12px;">…and ${arr.length - 30} more failures</div>` : ''}</div>` : '';
+
+  const detailsHtml = `
+    <div style="margin-top:6px;">
+      <div><strong>Summary</strong> (Container ${escapeHtml(containerId)}):</div>
+      <div>✅ Prepared / added to event: <strong>${results.prepared.length}</strong> / ${total}</div>
+      <div>ℹ️ Already prepared: <strong>${results.skippedPrepared.length}</strong></div>
+      <div>↩️ Returned in this event: <strong>${results.skippedReturned.length}</strong></div>
+      <div style="${failed ? 'color:#a00;' : ''}">⚠️ Failed: <strong>${failed}</strong></div>
+    </div>
+    <details style="margin-top:10px;"><summary style="cursor:pointer;">Show details</summary>
+      ${listToHtml('Prepared / added', results.prepared)}
+      ${listToHtml('Skipped (already prepared)', results.skippedPrepared)}
+      ${listToHtml('Skipped (returned)', results.skippedReturned)}
+      ${failuresToHtml(results.failed)}
+    </details>
+  `;
+
+  if (feedbackDiv) showFeedback(feedbackDiv, failed ? 'warning' : 'success', detailsHtml);
+  setTimeout(() => {
+    preserveModalState(() => openPrepareEventModal(eventId));
+    if (document.getElementById('prepare-section')?.classList.contains('active')) loadPrepareEvents();
+    if (document.getElementById('events-section')?.classList.contains('active')) loadAllEvents();
+  }, 350);
+}
+
+function renderTransferWorkspace() {
+  const container = document.getElementById('transfer-history');
+  if (!container) return;
+
+  const sourceEvents = transferOptionsCache?.sourceEvents || [];
+  const targetEvents = transferOptionsCache?.targetEvents || [];
+
+  const sourceOptions = sourceEvents.map(event => {
+    const tagPrefix = event.tag === 'dry hire' ? '[DH]' : '[E]';
+    const dateRange = event.startDate === event.endDate ? formatDate(event.startDate) : `${formatDate(event.startDate)} - ${formatDate(event.endDate)}`;
+    return `<option value="${event.id}">${tagPrefix} ${event.id}: ${escapeHtml(event.name)} • ${event.state} • ${event.unreturnedCount || 0} out • ${dateRange}</option>`;
+  }).join('');
+
+  const targetOptions = targetEvents.map(event => {
+    const tagPrefix = event.tag === 'dry hire' ? '[DH]' : '[E]';
+    const dateRange = event.startDate === event.endDate ? formatDate(event.startDate) : `${formatDate(event.startDate)} - ${formatDate(event.endDate)}`;
+    return `<option value="${event.id}">${tagPrefix} ${event.id}: ${escapeHtml(event.name)} • ${event.state} • ${dateRange}</option>`;
+  }).join('');
+
+  container.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:18px;">
+      <div style="background:linear-gradient(135deg,rgba(102,126,234,.10),rgba(118,75,162,.10));border:1px solid rgba(118,75,162,.18);border-radius:16px;padding:18px;">
+        <h3 style="margin:0 0 6px;color:#4b2f65;">Transfer Assets Directly Between Events</h3>
+        <p style="margin:0;color:#666;line-height:1.4;">Select a source event and a destination event. You can view assets that can transfer directly, or assets that are not common and should return to office.</p>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;align-items:end;background:white;border:1px solid #edf0f5;border-radius:16px;padding:16px;box-shadow:0 6px 18px rgba(0,0,0,.05);">
+        <div class="form-group" style="margin:0;">
+          <label class="form-label">From Event — Ongoing / Last Day / Overdue</label>
+          <select id="transferSourceSelect" class="form-input" onchange="loadTransferCandidates()"><option value="">Select source event...</option>${sourceOptions}</select>
+          <div style="font-size:12px;color:#666;margin-top:6px;">${sourceEvents.length} eligible source event(s)</div>
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label class="form-label">To Event — Planning / Preparing</label>
+          <select id="transferTargetSelect" class="form-input" onchange="loadTransferCandidates()"><option value="">Select destination event...</option>${targetOptions}</select>
+          <div style="font-size:12px;color:#666;margin-top:6px;">${targetEvents.length} eligible destination event(s)</div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-primary" onclick="loadTransferCandidates()">Compare Events</button>
+          <button class="btn btn-success" onclick="generateTransferPdf()">Export PDF</button>
+        </div>
+      </div>
+
+      <div id="transfer-candidates-panel" style="background:white;border:1px solid #edf0f5;border-radius:16px;padding:16px;box-shadow:0 6px 18px rgba(0,0,0,.05);">
+        ${renderTransferInitialMessage(sourceEvents, targetEvents)}
+      </div>
+    </div>
+  `;
+}
+
+async function loadTransferCandidates() {
+  const sourceSelect = document.getElementById('transferSourceSelect');
+  const targetSelect = document.getElementById('transferTargetSelect');
+  const panel = document.getElementById('transfer-candidates-panel');
+  if (!sourceSelect || !targetSelect || !panel) return;
+
+  const fromEventId = sourceSelect.value;
+  const toEventId = targetSelect.value;
+  if (!fromEventId || !toEventId) {
+    panel.innerHTML = '<p style="text-align:center;color:#666;padding:28px;">Choose both events to compare transfer and return-to-office assets.</p>';
+    return;
+  }
+  if (fromEventId === toEventId) {
+    panel.innerHTML = '<p style="text-align:center;color:#a00;padding:28px;">Source and destination events cannot be the same.</p>';
+    return;
+  }
+  panel.innerHTML = '<div class="loading">Comparing events...</div>';
+  try {
+    const response = await apiCall(`/api/transfers/candidates?fromEventId=${encodeURIComponent(fromEventId)}&toEventId=${encodeURIComponent(toEventId)}`);
+    transferCandidateCache = response.data?.candidates || [];
+    transferReturnToOfficeCache = response.data?.returnToOffice || [];
+    renderTransferCandidates(response.data || {});
+  } catch (error) {
+    panel.innerHTML = `<div style="padding:28px;text-align:center;color:#a00;">Failed to compare events: ${escapeHtml(error.message || String(error))}</div>`;
+  }
+}
+
+function setTransferPanelMode(mode) {
+  transferPanelMode = mode === 'return-office' ? 'return-office' : 'common';
+  renderTransferCandidates(window.__lastTransferData || {});
+}
+
+function renderTransferCandidates(data) {
+  window.__lastTransferData = data;
+  const panel = document.getElementById('transfer-candidates-panel');
+  if (!panel) return;
+  const candidates = data.candidates || transferCandidateCache || [];
+  const returnToOffice = data.returnToOffice || transferReturnToOfficeCache || [];
+  const fromEvent = data.fromEvent || {};
+  const toEvent = data.toEvent || {};
+  const isReturnMode = transferPanelMode === 'return-office';
+  const activeList = isReturnMode ? returnToOffice : candidates;
+
+  const modeButtons = `
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+      <button class="btn btn-${isReturnMode ? 'secondary' : 'primary'} btn-sm" onclick="setTransferPanelMode('common')">Common / Transferable (${candidates.length})</button>
+      <button class="btn btn-${isReturnMode ? 'primary' : 'secondary'} btn-sm" onclick="setTransferPanelMode('return-office')">Not Common / Return to Office (${returnToOffice.length})</button>
+    </div>
+  `;
+
+  if (!activeList.length) {
+    panel.innerHTML = `${modeButtons}<div style="text-align:center;padding:34px;color:#666;"><div style="font-size:32px;margin-bottom:8px;">🔍</div><div style="font-weight:700;color:#333;margin-bottom:4px;">No assets in this view</div><div>${isReturnMode ? 'All unreturned source assets are currently common with the destination requirements.' : 'There are no unreturned source assets that match the destination event’s remaining model requirements.'}</div></div>`;
+    return;
+  }
+
+  const commonRows = candidates.map(candidate => `
+    <tr>
+      <td><input type="checkbox" class="transfer-candidate-checkbox" data-asset-id="${escapeHtmlAttr(candidate.assetId)}" checked></td>
+      <td><strong>${escapeHtml(candidate.assetId)}</strong></td>
+      <td>${escapeHtml(candidate.serial || '')}</td>
+      <td>${departmentBadgeHtml(candidate.department || 'UN')}</td>
+      <td>${escapeHtml(candidate.brand || '')}</td>
+      <td>${escapeHtml(candidate.model || '')}</td>
+      <td>${escapeHtml(candidate.description || '')}</td>
+      <td>${escapeHtml(candidate.matchLabel || '')}</td>
+      <td><button class="btn btn-success btn-sm" onclick="executeSingleTransfer('${encodeURIComponent(candidate.assetId)}')">Transfer</button></td>
+    </tr>
+  `).join('');
+
+  const returnRows = returnToOffice.map((item, index) => `
+    <tr>
+      <td>${index + 1}</td>
+      <td><strong>${escapeHtml(item.assetId)}</strong></td>
+      <td>${escapeHtml(item.serial || '')}</td>
+      <td>${departmentBadgeHtml(item.department || 'UN')}</td>
+      <td>${escapeHtml(item.brand || '')}</td>
+      <td>${escapeHtml(item.model || '')}</td>
+      <td>${escapeHtml(item.description || '')}</td>
+      <td>${escapeHtml(item.reason || '')}</td>
+    </tr>
+  `).join('');
+
+  panel.innerHTML = `
+    ${modeButtons}
+    <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;margin-bottom:14px;">
+      <div>
+        <h3 style="margin:0;color:#764ba2;">${activeList.length} ${isReturnMode ? 'asset(s) to return to office' : 'transferable asset(s)'}</h3>
+        <div style="color:#666;font-size:13px;margin-top:4px;">From <strong>${escapeHtml(fromEvent.name || '')}</strong> → To <strong>${escapeHtml(toEvent.name || '')}</strong></div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        ${isReturnMode ? '' : '<button class="btn btn-secondary btn-sm" onclick="toggleAllTransferCandidates(true)">Select All</button><button class="btn btn-secondary btn-sm" onclick="toggleAllTransferCandidates(false)">Clear</button><button class="btn btn-success" onclick="executeSelectedTransfers()">Transfer Selected</button>'}
+        <button class="btn btn-primary" onclick="generateTransferPdf()">Export PDF</button>
+      </div>
+    </div>
+    <div style="overflow:auto;border:1px solid #edf0f5;border-radius:12px;">
+      <table class="table" style="margin-top:0;">
+        <thead>
+          ${isReturnMode
+            ? '<tr><th>#</th><th>Asset ID</th><th>Serial</th><th>Dept</th><th>Brand</th><th>Model</th><th>Description</th><th>Reason</th></tr>'
+            : '<tr><th></th><th>Asset ID</th><th>Serial</th><th>Dept</th><th>Brand</th><th>Model</th><th>Description</th><th>Match</th><th>Action</th></tr>'}
+        </thead>
+        <tbody>${isReturnMode ? returnRows : commonRows}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+function generateTransferPdf() {
+  const fromEventId = document.getElementById('transferSourceSelect')?.value;
+  const toEventId = document.getElementById('transferTargetSelect')?.value;
+  const fromEvent = (transferOptionsCache?.sourceEvents || []).find(e => String(e.id) === String(fromEventId)) || {};
+  const toEvent = (transferOptionsCache?.targetEvents || []).find(e => String(e.id) === String(toEventId)) || {};
+  const isReturnMode = transferPanelMode === 'return-office';
+  const candidates = transferCandidateCache || [];
+  const returnToOffice = transferReturnToOfficeCache || [];
+
+  if (!fromEventId || !toEventId) {
+    showNotification('warning', 'Select both source and destination events first');
+    return;
+  }
+
+  const selectedIds = new Set(Array.from(document.querySelectorAll('.transfer-candidate-checkbox:checked')).map(cb => cb.dataset.assetId));
+  const safe = (value) => escapeHtml(String(value ?? ''));
+  const dateRange = (event) => !event || !event.startDate ? '' : (event.startDate === event.endDate ? formatDate(event.startDate) : `${formatDate(event.startDate)} - ${formatDate(event.endDate)}`);
+
+  const rows = isReturnMode
+    ? (returnToOffice.length ? returnToOffice.map((item, index) => `
+        <tr><td>${index + 1}</td><td><strong>${safe(item.assetId)}</strong>${item.serial ? `<br><span style="font-size:8pt;color:#666;">SN: ${safe(item.serial)}</span>` : ''}</td><td>${safe(item.department || 'UN')}</td><td>${safe(item.brand || '')} ${safe(item.model || '')}</td><td>${safe(item.description || '')}</td><td>${safe(item.reason || '')}</td></tr>
+      `).join('') : '<tr><td colspan="6" style="text-align:center;color:#666;padding:18px;">No return-to-office assets currently shown.</td></tr>')
+    : (candidates.length ? candidates.map((candidate, index) => `
+        <tr><td>${index + 1}</td><td><strong>${safe(candidate.assetId)}</strong>${candidate.serial ? `<br><span style="font-size:8pt;color:#666;">SN: ${safe(candidate.serial)}</span>` : ''}</td><td>${safe(candidate.department || 'UN')}</td><td>${safe(candidate.brand || '')} ${safe(candidate.model || '')}</td><td>${safe(candidate.description || '')}</td><td>${safe(candidate.matchLabel || `Destination still needs ${candidate.targetRemainingBeforeThisAsset || ''}`)}</td><td>${selectedIds.has(candidate.assetId) ? 'Yes' : 'No'}</td></tr>
+      `).join('') : '<tr><td colspan="7" style="text-align:center;color:#666;padding:18px;">No matching assets currently shown.</td></tr>');
+
+  const now = new Date();
+  const formattedDate = now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  const transferNumber = `${isReturnMode ? 'RTO' : 'TR'}-${now.getFullYear()}${String(fromEventId).padStart(4, '0')}-${String(toEventId).padStart(4, '0')}`;
+  const title = isReturnMode ? 'RETURN TO OFFICE ASSETS' : 'TRANSFER ASSETS';
+  const countLabel = isReturnMode ? 'Return-to-office assets' : 'Matching assets shown';
+  const countValue = isReturnMode ? returnToOffice.length : candidates.length;
+
+  const win = window.open('', '_blank', 'width=900,height=1000');
+  if (!win) {
+    showNotification('error', 'Pop-up blocked. Please allow pop-ups to export the transfer PDF.');
+    return;
+  }
+
+  const tableHead = isReturnMode
+    ? '<tr><th style="width:8mm;">#</th><th style="width:36mm;">Asset ID / Serial</th><th style="width:18mm;">Dept</th><th style="width:40mm;">Brand / Model</th><th>Description</th><th style="width:42mm;">Reason</th></tr>'
+    : '<tr><th style="width:8mm;">#</th><th style="width:32mm;">Asset ID / Serial</th><th style="width:18mm;">Dept</th><th style="width:36mm;">Brand / Model</th><th>Description</th><th style="width:38mm;">Match</th><th style="width:18mm;">Selected</th></tr>';
+
+  const html = `<!DOCTYPE html><html><head><title>${safe(title)} - ${safe(fromEvent.name || '')} to ${safe(toEvent.name || '')}</title><style>
+    @page { size: A4; margin: 0; } * { box-sizing: border-box; } body { margin: 0; font-family: 'Century Gothic', Arial, sans-serif; color: #000; background: #f0f0f0; }
+    .page { width: 210mm; min-height: 297mm; margin: 0 auto; padding: 7mm 7mm 14mm 7mm; background: white; position: relative; page-break-after: always; }
+    .logo-row { display:flex; justify-content:flex-end; margin-bottom:7px; height:39px; } .logo-row img { height:39px; width:auto; object-fit:contain; }
+    .header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:20px; } .header-left { flex:1; font-size:9pt; font-weight:bold; line-height:1.35; } .header-right { text-align:right; font-size:9pt; font-weight:bold; }
+    .transfer-title { font-size:14pt; font-weight:bold; margin-bottom:5px; } .summary-table, .items-table { width:100%; border-collapse:collapse; border:2px solid black; margin-bottom:16px; }
+    .summary-table td { border:1px solid #333; padding:7px; font-size:9pt; vertical-align:top; } .items-table th { background:#333; color:white; padding:8px; text-align:left; font-size:8.5pt; border:1px solid #333; }
+    .items-table td { border:1px solid #333; padding:6px; font-size:8.5pt; vertical-align:top; line-height:1.25; } .footer { position:absolute; bottom:5mm; left:7mm; right:7mm; text-align:center; font-size:7pt; font-weight:bold; line-height:1.2; }
+    .print-btn { position:fixed; top:20px; right:20px; background:#667eea; color:white; border:none; padding:10px 18px; border-radius:6px; cursor:pointer; z-index:999; } @media print { body { background:white; } .page { margin:0; page-break-after:auto; } .print-btn { display:none; } }
+  </style></head><body><button class="print-btn" onclick="window.print()">Print / Save as PDF</button><div class="page">
+    <div class="logo-row"><img src="/static/images/logo.png" alt="Company Logo"></div>
+    <div class="header"><div class="header-left">FROM EVENT:<br>${safe(fromEvent.id || fromEventId)} — ${safe(fromEvent.name || '')}<br>${safe(fromEvent.state || '')}${dateRange(fromEvent) ? ' • ' + safe(dateRange(fromEvent)) : ''}<br><br>TO EVENT:<br>${safe(toEvent.id || toEventId)} — ${safe(toEvent.name || '')}<br>${safe(toEvent.state || '')}${dateRange(toEvent) ? ' • ' + safe(dateRange(toEvent)) : ''}</div><div class="header-right"><div class="transfer-title">${safe(title)}</div>No. : ${safe(transferNumber)}<br>Date : ${safe(formattedDate)}</div></div>
+    <table class="summary-table"><tr><td><strong>Source unreturned assets:</strong><br>${safe(fromEvent.unreturnedCount || 0)}</td><td><strong>${safe(countLabel)}:</strong><br>${safe(countValue)}</td><td><strong>${isReturnMode ? 'Action:' : 'Selected for transfer:'}</strong><br>${isReturnMode ? 'Return to office' : safe(selectedIds.size || 0)}</td></tr></table>
+    <table class="items-table"><thead>${tableHead}</thead><tbody>${rows}</tbody></table>
+    <div class="footer">AVEC VISION PRIVATE LIMITED<br>601 SIMS DRIVE PAN-I COMPLEX #04-10 SINGAPORE 387382 TEL 65.9743.3660 CO REG 202122775G</div>
+  </div></body></html>`;
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+}
+
+(function initialisePatchedEventViews() {
+  document.addEventListener('DOMContentLoaded', () => {
+    ensureAllEventsViewTabs();
+    const eventSearch = document.getElementById('event-search');
+    if (eventSearch) eventSearch.oninput = () => renderAllEventsList(events);
+  });
+})();
+
+// PATCH 2026-05-14: keep bulk inventory rows in the selected sort order instead of grouping blank IDs first
+function getInventorySortValue(asset, sortBy) {
+  if (!asset) return '';
+  if (sortBy === 'id') return asset.isBulk ? (asset.internalId || asset.bulkId || `${asset.brand || ''} ${asset.model || ''} ${asset.description || ''}`) : (asset.id || asset.internalId || '');
+  if (sortBy === 'serial') return asset.isBulk ? '' : (asset.serial || '');
+  if (sortBy === 'department') return asset.department || '';
+  if (sortBy === 'status') return asset.status || '';
+  if (sortBy === 'location') return asset.location || '';
+  return asset[sortBy] || '';
+}
+
+function displayFilteredInventory() {
+  const searchTerm = document.getElementById('asset-search')?.value.toLowerCase() || '';
+  const deptFilter = document.getElementById('department-filter')?.value || '';
+  const statusFilter = document.getElementById('status-filter')?.value || '';
+  const sortBy = document.getElementById('sort-select')?.value || 'id';
+  const sortDesc = document.getElementById('sort-descending')?.checked || false;
+
+  let filteredAssets = assets.filter((asset) => {
+    const deptMeta = getDepartmentMeta(asset.department);
+    const searchableText = `${asset.id || ''} ${asset.internalId || ''} ${asset.bulkId || ''} ${asset.brand || ''} ${asset.model || ''} ${asset.description || ''} ${asset.department || ''} ${deptMeta.name || ''}`.toLowerCase();
+    const matchesSearch = !searchTerm || searchableText.includes(searchTerm);
+    const matchesDept = !deptFilter || asset.department === deptFilter;
+    const matchesStatus = !statusFilter || asset.status === statusFilter;
+    return matchesSearch && matchesDept && matchesStatus;
+  });
+
+  filteredAssets.sort((a, b) => {
+    let aVal = String(getInventorySortValue(a, sortBy) ?? '').toLowerCase();
+    let bVal = String(getInventorySortValue(b, sortBy) ?? '').toLowerCase();
+    const primary = aVal.localeCompare(bVal, undefined, { numeric: true, sensitivity: 'base' });
+    if (primary !== 0) return sortDesc ? -primary : primary;
+    const fallbackA = `${a.brand || ''} ${a.model || ''} ${a.description || ''} ${a.internalId || a.id || ''}`.toLowerCase();
+    const fallbackB = `${b.brand || ''} ${b.model || ''} ${b.description || ''} ${b.internalId || b.id || ''}`.toLowerCase();
+    const secondary = fallbackA.localeCompare(fallbackB, undefined, { numeric: true, sensitivity: 'base' });
+    return sortDesc ? -secondary : secondary;
+  });
+
+  const countElement = document.getElementById('asset-count');
+  if (countElement) countElement.textContent = `${filteredAssets.length} of ${assets.length} assets`;
+  displayInventoryTable(filteredAssets);
+}
+
+// PATCH 2026-05-14B: transfer grouping, per-asset dropdown actions, undo, and grouped PDFs
+window.__transferActionState = window.__transferActionState || {};
+
+function getTransferActionState(assetId) {
+  return window.__transferActionState[String(assetId || '')] || '';
+}
+
+function setTransferActionState(assetId, state) {
+  if (!assetId) return;
+  if (state) window.__transferActionState[String(assetId)] = state;
+  else delete window.__transferActionState[String(assetId)];
+}
+
+function resetTransferActionState() {
+  window.__transferActionState = {};
+}
+
+function transferAssetTypeKey(item) {
+  return [
+    normalizeDepartmentCode(item.department || 'UN'),
+    String(item.brand || '').trim(),
+    String(item.model || '').trim(),
+    String(item.description || '').trim()
+  ].join('|');
+}
+
+function transferAssetTypeName(group) {
+  return `${group.brand || ''} ${group.model || ''} ${group.description || ''}`.replace(/\s+/g, ' ').trim() || 'Unnamed Asset Type';
+}
+
+function buildTransferGroups(items, mode) {
+  const map = new Map();
+
+  (items || []).forEach(item => {
+    const key = transferAssetTypeKey(item);
+    if (!map.has(key)) {
+      const remaining = Math.max(0, Number(item.targetRemainingBeforeThisAsset || item.targetRemaining || 0));
+      map.set(key, {
+        key,
+        mode,
+        department: normalizeDepartmentCode(item.department || 'UN'),
+        brand: item.brand || '',
+        model: item.model || '',
+        description: item.description || '',
+        reason: item.reason || '',
+        targetRequired: Number(item.targetRequired || 0),
+        targetPrepared: Number(item.targetPrepared || 0),
+        targetRemaining: remaining,
+        returnQuantity: Number(item.returnQuantity || 0),
+        sourceQuantity: Number(item.sourceQuantity || 0),
+        items: []
+      });
+    }
+
+    const group = map.get(key);
+    group.items.push(item);
+    group.targetRemaining = Math.max(group.targetRemaining || 0, Number(item.targetRemainingBeforeThisAsset || item.targetRemaining || 0));
+    group.targetRequired = Math.max(group.targetRequired || 0, Number(item.targetRequired || 0));
+    group.targetPrepared = Math.max(group.targetPrepared || 0, Number(item.targetPrepared || 0));
+    group.returnQuantity = Math.max(group.returnQuantity || 0, Number(item.returnQuantity || 0));
+    group.sourceQuantity = Math.max(group.sourceQuantity || 0, Number(item.sourceQuantity || 0));
+    if (item.reason && !group.reason) group.reason = item.reason;
+  });
+
+  const groups = Array.from(map.values()).map(group => {
+    group.items.sort((a, b) => String(a.assetId || '').localeCompare(String(b.assetId || ''), undefined, { numeric: true, sensitivity: 'base' }));
+
+    if (mode === 'common') {
+      const needed = group.targetRemaining > 0 ? group.targetRemaining : group.items.length;
+      group.actionQty = Math.min(group.items.length, Math.max(1, needed));
+      group.doneQty = group.items.filter(item => getTransferActionState(item.assetId) === 'transferred').length;
+      group.progressLabel = `${group.doneQty}/${group.actionQty} transferred`;
+      group.helpText = `${group.items.length} source option(s) available${group.targetRemaining ? `; destination still needs ${group.targetRemaining}` : ''}.`;
+    } else {
+      const returnQty = group.returnQuantity > 0 ? group.returnQuantity : group.items.length;
+      group.actionQty = Math.min(group.items.length, Math.max(0, returnQty));
+      group.doneQty = group.items.filter(item => getTransferActionState(item.assetId) === 'returnedOffice').length;
+      group.progressLabel = `${group.doneQty}/${group.actionQty} marked to return`;
+      group.helpText = group.reason || (group.targetRemaining > 0
+        ? `Destination needs ${group.targetRemaining}; source has ${group.items.length}; ${group.actionQty} should return to office.`
+        : 'Not required by destination event.');
+    }
+
+    return group;
+  });
+
+  return groups.sort((a, b) => (
+    a.department.localeCompare(b.department, undefined, { numeric: true }) ||
+    a.brand.localeCompare(b.brand, undefined, { numeric: true, sensitivity: 'base' }) ||
+    a.model.localeCompare(b.model, undefined, { numeric: true, sensitivity: 'base' }) ||
+    a.description.localeCompare(b.description, undefined, { numeric: true, sensitivity: 'base' })
+  ));
+}
+
+function transferProgressHtml(done, total) {
+  const safeDone = Math.max(0, Number(done || 0));
+  const safeTotal = Math.max(0, Number(total || 0));
+  const pct = safeTotal > 0 ? Math.min(100, Math.round((safeDone / safeTotal) * 100)) : 0;
+  return `
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;">
+      <small style="color:#666;">Progress</small>
+      <small style="color:#666;">${safeDone}/${safeTotal}</small>
+    </div>
+    <div style="background:#e9ecef;border-radius:10px;height:6px;overflow:hidden;">
+      <div style="background:#28a745;height:100%;width:${pct}%;transition:width .25s ease;"></div>
+    </div>
+  `;
+}
+
+function transferAssetDropdownRows(group) {
+  const transferLimitReached = group.mode === 'common' && group.doneQty >= group.actionQty;
+  const returnLimitReached = group.mode !== 'common' && group.doneQty >= group.actionQty;
+
+  return group.items.map(item => {
+    const encodedAssetId = encodeURIComponent(item.assetId || '');
+    const state = getTransferActionState(item.assetId);
+    const isTransferred = state === 'transferred';
+    const isReturnedOffice = state === 'returnedOffice';
+
+    let actionHtml = '';
+    let statusHtml = '<span class="asset-badge status-available">Ready</span>';
+
+    if (group.mode === 'common') {
+      if (isTransferred) {
+        statusHtml = '<span class="asset-badge status-deployed">Transferred</span>';
+        actionHtml = `<button class="btn btn-warning btn-sm" onclick="undoTransferDropdownAsset('${encodedAssetId}')">Undo</button>`;
+      } else {
+        actionHtml = `<button class="btn btn-success btn-sm" ${transferLimitReached ? 'disabled title="Required transfer quantity reached"' : ''} onclick="transferDropdownAsset('${encodedAssetId}')">Transfer</button>`;
+      }
+    } else {
+      if (isReturnedOffice) {
+        statusHtml = '<span class="asset-badge status-deployed">Return to Office</span>';
+        actionHtml = `<button class="btn btn-warning btn-sm" onclick="undoReturnOfficeDropdownAsset('${encodedAssetId}')">Undo</button>`;
+      } else if (isTransferred) {
+        statusHtml = '<span class="asset-badge status-deployed">Transferred</span>';
+        actionHtml = `<button class="btn btn-secondary btn-sm" disabled title="This asset has already been transferred">Return</button>`;
+      } else {
+        actionHtml = `<button class="btn btn-primary btn-sm" ${returnLimitReached ? 'disabled title="Required return quantity reached"' : ''} onclick="returnOfficeDropdownAsset('${encodedAssetId}')">Return</button>`;
+      }
+    }
+
+    return `
+      <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;padding:9px 10px;border-bottom:1px solid #f1f1f1;background:white;">
+        <div style="min-width:0;">
+          <div style="font-weight:700;color:#333;">${escapeHtml(item.assetId || '')}</div>
+          <div style="font-size:12px;color:#666;">${item.serial ? `SN: ${escapeHtml(item.serial)}` : 'No serial'}${item.currentLocation ? ` • ${escapeHtml(item.currentLocation)}` : ''}</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;white-space:nowrap;">
+          ${statusHtml}
+          ${actionHtml}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderTransferGroupCard(group, index) {
+  const qtyLabel = group.actionQty;
+  const title = `${qtyLabel}x ${transferAssetTypeName(group)}`;
+  const detailsId = `transfer-group-${group.mode}-${index}`;
+  const badge = departmentBadgeHtml(group.department || 'UN', true);
+
+  return `
+    <div style="margin-bottom:14px;border:1px solid #e9ecef;border-radius:12px;overflow:hidden;background:#fff;box-shadow:0 3px 10px rgba(0,0,0,.04);">
+      <div style="padding:12px;background:#f1f3f4;">
+        <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;">
+          <div style="min-width:260px;">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;">
+              ${badge}
+              <strong style="font-size:14px;color:#333;">${escapeHtml(title)}</strong>
+            </div>
+            <div style="font-size:12px;color:#666;">${escapeHtml(group.helpText || '')}</div>
+          </div>
+          <div style="min-width:180px;">${transferProgressHtml(group.doneQty, group.actionQty)}</div>
+        </div>
+      </div>
+      <details id="${detailsId}">
+        <summary style="cursor:pointer;padding:10px 12px;background:#fafafa;border-top:1px solid #e9ecef;font-weight:700;color:#555;">
+          Choose exact asset(s) (${group.items.length} available; ${group.actionQty} needed)
+        </summary>
+        <div>${transferAssetDropdownRows(group)}</div>
+      </details>
+    </div>
+  `;
+}
+
+function renderTransferInitialMessage(sourceEvents, targetEvents) {
+  if (!sourceEvents.length || !targetEvents.length) {
+    return `
+      <div style="text-align:center;padding:34px;color:#666;">
+        <div style="font-size:34px;margin-bottom:8px;">↔️</div>
+        <div style="font-weight:800;color:#333;margin-bottom:4px;">No valid transfer pair yet</div>
+        <div>${!sourceEvents.length ? 'No source events with unreturned assets are currently eligible. ' : ''}${!targetEvents.length ? 'No Planning/Preparing destination events are currently eligible.' : ''}</div>
+      </div>
+    `;
+  }
+  return '<p style="text-align:center;color:#666;padding:28px;">Choose both events to compare transfer and return-to-office assets.</p>';
+}
+
+function renderTransferWorkspace() {
+  const container = document.getElementById('transfer-history');
+  if (!container) return;
+
+  const sourceEvents = transferOptionsCache?.sourceEvents || [];
+  const targetEvents = transferOptionsCache?.targetEvents || [];
+
+  const sourceOptions = sourceEvents.map(event => {
+    const tagPrefix = event.tag === 'dry hire' ? '[DH]' : '[E]';
+    const dateRange = event.startDate === event.endDate ? formatDate(event.startDate) : `${formatDate(event.startDate)} - ${formatDate(event.endDate)}`;
+    return `<option value="${event.id}">${tagPrefix} ${event.id}: ${escapeHtml(event.name)} • ${event.state} • ${event.unreturnedCount || 0} out • ${dateRange}</option>`;
+  }).join('');
+
+  const targetOptions = targetEvents.map(event => {
+    const tagPrefix = event.tag === 'dry hire' ? '[DH]' : '[E]';
+    const dateRange = event.startDate === event.endDate ? formatDate(event.startDate) : `${formatDate(event.startDate)} - ${formatDate(event.endDate)}`;
+    return `<option value="${event.id}">${tagPrefix} ${event.id}: ${escapeHtml(event.name)} • ${event.state} • ${dateRange}</option>`;
+  }).join('');
+
+  container.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:18px;">
+      <div style="background:linear-gradient(135deg,rgba(102,126,234,.10),rgba(118,75,162,.10));border:1px solid rgba(118,75,162,.18);border-radius:16px;padding:18px;">
+        <h3 style="margin:0 0 6px;color:#4b2f65;">Transfer Assets Directly Between Events</h3>
+        <p style="margin:0;color:#666;line-height:1.4;">Select a source and destination event. Asset types are grouped by quantity; expand each dropdown to choose the exact physical asset to transfer or return.</p>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;align-items:end;background:white;border:1px solid #edf0f5;border-radius:16px;padding:16px;box-shadow:0 6px 18px rgba(0,0,0,.05);">
+        <div class="form-group" style="margin:0;">
+          <label class="form-label">From Event — Ongoing / Last Day / Overdue</label>
+          <select id="transferSourceSelect" class="form-input" onchange="loadTransferCandidates()"><option value="">Select source event...</option>${sourceOptions}</select>
+          <div style="font-size:12px;color:#666;margin-top:6px;">${sourceEvents.length} eligible source event(s)</div>
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label class="form-label">To Event — Planning / Preparing</label>
+          <select id="transferTargetSelect" class="form-input" onchange="loadTransferCandidates()"><option value="">Select destination event...</option>${targetOptions}</select>
+          <div style="font-size:12px;color:#666;margin-top:6px;">${targetEvents.length} eligible destination event(s)</div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-primary" onclick="loadTransferCandidates()">Compare Events</button>
+        </div>
+      </div>
+
+      <div id="transfer-candidates-panel" style="background:white;border:1px solid #edf0f5;border-radius:16px;padding:16px;box-shadow:0 6px 18px rgba(0,0,0,.05);">
+        ${renderTransferInitialMessage(sourceEvents, targetEvents)}
+      </div>
+    </div>
+  `;
+}
+
+async function loadTransferCandidates() {
+  const sourceSelect = document.getElementById('transferSourceSelect');
+  const targetSelect = document.getElementById('transferTargetSelect');
+  const panel = document.getElementById('transfer-candidates-panel');
+  if (!sourceSelect || !targetSelect || !panel) return;
+
+  const fromEventId = sourceSelect.value;
+  const toEventId = targetSelect.value;
+  resetTransferActionState();
+
+  if (!fromEventId || !toEventId) {
+    panel.innerHTML = '<p style="text-align:center;color:#666;padding:28px;">Choose both events to compare transfer and return-to-office assets.</p>';
+    return;
+  }
+  if (fromEventId === toEventId) {
+    panel.innerHTML = '<p style="text-align:center;color:#a00;padding:28px;">Source and destination events cannot be the same.</p>';
+    return;
+  }
+  panel.innerHTML = '<div class="loading">Comparing events...</div>';
+  try {
+    const response = await apiCall(`/api/transfers/candidates?fromEventId=${encodeURIComponent(fromEventId)}&toEventId=${encodeURIComponent(toEventId)}`);
+    transferCandidateCache = response.data?.candidates || [];
+    transferReturnToOfficeCache = response.data?.returnToOffice || [];
+    renderTransferCandidates(response.data || {});
+  } catch (error) {
+    panel.innerHTML = `<div style="padding:28px;text-align:center;color:#a00;">Failed to compare events: ${escapeHtml(error.message || String(error))}</div>`;
+  }
+}
+
+function setTransferPanelMode(mode) {
+  transferPanelMode = mode === 'return-office' ? 'return-office' : 'common';
+  renderTransferCandidates(window.__lastTransferData || {});
+}
+
+function renderTransferCandidates(data) {
+  window.__lastTransferData = data;
+  const panel = document.getElementById('transfer-candidates-panel');
+  if (!panel) return;
+
+  const candidates = data.candidates || transferCandidateCache || [];
+  const returnToOffice = data.returnToOffice || transferReturnToOfficeCache || [];
+  const fromEvent = data.fromEvent || {};
+  const toEvent = data.toEvent || {};
+  const isReturnMode = transferPanelMode === 'return-office';
+  const groups = buildTransferGroups(isReturnMode ? returnToOffice : candidates, isReturnMode ? 'return-office' : 'common');
+
+  const modeButtons = `
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+      <button class="btn btn-${isReturnMode ? 'secondary' : 'primary'} btn-sm" onclick="setTransferPanelMode('common')">Common / Transferable (${buildTransferGroups(candidates, 'common').length})</button>
+      <button class="btn btn-${isReturnMode ? 'primary' : 'secondary'} btn-sm" onclick="setTransferPanelMode('return-office')">Not Common / Return to Office (${buildTransferGroups(returnToOffice, 'return-office').length})</button>
+    </div>
+  `;
+
+  if (!groups.length) {
+    panel.innerHTML = `${modeButtons}<div style="text-align:center;padding:34px;color:#666;"><div style="font-size:32px;margin-bottom:8px;">🔍</div><div style="font-weight:700;color:#333;margin-bottom:4px;">No asset types in this view</div><div>${isReturnMode ? 'All unreturned source assets are currently common with the destination requirements.' : 'There are no unreturned source asset types that match the destination event’s remaining model requirements.'}</div></div>`;
+    return;
+  }
+
+  const totalQty = groups.reduce((sum, group) => sum + Number(group.actionQty || 0), 0);
+  const totalDone = groups.reduce((sum, group) => sum + Number(group.doneQty || 0), 0);
+  const groupCards = groups.map((group, index) => renderTransferGroupCard(group, index)).join('');
+
+  panel.innerHTML = `
+    ${modeButtons}
+    <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;margin-bottom:14px;">
+      <div>
+        <h3 style="margin:0;color:#764ba2;">${groups.length} asset type(s), ${totalQty} ${isReturnMode ? 'asset(s) to return' : 'asset(s) to transfer'}</h3>
+        <div style="color:#666;font-size:13px;margin-top:4px;">From <strong>${escapeHtml(fromEvent.name || '')}</strong> → To <strong>${escapeHtml(toEvent.name || '')}</strong></div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <span style="color:#666;font-size:13px;">${totalDone}/${totalQty} done</span>
+        <button class="btn btn-primary" onclick="generateTransferPdf()">Export PDF</button>
+      </div>
+    </div>
+    ${groupCards}
+  `;
+}
+
+async function transferDropdownAsset(encodedAssetId) {
+  const assetId = decodeURIComponent(encodedAssetId);
+  const fromEventId = document.getElementById('transferSourceSelect')?.value;
+  const toEventId = document.getElementById('transferTargetSelect')?.value;
+  if (!fromEventId || !toEventId || !assetId) return;
+  try {
+    await apiCall('/api/transfers/execute', 'POST', { fromEventId: Number(fromEventId), toEventId: Number(toEventId), assetIds: [assetId] });
+    showNotification('success', `${assetId} transferred`);
+    await loadTransferCandidates();
+  } catch (error) {
+    showNotification('error', `Failed to transfer ${assetId}: ${error.message}`);
+    await loadTransferCandidates();
+  }
+}
+
+async function undoTransferDropdownAsset(encodedAssetId) {
+  const assetId = decodeURIComponent(encodedAssetId);
+  const fromEventId = document.getElementById('transferSourceSelect')?.value;
+  const toEventId = document.getElementById('transferTargetSelect')?.value;
+  if (!fromEventId || !toEventId || !assetId) return;
+  try {
+    await apiCall('/api/transfers/undo', 'POST', { fromEventId: Number(fromEventId), toEventId: Number(toEventId), assetIds: [assetId] });
+    showNotification('success', `${assetId} transfer undone`);
+    await loadTransferCandidates();
+  } catch (error) {
+    showNotification('error', `Failed to undo transfer for ${assetId}: ${error.message}`);
+    await loadTransferCandidates();
+  }
+}
+
+async function returnOfficeDropdownAsset(encodedAssetId) {
+  const assetId = decodeURIComponent(encodedAssetId);
+  const fromEventId = document.getElementById('transferSourceSelect')?.value;
+  if (!fromEventId || !assetId) return;
+  try {
+    await apiCall('/api/transfers/return-office', 'POST', { fromEventId: Number(fromEventId), assetIds: [assetId] });
+    showNotification('success', `${assetId} marked to return to office`);
+    await loadTransferCandidates();
+  } catch (error) {
+    showNotification('error', `Failed to return ${assetId}: ${error.message}`);
+    await loadTransferCandidates();
+  }
+}
+
+async function undoReturnOfficeDropdownAsset(encodedAssetId) {
+  const assetId = decodeURIComponent(encodedAssetId);
+  const fromEventId = document.getElementById('transferSourceSelect')?.value;
+  if (!fromEventId || !assetId) return;
+  try {
+    await apiCall('/api/transfers/undo-return-office', 'POST', { fromEventId: Number(fromEventId), assetIds: [assetId] });
+    showNotification('success', `${assetId} return-to-office undone`);
+    await loadTransferCandidates();
+  } catch (error) {
+    showNotification('error', `Failed to undo return for ${assetId}: ${error.message}`);
+    await loadTransferCandidates();
+  }
+}
+
+function executeSingleTransfer(encodedAssetId) {
+  transferDropdownAsset(encodedAssetId);
+}
+
+function executeSelectedTransfers() {
+  showNotification('info', 'Use each asset type dropdown to choose exactly which asset to transfer.');
+}
+
+function groupedTransferPdfRows(groups) {
+  if (!groups.length) {
+    return '<tr><td colspan="5" style="text-align:center;color:#666;padding:18px;">No asset types in this view.</td></tr>';
+  }
+
+  return groups.map((group, index) => `
+    <tr>
+      <td>${index + 1}</td>
+      <td>${escapeHtml(String(group.actionQty || 0))}</td>
+      <td>${escapeHtml(group.department || 'UN')}</td>
+      <td>${escapeHtml(`${group.brand || ''} ${group.model || ''}`.trim())}</td>
+      <td>${escapeHtml(group.description || '')}</td>
+    </tr>
+  `).join('');
+}
+
+function generateTransferPdf() {
+  const fromEventId = document.getElementById('transferSourceSelect')?.value;
+  const toEventId = document.getElementById('transferTargetSelect')?.value;
+  const fromEvent = (transferOptionsCache?.sourceEvents || []).find(e => String(e.id) === String(fromEventId)) || {};
+  const toEvent = (transferOptionsCache?.targetEvents || []).find(e => String(e.id) === String(toEventId)) || {};
+  const isReturnMode = transferPanelMode === 'return-office';
+
+  if (!fromEventId || !toEventId) {
+    showNotification('warning', 'Select both source and destination events first');
+    return;
+  }
+
+  const groups = buildTransferGroups(isReturnMode ? (transferReturnToOfficeCache || []) : (transferCandidateCache || []), isReturnMode ? 'return-office' : 'common');
+  const safe = (value) => escapeHtml(String(value ?? ''));
+  const dateRange = (event) => !event || !event.startDate ? '' : (event.startDate === event.endDate ? formatDate(event.startDate) : `${formatDate(event.startDate)} - ${formatDate(event.endDate)}`);
+  const rows = groupedTransferPdfRows(groups);
+
+  const now = new Date();
+  const formattedDate = now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  const transferNumber = `${isReturnMode ? 'RTO' : 'TR'}-${now.getFullYear()}${String(fromEventId).padStart(4, '0')}-${String(toEventId).padStart(4, '0')}`;
+  const title = isReturnMode ? 'RETURN TO OFFICE ASSETS' : 'TRANSFER ASSETS';
+  const totalQty = groups.reduce((sum, group) => sum + Number(group.actionQty || 0), 0);
+
+  const win = window.open('', '_blank', 'width=900,height=1000');
+  if (!win) {
+    showNotification('error', 'Pop-up blocked. Please allow pop-ups to export the transfer PDF.');
+    return;
+  }
+
+  const html = `<!DOCTYPE html><html><head><title>${safe(title)} - ${safe(fromEvent.name || '')} to ${safe(toEvent.name || '')}</title><style>
+    @page { size: A4; margin: 0; } * { box-sizing: border-box; } body { margin: 0; font-family: 'Century Gothic', Arial, sans-serif; color: #000; background: #f0f0f0; }
+    .page { width: 210mm; min-height: 297mm; margin: 0 auto; padding: 7mm 7mm 14mm 7mm; background: white; position: relative; page-break-after: always; }
+    .logo-row { display:flex; justify-content:flex-end; margin-bottom:7px; height:39px; } .logo-row img { height:39px; width:auto; object-fit:contain; }
+    .header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:20px; } .header-left { flex:1; font-size:9pt; font-weight:bold; line-height:1.35; } .header-right { text-align:right; font-size:9pt; font-weight:bold; }
+    .transfer-title { font-size:14pt; font-weight:bold; margin-bottom:5px; } .summary-table, .items-table { width:100%; border-collapse:collapse; border:2px solid black; margin-bottom:16px; }
+    .summary-table td { border:1px solid #333; padding:7px; font-size:9pt; vertical-align:top; } .items-table th { background:#333; color:white; padding:8px; text-align:left; font-size:8.5pt; border:1px solid #333; }
+    .items-table td { border:1px solid #333; padding:6px; font-size:8.5pt; vertical-align:top; line-height:1.25; } .footer { position:absolute; bottom:5mm; left:7mm; right:7mm; text-align:center; font-size:7pt; font-weight:bold; line-height:1.2; }
+    .print-btn { position:fixed; top:20px; right:20px; background:#667eea; color:white; border:none; padding:10px 18px; border-radius:6px; cursor:pointer; z-index:999; } @media print { body { background:white; } .page { margin:0; page-break-after:auto; } .print-btn { display:none; } }
+  </style></head><body><button class="print-btn" onclick="window.print()">Print / Save as PDF</button><div class="page">
+    <div class="logo-row"><img src="/static/images/logo.png" alt="Company Logo"></div>
+    <div class="header"><div class="header-left">FROM EVENT:<br>${safe(fromEvent.id || fromEventId)} — ${safe(fromEvent.name || '')}<br>${safe(fromEvent.state || '')}${dateRange(fromEvent) ? ' • ' + safe(dateRange(fromEvent)) : ''}<br><br>TO EVENT:<br>${safe(toEvent.id || toEventId)} — ${safe(toEvent.name || '')}<br>${safe(toEvent.state || '')}${dateRange(toEvent) ? ' • ' + safe(dateRange(toEvent)) : ''}</div><div class="header-right"><div class="transfer-title">${safe(title)}</div>No. : ${safe(transferNumber)}<br>Date : ${safe(formattedDate)}</div></div>
+    <table class="summary-table"><tr><td><strong>Source unreturned assets:</strong><br>${safe(fromEvent.unreturnedCount || 0)}</td><td><strong>Asset type count:</strong><br>${safe(groups.length)}</td><td><strong>Total quantity:</strong><br>${safe(totalQty)}</td></tr></table>
+    <table class="items-table"><thead><tr><th style="width:8mm;">#</th><th style="width:16mm;">Qty</th><th style="width:20mm;">Dept</th><th style="width:54mm;">Brand / Model</th><th>Description</th></tr></thead><tbody>${rows}</tbody></table>
+    <div class="footer">AVEC VISION PRIVATE LIMITED<br>601 SIMS DRIVE PAN-I COMPLEX #04-10 SINGAPORE 387382 TEL 65.9743.3660 CO REG 202122775G</div>
+  </div></body></html>`;
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+}

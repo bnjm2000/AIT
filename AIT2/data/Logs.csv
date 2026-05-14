@@ -1,76 +1,3 @@
-2026/04/15 16:33:22,bnjm2000,Returned all assets for department AX in event 121: 2 items
-2026/04/17 11:16:04,bnjm2000,User bnjm2000 logged in via web interface
-2026/04/17 11:16:12,bnjm2000,Returned all assets for department AX in event 125: 5 items
-2026/04/17 11:17:05,bnjm2000,Updated location for asset MR-90A#04 from 'MiPro' to 'Store'
-2026/04/17 11:17:05,bnjm2000,Removed Out of Commission status from asset MR-90A#04
-2026/04/17 11:17:05,bnjm2000,"Maintenance logged for asset MR-90A#04: Collected back from MiPro, repaired
-XLR connector loosed, soldered back - $40"
-2026/04/17 11:17:05,bnjm2000,Updated location for asset MR-90A#06 from 'MiPro' to 'Store'
-2026/04/17 11:17:05,bnjm2000,Removed Out of Commission status from asset MR-90A#06
-2026/04/17 11:17:06,bnjm2000,"Maintenance logged for asset MR-90A#06: Collected back from MiPro, repaired
-XLR connector loosed, soldered back - $40"
-2026/04/17 11:18:08,bnjm2000,Removed Out of Commission status from asset PB#49
-2026/04/17 11:18:08,bnjm2000,"Maintenance logged for asset PB#49: Sent to TSM, serviced on the spot.
-Replaced PB15 Rear Housing"
-2026/04/17 14:17:44,bnjm2000,"Updated maintenance log for asset PB#49: 'Sent to TSM, serviced on the spot.
-Replaced PB15 Rear Housing [Cleared OOC]' -> 'Sent to TSM, serviced on the spot.
-Replaced PB15 Rear Housing - $39.52
-Service Fee - $80' (also: Cleared OOC) (edited by bnjm2000)"
-2026/04/17 14:22:45,bnjm2000,Added 1x Shure P9T model to event 126 (total: 1)
-2026/04/17 14:22:49,bnjm2000,Added 1x RF Venue Combine4 model to event 126 (total: 1)
-2026/04/17 14:22:57,bnjm2000,Added 4x Shure P9RA model to event 126 (total: 4)
-2026/04/17 14:22:58,bnjm2000,Added 1x Shure P9R model to event 126 (total: 1)
-2026/04/17 14:23:09,bnjm2000,Removed Shure ULXD2 model from event 126
-2026/04/17 14:23:13,bnjm2000,Removed Shure ULXD4D model from event 126
-2026/04/17 14:23:20,bnjm2000,Added 1x Shure ULXD2 model to event 126 (total: 1)
-2026/04/17 14:23:24,bnjm2000,Added 1x Shure ULXD4D model to event 126 (total: 1)
-2026/04/17 14:23:53,bnjm2000,Assigned specific asset PB#25 to event 126
-2026/04/17 14:23:53,bnjm2000,Assigned specific asset PB#26 to event 126
-2026/04/17 14:23:53,bnjm2000,Assigned specific asset PB#27 to event 126
-2026/04/17 14:23:53,bnjm2000,Assigned specific asset PB#28 to event 126
-2026/04/17 14:23:53,bnjm2000,Assigned specific asset PB#29 to event 126
-2026/04/17 14:23:53,bnjm2000,Assigned specific asset PB#30 to event 126
-2026/04/17 14:23:53,bnjm2000,Assigned specific asset PB#31 to event 126
-2026/04/17 14:23:53,bnjm2000,Assigned specific asset PB#32 to event 126
-2026/04/17 14:23:58,bnjm2000,Assigned specific asset PB#33 to event 126
-2026/04/17 14:23:58,bnjm2000,Assigned specific asset PB#34 to event 126
-2026/04/17 14:23:58,bnjm2000,Assigned specific asset PB#35 to event 126
-2026/04/17 14:23:58,bnjm2000,Assigned specific asset PB#36 to event 126
-2026/04/17 14:23:58,bnjm2000,Assigned specific asset PB#37 to event 126
-2026/04/17 14:23:58,bnjm2000,Assigned specific asset PB#38 to event 126
-2026/04/17 14:23:59,bnjm2000,Assigned specific asset PB#39 to event 126
-2026/04/17 14:23:59,bnjm2000,Assigned specific asset PB#40 to event 126
-2026/04/17 14:24:04,bnjm2000,Assigned specific asset PB#41 to event 126
-2026/04/17 14:24:04,bnjm2000,Assigned specific asset PB#42 to event 126
-2026/04/17 14:24:04,bnjm2000,Assigned specific asset PB#43 to event 126
-2026/04/17 14:24:04,bnjm2000,Assigned specific asset PB#44 to event 126
-2026/04/17 14:24:04,bnjm2000,Assigned specific asset PB#45 to event 126
-2026/04/17 14:24:04,bnjm2000,Assigned specific asset PB#46 to event 126
-2026/04/17 14:24:04,bnjm2000,Assigned specific asset PB#47 to event 126
-2026/04/17 14:24:04,bnjm2000,Assigned specific asset PB#48 to event 126
-2026/04/17 14:24:39,bnjm2000,Updated event 126: Hermes Sorry it was yesterday @ Liat Towers via web interface
-2026/04/20 17:40:26,bnjm2000,User bnjm2000 logged in via web interface
-2026/04/20 17:51:52,admin,Assigned specific asset 4099#16 to event 126
-2026/04/20 17:52:14,admin,Assigned specific asset COMBINE4#01 to event 126
-2026/04/20 17:52:17,admin,Assigned specific asset SBS#01 to event 126
-2026/04/20 17:52:25,admin,Assigned specific asset P9RA#01 to event 126
-2026/04/20 17:52:25,admin,Assigned specific asset P9RA#02 to event 126
-2026/04/20 17:52:27,admin,Assigned specific asset P9RA#03 to event 126
-2026/04/20 17:52:28,admin,Assigned specific asset P9RA#04 to event 126
-2026/04/20 17:53:03,admin,Assigned specific asset P9R#03 to event 126
-2026/04/20 17:53:24,admin,Assigned specific asset P9T#05 to event 126
-2026/04/20 17:53:30,admin,Assigned specific asset SEK#03 to event 126
-2026/04/20 17:53:59,admin,Assigned specific asset SEK#10 to event 126
-2026/04/20 17:54:27,admin,Assigned specific asset SEK#07 to event 126
-2026/04/20 17:54:57,admin,Assigned specific asset SEK#01 to event 126
-2026/04/20 17:55:11,admin,Added 5x Sennheiser SEK(UHF) model to event 126 (total: 5)
-2026/04/20 17:55:38,admin,Assigned specific asset SEK#04 to event 126
-2026/04/20 17:57:02,admin,Assigned specific asset ULXD1#15 to event 126
-2026/04/20 17:57:05,admin,Assigned specific asset ULXD2#13 to event 126
-2026/04/20 17:57:21,admin,Assigned specific asset ULXD2#15 to event 126
-2026/04/20 17:57:44,admin,Assigned specific asset 4488#08 to event 126
-2026/04/20 17:58:00,admin,Assigned specific asset 4488#02 to event 126
-2026/04/20 18:00:05,admin,Assigned specific asset 4488#06 to event 126
 2026/04/20 18:00:21,admin,Assigned specific asset MR-90A#05 to event 126
 2026/04/20 18:00:23,admin,Assigned specific asset MR-90A#01 to event 126
 2026/04/20 18:00:28,admin,Assigned specific asset MR-90A#02 to event 126
@@ -1004,3 +931,70 @@ Service Fee - $80' (also: Cleared OOC) (edited by bnjm2000)"
 2026/05/13 16:37:26,bnjm2000,Created user user
 2026/05/13 16:37:29,bnjm2000,User bnjm2000 logged out from web interface
 2026/05/13 16:37:33,user,User user logged in via web interface
+2026/05/14 13:31:32,bnjm2000,Completely removed asset DXR12#02 from event 130
+2026/05/14 13:31:35,bnjm2000,Assigned specific asset DXR12#02 to event 130
+2026/05/14 13:31:46,bnjm2000,Assigned specific asset PB#01 to event 134
+2026/05/14 13:31:47,bnjm2000,Assigned specific asset PB#02 to event 134
+2026/05/14 13:31:47,bnjm2000,Assigned specific asset PB#03 to event 134
+2026/05/14 13:31:47,bnjm2000,Assigned specific asset PB#04 to event 134
+2026/05/14 13:31:47,bnjm2000,Assigned specific asset PB#05 to event 134
+2026/05/14 13:31:47,bnjm2000,Assigned specific asset PB#06 to event 134
+2026/05/14 13:31:47,bnjm2000,Assigned specific asset PB#07 to event 134
+2026/05/14 13:31:47,bnjm2000,Assigned specific asset PB#08 to event 134
+2026/05/14 13:32:07,bnjm2000,Completely removed asset PB#05 from event 134
+2026/05/14 13:32:07,bnjm2000,Completely removed asset PB#01 from event 134
+2026/05/14 13:32:11,bnjm2000,Completely removed asset PB#07 from event 134
+2026/05/14 13:32:11,bnjm2000,Completely removed asset PB#03 from event 134
+2026/05/14 13:32:14,bnjm2000,Completely removed asset PB#08 from event 134
+2026/05/14 13:32:14,bnjm2000,Completely removed asset PB#04 from event 134
+2026/05/14 13:32:21,bnjm2000,Completely removed asset PB#02 from event 134
+2026/05/14 13:32:24,bnjm2000,Completely removed asset PB#06 from event 134
+2026/05/14 14:32:15,bnjm2000,Removed Astera Pixel Brick model from event 134
+2026/05/14 14:34:19,bnjm2000,"Deleted event 140: test via web interface. Reset 18 asset locations: KARAII#01 (from 'Store' to 'Store'), KARAII#02 (from 'test' to 'Store'), KARAII#03 (from 'test' to 'Store'), KARAII#04 (from 'test' to 'Store'), KARAII#05 (from 'test' to 'Store').... Removed 45 related log entries."
+2026/05/14 14:34:25,bnjm2000,Created event 140: test via web interface
+2026/05/14 14:34:31,bnjm2000,Added 1x Shure ULXD4Q model to event 140 (total: 1)
+2026/05/14 14:34:32,bnjm2000,Added 1x Shure ULXD4Q model to event 140 (total: 1)
+2026/05/14 14:34:42,bnjm2000,Added 4x Shure ULXD2 model to event 140 (total: 4)
+2026/05/14 14:34:47,bnjm2000,Added 4x Shure ULXD2 model to event 140 (total: 4)
+2026/05/14 14:34:56,bnjm2000,Added 5x L-Acoustics KARAII model to event 140 (total: 5)
+2026/05/14 14:34:57,bnjm2000,Added 3x L-Acoustics M-BUMP model to event 140 (total: 3)
+2026/05/14 14:35:12,bnjm2000,Added 6x Astera Pixel Brick model to event 140 (total: 6)
+2026/05/14 14:35:16,bnjm2000,Assigned specific asset PB#01 to event 140
+2026/05/14 14:35:17,bnjm2000,Assigned specific asset PB#02 to event 140
+2026/05/14 14:35:17,bnjm2000,Assigned specific asset PB#03 to event 140
+2026/05/14 14:35:17,bnjm2000,Assigned specific asset PB#04 to event 140
+2026/05/14 14:35:17,bnjm2000,Assigned specific asset PB#05 to event 140
+2026/05/14 14:35:17,bnjm2000,Assigned specific asset PB#06 to event 140
+2026/05/14 14:35:17,bnjm2000,Assigned specific asset PB#07 to event 140
+2026/05/14 14:35:17,bnjm2000,Assigned specific asset PB#08 to event 140
+2026/05/14 14:35:22,bnjm2000,Assigned specific asset KARAII#01 to event 140
+2026/05/14 14:35:26,bnjm2000,Assigned specific asset KARAII#02 to event 140
+2026/05/14 14:35:27,bnjm2000,Assigned specific asset KARAII#03 to event 140
+2026/05/14 14:35:28,bnjm2000,Assigned specific asset KARAII#04 to event 140
+2026/05/14 14:35:29,bnjm2000,Assigned specific asset KARAII#05 to event 140
+2026/05/14 14:35:37,bnjm2000,Assigned specific asset MBUMP#01 to event 140
+2026/05/14 14:35:37,bnjm2000,Assigned specific asset MBUMP#02 to event 140
+2026/05/14 14:35:39,bnjm2000,Assigned specific asset MBUMP#03 to event 140
+2026/05/14 14:35:43,bnjm2000,Assigned specific asset ULXD2#13 to event 140
+2026/05/14 14:35:44,bnjm2000,Assigned specific asset ULXD2#14 to event 140
+2026/05/14 14:35:45,bnjm2000,Assigned specific asset ULXD2#15 to event 140
+2026/05/14 14:35:46,bnjm2000,Assigned specific asset ULXD2#16 to event 140
+2026/05/14 14:35:48,bnjm2000,Assigned specific asset ULXD2#01 to event 140
+2026/05/14 14:35:48,bnjm2000,Assigned specific asset ULXD2#02 to event 140
+2026/05/14 14:35:49,bnjm2000,Assigned specific asset ULXD2#03 to event 140
+2026/05/14 14:35:50,bnjm2000,Assigned specific asset ULXD2#04 to event 140
+2026/05/14 14:35:52,bnjm2000,Assigned specific asset ULXD4Q#02 to event 140
+2026/05/14 14:35:54,bnjm2000,Assigned specific asset ULXD4Q#01 to event 140
+2026/05/14 14:36:10,bnjm2000,Assigned specific asset 5XT#01 to event 140
+2026/05/14 14:36:10,bnjm2000,Assigned specific asset 5XT#02 to event 140
+2026/05/14 14:36:10,bnjm2000,Assigned specific asset 5XT#03 to event 140
+2026/05/14 14:36:10,bnjm2000,Assigned specific asset 5XT#04 to event 140
+2026/05/14 14:36:10,bnjm2000,Assigned specific asset 5XT#05 to event 140
+2026/05/14 14:36:10,bnjm2000,Assigned specific asset 5XT#06 to event 140
+2026/05/14 14:36:10,bnjm2000,Assigned specific asset ETR5#01 to event 140
+2026/05/14 14:36:10,bnjm2000,Assigned specific asset ETR5#02 to event 140
+2026/05/14 14:36:10,bnjm2000,Assigned specific asset ETR5#03 to event 140
+2026/05/14 14:36:10,bnjm2000,Assigned specific asset ETR5#04 to event 140
+2026/05/14 14:36:10,bnjm2000,Assigned specific asset ETR5#05 to event 140
+2026/05/14 14:36:10,bnjm2000,Assigned specific asset ETR5#06 to event 140
+2026/05/14 14:36:49,bnjm2000,Returned 1 asset(s) from event 140 to office: 5XT#01

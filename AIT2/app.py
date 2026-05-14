@@ -38,6 +38,17 @@ _cache = {
     'cache_timestamp': None
 }
 
+# Serialise transfer/return mutations so multiple users on different devices
+# cannot transfer and return the same physical asset at the same time.
+_transfer_action_lock = threading.RLock()
+
+def with_transfer_action_lock(f):
+    @wraps(f)
+    def locked_function(*args, **kwargs):
+        with _transfer_action_lock:
+            return f(*args, **kwargs)
+    return locked_function
+
 from datetime import datetime as _dt
 from flask import request, jsonify
 
@@ -1235,6 +1246,104 @@ def _add_or_increment_asset_model_row(asset_models, group, quantity_to_add=1):
     })
     return 1
 
+
+
+
+def _ensure_event_has_model_requirement_for_asset(event, asset, quantity_to_add=1):
+    """Ensure the event has a [MODEL] requirement row for this asset's type.
+
+    This is used when preparing/scanning a container: if a container contains an
+    asset type that was not originally requested for the event, the event should
+    gain a real model requirement row instead of only showing the asset as an
+    unrelated extra item.
+    """
+    if not event or not asset:
+        return 0
+
+    if not hasattr(event, 'prepared_items') or event.prepared_items is None:
+        event.prepared_items = []
+    if not hasattr(event, 'asset_models') or event.asset_models is None:
+        event.asset_models = []
+
+    group = _asset_group_from_item(asset)
+    changed = _add_or_increment_model_marker(event.prepared_items, group, quantity_to_add)
+    changed += _add_or_increment_asset_model_row(event.asset_models, group, quantity_to_add)
+    return changed
+
+
+def _event_model_requirement_quantity_for_group(event, group):
+    """Return the required [MODEL] quantity for one exact asset group."""
+    if not event or not group:
+        return 0
+
+    total = 0
+    for item in getattr(event, 'prepared_items', []) or []:
+        marker = _parse_model_marker(item)
+        if not _model_marker_matches_group(marker, group):
+            continue
+        try:
+            total += int(marker.get('quantity') or 0)
+        except Exception:
+            continue
+    return max(0, total)
+
+
+def _event_real_asset_count_for_group(event, group):
+    """Count real physical assets from this exact group already tied to the event.
+
+    Includes active prepared assets and returned assets so an event's model
+    requirement stays large enough for the physical units that have passed
+    through it.
+    """
+    if not event or not group:
+        return 0
+
+    seen = set()
+    for values in (
+        getattr(event, 'actually_prepared', []) or [],
+        getattr(event, 'returned_items', []) or [],
+    ):
+        for asset_id in values:
+            if not _is_real_asset_ref(asset_id):
+                continue
+            if asset_id in seen:
+                continue
+            asset = data_manager.inventory.get(asset_id) if data_manager else None
+            if asset and _asset_matches_group(asset, group):
+                seen.add(asset_id)
+
+    return len(seen)
+
+
+def _ensure_event_model_requirement_covers_asset(event, asset, additional_quantity=1):
+    """Top up the event's model requirement so prepared container contents do not show as extra.
+
+    When scanning a container, each asset is processed one at a time. The old
+    logic only added 1x for the first new model type, then stopped increasing
+    the requirement because the type already existed. This helper compares the
+    model requirement against the number of prepared/returned physical assets of
+    that same type, then increments the [MODEL] row only by the missing amount.
+    """
+    if not event or not asset:
+        return 0
+
+    if not hasattr(event, 'prepared_items') or event.prepared_items is None:
+        event.prepared_items = []
+    if not hasattr(event, 'asset_models') or event.asset_models is None:
+        event.asset_models = []
+
+    group = _asset_group_from_item(asset)
+    current_required = _event_model_requirement_quantity_for_group(event, group)
+    existing_physical_count = _event_real_asset_count_for_group(event, group)
+    minimum_required = existing_physical_count + max(1, _safe_int(additional_quantity, 1))
+
+    if current_required >= minimum_required:
+        return 0
+
+    delta = minimum_required - current_required
+    changed = _add_or_increment_model_marker(event.prepared_items, group, delta)
+    changed += _add_or_increment_asset_model_row(event.asset_models, group, delta)
+    return changed
 
 def _update_single_asset_event_model_references(event, old_group, new_group):
     """
@@ -3934,43 +4043,35 @@ def assign_specific_asset_to_model(event_id):
                         asset_id not in other_event.returned_items):
                         return jsonify({'error': f'Asset is already assigned to event {other_event_id}: {other_event.name}'}), 400
 
-            # Check if asset matches any model requirement
-            fulfills_model_requirement = False
-            if hasattr(event, 'model_requirements'):
-                for req in event.model_requirements:
-                    if req.get('fulfilled', 0) < req.get('quantity', 0):
-                        req_dept = req.get('department', '').strip()
-                        req_brand = req.get('brand', '').strip()
-                        req_model = req.get('model', '').strip()
-                        
-                        if (req_dept == asset.department_code and
-                            req_brand.lower() == asset.brand.lower() and
-                                req_model.lower() == asset.model_number.lower()):
-                            fulfills_model_requirement = True
-                            break
+            # Ensure the event's model requirement quantity covers this physical asset.
+            # This is intentionally done for every scanned/prepared asset, not only
+            # the first item of a new type. Container contents are processed one
+            # asset at a time, so a container with 6 of the same new model must
+            # increase the model requirement to 6 rather than leaving the last 5
+            # displayed as extras.
+            added_requirement_units = _ensure_event_model_requirement_covers_asset(event, asset, 1)
+            fulfills_model_requirement = True
 
-            logger.info(f"Asset {asset_id} fulfills model requirement: {fulfills_model_requirement}")
+            if added_requirement_units:
+                logger.info(
+                    f"Added {added_requirement_units} model requirement unit(s) for container/manual asset {asset_id}: "
+                    f"[{asset.department_code}] {asset.brand} {asset.model_number} {asset.description}"
+                )
+
+            logger.info(f"Asset {asset_id} fulfills model requirement: {fulfills_model_requirement}; addedUnits={added_requirement_units}")
             
-            # Add to prepared_items if not already there (regardless of whether it fulfills a model requirement)
+            # Keep the specific asset linked to the event. Model rows track the
+            # requested type/quantity; this direct reference keeps the prepared
+            # physical unit visible in the All Assets section.
             if asset_id not in event.prepared_items:
                 event.prepared_items.append(asset_id)
                 logger.info(f"Added {asset_id} to prepared_items")
             
-            # Handle extra_assets logic:
-            # If asset was previously extra but now fulfills a requirement, remove from extra list
-            if asset_id in event.extra_assets and fulfills_model_requirement:
+            # A specific asset that now has a matching model requirement should
+            # not be shown as an unrelated extra item.
+            if asset_id in event.extra_assets:
                 event.extra_assets.remove(asset_id)
-                logger.info(f"Removed {asset_id} from extra_assets (now fulfills requirement). Extra assets: {event.extra_assets}")
-            
-            # Only add to extra_assets if it doesn't fulfill any model requirement AND isn't already there
-            elif not fulfills_model_requirement and asset_id not in event.extra_assets:
-                event.extra_assets.append(asset_id)
-                logger.info(f"Added {asset_id} to extra_assets list (doesn't fulfill model requirement). Extra assets: {event.extra_assets}")
-            
-            # If asset fulfills requirement, ensure it's NOT in extra_assets
-            elif fulfills_model_requirement and asset_id in event.extra_assets:
-                event.extra_assets.remove(asset_id)
-                logger.info(f"Removed {asset_id} from extra_assets (fulfills requirement). Extra assets: {event.extra_assets}")
+                logger.info(f"Removed {asset_id} from extra_assets. Extra assets: {event.extra_assets}")
 
             asset.current_location = event.name
             data_manager.save_inventory()
@@ -4386,6 +4487,9 @@ def _get_transfer_candidates(from_event, to_event):
             continue
 
         req = requirements[key]
+        # Return every matching source asset for this model type, not just the
+        # first N assets. The UI groups by model and lets the user choose exactly
+        # which physical units should transfer.
         candidates.append({
             'assetId': asset.asset_id,
             'department': asset.department_code,
@@ -4399,11 +4503,85 @@ def _get_transfer_candidates(from_event, to_event):
             'targetPrepared': req['prepared'],
             'targetRemainingBeforeThisAsset': remaining_by_key[key],
         })
-        remaining_by_key[key] -= 1
 
     candidates.sort(key=lambda x: (x['department'], x['brand'], x['model'], x['description'], x['assetId']))
     return candidates
 
+
+
+def _get_transfer_return_to_office_assets(from_event, to_event):
+    """Return source assets that should go back to office.
+
+    This is quantity-based by asset type:
+    - if the destination has no matching requirement, all source units go back
+    - if the destination needs fewer units than the source event currently has,
+      only the excess quantity goes back
+
+    The response still includes the physical source asset options so the UI can
+    let the user choose exactly which units are transferred or returned, but it
+    also includes returnQuantity so the grouped view/PDF shows only the excess
+    count, e.g. source has 15 and destination needs 12 => 3x return to office.
+    """
+    _ensure_event_lists(from_event)
+    _ensure_event_lists(to_event)
+
+    target_requirements = _target_model_requirements(to_event)
+
+    source_groups = defaultdict(list)
+    for asset_id in _get_unreturned_real_asset_ids(from_event):
+        asset = data_manager.inventory.get(asset_id)
+        if not asset:
+            continue
+        source_groups[_asset_match_key(asset)].append(asset)
+
+    going_back = []
+
+    for key, group_assets in source_groups.items():
+        group_assets.sort(key=lambda asset: asset.asset_id)
+        source_quantity = len(group_assets)
+        requirement = target_requirements.get(key)
+
+        if requirement:
+            target_remaining = max(0, int(requirement.get('remaining', 0) or 0))
+            return_quantity = max(0, source_quantity - target_remaining)
+            if return_quantity <= 0:
+                continue
+            reason = (
+                f"Destination needs {target_remaining}; "
+                f"source has {source_quantity}; {return_quantity} should return to office"
+            )
+            target_required = int(requirement.get('required', 0) or 0)
+            target_prepared = int(requirement.get('prepared', 0) or 0)
+        else:
+            target_remaining = 0
+            return_quantity = source_quantity
+            reason = 'Not required by destination event'
+            target_required = 0
+            target_prepared = 0
+
+        # Include all possible physical units in the dropdown so the user can
+        # decide which exact units go back, while the grouped quantity remains
+        # limited to returnQuantity.
+        for asset in group_assets:
+            going_back.append({
+                'assetId': asset.asset_id,
+                'department': asset.department_code,
+                'brand': asset.brand,
+                'model': asset.model_number,
+                'description': asset.description,
+                'serial': asset.serial_number,
+                'currentLocation': asset.current_location or from_event.name,
+                'matchLabel': f"[{asset.department_code}] {asset.brand} {asset.model_number} {asset.description}".strip(),
+                'reason': reason,
+                'sourceQuantity': source_quantity,
+                'targetRequired': target_required,
+                'targetPrepared': target_prepared,
+                'targetRemaining': target_remaining,
+                'returnQuantity': return_quantity,
+            })
+
+    going_back.sort(key=lambda x: (x['department'], x['brand'], x['model'], x['description'], x['assetId']))
+    return going_back
 
 def _transfer_one_asset(from_event, to_event, asset_id):
     _ensure_event_lists(from_event)
@@ -4428,7 +4606,12 @@ def _transfer_one_asset(from_event, to_event, asset_id):
     if asset_id in from_event.actually_prepared:
         from_event.actually_prepared.remove(asset_id)
 
-    # Prepare it immediately for the destination event.
+    # Prepare it immediately for the destination event. If the destination did
+    # not already have this asset type as a model requirement, add it so it shows
+    # together with the rest of the event assets.
+    if not _asset_fulfills_event_model_requirement(to_event, asset):
+        _ensure_event_has_model_requirement_for_asset(to_event, asset, 1)
+
     if asset_id not in to_event.prepared_items:
         to_event.prepared_items.append(asset_id)
     if asset_id in to_event.returned_items:
@@ -4436,12 +4619,9 @@ def _transfer_one_asset(from_event, to_event, asset_id):
     if asset_id not in to_event.actually_prepared:
         to_event.actually_prepared.append(asset_id)
 
-    # Keep extra asset tracking correct.
-    if _asset_fulfills_event_model_requirement(to_event, asset):
-        if asset_id in to_event.extra_assets:
-            to_event.extra_assets.remove(asset_id)
-    elif asset_id not in to_event.extra_assets:
-        to_event.extra_assets.append(asset_id)
+    # The asset has a model row now, so it should not be displayed as a loose extra.
+    if asset_id in to_event.extra_assets:
+        to_event.extra_assets.remove(asset_id)
 
     # The physical location should now show the destination event.
     asset.current_location = to_event.name
@@ -4515,6 +4695,7 @@ def get_transfer_candidates():
             return jsonify({'error': 'Event not found'}), 404
 
         candidates = _get_transfer_candidates(from_event, to_event)
+        return_to_office = _get_transfer_return_to_office_assets(from_event, to_event)
 
         return jsonify({
             'success': True,
@@ -4523,6 +4704,8 @@ def get_transfer_candidates():
                 'toEvent': _event_summary_for_transfer(to_event),
                 'candidates': candidates,
                 'candidateCount': len(candidates),
+                'returnToOffice': return_to_office,
+                'returnToOfficeCount': len(return_to_office),
             }
         })
     except Exception as e:
@@ -4532,6 +4715,7 @@ def get_transfer_candidates():
 
 @app.route('/api/transfers/execute', methods=['POST'])
 @require_auth
+@with_transfer_action_lock
 def execute_transfer_assets():
     """Bulk transfer selected matching assets from one event to another."""
     try:
@@ -4558,10 +4742,6 @@ def execute_transfer_assets():
         if str(to_event.state or '').strip().lower() not in TRANSFER_TARGET_STATES:
             return jsonify({'error': 'Destination event must be Planning or Preparing'}), 400
 
-        valid_candidate_ids = {
-            candidate['assetId'] for candidate in _get_transfer_candidates(from_event, to_event)
-        }
-
         transferred = []
         skipped = []
 
@@ -4569,9 +4749,18 @@ def execute_transfer_assets():
             asset_id = str(raw_asset_id or '').strip()
             if not asset_id:
                 continue
-            if asset_id not in valid_candidate_ids:
-                skipped.append({'assetId': asset_id, 'reason': 'Asset no longer matches an open destination requirement'})
+
+            asset = data_manager.inventory.get(asset_id)
+            if not asset:
+                skipped.append({'assetId': asset_id, 'reason': 'Asset not found'})
                 continue
+
+            requirements = _target_model_requirements(to_event)
+            requirement = requirements.get(_asset_match_key(asset))
+            if not requirement or requirement.get('remaining', 0) <= 0:
+                skipped.append({'assetId': asset_id, 'reason': 'Destination event no longer needs this asset type'})
+                continue
+
             try:
                 transferred.append(_transfer_one_asset(from_event, to_event, asset_id))
             except ValueError as e:
@@ -4609,8 +4798,268 @@ def execute_transfer_assets():
         return jsonify({'error': 'Failed to transfer assets'}), 500
 
 
+def _undo_transfer_one_asset(from_event, to_event, asset_id):
+    _ensure_event_lists(from_event)
+    _ensure_event_lists(to_event)
+
+    if not _is_real_asset_ref(asset_id):
+        raise ValueError('Only real inventory assets can be undone here')
+
+    asset = data_manager.inventory.get(asset_id)
+    if not asset:
+        raise ValueError(f'Asset {asset_id} not found')
+
+    if asset_id not in getattr(to_event, 'actually_prepared', []):
+        raise ValueError(f'Asset {asset_id} is not currently prepared for the destination event')
+
+    # Remove from destination event's active prepared assets.
+    if asset_id in to_event.actually_prepared:
+        to_event.actually_prepared.remove(asset_id)
+    if asset_id in to_event.prepared_items:
+        to_event.prepared_items.remove(asset_id)
+    if asset_id in to_event.extra_assets:
+        to_event.extra_assets.remove(asset_id)
+    if asset_id in to_event.returned_items:
+        to_event.returned_items.remove(asset_id)
+
+    # Put it back as active on the source event.
+    if asset_id in from_event.returned_items:
+        from_event.returned_items.remove(asset_id)
+    if asset_id not in from_event.prepared_items:
+        from_event.prepared_items.append(asset_id)
+    if asset_id not in from_event.actually_prepared:
+        from_event.actually_prepared.append(asset_id)
+
+    asset.current_location = from_event.name
+
+    return {
+        'assetId': asset.asset_id,
+        'brand': asset.brand,
+        'model': asset.model_number,
+        'description': asset.description,
+        'department': asset.department_code,
+        'serial': asset.serial_number,
+    }
+
+
+def _return_source_asset_to_office(from_event, asset_id):
+    _ensure_event_lists(from_event)
+
+    if not _is_real_asset_ref(asset_id):
+        raise ValueError('Only real inventory assets can be returned to office here')
+
+    asset = data_manager.inventory.get(asset_id)
+    if not asset:
+        raise ValueError(f'Asset {asset_id} not found')
+
+    if asset_id in from_event.returned_items:
+        raise ValueError(f'Asset {asset_id} has already been returned from the source event')
+
+    if asset_id not in from_event.prepared_items and asset_id not in from_event.actually_prepared:
+        raise ValueError(f'Asset {asset_id} is not currently prepared for the source event')
+
+    if asset_id in from_event.actually_prepared:
+        from_event.actually_prepared.remove(asset_id)
+    if asset_id not in from_event.returned_items:
+        from_event.returned_items.append(asset_id)
+
+    asset.current_location = asset.default_location or 'Store'
+
+    return {
+        'assetId': asset.asset_id,
+        'brand': asset.brand,
+        'model': asset.model_number,
+        'description': asset.description,
+        'department': asset.department_code,
+        'serial': asset.serial_number,
+    }
+
+
+def _undo_return_source_asset_to_office(from_event, asset_id):
+    _ensure_event_lists(from_event)
+
+    if not _is_real_asset_ref(asset_id):
+        raise ValueError('Only real inventory assets can be restored here')
+
+    asset = data_manager.inventory.get(asset_id)
+    if not asset:
+        raise ValueError(f'Asset {asset_id} not found')
+
+    if asset_id not in from_event.returned_items:
+        raise ValueError(f'Asset {asset_id} is not marked as returned from the source event')
+
+    from_event.returned_items.remove(asset_id)
+    if asset_id not in from_event.prepared_items:
+        from_event.prepared_items.append(asset_id)
+    if asset_id not in from_event.actually_prepared:
+        from_event.actually_prepared.append(asset_id)
+
+    asset.current_location = from_event.name
+
+    return {
+        'assetId': asset.asset_id,
+        'brand': asset.brand,
+        'model': asset.model_number,
+        'description': asset.description,
+        'department': asset.department_code,
+        'serial': asset.serial_number,
+    }
+
+
+@app.route('/api/transfers/undo', methods=['POST'])
+@require_auth
+@with_transfer_action_lock
+def undo_transfer_assets():
+    """Undo one or more direct transfers from a destination event back to the source event."""
+    try:
+        data = request.get_json() or {}
+        from_event_id = data.get('fromEventId')
+        to_event_id = data.get('toEventId')
+        asset_ids = data.get('assetIds') or []
+
+        if not from_event_id or not to_event_id:
+            return jsonify({'error': 'Source and destination events are required'}), 400
+        if not isinstance(asset_ids, list) or not asset_ids:
+            return jsonify({'error': 'Select at least one asset to undo'}), 400
+
+        from_event = data_manager.events.get(int(from_event_id))
+        to_event = data_manager.events.get(int(to_event_id))
+        if not from_event or not to_event:
+            return jsonify({'error': 'Event not found'}), 404
+
+        undone = []
+        skipped = []
+        for raw_asset_id in asset_ids:
+            asset_id = str(raw_asset_id or '').strip()
+            if not asset_id:
+                continue
+            try:
+                undone.append(_undo_transfer_one_asset(from_event, to_event, asset_id))
+            except ValueError as e:
+                skipped.append({'assetId': asset_id, 'reason': str(e)})
+
+        if not undone:
+            return jsonify({'error': 'No transfers were undone', 'skipped': skipped}), 400
+
+        data_manager.save_inventory()
+        update_event_state(from_event)
+        update_event_state(to_event)
+        data_manager.save_event(from_event)
+        data_manager.save_event(to_event)
+        invalidate_cache()
+
+        log_action(
+            f"Undid {len(undone)} transfer(s) from event {to_event.event_id} back to event {from_event.event_id}: "
+            f"{', '.join([item['assetId'] for item in undone])}"
+        )
+
+        return jsonify({'success': True, 'message': f"Undid {len(undone)} transfer(s)", 'data': {'undone': undone, 'skipped': skipped}})
+    except Exception as e:
+        logger.error(f"Error undoing transfer: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to undo transfer'}), 500
+
+
+@app.route('/api/transfers/return-office', methods=['POST'])
+@require_auth
+@with_transfer_action_lock
+def return_transfer_assets_to_office():
+    """Mark selected source-event assets as returned to office."""
+    try:
+        data = request.get_json() or {}
+        from_event_id = data.get('fromEventId')
+        asset_ids = data.get('assetIds') or []
+
+        if not from_event_id:
+            return jsonify({'error': 'Source event is required'}), 400
+        if not isinstance(asset_ids, list) or not asset_ids:
+            return jsonify({'error': 'Select at least one asset to return to office'}), 400
+
+        from_event = data_manager.events.get(int(from_event_id))
+        if not from_event:
+            return jsonify({'error': 'Source event not found'}), 404
+
+        returned = []
+        skipped = []
+        for raw_asset_id in asset_ids:
+            asset_id = str(raw_asset_id or '').strip()
+            if not asset_id:
+                continue
+            try:
+                returned.append(_return_source_asset_to_office(from_event, asset_id))
+            except ValueError as e:
+                skipped.append({'assetId': asset_id, 'reason': str(e)})
+
+        if not returned:
+            return jsonify({'error': 'No assets were returned to office', 'skipped': skipped}), 400
+
+        data_manager.save_inventory()
+        update_event_state(from_event)
+        data_manager.save_event(from_event)
+        invalidate_cache()
+
+        log_action(
+            f"Returned {len(returned)} asset(s) from event {from_event.event_id} to office: "
+            f"{', '.join([item['assetId'] for item in returned])}"
+        )
+
+        return jsonify({'success': True, 'message': f"Returned {len(returned)} asset(s) to office", 'data': {'returned': returned, 'skipped': skipped}})
+    except Exception as e:
+        logger.error(f"Error returning transfer assets to office: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to return assets to office'}), 500
+
+
+@app.route('/api/transfers/undo-return-office', methods=['POST'])
+@require_auth
+@with_transfer_action_lock
+def undo_return_transfer_assets_to_office():
+    """Undo return-to-office for selected source-event assets."""
+    try:
+        data = request.get_json() or {}
+        from_event_id = data.get('fromEventId')
+        asset_ids = data.get('assetIds') or []
+
+        if not from_event_id:
+            return jsonify({'error': 'Source event is required'}), 400
+        if not isinstance(asset_ids, list) or not asset_ids:
+            return jsonify({'error': 'Select at least one asset to restore'}), 400
+
+        from_event = data_manager.events.get(int(from_event_id))
+        if not from_event:
+            return jsonify({'error': 'Source event not found'}), 404
+
+        restored = []
+        skipped = []
+        for raw_asset_id in asset_ids:
+            asset_id = str(raw_asset_id or '').strip()
+            if not asset_id:
+                continue
+            try:
+                restored.append(_undo_return_source_asset_to_office(from_event, asset_id))
+            except ValueError as e:
+                skipped.append({'assetId': asset_id, 'reason': str(e)})
+
+        if not restored:
+            return jsonify({'error': 'No return-to-office actions were undone', 'skipped': skipped}), 400
+
+        data_manager.save_inventory()
+        update_event_state(from_event)
+        data_manager.save_event(from_event)
+        invalidate_cache()
+
+        log_action(
+            f"Restored {len(restored)} asset(s) from office back to event {from_event.event_id}: "
+            f"{', '.join([item['assetId'] for item in restored])}"
+        )
+
+        return jsonify({'success': True, 'message': f"Restored {len(restored)} asset(s)", 'data': {'restored': restored, 'skipped': skipped}})
+    except Exception as e:
+        logger.error(f"Error undoing return-to-office: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to undo return-to-office'}), 500
+
+
 @app.route('/api/events/<int:event_id>/transfer', methods=['POST'])
 @require_auth
+@with_transfer_action_lock
 def transfer_asset_between_events(event_id):
     """Transfer one asset from one event to another. Kept for the existing manual modal."""
     try:
