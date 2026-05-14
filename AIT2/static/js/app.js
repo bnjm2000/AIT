@@ -19042,3 +19042,331 @@ async function undoReturnOfficeDropdownAsset(encodedAssetId) {
     await __aitRefreshTransferAfterAction();
   }
 }
+
+// PATCH 2026-05-14D: third Transfer Assets view — what still needs to come from office for the destination event.
+var transferNeededFromOfficeCache = [];
+
+function transferModeMeta(mode) {
+  const normalized = mode === 'return-office' || mode === 'office-needed' ? mode : 'common';
+  if (normalized === 'return-office') {
+    return {
+      mode: normalized,
+      title: 'RETURN TO OFFICE ASSETS',
+      numberPrefix: 'RTO',
+      qtyNoun: 'asset(s) to return',
+      emptyText: 'There are no excess source-event asset types that should go back to office.',
+      buttonLabel: 'Not Common / Return to Office',
+      doneSuffix: 'marked to return'
+    };
+  }
+  if (normalized === 'office-needed') {
+    return {
+      mode: normalized,
+      title: 'NEEDED FROM OFFICE',
+      numberPrefix: 'NFO',
+      qtyNoun: 'asset(s) needed from office',
+      emptyText: 'The destination event can be completed using what is already prepared and what can transfer from the source event.',
+      buttonLabel: 'Needed from Office',
+      doneSuffix: 'needed from office'
+    };
+  }
+  return {
+    mode: 'common',
+    title: 'TRANSFER ASSETS',
+    numberPrefix: 'TR',
+    qtyNoun: 'asset(s) to transfer',
+    emptyText: 'There are no unreturned source asset types that match the destination event’s remaining model requirements.',
+    buttonLabel: 'Common / Transferable',
+    doneSuffix: 'transferred'
+  };
+}
+
+function setTransferPanelMode(mode) {
+  transferPanelMode = transferModeMeta(mode).mode;
+  renderTransferCandidates(window.__lastTransferData || {});
+}
+
+async function loadTransferCandidates(options = {}) {
+  const sourceSelect = document.getElementById('transferSourceSelect');
+  const targetSelect = document.getElementById('transferTargetSelect');
+  const panel = document.getElementById('transfer-candidates-panel');
+  if (!sourceSelect || !targetSelect || !panel) return;
+
+  const fromEventId = sourceSelect.value;
+  const toEventId = targetSelect.value;
+  const pairKey = `${fromEventId || ''}|${toEventId || ''}`;
+  const openDropdowns = options.openDropdowns || getOpenTransferDropdownIds();
+
+  if (window.__lastTransferPairKey !== pairKey) {
+    resetTransferActionState();
+    window.__lastTransferPairKey = pairKey;
+  }
+
+  if (!fromEventId || !toEventId) {
+    panel.innerHTML = '<p style="text-align:center;color:#666;padding:28px;">Choose both events to compare transferable assets, return-to-office assets, and what is still needed from office.</p>';
+    return;
+  }
+  if (fromEventId === toEventId) {
+    panel.innerHTML = '<p style="text-align:center;color:#a00;padding:28px;">Source and destination events cannot be the same.</p>';
+    return;
+  }
+
+  if (!options.quiet) {
+    panel.innerHTML = '<div class="loading">Comparing events...</div>';
+  }
+
+  try {
+    const response = await apiCall(`/api/transfers/candidates?fromEventId=${encodeURIComponent(fromEventId)}&toEventId=${encodeURIComponent(toEventId)}`);
+    transferCandidateCache = response.data?.candidates || [];
+    transferReturnToOfficeCache = response.data?.returnToOffice || [];
+    transferNeededFromOfficeCache = response.data?.neededFromOffice || [];
+    renderTransferCandidates(response.data || {});
+    setTimeout(() => restoreOpenTransferDropdownIds(openDropdowns), 50);
+    setTimeout(() => restoreOpenTransferDropdownIds(openDropdowns), 200);
+  } catch (error) {
+    panel.innerHTML = `<div style="padding:28px;text-align:center;color:#a00;">Failed to compare events: ${escapeHtml(error.message || String(error))}</div>`;
+  }
+}
+
+function getTransferListForMode(mode, data = {}) {
+  const normalized = transferModeMeta(mode).mode;
+  if (normalized === 'return-office') return data.returnToOffice || transferReturnToOfficeCache || [];
+  if (normalized === 'office-needed') return data.neededFromOffice || transferNeededFromOfficeCache || [];
+  return data.candidates || transferCandidateCache || [];
+}
+
+function buildTransferGroups(items, mode) {
+  const normalizedMode = transferModeMeta(mode).mode;
+  const map = new Map();
+
+  (items || []).forEach(item => {
+    const key = transferAssetTypeKey(item);
+    if (!map.has(key)) {
+      const remaining = Math.max(0, Number(item.targetRemainingBeforeThisAsset || item.targetRemaining || 0));
+      map.set(key, {
+        key,
+        mode: normalizedMode,
+        department: normalizeDepartmentCode(item.department || 'UN'),
+        brand: item.brand || '',
+        model: item.model || '',
+        description: item.description || '',
+        reason: item.reason || '',
+        targetRequired: Number(item.targetRequired || 0),
+        targetPrepared: Number(item.targetPrepared || 0),
+        targetRemaining: remaining,
+        returnQuantity: Number(item.returnQuantity || 0),
+        officeQuantity: Number(item.officeQuantity || 0),
+        sourceQuantity: Number(item.sourceQuantity || 0),
+        items: []
+      });
+    }
+
+    const group = map.get(key);
+    group.items.push(item);
+    group.targetRemaining = Math.max(group.targetRemaining || 0, Number(item.targetRemainingBeforeThisAsset || item.targetRemaining || 0));
+    group.targetRequired = Math.max(group.targetRequired || 0, Number(item.targetRequired || 0));
+    group.targetPrepared = Math.max(group.targetPrepared || 0, Number(item.targetPrepared || 0));
+    group.returnQuantity = Math.max(group.returnQuantity || 0, Number(item.returnQuantity || 0));
+    group.officeQuantity = Math.max(group.officeQuantity || 0, Number(item.officeQuantity || 0));
+    group.sourceQuantity = Math.max(group.sourceQuantity || 0, Number(item.sourceQuantity || 0));
+    if (item.reason && !group.reason) group.reason = item.reason;
+  });
+
+  const groups = Array.from(map.values()).map(group => {
+    group.items.sort((a, b) => String(a.assetId || '').localeCompare(String(b.assetId || ''), undefined, { numeric: true, sensitivity: 'base' }));
+
+    if (normalizedMode === 'common') {
+      group.doneQty = group.items.filter(item => getTransferItemState(item) === 'transferred').length;
+      const currentRemaining = Math.max(0, Number(group.targetRemaining || 0));
+      const totalNeededForThisComparison = group.doneQty + currentRemaining;
+      group.actionQty = Math.min(group.items.length, Math.max(group.doneQty, totalNeededForThisComparison, group.doneQty ? group.doneQty : 1));
+      group.progressLabel = `${group.doneQty}/${group.actionQty} transferred`;
+      group.helpText = `${group.items.length} source option(s) available${currentRemaining ? `; destination still needs ${currentRemaining}` : ''}.`;
+    } else if (normalizedMode === 'return-office') {
+      const returnQty = group.returnQuantity > 0 ? group.returnQuantity : group.items.length;
+      group.doneQty = group.items.filter(item => getTransferItemState(item) === 'returnedOffice').length;
+      group.actionQty = Math.min(group.items.length, Math.max(group.doneQty, returnQty));
+      group.progressLabel = `${group.doneQty}/${group.actionQty} marked to return`;
+      group.helpText = group.reason || (group.targetRemaining > 0
+        ? `Destination needs ${group.targetRemaining}; source has ${group.sourceQuantity || group.items.length}; ${group.actionQty} should return to office.`
+        : 'Not required by destination event.');
+    } else {
+      const officeQty = group.officeQuantity > 0 ? group.officeQuantity : group.items.length;
+      group.doneQty = 0;
+      group.actionQty = officeQty;
+      group.progressLabel = `${officeQty} needed from office`;
+      group.helpText = group.reason || `Destination still needs ${group.targetRemaining}; source can provide ${group.sourceQuantity || 0}; ${officeQty} should be packed from office.`;
+    }
+
+    return group;
+  });
+
+  return groups.sort((a, b) => (
+    a.department.localeCompare(b.department, undefined, { numeric: true }) ||
+    a.brand.localeCompare(b.brand, undefined, { numeric: true, sensitivity: 'base' }) ||
+    a.model.localeCompare(b.model, undefined, { numeric: true, sensitivity: 'base' }) ||
+    a.description.localeCompare(b.description, undefined, { numeric: true, sensitivity: 'base' })
+  ));
+}
+
+function renderTransferModeButtons(data) {
+  const commonGroups = buildTransferGroups(getTransferListForMode('common', data), 'common');
+  const returnGroups = buildTransferGroups(getTransferListForMode('return-office', data), 'return-office');
+  const officeGroups = buildTransferGroups(getTransferListForMode('office-needed', data), 'office-needed');
+  const active = transferModeMeta(transferPanelMode).mode;
+
+  const button = (mode, label, count) => `
+    <button class="btn btn-${active === mode ? 'primary' : 'secondary'} btn-sm" onclick="setTransferPanelMode('${mode}')">
+      ${label} (${count})
+    </button>`;
+
+  return `
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+      ${button('common', 'Common / Transferable', commonGroups.length)}
+      ${button('return-office', 'Not Common / Return to Office', returnGroups.length)}
+      ${button('office-needed', 'Needed from Office', officeGroups.length)}
+    </div>
+  `;
+}
+
+function renderTransferCandidates(data) {
+  window.__lastTransferData = data;
+  const panel = document.getElementById('transfer-candidates-panel');
+  if (!panel) return;
+
+  const fromEvent = data.fromEvent || {};
+  const toEvent = data.toEvent || {};
+  const meta = transferModeMeta(transferPanelMode);
+  const groups = buildTransferGroups(getTransferListForMode(meta.mode, data), meta.mode);
+  const modeButtons = renderTransferModeButtons(data);
+
+  if (!groups.length) {
+    panel.innerHTML = `${modeButtons}<div style="text-align:center;padding:34px;color:#666;"><div style="font-size:32px;margin-bottom:8px;">🔍</div><div style="font-weight:700;color:#333;margin-bottom:4px;">No asset types in this view</div><div>${escapeHtml(meta.emptyText)}</div></div>`;
+    return;
+  }
+
+  const totalQty = groups.reduce((sum, group) => sum + Number(group.actionQty || 0), 0);
+  const totalDone = groups.reduce((sum, group) => sum + Number(group.doneQty || 0), 0);
+  const groupCards = groups.map((group, index) => renderTransferGroupCard(group, index)).join('');
+  const doneText = meta.mode === 'office-needed'
+    ? `${totalQty} item(s) still needed from office`
+    : `${totalDone}/${totalQty} done`;
+
+  panel.innerHTML = `
+    ${modeButtons}
+    <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;margin-bottom:14px;">
+      <div>
+        <h3 style="margin:0;color:#764ba2;">${groups.length} asset type(s), ${totalQty} ${escapeHtml(meta.qtyNoun)}</h3>
+        <div style="color:#666;font-size:13px;margin-top:4px;">From <strong>${escapeHtml(fromEvent.name || '')}</strong> → To <strong>${escapeHtml(toEvent.name || '')}</strong></div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <span style="color:#666;font-size:13px;">${escapeHtml(doneText)}</span>
+        <button class="btn btn-primary" onclick="generateTransferPdf()">Export PDF</button>
+      </div>
+    </div>
+    ${groupCards}
+  `;
+}
+
+function renderTransferGroupCard(group, index) {
+  const qtyLabel = group.actionQty;
+  const title = `${qtyLabel}x ${transferAssetTypeName(group)}`;
+  const detailsId = transferGroupDetailsId(group);
+  const badge = departmentBadgeHtml(group.department || 'UN', true);
+  const isOfficeNeeded = group.mode === 'office-needed';
+
+  const progressOrBadge = isOfficeNeeded
+    ? `<span class="asset-badge status-ooc">Needed from Office</span>`
+    : transferProgressHtml(group.doneQty, group.actionQty);
+
+  const dropdownHtml = isOfficeNeeded ? '' : `
+      <details id="${detailsId}">
+        <summary style="cursor:pointer;padding:10px 12px;background:#fafafa;border-top:1px solid #e9ecef;font-weight:700;color:#555;">
+          Choose exact asset(s) (${group.items.length} available; ${group.actionQty} needed)
+        </summary>
+        <div>${transferAssetDropdownRows(group)}</div>
+      </details>`;
+
+  return `
+    <div style="margin-bottom:14px;border:1px solid #e9ecef;border-radius:12px;overflow:hidden;background:#fff;box-shadow:0 3px 10px rgba(0,0,0,.04);">
+      <div style="padding:12px;background:#f1f3f4;">
+        <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;">
+          <div style="min-width:260px;">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;">
+              ${badge}
+              <strong style="font-size:14px;color:#333;">${escapeHtml(title)}</strong>
+            </div>
+            <div style="font-size:12px;color:#666;">${escapeHtml(group.helpText || '')}</div>
+          </div>
+          <div style="min-width:180px;text-align:right;">${progressOrBadge}</div>
+        </div>
+      </div>
+      ${dropdownHtml}
+    </div>
+  `;
+}
+
+function groupedTransferPdfRows(groups) {
+  if (!groups.length) {
+    return '<tr><td colspan="5" style="text-align:center;color:#666;padding:18px;">No asset types in this view.</td></tr>';
+  }
+
+  return groups.map((group, index) => `
+    <tr>
+      <td>${index + 1}</td>
+      <td>${escapeHtml(String(group.actionQty || 0))}</td>
+      <td>${escapeHtml(group.department || 'UN')}</td>
+      <td>${escapeHtml(`${group.brand || ''} ${group.model || ''}`.trim())}</td>
+      <td>${escapeHtml(group.description || '')}</td>
+    </tr>
+  `).join('');
+}
+
+function generateTransferPdf() {
+  const fromEventId = document.getElementById('transferSourceSelect')?.value;
+  const toEventId = document.getElementById('transferTargetSelect')?.value;
+  const fromEvent = (transferOptionsCache?.sourceEvents || []).find(e => String(e.id) === String(fromEventId)) || {};
+  const toEvent = (transferOptionsCache?.targetEvents || []).find(e => String(e.id) === String(toEventId)) || {};
+  const meta = transferModeMeta(transferPanelMode);
+
+  if (!fromEventId || !toEventId) {
+    showNotification('warning', 'Select both source and destination events first');
+    return;
+  }
+
+  const groups = buildTransferGroups(getTransferListForMode(meta.mode, window.__lastTransferData || {}), meta.mode);
+  const safe = (value) => escapeHtml(String(value ?? ''));
+  const dateRange = (event) => !event || !event.startDate ? '' : (event.startDate === event.endDate ? formatDate(event.startDate) : `${formatDate(event.startDate)} - ${formatDate(event.endDate)}`);
+  const rows = groupedTransferPdfRows(groups);
+
+  const now = new Date();
+  const formattedDate = now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  const transferNumber = `${meta.numberPrefix}-${now.getFullYear()}${String(fromEventId).padStart(4, '0')}-${String(toEventId).padStart(4, '0')}`;
+  const totalQty = groups.reduce((sum, group) => sum + Number(group.actionQty || 0), 0);
+
+  const win = window.open('', '_blank', 'width=900,height=1000');
+  if (!win) {
+    showNotification('error', 'Pop-up blocked. Please allow pop-ups to export the transfer PDF.');
+    return;
+  }
+
+  const html = `<!DOCTYPE html><html><head><title>${safe(meta.title)} - ${safe(fromEvent.name || '')} to ${safe(toEvent.name || '')}</title><style>
+    @page { size: A4; margin: 0; } * { box-sizing: border-box; } body { margin: 0; font-family: 'Century Gothic', Arial, sans-serif; color: #000; background: #f0f0f0; }
+    .page { width: 210mm; min-height: 297mm; margin: 0 auto; padding: 7mm 7mm 14mm 7mm; background: white; position: relative; page-break-after: always; }
+    .logo-row { display:flex; justify-content:flex-end; margin-bottom:7px; height:39px; } .logo-row img { height:39px; width:auto; object-fit:contain; }
+    .header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:20px; } .header-left { flex:1; font-size:9pt; font-weight:bold; line-height:1.35; } .header-right { text-align:right; font-size:9pt; font-weight:bold; }
+    .transfer-title { font-size:14pt; font-weight:bold; margin-bottom:5px; } .summary-table, .items-table { width:100%; border-collapse:collapse; border:2px solid black; margin-bottom:16px; }
+    .summary-table td { border:1px solid #333; padding:7px; font-size:9pt; vertical-align:top; } .items-table th { background:#333; color:white; padding:8px; text-align:left; font-size:8.5pt; border:1px solid #333; }
+    .items-table td { border:1px solid #333; padding:6px; font-size:8.5pt; vertical-align:top; line-height:1.25; } .footer { position:absolute; bottom:5mm; left:7mm; right:7mm; text-align:center; font-size:7pt; font-weight:bold; line-height:1.2; }
+    .print-btn { position:fixed; top:20px; right:20px; background:#667eea; color:white; border:none; padding:10px 18px; border-radius:6px; cursor:pointer; z-index:999; } @media print { body { background:white; } .page { margin:0; page-break-after:auto; } .print-btn { display:none; } }
+  </style></head><body><button class="print-btn" onclick="window.print()">Print / Save as PDF</button><div class="page">
+    <div class="logo-row"><img src="/static/images/logo.png" alt="Company Logo"></div>
+    <div class="header"><div class="header-left">FROM EVENT:<br>${safe(fromEvent.id || fromEventId)} — ${safe(fromEvent.name || '')}<br>${safe(fromEvent.state || '')}${dateRange(fromEvent) ? ' • ' + safe(dateRange(fromEvent)) : ''}<br><br>TO EVENT:<br>${safe(toEvent.id || toEventId)} — ${safe(toEvent.name || '')}<br>${safe(toEvent.state || '')}${dateRange(toEvent) ? ' • ' + safe(dateRange(toEvent)) : ''}</div><div class="header-right"><div class="transfer-title">${safe(meta.title)}</div>No. : ${safe(transferNumber)}<br>Date : ${safe(formattedDate)}</div></div>
+    <table class="summary-table"><tr><td><strong>Source unreturned assets:</strong><br>${safe(fromEvent.unreturnedCount || 0)}</td><td><strong>Asset type count:</strong><br>${safe(groups.length)}</td><td><strong>Total quantity:</strong><br>${safe(totalQty)}</td></tr></table>
+    <table class="items-table"><thead><tr><th style="width:8mm;">#</th><th style="width:16mm;">Qty</th><th style="width:20mm;">Dept</th><th style="width:54mm;">Brand / Model</th><th>Description</th></tr></thead><tbody>${rows}</tbody></table>
+    <div class="footer">AVEC VISION PRIVATE LIMITED<br>601 SIMS DRIVE PAN-I COMPLEX #04-10 SINGAPORE 387382 TEL 65.9743.3660 CO REG 202122775G</div>
+  </div></body></html>`;
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+}

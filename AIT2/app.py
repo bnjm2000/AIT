@@ -4585,6 +4585,70 @@ def _get_transfer_candidates(from_event, to_event):
     return candidates
 
 
+
+def _get_transfer_needed_from_office_assets(from_event, to_event):
+    """Return destination event model quantities that still need to be packed from office.
+
+    This compares the destination event's remaining model requirements against
+    the source event's currently unreturned, transferable matching assets. If
+    the destination still needs 12 of a type and the source event can provide 9,
+    this view returns 3x for that type as still needed from office.
+    """
+    _ensure_event_lists(from_event)
+    _ensure_event_lists(to_event)
+
+    requirements = _target_model_requirements(to_event)
+
+    # Count how many active, transferable source assets can still satisfy each
+    # destination requirement. Already-transferred assets are not in this list,
+    # and they are already counted as prepared in _target_model_requirements().
+    source_available_by_key = defaultdict(int)
+    for asset_id in _get_unreturned_real_asset_ids(from_event):
+        asset = data_manager.inventory.get(asset_id)
+        if not asset:
+            continue
+        if getattr(asset, 'is_missing', False) or getattr(asset, 'is_ooc', False):
+            continue
+        source_available_by_key[_asset_match_key(asset)] += 1
+
+    needed = []
+    for key, req in requirements.items():
+        target_remaining = max(0, int(req.get('remaining', 0) or 0))
+        if target_remaining <= 0:
+            continue
+
+        source_available = max(0, int(source_available_by_key.get(key, 0) or 0))
+        office_quantity = max(0, target_remaining - source_available)
+        if office_quantity <= 0:
+            continue
+
+        needed.append({
+            'assetId': '',
+            'department': req.get('department', ''),
+            'brand': req.get('brand', ''),
+            'model': req.get('model', ''),
+            'description': req.get('description', ''),
+            'serial': '',
+            'currentLocation': 'Office',
+            'matchLabel': f"[{req.get('department', '')}] {req.get('brand', '')} {req.get('model', '')} {req.get('description', '')}".strip(),
+            'targetRequired': int(req.get('required', 0) or 0),
+            'targetPrepared': int(req.get('prepared', 0) or 0),
+            'targetRemainingBeforeThisAsset': target_remaining,
+            'targetRemaining': target_remaining,
+            'sourceQuantity': source_available,
+            'officeQuantity': office_quantity,
+            'returnQuantity': 0,
+            'reason': (
+                f"Destination still needs {target_remaining}; "
+                f"source can provide {source_available}; {office_quantity} should be packed from office"
+            ),
+            'transferState': 'neededFromOffice',
+        })
+
+    needed.sort(key=lambda x: (x['department'], x['brand'], x['model'], x['description']))
+    return needed
+
+
 def _get_transfer_return_to_office_assets(from_event, to_event):
     """Return source assets that should go back to office.
 
@@ -4772,6 +4836,7 @@ def get_transfer_candidates():
 
         candidates = _get_transfer_candidates(from_event, to_event)
         return_to_office = _get_transfer_return_to_office_assets(from_event, to_event)
+        needed_from_office = _get_transfer_needed_from_office_assets(from_event, to_event)
 
         return jsonify({
             'success': True,
@@ -4782,6 +4847,9 @@ def get_transfer_candidates():
                 'candidateCount': len(candidates),
                 'returnToOffice': return_to_office,
                 'returnToOfficeCount': len(return_to_office),
+                'neededFromOffice': needed_from_office,
+                'neededFromOfficeCount': len(needed_from_office),
+                'neededFromOfficeQuantity': sum(int(item.get('officeQuantity', 0) or 0) for item in needed_from_office),
             }
         })
     except Exception as e:
