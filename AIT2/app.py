@@ -1737,7 +1737,7 @@ def update_event_state(event):
             event.state = 'Returning'
 
         else:
-            logger.warning(f"Event {event.event_id} fell through state calculation; keeping {event.state}")
+            logger.debug(f"Event {event.event_id} fell through state calculation; keeping {event.state}")
 
     except Exception as e:
         logger.error(f"Error updating event state for event {event.event_id}: {e}")
@@ -2660,7 +2660,7 @@ def get_event(event_id):
                         # Also check returned items as they might have been assigned to this model
                         all_potential_assets.update(event.returned_items)
                         
-                        logger.info(f"Checking assets for model {brand} {model}: {all_potential_assets}")
+                        logger.debug(f"Checking assets for model {brand} {model}: {all_potential_assets}")
                         
                         extra_asset_ids = set(getattr(event, 'extra_assets', []) or [])
                         for specific_asset_id in all_potential_assets:
@@ -2668,8 +2668,8 @@ def get_event(event_id):
                             specific_asset = data_manager.inventory.get(specific_asset_id)
                             
                             if specific_asset:
-                                logger.info(f"Asset {specific_asset_id}: brand={specific_asset.brand}, model={specific_asset.model_number}, dept={specific_asset.department_code}")
-                                logger.info(f"Looking for: brand={brand}, model={model}, dept={dept}")
+                                logger.debug(f"Asset {specific_asset_id}: brand={specific_asset.brand}, model={specific_asset.model_number}, dept={specific_asset.department_code}")
+                                logger.debug(f"Looking for: brand={brand}, model={model}, dept={dept}")
                                 
                                 description = parts[4] if len(parts) > 4 else ''
                                 if (specific_asset and 
@@ -2680,7 +2680,7 @@ def get_event(event_id):
 
                                     # Check if this asset is returned
                                     asset_status = 'returned' if specific_asset_id in event.returned_items else 'prepared'
-                                    logger.info(f"Asset {specific_asset_id} matches model and has status: {asset_status}")
+                                    logger.debug(f"Asset {specific_asset_id} matches model and has status: {asset_status}")
 
                                     model_groups[model_key]['assignedAssets'].append({
                                         'id': specific_asset_id,
@@ -2696,7 +2696,7 @@ def get_event(event_id):
                         returned_count = len([a for a in model_groups[model_key]['assignedAssets'] if a['status'] == 'returned'])
                         prepared_count = assigned_count - returned_count
 
-                        logger.info(f"Model {brand} {model}: assigned={assigned_count}, returned={returned_count}, prepared={prepared_count}, required={quantity}")
+                        logger.debug(f"Model {brand} {model}: assigned={assigned_count}, returned={returned_count}, prepared={prepared_count}, required={quantity}")
 
                         if returned_count == assigned_count and assigned_count > 0:
                             model_groups[model_key]['status'] = 'returned'
@@ -2707,7 +2707,7 @@ def get_event(event_id):
                         else:
                             model_groups[model_key]['status'] = 'pending'
 
-                        logger.info(f"Model {brand} {model} final status: {model_groups[model_key]['status']}")
+                        logger.debug(f"Model {brand} {model} final status: {model_groups[model_key]['status']}")
 
                 except Exception as e:
                     logger.error(f"Error parsing model assignment {asset_id}: {e}")
@@ -2785,7 +2785,7 @@ def get_event(event_id):
 
         total_extra_assets = _event_extra_asset_quantity(event)
 
-        logger.info(
+        logger.debug(
             f"Event {event_id} final asset counts - Required: {total_required}, "
             f"Prepared: {total_prepared}, Returned: {total_returned}, "
             f"Active extras: {total_extra_assets}, Extra assets in list: {len(event.extra_assets)}"

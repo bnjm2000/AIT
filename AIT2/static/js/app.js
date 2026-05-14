@@ -7,6 +7,7 @@ let logs = [];
 let stats = {};
 let departments = {};
 let departmentsLoaded = false;
+let __autoRefreshInFlight = false;
 
 // ---------- containers cache ----------
 let selectedContainerAssets = new Set();
@@ -320,13 +321,6 @@ function getDepartmentCodeForDoName(name) {
 
 // status badge renderer (used by selectors)
 
-function getAssignedQuantity(modelGroup) {
-  if (!modelGroup) return 0;
-  if (typeof modelGroup.assignedQuantity !== 'undefined') {
-    return Number(modelGroup.assignedQuantity || 0);
-  }
-  return (modelGroup.assignedAssets || []).reduce((sum, asset) => sum + Number(asset.quantity || 1), 0);
-}
 
 function getPreparedQuantity(modelGroup) {
   if (!modelGroup) return 0;
@@ -373,25 +367,11 @@ function getEventExtraQuantity(event) {
   return Array.isArray(event.extraAssets) ? event.extraAssets.length : 0;
 }
 
-function getReturnedQuantity(modelGroup) {
-  if (!modelGroup) return 0;
-  if (typeof modelGroup.returnedQuantity !== 'undefined') {
-    return Number(modelGroup.returnedQuantity || 0);
-  }
-  return (modelGroup.assignedAssets || [])
-    .filter(asset => asset.status === 'returned')
-    .reduce((sum, asset) => sum + Number(asset.quantity || 1), 0);
-}
 
 function getAssetIdentifierForApi(asset) {
   return asset?.internalId || asset?.bulkId || asset?.id || '';
 }
 
-function getAssetDisplayId(asset) {
-  if (!asset) return '';
-  if (asset.isBulk) return 'Bulk Item';
-  return asset.displayId || asset.id || asset.internalId || '';
-}
 
 function getAssignedAssetDisplay(asset) {
   if (!asset) return '';
@@ -399,25 +379,6 @@ function getAssignedAssetDisplay(asset) {
   return asset.id || '';
 }
 
-function getAssetStatusBadge(asset) {
-  const status = (asset?.status || '').toString().toLowerCase();
-
-  let statusClass = 'status-available';
-  let statusText  = 'Available';
-
-  if (status === 'missing') {
-    statusClass = 'status-missing';
-    statusText  = 'Missing';
-  } else if (status === 'ooc') {
-    statusClass = 'status-ooc';
-    statusText  = 'OOC';
-  } else if (status === 'deployed') {
-    statusClass = 'status-deployed';
-    statusText  = 'Deployed';
-  }
-
-  return `<span class="asset-badge ${statusClass}">${statusText}</span>`;
-}
 
 /* PATCH A — Delivery Order (DO) edit helpers */
 function getDoEdits(eventId, deptNames = []) {
@@ -861,13 +822,6 @@ function openModal(modalId) {
   }
 }
 
-function generateRemoveButton(eventId, assetId) {
-    // Store raw asset ID - no HTML escaping here
-    return `<button class="btn btn-danger btn-sm remove-asset-btn" 
-                    data-event-id="${eventId}" 
-                    data-asset-id="${assetId}"
-                    style="padding: 4px 8px; font-size: 11px;">Remove</button>`;
-}
 
 function closeModal(modalId) {
   const modal = document.getElementById(modalId);
@@ -1647,11 +1601,6 @@ async function deleteUserAdmin(encodedOriginalUsername) {
   }
 }
 
-function decodeHtmlAttr(str) {
-  const textarea = document.createElement('textarea');
-  textarea.innerHTML = str;
-  return textarea.value;
-}
 
 function ensureUserAdminStyles() {
   if (document.getElementById('user-admin-switch-styles')) return;
@@ -1752,7 +1701,7 @@ function switchEventsTab(tabName) {
 }
 
 // Load ongoing events (events that are currently active)
-async function loadOngoingEvents() {
+async function loadOngoingEvents(preloadedEvents = null) {
     try {
         const container = document.getElementById('ongoing-events');
         if (!container) {
@@ -1763,11 +1712,13 @@ async function loadOngoingEvents() {
         
         container.innerHTML = '<p style="text-align: center; color: #666; padding: 40px;">Loading ongoing events...</p>';
         
-        const response = await apiCall('/api/events');
+        const eventList = Array.isArray(preloadedEvents)
+            ? preloadedEvents
+            : (await apiCall('/api/events')).data;
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         
-        const ongoingEvents = response.data.filter(event => {
+        const ongoingEvents = eventList.filter(event => {
             const startDate = new Date(event.startDate);
             const endDate = new Date(event.endDate);
             startDate.setHours(0, 0, 0, 0);
@@ -1798,7 +1749,7 @@ async function loadOngoingEvents() {
 }
 
 // Load upcoming events (events that start in the future)
-async function loadUpcomingEvents() {
+async function loadUpcomingEvents(preloadedEvents = null) {
     try {
         const container = document.getElementById('upcoming-events');
         if (!container) {
@@ -1809,11 +1760,13 @@ async function loadUpcomingEvents() {
         
         container.innerHTML = '<p style="text-align: center; color: #666; padding: 40px;">Loading upcoming events...</p>';
         
-        const response = await apiCall('/api/events');
+        const eventList = Array.isArray(preloadedEvents)
+            ? preloadedEvents
+            : (await apiCall('/api/events')).data;
         const today = new Date();
         today.setHours(23, 59, 59, 999);
         
-        const upcomingEvents = response.data
+        const upcomingEvents = eventList
             .filter(event => {
                 const startDate = new Date(event.startDate);
                 return startDate > today;
@@ -1894,8 +1847,8 @@ async function loadDashboard() {
     updateOverdueCounter(overdueCount);
 
     setTimeout(async () => {
-      await loadOngoingEvents();
-      await loadUpcomingEvents();
+      await loadOngoingEvents(response.data);
+      await loadUpcomingEvents(response.data);
     }, 300);
   } catch (error) {
     console.error("Error loading dashboard:", error);
@@ -1943,68 +1896,7 @@ function sortEventsStartDateFutureTop(list) {
   });
 }
 
-function renderAllEventsList(eventsToRender = null) {
-  const container = document.getElementById('all-events');
-  if (!container) return;
 
-  const eventSearch = document.getElementById("event-search");
-  const searchTerm = eventSearch ? eventSearch.value.toLowerCase().trim() : "";
-
-  let list = Array.isArray(eventsToRender) ? eventsToRender : events;
-
-  if (searchTerm) {
-    list = list.filter(event => {
-      const searchableText = `
-        ${event.id}
-        ${event.name || ''}
-        ${event.state || ''}
-        ${event.tag || ''}
-        ${event.startDate || ''}
-        ${event.endDate || ''}
-      `.toLowerCase();
-
-      return searchableText.includes(searchTerm);
-    });
-  }
-
-  const sorted = sortEventsStartDateFutureTop(list);
-
-  container.innerHTML = "";
-
-  if (!sorted || sorted.length === 0) {
-    container.innerHTML = '<p style="text-align: center; color: #666; padding: 40px;">No matching events found.</p>';
-    return;
-  }
-
-  sorted.forEach(event => {
-    container.appendChild(createEventCard(event));
-  });
-}
-
-async function loadAllEvents() {
-  try {
-    await loadStatsCards();
-
-    const response = await apiCall('/api/events');
-    events = response.data;
-
-    const overdueCount = countOverdueEvents(events);
-    updateOverdueCounter(overdueCount);
-
-    if (!events || events.length === 0) {
-      const container = document.getElementById('all-events');
-      if (container) {
-        container.innerHTML = '<p style="text-align: center; color: #666; padding: 40px;">No events found.</p>';
-      }
-      return;
-    }
-
-    renderAllEventsList(events);
-  } catch (error) {
-    document.getElementById('all-events').innerHTML =
-      '<p style="color: red; text-align: center;">Error loading events</p>';
-  }
-}
 
 function createEventCard(event) {
     const card = document.createElement('div');
@@ -2063,30 +1955,6 @@ function createEventCard(event) {
 }
 
 // Update all event states manually
-async function updateAllEventStates() {
-    try {
-        const response = await apiCall('/api/events/update-states', 'POST');
-        
-        if (response.updatedEvents && response.updatedEvents.length > 0) {
-            showNotification('success', `Updated ${response.updatedEvents.length} event(s) to current state`);
-            
-            // Log the changes
-            response.updatedEvents.forEach(event => {
-                console.log(`Event ${event.eventId} (${event.name}): ${event.oldState} → ${event.newState}`);
-            });
-            
-            // Refresh the dashboard
-            if (document.getElementById('dashboard-section').classList.contains('active')) {
-                loadDashboard();
-            }
-        } else {
-            showNotification('info', 'All events are already in the correct state');
-        }
-        
-    } catch (error) {
-        showNotification('error', `Failed to update event states: ${error.message}`);
-    }
-}
 
 // Force event state
 async function forceEventState(eventId, newState) {
@@ -2159,94 +2027,6 @@ async function removeForcedState(eventId) {
 }
 
 // Show force state modal
-function showForceStateModal(eventId, currentState) {
-    if (!isAdminUser()) {
-        showNotification('error', 'Admin privileges required');
-        return;
-    }
-
-    // Create modal HTML if it doesn't exist
-    let modal = document.getElementById('forceStateModal');
-    if (!modal) {
-        const modalHTML = `
-            <div id="forceStateModal" class="modal">
-                <div class="modal-content" style="max-width: 450px;">
-                    <div class="modal-header">
-                        <h3>Force Event State</h3>
-                    </div>
-                    <div class="modal-body">
-                        <div style="margin-bottom: 20px;">
-                            <p><strong>Event ID:</strong> <span id="forceStateEventId"></span></p>
-                            <p><strong>Current State:</strong> <span id="forceStateCurrentState"></span></p>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="forceStateSelect">Select New State:</label>
-                            <select id="forceStateSelect" class="form-input">
-                                <option value="">Choose a state...</option>
-                                <option value="Added">Added</option>
-                                <option value="Planning">Planning</option>
-                                <option value="Preparing">Preparing</option>
-                                <option value="Ready">Ready</option>
-                                <option value="Ongoing">Ongoing</option>
-                                <option value="Last Day">Last Day</option>
-                                <option value="Returning">Returning</option>
-                                <option value="Closed">Closed</option>
-                                <option value="Overdue">Overdue</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" id="forceStateCancelBtn">Cancel</button>
-                        <button type="button" class="btn btn-primary" id="forceStateConfirmBtn">Force State</button>
-                    </div>
-                </div>
-            </div>
-        `;
-        
-        // Add modal to DOM
-        document.body.insertAdjacentHTML('beforeend', modalHTML);
-        modal = document.getElementById('forceStateModal');
-        
-        // Add click event listener to modal backdrop
-        modal.addEventListener('click', function(event) {
-            if (event.target === modal) {
-                modal.style.display = 'none';
-            }
-        });
-        
-        // Add click event listeners to buttons
-        document.getElementById('forceStateCancelBtn').addEventListener('click', function() {
-            modal.style.display = 'none';
-        });
-        
-        document.getElementById('forceStateConfirmBtn').addEventListener('click', function() {
-            confirmForceState();
-        });
-    }
-    
-    // Now populate the modal
-    const eventIdSpan = document.getElementById('forceStateEventId');
-    const currentStateSpan = document.getElementById('forceStateCurrentState');
-    const stateSelect = document.getElementById('forceStateSelect');
-    
-    if (eventIdSpan && currentStateSpan && stateSelect) {
-        eventIdSpan.textContent = eventId;
-        currentStateSpan.textContent = currentState;
-        
-        // Reset select to default
-        stateSelect.value = '';
-        
-        // Store event ID for use in confirmation
-        stateSelect.setAttribute('data-event-id', eventId);
-        
-        // Show modal
-        modal.style.display = 'block';
-    } else {
-        console.error('Modal elements not found after creation');
-        showNotification('error', 'Failed to open force state modal');
-    }
-}
 
 // Show force state modal - Updated to show current force status
 function showForceStateModal(eventId, currentState) {
@@ -2387,19 +2167,8 @@ function handleRemoveForcedState() {
 }
 
 // Handle modal backdrop clicks
-function handleModalBackdropClick(event, modalId) {
-    if (event.target.id === modalId) {
-        closeModal(modalId);
-    }
-}
 
 // Close force state modal specifically
-function closeForceStateModal() {
-    const modal = document.getElementById('forceStateModal');
-    if (modal) {
-        modal.style.display = 'none';
-    }
-}
 
 // Confirm force state change
 function confirmForceState() {
@@ -2511,54 +2280,6 @@ function setupInventoryFilters() {
   }
 }
 
-function displayFilteredInventory() {
-  const searchTerm =
-    document.getElementById("asset-search")?.value.toLowerCase() || "";
-  const deptFilter = document.getElementById("department-filter")?.value || "";
-  const statusFilter = document.getElementById("status-filter")?.value || "";
-  const sortBy = document.getElementById("sort-select")?.value || "id";
-  const sortDesc = document.getElementById("sort-descending")?.checked || false;
-
-  // Filter assets
-  let filteredAssets = assets.filter((asset) => {
-    // Search filter
-    const deptMeta = getDepartmentMeta(asset.department);
-    const searchableText = `${asset.id} ${asset.brand} ${asset.model} ${
-      asset.description || ""
-    } ${asset.department || ""} ${deptMeta.name || ""}`.toLowerCase();
-    const matchesSearch = !searchTerm || searchableText.includes(searchTerm);
-
-    // Department filter
-    const matchesDept = !deptFilter || asset.department === deptFilter;
-
-    // Status filter
-    const matchesStatus = !statusFilter || asset.status === statusFilter;
-
-    return matchesSearch && matchesDept && matchesStatus;
-  });
-
-  // Sort assets
-  filteredAssets.sort((a, b) => {
-    let aVal = a[sortBy] || "";
-    let bVal = b[sortBy] || "";
-
-    // Convert to strings for comparison
-    aVal = aVal.toString().toLowerCase();
-    bVal = bVal.toString().toLowerCase();
-
-    let comparison = aVal.localeCompare(bVal);
-    return sortDesc ? -comparison : comparison;
-  });
-
-  // Update count
-  const countElement = document.getElementById("asset-count");
-  if (countElement) {
-    countElement.textContent = `${filteredAssets.length} of ${assets.length} assets`;
-  }
-
-  // Display filtered assets
-  displayInventoryTable(filteredAssets);
-}
 
 function clearFilters() {
   document.getElementById("asset-search").value = "";
@@ -3840,13 +3561,6 @@ function ensureContainerCrudModal() {
   document.body.appendChild(modal);
 }
 
-function parseAssetIdsFromTextarea(text) {
-  return (text || '')
-    .replace(/\r/g, '')
-    .split(/\n|,/)
-    .map(s => s.trim())
-    .filter(Boolean);
-}
 
 // ---------------- Container Asset Selector (same UX as Maintenance selector) ----------------
 // ---------------- Container Asset Selector (same UX as Maintenance selector) ----------------
@@ -3972,42 +3686,6 @@ function bindContainerAssetSearchHandlers() {
   return el;
 }
 
-function updateSelectedContainerAssetsDisplay() {
-  const countElement = document.getElementById('selectedContainerAssetsCount');
-  const listElement = document.getElementById('selectedContainerAssetsList');
-  if (!countElement || !listElement) return;
-
-  countElement.textContent = selectedContainerAssets.size;
-
-  if (selectedContainerAssets.size === 0) {
-    listElement.innerHTML = '<span style="color:#666;font-style:italic;">No assets selected</span>';
-    return;
-  }
-
-  let html = '<div style="display:flex;flex-wrap:wrap;gap:8px;">';
-  selectedContainerAssets.forEach(assetId => {
-    const asset = Array.isArray(assets) ? assets.find(a => a.id === assetId) : null;
-    if (asset) {
-      html += `
-        <div style="background:#e7f3ff;border:1px solid #b3d9ff;border-radius:6px;padding:6px 10px;display:flex;align-items:center;gap:8px;font-size:13px;">
-          <span style="font-weight:500;">${escapeHtml(assetId)}</span>
-          <span style="color:#666;">- ${escapeHtml(asset.brand)} ${escapeHtml(asset.model)}</span>
-          <button onclick="removeAssetFromContainer('${escapeHtmlAttr(assetId)}')" style="background:none;border:none;color:#999;cursor:pointer;padding:0;margin-left:4px;font-size:14px;" title="Remove">×</button>
-        </div>
-      `;
-    } else {
-      html += `
-        <div style="background:#fff3cd;border:1px solid #ffeaa7;border-radius:6px;padding:6px 10px;display:flex;align-items:center;gap:8px;font-size:13px;">
-          <span style="font-weight:500;">${escapeHtml(assetId)}</span>
-          <span style="color:#666;">- Asset not found</span>
-          <button onclick="removeAssetFromContainer('${escapeHtmlAttr(assetId)}')" style="background:none;border:none;color:#999;cursor:pointer;padding:0;margin-left:4px;font-size:14px;" title="Remove">×</button>
-        </div>
-      `;
-    }
-  });
-  html += '</div>';
-  listElement.innerHTML = html;
-}
 
 function selectAssetForContainer(assetId) {
   if (!assetId) return;
@@ -4363,39 +4041,6 @@ async function loadLogs() {
   }
 }
 
-async function loadPrepareEvents() {
-  try {
-    const response = await apiCall("/api/events");
-    
-    // Update overdue counter
-    const overdueCount = countOverdueEvents(response.data);
-    updateOverdueCounter(overdueCount);
-    
-    const preparableEvents = response.data.filter(
-      (event) =>
-        event.state !== "Closed" && // Allow all events except closed ones
-        event.state !== "Overdue" && // NEW: Exclude overdue events
-        event.assetCount >= 0 // Include events with 0 assets too
-    );
-
-    const container = document.getElementById("prepare-events");
-    container.innerHTML = "";
-
-    if (preparableEvents.length === 0) {
-      container.innerHTML =
-        '<p style="text-align: center; color: #666; padding: 40px;">No events available for preparation.</p>';
-      return;
-    }
-
-    sortEventsStartDateFutureTop(preparableEvents).forEach((event) => {
-      const card = createPrepareEventCard(event);
-      container.appendChild(card);
-    });
-  } catch (error) {
-    document.getElementById("prepare-events").innerHTML =
-      '<p style="color: red; text-align: center;">Error loading events</p>';
-  }
-}
 
 function createPrepareEventCard(event) {
   const card = document.createElement("div");
@@ -4814,35 +4459,6 @@ async function openPrepareEventModal(eventId) {
     setupAssetClickHandler();
 }
 // All Events Tab System
-function switchAllEventsTab(tabName) {
-  // Remove active class from all tabs
-  document.querySelectorAll('.all-events-tab').forEach(tab => {
-    tab.classList.remove('active');
-  });
-  
-  // Hide all tab content
-  document.querySelectorAll('.all-events-content').forEach(content => {
-    content.classList.remove('active');
-    content.style.display = 'none';
-  });
-  
-  // Add active class to clicked tab
-  document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
-  
-  // Show corresponding content
-  const contentDiv = document.getElementById(`all-events-${tabName}-view`);
-  contentDiv.classList.add('active');
-  contentDiv.style.display = 'block';
-  
-  loadStatsCards();
-
-  // Load appropriate data
-  if (tabName === "list") {
-    loadAllEvents();
-  } else if (tabName === "calendar") {
-    loadCalendarView();
-  }
-}
 
 // Calendar functionality
 let currentCalendarDate = new Date();
@@ -5348,100 +4964,6 @@ function getCustomAssetsFromEvent(event) {
     return list;
 }
 
-function generateCustomAssetsSection(event) {
-    const customAssets = getCustomAssetsFromEvent(event);
-
-    if (customAssets.length === 0) {
-        return '<div style="text-align: center; color: #666; padding: 20px;">No custom assets assigned to this event.</div>';
-    }
-
-    const byDept = {};
-    customAssets.forEach(asset => {
-        const dept = normalizeDepartmentCode(asset.department || asset.parsedCustom.department || 'UN');
-        if (!byDept[dept]) byDept[dept] = [];
-        byDept[dept].push(asset);
-    });
-
-    let content = '';
-
-    Object.keys(byDept).sort().forEach(dept => {
-        const deptMeta = getDepartmentMeta(dept);
-        const assetsInDept = byDept[dept];
-        content += `
-            <div style="border: 1px solid #e9ecef; border-radius: 8px; margin-bottom: 10px; overflow:hidden;">
-                <div style="background: #f8f9fa; padding: 10px; font-weight: bold; border-bottom:1px solid #e9ecef; display:flex; align-items:center; gap:8px;">
-                    ${departmentBadgeHtml(dept, true)}
-                    <span>Custom Assets (${assetsInDept.length})</span>
-                </div>
-                <div style="padding: 10px;">
-        `;
-
-        assetsInDept.forEach(asset => {
-            const custom = asset.parsedCustom;
-            const isReturned = asset.status === 'returned' || (event.returnedItems || []).includes(asset.id);
-            const isPrepared = asset.status === 'prepared' || (event.actuallyPrepared || []).includes(asset.id);
-            const isCollected = asset.status === 'collected' || asset.isCollected || (event.customCollected || []).includes(asset.id);
-            const safeAssetId = encodeURIComponent(asset.id);
-
-            let statusIcon = '📋';
-            let statusText = 'Pending';
-            let statusColor = '#ffc107';
-            if (isReturned) {
-                statusIcon = '↩️';
-                statusText = 'Returned';
-                statusColor = '#dc3545';
-            } else if (isPrepared) {
-                statusIcon = '✅';
-                statusText = 'Prepared';
-                statusColor = '#28a745';
-            } else if (custom.type === 'LOAN' && isCollected) {
-                statusIcon = '📥';
-                statusText = 'Collected';
-                statusColor = '#17a2b8';
-            }
-
-            let actionButtons = '';
-            if (isReturned) {
-                actionButtons = '<span style="color:#dc3545;font-size:11px;">Returned</span>';
-            } else if (custom.type === 'LOAN') {
-                if (!isCollected) {
-                    actionButtons = `
-                        <button class="btn btn-primary btn-sm" onclick="collectCustomAsset(${event.id}, '${safeAssetId}')">Collect</button>
-                    `;
-                } else if (!isPrepared) {
-                    actionButtons = `
-                        <button class="btn btn-secondary btn-sm" onclick="uncollectCustomAsset(${event.id}, '${safeAssetId}')">Uncollect</button>
-                        <button class="btn btn-success btn-sm" onclick="prepareSpecificAsset(${event.id}, decodeURIComponent('${safeAssetId}'))">Prepare</button>
-                    `;
-                } else {
-                    actionButtons = `
-                        <button class="btn btn-warning btn-sm" onclick="unprepareSpecificAsset(${event.id}, decodeURIComponent('${safeAssetId}'))">Unprepare</button>
-                        <button class="btn btn-secondary btn-sm" onclick="uncollectCustomAsset(${event.id}, '${safeAssetId}')">Uncollect</button>
-                    `;
-                }
-            } else {
-                actionButtons = isPrepared
-                    ? `<button class="btn btn-warning btn-sm" onclick="unprepareSpecificAsset(${event.id}, decodeURIComponent('${safeAssetId}'))">Unprepare</button>`
-                    : `<button class="btn btn-success btn-sm" onclick="prepareSpecificAsset(${event.id}, decodeURIComponent('${safeAssetId}'))">Prepare</button>`;
-            }
-
-            content += `
-                <div style="display: flex; justify-content: space-between; align-items: center; gap:12px; padding: 10px; margin-bottom: 6px; border: 1px solid #e9ecef; border-radius: 6px; background:white;">
-                    <div style="min-width:0; flex:1;">
-                        <div style="font-weight:600;">${statusIcon} ${escapeHtml(customAssetDisplayName(custom))} ${customAssetTypeBadge(custom)}</div>
-                        <div style="color:${statusColor}; font-size: 11px; margin-top: 3px;">${statusText}</div>
-                        ${custom.type === 'LOAN' && custom.company ? `<div style="color:#666; font-size:12px; margin-top:3px;">Company: ${escapeHtml(custom.company)}</div>` : ''}
-                    </div>
-                    <div style="display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end;">${actionButtons}</div>
-                </div>
-            `;
-        });
-
-        content += '</div></div>';
-    });
-
-    return content;
-}
 
 async function collectCustomAsset(eventId, encodedAssetId) {
     const assetId = decodeURIComponent(encodedAssetId);
@@ -5563,46 +5085,6 @@ function togglePrepareSection(sectionId) {
     }
 }
 
-function searchAdditionalAssets(eventId) {
-    const searchInput = document.getElementById('additionalAssetSearch');
-    const resultsContainer = document.getElementById('additional-assets-results');
-    const searchTerm = searchInput.value.toLowerCase().trim();
-    
-    if (!searchTerm || searchTerm.length < 2) {
-        resultsContainer.innerHTML = '<p style="text-align: center; color: #666; padding: 20px;">Type at least 2 characters to search...</p>';
-        return;
-    }
-    
-    const availableAssets = window.currentAdditionalAssets || [];
-    const filteredAssets = availableAssets.filter(asset => 
-        asset.id.toLowerCase().includes(searchTerm) ||
-        asset.brand.toLowerCase().includes(searchTerm) ||
-        asset.model.toLowerCase().includes(searchTerm) ||
-        (asset.description && asset.description.toLowerCase().includes(searchTerm))
-    );
-    
-    if (filteredAssets.length === 0) {
-        resultsContainer.innerHTML = '<p style="text-align: center; color: #666; padding: 20px;">No matching assets found.</p>';
-        return;
-    }
-    
-    let content = '';
-    filteredAssets.slice(0, 20).forEach(asset => { // Limit to 20 results
-        content += `
-            <div style="padding: 10px 12px; border-bottom: 1px solid #f1f1f1; display: flex; justify-content: space-between; align-items: center;">
-                <div>
-                    <div style="font-weight: 500;">${asset.id}</div>
-                    <div style="color: #666; font-size: 12px;">${asset.brand} ${asset.model}</div>
-                    <div style="color: #999; font-size: 11px;">${escapeJs(asset.description || '')}</div>
-                    <span class="asset-badge dept-${asset.department.toLowerCase()}">${asset.department}</span>
-                </div>
-                <button class="btn btn-warning" style="padding: 4px 8px; font-size: 11px; background: #ff8c00;" onclick="assignAdditionalAsset(${eventId}, '${asset.id}')">Assign as Extra</button>
-            </div>
-        `;
-    });
-    
-    resultsContainer.innerHTML = content;
-}
 
 /**
  * ASSIGN additional asset from search results
@@ -5676,24 +5158,6 @@ async function prepareAssignedAsset(eventId) {
     }
 }
 
-async function prepareSpecificAsset(eventId, assetId) {
-    console.log(`=== SINGLE prepareSpecificAsset CALLED ===`);
-    console.log('eventId:', eventId, 'assetId:', assetId);
-    
-    try {
-        await apiCall(`/api/events/${eventId}/prepare`, 'POST', { assetId });
-        showNotification('success', `${customAssetLabelFromId(assetId)} marked as prepared`);
-        updateAllButtonsForAsset(assetId, true);
-        if (isCustomAssetId(assetId)) {
-            setTimeout(() => openPrepareEventModal(eventId), 250);
-        }
-        
-    } catch (error) {
-        console.error('Error in prepareSpecificAsset:', error);
-        showNotification('error', `Failed to prepare asset: ${error.message}`);
-        updateAllButtonsForAsset(assetId, false);
-    }
-}
 
 function updateAllButtonsForAsset(assetId, isPrepared) {
     const encodedAssetId = encodeURIComponent(assetId);
@@ -5738,843 +5202,22 @@ function updateAllButtonsForAsset(assetId, isPrepared) {
     });
 }
 
-async function unprepareSpecificAsset(eventId, assetId) {
-    console.log(`=== SINGLE unprepareSpecificAsset CALLED ===`);
-    console.log('eventId:', eventId, 'assetId:', assetId);
-    
-    try {
-        await apiCall(`/api/events/${eventId}/unprepare`, 'POST', { assetId });
-        showNotification('success', `${customAssetLabelFromId(assetId)} unprepared`);
-        updateAllButtonsForAsset(assetId, false);
-        if (isCustomAssetId(assetId)) {
-            setTimeout(() => openPrepareEventModal(eventId), 250);
-        }
-        
-    } catch (error) {
-        console.error('Error in unprepareSpecificAsset:', error);
-        showNotification('error', `Failed to unprepare asset: ${error.message}`);
-        updateAllButtonsForAsset(assetId, true);
-    }
-}
 
-async function updateAssetStatusInModal(eventId, assetId, action) {
-    try {
-        if (action === 'unprepared') {
-            // Asset was completely removed, so remove it from both sections
-            removeAssetFromModal(assetId);
-            
-            // Get fresh event data AFTER the removal to update counters
-            await new Promise(resolve => setTimeout(resolve, 100)); // Small delay to ensure backend is updated
-            const response = await apiCall(`/api/events/${eventId}`);
-            const event = response.data;
-            
-            // Update the event summary counts
-            updateEventSummaryInModal(event);
-            
-            // Update model progress bars
-            updateModelProgressBars(event);
-            
-            // Update department progress bars
-            updateDepartmentProgressBars(event);
-            
-        } else {
-            // Get fresh event data for other actions
-            const response = await apiCall(`/api/events/${eventId}`);
-            const event = response.data;
-            
-            if (action === 'prepared') {
-                // Update the asset's status in the "All Assets" section
-                await updateAssetInAllAssetsSection(eventId, assetId, true);
-                
-                // Move asset from available to assigned in model sections AND check for extra status
-                await moveAssetInModelSectionWithExtraCheck(eventId, assetId, event);
-            } else if (action === 'assigned') {
-                // Asset was assigned and prepared, move from available to assigned
-                moveAssetFromAvailableToAssigned(eventId, assetId);
-                
-                // Add to "All Assets Assigned" section
-                addAssetToAllAssetsSection(eventId, assetId, event);
-            }
-            
-            // Update the event summary counts
-            updateEventSummaryInModal(event);
-            
-            // Update model progress bars
-            updateModelProgressBars(event);
-            
-            // Update department progress bars
-            updateDepartmentProgressBars(event);
-        }
-        
-    } catch (error) {
-        console.error('Error updating asset status:', error);
-        showNotification('error', 'Failed to update interface. Please try again.');
-    }
-}
 
-function updateButtonState(eventId, assetId, isPrepared) {
-    const encodedAssetId = encodeURIComponent(assetId);
-    const buttons = document.querySelectorAll(`[data-asset-id="${encodedAssetId}"]`);
-    
-    buttons.forEach(button => {
-        // Re-enable the button
-        button.disabled = false;
-        
-        // Update button appearance and action
-        if (isPrepared) {
-            button.textContent = 'Unprepare';
-            button.className = 'btn btn-warning asset-action-btn';
-            button.dataset.action = 'unprepare';
-            button.style.cssText = 'padding: 4px 8px; font-size: 11px; margin-right: 5px;';
-        } else {
-            button.textContent = 'Prepare';
-            button.className = 'btn btn-success asset-action-btn';
-            button.dataset.action = 'prepare';
-            button.style.cssText = 'padding: 4px 8px; font-size: 11px; margin-right: 5px;';
-        }
-        
-        // Update status icons and text in the same row
-        const assetRow = button.closest('div[style*="display: flex"]');
-        if (assetRow) {
-            // Update status icon
-            const statusSpan = assetRow.querySelector('span');
-            if (statusSpan && statusSpan.textContent.includes(assetId)) {
-                const icon = isPrepared ? '✅' : '📋';
-                statusSpan.innerHTML = statusSpan.innerHTML.replace(/^[✅📋]\s/, `${icon} `);
-            }
-            
-            // Update status text
-            const statusText = assetRow.querySelector('div[style*="margin-top: 2px"]');
-            if (statusText) {
-                statusText.textContent = isPrepared ? 'Prepared' : 'Pending';
-                statusText.style.color = isPrepared ? '#28a745' : '#ffc107';
-            }
-        }
-    });
-}
 
-function moveAssetFromAvailableToAssigned(eventId, assetId) {
-    // Find the asset in the available section
-    const availableButtons = document.querySelectorAll(`[onclick*="assignSpecificAsset"][onclick*="'${assetId}'"]`);
-    
-    availableButtons.forEach(button => {
-        const assetDiv = button.closest('div[style*="display: flex"]');
-        if (assetDiv) {
-            // Get asset details from the existing div
-            const assetIdElement = assetDiv.querySelector('[style*="font-weight: 500"]');
-            const serialElement = assetDiv.querySelector('[style*="color: #666"]');
-            
-            if (assetIdElement && serialElement) {
-                const assetIdText = assetIdElement.textContent;
-                const serialText = serialElement.textContent;
-                
-                // Find the model section this asset belongs to
-                const modelSection = assetDiv.closest('.model-prep-section');
-                if (modelSection) {
-                    // Remove from available section
-                    assetDiv.remove();
-                    
-                    // Find or create the assigned section
-                    let assignedSection = modelSection.querySelector('[style*="background: #d4edda"][style*="border-radius: 6px"]');
-                    if (!assignedSection) {
-                        // Create assigned section if it doesn't exist
-                        const assignedContainer = modelSection.querySelector('div[id*="model-"] > div:last-child');
-                        if (assignedContainer) {
-                            assignedContainer.innerHTML = `
-                                <div>
-                                    <h6 style="color: #495057; margin-bottom: 10px; font-size: 13px;">Assigned Assets (1)</h6>
-                                    <div style="background: #d4edda; border-radius: 6px; padding: 12px;"></div>
-                                </div>
-                            `;
-                            assignedSection = assignedContainer.querySelector('[style*="background: #d4edda"]');
-                        }
-                    }
-                    
-                    if (assignedSection) {
-                        // Create new assigned asset element
-                        const newAssetHTML = `
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; padding: 10px 12px; background: #d4edda; border-radius: 4px; border: 1px solid #c3e6cb;">
-                                <div>
-                                    <span style="color: #155724; font-weight: 500; font-size: 15px;">
-                                        ✅ ${assetIdText}
-                                    </span>
-                                    <div style="color: #155724; font-size: 13px; margin-top: 3px;">${serialText} • Required</div>
-                                </div>
-                                <button class="btn btn-warning" style="padding: 6px 12px; font-size: 12px;" onclick="unprepareSpecificAsset(${eventId}, '${escapeJs(assetId)}')">Unprepare</button>
-                            </div>
-                        `;
-                        
-                        assignedSection.insertAdjacentHTML('beforeend', newAssetHTML);
-                    }
-                    
-                    // Update counts
-                    updateModelSectionCounts(modelSection, 'add');
-                }
-            }
-        }
-    });
-}
 
-async function addAssetToAllAssetsSection(eventId, assetId, event) {
-    // Get fresh event data to find the asset details
-    try {
-        const response = await apiCall(`/api/events/${eventId}`);
-        const freshEvent = response.data;
-        
-        // Find the asset details from the fresh event data
-        let assetDetails = null;
-        let department = null;
-        let isExtra = false;
-        
-        // First check if it's in the fresh event's extraAssets array
-        isExtra = freshEvent.extraAssets && freshEvent.extraAssets.includes(assetId);
-        
-        if (freshEvent.assetsByDepartment) {
-            Object.keys(freshEvent.assetsByDepartment).forEach(dept => {
-                const deptAssets = freshEvent.assetsByDepartment[dept];
-                const found = deptAssets.find(asset => asset.id === assetId);
-                if (found) {
-                    assetDetails = found;
-                    department = dept;
-                    // Use the extraAssets array check, not the asset.isExtra property
-                }
-            });
-        }
-        
-        // If not found in assetsByDepartment, try to get from available assets
-        if (!assetDetails) {
-            const availableResponse = await apiCall('/api/assets/available');
-            const availableAssets = availableResponse.data;
-            const availableAsset = availableAssets.find(a => a.id === assetId);
-            
-            if (availableAsset) {
-                assetDetails = availableAsset;
-                department = availableAsset.department;
-                // isExtra is already set from extraAssets array above
-            }
-        }
-        
-        // Fallback: if still no department found, default to 'Unknown'
-        if (!department) {
-            department = 'Unknown';
-        }
-        
-        if (assetDetails) {
-            // Find the appropriate department section in "All Assets Assigned"
-            const allAssetsContainer = document.getElementById('all-assigned-assets');
-            if (!allAssetsContainer) return;
-            
-            // Look for existing department header and its content section
-            let targetDeptSection = null;
-            const deptHeaderDivs = allAssetsContainer.querySelectorAll('[onclick*="togglePrepareSection"]');
 
-            deptHeaderDivs.forEach(headerDiv => {
-                const deptText = headerDiv.querySelector('div[style*="font-weight: 500"]');
-                if (deptText && deptText.textContent.includes(`${department} Department`)) {
-                    // Get the ID from the onclick attribute to find the content section
-                    const onclickAttr = headerDiv.getAttribute('onclick');
-                    const match = onclickAttr.match(/togglePrepareSection\('([^']+)'\)/);
-                    if (match) {
-                        const sectionId = match[1];
-                        targetDeptSection = document.getElementById(sectionId);
-                    }
-                }
-            });
-            
-            // If no department section exists, create it
-            if (!targetDeptSection) {
-                const deptId = `assigned-dept-${department}`;
-                const newDeptHTML = `
-                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: #f1f3f4; border-bottom: 1px solid #e9ecef; cursor: pointer;" onclick="togglePrepareSection('${deptId}')">
-                        <div style="font-weight: 500; font-size: 13px;">${department} Department (1 assets)</div>
-                        <span class="toggle-icon" style="font-size: 14px; font-weight: bold; color: #666;">▼</span>
-                    </div>
-                    <div id="${deptId}" style="display: block;">
-                    </div>
-                `;
-                
-                allAssetsContainer.insertAdjacentHTML('beforeend', newDeptHTML);
-                targetDeptSection = document.getElementById(deptId);
-            } else {
-                // Update the count in existing header
-                const deptHeader = targetDeptSection.previousElementSibling;
-                if (deptHeader) {
-                    const headerDiv = deptHeader.querySelector('div[style*="font-weight: 500"]');
-                    if (headerDiv) {
-                        const match = headerDiv.textContent.match(/(\d+) assets/);
-                        if (match) {
-                            const currentCount = parseInt(match[1]);
-                            headerDiv.textContent = `${department} Department (${currentCount + 1} assets)`;
-                        }
-                    }
-                }
-            }
-            
-            if (targetDeptSection) {
-                // Use the extraAssets array check for the badge
-                const extraBadge = isExtra ? 
-                    '<span style="background: #fff3cd; color: #856404; padding: 2px 6px; border-radius: 3px; font-size: 10px; margin-left: 10px;">EXTRA</span>' : '';
-                
-                const newAssetHTML = `
-                    <div style="padding: 8px 12px; border-bottom: 1px solid #f1f1f1; display: flex; justify-content: space-between; align-items: center;">
-                        <div>
-                            <span style="font-weight: 500;">✅ ${assetId}</span>
-                            <span style="color: #666; font-size: 12px; margin-left: 10px;">${escapeJs(assetDetails.name || assetDetails.description || '')}</span>
-                            ${extraBadge}
-                            <div style="color: #28a745; font-size: 11px; margin-top: 2px;">Prepared</div>
-                        </div>
-                        <div>
-                            <button class="btn btn-warning" style="padding: 4px 8px; font-size: 11px;" onclick="unprepareSpecificAsset(${eventId}, '${escapeJs(assetId)}')">Unprepare</button>
-                        </div>
-                    </div>
-                `;
-                
-                // Find the correct position to insert the asset (sorted by asset ID)
-                const existingAssets = targetDeptSection.querySelectorAll('div[style*="padding: 8px 12px"]');
-                let insertPosition = null;
-                
-                for (let i = 0; i < existingAssets.length; i++) {
-                    const existingAssetSpan = existingAssets[i].querySelector('span[style*="font-weight: 500"]');
-                    if (existingAssetSpan) {
-                        const existingAssetId = existingAssetSpan.textContent.replace(/^[✅⏳]\s/, '').trim();
-                        
-                        // Compare asset IDs to find correct insertion point
-                        if (assetId.localeCompare(existingAssetId, undefined, { numeric: true, sensitivity: 'base' }) < 0) {
-                            insertPosition = existingAssets[i];
-                            break;
-                        }
-                    }
-                }
-                
-                // Insert in the correct position
-                if (insertPosition) {
-                    insertPosition.insertAdjacentHTML('beforebegin', newAssetHTML);
-                } else {
-                    // Insert at the end if no position found (asset ID is largest)
-                    targetDeptSection.insertAdjacentHTML('beforeend', newAssetHTML);
-                }
-            }
-        }
-    } catch (error) {
-        console.error('Error adding asset to all assets section:', error);
-    }
-}
 
-async function updateAssetInAllAssetsSection(eventId, assetId, isPrepared) {
-    // Get fresh event data to check if asset is extra
-    try {
-        const response = await apiCall(`/api/events/${eventId}`);
-        const freshEvent = response.data;
-        
-        // Check if asset is in extraAssets array
-        const isExtra = freshEvent.extraAssets && freshEvent.extraAssets.includes(assetId);
-        
-        // Find the asset in the "All Assets" section and update its status
-        const allAssetsElements = document.querySelectorAll(`[onclick*="'${assetId}'"]`);
-        allAssetsElements.forEach(element => {
-            const assetDiv = element.closest('div[style*="padding: 8px 12px"]');
-            if (assetDiv && assetDiv.textContent.includes(assetId)) {
-                // Update the status icon and text
-                const statusSpan = assetDiv.querySelector('span[style*="font-weight: 500"]');
-                if (statusSpan) {
-                    const icon = isPrepared ? '✅' : '⏳';
-                    statusSpan.innerHTML = statusSpan.innerHTML.replace(/^[✅⏳]\s/, `${icon} `);
-                }
-                
-                // Update the status text
-                const statusText = assetDiv.querySelector('div[style*="margin-top: 2px"]');
-                if (statusText) {
-                    statusText.textContent = isPrepared ? 'Prepared' : 'Pending';
-                    statusText.style.color = isPrepared ? '#28a745' : '#ffc107';
-                }
-                
-                // Update or add the EXTRA badge
-                const assetContainer = assetDiv.querySelector('div:first-child');
-                if (assetContainer) {
-                    // Remove existing EXTRA badge if it exists
-                    const existingBadge = assetContainer.querySelector('span[style*="background: #fff3cd"]');
-                    if (existingBadge) {
-                        existingBadge.remove();
-                    }
-                    
-                    // Add EXTRA badge if asset is extra
-                    if (isExtra) {
-                        const assetNameSpan = assetContainer.querySelector('span[style*="color: #666"]');
-                        if (assetNameSpan) {
-                            const extraBadge = document.createElement('span');
-                            extraBadge.style.cssText = 'background: #fff3cd; color: #856404; padding: 2px 6px; border-radius: 3px; font-size: 10px; margin-left: 10px;';
-                            extraBadge.textContent = 'EXTRA';
-                            assetNameSpan.insertAdjacentElement('afterend', extraBadge);
-                        }
-                    }
-                }
-                
-                // Update the button
-                const button = assetDiv.querySelector('button');
-                if (button) {
-                    if (isPrepared) {
-                        button.textContent = 'Unprepare';
-                        button.className = 'btn btn-warning';
-                        button.style.cssText = 'padding: 4px 8px; font-size: 11px;';
-                        button.onclick = () => unprepareSpecificAsset(eventId, assetId);
-                    } else {
-                        button.textContent = 'Prepare';
-                        button.className = 'btn btn-success';
-                        button.style.cssText = 'padding: 4px 8px; font-size: 11px;';
-                        button.onclick = () => prepareSpecificAsset(eventId, assetId);
-                    }
-                }
-            }
-        });
-    } catch (error) {
-        console.error('Error updating asset status:', error);
-        // Fallback to original logic if API call fails
-        const allAssetsElements = document.querySelectorAll(`[onclick*="'${assetId}'"]`);
-        allAssetsElements.forEach(element => {
-            const assetDiv = element.closest('div[style*="padding: 8px 12px"]');
-            if (assetDiv && assetDiv.textContent.includes(assetId)) {
-                // Update the status icon and text
-                const statusSpan = assetDiv.querySelector('span[style*="font-weight: 500"]');
-                if (statusSpan) {
-                    const icon = isPrepared ? '✅' : '⏳';
-                    statusSpan.innerHTML = statusSpan.innerHTML.replace(/^[✅⏳]\s/, `${icon} `);
-                }
-                
-                // Update the status text
-                const statusText = assetDiv.querySelector('div[style*="margin-top: 2px"]');
-                if (statusText) {
-                    statusText.textContent = isPrepared ? 'Prepared' : 'Pending';
-                    statusText.style.color = isPrepared ? '#28a745' : '#ffc107';
-                }
-                
-                // Update the button
-                const button = assetDiv.querySelector('button');
-                if (button) {
-                    if (isPrepared) {
-                        button.textContent = 'Unprepare';
-                        button.className = 'btn btn-warning';
-                        button.style.cssText = 'padding: 4px 8px; font-size: 11px;';
-                        button.onclick = () => unprepareSpecificAsset(eventId, assetId);
-                    } else {
-                        button.textContent = 'Prepare';
-                        button.className = 'btn btn-success';
-                        button.style.cssText = 'padding: 4px 8px; font-size: 11px;';
-                        button.onclick = () => prepareSpecificAsset(eventId, assetId);
-                    }
-                }
-            }
-        });
-    }
-}
 
-function removeAssetFromModal(assetId) {
-    // Remove from "All Assets Assigned" section
-    const allAssetsSection = document.getElementById('all-assigned-assets');
-    if (allAssetsSection) {
-        const assetElements = allAssetsSection.querySelectorAll('div[style*="padding: 8px 12px"]');
-        assetElements.forEach(element => {
-            const assetSpan = element.querySelector('span[style*="font-weight: 500"]');
-            if (assetSpan && assetSpan.textContent.includes(assetId)) {
-                element.remove();
-            }
-        });
-    }
-    
-    // Remove from model sections (assigned section)
-    const modelSections = document.querySelectorAll('.model-prep-section');
-    modelSections.forEach(modelSection => {
-        const assignedContainer = modelSection.querySelector('[style*="background: #d4edda"]');
-        if (assignedContainer) {
-            const assignedAssets = assignedContainer.querySelectorAll('div[style*="display: flex"]');
-            assignedAssets.forEach(assetDiv => {
-                const assetSpan = assetDiv.querySelector('span[style*="font-weight: 500"]');
-                if (assetSpan && assetSpan.textContent.includes(assetId)) {
-                    // Get asset details before removing
-                    const assetIdText = assetId;
-                    const serialMatch = assetDiv.textContent.match(/SN: ([^•]+)/);
-                    const serialText = serialMatch ? serialMatch[1].trim() : 'N/A';
-                    
-                    // Remove from assigned section
-                    assetDiv.remove();
-                    
-                    // Add back to available section
-                    addAssetBackToAvailable(modelSection, assetIdText, serialText);
-                    
-                    // Update counts
-                    updateModelSectionCounts(modelSection, 'remove');
-                }
-            });
-        }
-    });
-}
 
-function updateAssetInAllAssetsSection(eventId, assetId, isPrepared) {
-    // Find the asset in the "All Assets" section and update its status
-    const allAssetsElements = document.querySelectorAll(`[onclick*="'${assetId}'"]`);
-    allAssetsElements.forEach(element => {
-        const assetDiv = element.closest('div[style*="padding: 8px 12px"]');
-        if (assetDiv && assetDiv.textContent.includes(assetId)) {
-            // Update the status icon and text
-            const statusSpan = assetDiv.querySelector('span[style*="font-weight: 500"]');
-            if (statusSpan) {
-                const icon = isPrepared ? '✅' : '⏳';
-                statusSpan.innerHTML = statusSpan.innerHTML.replace(/^[✅⏳]\s/, `${icon} `);
-            }
-            
-            // Update the status text
-            const statusText = assetDiv.querySelector('div[style*="margin-top: 2px"]');
-            if (statusText) {
-                statusText.textContent = isPrepared ? 'Prepared' : 'Pending';
-                statusText.style.color = isPrepared ? '#28a745' : '#ffc107';
-            }
-            
-            // Update the button
-            const button = assetDiv.querySelector('button');
-            if (button) {
-                if (isPrepared) {
-                    button.textContent = 'Unprepare';
-                    button.className = 'btn btn-warning';
-                    button.style.cssText = 'padding: 4px 8px; font-size: 11px;';
-                    button.onclick = () => unprepareSpecificAsset(eventId, assetId);
-                } else {
-                    button.textContent = 'Prepare';
-                    button.className = 'btn btn-success';
-                    button.style.cssText = 'padding: 4px 8px; font-size: 11px;';
-                    button.onclick = () => prepareSpecificAsset(eventId, assetId);
-                }
-            }
-        }
-    });
-}
 
-async function moveAssetInModelSection(eventId, assetId) {
-    try {
-        // Get fresh event data to check if asset is extra
-        const response = await apiCall(`/api/events/${eventId}`);
-        const freshEvent = response.data;
-        
-        // Find the asset in available section and move it to assigned section
-        const availableAssetElements = document.querySelectorAll(`[onclick*="prepareSpecificAsset(${eventId}, '${assetId}')"]`);
-        
-        availableAssetElements.forEach(button => {
-            const assetDiv = button.closest('div[style*="display: flex"]');
-            if (assetDiv) {
-                const modelSection = assetDiv.closest('.model-prep-section');
-                if (modelSection) {
-                    // Get asset details before removing from available
-                    const assetIdText = assetId;
-                    const serialMatch = assetDiv.textContent.match(/SN: ([^•]+)/);
-                    const serialText = serialMatch ? serialMatch[1].trim() : 'N/A';
-                    
-                    // Remove from available section
-                    assetDiv.remove();
-                    
-                    // Find the assigned section
-                    const assignedSection = modelSection.querySelector('[style*="background: #d4edda"]');
-                    if (assignedSection) {
-                        // Count how many assets are already assigned to determine if this one is extra
-                        const existingAssets = assignedSection.querySelectorAll('div[style*="display: flex"]');
-                        const currentAssignedCount = existingAssets.length;
-                        
-                        // Find the required quantity from the section title
-                        const titleElement = modelSection.querySelector('h5');
-                        const titleMatch = titleElement ? titleElement.textContent.match(/(\d+)x/) : null;
-                        const requiredQty = titleMatch ? parseInt(titleMatch[1]) : 1;
-                        
-                        // Determine if this asset is extra
-                        const isExtra = currentAssignedCount >= requiredQty;
-                        const bgColor = isExtra ? '#fff3cd' : '#d4edda';
-                        const textColor = isExtra ? '#856404' : '#155724';
-                        const statusIcon = isExtra ? '➕' : '✅';
-                        const statusText = isExtra ? 'Extra' : 'Required';
-                        const borderColor = isExtra ? '#ffeaa7' : '#c3e6cb';
-                        
-                        // Create new assigned asset element with proper styling
-                        const newAssetHTML = `
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; padding: 10px 12px; background: ${bgColor}; border-radius: 4px; border: 1px solid ${borderColor};">
-                                <div>
-                                    <span style="color: ${textColor}; font-weight: 500; font-size: 15px;">
-                                        ${statusIcon} ${assetIdText}
-                                    </span>
-                                    <div style="color: ${textColor}; font-size: 13px; margin-top: 3px;">SN: ${serialText} • ${statusText}</div>
-                                </div>
-                                <button class="btn btn-warning" style="padding: 6px 12px; font-size: 12px;" onclick="unprepareSpecificAsset(${eventId}, '${assetId}')">Unprepare</button>
-                            </div>
-                        `;
-                        
-                        assignedSection.insertAdjacentHTML('beforeend', newAssetHTML);
-                    }
-                    
-                    // Update counts
-                    updateModelSectionCounts(modelSection, 'add');
-                }
-            }
-        });
-    } catch (error) {
-        console.error('Error moving asset in model section:', error);
-    }
-}
 
-function updateEventSummaryInModal(event) {
-    // Update the summary numbers at the top
-    const summaryDivs = document.querySelectorAll('.prepare-event-interface div[style*="font-size: 20px"]');
-    if (summaryDivs.length >= 3) {
-        summaryDivs[0].textContent = event.totalAssets || 0; // Required
-        summaryDivs[1].textContent = event.totalPrepared || 0; // Prepared
-        summaryDivs[2].textContent = getEventExtraQuantity(event); // Extra
-    }
-}
 
-function updateModelProgressBars(event) {
-    // Update progress bars in model sections
-    if (event.modelGroups) {
-        Object.values(event.modelGroups).forEach(modelGroup => {
-            const assignedCount = getPreparedQuantity(modelGroup);
-            const requiredQty = modelGroup.requiredQuantity;
-            const progressPercent = Math.round((assignedCount / requiredQty) * 100);
-            
-            // Find the model section by looking for the model name
-            const modelName = `${modelGroup.brand} ${modelGroup.model}`;
-            const modelHeaders = document.querySelectorAll('h5, h6');
-            
-            modelHeaders.forEach(header => {
-                if (header.textContent.includes(modelName)) {
-                    const progressContainer = header.closest('div').parentElement;
-                    
-                    // Update the assigned count text
-                    const assignedText = progressContainer.querySelector('[style*="font-size: 14px"][style*="font-weight: 500"]');
-                    if (assignedText) {
-                        const color = assignedCount >= requiredQty ? '#28a745' : '#ffc107';
-                        assignedText.style.color = color;
-                        assignedText.textContent = `${assignedCount}/${requiredQty} assigned${assignedCount > requiredQty ? ` (+${assignedCount - requiredQty} extra)` : ''}`;
-                    }
-                    
-                    // Update the progress bar
-                    const progressBar = progressContainer.querySelector('[style*="background: #e9ecef"] div');
-                    if (progressBar) {
-                        const color = assignedCount >= requiredQty ? '#28a745' : '#ffc107';
-                        progressBar.style.background = color;
-                        progressBar.style.width = `${Math.min(progressPercent, 100)}%`;
-                    }
-                }
-            });
-        });
-    }
-}
 
-function addAssetBackToAvailable(modelSection, assetId, serial) {
-    // Find the available section container
-    let availableContainer = modelSection.querySelector('[style*="background: #e8f5e8"]');
-    
-    if (!availableContainer) {
-        // If no available section exists, create it
-        const modelContent = modelSection.querySelector('div[id*="model-"]');
-        if (modelContent) {
-            const availableSectionHTML = `
-                <div style="margin-bottom: 20px;">
-                    <h6 style="color: #495057; margin-bottom: 10px; font-size: 13px;">Available Assets (1)</h6>
-                    <div style="background: #e8f5e8; border-radius: 6px; padding: 10px; max-height: 200px; overflow-y: auto;"></div>
-                </div>
-            `;
-            modelContent.insertAdjacentHTML('afterbegin', availableSectionHTML);
-            availableContainer = modelContent.querySelector('[style*="background: #e8f5e8"]');
-        }
-    }
-    
-    if (availableContainer) {
-        // Extract eventId from the model section
-        let eventId = null;
-        const existingButton = modelSection.querySelector('[onclick*="assignSpecificAsset"]');
-        if (existingButton) {
-            const onclickAttr = existingButton.getAttribute('onclick');
-            const eventIdMatch = onclickAttr.match(/assignSpecificAsset\((\d+),/);
-            if (eventIdMatch) {
-                eventId = eventIdMatch[1];
-            }
-        }
-        
-        // If we can't find eventId from existing buttons, try to extract from unprepare buttons
-        if (!eventId) {
-            const unprepareButton = modelSection.querySelector('[onclick*="unprepareSpecificAsset"]');
-            if (unprepareButton) {
-                const onclickAttr = unprepareButton.getAttribute('onclick');
-                const eventIdMatch = onclickAttr.match(/unprepareSpecificAsset\((\d+),/);
-                if (eventIdMatch) {
-                    eventId = eventIdMatch[1];
-                }
-            }
-        }
-        
-        if (eventId) {
-            const newAssetHTML = `
-                <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; background: white; border-radius: 4px; margin-bottom: 5px; border: 1px solid #c3e6cb;">
-                    <div>
-                        <div style="font-weight: 500; font-size: 14px;">${assetId}</div>
-                        <div style="color: #666; font-size: 12px;">SN: ${serial}</div>
-                    </div>
-                    <button class="btn btn-success" style="padding: 4px 10px; font-size: 11px;" onclick="assignSpecificAsset(${eventId}, '${escapeJs(assetId)}', '', '')">Prepare</button>
-                </div>
-            `;
-            
-            // Find the correct position to insert the asset (sorted by asset ID)
-            const existingAssets = availableContainer.querySelectorAll('div[style*="display: flex"]');
-            let insertPosition = null;
-            
-            for (let i = 0; i < existingAssets.length; i++) {
-                const existingAssetId = existingAssets[i].querySelector('[style*="font-weight: 500"]').textContent;
-                
-                // Compare asset IDs to find correct insertion point
-                if (assetId.localeCompare(existingAssetId, undefined, { numeric: true, sensitivity: 'base' }) < 0) {
-                    insertPosition = existingAssets[i];
-                    break;
-                }
-            }
-            
-            // Insert in the correct position
-            if (insertPosition) {
-                insertPosition.insertAdjacentHTML('beforebegin', newAssetHTML);
-            } else {
-                // Insert at the end if no position found
-                availableContainer.insertAdjacentHTML('beforeend', newAssetHTML);
-            }
-        }
-    }
-}
 
-function updateModelSectionCounts(modelSection, action) {
-    // Update Available Assets count
-    const availableHeaders = modelSection.querySelectorAll('h6[style*="color: #495057"]');
-    availableHeaders.forEach(header => {
-        if (header.textContent.includes('Available Assets')) {
-            const match = header.textContent.match(/Available Assets \((\d+)\)/);
-            if (match) {
-                const currentCount = parseInt(match[1]);
-                const newCount = action === 'remove' ? currentCount + 1 : currentCount - 1;
-                header.textContent = `Available Assets (${Math.max(0, newCount)})`;
-            }
-        }
-    });
-    
-    // Update Assigned Assets count
-    const assignedHeaders = modelSection.querySelectorAll('h6[style*="color: #495057"]');
-    assignedHeaders.forEach(header => {
-        if (header.textContent.includes('Assigned Assets')) {
-            const match = header.textContent.match(/Assigned Assets \((\d+)\)/);
-            if (match) {
-                const currentCount = parseInt(match[1]);
-                const newCount = action === 'remove' ? currentCount - 1 : currentCount + 1;
-                header.textContent = `Assigned Assets (${Math.max(0, newCount)})`;
-            }
-        }
-    });
-}
 
-function updateDepartmentProgressBars(event) {
-    // Update progress bars for model requirements departments
-    if (event.modelGroups) {
-        const deptProgress = {};
-        
-        // Calculate progress by department
-        Object.values(event.modelGroups).forEach(modelGroup => {
-            const dept = modelGroup.department;
-            if (!deptProgress[dept]) {
-                deptProgress[dept] = { required: 0, assigned: 0 };
-            }
-            deptProgress[dept].required += modelGroup.requiredQuantity;
-            deptProgress[dept].assigned += getCountablePreparedQuantity(modelGroup);
-        });
-        
-        // Update the department progress bars
-        Object.keys(deptProgress).forEach(dept => {
-            const { required, assigned } = deptProgress[dept];
-            const progressPercent = required > 0 ? Math.round((assigned / required) * 100) : 0;
-            const progressColor = assigned >= required ? '#28a745' : '#ffc107';
-            
-            // Find the department header - try multiple selectors
-            let deptHeader = document.querySelector(`[onclick*="togglePrepareSection('dept-${dept}')"]`);
-            if (!deptHeader) {
-                deptHeader = document.querySelector(`[onclick*="dept-${dept}"]`);
-            }
-            
-            if (deptHeader) {
-                // Update the progress text
-                const progressText = deptHeader.querySelector('[style*="font-size: 12px"][style*="font-weight: 500"]');
-                if (progressText) {
-                    progressText.style.color = progressColor;
-                    progressText.textContent = `${assigned}/${required} assigned`;
-                }
-                
-                // Update the progress bar
-                const progressBar = deptHeader.querySelector('[style*="background: #e9ecef"] div');
-                if (progressBar) {
-                    progressBar.style.background = progressColor;
-                    progressBar.style.width = `${Math.min(progressPercent, 100)}%`;
-                }
-            }
-        });
-    }
-}
 
-async function assignSpecificAsset(eventId, assetId, brand, model) {
-    try {
-        await apiCall(`/api/events/${eventId}/assign-specific`, 'POST', { assetId });
-        showNotification('success', `Assigned ${assetId} to event`);
-        
-        // Force refresh the preparation modal to show updated status
-        setTimeout(() => {
-            openPrepareEventModal(eventId);
-        }, 500);
-        
-        // Also refresh other views if they're active
-        setTimeout(() => {
-            if (document.getElementById('prepare-section').classList.contains('active')) {
-                loadPrepareEvents();
-            }
-            if (document.getElementById('dashboard-section').classList.contains('active')) {
-                loadDashboard();
-            }
-            if (document.getElementById('events-section').classList.contains('active')) {
-                loadAllEvents();
-            }
-        }, 700);
-        
-    } catch (error) {
-        showNotification('error', `Failed to assign asset: ${error.message}`);
-    }
-}
 
-async function unassignSpecificAsset(eventId, assetId, brand, model) {
-  try {
-    // Use the new unassign-specific endpoint
-    await apiCall(`/api/events/${eventId}/unassign-specific`, "POST", {
-      assetId,
-    });
-    showNotification("success", `Unassigned ${assetId} from event`);
-
-    // Refresh the preparation modal with state preservation
-    setTimeout(() => {
-      preserveModalState(() => openPrepareEventModal(eventId));
-    }, 200);
-  } catch (error) {
-    showNotification("error", `Failed to unassign asset: ${error.message}`);
-  }
-}
-
-function finishEventPreparation(eventId) {
-    closeModal('prepareEventModal');
-    showNotification('success', 'Event preparation completed');
-    
-    // Refresh multiple views
-    if (document.getElementById('prepare-section').classList.contains('active')) {
-        loadPrepareEvents();
-    }
-    if (document.getElementById('dashboard-section').classList.contains('active')) {
-        loadDashboard();
-    }
-    if (document.getElementById('events-section').classList.contains('active')) {
-        loadAllEvents();
-    }
-}
 
 async function processUniversalAsset(eventId) {
     const input = document.getElementById('universalAssetInput');
@@ -6710,166 +5353,6 @@ async function processUniversalAsset(eventId) {
     }
 }
 
-async function processUniversalContainer(eventId, containerId) {
-  const feedbackDiv = document.getElementById('universal-asset-feedback');
-  const input = document.getElementById('universalAssetInput');
-
-  const container = await getContainerById(containerId, true);
-  if (!container) {
-    if (feedbackDiv) showFeedback(feedbackDiv, 'error', `Container ${containerId} not found`);
-    return;
-  }
-
-  const assetIds = (container.assetIds || [])
-    .map(a => String(a || '').trim())
-    .filter(Boolean);
-
-  if (assetIds.length === 0) {
-    if (feedbackDiv) showFeedback(feedbackDiv, 'warning', `Container ${containerId} has no assets`);
-    return;
-  }
-
-  if (feedbackDiv) {
-    showFeedback(
-      feedbackDiv,
-      'info',
-      `Processing container <strong>${escapeHtml(containerId)}</strong> (${assetIds.length} assets)…<br/>` +
-      `• Any asset types found in the container will be added to this event's requirements and prepared.`
-    );
-  }
-
-  // Pull current event state once, then keep local sets updated as we go
-  let event;
-  try {
-    const eventRes = await apiCall(`/api/events/${eventId}`);
-    event = eventRes.data || {};
-  } catch (e) {
-    if (feedbackDiv) showFeedback(feedbackDiv, 'error', `Failed to load event: ${escapeHtml(e.message || String(e))}`);
-    return;
-  }
-
-  const preparedSet = new Set(event.actuallyPrepared || []);
-  const returnedSet = new Set(event.returnedItems || []);
-
-  const results = {
-    prepared: [],
-    skippedPrepared: [],
-    skippedReturned: [],
-    failed: []
-  };
-
-  window.__processingContainerBatch = true;
-  try {
-    for (const aid of assetIds) {
-      // Skip returned assets (same behavior as manual processing)
-      if (returnedSet.has(aid)) {
-        results.skippedReturned.push(aid);
-        continue;
-      }
-
-      // Skip already prepared assets (avoid /assign-specific "already assigned" error)
-      if (preparedSet.has(aid)) {
-        results.skippedPrepared.push(aid);
-        continue;
-      }
-
-      try {
-        // This endpoint both assigns (adds to prepared_items if missing) and prepares (adds to actually_prepared)
-        await apiCall(`/api/events/${eventId}/assign-specific`, 'POST', {
-          assetId: aid,
-          fromContainer: true,
-          source: 'container'
-        });
-        results.prepared.push(aid);
-        preparedSet.add(aid);
-      } catch (err) {
-        results.failed.push({ id: aid, error: err?.message || String(err) });
-      }
-    }
-  } finally {
-    window.__processingContainerBatch = false;
-
-    if (input) {
-      input.value = '';
-      input.focus();
-    }
-  }
-
-  // Build a compact summary + expandable details
-  const total = assetIds.length;
-  const ok = results.prepared.length;
-  const already = results.skippedPrepared.length;
-  const returned = results.skippedReturned.length;
-  const failed = results.failed.length;
-
-  let detailsHtml = `
-    <div style="margin-top:6px;">
-      <div><strong>Summary</strong> (Container ${escapeHtml(containerId)}):</div>
-      <div>✅ Prepared: <strong>${ok}</strong> / ${total}</div>
-      <div>ℹ️ Already prepared (skipped): <strong>${already}</strong></div>
-      <div>↩️ Returned in this event (skipped): <strong>${returned}</strong></div>
-      <div style="${failed ? 'color:#a00;' : ''}">⚠️ Failed: <strong>${failed}</strong></div>
-    </div>
-  `;
-
-  const listToHtml = (title, arr) => {
-    if (!arr || arr.length === 0) return '';
-    const items = arr.slice(0, 50).map(x => `<li>${escapeHtml(String(x))}</li>`).join('');
-    const more = arr.length > 50 ? `<div style="color:#666;font-size:12px;">…and ${arr.length - 50} more</div>` : '';
-    return `
-      <div style="margin-top:10px;">
-        <div style="font-weight:700;">${escapeHtml(title)}</div>
-        <ul style="margin:6px 0 0 18px;">${items}</ul>
-        ${more}
-      </div>
-    `;
-  };
-
-  const failuresToHtml = (arr) => {
-    if (!arr || arr.length === 0) return '';
-    const rows = arr.slice(0, 30).map(f =>
-      `<tr><td style="padding:4px 8px;border-bottom:1px solid #eee;">${escapeHtml(f.id)}</td>` +
-      `<td style="padding:4px 8px;border-bottom:1px solid #eee;color:#a00;">${escapeHtml(f.error)}</td></tr>`
-    ).join('');
-    const more = arr.length > 30 ? `<div style="color:#666;font-size:12px;margin-top:6px;">…and ${arr.length - 30} more failures</div>` : '';
-    return `
-      <div style="margin-top:10px;">
-        <div style="font-weight:700;color:#a00;">Failures</div>
-        <div style="border:1px solid #eee;border-radius:6px;overflow:hidden;">
-          <table style="width:100%;border-collapse:collapse;">
-            <thead>
-              <tr style="background:#f8f9fa;">
-                <th style="text-align:left;padding:6px 8px;">Asset ID</th>
-                <th style="text-align:left;padding:6px 8px;">Reason</th>
-              </tr>
-            </thead>
-            <tbody>${rows}</tbody>
-          </table>
-        </div>
-        ${more}
-      </div>
-    `;
-  };
-
-  detailsHtml += `
-    <details style="margin-top:10px;">
-      <summary style="cursor:pointer;">Show details</summary>
-      ${listToHtml('Prepared', results.prepared)}
-      ${listToHtml('Skipped (already prepared)', results.skippedPrepared)}
-      ${listToHtml('Skipped (returned)', results.skippedReturned)}
-      ${failuresToHtml(results.failed)}
-    </details>
-  `;
-
-  if (feedbackDiv) {
-    showFeedback(feedbackDiv, failed ? 'warning' : 'success', detailsHtml);
-  }
-
-  // Refresh just the asset list section once at the end (same UX as manual input)
-  setTimeout(() => {
-    try { updateAssetListSection(eventId); } catch (e) {}
-  }, 400);
-}
 
 /**
  * ASSIGN + PREPARE in one step for extra assets
@@ -7251,36 +5734,6 @@ function isAssetReturnableFromEventDetail(asset, event) {
   return asset.status === 'prepared' || actuallyPrepared.has(id);
 }
 
-async function loadReturnEvents() {
-  try {
-    const response = await apiCall('/api/events');
-    
-    // Update overdue counter
-    const overdueCount = countOverdueEvents(response.data);
-    updateOverdueCounter(overdueCount);
-    
-    const returnableEvents = response.data.filter((event) => {
-      return getEventReturnableCount(event) > 0 && event.state !== 'Closed';
-    });
-
-    const container = document.getElementById("return-events");
-    container.innerHTML = "";
-
-    if (returnableEvents.length === 0) {
-      container.innerHTML =
-        '<p style="text-align: center; color: #666; padding: 40px;">No events with assets to return.</p>';
-      return;
-    }
-
-    sortEventsStartDateFutureTop(returnableEvents).forEach((event) => {
-      const card = createReturnEventCard(event);
-      container.appendChild(card);
-    });
-  } catch (error) {
-    document.getElementById("return-events").innerHTML =
-      '<p style="color: red; text-align: center;">Error loading events</p>';
-  }
-}
 
 function createReturnEventCard(event) {
   const card = document.createElement("div");
@@ -7587,65 +6040,6 @@ async function loadEventAssetsForReturn() {
     }
 }
 
-async function returnAssetsByType(eventId, assetType) {
-    if (!confirm(`Are you sure you want to return all ${assetType} assets from this event?`)) {
-        return;
-    }
-    
-    try {
-        // Get current event data to find assets of this type
-        const response = await apiCall(`/api/events/${eventId}`);
-        const event = response.data;
-        const preparedAssets = event.preparedAssets || [];
-        
-        // Filter unreturned assets of the specified type
-        const assetsToReturn = preparedAssets.filter(asset => {
-            const assetTypeFromId = asset.id.split('#')[0];
-            return assetTypeFromId === assetType && asset.status !== 'returned';
-        });
-        
-        if (assetsToReturn.length === 0) {
-            showNotification('info', `No ${assetType} assets available for return`);
-            return;
-        }
-        
-        // Return each asset
-        let successCount = 0;
-        let failCount = 0;
-        
-        for (const asset of assetsToReturn) {
-            try {
-                await apiCall(`/api/events/${eventId}/return`, 'POST', { assetId: asset.id });
-                successCount++;
-            } catch (error) {
-                console.error(`Failed to return ${asset.id}:`, error);
-                failCount++;
-            }
-        }
-        
-        // Show results
-        if (successCount > 0) {
-            showNotification('success', `Successfully returned ${successCount} ${assetType} asset(s)`);
-        }
-        if (failCount > 0) {
-            showNotification('warning', `Failed to return ${failCount} asset(s)`);
-        }
-        
-        // Refresh the interface
-        setTimeout(() => {
-            loadEventAssetsForReturn();
-        }, 500);
-        
-        // Update overdue counter
-        const eventsResponse = await apiCall('/api/events');
-        const overdueCount = countOverdueEvents(eventsResponse.data);
-        updateOverdueCounter(overdueCount);
-        
-    } catch (error) {
-        showNotification('error', `Failed to return ${assetType} assets: ${error.message}`);
-        console.error('Error returning assets by type:', error);
-    }
-}
 
 async function returnSpecificAssetNew(eventId, assetId) {
     // Prevent multiple clicks
@@ -7830,408 +6224,14 @@ async function loadTransferHistory() {
   }
 }
 
-function renderTransferWorkspace() {
-  const container = document.getElementById('transfer-history');
-  if (!container) return;
 
-  const sourceEvents = transferOptionsCache?.sourceEvents || [];
-  const targetEvents = transferOptionsCache?.targetEvents || [];
 
-  const sourceOptions = sourceEvents.map(event => {
-    const tagPrefix = event.tag === 'dry hire' ? '[DH]' : '[E]';
-    const dateRange = event.startDate === event.endDate
-      ? formatDate(event.startDate)
-      : `${formatDate(event.startDate)} - ${formatDate(event.endDate)}`;
 
-    return `
-      <option value="${event.id}">
-        ${tagPrefix} ${event.id}: ${escapeHtml(event.name)} • ${event.state} • ${event.unreturnedCount || 0} out • ${dateRange}
-      </option>
-    `;
-  }).join('');
 
-  const targetOptions = targetEvents.map(event => {
-    const tagPrefix = event.tag === 'dry hire' ? '[DH]' : '[E]';
-    const dateRange = event.startDate === event.endDate
-      ? formatDate(event.startDate)
-      : `${formatDate(event.startDate)} - ${formatDate(event.endDate)}`;
 
-    return `
-      <option value="${event.id}">
-        ${tagPrefix} ${event.id}: ${escapeHtml(event.name)} • ${event.state} • ${dateRange}
-      </option>
-    `;
-  }).join('');
 
-  container.innerHTML = `
-    <div style="display:flex;flex-direction:column;gap:18px;">
-      <div style="background:linear-gradient(135deg,rgba(102,126,234,.10),rgba(118,75,162,.10));border:1px solid rgba(118,75,162,.18);border-radius:16px;padding:18px;">
-        <h3 style="margin:0 0 6px;color:#4b2f65;">Transfer Assets Directly Between Events</h3>
-        <p style="margin:0;color:#666;line-height:1.4;">
-          Select a source event that is <strong>Ongoing</strong>, <strong>Last Day</strong>, or <strong>Overdue</strong>, then select a destination event that is <strong>Planning</strong> or <strong>Preparing</strong>.
-          Matching assets will be returned from the source and immediately prepared for the destination.
-        </p>
-      </div>
 
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;align-items:end;background:white;border:1px solid #edf0f5;border-radius:16px;padding:16px;box-shadow:0 6px 18px rgba(0,0,0,.05);">
-        <div class="form-group" style="margin:0;">
-          <label class="form-label">From Event — Ongoing / Last Day / Overdue</label>
-          <select id="transferSourceSelect" class="form-input" onchange="loadTransferCandidates()">
-            <option value="">Select source event...</option>
-            ${sourceOptions}
-          </select>
-          <div style="font-size:12px;color:#666;margin-top:6px;">${sourceEvents.length} eligible source event(s)</div>
-        </div>
 
-        <div class="form-group" style="margin:0;">
-          <label class="form-label">To Event — Planning / Preparing</label>
-          <select id="transferTargetSelect" class="form-input" onchange="loadTransferCandidates()">
-            <option value="">Select destination event...</option>
-            ${targetOptions}
-          </select>
-          <div style="font-size:12px;color:#666;margin-top:6px;">${targetEvents.length} eligible destination event(s)</div>
-        </div>
-
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <button class="btn btn-primary" onclick="loadTransferCandidates()">Find Matching Assets</button>
-          <button class="btn btn-secondary" onclick="openManualTransferModal()">Manual Transfer</button>
-          <button class="btn btn-success" onclick="generateTransferPdf()">Export PDF</button>
-        </div>
-      </div>
-
-      <div id="transfer-candidates-panel" style="background:white;border:1px solid #edf0f5;border-radius:16px;padding:16px;box-shadow:0 6px 18px rgba(0,0,0,.05);">
-        ${renderTransferInitialMessage(sourceEvents, targetEvents)}
-      </div>
-    </div>
-  `;
-}
-
-function renderTransferInitialMessage(sourceEvents, targetEvents) {
-  if (!sourceEvents.length && !targetEvents.length) {
-    return '<p style="text-align:center;color:#666;padding:28px;">No eligible source or destination events found.</p>';
-  }
-  if (!sourceEvents.length) {
-    return '<p style="text-align:center;color:#666;padding:28px;">No Ongoing or Overdue events with unreturned assets found.</p>';
-  }
-  if (!targetEvents.length) {
-    return '<p style="text-align:center;color:#666;padding:28px;">No Planning or Preparing destination events found.</p>';
-  }
-  return '<p style="text-align:center;color:#666;padding:28px;">Choose both events to see assets that match the destination requirements.</p>';
-}
-
-async function loadTransferCandidates() {
-  const sourceSelect = document.getElementById('transferSourceSelect');
-  const targetSelect = document.getElementById('transferTargetSelect');
-  const panel = document.getElementById('transfer-candidates-panel');
-  if (!sourceSelect || !targetSelect || !panel) return;
-
-  const fromEventId = sourceSelect.value;
-  const toEventId = targetSelect.value;
-
-  if (!fromEventId || !toEventId) {
-    panel.innerHTML = '<p style="text-align:center;color:#666;padding:28px;">Choose both events to see assets that match the destination requirements.</p>';
-    return;
-  }
-
-  if (fromEventId === toEventId) {
-    panel.innerHTML = '<p style="text-align:center;color:#a00;padding:28px;">Source and destination events cannot be the same.</p>';
-    return;
-  }
-
-  panel.innerHTML = '<div class="loading">Finding matching transferable assets...</div>';
-
-  try {
-    const response = await apiCall(`/api/transfers/candidates?fromEventId=${encodeURIComponent(fromEventId)}&toEventId=${encodeURIComponent(toEventId)}`);
-    transferCandidateCache = response.data?.candidates || [];
-    renderTransferCandidates(response.data || {});
-  } catch (error) {
-    panel.innerHTML = `
-      <div style="padding:28px;text-align:center;color:#a00;">
-        Failed to load transfer candidates: ${escapeHtml(error.message || String(error))}
-      </div>
-    `;
-  }
-}
-
-function renderTransferCandidates(data) {
-  const panel = document.getElementById('transfer-candidates-panel');
-  if (!panel) return;
-
-  const candidates = data.candidates || [];
-  const fromEvent = data.fromEvent || {};
-  const toEvent = data.toEvent || {};
-
-  if (!candidates.length) {
-    panel.innerHTML = `
-      <div style="text-align:center;padding:34px;color:#666;">
-        <div style="font-size:32px;margin-bottom:8px;">🔍</div>
-        <div style="font-weight:700;color:#333;margin-bottom:4px;">No matching assets found</div>
-        <div>There are no unreturned source assets that match the destination event’s remaining model requirements.</div>
-      </div>
-    `;
-    return;
-  }
-
-  const groupedCounts = candidates.reduce((acc, item) => {
-    const key = item.matchLabel || `${item.department} ${item.brand} ${item.model}`;
-    acc[key] = (acc[key] || 0) + 1;
-    return acc;
-  }, {});
-
-  const groupSummary = Object.entries(groupedCounts).map(([label, count]) => {
-    return `<span style="display:inline-block;background:#eef1ff;color:#4f5edb;border-radius:999px;padding:5px 10px;font-size:12px;font-weight:700;margin:3px;">${count}× ${escapeHtml(label)}</span>`;
-  }).join('');
-
-  const rows = candidates.map(candidate => {
-    return `
-      <tr>
-        <td style="width:36px;">
-          <input type="checkbox" class="transfer-candidate-checkbox" data-asset-id="${escapeHtmlAttr(candidate.assetId)}" checked>
-        </td>
-        <td><strong>${escapeHtml(candidate.assetId)}</strong></td>
-        <td>${escapeHtml(candidate.serial || 'N/A')}</td>
-        <td>
-          <span class="asset-badge dept-${escapeHtmlAttr((candidate.department || 'un').toLowerCase())}">${escapeHtml(candidate.department || 'UN')}</span>
-        </td>
-        <td>${escapeHtml(candidate.brand || '')}</td>
-        <td>${escapeHtml(candidate.model || '')}</td>
-        <td>${escapeHtml(candidate.description || '')}</td>
-        <td style="color:#666;font-size:12px;">
-          Destination still needs ${candidate.targetRemainingBeforeThisAsset} before this asset
-        </td>
-        <td>
-          <button class="btn btn-success btn-sm" onclick="executeSingleTransfer('${encodeURIComponent(candidate.assetId)}')">Transfer</button>
-        </td>
-      </tr>
-    `;
-  }).join('');
-
-  panel.innerHTML = `
-    <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;margin-bottom:14px;">
-      <div>
-        <h3 style="margin:0;color:#764ba2;">${candidates.length} transferable asset(s)</h3>
-        <div style="color:#666;font-size:13px;margin-top:4px;">
-          From <strong>${escapeHtml(fromEvent.name || '')}</strong> → To <strong>${escapeHtml(toEvent.name || '')}</strong>
-        </div>
-      </div>
-
-      <div style="display:flex;gap:8px;flex-wrap:wrap;">
-        <button class="btn btn-secondary btn-sm" onclick="toggleAllTransferCandidates(true)">Select All</button>
-        <button class="btn btn-secondary btn-sm" onclick="toggleAllTransferCandidates(false)">Clear</button>
-        <button class="btn btn-primary" onclick="generateTransferPdf()">Export PDF</button>
-        <button class="btn btn-success" onclick="executeSelectedTransfers()">Transfer Selected</button>
-      </div>
-    </div>
-
-    <div style="margin-bottom:14px;">${groupSummary}</div>
-
-    <div style="overflow:auto;border:1px solid #edf0f5;border-radius:12px;">
-      <table class="table" style="margin-top:0;">
-        <thead>
-          <tr>
-            <th></th>
-            <th>Asset ID</th>
-            <th>Serial</th>
-            <th>Dept</th>
-            <th>Brand</th>
-            <th>Model</th>
-            <th>Description</th>
-            <th>Match</th>
-            <th>Action</th>
-          </tr>
-        </thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>
-  `;
-}
-
-function generateTransferPdf() {
-  const fromEventId = document.getElementById('transferSourceSelect')?.value;
-  const toEventId = document.getElementById('transferTargetSelect')?.value;
-  const fromEvent = (transferOptionsCache?.sourceEvents || []).find(e => String(e.id) === String(fromEventId)) || {};
-  const toEvent = (transferOptionsCache?.targetEvents || []).find(e => String(e.id) === String(toEventId)) || {};
-  const candidates = transferCandidateCache || [];
-
-  if (!fromEventId || !toEventId) {
-    showNotification('warning', 'Select both source and destination events first');
-    return;
-  }
-
-  const selectedIds = new Set(Array.from(document.querySelectorAll('.transfer-candidate-checkbox:checked')).map(cb => cb.dataset.assetId));
-  const safe = (value) => escapeHtml(String(value ?? ''));
-  const dateRange = (event) => {
-    if (!event || !event.startDate) return '';
-    return event.startDate === event.endDate ? formatDate(event.startDate) : `${formatDate(event.startDate)} - ${formatDate(event.endDate)}`;
-  };
-
-  const rows = candidates.length ? candidates.map((candidate, index) => `
-    <tr>
-      <td>${index + 1}</td>
-      <td><strong>${safe(candidate.assetId)}</strong>${candidate.serial ? `<br><span style="font-size:8pt;color:#666;">SN: ${safe(candidate.serial)}</span>` : ''}</td>
-      <td>${safe(candidate.department || 'UN')}</td>
-      <td>${safe(candidate.brand || '')} ${safe(candidate.model || '')}</td>
-      <td>${safe(candidate.description || '')}</td>
-      <td>${safe(candidate.matchLabel || `Destination still needs ${candidate.targetRemainingBeforeThisAsset || ''}`)}</td>
-      <td>${selectedIds.has(candidate.assetId) ? 'Yes' : 'No'}</td>
-    </tr>
-  `).join('') : `
-    <tr><td colspan="7" style="text-align:center;color:#666;padding:18px;">No matching assets currently shown.</td></tr>
-  `;
-
-  const now = new Date();
-  const formattedDate = now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-  const transferNumber = `TR-${now.getFullYear()}${String(fromEventId).padStart(4, '0')}-${String(toEventId).padStart(4, '0')}`;
-
-  const win = window.open('', '_blank', 'width=900,height=1000');
-  if (!win) {
-    showNotification('error', 'Pop-up blocked. Please allow pop-ups to export the transfer PDF.');
-    return;
-  }
-
-  const html = `
-<!DOCTYPE html>
-<html>
-<head>
-  <title>Transfer Assets - ${safe(fromEvent.name || '')} to ${safe(toEvent.name || '')}</title>
-  <style>
-    @page { size: A4; margin: 0; }
-    * { box-sizing: border-box; }
-    body { margin: 0; font-family: 'Century Gothic', Arial, sans-serif; color: #000; background: #f0f0f0; }
-    .page { width: 210mm; min-height: 297mm; margin: 0 auto; padding: 7mm 7mm 14mm 7mm; background: white; position: relative; page-break-after: always; }
-    .logo-row { display:flex; justify-content:flex-end; margin-bottom:7px; height:39px; }
-    .logo-row img { height:39px; width:auto; object-fit:contain; }
-    .header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:20px; }
-    .header-left { flex:1; font-size:9pt; font-weight:bold; line-height:1.35; }
-    .header-right { text-align:right; font-size:9pt; font-weight:bold; }
-    .transfer-title { font-size:14pt; font-weight:bold; margin-bottom:5px; }
-    .summary-table, .items-table { width:100%; border-collapse:collapse; border:2px solid black; margin-bottom:16px; }
-    .summary-table td { border:1px solid #333; padding:7px; font-size:9pt; vertical-align:top; }
-    .items-table th { background:#333; color:white; padding:8px; text-align:left; font-size:8.5pt; border:1px solid #333; }
-    .items-table td { border:1px solid #333; padding:6px; font-size:8.5pt; vertical-align:top; line-height:1.25; }
-    .footer { position:absolute; bottom:5mm; left:7mm; right:7mm; text-align:center; font-size:7pt; font-weight:bold; line-height:1.2; }
-    .print-btn { position:fixed; top:20px; right:20px; background:#667eea; color:white; border:none; padding:10px 18px; border-radius:6px; cursor:pointer; z-index:999; }
-    @media print { body { background:white; } .page { margin:0; page-break-after:auto; } .print-btn { display:none; } }
-  </style>
-</head>
-<body>
-  <button class="print-btn" onclick="window.print()">Print / Save as PDF</button>
-  <div class="page">
-    <div class="logo-row"><img src="/static/images/logo.png" alt="Company Logo"></div>
-    <div class="header">
-      <div class="header-left">
-        FROM EVENT:<br>
-        ${safe(fromEvent.id || fromEventId)} — ${safe(fromEvent.name || '')}<br>
-        ${safe(fromEvent.state || '')}${dateRange(fromEvent) ? ' • ' + safe(dateRange(fromEvent)) : ''}<br><br>
-        TO EVENT:<br>
-        ${safe(toEvent.id || toEventId)} — ${safe(toEvent.name || '')}<br>
-        ${safe(toEvent.state || '')}${dateRange(toEvent) ? ' • ' + safe(dateRange(toEvent)) : ''}
-      </div>
-      <div class="header-right">
-        <div class="transfer-title">TRANSFER ASSETS</div>
-        No. : ${safe(transferNumber)}<br>
-        Date : ${safe(formattedDate)}
-      </div>
-    </div>
-
-    <table class="summary-table">
-      <tr>
-        <td><strong>Source unreturned assets:</strong><br>${safe(fromEvent.unreturnedCount || 0)}</td>
-        <td><strong>Matching assets shown:</strong><br>${safe(candidates.length)}</td>
-        <td><strong>Selected for transfer:</strong><br>${safe(selectedIds.size || 0)}</td>
-      </tr>
-    </table>
-
-    <table class="items-table">
-      <thead>
-        <tr>
-          <th style="width:8mm;">#</th>
-          <th style="width:32mm;">Asset ID / Serial</th>
-          <th style="width:18mm;">Dept</th>
-          <th style="width:36mm;">Brand / Model</th>
-          <th>Description</th>
-          <th style="width:38mm;">Match</th>
-          <th style="width:18mm;">Selected</th>
-        </tr>
-      </thead>
-      <tbody>${rows}</tbody>
-    </table>
-
-    <div class="footer">
-      AVEC VISION PRIVATE LIMITED<br>
-      601 SIMS DRIVE PAN-I COMPLEX #04-10 SINGAPORE 387382 TEL 65.9743.3660 CO REG 202122775G
-    </div>
-  </div>
-</body>
-</html>`;
-
-  win.document.write(html);
-  win.document.close();
-  win.focus();
-}
-
-function toggleAllTransferCandidates(checked) {
-  document.querySelectorAll('.transfer-candidate-checkbox').forEach(cb => {
-    cb.checked = checked;
-  });
-}
-
-async function executeSingleTransfer(encodedAssetId) {
-  const assetId = decodeURIComponent(encodedAssetId);
-  await executeTransfers([assetId]);
-}
-
-async function executeSelectedTransfers() {
-  const selected = Array.from(document.querySelectorAll('.transfer-candidate-checkbox:checked'))
-    .map(cb => cb.dataset.assetId)
-    .filter(Boolean);
-
-  if (!selected.length) {
-    showNotification('warning', 'Select at least one asset to transfer');
-    return;
-  }
-
-  await executeTransfers(selected);
-}
-
-async function executeTransfers(assetIds) {
-  const fromEventId = document.getElementById('transferSourceSelect')?.value;
-  const toEventId = document.getElementById('transferTargetSelect')?.value;
-
-  if (!fromEventId || !toEventId) {
-    showNotification('warning', 'Select both source and destination events');
-    return;
-  }
-
-  const message = assetIds.length === 1
-    ? `Transfer ${assetIds[0]} to the destination event?`
-    : `Transfer ${assetIds.length} selected assets to the destination event?`;
-
-  if (!confirm(message)) return;
-
-  try {
-    const response = await apiCall('/api/transfers/execute', 'POST', {
-      fromEventId: parseInt(fromEventId, 10),
-      toEventId: parseInt(toEventId, 10),
-      assetIds
-    });
-
-    const transferred = response.data?.transferred || [];
-    const skipped = response.data?.skipped || [];
-
-    let msg = `Transferred ${transferred.length} asset(s)`;
-    if (skipped.length) msg += `; ${skipped.length} skipped`;
-    showNotification('success', msg);
-
-    await loadTransferHistory();
-
-    if (document.getElementById('prepare-section')?.classList.contains('active')) await loadPrepareEvents();
-    if (document.getElementById('return-section')?.classList.contains('active')) await loadReturnEvents();
-    if (document.getElementById('events-section')?.classList.contains('active')) await loadAllEvents();
-  } catch (error) {
-    showNotification('error', `Failed to transfer assets: ${error.message}`);
-  }
-}
 
 async function openManualTransferModal() {
   if (!transferOptionsCache) {
@@ -8606,18 +6606,6 @@ function toggleModelDetailsInView(modelId) {
 }
 
 // Add the toggle function for expanding/collapsing model details
-function toggleModelDetails(modelId) {
-  const detailsDiv = document.getElementById(modelId);
-  const toggleIcon = document.getElementById(`toggle-${modelId}`);
-
-  if (detailsDiv.style.display === "none") {
-    detailsDiv.style.display = "block";
-    toggleIcon.textContent = "▲";
-  } else {
-    detailsDiv.style.display = "none";
-    toggleIcon.textContent = "▼";
-  }
-}
 
 async function loadMaintenanceAssets() {
   try {
@@ -8909,13 +6897,6 @@ function loadAssetCheck() {
 }
 
 // Event handler functions
-function openReturnAssetModal(eventId) {
-  document.getElementById("returnEventId").value = eventId;
-  document.getElementById(
-    "returnAssetTitle"
-  ).textContent = `Return Asset from Event ${eventId}`;
-  openModal("returnAssetModal");
-}
 
 async function returnSpecificAsset(eventId, assetId) {
     try {
@@ -8948,76 +6929,8 @@ async function returnSpecificAsset(eventId, assetId) {
     }
 }
 
-async function returnManualAsset(eventId) {
-    const input = document.getElementById('manualReturnAssetId');
-    const assetId = input.value.trim();
-    
-    if (!assetId) {
-        showNotification('warning', 'Please enter an asset ID');
-        return;
-    }
-    
-    try {
-        await apiCall(`/api/events/${eventId}/return`, 'POST', { assetId });
-        showNotification('success', `${assetId} returned successfully`);
-        
-        // Clear input and focus back on it
-        input.value = '';
-        input.focus();
-        
-        // Remove the asset from the return list with animation
-        const assetElement = document.querySelector(`[onclick*="returnSpecificAsset(${eventId}, '${assetId}')"]`);
-        if (assetElement) {
-            assetElement.style.transition = 'opacity 0.3s ease';
-            assetElement.style.opacity = '0.5';
-            assetElement.style.pointerEvents = 'none';
-            
-            setTimeout(() => {
-                if (assetElement.parentNode) {
-                    assetElement.parentNode.removeChild(assetElement);
-                }
-            }, 300);
-        }
-        
-        // Refresh the return events list if it's active (but don't refresh modal)
-        if (document.getElementById('return-section').classList.contains('active')) {
-            setTimeout(() => {
-                loadReturnEvents();
-            }, 500);
-        }
-        
-    } catch (error) {
-        showNotification('error', `Failed to return asset: ${error.message}`);
-    }
-}
 
-function finishReturningAssets(eventId) {
-    closeModal('returnAssetsModal');
-    showNotification('success', 'Return process completed');
-    
-    // Refresh views
-    if (document.getElementById('return-section').classList.contains('active')) {
-        loadReturnEvents();
-    }
-    if (document.getElementById('dashboard-section').classList.contains('active')) {
-        loadDashboard();
-    }
-    if (document.getElementById('events-section').classList.contains('active')) {
-        loadAllEvents();
-    }
-}
 
-function openMaintenanceModalForAsset(assetId) {
-  openMaintenanceModal();
-  
-  setTimeout(() => {
-    if (assets && assets.length > 0) {
-      selectAssetForMaintenance(assetId);
-    } else {
-      console.warn('Assets not loaded yet, cannot pre-select asset');
-    }
-  }, 200);
-}
 
 function populateTransferDropdowns(options) {
   const fromSelect = document.getElementById("transferFromEvent");
@@ -9364,49 +7277,8 @@ async function markUncheckedAssetCheckMissing() {
   }
 }
 
-function finishAssetCheck() {
-  const checkedCount = assetCheckState.assets.filter(asset => asset.checkEligible && asset.id && assetCheckState.checked.has(asset.id)).length;
-  showNotification('success', `Asset Check finished. ${checkedCount} asset(s) checked.`);
-  loadAssetCheck();
-}
 
-async function prepareAsset(eventId, assetId) {
-  try {
-    await apiCall(`/api/events/${eventId}/prepare`, "POST", { assetId });
-    showNotification("success", `Asset ${assetId} prepared for event`);
 
-    // Refresh the event details
-    viewEvent(eventId);
-
-    // Refresh other views if they're active
-    if (
-      document.getElementById("prepare-section").classList.contains("active")
-    ) {
-      loadPrepareEvents();
-    }
-  } catch (error) {
-    showNotification("error", `Failed to prepare asset: ${error.message}`);
-  }
-}
-
-async function unprepareAsset(eventId, assetId) {
-  try {
-    await apiCall(`/api/events/${eventId}/unprepare`, "POST", { assetId });
-    showNotification("success", `Asset ${assetId} unprepared`);
-
-    // Refresh the event details
-    viewEvent(eventId);
-
-    // Refresh other views if they're active
-    if (
-      document.getElementById("prepare-section").classList.contains("active")
-    ) {
-      loadPrepareEvents();
-    }
-  } catch (error) {
-    showNotification("error", `Failed to unprepare asset: ${error.message}`);
-  }
-}
 
 function toggleEventLogSection(sectionId) {
   const section = document.getElementById(sectionId);
@@ -9745,32 +7617,6 @@ async function editEvent(eventId) {
 }
 
 // Switch between edit tabs
-function switchEditTab(tabName) {
-  // Remove active class from all tabs and content
-  document.querySelectorAll(".edit-tab").forEach((tab) => {
-    tab.classList.remove("active");
-  });
-  document.querySelectorAll(".edit-tab-content").forEach((content) => {
-    content.classList.remove("active");
-    content.style.display = "none";
-  });
-
-  // Add active class to clicked tab
-  document.querySelector(`[data-tab="${tabName}"]`).classList.add("active");
-
-  // Show corresponding content
-  const contentDiv = document.getElementById(`edit-${tabName}-tab`);
-  contentDiv.classList.add("active");
-  contentDiv.style.display = "block";
-
-  // Load assets data when assets tab is clicked
-  if (tabName === "assets") {
-    const eventId = document.getElementById("editEventId").value;
-    if (eventId) {
-      loadEditEventAssets(eventId);
-    }
-  }
-}
 
 async function loadEditEventAssets(eventId) {
   try {
@@ -9928,33 +7774,6 @@ function clearModelSearch() {
 }
 
 // Add asset model to event (simplified)
-async function addAssetModelToEvent(eventId, modelName, department) {
-  try {
-    // Find the first available asset of this model
-    const response = await apiCall("/api/assets/available");
-    const availableAssets = response.data;
-
-    const asset = availableAssets.find(
-      (a) =>
-        `${a.brand} ${a.model}` === modelName && a.department === department
-    );
-
-    if (!asset) {
-      showNotification("error", "No available assets of this model");
-      return;
-    }
-
-    await apiCall(`/api/events/${eventId}/assets`, "POST", {
-      assetId: asset.id,
-    });
-    showNotification("success", `${modelName} added to event`);
-
-    // Refresh the assets view
-    loadEditEventAssets(eventId);
-  } catch (error) {
-    showNotification("error", `Failed to add asset: ${error.message}`);
-  }
-}
 
 // Switch between edit tabs
 function switchEditTab(tabName) {
@@ -9988,22 +7807,6 @@ function switchEditTab(tabName) {
 }
 
 // Load available assets for editing
-async function loadAvailableAssetsForEdit(eventId) {
-  try {
-    const [availableResponse, availabilityResponse] = await Promise.all([
-      apiCall("/api/assets/available"),
-      apiCall(`/api/events/${eventId}/availability`),
-    ]);
-    const availableAssets = availableResponse.data;
-
-    // Store for search functionality
-    window.currentEditAvailableAssets = availableAssets;
-    window.currentEditEventId = eventId;
-    window.currentEditAvailabilityList = availabilityResponse.data;
-  } catch (error) {
-    console.error("Error loading available assets:", error);
-  }
-}
 
 async function addModelToEvent(eventId, brand, model, department, description = '') {
   try {
@@ -10233,86 +8036,6 @@ async function updateModelRequirementsSection(eventId) {
 }
 
 // Add custom assets to existing model requirements without changing format
-async function addCustomAssetsToModelRequirements(eventId, existingContent = '') {
-  try {
-    const eventResponse = await apiCall(`/api/events/${eventId}`);
-    const event = eventResponse.data;
-    const modelsContainer = document.getElementById("current-asset-models");
-    if (!modelsContainer) return;
-
-    let content = existingContent;
-    const customAssets = getCustomAssetsFromEvent(event);
-
-    if (customAssets.length > 0) {
-      const byDept = {};
-      customAssets.forEach(asset => {
-        const custom = asset.parsedCustom;
-        const dept = normalizeDepartmentCode(custom.department || asset.department || 'UN');
-        if (!byDept[dept]) byDept[dept] = [];
-        byDept[dept].push(asset);
-      });
-
-      Object.keys(byDept).sort().forEach(dept => {
-        const assetsOfDept = byDept[dept];
-        const totalQty = assetsOfDept.reduce((sum, asset) => sum + Number(asset.parsedCustom.quantity || 1), 0);
-
-        content += `
-          <div data-custom-section="true" style="border-top: 1px solid #e9ecef; margin-top: 20px; padding-top: 20px;">
-            <div style="background: #f8f9fa; padding: 12px; border-bottom: 1px solid #e9ecef; font-weight: bold; display:flex; align-items:center; gap:8px;">
-              ${departmentBadgeHtml(dept, true)}
-              <span>Custom Assets (${totalQty} total qty, ${assetsOfDept.length} line item${assetsOfDept.length === 1 ? '' : 's'})</span>
-            </div>
-            <div style="padding: 12px;">
-              ${assetsOfDept.map(asset => {
-                const custom = asset.parsedCustom;
-                const statusIcon = asset.status === "returned" ? "↩️"
-                               : asset.status === "prepared" ? "✅"
-                               : asset.status === "collected" ? "📥"
-                               : "📋";
-                const displayName = customAssetDisplayName(custom);
-                const safeId = escapeHtmlAttr(asset.id);
-                const safeName = escapeHtmlAttr(custom.name);
-                return `
-                  <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #f1f1f1; gap:12px;">
-                    <div style="min-width:0; flex:1;">
-                      <div style="display: flex; align-items: center; flex-wrap:wrap; gap:6px;">
-                        <span>${statusIcon}</span>
-                        <span style="font-weight: 500;">${escapeHtml(displayName)}</span>
-                        ${customAssetTypeBadge(custom)}
-                      </div>
-                      ${custom.type === 'LOAN' && custom.company ? `<div style="color:#666;font-size:12px;margin-left:24px;margin-top:2px;">${escapeHtml(custom.company)}</div>` : ''}
-                    </div>
-                    <div style="display: flex; gap: 8px; flex-wrap:wrap; justify-content:flex-end;">
-                      <button class="btn btn-sm btn-outline-primary edit-custom-qty-btn"
-                              data-event-id="${eventId}" data-asset-id="${safeId}"
-                              data-asset-name="${safeName}" data-asset-type="${custom.type}"
-                              style="padding: 4px 8px; font-size: 11px;">Edit Qty</button>
-                      <button class="btn btn-danger btn-sm remove-asset-btn"
-                              data-event-id="${eventId}" data-asset-id="${safeId}"
-                              style="padding: 4px 8px; font-size: 11px;">Remove</button>
-                    </div>
-                  </div>
-                `;
-              }).join('')}
-            </div>
-          </div>
-        `;
-      });
-    }
-
-    if (!content.trim()) {
-      content = `
-        <div style="text-align: center; padding: 40px; color: #666;">
-          No assets assigned to this event
-        </div>
-      `;
-    }
-
-    modelsContainer.innerHTML = content;
-  } catch (error) {
-    console.error("Error adding custom assets to model requirements:", error);
-  }
-}
 
 async function removeModelFromEvent(eventId, brand, model, department, description = "") {
   const label = `${brand} ${model}${description ? ` (${description})` : ""}`;
@@ -10414,57 +8137,7 @@ function populateEditQuantityModal(eventId, brand, model, department, currentQua
 }
 
 // Handle blur for edit quantity modal
-function handleEditQuantityBlur(maxQuantity) {
-  const input = document.getElementById("editQuantityInput");
-  if (!input) return;
 
-  let value = input.value.trim();
-
-  // If empty on blur, restore to minimum 1
-  if (value === '' || isNaN(parseInt(value)) || parseInt(value) < 1) {
-    input.value = 1;
-    input.style.borderColor = "#28a745";
-    return;
-  }
-
-  // If value exceeds maximum, set to maximum
-  const numValue = parseInt(value);
-  if (numValue > maxQuantity) {
-    input.value = maxQuantity;
-    showNotification("warning", `Maximum ${maxQuantity} available`);
-  }
-
-  validateEditQuantityInput();
-}
-
-function validateEditQuantityInput() {
-  const input = document.getElementById("editQuantityInput");
-  if (!input) return false;
-
-  const maxQty = parseInt(input.max);
-  let value = input.value.trim();
-
-  // Allow empty during typing
-  if (value === '') {
-    input.style.borderColor = "#ddd";
-    return false;
-  }
-
-  const numValue = parseInt(value);
-
-  if (isNaN(numValue) || numValue < 1) {
-    input.style.borderColor = "#dc3545";
-    return false;
-  }
-
-  if (numValue > maxQty) {
-    input.style.borderColor = "#dc3545";
-    return false;
-  }
-
-  input.style.borderColor = "#28a745";
-  return true;
-}
 
 async function updateModelQuantity(eventId, brand, model, department, newQuantity, currentQuantity, description = "") {
   try {
@@ -10536,68 +8209,6 @@ async function updateModelQuantity(eventId, brand, model, department, newQuantit
   }
 }
 
-function preserveModalState(callback) {
-    // Save which sections are expanded
-    const expandedSections = [];
-    const toggleIcons = document.querySelectorAll('.toggle-icon');
-    toggleIcons.forEach(icon => {
-        const parent = icon.closest('[onclick*="togglePrepareSection"]');
-        if (parent) {
-            const onclickAttr = parent.getAttribute('onclick');
-            const match = onclickAttr.match(/togglePrepareSection\('([^']+)'\)/);
-            if (match) {
-                const sectionId = match[1];
-                const section = document.getElementById(sectionId);
-                if (section && section.style.display !== 'none') {
-                    expandedSections.push(sectionId);
-                }
-            }
-        }
-    });
-    
-    // Save scroll position
-    const modalContent = document.getElementById('prepareEventContent');
-    const scrollTop = modalContent ? modalContent.scrollTop : 0;
-    
-    // Save active tabs
-    const activeTab = document.querySelector('.nav-link.active');
-    const activeTabText = activeTab ? activeTab.textContent.trim() : '';
-    
-    // Execute the callback (usually openPrepareEventModal)
-    callback();
-    
-    // Restore state after a short delay to allow DOM to update
-    setTimeout(() => {
-        // Restore expanded sections
-        expandedSections.forEach(sectionId => {
-            const section = document.getElementById(sectionId);
-            if (section) {
-                section.style.display = 'block';
-                // Update toggle icon
-                const toggleIcon = document.querySelector(`[onclick*="togglePrepareSection('${sectionId}')"] .toggle-icon`);
-                if (toggleIcon) {
-                    toggleIcon.textContent = '▼';
-                }
-            }
-        });
-        
-        // Restore scroll position
-        const newModalContent = document.getElementById('prepareEventContent');
-        if (newModalContent) {
-            newModalContent.scrollTop = scrollTop;
-        }
-        
-        // Restore active tab
-        if (activeTabText) {
-            const tabs = document.querySelectorAll('.nav-link');
-            tabs.forEach(tab => {
-                if (tab.textContent.trim() === activeTabText) {
-                    tab.click();
-                }
-            });
-        }
-    }, 100);
-}
 
 function validateEditQuantityInput() {
   const input = document.getElementById("editQuantityInput");
@@ -10624,196 +8235,7 @@ function validateEditQuantityInput() {
 }
 
 // Filter available assets for simple interface
-function filterAvailableAssetsSimple(searchTerm) {
-  const container = document.getElementById("available-assets-simple");
-  const availableAssets = window.currentEditAvailableAssets || [];
-  const eventId = window.currentEditEventId;
 
-  if (!searchTerm || searchTerm.length < 2) {
-    container.innerHTML =
-      '<p style="text-align: center; color: #666; padding: 20px;">Type at least 2 characters to search...</p>';
-    return;
-  }
-
-  const filteredAssets = availableAssets.filter(
-    (asset) =>
-      asset.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      asset.brand.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      asset.model.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (asset.description &&
-        asset.description.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
-
-  if (filteredAssets.length === 0) {
-    container.innerHTML =
-      '<p style="text-align: center; color: #666; padding: 20px;">No matching assets found.</p>';
-    return;
-  }
-
-  // Group assets by model
-  const assetsByModel = {};
-  filteredAssets.forEach((asset) => {
-    const modelKey = `${asset.brand} ${asset.model}`;
-    if (!assetsByModel[modelKey]) {
-      assetsByModel[modelKey] = {
-        brand: asset.brand,
-        model: asset.model,
-        description: asset.description,
-        department: asset.department,
-        assets: [],
-        count: 0,
-      };
-    }
-    assetsByModel[modelKey].assets.push(asset);
-    assetsByModel[modelKey].count++;
-  });
-
-  let content = "";
-  Object.values(assetsByModel).forEach((modelGroup) => {
-    const inputId = `qty-${modelGroup.brand.replace(
-      /\s+/g,
-      ""
-    )}-${modelGroup.model.replace(/\s+/g, "")}`;
-
-    content += `
-            <div style="padding: 12px; border-bottom: 1px solid #f1f1f1; display: flex; justify-content: space-between; align-items: center;">
-                <div style="flex: 1;">
-                    <div style="font-weight: 500; font-size: 14px;">${escapeHtml(modelGroup.brand)} ${escapeHtml(modelGroup.model)}</div>
-                    <div style="color: #666; font-size: 12px; margin: 4px 0;">${escapeHtml(modelGroup.description || "")}</div>
-                    <div style="display: flex; align-items: center; gap: 10px;">
-                        <span class="asset-badge dept-${modelGroup.department.toLowerCase()}">${escapeHtml(modelGroup.department)}</span>
-                        <span style="color: #28a745; font-size: 11px; font-weight: 500;">${modelGroup.count} available</span>
-                    </div>
-                </div>
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    <input type="number" min="1" max="${modelGroup.count}" value="1" 
-                           id="${inputId}"
-                           style="width: 50px; padding: 4px; border: 1px solid #ddd; border-radius: 4px; text-align: center;"
-                           onchange="validateQuantityInput('${inputId}', ${modelGroup.count})"
-                           oninput="validateQuantityInput('${inputId}', ${modelGroup.count})">
-                    <button class="btn btn-success add-model-btn" style="padding: 6px 12px; font-size: 11px;" 
-                            data-event-id="${eventId}"
-                            data-brand="${escapeHtml(modelGroup.brand)}"
-                            data-model="${escapeHtml(modelGroup.model)}"
-                            data-department="${escapeHtml(modelGroup.department)}"
-                            data-description="${escapeHtmlAttribute(modelGroup.description || '')}"
-                            data-input-id="${inputId}">
-                        Add
-                    </button>
-                </div>
-            </div>
-        `;
-  });
-
-  container.innerHTML = content;
-}
-
-async function updateCurrentAssetsOnly(eventId) {
-  try {
-    const response = await apiCall(`/api/events/${eventId}`);
-    const event = response.data;
-
-    // Update just the current assets section
-    const currentAssetsContainer = document.querySelector(
-      "#edit-assets-tab > div:first-child > div:last-child"
-    );
-    if (!currentAssetsContainer) return;
-
-    // Clear current assets
-    currentAssetsContainer.innerHTML = "";
-
-    // Rebuild current assets display
-    if (
-      event.assetsByDepartment &&
-      Object.keys(event.assetsByDepartment).length > 0
-    ) {
-      Object.keys(event.assetsByDepartment).forEach((dept) => {
-        const assets = event.assetsByDepartment[dept];
-
-        // Create department section
-        const deptHTML = `
-                    <div style="background: #f8f9fa; padding: 8px 12px; font-weight: bold; border-bottom: 1px solid #e9ecef;">
-                        ${dept} Department (${assets.length} assets)
-                    </div>
-                    <div class="dept-assets-${dept}"></div>
-                `;
-        currentAssetsContainer.insertAdjacentHTML("beforeend", deptHTML);
-
-        const deptContainer = currentAssetsContainer.querySelector(
-          `.dept-assets-${dept}`
-        );
-
-        assets.forEach((asset) => {
-          let assetHTML = "";
-
-          // Check if this is a model assignment
-          if (asset.id && asset.id.startsWith("[MODEL]")) {
-            // Parse model assignment
-            try {
-              const parts = asset.id.substring(7).split("|");
-              if (parts.length >= 4) {
-                const brand = parts[1];
-                const model = parts[2];
-                const quantity = parts[3];
-                const description = parts[4] || "";
-
-                assetHTML = `
-                                    <div class="model-assignment" style="padding: 12px; border-bottom: 1px solid #f1f1f1; display: flex; justify-content: space-between; align-items: center; background: #f8f9fa;">
-                                        <div>
-                                            <span style="font-weight: 500; color: #495057;">📦 ${quantity}x ${brand} ${model}</span>
-                                            <div style="color: #666; font-size: 11px; margin-top: 2px;">${description}</div>
-                                            <div style="color: #999; font-size: 10px; font-style: italic; margin-top: 2px;">Specific assets will be assigned during preparation</div>
-                                        </div>
-                                        <div style="display: flex; gap: 5px;">
-                                            <button class="btn btn-warning" style="padding: 3px 6px; font-size: 10px;"
-                                              onclick="editModelQuantity(${eventId}, '${escapeJs(brand)}', '${escapeJs(model)}', '${escapeJs(dept)}', '${escapeJs(description)}')">Edit Qty</button>
-
-                                            <button class="btn btn-danger" style="padding: 3px 6px; font-size: 10px;"
-                                              onclick="removeModelFromEvent(${eventId}, '${escapeJs(brand)}', '${escapeJs(model)}', '${escapeJs(dept)}', '${escapeJs(description)}')">Remove</button>
-                                        </div>
-                                    </div>
-                                `;
-              }
-            } catch (e) {
-              console.error("Error parsing model assignment:", e);
-            }
-          } else {
-            // Regular asset
-            const statusIcon =
-              asset.status === "returned"
-                ? "↩️"
-                : asset.status === "prepared"
-                ? "✅"
-                : "📋";
-            assetHTML = `
-                            <div style="padding: 10px 12px; border-bottom: 1px solid #f1f1f1; display: flex; justify-content: space-between; align-items: center;">
-                                <div>
-                                    <span>${statusIcon} ${asset.id} - ${asset.name}</span>
-                                </div>
-                                <button class="btn btn-danger" style="padding: 4px 8px; font-size: 11px;" onclick="removeAssetFromEvent(${eventId}, '${asset.id}')">Remove</button>
-                            </div>
-                        `;
-          }
-
-          if (assetHTML) {
-            deptContainer.insertAdjacentHTML("beforeend", assetHTML);
-          }
-        });
-      });
-    } else {
-      currentAssetsContainer.innerHTML =
-        '<p style="text-align: center; color: #666; padding: 40px;">No assets assigned to this event.</p>';
-    }
-
-    // Update the total count in the header
-    const assetsHeader = document.querySelector("#edit-assets-tab h4");
-    if (assetsHeader) {
-      assetsHeader.textContent = `Current Assets (${event.totalAssets})`;
-    }
-  } catch (error) {
-    console.error("Error updating current assets:", error);
-  }
-}
 
 function validateQuantityInput(inputId, maxAvailable) {
   const input = document.getElementById(inputId);
@@ -10900,23 +8322,6 @@ function handleQuantityKeydown(event) {
   }
 }
 
-async function refreshAvailableAssetsAfterRemoval(eventId) {
-  try {
-    // Reload available assets
-    const response = await apiCall("/api/assets/available");
-    window.currentEditAvailableAssets = response.data;
-
-    // If there's an active search, re-run it
-    const searchInput = document.querySelector(
-      '#edit-assets-tab input[placeholder="Search available assets..."]'
-    );
-    if (searchInput && searchInput.value.length >= 2) {
-      filterAvailableAssetsSimple(searchInput.value);
-    }
-  } catch (error) {
-    console.error("Error refreshing available assets:", error);
-  }
-}
 
 async function addAssetToEventSimple(eventId, assetId) {
   try {
@@ -11114,17 +8519,6 @@ function getDepartmentInfo(dept) {
   return deptInfo[dept] || { name: dept, color: "#6c757d", bgColor: "#e2e3e5" };
 }
 
-async function addAssetToEvent(eventId, assetId) {
-  try {
-    await apiCall(`/api/events/${eventId}/assets`, "POST", { assetId });
-    showNotification("success", `Asset ${assetId} added to event`);
-
-    // Refresh the edit modal
-    loadEditEventAssets(eventId);
-  } catch (error) {
-    showNotification("error", `Failed to add asset: ${error.message}`);
-  }
-}
 
 async function removeAssetFromEvent(eventId, assetId) {
     console.log('=== removeAssetFromEvent CALLED ===');
@@ -11350,146 +8744,7 @@ async function deleteEvent(eventId) {
   }
 }
 
-async function viewAsset(assetId) {
-  const asset = assets.find((a) => a.id === assetId);
-  if (!asset) {
-    showNotification("error", "Asset not found");
-    return;
-  }
 
-  document.getElementById(
-    "assetDetailsTitle"
-  ).textContent = `Asset ${asset.id}`;
-
-  const content = `
-        <div class="form-group">
-            <strong>Brand:</strong> ${asset.brand}
-        </div>
-        <div class="form-group">
-            <strong>Model:</strong> ${asset.model}
-        </div>
-        <div class="form-group">
-            <strong>Serial Number:</strong> ${asset.serial || "N/A"}
-        </div>
-        <div class="form-group">
-            <strong>Description:</strong> ${asset.description || "N/A"}
-        </div>
-        <div class="form-group">
-            <strong>Department:</strong> <span class="asset-badge dept-${asset.department.toLowerCase()}">${
-    asset.department
-  }</span>
-        </div>
-        <div class="form-group">
-            <strong>Status:</strong> <span class="asset-badge status-${
-              asset.status
-            }">${asset.status}</span>
-        </div>
-        <div class="form-group">
-            <strong>Current Location:</strong> ${asset.location || "Store"}
-        </div>
-        <div class="form-group">
-            <strong>Missing:</strong> ${asset.isMissing ? "Yes" : "No"}
-        </div>
-        <div class="form-group" style="display: flex; align-items: center; gap: 15px;">
-            <strong>Out of Commission:</strong>
-            <label class="ooc-toggle">
-                <input type="checkbox" ${asset.isOOC ? 'checked' : ''} 
-                       onchange="toggleOOCStatus('${asset.id}', this.checked)"
-                       ${asset.status === 'deployed' ? 'disabled title="Cannot change OOC status while asset is deployed"' : ''}>
-                <span class="ooc-slider"></span>
-            </label>
-            <span style="color: ${asset.isOOC ? '#dc3545' : '#28a745'}; font-weight: 500;">
-                ${asset.isOOC ? 'Out of Commission' : 'In Service'}
-            </span>
-        </div>
-        <div class="form-group" style="margin-top: 20px;">
-            <button class="btn btn-primary" onclick="viewMaintenanceLog('${asset.id}')">
-                View Maintenance Log
-            </button>
-            <button class="btn btn-warning" onclick="closeModal('assetDetailsModal'); openMaintenanceModalForAsset('${asset.id}')">
-                Log Maintenance
-            </button>
-        </div>
-    `;
-
-  document.getElementById("assetDetailsContent").innerHTML = content;
-  openModal("assetDetailsModal");
-}
-
-async function refreshAssetsTabContent(eventId) {
-  try {
-    const response = await apiCall(`/api/events/${eventId}`);
-    const event = response.data;
-
-    // Update the current assets section
-    let currentAssetsHTML = "";
-    if (
-      event.assetsByDepartment &&
-      Object.keys(event.assetsByDepartment).length > 0
-    ) {
-      Object.keys(event.assetsByDepartment).forEach((dept) => {
-        const assets = event.assetsByDepartment[dept];
-        currentAssetsHTML += `
-                        <div style="background: #f8f9fa; padding: 8px 12px; font-weight: bold; border-bottom: 1px solid #e9ecef;">
-                            ${dept} Department (${assets.length} assets)
-                        </div>
-                    `;
-        assets.forEach((asset) => {
-          const statusIcon =
-            asset.status === "returned"
-              ? "↩️"
-              : asset.status === "prepared"
-              ? "✅"
-              : "📋";
-          currentAssetsHTML += `
-                            <div style="padding: 10px 12px; border-bottom: 1px solid #f1f1f1; display: flex; justify-content: space-between; align-items: center;">
-                                <div>
-                                    <span>${statusIcon} ${asset.id} - ${asset.name}</span>
-                                </div>
-                                ${generateRemoveButton(event.id, asset.id)}
-                            </div>
-                        `;
-        });
-      });
-    } else {
-      currentAssetsHTML =
-        '<p style="text-align: center; color: #666; padding: 40px;">No assets assigned to this event.</p>';
-    }
-
-    // Update the current assets container
-    const currentAssetsContainer = document.querySelector(
-      "#edit-assets-tab > div:first-child > div:last-child"
-    );
-    if (currentAssetsContainer) {
-      currentAssetsContainer.innerHTML = currentAssetsHTML;
-    }
-
-    // Update the asset count in the header
-    const assetsHeader = document.querySelector("#edit-assets-tab h4");
-    if (assetsHeader) {
-      assetsHeader.textContent = `Current Assets (${event.totalAssets})`;
-    }
-
-    // Clear the search and results
-    const searchInput = document.querySelector(
-      '#edit-assets-tab input[placeholder="Search available assets..."]'
-    );
-    if (searchInput) {
-      searchInput.value = "";
-    }
-    const resultsContainer = document.getElementById("available-assets-simple");
-    if (resultsContainer) {
-      resultsContainer.innerHTML =
-        '<p style="text-align: center; color: #666; padding: 20px;">Type to search for available assets...</p>';
-    }
-
-    // Reload available assets
-    await loadAvailableAssetsForEdit(eventId);
-  } catch (error) {
-    console.error("Error refreshing assets tab:", error);
-    showNotification("error", "Failed to refresh assets list");
-  }
-}
 
 // Form handlers
 document.addEventListener("DOMContentLoaded", function () {
@@ -12256,19 +9511,6 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   });
 
-function openMaintenanceModalForAsset(assetId) {
-  // Ensure the modal is opened first
-  openMaintenanceModal();
-  
-  // Pre-select the asset after a short delay to ensure DOM is ready
-  setTimeout(() => {
-    if (assets && assets.length > 0) {
-      selectAssetForMaintenance(assetId);
-    } else {
-      console.warn('Assets not loaded yet, cannot pre-select asset');
-    }
-  }, 200);
-}
 
 // Global variable to store selected assets for maintenance
 let selectedMaintenanceAssets = new Set();
@@ -12326,118 +9568,9 @@ function openMaintenanceModalForAsset(assetId) {
   }, 200);
 }
 
-function searchMaintenanceAssets() {
-  const searchEl = document.getElementById('maintenanceAssetSearch');
-  const container = document.getElementById('availableMaintenanceAssets');
-  
-  if (!searchEl || !container) {
-    console.error('Search elements not found');
-    return;
-  }
-  
-  const searchTerm = searchEl.value.toLowerCase().trim();
-  
-  if (!searchTerm || searchTerm.length < 2) {
-    container.innerHTML = '<div style="padding: 20px; text-align: center; color: #666;">Type at least 2 characters to search...</div>';
-    return;
-  }
-  
-  if (!assets || assets.length === 0) {
-    container.innerHTML = '<div style="padding: 20px; text-align: center; color: #666;">No assets loaded. Please refresh the page.</div>';
-    return;
-  }
-  
-  // Filter assets based on search term
-  const filteredAssets = assets.filter(asset => {
-    const searchableText = `${asset.id} ${asset.brand} ${asset.model} ${asset.serial || ''} ${escapeJs(asset.description || '')}`.toLowerCase();
-    return searchableText.includes(searchTerm) && !selectedMaintenanceAssets.has(asset.id);
-  });
-  
-  if (filteredAssets.length === 0) {
-    container.innerHTML = '<div style="padding: 20px; text-align: center; color: #666;">No matching assets found.</div>';
-    return;
-  }
-  
-  let html = '';
-  filteredAssets.slice(0, 50).forEach(asset => { // Limit to 50 results
-    const statusBadge = getAssetStatusBadge(asset);
-    const locationText = asset.location || 'Store';
-    
-    html += `
-      <div class="maintenance-asset-item" style="padding: 12px; border-bottom: 1px solid #f1f1f1; display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: background-color 0.2s;"
-           onmouseover="this.style.backgroundColor='#f8f9fa'" 
-           onmouseout="this.style.backgroundColor='white'"
-           data-asset-id="${escapeHtml(asset.id)}">
-        <div style="flex: 1;">
-          <div style="font-weight: 500; margin-bottom: 4px;">${escapeHtml(asset.id)}</div>
-          <div style="color: #666; font-size: 13px; margin-bottom: 2px;">${escapeHtml(asset.brand)} ${escapeHtml(asset.model)}</div>
-          <div style="color: #999; font-size: 12px;">${escapeJs(asset.description || '')}</div>
-          <div style="margin-top: 4px;">
-            ${statusBadge}
-            <span style="color: #999; font-size: 11px; margin-left: 8px;">📍 ${escapeHtml(locationText)}</span>
-          </div>
-        </div>
-        <button class="btn btn-primary select-maintenance-btn" style="padding: 6px 12px; font-size: 12px;" data-asset-id="${escapeHtml(asset.id)}">
-          Select
-        </button>
-      </div>
-    `;
-  });
-  
-  container.innerHTML = html;
-}
 
-function getAssetStatusBadge(asset) {
-  let statusClass = 'status-available';
-  let statusText = 'Available';
-  
-  if (asset.status === 'missing') {
-    statusClass = 'status-missing';
-    statusText = 'Missing';
-  } else if (asset.status === 'ooc') {
-    statusClass = 'status-ooc';
-    statusText = 'OOC';
-  } else if (asset.status === 'deployed') {
-    statusClass = 'status-deployed';
-    statusText = 'Deployed';
-  }
-  
-  return `<span class="asset-badge ${statusClass}">${statusText}</span>`;
-}
 
-function selectAssetForMaintenance(assetId) {
-  if (!assets || assets.length === 0) {
-    showNotification('error', 'Assets not loaded');
-    return;
-  }
-  
-  const asset = assets.find(a => a.id === assetId);
-  if (!asset) {
-    showNotification('error', `Asset ${assetId} not found`);
-    return;
-  }
-  
-  selectedMaintenanceAssets.add(assetId);
-  updateSelectedAssetsDisplay();
-  
-  // Clear search results and show a message
-  const searchContainer = document.getElementById('availableMaintenanceAssets');
-  if (searchContainer) {
-    searchContainer.innerHTML = '<div style="padding: 20px; text-align: center; color: #666;">Asset pre-selected. You can search for additional assets to add to this maintenance session.</div>';
-  }
-  
-  showNotification('success', `Selected ${assetId} for maintenance`);
-}
 
-function removeAssetFromMaintenance(assetId) {
-  selectedMaintenanceAssets.delete(assetId);
-  updateSelectedAssetsDisplay();
-  
-  // Refresh search results
-  searchMaintenanceAssets();
-  
-  showNotification('info', `Removed ${assetId} from selection`);
-}
 
 function updateSelectedContainerAssetsDisplay() {
   const countElement = document.getElementById('selectedContainerAssetsCount');
@@ -12787,300 +9920,17 @@ function displayOOCAssets(oocAssets) {
   updateBulkOOCButton();
 }
 
-async function toggleOOCStatus(assetId, isOOC) {
-  try {
-    // Find the asset in our local data
-    const asset = assets.find(a => a.id === assetId);
-    if (!asset) {
-      showNotification('error', 'Asset not found');
-      return;
-    }
-    
-    // Check if asset is deployed
-    if (asset.status === 'deployed') {
-      showNotification('warning', 'Cannot change OOC status while asset is deployed');
-      // Reset the toggle
-      const toggle = document.querySelector(`input[onchange*="${assetId}"]`);
-      if (toggle) {
-        toggle.checked = asset.isOOC;
-      }
-      return;
-    }
-    
-    // Prepare the maintenance data
-    const actionText = isOOC ? 'Marked as Out of Commission via toggle' : 'Removed Out of Commission status via toggle';
-    
-    const maintenanceData = {
-          logEntry,
-          newLocation: newLocation || null,
-          markOOC: false,
-          unmarkOOC: true,
-          markMissing: false,
-          unmarkMissing: true
-    };
-    
-    // Call the maintenance API to update OOC status
-    const response = await apiCall(`/api/assets/${encodeURIComponent(assetId)}/maintain`, 'POST', maintenanceData);
-    
-    if (response.success) {
-      // Update local asset data
-      asset.isOOC = isOOC;
-      
-      // Show success notification
-      const statusText = isOOC ? 'marked as Out of Commission' : 'removed from Out of Commission';
-      showNotification('success', `${assetId} ${statusText}`);
-      
-      // Refresh inventory if we're on that page
-      if (document.getElementById('inventory-section').classList.contains('active')) {
-        // Just update the local display instead of full reload for better UX
-        setTimeout(() => {
-          displayFilteredInventory();
-        }, 100);
-      }
-      
-      // Refresh maintenance section if it's active
-      if (document.getElementById('maintenance-section').classList.contains('active')) {
-        setTimeout(() => {
-          loadMaintenanceAssets();
-        }, 100);
-      }
-      
-    } else {
-      showNotification('error', response.message || 'Failed to update OOC status');
-      
-      // Reset the toggle on error
-      const toggle = document.querySelector(`input[onchange*="${assetId}"]`);
-      if (toggle) {
-        toggle.checked = asset.isOOC;
-      }
-    }
-    
-  } catch (error) {
-    showNotification('error', `Failed to update OOC status: ${error.message}`);
-    console.error('Error toggling OOC status:', error);
-    
-    // Reset the toggle on error
-    const toggle = document.querySelector(`input[onchange*="${assetId}"]`);
-    if (toggle) {
-      const asset = assets.find(a => a.id === assetId);
-      if (asset) {
-        toggle.checked = asset.isOOC;
-      }
-    }
-  }
-}
 
-function toggleOOCAssetSelection(assetId) {
-  if (selectedOOCAssets.has(assetId)) {
-    selectedOOCAssets.delete(assetId);
-  } else {
-    selectedOOCAssets.add(assetId);
-  }
-  
-  updateOOCAssetDisplay();
-  updateBulkOOCButton();
-}
 
-function toggleAllOOCSelection() {
-  const selectAllCheckbox = document.getElementById("selectAllOOC");
-  const isChecked = selectAllCheckbox.checked;
-  
-  // Get all currently visible OOC assets
-  const oocAssetRows = document.querySelectorAll(".ooc-asset-item");
-  
-  if (isChecked) {
-    // Select all visible assets
-    oocAssetRows.forEach(row => {
-      const checkbox = row.querySelector('input[type="checkbox"]');
-      if (checkbox && !checkbox.checked) {
-        const assetId = checkbox.getAttribute('onchange').match(/'([^']+)'/)[1];
-        selectedOOCAssets.add(assetId);
-      }
-    });
-  } else {
-    // Deselect all
-    selectedOOCAssets.clear();
-  }
-  
-  updateOOCAssetDisplay();
-  updateBulkOOCButton();
-}
 
-function updateOOCAssetDisplay() {
-  // Update individual checkboxes and row styling
-  document.querySelectorAll(".ooc-asset-item").forEach(row => {
-    const checkbox = row.querySelector('input[type="checkbox"]');
-    if (checkbox) {
-      const assetId = checkbox.getAttribute('onchange').match(/'([^']+)'/)[1];
-      const isSelected = selectedOOCAssets.has(assetId);
-      
-      checkbox.checked = isSelected;
-      if (isSelected) {
-        row.classList.add('selected');
-      } else {
-        row.classList.remove('selected');
-      }
-    }
-  });
-  
-  // Update select all checkbox
-  const selectAllCheckbox = document.getElementById("selectAllOOC");
-  if (selectAllCheckbox) {
-    const totalVisible = document.querySelectorAll(".ooc-asset-item").length;
-    const totalSelected = selectedOOCAssets.size;
-    
-    selectAllCheckbox.checked = totalSelected > 0 && totalSelected === totalVisible;
-    selectAllCheckbox.indeterminate = totalSelected > 0 && totalSelected < totalVisible;
-  }
-}
 
 // Update the bulk OOC button state
-function updateBulkOOCButton() {
-  const bulkButton = document.getElementById('bulk-clear-ooc-btn');
-  
-  if (bulkButton) {
-    const count = selectedOOCAssets.size;
-    
-    if (count === 0) {
-      // Hide the button when no assets are selected
-      bulkButton.style.display = 'none';
-    } else {
-      // Show the button and update text when assets are selected
-      bulkButton.style.display = 'inline-block';
-      bulkButton.textContent = `Clear Status (${count} selected)`;
-      bulkButton.disabled = false;
-      bulkButton.classList.add('btn-success');
-      bulkButton.classList.remove('btn-secondary');
-    }
-  }
-}
 
-function filterOOCAssets() {
-  const searchTerm = document.getElementById("ooc-search")?.value.toLowerCase() || "";
-  const rows = document.querySelectorAll(".ooc-asset-item");
-  
-  rows.forEach(row => {
-    const text = row.textContent.toLowerCase();
-    if (text.includes(searchTerm)) {
-      row.style.display = "";
-    } else {
-      row.style.display = "none";
-    }
-  });
-}
 
-function openBulkOOCModal() {
-  if (selectedOOCAssets.size === 0) {
-    showNotification("warning", "Please select at least one asset");
-    return;
-  }
-  
-  updateSelectedOOCDisplay();
-  openModal('bulkOOCModal');
-}
 
-function updateSelectedOOCDisplay() {
-  const countElement = document.getElementById('selectedOOCCount');
-  const containerElement = document.getElementById('selectedOOCAssets');
-  const serialUpdatesContainer = document.getElementById('bulkSerialNumberUpdates');
-  
-  countElement.textContent = selectedOOCAssets.size;
-  
-  if (selectedOOCAssets.size === 0) {
-    containerElement.innerHTML = '<div style="color: #666; font-style: italic;">No assets selected</div>';
-    if (serialUpdatesContainer) {
-      serialUpdatesContainer.innerHTML = '<div style="color: #666; font-style: italic; text-align: center;">No assets selected for serial number updates</div>';
-    }
-    return;
-  }
-  
-  let html = '<div style="display: grid; gap: 8px;">';
-  let serialHtml = '<div style="display: grid; gap: 8px;">';
-  
-  selectedOOCAssets.forEach(assetId => {
-    const asset = assets ? assets.find(a => a.id === assetId) : null;
-    if (asset) {
-      html += `
-        <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px; background: white; border: 1px solid #ddd; border-radius: 4px;">
-          <div>
-            <span style="font-weight: 500;">${assetId}</span>
-            <span style="color: #666; margin-left: 10px;">${asset.brand} ${asset.model}</span>
-          </div>
-          <button onclick="removeFromOOCSelection('${assetId}')" style="background: none; border: none; color: #999; cursor: pointer; font-size: 16px;" title="Remove">×</button>
-        </div>
-      `;
-      
-      serialHtml += `
-        <div style="display: flex; align-items: center; gap: 10px; padding: 8px; background: white; border: 1px solid #ddd; border-radius: 4px;">
-          <div style="flex: 1;">
-            <span style="font-weight: 500; font-size: 12px;">${assetId}</span>
-            <div style="color: #666; font-size: 11px;">Current SN: ${asset.serial || 'None'}</div>
-          </div>
-          <input 
-            type="text" 
-            placeholder="New serial number" 
-            id="newSerial_${assetId.replace(/[^a-zA-Z0-9]/g, '_')}"
-            style="flex: 2; padding: 4px 8px; border: 1px solid #ddd; border-radius: 3px; font-size: 12px;"
-          />
-        </div>
-      `;
-    }
-  });
-  html += '</div>';
-  serialHtml += '</div>';
-  
-  containerElement.innerHTML = html;
-  if (serialUpdatesContainer) {
-    serialUpdatesContainer.innerHTML = serialHtml;
-  }
-}
 
-function removeFromOOCSelection(assetId) {
-  selectedOOCAssets.delete(assetId);
-  updateSelectedOOCDisplay();
-  updateOOCAssetDisplay();
-  updateBulkOOCButton();
-}
 
-function clearSingleOOC(assetId) {
-  // Find the asset details
-  const asset = assets ? assets.find(a => a.id === assetId) : null;
-  if (!asset) {
-    showNotification('error', 'Asset not found');
-    return;
-  }
-  
-  // Populate the modal
-  document.getElementById('singleOOCTitle').textContent = `Clear OOC Status - ${assetId}`;
-  document.getElementById('singleOOCAssetId').value = assetId;
-  document.getElementById('singleOOCLogEntry').value = '';
-  document.getElementById('singleOOCNewLocation').value = 'Store';
-  document.getElementById('singleOOCNewSerial').value = '';
-  
-  // Show asset info
-  const assetInfoDiv = document.getElementById('singleOOCAssetInfo');
-  assetInfoDiv.innerHTML = `
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px;">
-      <div><strong>Asset ID:</strong> ${asset.id}</div>
-      <div><strong>Brand:</strong> ${asset.brand}</div>
-      <div><strong>Model:</strong> ${asset.model}</div>
-      <div><strong>Current Location:</strong> ${asset.location || 'Store'}</div>
-      <div><strong>Current Serial:</strong> ${asset.serial || 'None'}</div>
-    </div>
-    ${asset.description ? `<div style="margin-top: 8px;"><strong>Description:</strong> ${escapeJs(asset.description || '')}</div>` : ''}
-  `;
-  
-  // Open the modal
-  openModal('singleOOCModal');
-}
 
-function openBulkOOCClear() {
-  // Set current date as default
-  const today = new Date().toISOString().split('T')[0];
-  document.getElementById('bulkOOCMaintenanceDate').value = today;
-  
-  openModal('bulkOOCModal');
-}
 
 function clearSingleOOC(assetId) {
   // Find the asset details
@@ -13222,49 +10072,6 @@ async function viewMaintenanceLog(assetId) {
   }
 }
 
-function updateStatusFromToggle(statusType, isChecked) {
-  if (statusType === 'ooc') {
-    const hiddenNoChange = document.getElementById('hiddenOOCNoChange');
-    const hiddenMark = document.getElementById('hiddenOOCMark');
-    const statusText = document.getElementById('oocStatusText');
-    
-    if (!hiddenNoChange || !hiddenMark || !statusText) {
-      return;
-    }
-    
-    if (isChecked) {
-      hiddenMark.checked = true;
-      statusText.textContent = 'Mark as Out of Commission';
-      statusText.style.color = '#dc3545';
-      statusText.style.fontWeight = '500';
-    } else {
-      hiddenNoChange.checked = true;
-      statusText.textContent = 'No change';
-      statusText.style.color = '#6c757d';
-      statusText.style.fontWeight = 'normal';
-    }
-  } else if (statusType === 'missing') {
-    const hiddenNoChange = document.getElementById('hiddenMissingNoChange');
-    const hiddenMark = document.getElementById('hiddenMissingMark');
-    const statusText = document.getElementById('missingStatusText');
-    
-    if (!hiddenNoChange || !hiddenMark || !statusText) {
-      return;
-    }
-    
-    if (isChecked) {
-      hiddenMark.checked = true;
-      statusText.textContent = 'Mark as Missing';
-      statusText.style.color = '#fd7e14';
-      statusText.style.fontWeight = '500';
-    } else {
-      hiddenNoChange.checked = true;
-      statusText.textContent = 'No change';
-      statusText.style.color = '#6c757d';
-      statusText.style.fontWeight = 'normal';
-    }
-  }
-}
 
 function showMaintenanceLogModal(asset) {
   // Debug: Log the asset data to console
@@ -13624,12 +10431,6 @@ window.selectAssetForMaintenance = selectAssetForMaintenance;
 window.removeAssetFromMaintenance = removeAssetFromMaintenance;
 
 // Helper function to close the maintenance log modal
-function closeMaintenanceLogModal() {
-  const modal = document.getElementById('maintenanceLogModal');
-  if (modal) {
-    modal.remove();
-  }
-}
 
 // Function to handle adding new log entry from the maintenance log modal
 function addNewLogEntryFromModal(assetId) {
@@ -13713,167 +10514,6 @@ async function deleteMaintenanceLog(assetId, logIndex, logId) {
 }
 
 // Add this improved custom confirmation function
-function showCustomConfirm(title, message) {
-  return new Promise((resolve) => {
-    // Remove any existing confirmation modals
-    const existingModal = document.getElementById('customConfirmModal');
-    if (existingModal) {
-      existingModal.remove();
-    }
-    
-    // Create confirmation modal with higher z-index
-    const confirmModalHTML = `
-      <div id="customConfirmModal" style="
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0, 0, 0, 0.6);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 9999;
-        backdrop-filter: blur(2px);
-      ">
-        <div style="
-          background: white;
-          border-radius: 12px;
-          padding: 30px;
-          max-width: 450px;
-          width: 90%;
-          text-align: center;
-          box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-          border: 1px solid rgba(255, 255, 255, 0.2);
-          animation: confirmFadeIn 0.2s ease-out;
-        ">
-          <div style="
-            width: 60px;
-            height: 60px;
-            background: #fee;
-            border-radius: 50%;
-            margin: 0 auto 20px auto;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 24px;
-            color: #dc3545;
-          ">⚠️</div>
-          <h3 style="
-            margin: 0 0 15px 0; 
-            color: #333; 
-            font-size: 20px;
-            font-weight: 600;
-          ">${title}</h3>
-          <p style="
-            margin: 0 0 30px 0; 
-            color: #666; 
-            line-height: 1.5;
-            font-size: 15px;
-          ">${message}</p>
-          <div style="
-            display: flex; 
-            gap: 15px; 
-            justify-content: center;
-          ">
-            <button id="confirmCancel" style="
-              background: #6c757d;
-              color: white;
-              border: none;
-              padding: 12px 24px;
-              border-radius: 6px;
-              cursor: pointer;
-              font-size: 14px;
-              font-weight: 500;
-              transition: background-color 0.2s;
-            " onmouseover="this.style.backgroundColor='#5a6268'" 
-               onmouseout="this.style.backgroundColor='#6c757d'">
-              Cancel
-            </button>
-            <button id="confirmDelete" style="
-              background: #dc3545;
-              color: white;
-              border: none;
-              padding: 12px 24px;
-              border-radius: 6px;
-              cursor: pointer;
-              font-size: 14px;
-              font-weight: 500;
-              transition: background-color 0.2s;
-            " onmouseover="this.style.backgroundColor='#c82333'" 
-               onmouseout="this.style.backgroundColor='#dc3545'">
-              Delete
-            </button>
-          </div>
-        </div>
-      </div>
-      
-      <style>
-        @keyframes confirmFadeIn {
-          from {
-            opacity: 0;
-            transform: scale(0.9);
-          }
-          to {
-            opacity: 1;
-            transform: scale(1);
-          }
-        }
-      </style>
-    `;
-    
-    // Add modal to body
-    document.body.insertAdjacentHTML('beforeend', confirmModalHTML);
-    
-    // Get modal and buttons
-    const modal = document.getElementById('customConfirmModal');
-    const cancelBtn = document.getElementById('confirmCancel');
-    const deleteBtn = document.getElementById('confirmDelete');
-    
-    // Function to clean up and resolve
-    const cleanup = (result) => {
-      if (modal && modal.parentNode) {
-        modal.remove();
-      }
-      document.removeEventListener('keydown', escapeHandler);
-      resolve(result);
-    };
-    
-    // Handle cancel
-    cancelBtn.onclick = (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      cleanup(false);
-    };
-    
-    // Handle delete
-    deleteBtn.onclick = (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      cleanup(true);
-    };
-    
-    // Handle click outside (only on the backdrop)
-    modal.onclick = (e) => {
-      if (e.target === modal) {
-        cleanup(false);
-      }
-    };
-    
-    // Handle escape key
-    const escapeHandler = (e) => {
-      if (e.key === 'Escape') {
-        cleanup(false);
-      }
-    };
-    document.addEventListener('keydown', escapeHandler);
-    
-    // Focus the cancel button by default
-    setTimeout(() => {
-      cancelBtn.focus();
-    }, 100);
-  });
-}
 
 // Add this custom confirmation function
 function showCustomConfirm(message) {
@@ -14317,96 +10957,7 @@ function filterOOCAssets() {
   });
 }
 
-function createMaintenanceLogTable(asset) {
-  if (!asset.maintenanceLogs || asset.maintenanceLogs.length === 0) {
-    return `
-      <div style="text-align: center; padding: 40px; color: #666; background: #f8f9fa; border-radius: 8px;">
-        <div style="font-size: 48px; margin-bottom: 10px;">🔧</div>
-        <div style="font-size: 18px; margin-bottom: 5px;">No Maintenance Records</div>
-        <div style="font-size: 14px;">This asset has no maintenance history yet.</div>
-      </div>
-    `;
-  }
-  
-  // Sort logs by date (most recent first)
-  const sortedLogs = sortMaintenanceLogsByDate(asset.maintenanceLogs);
-  
-  let tableHTML = `
-    <div style="border: 1px solid #e9ecef; border-radius: 8px; overflow: hidden;">
-      <table class="table" style="margin: 0;">
-        <thead style="background: #f8f9fa;">
-          <tr>
-            <th style="width: 120px;">Date</th>
-            <th style="width: 100px;">User</th>
-            <th>Maintenance Description <small style="font-weight: normal; color: #666;">(click to edit)</small></th>
-          </tr>
-        </thead>
-        <tbody>
-  `;
-  
-  sortedLogs.forEach((logData, index) => {
-    const parts = logData.log.split('\t');
-    if (parts.length >= 3) {
-      const date = parts[0];
-      const user = parts[1];
-      const description = parts.slice(2).join('\t'); // In case description contains tabs
-      
-      // Alternate row colors
-      const rowClass = index % 2 === 0 ? '' : 'style="background-color: #f8f9fa;"';
-      
-      tableHTML += `
-        <tr ${rowClass} style="cursor: pointer;" onclick="editMaintenanceLog('${asset.id}', ${logData.originalIndex}, 'log_${asset.id}_${logData.originalIndex}')">
-          <td style="padding: 12px; vertical-align: top; font-weight: 500;">${date}</td>
-          <td style="padding: 12px; vertical-align: top;">${user}</td>
-          <td style="padding: 12px;">${description}</td>
-        </tr>
-      `;
-    }
-  });
-  
-  tableHTML += `
-        </tbody>
-      </table>
-    </div>
-  `;
-  
-  return tableHTML;
-}
 
-function sortMaintenanceLogsByDate(logs) {
-  if (!logs || logs.length === 0) return [];
-  
-  // Parse logs and sort by date (most recent first)
-  const parsedLogs = logs.map((log, index) => {
-    const parts = log.split('\t');
-    const dateStr = parts[0] || '';
-    
-    // Convert date string to Date object for proper sorting
-    let dateObj;
-    try {
-      // Parse YYYY/MM/DD format
-      const dateParts = dateStr.split('/');
-      if (dateParts.length === 3) {
-        dateObj = new Date(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2]));
-      } else {
-        dateObj = new Date(0); // Very old date if parsing fails
-      }
-    } catch (e) {
-      dateObj = new Date(0); // Very old date if parsing fails
-    }
-    
-    return {
-      log: log,
-      date: dateObj,
-      originalIndex: index
-    };
-  });
-  
-  // Sort by date (most recent first)
-  parsedLogs.sort((a, b) => b.date - a.date);
-  
-  return parsedLogs;
-}
 
 function editMaintenanceLog(assetId, logIndex, logId) {
   // First, close any other editing logs
@@ -14914,13 +11465,6 @@ async function saveMaintenanceLogSilent(assetId, logIndex, logId) {
   }
 }
 
-async function saveMaintenanceLog(assetId, logIndex, logId) {
-  const result = await saveMaintenanceLogSilent(assetId, logIndex, logId);
-  
-  if (result) {
-    showNotification('success', 'Maintenance log updated successfully');
-  }
-}
 
 function closeMaintenanceLogModal() {
   const modal = document.getElementById('maintenanceLogModal');
@@ -16235,27 +12779,6 @@ function generateExcelDO(data) {
 }
 
 // Keep the existing helper functions
-function generateItemRows(event) {
-    let html = '';
-    const departments = groupItemsByDepartment(event);
-    
-    // Generate HTML for each department
-    Object.keys(departments).forEach(dept => {
-        if (departments[dept].length > 0) {
-            html += `<tr><td class="department-header" colspan="2">${dept}:</td></tr>`;
-            departments[dept].forEach(item => {
-                html += `
-                    <tr>
-                        <td>${item.description}</td>
-                        <td class="quantity-col">${item.quantity}</td>
-                    </tr>
-                `;
-            });
-        }
-    });
-    
-    return html;
-}
 
 // Function to ensure assets are loaded before using them
 async function ensureAssetsLoaded() {
@@ -16347,87 +12870,6 @@ function applyDoOrdering(items, dept, eventId) {
 }
 
 // Setup drag and drop handlers for DO items (enhanced)
-function setupDoItemDragHandlers(previewContainer, eventId) {
-  let draggedElement = null;
-  let draggedIndex = null;
-  let draggedDept = null;
-
-  previewContainer.querySelectorAll('.do-item-row[draggable="true"]').forEach(row => {
-    row.addEventListener('dragstart', (e) => {
-      draggedElement = e.target;
-      draggedIndex = parseInt(e.target.getAttribute('data-index'));
-      draggedDept = e.target.getAttribute('data-dept');
-      e.target.classList.add('dragging');
-      
-      // Set drag data
-      e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData('text/html', e.target.outerHTML);
-    });
-
-    row.addEventListener('dragend', (e) => {
-      e.target.classList.remove('dragging');
-      draggedElement = null;
-      draggedIndex = null;
-      draggedDept = null;
-      
-      // Remove drag-over class from all rows
-      previewContainer.querySelectorAll('.do-item-row').forEach(r => r.classList.remove('drag-over'));
-    });
-
-    row.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
-      
-      // Only allow dropping within same department
-      const targetDept = e.target.closest('.do-item-row').getAttribute('data-dept');
-      if (targetDept === draggedDept) {
-        e.target.closest('.do-item-row').classList.add('drag-over');
-      }
-    });
-
-    row.addEventListener('dragleave', (e) => {
-      e.target.closest('.do-item-row').classList.remove('drag-over');
-    });
-
-    row.addEventListener('drop', (e) => {
-      e.preventDefault();
-      const targetRow = e.target.closest('.do-item-row');
-      const targetIndex = parseInt(targetRow.getAttribute('data-index'));
-      const targetDept = targetRow.getAttribute('data-dept');
-      
-      targetRow.classList.remove('drag-over');
-      
-      // Only allow dropping within same department
-      if (targetDept !== draggedDept || targetIndex === draggedIndex) {
-        return;
-      }
-
-      // Attempt to reorder the items
-      if (reorderDoItems(eventId, draggedDept, draggedIndex, targetIndex)) {
-        // Refresh the display
-        const event = events.find(e => e.id === eventId || e.event_id === eventId);
-        if (event) {
-          populateDeliveryItemsPreview(event);
-        }
-        if (typeof showNotification === 'function') {
-          showNotification('success', 'Items reordered successfully');
-        }
-      } else {
-        if (typeof showNotification === 'function') {
-          showNotification('warning', 'Unable to reorder items');
-        }
-      }
-    });
-  });
-
-  // Prevent drag on form inputs
-  previewContainer.querySelectorAll('input').forEach(input => {
-    input.addEventListener('dragstart', (e) => {
-      e.preventDefault();
-      return false;
-    });
-  });
-}
 
 // Helper function to clear ordering when DO edits are reset
 function clearDoOrdering(eventId) {
@@ -16514,15 +12956,6 @@ function setupDoItemDragHandlers(previewContainer, eventId) {
 }
 
 // Helper function to update item indices after reordering
-function updateDoItemIndices(eventId, dept) {
-  const state = getDoEdits(eventId);
-  
-  // Re-index custom items to maintain consistency
-  if (state.custom[dept]) {
-    state.custom[dept] = state.custom[dept].map((item, index) => ({...item}));
-    saveDoEdits(eventId, state);
-  }
-}
 
 // NON-BULLET DO PREVIEW + EDIT MODE with consistent styling
 async function populateDeliveryItemsPreview(event) {
@@ -17181,6 +13614,9 @@ document.addEventListener('keydown', function(e) {
 
 // Auto-refresh data every 6 seconds
 setInterval(async () => {
+  if (document.hidden || __autoRefreshInFlight) return;
+
+  __autoRefreshInFlight = true;
   try {
     const currentSection = document.querySelector(".content-section.active");
     if (currentSection) {
@@ -17202,6 +13638,8 @@ setInterval(async () => {
     }
   } catch (error) {
     console.error("Auto-refresh error:", error);
+  } finally {
+    __autoRefreshInFlight = false;
   }
 }, 6000);
 
@@ -17628,17 +14066,6 @@ function getEventSortMode(scope) {
   return document.getElementById(idMap[scope])?.value || 'startDate';
 }
 
-function parseEventDateForSort(value) {
-  if (!value) return new Date(0);
-  const raw = String(value).trim();
-  const norm = raw.includes('/') ? (() => {
-    const [y, m, d] = raw.split('/');
-    return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-  })() : raw;
-  if (/^\d{4}-\d{2}-\d{2}$/.test(norm)) return new Date(`${norm}T12:00:00`);
-  const parsed = new Date(norm);
-  return Number.isNaN(parsed.getTime()) ? new Date(0) : parsed;
-}
 
 function sortEventsForView(list, scope = 'all') {
   const mode = getEventSortMode(scope);
@@ -18136,226 +14563,10 @@ async function processUniversalContainer(eventId, containerId) {
   }, 350);
 }
 
-function renderTransferWorkspace() {
-  const container = document.getElementById('transfer-history');
-  if (!container) return;
 
-  const sourceEvents = transferOptionsCache?.sourceEvents || [];
-  const targetEvents = transferOptionsCache?.targetEvents || [];
 
-  const sourceOptions = sourceEvents.map(event => {
-    const tagPrefix = event.tag === 'dry hire' ? '[DH]' : '[E]';
-    const dateRange = event.startDate === event.endDate ? formatDate(event.startDate) : `${formatDate(event.startDate)} - ${formatDate(event.endDate)}`;
-    return `<option value="${event.id}">${tagPrefix} ${event.id}: ${escapeHtml(event.name)} • ${event.state} • ${event.unreturnedCount || 0} out • ${dateRange}</option>`;
-  }).join('');
 
-  const targetOptions = targetEvents.map(event => {
-    const tagPrefix = event.tag === 'dry hire' ? '[DH]' : '[E]';
-    const dateRange = event.startDate === event.endDate ? formatDate(event.startDate) : `${formatDate(event.startDate)} - ${formatDate(event.endDate)}`;
-    return `<option value="${event.id}">${tagPrefix} ${event.id}: ${escapeHtml(event.name)} • ${event.state} • ${dateRange}</option>`;
-  }).join('');
 
-  container.innerHTML = `
-    <div style="display:flex;flex-direction:column;gap:18px;">
-      <div style="background:linear-gradient(135deg,rgba(102,126,234,.10),rgba(118,75,162,.10));border:1px solid rgba(118,75,162,.18);border-radius:16px;padding:18px;">
-        <h3 style="margin:0 0 6px;color:#4b2f65;">Transfer Assets Directly Between Events</h3>
-        <p style="margin:0;color:#666;line-height:1.4;">Select a source event and a destination event. You can view assets that can transfer directly, or assets that are not common and should return to office.</p>
-      </div>
-
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;align-items:end;background:white;border:1px solid #edf0f5;border-radius:16px;padding:16px;box-shadow:0 6px 18px rgba(0,0,0,.05);">
-        <div class="form-group" style="margin:0;">
-          <label class="form-label">From Event — Ongoing / Last Day / Overdue</label>
-          <select id="transferSourceSelect" class="form-input" onchange="loadTransferCandidates()"><option value="">Select source event...</option>${sourceOptions}</select>
-          <div style="font-size:12px;color:#666;margin-top:6px;">${sourceEvents.length} eligible source event(s)</div>
-        </div>
-        <div class="form-group" style="margin:0;">
-          <label class="form-label">To Event — Planning / Preparing</label>
-          <select id="transferTargetSelect" class="form-input" onchange="loadTransferCandidates()"><option value="">Select destination event...</option>${targetOptions}</select>
-          <div style="font-size:12px;color:#666;margin-top:6px;">${targetEvents.length} eligible destination event(s)</div>
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <button class="btn btn-primary" onclick="loadTransferCandidates()">Compare Events</button>
-          <button class="btn btn-success" onclick="generateTransferPdf()">Export PDF</button>
-        </div>
-      </div>
-
-      <div id="transfer-candidates-panel" style="background:white;border:1px solid #edf0f5;border-radius:16px;padding:16px;box-shadow:0 6px 18px rgba(0,0,0,.05);">
-        ${renderTransferInitialMessage(sourceEvents, targetEvents)}
-      </div>
-    </div>
-  `;
-}
-
-async function loadTransferCandidates() {
-  const sourceSelect = document.getElementById('transferSourceSelect');
-  const targetSelect = document.getElementById('transferTargetSelect');
-  const panel = document.getElementById('transfer-candidates-panel');
-  if (!sourceSelect || !targetSelect || !panel) return;
-
-  const fromEventId = sourceSelect.value;
-  const toEventId = targetSelect.value;
-  if (!fromEventId || !toEventId) {
-    panel.innerHTML = '<p style="text-align:center;color:#666;padding:28px;">Choose both events to compare transfer and return-to-office assets.</p>';
-    return;
-  }
-  if (fromEventId === toEventId) {
-    panel.innerHTML = '<p style="text-align:center;color:#a00;padding:28px;">Source and destination events cannot be the same.</p>';
-    return;
-  }
-  panel.innerHTML = '<div class="loading">Comparing events...</div>';
-  try {
-    const response = await apiCall(`/api/transfers/candidates?fromEventId=${encodeURIComponent(fromEventId)}&toEventId=${encodeURIComponent(toEventId)}`);
-    transferCandidateCache = response.data?.candidates || [];
-    transferReturnToOfficeCache = response.data?.returnToOffice || [];
-    renderTransferCandidates(response.data || {});
-  } catch (error) {
-    panel.innerHTML = `<div style="padding:28px;text-align:center;color:#a00;">Failed to compare events: ${escapeHtml(error.message || String(error))}</div>`;
-  }
-}
-
-function setTransferPanelMode(mode) {
-  transferPanelMode = mode === 'return-office' ? 'return-office' : 'common';
-  renderTransferCandidates(window.__lastTransferData || {});
-}
-
-function renderTransferCandidates(data) {
-  window.__lastTransferData = data;
-  const panel = document.getElementById('transfer-candidates-panel');
-  if (!panel) return;
-  const candidates = data.candidates || transferCandidateCache || [];
-  const returnToOffice = data.returnToOffice || transferReturnToOfficeCache || [];
-  const fromEvent = data.fromEvent || {};
-  const toEvent = data.toEvent || {};
-  const isReturnMode = transferPanelMode === 'return-office';
-  const activeList = isReturnMode ? returnToOffice : candidates;
-
-  const modeButtons = `
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
-      <button class="btn btn-${isReturnMode ? 'secondary' : 'primary'} btn-sm" onclick="setTransferPanelMode('common')">Common / Transferable (${candidates.length})</button>
-      <button class="btn btn-${isReturnMode ? 'primary' : 'secondary'} btn-sm" onclick="setTransferPanelMode('return-office')">Not Common / Return to Office (${returnToOffice.length})</button>
-    </div>
-  `;
-
-  if (!activeList.length) {
-    panel.innerHTML = `${modeButtons}<div style="text-align:center;padding:34px;color:#666;"><div style="font-size:32px;margin-bottom:8px;">🔍</div><div style="font-weight:700;color:#333;margin-bottom:4px;">No assets in this view</div><div>${isReturnMode ? 'All unreturned source assets are currently common with the destination requirements.' : 'There are no unreturned source assets that match the destination event’s remaining model requirements.'}</div></div>`;
-    return;
-  }
-
-  const commonRows = candidates.map(candidate => `
-    <tr>
-      <td><input type="checkbox" class="transfer-candidate-checkbox" data-asset-id="${escapeHtmlAttr(candidate.assetId)}" checked></td>
-      <td><strong>${escapeHtml(candidate.assetId)}</strong></td>
-      <td>${escapeHtml(candidate.serial || '')}</td>
-      <td>${departmentBadgeHtml(candidate.department || 'UN')}</td>
-      <td>${escapeHtml(candidate.brand || '')}</td>
-      <td>${escapeHtml(candidate.model || '')}</td>
-      <td>${escapeHtml(candidate.description || '')}</td>
-      <td>${escapeHtml(candidate.matchLabel || '')}</td>
-      <td><button class="btn btn-success btn-sm" onclick="executeSingleTransfer('${encodeURIComponent(candidate.assetId)}')">Transfer</button></td>
-    </tr>
-  `).join('');
-
-  const returnRows = returnToOffice.map((item, index) => `
-    <tr>
-      <td>${index + 1}</td>
-      <td><strong>${escapeHtml(item.assetId)}</strong></td>
-      <td>${escapeHtml(item.serial || '')}</td>
-      <td>${departmentBadgeHtml(item.department || 'UN')}</td>
-      <td>${escapeHtml(item.brand || '')}</td>
-      <td>${escapeHtml(item.model || '')}</td>
-      <td>${escapeHtml(item.description || '')}</td>
-      <td>${escapeHtml(item.reason || '')}</td>
-    </tr>
-  `).join('');
-
-  panel.innerHTML = `
-    ${modeButtons}
-    <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;margin-bottom:14px;">
-      <div>
-        <h3 style="margin:0;color:#764ba2;">${activeList.length} ${isReturnMode ? 'asset(s) to return to office' : 'transferable asset(s)'}</h3>
-        <div style="color:#666;font-size:13px;margin-top:4px;">From <strong>${escapeHtml(fromEvent.name || '')}</strong> → To <strong>${escapeHtml(toEvent.name || '')}</strong></div>
-      </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;">
-        ${isReturnMode ? '' : '<button class="btn btn-secondary btn-sm" onclick="toggleAllTransferCandidates(true)">Select All</button><button class="btn btn-secondary btn-sm" onclick="toggleAllTransferCandidates(false)">Clear</button><button class="btn btn-success" onclick="executeSelectedTransfers()">Transfer Selected</button>'}
-        <button class="btn btn-primary" onclick="generateTransferPdf()">Export PDF</button>
-      </div>
-    </div>
-    <div style="overflow:auto;border:1px solid #edf0f5;border-radius:12px;">
-      <table class="table" style="margin-top:0;">
-        <thead>
-          ${isReturnMode
-            ? '<tr><th>#</th><th>Asset ID</th><th>Serial</th><th>Dept</th><th>Brand</th><th>Model</th><th>Description</th><th>Reason</th></tr>'
-            : '<tr><th></th><th>Asset ID</th><th>Serial</th><th>Dept</th><th>Brand</th><th>Model</th><th>Description</th><th>Match</th><th>Action</th></tr>'}
-        </thead>
-        <tbody>${isReturnMode ? returnRows : commonRows}</tbody>
-      </table>
-    </div>
-  `;
-}
-
-function generateTransferPdf() {
-  const fromEventId = document.getElementById('transferSourceSelect')?.value;
-  const toEventId = document.getElementById('transferTargetSelect')?.value;
-  const fromEvent = (transferOptionsCache?.sourceEvents || []).find(e => String(e.id) === String(fromEventId)) || {};
-  const toEvent = (transferOptionsCache?.targetEvents || []).find(e => String(e.id) === String(toEventId)) || {};
-  const isReturnMode = transferPanelMode === 'return-office';
-  const candidates = transferCandidateCache || [];
-  const returnToOffice = transferReturnToOfficeCache || [];
-
-  if (!fromEventId || !toEventId) {
-    showNotification('warning', 'Select both source and destination events first');
-    return;
-  }
-
-  const selectedIds = new Set(Array.from(document.querySelectorAll('.transfer-candidate-checkbox:checked')).map(cb => cb.dataset.assetId));
-  const safe = (value) => escapeHtml(String(value ?? ''));
-  const dateRange = (event) => !event || !event.startDate ? '' : (event.startDate === event.endDate ? formatDate(event.startDate) : `${formatDate(event.startDate)} - ${formatDate(event.endDate)}`);
-
-  const rows = isReturnMode
-    ? (returnToOffice.length ? returnToOffice.map((item, index) => `
-        <tr><td>${index + 1}</td><td><strong>${safe(item.assetId)}</strong>${item.serial ? `<br><span style="font-size:8pt;color:#666;">SN: ${safe(item.serial)}</span>` : ''}</td><td>${safe(item.department || 'UN')}</td><td>${safe(item.brand || '')} ${safe(item.model || '')}</td><td>${safe(item.description || '')}</td><td>${safe(item.reason || '')}</td></tr>
-      `).join('') : '<tr><td colspan="6" style="text-align:center;color:#666;padding:18px;">No return-to-office assets currently shown.</td></tr>')
-    : (candidates.length ? candidates.map((candidate, index) => `
-        <tr><td>${index + 1}</td><td><strong>${safe(candidate.assetId)}</strong>${candidate.serial ? `<br><span style="font-size:8pt;color:#666;">SN: ${safe(candidate.serial)}</span>` : ''}</td><td>${safe(candidate.department || 'UN')}</td><td>${safe(candidate.brand || '')} ${safe(candidate.model || '')}</td><td>${safe(candidate.description || '')}</td><td>${safe(candidate.matchLabel || `Destination still needs ${candidate.targetRemainingBeforeThisAsset || ''}`)}</td><td>${selectedIds.has(candidate.assetId) ? 'Yes' : 'No'}</td></tr>
-      `).join('') : '<tr><td colspan="7" style="text-align:center;color:#666;padding:18px;">No matching assets currently shown.</td></tr>');
-
-  const now = new Date();
-  const formattedDate = now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-  const transferNumber = `${isReturnMode ? 'RTO' : 'TR'}-${now.getFullYear()}${String(fromEventId).padStart(4, '0')}-${String(toEventId).padStart(4, '0')}`;
-  const title = isReturnMode ? 'RETURN TO OFFICE ASSETS' : 'TRANSFER ASSETS';
-  const countLabel = isReturnMode ? 'Return-to-office assets' : 'Matching assets shown';
-  const countValue = isReturnMode ? returnToOffice.length : candidates.length;
-
-  const win = window.open('', '_blank', 'width=900,height=1000');
-  if (!win) {
-    showNotification('error', 'Pop-up blocked. Please allow pop-ups to export the transfer PDF.');
-    return;
-  }
-
-  const tableHead = isReturnMode
-    ? '<tr><th style="width:8mm;">#</th><th style="width:36mm;">Asset ID / Serial</th><th style="width:18mm;">Dept</th><th style="width:40mm;">Brand / Model</th><th>Description</th><th style="width:42mm;">Reason</th></tr>'
-    : '<tr><th style="width:8mm;">#</th><th style="width:32mm;">Asset ID / Serial</th><th style="width:18mm;">Dept</th><th style="width:36mm;">Brand / Model</th><th>Description</th><th style="width:38mm;">Match</th><th style="width:18mm;">Selected</th></tr>';
-
-  const html = `<!DOCTYPE html><html><head><title>${safe(title)} - ${safe(fromEvent.name || '')} to ${safe(toEvent.name || '')}</title><style>
-    @page { size: A4; margin: 0; } * { box-sizing: border-box; } body { margin: 0; font-family: 'Century Gothic', Arial, sans-serif; color: #000; background: #f0f0f0; }
-    .page { width: 210mm; min-height: 297mm; margin: 0 auto; padding: 7mm 7mm 14mm 7mm; background: white; position: relative; page-break-after: always; }
-    .logo-row { display:flex; justify-content:flex-end; margin-bottom:7px; height:39px; } .logo-row img { height:39px; width:auto; object-fit:contain; }
-    .header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:20px; } .header-left { flex:1; font-size:9pt; font-weight:bold; line-height:1.35; } .header-right { text-align:right; font-size:9pt; font-weight:bold; }
-    .transfer-title { font-size:14pt; font-weight:bold; margin-bottom:5px; } .summary-table, .items-table { width:100%; border-collapse:collapse; border:2px solid black; margin-bottom:16px; }
-    .summary-table td { border:1px solid #333; padding:7px; font-size:9pt; vertical-align:top; } .items-table th { background:#333; color:white; padding:8px; text-align:left; font-size:8.5pt; border:1px solid #333; }
-    .items-table td { border:1px solid #333; padding:6px; font-size:8.5pt; vertical-align:top; line-height:1.25; } .footer { position:absolute; bottom:5mm; left:7mm; right:7mm; text-align:center; font-size:7pt; font-weight:bold; line-height:1.2; }
-    .print-btn { position:fixed; top:20px; right:20px; background:#667eea; color:white; border:none; padding:10px 18px; border-radius:6px; cursor:pointer; z-index:999; } @media print { body { background:white; } .page { margin:0; page-break-after:auto; } .print-btn { display:none; } }
-  </style></head><body><button class="print-btn" onclick="window.print()">Print / Save as PDF</button><div class="page">
-    <div class="logo-row"><img src="/static/images/logo.png" alt="Company Logo"></div>
-    <div class="header"><div class="header-left">FROM EVENT:<br>${safe(fromEvent.id || fromEventId)} — ${safe(fromEvent.name || '')}<br>${safe(fromEvent.state || '')}${dateRange(fromEvent) ? ' • ' + safe(dateRange(fromEvent)) : ''}<br><br>TO EVENT:<br>${safe(toEvent.id || toEventId)} — ${safe(toEvent.name || '')}<br>${safe(toEvent.state || '')}${dateRange(toEvent) ? ' • ' + safe(dateRange(toEvent)) : ''}</div><div class="header-right"><div class="transfer-title">${safe(title)}</div>No. : ${safe(transferNumber)}<br>Date : ${safe(formattedDate)}</div></div>
-    <table class="summary-table"><tr><td><strong>Source unreturned assets:</strong><br>${safe(fromEvent.unreturnedCount || 0)}</td><td><strong>${safe(countLabel)}:</strong><br>${safe(countValue)}</td><td><strong>${isReturnMode ? 'Action:' : 'Selected for transfer:'}</strong><br>${isReturnMode ? 'Return to office' : safe(selectedIds.size || 0)}</td></tr></table>
-    <table class="items-table"><thead>${tableHead}</thead><tbody>${rows}</tbody></table>
-    <div class="footer">AVEC VISION PRIVATE LIMITED<br>601 SIMS DRIVE PAN-I COMPLEX #04-10 SINGAPORE 387382 TEL 65.9743.3660 CO REG 202122775G</div>
-  </div></body></html>`;
-  win.document.write(html);
-  win.document.close();
-  win.focus();
-}
 
 (function initialisePatchedEventViews() {
   document.addEventListener('DOMContentLoaded', () => {
@@ -18411,9 +14622,6 @@ function displayFilteredInventory() {
 // PATCH 2026-05-14B: transfer grouping, per-asset dropdown actions, undo, and grouped PDFs
 window.__transferActionState = window.__transferActionState || {};
 
-function getTransferActionState(assetId) {
-  return window.__transferActionState[String(assetId || '')] || '';
-}
 
 function setTransferActionState(assetId, state) {
   if (!assetId) return;
@@ -18438,69 +14646,6 @@ function transferAssetTypeName(group) {
   return `${group.brand || ''} ${group.model || ''} ${group.description || ''}`.replace(/\s+/g, ' ').trim() || 'Unnamed Asset Type';
 }
 
-function buildTransferGroups(items, mode) {
-  const map = new Map();
-
-  (items || []).forEach(item => {
-    const key = transferAssetTypeKey(item);
-    if (!map.has(key)) {
-      const remaining = Math.max(0, Number(item.targetRemainingBeforeThisAsset || item.targetRemaining || 0));
-      map.set(key, {
-        key,
-        mode,
-        department: normalizeDepartmentCode(item.department || 'UN'),
-        brand: item.brand || '',
-        model: item.model || '',
-        description: item.description || '',
-        reason: item.reason || '',
-        targetRequired: Number(item.targetRequired || 0),
-        targetPrepared: Number(item.targetPrepared || 0),
-        targetRemaining: remaining,
-        returnQuantity: Number(item.returnQuantity || 0),
-        sourceQuantity: Number(item.sourceQuantity || 0),
-        items: []
-      });
-    }
-
-    const group = map.get(key);
-    group.items.push(item);
-    group.targetRemaining = Math.max(group.targetRemaining || 0, Number(item.targetRemainingBeforeThisAsset || item.targetRemaining || 0));
-    group.targetRequired = Math.max(group.targetRequired || 0, Number(item.targetRequired || 0));
-    group.targetPrepared = Math.max(group.targetPrepared || 0, Number(item.targetPrepared || 0));
-    group.returnQuantity = Math.max(group.returnQuantity || 0, Number(item.returnQuantity || 0));
-    group.sourceQuantity = Math.max(group.sourceQuantity || 0, Number(item.sourceQuantity || 0));
-    if (item.reason && !group.reason) group.reason = item.reason;
-  });
-
-  const groups = Array.from(map.values()).map(group => {
-    group.items.sort((a, b) => String(a.assetId || '').localeCompare(String(b.assetId || ''), undefined, { numeric: true, sensitivity: 'base' }));
-
-    if (mode === 'common') {
-      const needed = group.targetRemaining > 0 ? group.targetRemaining : group.items.length;
-      group.actionQty = Math.min(group.items.length, Math.max(1, needed));
-      group.doneQty = group.items.filter(item => getTransferActionState(item.assetId) === 'transferred').length;
-      group.progressLabel = `${group.doneQty}/${group.actionQty} transferred`;
-      group.helpText = `${group.items.length} source option(s) available${group.targetRemaining ? `; destination still needs ${group.targetRemaining}` : ''}.`;
-    } else {
-      const returnQty = group.returnQuantity > 0 ? group.returnQuantity : group.items.length;
-      group.actionQty = Math.min(group.items.length, Math.max(0, returnQty));
-      group.doneQty = group.items.filter(item => getTransferActionState(item.assetId) === 'returnedOffice').length;
-      group.progressLabel = `${group.doneQty}/${group.actionQty} marked to return`;
-      group.helpText = group.reason || (group.targetRemaining > 0
-        ? `Destination needs ${group.targetRemaining}; source has ${group.items.length}; ${group.actionQty} should return to office.`
-        : 'Not required by destination event.');
-    }
-
-    return group;
-  });
-
-  return groups.sort((a, b) => (
-    a.department.localeCompare(b.department, undefined, { numeric: true }) ||
-    a.brand.localeCompare(b.brand, undefined, { numeric: true, sensitivity: 'base' }) ||
-    a.model.localeCompare(b.model, undefined, { numeric: true, sensitivity: 'base' }) ||
-    a.description.localeCompare(b.description, undefined, { numeric: true, sensitivity: 'base' })
-  ));
-}
 
 function transferProgressHtml(done, total) {
   const safeDone = Math.max(0, Number(done || 0));
@@ -18517,82 +14662,7 @@ function transferProgressHtml(done, total) {
   `;
 }
 
-function transferAssetDropdownRows(group) {
-  const transferLimitReached = group.mode === 'common' && group.doneQty >= group.actionQty;
-  const returnLimitReached = group.mode !== 'common' && group.doneQty >= group.actionQty;
 
-  return group.items.map(item => {
-    const encodedAssetId = encodeURIComponent(item.assetId || '');
-    const state = getTransferActionState(item.assetId);
-    const isTransferred = state === 'transferred';
-    const isReturnedOffice = state === 'returnedOffice';
-
-    let actionHtml = '';
-    let statusHtml = '<span class="asset-badge status-available">Ready</span>';
-
-    if (group.mode === 'common') {
-      if (isTransferred) {
-        statusHtml = '<span class="asset-badge status-deployed">Transferred</span>';
-        actionHtml = `<button class="btn btn-warning btn-sm" onclick="undoTransferDropdownAsset('${encodedAssetId}')">Undo</button>`;
-      } else {
-        actionHtml = `<button class="btn btn-success btn-sm" ${transferLimitReached ? 'disabled title="Required transfer quantity reached"' : ''} onclick="transferDropdownAsset('${encodedAssetId}')">Transfer</button>`;
-      }
-    } else {
-      if (isReturnedOffice) {
-        statusHtml = '<span class="asset-badge status-deployed">Return to Office</span>';
-        actionHtml = `<button class="btn btn-warning btn-sm" onclick="undoReturnOfficeDropdownAsset('${encodedAssetId}')">Undo</button>`;
-      } else if (isTransferred) {
-        statusHtml = '<span class="asset-badge status-deployed">Transferred</span>';
-        actionHtml = `<button class="btn btn-secondary btn-sm" disabled title="This asset has already been transferred">Return</button>`;
-      } else {
-        actionHtml = `<button class="btn btn-primary btn-sm" ${returnLimitReached ? 'disabled title="Required return quantity reached"' : ''} onclick="returnOfficeDropdownAsset('${encodedAssetId}')">Return</button>`;
-      }
-    }
-
-    return `
-      <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;padding:9px 10px;border-bottom:1px solid #f1f1f1;background:white;">
-        <div style="min-width:0;">
-          <div style="font-weight:700;color:#333;">${escapeHtml(item.assetId || '')}</div>
-          <div style="font-size:12px;color:#666;">${item.serial ? `SN: ${escapeHtml(item.serial)}` : 'No serial'}${item.currentLocation ? ` • ${escapeHtml(item.currentLocation)}` : ''}</div>
-        </div>
-        <div style="display:flex;gap:8px;align-items:center;white-space:nowrap;">
-          ${statusHtml}
-          ${actionHtml}
-        </div>
-      </div>
-    `;
-  }).join('');
-}
-
-function renderTransferGroupCard(group, index) {
-  const qtyLabel = group.actionQty;
-  const title = `${qtyLabel}x ${transferAssetTypeName(group)}`;
-  const detailsId = `transfer-group-${group.mode}-${index}`;
-  const badge = departmentBadgeHtml(group.department || 'UN', true);
-
-  return `
-    <div style="margin-bottom:14px;border:1px solid #e9ecef;border-radius:12px;overflow:hidden;background:#fff;box-shadow:0 3px 10px rgba(0,0,0,.04);">
-      <div style="padding:12px;background:#f1f3f4;">
-        <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;">
-          <div style="min-width:260px;">
-            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;">
-              ${badge}
-              <strong style="font-size:14px;color:#333;">${escapeHtml(title)}</strong>
-            </div>
-            <div style="font-size:12px;color:#666;">${escapeHtml(group.helpText || '')}</div>
-          </div>
-          <div style="min-width:180px;">${transferProgressHtml(group.doneQty, group.actionQty)}</div>
-        </div>
-      </div>
-      <details id="${detailsId}">
-        <summary style="cursor:pointer;padding:10px 12px;background:#fafafa;border-top:1px solid #e9ecef;font-weight:700;color:#555;">
-          Choose exact asset(s) (${group.items.length} available; ${group.actionQty} needed)
-        </summary>
-        <div>${transferAssetDropdownRows(group)}</div>
-      </details>
-    </div>
-  `;
-}
 
 function renderTransferInitialMessage(sourceEvents, targetEvents) {
   if (!sourceEvents.length || !targetEvents.length) {
@@ -18656,215 +14726,16 @@ function renderTransferWorkspace() {
   `;
 }
 
-async function loadTransferCandidates() {
-  const sourceSelect = document.getElementById('transferSourceSelect');
-  const targetSelect = document.getElementById('transferTargetSelect');
-  const panel = document.getElementById('transfer-candidates-panel');
-  if (!sourceSelect || !targetSelect || !panel) return;
 
-  const fromEventId = sourceSelect.value;
-  const toEventId = targetSelect.value;
-  resetTransferActionState();
 
-  if (!fromEventId || !toEventId) {
-    panel.innerHTML = '<p style="text-align:center;color:#666;padding:28px;">Choose both events to compare transfer and return-to-office assets.</p>';
-    return;
-  }
-  if (fromEventId === toEventId) {
-    panel.innerHTML = '<p style="text-align:center;color:#a00;padding:28px;">Source and destination events cannot be the same.</p>';
-    return;
-  }
-  panel.innerHTML = '<div class="loading">Comparing events...</div>';
-  try {
-    const response = await apiCall(`/api/transfers/candidates?fromEventId=${encodeURIComponent(fromEventId)}&toEventId=${encodeURIComponent(toEventId)}`);
-    transferCandidateCache = response.data?.candidates || [];
-    transferReturnToOfficeCache = response.data?.returnToOffice || [];
-    renderTransferCandidates(response.data || {});
-  } catch (error) {
-    panel.innerHTML = `<div style="padding:28px;text-align:center;color:#a00;">Failed to compare events: ${escapeHtml(error.message || String(error))}</div>`;
-  }
-}
 
-function setTransferPanelMode(mode) {
-  transferPanelMode = mode === 'return-office' ? 'return-office' : 'common';
-  renderTransferCandidates(window.__lastTransferData || {});
-}
 
-function renderTransferCandidates(data) {
-  window.__lastTransferData = data;
-  const panel = document.getElementById('transfer-candidates-panel');
-  if (!panel) return;
 
-  const candidates = data.candidates || transferCandidateCache || [];
-  const returnToOffice = data.returnToOffice || transferReturnToOfficeCache || [];
-  const fromEvent = data.fromEvent || {};
-  const toEvent = data.toEvent || {};
-  const isReturnMode = transferPanelMode === 'return-office';
-  const groups = buildTransferGroups(isReturnMode ? returnToOffice : candidates, isReturnMode ? 'return-office' : 'common');
 
-  const modeButtons = `
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
-      <button class="btn btn-${isReturnMode ? 'secondary' : 'primary'} btn-sm" onclick="setTransferPanelMode('common')">Common / Transferable (${buildTransferGroups(candidates, 'common').length})</button>
-      <button class="btn btn-${isReturnMode ? 'primary' : 'secondary'} btn-sm" onclick="setTransferPanelMode('return-office')">Not Common / Return to Office (${buildTransferGroups(returnToOffice, 'return-office').length})</button>
-    </div>
-  `;
 
-  if (!groups.length) {
-    panel.innerHTML = `${modeButtons}<div style="text-align:center;padding:34px;color:#666;"><div style="font-size:32px;margin-bottom:8px;">🔍</div><div style="font-weight:700;color:#333;margin-bottom:4px;">No asset types in this view</div><div>${isReturnMode ? 'All unreturned source assets are currently common with the destination requirements.' : 'There are no unreturned source asset types that match the destination event’s remaining model requirements.'}</div></div>`;
-    return;
-  }
 
-  const totalQty = groups.reduce((sum, group) => sum + Number(group.actionQty || 0), 0);
-  const totalDone = groups.reduce((sum, group) => sum + Number(group.doneQty || 0), 0);
-  const groupCards = groups.map((group, index) => renderTransferGroupCard(group, index)).join('');
 
-  panel.innerHTML = `
-    ${modeButtons}
-    <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;margin-bottom:14px;">
-      <div>
-        <h3 style="margin:0;color:#764ba2;">${groups.length} asset type(s), ${totalQty} ${isReturnMode ? 'asset(s) to return' : 'asset(s) to transfer'}</h3>
-        <div style="color:#666;font-size:13px;margin-top:4px;">From <strong>${escapeHtml(fromEvent.name || '')}</strong> → To <strong>${escapeHtml(toEvent.name || '')}</strong></div>
-      </div>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-        <span style="color:#666;font-size:13px;">${totalDone}/${totalQty} done</span>
-        <button class="btn btn-primary" onclick="generateTransferPdf()">Export PDF</button>
-      </div>
-    </div>
-    ${groupCards}
-  `;
-}
 
-async function transferDropdownAsset(encodedAssetId) {
-  const assetId = decodeURIComponent(encodedAssetId);
-  const fromEventId = document.getElementById('transferSourceSelect')?.value;
-  const toEventId = document.getElementById('transferTargetSelect')?.value;
-  if (!fromEventId || !toEventId || !assetId) return;
-  try {
-    await apiCall('/api/transfers/execute', 'POST', { fromEventId: Number(fromEventId), toEventId: Number(toEventId), assetIds: [assetId] });
-    showNotification('success', `${assetId} transferred`);
-    await loadTransferCandidates();
-  } catch (error) {
-    showNotification('error', `Failed to transfer ${assetId}: ${error.message}`);
-    await loadTransferCandidates();
-  }
-}
-
-async function undoTransferDropdownAsset(encodedAssetId) {
-  const assetId = decodeURIComponent(encodedAssetId);
-  const fromEventId = document.getElementById('transferSourceSelect')?.value;
-  const toEventId = document.getElementById('transferTargetSelect')?.value;
-  if (!fromEventId || !toEventId || !assetId) return;
-  try {
-    await apiCall('/api/transfers/undo', 'POST', { fromEventId: Number(fromEventId), toEventId: Number(toEventId), assetIds: [assetId] });
-    showNotification('success', `${assetId} transfer undone`);
-    await loadTransferCandidates();
-  } catch (error) {
-    showNotification('error', `Failed to undo transfer for ${assetId}: ${error.message}`);
-    await loadTransferCandidates();
-  }
-}
-
-async function returnOfficeDropdownAsset(encodedAssetId) {
-  const assetId = decodeURIComponent(encodedAssetId);
-  const fromEventId = document.getElementById('transferSourceSelect')?.value;
-  if (!fromEventId || !assetId) return;
-  try {
-    await apiCall('/api/transfers/return-office', 'POST', { fromEventId: Number(fromEventId), assetIds: [assetId] });
-    showNotification('success', `${assetId} marked to return to office`);
-    await loadTransferCandidates();
-  } catch (error) {
-    showNotification('error', `Failed to return ${assetId}: ${error.message}`);
-    await loadTransferCandidates();
-  }
-}
-
-async function undoReturnOfficeDropdownAsset(encodedAssetId) {
-  const assetId = decodeURIComponent(encodedAssetId);
-  const fromEventId = document.getElementById('transferSourceSelect')?.value;
-  if (!fromEventId || !assetId) return;
-  try {
-    await apiCall('/api/transfers/undo-return-office', 'POST', { fromEventId: Number(fromEventId), assetIds: [assetId] });
-    showNotification('success', `${assetId} return-to-office undone`);
-    await loadTransferCandidates();
-  } catch (error) {
-    showNotification('error', `Failed to undo return for ${assetId}: ${error.message}`);
-    await loadTransferCandidates();
-  }
-}
-
-function executeSingleTransfer(encodedAssetId) {
-  transferDropdownAsset(encodedAssetId);
-}
-
-function executeSelectedTransfers() {
-  showNotification('info', 'Use each asset type dropdown to choose exactly which asset to transfer.');
-}
-
-function groupedTransferPdfRows(groups) {
-  if (!groups.length) {
-    return '<tr><td colspan="5" style="text-align:center;color:#666;padding:18px;">No asset types in this view.</td></tr>';
-  }
-
-  return groups.map((group, index) => `
-    <tr>
-      <td>${index + 1}</td>
-      <td>${escapeHtml(String(group.actionQty || 0))}</td>
-      <td>${escapeHtml(group.department || 'UN')}</td>
-      <td>${escapeHtml(`${group.brand || ''} ${group.model || ''}`.trim())}</td>
-      <td>${escapeHtml(group.description || '')}</td>
-    </tr>
-  `).join('');
-}
-
-function generateTransferPdf() {
-  const fromEventId = document.getElementById('transferSourceSelect')?.value;
-  const toEventId = document.getElementById('transferTargetSelect')?.value;
-  const fromEvent = (transferOptionsCache?.sourceEvents || []).find(e => String(e.id) === String(fromEventId)) || {};
-  const toEvent = (transferOptionsCache?.targetEvents || []).find(e => String(e.id) === String(toEventId)) || {};
-  const isReturnMode = transferPanelMode === 'return-office';
-
-  if (!fromEventId || !toEventId) {
-    showNotification('warning', 'Select both source and destination events first');
-    return;
-  }
-
-  const groups = buildTransferGroups(isReturnMode ? (transferReturnToOfficeCache || []) : (transferCandidateCache || []), isReturnMode ? 'return-office' : 'common');
-  const safe = (value) => escapeHtml(String(value ?? ''));
-  const dateRange = (event) => !event || !event.startDate ? '' : (event.startDate === event.endDate ? formatDate(event.startDate) : `${formatDate(event.startDate)} - ${formatDate(event.endDate)}`);
-  const rows = groupedTransferPdfRows(groups);
-
-  const now = new Date();
-  const formattedDate = now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-  const transferNumber = `${isReturnMode ? 'RTO' : 'TR'}-${now.getFullYear()}${String(fromEventId).padStart(4, '0')}-${String(toEventId).padStart(4, '0')}`;
-  const title = isReturnMode ? 'RETURN TO OFFICE ASSETS' : 'TRANSFER ASSETS';
-  const totalQty = groups.reduce((sum, group) => sum + Number(group.actionQty || 0), 0);
-
-  const win = window.open('', '_blank', 'width=900,height=1000');
-  if (!win) {
-    showNotification('error', 'Pop-up blocked. Please allow pop-ups to export the transfer PDF.');
-    return;
-  }
-
-  const html = `<!DOCTYPE html><html><head><title>${safe(title)} - ${safe(fromEvent.name || '')} to ${safe(toEvent.name || '')}</title><style>
-    @page { size: A4; margin: 0; } * { box-sizing: border-box; } body { margin: 0; font-family: 'Century Gothic', Arial, sans-serif; color: #000; background: #f0f0f0; }
-    .page { width: 210mm; min-height: 297mm; margin: 0 auto; padding: 7mm 7mm 14mm 7mm; background: white; position: relative; page-break-after: always; }
-    .logo-row { display:flex; justify-content:flex-end; margin-bottom:7px; height:39px; } .logo-row img { height:39px; width:auto; object-fit:contain; }
-    .header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:20px; } .header-left { flex:1; font-size:9pt; font-weight:bold; line-height:1.35; } .header-right { text-align:right; font-size:9pt; font-weight:bold; }
-    .transfer-title { font-size:14pt; font-weight:bold; margin-bottom:5px; } .summary-table, .items-table { width:100%; border-collapse:collapse; border:2px solid black; margin-bottom:16px; }
-    .summary-table td { border:1px solid #333; padding:7px; font-size:9pt; vertical-align:top; } .items-table th { background:#333; color:white; padding:8px; text-align:left; font-size:8.5pt; border:1px solid #333; }
-    .items-table td { border:1px solid #333; padding:6px; font-size:8.5pt; vertical-align:top; line-height:1.25; } .footer { position:absolute; bottom:5mm; left:7mm; right:7mm; text-align:center; font-size:7pt; font-weight:bold; line-height:1.2; }
-    .print-btn { position:fixed; top:20px; right:20px; background:#667eea; color:white; border:none; padding:10px 18px; border-radius:6px; cursor:pointer; z-index:999; } @media print { body { background:white; } .page { margin:0; page-break-after:auto; } .print-btn { display:none; } }
-  </style></head><body><button class="print-btn" onclick="window.print()">Print / Save as PDF</button><div class="page">
-    <div class="logo-row"><img src="/static/images/logo.png" alt="Company Logo"></div>
-    <div class="header"><div class="header-left">FROM EVENT:<br>${safe(fromEvent.id || fromEventId)} — ${safe(fromEvent.name || '')}<br>${safe(fromEvent.state || '')}${dateRange(fromEvent) ? ' • ' + safe(dateRange(fromEvent)) : ''}<br><br>TO EVENT:<br>${safe(toEvent.id || toEventId)} — ${safe(toEvent.name || '')}<br>${safe(toEvent.state || '')}${dateRange(toEvent) ? ' • ' + safe(dateRange(toEvent)) : ''}</div><div class="header-right"><div class="transfer-title">${safe(title)}</div>No. : ${safe(transferNumber)}<br>Date : ${safe(formattedDate)}</div></div>
-    <table class="summary-table"><tr><td><strong>Source unreturned assets:</strong><br>${safe(fromEvent.unreturnedCount || 0)}</td><td><strong>Asset type count:</strong><br>${safe(groups.length)}</td><td><strong>Total quantity:</strong><br>${safe(totalQty)}</td></tr></table>
-    <table class="items-table"><thead><tr><th style="width:8mm;">#</th><th style="width:16mm;">Qty</th><th style="width:20mm;">Dept</th><th style="width:54mm;">Brand / Model</th><th>Description</th></tr></thead><tbody>${rows}</tbody></table>
-    <div class="footer">AVEC VISION PRIVATE LIMITED<br>601 SIMS DRIVE PAN-I COMPLEX #04-10 SINGAPORE 387382 TEL 65.9743.3660 CO REG 202122775G</div>
-  </div></body></html>`;
-  win.document.write(html);
-  win.document.close();
-  win.focus();
-}
 
 // PATCH 2026-05-14C: preserve prepare/transfer dropdowns and make transfer/return state server-visible.
 function __aitCapturePrepareOpenState() {
@@ -18981,111 +14852,7 @@ function restoreOpenTransferDropdownIds(ids) {
   });
 }
 
-async function loadTransferCandidates(options = {}) {
-  const sourceSelect = document.getElementById('transferSourceSelect');
-  const targetSelect = document.getElementById('transferTargetSelect');
-  const panel = document.getElementById('transfer-candidates-panel');
-  if (!sourceSelect || !targetSelect || !panel) return;
 
-  const fromEventId = sourceSelect.value;
-  const toEventId = targetSelect.value;
-  const pairKey = `${fromEventId || ''}|${toEventId || ''}`;
-  const openDropdowns = options.openDropdowns || getOpenTransferDropdownIds();
-
-  if (window.__lastTransferPairKey !== pairKey) {
-    resetTransferActionState();
-    window.__lastTransferPairKey = pairKey;
-  }
-
-  if (!fromEventId || !toEventId) {
-    panel.innerHTML = '<p style="text-align:center;color:#666;padding:28px;">Choose both events to compare transfer and return-to-office assets.</p>';
-    return;
-  }
-  if (fromEventId === toEventId) {
-    panel.innerHTML = '<p style="text-align:center;color:#a00;padding:28px;">Source and destination events cannot be the same.</p>';
-    return;
-  }
-
-  if (!options.quiet) {
-    panel.innerHTML = '<div class="loading">Comparing events...</div>';
-  }
-
-  try {
-    const response = await apiCall(`/api/transfers/candidates?fromEventId=${encodeURIComponent(fromEventId)}&toEventId=${encodeURIComponent(toEventId)}`);
-    transferCandidateCache = response.data?.candidates || [];
-    transferReturnToOfficeCache = response.data?.returnToOffice || [];
-    renderTransferCandidates(response.data || {});
-    setTimeout(() => restoreOpenTransferDropdownIds(openDropdowns), 50);
-    setTimeout(() => restoreOpenTransferDropdownIds(openDropdowns), 200);
-  } catch (error) {
-    panel.innerHTML = `<div style="padding:28px;text-align:center;color:#a00;">Failed to compare events: ${escapeHtml(error.message || String(error))}</div>`;
-  }
-}
-
-function buildTransferGroups(items, mode) {
-  const map = new Map();
-
-  (items || []).forEach(item => {
-    const key = transferAssetTypeKey(item);
-    if (!map.has(key)) {
-      const remaining = Math.max(0, Number(item.targetRemainingBeforeThisAsset || item.targetRemaining || 0));
-      map.set(key, {
-        key,
-        mode,
-        department: normalizeDepartmentCode(item.department || 'UN'),
-        brand: item.brand || '',
-        model: item.model || '',
-        description: item.description || '',
-        reason: item.reason || '',
-        targetRequired: Number(item.targetRequired || 0),
-        targetPrepared: Number(item.targetPrepared || 0),
-        targetRemaining: remaining,
-        returnQuantity: Number(item.returnQuantity || 0),
-        sourceQuantity: Number(item.sourceQuantity || 0),
-        items: []
-      });
-    }
-
-    const group = map.get(key);
-    group.items.push(item);
-    group.targetRemaining = Math.max(group.targetRemaining || 0, Number(item.targetRemainingBeforeThisAsset || item.targetRemaining || 0));
-    group.targetRequired = Math.max(group.targetRequired || 0, Number(item.targetRequired || 0));
-    group.targetPrepared = Math.max(group.targetPrepared || 0, Number(item.targetPrepared || 0));
-    group.returnQuantity = Math.max(group.returnQuantity || 0, Number(item.returnQuantity || 0));
-    group.sourceQuantity = Math.max(group.sourceQuantity || 0, Number(item.sourceQuantity || 0));
-    if (item.reason && !group.reason) group.reason = item.reason;
-  });
-
-  const groups = Array.from(map.values()).map(group => {
-    group.items.sort((a, b) => String(a.assetId || '').localeCompare(String(b.assetId || ''), undefined, { numeric: true, sensitivity: 'base' }));
-
-    if (mode === 'common') {
-      group.doneQty = group.items.filter(item => getTransferItemState(item) === 'transferred').length;
-      const currentRemaining = Math.max(0, Number(group.targetRemaining || 0));
-      const totalNeededForThisComparison = group.doneQty + currentRemaining;
-      group.actionQty = Math.min(group.items.length, Math.max(group.doneQty, totalNeededForThisComparison, group.doneQty ? group.doneQty : 1));
-      group.progressLabel = `${group.doneQty}/${group.actionQty} transferred`;
-      group.helpText = `${group.items.length} source option(s) available${currentRemaining ? `; destination still needs ${currentRemaining}` : ''}.`;
-    } else {
-      const returnQty = group.returnQuantity > 0 ? group.returnQuantity : group.items.length;
-      group.doneQty = group.items.filter(item => getTransferItemState(item) === 'returnedOffice').length;
-      group.actionQty = Math.min(group.items.length, Math.max(group.doneQty, returnQty));
-      group.progressLabel = `${group.doneQty}/${group.actionQty} marked to return`;
-      group.helpText = group.reason || (group.targetRemaining > 0
-        ? `Destination needs ${group.targetRemaining}; source has ${group.sourceQuantity || group.items.length}; ${group.actionQty} should return to office.`
-        : 'Not required by destination event.');
-    }
-
-    return group;
-  });
-
-  return groups.sort((a, b) => (
-    a.department.localeCompare(b.department, undefined, { numeric: true }) ||
-    a.brand.localeCompare(b.brand, undefined, { numeric: true, sensitivity: 'base' }) ||
-    a.model.localeCompare(b.model, undefined, { numeric: true, sensitivity: 'base' }) ||
-    a.description.localeCompare(b.description, undefined, { numeric: true, sensitivity: 'base' })
-  ));
-}
 
 function transferAssetDropdownRows(group) {
   const transferLimitReached = group.mode === 'common' && group.doneQty >= group.actionQty;
@@ -19137,35 +14904,6 @@ function transferAssetDropdownRows(group) {
   }).join('');
 }
 
-function renderTransferGroupCard(group, index) {
-  const qtyLabel = group.actionQty;
-  const title = `${qtyLabel}x ${transferAssetTypeName(group)}`;
-  const detailsId = transferGroupDetailsId(group);
-  const badge = departmentBadgeHtml(group.department || 'UN', true);
-
-  return `
-    <div style="margin-bottom:14px;border:1px solid #e9ecef;border-radius:12px;overflow:hidden;background:#fff;box-shadow:0 3px 10px rgba(0,0,0,.04);">
-      <div style="padding:12px;background:#f1f3f4;">
-        <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;">
-          <div style="min-width:260px;">
-            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;">
-              ${badge}
-              <strong style="font-size:14px;color:#333;">${escapeHtml(title)}</strong>
-            </div>
-            <div style="font-size:12px;color:#666;">${escapeHtml(group.helpText || '')}</div>
-          </div>
-          <div style="min-width:180px;">${transferProgressHtml(group.doneQty, group.actionQty)}</div>
-        </div>
-      </div>
-      <details id="${detailsId}">
-        <summary style="cursor:pointer;padding:10px 12px;background:#fafafa;border-top:1px solid #e9ecef;font-weight:700;color:#555;">
-          Choose exact asset(s) (${group.items.length} available; ${group.actionQty} needed)
-        </summary>
-        <div>${transferAssetDropdownRows(group)}</div>
-      </details>
-    </div>
-  `;
-}
 
 async function __aitRefreshTransferAfterAction() {
   const openDropdowns = getOpenTransferDropdownIds();
