@@ -8,6 +8,24 @@ let stats = {};
 let departments = {};
 let departmentsLoaded = false;
 let __autoRefreshInFlight = false;
+let __realtimeRefreshQueued = false;
+let __realtimeRefreshTimer = null;
+let __realtimeFallbackTimer = null;
+let __realtimeSource = null;
+
+const REALTIME_CLIENT_ID = (() => {
+  try {
+    const existing = sessionStorage.getItem("avecRealtimeClientId");
+    if (existing) return existing;
+    const id = (crypto && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    sessionStorage.setItem("avecRealtimeClientId", id);
+    return id;
+  } catch (error) {
+    return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  }
+})();
 
 const DEFAULT_PDF_FOOTER_TEXT = "AVEC VISION PRIVATE LIMITED\n601 SIMS DRIVE PAN-I COMPLEX #04-10 SINGAPORE 387382 TEL 65.9743.3660 CO REG 202122775G";
 let pdfSettings = {
@@ -1572,6 +1590,7 @@ async function apiCall(endpoint, method = "GET", data = null) {
       method: method,
       headers: {
         "Content-Type": "application/json",
+        "X-Client-Id": REALTIME_CLIENT_ID,
       },
     };
 
@@ -1792,6 +1811,9 @@ async function uploadPdfSettingsLogo() {
   try {
     const response = await fetch('/api/pdf-settings/logo', {
       method: 'POST',
+      headers: {
+        "X-Client-Id": REALTIME_CLIENT_ID,
+      },
       body: formData
     });
     const result = await response.json();
@@ -1818,7 +1840,12 @@ async function resetPdfSettingsLogo() {
   }
 
   try {
-    const response = await fetch('/api/pdf-settings/logo', { method: 'DELETE' });
+    const response = await fetch('/api/pdf-settings/logo', {
+      method: 'DELETE',
+      headers: {
+        "X-Client-Id": REALTIME_CLIENT_ID,
+      },
+    });
     const result = await response.json();
 
     if (!response.ok) {
@@ -5127,6 +5154,7 @@ function createPrepareEventCard(event) {
 
 async function openPrepareEventModal(eventId) {
     try {
+        window.currentPrepareEventId = eventId;
         const [eventResponse, availableAssetsResponse] = await Promise.all([
             apiCall(`/api/events/${eventId}`),
             apiCall(`/api/assets/available-for-event/${eventId}`)
@@ -7284,6 +7312,8 @@ async function openManualTransferModal() {
 
 async function viewEvent(eventId) {
   try {
+    window.currentViewedEventId = eventId;
+    window.currentEventDetailsMode = "view";
     const response = await apiCall(`/api/events/${eventId}`);
     const event = response.data;
     
@@ -8629,6 +8659,8 @@ async function editEvent(eventId) {
   }
 
   try {
+    window.currentViewedEventId = eventId;
+    window.currentEventDetailsMode = "edit";
     const response = await apiCall(`/api/events/${eventId}`);
     const event = response.data;
 
@@ -14608,6 +14640,177 @@ function logout() {
   }
 }
 
+function setRealtimeStatus(state) {
+  const status = document.getElementById("realtime-status");
+  if (!status) return;
+  status.dataset.state = state;
+  const label = status.querySelector("[data-sync-label]");
+  if (label) {
+    label.textContent = state === "connected" ? "Live" : "Reconnecting";
+  }
+}
+
+function getActiveSectionId() {
+  const currentSection = document.querySelector(".content-section.active");
+  return currentSection ? currentSection.id.replace("-section", "") : "";
+}
+
+function activeModal(modalId) {
+  return !!document.getElementById(modalId)?.classList.contains("active");
+}
+
+async function refreshActiveModalData() {
+  const modalRefreshes = [];
+
+  if (activeModal("prepareEventModal") && window.currentPrepareEventId) {
+    modalRefreshes.push(preserveModalState(() => openPrepareEventModal(window.currentPrepareEventId)));
+  }
+
+  if (activeModal("returnAssetsModalNew")) {
+    const selectedEventId = document.getElementById("returnEventSelect")?.value || "";
+    modalRefreshes.push((async () => {
+      await openReturnAssetsModal();
+      if (selectedEventId) {
+        const select = document.getElementById("returnEventSelect");
+        if (select) {
+          select.value = selectedEventId;
+          await loadEventAssetsForReturn();
+        }
+      }
+    })());
+  }
+
+  if (
+    activeModal("eventDetailsModal") &&
+    window.currentEventDetailsMode === "view" &&
+    window.currentViewedEventId
+  ) {
+    modalRefreshes.push(viewEvent(window.currentViewedEventId));
+  }
+
+  await Promise.allSettled(modalRefreshes);
+}
+
+async function refreshVisibleDataFromRealtime() {
+  if (document.hidden) {
+    __realtimeRefreshQueued = true;
+    return;
+  }
+
+  if (__autoRefreshInFlight) {
+    __realtimeRefreshQueued = true;
+    return;
+  }
+
+  __autoRefreshInFlight = true;
+  try {
+    __containersCache = null;
+    __containersCacheTs = 0;
+    departmentsLoaded = false;
+
+    await refreshActiveModalData();
+
+    switch (getActiveSectionId()) {
+      case "dashboard":
+        await loadDashboard();
+        break;
+      case "events":
+        await loadAllEvents();
+        break;
+      case "prepare":
+        await loadPrepareEvents();
+        break;
+      case "return":
+        await loadReturnEvents();
+        break;
+      case "inventory":
+        await loadInventory();
+        break;
+      case "containers":
+        await loadContainers();
+        break;
+      case "maintenance":
+        await loadMaintenanceAssets();
+        break;
+      case "logs":
+        await loadLogs();
+        break;
+      case "users":
+        if (typeof loadUsersAdmin === "function") await loadUsersAdmin();
+        break;
+      case "pdf-settings":
+        if (typeof loadPdfSettingsSection === "function") await loadPdfSettingsSection();
+        break;
+    }
+  } catch (error) {
+    console.error("Realtime refresh error:", error);
+  } finally {
+    __autoRefreshInFlight = false;
+    if (__realtimeRefreshQueued && !document.hidden) {
+      __realtimeRefreshQueued = false;
+      queueRealtimeRefresh();
+    }
+  }
+}
+
+function queueRealtimeRefresh() {
+  clearTimeout(__realtimeRefreshTimer);
+  __realtimeRefreshTimer = setTimeout(() => {
+    refreshVisibleDataFromRealtime();
+  }, 350);
+}
+
+function startRealtimeFallbackPolling() {
+  if (__realtimeFallbackTimer) return;
+  __realtimeFallbackTimer = setInterval(() => {
+    refreshVisibleDataFromRealtime();
+  }, 30000);
+}
+
+function stopRealtimeFallbackPolling() {
+  if (!__realtimeFallbackTimer) return;
+  clearInterval(__realtimeFallbackTimer);
+  __realtimeFallbackTimer = null;
+}
+
+function connectRealtimeUpdates() {
+  if (!window.EventSource) {
+    setRealtimeStatus("reconnecting");
+    startRealtimeFallbackPolling();
+    return;
+  }
+
+  if (__realtimeSource) return;
+
+  __realtimeSource = new EventSource(`/api/realtime/stream?clientId=${encodeURIComponent(REALTIME_CLIENT_ID)}`);
+
+  __realtimeSource.addEventListener("connected", () => {
+    setRealtimeStatus("connected");
+    stopRealtimeFallbackPolling();
+  });
+
+  __realtimeSource.addEventListener("inventory-update", (event) => {
+    try {
+      const payload = JSON.parse(event.data || "{}");
+      if (payload.originClientId && payload.originClientId === REALTIME_CLIENT_ID) {
+        return;
+      }
+      queueRealtimeRefresh();
+    } catch (error) {
+      console.warn("Realtime update parse failed:", error);
+      queueRealtimeRefresh();
+    }
+  });
+
+  __realtimeSource.onerror = () => {
+    setRealtimeStatus("reconnecting");
+    startRealtimeFallbackPolling();
+    __realtimeSource.close();
+    __realtimeSource = null;
+    setTimeout(connectRealtimeUpdates, 3000);
+  };
+}
+
 // Close modals when clicking outside
 window.addEventListener("click", function (e) {
   if (e.target.classList.contains("modal")) {
@@ -14677,6 +14880,8 @@ async function initializeApp() {
       // Load initial data
       await loadAllEvents();
     }, 200);
+
+    connectRealtimeUpdates();
   } catch (error) {
     console.error("Error initializing application:", error);
     showNotification("error", "Failed to initialize application");
@@ -14701,36 +14906,12 @@ document.addEventListener('keydown', function(e) {
   }
 });
 
-// Auto-refresh data every 6 seconds
-setInterval(async () => {
-  if (document.hidden || __autoRefreshInFlight) return;
-
-  __autoRefreshInFlight = true;
-  try {
-    const currentSection = document.querySelector(".content-section.active");
-    if (currentSection) {
-      const sectionId = currentSection.id.replace("-section", "");
-      switch (sectionId) {
-        case "dashboard":
-          await loadDashboard();
-          break;
-        case "events":
-          await loadAllEvents();
-          break;
-        case "inventory":
-          await loadInventory();
-          break;
-        case "logs":
-          await loadLogs();
-          break;
-      }
-    }
-  } catch (error) {
-    console.error("Auto-refresh error:", error);
-  } finally {
-    __autoRefreshInFlight = false;
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && __realtimeRefreshQueued) {
+    __realtimeRefreshQueued = false;
+    queueRealtimeRefresh();
   }
-}, 6000);
+});
 
 document.addEventListener('DOMContentLoaded', function() {
     setupMobileNavigation();

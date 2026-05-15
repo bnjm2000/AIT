@@ -97,6 +97,37 @@
         object-fit: contain;
         margin-right: 15px;
       }
+
+      .sync-status {
+        margin-left: auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 10px;
+        border: 1px solid #d7dde8;
+        border-radius: 999px;
+        background: #fff;
+        color: #334155;
+        font-size: 12px;
+        font-weight: 600;
+        line-height: 1;
+      }
+
+      .sync-status span {
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        background: #94a3b8;
+      }
+
+      .sync-status[data-state="connected"] span {
+        background: #16a34a;
+      }
+
+      .sync-status[data-state="reconnecting"] span {
+        background: #f59e0b;
+      }
+
       .nav-section {
         margin-bottom: 30px;
       }
@@ -2019,6 +2050,10 @@
           style="height:40px; width: auto; object-fit: contain"
           onerror="this.style.display='none'"
         />
+        <div class="sync-status" id="realtime-status" data-state="reconnecting" title="Realtime connection status">
+          <span aria-hidden="true"></span>
+          <strong data-sync-label>Reconnecting</strong>
+        </div>
         <button
           type="button"
           class="mobile-nav-toggle"

@@ -1,8 +1,9 @@
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for, send_file
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for, send_file, Response, stream_with_context, g, has_request_context
 import csv
 from urllib.parse import unquote_plus
 import os
 import re
+import queue
 from flask_cors import CORS
 from functools import wraps
 import os
@@ -27,7 +28,6 @@ from maintenance_logs import (
     parse_maintenance_log_date,
     status_change_labels,
 )
-from utils import get_state_color
 from urllib.parse import unquote_plus
 
 # Configure logging
@@ -40,6 +40,8 @@ CORS(app)
 
 # Global data manager instance
 data_manager = None
+_data_manager_init_lock = threading.RLock()
+_background_thread_started = False
 
 # Caching for performance
 _cache = {
@@ -51,6 +53,134 @@ _cache = {
 # Serialise transfer/return mutations so multiple users on different devices
 # cannot transfer and return the same physical asset at the same time.
 _transfer_action_lock = threading.RLock()
+
+# Browser realtime update stream.  Server-sent events keep the deployment simple
+# for regular WSGI hosting while still letting every logged-in browser react when
+# another user changes shared inventory/event data.
+_realtime_subscribers = {}
+_realtime_subscribers_lock = threading.RLock()
+_realtime_sequence = 0
+
+
+def _realtime_state_path():
+    if not data_manager or not getattr(data_manager, 'data_folder', ''):
+        return None
+    return os.path.join(data_manager.data_folder, 'RealtimeState.json')
+
+
+def _write_realtime_state(payload):
+    path = _realtime_state_path()
+    if not path:
+        return
+
+    try:
+        folder = os.path.dirname(path)
+        if folder and not os.path.exists(folder):
+            os.makedirs(folder)
+        tmp_path = f"{path}.{secrets.token_hex(6)}.tmp"
+        with open(tmp_path, 'w', encoding='utf-8') as f:
+            json.dump(payload, f, ensure_ascii=False)
+        os.replace(tmp_path, path)
+    except Exception as e:
+        logger.warning("Failed to write realtime state: %s", e)
+
+
+def _read_realtime_state():
+    path = _realtime_state_path()
+    if not path or not os.path.exists(path):
+        return None
+
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception as e:
+        logger.debug("Failed to read realtime state: %s", e)
+        return None
+
+
+def _client_id_from_request():
+    if not has_request_context():
+        return ''
+    return (
+        request.headers.get('X-Client-Id')
+        or request.args.get('clientId')
+        or ''
+    )[:120]
+
+
+def _current_actor_for_realtime():
+    if not has_request_context():
+        return 'system'
+    return session.get('user', 'system')
+
+
+def _publish_realtime_update_now(topic='data-changed', details=None, origin_client_id=None):
+    """Push a compact change notice to every connected browser."""
+    global _realtime_sequence
+
+    with _realtime_subscribers_lock:
+        _realtime_sequence += 1
+        event_id = f"{int(time.time() * 1000)}-{_realtime_sequence}-{secrets.token_hex(4)}"
+
+    payload = {
+        'id': event_id,
+        'topic': topic,
+        'details': details or {},
+        'actor': _current_actor_for_realtime(),
+        'originClientId': origin_client_id or _client_id_from_request(),
+        'timestamp': datetime.now().isoformat(timespec='seconds')
+    }
+
+    # The file stamp lets separate WSGI workers observe the same change without
+    # adding Redis or another service to this CSV-backed app.
+    _write_realtime_state(payload)
+
+    with _realtime_subscribers_lock:
+        if not _realtime_subscribers:
+            return
+
+        dead_subscribers = []
+        for subscriber_id, subscriber_queue in _realtime_subscribers.items():
+            try:
+                subscriber_queue.put_nowait(payload)
+            except queue.Full:
+                dead_subscribers.append(subscriber_id)
+
+        for subscriber_id in dead_subscribers:
+            _realtime_subscribers.pop(subscriber_id, None)
+
+
+def mark_realtime_change(topic='data-changed', details=None):
+    """Mark this request as having changed shared data.
+
+    The actual publish happens after the response succeeds, so failed writes do
+    not trigger other browsers to refresh. Background jobs publish immediately.
+    """
+    if has_request_context():
+        changes = getattr(g, 'realtime_changes', [])
+        changes.append({'topic': topic, 'details': details or {}})
+        g.realtime_changes = changes
+        return
+
+    _publish_realtime_update_now(topic, details or {}, '')
+
+
+@app.after_request
+def publish_marked_realtime_changes(response):
+    changes = getattr(g, 'realtime_changes', None)
+    if changes and response.status_code < 400:
+        topics = sorted({change.get('topic', 'data-changed') for change in changes})
+        _publish_realtime_update_now(
+            'data-changed',
+            {
+                'topics': topics,
+                'changes': changes[-10:],
+                'path': request.path,
+                'method': request.method
+            },
+            _client_id_from_request()
+        )
+    return response
 
 def with_transfer_action_lock(f):
     @wraps(f)
@@ -85,6 +215,7 @@ def invalidate_cache():
     global _cache
     _cache = {'assigned_assets': None,
               'available_assets': None, 'cache_timestamp': None}
+    mark_realtime_change('inventory-data')
 
 
 # ---------------- Department configuration helpers ----------------
@@ -718,7 +849,7 @@ def _parse_legacy_custom_marker(value):
     raw_value = value.strip()
     lowered = raw_value.lower()
 
-    # Very old CLI markers sometimes used loan|... or misc|...
+    # Very old data markers sometimes used loan|... or misc|...
     if lowered.startswith('loan|') or lowered.startswith('misc|'):
         fallback_type, remainder = raw_value.split('|', 1)
         parsed = _parse_legacy_custom_marker(remainder)
@@ -1554,6 +1685,7 @@ def log_action(action):
         )
         data_manager.logs.append(log_entry)
         data_manager.save_logs()
+        mark_realtime_change('activity-log', {'action': action})
         logger.info(f"Action logged: {action}")
     except Exception as e:
         logger.error(f"Failed to log action: {e}")
@@ -1563,7 +1695,6 @@ def log_asset_change(event_id, asset_id, action, details=""):
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     log_message = f"[ASSET_CHANGE] {timestamp} - Event {event_id}: {action} asset {asset_id} {details}"
     logger.warning(log_message)
-    print(log_message)
 
 def _asset_group_from_item(asset):
     return {
@@ -1671,7 +1802,7 @@ def _update_event_model_group_references(event, old_group, new_group):
                 event.prepared_items[index] = _make_model_marker(new_group, marker['quantity'])
                 changed += 1
 
-    # Older/CLI workflow: asset_models list with model_description
+    # Older saved events may still use asset_models rows with model_description.
     old_display = _display_model_description(old_group)
     new_display = _display_model_description(new_group)
 
@@ -1734,7 +1865,7 @@ def _add_or_increment_model_marker(prepared_items, group, quantity_to_add=1):
 
 def _add_or_increment_asset_model_row(asset_models, group, quantity_to_add=1):
     """
-    Add quantity to an existing old CLI-style asset_models row if it already exists.
+    Add quantity to an existing legacy asset_models row if it already exists.
     Otherwise append a new row.
     """
     new_display = _display_model_description(group)
@@ -1923,7 +2054,7 @@ def _update_single_asset_event_model_references(event, old_group, new_group):
             # Only move ONE unit because only ONE asset was edited.
             break
 
-    # Older/CLI workflow: asset_models contains display rows.
+    # Older saved events may still contain display rows in asset_models.
     asset_models = getattr(event, 'asset_models', []) or []
     old_display = _display_model_description(old_group)
 
@@ -2251,9 +2382,15 @@ def schedule_ongoing_check():
 
 def start_background_thread():
     """Start the background thread for event checking"""
+    global _background_thread_started
+    if _background_thread_started:
+        logger.info("Background event checker already running")
+        return True
+
     try:
         ongoing_thread = threading.Thread(target=schedule_ongoing_check, daemon=True)
         ongoing_thread.start()
+        _background_thread_started = True
         logger.info("Background thread for event checking started successfully")
         return True
     except Exception as e:
@@ -2263,43 +2400,51 @@ def start_background_thread():
 def init_data_manager():
     """Initialize the data manager with the configured data folder"""
     global data_manager
+    if data_manager is not None:
+        return data_manager
 
-    try:
-        # Try to read data folder from config file
-        if os.path.exists('data_folder.txt'):
-            with open('data_folder.txt', 'r') as f:
-                data_folder = f.read().strip()
-        else:
-            # Default data folder
-            data_folder = './data'
-            if not os.path.exists(data_folder):
-                os.makedirs(data_folder)
-            with open('data_folder.txt', 'w') as f:
-                f.write(data_folder)
+    with _data_manager_init_lock:
+        if data_manager is not None:
+            return data_manager
 
-        data_manager = DataManager(data_folder)
-        data_manager.setup_data_folder()
-        data_manager.check_and_initialize_files()
-        data_manager.load_all_data()
-        logger.info(f"Data manager initialized with folder: {data_folder}")
-        
-        # Start the background thread AFTER data_manager is initialized
-        background_started = start_background_thread()
-        if not background_started:
-            logger.warning("Background thread failed to start - automatic event updates disabled")
-        else:
-            logger.info("Background thread started successfully after data_manager initialization")
+        try:
+            # Try to read data folder from config file
+            if os.path.exists('data_folder.txt'):
+                with open('data_folder.txt', 'r') as f:
+                    data_folder = f.read().strip()
+            else:
+                # Default data folder
+                data_folder = './data'
+                if not os.path.exists(data_folder):
+                    os.makedirs(data_folder)
+                with open('data_folder.txt', 'w') as f:
+                    f.write(data_folder)
+
+            data_manager = DataManager(data_folder)
+            data_manager.setup_data_folder()
+            data_manager.check_and_initialize_files()
+            data_manager.load_all_data()
+            logger.info(f"Data manager initialized with folder: {data_folder}")
             
-    except Exception as e:
-        logger.error(f"Failed to initialize data manager: {e}")
-        raise
+            # Start the background thread AFTER data_manager is initialized
+            background_started = start_background_thread()
+            if not background_started:
+                logger.warning("Background thread failed to start - automatic event updates disabled")
+            else:
+                logger.info("Background thread started successfully after data_manager initialization")
+                
+        except Exception as e:
+            logger.error(f"Failed to initialize data manager: {e}")
+            raise
 
-    def _client_to_dict(c):
-        return {
-            'name': c.name, 'company': c.company,
-            'address1': c.address1, 'address2': c.address2, 'address3': c.address3,
-            'postalCode': c.postal_code, 'phone': c.phone
-        }
+    return data_manager
+
+
+@app.before_request
+def ensure_web_runtime_ready():
+    """Lazy init for hosted WSGI imports where __main__ is never executed."""
+    if data_manager is None:
+        init_data_manager()
 
 # Routes
 
@@ -2365,6 +2510,74 @@ def logout():
         session.clear()
 
     return redirect(url_for('login'))
+
+
+@app.route('/api/realtime/stream', methods=['GET'])
+@require_auth
+def realtime_stream():
+    """Stream shared-data change notices to the logged-in browser."""
+    subscriber_id = secrets.token_urlsafe(16)
+    subscriber_queue = queue.Queue(maxsize=100)
+    client_id = _client_id_from_request()
+
+    with _realtime_subscribers_lock:
+        _realtime_subscribers[subscriber_id] = subscriber_queue
+
+    def sse_message(event_name, payload):
+        payload = payload or {}
+        data = json.dumps(payload, ensure_ascii=False)
+        event_id = payload.get('id', '')
+        id_line = f"id: {event_id}\n" if event_id else ""
+        return f"{id_line}event: {event_name}\ndata: {data}\n\n"
+
+    @stream_with_context
+    def event_stream():
+        last_seen_realtime_id = request.headers.get('Last-Event-ID') or ''
+        last_heartbeat_at = time.time()
+
+        try:
+            yield sse_message('connected', {
+                'topic': 'connected',
+                'clientId': client_id,
+                'timestamp': datetime.now().isoformat(timespec='seconds')
+            })
+
+            while True:
+                payload = None
+                try:
+                    payload = subscriber_queue.get(timeout=1)
+                except queue.Empty:
+                    payload = None
+
+                if payload:
+                    last_seen_realtime_id = str(payload.get('id') or last_seen_realtime_id)
+                    yield sse_message('inventory-update', payload)
+                    continue
+
+                shared_payload = _read_realtime_state()
+                shared_payload_id = str((shared_payload or {}).get('id') or '')
+                if shared_payload and shared_payload_id and shared_payload_id != last_seen_realtime_id:
+                    last_seen_realtime_id = shared_payload_id
+                    yield sse_message('inventory-update', shared_payload)
+                    continue
+
+                if time.time() - last_heartbeat_at >= 25:
+                    last_heartbeat_at = time.time()
+                    yield ": heartbeat\n\n"
+        finally:
+            with _realtime_subscribers_lock:
+                _realtime_subscribers.pop(subscriber_id, None)
+
+    return Response(
+        event_stream(),
+        mimetype='text/event-stream',
+        headers={
+            'Cache-Control': 'no-cache',
+            'X-Accel-Buffering': 'no',
+            'Connection': 'keep-alive'
+        }
+    )
+
 
 @app.route('/api/current-user', methods=['GET'])
 @require_auth
@@ -7669,24 +7882,13 @@ def client_item(name):
 
 if __name__ == '__main__':
     try:
-        # Initialize data manager
         init_data_manager()
-        
-        # Start the background thread AFTER data_manager is initialized
-        background_started = start_background_thread()
-        if not background_started:
-            logger.warning("Background thread failed to start - automatic event updates disabled")
-        else:
-            logger.info("Background thread started successfully after data_manager initialization")
 
-        # Run the Flask app
         app.run(
-            debug=False,
-            host='127.0.0.1',
-            port=5443,
-            #ssl_context='adhoc'
+            debug=os.environ.get('FLASK_DEBUG') == '1',
+            host=os.environ.get('HOST', '0.0.0.0'),
+            port=int(os.environ.get('PORT', '5443')),
         )
-        logger.info("app starteded")
     except Exception as e:
         logger.error(f"Failed to start application: {e}")
         raise

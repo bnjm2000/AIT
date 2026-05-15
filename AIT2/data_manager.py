@@ -1,12 +1,14 @@
 import os
 import csv
 import json
+import logging
 from models import User, InventoryItem, Container, Event, LogEntry, hash_password
 from utils import sanitize_filename, open_csv_robust, clean_csv_cell
 from maintenance_logs import dump_maintenance_logs, load_maintenance_logs
 
 # Constants
 MAX_LOG_LINES = 1000
+logger = logging.getLogger(__name__)
 
 class DataManager:
     def __init__(self, data_folder):
@@ -32,10 +34,10 @@ class DataManager:
             if not os.path.exists(filepath):
                 missing_files.append(filename)
         if missing_files:
-            print(f"The following required files are missing and will be created: {', '.join(missing_files)}")
+            logger.info("The following required files are missing and will be created: %s", ', '.join(missing_files))
             self.initialize_files()
         else:
-            print("All required files are present.")
+            logger.info("All required files are present.")
 
     def initialize_files(self):
         required_files = ['Inventory.csv', 'Logs.csv', 'Users.csv', 'Containers.csv', 'Clients.csv']
@@ -52,8 +54,8 @@ class DataManager:
             password_hash = hash_password('admin', salt)
             self.users['admin'] = User('admin', password_hash, salt, True, True)
             self.save_users()
-            print("Default admin user created.")
-        print("Required files have been initialized.")
+            logger.info("Default admin user created.")
+        logger.info("Required files have been initialized.")
 
     def load_all_data(self):
         self.load_users()
@@ -133,7 +135,7 @@ class DataManager:
         f, enc = open_csv_robust(filepath)
         try:
             if enc not in ("utf-8", "utf-8-sig"):
-                print(f"Warning: Inventory.csv decoded using {enc}. Consider re-saving as UTF-8.")
+                logger.warning("Inventory.csv decoded using %s. Consider re-saving as UTF-8.", enc)
             reader = csv.DictReader(f)
             for row in reader:
                 if not row:
@@ -213,7 +215,7 @@ class DataManager:
         f, enc = open_csv_robust(filepath)
         try:
             if enc not in ("utf-8", "utf-8-sig"):
-                print(f"Warning: Containers.csv decoded using {enc}. Consider re-saving as UTF-8.")
+                logger.warning("Containers.csv decoded using %s. Consider re-saving as UTF-8.", enc)
             reader = csv.reader(f)
             for row in reader:
                 if not row:
@@ -248,12 +250,12 @@ class DataManager:
             f, enc = open_csv_robust(filepath)
             try:
                 if enc not in ("utf-8", "utf-8-sig"):
-                    print(f"Warning: Event file {filename} decoded using {enc}. Consider re-saving as UTF-8.")
+                    logger.warning("Event file %s decoded using %s. Consider re-saving as UTF-8.", filename, enc)
 
                 reader = csv.DictReader(f)
                 event_data = next(reader, None)
                 if not event_data:
-                    print(f"Warning: Event file {filename} is empty or corrupted.")
+                    logger.warning("Event file %s is empty or corrupted.", filename)
                     continue
 
                 event_data = {k: clean_csv_cell(v) for k, v in event_data.items()}
@@ -261,7 +263,7 @@ class DataManager:
                 try:
                     event_id = int(event_data.get('EventID', '0') or '0')
                 except ValueError:
-                    print(f"Warning: Event file {filename} has invalid EventID: {event_data.get('EventID')}")
+                    logger.warning("Event file %s has invalid EventID: %s", filename, event_data.get('EventID'))
                     continue
 
                 name = event_data.get('Name', '')
@@ -273,7 +275,7 @@ class DataManager:
                     try:
                         asset_models = eval(event_data['AssetModels'])
                     except Exception as e:
-                        print(f"Error parsing 'AssetModels' in event file {filename}: {e}. Setting to empty list.")
+                        logger.error("Error parsing 'AssetModels' in event file %s: %s. Setting to empty list.", filename, e)
                         asset_models = []
 
                 prepared_items = []
@@ -281,7 +283,7 @@ class DataManager:
                     try:
                         prepared_items = json.loads(event_data['PreparedItems'])
                     except json.JSONDecodeError as e:
-                        print(f"Error parsing 'PreparedItems' in event file {filename}: {e}. Setting to empty list.")
+                        logger.error("Error parsing 'PreparedItems' in event file %s: %s. Setting to empty list.", filename, e)
                         prepared_items = []
 
                 returned_items = []
@@ -289,7 +291,7 @@ class DataManager:
                     try:
                         returned_items = json.loads(event_data['ReturnedItems'])
                     except json.JSONDecodeError as e:
-                        print(f"Error parsing 'ReturnedItems' in event file {filename}: {e}. Setting to empty list.")
+                        logger.error("Error parsing 'ReturnedItems' in event file %s: %s. Setting to empty list.", filename, e)
                         returned_items = []
 
                 actually_prepared = []
@@ -297,7 +299,7 @@ class DataManager:
                     try:
                         actually_prepared = json.loads(event_data['ActuallyPrepared'])
                     except json.JSONDecodeError as e:
-                        print(f"Error parsing 'ActuallyPrepared' in event file {filename}: {e}. Setting to empty list.")
+                        logger.error("Error parsing 'ActuallyPrepared' in event file %s: %s. Setting to empty list.", filename, e)
                         actually_prepared = []
 
                 extra_assets = []
@@ -305,7 +307,7 @@ class DataManager:
                     try:
                         extra_assets = json.loads(event_data['ExtraAssets'])
                     except json.JSONDecodeError as e:
-                        print(f"Error parsing 'ExtraAssets' in event file {filename}: {e}. Setting to empty list.")
+                        logger.error("Error parsing 'ExtraAssets' in event file %s: %s. Setting to empty list.", filename, e)
                         extra_assets = []
 
                 custom_collected = []
@@ -313,7 +315,7 @@ class DataManager:
                     try:
                         custom_collected = json.loads(event_data['CustomCollected'])
                     except json.JSONDecodeError as e:
-                        print(f"Error parsing 'CustomCollected' in event file {filename}: {e}. Setting to empty list.")
+                        logger.error("Error parsing 'CustomCollected' in event file %s: %s. Setting to empty list.", filename, e)
                         custom_collected = []
 
                 state = event_data.get('State', 'Added')
@@ -365,15 +367,15 @@ class DataManager:
         
         # VALIDATION: Don't save if critical data is missing
         if not hasattr(event, 'prepared_items'):
-            print(f"ERROR: Event {event.event_id} missing prepared_items - NOT SAVING to prevent data loss!")
+            logger.error("Event %s missing prepared_items - NOT SAVING to prevent data loss!", event.event_id)
             return
         
-        print(f"DEBUG: Saving event {event.event_id}")
-        print(f"DEBUG: prepared_items: {event.prepared_items}")
-        print(f"DEBUG: actually_prepared: {actually_prepared}")
-        print(f"DEBUG: extra_assets: {extra_assets}")
-        print(f"DEBUG: tag: {tag}")
-        print(f"DEBUG: force_state_override: {force_state_override}")
+        logger.debug("Saving event %s", event.event_id)
+        logger.debug("prepared_items: %s", event.prepared_items)
+        logger.debug("actually_prepared: %s", actually_prepared)
+        logger.debug("extra_assets: %s", extra_assets)
+        logger.debug("tag: %s", tag)
+        logger.debug("force_state_override: %s", force_state_override)
         
         # Validate JSON serialization before writing
         try:
@@ -383,9 +385,9 @@ class DataManager:
             extra_assets_json = json.dumps(extra_assets)
             custom_collected_json = json.dumps(custom_collected)
         except (TypeError, ValueError) as e:
-            print(f"ERROR: Cannot serialize event {event.event_id} data to JSON: {e}")
-            print(f"ERROR: prepared_items: {event.prepared_items}")
-            print(f"ERROR: NOT SAVING to prevent corruption!")
+            logger.error("Cannot serialize event %s data to JSON: %s", event.event_id, e)
+            logger.error("prepared_items: %s", event.prepared_items)
+            logger.error("NOT SAVING to prevent corruption!")
             return
         
         with open(filepath, 'w', newline='', encoding='utf-8') as f:
@@ -409,7 +411,7 @@ class DataManager:
                 'ForceStateOverride': str(force_state_override)
             }
             
-            print(f"DEBUG: Row data being written: {row_data}")
+            logger.debug("Row data being written: %s", row_data)
             writer.writerow(row_data)
 
         old_filename = self.event_file_map.get(event.event_id)
@@ -419,7 +421,7 @@ class DataManager:
                 os.remove(old_filepath)
         
         self.event_file_map[event.event_id] = filename
-        print(f"DEBUG: Event {event.event_id} saved successfully to {filename}")
+        logger.debug("Event %s saved successfully to %s", event.event_id, filename)
 
     def delete_event_file(self, event_id):
         if event_id in self.event_file_map:
@@ -437,7 +439,7 @@ class DataManager:
         f, enc = open_csv_robust(filepath)
         try:
             if enc not in ("utf-8", "utf-8-sig"):
-                print(f"Warning: Logs.csv decoded using {enc}. Consider re-saving as UTF-8.")
+                logger.warning("Logs.csv decoded using %s. Consider re-saving as UTF-8.", enc)
             reader = csv.reader(f)
             for row in reader:
                 if row:
@@ -470,11 +472,11 @@ class DataManager:
                 with open(filepath, 'rb') as original, open(backup_path, 'wb') as backup:
                     backup.write(original.read())
 
-                print(f"Backup created at {backup_path}.")
+                logger.info("Backup created at %s.", backup_path)
             else:
-                print(f"Event file {filename} does not exist. No backup created.")
+                logger.warning("Event file %s does not exist. No backup created.", filename)
         else:
-            print(f"No file mapping found for Event ID {event_id}. Cannot create backup.")
+            logger.warning("No file mapping found for Event ID %s. Cannot create backup.", event_id)
     
     def load_clients(self):
         import csv, os
