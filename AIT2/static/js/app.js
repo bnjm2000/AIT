@@ -238,7 +238,46 @@ function customAssetDisplayName(custom, includeQuantity = true) {
   if (!custom) return '';
   const qty = Math.max(1, parseInt(custom.quantity || 1, 10) || 1);
   const name = String(custom.name || '').trim();
-  return includeQuantity && qty > 1 ? `${qty}x ${name}` : name;
+  return includeQuantity ? `${qty}x ${name}` : name;
+}
+
+function customAssetSortName(custom) {
+  if (!custom) return '';
+  return String(custom.name || customAssetDisplayName(custom, false) || '').trim();
+}
+
+function modelGroupSortName(modelGroup) {
+  if (!modelGroup) return '';
+  return [modelGroup.brand, modelGroup.model, modelGroup.description]
+    .map(value => String(value || '').trim())
+    .filter(Boolean)
+    .join(' ');
+}
+
+function assetDisplaySortName(asset) {
+  if (!asset) return '';
+  const custom = asset.parsedCustom || parseCustomAsset(asset.id, asset);
+  if (custom) return customAssetSortName(custom);
+
+  const labelParts = [asset.brand, asset.model, asset.description, asset.name, asset.id]
+    .map(value => String(value || '').trim())
+    .filter(Boolean);
+
+  if (asset.isBulk || String(asset.id || '').startsWith('[BULK]')) {
+    const bulkParts = [asset.name, asset.brand, asset.model, asset.description, asset.id]
+      .map(value => String(value || '').trim())
+      .filter(Boolean);
+    return bulkParts.join(' ');
+  }
+
+  return labelParts.join(' ');
+}
+
+function compareByDisplayName(a, b) {
+  return String(a || '').localeCompare(String(b || ''), undefined, {
+    numeric: true,
+    sensitivity: 'base'
+  });
 }
 
 function customAssetTypeBadge(custom) {
@@ -5363,7 +5402,26 @@ async function openPrepareEventModal(eventId) {
                         <div id="dept-${dept}" style="display: block; padding: 0 10px;">
                 `;
 
-                modelGroups.forEach(modelGroup => {
+                const requirementRows = [
+                    ...modelGroups.map(modelGroup => ({
+                        type: 'model',
+                        sortName: modelGroupSortName(modelGroup),
+                        modelGroup
+                    })),
+                    ...customAssetsForDept.map(asset => ({
+                        type: 'custom',
+                        sortName: customAssetSortName(asset.parsedCustom || parseCustomAsset(asset.id, asset)),
+                        asset
+                    }))
+                ].sort((a, b) => compareByDisplayName(a.sortName, b.sortName));
+
+                requirementRows.forEach(row => {
+                    if (row.type === 'custom') {
+                        content += createCustomPreparationSection(eventId, [row.asset], event);
+                        return;
+                    }
+
+                    const modelGroup = row.modelGroup;
                     const modelAvailableAssets = availableAssets.filter(a => 
                         a.brand === modelGroup.brand && 
                         a.model === modelGroup.model && 
@@ -5387,7 +5445,6 @@ async function openPrepareEventModal(eventId) {
                     }
                 });
 
-                content += createCustomPreparationSection(eventId, customAssetsForDept, event);
                 content += '</div></div>';
             });
         }
@@ -5444,7 +5501,9 @@ async function openPrepareEventModal(eventId) {
                 const assets = event.assetsByDepartment[dept];
                 
                 // Add department header if there are non-model assets
-                const nonModelAssets = assets.filter(asset => !asset.id.startsWith('[MODEL]'));
+                const nonModelAssets = assets
+                    .filter(asset => !asset.id.startsWith('[MODEL]'))
+                    .sort((a, b) => compareByDisplayName(assetDisplaySortName(a), assetDisplaySortName(b)));
                 if (nonModelAssets.length > 0) {
                     content += `
                         <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: #f1f3f4; border-bottom: 1px solid #e9ecef; cursor: pointer;" onclick="togglePrepareSection('assigned-dept-${dept}')">
@@ -5455,7 +5514,7 @@ async function openPrepareEventModal(eventId) {
                     `;
                 }
                 
-                assets.forEach(asset => {
+                nonModelAssets.forEach(asset => {
                     if (!asset.id.startsWith('[MODEL]')) {
                         const custom = parseCustomAsset(asset.id, asset);
                         const isReturned = event.returnedItems && event.returnedItems.includes(asset.id);
@@ -5948,6 +6007,14 @@ function groupCustomAssetsByDepartment(event) {
         if (!grouped[dept]) grouped[dept] = [];
         grouped[dept].push({ ...asset, parsedCustom: custom, department: dept });
     });
+
+    Object.keys(grouped).forEach(dept => {
+        grouped[dept].sort((a, b) => compareByDisplayName(
+            customAssetSortName(a.parsedCustom || parseCustomAsset(a.id, a)),
+            customAssetSortName(b.parsedCustom || parseCustomAsset(b.id, b))
+        ));
+    });
+
     return grouped;
 }
 
@@ -5969,7 +6036,12 @@ function getCustomRequiredQuantityForProgress(customAssets) {
 function createCustomPreparationSection(eventId, customAssets, event) {
     if (!customAssets || customAssets.length === 0) return '';
 
-    return customAssets.map((asset) => {
+    return [...customAssets]
+        .sort((a, b) => compareByDisplayName(
+            customAssetSortName(a.parsedCustom || parseCustomAsset(a.id, a)),
+            customAssetSortName(b.parsedCustom || parseCustomAsset(b.id, b))
+        ))
+        .map((asset) => {
         const custom = asset.parsedCustom || parseCustomAsset(asset.id, asset);
         if (!custom) return '';
 
@@ -6605,9 +6677,9 @@ function updateAllAssetsSection(event, eventId) {
       const deptAssets = event.assetsByDepartment[dept] || [];
 
       // Only show real assets here (ignore [MODEL] rows)
-      const nonModelAssets = deptAssets.filter(
-        (a) => a && a.id && !a.id.startsWith("[MODEL]")
-      );
+      const nonModelAssets = deptAssets
+        .filter((a) => a && a.id && !a.id.startsWith("[MODEL]"))
+        .sort((a, b) => compareByDisplayName(assetDisplaySortName(a), assetDisplaySortName(b)));
 
       if (nonModelAssets.length > 0) {
         content += `
@@ -7095,11 +7167,9 @@ async function loadEventAssetsForReturn() {
         }
 
         deptCodes.forEach(dept => {
-            const items = (byDept[dept] || []).sort((a, b) => {
-                const aName = a.parsedCustom ? customAssetDisplayName(a.parsedCustom) : `${a.brand || ''} ${a.model || ''} ${a.description || ''} ${a.id || ''}`;
-                const bName = b.parsedCustom ? customAssetDisplayName(b.parsedCustom) : `${b.brand || ''} ${b.model || ''} ${b.description || ''} ${b.id || ''}`;
-                return aName.localeCompare(bName, undefined, { numeric: true });
-            });
+            const items = (byDept[dept] || []).sort((a, b) =>
+                compareByDisplayName(assetDisplaySortName(a), assetDisplaySortName(b))
+            );
             const totalQty = items.reduce((sum, a) => sum + Number(a.quantity || a.parsedCustom?.quantity || 1), 0);
 
             assetsContent += `
@@ -7587,7 +7657,9 @@ async function viewEvent(eventId) {
 
         Object.keys(event.assetsByDepartment).sort().forEach((dept) => {
           const assets = event.assetsByDepartment[dept];
-          const individualAssets = assets.filter(asset => !asset.id.startsWith('[MODEL]'));
+          const individualAssets = assets
+            .filter(asset => !asset.id.startsWith('[MODEL]'))
+            .sort((a, b) => compareByDisplayName(assetDisplaySortName(a), assetDisplaySortName(b)));
           
           if (individualAssets.length > 0) {
             content += `
@@ -9208,41 +9280,53 @@ async function updateModelRequirementsSection(eventId) {
         <div style="padding: 12px;">
       `;
 
-      models.forEach((model) => {
-        const assignedCount = getPreparedQuantity(model);
-        const statusIcon = assignedCount >= model.requiredQuantity ? "✅" : "⚠️";
+      const assignmentRows = [
+        ...models.map(model => ({ type: 'model', sortName: modelGroupSortName(model), model })),
+        ...customAssets.map(asset => ({
+          type: 'custom',
+          sortName: customAssetSortName(asset.parsedCustom || parseCustomAsset(asset.id, asset)),
+          asset
+        }))
+      ].sort((a, b) => compareByDisplayName(a.sortName, b.sortName));
 
-        content += `
-          <div class="model-assignment" style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #f1f1f1; gap:12px;">
-            <div style="flex: 1; min-width:0;">
-              <div style="display: flex; align-items: center; flex-wrap:wrap; gap:6px;">
-                <span>${statusIcon}</span>
-                <span style="font-weight: 500;">${Number(model.requiredQuantity || 0)}x ${escapeHtml(model.brand)} ${escapeHtml(model.model)}</span>
-                <span style="color: #666;">(${assignedCount} assigned)</span>
+      assignmentRows.forEach(row => {
+        if (row.type === 'model') {
+          const model = row.model;
+          const assignedCount = getPreparedQuantity(model);
+          const statusIcon = assignedCount >= model.requiredQuantity ? "✅" : "⚠️";
+
+          content += `
+            <div class="model-assignment" style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #f1f1f1; gap:12px;">
+              <div style="flex: 1; min-width:0;">
+                <div style="display: flex; align-items: center; flex-wrap:wrap; gap:6px;">
+                  <span>${statusIcon}</span>
+                  <span style="font-weight: 500;">${Number(model.requiredQuantity || 0)}x ${escapeHtml(model.brand)} ${escapeHtml(model.model)}</span>
+                  <span style="color: #666;">(${assignedCount} assigned)</span>
+                </div>
+                <div style="color: #666; font-size: 12px; margin-left: 22px; margin-top: 2px;">${escapeHtml(model.description || '')}</div>
               </div>
-              <div style="color: #666; font-size: 12px; margin-left: 22px; margin-top: 2px;">${escapeHtml(model.description || '')}</div>
+              <div style="display: flex; gap: 8px; flex-wrap:wrap; justify-content:flex-end;">
+                <button class="btn btn-sm btn-outline-primary edit-model-qty-btn"
+                        data-event-id="${eventId}"
+                        data-brand="${escapeHtmlAttribute(model.brand)}"
+                        data-model="${escapeHtmlAttribute(model.model)}"
+                        data-department="${escapeHtmlAttribute(model.department)}"
+                        data-description="${escapeHtmlAttribute(model.description || '')}"
+                        style="padding: 4px 8px; font-size: 11px;">Edit Qty</button>
+                <button class="btn btn-sm btn-danger remove-model-btn"
+                        data-event-id="${eventId}"
+                        data-brand="${escapeHtmlAttribute(model.brand)}"
+                        data-model="${escapeHtmlAttribute(model.model)}"
+                        data-department="${escapeHtmlAttribute(model.department)}"
+                        data-description="${escapeHtmlAttribute(model.description || '')}"
+                        style="padding: 4px 8px; font-size: 11px;">Remove</button>
+              </div>
             </div>
-            <div style="display: flex; gap: 8px; flex-wrap:wrap; justify-content:flex-end;">
-              <button class="btn btn-sm btn-outline-primary edit-model-qty-btn"
-                      data-event-id="${eventId}"
-                      data-brand="${escapeHtmlAttribute(model.brand)}"
-                      data-model="${escapeHtmlAttribute(model.model)}"
-                      data-department="${escapeHtmlAttribute(model.department)}"
-                      data-description="${escapeHtmlAttribute(model.description || '')}"
-                      style="padding: 4px 8px; font-size: 11px;">Edit Qty</button>
-              <button class="btn btn-sm btn-danger remove-model-btn"
-                      data-event-id="${eventId}"
-                      data-brand="${escapeHtmlAttribute(model.brand)}"
-                      data-model="${escapeHtmlAttribute(model.model)}"
-                      data-department="${escapeHtmlAttribute(model.department)}"
-                      data-description="${escapeHtmlAttribute(model.description || '')}"
-                      style="padding: 4px 8px; font-size: 11px;">Remove</button>
-            </div>
-          </div>
-        `;
-      });
+          `;
+          return;
+        }
 
-      customAssets.forEach(asset => {
+        const asset = row.asset;
         const custom = asset.parsedCustom;
         const statusIcon = asset.status === "returned" ? "↩️"
                          : asset.status === "prepared" ? "✅"

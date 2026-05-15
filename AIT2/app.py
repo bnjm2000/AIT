@@ -926,7 +926,7 @@ def _is_custom_ref(value):
 def _custom_display_name(custom):
     qty = max(1, _safe_int(custom.get('quantity'), 1))
     name = str(custom.get('name') or '').strip()
-    return f"{qty}x {name}" if qty > 1 else name
+    return f"{qty}x {name}"
 
 
 def _custom_status(event, marker):
