@@ -381,6 +381,118 @@ function getAssetIdentifierForApi(asset) {
   return asset?.internalId || asset?.bulkId || asset?.id || '';
 }
 
+function isAssetDegraded(asset) {
+  return !!(asset && (asset.isDegraded || asset.status === 'degraded'));
+}
+
+function isAssetDisposed(asset) {
+  return !!(asset && (asset.isDisposed || asset.status === 'disposed'));
+}
+
+function assetStatusClass(status) {
+  return `status-${String(status || 'available').trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '-')}`;
+}
+
+function statusBadgeHtml(status, label = null) {
+  const cleanStatus = String(status || 'available').trim().toLowerCase() || 'available';
+  const text = label || cleanStatus.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  return `<span class="asset-badge ${assetStatusClass(cleanStatus)}">${escapeHtml(text)}</span>`;
+}
+
+function getAssetConditionStatus(asset) {
+  if (!asset) return 'available';
+  if (asset.isDisposed || asset.status === 'disposed') return 'disposed';
+  if (asset.isMissing || asset.status === 'missing') return 'missing';
+  if (asset.isOOC || asset.status === 'ooc') return 'ooc';
+  if (asset.isDegraded || asset.status === 'degraded') return 'degraded';
+  return 'available';
+}
+
+function assetFlagBadgesHtml(asset) {
+  const status = getAssetConditionStatus(asset);
+  const label = status === 'available'
+    ? 'OK'
+    : (status === 'ooc' ? 'OOC' : status.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()));
+  return statusBadgeHtml(status, label);
+}
+
+function maintenanceStatusMeta(value) {
+  const cleanValue = String(value || 'nochange').trim().toLowerCase();
+  const map = {
+    nochange: { label: 'No Change', color: '#495057' },
+    ok: { label: 'OK / Clear Status', color: '#28a745' },
+    ooc: { label: 'OOC', color: '#dc3545' },
+    missing: { label: 'Missing', color: '#fd7e14' },
+    degraded: { label: 'Degraded', color: '#856404' },
+    disposed: { label: 'Disposed', color: '#6c757d' }
+  };
+  return map[cleanValue] || map.nochange;
+}
+
+function applyMaintenanceStatusSelectStyle(selectEl) {
+  if (!selectEl) return;
+
+  const meta = maintenanceStatusMeta(selectEl.value);
+  selectEl.style.color = meta.color;
+  selectEl.style.fontWeight = selectEl.value === 'nochange' ? '400' : '600';
+  selectEl.style.borderColor = meta.color;
+
+  Array.from(selectEl.options || []).forEach(option => {
+    const optionMeta = maintenanceStatusMeta(option.value);
+    option.style.color = optionMeta.color;
+    option.style.fontWeight = option.value === 'nochange' ? '400' : '600';
+  });
+}
+
+function initialiseMaintenanceStatusSelects(root = document) {
+  root.querySelectorAll('[data-maintenance-status-select="true"]').forEach(selectEl => {
+    applyMaintenanceStatusSelectStyle(selectEl);
+    if (selectEl.dataset.statusColourBound === 'true') return;
+    selectEl.addEventListener('change', () => applyMaintenanceStatusSelectStyle(selectEl));
+    selectEl.dataset.statusColourBound = 'true';
+  });
+}
+
+function maintenanceStatusSelectHtml(id, name, selected = 'nochange') {
+  const value = String(selected || 'nochange');
+  const option = (optionValue) => {
+    const meta = maintenanceStatusMeta(optionValue);
+    return `<option value="${optionValue}" style="color:${meta.color};font-weight:${optionValue === 'nochange' ? '400' : '600'};" ${value === optionValue ? 'selected' : ''}>${meta.label}</option>`;
+  };
+  return `
+    <select id="${id}" name="${name}" class="form-input" data-maintenance-status-select="true" onchange="applyMaintenanceStatusSelectStyle(this)">
+      ${option('nochange')}
+      ${option('ok')}
+      ${option('ooc')}
+      ${option('missing')}
+      ${option('degraded')}
+      ${option('disposed')}
+    </select>
+    <small style="color:#666;font-size:12px;margin-top:6px;display:block;">
+      Assets can only have one status. To change a non-OK asset to another status, mark it as OK first.
+    </small>
+  `;
+}
+
+
+function confirmDegradedAssetUse(assetId, assetDetails = null) {
+  const identifier = getAssetIdentifierForApi(assetDetails) || assetId;
+  const asset = assetDetails || (Array.isArray(assets)
+    ? assets.find(a => getAssetIdentifierForApi(a) === identifier || a.id === identifier || a.displayId === identifier)
+    : null);
+
+  if (!isAssetDegraded(asset)) return true;
+
+  const label = [asset?.brand, asset?.model, asset?.description].filter(Boolean).join(' ');
+  return confirm(`Warning: ${identifier}${label ? ` (${label})` : ''} is marked as Degraded.\n\nIt can still be used for show, but it may not be fully functional. Continue preparing this asset?`);
+}
+
+function showApiWarning(response) {
+  if (response && response.warning) {
+    alert(response.warning);
+  }
+}
+
 
 function getAssignedAssetDisplay(asset) {
   if (!asset) return '';
@@ -3278,7 +3390,7 @@ function displayInventoryTable(assetsToShow) {
           <th>Department</th>
           <th>Status</th>
           <th>Location</th>
-          <th>OOC</th>
+          <th>Flags</th>
           <th>Actions</th>
         </tr>
       </thead>
@@ -3312,17 +3424,13 @@ function displayInventoryTable(assetsToShow) {
         </td>
 
         <td>
-          <span class="asset-badge status-${escapeHtmlAttr(asset.status || 'available')}">
-            ${escapeHtml(asset.status || "available")}
-          </span>
+          ${statusBadgeHtml(asset.status || 'available')}
         </td>
 
         <td>${escapeHtml(asset.location || "Store")}</td>
 
         <td>
-          <span class="asset-badge ${asset.isOOC ? 'status-ooc' : 'status-available'}">
-            ${asset.isOOC ? 'OOC' : 'OK'}
-          </span>
+          ${assetFlagBadgesHtml(asset)}
         </td>
 
         <td class="inventory-actions-cell">
@@ -3431,16 +3539,18 @@ function ensureAssetEditModal() {
           <textarea id="editAssetDescription" class="form-input" rows="3"></textarea>
         </div>
 
-        <div style="display:flex;gap:20px;align-items:center;flex-wrap:wrap;margin-top:8px;">
-          <label style="display:flex;gap:8px;align-items:center;">
-            <input id="editAssetIsMissing" type="checkbox">
-            Missing
-          </label>
-
-          <label style="display:flex;gap:8px;align-items:center;">
-            <input id="editAssetIsOOC" type="checkbox">
-            Out of Commission
-          </label>
+        <div class="form-group" style="margin-top:8px;">
+          <label class="form-label" for="editAssetStatus">Asset Status</label>
+          <select id="editAssetStatus" class="form-input">
+            <option value="ok">OK</option>
+            <option value="ooc">OOC</option>
+            <option value="missing">Missing</option>
+            <option value="degraded">Degraded</option>
+            <option value="disposed">Disposed</option>
+          </select>
+          <small style="color:#666;font-size:12px;margin-top:6px;display:block;">
+            Assets can only have one status at a time.
+          </small>
         </div>
       </div>
 
@@ -3496,8 +3606,11 @@ function openEditAssetModal(encodedAssetId) {
   document.getElementById('editAssetDepartment').value = asset.department || 'UN';
   document.getElementById('editAssetDefaultLocation').value = asset.defaultLocation || 'Store';
   document.getElementById('editAssetCurrentLocation').value = asset.currentLocation || '';
-  document.getElementById('editAssetIsMissing').checked = !!asset.isMissing;
-  document.getElementById('editAssetIsOOC').checked = !!asset.isOOC;
+  const editStatusEl = document.getElementById('editAssetStatus');
+  if (editStatusEl) {
+    const conditionStatus = getAssetConditionStatus(asset);
+    editStatusEl.value = conditionStatus === 'available' ? 'ok' : conditionStatus;
+  }
 
   openModal('editAssetModal');
 }
@@ -3521,8 +3634,10 @@ async function saveAssetEditModal() {
     department: document.getElementById('editAssetDepartment').value.trim().toUpperCase(),
     defaultLocation: document.getElementById('editAssetDefaultLocation').value.trim(),
     currentLocation: document.getElementById('editAssetCurrentLocation').value.trim(),
-    isMissing: document.getElementById('editAssetIsMissing').checked,
-    isOOC: document.getElementById('editAssetIsOOC').checked,
+    isMissing: document.getElementById('editAssetStatus')?.value === 'missing',
+    isOOC: document.getElementById('editAssetStatus')?.value === 'ooc',
+    isDegraded: document.getElementById('editAssetStatus')?.value === 'degraded',
+    isDisposed: document.getElementById('editAssetStatus')?.value === 'disposed',
     quantity: parseInt(document.getElementById('editAssetQuantity')?.value || '1', 10) || 1,
     applyTo: 'single'
   };
@@ -6217,7 +6332,9 @@ async function processUniversalAsset(eventId) {
                 refreshPrepareUiAfterAssetChange(eventId);
             } else {
                 // Asset is assigned but not prepared - prepare it
-                await apiCall(`/api/events/${eventId}/assign-specific`, 'POST', { assetId });
+                if (!confirmDegradedAssetUse(assetId, assetDetails)) return;
+                const response = await apiCall(`/api/events/${eventId}/assign-specific`, 'POST', { assetId });
+                showApiWarning(response);
                 showFeedback(feedbackDiv, 'success', `✅ ${assetId} assigned and prepared`);
                 
                 // Clear input and focus back on it
@@ -6233,7 +6350,9 @@ async function processUniversalAsset(eventId) {
                 return;
             }
 
-            await apiCall(`/api/events/${eventId}/assign-specific`, 'POST', { assetId });
+            if (!confirmDegradedAssetUse(assetId, assetDetails)) return;
+            const response = await apiCall(`/api/events/${eventId}/assign-specific`, 'POST', { assetId });
+            showApiWarning(response);
             showFeedback(feedbackDiv, 'success', `✅ ${assetId} prepared as extra asset`);
 
             input.value = '';
@@ -7537,7 +7656,7 @@ function normalizeMaintenanceChange(change) {
     return value ? { kind, value } : null;
   }
 
-  if (kind === 'ooc' || kind === 'missing') {
+  if (kind === 'ooc' || kind === 'missing' || kind === 'degraded' || kind === 'disposed') {
     const rawAction = String(change.action || '').trim().toLowerCase();
     if (['mark', 'marked'].includes(rawAction)) return { kind, action: 'marked' };
     if (['clear', 'cleared', 'remove', 'removed', 'unmark', 'unmarked'].includes(rawAction)) {
@@ -7570,6 +7689,18 @@ function maintenanceChangeFromLegacyPart(part) {
   if (['cleared missing', 'clear missing', 'removed missing', 'unmarked missing', 'unmark missing'].includes(lower)) {
     return { kind: 'missing', action: 'cleared' };
   }
+  if (['marked degraded', 'mark degraded'].includes(lower)) {
+    return { kind: 'degraded', action: 'marked' };
+  }
+  if (['cleared degraded', 'clear degraded', 'removed degraded', 'unmarked degraded', 'unmark degraded'].includes(lower)) {
+    return { kind: 'degraded', action: 'cleared' };
+  }
+  if (['marked disposed', 'mark disposed'].includes(lower)) {
+    return { kind: 'disposed', action: 'marked' };
+  }
+  if (['cleared disposed', 'clear disposed', 'removed disposed', 'unmarked disposed', 'unmark disposed'].includes(lower)) {
+    return { kind: 'disposed', action: 'cleared' };
+  }
 
   return null;
 }
@@ -7594,6 +7725,7 @@ function normalizeMaintenanceLogRecord(log) {
       date: String(log.date || ''),
       user: String(log.user || ''),
       description: String(log.description || ''),
+      cost: String(log.cost || ''),
       changes: Array.isArray(log.changes)
         ? log.changes.map(normalizeMaintenanceChange).filter(Boolean)
         : []
@@ -7605,7 +7737,7 @@ function normalizeMaintenanceLogRecord(log) {
     ? { date: parts[0] || '', user: parts[1] || '', description: parts.slice(2).join('\t') || '' }
     : { date: '', user: '', description: String(log || '') };
   const legacy = splitLegacyMaintenanceStatus(parsed.description);
-  return { ...parsed, description: legacy.description, changes: legacy.changes };
+  return { ...parsed, description: legacy.description, cost: '', changes: legacy.changes };
 }
 
 function getMaintenanceLogRecords(asset) {
@@ -7625,6 +7757,8 @@ function getMaintenanceChangeLabels(logOrChanges) {
     if (change.kind === 'serial') return `Serial: ${change.value}`;
     if (change.kind === 'ooc') return change.action === 'marked' ? 'Marked OOC' : 'Cleared OOC';
     if (change.kind === 'missing') return change.action === 'marked' ? 'Marked Missing' : 'Cleared Missing';
+    if (change.kind === 'degraded') return change.action === 'marked' ? 'Marked Degraded' : 'Cleared Degraded';
+    if (change.kind === 'disposed') return change.action === 'marked' ? 'Marked Disposed' : 'Cleared Disposed';
     return '';
   }).filter(Boolean);
 }
@@ -9478,7 +9612,10 @@ async function assignSpecificAsset(eventId, assetId, brand, model) {
     console.log('eventId:', eventId, 'assetId:', assetId, 'brand:', brand, 'model:', model);
     
     try {
-        await apiCall(`/api/events/${eventId}/assign-specific`, 'POST', { assetId });
+        await ensureAssetsLoaded();
+        if (!confirmDegradedAssetUse(assetId)) return;
+        const response = await apiCall(`/api/events/${eventId}/assign-specific`, 'POST', { assetId });
+        showApiWarning(response);
         showNotification('success', `Assigned ${assetId} to event`);
         
         console.log('About to refresh modal with state preservation...');
@@ -10166,7 +10303,10 @@ document.addEventListener("DOMContentLoaded", function () {
               unmarkOOC: true,  // Clear OOC status
               markMissing: false,
               unmarkMissing: true,  // Clear Missing status
-              newSerial: newSerial || null
+              unmarkDegraded: true,
+              unmarkDisposed: true,
+              newSerial: newSerial || null,
+              cost: document.getElementById('bulkOOCCost')?.value.trim() || null
             };
             
             // Encode the asset ID for the URL
@@ -10184,7 +10324,7 @@ document.addEventListener("DOMContentLoaded", function () {
         
         if (successCount > 0) {
           const locationText = newLocation ? ` and moved to ${newLocation}` : "";
-          showNotification("success", `Cleared OOC/Missing status for ${successCount} asset${successCount > 1 ? 's' : ''}${locationText}`);
+          showNotification("success", `Cleared asset status for ${successCount} asset${successCount > 1 ? 's' : ''}${locationText}`);
         }
         
         if (errorCount > 0) {
@@ -10227,16 +10367,10 @@ document.addEventListener("DOMContentLoaded", function () {
 
       const newSerialElement = document.getElementById("maintenanceNewSerial");
       const newSerial = newSerialElement ? newSerialElement.value.trim() : '';
+      const maintenanceCost = document.getElementById("maintenanceCost")?.value.trim() || '';
       
-      // Get asset status from radio buttons
-      const statusEl = document.querySelector('input[name="assetStatus"]:checked');
-      
-      if (!statusEl) {
-        showNotification("warning", "Please select a status option");
-        return;
-      }
-      
-      const statusValue = statusEl.value;
+      // Get the requested asset status from the cleaned-up selector.
+      const statusValue = document.getElementById('maintenanceAssetStatus')?.value || 'nochange';
 
       if (!logEntry) {
         showNotification("warning", "Please enter a maintenance log entry");
@@ -10261,10 +10395,16 @@ document.addEventListener("DOMContentLoaded", function () {
               maintenanceDate: maintenanceDate,
               newLocation: newLocation || null,
               newSerial: newSerial || null,
+              cost: maintenanceCost || null,
+              assetStatus: statusValue,
               markOOC: statusValue === 'ooc',
-              unmarkOOC: statusValue === 'clearooc',
+              unmarkOOC: statusValue === 'ok',
               markMissing: statusValue === 'missing',
-              unmarkMissing: statusValue === 'clearmissing'
+              unmarkMissing: statusValue === 'ok',
+              markDegraded: statusValue === 'degraded',
+              unmarkDegraded: statusValue === 'ok',
+              markDisposed: statusValue === 'disposed',
+              unmarkDisposed: statusValue === 'ok'
             };
             
             // Encode the asset ID for the URL
@@ -10286,6 +10426,12 @@ document.addEventListener("DOMContentLoaded", function () {
             statusMessage = " and marked as OOC";
           } else if (statusValue === 'missing') {
             statusMessage = " and marked as Missing";
+          } else if (statusValue === 'degraded') {
+            statusMessage = " and marked as Degraded";
+          } else if (statusValue === 'disposed') {
+            statusMessage = " and marked as Disposed";
+          } else if (statusValue === 'ok') {
+            statusMessage = " and marked as OK";
           }
           showNotification("success", `Maintenance logged for ${successCount} asset${successCount > 1 ? 's' : ''}${statusMessage}`);
         }
@@ -10516,14 +10662,19 @@ function openMaintenanceModal() {
   // Clear form
   logEntryEl.value = '';
   newLocationEl.value = '';
+  const maintenanceCostEl = document.getElementById('maintenanceCost');
+  if (maintenanceCostEl) maintenanceCostEl.value = '';
   
   // Set current date as default
   const today = new Date().toISOString().split('T')[0];
   maintenanceDateEl.value = today;
   
-  // Reset status radio button to "no change"
-  const noChangeRadio = document.querySelector('input[name="assetStatus"][value="nochange"]');
-  if (noChangeRadio) noChangeRadio.checked = true;
+  // Reset status selector to "No Change"
+  const statusSelect = document.getElementById('maintenanceAssetStatus');
+  if (statusSelect) {
+    statusSelect.value = 'nochange';
+    applyMaintenanceStatusSelectStyle(statusSelect);
+  }
   
   assetSearchEl.value = '';
   
@@ -10652,21 +10803,15 @@ function searchMaintenanceAssets() {
 }
 
 function getAssetStatusBadge(asset) {
-  let statusClass = 'status-available';
-  let statusText = 'Available';
-  
-  if (asset.status === 'missing') {
-    statusClass = 'status-missing';
-    statusText = 'Missing';
-  } else if (asset.status === 'ooc') {
-    statusClass = 'status-ooc';
-    statusText = 'OOC';
-  } else if (asset.status === 'deployed') {
-    statusClass = 'status-deployed';
-    statusText = 'Deployed';
+  if (!asset) return statusBadgeHtml('available', 'Available');
+
+  const condition = getAssetConditionStatus(asset);
+  if (condition !== 'available') {
+    return statusBadgeHtml(condition, condition === 'ooc' ? 'OOC' : condition.replace(/\w/g, c => c.toUpperCase()));
   }
-  
-  return `<span class="asset-badge ${statusClass}">${statusText}</span>`;
+  if (asset.status === 'deployed') return statusBadgeHtml('deployed', 'Deployed');
+
+  return statusBadgeHtml('available', 'Available');
 }
 
 function selectAssetForMaintenance(assetId) {
@@ -10799,7 +10944,7 @@ function switchMaintenanceTab(tabName) {
 async function loadOOCAssets() {
   try {
     const response = await apiCall("/api/assets");
-    const oocAndMissingAssets = response.data.filter(asset => asset.isOOC || asset.isMissing);
+    const oocAndMissingAssets = response.data.filter(asset => asset.isOOC || asset.isMissing || asset.isDegraded || asset.isDisposed);
     
     displayOOCAssets(oocAndMissingAssets);
     
@@ -10812,7 +10957,7 @@ async function loadOOCAssets() {
     
   } catch (error) {
     document.getElementById("ooc-assets-list").innerHTML =
-      '<p style="color: red; text-align: center;">Error loading OOC and Missing assets</p>';
+      '<p style="color: red; text-align: center;">Error loading flagged assets</p>';
   }
 }
 
@@ -10821,7 +10966,7 @@ function displayOOCAssets(oocAssets) {
 
   if (oocAssets.length === 0) {
     container.innerHTML =
-      '<p style="text-align: center; color: #666; padding: 40px;">🎉 No assets are currently marked as Out of Commission or Missing!</p>';
+      '<p style="text-align: center; color: #666; padding: 40px;">🎉 No assets are currently marked as OOC, Missing, Degraded, or Disposed!</p>';
     return;
   }
 
@@ -10851,10 +10996,7 @@ function displayOOCAssets(oocAssets) {
 
   oocAssets.forEach(asset => {
     const isSelected = selectedOOCAssets.has(asset.id);
-    const statusText = asset.isOOC && asset.isMissing ? 'OOC & Missing' : 
-                     asset.isOOC ? 'Out of Commission' : 'Missing';
-    const statusClass = asset.isOOC && asset.isMissing ? 'status-ooc' : 
-                       asset.isOOC ? 'status-ooc' : 'status-missing';
+    const statusHtml = assetFlagBadgesHtml(asset);
     
     tableHTML += `
       <tr class="ooc-asset-item ${isSelected ? 'selected' : ''}" data-asset-id="${escapeHtmlAttribute(asset.id)}">
@@ -10875,7 +11017,7 @@ function displayOOCAssets(oocAssets) {
 
         <td>${asset.brand} ${asset.model}</td>
         <td>
-          <span class="asset-badge ${statusClass}">${statusText}</span>
+          ${statusHtml}
         </td>
         <td>${asset.location || 'Store'}</td>
         <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis;">${asset.description || '-'}</td>
@@ -10925,11 +11067,13 @@ function clearSingleOOC(assetId) {
   document.getElementById('singleOOCMaintenanceDate').value = today;
   
   // Populate the modal
-  document.getElementById('singleOOCTitle').textContent = `Clear OOC Status - ${assetId}`;
+  document.getElementById('singleOOCTitle').textContent = `Clear Status - ${assetId}`;
   document.getElementById('singleOOCAssetId').value = assetId;
   document.getElementById('singleOOCLogEntry').value = '';
   document.getElementById('singleOOCNewLocation').value = 'Store';
   document.getElementById('singleOOCNewSerial').value = '';
+  const singleCostEl = document.getElementById('singleOOCCost');
+  if (singleCostEl) singleCostEl.value = '';
   
   // Show asset info
   const assetInfoDiv = document.getElementById('singleOOCAssetInfo');
@@ -10954,6 +11098,7 @@ async function processSingleOOCClear() {
   const maintenanceDate = document.getElementById('singleOOCMaintenanceDate').value;
   const newLocation = document.getElementById('singleOOCNewLocation').value.trim();
   const newSerial = document.getElementById('singleOOCNewSerial').value.trim();
+  const repairCost = document.getElementById('singleOOCCost')?.value.trim() || '';
   
   if (!logEntry) {
     showNotification("warning", "Please enter a maintenance description");
@@ -10978,7 +11123,12 @@ async function processSingleOOCClear() {
       markOOC: false,
       unmarkOOC: true,   // Clear OOC status
       markMissing: false,
-      unmarkMissing: true // Clear Missing status
+      unmarkMissing: true, // Clear Missing status
+      markDegraded: false,
+      unmarkDegraded: true,
+      markDisposed: false,
+      unmarkDisposed: true,
+      cost: repairCost || null
     };
     
     // Add serial number if provided
@@ -11084,10 +11234,9 @@ function showMaintenanceLogModal(asset) {
                 <strong>Department:</strong> <span class="asset-badge dept-${asset.department.toLowerCase()}">${asset.department}</span>
               </div>
               <div>
-                <strong>Status:</strong> <span class="asset-badge status-${asset.status}">${asset.status}</span><br>
+                <strong>Status:</strong> ${statusBadgeHtml(asset.status || 'available')}<br>
                 <strong>Location:</strong> ${asset.location || 'Store'}<br>
-                <strong>OOC:</strong> ${asset.isOOC ? '<span style="color: #dc3545;">Yes</span>' : '<span style="color: #28a745;">No</span>'}<br>
-                <strong>Missing:</strong> ${asset.isMissing ? '<span style="color: #fd7e14;">Yes</span>' : '<span style="color: #28a745;">No</span>'}
+                <strong>Flags:</strong> ${assetFlagBadgesHtml(asset)}
               </div>
             </div>
           </div>
@@ -11112,6 +11261,7 @@ function showMaintenanceLogModal(asset) {
                     <th style="padding: 12px; font-weight: 600; color: #495057; border-bottom: 2px solid #e9ecef; text-align: left; background: #f8f9fa; width: 110px;">Date</th>
                     <th style="padding: 12px; font-weight: 600; color: #495057; border-bottom: 2px solid #e9ecef; text-align: left; background: #f8f9fa; width: 100px;">User</th>
                     <th style="padding: 12px; font-weight: 600; color: #495057; border-bottom: 2px solid #e9ecef; text-align: left; background: #f8f9fa;">Description</th>
+                    <th style="padding: 12px; font-weight: 600; color: #495057; border-bottom: 2px solid #e9ecef; text-align: left; background: #f8f9fa; width: 110px;">Cost</th>
                     <th style="padding: 12px; font-weight: 600; color: #495057; border-bottom: 2px solid #e9ecef; text-align: left; background: #f8f9fa; width: 200px;">Status Changes</th>
                     <th style="padding: 12px; font-weight: 600; color: #495057; border-bottom: 2px solid #e9ecef; width: 50px; text-align: center; background: #f8f9fa;"></th>
                   </tr>
@@ -11178,6 +11328,18 @@ function showMaintenanceLogModal(asset) {
           } else if (changeLower.includes('cleared missing') || changeLower.includes('clear missing') || changeLower.includes('removed missing') || changeLower.includes('unmark missing')) {
             color = '#28a745';
             icon = '✅';
+          } else if (changeLower.includes('marked degraded')) {
+            color = '#856404';
+            icon = '⚠️';
+          } else if (changeLower.includes('cleared degraded')) {
+            color = '#28a745';
+            icon = '✅';
+          } else if (changeLower.includes('marked disposed')) {
+            color = '#6c757d';
+            icon = '🗑️';
+          } else if (changeLower.includes('cleared disposed')) {
+            color = '#28a745';
+            icon = '✅';
           } else if (changeLower.includes('location:')) {
             color = '#17a2b8';
             icon = '📍';
@@ -11221,6 +11383,9 @@ function showMaintenanceLogModal(asset) {
             <div id="${logId}_display" ${descriptionAttrs}>
               ${escapeHtml(log.description)}
             </div>
+          </td>
+          <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; vertical-align: top; font-size: 13px;">
+            ${log.cost ? '$' + escapeHtml(log.cost) : '<span style="color:#999;">—</span>'}
           </td>
           <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; vertical-align: top; word-wrap: break-word; overflow-wrap: break-word; max-width: 200px;">
             ${statusChangesDisplay}
@@ -11958,25 +12123,27 @@ function editMaintenanceLog(assetId, logIndex, logId) {
   // Convert date format from YYYY/MM/DD to YYYY-MM-DD for HTML date input
   const dateForInput = currentDate.replace(/\//g, '-');
   
-  // Determine status radio button from THIS log entry, not current asset status
+  // Determine status selector value from THIS log entry, not current asset status.
+  // Older logs may only contain one clear action (e.g. Clear OOC). In this
+  // cleaned-up UI, any clear action means the dropdown should show OK / Clear Status.
   let defaultStatusValue = 'nochange';
+  const statusKinds = ['ooc', 'missing', 'degraded', 'disposed'];
+  let hasAnyClearStatusChange = false;
   for (const change of logEntry.changes || []) {
-    if (change.kind === 'ooc' && change.action === 'cleared') {
-      defaultStatusValue = 'clearooc';
+    const kind = String(change.kind || '').toLowerCase();
+    const action = String(change.action || '').toLowerCase();
+
+    if (statusKinds.includes(kind) && action === 'marked') {
+      defaultStatusValue = kind;
       break;
     }
-    if (change.kind === 'ooc' && change.action === 'marked') {
-      defaultStatusValue = 'ooc';
-      break;
+
+    if (statusKinds.includes(kind) && action === 'cleared') {
+      hasAnyClearStatusChange = true;
     }
-    if (change.kind === 'missing' && change.action === 'cleared') {
-      defaultStatusValue = 'clearmissing';
-      break;
-    }
-    if (change.kind === 'missing' && change.action === 'marked') {
-      defaultStatusValue = 'missing';
-      break;
-    }
+  }
+  if (defaultStatusValue === 'nochange' && hasAnyClearStatusChange) {
+    defaultStatusValue = 'ok';
   }
   
   // Create the enhanced edit modal
@@ -11993,16 +12160,10 @@ function editMaintenanceLog(assetId, logIndex, logId) {
             <h5 style="margin: 0 0 10px 0; color: #495057;">Current Asset Status</h5>
             <div style="display: flex; gap: 20px; flex-wrap: wrap;">
               <div>
-                <strong>OOC:</strong> 
-                <span style="color: ${asset.isOOC ? '#dc3545' : '#28a745'}; font-weight: 500;">
-                  ${asset.isOOC ? 'Yes' : 'No'}
-                </span>
+                <strong>Status:</strong> ${statusBadgeHtml(asset.status || 'available')}
               </div>
               <div>
-                <strong>Missing:</strong> 
-                <span style="color: ${asset.isMissing ? '#fd7e14' : '#28a745'}; font-weight: 500;">
-                  ${asset.isMissing ? 'Yes' : 'No'}
-                </span>
+                <strong>Flags:</strong> ${assetFlagBadgesHtml(asset)}
               </div>
               <div>
                 <strong>Location:</strong> <span style="font-weight: 500;">${escapeHtml(asset.location || 'Store')}</span>
@@ -12053,6 +12214,24 @@ function editMaintenanceLog(assetId, logIndex, logId) {
               >${escapeHtml(currentDescription)}</textarea>
             </div>
 
+            <!-- Repair Cost -->
+            <div class="form-group">
+              <label class="form-label">Cost (optional)</label>
+              <div style="display:flex;align-items:center;border:2px solid #e9ecef;border-radius:8px;background:white;overflow:hidden;">
+                <span style="padding:12px 0 12px 12px;color:#495057;font-weight:600;">$</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  class="form-input"
+                  id="editMaintenanceCost"
+                  placeholder="Repair cost, if any"
+                  value="${escapeHtml(logEntry.cost || '')}"
+                  style="border:0;box-shadow:none;"
+                />
+              </div>
+            </div>
+
             <!-- New Location -->
             <div class="form-group">
               <label class="form-label">Update Location (optional)</label>
@@ -12079,29 +12258,8 @@ function editMaintenanceLog(assetId, logIndex, logId) {
 
             <!-- Asset Status Changes -->
             <div class="form-group">
-              <label class="form-label">Asset Status Changes</label>
-              <div style="display: flex; gap: 15px; flex-wrap: wrap; margin-top: 10px;">
-                <label style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 2px solid #e9ecef; border-radius: 6px; cursor: pointer; background: white;">
-                  <input type="radio" name="editAssetStatus" value="nochange" ${defaultStatusValue === 'nochange' ? 'checked' : ''}>
-                  <span>No Change</span>
-                </label>
-                <label style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 2px solid #e9ecef; border-radius: 6px; cursor: pointer; background: white;">
-                  <input type="radio" name="editAssetStatus" value="ooc" ${defaultStatusValue === 'ooc' ? 'checked' : ''}>
-                  <span style="color: #dc3545;">Mark as OOC</span>
-                </label>
-                <label style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 2px solid #e9ecef; border-radius: 6px; cursor: pointer; background: white;">
-                  <input type="radio" name="editAssetStatus" value="missing" ${defaultStatusValue === 'missing' ? 'checked' : ''}>
-                  <span style="color: #fd7e14;">Mark as Missing</span>
-                </label>
-                <label style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 2px solid #e9ecef; border-radius: 6px; cursor: pointer; background: white;">
-                  <input type="radio" name="editAssetStatus" value="clearooc" ${defaultStatusValue === 'clearooc' ? 'checked' : ''}>
-                  <span style="color: #28a745;">Clear OOC Status</span>
-                </label>
-                <label style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 2px solid #e9ecef; border-radius: 6px; cursor: pointer; background: white;">
-                  <input type="radio" name="editAssetStatus" value="clearmissing" ${defaultStatusValue === 'clearmissing' ? 'checked' : ''}>
-                  <span style="color: #28a745;">Clear Missing Status</span>
-                </label>
-              </div>
+              <label class="form-label" for="editMaintenanceAssetStatus">Asset Status</label>
+              ${maintenanceStatusSelectHtml('editMaintenanceAssetStatus', 'editAssetStatus', defaultStatusValue)}
             </div>
 
             <!-- Form Buttons -->
@@ -12145,8 +12303,7 @@ function editMaintenanceLog(assetId, logIndex, logId) {
   // Show modal
   const modal = document.getElementById('editMaintenanceLogModal');
   modal.style.display = 'flex';
-    // Load prepared event/dry hire history
-  setTimeout(() => loadAssetEventHistory(asset.id, eventHistoryContainerId), 0);
+  initialiseMaintenanceStatusSelects(modal);
   
   // Add form submit handler
   const form = document.getElementById('editMaintenanceLogForm');
@@ -12226,19 +12383,14 @@ async function saveEnhancedMaintenanceLog(assetId, logIndex, logId) {
     const description = document.getElementById('editMaintenanceDescription').value.trim();
     const newLocation = document.getElementById('editMaintenanceNewLocation').value.trim();
     const newSerial = document.getElementById('editMaintenanceNewSerial').value.trim();
-    const statusEl = document.querySelector('input[name="editAssetStatus"]:checked');
+    const repairCost = document.getElementById('editMaintenanceCost')?.value.trim() || '';
+    const statusValue = document.getElementById('editMaintenanceAssetStatus')?.value || 'nochange';
     
     if (!date || !user || !description) {
       showNotification('warning', 'Date, user, and description are required');
       return;
     }
     
-    if (!statusEl) {
-      showNotification('warning', 'Please select a status option');
-      return;
-    }
-    
-    const statusValue = statusEl.value;
     console.log('Status value selected:', statusValue);
 
     // Extract the original location from this specific log for comparison
@@ -12280,10 +12432,16 @@ async function saveEnhancedMaintenanceLog(assetId, logIndex, logId) {
       description: description,
       newLocation: locationToUpdate,
       newSerial: serialToUpdate,
+      cost: repairCost || null,
+      assetStatus: statusValue,
       markOOC: statusValue === 'ooc',
-      unmarkOOC: statusValue === 'clearooc',
+      unmarkOOC: statusValue === 'ok',
       markMissing: statusValue === 'missing',
-      unmarkMissing: statusValue === 'clearmissing'
+      unmarkMissing: statusValue === 'ok',
+      markDegraded: statusValue === 'degraded',
+      unmarkDegraded: statusValue === 'ok',
+      markDisposed: statusValue === 'disposed',
+      unmarkDisposed: statusValue === 'ok'
     };
     
     console.log('Sending update data:', updateData);
@@ -14578,6 +14736,7 @@ document.addEventListener('DOMContentLoaded', function() {
     setupMobileNavigation();
     enhanceModalAccessibility();
     setupSingleAssetClickHandler();
+    initialiseMaintenanceStatusSelects();
 });
 
 // --- Client directory helpers ---
@@ -15373,7 +15532,13 @@ async function loadReturnEvents() {
 async function prepareSpecificAsset(eventId, assetId) {
   console.log(`=== PATCHED prepareSpecificAsset CALLED ===`, { eventId, assetId });
   try {
-    await apiCall(`/api/events/${eventId}/prepare`, 'POST', { assetId });
+    await ensureAssetsLoaded();
+    if (!confirmDegradedAssetUse(assetId)) {
+      updateAllButtonsForAsset(assetId, false);
+      return;
+    }
+    const response = await apiCall(`/api/events/${eventId}/prepare`, 'POST', { assetId });
+    showApiWarning(response);
     showNotification('success', `${customAssetLabelFromId(assetId)} marked as prepared`);
     updateAllButtonsForAsset(assetId, true);
     setTimeout(() => {

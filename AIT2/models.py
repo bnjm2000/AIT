@@ -46,7 +46,7 @@ class Client:
         self.phone = phone
 
 class InventoryItem:
-    def __init__(self, asset_id, brand, model_number, serial_number, description, is_missing, maintenance_logs, department_code, default_location='', current_location='', is_ooc=False, is_bulk=False, quantity=1):
+    def __init__(self, asset_id, brand, model_number, serial_number, description, is_missing, maintenance_logs, department_code, default_location='', current_location='', is_ooc=False, is_bulk=False, quantity=1, is_degraded=False, is_disposed=False):
         self.asset_id = asset_id
         self.brand = brand
         self.model_number = model_number
@@ -54,6 +54,23 @@ class InventoryItem:
         self.description = description
         self.is_missing = is_missing
         self.is_ooc = is_ooc  # Out of Commission
+        # Degraded means the asset is not fully functional, but can still be used for show.
+        self.is_degraded = bool(is_degraded)
+        # Disposed means the asset is no longer part of usable inventory and cannot be prepared.
+        self.is_disposed = bool(is_disposed)
+
+        # Asset condition statuses are mutually exclusive. If older CSV data has
+        # more than one flag set, keep the most restrictive visible state.
+        if self.is_disposed:
+            self.is_missing = False
+            self.is_ooc = False
+            self.is_degraded = False
+        elif self.is_missing:
+            self.is_ooc = False
+            self.is_degraded = False
+        elif self.is_ooc:
+            self.is_degraded = False
+
         self.maintenance_logs = maintenance_logs
         self.department_code = department_code.upper()
         self.default_location = default_location

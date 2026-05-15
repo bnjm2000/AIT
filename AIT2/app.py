@@ -13,6 +13,7 @@ import logging
 import threading
 import time
 import secrets
+from types import SimpleNamespace
 
 # Import your existing modules
 from models import User, InventoryItem, Container, Event, LogEntry, hash_password, format_date_output, dates_overlap
@@ -426,6 +427,209 @@ def _safe_int(value, default=0):
         return int(value)
     except (TypeError, ValueError):
         return default
+
+
+def _is_degraded(asset):
+    return bool(getattr(asset, 'is_degraded', False))
+
+
+def _is_disposed(asset):
+    return bool(getattr(asset, 'is_disposed', False))
+
+
+def _asset_inventory_quantity(asset):
+    if not asset or _is_disposed(asset):
+        return 0
+    return max(1, _safe_int(getattr(asset, 'quantity', 1), 1)) if _is_bulk_asset(asset) else 1
+
+
+def _asset_status_value(asset, assigned_assets=None):
+    if not asset:
+        return 'unknown'
+    if _is_disposed(asset):
+        return 'disposed'
+    if getattr(asset, 'is_missing', False):
+        return 'missing'
+    if getattr(asset, 'is_ooc', False):
+        return 'ooc'
+    if assigned_assets is not None and not _is_bulk_asset(asset) and asset.asset_id in assigned_assets:
+        return 'deployed'
+    if _is_degraded(asset):
+        return 'degraded'
+    return 'available'
+
+
+ASSET_CONDITION_STATUSES = ('ooc', 'missing', 'degraded', 'disposed')
+
+
+def _asset_condition_status(asset):
+    """Return the asset's mutually-exclusive condition status, excluding deployment."""
+    if not asset:
+        return 'unknown'
+    if _is_disposed(asset):
+        return 'disposed'
+    if getattr(asset, 'is_missing', False):
+        return 'missing'
+    if getattr(asset, 'is_ooc', False):
+        return 'ooc'
+    if _is_degraded(asset):
+        return 'degraded'
+    return 'ok'
+
+
+def _apply_exclusive_asset_status(asset, target_status):
+    """Set one condition status on an asset. target_status='ok' clears all."""
+    for attr in ('is_ooc', 'is_missing', 'is_degraded', 'is_disposed'):
+        setattr(asset, attr, False)
+
+    if target_status == 'ooc':
+        asset.is_ooc = True
+    elif target_status == 'missing':
+        asset.is_missing = True
+    elif target_status == 'degraded':
+        asset.is_degraded = True
+    elif target_status == 'disposed':
+        asset.is_disposed = True
+
+
+def _normalise_asset_status_flags(asset):
+    """Repair any legacy/conflicting flags to one status only."""
+    _apply_exclusive_asset_status(asset, _asset_condition_status(asset))
+
+
+def _status_changes_for_request(data):
+    """Return (target_status, changes, error).
+
+    target_status is one of: None, 'ok', 'ooc', 'missing', 'degraded', 'disposed'.
+    None means no status change requested.
+    """
+    data = data or {}
+    explicit = (
+        data.get('assetStatus') or
+        data.get('editAssetStatus') or
+        data.get('statusValue') or
+        data.get('statusChange') or
+        data.get('targetStatus')
+    )
+
+    if explicit is not None:
+        value = str(explicit).strip().lower()
+        aliases = {
+            '': None,
+            'none': None,
+            'nochange': None,
+            'no-change': None,
+            'ok': 'ok',
+            'okay': 'ok',
+            'available': 'ok',
+            'clear': 'ok',
+            'cleared': 'ok',
+            'normal': 'ok',
+            'ooc': 'ooc',
+            'out-of-commission': 'ooc',
+            'out_of_commission': 'ooc',
+            'missing': 'missing',
+            'degraded': 'degraded',
+            'disposed': 'disposed',
+        }
+        if value not in aliases:
+            return None, [], f'Invalid asset status: {explicit}'
+        target = aliases[value]
+        if target is None:
+            return None, [], None
+        if target == 'ok':
+            return target, [make_change(kind, action='cleared') for kind in ASSET_CONDITION_STATUSES], None
+        return target, [make_change(target, action='marked')], None
+
+    mark_flags = {
+        'ooc': bool(data.get('markOOC', False)),
+        'missing': bool(data.get('markMissing', False)),
+        'degraded': bool(data.get('markDegraded', False)),
+        'disposed': bool(data.get('markDisposed', False)),
+    }
+    marked = [kind for kind, enabled in mark_flags.items() if enabled]
+    if len(marked) > 1:
+        return None, [], 'Choose only one asset status at a time'
+    if marked:
+        target = marked[0]
+        return target, [make_change(target, action='marked')], None
+
+    clear_flags = {
+        'ooc': bool(data.get('unmarkOOC', False)),
+        'missing': bool(data.get('unmarkMissing', False)),
+        'degraded': bool(data.get('unmarkDegraded', False)),
+        'disposed': bool(data.get('unmarkDisposed', False)),
+    }
+    cleared = [kind for kind, enabled in clear_flags.items() if enabled]
+    if cleared:
+        target = 'ok' if set(cleared) == set(ASSET_CONDITION_STATUSES) else None
+        return target, [make_change(kind, action='cleared') for kind in cleared], None
+
+    return None, [], None
+
+
+def _validate_status_transition(asset, target_status, current_status=None):
+    if target_status in ASSET_CONDITION_STATUSES:
+        current = current_status or _asset_condition_status(asset)
+        if current != 'ok' and current != target_status:
+            return (
+                f"Asset is currently {current.upper()}. Mark it as OK first before "
+                f"changing it to {target_status.upper()}."
+            )
+    return None
+
+
+def _condition_status_before_log(asset, exclude_index):
+    """Calculate an asset's status after all logs except one selected log."""
+    scratch = SimpleNamespace(
+        asset_id=getattr(asset, 'asset_id', ''),
+        is_ooc=False,
+        is_missing=False,
+        is_degraded=False,
+        is_disposed=False,
+        serial_number=getattr(asset, 'serial_number', ''),
+        current_location='',
+    )
+
+    sorted_logs = []
+    for i, log_entry in enumerate(getattr(asset, 'maintenance_logs', []) or []):
+        if i == exclude_index:
+            continue
+        record = normalize_maintenance_log(log_entry)
+        date_str = record.get('date', '')
+        try:
+            date_obj = datetime.strptime(date_str, "%Y/%m/%d")
+        except ValueError:
+            date_obj = datetime.min
+        sorted_logs.append((date_obj, i, record))
+
+    sorted_logs.sort(key=lambda x: (x[0], x[1]))
+    for _, _, record in sorted_logs:
+        apply_maintenance_log_changes(scratch, record)
+
+    return _asset_condition_status(scratch)
+
+
+def _status_action_label(target_status):
+    return {
+        'ok': 'OK',
+        'ooc': 'OOC',
+        'missing': 'Missing',
+        'degraded': 'Degraded',
+        'disposed': 'Disposed',
+    }.get(target_status or '', '')
+
+
+def _asset_prepare_block_reason(asset):
+    if not asset:
+        return 'Asset not found'
+    if _is_disposed(asset):
+        return 'Asset is disposed and cannot be prepared'
+    if getattr(asset, 'is_missing', False):
+        return 'Asset is marked as missing'
+    if getattr(asset, 'is_ooc', False):
+        return 'Asset is out of commission'
+    return ''
 
 
 def _find_inventory_asset_by_identifier(identifier):
@@ -1020,7 +1224,7 @@ def _bulk_available_quantity_for_event(bulk_asset, target_event):
         return 0
 
     total = max(1, _safe_int(getattr(bulk_asset, 'quantity', 1), 1))
-    if getattr(bulk_asset, 'is_missing', False):
+    if getattr(bulk_asset, 'is_missing', False) or _is_disposed(bulk_asset):
         return 0
 
     busy = 0
@@ -1041,11 +1245,7 @@ def _bulk_available_quantity_for_event(bulk_asset, target_event):
 
 
 def _bulk_asset_to_available_dict(asset, target_event=None):
-    status = 'available'
-    if getattr(asset, 'is_missing', False):
-        status = 'missing'
-    elif getattr(asset, 'is_ooc', False):
-        status = 'ooc'
+    status = _asset_status_value(asset)
 
     available_quantity = (
         _bulk_available_quantity_for_event(asset, target_event)
@@ -1065,6 +1265,8 @@ def _bulk_asset_to_available_dict(asset, target_event=None):
         'status': status,
         'isMissing': getattr(asset, 'is_missing', False),
         'isOOC': getattr(asset, 'is_ooc', False),
+        'isDegraded': _is_degraded(asset),
+        'isDisposed': _is_disposed(asset),
         'isBulk': True,
         'quantity': max(1, _safe_int(getattr(asset, 'quantity', 1), 1)),
         'availableQuantity': available_quantity
@@ -1107,12 +1309,7 @@ def _asset_to_available_dict(asset):
     if _is_bulk_asset(asset):
         return _bulk_asset_to_available_dict(asset)
 
-    status = 'available'
-
-    if getattr(asset, 'is_missing', False):
-        status = 'missing'
-    elif getattr(asset, 'is_ooc', False):
-        status = 'ooc'
+    status = _asset_status_value(asset)
 
     return {
         'id': asset.asset_id,
@@ -1125,6 +1322,8 @@ def _asset_to_available_dict(asset):
         'status': status,
         'isMissing': getattr(asset, 'is_missing', False),
         'isOOC': getattr(asset, 'is_ooc', False),
+        'isDegraded': _is_degraded(asset),
+        'isDisposed': _is_disposed(asset),
         'isBulk': False,
         'quantity': 1,
         'availableQuantity': 1
@@ -1162,6 +1361,7 @@ def get_available_assets_for_event(event_id):
     This endpoint intentionally shows only assets that can actually be prepared
     for this event:
       - not missing
+      - not disposed
       - not out of commission
       - not already prepared/assigned to this same event
       - not specifically out for another overlapping event and not returned
@@ -1225,7 +1425,7 @@ def get_available_assets_for_event(event_id):
             if _is_bulk_asset(asset):
                 # Bulk assets have quantity-based availability.  Keep this branch
                 # separate so partially available bulk items can still appear.
-                if getattr(asset, 'is_missing', False) or getattr(asset, 'is_ooc', False):
+                if getattr(asset, 'is_missing', False) or getattr(asset, 'is_ooc', False) or _is_disposed(asset):
                     continue
 
                 available_quantity = _bulk_available_quantity_for_event(asset, event)
@@ -1235,7 +1435,7 @@ def get_available_assets_for_event(event_id):
                 final_list.append(_bulk_asset_to_available_dict(asset, event))
                 continue
 
-            if getattr(asset, 'is_missing', False) or getattr(asset, 'is_ooc', False):
+            if getattr(asset, 'is_missing', False) or getattr(asset, 'is_ooc', False) or _is_disposed(asset):
                 continue
 
             if asset_id in current_event_refs:
@@ -1252,9 +1452,11 @@ def get_available_assets_for_event(event_id):
                 'department': asset.department_code,
                 'serial': (getattr(asset, 'serial_number', None) or getattr(asset, 'serial', None) or ''),
                 'location': asset.current_location or asset.default_location or '',
-                'status': 'available',
-                'isMissing': False,
-                'isOOC': False,
+                'status': _asset_status_value(asset),
+                'isMissing': getattr(asset, 'is_missing', False),
+                'isOOC': getattr(asset, 'is_ooc', False),
+                'isDegraded': _is_degraded(asset),
+                'isDisposed': _is_disposed(asset),
                 'isBulk': False,
                 'quantity': 1,
                 'availableQuantity': 1
@@ -2327,8 +2529,10 @@ def get_departments():
         usage_counts = defaultdict(int)
 
         for asset in data_manager.inventory.values():
+            if _is_disposed(asset):
+                continue
             code = _normalise_department_code(getattr(asset, 'department_code', 'UN')) or 'UN'
-            usage_counts[code] += 1
+            usage_counts[code] += _asset_inventory_quantity(asset)
 
         data = []
         for code in sorted(departments.keys()):
@@ -3193,8 +3397,8 @@ def get_event_model_availability(event_id):
 
     Rules:
     - Group by department + brand + model + description.
-    - Exclude Missing assets.
-    - Include OOC assets as inventory because they may be fixed by event day.
+    - Exclude Missing and Disposed assets.
+    - Include OOC and Degraded assets as inventory because they may be fixed/usable by event day.
     - Subtract current event's requested quantity.
     - Subtract overlapping events' requested quantity.
     - Still return rows with 0 availability so the frontend can show them.
@@ -3206,16 +3410,16 @@ def get_event_model_availability(event_id):
 
         physical_by_key = defaultdict(int)
 
-        # Physical inventory: exclude Missing only, include OOC
+        # Physical inventory: exclude Missing and Disposed, include OOC and Degraded
         for asset in data_manager.inventory.values():
             if not asset:
                 continue
 
-            if getattr(asset, 'is_missing', False):
+            if getattr(asset, 'is_missing', False) or _is_disposed(asset):
                 continue
 
             key = _asset_group_key(asset)
-            physical_by_key[key] += max(1, _safe_int(getattr(asset, 'quantity', 1), 1)) if _is_bulk_asset(asset) else 1
+            physical_by_key[key] += _asset_inventory_quantity(asset)
 
         # Quantity already requested in this same event
         used_here_by_key = defaultdict(int)
@@ -3270,7 +3474,7 @@ def get_event_model_availability(event_id):
                     continue
 
                 # Missing assets should not count as usable inventory.
-                if getattr(asset, 'is_missing', False):
+                if getattr(asset, 'is_missing', False) or _is_disposed(asset):
                     continue
 
                 other_specific_by_key[_asset_group_key(asset)] += 1
@@ -3473,6 +3677,8 @@ def recalculate_asset_status_from_logs(asset):
     try:
         asset.is_ooc = False
         asset.is_missing = False
+        asset.is_degraded = False
+        asset.is_disposed = False
         asset.current_location = ''
 
         sorted_logs = []
@@ -3494,7 +3700,7 @@ def recalculate_asset_status_from_logs(asset):
 
         logger.info(
             f"Final status for {asset.asset_id}: "
-            f"OOC={asset.is_ooc}, Missing={asset.is_missing}, Location='{asset.current_location}'"
+            f"OOC={asset.is_ooc}, Missing={asset.is_missing}, Degraded={_is_degraded(asset)}, Disposed={_is_disposed(asset)}, Location='{asset.current_location}'"
         )
 
     except Exception as e:
@@ -3623,6 +3829,9 @@ def add_asset_to_event(event_id):
             if not asset:
                 return jsonify({'error': 'Asset not found'}), 404
 
+            if _is_disposed(asset):
+                return jsonify({'error': 'Cannot assign disposed asset'}), 400
+
             if asset.is_missing:
                 return jsonify({'error': 'Cannot assign missing asset'}), 400
 
@@ -3706,12 +3915,13 @@ def manage_event_models(event_id):
             # Server-side hard cap:
             # Users may overbook against clashing events, but they may not request
             # more than the physical inventory for this exact model/description group.
-            # Missing assets are excluded. OOC assets are included.
+            # Missing and Disposed assets are excluded. OOC and Degraded assets are included.
             inv_count = sum(
-                (max(1, _safe_int(getattr(asset, 'quantity', 1), 1)) if _is_bulk_asset(asset) else 1)
+                _asset_inventory_quantity(asset)
                 for asset in data_manager.inventory.values()
                 if asset
                 and not getattr(asset, 'is_missing', False)
+                and not _is_disposed(asset)
                 and _asset_group_key(asset) == group_key
             )
 
@@ -3925,11 +4135,9 @@ def prepare_event_asset(event_id):
             if not asset:
                 return jsonify({'error': 'Asset not found'}), 404
 
-            if asset.is_missing:
-                return jsonify({'error': 'Asset is marked as missing'}), 400
-
-            if asset.is_ooc:
-                return jsonify({'error': 'Asset is out of commission'}), 400
+            block_reason = _asset_prepare_block_reason(asset)
+            if block_reason:
+                return jsonify({'error': block_reason}), 400
 
             # A manual/individual prepare only fills an existing open model slot.
             # If the matching model requirement is already full, or if this asset
@@ -3972,7 +4180,11 @@ def prepare_event_asset(event_id):
 
         log_action(f"Prepared asset {asset_id} for event {event_id}")
 
-        return jsonify({'success': True, 'message': f'Asset {asset_id} prepared for event'})
+        response_payload = {'success': True, 'message': f'Asset {asset_id} prepared for event'}
+        prepared_asset = data_manager.inventory.get(asset_id)
+        if prepared_asset and _is_degraded(prepared_asset):
+            response_payload['warning'] = f'Asset {asset_id} is marked as Degraded. It can be used, but please verify the limitation before show.'
+        return jsonify(response_payload)
     except Exception as e:
         logger.error(f"Error preparing asset for event {event_id}: {e}")
         return jsonify({'error': 'Failed to prepare asset'}), 500
@@ -4392,6 +4604,9 @@ def assign_specific_asset_to_model(event_id):
 
         bulk_asset = data_manager.inventory.get(asset_id)
         if bulk_asset and _is_bulk_asset(bulk_asset):
+            if _is_disposed(bulk_asset):
+                return jsonify({'error': 'Bulk asset is disposed and cannot be prepared'}), 400
+
             if getattr(bulk_asset, 'is_missing', False):
                 return jsonify({'error': 'Bulk asset is marked as missing'}), 400
 
@@ -4440,11 +4655,9 @@ def assign_specific_asset_to_model(event_id):
 
             logger.info(f"Assigning asset {asset_id} - Brand: {asset.brand}, Model: {asset.model_number}, Dept: {asset.department_code}")
 
-            if asset.is_missing:
-                return jsonify({'error': 'Asset is marked as missing'}), 400
-
-            if asset.is_ooc:
-                return jsonify({'error': 'Asset is out of commission'}), 400
+            block_reason = _asset_prepare_block_reason(asset)
+            if block_reason:
+                return jsonify({'error': block_reason}), 400
 
             # Check if asset is assigned to another active event
             assigned_assets = get_assigned_assets()
@@ -4521,7 +4734,11 @@ def assign_specific_asset_to_model(event_id):
 
         log_action(f"Assigned specific asset {asset_id} to event {event_id}")
 
-        return jsonify({'success': True, 'message': f'Asset {asset_id} assigned to event'})
+        response_payload = {'success': True, 'message': f'Asset {asset_id} assigned to event'}
+        assigned_asset = data_manager.inventory.get(asset_id)
+        if assigned_asset and _is_degraded(assigned_asset):
+            response_payload['warning'] = f'Asset {asset_id} is marked as Degraded. It can be used, but please verify the limitation before show.'
+        return jsonify(response_payload)
 
     except Exception as e:
         logger.error(f"Error assigning specific asset to event {event_id}: {e}")
@@ -4893,6 +5110,9 @@ def _transfer_asset_payload(asset, state='', from_event=None, to_event=None, rea
         'model': asset.model_number,
         'description': asset.description,
         'serial': asset.serial_number,
+        'status': _asset_status_value(asset),
+        'isDegraded': _is_degraded(asset),
+        'isDisposed': _is_disposed(asset),
         'currentLocation': asset.current_location or (getattr(from_event, 'name', '') if from_event else ''),
         'matchLabel': f"[{asset.department_code}] {asset.brand} {asset.model_number} {asset.description}".strip(),
         'targetRequired': int(requirement.get('required', 0) or 0),
@@ -4962,7 +5182,7 @@ def _get_transfer_candidates(from_event, to_event):
             asset = data_manager.inventory.get(asset_id)
             if not asset:
                 continue
-            if getattr(asset, 'is_missing', False) or getattr(asset, 'is_ooc', False):
+            if getattr(asset, 'is_missing', False) or getattr(asset, 'is_ooc', False) or _is_disposed(asset):
                 continue
 
             key = _asset_match_key(asset)
@@ -5689,12 +5909,8 @@ def get_assets():
             ]
 
             # Determine current status
-            status = 'available'
-            if asset.is_missing:
-                status = 'missing'
-            elif asset.is_ooc:
-                status = 'ooc'
-            elif _is_bulk_asset(asset):
+            status = _asset_status_value(asset, assigned_assets)
+            if _is_bulk_asset(asset) and status not in ('disposed', 'missing', 'ooc'):
                 out_qty = 0
                 for ev in data_manager.events.values():
                     out_qty += max(
@@ -5702,9 +5918,7 @@ def get_assets():
                         _bulk_quantity_for_asset_in_values(getattr(ev, 'returned_items', []) or [], asset.asset_id),
                         0
                     )
-                status = 'deployed' if out_qty > 0 else 'available'
-            elif asset.asset_id in assigned_assets:
-                status = 'deployed'
+                status = 'deployed' if out_qty > 0 else ('degraded' if _is_degraded(asset) else 'available')
 
             assets_data.append({
                 'id': '' if _is_bulk_asset(asset) else asset.asset_id,
@@ -5723,6 +5937,8 @@ def get_assets():
                 'location': asset.current_location or asset.default_location,
                 'isMissing': asset.is_missing,
                 'isOOC': asset.is_ooc,
+                'isDegraded': _is_degraded(asset),
+                'isDisposed': _is_disposed(asset),
                 'defaultLocation': asset.default_location,
                 'currentLocation': asset.current_location,
                 'maintenanceLogs': [
@@ -5732,7 +5948,7 @@ def get_assets():
                 'maintenanceLogRecords': maintenance_records,
                 'isBulk': _is_bulk_asset(asset),
                 'quantity': max(1, _safe_int(getattr(asset, 'quantity', 1), 1)) if _is_bulk_asset(asset) else 1,
-                'availableQuantity': max(0, max(1, _safe_int(getattr(asset, 'quantity', 1), 1)) - sum(max(_bulk_quantity_for_asset_in_values(getattr(ev, 'actually_prepared', []) or [], asset.asset_id) - _bulk_quantity_for_asset_in_values(getattr(ev, 'returned_items', []) or [], asset.asset_id), 0) for ev in data_manager.events.values())) if _is_bulk_asset(asset) else 1
+                'availableQuantity': 0 if _is_disposed(asset) else (max(0, max(1, _safe_int(getattr(asset, 'quantity', 1), 1)) - sum(max(_bulk_quantity_for_asset_in_values(getattr(ev, 'actually_prepared', []) or [], asset.asset_id) - _bulk_quantity_for_asset_in_values(getattr(ev, 'returned_items', []) or [], asset.asset_id), 0) for ev in data_manager.events.values())) if _is_bulk_asset(asset) else 1)
             })
 
         return jsonify({'success': True, 'data': assets_data})
@@ -5808,6 +6024,10 @@ def _asset_check_asset_to_dict(asset, group_key):
         excluded = True
         exclusion_reason = 'Bulk quantity asset - no individual Asset ID to check'
         status = 'bulk'
+    elif _is_disposed(asset):
+        excluded = True
+        exclusion_reason = 'Disposed asset - no longer in usable inventory'
+        status = 'disposed'
     elif getattr(asset, 'is_missing', False):
         excluded = True
         exclusion_reason = 'Already marked Missing'
@@ -5824,6 +6044,8 @@ def _asset_check_asset_to_dict(asset, group_key):
     elif getattr(asset, 'is_ooc', False):
         # OOC items that are still in Store can still be physically checked.
         status = 'ooc'
+    elif _is_degraded(asset):
+        status = 'degraded'
 
     return {
         'id': '' if _is_bulk_asset(asset) else asset.asset_id,
@@ -5838,6 +6060,8 @@ def _asset_check_asset_to_dict(asset, group_key):
         'currentLocation': getattr(asset, 'current_location', '') or '',
         'isMissing': bool(getattr(asset, 'is_missing', False)),
         'isOOC': bool(getattr(asset, 'is_ooc', False)),
+        'isDegraded': _is_degraded(asset),
+        'isDisposed': _is_disposed(asset),
         'isBulk': bool(_is_bulk_asset(asset)),
         'deployment': deployment,
         'status': status,
@@ -5860,6 +6084,7 @@ def _asset_check_build_group(seed_asset):
     ]
 
     group_assets.sort(key=lambda a: (
+        bool(_is_disposed(a)),
         bool(getattr(a, 'is_missing', False)),
         str(getattr(a, 'asset_id', '') or '').lower()
     ))
@@ -5869,8 +6094,9 @@ def _asset_check_build_group(seed_asset):
     summary = {
         'total': len(assets_payload),
         'checkable': len([a for a in assets_payload if a['checkEligible']]),
-        'excluded': len([a for a in assets_payload if a['excluded'] and not a['isMissing']]),
+        'excluded': len([a for a in assets_payload if a['excluded'] and not a['isMissing'] and not a.get('isDisposed')]),
         'missing': len([a for a in assets_payload if a['isMissing']]),
+        'disposed': len([a for a in assets_payload if a.get('isDisposed')]),
     }
 
     dept, brand, model, description = group_key
@@ -6008,8 +6234,8 @@ def get_available_assets():
     Get assets that can be requested for future events.
 
     Rules:
-    - Exclude Missing assets.
-    - Include OOC assets because they may be repaired before the event date.
+    - Exclude Missing and Disposed assets.
+    - Include OOC and Degraded assets because they may be repaired/usable before the event date.
     - Do not subtract clashing events here; event-date availability is handled by
       /api/events/<event_id>/availability.
     """
@@ -6020,7 +6246,7 @@ def get_available_assets():
             if not asset:
                 continue
 
-            if getattr(asset, 'is_missing', False):
+            if getattr(asset, 'is_missing', False) or _is_disposed(asset):
                 continue
 
             available_assets.append(_asset_to_available_dict(asset))
@@ -6064,7 +6290,9 @@ def get_event_assets(event_id):
                     'status': 'returned' if asset_id in event.returned_items else 'prepared',
                     'location': asset.current_location,
                     'isMissing': asset.is_missing,
-                    'isOOC': asset.is_ooc
+                    'isOOC': asset.is_ooc,
+                    'isDegraded': _is_degraded(asset),
+                    'isDisposed': _is_disposed(asset)
                 })
 
     return jsonify({'success': True, 'data': event_assets})
@@ -6115,6 +6343,8 @@ def create_asset():
             description=data.get('description', '').strip(),
             is_missing=False,
             is_ooc=False,
+            is_degraded=bool(data.get('isDegraded', False)),
+            is_disposed=bool(data.get('isDisposed', False)),
             maintenance_logs=[],
             department_code=data.get('department', 'UN').strip(),
             default_location='Store',
@@ -6247,6 +6477,14 @@ def update_asset(asset_id):
 
         if 'isOOC' in data:
             asset.is_ooc = bool(data.get('isOOC'))
+
+        if 'isDegraded' in data:
+            asset.is_degraded = bool(data.get('isDegraded'))
+
+        if 'isDisposed' in data:
+            asset.is_disposed = bool(data.get('isDisposed'))
+
+        _normalise_asset_status_flags(asset)
 
         if _is_bulk_asset(asset) and 'quantity' in data:
             asset.quantity = max(1, _safe_int(data.get('quantity'), getattr(asset, 'quantity', 1)))
@@ -6426,10 +6664,15 @@ def maintain_asset(asset_id):
             if not new_serial:
                 new_serial = None
         
-        mark_ooc = data.get('markOOC', False)
-        unmark_ooc = data.get('unmarkOOC', False)
-        mark_missing = data.get('markMissing', False)
-        unmark_missing = data.get('unmarkMissing', False)
+        target_status, requested_status_changes, status_error = _status_changes_for_request(data)
+        if status_error:
+            return jsonify({'error': status_error}), 400
+
+        transition_error = _validate_status_transition(asset, target_status)
+        if transition_error:
+            return jsonify({'error': transition_error}), 400
+
+        repair_cost = str(data.get('cost') or data.get('maintenanceCost') or '').strip()
 
         if not log_entry_text:
             return jsonify({'error': 'Log entry is required'}), 400
@@ -6459,47 +6702,19 @@ def maintain_asset(asset_id):
             status_changes.append(make_change('location', value=new_location))
         if new_serial:
             status_changes.append(make_change('serial', value=new_serial))
-        if mark_ooc:
-            status_changes.append(make_change('ooc', action='marked'))
-        elif unmark_ooc:
-            status_changes.append(make_change('ooc', action='cleared'))
-        if mark_missing:
-            status_changes.append(make_change('missing', action='marked'))
-        elif unmark_missing:
-            status_changes.append(make_change('missing', action='cleared'))
+        status_changes.extend(requested_status_changes)
         
         status_changes = [change for change in status_changes if change]
-        entry = make_maintenance_log(formatted_date, session['user'], log_entry_text, status_changes)
+        entry = make_maintenance_log(formatted_date, session['user'], log_entry_text, status_changes, cost=repair_cost)
         
         asset.maintenance_logs.append(entry)
 
-        # Update location if provided
-        if new_location:
-            old_location = asset.current_location or ''
-            asset.current_location = new_location
-            log_action(f"Updated location for asset {asset_id} from '{old_location}' to '{new_location}'")
+        # Apply the structured maintenance changes to the live asset.
+        # Status changes are mutually exclusive inside apply_maintenance_log_changes().
+        apply_maintenance_log_changes(asset, entry)
 
-        # Update serial number if provided
-        if new_serial:
-            old_serial = asset.serial_number or 'None'
-            asset.serial_number = new_serial
-            log_action(f"Updated serial number for asset {asset_id} from '{old_serial}' to '{new_serial}'")
-
-        # Update OOC status
-        if mark_ooc and not asset.is_ooc:
-            asset.is_ooc = True
-            log_action(f"Marked asset {asset_id} as Out of Commission")
-        elif unmark_ooc and asset.is_ooc:
-            asset.is_ooc = False
-            log_action(f"Removed Out of Commission status from asset {asset_id}")
-
-        # Update Missing status
-        if mark_missing and not asset.is_missing:
-            asset.is_missing = True
-            log_action(f"Marked asset {asset_id} as Missing")
-        elif unmark_missing and asset.is_missing:
-            asset.is_missing = False
-            log_action(f"Removed Missing status from asset {asset_id}")
+        if target_status:
+            log_action(f"Set asset {asset_id} status to {_status_action_label(target_status)}")
 
         # Save changes
         data_manager.save_inventory()
@@ -6606,6 +6821,7 @@ def update_maintenance_log_enhanced(asset_id, log_index):
         new_date = data.get('date')
         new_user = data.get('user')
         new_description = data.get('description')
+        repair_cost = str(data.get('cost') or data.get('maintenanceCost') or '').strip()
         
         if not all([new_date, new_user, new_description]):
             return jsonify({'error': 'Date, user, and description are required'}), 400
@@ -6682,27 +6898,19 @@ def update_maintenance_log_enhanced(asset_id, log_index):
             changes_made.append(make_change('serial', value=original_log_serial_change))
             logger.info(f"Preserved original serial change: '{original_log_serial_change}'")
         
-        # Handle status changes
-        mark_ooc = data.get('markOOC', False)
-        unmark_ooc = data.get('unmarkOOC', False)
-        mark_missing = data.get('markMissing', False)
-        unmark_missing = data.get('unmarkMissing', False)
-        
-        logger.info(f"Status change flags: markOOC={mark_ooc}, unmarkOOC={unmark_ooc}, markMissing={mark_missing}, unmarkMissing={unmark_missing}")
-        logger.info(f"Current asset status: OOC={asset.is_ooc}, Missing={asset.is_missing}")
-        
-        # Apply OOC status changes
-        # Store the selected status action in the log, regardless of current asset status.
-        # The final asset status is recalculated from all logs below.
-        if mark_ooc:
-            changes_made.append(make_change('ooc', action='marked'))
-        elif unmark_ooc:
-            changes_made.append(make_change('ooc', action='cleared'))
+        # Handle status changes. These now use one clean target status,
+        # while still accepting the old boolean flags for backward compatibility.
+        target_status, requested_status_changes, status_error = _status_changes_for_request(data)
+        if status_error:
+            return jsonify({'error': status_error}), 400
 
-        if mark_missing:
-            changes_made.append(make_change('missing', action='marked'))
-        elif unmark_missing:
-            changes_made.append(make_change('missing', action='cleared'))
+        status_before_this_log = _condition_status_before_log(asset, log_index)
+        transition_error = _validate_status_transition(asset, target_status, current_status=status_before_this_log)
+        if transition_error:
+            return jsonify({'error': transition_error}), 400
+
+        logger.info(f"Requested target status: {target_status}; status before edited log: {status_before_this_log}")
+        changes_made.extend(requested_status_changes)
             
         changes_made = [change for change in changes_made if change]
         change_labels = status_change_labels(changes_made)
@@ -6710,7 +6918,7 @@ def update_maintenance_log_enhanced(asset_id, log_index):
         logger.info(f"Final asset status: OOC={asset.is_ooc}, Missing={asset.is_missing}")
         
         # Create updated log entry with structured status changes
-        updated_log = make_maintenance_log(formatted_date, new_user, new_description, changes_made)
+        updated_log = make_maintenance_log(formatted_date, new_user, new_description, changes_made, cost=repair_cost)
         
         logger.info(f"Updated log entry: {updated_log}")
         
@@ -6752,13 +6960,7 @@ def search_assets():
             )
             if any(keyword in searchable_text for keyword in keywords):
                 # Determine current status
-                status = 'available'
-                if asset.is_missing:
-                    status = 'missing'
-                elif asset.is_ooc:
-                    status = 'ooc'
-                elif asset.asset_id in assigned_assets:
-                    status = 'deployed'
+                status = _asset_status_value(asset, assigned_assets)
 
                 results.append({
                     'id': asset.asset_id,
@@ -6770,7 +6972,9 @@ def search_assets():
                     'status': status,
                     'location': asset.current_location or asset.default_location,
                     'isMissing': asset.is_missing,
-                    'isOOC': asset.is_ooc
+                    'isOOC': asset.is_ooc,
+                    'isDegraded': _is_degraded(asset),
+                    'isDisposed': _is_disposed(asset)
                 })
 
         # Sort by relevance (exact matches first, then partial)
@@ -7009,7 +7213,7 @@ def get_stats():
         total_events = len(data_manager.events)
         active_events = len(
             [e for e in data_manager.events.values() if e.state not in ['Closed']])
-        total_assets = len(data_manager.inventory)
+        total_assets = sum(_asset_inventory_quantity(a) for a in data_manager.inventory.values())
         
         # Add error handling for get_assigned_assets
         try:
@@ -7021,9 +7225,13 @@ def get_stats():
             deployed_assets = 0
             
         missing_assets = len(
-            [a for a in data_manager.inventory.values() if a.is_missing])
+            [a for a in data_manager.inventory.values() if a.is_missing and not _is_disposed(a)])
         ooc_assets = len(
-            [a for a in data_manager.inventory.values() if a.is_ooc])
+            [a for a in data_manager.inventory.values() if a.is_ooc and not _is_disposed(a)])
+        degraded_assets = len(
+            [a for a in data_manager.inventory.values() if _is_degraded(a) and not _is_disposed(a)])
+        disposed_assets = len(
+            [a for a in data_manager.inventory.values() if _is_disposed(a)])
 
         stats_data = {
             'totalEvents': total_events,
@@ -7031,7 +7239,9 @@ def get_stats():
             'totalAssets': total_assets,
             'deployedAssets': deployed_assets,
             'missingAssets': missing_assets,
-            'oocAssets': ooc_assets
+            'oocAssets': ooc_assets,
+            'degradedAssets': degraded_assets,
+            'disposedAssets': disposed_assets
         }
         
         logger.info(f"Returning stats: {stats_data}")

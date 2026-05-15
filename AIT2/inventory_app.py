@@ -7,7 +7,7 @@ from collections import defaultdict
 
 from models import User, InventoryItem, Container, Event, LogEntry, hash_password, get_current_date, parse_date_input, format_date_output, dates_overlap
 from data_manager import DataManager
-from maintenance_logs import make_maintenance_log, maintenance_log_to_display_string
+from maintenance_logs import make_maintenance_log, maintenance_log_to_display_string, apply_maintenance_log_changes
 from utils import clear_screen, pause, play_sound, get_state_color, get_colored_item_description, sort_items_for_display, group_items_by_model
 
 class InventoryManagementApp:
@@ -256,7 +256,7 @@ class InventoryManagementApp:
         keywords = keywords.lower().split()
         results = []
         for item in self.data_manager.inventory.values():
-            if item.is_missing or item.is_ooc:
+            if item.is_missing or item.is_ooc or getattr(item, 'is_disposed', False):
                 continue
             searchable_text = f"{item.brand} {item.model_number} {item.description}".lower()
             if any(keyword in searchable_text for keyword in keywords):
@@ -272,7 +272,7 @@ class InventoryManagementApp:
     def get_available_quantity(self, model_description, start_date, end_date, exclude_event_id=None):
         total_quantity = sum(
             1 for item in self.data_manager.inventory.values()
-            if not item.is_missing and not item.is_ooc and
+            if not item.is_missing and not item.is_ooc and not getattr(item, 'is_disposed', False) and
             f"[{item.department_code}] {item.brand} {item.model_number} {item.description}" == model_description
         )
 
@@ -305,7 +305,7 @@ class InventoryManagementApp:
 
         total_inventory = sum(
             1 for item in self.data_manager.inventory.values()
-            if not item.is_missing and not item.is_ooc and
+            if not item.is_missing and not item.is_ooc and not getattr(item, 'is_disposed', False) and
             f"[{item.department_code}] {item.brand} {item.model_number} {item.description}" == model_description
         )
 
@@ -558,10 +558,16 @@ class InventoryManagementApp:
         print(f"Current Location: {item.current_location}")
         is_missing = 'Yes' if item.is_missing else 'No'
         is_ooc = 'Yes' if item.is_ooc else 'No'
+        is_degraded = 'Yes' if getattr(item, 'is_degraded', False) else 'No'
+        is_disposed = 'Yes' if getattr(item, 'is_disposed', False) else 'No'
         missing_color = '\033[91m' if item.is_missing else '\033[0m'
         ooc_color = '\033[91m' if item.is_ooc else '\033[0m'
+        degraded_color = '\033[93m' if getattr(item, 'is_degraded', False) else '\033[0m'
+        disposed_color = '\033[90m' if getattr(item, 'is_disposed', False) else '\033[0m'
         print(f"Is Missing: {missing_color}{is_missing}\033[0m")
-        print(f"Is Out of Commission: {ooc_color}{is_ooc}\033[0m\n")
+        print(f"Is Out of Commission: {ooc_color}{is_ooc}\033[0m")
+        print(f"Is Degraded: {degraded_color}{is_degraded}\033[0m")
+        print(f"Is Disposed: {disposed_color}{is_disposed}\033[0m\n")
 
         print("Maintenance Logs:")
         if item.maintenance_logs:
@@ -725,6 +731,7 @@ class InventoryManagementApp:
 
         if maintenance_list:
             log_entry = input("\nEnter maintenance log entry: ").strip()
+            repair_cost = input("Repair cost, if any (leave blank if none): $").strip()
             current_date = get_current_date()
             
             if any(keyword in log_entry.lower() for keyword in ["servicing", "repair", "spoilt", "faulty"]):
@@ -732,13 +739,18 @@ class InventoryManagementApp:
                 if update_location == 'y':
                     new_location = input("Enter the new location: ").strip()
 
-            if any(keyword in log_entry.lower() for keyword in ["spoilt", "faulty", "check"]):
-                mark_ooc = input("Do you want to mark these items as Out of Commission (OOC)? (y/n): ").strip().lower()
-            elif any(keyword in log_entry.lower() for keyword in ["fixed", "repaired", "replaced"]):
-                unmark_ooc = input("Do you want to unmark these items from being Out of Commission (OOC)? (y/n): ").strip().lower()
-            else:
-                mark_ooc = 'n'
-                unmark_ooc = 'n'
+            print("\nAsset status change:")
+            print("  [Enter] No change")
+            print("  ok       Mark as OK / clear status")
+            print("  ooc      Mark as Out of Commission")
+            print("  missing  Mark as Missing")
+            print("  degraded Mark as Degraded")
+            print("  disposed Mark as Disposed")
+            status_choice = input("Choose one status change: ").strip().lower()
+            valid_status_choices = {'', 'ok', 'ooc', 'missing', 'degraded', 'disposed'}
+            if status_choice not in valid_status_choices:
+                print("Invalid status option. No status change will be applied.")
+                status_choice = ''
 
             for asset_id in maintenance_list:
                 item = self.data_manager.inventory.get(asset_id)
@@ -746,21 +758,28 @@ class InventoryManagementApp:
                     changes = []
                     if new_location:
                         changes.append({'kind': 'location', 'value': new_location})
-                    if mark_ooc == 'y':
-                        changes.append({'kind': 'ooc', 'action': 'marked'})
-                    if unmark_ooc == 'y':
-                        changes.append({'kind': 'ooc', 'action': 'cleared'})
 
-                    entry = make_maintenance_log(current_date, self.current_user.username, log_entry, changes)
+                    current_status = (
+                        'disposed' if getattr(item, 'is_disposed', False) else
+                        'missing' if getattr(item, 'is_missing', False) else
+                        'ooc' if getattr(item, 'is_ooc', False) else
+                        'degraded' if getattr(item, 'is_degraded', False) else
+                        'ok'
+                    )
+
+                    if status_choice == 'ok':
+                        for kind in ('ooc', 'missing', 'degraded', 'disposed'):
+                            changes.append({'kind': kind, 'action': 'cleared'})
+                    elif status_choice in ('ooc', 'missing', 'degraded', 'disposed'):
+                        if current_status != 'ok' and current_status != status_choice:
+                            print(f"Asset {item.asset_id} is currently {current_status.upper()}. Mark it as OK first before changing to {status_choice.upper()}.")
+                            play_sound(success=False)
+                            continue
+                        changes.append({'kind': status_choice, 'action': 'marked'})
+
+                    entry = make_maintenance_log(current_date, self.current_user.username, log_entry, changes, cost=repair_cost)
                     item.maintenance_logs.append(entry)
-                    
-                    if new_location:
-                        item.current_location = new_location
-
-                    if mark_ooc == 'y':
-                        item.is_ooc = True
-                    if unmark_ooc == 'y':
-                        item.is_ooc = False
+                    apply_maintenance_log_changes(item, entry)
 
                     self.data_manager.save_inventory()
                     message = f"Maintenance logged for {item.asset_id}."
@@ -850,7 +869,17 @@ class InventoryManagementApp:
         print("-" * 60)
         for item in sorted_items:
             colored_description = get_colored_item_description(f"[{item.department_code}] {item.brand} {item.model_number} {item.description}")
-            print(f"{item.asset_id:<15}{item.serial_number:<20}{colored_description}")
+            flags = []
+            if getattr(item, 'is_disposed', False):
+                flags.append('Disposed')
+            if getattr(item, 'is_degraded', False):
+                flags.append('Degraded')
+            if getattr(item, 'is_ooc', False):
+                flags.append('OOC')
+            if getattr(item, 'is_missing', False):
+                flags.append('Missing')
+            flag_text = f" [{' / '.join(flags)}]" if flags else ''
+            print(f"{item.asset_id:<15}{item.serial_number:<20}{colored_description}{flag_text}")
 
     # Placeholder methods for complex event operations
     def add_edit_event(self, event_id, event, start_date, end_date, asset_models, added_items, last_action):

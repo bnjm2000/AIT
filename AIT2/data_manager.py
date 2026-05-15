@@ -145,6 +145,8 @@ class DataManager:
                 maintenance_logs = load_maintenance_logs(row.get('MaintenanceLogs', ''))
                 department_code = row.get('DepartmentCode', 'UN')
                 is_ooc = row.get('IsOOC', 'False') == 'True'
+                is_degraded = row.get('IsDegraded', 'False') == 'True'
+                is_disposed = row.get('IsDisposed', 'False') == 'True'
                 is_bulk = row.get('IsBulk', 'False') == 'True'
                 try:
                     quantity = int(row.get('Quantity', '1') or '1')
@@ -159,6 +161,8 @@ class DataManager:
                     description=row.get('Description', ''),
                     is_missing=row.get('IsMissing', 'False') == 'True',
                     is_ooc=is_ooc,
+                    is_degraded=is_degraded,
+                    is_disposed=is_disposed,
                     maintenance_logs=maintenance_logs,
                     department_code=department_code,
                     default_location=row.get('DefaultLocation', 'Store'),
@@ -177,7 +181,7 @@ class DataManager:
         with open(filepath, 'w', newline='', encoding='utf-8') as f:
             fieldnames = [
                 'AssetID', 'Brand', 'ModelNumber', 'SerialNumber', 'Description',
-                'IsMissing', 'IsOOC', 'IsBulk', 'Quantity', 'MaintenanceLogs', 'DepartmentCode', 'DefaultLocation', 'CurrentLocation'
+                'IsMissing', 'IsOOC', 'IsDegraded', 'IsDisposed', 'IsBulk', 'Quantity', 'MaintenanceLogs', 'DepartmentCode', 'DefaultLocation', 'CurrentLocation'
             ]
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
@@ -190,6 +194,8 @@ class DataManager:
                     'Description': item.description,
                     'IsMissing': item.is_missing,
                     'IsOOC': item.is_ooc,
+                    'IsDegraded': getattr(item, 'is_degraded', False),
+                    'IsDisposed': getattr(item, 'is_disposed', False),
                     'IsBulk': getattr(item, 'is_bulk', False),
                     'Quantity': getattr(item, 'quantity', 1),
                     'MaintenanceLogs': dump_maintenance_logs(item.maintenance_logs),
