@@ -169,18 +169,92 @@
           font-size: 0.95rem;
         }
       }
+
+
+      /* 2026 login accessibility polish */
+      :root {
+        --brand-main: #5b4ee6;
+        --brand-dark: #4438ca;
+        --focus-ring: 0 0 0 4px rgba(79, 70, 229, 0.22);
+      }
+
+      .login-container {
+        border: 1px solid rgba(255, 255, 255, 0.55);
+      }
+
+      .login-title {
+        line-height: 1.1;
+      }
+
+      .form-input {
+        min-height: 48px;
+        border-color: #cbd5e1;
+      }
+
+      .form-input::placeholder {
+        color: #94a3b8;
+      }
+
+      .form-input[aria-invalid="true"] {
+        border-color: #b91c1c;
+        box-shadow: 0 0 0 3px rgba(185, 28, 28, 0.12);
+      }
+
+      .form-input:focus,
+      .form-input:focus-visible {
+        border-color: var(--brand-main);
+        box-shadow: var(--focus-ring);
+      }
+
+      .login-btn {
+        min-height: 48px;
+      }
+
+      .login-btn:hover:not(:disabled) {
+        transform: translateY(-1px);
+      }
+
+      .error-message {
+        border: 1px solid #f1b0b7;
+        line-height: 1.4;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          animation-duration: 0.01ms !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: 0.01ms !important;
+          scroll-behavior: auto !important;
+        }
+
+        .login-btn:hover {
+          transform: none !important;
+        }
+      }
+
+      @media (forced-colors: active) {
+        .login-container,
+        .form-input,
+        .login-btn,
+        .error-message {
+          border: 1px solid CanvasText;
+        }
+      }
+
     </style>
   </head>
   <body>
-    <div class="login-container">
+    <main class="login-container" role="main">
       <div class="login-header">
         <h1 class="login-title">Avec Inventory Tracker</h1>
         <p class="login-subtitle">Please sign in to continue</p>
       </div>
 
-      <div class="error-message" id="error-message"></div>
+      <div class="error-message" id="error-message" role="alert" aria-live="assertive"></div>
 
-      <form id="loginForm">
+      <form id="loginForm" aria-describedby="error-message">
         <div class="form-group">
           <label class="form-label" for="username">Username</label>
           <input
@@ -190,6 +264,8 @@
             name="username"
             required
             autocomplete="username"
+            spellcheck="false"
+            aria-invalid="false"
           />
         </div>
 
@@ -202,14 +278,15 @@
             name="password"
             required
             autocomplete="current-password"
+            aria-invalid="false"
           />
         </div>
 
         <button type="submit" class="login-btn" id="loginBtn">Sign In</button>
 
-        <div class="loading" id="loading">Signing in...</div>
+        <div class="loading" id="loading" role="status" aria-live="polite">Signing in...</div>
       </form>
-    </div>
+    </main>
 
     <script>
       document
@@ -225,6 +302,9 @@
 
           // Reset error state
           errorMessage.style.display = "none";
+          document.getElementById("username").setAttribute("aria-invalid", "false");
+          document.getElementById("password").setAttribute("aria-invalid", "false");
+          loginBtn.setAttribute("aria-busy", "true");
 
           // Show loading state
           loginBtn.disabled = true;
@@ -248,13 +328,19 @@
               // Show error message
               errorMessage.textContent = result.message || "Login failed";
               errorMessage.style.display = "block";
+              document.getElementById("username").setAttribute("aria-invalid", "true");
+              document.getElementById("password").setAttribute("aria-invalid", "true");
+              document.getElementById("password").focus();
             }
           } catch (error) {
             errorMessage.textContent = "Network error. Please try again.";
             errorMessage.style.display = "block";
+            document.getElementById("username").setAttribute("aria-invalid", "true");
+            document.getElementById("password").setAttribute("aria-invalid", "true");
           } finally {
             // Reset loading state
             loginBtn.disabled = false;
+            loginBtn.setAttribute("aria-busy", "false");
             loading.style.display = "none";
           }
         });

@@ -1485,23 +1485,30 @@ function setupMobileNavigation() {
 }
 
 function showSection(sectionName) {
-  // Hide all sections
+  const targetSection = document.getElementById(sectionName + "-section");
+  if (!targetSection) return;
+
   document.querySelectorAll(".content-section").forEach((section) => {
-    section.classList.remove("active");
+    const isActive = section === targetSection;
+    section.classList.toggle("active", isActive);
+    section.setAttribute("aria-hidden", String(!isActive));
   });
 
-  // Remove active class from all nav items
   document.querySelectorAll(".nav-item").forEach((item) => {
-    item.classList.remove("active");
+    const isActive = item.getAttribute("onclick") === `showSection('${sectionName}')`;
+    item.classList.toggle("active", isActive);
+    if (isActive) {
+      item.setAttribute("aria-current", "page");
+    } else {
+      item.removeAttribute("aria-current");
+    }
   });
 
-  // Show selected section
-  document.getElementById(sectionName + "-section").classList.add("active");
-
-  // Add active class to the matching nav item
-  document
-    .querySelector(`[onclick="showSection('${sectionName}')"]`)
-    ?.classList.add("active");
+  const mainContent = document.getElementById("mainContent");
+  if (mainContent) {
+    mainContent.setAttribute("tabindex", "-1");
+    mainContent.focus({ preventScroll: true });
+  }
 
   closeMobileNavigation();
 
@@ -1554,9 +1561,35 @@ function showSection(sectionName) {
 }
 
 // Modal functions
+let __lastFocusedBeforeModal = null;
+
+function getFocusableElements(container) {
+  if (!container) return [];
+  const selector = [
+    'a[href]',
+    'button:not([disabled])',
+    'input:not([disabled])',
+    'select:not([disabled])',
+    'textarea:not([disabled])',
+    '[tabindex]:not([tabindex="-1"])'
+  ].join(',');
+
+  return Array.from(container.querySelectorAll(selector))
+    .filter(el => el.offsetParent !== null || el === document.activeElement);
+}
+
+function focusModalStart(modal) {
+  const focusable = getFocusableElements(modal);
+  const target = focusable.find(el => !el.classList.contains('close-btn') && !el.classList.contains('close')) || focusable[0];
+  if (target) {
+    setTimeout(() => target.focus({ preventScroll: true }), 0);
+  }
+}
+
 function openModal(modalId) {
   const modal = document.getElementById(modalId);
   if (modal) {
+    __lastFocusedBeforeModal = document.activeElement;
     modal.classList.add("active");
     modal.setAttribute("role", "dialog");
     modal.setAttribute("aria-modal", "true");
@@ -1566,6 +1599,8 @@ function openModal(modalId) {
     if (modalId === "editQuantityModal") {
       modal.style.zIndex = "1100";
     }
+
+    focusModalStart(modal);
   }
 }
 
@@ -1575,11 +1610,37 @@ function closeModal(modalId) {
   if (!modal) return;
   modal.classList.remove("active");
   modal.setAttribute("aria-hidden", "true");
+
+  if (__lastFocusedBeforeModal && typeof __lastFocusedBeforeModal.focus === 'function') {
+    setTimeout(() => {
+      try { __lastFocusedBeforeModal.focus({ preventScroll: true }); } catch (e) {}
+    }, 0);
+  }
 }
 
 function enhanceModalAccessibility(root = document) {
   root.querySelectorAll(".close-btn:not([aria-label]), .close:not([aria-label])").forEach((button) => {
     button.setAttribute("aria-label", "Close dialog");
+  });
+
+  root.querySelectorAll(".modal").forEach((modal) => {
+    modal.setAttribute("aria-hidden", modal.classList.contains("active") ? "false" : "true");
+    modal.setAttribute("role", "dialog");
+  });
+}
+
+function enhanceNavigationAccessibility() {
+  document.querySelectorAll(".content-section").forEach(section => {
+    section.setAttribute("aria-hidden", String(!section.classList.contains("active")));
+  });
+
+  document.querySelectorAll(".nav-item").forEach(item => {
+    item.setAttribute("type", "button");
+    if (item.classList.contains("active")) {
+      item.setAttribute("aria-current", "page");
+    } else {
+      item.removeAttribute("aria-current");
+    }
   });
 }
 
@@ -12592,6 +12653,9 @@ function showNotification(type, message) {
   const notification = document.createElement("div");
   notification.className = `notification ${type}`;
   notification.textContent = message;
+  notification.setAttribute("role", type === "error" || type === "warning" ? "alert" : "status");
+  notification.setAttribute("aria-live", type === "error" || type === "warning" ? "assertive" : "polite");
+  notification.setAttribute("aria-atomic", "true");
 
   document.body.appendChild(notification);
 
@@ -14888,6 +14952,19 @@ async function initializeApp() {
   }
 }
 
+
+
+// Close the currently open app modal with Escape. This only affects the UI shell;
+// business actions still require their existing buttons and confirmations.
+document.addEventListener('keydown', function(e) {
+  if (e.key !== 'Escape') return;
+  const activeModals = Array.from(document.querySelectorAll('.modal.active'));
+  const topModal = activeModals[activeModals.length - 1];
+  if (topModal && topModal.id && topModal.id !== 'maintenanceLogModal') {
+    closeModal(topModal.id);
+  }
+});
+
 // Close maintenance log modal when clicking outside
 document.addEventListener('click', function(e) {
   const modal = document.getElementById('maintenanceLogModal');
@@ -14915,6 +14992,7 @@ document.addEventListener("visibilitychange", () => {
 
 document.addEventListener('DOMContentLoaded', function() {
     setupMobileNavigation();
+    enhanceNavigationAccessibility();
     enhanceModalAccessibility();
     setupSingleAssetClickHandler();
     initialiseMaintenanceStatusSelects();
