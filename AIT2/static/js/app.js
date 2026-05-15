@@ -9,6 +9,15 @@ let departments = {};
 let departmentsLoaded = false;
 let __autoRefreshInFlight = false;
 
+const DEFAULT_PDF_FOOTER_TEXT = "AVEC VISION PRIVATE LIMITED\n601 SIMS DRIVE PAN-I COMPLEX #04-10 SINGAPORE 387382 TEL 65.9743.3660 CO REG 202122775G";
+let pdfSettings = {
+  footerText: DEFAULT_PDF_FOOTER_TEXT,
+  logoUrl: "/static/images/logo.png",
+  hasCustomLogo: false,
+  logoOriginalName: "",
+  updatedAt: ""
+};
+
 // ---------- containers cache ----------
 let selectedContainerAssets = new Set();
 let __containersCache = null;
@@ -656,6 +665,611 @@ function escapeHtmlAttribute(str) {
     .replace(/>/g, '&gt;');
 }
 
+const BARCODE_SCANNER_SCRIPT_URL = 'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js';
+let barcodeScannerScriptPromise = null;
+let barcodeScannerState = {
+  html5: null,
+  stream: null,
+  nativeTimer: null,
+  nativeVideo: null,
+  onScan: null,
+  handling: false
+};
+
+function normalizeScannedIdentifier(rawValue) {
+  let value = String(rawValue || '')
+    .replace(/[\u0000-\u001f]+/g, ' ')
+    .trim();
+
+  if (!value) return '';
+
+  try {
+    const url = new URL(value);
+    const paramNames = ['assetId', 'asset_id', 'asset', 'id', 'serial', 'sn', 'container'];
+    for (const name of paramNames) {
+      const paramValue = url.searchParams.get(name);
+      if (paramValue && paramValue.trim()) return paramValue.trim();
+    }
+
+    const lastPathPart = decodeURIComponent(url.pathname.split('/').filter(Boolean).pop() || '').trim();
+    if (lastPathPart) return lastPathPart;
+  } catch (e) {
+    // Not a URL; keep processing as a raw code.
+  }
+
+  const prefixed = value.match(/^(?:asset(?:\s*id)?|serial(?:\s*(?:no|number))?|id|sn|container)\s*[:=#]\s*(.+)$/i);
+  if (prefixed && prefixed[1]) {
+    value = prefixed[1].trim();
+  }
+
+  return value;
+}
+
+async function ensureAssetsLoaded(force = false) {
+  if (!force && Array.isArray(assets) && assets.length > 0) return assets;
+
+  const response = await apiCall('/api/assets');
+  assets = response.data || [];
+  return assets;
+}
+
+function findAssetByIdentifier(identifier, assetList = assets) {
+  const normalized = normalizeScannedIdentifier(identifier).toLowerCase();
+  if (!normalized || !Array.isArray(assetList)) return null;
+
+  return assetList.find(asset => {
+    if (!asset) return false;
+    const ids = [
+      asset.id,
+      asset.internalId,
+      asset.bulkId,
+      asset.displayId
+    ].map(value => String(value || '').trim()).filter(Boolean);
+
+    if (ids.some(value => value.toLowerCase() === normalized)) return true;
+
+    const serial = String(asset.serial || '').trim();
+    return serial && serial.toLowerCase() === normalized;
+  }) || null;
+}
+
+function getAssetIdFromIdentifier(identifier, assetList = assets) {
+  const asset = findAssetByIdentifier(identifier, assetList);
+  return asset ? getAssetIdentifierForApi(asset) : normalizeScannedIdentifier(identifier);
+}
+
+function scannerButtonHtml(onclick, label = 'Scan') {
+  return `<button type="button" class="btn btn-primary scanner-action-btn" onclick="${onclick}" title="Use phone camera to scan QR or barcode">${label}</button>`;
+}
+
+function ensureBarcodeScannerStyles() {
+  if (document.getElementById('barcode-scanner-styles')) return;
+
+  const style = document.createElement('style');
+  style.id = 'barcode-scanner-styles';
+  style.textContent = `
+    .scanner-action-btn {
+      white-space: nowrap;
+    }
+
+    #barcodeScannerModal .modal-content {
+      max-width: 560px;
+    }
+
+    .barcode-scanner-reader {
+      overflow: hidden;
+      border-radius: 12px;
+      background: #111827;
+      min-height: 260px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+    }
+
+    .barcode-scanner-reader video {
+      width: 100%;
+      max-height: 60vh;
+      object-fit: cover;
+    }
+
+    .barcode-scanner-status {
+      color: #666;
+      font-size: 13px;
+      line-height: 1.4;
+      margin-top: 10px;
+      min-height: 18px;
+    }
+
+    .barcode-scanner-fallback {
+      display: grid;
+      gap: 10px;
+      margin-top: 14px;
+      padding-top: 14px;
+      border-top: 1px solid #e9ecef;
+    }
+
+    .barcode-scanner-manual-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .barcode-scanner-manual-row input {
+      flex: 1 1 220px;
+    }
+
+    @media (max-width: 640px) {
+      #barcodeScannerModal.modal.active {
+        align-items: stretch;
+      }
+
+      #barcodeScannerModal .modal-content {
+        max-height: calc(100dvh - 20px);
+      }
+
+      .barcode-scanner-reader {
+        min-height: 320px;
+      }
+
+      .barcode-scanner-manual-row .btn,
+      .barcode-scanner-fallback .btn,
+      .scanner-action-btn {
+        flex: 1 1 auto;
+      }
+    }
+  `;
+
+  document.head.appendChild(style);
+}
+
+function ensureBarcodeScannerModal() {
+  ensureBarcodeScannerStyles();
+
+  let modal = document.getElementById('barcodeScannerModal');
+  if (modal) return modal;
+
+  modal = document.createElement('div');
+  modal.id = 'barcodeScannerModal';
+  modal.className = 'modal';
+  modal.innerHTML = `
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 class="modal-title" id="barcodeScannerTitle">Scan Code</h3>
+        <button type="button" class="close-btn" onclick="closeBarcodeScanner()">&times;</button>
+      </div>
+
+      <div id="barcodeScannerInstructions" style="color:#666;font-size:14px;margin-bottom:12px;">
+        Point your camera at an asset QR code or barcode.
+      </div>
+
+      <div id="barcodeScannerReader" class="barcode-scanner-reader">
+        Starting camera...
+      </div>
+
+      <div id="barcodeScannerStatus" class="barcode-scanner-status"></div>
+
+      <div class="barcode-scanner-fallback">
+        <label class="btn btn-secondary" style="text-align:center;cursor:pointer;">
+          Take Photo
+          <input id="barcodeScannerFileInput" type="file" accept="image/*" capture="environment" style="display:none;" onchange="scanBarcodeImageFile(this)">
+        </label>
+
+        <div class="barcode-scanner-manual-row">
+          <input id="barcodeScannerManualValue" class="form-input" type="text" placeholder="Or enter code manually" onkeypress="if(event.key==='Enter') submitBarcodeScannerManual()">
+          <button type="button" class="btn btn-primary" onclick="submitBarcodeScannerManual()">Use Code</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+  return modal;
+}
+
+function setBarcodeScannerStatus(message, type = 'info') {
+  const el = document.getElementById('barcodeScannerStatus');
+  if (!el) return;
+
+  const colors = {
+    info: '#666',
+    success: '#155724',
+    warning: '#856404',
+    error: '#721c24'
+  };
+  el.style.color = colors[type] || colors.info;
+  el.textContent = message || '';
+}
+
+function getHtml5QrcodeFormats() {
+  const formats = window.Html5QrcodeSupportedFormats;
+  if (!formats) return [];
+
+  return [
+    formats.QR_CODE,
+    formats.CODE_128,
+    formats.CODE_39,
+    formats.CODE_93,
+    formats.CODABAR,
+    formats.EAN_13,
+    formats.EAN_8,
+    formats.ITF,
+    formats.UPC_A,
+    formats.UPC_E
+  ].filter(format => typeof format !== 'undefined');
+}
+
+function loadHtml5Qrcode() {
+  if (window.Html5Qrcode) return Promise.resolve(true);
+  if (barcodeScannerScriptPromise) return barcodeScannerScriptPromise;
+
+  barcodeScannerScriptPromise = new Promise(resolve => {
+    const script = document.createElement('script');
+    script.src = BARCODE_SCANNER_SCRIPT_URL;
+    script.async = true;
+    script.onload = () => resolve(!!window.Html5Qrcode);
+    script.onerror = () => resolve(false);
+    document.head.appendChild(script);
+  });
+
+  return barcodeScannerScriptPromise;
+}
+
+async function stopBarcodeScannerCamera(clearReader = true) {
+  if (barcodeScannerState.nativeTimer) {
+    clearTimeout(barcodeScannerState.nativeTimer);
+    barcodeScannerState.nativeTimer = null;
+  }
+
+  if (barcodeScannerState.html5) {
+    try {
+      await barcodeScannerState.html5.stop();
+    } catch (e) {
+      // Stop can throw if the camera was never started.
+    }
+
+    try {
+      await barcodeScannerState.html5.clear();
+    } catch (e) {
+      // Clear is best effort.
+    }
+
+    barcodeScannerState.html5 = null;
+  }
+
+  if (barcodeScannerState.stream) {
+    barcodeScannerState.stream.getTracks().forEach(track => track.stop());
+    barcodeScannerState.stream = null;
+  }
+
+  barcodeScannerState.nativeVideo = null;
+
+  if (clearReader) {
+    const reader = document.getElementById('barcodeScannerReader');
+    if (reader) reader.innerHTML = '';
+  }
+}
+
+async function handleBarcodeScanResult(rawValue) {
+  const identifier = normalizeScannedIdentifier(rawValue);
+  if (!identifier || barcodeScannerState.handling) return;
+
+  barcodeScannerState.handling = true;
+  const onScan = barcodeScannerState.onScan;
+
+  await stopBarcodeScannerCamera(false);
+  closeModal('barcodeScannerModal');
+  barcodeScannerState.onScan = null;
+
+  try {
+    if (typeof onScan === 'function') {
+      await onScan(identifier, rawValue);
+    }
+  } catch (error) {
+    console.error('Scanner handler failed:', error);
+    showNotification('error', `Failed to use scanned code: ${error.message || error}`);
+  } finally {
+    barcodeScannerState.handling = false;
+  }
+}
+
+async function startNativeBarcodeScanner() {
+  if (!window.BarcodeDetector || !navigator.mediaDevices?.getUserMedia) {
+    throw new Error('Camera scanning is not available in this browser');
+  }
+
+  const reader = document.getElementById('barcodeScannerReader');
+  if (!reader) return;
+
+  reader.innerHTML = '';
+  const video = document.createElement('video');
+  video.setAttribute('playsinline', 'true');
+  video.muted = true;
+  reader.appendChild(video);
+
+  const stream = await navigator.mediaDevices.getUserMedia({
+    video: { facingMode: { ideal: 'environment' } },
+    audio: false
+  });
+
+  barcodeScannerState.stream = stream;
+  barcodeScannerState.nativeVideo = video;
+  video.srcObject = stream;
+  await video.play();
+
+  const formats = [
+    'qr_code',
+    'code_128',
+    'code_39',
+    'code_93',
+    'codabar',
+    'ean_13',
+    'ean_8',
+    'itf',
+    'upc_a',
+    'upc_e'
+  ];
+
+  let detector;
+  try {
+    detector = new BarcodeDetector({ formats });
+  } catch (e) {
+    detector = new BarcodeDetector();
+  }
+
+  const detectLoop = async () => {
+    if (!barcodeScannerState.nativeVideo || barcodeScannerState.handling) return;
+
+    try {
+      const codes = await detector.detect(video);
+      if (codes && codes.length > 0) {
+        await handleBarcodeScanResult(codes[0].rawValue || '');
+        return;
+      }
+    } catch (e) {
+      console.warn('Native barcode detection failed:', e);
+    }
+
+    barcodeScannerState.nativeTimer = setTimeout(detectLoop, 250);
+  };
+
+  setBarcodeScannerStatus('Camera ready. Point it at the QR code or barcode.');
+  detectLoop();
+}
+
+async function startHtml5BarcodeScanner() {
+  const readerId = 'barcodeScannerReader';
+  const reader = document.getElementById(readerId);
+  if (!reader) return false;
+
+  const loaded = await loadHtml5Qrcode();
+  if (!loaded || !window.Html5Qrcode) return false;
+
+  reader.innerHTML = '';
+  const formats = getHtml5QrcodeFormats();
+  const config = formats.length > 0 ? { formatsToSupport: formats, verbose: false } : { verbose: false };
+  const scanner = new Html5Qrcode(readerId, config);
+  barcodeScannerState.html5 = scanner;
+
+  await scanner.start(
+    { facingMode: 'environment' },
+    {
+      fps: 10,
+      qrbox: { width: 280, height: 220 },
+      aspectRatio: 1.7777778
+    },
+    decodedText => handleBarcodeScanResult(decodedText),
+    () => {}
+  );
+
+  setBarcodeScannerStatus('Camera ready. Point it at the QR code or barcode.');
+  return true;
+}
+
+async function openBarcodeScanner({ title, instructions, onScan }) {
+  const modal = ensureBarcodeScannerModal();
+  barcodeScannerState.onScan = onScan;
+  barcodeScannerState.handling = false;
+
+  document.getElementById('barcodeScannerTitle').textContent = title || 'Scan Code';
+  document.getElementById('barcodeScannerInstructions').textContent = instructions || 'Point your camera at an asset QR code or barcode.';
+  document.getElementById('barcodeScannerReader').innerHTML = 'Starting camera...';
+  document.getElementById('barcodeScannerManualValue').value = '';
+  document.getElementById('barcodeScannerFileInput').value = '';
+
+  openModal(modal.id);
+  setBarcodeScannerStatus('Starting camera...');
+
+  try {
+    const startedWithLibrary = await startHtml5BarcodeScanner();
+    if (!startedWithLibrary) await startNativeBarcodeScanner();
+  } catch (error) {
+    console.warn('Camera scanner unavailable:', error);
+    await stopBarcodeScannerCamera(false);
+    document.getElementById('barcodeScannerReader').innerHTML = `
+      <div style="padding:20px;text-align:center;line-height:1.45;">
+        Camera scanner could not start.<br>
+        Use Take Photo or enter the code below.
+      </div>
+    `;
+    setBarcodeScannerStatus(
+      window.isSecureContext
+        ? 'Camera access was blocked or unavailable.'
+        : 'Camera access usually requires HTTPS on a phone browser.',
+      'warning'
+    );
+  }
+}
+
+async function closeBarcodeScanner() {
+  barcodeScannerState.onScan = null;
+  barcodeScannerState.handling = false;
+  await stopBarcodeScannerCamera();
+  closeModal('barcodeScannerModal');
+}
+
+async function scanBarcodeImageFile(input) {
+  const file = input?.files?.[0];
+  if (!file) return;
+
+  setBarcodeScannerStatus('Scanning photo...');
+
+  try {
+    await stopBarcodeScannerCamera(false);
+
+    const loaded = await loadHtml5Qrcode();
+    if (loaded && window.Html5Qrcode) {
+      const scanner = new Html5Qrcode('barcodeScannerReader');
+      barcodeScannerState.html5 = scanner;
+      const result = await scanner.scanFile(file, true);
+      await handleBarcodeScanResult(result);
+      return;
+    }
+
+    if (!window.BarcodeDetector) {
+      throw new Error('Photo scanning is not available in this browser');
+    }
+
+    const bitmap = await createImageBitmap(file);
+    const detector = new BarcodeDetector();
+    const codes = await detector.detect(bitmap);
+    if (!codes || codes.length === 0) {
+      throw new Error('No QR code or barcode found in the photo');
+    }
+
+    await handleBarcodeScanResult(codes[0].rawValue || '');
+  } catch (error) {
+    console.error('Photo scan failed:', error);
+    setBarcodeScannerStatus(error.message || 'Photo scan failed', 'error');
+  }
+}
+
+function submitBarcodeScannerManual() {
+  const input = document.getElementById('barcodeScannerManualValue');
+  const value = normalizeScannedIdentifier(input?.value || '');
+  if (!value) {
+    setBarcodeScannerStatus('Enter a code first.', 'warning');
+    input?.focus();
+    return;
+  }
+
+  handleBarcodeScanResult(value);
+}
+
+function scanForPrepare(eventId) {
+  openBarcodeScanner({
+    title: 'Scan To Prepare',
+    instructions: 'Scan an asset, serial number, or container code to prepare it for this event.',
+    onScan: async identifier => {
+      const input = document.getElementById('universalAssetInput');
+      if (input) input.value = identifier;
+      await processUniversalAsset(eventId);
+    }
+  });
+}
+
+function scanForReturn() {
+  const eventSelect = document.getElementById('returnEventSelect');
+  const eventId = eventSelect?.value || '';
+
+  if (!eventId) {
+    showNotification('warning', 'Select an event first');
+    eventSelect?.focus();
+    return;
+  }
+
+  openBarcodeScanner({
+    title: 'Scan To Return',
+    instructions: 'Scan an asset QR code, barcode, or serial number to return it from the selected event.',
+    onScan: async identifier => {
+      const input = document.getElementById('manualReturnAssetIdNew');
+      if (input) input.value = identifier;
+      await returnManualAssetNew();
+    }
+  });
+}
+
+async function addIdentifierToMaintenanceSelection(identifier) {
+  const normalized = normalizeScannedIdentifier(identifier);
+  if (!normalized) {
+    showNotification('warning', 'Scan or enter an Asset ID first');
+    return;
+  }
+
+  await ensureAssetsLoaded();
+
+  const asset = findAssetByIdentifier(normalized, assets);
+  if (asset && !asset.isBulk) {
+    selectAssetForMaintenance(getAssetIdentifierForApi(asset));
+    const searchEl = document.getElementById('maintenanceAssetSearch');
+    if (searchEl) searchEl.value = '';
+    return;
+  }
+
+  const container = await getContainerById(normalized, true);
+  if (container) {
+    let added = 0;
+    let already = 0;
+    let skipped = 0;
+
+    for (const assetId of (container.assetIds || [])) {
+      const containerAsset = findAssetByIdentifier(assetId, assets);
+      const resolvedAssetId = containerAsset ? getAssetIdentifierForApi(containerAsset) : assetId;
+
+      if (!containerAsset || containerAsset.isBulk) {
+        skipped++;
+        continue;
+      }
+
+      if (selectedMaintenanceAssets.has(resolvedAssetId)) {
+        already++;
+      } else {
+        selectedMaintenanceAssets.add(resolvedAssetId);
+        added++;
+      }
+    }
+
+    updateSelectedAssetsDisplay();
+    searchMaintenanceAssets();
+    showNotification('success', `Added container ${container.id}: ${added} added (${already} already selected${skipped ? `, ${skipped} skipped` : ''})`);
+    return;
+  }
+
+  showNotification('error', `Asset or container not found: ${normalized}`);
+  const searchEl = document.getElementById('maintenanceAssetSearch');
+  if (searchEl) {
+    searchEl.value = normalized;
+    searchEl.focus();
+    searchMaintenanceAssets();
+  }
+}
+
+function scanForMaintenance() {
+  openBarcodeScanner({
+    title: 'Scan For Maintenance',
+    instructions: 'Scan an asset or container code to add it to this maintenance log.',
+    onScan: async identifier => {
+      await addIdentifierToMaintenanceSelection(identifier);
+    }
+  });
+}
+
+function scanForAssetCheck(targetInputId, actionName) {
+  openBarcodeScanner({
+    title: 'Scan For Asset Check',
+    instructions: 'Scan an Asset ID or serial number for the asset check.',
+    onScan: async identifier => {
+      const input = document.getElementById(targetInputId);
+      if (input) input.value = identifier;
+      if (actionName === 'start') {
+        await startAssetCheck();
+      } else {
+        checkAsset();
+      }
+    }
+  });
+}
+
 // Update the overdue events counter
 function updateOverdueCounter(count) {
     const counter = document.getElementById('overdue-counter');
@@ -801,6 +1415,9 @@ function showSection(sectionName) {
     case "users":
       loadUsersAdmin();
       break;
+    case "pdf-settings":
+      loadPdfSettingsSection();
+      break;
     case "delivery-order":
       break;
   }
@@ -863,6 +1480,272 @@ async function apiCall(endpoint, method = "GET", data = null) {
     showNotification("error", error.message);
     throw error;
   }
+}
+
+
+// ---------------- PDF Settings ----------------
+function normalisePdfSettings(settings = {}) {
+  return {
+    footerText: typeof settings.footerText === 'string' ? settings.footerText : DEFAULT_PDF_FOOTER_TEXT,
+    logoUrl: settings.logoUrl || "/static/images/logo.png",
+    hasCustomLogo: !!settings.hasCustomLogo,
+    logoOriginalName: settings.logoOriginalName || "",
+    updatedAt: settings.updatedAt || ""
+  };
+}
+
+function getPdfLogoUrl() {
+  return (pdfSettings && pdfSettings.logoUrl) || "/static/images/logo.png";
+}
+
+function getPdfFooterText() {
+  return pdfSettings && typeof pdfSettings.footerText === 'string'
+    ? pdfSettings.footerText
+    : DEFAULT_PDF_FOOTER_TEXT;
+}
+
+function renderPdfFooterHtml() {
+  const text = getPdfFooterText();
+  if (!text) return '';
+  return text.split(/\r?\n/).map(line => escapeHtml(line)).join('<br>');
+}
+
+function applyPdfSettingsToApp() {
+  const logo = document.getElementById('company-logo');
+  if (logo) {
+    logo.src = getPdfLogoUrl();
+    logo.style.display = '';
+  }
+}
+
+async function loadPdfSettings(force = false) {
+  if (!force && pdfSettings && pdfSettings.logoUrl) {
+    return pdfSettings;
+  }
+
+  try {
+    const res = await apiCall('/api/pdf-settings');
+    pdfSettings = normalisePdfSettings(res.data || {});
+  } catch (error) {
+    console.warn('PDF settings not loaded:', error);
+    pdfSettings = normalisePdfSettings(pdfSettings);
+  }
+
+  applyPdfSettingsToApp();
+  renderPdfSettingsForm();
+  return pdfSettings;
+}
+
+async function setupPdfSettingsTab() {
+  if (!isAdminUser()) {
+    removePdfSettingsTab();
+    return;
+  }
+
+  ensurePdfSettingsNavItem();
+  ensurePdfSettingsSection();
+  renderPdfSettingsForm();
+}
+
+function removePdfSettingsTab() {
+  const tab = document.querySelector(`[onclick="showSection('pdf-settings')"]`);
+  if (tab) tab.remove();
+
+  const section = document.getElementById('pdf-settings-section');
+  if (section) section.remove();
+}
+
+function ensurePdfSettingsNavItem() {
+  if (document.querySelector(`[onclick="showSection('pdf-settings')"]`)) return;
+
+  const settingsSection = Array.from(document.querySelectorAll('.nav-section'))
+    .find(section => {
+      const heading = section.querySelector('h3');
+      return heading && heading.textContent.trim() === 'Settings';
+    });
+
+  if (!settingsSection) {
+    console.warn('Could not find Settings section for PDF Settings tab');
+    return;
+  }
+
+  const pdfSettingsTab = document.createElement('button');
+  pdfSettingsTab.type = 'button';
+  pdfSettingsTab.className = 'nav-item';
+  pdfSettingsTab.setAttribute('onclick', "showSection('pdf-settings')");
+  pdfSettingsTab.textContent = '📄 PDF Settings';
+
+  const logoutButton = settingsSection.querySelector(`[onclick="logout()"]`);
+
+  if (logoutButton) {
+    settingsSection.insertBefore(pdfSettingsTab, logoutButton);
+  } else {
+    settingsSection.appendChild(pdfSettingsTab);
+  }
+}
+
+function ensurePdfSettingsSection() {
+  if (document.getElementById('pdf-settings-section')) return;
+
+  const firstSection = document.querySelector('.content-section');
+  const sectionParent = firstSection ? firstSection.parentElement : document.body;
+
+  const section = document.createElement('div');
+  section.id = 'pdf-settings-section';
+  section.className = 'content-section';
+
+  section.innerHTML = `
+    <div class="content-header">
+      <h2 class="content-title">PDF Settings</h2>
+    </div>
+
+    <div class="form-container">
+      <div style="display:grid;grid-template-columns:minmax(240px,320px) minmax(280px,1fr);gap:24px;align-items:start;">
+        <div class="form-group">
+          <label class="form-label" for="pdfSettingsLogoInput">Logo</label>
+          <div style="border:1px solid #e9ecef;border-radius:8px;padding:18px;background:#fff;min-height:130px;display:flex;align-items:center;justify-content:center;margin-bottom:12px;">
+            <img id="pdfSettingsLogoPreview" alt="PDF Logo" style="max-width:240px;max-height:90px;object-fit:contain;">
+          </div>
+          <input id="pdfSettingsLogoInput" class="form-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
+            <button type="button" class="btn btn-primary" onclick="uploadPdfSettingsLogo()">Upload Logo</button>
+            <button type="button" class="btn btn-secondary" onclick="resetPdfSettingsLogo()">Reset Logo</button>
+          </div>
+          <div id="pdfSettingsLogoName" style="font-size:12px;color:#666;margin-top:8px;"></div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="pdfSettingsFooterText">Footer</label>
+          <textarea id="pdfSettingsFooterText" class="form-input" rows="5" maxlength="2000"></textarea>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
+            <button type="button" class="btn btn-primary" onclick="savePdfSettingsFooter()">Save Footer</button>
+            <button type="button" class="btn btn-secondary" onclick="resetPdfSettingsFooter()">Reset Footer</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  sectionParent.appendChild(section);
+}
+
+function renderPdfSettingsForm() {
+  const logoPreview = document.getElementById('pdfSettingsLogoPreview');
+  const logoName = document.getElementById('pdfSettingsLogoName');
+  const footerText = document.getElementById('pdfSettingsFooterText');
+
+  if (logoPreview) {
+    logoPreview.src = getPdfLogoUrl();
+  }
+
+  if (logoName) {
+    logoName.textContent = pdfSettings.hasCustomLogo && pdfSettings.logoOriginalName
+      ? pdfSettings.logoOriginalName
+      : 'Default logo';
+  }
+
+  if (footerText && footerText.value !== getPdfFooterText()) {
+    footerText.value = getPdfFooterText();
+  }
+}
+
+async function loadPdfSettingsSection() {
+  if (!isAdminUser()) {
+    showNotification('error', 'Admin privileges required');
+    showSection('events');
+    return;
+  }
+
+  ensurePdfSettingsSection();
+  await loadPdfSettings(true);
+}
+
+async function uploadPdfSettingsLogo() {
+  if (!isAdminUser()) {
+    showNotification('error', 'Admin privileges required');
+    return;
+  }
+
+  const input = document.getElementById('pdfSettingsLogoInput');
+  const file = input && input.files ? input.files[0] : null;
+
+  if (!file) {
+    showNotification('warning', 'Choose a logo file first');
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append('logo', file);
+
+  try {
+    const response = await fetch('/api/pdf-settings/logo', {
+      method: 'POST',
+      body: formData
+    });
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.error || 'Failed to upload logo');
+    }
+
+    pdfSettings = normalisePdfSettings(result.data || {});
+    if (input) input.value = '';
+    applyPdfSettingsToApp();
+    renderPdfSettingsForm();
+    showNotification('success', 'PDF logo updated');
+  } catch (error) {
+    console.error('PDF logo upload failed:', error);
+    showNotification('error', error.message || 'Failed to upload logo');
+  }
+}
+
+async function resetPdfSettingsLogo() {
+  if (!isAdminUser()) {
+    showNotification('error', 'Admin privileges required');
+    return;
+  }
+
+  try {
+    const response = await fetch('/api/pdf-settings/logo', { method: 'DELETE' });
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.error || 'Failed to reset logo');
+    }
+
+    pdfSettings = normalisePdfSettings(result.data || {});
+    applyPdfSettingsToApp();
+    renderPdfSettingsForm();
+    showNotification('success', 'PDF logo reset');
+  } catch (error) {
+    console.error('PDF logo reset failed:', error);
+    showNotification('error', error.message || 'Failed to reset logo');
+  }
+}
+
+async function savePdfSettingsFooter() {
+  if (!isAdminUser()) {
+    showNotification('error', 'Admin privileges required');
+    return;
+  }
+
+  const textarea = document.getElementById('pdfSettingsFooterText');
+  const footerText = textarea ? textarea.value : '';
+
+  try {
+    const res = await apiCall('/api/pdf-settings', 'PUT', { footerText });
+    pdfSettings = normalisePdfSettings(res.data || {});
+    renderPdfSettingsForm();
+    showNotification('success', 'PDF footer saved');
+  } catch (error) {
+    showNotification('error', 'Failed to save PDF footer');
+  }
+}
+
+async function resetPdfSettingsFooter() {
+  const textarea = document.getElementById('pdfSettingsFooterText');
+  if (textarea) textarea.value = DEFAULT_PDF_FOOTER_TEXT;
+  await savePdfSettingsFooter();
 }
 
 
@@ -4164,12 +5047,16 @@ async function openPrepareEventModal(eventId) {
                 <div style="margin-bottom: 10px; padding: 10px; background: #e8f5e8; border-radius: 8px; border: 2px solid #28a745;">
                     <h4 style="color: #155724; margin-bottom: 15px;">Prepare or Assign Assets</h4>
                     <div class="form-group">
-                        <input type="text" class="form-input" id="universalAssetInput" 
-                              placeholder="Enter Asset ID or Serial Number..." 
-                              onkeypress="if(event.key==='Enter') processUniversalAsset(${eventId})"
-                              style="font-size: 16px; padding: 12px;">
-                        <button class="btn btn-success" style="margin-top: 10px; margin-right: 10px;" onclick="processUniversalAsset(${eventId})">Process Asset</button>
-                        <button class="btn btn-secondary" style="margin-top: 10px;" onclick="clearUniversalInput()">Clear</button>
+                        <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:stretch;">
+                            <input type="text" class="form-input" id="universalAssetInput" 
+                                  placeholder="Enter Asset ID or Serial Number..." 
+                                  onkeypress="if(event.key==='Enter') processUniversalAsset(${eventId})"
+                                  autocomplete="off"
+                                  style="font-size: 16px; padding: 12px; flex:1 1 260px;">
+                            <button type="button" class="btn btn-success" onclick="processUniversalAsset(${eventId})">Process Asset</button>
+                            ${scannerButtonHtml(`scanForPrepare(${eventId})`)}
+                            <button type="button" class="btn btn-secondary" onclick="clearUniversalInput()">Clear</button>
+                        </div>
                     </div>
                     <div id="universal-asset-feedback" style="margin-top: 15px; min-height: 10px;">
                         <!-- Feedback messages will appear here -->
@@ -5222,12 +6109,14 @@ function updateAllButtonsForAsset(assetId, isPrepared) {
 async function processUniversalAsset(eventId) {
     const input = document.getElementById('universalAssetInput');
     const feedbackDiv = document.getElementById('universal-asset-feedback');
-    const assetId = input.value.trim();
+    let assetId = normalizeScannedIdentifier(input.value);
     
     if (!assetId) {
         showFeedback(feedbackDiv, 'warning', 'Please enter an asset ID');
         return;
     }
+
+    input.value = assetId;
 
     if (!window.__processingContainerBatch) {
       const container = await getContainerById(assetId, true);
@@ -5248,7 +6137,16 @@ async function processUniversalAsset(eventId) {
         const allAssets = availableAssetsResponse.data;
         
         // Find the asset in available assets or check if it exists in inventory
-        let assetDetails = allAssets.find(a => a.id === assetId);
+        let assetDetails = findAssetByIdentifier(assetId, allAssets);
+
+        if (!assetDetails) {
+            const inventoryAssets = await ensureAssetsLoaded();
+            assetDetails = findAssetByIdentifier(assetId, inventoryAssets);
+        }
+
+        if (assetDetails) {
+            assetId = getAssetIdentifierForApi(assetDetails);
+        }
         
         // If not in available assets, try to get asset details from the event's actually_prepared list
         if (!assetDetails && event.actuallyPrepared && event.actuallyPrepared.includes(assetId)) {
@@ -5316,6 +6214,7 @@ async function processUniversalAsset(eventId) {
         if (isAssigned) {
             if (isAlreadyPrepared) {
                 showFeedback(feedbackDiv, 'info', `${assetId} is already prepared for this event`);
+                refreshPrepareUiAfterAssetChange(eventId);
             } else {
                 // Asset is assigned but not prepared - prepare it
                 await apiCall(`/api/events/${eventId}/assign-specific`, 'POST', { assetId });
@@ -5325,10 +6224,7 @@ async function processUniversalAsset(eventId) {
                 input.value = '';
                 input.focus();
                 
-                // Update just the asset list section without full refresh
-                setTimeout(() => {
-                    updateAssetListSection(eventId);
-                }, 500);
+                refreshPrepareUiAfterAssetChange(eventId);
             }
         } else {
             // Asset is not assigned - ask if they want to assign it
@@ -5339,7 +6235,7 @@ async function processUniversalAsset(eventId) {
             
             showFeedback(feedbackDiv, 'warning', 
                 `${assetId} is not assigned to this event. 
-                <button class="btn btn-warning" style="margin-left: 10px; padding: 4px 8px; font-size: 12px;" onclick="assignAndPrepareAsset(${eventId}, '${assetId}')">
+                <button class="btn btn-warning" style="margin-left: 10px; padding: 4px 8px; font-size: 12px;" onclick="assignAndPrepareAsset(${eventId}, '${escapeJs(assetId)}')">
                     Assign & Prepare
                 </button>
                 <button class="btn btn-secondary" style="margin-left: 5px; padding: 4px 8px; font-size: 12px;" onclick="clearUniversalFeedback()">
@@ -5679,6 +6575,24 @@ function clearUniversalFeedback() {
     feedbackDiv.innerHTML = '';
 }
 
+function refreshPrepareUiAfterAssetChange(eventId, delay = 250) {
+    setTimeout(() => {
+        if (typeof preserveModalState === 'function') {
+            preserveModalState(() => openPrepareEventModal(eventId));
+        } else {
+            openPrepareEventModal(eventId);
+        }
+
+        if (document.getElementById('prepare-section')?.classList.contains('active')) {
+            loadPrepareEvents();
+        }
+
+        if (document.getElementById('events-section')?.classList.contains('active')) {
+            loadAllEvents();
+        }
+    }, delay);
+}
+
 function getEventReturnableCount(event) {
   const direct = Number(event?.returnableCount ?? 0);
   if (Number.isFinite(direct) && direct > 0) return direct;
@@ -5854,12 +6768,14 @@ async function openReturnAssetsModal() {
                     <div style="margin-bottom: 24px; padding-bottom: 20px; border-bottom: 2px solid #e9ecef;">
                         <h4 style="color: #495057; margin-bottom: 15px;">Manual Return</h4>
                         <p style="color: #666; font-size: 14px; margin-bottom: 15px;">Scan or enter any asset ID to return it</p>
-                        <div class="form-group" style="display: flex; gap: 10px;">
+                        <div class="form-group" style="display: flex; gap: 10px; flex-wrap: wrap;">
                             <input type="text" class="form-input" id="manualReturnAssetIdNew" 
                                    placeholder="Enter Asset ID or Serial Number..." 
                                    onkeypress="if(event.key==='Enter') returnManualAssetNew()"
-                                   style="flex: 1;">
-                            <button class="btn btn-warning" onclick="returnManualAssetNew()">Return Asset</button>
+                                   autocomplete="off"
+                                   style="flex: 1 1 260px;">
+                            <button type="button" class="btn btn-warning" onclick="returnManualAssetNew()">Return Asset</button>
+                            ${scannerButtonHtml('scanForReturn()')}
                         </div>
                     </div>
 
@@ -6152,7 +7068,7 @@ async function returnManualAssetNew() {
     const eventSelect = document.getElementById('returnEventSelect');
     const assetInput = document.getElementById('manualReturnAssetIdNew');
     const eventId = eventSelect.value;
-    const assetId = assetInput.value.trim();
+    let assetId = normalizeScannedIdentifier(assetInput.value);
     
     if (!eventId) {
         showNotification('warning', 'Please select an event first');
@@ -6162,6 +7078,14 @@ async function returnManualAssetNew() {
     if (!assetId) {
         showNotification('warning', 'Please enter an asset ID');
         return;
+    }
+
+    try {
+      const inventoryAssets = await ensureAssetsLoaded();
+      assetId = getAssetIdFromIdentifier(assetId, inventoryAssets);
+      assetInput.value = assetId;
+    } catch (error) {
+      console.warn('Could not resolve scanned return identifier locally:', error);
     }
     
     try {
@@ -6882,6 +7806,7 @@ function loadAssetCheck() {
         </div>
 
         <button class="btn btn-success" onclick="startAssetCheck()">Start Check</button>
+        ${scannerButtonHtml("scanForAssetCheck('assetCheckSeedInput', 'start')")}
         <button class="btn btn-secondary" onclick="loadAssetCheck()">Reset</button>
       </div>
     </div>
@@ -7058,6 +7983,7 @@ function renderAssetCheckSession() {
           >
         </div>
         <button class="btn btn-success" onclick="checkAsset()">Check Asset</button>
+        ${scannerButtonHtml("scanForAssetCheck('assetCheckScanInput', 'continue')")}
         <button class="btn btn-secondary" onclick="renderAssetCheckSession()">Refresh View</button>
       </div>
     </div>
@@ -9363,56 +10289,9 @@ document.addEventListener("DOMContentLoaded", function () {
     maintenanceAssetSearch.addEventListener("keypress", async function (e) {
       if (e.key === "Enter") {
         e.preventDefault();
-        const searchTerm = e.target.value.trim();
+        const searchTerm = normalizeScannedIdentifier(e.target.value);
         if (!searchTerm) return;
-
-        if (!assets || assets.length === 0) {
-          showNotification('error', 'Assets not loaded yet');
-          return;
-        }
-
-        // exact asset match first
-        const asset = assets.find(a =>
-          a.id.toLowerCase() === searchTerm.toLowerCase() ||
-          (a.serial && a.serial.toLowerCase() === searchTerm.toLowerCase())
-        );
-
-        if (asset) {
-          if (!selectedMaintenanceAssets.has(asset.id)) {
-            selectAssetForMaintenance(asset.id);
-            e.target.value = '';
-          } else {
-            showNotification('warning', `Asset ${asset.id} is already selected`);
-          }
-          return;
-        }
-
-        // ---------- NEW: container match ----------
-        try {
-          const container = await getContainerById(searchTerm, true);
-          if (!container) {
-            showNotification('error', `Asset/Container '${searchTerm}' not found`);
-            return;
-          }
-
-          let added = 0;
-          let already = 0;
-
-          for (const aid of (container.assetIds || [])) {
-            if (!selectedMaintenanceAssets.has(aid)) {
-              selectAssetForMaintenance(aid);
-              added++;
-            } else {
-              already++;
-            }
-          }
-
-          e.target.value = '';
-          showNotification('success', `Added container ${container.id}: ${added} added (${already} already selected)`);
-
-        } catch (err) {
-          showNotification('error', `Failed to load container: ${err.message}`);
-        }
+        await addIdentifierToMaintenanceSelection(searchTerm);
       }
     });
   }
@@ -9510,10 +10389,6 @@ document.addEventListener("DOMContentLoaded", function () {
       closeModal("editQuantityModal");
     }
   });
-
-
-// Global variable to store selected assets for maintenance
-let selectedMaintenanceAssets = new Set();
 
 function openMaintenanceModal() {
   // Check if elements exist before trying to use them
@@ -11767,7 +12642,7 @@ async function populateDeliveryOrderForm(event) {
     ensureKnownClientsButton();
 }
 
-function generateDeliveryOrder(format) {
+async function generateDeliveryOrder(format) {
     if (!currentDeliveryOrderEvent) {
         showNotification('error', 'No event selected');
         return;
@@ -11795,6 +12670,8 @@ function generateDeliveryOrder(format) {
         showNotification('error', 'Please fill in DO Number, Date, and Client Name');
         return;
     }
+
+    await loadPdfSettings(true);
     
     if (format === 'excel') {
         generateExcelDO(deliveryOrderData);
@@ -12230,6 +13107,8 @@ function generatePdfDO(data) {
 
 function generatePagesContent(data, formattedDate) {
     const departments = groupItemsByDepartment(data.event);
+    const logoUrl = escapeHtmlAttr(getPdfLogoUrl());
+    const footerHtml = renderPdfFooterHtml();
 
     const mmToPx = (mm) => (mm * 96) / 25.4;
 
@@ -12251,8 +13130,7 @@ function generatePagesContent(data, formattedDate) {
 
     const FOOTER_HTML = `
         <div class="footer">
-            AVEC VISION PRIVATE LIMITED<br>
-            601 SIMS DRIVE PAN-I COMPLEX #04-10 SINGAPORE 387382 TEL 65.9743.3660 CO REG 202122775G
+            ${footerHtml}
         </div>
     `;
 
@@ -12615,7 +13493,7 @@ function generatePagesContent(data, formattedDate) {
         pagesHtml += `
             <div class="page">
                 <div style="display:flex;justify-content:flex-end;margin-bottom:7px;">
-                    <img src="/static/images/logo.png" alt="Company Logo" id="company-logo" style="height:39px;width:auto;object-fit:contain">
+                    <img src="${logoUrl}" alt="Company Logo" style="height:39px;width:auto;object-fit:contain">
                 </div>
 
                 <div class="header">
@@ -13572,8 +14450,12 @@ async function initializeApp() {
     if (editStartDateEl) editStartDateEl.value = today;
     if (editEndDateEl) editEndDateEl.value = today;
 
-    // Load the current user and add admin-only Users tab if the logged-in user is an admin.
+    // Load configurable PDF logo/footer settings used by generated PDFs.
+    await loadPdfSettings(true);
+
+    // Load the current user and add admin-only Settings tabs.
     await setupAdminUserManagementTab();
+    await setupPdfSettingsTab();
     applyPermissionUi();
 
     // Load configurable department names/colours for badges and dropdowns.
@@ -15240,18 +16122,204 @@ function groupedTransferPdfRows(groups) {
     return '<tr><td colspan="5" style="text-align:center;color:#666;padding:18px;">No asset types in this view.</td></tr>';
   }
 
-  return groups.map((group, index) => `
+  return groups.map((group, index) => transferPdfRowHtml(group, index + 1)).join('');
+}
+
+const TRANSFER_PDF_COLGROUP = `
+  <col style="width:8mm;">
+  <col style="width:16mm;">
+  <col style="width:20mm;">
+  <col style="width:54mm;">
+  <col>
+`;
+
+function transferPdfTableHead() {
+  return `
+    ${TRANSFER_PDF_COLGROUP}
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Qty</th>
+        <th>Dept</th>
+        <th>Brand / Model</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+  `;
+}
+
+function transferPdfRowHtml(group, rowNumber) {
+  return `
     <tr>
-      <td>${index + 1}</td>
+      <td>${rowNumber}</td>
       <td>${escapeHtml(String(group.actionQty || 0))}</td>
       <td>${escapeHtml(group.department || 'UN')}</td>
       <td>${escapeHtml(`${group.brand || ''} ${group.model || ''}`.trim())}</td>
       <td>${escapeHtml(group.description || '')}</td>
     </tr>
+  `;
+}
+
+function buildTransferPdfPages(groups, context) {
+  const safe = (value) => escapeHtml(String(value ?? ''));
+  const logoUrl = escapeHtmlAttr(getPdfLogoUrl());
+  const footerHtml = renderPdfFooterHtml();
+  const mmToPx = (mm) => (mm * 96) / 25.4;
+
+  const fromDate = context.fromDateRange ? ` | ${safe(context.fromDateRange)}` : '';
+  const toDate = context.toDateRange ? ` | ${safe(context.toDateRange)}` : '';
+
+  const headerHtml = `
+    <div class="logo-row"><img src="${logoUrl}" alt="Company Logo"></div>
+    <div class="header">
+      <div class="header-left">
+        FROM EVENT:<br>
+        ${safe(context.fromEvent.id || context.fromEventId)} - ${safe(context.fromEvent.name || '')}<br>
+        ${safe(context.fromEvent.state || '')}${fromDate}<br><br>
+        TO EVENT:<br>
+        ${safe(context.toEvent.id || context.toEventId)} - ${safe(context.toEvent.name || '')}<br>
+        ${safe(context.toEvent.state || '')}${toDate}
+      </div>
+      <div class="header-right">
+        <div class="transfer-title">${safe(context.title)}</div>
+        No. : ${safe(context.transferNumber)}<br>
+        Date : ${safe(context.formattedDate)}
+      </div>
+    </div>
+  `;
+
+  const summaryHtml = `
+    <table class="summary-table">
+      <tr>
+        <td><strong>Source unreturned assets:</strong><br>${safe(context.fromEvent.unreturnedCount || 0)}</td>
+        <td><strong>Asset type count:</strong><br>${safe(groups.length)}</td>
+        <td><strong>Total quantity:</strong><br>${safe(context.totalQty)}</td>
+      </tr>
+    </table>
+  `;
+
+  const emptyRow = '<tr><td colspan="5" style="text-align:center;color:#666;padding:18px;">No asset types in this view.</td></tr>';
+  const rowRecords = groups.length
+    ? groups.map((group, index) => ({ html: transferPdfRowHtml(group, index + 1), height: 0 }))
+    : [{ html: emptyRow, height: 0 }];
+
+  const measureBox = document.createElement('div');
+  measureBox.id = '__transferMeasureBox';
+  measureBox.style.cssText = `
+    position:absolute;
+    left:-10000px;
+    top:0;
+    visibility:hidden;
+    width:196mm;
+    font-family:'Century Gothic', Arial, sans-serif;
+    font-size:8.5pt;
+    line-height:1.25;
+    background:white;
+    z-index:-1;
+  `;
+
+  measureBox.innerHTML = `
+    <style>
+      #__transferMeasureBox * { box-sizing: border-box; }
+      #__transferMeasureBox .logo-row { display:flex; justify-content:flex-end; margin-bottom:7px; height:39px; }
+      #__transferMeasureBox .logo-row img { height:39px; width:auto; object-fit:contain; }
+      #__transferMeasureBox .header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:20px; }
+      #__transferMeasureBox .header-left { flex:1; font-size:9pt; font-weight:bold; line-height:1.35; }
+      #__transferMeasureBox .header-right { text-align:right; font-size:9pt; font-weight:bold; }
+      #__transferMeasureBox .transfer-title { font-size:14pt; font-weight:bold; margin-bottom:5px; }
+      #__transferMeasureBox .summary-table,
+      #__transferMeasureBox .items-table { width:100%; border-collapse:collapse; border:2px solid black; margin-bottom:16px; table-layout:fixed; }
+      #__transferMeasureBox .summary-table td { border:1px solid #333; padding:7px; font-size:9pt; vertical-align:top; }
+      #__transferMeasureBox .items-table th { background:#333; color:white; padding:8px; text-align:left; font-size:8.5pt; border:1px solid #333; }
+      #__transferMeasureBox .items-table td { border:1px solid #333; padding:6px; font-size:8.5pt; vertical-align:top; line-height:1.25; word-break:break-word; }
+    </style>
+    <div id="__transferFirstBase">
+      ${headerHtml}
+      ${summaryHtml}
+      <table class="items-table">${transferPdfTableHead()}</table>
+    </div>
+    <div id="__transferNextBase">
+      ${headerHtml}
+      <table class="items-table">${transferPdfTableHead()}</table>
+    </div>
+    <table class="items-table">
+      ${TRANSFER_PDF_COLGROUP}
+      <tbody id="__transferMeasureBody"></tbody>
+    </table>
+  `;
+
+  document.body.appendChild(measureBox);
+
+  const measureBody = measureBox.querySelector('#__transferMeasureBody');
+  const firstBaseHeight = measureBox.querySelector('#__transferFirstBase').getBoundingClientRect().height;
+  const nextBaseHeight = measureBox.querySelector('#__transferNextBase').getBoundingClientRect().height;
+  const pageFlowHeightMm = 276;
+  const footerReserveMm = 18;
+  const firstPageBudget = Math.max(40, mmToPx(pageFlowHeightMm - footerReserveMm) - firstBaseHeight);
+  const nextPageBudget = Math.max(40, mmToPx(pageFlowHeightMm - footerReserveMm) - nextBaseHeight);
+
+  function measureRow(rowHtml) {
+    measureBody.innerHTML = rowHtml;
+    const row = measureBody.querySelector('tr');
+    return row ? row.getBoundingClientRect().height : 0;
+  }
+
+  rowRecords.forEach(record => {
+    record.height = measureRow(record.html);
+  });
+
+  measureBox.remove();
+
+  const pages = [];
+  let index = 0;
+
+  while (index < rowRecords.length) {
+    const isFirstPage = pages.length === 0;
+    const budget = isFirstPage ? firstPageBudget : nextPageBudget;
+    const pageRows = [];
+    let pageHeight = 0;
+
+    while (index < rowRecords.length) {
+      const record = rowRecords[index];
+
+      if (pageRows.length > 0 && pageHeight + record.height > budget) {
+        break;
+      }
+
+      pageRows.push(record);
+      pageHeight += record.height;
+      index++;
+
+      if (pageRows.length === 1 && record.height > budget) {
+        break;
+      }
+    }
+
+    pages.push({
+      includeSummary: isFirstPage,
+      rows: pageRows
+    });
+  }
+
+  const totalPages = pages.length;
+
+  return pages.map((page, pageIndex) => `
+    <div class="page">
+      ${headerHtml}
+      ${page.includeSummary ? summaryHtml : ''}
+      <table class="items-table">
+        ${transferPdfTableHead()}
+        <tbody>
+          ${page.rows.map(row => row.html).join('')}
+        </tbody>
+      </table>
+      <div class="footer">${footerHtml}</div>
+      <div class="page-number">Page ${pageIndex + 1} of ${totalPages}</div>
+    </div>
   `).join('');
 }
 
-function generateTransferPdf() {
+async function generateTransferPdf() {
   const fromEventId = document.getElementById('transferSourceSelect')?.value;
   const toEventId = document.getElementById('transferTargetSelect')?.value;
   const fromEvent = (transferOptionsCache?.sourceEvents || []).find(e => String(e.id) === String(fromEventId)) || {};
@@ -15266,12 +16334,26 @@ function generateTransferPdf() {
   const groups = buildTransferGroups(getTransferListForMode(meta.mode, window.__lastTransferData || {}), meta.mode);
   const safe = (value) => escapeHtml(String(value ?? ''));
   const dateRange = (event) => !event || !event.startDate ? '' : (event.startDate === event.endDate ? formatDate(event.startDate) : `${formatDate(event.startDate)} - ${formatDate(event.endDate)}`);
-  const rows = groupedTransferPdfRows(groups);
 
   const now = new Date();
   const formattedDate = now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
   const transferNumber = `${meta.numberPrefix}-${now.getFullYear()}${String(fromEventId).padStart(4, '0')}-${String(toEventId).padStart(4, '0')}`;
   const totalQty = groups.reduce((sum, group) => sum + Number(group.actionQty || 0), 0);
+
+  await loadPdfSettings(true);
+
+  const pagesHtml = buildTransferPdfPages(groups, {
+    fromEvent,
+    toEvent,
+    fromEventId,
+    toEventId,
+    fromDateRange: dateRange(fromEvent),
+    toDateRange: dateRange(toEvent),
+    title: meta.title,
+    transferNumber,
+    formattedDate,
+    totalQty
+  });
 
   const win = window.open('', '_blank', 'width=900,height=1000');
   if (!win) {
@@ -15280,21 +16362,21 @@ function generateTransferPdf() {
   }
 
   const html = `<!DOCTYPE html><html><head><title>${safe(meta.title)} - ${safe(fromEvent.name || '')} to ${safe(toEvent.name || '')}</title><style>
-    @page { size: A4; margin: 0; } * { box-sizing: border-box; } body { margin: 0; font-family: 'Century Gothic', Arial, sans-serif; color: #000; background: #f0f0f0; }
-    .page { width: 210mm; min-height: 297mm; margin: 0 auto; padding: 7mm 7mm 14mm 7mm; background: white; position: relative; page-break-after: always; }
+    @page { size: A4; margin: 0; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: 'Century Gothic', Arial, sans-serif; color: #000; background: #f0f0f0; }
+    .page { width: 210mm; height: 297mm; min-height: 297mm; margin: 0 auto 12px auto; padding: 7mm 7mm 14mm 7mm; background: white; position: relative; overflow: hidden; page-break-after: always; break-after: page; }
+    .page:last-child { page-break-after: auto; break-after: auto; }
     .logo-row { display:flex; justify-content:flex-end; margin-bottom:7px; height:39px; } .logo-row img { height:39px; width:auto; object-fit:contain; }
     .header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:20px; } .header-left { flex:1; font-size:9pt; font-weight:bold; line-height:1.35; } .header-right { text-align:right; font-size:9pt; font-weight:bold; }
-    .transfer-title { font-size:14pt; font-weight:bold; margin-bottom:5px; } .summary-table, .items-table { width:100%; border-collapse:collapse; border:2px solid black; margin-bottom:16px; }
+    .transfer-title { font-size:14pt; font-weight:bold; margin-bottom:5px; } .summary-table, .items-table { width:100%; border-collapse:collapse; border:2px solid black; margin-bottom:16px; table-layout:fixed; }
     .summary-table td { border:1px solid #333; padding:7px; font-size:9pt; vertical-align:top; } .items-table th { background:#333; color:white; padding:8px; text-align:left; font-size:8.5pt; border:1px solid #333; }
-    .items-table td { border:1px solid #333; padding:6px; font-size:8.5pt; vertical-align:top; line-height:1.25; } .footer { position:absolute; bottom:5mm; left:7mm; right:7mm; text-align:center; font-size:7pt; font-weight:bold; line-height:1.2; }
-    .print-btn { position:fixed; top:20px; right:20px; background:#667eea; color:white; border:none; padding:10px 18px; border-radius:6px; cursor:pointer; z-index:999; } @media print { body { background:white; } .page { margin:0; page-break-after:auto; } .print-btn { display:none; } }
-  </style></head><body><button class="print-btn" onclick="window.print()">Print / Save as PDF</button><div class="page">
-    <div class="logo-row"><img src="/static/images/logo.png" alt="Company Logo"></div>
-    <div class="header"><div class="header-left">FROM EVENT:<br>${safe(fromEvent.id || fromEventId)} — ${safe(fromEvent.name || '')}<br>${safe(fromEvent.state || '')}${dateRange(fromEvent) ? ' • ' + safe(dateRange(fromEvent)) : ''}<br><br>TO EVENT:<br>${safe(toEvent.id || toEventId)} — ${safe(toEvent.name || '')}<br>${safe(toEvent.state || '')}${dateRange(toEvent) ? ' • ' + safe(dateRange(toEvent)) : ''}</div><div class="header-right"><div class="transfer-title">${safe(meta.title)}</div>No. : ${safe(transferNumber)}<br>Date : ${safe(formattedDate)}</div></div>
-    <table class="summary-table"><tr><td><strong>Source unreturned assets:</strong><br>${safe(fromEvent.unreturnedCount || 0)}</td><td><strong>Asset type count:</strong><br>${safe(groups.length)}</td><td><strong>Total quantity:</strong><br>${safe(totalQty)}</td></tr></table>
-    <table class="items-table"><thead><tr><th style="width:8mm;">#</th><th style="width:16mm;">Qty</th><th style="width:20mm;">Dept</th><th style="width:54mm;">Brand / Model</th><th>Description</th></tr></thead><tbody>${rows}</tbody></table>
-    <div class="footer">AVEC VISION PRIVATE LIMITED<br>601 SIMS DRIVE PAN-I COMPLEX #04-10 SINGAPORE 387382 TEL 65.9743.3660 CO REG 202122775G</div>
-  </div></body></html>`;
+    .items-table td { border:1px solid #333; padding:6px; font-size:8.5pt; vertical-align:top; line-height:1.25; word-break:break-word; }
+    .footer { position:absolute; bottom:7mm; left:7mm; right:7mm; text-align:center; font-size:7pt; font-weight:bold; line-height:1.2; }
+    .page-number { position:absolute; bottom:3mm; right:7mm; font-size:7pt; }
+    .print-btn { position:fixed; top:20px; right:20px; background:#667eea; color:white; border:none; padding:10px 18px; border-radius:6px; cursor:pointer; z-index:999; }
+    @media print { body { background:white; } .page { margin:0; page-break-after:always; break-after:page; } .page:last-child { page-break-after:auto; break-after:auto; } .print-btn { display:none; } }
+  </style></head><body><button class="print-btn" onclick="window.print()">Print / Save as PDF</button>${pagesHtml}</body></html>`;
   win.document.write(html);
   win.document.close();
   win.focus();

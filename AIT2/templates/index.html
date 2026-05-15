@@ -3090,13 +3090,19 @@
           <!-- Asset Selection Section -->
           <div class="form-group">
             <label class="form-label">Select Assets for Maintenance</label>
-            <input
-              type="text"
-              class="form-input"
-              id="maintenanceAssetSearch"
-              placeholder="Search by Asset ID, brand, model, or serial number..."
-              style="margin-bottom: 10px;"
-            />
+            <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:10px;">
+              <input
+                type="text"
+                class="form-input"
+                id="maintenanceAssetSearch"
+                placeholder="Search by Asset ID, brand, model, or serial number..."
+                autocomplete="off"
+                style="flex:1 1 260px; margin-bottom:0;"
+              />
+              <button type="button" class="btn btn-primary scanner-action-btn" onclick="scanForMaintenance()">
+                Scan
+              </button>
+            </div>
             <div
               id="availableMaintenanceAssets"
               style="

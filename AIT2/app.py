@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for, jsonify
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for, send_file
 import csv
 from urllib.parse import unquote_plus
 import os
@@ -211,6 +211,140 @@ def _department_payload(code, departments=None):
     return departments.get(code) or _department_record(code)
 
 
+# ---------------- PDF branding settings helpers ----------------
+DEFAULT_PDF_FOOTER_TEXT = (
+    "AVEC VISION PRIVATE LIMITED\n"
+    "601 SIMS DRIVE PAN-I COMPLEX #04-10 SINGAPORE 387382 TEL 65.9743.3660 CO REG 202122775G"
+)
+
+ALLOWED_PDF_LOGO_MIMES = {
+    'image/png': '.png',
+    'image/jpeg': '.jpg',
+    'image/webp': '.webp',
+    'image/gif': '.gif',
+}
+
+ALLOWED_PDF_LOGO_EXTENSIONS = {
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.webp': 'image/webp',
+    '.gif': 'image/gif',
+}
+
+
+def _pdf_settings_defaults():
+    return {
+        'footerText': DEFAULT_PDF_FOOTER_TEXT,
+        'logoFilename': '',
+        'logoOriginalName': '',
+        'logoMimeType': '',
+        'updatedAt': '',
+    }
+
+
+def _pdf_settings_path():
+    folder = data_manager.data_folder if data_manager else './data'
+    return os.path.join(folder, 'PdfSettings.json')
+
+
+def _pdf_assets_folder():
+    folder = data_manager.data_folder if data_manager else './data'
+    return os.path.join(folder, 'pdf_assets')
+
+
+def _pdf_logo_path(settings=None):
+    settings = settings or _load_pdf_settings()
+    logo_filename = str(settings.get('logoFilename') or '').strip()
+    if not logo_filename:
+        return ''
+    return os.path.join(_pdf_assets_folder(), os.path.basename(logo_filename))
+
+
+def _normalise_pdf_settings(settings):
+    defaults = _pdf_settings_defaults()
+    merged = defaults.copy()
+    if isinstance(settings, dict):
+        for key in merged.keys():
+            if key in settings:
+                merged[key] = settings[key]
+
+    merged['footerText'] = str(merged.get('footerText', DEFAULT_PDF_FOOTER_TEXT))
+    merged['logoFilename'] = os.path.basename(str(merged.get('logoFilename') or '').strip())
+    merged['logoOriginalName'] = str(merged.get('logoOriginalName') or '').strip()
+    merged['logoMimeType'] = str(merged.get('logoMimeType') or '').strip()
+    merged['updatedAt'] = str(merged.get('updatedAt') or '').strip()
+
+    logo_path = _pdf_logo_path(merged) if merged['logoFilename'] else ''
+    if logo_path and not os.path.exists(logo_path):
+        merged['logoFilename'] = ''
+        merged['logoOriginalName'] = ''
+        merged['logoMimeType'] = ''
+
+    return merged
+
+
+def _load_pdf_settings():
+    filepath = _pdf_settings_path()
+    settings = _pdf_settings_defaults()
+
+    if os.path.exists(filepath) and os.path.getsize(filepath) > 0:
+        try:
+            with open(filepath, 'r', encoding='utf-8') as f:
+                loaded = json.load(f)
+                if isinstance(loaded, dict):
+                    settings.update(loaded)
+        except Exception as e:
+            logger.warning(f"Failed to read PdfSettings.json, using defaults: {e}")
+
+    return _normalise_pdf_settings(settings)
+
+
+def _save_pdf_settings(settings):
+    settings = _normalise_pdf_settings(settings)
+    filepath = _pdf_settings_path()
+    folder = os.path.dirname(filepath)
+    if folder and not os.path.exists(folder):
+        os.makedirs(folder)
+
+    with open(filepath, 'w', encoding='utf-8') as f:
+        json.dump(settings, f, ensure_ascii=False, indent=2)
+
+    return settings
+
+
+def _pdf_settings_payload(settings=None):
+    settings = _normalise_pdf_settings(settings or _load_pdf_settings())
+    logo_path = _pdf_logo_path(settings) if settings.get('logoFilename') else ''
+    has_custom_logo = bool(logo_path and os.path.exists(logo_path))
+    logo_url = '/static/images/logo.png'
+
+    if has_custom_logo:
+        version = int(os.path.getmtime(logo_path))
+        logo_url = f'/api/pdf-settings/logo?v={version}'
+
+    return {
+        'footerText': settings.get('footerText', DEFAULT_PDF_FOOTER_TEXT),
+        'logoUrl': logo_url,
+        'hasCustomLogo': has_custom_logo,
+        'logoOriginalName': settings.get('logoOriginalName', ''),
+        'updatedAt': settings.get('updatedAt', ''),
+    }
+
+
+def _remove_custom_pdf_logos():
+    folder = _pdf_assets_folder()
+    if not os.path.isdir(folder):
+        return
+
+    for filename in os.listdir(folder):
+        if filename.startswith('logo.'):
+            try:
+                os.remove(os.path.join(folder, filename))
+            except OSError as e:
+                logger.warning(f"Failed to remove old PDF logo {filename}: {e}")
+
+
 def _replace_department_in_model_marker(value, old_code, new_code):
     if not isinstance(value, str) or not value.startswith('[MODEL]'):
         return value, False
@@ -283,6 +417,28 @@ def _safe_int(value, default=0):
         return int(value)
     except (TypeError, ValueError):
         return default
+
+
+def _find_inventory_asset_by_identifier(identifier):
+    """Find an inventory item from a scanned Asset ID or Serial Number."""
+    identifier = str(identifier or '').strip()
+    if not identifier:
+        return None
+
+    if identifier in data_manager.inventory:
+        return data_manager.inventory[identifier]
+
+    identifier_lower = identifier.lower()
+    for asset in data_manager.inventory.values():
+        if not asset:
+            continue
+        if str(getattr(asset, 'asset_id', '') or '').strip().lower() == identifier_lower:
+            return asset
+        serial = str(getattr(asset, 'serial_number', '') or '').strip()
+        if serial and serial.lower() == identifier_lower:
+            return asset
+
+    return None
 
 
 def _bulk_marker(bulk_id, quantity):
@@ -1961,6 +2117,139 @@ def get_current_user():
     })
 
 
+@app.route('/api/pdf-settings', methods=['GET'])
+@require_auth
+def get_pdf_settings():
+    """Return logo and footer settings used by generated PDFs."""
+    try:
+        return jsonify({'success': True, 'data': _pdf_settings_payload()})
+    except Exception as e:
+        logger.error(f"Error loading PDF settings: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to load PDF settings'}), 500
+
+
+@app.route('/api/pdf-settings', methods=['PUT'])
+@require_admin
+def update_pdf_settings():
+    """Update configurable PDF footer text."""
+    try:
+        data = request.get_json() or {}
+        footer_text = data.get('footerText')
+
+        if footer_text is None:
+            return jsonify({'error': 'Footer text is required'}), 400
+
+        footer_text = str(footer_text)
+        if len(footer_text) > 2000:
+            return jsonify({'error': 'Footer text is too long'}), 400
+
+        settings = _load_pdf_settings()
+        settings['footerText'] = footer_text
+        settings['updatedAt'] = datetime.now().isoformat(timespec='seconds')
+        saved = _save_pdf_settings(settings)
+
+        log_action("Updated PDF footer settings")
+
+        return jsonify({'success': True, 'data': _pdf_settings_payload(saved)})
+    except Exception as e:
+        logger.error(f"Error updating PDF settings: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to update PDF settings'}), 500
+
+
+@app.route('/api/pdf-settings/logo', methods=['GET'])
+@require_auth
+def get_pdf_logo():
+    """Serve the configured PDF logo, falling back to the bundled logo."""
+    try:
+        settings = _load_pdf_settings()
+        logo_path = _pdf_logo_path(settings)
+
+        if logo_path and os.path.exists(logo_path):
+            return send_file(
+                logo_path,
+                mimetype=settings.get('logoMimeType') or None,
+                max_age=3600
+            )
+
+        return send_file(
+            os.path.join(app.static_folder, 'images', 'logo.png'),
+            mimetype='image/png',
+            max_age=3600
+        )
+    except Exception as e:
+        logger.error(f"Error serving PDF logo: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to load PDF logo'}), 500
+
+
+@app.route('/api/pdf-settings/logo', methods=['POST'])
+@require_admin
+def upload_pdf_logo():
+    """Upload the custom logo used by generated PDFs."""
+    try:
+        if request.content_length and request.content_length > 5 * 1024 * 1024:
+            return jsonify({'error': 'Logo must be smaller than 5 MB'}), 400
+
+        file = request.files.get('logo')
+        if not file or not file.filename:
+            return jsonify({'error': 'Logo file is required'}), 400
+
+        mime_type = (file.mimetype or '').lower()
+        extension = ALLOWED_PDF_LOGO_MIMES.get(mime_type)
+
+        if not extension:
+            original_extension = os.path.splitext(file.filename)[1].lower()
+            mime_type = ALLOWED_PDF_LOGO_EXTENSIONS.get(original_extension, '')
+            extension = ALLOWED_PDF_LOGO_MIMES.get(mime_type)
+
+        if not extension:
+            return jsonify({'error': 'Logo must be a PNG, JPG, WebP, or GIF image'}), 400
+
+        folder = _pdf_assets_folder()
+        if not os.path.exists(folder):
+            os.makedirs(folder)
+
+        _remove_custom_pdf_logos()
+
+        logo_filename = f'logo{extension}'
+        logo_path = os.path.join(folder, logo_filename)
+        file.save(logo_path)
+
+        settings = _load_pdf_settings()
+        settings['logoFilename'] = logo_filename
+        settings['logoOriginalName'] = os.path.basename(file.filename)
+        settings['logoMimeType'] = mime_type
+        settings['updatedAt'] = datetime.now().isoformat(timespec='seconds')
+        saved = _save_pdf_settings(settings)
+
+        log_action(f"Updated PDF logo ({settings['logoOriginalName']})")
+
+        return jsonify({'success': True, 'data': _pdf_settings_payload(saved)})
+    except Exception as e:
+        logger.error(f"Error uploading PDF logo: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to upload PDF logo'}), 500
+
+
+@app.route('/api/pdf-settings/logo', methods=['DELETE'])
+@require_admin
+def reset_pdf_logo():
+    """Reset PDFs to the bundled logo."""
+    try:
+        _remove_custom_pdf_logos()
+        settings = _load_pdf_settings()
+        settings['logoFilename'] = ''
+        settings['logoOriginalName'] = ''
+        settings['logoMimeType'] = ''
+        settings['updatedAt'] = datetime.now().isoformat(timespec='seconds')
+        saved = _save_pdf_settings(settings)
+
+        log_action("Reset PDF logo")
+
+        return jsonify({'success': True, 'data': _pdf_settings_payload(saved)})
+    except Exception as e:
+        logger.error(f"Error resetting PDF logo: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to reset PDF logo'}), 500
+
+
 
 @app.route('/api/departments', methods=['GET'])
 @require_auth
@@ -3591,6 +3880,10 @@ def prepare_event_asset(event_id):
         if not asset_id:
             return jsonify({'error': 'Asset ID is required'}), 400
 
+        scanned_asset = _find_inventory_asset_by_identifier(asset_id)
+        if scanned_asset:
+            asset_id = scanned_asset.asset_id
+
         # Initialize lists if they don't exist
         if not hasattr(event, 'actually_prepared'):
             event.actually_prepared = []
@@ -3890,6 +4183,10 @@ def return_event_asset(event_id):
         if not asset_id:
             return jsonify({'error': 'Asset ID is required'}), 400
 
+        scanned_asset = _find_inventory_asset_by_identifier(asset_id)
+        if scanned_asset:
+            asset_id = scanned_asset.asset_id
+
         if _is_bulk_ref(asset_id):
             if asset_id not in getattr(event, 'actually_prepared', []) and asset_id not in getattr(event, 'prepared_items', []):
                 return jsonify({'error': 'Bulk asset is not prepared for this event'}), 400
@@ -4079,6 +4376,10 @@ def assign_specific_asset_to_model(event_id):
 
         if not asset_id:
             return jsonify({'error': 'Asset ID is required'}), 400
+
+        scanned_asset = _find_inventory_asset_by_identifier(asset_id)
+        if scanned_asset:
+            asset_id = scanned_asset.asset_id
 
         bulk_asset = data_manager.inventory.get(asset_id)
         if bulk_asset and _is_bulk_asset(bulk_asset):
@@ -5425,27 +5726,7 @@ def get_assets():
 
 def _asset_check_find_asset(identifier):
     """Find an asset by Asset ID or Serial Number for Asset Check."""
-    identifier = str(identifier or '').strip()
-    if not identifier:
-        return None
-
-    # Exact asset ID match first.
-    if identifier in data_manager.inventory:
-        return data_manager.inventory[identifier]
-
-    identifier_lower = identifier.lower()
-
-    # Case-insensitive Asset ID / Serial Number fallback for scanner inconsistencies.
-    for asset in data_manager.inventory.values():
-        if not asset:
-            continue
-        if str(getattr(asset, 'asset_id', '') or '').lower() == identifier_lower:
-            return asset
-        serial = str(getattr(asset, 'serial_number', '') or '').strip()
-        if serial and serial.lower() == identifier_lower:
-            return asset
-
-    return None
+    return _find_inventory_asset_by_identifier(identifier)
 
 
 def _asset_check_is_store_location(asset):
@@ -6086,6 +6367,10 @@ def maintain_asset(asset_id):
         from urllib.parse import unquote
         asset_id = unquote_plus(asset_id)
         logger.info(f"Decoded asset ID: '{asset_id}'")
+
+        scanned_asset = _find_inventory_asset_by_identifier(asset_id)
+        if scanned_asset:
+            asset_id = scanned_asset.asset_id
         
         asset = data_manager.inventory.get(asset_id)
         if not asset:
