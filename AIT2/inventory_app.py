@@ -7,6 +7,7 @@ from collections import defaultdict
 
 from models import User, InventoryItem, Container, Event, LogEntry, hash_password, get_current_date, parse_date_input, format_date_output, dates_overlap
 from data_manager import DataManager
+from maintenance_logs import make_maintenance_log, maintenance_log_to_display_string
 from utils import clear_screen, pause, play_sound, get_state_color, get_colored_item_description, sort_items_for_display, group_items_by_model
 
 class InventoryManagementApp:
@@ -565,7 +566,7 @@ class InventoryManagementApp:
         print("Maintenance Logs:")
         if item.maintenance_logs:
             for log in item.maintenance_logs[-10:]:
-                print(f"{log}")
+                print(maintenance_log_to_display_string(log, include_changes=True))
         else:
             print("No maintenance logs available.")
 
@@ -742,7 +743,15 @@ class InventoryManagementApp:
             for asset_id in maintenance_list:
                 item = self.data_manager.inventory.get(asset_id)
                 if item:
-                    entry = f"{current_date}\t{self.current_user.username}\t{log_entry}"
+                    changes = []
+                    if new_location:
+                        changes.append({'kind': 'location', 'value': new_location})
+                    if mark_ooc == 'y':
+                        changes.append({'kind': 'ooc', 'action': 'marked'})
+                    if unmark_ooc == 'y':
+                        changes.append({'kind': 'ooc', 'action': 'cleared'})
+
+                    entry = make_maintenance_log(current_date, self.current_user.username, log_entry, changes)
                     item.maintenance_logs.append(entry)
                     
                     if new_location:

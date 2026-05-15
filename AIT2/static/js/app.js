@@ -7528,6 +7528,113 @@ function toggleModelDetailsInView(modelId) {
 
 // Add the toggle function for expanding/collapsing model details
 
+function normalizeMaintenanceChange(change) {
+  if (!change || typeof change !== 'object') return null;
+
+  const kind = String(change.kind || change.type || '').trim().toLowerCase();
+  if (kind === 'location' || kind === 'serial') {
+    const value = String(change.value || '').trim();
+    return value ? { kind, value } : null;
+  }
+
+  if (kind === 'ooc' || kind === 'missing') {
+    const rawAction = String(change.action || '').trim().toLowerCase();
+    if (['mark', 'marked'].includes(rawAction)) return { kind, action: 'marked' };
+    if (['clear', 'cleared', 'remove', 'removed', 'unmark', 'unmarked'].includes(rawAction)) {
+      return { kind, action: 'cleared' };
+    }
+  }
+
+  return null;
+}
+
+function maintenanceChangeFromLegacyPart(part) {
+  const text = String(part || '').trim();
+  const lower = text.toLowerCase();
+
+  if (lower.startsWith('location:')) {
+    return normalizeMaintenanceChange({ kind: 'location', value: text.split(':').slice(1).join(':').trim() });
+  }
+  if (lower.startsWith('serial:')) {
+    return normalizeMaintenanceChange({ kind: 'serial', value: text.split(':').slice(1).join(':').trim() });
+  }
+  if (['marked ooc', 'mark ooc', 'marked out of commission', 'mark out of commission'].includes(lower)) {
+    return { kind: 'ooc', action: 'marked' };
+  }
+  if (['cleared ooc', 'clear ooc', 'removed ooc', 'unmarked ooc', 'unmark ooc', 'cleared out of commission', 'removed out of commission'].includes(lower)) {
+    return { kind: 'ooc', action: 'cleared' };
+  }
+  if (['marked missing', 'mark missing'].includes(lower)) {
+    return { kind: 'missing', action: 'marked' };
+  }
+  if (['cleared missing', 'clear missing', 'removed missing', 'unmarked missing', 'unmark missing'].includes(lower)) {
+    return { kind: 'missing', action: 'cleared' };
+  }
+
+  return null;
+}
+
+function splitLegacyMaintenanceStatus(description) {
+  const text = String(description || '');
+  const match = text.match(/^(.*?)(?:\s*\[([^\]]*)\]\s*)$/s);
+  if (!match) return { description: text, changes: [] };
+
+  const changes = match[2]
+    .split(',')
+    .map(maintenanceChangeFromLegacyPart)
+    .filter(Boolean);
+
+  if (changes.length === 0) return { description: text, changes: [] };
+  return { description: match[1].trimEnd(), changes };
+}
+
+function normalizeMaintenanceLogRecord(log) {
+  if (log && typeof log === 'object' && !Array.isArray(log)) {
+    return {
+      date: String(log.date || ''),
+      user: String(log.user || ''),
+      description: String(log.description || ''),
+      changes: Array.isArray(log.changes)
+        ? log.changes.map(normalizeMaintenanceChange).filter(Boolean)
+        : []
+    };
+  }
+
+  const parts = String(log || '').split('\t');
+  const parsed = parts.length >= 3
+    ? { date: parts[0] || '', user: parts[1] || '', description: parts.slice(2).join('\t') || '' }
+    : { date: '', user: '', description: String(log || '') };
+  const legacy = splitLegacyMaintenanceStatus(parsed.description);
+  return { ...parsed, description: legacy.description, changes: legacy.changes };
+}
+
+function getMaintenanceLogRecords(asset) {
+  const source = Array.isArray(asset?.maintenanceLogRecords)
+    ? asset.maintenanceLogRecords
+    : (Array.isArray(asset?.maintenanceLogs) ? asset.maintenanceLogs : []);
+  return source.map(normalizeMaintenanceLogRecord);
+}
+
+function getMaintenanceChangeLabels(logOrChanges) {
+  const changes = Array.isArray(logOrChanges)
+    ? logOrChanges.map(normalizeMaintenanceChange).filter(Boolean)
+    : normalizeMaintenanceLogRecord(logOrChanges).changes;
+
+  return changes.map(change => {
+    if (change.kind === 'location') return `Location: ${change.value}`;
+    if (change.kind === 'serial') return `Serial: ${change.value}`;
+    if (change.kind === 'ooc') return change.action === 'marked' ? 'Marked OOC' : 'Cleared OOC';
+    if (change.kind === 'missing') return change.action === 'marked' ? 'Marked Missing' : 'Cleared Missing';
+    return '';
+  }).filter(Boolean);
+}
+
+function getMaintenanceChangeValue(log, kind) {
+  const record = normalizeMaintenanceLogRecord(log);
+  const change = record.changes.find(item => item.kind === kind);
+  return change ? (change.value || change.action || '') : '';
+}
+
 async function loadMaintenanceAssets() {
   try {
     const response = await apiCall("/api/assets");
@@ -7574,9 +7681,10 @@ function displayMaintenanceAssets(assetsToShow) {
     `;
 
   assetsToShow.forEach((asset) => {
+    const maintenanceRecords = getMaintenanceLogRecords(asset);
     const lastMaintenance =
-      asset.maintenanceLogs && asset.maintenanceLogs.length > 0
-        ? asset.maintenanceLogs[asset.maintenanceLogs.length - 1].split("\t")[0]
+      maintenanceRecords.length > 0
+        ? maintenanceRecords[maintenanceRecords.length - 1].date
         : "Never";
 
     tableHTML += `
@@ -10948,7 +11056,8 @@ async function viewMaintenanceLog(assetId) {
 function showMaintenanceLogModal(asset) {
   // Debug: Log the asset data to console
   // console.log('Asset maintenance logs:', asset.maintenanceLogs);
-  // console.log('Total maintenance logs count:', asset.maintenanceLogs ? asset.maintenanceLogs.length : 0);
+  const maintenanceRecords = getMaintenanceLogRecords(asset);
+  // console.log('Total maintenance logs count:', maintenanceRecords.length);
   
   // Start building modal content
   const assetSafeId = asset.id.replace(/[^a-zA-Z0-9]/g, '_');
@@ -10993,7 +11102,7 @@ function showMaintenanceLogModal(asset) {
           <!-- Maintenance Logs -->
           <div style="flex: 1; display: flex; flex-direction: column; min-height: 0;">
             <h4 style="margin-bottom: 15px; color: #495057; flex-shrink: 0;">
-              Maintenance History - Total: ${asset.maintenanceLogs ? asset.maintenanceLogs.length : 0} entries
+              Maintenance History - Total: ${maintenanceRecords.length} entries
             </h4>
             <div style="flex: 1; overflow-y: scroll; border: 1px solid #e9ecef; border-radius: 8px; background: white;">
              <table style="width: 100%; border-collapse: collapse; font-size: 14px; table-layout: fixed;">
@@ -11011,16 +11120,11 @@ function showMaintenanceLogModal(asset) {
   `;
 
   // Process maintenance logs
-  if (asset.maintenanceLogs && asset.maintenanceLogs.length > 0) {
-    const maintenanceData = asset.maintenanceLogs.map((log, originalIndex) => {
-      const parts = log.split('\t');
-      return {
-        date: parts[0] || '',
-        user: parts[1] || '',
-        description: parts.slice(2).join('\t') || '',
-        originalIndex: originalIndex // Keep track of the original index
-      };
-    });
+  if (maintenanceRecords.length > 0) {
+    const maintenanceData = maintenanceRecords.map((log, originalIndex) => ({
+      ...log,
+      originalIndex: originalIndex // Keep track of the original index
+    }));
 
     // Sort logs by date (most recent first) using proper date parsing
     const sortedData = maintenanceData.map(log => {
@@ -11051,23 +11155,10 @@ function showMaintenanceLogModal(asset) {
       
       console.log(`Processing log ${displayNumber}:`, log);
       
-      // Parse description and status changes
-      let mainDescription = log.description;
-      let statusChanges = '';
-
-      // Only look for status changes if brackets exist
-      if (log.description.includes('[') && log.description.includes(']')) {
-        const statusMatch = log.description.match(/^(.*?)(\s*\[.*?\]\s*)$/s);
-        if (statusMatch) {
-          mainDescription = statusMatch[1].trim();
-          statusChanges = statusMatch[2].trim().replace(/^\[|\]$/g, ''); // Remove the brackets
-        }
-      }
-
       // Format status changes for display
       let statusChangesDisplay = '';
-      if (statusChanges) {
-        const changes = statusChanges.split(',').map(change => change.trim());
+      const changes = getMaintenanceChangeLabels(log.changes);
+      if (changes.length > 0) {
         statusChangesDisplay = changes.map(change => {
           let color = '#667eea'; // Default blue
           let icon = '';
@@ -11128,7 +11219,7 @@ function showMaintenanceLogModal(asset) {
           <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; vertical-align: top; font-size: 13px;">${escapeHtml(log.user)}</td>
           <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; vertical-align: top;">
             <div id="${logId}_display" ${descriptionAttrs}>
-              ${escapeHtml(mainDescription)}
+              ${escapeHtml(log.description)}
             </div>
           </td>
           <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; vertical-align: top; word-wrap: break-word; overflow-wrap: break-word; max-width: 200px;">
@@ -11841,17 +11932,13 @@ function editMaintenanceLog(assetId, logIndex, logId) {
   
   // Get the asset data
   const asset = assets.find(a => a.id === assetId);
-  if (!asset || !asset.maintenanceLogs || !asset.maintenanceLogs[logIndex]) {
+  const maintenanceRecords = getMaintenanceLogRecords(asset || {});
+  if (!asset || !maintenanceRecords[logIndex]) {
     showNotification('error', 'Maintenance log not found');
     return;
   }
 
-  const permissionLogParts = asset.maintenanceLogs[logIndex].split('	');
-  const permissionLog = {
-    date: permissionLogParts[0] || '',
-    user: permissionLogParts[1] || '',
-    description: permissionLogParts.slice(2).join('	') || ''
-  };
+  const permissionLog = maintenanceRecords[logIndex];
 
   if (!canCurrentUserModifyMaintenanceLog(permissionLog)) {
     showNotification('error', 'You can only edit maintenance logs that you wrote within the last 7 days');
@@ -11859,33 +11946,13 @@ function editMaintenanceLog(assetId, logIndex, logId) {
   }
   
   // Parse the current log entry
-  const logEntry = asset.maintenanceLogs[logIndex];
-  const parts = logEntry.split('\t');
-  const currentDate = parts[0] || '';
-  const currentUser = parts[1] || '';
-  const descriptionWithStatus = parts.slice(2).join('\t') || '';
-  
-  // Extract status changes from description if they exist
-  let currentDescription = descriptionWithStatus;
-  let existingStatusChanges = '';
-  let logLocationFromThisEntry = null; 
-  let hasLocationChangeInThisLog = false;
-
-  // Only look for status changes if brackets exist
-  if (descriptionWithStatus.includes('[') && descriptionWithStatus.includes(']')) {
-    const statusMatch = descriptionWithStatus.match(/^(.*?)(\s*\[.*?\]\s*)$/s);
-    if (statusMatch) {
-      currentDescription = statusMatch[1].trim();
-      existingStatusChanges = statusMatch[2].trim();
-      
-      // Extract location from this specific log's status changes
-      const locationMatch = existingStatusChanges.match(/Location:\s*([^,\]]+)/i);
-      if (locationMatch) {
-        logLocationFromThisEntry = locationMatch[1].trim();
-        hasLocationChangeInThisLog = true;
-      }
-    }
-  }
+  const logEntry = maintenanceRecords[logIndex];
+  const currentDate = logEntry.date || '';
+  const currentUser = logEntry.user || '';
+  const currentDescription = logEntry.description || '';
+  const existingStatusChanges = getMaintenanceChangeLabels(logEntry.changes).join(', ');
+  const logLocationFromThisEntry = getMaintenanceChangeValue(logEntry, 'location');
+  const hasLocationChangeInThisLog = Boolean(logLocationFromThisEntry);
 
   
   // Convert date format from YYYY/MM/DD to YYYY-MM-DD for HTML date input
@@ -11893,34 +11960,23 @@ function editMaintenanceLog(assetId, logIndex, logId) {
   
   // Determine status radio button from THIS log entry, not current asset status
   let defaultStatusValue = 'nochange';
-  const statusLower = (existingStatusChanges || '').toLowerCase();
-
-  if (
-    statusLower.includes('cleared ooc') ||
-    statusLower.includes('clear ooc') ||
-    statusLower.includes('removed ooc') ||
-    statusLower.includes('unmarked ooc') ||
-    statusLower.includes('unmark ooc')
-  ) {
-    defaultStatusValue = 'clearooc';
-  } else if (
-    statusLower.includes('marked ooc') ||
-    statusLower.includes('mark ooc')
-  ) {
-    defaultStatusValue = 'ooc';
-  } else if (
-    statusLower.includes('cleared missing') ||
-    statusLower.includes('clear missing') ||
-    statusLower.includes('removed missing') ||
-    statusLower.includes('unmarked missing') ||
-    statusLower.includes('unmark missing')
-  ) {
-    defaultStatusValue = 'clearmissing';
-  } else if (
-    statusLower.includes('marked missing') ||
-    statusLower.includes('mark missing')
-  ) {
-    defaultStatusValue = 'missing';
+  for (const change of logEntry.changes || []) {
+    if (change.kind === 'ooc' && change.action === 'cleared') {
+      defaultStatusValue = 'clearooc';
+      break;
+    }
+    if (change.kind === 'ooc' && change.action === 'marked') {
+      defaultStatusValue = 'ooc';
+      break;
+    }
+    if (change.kind === 'missing' && change.action === 'cleared') {
+      defaultStatusValue = 'clearmissing';
+      break;
+    }
+    if (change.kind === 'missing' && change.action === 'marked') {
+      defaultStatusValue = 'missing';
+      break;
+    }
   }
   
   // Create the enhanced edit modal
@@ -12188,13 +12244,11 @@ async function saveEnhancedMaintenanceLog(assetId, logIndex, logId) {
     // Extract the original location from this specific log for comparison
     let originalLogLocation = null;
     let hadLocationChangeOriginally = false;
-    const logEntry = asset.maintenanceLogs[logIndex];
+    const logEntry = getMaintenanceLogRecords(asset)[logIndex];
     if (logEntry) {
-      const logParts = logEntry.split('\t');
-      const logDescription = logParts.slice(2).join('\t') || '';
-      const locationMatch = logDescription.match(/\[.*?Location:\s*([^,\]]+)/i);
-      if (locationMatch) {
-        originalLogLocation = locationMatch[1].trim();
+      const locationValue = getMaintenanceChangeValue(logEntry, 'location');
+      if (locationValue) {
+        originalLogLocation = locationValue;
         hadLocationChangeOriginally = true;
       }
     }
@@ -12310,12 +12364,10 @@ async function saveMaintenanceLogSilent(assetId, logIndex, logId) {
       // Update the assets array if it exists
       if (window.assets) {
         const asset = window.assets.find(a => a.id === assetId);
-        if (asset && asset.maintenanceLogs && asset.maintenanceLogs[logIndex]) {
-          const logParts = asset.maintenanceLogs[logIndex].split('\t');
-          if (logParts.length >= 3) {
-            logParts[2] = newDescription;
-            asset.maintenanceLogs[logIndex] = logParts.join('\t');
-          }
+        const records = getMaintenanceLogRecords(asset || {});
+        if (asset && records[logIndex]) {
+          records[logIndex].description = newDescription;
+          asset.maintenanceLogRecords = records;
         }
       }
       

@@ -3,6 +3,7 @@ import csv
 import json
 from models import User, InventoryItem, Container, Event, LogEntry, hash_password
 from utils import sanitize_filename, open_csv_robust, clean_csv_cell
+from maintenance_logs import dump_maintenance_logs, load_maintenance_logs
 
 # Constants
 MAX_LOG_LINES = 1000
@@ -141,7 +142,7 @@ class DataManager:
                 # clean all values
                 row = {k: clean_csv_cell(v) for k, v in row.items()}
 
-                maintenance_logs = row.get('MaintenanceLogs', '').split('|') if row.get('MaintenanceLogs') else []
+                maintenance_logs = load_maintenance_logs(row.get('MaintenanceLogs', ''))
                 department_code = row.get('DepartmentCode', 'UN')
                 is_ooc = row.get('IsOOC', 'False') == 'True'
                 is_bulk = row.get('IsBulk', 'False') == 'True'
@@ -191,7 +192,7 @@ class DataManager:
                     'IsOOC': item.is_ooc,
                     'IsBulk': getattr(item, 'is_bulk', False),
                     'Quantity': getattr(item, 'quantity', 1),
-                    'MaintenanceLogs': '|'.join(item.maintenance_logs),
+                    'MaintenanceLogs': dump_maintenance_logs(item.maintenance_logs),
                     'DepartmentCode': item.department_code,
                     'DefaultLocation': item.default_location,
                     'CurrentLocation': item.current_location

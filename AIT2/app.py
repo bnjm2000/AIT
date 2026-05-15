@@ -17,6 +17,15 @@ import secrets
 # Import your existing modules
 from models import User, InventoryItem, Container, Event, LogEntry, hash_password, format_date_output, dates_overlap
 from data_manager import DataManager
+from maintenance_logs import (
+    apply_maintenance_log_changes,
+    make_change,
+    make_maintenance_log,
+    maintenance_log_to_display_string,
+    normalize_maintenance_log,
+    parse_maintenance_log_date,
+    status_change_labels,
+)
 from utils import get_state_color
 from urllib.parse import unquote_plus
 
@@ -1296,14 +1305,7 @@ def _current_user_is_admin():
 
 def _parse_maintenance_log_date(log_entry):
     """Parse the date at the start of a maintenance log entry."""
-    parts = str(log_entry or '').split('\t')
-    raw_date = parts[0].strip() if parts else ''
-    for fmt in ("%Y/%m/%d", "%Y-%m-%d", "%Y%m%d"):
-        try:
-            return datetime.strptime(raw_date, fmt).date()
-        except ValueError:
-            pass
-    return None
+    return parse_maintenance_log_date(log_entry)
 
 
 def _maintenance_log_permission(asset, log_index, allow_admin=True):
@@ -1323,9 +1325,8 @@ def _maintenance_log_permission(asset, log_index, allow_admin=True):
     if log_index < 0 or log_index >= len(logs):
         return False, 'Invalid log index'
 
-    original_log = logs[log_index]
-    parts = original_log.split('\t')
-    original_user = parts[1].strip() if len(parts) >= 2 else ''
+    original_log = normalize_maintenance_log(logs[log_index])
+    original_user = original_log.get('user', '').strip()
 
     if original_user != username:
         return False, 'You can only modify maintenance logs that you wrote'
@@ -3443,9 +3444,8 @@ def delete_maintenance_log(asset_id, log_index):
             return jsonify({'error': 'Admin privileges required to delete maintenance logs'}), 403
 
         # Get the log entry that will be deleted for logging purposes
-        deleted_log = asset.maintenance_logs[log_index]
-        log_parts = deleted_log.split('\t')
-        deleted_description = '\t'.join(log_parts[2:]) if len(log_parts) >= 3 else deleted_log
+        deleted_log = normalize_maintenance_log(asset.maintenance_logs[log_index])
+        deleted_description = deleted_log.get('description', '')
         
         # Remove the log entry
         asset.maintenance_logs.pop(log_index)
@@ -3477,79 +3477,20 @@ def recalculate_asset_status_from_logs(asset):
 
         sorted_logs = []
         for i, log_entry in enumerate(asset.maintenance_logs):
-            parts = log_entry.split('\t')
-            if len(parts) >= 3:
-                date_str = parts[0]
-                try:
-                    date_obj = datetime.strptime(date_str, "%Y/%m/%d")
-                except ValueError:
-                    logger.warning(f"Invalid date format in log: {date_str}")
-                    date_obj = datetime.min
+            record = normalize_maintenance_log(log_entry)
+            date_str = record.get('date', '')
+            try:
+                date_obj = datetime.strptime(date_str, "%Y/%m/%d")
+            except ValueError:
+                logger.warning(f"Invalid date format in log: {date_str}")
+                date_obj = datetime.min
 
-                sorted_logs.append((date_obj, i, log_entry))
+            sorted_logs.append((date_obj, i, record))
 
         sorted_logs.sort(key=lambda x: (x[0], x[1]))
 
         for date_obj, log_index, log_entry in sorted_logs:
-            parts = log_entry.split('\t')
-            if len(parts) < 3:
-                continue
-
-            description = '\t'.join(parts[2:])
-
-            if '[' not in description or ']' not in description:
-                continue
-
-            import re
-            status_match = re.search(r'\[(.*?)\]', description)
-            if not status_match:
-                continue
-
-            status_info = status_match.group(1)
-            status_parts = [part.strip() for part in status_info.split(',')]
-
-            for part in status_parts:
-                part_lower = part.lower()
-
-                if part_lower.startswith('location:'):
-                    asset.current_location = part.split(':', 1)[1].strip()
-
-                elif part_lower.startswith('serial:'):
-                    asset.serial_number = part.split(':', 1)[1].strip()
-
-                elif part_lower in (
-                    'cleared ooc',
-                    'clear ooc',
-                    'removed ooc',
-                    'unmarked ooc',
-                    'unmark ooc',
-                    'cleared out of commission',
-                    'removed out of commission'
-                ):
-                    asset.is_ooc = False
-
-                elif part_lower in (
-                    'marked ooc',
-                    'mark ooc',
-                    'marked out of commission',
-                    'mark out of commission'
-                ):
-                    asset.is_ooc = True
-
-                elif part_lower in (
-                    'cleared missing',
-                    'clear missing',
-                    'removed missing',
-                    'unmarked missing',
-                    'unmark missing'
-                ):
-                    asset.is_missing = False
-
-                elif part_lower in (
-                    'marked missing',
-                    'mark missing'
-                ):
-                    asset.is_missing = True
+            apply_maintenance_log_changes(asset, log_entry)
 
         logger.info(
             f"Final status for {asset.asset_id}: "
@@ -5743,6 +5684,10 @@ def get_assets():
         departments = _load_departments()
 
         for asset in data_manager.inventory.values():
+            maintenance_records = [] if _is_bulk_asset(asset) else [
+                normalize_maintenance_log(log) for log in (getattr(asset, 'maintenance_logs', []) or [])
+            ]
+
             # Determine current status
             status = 'available'
             if asset.is_missing:
@@ -5780,7 +5725,11 @@ def get_assets():
                 'isOOC': asset.is_ooc,
                 'defaultLocation': asset.default_location,
                 'currentLocation': asset.current_location,
-                'maintenanceLogs': [] if _is_bulk_asset(asset) else asset.maintenance_logs,
+                'maintenanceLogs': [
+                    maintenance_log_to_display_string(log, include_changes=False)
+                    for log in maintenance_records
+                ],
+                'maintenanceLogRecords': maintenance_records,
                 'isBulk': _is_bulk_asset(asset),
                 'quantity': max(1, _safe_int(getattr(asset, 'quantity', 1), 1)) if _is_bulk_asset(asset) else 1,
                 'availableQuantity': max(0, max(1, _safe_int(getattr(asset, 'quantity', 1), 1)) - sum(max(_bulk_quantity_for_asset_in_values(getattr(ev, 'actually_prepared', []) or [], asset.asset_id) - _bulk_quantity_for_asset_in_values(getattr(ev, 'returned_items', []) or [], asset.asset_id), 0) for ev in data_manager.events.values())) if _is_bulk_asset(asset) else 1
@@ -6023,9 +5972,12 @@ def asset_check_mark_missing():
                 continue
 
             asset.is_missing = True
-            asset.maintenance_logs.append(
-                f"{today}\t{username}\tAsset Check - marked missing because this item was not checked [Marked Missing]"
-            )
+            asset.maintenance_logs.append(make_maintenance_log(
+                today,
+                username,
+                "Asset Check - marked missing because this item was not checked",
+                [make_change('missing', action='marked')]
+            ))
             marked.append(asset_id)
 
         if marked:
@@ -6498,25 +6450,26 @@ def maintain_asset(asset_id):
             # If no date provided, use current date
             formatted_date = datetime.now().strftime("%Y/%m/%d")
 
-        # Build status changes information - INITIALIZE HERE
+        # Build structured status changes. These are stored separately from the
+        # human-written note, so the note may contain brackets, commas, pipes,
+        # or any other normal text without affecting status parsing.
         status_changes = []
         
         if new_location:
-            status_changes.append(f"Location: {new_location}")
+            status_changes.append(make_change('location', value=new_location))
         if new_serial:
-            status_changes.append(f"Serial: {new_serial}")
+            status_changes.append(make_change('serial', value=new_serial))
         if mark_ooc:
-            status_changes.append("Marked OOC")
+            status_changes.append(make_change('ooc', action='marked'))
         elif unmark_ooc:
-            status_changes.append("Cleared OOC")
+            status_changes.append(make_change('ooc', action='cleared'))
         if mark_missing:
-            status_changes.append("Marked Missing")
+            status_changes.append(make_change('missing', action='marked'))
         elif unmark_missing:
-            status_changes.append("Cleared Missing")
+            status_changes.append(make_change('missing', action='cleared'))
         
-        # Create enhanced log entry with status changes
-        status_text = f" [{', '.join(status_changes)}]" if status_changes else ""
-        entry = f"{formatted_date}\t{session['user']}\t{log_entry_text}{status_text}"
+        status_changes = [change for change in status_changes if change]
+        entry = make_maintenance_log(formatted_date, session['user'], log_entry_text, status_changes)
         
         asset.maintenance_logs.append(entry)
 
@@ -6687,9 +6640,8 @@ def update_maintenance_log_enhanced(asset_id, log_index):
                 return jsonify({'error': 'Normal users can only set maintenance log dates within the last 7 days'}), 403
         
         # Get original log for logging purposes
-        original_log = asset.maintenance_logs[log_index]
-        original_parts = original_log.split('\t')
-        original_description = '\t'.join(original_parts[2:]) if len(original_parts) >= 3 else original_log
+        original_log = normalize_maintenance_log(asset.maintenance_logs[log_index])
+        original_description = original_log.get('description', '')
         
         # Handle additional updates - INITIALIZE changes_made HERE
         changes_made = []
@@ -6699,24 +6651,21 @@ def update_maintenance_log_enhanced(asset_id, log_index):
 
         # First, check what location change was originally in this specific log
         original_log_location_change = None
-        original_log = asset.maintenance_logs[log_index]
-        if original_log:
-            original_parts = original_log.split('\t')
-            original_description = '\t'.join(original_parts[2:]) if len(original_parts) >= 3 else ''
-            if '[' in original_description and ']' in original_description:
-                import re
-                location_match = re.search(r'Location:\s*([^,\]]+)', original_description)
-                if location_match:
-                    original_log_location_change = location_match.group(1).strip()
+        original_log_serial_change = None
+        for change in original_log.get('changes', []):
+            if change.get('kind') == 'location':
+                original_log_location_change = change.get('value', '').strip()
+            elif change.get('kind') == 'serial':
+                original_log_serial_change = change.get('value', '').strip()
 
         if new_location is not None and new_location.strip():
             # Only update location if the user actually typed one
             new_location_clean = new_location.strip()
-            changes_made.append(f"Location: {new_location_clean}")
+            changes_made.append(make_change('location', value=new_location_clean))
             logger.info(f"User set location to: '{new_location_clean}'")
         elif original_log_location_change is not None:
             # User didn't provide location, but original log had a location change - preserve it
-            changes_made.append(f"Location: {original_log_location_change}")
+            changes_made.append(make_change('location', value=original_log_location_change))
             logger.info(f"Preserved original location change: '{original_log_location_change}'")
         # If neither condition is met, no location change is added to the log
 
@@ -6727,8 +6676,11 @@ def update_maintenance_log_enhanced(asset_id, log_index):
             new_serial_clean = new_serial.strip()
             if new_serial_clean != old_serial:
                 asset.serial_number = new_serial_clean
-                changes_made.append(f"Serial: {asset.serial_number}")
+                changes_made.append(make_change('serial', value=asset.serial_number))
                 logger.info(f"Updated serial from '{old_serial}' to '{new_serial_clean}'")
+        elif original_log_serial_change is not None:
+            changes_made.append(make_change('serial', value=original_log_serial_change))
+            logger.info(f"Preserved original serial change: '{original_log_serial_change}'")
         
         # Handle status changes
         mark_ooc = data.get('markOOC', False)
@@ -6743,21 +6695,22 @@ def update_maintenance_log_enhanced(asset_id, log_index):
         # Store the selected status action in the log, regardless of current asset status.
         # The final asset status is recalculated from all logs below.
         if mark_ooc:
-            changes_made.append("Marked OOC")
+            changes_made.append(make_change('ooc', action='marked'))
         elif unmark_ooc:
-            changes_made.append("Cleared OOC")
+            changes_made.append(make_change('ooc', action='cleared'))
 
         if mark_missing:
-            changes_made.append("Marked Missing")
+            changes_made.append(make_change('missing', action='marked'))
         elif unmark_missing:
-            changes_made.append("Cleared Missing")
+            changes_made.append(make_change('missing', action='cleared'))
             
-        logger.info(f"Final changes made: {changes_made}")
+        changes_made = [change for change in changes_made if change]
+        change_labels = status_change_labels(changes_made)
+        logger.info(f"Final changes made: {change_labels}")
         logger.info(f"Final asset status: OOC={asset.is_ooc}, Missing={asset.is_missing}")
         
-        # Create updated log entry with status changes
-        status_text = f" [{', '.join(changes_made)}]" if changes_made else ""
-        updated_log = f"{formatted_date}\t{new_user}\t{new_description}{status_text}"
+        # Create updated log entry with structured status changes
+        updated_log = make_maintenance_log(formatted_date, new_user, new_description, changes_made)
         
         logger.info(f"Updated log entry: {updated_log}")
         
@@ -6769,7 +6722,7 @@ def update_maintenance_log_enhanced(asset_id, log_index):
         data_manager.save_inventory()
 
         # Log the action
-        changes_text = f" (also: {', '.join(changes_made)})" if changes_made else ""
+        changes_text = f" (also: {', '.join(change_labels)})" if change_labels else ""
         log_action(f"Updated maintenance log for asset {asset_id}: '{original_description}' -> '{new_description}'{changes_text} (edited by {session['user']})")
         
         logger.info(f"Successfully updated enhanced maintenance log for asset {asset_id}")
