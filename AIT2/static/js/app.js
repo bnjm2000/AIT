@@ -6227,21 +6227,19 @@ async function processUniversalAsset(eventId) {
                 refreshPrepareUiAfterAssetChange(eventId);
             }
         } else {
-            // Asset is not assigned - ask if they want to assign it
+            // Asset is not assigned; prepare it immediately as a manual extra.
             if (!assetDetails) {
                 showFeedback(feedbackDiv, 'error', `${assetId} not found in inventory or not available`);
                 return;
             }
-            
-            showFeedback(feedbackDiv, 'warning', 
-                `${assetId} is not assigned to this event. 
-                <button class="btn btn-warning" style="margin-left: 10px; padding: 4px 8px; font-size: 12px;" onclick="assignAndPrepareAsset(${eventId}, '${escapeJs(assetId)}')">
-                    Assign & Prepare
-                </button>
-                <button class="btn btn-secondary" style="margin-left: 5px; padding: 4px 8px; font-size: 12px;" onclick="clearUniversalFeedback()">
-                    Cancel
-                </button>`
-            );
+
+            await apiCall(`/api/events/${eventId}/assign-specific`, 'POST', { assetId });
+            showFeedback(feedbackDiv, 'success', `✅ ${assetId} prepared as extra asset`);
+
+            input.value = '';
+            input.focus();
+
+            refreshPrepareUiAfterAssetChange(eventId);
         }
         
     } catch (error) {
@@ -6251,9 +6249,8 @@ async function processUniversalAsset(eventId) {
 
 
 /**
- * ASSIGN + PREPARE in one step for extra assets
- * Used by: Universal asset input and "Assign & Prepare" buttons
- * Maintains exact same function signature as before
+ * Legacy one-step assign + prepare helper for extra assets.
+ * The universal asset input now calls the same endpoint directly.
  */
 async function assignAndPrepareAsset(eventId, assetId) {
     console.log(`=== assignAndPrepareAsset CALLED ===`);

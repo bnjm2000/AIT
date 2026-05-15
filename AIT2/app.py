@@ -928,6 +928,72 @@ def _append_bulk_assignments_to_model_groups(model_groups, event):
         })
 
 
+def _append_orphan_extra_assignments_to_model_groups(model_groups, event):
+    """Show manual extra assets in the model requirement area.
+
+    Manual extras should not raise the event's required quantity, but they should
+    still sit beside matching model rows in the prepare modal. If the event did
+    not request that model at all, create a 0-required model group so the UI can
+    show values such as "1/0 assigned (+1 extra)".
+    """
+    if model_groups is None:
+        return
+
+    _ensure_event_custom_lists(event)
+    extra_asset_ids = set(getattr(event, 'extra_assets', []) or [])
+    if not extra_asset_ids:
+        return
+
+    returned_values = set(getattr(event, 'returned_items', []) or [])
+    prepared_or_returned = list(getattr(event, 'actually_prepared', []) or [])
+    prepared_or_returned.extend(getattr(event, 'returned_items', []) or [])
+
+    already_grouped = set()
+    for group in model_groups.values():
+        for assigned in group.get('assignedAssets', []) or []:
+            assigned_id = assigned.get('id') if isinstance(assigned, dict) else assigned
+            if assigned_id:
+                already_grouped.add(assigned_id)
+
+    seen = set()
+    for asset_id in prepared_or_returned:
+        if asset_id in seen or asset_id in already_grouped:
+            continue
+        seen.add(asset_id)
+
+        if asset_id not in extra_asset_ids:
+            continue
+        if not _is_real_asset_ref(asset_id) or _is_bulk_ref(asset_id):
+            continue
+
+        asset = data_manager.inventory.get(asset_id) if data_manager else None
+        if not asset or _is_bulk_asset(asset):
+            continue
+
+        dept, brand, model, description = _asset_group_key(asset)
+        model_key = f"{dept}|{brand}|{model}|{description}"
+
+        if model_key not in model_groups:
+            model_groups[model_key] = {
+                'department': dept,
+                'brand': brand,
+                'model': model,
+                'description': description,
+                'requiredQuantity': 0,
+                'assignedAssets': [],
+                'status': 'pending'
+            }
+
+        model_groups[model_key]['assignedAssets'].append({
+            'id': asset_id,
+            'serial': asset.serial_number,
+            'status': 'returned' if asset_id in returned_values else 'prepared',
+            'location': asset.current_location,
+            'quantity': 1,
+            'isExtra': True
+        })
+
+
 def _bulk_remaining_for_event_group(event, bulk_asset):
     group_key = _asset_group_key(bulk_asset)
     required = 0
@@ -2704,6 +2770,7 @@ def get_events():
                         continue
 
             _append_bulk_assignments_to_model_groups(model_groups, event)
+            _append_orphan_extra_assignments_to_model_groups(model_groups, event)
             _refresh_model_group_statuses(model_groups)
 
             # Calculate totals including custom item quantities.
@@ -3002,6 +3069,7 @@ def get_event(event_id):
                     logger.error(f"Error parsing model assignment {asset_id}: {e}")
 
         _append_bulk_assignments_to_model_groups(model_groups, event)
+        _append_orphan_extra_assignments_to_model_groups(model_groups, event)
         _refresh_model_group_statuses(model_groups)
 
         # Add prepared/returned bulk quantity markers to the department asset lists.
