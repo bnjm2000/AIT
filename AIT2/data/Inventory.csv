@@ -57,9 +57,9 @@ CT3#01,DBX,CT3,11065310806,advanced cable tester,False,False,False,False,False,1
 4488#02,DPA,4488,M068571,Directional Headset (beige),False,False,False,False,False,1,,AX,Store,Store
 4488#03,DPA,4488,M069881,Directional Headset (beige),False,False,False,False,False,1,,AX,Store,Store
 4488#04,DPA,4488,M069448,Directional Headset (beige),False,False,False,False,False,1,,AX,Store,Store
-4488#05,DPA,4488,M071554,Directional Headset (beige),False,False,False,False,False,1,,AX,Store,
+4488#05,DPA,4488,M071554,Directional Headset (beige),False,False,False,False,False,1,,AX,Store,Store
 4488#06,DPA,4488,M068245,Directional Headset (beige),False,False,False,False,False,1,,AX,Store,Store
-4488#07,DPA,4488,M069285,Directional Headset (beige),False,False,False,False,False,1,,AX,Store,
+4488#07,DPA,4488,M069285,Directional Headset (beige),False,False,False,False,False,1,,AX,Store,Store
 4488#08,DPA,4488,M068376,Directional Headset (beige),False,False,False,False,False,1,,AX,Store,Store
 4488#09,DPA,4488,M070024,Directional Headset (beige),False,False,False,False,False,1,,AX,Store,
 4488#10,DPA,4488,M069545,Directional Headset (beige),False,False,False,False,False,1,,AX,Store,
@@ -521,10 +521,10 @@ X-US8#09,L-Acoustics,X-US8,1280006795,Short U-bracket for X8,False,False,False,F
 X-US8#10,L-Acoustics,X-US8,1280006796,Short U-bracket for X8,False,False,False,False,False,1,,AX,Store,
 X-US8#11,L-Acoustics,X-US8,1280006797,Short U-bracket for X8,False,False,False,False,False,1,,AX,Store,
 X-US8#12,L-Acoustics,X-US8,1280006799,Short U-bracket for X8,False,False,False,False,False,1,,AX,Store,
-X12#01,L-Acoustics,X12,1190036006,"12"" passive coaxial enclosure",False,False,False,False,False,1,,AX,Store,
-X12#02,L-Acoustics,X12,1190036007,"12"" passive coaxial enclosure",False,False,False,False,False,1,,AX,Store,
-X12#03,L-Acoustics,X12,1190036008,"12"" passive coaxial enclosure",False,False,False,False,False,1,,AX,Store,
-X12#04,L-Acoustics,X12,1190036010,"12"" passive coaxial enclosure",False,False,False,False,False,1,,AX,Store,
+X12#01,L-Acoustics,X12,1190036006,"12"" passive coaxial enclosure",False,False,False,False,False,1,,AX,Store,Store
+X12#02,L-Acoustics,X12,1190036007,"12"" passive coaxial enclosure",False,False,False,False,False,1,,AX,Store,Store
+X12#03,L-Acoustics,X12,1190036008,"12"" passive coaxial enclosure",False,False,False,False,False,1,,AX,Store,Store
+X12#04,L-Acoustics,X12,1190036010,"12"" passive coaxial enclosure",False,False,False,False,False,1,,AX,Store,Store
 X12#05,L-Acoustics,X12,1190036011,"12"" passive coaxial enclosure",False,False,False,False,False,1,,AX,Store,Store
 X12#06,L-Acoustics,X12,1190036012,"12"" passive coaxial enclosure",False,False,False,False,False,1,,AX,Store,Store
 X12#07,L-Acoustics,X12,1190036013,"12"" passive coaxial enclosure",False,False,False,False,False,1,,AX,Store,Store
@@ -718,7 +718,7 @@ B58A#03,Shure,Beta 58A,,supercardioid dynamic vocal microphone,False,False,False
 B58A#04,Shure,Beta 58A,,supercardioid dynamic vocal microphone,False,False,False,False,False,1,,AX,Store,Store
 ULXD1#01,Shure,ULXD1,1ND2342330-01,Beltpack [L50],False,False,False,False,False,1,,AX,Store,Store
 ULXD1#02,Shure,ULXD1,1ML0246448,Beltpack [L50],False,False,False,False,False,1,,AX,Store,Store
-ULXD1#03,Shure,ULXD1,1NB0326366-01,Beltpack [L50],False,False,False,False,False,1,,AX,Store,
+ULXD1#03,Shure,ULXD1,1NB0326366-01,Beltpack [L50],False,False,False,False,False,1,,AX,Store,Store
 ULXD1#04,Shure,ULXD1,1ND2342613-01,Beltpack [L50],False,False,False,False,False,1,,AX,Store,Store
 ULXD1#05,Shure,ULXD1,1ND23423459-01,Beltpack [L50],False,False,False,False,False,1,,AX,Store,Store
 ULXD1#06,Shure,ULXD1,1ND2342323-01,Beltpack [L50],False,False,False,False,False,1,,AX,Store,Store
@@ -737,8 +737,8 @@ ULXD1#18,Shure,ULXD1,3BI28078539,Beltpack [G52],False,False,False,False,False,1,
 ULXD1#19,Shure,ULXD1,3EC18480865,Beltpack [L50],False,False,False,False,False,1,,AX,Store,Store
 ULXD2#01,Shure,ULXD2,2NK0071080-01,Handheld Microphone [L50],False,False,False,False,False,1,,AX,Store,Store
 ULXD2#02,Shure,ULXD2,2PH3049605,Handheld Microphone [L50],False,False,False,False,False,1,,AX,Store,Store
-ULXD2#03,Shure,ULXD2,2OB0659314-01,Handheld Microphone [L50],False,False,False,False,False,1,"[{""date"":""2026/03/22"",""user"":""bnjm2000"",""description"":""Handheld dropped by emcee, capsule broke off (Wedding of Russell & Cassandra @ Shangri-La Island Ballroom)"",""cost"":"""",""changes"":[{""kind"":""ooc"",""action"":""marked""}]},{""date"":""2026/04/17"",""user"":""bnjm2000"",""description"":""Bought new capsule from E&E, replaced whole capsule - $214"",""cost"":"""",""changes"":[{""kind"":""ooc"",""action"":""cleared""}]}]",AX,Store,
-ULXD2#04,Shure,ULXD2,2PK2362933,Handheld Microphone [L50],False,False,False,False,False,1,,AX,Store,
+ULXD2#03,Shure,ULXD2,2OB0659314-01,Handheld Microphone [L50],False,False,False,False,False,1,"[{""date"":""2026/03/22"",""user"":""bnjm2000"",""description"":""Handheld dropped by emcee, capsule broke off (Wedding of Russell & Cassandra @ Shangri-La Island Ballroom)"",""cost"":"""",""changes"":[{""kind"":""ooc"",""action"":""marked""}]},{""date"":""2026/04/17"",""user"":""bnjm2000"",""description"":""Bought new capsule from E&E, replaced whole capsule - $214"",""cost"":"""",""changes"":[{""kind"":""ooc"",""action"":""cleared""}]}]",AX,Store,Store
+ULXD2#04,Shure,ULXD2,2PK2362933,Handheld Microphone [L50],False,False,False,False,False,1,,AX,Store,Store
 ULXD2#05,Shure,ULXD2,20A1395239-01,Handheld Microphone [L50],False,False,False,False,False,1,"[{""date"":""2025/11/27"",""user"":""bnjm2000"",""description"":""Discovered capsule broken and sponge disintegrated (Loro Piana @ Jiak Kim House)"",""cost"":"""",""changes"":[{""kind"":""ooc"",""action"":""marked""}]},{""date"":""2026/01/08"",""user"":""bnjm2000"",""description"":""Sent to E&E for servicing"",""cost"":"""",""changes"":[{""kind"":""location"",""value"":""E&E""}]},{""date"":""2026/01/12"",""user"":""bnjm2000"",""description"":""SR22011:\nE&E quoted to replace capsule ($267), with service fee ($120).\nDecided to cancel repair and buy the capsule from Sales."",""cost"":"""",""changes"":[]},{""date"":""2026/01/27"",""user"":""bnjm2000"",""description"":""Purchased new B58A Capsule to replace. ($214)\nCapsule SN: 3EH15266104"",""cost"":"""",""changes"":[{""kind"":""location"",""value"":""Store""},{""kind"":""ooc"",""action"":""cleared""},{""kind"":""missing"",""action"":""cleared""}]}]",AX,Store,
 ULXD2#06,Shure,ULXD2,2PK2362926,Handheld Microphone [L50],False,False,False,False,False,1,,AX,Store,
 ULXD2#07,Shure,ULXD2,2QK2204370,Handheld Microphone [L50],False,False,False,False,False,1,,AX,Store,
@@ -759,7 +759,7 @@ ULXD4D#03,Shure,ULXD4D,,Dual Channel Receiver [L50],False,False,False,False,Fals
 ULXD4D#04,Shure,ULXD4D,,Dual Channel Receiver [L50],False,False,False,False,False,1,,AX,Store,Store
 ULXD4D#05,Shure,ULXD4D,3BH26487024,Dual Channel Receiver [G52],False,False,False,False,False,1,,AX,Store,Store
 ULXD4D#06,Shure,ULXD4D,3BH26487098,Dual Channel Receiver [G52],False,False,False,False,False,1,,AX,Store,Store
-ULXD4Q#01,Shure,ULXD4Q,,Quad Channel Receiver [L50],False,False,False,False,False,1,,AX,Store,
+ULXD4Q#01,Shure,ULXD4Q,,Quad Channel Receiver [L50],False,False,False,False,False,1,,AX,Store,Store
 ULXD4Q#02,Shure,ULXD4Q,3BF11462545,Quad Channel Receiver [G52],False,False,False,False,False,1,,AX,Store,Store
 ULXD4Q#03,Shure,ULXD4Q,3BF11462711,Quad Channel Receiver [G52],False,False,False,False,False,1,,AX,Store,Store
 WL184#01,Shure,WL184,,supercardioid condenser lavalier microphone,False,False,False,False,False,1,,AX,Store,
@@ -821,7 +821,7 @@ MG12XU#02,Yamaha,MG12XU,,12-Channel Analog Mixing Console with FX,False,False,Fa
 MG10#01,Yamaha,MG10,ECWH01433,10-Channel Analogue Mixer,False,False,False,False,False,1,,AX,Store,Store
 MG124CX#01,Yamaha,MG124CX,,12-Input Stereo Mixer with Compression and Effects,False,False,False,False,False,1,,AX,Store,
 MG124CX#02,Yamaha,MG124CX,,12-Input Stereo Mixer with Compression and Effects,False,False,False,False,False,1,,AX,Store,
-QL1#01,Yamaha,QL1,WTAUM01016,Digital Mixer,False,False,False,False,False,1,,AX,Store,
+QL1#01,Yamaha,QL1,WTAUM01016,Digital Mixer,False,False,False,False,False,1,,AX,Store,Store
 QL1#02,Yamaha,QL1,EAXP01044,Digital Mixer,False,False,False,False,False,1,,AX,Store,Store
 QL5#01,Yamaha,QL5,,Digital Mixer,False,False,False,False,False,1,,AX,Store,Store
 RO8-D #01,Yamaha,Ro8-d,,8-channel Remote Output Rack,False,False,False,False,False,1,,AX,Store,Store
@@ -1064,9 +1064,9 @@ NICKWASH#11,DTS,NickWash 600,,self-contained compact high-output LED moving head
 NICKWASH#12,DTS,NickWash 600,,self-contained compact high-output LED moving head projector,False,True,False,False,False,1,,LX,Store,
 MVSHAZER#01,Le Maitre,MVS Hazer,5317,Hazer machine,False,False,False,False,False,1,,LX,Store,Store
 MVSHAZER#02,Le Maitre,MVS Hazer,2222,Hazer machine,False,False,False,False,False,1,,LX,Store,Store
-63ADB#01,Custom,63A 3-Phase DB,,,False,False,False,False,False,1,,LX,Store,Store
-63ADB#02,Custom,63A 3-Phase DB,,,False,False,False,False,False,1,,LX,Store,Store
-32ADB#02,Custom,32A 3-Phase DB,,,False,False,False,False,False,1,,LX,Store,Store
+63ADB#01,Custom,63A 3-Phase DB,,,False,False,False,False,False,1,,ELEC,Store,Store
+63ADB#02,Custom,63A 3-Phase DB,,,False,False,False,False,False,1,,ELEC,Store,Store
+32ADB#02,Custom,32A 3-Phase DB,,,False,False,False,False,False,1,,ELEC,Store,Store
 LX TREE #01,Versa-Stand,,,Winch Up Lighting Stand,False,False,False,False,False,1,,LX,Store,
 LX TREE #02,Versa-Stand,,,Winch Up Lighting Stand,False,False,False,False,False,1,,LX,Store,
 LX TREE #03,Versa-Stand,,,Winch Up Lighting Stand,False,False,False,False,False,1,,LX,Store,
@@ -1270,7 +1270,7 @@ LEGION#04,Lenovo,Legion 5 Pro,PF4LW7B4,16inch Windows Laptop,False,False,False,F
 MACBOOK#01,Apple,Macbook Pro (A1707),C02WG8EHHTD5,16inch Macbook Pro,False,False,False,False,False,1,,VX,Store,Store
 MACBOOK#02,Apple,Macbook Pro (A2442),M5P2V176XD,14inch Macbook Pro M1 Pro,False,False,False,False,False,1,,AX,Store,Store
 LUMINODE12,Luminex,Luminode 12,,12 DMX Interface,False,False,False,False,False,1,,LX,Store,Store
-32ADB#01,Custom,32A 3-Phase DB,,,False,False,False,False,False,1,,LX,Store,Store
+32ADB#01,Custom,32A 3-Phase DB,,,False,False,False,False,False,1,,ELEC,Store,Store
 ME36#03,Sennheiser,ME36,,Gooseneck mic,False,False,False,False,False,1,,AX,Store,
 ME36#04,Sennheiser,ME36,,Gooseneck mic,False,False,False,False,False,1,,AX,Store,
 BULK-0001,Global Truss,F34 Truss - 3m (Silver),,3m truss (silver),False,False,False,False,True,10,,STG,Store,
@@ -1288,5 +1288,5 @@ BULK-0012,Global Truss,F34 Truss - 1m (Black),,1m truss (silver),False,False,Fal
 BULK-0013,Global Truss,F34 Truss - 0.5m (Black),,0.5m truss (black),False,False,False,False,True,18,,STG,Store,
 BULK-0014,Global Truss,F34 Corner Block (Black),,Corner Block (black),False,False,False,False,True,17,,STG,Store,
 BULK-0015,Custom,Sandbag,,Sandbag - 6kg,False,False,False,False,True,20,,STG,Store,
-BULK-0016,Custom,600mm Base plate (carpeted),,,False,False,False,False,True,18,,STG,Store,
-BULK-0017,Custom,600mm Base plate,,,False,False,False,False,True,12,,STG,Store,
+BULK-0016,Custom,605mm Base plate (carpeted),,605x605mm heavy-duty base plate c/w black carpet,False,False,False,False,True,18,,STG,Store,
+BULK-0017,Custom,605mm Base plate,,605x605mm heavy-duty base plate,False,False,False,False,True,12,,STG,Store,

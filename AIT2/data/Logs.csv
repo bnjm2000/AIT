@@ -1,29 +1,3 @@
-2026/04/20 18:02:13,admin,Added 1x Sennheiser DAD(UHF) model to event 126 (total: 1)
-2026/04/20 18:04:44,admin,Assigned specific asset PCBB#10 to event 126
-2026/04/20 18:05:05,admin,Assigned specific asset DAD#01 to event 126
-2026/04/20 18:05:20,admin,Assigned specific asset QL1#02 to event 126
-2026/04/20 18:05:42,admin,Assigned specific asset IP1000#01 to event 126
-2026/04/20 18:05:42,admin,Assigned specific asset IP1000#02 to event 126
-2026/04/20 18:05:46,admin,Assigned specific asset IP1000#03 to event 126
-2026/04/20 18:05:46,admin,Assigned specific asset IP1000#04 to event 126
-2026/04/20 18:05:51,admin,Assigned specific asset IP1000#07 to event 126
-2026/04/20 18:05:51,admin,Assigned specific asset IP1000#08 to event 126
-2026/04/20 18:11:22,admin,Assigned specific asset MT-90A#03 to event 126
-2026/04/20 18:11:25,admin,Assigned specific asset MT-90A#04 to event 126
-2026/04/20 18:15:36,admin,Marked asset PB#26 as Out of Commission
-2026/04/20 18:15:36,admin,Maintenance logged for asset PB#26: Display died while charging.
-2026/04/20 18:15:47,admin,Updated maintenance log for asset PB#26: 'Display died while charging. [Marked OOC]' -> 'Display died while charging.' (also: Marked OOC) (edited by admin)
-2026/04/20 18:16:11,admin,Removed Out of Commission status from asset PB#26
-2026/04/20 18:16:11,admin,"Maintenance logged for asset PB#26: Sent to TSM, replaced display on the spot - $FOC"
-2026/04/20 18:16:22,admin,"Updated maintenance log for asset PB#26: 'Sent to TSM, replaced display on the spot - $FOC [Cleared OOC]' -> 'Sent to TSM, replaced display on the spot - $FOC' (also: Cleared OOC) (edited by admin)"
-2026/04/20 18:23:33,bnjm2000,"Maintenance logged for asset ULXD2#03: Bought new capsule from E&E, replaced whole capsule - 214"
-2026/04/20 18:23:52,bnjm2000,"Updated maintenance log for asset ULXD2#03: 'Bought new capsule from E&E, replaced whole capsule - 214' -> 'Bought new capsule from E&E, replaced whole capsule - $214' (also: Cleared OOC) (edited by bnjm2000)"
-2026/04/20 18:27:27,bnjm2000,Added 40x Astera Pixel Brick model to event 127 (total: 40)
-2026/04/20 18:27:39,bnjm2000,Assigned specific asset PB#01 to event 127
-2026/04/20 18:27:40,bnjm2000,Assigned specific asset PB#02 to event 127
-2026/04/20 18:27:40,bnjm2000,Assigned specific asset PB#03 to event 127
-2026/04/20 18:27:40,bnjm2000,Assigned specific asset PB#04 to event 127
-2026/04/20 18:27:40,bnjm2000,Assigned specific asset PB#05 to event 127
 2026/04/20 18:27:40,bnjm2000,Assigned specific asset PB#06 to event 127
 2026/04/20 18:27:40,bnjm2000,Assigned specific asset PB#07 to event 127
 2026/04/20 18:27:40,bnjm2000,Assigned specific asset PB#08 to event 127
@@ -973,3 +947,30 @@
 2026/05/15 23:44:07,bnjm2000,Maintenance logged for asset DXR12#04: Fan not working (130: Dry Hire: Avery Events)
 2026/05/15 23:44:59,bnjm2000,"Updated maintenance log for asset DXR12#04: 'Fan not working (130: Dry Hire: Avery Events)' -> 'Fan not working, will overheat and go into Protect Mode (130: Dry Hire: Avery Events)' (also: Marked Degraded) (edited by bnjm2000)"
 2026/05/16 00:04:39,bnjm2000,Deleted user user
+2026/05/16 14:32:58,bnjm2000,Created department ELEC (Electrical)
+2026/05/16 14:33:20,bnjm2000,Updated department ELEC -> ELEC; name='Electrical' -> 'Electrical'; assetsUpdated=0; eventsUpdated=0
+2026/05/16 14:33:40,bnjm2000,Updated asset 32ADB#01; applyTo=single; updatedAssets=1; eventsUpdated=3; containersUpdated=0
+2026/05/16 14:33:46,bnjm2000,Updated asset 32ADB#02; applyTo=single; updatedAssets=1; eventsUpdated=2; containersUpdated=0
+2026/05/16 14:33:51,bnjm2000,Updated asset 63ADB#01; applyTo=single; updatedAssets=1; eventsUpdated=3; containersUpdated=0
+2026/05/16 14:33:57,bnjm2000,Updated asset 63ADB#02; applyTo=single; updatedAssets=1; eventsUpdated=1; containersUpdated=0
+2026/05/16 14:35:32,bnjm2000,Created event 140: Dry Hire: Avery Events via web interface
+2026/05/16 14:35:56,bnjm2000,"Added MISC custom asset '8-core XLR - 20m' (2x, dept AX) to event 140"
+2026/05/16 14:36:21,bnjm2000,"Added MISC custom asset '300mm Base plate' (6x, dept STG) to event 140"
+2026/05/16 14:36:29,bnjm2000,Prepared custom item 2x 8-core XLR - 20m for event 140
+2026/05/16 14:36:30,bnjm2000,Prepared custom item 6x 300mm Base plate for event 140
+2026/05/16 20:36:24,bnjm2000,Deleted event 141: Wave to Earth Busking Event @ SMU Campus Green via web interface. No asset locations to reset. Removed 6 related log entries.
+2026/05/16 20:42:29,bnjm2000,Updated asset BULK-0016; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/05/16 20:42:33,bnjm2000,Updated asset BULK-0017; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/05/16 20:43:06,bnjm2000,Updated asset BULK-0016; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/05/16 20:43:09,bnjm2000,Updated asset BULK-0017; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/05/16 20:44:28,bnjm2000,Added 2x Global Truss F34 Truss - 3m (Silver) model to event 131 (total: 3)
+2026/05/16 20:44:36,bnjm2000,Added 2x Global Truss F34 Corner Block (Silver) model to event 131 (total: 2)
+2026/05/16 20:44:54,bnjm2000,Removed Custom 600mm Base plate (carpeted) model from event 131
+2026/05/16 20:44:59,bnjm2000,Added 3x Custom 605mm Base plate (carpeted) model to event 131 (total: 3)
+2026/05/16 20:46:33,bnjm2000,Created event 141:  Wave to Earth Busking Event @ SMU Campus Green via web interface
+2026/05/16 20:46:41,bnjm2000,Added 3x Shure SM57 model to event 141 (total: 3)
+2026/05/16 20:46:46,bnjm2000,Added 1x Sennheiser DAD(UHF) model to event 141 (total: 1)
+2026/05/16 20:46:47,bnjm2000,Added 3x Sennheiser SEK(UHF) model to event 141 (total: 3)
+2026/05/16 20:46:48,bnjm2000,Added 1x Sennheiser Spectera Base Station model to event 141 (total: 1)
+2026/05/16 20:47:02,bnjm2000,"Added MISC custom asset 'Cat6 Drum - 50m' (2x, dept AX) to event 141"
+2026/05/16 22:09:13,bnjm2000,"Deleted event 142: test via web interface. Reset 12 asset locations: ULXD4Q#01 (from 'test' to 'Store'), ULXD2#01 (from 'test' to 'Store'), ULXD2#02 (from 'test' to 'Store'), ULXD2#03 (from 'test' to 'Store'), ULXD2#04 (from 'test' to 'Store').... Removed 37 related log entries."

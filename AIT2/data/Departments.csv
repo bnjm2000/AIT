@@ -1,5 +1,6 @@
 Code,Name,Color,TextColor
 AX,Audio,#CCE5FF,#004085
+ELEC,Electrical,#FFADAD,#111827
 LOAN,Loan,#F8D7DA,#721C24
 LX,Lighting,#D4EDDA,#155724
 MISC,Misc,#FFF3CD,#856404
