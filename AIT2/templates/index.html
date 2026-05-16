@@ -988,6 +988,144 @@
         color: #383d41;
       }
 
+      .maintenance-report-picker-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 8px;
+        align-items: stretch;
+      }
+
+      .maintenance-report-picker-row .btn {
+        margin-right: 0;
+        white-space: nowrap;
+      }
+
+      .maintenance-report-chip-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        max-height: 96px;
+        overflow-y: auto;
+        margin-top: 8px;
+        padding-right: 2px;
+      }
+
+      .maintenance-report-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        border: 1px solid #dfe4ea;
+        border-radius: 8px;
+        background: #fff;
+        color: #333;
+        padding: 6px 8px;
+        font-size: 12px;
+        font-weight: 700;
+        max-width: 100%;
+      }
+
+      .maintenance-report-chip.container-chip {
+        border-color: #b8daff;
+        background: #f4f9ff;
+      }
+
+      .maintenance-report-chip.asset-chip {
+        border-color: #d6eadf;
+        background: #f6fbf8;
+      }
+
+      .maintenance-report-chip span {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .maintenance-report-chip button {
+        width: 20px;
+        height: 20px;
+        border: none;
+        border-radius: 50%;
+        background: rgba(0, 0, 0, 0.08);
+        color: #333;
+        cursor: pointer;
+        font-weight: 800;
+        line-height: 20px;
+        padding: 0;
+      }
+
+      .maintenance-report-empty-filter {
+        color: #666;
+        font-size: 13px;
+        margin-top: 8px;
+      }
+
+      .maintenance-report-multiselect {
+        position: relative;
+      }
+
+      .maintenance-report-multiselect-toggle {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        text-align: left;
+        cursor: pointer;
+        background: #fff;
+      }
+
+      .maintenance-report-multiselect-toggle::after {
+        content: "▾";
+        color: #666;
+        font-size: 12px;
+        font-weight: 800;
+      }
+
+      .maintenance-report-multiselect.open .maintenance-report-multiselect-toggle::after {
+        content: "▴";
+      }
+
+      .maintenance-report-multiselect-menu {
+        display: none;
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: calc(100% + 6px);
+        z-index: 30;
+        background: #fff;
+        border: 1px solid #dfe4ea;
+        border-radius: 8px;
+        box-shadow: 0 12px 26px rgba(0, 0, 0, 0.16);
+        max-height: 260px;
+        overflow-y: auto;
+        padding: 6px;
+      }
+
+      .maintenance-report-multiselect.open .maintenance-report-multiselect-menu {
+        display: block;
+      }
+
+      .maintenance-report-type-option {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 9px 8px;
+        border-radius: 6px;
+        color: #333;
+        font-size: 14px;
+        cursor: pointer;
+      }
+
+      .maintenance-report-type-option:hover {
+        background: #f6f7fb;
+      }
+
+      .maintenance-report-type-option input {
+        width: 16px;
+        height: 16px;
+        accent-color: #667eea;
+      }
+
       .loading {
         text-align: center;
         padding: 40px;
@@ -2453,6 +2591,9 @@
 
           <div class="nav-section">
             <h3>Reports</h3>
+            <button type="button" class="nav-item" onclick="showSection('maintenance-report')">
+              📄 Maintenance Report
+            </button>
             <button type="button" class="nav-item" onclick="showSection('logs')">
               📝 Activity Logs
             </button>
@@ -2679,7 +2820,7 @@
                   <input
                     type="text"
                     class="form-input"
-                    placeholder="Search by ID, brand, model..."
+                    placeholder="Search by ID, brand, model, serial..."
                     id="asset-search"
                     style="padding: 8px 12px; font-size: 14px"
                   />
@@ -2809,6 +2950,66 @@
 
             <div id="logs-container">
               <div class="loading">Loading logs...</div>
+            </div>
+          </div>
+
+          <div id="maintenance-report-section" class="content-section">
+            <div class="content-header">
+              <h2 class="content-title">Maintenance Report</h2>
+              <button class="btn btn-primary" onclick="generateMaintenanceReportPdf()">
+                Generate PDF
+              </button>
+            </div>
+
+            <div class="form-container">
+              <div class="form-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-bottom:16px;">
+                <div class="form-group">
+                  <label class="form-label" for="maintenanceReportStartDate">Start Date</label>
+                  <input type="date" class="form-input" id="maintenanceReportStartDate">
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="maintenanceReportEndDate">End Date</label>
+                  <input type="date" class="form-input" id="maintenanceReportEndDate">
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="maintenanceReportAssetFilter">Asset(s)</label>
+                  <div class="maintenance-report-picker-row">
+                    <input type="text" class="form-input" id="maintenanceReportAssetFilter" list="maintenanceReportAssetOptions" placeholder="Asset or container ID">
+                    <button type="button" class="btn btn-secondary" onclick="addMaintenanceReportAssetFilterFromInput()">Add</button>
+                  </div>
+                  <datalist id="maintenanceReportAssetOptions"></datalist>
+                  <div id="maintenanceReportAssetSelections" class="maintenance-report-chip-list"></div>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="maintenanceReportUserFilter">User</label>
+                  <select class="form-input" id="maintenanceReportUserFilter">
+                    <option value="">All users</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="maintenanceReportLocationFilter">Location</label>
+                  <select class="form-input" id="maintenanceReportLocationFilter">
+                    <option value="">All locations</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="maintenanceReportTypeFilterButton">Report Type</label>
+                  <div class="maintenance-report-multiselect" id="maintenanceReportTypeFilter">
+                    <button type="button" class="form-input maintenance-report-multiselect-toggle" id="maintenanceReportTypeFilterButton" onclick="toggleMaintenanceReportTypeMenu()" aria-haspopup="true" aria-expanded="false">
+                      All types
+                    </button>
+                    <div class="maintenance-report-multiselect-menu" id="maintenanceReportTypeFilterMenu"></div>
+                  </div>
+                </div>
+              </div>
+              <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+                <button type="button" class="btn btn-secondary" onclick="clearMaintenanceReportFilters()">Clear Filters</button>
+                <span id="maintenanceReportPreview" style="color:#666;font-size:14px;"></span>
+              </div>
+            </div>
+
+            <div id="maintenance-report-preview" style="margin-top:16px;">
+              <div class="loading">Loading maintenance records...</div>
             </div>
           </div>
 
@@ -3541,6 +3742,18 @@
                 No assets selected
               </div>
             </div>
+          </div>
+
+          <!-- Maintenance Log Type -->
+          <div class="form-group">
+            <label class="form-label" for="maintenanceLogType">Maintenance Log Type</label>
+            <select class="form-input" id="maintenanceLogType">
+              <option value="General" selected>General</option>
+              <option value="Preventative maintenance">Preventative maintenance</option>
+              <option value="Fault">Fault</option>
+              <option value="Update">Update</option>
+              <option value="Repair">Repair</option>
+            </select>
           </div>
 
           <!-- Maintenance Log Entry -->

@@ -1,9 +1,20 @@
 import json
 import re
 from datetime import datetime
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 
 STATUS_CHANGE_KINDS = ('ooc', 'missing', 'degraded', 'disposed')
+DEFAULT_MAINTENANCE_LOG_TYPE = 'General'
+ASSET_CHECK_LOG_TYPE = 'Asset check'
+USER_MAINTENANCE_LOG_TYPES = (
+    DEFAULT_MAINTENANCE_LOG_TYPE,
+    'Preventative maintenance',
+    'Fault',
+    'Update',
+    'Repair',
+)
+MAINTENANCE_LOG_TYPES = USER_MAINTENANCE_LOG_TYPES + (ASSET_CHECK_LOG_TYPE,)
 
 
 OOC_MARKED = {
@@ -66,6 +77,54 @@ DISPOSED_CLEARED = {
 
 def _text(value):
     return '' if value is None else str(value)
+
+
+def format_maintenance_cost(value):
+    raw = _text(value).strip()
+    if not raw:
+        return ''
+
+    cleaned = raw.replace(',', '')
+    if cleaned.startswith('$'):
+        cleaned = cleaned[1:].strip()
+
+    try:
+        amount = Decimal(cleaned)
+    except (InvalidOperation, ValueError):
+        return raw
+
+    if not amount.is_finite():
+        return raw
+
+    return str(amount.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
+
+
+def normalize_maintenance_log_type(value, allow_asset_check=True):
+    raw = _text(value).strip()
+    if not raw:
+        return DEFAULT_MAINTENANCE_LOG_TYPE
+
+    lookup = {log_type.lower(): log_type for log_type in MAINTENANCE_LOG_TYPES}
+    normalized = lookup.get(raw.lower())
+    if not normalized:
+        return None
+    if normalized == ASSET_CHECK_LOG_TYPE and not allow_asset_check:
+        return None
+    return normalized
+
+
+def normalize_maintenance_log_source(source):
+    if not isinstance(source, dict):
+        return {}
+
+    clean_source = {}
+    for key, value in source.items():
+        clean_key = _text(key).strip()
+        if not clean_key:
+            continue
+        if isinstance(value, (str, int, float, bool)) or value is None:
+            clean_source[clean_key] = _text(value).strip()
+    return clean_source
 
 
 def normalize_change(change):
@@ -178,8 +237,14 @@ def normalize_maintenance_log(log):
             'date': _text(log.get('date')).strip(),
             'user': _text(log.get('user')).strip(),
             'description': _text(log.get('description')),
-            'cost': _text(log.get('cost')).strip(),
+            'type': (
+                normalize_maintenance_log_type(
+                    log.get('type') or log.get('logType') or log.get('maintenanceType')
+                ) or DEFAULT_MAINTENANCE_LOG_TYPE
+            ),
+            'cost': format_maintenance_cost(log.get('cost')),
             'changes': normalize_changes(log.get('changes') or log.get('statusChanges')),
+            'source': normalize_maintenance_log_source(log.get('source')),
         }
 
     raw = _text(log)
@@ -207,18 +272,22 @@ def normalize_maintenance_log(log):
         'date': date,
         'user': user,
         'description': description,
+        'type': DEFAULT_MAINTENANCE_LOG_TYPE,
         'cost': '',
         'changes': changes,
+        'source': {},
     }
 
 
-def make_maintenance_log(date, user, description, changes=None, cost=''):
+def make_maintenance_log(date, user, description, changes=None, cost='', log_type=DEFAULT_MAINTENANCE_LOG_TYPE, source=None):
     return normalize_maintenance_log({
         'date': date,
         'user': user,
         'description': description,
+        'type': log_type,
         'cost': cost,
         'changes': changes or [],
+        'source': source or {},
     })
 
 
@@ -356,4 +425,3 @@ def apply_maintenance_log_changes(asset, log):
                     'degraded': 'is_degraded',
                     'disposed': 'is_disposed',
                 }[kind], False)
-

@@ -36,10 +36,27 @@ let pdfSettings = {
   updatedAt: ""
 };
 
+const DEFAULT_MAINTENANCE_LOG_TYPE = "General";
+const ASSET_CHECK_MAINTENANCE_LOG_TYPE = "Asset check";
+const USER_MAINTENANCE_LOG_TYPES = [
+  DEFAULT_MAINTENANCE_LOG_TYPE,
+  "Preventative maintenance",
+  "Fault",
+  "Update",
+  "Repair"
+];
+const MAINTENANCE_LOG_TYPES = [
+  ...USER_MAINTENANCE_LOG_TYPES,
+  ASSET_CHECK_MAINTENANCE_LOG_TYPE
+];
+
 // ---------- containers cache ----------
 let selectedContainerAssets = new Set();
 let __containersCache = null;
 let __containersCacheTs = 0;
+let maintenanceReportSelectedAssetIds = new Set();
+let maintenanceReportSelectedContainerIds = new Set();
+let __maintenanceReportOutsideClickBound = false;
 
 // keep cache reasonably fresh
 async function refreshContainersCache(force = false) {
@@ -1568,6 +1585,9 @@ function showSection(sectionName) {
     case "logs":
       loadLogs();
       break;
+    case "maintenance-report":
+      loadMaintenanceReportSection();
+      break;
     case "prepare":
       loadPrepareEvents();
       break;
@@ -2109,19 +2129,24 @@ function ensureDepartmentManagerPanel() {
   const controls = inventorySection?.querySelector('.inventory-controls');
   if (!inventorySection || !controls) return;
 
-  const panel = document.createElement('div');
+  const panel = document.createElement('details');
   panel.id = 'department-admin-panel';
   panel.className = 'card';
-  panel.style.cssText = 'margin-bottom:20px;background:white;border-radius:12px;padding:18px;box-shadow:0 4px 15px rgba(0,0,0,0.08);';
+  panel.style.cssText = 'margin-bottom:20px;background:white;border-radius:8px;padding:0;box-shadow:0 4px 15px rgba(0,0,0,0.08);overflow:hidden;';
   panel.innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px;">
+    <summary style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:16px 18px;cursor:pointer;list-style:none;">
       <div>
         <h3 style="margin:0;color:#333;">Department Management</h3>
-        <p style="margin:4px 0 0;color:#666;font-size:13px;">Admin-only: add departments, rename department codes/names, and change badge colours.</p>
+        <p style="margin:4px 0 0;color:#666;font-size:13px;">Admin-only department setup</p>
       </div>
-      <button class="btn btn-success" onclick="openDepartmentModal()">+ Add Department</button>
+      <span style="font-size:13px;color:#667eea;font-weight:700;">Manage departments &#9662;</span>
+    </summary>
+    <div style="padding:0 18px 18px;">
+      <div style="display:flex;justify-content:flex-end;margin-bottom:12px;">
+        <button class="btn btn-success" onclick="openDepartmentModal()">+ Add Department</button>
+      </div>
+      <div id="department-admin-table" style="max-height:360px;overflow:auto;"></div>
     </div>
-    <div id="department-admin-table"></div>
   `;
 
   controls.parentNode.insertBefore(panel, controls);
@@ -5166,6 +5191,793 @@ async function loadLogs() {
   }
 }
 
+function maintenanceReportAssetList() {
+  return Array.isArray(assets) ? assets : [];
+}
+
+function maintenanceReportContainerList() {
+  return Object.values(__containersCache || {}).filter(container => container && container.id);
+}
+
+function maintenanceReportSortIds(ids) {
+  return Array.from(ids || []).sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' }));
+}
+
+function findMaintenanceReportAsset(value) {
+  const raw = String(value || '').trim().toLowerCase();
+  if (!raw) return null;
+  return maintenanceReportAssetList().find(asset => {
+    const candidates = [asset.id, asset.internalId, asset.displayId, asset.serial];
+    return candidates.some(candidate => String(candidate || '').trim().toLowerCase() === raw);
+  }) || null;
+}
+
+function findMaintenanceReportContainer(value) {
+  const raw = String(value || '').trim().toLowerCase();
+  if (!raw) return null;
+  return maintenanceReportContainerList().find(container => String(container.id || '').trim().toLowerCase() === raw) || null;
+}
+
+function maintenanceReportContainerAssetIds(container) {
+  return (container?.assetIds || [])
+    .map(assetId => String(assetId || '').trim())
+    .filter(Boolean);
+}
+
+function maintenanceReportSelectedAssetIdSet() {
+  const selected = new Set();
+  maintenanceReportSelectedAssetIds.forEach(assetId => {
+    if (assetId) selected.add(String(assetId));
+  });
+  maintenanceReportSelectedContainerIds.forEach(containerId => {
+    const container = findMaintenanceReportContainer(containerId);
+    maintenanceReportContainerAssetIds(container).forEach(assetId => selected.add(assetId));
+  });
+  return selected;
+}
+
+function maintenanceReportSplitFilterTokens(value) {
+  return String(value || '')
+    .split(/[,\n;]+/)
+    .map(token => token.trim())
+    .filter(Boolean);
+}
+
+async function ensureMaintenanceReportContainersLoaded() {
+  if (__containersCache) return true;
+  try {
+    await refreshContainersCache(true);
+    return true;
+  } catch (error) {
+    console.warn('Failed to load containers for maintenance report filter:', error);
+    return false;
+  }
+}
+
+function renderMaintenanceReportAssetSelections() {
+  const container = document.getElementById('maintenanceReportAssetSelections');
+  if (!container) return;
+
+  const selectedContainers = maintenanceReportSortIds(maintenanceReportSelectedContainerIds);
+  const selectedAssets = maintenanceReportSortIds(maintenanceReportSelectedAssetIds);
+
+  if (selectedContainers.length === 0 && selectedAssets.length === 0) {
+    container.innerHTML = '<div class="maintenance-report-empty-filter">All assets</div>';
+    return;
+  }
+
+  const containerChips = selectedContainers.map(containerId => {
+    const selectedContainer = findMaintenanceReportContainer(containerId);
+    const assetCount = maintenanceReportContainerAssetIds(selectedContainer).length;
+    const label = assetCount ? `${containerId} (${assetCount})` : containerId;
+    return `
+      <div class="maintenance-report-chip container-chip" title="Container">
+        <span>${escapeHtml(label)}</span>
+        <button type="button" onclick="removeMaintenanceReportContainerFilter('${escapeHtmlAttr(encodeURIComponent(containerId))}')" aria-label="Remove ${escapeHtmlAttr(containerId)}">&times;</button>
+      </div>
+    `;
+  });
+
+  const assetChips = selectedAssets.map(assetId => `
+    <div class="maintenance-report-chip asset-chip" title="Asset">
+      <span>${escapeHtml(assetId)}</span>
+      <button type="button" onclick="removeMaintenanceReportAssetFilter('${escapeHtmlAttr(encodeURIComponent(assetId))}')" aria-label="Remove ${escapeHtmlAttr(assetId)}">&times;</button>
+    </div>
+  `);
+
+  container.innerHTML = [...containerChips, ...assetChips].join('');
+}
+
+function addMaintenanceReportAssetFilterValue(value, options = {}) {
+  const tokens = maintenanceReportSplitFilterTokens(value);
+  const showFeedback = options.showFeedback !== false;
+  let addedAssets = 0;
+  let addedContainers = 0;
+  let alreadySelected = 0;
+  const unknown = [];
+
+  tokens.forEach(token => {
+    const matchingContainer = findMaintenanceReportContainer(token);
+    if (matchingContainer) {
+      if (maintenanceReportSelectedContainerIds.has(matchingContainer.id)) {
+        alreadySelected++;
+      } else {
+        maintenanceReportSelectedContainerIds.add(matchingContainer.id);
+        addedContainers++;
+      }
+      return;
+    }
+
+    const matchingAsset = findMaintenanceReportAsset(token);
+    if (matchingAsset) {
+      const assetId = String(matchingAsset.id || matchingAsset.internalId || matchingAsset.displayId || token);
+      if (maintenanceReportSelectedAssetIds.has(assetId)) {
+        alreadySelected++;
+      } else {
+        maintenanceReportSelectedAssetIds.add(assetId);
+        addedAssets++;
+      }
+      return;
+    }
+
+    unknown.push(token);
+  });
+
+  renderMaintenanceReportAssetSelections();
+  renderMaintenanceReportPreview();
+
+  if (showFeedback) {
+    if (unknown.length > 0) {
+      showNotification('warning', `No asset or container found for: ${unknown.join(', ')}`);
+    } else if (addedAssets > 0 || addedContainers > 0) {
+      const parts = [];
+      if (addedContainers > 0) parts.push(`${addedContainers} container${addedContainers === 1 ? '' : 's'}`);
+      if (addedAssets > 0) parts.push(`${addedAssets} asset${addedAssets === 1 ? '' : 's'}`);
+      showNotification('success', `Added ${parts.join(' and ')} to the report filter`);
+    } else if (alreadySelected > 0) {
+      showNotification('info', 'That filter is already selected');
+    }
+  }
+
+  return { addedAssets, addedContainers, alreadySelected, unknown, tokenCount: tokens.length };
+}
+
+async function flushMaintenanceReportAssetInput(showFeedback = false) {
+  const input = document.getElementById('maintenanceReportAssetFilter');
+  const value = input?.value || '';
+  if (!value.trim()) return null;
+
+  await ensureMaintenanceReportContainersLoaded();
+  const result = addMaintenanceReportAssetFilterValue(value, { showFeedback });
+  const onlyUnknown = result.unknown.length === result.tokenCount && result.addedAssets === 0 && result.addedContainers === 0 && result.alreadySelected === 0;
+  if (input && !onlyUnknown) input.value = '';
+  return result;
+}
+
+async function addMaintenanceReportAssetFilterFromInput() {
+  await flushMaintenanceReportAssetInput(true);
+}
+
+function removeMaintenanceReportAssetFilter(encodedAssetId) {
+  const assetId = decodeURIComponent(encodedAssetId || '');
+  maintenanceReportSelectedAssetIds.delete(assetId);
+  renderMaintenanceReportAssetSelections();
+  renderMaintenanceReportPreview();
+}
+
+function removeMaintenanceReportContainerFilter(encodedContainerId) {
+  const containerId = decodeURIComponent(encodedContainerId || '');
+  maintenanceReportSelectedContainerIds.delete(containerId);
+  renderMaintenanceReportAssetSelections();
+  renderMaintenanceReportPreview();
+}
+
+function getMaintenanceReportTypeCheckboxes() {
+  return Array.from(document.querySelectorAll('#maintenanceReportTypeFilterMenu input[type="checkbox"]'));
+}
+
+function getSelectedMaintenanceReportTypes() {
+  const checkboxes = getMaintenanceReportTypeCheckboxes();
+  if (checkboxes.length === 0) return MAINTENANCE_LOG_TYPES.slice();
+  return checkboxes
+    .filter(checkbox => checkbox.checked)
+    .map(checkbox => checkbox.value);
+}
+
+function syncMaintenanceReportTypeButton() {
+  const button = document.getElementById('maintenanceReportTypeFilterButton');
+  if (!button) return;
+
+  const selectedTypes = getSelectedMaintenanceReportTypes();
+  if (selectedTypes.length === 0) {
+    button.textContent = 'No types selected';
+  } else if (selectedTypes.length === MAINTENANCE_LOG_TYPES.length) {
+    button.textContent = 'All types';
+  } else if (selectedTypes.length === 1) {
+    button.textContent = selectedTypes[0];
+  } else {
+    button.textContent = `${selectedTypes.length} types`;
+  }
+}
+
+function populateMaintenanceReportTypeFilter() {
+  const menu = document.getElementById('maintenanceReportTypeFilterMenu');
+  if (!menu) return;
+
+  const existingCheckboxes = getMaintenanceReportTypeCheckboxes();
+  const selectedBefore = existingCheckboxes.length > 0
+    ? new Set(existingCheckboxes.filter(checkbox => checkbox.checked).map(checkbox => checkbox.value))
+    : new Set(MAINTENANCE_LOG_TYPES);
+
+  menu.innerHTML = MAINTENANCE_LOG_TYPES.map(type => `
+    <label class="maintenance-report-type-option">
+      <input type="checkbox" value="${escapeHtmlAttr(type)}"${selectedBefore.has(type) ? ' checked' : ''}>
+      <span>${escapeHtml(type)}</span>
+    </label>
+  `).join('');
+
+  syncMaintenanceReportTypeButton();
+}
+
+function setAllMaintenanceReportTypes(selected) {
+  getMaintenanceReportTypeCheckboxes().forEach(checkbox => {
+    checkbox.checked = selected;
+  });
+  syncMaintenanceReportTypeButton();
+}
+
+function toggleMaintenanceReportTypeMenu() {
+  const wrapper = document.getElementById('maintenanceReportTypeFilter');
+  const button = document.getElementById('maintenanceReportTypeFilterButton');
+  if (!wrapper) return;
+
+  const isOpen = wrapper.classList.toggle('open');
+  if (button) button.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+}
+
+function closeMaintenanceReportTypeMenu() {
+  const wrapper = document.getElementById('maintenanceReportTypeFilter');
+  const button = document.getElementById('maintenanceReportTypeFilterButton');
+  if (wrapper) wrapper.classList.remove('open');
+  if (button) button.setAttribute('aria-expanded', 'false');
+}
+
+function parseMaintenanceReportDate(dateText) {
+  const raw = String(dateText || '').trim();
+  if (!raw) return null;
+  const parts = raw.split(/[\/-]/).map(Number);
+  if (parts.length !== 3 || parts.some(part => !Number.isFinite(part))) return null;
+  const date = new Date(parts[0], parts[1] - 1, parts[2]);
+  date.setHours(0, 0, 0, 0);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function maintenanceReportDateForDisplay(dateText) {
+  const date = parseMaintenanceReportDate(dateText);
+  if (!date) return String(dateText || '');
+  return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+function maintenanceReportAssetLocation(asset) {
+  return String(
+    asset?.location ||
+    asset?.currentLocation ||
+    asset?.defaultLocation ||
+    'Store'
+  ).trim() || 'Store';
+}
+
+function maintenanceReportRowLocation(asset, log) {
+  const logLocation = getMaintenanceChangeValue(log, 'location');
+  return String(logLocation || maintenanceReportAssetLocation(asset)).trim() || 'Store';
+}
+
+function getAllMaintenanceReportRows() {
+  return (Array.isArray(assets) ? assets : []).flatMap(asset => {
+    const assetId = asset.id || asset.internalId || asset.displayId || '';
+    const records = getMaintenanceLogRecords(asset);
+    return records.map((log, index) => {
+      const dateObj = parseMaintenanceReportDate(log.date);
+      return {
+        assetId,
+        asset,
+        log,
+        logIndex: index,
+        dateObj,
+        dateSort: dateObj ? dateObj.getTime() : 0,
+        type: normalizeMaintenanceLogType(log.type),
+        location: maintenanceReportRowLocation(asset, log),
+        changes: getMaintenanceChangeLabels(log.changes)
+      };
+    });
+  });
+}
+
+function getMaintenanceReportFilters() {
+  const startDate = parseMaintenanceReportDate(document.getElementById('maintenanceReportStartDate')?.value);
+  const endDate = parseMaintenanceReportDate(document.getElementById('maintenanceReportEndDate')?.value);
+  const selectedAssetIds = maintenanceReportSelectedAssetIdSet();
+  const selectedTypes = getSelectedMaintenanceReportTypes();
+
+  return {
+    startDate,
+    endDate,
+    assetIds: Array.from(selectedAssetIds).map(value => String(value || '').toLowerCase()),
+    user: document.getElementById('maintenanceReportUserFilter')?.value || '',
+    location: document.getElementById('maintenanceReportLocationFilter')?.value || '',
+    types: selectedTypes,
+    noTypesSelected: selectedTypes.length === 0,
+    typeFilterActive: selectedTypes.length > 0 && selectedTypes.length < MAINTENANCE_LOG_TYPES.length
+  };
+}
+
+function getFilteredMaintenanceReportRows() {
+  const filters = getMaintenanceReportFilters();
+  return getAllMaintenanceReportRows()
+    .filter(row => {
+      if (filters.startDate && (!row.dateObj || row.dateObj < filters.startDate)) return false;
+      if (filters.endDate && (!row.dateObj || row.dateObj > filters.endDate)) return false;
+      if (filters.assetIds.length > 0) {
+        const rowAssetId = String(row.assetId || '').toLowerCase();
+        if (!filters.assetIds.includes(rowAssetId)) return false;
+      }
+      if (filters.user && row.log.user !== filters.user) return false;
+      if (filters.location && row.location !== filters.location) return false;
+      if (filters.noTypesSelected) return false;
+      if (filters.typeFilterActive && !filters.types.includes(row.type)) return false;
+      return true;
+    })
+    .sort((a, b) => {
+      if (b.dateSort !== a.dateSort) return b.dateSort - a.dateSort;
+      return String(a.assetId || '').localeCompare(String(b.assetId || ''), undefined, { numeric: true });
+    });
+}
+
+function populateMaintenanceReportFilters() {
+  const rows = getAllMaintenanceReportRows();
+  const users = Array.from(new Set(rows.map(row => row.log.user).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+  const userSelect = document.getElementById('maintenanceReportUserFilter');
+  if (userSelect) {
+    const selected = userSelect.value;
+    userSelect.innerHTML = '<option value="">All users</option>' + users.map(user => (
+      `<option value="${escapeHtmlAttr(user)}"${user === selected ? ' selected' : ''}>${escapeHtml(user)}</option>`
+    )).join('');
+  }
+
+  const locations = Array.from(new Set(rows.map(row => row.location).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+  const locationSelect = document.getElementById('maintenanceReportLocationFilter');
+  if (locationSelect) {
+    const selected = locationSelect.value;
+    locationSelect.innerHTML = '<option value="">All locations</option>' + locations.map(location => (
+      `<option value="${escapeHtmlAttr(location)}"${location === selected ? ' selected' : ''}>${escapeHtml(location)}</option>`
+    )).join('');
+  }
+
+  const datalist = document.getElementById('maintenanceReportAssetOptions');
+  if (datalist) {
+    const assetOptions = (Array.isArray(assets) ? assets : [])
+      .map(asset => asset.id || asset.internalId || asset.displayId || '')
+      .filter(Boolean)
+      .sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }))
+      .map(assetId => `<option value="${escapeHtmlAttr(assetId)}" label="Asset"></option>`);
+
+    const containerOptions = maintenanceReportContainerList()
+      .map(container => container.id || '')
+      .filter(Boolean)
+      .sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }))
+      .map(containerId => {
+        const match = findMaintenanceReportContainer(containerId);
+        const count = maintenanceReportContainerAssetIds(match).length;
+        return `<option value="${escapeHtmlAttr(containerId)}" label="Container${count ? ` (${count} assets)` : ''}"></option>`;
+      });
+
+    datalist.innerHTML = [...containerOptions, ...assetOptions].join('');
+  }
+
+  populateMaintenanceReportTypeFilter();
+  renderMaintenanceReportAssetSelections();
+}
+
+function renderMaintenanceReportPreview() {
+  const rows = getFilteredMaintenanceReportRows();
+  const previewText = document.getElementById('maintenanceReportPreview');
+  if (previewText) {
+    previewText.textContent = `${rows.length} maintenance log${rows.length === 1 ? '' : 's'} selected`;
+  }
+
+  const container = document.getElementById('maintenance-report-preview');
+  if (!container) return;
+
+  if (rows.length === 0) {
+    container.innerHTML = '<p style="text-align:center;color:#666;padding:30px;">No maintenance records match the selected filters.</p>';
+    return;
+  }
+
+  const previewRows = rows.slice(0, 60);
+  container.innerHTML = `
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Asset ID</th>
+          <th>Location</th>
+          <th>Type</th>
+          <th>User</th>
+          <th>Description</th>
+          <th>Cost</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${previewRows.map(row => `
+          <tr>
+            <td>${escapeHtml(maintenanceReportDateForDisplay(row.log.date))}</td>
+            <td>${escapeHtml(row.assetId)}</td>
+            <td>${escapeHtml(row.location)}</td>
+            <td>${maintenanceLogTypeBadgeHtml(row.type)}</td>
+            <td>${escapeHtml(row.log.user)}</td>
+            <td>${escapeHtml(row.log.description)}</td>
+            <td>${maintenanceCostDisplayHtml(row.log.cost)}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+    ${rows.length > previewRows.length ? `<div style="color:#666;font-size:13px;margin-top:8px;">Showing first ${previewRows.length} records in preview.</div>` : ''}
+  `;
+}
+
+function bindMaintenanceReportFilters() {
+  [
+    'maintenanceReportStartDate',
+    'maintenanceReportEndDate',
+    'maintenanceReportUserFilter',
+    'maintenanceReportLocationFilter'
+  ].forEach(id => {
+    const element = document.getElementById(id);
+    if (!element || element.dataset.reportBound === 'true') return;
+    element.dataset.reportBound = 'true';
+    element.addEventListener('input', renderMaintenanceReportPreview);
+    element.addEventListener('change', renderMaintenanceReportPreview);
+  });
+
+  const assetInput = document.getElementById('maintenanceReportAssetFilter');
+  if (assetInput && assetInput.dataset.reportBound !== 'true') {
+    assetInput.dataset.reportBound = 'true';
+    assetInput.addEventListener('keydown', event => {
+      if (event.key !== 'Enter') return;
+      event.preventDefault();
+      addMaintenanceReportAssetFilterFromInput();
+    });
+  }
+
+  const typeMenu = document.getElementById('maintenanceReportTypeFilterMenu');
+  if (typeMenu && typeMenu.dataset.reportBound !== 'true') {
+    typeMenu.dataset.reportBound = 'true';
+    typeMenu.addEventListener('change', event => {
+      if (!event.target || event.target.type !== 'checkbox') return;
+      syncMaintenanceReportTypeButton();
+      renderMaintenanceReportPreview();
+    });
+  }
+
+  if (!__maintenanceReportOutsideClickBound) {
+    __maintenanceReportOutsideClickBound = true;
+    document.addEventListener('click', event => {
+      const wrapper = document.getElementById('maintenanceReportTypeFilter');
+      if (!wrapper || wrapper.contains(event.target)) return;
+      closeMaintenanceReportTypeMenu();
+    });
+  }
+}
+
+async function loadMaintenanceReportSection() {
+  try {
+    const response = await apiCall('/api/assets');
+    assets = response.data || [];
+    try {
+      await refreshContainersCache(true);
+    } catch (containerError) {
+      console.warn('Maintenance report container filter unavailable:', containerError);
+    }
+    populateMaintenanceReportFilters();
+    bindMaintenanceReportFilters();
+    renderMaintenanceReportPreview();
+  } catch (error) {
+    const container = document.getElementById('maintenance-report-preview');
+    if (container) {
+      container.innerHTML = '<p style="color:red;text-align:center;">Error loading maintenance records</p>';
+    }
+  }
+}
+
+function clearMaintenanceReportFilters() {
+  ['maintenanceReportStartDate', 'maintenanceReportEndDate', 'maintenanceReportAssetFilter'].forEach(id => {
+    const element = document.getElementById(id);
+    if (element) element.value = '';
+  });
+  const user = document.getElementById('maintenanceReportUserFilter');
+  const location = document.getElementById('maintenanceReportLocationFilter');
+  if (user) user.value = '';
+  if (location) location.value = '';
+  maintenanceReportSelectedAssetIds.clear();
+  maintenanceReportSelectedContainerIds.clear();
+  setAllMaintenanceReportTypes(true);
+  closeMaintenanceReportTypeMenu();
+  renderMaintenanceReportAssetSelections();
+  renderMaintenanceReportPreview();
+}
+
+function maintenanceReportTableHead() {
+  return `
+    <colgroup>
+      <col style="width:8%;">
+      <col style="width:11%;">
+      <col style="width:15%;">
+      <col style="width:12%;">
+      <col style="width:9%;">
+      <col style="width:9%;">
+      <col style="width:22%;">
+      <col style="width:6%;">
+      <col style="width:8%;">
+    </colgroup>
+    <thead>
+      <tr>
+        <th>Date</th>
+        <th>Asset ID</th>
+        <th>Asset</th>
+        <th>Location</th>
+        <th>Type</th>
+        <th>User</th>
+        <th>Description</th>
+        <th>Cost</th>
+        <th>Changes</th>
+      </tr>
+    </thead>
+  `;
+}
+
+function maintenanceReportRowHtml(row, rowNumber) {
+  const safe = value => escapeHtml(String(value ?? ''));
+  const assetText = [row.asset?.brand, row.asset?.model, row.asset?.description]
+    .filter(Boolean)
+    .join(' ');
+  const changesText = row.changes.length ? row.changes.map(safe).join('<br>') : '-';
+  return `
+    <tr>
+      <td>${safe(maintenanceReportDateForDisplay(row.log.date))}</td>
+      <td><strong>${safe(row.assetId)}</strong></td>
+      <td>${safe(assetText || '-')}</td>
+      <td>${safe(row.location || '-')}</td>
+      <td>${safe(row.type)}</td>
+      <td>${safe(row.log.user)}</td>
+      <td>${safe(row.log.description)}</td>
+      <td>${maintenanceCostDisplayHtml(row.log.cost)}</td>
+      <td>${changesText}</td>
+    </tr>
+  `;
+}
+
+function localDateStamp() {
+  const now = new Date();
+  const pad = value => String(value).padStart(2, '0');
+  return {
+    date: now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+    number: `MR-${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}`
+  };
+}
+
+function maintenanceReportFilterSummary(rows) {
+  const start = document.getElementById('maintenanceReportStartDate')?.value || '';
+  const end = document.getElementById('maintenanceReportEndDate')?.value || '';
+  const user = document.getElementById('maintenanceReportUserFilter')?.value || '';
+  const location = document.getElementById('maintenanceReportLocationFilter')?.value || '';
+  const selectedTypes = getSelectedMaintenanceReportTypes();
+  const parts = [];
+  const compactList = (values, max = 5) => {
+    const list = maintenanceReportSortIds(values);
+    if (list.length <= max) return list.join(', ');
+    return `${list.slice(0, max).join(', ')} +${list.length - max} more`;
+  };
+
+  if (start || end) parts.push(`Date range: ${start || 'All'} to ${end || 'All'}`);
+  if (maintenanceReportSelectedContainerIds.size > 0) {
+    parts.push(`Containers: ${compactList(maintenanceReportSelectedContainerIds)}`);
+  }
+  if (maintenanceReportSelectedAssetIds.size > 0) {
+    parts.push(`Assets: ${compactList(maintenanceReportSelectedAssetIds)}`);
+  }
+  if (user) parts.push(`User: ${user}`);
+  if (location) parts.push(`Location: ${location}`);
+  if (selectedTypes.length === 0) {
+    parts.push('Report types: None selected');
+  } else if (selectedTypes.length < MAINTENANCE_LOG_TYPES.length) {
+    parts.push(`Report types: ${compactList(selectedTypes, 4)}`);
+  }
+  if (parts.length === 0) parts.push('All maintenance logs, all time');
+  parts.push(`Records: ${rows.length}`);
+  return parts;
+}
+
+function buildMaintenanceReportPdfPages(rows, context) {
+  const safe = value => escapeHtml(String(value ?? ''));
+  const logoUrl = escapeHtmlAttr(getPdfLogoUrl());
+  const footerHtml = renderPdfFooterHtml();
+  const mmToPx = mm => (mm * 96) / 25.4;
+
+  const headerHtml = `
+    <div class="logo-row"><img src="${logoUrl}" alt="Company Logo"></div>
+    <div class="header">
+      <div class="header-left">
+        GENERATED BY:<br>
+        ${safe(context.generatedBy)}<br><br>
+        FILTERS:<br>
+        ${context.filterSummary.map(safe).join('<br>')}
+      </div>
+      <div class="header-right">
+        <div class="report-title">MAINTENANCE REPORT</div>
+        No. : ${safe(context.reportNumber)}<br>
+        Date : ${safe(context.formattedDate)}
+      </div>
+    </div>
+  `;
+
+  const rowRecords = rows.length
+    ? rows.map((row, index) => ({ html: maintenanceReportRowHtml(row, index + 1), height: 0 }))
+    : [{ html: '<tr><td colspan="9" style="text-align:center;color:#666;padding:18px;">No maintenance records match the selected filters.</td></tr>', height: 0 }];
+
+  const measureBox = document.createElement('div');
+  measureBox.id = '__maintenanceReportMeasureBox';
+  measureBox.style.cssText = `
+    position:absolute;
+    left:-10000px;
+    top:0;
+    visibility:hidden;
+    width:196mm;
+    font-family:'Century Gothic', Arial, sans-serif;
+    font-size:7.6pt;
+    line-height:1.25;
+    background:white;
+    z-index:-1;
+  `;
+
+  measureBox.innerHTML = `
+    <style>
+      #__maintenanceReportMeasureBox * { box-sizing: border-box; }
+      #__maintenanceReportMeasureBox .logo-row { display:flex; justify-content:flex-end; margin-bottom:7px; height:39px; }
+      #__maintenanceReportMeasureBox .logo-row img { height:39px; width:auto; object-fit:contain; }
+      #__maintenanceReportMeasureBox .header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:18px; }
+      #__maintenanceReportMeasureBox .header-left { flex:1; font-size:9pt; font-weight:bold; line-height:1.35; }
+      #__maintenanceReportMeasureBox .header-right { text-align:right; font-size:9pt; font-weight:bold; }
+      #__maintenanceReportMeasureBox .report-title { font-size:14pt; font-weight:bold; margin-bottom:5px; }
+      #__maintenanceReportMeasureBox .items-table { width:100%; border-collapse:collapse; border:2px solid black; margin-bottom:16px; table-layout:fixed; }
+      #__maintenanceReportMeasureBox .items-table th { background:#333; color:white; padding:6px; text-align:left; font-size:7.8pt; border:1px solid #333; }
+      #__maintenanceReportMeasureBox .items-table td { border:1px solid #333; padding:5px; font-size:7.6pt; vertical-align:top; line-height:1.25; word-break:break-word; }
+    </style>
+    <div id="__maintenanceReportBase">
+      ${headerHtml}
+      <table class="items-table">${maintenanceReportTableHead()}</table>
+    </div>
+    <table class="items-table">
+      ${maintenanceReportTableHead()}
+      <tbody id="__maintenanceReportMeasureBody"></tbody>
+    </table>
+  `;
+
+  document.body.appendChild(measureBox);
+
+  const measureBody = measureBox.querySelector('#__maintenanceReportMeasureBody');
+  const baseHeight = measureBox.querySelector('#__maintenanceReportBase').getBoundingClientRect().height;
+  const pageFlowHeightMm = 276;
+  const footerReserveMm = 18;
+  const rowBudget = Math.max(40, mmToPx(pageFlowHeightMm - footerReserveMm) - baseHeight);
+
+  function measureRow(rowHtml) {
+    measureBody.innerHTML = rowHtml;
+    const row = measureBody.querySelector('tr');
+    return row ? row.getBoundingClientRect().height : 0;
+  }
+
+  rowRecords.forEach(record => {
+    record.height = measureRow(record.html);
+  });
+  measureBox.remove();
+
+  const pages = [];
+  let index = 0;
+  while (index < rowRecords.length) {
+    const pageRows = [];
+    let pageHeight = 0;
+    while (index < rowRecords.length) {
+      const record = rowRecords[index];
+      if (pageRows.length > 0 && pageHeight + record.height > rowBudget) break;
+      pageRows.push(record);
+      pageHeight += record.height;
+      index++;
+      if (pageRows.length === 1 && record.height > rowBudget) break;
+    }
+    pages.push(pageRows);
+  }
+
+  const totalPages = pages.length;
+  return pages.map((pageRows, pageIndex) => `
+    <div class="page">
+      ${headerHtml}
+      <table class="items-table">
+        ${maintenanceReportTableHead()}
+        <tbody>
+          ${pageRows.map(row => row.html).join('')}
+        </tbody>
+      </table>
+      <div class="footer">${footerHtml}</div>
+      <div class="page-number">Page ${pageIndex + 1} of ${totalPages}</div>
+    </div>
+  `).join('');
+}
+
+async function generateMaintenanceReportPdf() {
+  try {
+    const response = await apiCall('/api/assets');
+    assets = response.data || [];
+    try {
+      await refreshContainersCache(true);
+    } catch (containerError) {
+      console.warn('Maintenance report container filter unavailable:', containerError);
+    }
+    const pendingAssetFilter = await flushMaintenanceReportAssetInput(true);
+    if (
+      pendingAssetFilter &&
+      pendingAssetFilter.unknown.length === pendingAssetFilter.tokenCount &&
+      pendingAssetFilter.addedAssets === 0 &&
+      pendingAssetFilter.addedContainers === 0 &&
+      pendingAssetFilter.alreadySelected === 0
+    ) {
+      return;
+    }
+
+    const rows = getFilteredMaintenanceReportRows();
+    await loadPdfSettings(true);
+    const stamp = localDateStamp();
+    const pagesHtml = buildMaintenanceReportPdfPages(rows, {
+      generatedBy: currentUser?.username || '',
+      reportNumber: stamp.number,
+      formattedDate: stamp.date,
+      filterSummary: maintenanceReportFilterSummary(rows)
+    });
+
+    const win = window.open('', '_blank', 'width=900,height=1000');
+    if (!win) {
+      showNotification('error', 'Pop-up blocked. Please allow pop-ups to export the maintenance report PDF.');
+      return;
+    }
+
+    const html = `<!DOCTYPE html><html><head><title>Maintenance Report</title><style>
+      @page { size: A4; margin: 0; }
+      * { box-sizing: border-box; }
+      body { margin: 0; font-family: 'Century Gothic', Arial, sans-serif; color: #000; background: #f0f0f0; }
+      .page { width: 210mm; height: 297mm; min-height: 297mm; margin: 0 auto 12px auto; padding: 7mm 7mm 14mm 7mm; background: white; position: relative; overflow: hidden; page-break-after: always; break-after: page; }
+      .page:last-child { page-break-after: auto; break-after: auto; }
+      .logo-row { display:flex; justify-content:flex-end; margin-bottom:7px; height:39px; }
+      .logo-row img { height:39px; width:auto; object-fit:contain; }
+      .header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:18px; }
+      .header-left { flex:1; font-size:9pt; font-weight:bold; line-height:1.35; }
+      .header-right { text-align:right; font-size:9pt; font-weight:bold; }
+      .report-title { font-size:14pt; font-weight:bold; margin-bottom:5px; }
+      .items-table { width:100%; border-collapse:collapse; border:2px solid black; margin-bottom:16px; table-layout:fixed; }
+      .items-table th { background:#333; color:white; padding:6px; text-align:left; font-size:7.8pt; border:1px solid #333; }
+      .items-table td { border:1px solid #333; padding:5px; font-size:7.6pt; vertical-align:top; line-height:1.25; word-break:break-word; }
+      .footer { position:absolute; bottom:7mm; left:7mm; right:7mm; text-align:center; font-size:7pt; font-weight:bold; line-height:1.2; }
+      .page-number { position:absolute; bottom:3mm; right:7mm; font-size:7pt; }
+      .print-btn { position:fixed; top:20px; right:20px; background:#667eea; color:white; border:none; padding:10px 18px; border-radius:6px; cursor:pointer; z-index:999; }
+      @media print { body { background:white; } .page { margin:0; page-break-after:always; break-after:page; } .page:last-child { page-break-after:auto; break-after:auto; } .print-btn { display:none; } }
+    </style></head><body><button class="print-btn" onclick="window.print()">Print / Save as PDF</button>${pagesHtml}</body></html>`;
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    showNotification('success', 'Maintenance report PDF generated successfully');
+  } catch (error) {
+    showNotification('error', `Failed to generate maintenance report: ${error.message}`);
+  }
+}
+
 
 function createPrepareEventCard(event) {
   const card = document.createElement("div");
@@ -7882,16 +8694,72 @@ function splitLegacyMaintenanceStatus(description) {
   return { description: match[1].trimEnd(), changes };
 }
 
+function normalizeMaintenanceLogType(value, allowAssetCheck = true) {
+  const raw = String(value || '').trim();
+  if (!raw) return DEFAULT_MAINTENANCE_LOG_TYPE;
+  const match = MAINTENANCE_LOG_TYPES.find(type => type.toLowerCase() === raw.toLowerCase());
+  if (!match) return DEFAULT_MAINTENANCE_LOG_TYPE;
+  if (match === ASSET_CHECK_MAINTENANCE_LOG_TYPE && !allowAssetCheck) {
+    return DEFAULT_MAINTENANCE_LOG_TYPE;
+  }
+  return match;
+}
+
+function maintenanceLogTypeSelectHtml(id, selectedType = DEFAULT_MAINTENANCE_LOG_TYPE) {
+  const selected = normalizeMaintenanceLogType(selectedType, false);
+  return `
+    <select id="${escapeHtmlAttr(id)}" class="form-input">
+      ${USER_MAINTENANCE_LOG_TYPES.map(type => `
+        <option value="${escapeHtmlAttr(type)}"${type === selected ? ' selected' : ''}>${escapeHtml(type)}</option>
+      `).join('')}
+    </select>
+  `;
+}
+
+function maintenanceLogTypeBadgeHtml(type) {
+  const normalized = normalizeMaintenanceLogType(type);
+  const palette = {
+    "General": "background:#e9ecef;color:#343a40;",
+    "Preventative maintenance": "background:#d1ecf1;color:#0c5460;",
+    "Fault": "background:#f8d7da;color:#721c24;",
+    "Update": "background:#e2d9f3;color:#3d246c;",
+    "Repair": "background:#fff3cd;color:#856404;",
+    "Asset check": "background:#d4edda;color:#155724;"
+  };
+  const label = normalized === "Preventative maintenance" ? "Preventative" : normalized;
+  return `<span style="display:inline-block;padding:4px 8px;border-radius:999px;font-size:12px;font-weight:700;white-space:nowrap;${palette[normalized] || palette.General}">${escapeHtml(label)}</span>`;
+}
+
+function formatMaintenanceCost(value) {
+  const raw = String(value ?? '').trim();
+  if (!raw) return '';
+
+  const cleaned = raw.replace(/,/g, '').replace(/^\$/, '').trim();
+  if (!cleaned) return '';
+
+  const amount = Number(cleaned);
+  if (!Number.isFinite(amount)) return raw;
+
+  return amount.toFixed(2);
+}
+
+function maintenanceCostDisplayHtml(value, emptyHtml = '-') {
+  const cost = formatMaintenanceCost(value);
+  return cost ? `$${escapeHtml(cost)}` : emptyHtml;
+}
+
 function normalizeMaintenanceLogRecord(log) {
   if (log && typeof log === 'object' && !Array.isArray(log)) {
     return {
       date: String(log.date || ''),
       user: String(log.user || ''),
       description: String(log.description || ''),
-      cost: String(log.cost || ''),
+      type: normalizeMaintenanceLogType(log.type || log.logType || log.maintenanceType),
+      cost: formatMaintenanceCost(log.cost),
       changes: Array.isArray(log.changes)
         ? log.changes.map(normalizeMaintenanceChange).filter(Boolean)
-        : []
+        : [],
+      source: log.source && typeof log.source === 'object' ? { ...log.source } : {}
     };
   }
 
@@ -7900,7 +8768,7 @@ function normalizeMaintenanceLogRecord(log) {
     ? { date: parts[0] || '', user: parts[1] || '', description: parts.slice(2).join('\t') || '' }
     : { date: '', user: '', description: String(log || '') };
   const legacy = splitLegacyMaintenanceStatus(parsed.description);
-  return { ...parsed, description: legacy.description, cost: '', changes: legacy.changes };
+  return { ...parsed, description: legacy.description, type: DEFAULT_MAINTENANCE_LOG_TYPE, cost: '', changes: legacy.changes, source: {} };
 }
 
 function getMaintenanceLogRecords(asset) {
@@ -8011,6 +8879,7 @@ let assetCheckState = {
   group: null,
   assets: [],
   checked: new Set(),
+  checkIds: {},
   seedIdentifier: ''
 };
 
@@ -8174,6 +9043,7 @@ function resetAssetCheckState() {
     group: null,
     assets: [],
     checked: new Set(),
+    checkIds: {},
     seedIdentifier: ''
   };
 }
@@ -8221,6 +9091,39 @@ function loadAssetCheck() {
       if (e.key === 'Enter') startAssetCheck();
     });
   }
+}
+
+function createAssetCheckLogId(assetId) {
+  if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+    return `asset-check-${window.crypto.randomUUID()}`;
+  }
+  return `asset-check-${Date.now()}-${Math.random().toString(16).slice(2)}-${String(assetId || '').replace(/[^A-Za-z0-9_-]+/g, '')}`;
+}
+
+async function setAssetCheckChecked(assetId, checked) {
+  const cleanAssetId = String(assetId || '').trim();
+  if (!cleanAssetId) throw new Error('Asset ID is required');
+
+  const checkId = checked
+    ? (assetCheckState.checkIds[cleanAssetId] || createAssetCheckLogId(cleanAssetId))
+    : (assetCheckState.checkIds[cleanAssetId] || '');
+
+  const response = await apiCall('/api/asset-check/sighting', 'POST', {
+    assetId: cleanAssetId,
+    groupKey: assetCheckState.group?.key || '',
+    checkId,
+    checked: !!checked
+  });
+
+  if (checked) {
+    assetCheckState.checked.add(cleanAssetId);
+    assetCheckState.checkIds[cleanAssetId] = response.data?.checkId || checkId;
+  } else {
+    assetCheckState.checked.delete(cleanAssetId);
+    delete assetCheckState.checkIds[cleanAssetId];
+  }
+
+  return response;
 }
 
 // Event handler functions
@@ -8304,11 +9207,12 @@ async function startAssetCheck() {
     assetCheckState.group = data.group || null;
     assetCheckState.assets = Array.isArray(data.assets) ? data.assets : [];
     assetCheckState.checked = new Set();
+    assetCheckState.checkIds = {};
     assetCheckState.seedIdentifier = identifier;
 
     const scannedAsset = data.scannedAsset;
     if (scannedAsset && scannedAsset.checkEligible && scannedAsset.id) {
-      assetCheckState.checked.add(scannedAsset.id);
+      await setAssetCheckChecked(scannedAsset.id, true);
     }
 
     renderAssetCheckSession();
@@ -8457,7 +9361,7 @@ function getAssetCheckStatusBadge(asset, isChecked) {
   return '<span class="asset-check-badge pending">Unchecked</span>';
 }
 
-function toggleAssetCheck(encodedAssetId) {
+async function toggleAssetCheck(encodedAssetId) {
   const assetId = decodeURIComponent(encodedAssetId || '');
   const asset = assetCheckState.assets.find(item => item.id === assetId);
 
@@ -8472,17 +9376,20 @@ function toggleAssetCheck(encodedAssetId) {
     return;
   }
 
-  if (assetCheckState.checked.has(assetId)) {
-    assetCheckState.checked.delete(assetId);
-  } else {
-    assetCheckState.checked.add(assetId);
+  const shouldCheck = !assetCheckState.checked.has(assetId);
+
+  try {
+    await setAssetCheckChecked(assetId, shouldCheck);
+  } catch (error) {
+    showNotification('error', `Failed to ${shouldCheck ? 'check' : 'undo'} ${assetId}: ${error.message}`);
+    return;
   }
 
   renderAssetCheckSession();
   flashAssetCheckRow(assetId);
 }
 
-function checkAsset() {
+async function checkAsset() {
   const input = document.getElementById('assetCheckScanInput');
   const identifier = input ? input.value.trim() : '';
 
@@ -8520,7 +9427,22 @@ function checkAsset() {
     return;
   }
 
-  assetCheckState.checked.add(asset.id);
+  if (assetCheckState.checked.has(asset.id)) {
+    showNotification('info', `${asset.id} is already checked`);
+    input.value = '';
+    renderAssetCheckSession();
+    flashAssetCheckRow(asset.id);
+    return;
+  }
+
+  try {
+    await setAssetCheckChecked(asset.id, true);
+  } catch (error) {
+    showNotification('error', `Failed to check ${asset.id}: ${error.message}`);
+    input.focus();
+    return;
+  }
+
   showNotification('success', `${asset.id} checked`);
   input.value = '';
   renderAssetCheckSession();
@@ -8550,6 +9472,7 @@ async function refreshAssetCheckGroup(keepChecked = true) {
   assetCheckState.group = data.group || assetCheckState.group;
   assetCheckState.assets = Array.isArray(data.assets) ? data.assets : [];
   assetCheckState.checked = keepChecked ? existingChecked : new Set();
+  if (!keepChecked) assetCheckState.checkIds = {};
 }
 
 async function markUncheckedAssetCheckMissing() {
@@ -10476,12 +11399,7 @@ document.addEventListener("DOMContentLoaded", function () {
               logEntry,
               maintenanceDate, // Include the selected date
               newLocation: newLocation || null,
-              markOOC: false,
-              unmarkOOC: true,  // Clear OOC status
-              markMissing: false,
-              unmarkMissing: true,  // Clear Missing status
-              unmarkDegraded: true,
-              unmarkDisposed: true,
+              assetStatus: 'ok',
               newSerial: newSerial || null,
               cost: document.getElementById('bulkOOCCost')?.value.trim() || null
             };
@@ -10541,6 +11459,7 @@ document.addEventListener("DOMContentLoaded", function () {
       const logEntry = document.getElementById("maintenanceLogEntry").value.trim();
       const maintenanceDate = document.getElementById("maintenanceDate").value;
       const newLocation = document.getElementById("maintenanceNewLocation").value.trim();
+      const logType = normalizeMaintenanceLogType(document.getElementById("maintenanceLogType")?.value, false);
 
       const newSerialElement = document.getElementById("maintenanceNewSerial");
       const newSerial = newSerialElement ? newSerialElement.value.trim() : '';
@@ -10569,6 +11488,7 @@ document.addEventListener("DOMContentLoaded", function () {
           try {
             const maintenanceData = {
               logEntry: logEntry,
+              logType: logType,
               maintenanceDate: maintenanceDate,
               newLocation: newLocation || null,
               newSerial: newSerial || null,
@@ -10825,6 +11745,7 @@ function openMaintenanceModal() {
   const maintenanceDateEl = document.getElementById('maintenanceDate');
   const assetSearchEl = document.getElementById('maintenanceAssetSearch');
   const availableAssetsEl = document.getElementById('availableMaintenanceAssets');
+  const logTypeEl = document.getElementById('maintenanceLogType');
   
   if (!logEntryEl || !newLocationEl || !maintenanceDateEl || !assetSearchEl || !availableAssetsEl) {
     console.error('Maintenance modal elements not found');
@@ -10841,6 +11762,7 @@ function openMaintenanceModal() {
   newLocationEl.value = '';
   const maintenanceCostEl = document.getElementById('maintenanceCost');
   if (maintenanceCostEl) maintenanceCostEl.value = '';
+  if (logTypeEl) logTypeEl.value = DEFAULT_MAINTENANCE_LOG_TYPE;
   
   // Set current date as default
   const today = new Date().toISOString().split('T')[0];
@@ -11297,14 +12219,7 @@ async function processSingleOOCClear() {
       logEntry: logEntry,
       maintenanceDate: maintenanceDate, // Include the selected date
       newLocation: newLocation,
-      markOOC: false,
-      unmarkOOC: true,   // Clear OOC status
-      markMissing: false,
-      unmarkMissing: true, // Clear Missing status
-      markDegraded: false,
-      unmarkDegraded: true,
-      markDisposed: false,
-      unmarkDisposed: true,
+      assetStatus: 'ok',
       cost: repairCost || null
     };
     
@@ -11317,7 +12232,7 @@ async function processSingleOOCClear() {
     
     closeModal('singleOOCModal');
     
-    let message = `Cleared OOC/Missing status for ${assetId} and moved to ${newLocation}`;
+    let message = `Cleared status for ${assetId} and moved to ${newLocation}`;
     if (newSerial) {
       message += ` (Serial updated to: ${newSerial})`;
     }
@@ -11437,6 +12352,7 @@ function showMaintenanceLogModal(asset) {
                     <th style="padding: 12px; font-weight: 600; color: #495057; border-bottom: 2px solid #e9ecef; text-align: left; background: #f8f9fa; width: 50px;">#</th>
                     <th style="padding: 12px; font-weight: 600; color: #495057; border-bottom: 2px solid #e9ecef; text-align: left; background: #f8f9fa; width: 110px;">Date</th>
                     <th style="padding: 12px; font-weight: 600; color: #495057; border-bottom: 2px solid #e9ecef; text-align: left; background: #f8f9fa; width: 100px;">User</th>
+                    <th style="padding: 12px; font-weight: 600; color: #495057; border-bottom: 2px solid #e9ecef; text-align: left; background: #f8f9fa; width: 150px;">Type</th>
                     <th style="padding: 12px; font-weight: 600; color: #495057; border-bottom: 2px solid #e9ecef; text-align: left; background: #f8f9fa;">Description</th>
                     <th style="padding: 12px; font-weight: 600; color: #495057; border-bottom: 2px solid #e9ecef; text-align: left; background: #f8f9fa; width: 110px;">Cost</th>
                     <th style="padding: 12px; font-weight: 600; color: #495057; border-bottom: 2px solid #e9ecef; text-align: left; background: #f8f9fa; width: 200px;">Status Changes</th>
@@ -11556,13 +12472,14 @@ function showMaintenanceLogModal(asset) {
           <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; vertical-align: top; font-weight: 500; text-align: center;">${displayNumber}</td>
           <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; vertical-align: top; font-size: 13px;">${log.date}</td>
           <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; vertical-align: top; font-size: 13px;">${escapeHtml(log.user)}</td>
+          <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; vertical-align: top; font-size: 13px;">${maintenanceLogTypeBadgeHtml(log.type)}</td>
           <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; vertical-align: top;">
             <div id="${logId}_display" ${descriptionAttrs}>
               ${escapeHtml(log.description)}
             </div>
           </td>
           <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; vertical-align: top; font-size: 13px;">
-            ${log.cost ? '$' + escapeHtml(log.cost) : '<span style="color:#999;">—</span>'}
+            ${maintenanceCostDisplayHtml(log.cost, '<span style="color:#999;">—</span>')}
           </td>
           <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; vertical-align: top; word-wrap: break-word; overflow-wrap: break-word; max-width: 200px;">
             ${statusChangesDisplay}
@@ -11578,7 +12495,7 @@ function showMaintenanceLogModal(asset) {
   } else {
     modalContent += `
       <tr>
-        <td colspan="6" style="text-align: center; color: #666; padding: 30px; font-style: italic;">
+        <td colspan="8" style="text-align: center; color: #666; padding: 30px; font-style: italic;">
           No maintenance records found for this asset.
         </td>
       </tr>
@@ -12292,6 +13209,7 @@ function editMaintenanceLog(assetId, logIndex, logId) {
   const currentDate = logEntry.date || '';
   const currentUser = logEntry.user || '';
   const currentDescription = logEntry.description || '';
+  const currentLogType = normalizeMaintenanceLogType(logEntry.type);
   const existingStatusChanges = getMaintenanceChangeLabels(logEntry.changes).join(', ');
   const logLocationFromThisEntry = getMaintenanceChangeValue(logEntry, 'location');
   const hasLocationChangeInThisLog = Boolean(logLocationFromThisEntry);
@@ -12379,6 +13297,16 @@ function editMaintenanceLog(assetId, logIndex, logId) {
               />
             </div>
 
+            <!-- Type -->
+            <div class="form-group">
+              <label class="form-label" for="editMaintenanceLogType">Maintenance Log Type</label>
+              ${
+                currentLogType === ASSET_CHECK_MAINTENANCE_LOG_TYPE
+                  ? `<input type="text" class="form-input" id="editMaintenanceLogType" value="${escapeHtmlAttr(ASSET_CHECK_MAINTENANCE_LOG_TYPE)}" readonly />`
+                  : maintenanceLogTypeSelectHtml('editMaintenanceLogType', currentLogType)
+              }
+            </div>
+
             <!-- Description -->
             <div class="form-group">
               <label class="form-label">Maintenance Description</label>
@@ -12403,7 +13331,7 @@ function editMaintenanceLog(assetId, logIndex, logId) {
                   class="form-input"
                   id="editMaintenanceCost"
                   placeholder="Repair cost, if any"
-                  value="${escapeHtml(logEntry.cost || '')}"
+                  value="${escapeHtml(formatMaintenanceCost(logEntry.cost))}"
                   style="border:0;box-shadow:none;"
                 />
               </div>
@@ -12562,6 +13490,7 @@ async function saveEnhancedMaintenanceLog(assetId, logIndex, logId) {
     const newSerial = document.getElementById('editMaintenanceNewSerial').value.trim();
     const repairCost = document.getElementById('editMaintenanceCost')?.value.trim() || '';
     const statusValue = document.getElementById('editMaintenanceAssetStatus')?.value || 'nochange';
+    const logType = normalizeMaintenanceLogType(document.getElementById('editMaintenanceLogType')?.value, true);
     
     if (!date || !user || !description) {
       showNotification('warning', 'Date, user, and description are required');
@@ -12607,6 +13536,7 @@ async function saveEnhancedMaintenanceLog(assetId, logIndex, logId) {
       date: date,
       user: user,
       description: description,
+      logType: logType,
       newLocation: locationToUpdate,
       newSerial: serialToUpdate,
       cost: repairCost || null,
@@ -14883,6 +15813,9 @@ async function refreshVisibleDataFromRealtime() {
       case "logs":
         await loadLogs();
         break;
+      case "maintenance-report":
+        await loadMaintenanceReportSection();
+        break;
       case "users":
         if (typeof loadUsersAdmin === "function") await loadUsersAdmin();
         break;
@@ -16035,7 +16968,7 @@ function displayFilteredInventory() {
 
   let filteredAssets = assets.filter((asset) => {
     const deptMeta = getDepartmentMeta(asset.department);
-    const searchableText = `${asset.id || ''} ${asset.internalId || ''} ${asset.bulkId || ''} ${asset.brand || ''} ${asset.model || ''} ${asset.description || ''} ${asset.department || ''} ${deptMeta.name || ''}`.toLowerCase();
+    const searchableText = `${asset.id || ''} ${asset.internalId || ''} ${asset.bulkId || ''} ${asset.brand || ''} ${asset.model || ''} ${asset.serial || ''} ${asset.description || ''} ${asset.department || ''} ${deptMeta.name || ''}`.toLowerCase();
     const matchesSearch = !searchTerm || searchableText.includes(searchTerm);
     const matchesDept = !deptFilter || asset.department === deptFilter;
     const matchesStatus = !statusFilter || asset.status === statusFilter;

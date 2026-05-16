@@ -20,11 +20,15 @@ from types import SimpleNamespace
 from models import User, InventoryItem, Container, Event, LogEntry, hash_password, format_date_output, dates_overlap
 from data_manager import DataManager
 from maintenance_logs import (
+    ASSET_CHECK_LOG_TYPE,
+    DEFAULT_MAINTENANCE_LOG_TYPE,
+    USER_MAINTENANCE_LOG_TYPES,
     apply_maintenance_log_changes,
     make_change,
     make_maintenance_log,
     maintenance_log_to_display_string,
     normalize_maintenance_log,
+    normalize_maintenance_log_type,
     parse_maintenance_log_date,
     status_change_labels,
 )
@@ -628,13 +632,22 @@ def _normalise_asset_status_flags(asset):
     _apply_exclusive_asset_status(asset, _asset_condition_status(asset))
 
 
-def _status_changes_for_request(data):
+def _status_changes_for_request(data, current_status=None):
     """Return (target_status, changes, error).
 
     target_status is one of: None, 'ok', 'ooc', 'missing', 'degraded', 'disposed'.
     None means no status change requested.
     """
     data = data or {}
+    current_status = str(current_status or '').strip().lower()
+    if current_status == 'available':
+        current_status = 'ok'
+
+    def clear_current_status_change():
+        if current_status in ASSET_CONDITION_STATUSES:
+            return 'ok', [make_change(current_status, action='cleared')]
+        return None, []
+
     explicit = (
         data.get('assetStatus') or
         data.get('editAssetStatus') or
@@ -669,7 +682,8 @@ def _status_changes_for_request(data):
         if target is None:
             return None, [], None
         if target == 'ok':
-            return target, [make_change(kind, action='cleared') for kind in ASSET_CONDITION_STATUSES], None
+            target, changes = clear_current_status_change()
+            return target, changes, None
         return target, [make_change(target, action='marked')], None
 
     mark_flags = {
@@ -693,10 +707,45 @@ def _status_changes_for_request(data):
     }
     cleared = [kind for kind, enabled in clear_flags.items() if enabled]
     if cleared:
-        target = 'ok' if set(cleared) == set(ASSET_CONDITION_STATUSES) else None
+        if set(cleared) == set(ASSET_CONDITION_STATUSES):
+            target, changes = clear_current_status_change()
+            return target, changes, None
+        target = 'ok' if current_status in cleared else None
         return target, [make_change(kind, action='cleared') for kind in cleared], None
 
     return None, [], None
+
+
+def _maintenance_log_type_for_request(data, default_type=DEFAULT_MAINTENANCE_LOG_TYPE, allow_asset_check=False):
+    """Return (log_type, error) for a maintenance log type submitted by the UI."""
+    data = data or {}
+    raw_type = None
+    for key in ('logType', 'maintenanceType', 'type'):
+        if key in data:
+            raw_type = data.get(key)
+            break
+
+    if raw_type is None or str(raw_type).strip() == '':
+        return default_type or DEFAULT_MAINTENANCE_LOG_TYPE, None
+
+    log_type = normalize_maintenance_log_type(raw_type, allow_asset_check=allow_asset_check)
+    if not log_type:
+        user_options = ', '.join(USER_MAINTENANCE_LOG_TYPES)
+        if str(raw_type).strip().lower() == ASSET_CHECK_LOG_TYPE.lower():
+            return None, 'Asset check logs can only be created by the Asset Check function'
+        return None, f'Invalid maintenance log type. Choose one of: {user_options}'
+
+    return log_type, None
+
+
+def _request_bool(value, default=False):
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    return str(value).strip().lower() in ('1', 'true', 'yes', 'y', 'on')
 
 
 def _validate_status_transition(asset, target_status, current_status=None):
@@ -710,8 +759,8 @@ def _validate_status_transition(asset, target_status, current_status=None):
     return None
 
 
-def _condition_status_before_log(asset, exclude_index):
-    """Calculate an asset's status after all logs except one selected log."""
+def _condition_status_before_log(asset, exclude_index, selected_date=None):
+    """Calculate an asset's condition status immediately before one selected log."""
     scratch = SimpleNamespace(
         asset_id=getattr(asset, 'asset_id', ''),
         is_ooc=False,
@@ -722,20 +771,33 @@ def _condition_status_before_log(asset, exclude_index):
         current_location='',
     )
 
+    logs = getattr(asset, 'maintenance_logs', []) or []
+    if exclude_index < 0 or exclude_index >= len(logs):
+        return _asset_condition_status(scratch)
+
+    def log_sort_date(record):
+        try:
+            return datetime.strptime(record.get('date', ''), "%Y/%m/%d")
+        except ValueError:
+            return datetime.min
+
+    selected_record = normalize_maintenance_log(logs[exclude_index])
+    selected_sort_key = (
+        log_sort_date({**selected_record, 'date': selected_date or selected_record.get('date', '')}),
+        exclude_index
+    )
+
     sorted_logs = []
-    for i, log_entry in enumerate(getattr(asset, 'maintenance_logs', []) or []):
+    for i, log_entry in enumerate(logs):
         if i == exclude_index:
             continue
         record = normalize_maintenance_log(log_entry)
-        date_str = record.get('date', '')
-        try:
-            date_obj = datetime.strptime(date_str, "%Y/%m/%d")
-        except ValueError:
-            date_obj = datetime.min
-        sorted_logs.append((date_obj, i, record))
+        sorted_logs.append((log_sort_date(record), i, record))
 
     sorted_logs.sort(key=lambda x: (x[0], x[1]))
-    for _, _, record in sorted_logs:
+    for date_obj, index, record in sorted_logs:
+        if (date_obj, index) >= selected_sort_key:
+            break
         apply_maintenance_log_changes(scratch, record)
 
     return _asset_condition_status(scratch)
@@ -6356,6 +6418,139 @@ def asset_check_group():
         return jsonify({'error': 'Failed to start Asset Check'}), 500
 
 
+def _asset_check_sighting_description(username):
+    username = str(username or 'user').strip() or 'user'
+    return f"Asset sighted by {username} during Asset Check"
+
+
+def _asset_check_log_matches_source(log_entry, check_id):
+    record = normalize_maintenance_log(log_entry)
+    source = record.get('source') or {}
+    return (
+        record.get('type') == ASSET_CHECK_LOG_TYPE and
+        source.get('kind') == 'asset_check_sighting' and
+        check_id and
+        source.get('checkId') == check_id
+    )
+
+
+def _asset_check_fallback_sighting_index(asset, username):
+    """Find the latest same-day sighting log when an older client has no check id."""
+    today = datetime.now().strftime("%Y/%m/%d")
+    expected_description = _asset_check_sighting_description(username)
+
+    for index in range(len(getattr(asset, 'maintenance_logs', []) or []) - 1, -1, -1):
+        record = normalize_maintenance_log(asset.maintenance_logs[index])
+        if (
+            record.get('type') == ASSET_CHECK_LOG_TYPE and
+            record.get('date') == today and
+            record.get('user') == username and
+            record.get('description') == expected_description
+        ):
+            return index
+
+    return None
+
+
+@app.route('/api/asset-check/sighting', methods=['POST'])
+@require_auth
+def asset_check_sighting():
+    """Add or remove the automatic Asset Check sighting maintenance log."""
+    try:
+        data = request.get_json() or {}
+        asset_id = str(data.get('assetId') or data.get('identifier') or '').strip()
+        group_key = str(data.get('groupKey') or '').strip()
+        check_id = str(data.get('checkId') or '').strip()[:160]
+        checked = _request_bool(data.get('checked'), default=True)
+
+        if not asset_id:
+            return jsonify({'error': 'Asset ID is required'}), 400
+
+        asset = _asset_check_find_asset(asset_id)
+        if not asset:
+            return jsonify({'error': 'Asset not found'}), 404
+
+        if _is_bulk_asset(asset):
+            return jsonify({'error': 'Bulk quantity assets cannot be checked individually'}), 400
+
+        actual_group_key = '|'.join(_asset_group_key(asset))
+        if group_key and group_key != actual_group_key:
+            return jsonify({'error': 'Asset no longer matches this Asset Check group'}), 400
+
+        asset_payload = _asset_check_asset_to_dict(asset, _asset_group_key(asset))
+        if not asset_payload.get('checkEligible'):
+            return jsonify({'error': asset_payload.get('exclusionReason') or 'Asset is not eligible for this Asset Check'}), 400
+
+        username = session.get('user', 'system')
+
+        if checked:
+            for existing_log in getattr(asset, 'maintenance_logs', []) or []:
+                if _asset_check_log_matches_source(existing_log, check_id):
+                    return jsonify({
+                        'success': True,
+                        'message': 'Asset Check sighting already logged',
+                        'data': {'assetId': asset.asset_id, 'checkId': check_id}
+                    })
+
+            if not check_id:
+                check_id = f"asset-check-{int(time.time() * 1000)}-{secrets.token_hex(6)}"
+
+            today = datetime.now().strftime("%Y/%m/%d")
+            source = {
+                'kind': 'asset_check_sighting',
+                'checkId': check_id,
+                'groupKey': group_key or actual_group_key,
+                'createdAt': datetime.now().isoformat(timespec='seconds')
+            }
+            asset.maintenance_logs.append(make_maintenance_log(
+                today,
+                username,
+                _asset_check_sighting_description(username),
+                [],
+                log_type=ASSET_CHECK_LOG_TYPE,
+                source=source
+            ))
+            data_manager.save_inventory()
+            invalidate_cache()
+            log_action(f"Asset Check sighted asset {asset.asset_id}")
+
+            return jsonify({
+                'success': True,
+                'message': 'Asset Check sighting logged',
+                'data': {'assetId': asset.asset_id, 'checkId': check_id}
+            })
+
+        remove_index = None
+        if check_id:
+            for index in range(len(getattr(asset, 'maintenance_logs', []) or []) - 1, -1, -1):
+                if _asset_check_log_matches_source(asset.maintenance_logs[index], check_id):
+                    remove_index = index
+                    break
+
+        if remove_index is None:
+            remove_index = _asset_check_fallback_sighting_index(asset, username)
+
+        if remove_index is not None:
+            asset.maintenance_logs.pop(remove_index)
+            data_manager.save_inventory()
+            invalidate_cache()
+            log_action(f"Asset Check sighting removed for asset {asset.asset_id}")
+
+        return jsonify({
+            'success': True,
+            'message': 'Asset Check sighting removed',
+            'data': {
+                'assetId': asset.asset_id,
+                'checkId': check_id,
+                'removed': remove_index is not None
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"Error updating Asset Check sighting: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to update Asset Check sighting'}), 500
+
+
 @app.route('/api/asset-check/mark-missing', methods=['POST'])
 @require_auth
 def asset_check_mark_missing():
@@ -6415,7 +6610,13 @@ def asset_check_mark_missing():
                 today,
                 username,
                 "Asset Check - marked missing because this item was not checked",
-                [make_change('missing', action='marked')]
+                [make_change('missing', action='marked')],
+                log_type=ASSET_CHECK_LOG_TYPE,
+                source={
+                    'kind': 'asset_check_missing',
+                    'groupKey': group_key,
+                    'createdAt': datetime.now().isoformat(timespec='seconds')
+                }
             ))
             marked.append(asset_id)
 
@@ -6877,7 +7078,10 @@ def maintain_asset(asset_id):
             if not new_serial:
                 new_serial = None
         
-        target_status, requested_status_changes, status_error = _status_changes_for_request(data)
+        target_status, requested_status_changes, status_error = _status_changes_for_request(
+            data,
+            current_status=_asset_condition_status(asset)
+        )
         if status_error:
             return jsonify({'error': status_error}), 400
 
@@ -6886,6 +7090,9 @@ def maintain_asset(asset_id):
             return jsonify({'error': transition_error}), 400
 
         repair_cost = str(data.get('cost') or data.get('maintenanceCost') or '').strip()
+        log_type, log_type_error = _maintenance_log_type_for_request(data)
+        if log_type_error:
+            return jsonify({'error': log_type_error}), 400
 
         if not log_entry_text:
             return jsonify({'error': 'Log entry is required'}), 400
@@ -6918,7 +7125,14 @@ def maintain_asset(asset_id):
         status_changes.extend(requested_status_changes)
         
         status_changes = [change for change in status_changes if change]
-        entry = make_maintenance_log(formatted_date, session['user'], log_entry_text, status_changes, cost=repair_cost)
+        entry = make_maintenance_log(
+            formatted_date,
+            session['user'],
+            log_entry_text,
+            status_changes,
+            cost=repair_cost,
+            log_type=log_type
+        )
         
         asset.maintenance_logs.append(entry)
 
@@ -7071,6 +7285,15 @@ def update_maintenance_log_enhanced(asset_id, log_index):
         # Get original log for logging purposes
         original_log = normalize_maintenance_log(asset.maintenance_logs[log_index])
         original_description = original_log.get('description', '')
+        original_log_type = original_log.get('type') or DEFAULT_MAINTENANCE_LOG_TYPE
+
+        if original_log_type == ASSET_CHECK_LOG_TYPE:
+            # Keep automatic Asset Check records in their system-only category.
+            log_type = ASSET_CHECK_LOG_TYPE
+        else:
+            log_type, log_type_error = _maintenance_log_type_for_request(data, default_type=original_log_type)
+            if log_type_error:
+                return jsonify({'error': log_type_error}), 400
         
         # Handle additional updates - INITIALIZE changes_made HERE
         changes_made = []
@@ -7113,11 +7336,14 @@ def update_maintenance_log_enhanced(asset_id, log_index):
         
         # Handle status changes. These now use one clean target status,
         # while still accepting the old boolean flags for backward compatibility.
-        target_status, requested_status_changes, status_error = _status_changes_for_request(data)
+        status_before_this_log = _condition_status_before_log(asset, log_index, selected_date=formatted_date)
+        target_status, requested_status_changes, status_error = _status_changes_for_request(
+            data,
+            current_status=status_before_this_log
+        )
         if status_error:
             return jsonify({'error': status_error}), 400
 
-        status_before_this_log = _condition_status_before_log(asset, log_index)
         transition_error = _validate_status_transition(asset, target_status, current_status=status_before_this_log)
         if transition_error:
             return jsonify({'error': transition_error}), 400
@@ -7131,7 +7357,15 @@ def update_maintenance_log_enhanced(asset_id, log_index):
         logger.info(f"Final asset status: OOC={asset.is_ooc}, Missing={asset.is_missing}")
         
         # Create updated log entry with structured status changes
-        updated_log = make_maintenance_log(formatted_date, new_user, new_description, changes_made, cost=repair_cost)
+        updated_log = make_maintenance_log(
+            formatted_date,
+            new_user,
+            new_description,
+            changes_made,
+            cost=repair_cost,
+            log_type=log_type,
+            source=original_log.get('source') or {}
+        )
         
         logger.info(f"Updated log entry: {updated_log}")
         
