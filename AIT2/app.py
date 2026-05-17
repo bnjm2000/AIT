@@ -1,6 +1,6 @@
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for, send_file, Response, stream_with_context, g, has_request_context
 import csv
-from urllib.parse import unquote_plus
+from urllib.parse import unquote_plus, quote
 import os
 import re
 import queue
@@ -32,7 +32,7 @@ from maintenance_logs import (
     parse_maintenance_log_date,
     status_change_labels,
 )
-from urllib.parse import unquote_plus
+from utils import sanitize_filename
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -3287,6 +3287,83 @@ def delete_user(username):
         logger.error(f"Error deleting user {username}: {e}")
         return jsonify({'error': 'Failed to delete user'}), 500
 
+
+def _safe_event_upload_filename(filename):
+    raw_name = str(filename or '').replace('\\', '/')
+    basename = os.path.basename(raw_name).strip()
+    cleaned = sanitize_filename(basename)
+    cleaned = re.sub(r'\s+', ' ', cleaned).strip().strip('.')
+
+    if not cleaned:
+        cleaned = f"upload-{secrets.token_hex(6)}"
+
+    if len(cleaned) > 180:
+        base, ext = os.path.splitext(cleaned)
+        ext = ext[:20]
+        cleaned = f"{base[:180 - len(ext)]}{ext}"
+
+    return cleaned
+
+
+def _unique_event_upload_path(folder, filename):
+    base, ext = os.path.splitext(filename)
+    candidate = os.path.join(folder, filename)
+    counter = 2
+
+    while os.path.exists(candidate):
+        candidate = os.path.join(folder, f"{base}_{counter}{ext}")
+        counter += 1
+
+    return candidate
+
+
+def _event_files_for_response(event_id):
+    folder = data_manager.get_event_folder(event_id) if data_manager else None
+    if not folder or not os.path.isdir(folder):
+        return []
+
+    files = []
+    try:
+        with os.scandir(folder) as entries:
+            for entry in entries:
+                if not entry.is_file():
+                    continue
+                try:
+                    stat = entry.stat()
+                except OSError:
+                    continue
+
+                files.append({
+                    'name': entry.name,
+                    'size': stat.st_size,
+                    'modifiedAt': datetime.fromtimestamp(stat.st_mtime).isoformat(timespec='seconds'),
+                    'downloadUrl': f"/api/events/{event_id}/files/{quote(entry.name)}"
+                })
+    except OSError as e:
+        logger.warning("Failed to list files for event %s: %s", event_id, e)
+        return []
+
+    files.sort(key=lambda item: item['name'].lower())
+    return files
+
+
+def _event_file_path(event_id, filename):
+    if not filename or '/' in filename or '\\' in filename:
+        return None
+
+    folder = data_manager.get_event_folder(event_id) if data_manager else None
+    if not folder:
+        return None
+
+    base = os.path.abspath(folder)
+    target = os.path.abspath(os.path.join(base, filename))
+
+    if not target.startswith(base + os.sep):
+        return None
+
+    return target
+
+
 @app.route('/api/events', methods=['GET'])
 @require_auth
 def get_events():
@@ -3426,7 +3503,9 @@ def get_events():
                 'returnableRefs': returnable_counts['refs'],
                 'modelGroups': model_groups,
                 'hasModelAssignments': has_model_assignments,  # Flag to know which logic to use
-                'forceStateOverride': getattr(event, 'force_state_override', False)
+                'forceStateOverride': getattr(event, 'force_state_override', False),
+                'hasNotes': bool((getattr(event, 'notes', '') or '').strip()),
+                'fileCount': len(_event_files_for_response(event.event_id))
             })
 
         # Sort by event ID descending
@@ -3782,7 +3861,10 @@ def get_event(event_id):
             'totalReturned': total_returned,
             'totalExtraAssets': total_extra_assets,
             'modelGroups': model_groups,
-            'forceStateOverride': getattr(event, 'force_state_override', False)
+            'forceStateOverride': getattr(event, 'force_state_override', False),
+            'notes': getattr(event, 'notes', '') or '',
+            'files': _event_files_for_response(event.event_id),
+            'canDeleteFiles': _current_user_is_admin()
         }
 
         return jsonify({'success': True, 'data': event_data})
@@ -3790,6 +3872,130 @@ def get_event(event_id):
     except Exception as e:
         logger.error(f"Error getting event {event_id}: {e}")
         return jsonify({'error': 'Failed to retrieve event'}), 500
+
+
+@app.route('/api/events/<int:event_id>/notes', methods=['PUT'])
+@require_auth
+def update_event_notes(event_id):
+    """Update the plaintext notes attached to an event."""
+    try:
+        event = data_manager.events.get(event_id)
+        if not event:
+            return jsonify({'error': 'Event not found'}), 404
+
+        data = request.get_json(silent=True) or {}
+        notes = str(data.get('notes', ''))
+        if len(notes) > 50000:
+            return jsonify({'error': 'Notes cannot exceed 50,000 characters'}), 400
+
+        event.notes = notes
+        data_manager.events[event_id] = event
+        data_manager.save_event(event)
+
+        log_action(f"Updated notes for event {event_id}: {event.name}")
+        mark_realtime_change('event-notes', {'eventId': event_id})
+
+        return jsonify({'success': True, 'message': 'Event notes updated', 'data': {'notes': event.notes}})
+    except Exception as e:
+        logger.error(f"Error updating notes for event {event_id}: {e}")
+        return jsonify({'error': 'Failed to update event notes'}), 500
+
+
+@app.route('/api/events/<int:event_id>/files', methods=['POST'])
+@require_auth
+def upload_event_files(event_id):
+    """Upload one or more files into the event-specific folder."""
+    try:
+        event = data_manager.events.get(event_id)
+        if not event:
+            return jsonify({'error': 'Event not found'}), 404
+
+        incoming_files = request.files.getlist('files')
+        if not incoming_files and 'file' in request.files:
+            incoming_files = request.files.getlist('file')
+
+        if not incoming_files:
+            return jsonify({'error': 'Choose at least one file to upload'}), 400
+
+        folder = data_manager.get_event_folder(event_id, create=True)
+        if not folder:
+            return jsonify({'error': 'Event folder could not be created'}), 500
+
+        saved_files = []
+        for uploaded_file in incoming_files:
+            if not uploaded_file or not uploaded_file.filename:
+                continue
+
+            filename = _safe_event_upload_filename(uploaded_file.filename)
+            target_path = _unique_event_upload_path(folder, filename)
+            uploaded_file.save(target_path)
+            saved_files.append(os.path.basename(target_path))
+
+        if not saved_files:
+            return jsonify({'error': 'No valid files were uploaded'}), 400
+
+        log_action(f"Uploaded {len(saved_files)} file(s) to event {event_id}: {event.name}")
+        mark_realtime_change('event-files', {'eventId': event_id})
+
+        return jsonify({
+            'success': True,
+            'message': 'File upload complete',
+            'data': _event_files_for_response(event_id)
+        })
+    except Exception as e:
+        logger.error(f"Error uploading files for event {event_id}: {e}")
+        return jsonify({'error': 'Failed to upload event files'}), 500
+
+
+@app.route('/api/events/<int:event_id>/files/<path:filename>', methods=['GET'])
+@require_auth
+def download_event_file(event_id, filename):
+    """Download a file attached to an event."""
+    try:
+        if event_id not in data_manager.events:
+            return jsonify({'error': 'Event not found'}), 404
+
+        target_path = _event_file_path(event_id, filename)
+        if not target_path or not os.path.exists(target_path) or not os.path.isfile(target_path):
+            return jsonify({'error': 'File not found'}), 404
+
+        return send_file(
+            target_path,
+            as_attachment=True,
+            download_name=os.path.basename(target_path)
+        )
+    except Exception as e:
+        logger.error(f"Error downloading file {filename} for event {event_id}: {e}")
+        return jsonify({'error': 'Failed to download event file'}), 500
+
+
+@app.route('/api/events/<int:event_id>/files/<path:filename>', methods=['DELETE'])
+@require_admin
+def delete_event_file_upload(event_id, filename):
+    """Delete a file attached to an event. Admin only."""
+    try:
+        event = data_manager.events.get(event_id)
+        if not event:
+            return jsonify({'error': 'Event not found'}), 404
+
+        target_path = _event_file_path(event_id, filename)
+        if not target_path or not os.path.exists(target_path) or not os.path.isfile(target_path):
+            return jsonify({'error': 'File not found'}), 404
+
+        os.remove(target_path)
+
+        log_action(f"Deleted file '{os.path.basename(target_path)}' from event {event_id}: {event.name}")
+        mark_realtime_change('event-files', {'eventId': event_id})
+
+        return jsonify({
+            'success': True,
+            'message': 'Event file deleted',
+            'data': _event_files_for_response(event_id)
+        })
+    except Exception as e:
+        logger.error(f"Error deleting file {filename} for event {event_id}: {e}")
+        return jsonify({'error': 'Failed to delete event file'}), 500
+
 
 @app.route('/api/events/<int:event_id>/availability', methods=['GET'])
 @require_auth

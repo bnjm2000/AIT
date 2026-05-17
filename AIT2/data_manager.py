@@ -2,6 +2,7 @@ import os
 import csv
 import json
 import logging
+import shutil
 from models import User, InventoryItem, Container, Event, LogEntry, hash_password
 from utils import sanitize_filename, open_csv_robust, clean_csv_cell
 from maintenance_logs import dump_maintenance_logs, load_maintenance_logs
@@ -21,6 +22,55 @@ class DataManager:
         self.event_file_map = {}
         self.logs = []
         self.clients = {}
+
+    def _event_filename(self, event):
+        sanitized_name = sanitize_filename(event.name)
+        return f"{event.event_id}. [{event.start_date}] {sanitized_name}.csv"
+
+    def _event_folder_for_filename(self, filename):
+        if not filename:
+            return None
+        stem, _ = os.path.splitext(filename)
+        return os.path.join(self.events_folder, stem)
+
+    def get_event_folder(self, event_id, create=False):
+        filename = self.event_file_map.get(event_id)
+        if not filename and event_id in self.events:
+            filename = self._event_filename(self.events[event_id])
+        folder = self._event_folder_for_filename(filename)
+        if create and folder:
+            os.makedirs(folder, exist_ok=True)
+        return folder
+
+    def _unique_child_path(self, folder, filename):
+        base, ext = os.path.splitext(filename)
+        candidate = os.path.join(folder, filename)
+        counter = 2
+        while os.path.exists(candidate):
+            candidate = os.path.join(folder, f"{base}_{counter}{ext}")
+            counter += 1
+        return candidate
+
+    def _move_event_folder(self, old_filename, new_filename):
+        old_folder = self._event_folder_for_filename(old_filename)
+        new_folder = self._event_folder_for_filename(new_filename)
+        if not old_folder or not new_folder or old_folder == new_folder:
+            return
+        if not os.path.isdir(old_folder):
+            return
+        if not os.path.exists(new_folder):
+            os.rename(old_folder, new_folder)
+            return
+
+        for child in os.listdir(old_folder):
+            source = os.path.join(old_folder, child)
+            target = self._unique_child_path(new_folder, child)
+            shutil.move(source, target)
+
+        try:
+            os.rmdir(old_folder)
+        except OSError:
+            logger.warning("Event folder %s was not empty after merge.", old_folder)
 
     def setup_data_folder(self):
         if not os.path.exists(self.events_folder):
@@ -261,6 +311,7 @@ class DataManager:
                     logger.warning("Event file %s is empty or corrupted.", filename)
                     continue
 
+                raw_notes = event_data.get('Notes', '') or ''
                 event_data = {k: clean_csv_cell(v) for k, v in event_data.items()}
 
                 try:
@@ -338,7 +389,8 @@ class DataManager:
                     extra_assets=extra_assets,
                     tag=tag,
                     force_state_override=force_state_override,
-                    custom_collected=custom_collected
+                    custom_collected=custom_collected,
+                    notes=raw_notes
                 )
 
                 event.actually_prepared = actually_prepared
@@ -346,6 +398,7 @@ class DataManager:
                 event.tag = tag
                 event.force_state_override = force_state_override
                 event.custom_collected = custom_collected
+                event.notes = raw_notes
 
                 self.events[event_id] = event
                 self.event_file_map[event_id] = filename
@@ -357,9 +410,9 @@ class DataManager:
         if hasattr(self, 'event_file_map') and event.event_id in self.event_file_map:
             self.backup_event_file(event.event_id)
         
-        sanitized_name = sanitize_filename(event.name)
-        filename = f"{event.event_id}. [{event.start_date}] {sanitized_name}.csv"
+        filename = self._event_filename(event)
         filepath = os.path.join(self.events_folder, filename)
+        old_filename = self.event_file_map.get(event.event_id)
         
         # Ensure attributes exist
         actually_prepared = getattr(event, 'actually_prepared', [])
@@ -367,6 +420,7 @@ class DataManager:
         tag = getattr(event, 'tag', 'events')
         force_state_override = getattr(event, 'force_state_override', False)
         custom_collected = getattr(event, 'custom_collected', [])
+        notes = getattr(event, 'notes', '')
         
         # VALIDATION: Don't save if critical data is missing
         if not hasattr(event, 'prepared_items'):
@@ -394,7 +448,7 @@ class DataManager:
             return
         
         with open(filepath, 'w', newline='', encoding='utf-8') as f:
-            fieldnames = ['EventID', 'Name', 'StartDate', 'EndDate', 'AssetModels', 'PreparedItems', 'ReturnedItems', 'State', 'ActuallyPrepared', 'ExtraAssets', 'CustomCollected', 'Tag', 'ForceStateOverride']
+            fieldnames = ['EventID', 'Name', 'StartDate', 'EndDate', 'AssetModels', 'PreparedItems', 'ReturnedItems', 'State', 'ActuallyPrepared', 'ExtraAssets', 'CustomCollected', 'Tag', 'ForceStateOverride', 'Notes']
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
             
@@ -411,28 +465,32 @@ class DataManager:
                 'ExtraAssets': extra_assets_json,
                 'CustomCollected': custom_collected_json,
                 'Tag': tag,
-                'ForceStateOverride': str(force_state_override)
+                'ForceStateOverride': str(force_state_override),
+                'Notes': notes
             }
             
             logger.debug("Row data being written: %s", row_data)
             writer.writerow(row_data)
 
-        old_filename = self.event_file_map.get(event.event_id)
         if old_filename and old_filename != filename:
             old_filepath = os.path.join(self.events_folder, old_filename)
             if os.path.exists(old_filepath):
                 os.remove(old_filepath)
+            self._move_event_folder(old_filename, filename)
         
         self.event_file_map[event.event_id] = filename
         logger.debug("Event %s saved successfully to %s", event.event_id, filename)
 
     def delete_event_file(self, event_id):
+        folder = self.get_event_folder(event_id)
         if event_id in self.event_file_map:
             filename = self.event_file_map[event_id]
             filepath = os.path.join(self.events_folder, filename)
             if os.path.exists(filepath):
                 os.remove(filepath)
             del self.event_file_map[event_id]
+        if folder and os.path.isdir(folder):
+            shutil.rmtree(folder)
 
     def load_logs(self):
         self.logs = []

@@ -2016,6 +2016,196 @@ async function apiCall(endpoint, method = "GET", data = null) {
   }
 }
 
+function formatEventFileSize(bytes) {
+  const size = Number(bytes || 0);
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function formatEventFileModified(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit"
+  });
+}
+
+function renderEventFilesList(eventId, files) {
+  const list = Array.isArray(files) ? files : [];
+
+  if (!list.length) {
+    return '<div style="padding: 14px; border: 1px dashed #d7dde8; border-radius: 8px; color: #667085; background: #fafbff;">No files uploaded yet.</div>';
+  }
+
+  return list.map(file => {
+    const name = String(file.name || '');
+    const downloadUrl = file.downloadUrl || `/api/events/${eventId}/files/${encodeURIComponent(name)}`;
+    const modified = formatEventFileModified(file.modifiedAt);
+    const deleteButton = isAdminUser()
+      ? `<button type="button" class="btn btn-danger btn-sm" onclick="deleteEventFile(${eventId}, '${escapeJs(name)}')" style="padding: 6px 10px;">Delete</button>`
+      : '';
+
+    return `
+      <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid #e9ecef; border-radius: 8px; background: #fff; margin-bottom: 8px;">
+        <div style="min-width: 0; flex: 1;">
+          <div style="font-weight: 600; color: #344054; overflow-wrap: anywhere;">${escapeHtml(name)}</div>
+          <div style="font-size: 12px; color: #667085; margin-top: 2px;">
+            ${formatEventFileSize(file.size)}${modified ? ` · ${escapeHtml(modified)}` : ''}
+          </div>
+        </div>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end;">
+          <a class="btn btn-secondary btn-sm" href="${escapeHtmlAttr(downloadUrl)}" style="padding: 6px 10px;">Download</a>
+          ${deleteButton}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderEventNotesFilesSection(event) {
+  const eventId = Number(event.id);
+  const notes = event.notes || '';
+
+  return `
+    <div style="margin-bottom: 25px; border: 1px solid #e9ecef; border-radius: 10px; overflow: hidden; background: #fff;">
+      <div style="display: flex; flex-wrap: wrap; gap: 0;">
+        <div style="padding: 16px; border-right: 1px solid #e9ecef; flex: 1 1 360px; min-width: 0;">
+          <h4 style="margin: 0 0 12px 0; color: #495057; font-size: 16px;">Event Notes</h4>
+          <textarea id="eventNotesInput-${eventId}" class="form-input" rows="5" style="min-height: 128px; resize: vertical;" placeholder="Add plaintext notes for this event...">${escapeHtml(notes)}</textarea>
+          <div style="display: flex; justify-content: flex-end; margin-top: 10px;">
+            <button type="button" id="eventNotesSaveButton-${eventId}" class="btn btn-primary" onclick="saveEventNotes(${eventId})">Save Notes</button>
+          </div>
+        </div>
+        <div style="padding: 16px; background: #f8f9fa; flex: 1 1 280px; min-width: 260px;">
+          <h4 style="margin: 0 0 12px 0; color: #495057; font-size: 16px;">Event Files</h4>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px;">
+            <input type="file" id="eventFileInput-${eventId}" class="form-input" multiple style="flex: 1 1 180px; min-width: 180px; padding: 9px;">
+            <button type="button" id="eventFileUploadButton-${eventId}" class="btn btn-success" onclick="uploadEventFiles(${eventId})">Upload</button>
+          </div>
+          <div id="eventFilesList-${eventId}">
+            ${renderEventFilesList(eventId, event.files || [])}
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function updateEventFilesList(eventId, files) {
+  const list = document.getElementById(`eventFilesList-${eventId}`);
+  if (list) {
+    list.innerHTML = renderEventFilesList(eventId, files || []);
+  }
+
+  if (window.currentEventData && Number(window.currentEventData.id) === Number(eventId)) {
+    window.currentEventData.files = files || [];
+  }
+}
+
+async function saveEventNotes(eventId) {
+  const textarea = document.getElementById(`eventNotesInput-${eventId}`);
+  const button = document.getElementById(`eventNotesSaveButton-${eventId}`);
+  if (!textarea) return;
+
+  try {
+    if (button) button.disabled = true;
+    const response = await apiCall(`/api/events/${eventId}/notes`, "PUT", {
+      notes: textarea.value
+    });
+
+    if (window.currentEventData && Number(window.currentEventData.id) === Number(eventId)) {
+      window.currentEventData.notes = response.data?.notes || textarea.value;
+    }
+
+    showNotification("success", "Event notes saved");
+  } catch (error) {
+    showNotification("error", "Failed to save event notes");
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
+async function uploadEventFiles(eventId) {
+  const input = document.getElementById(`eventFileInput-${eventId}`);
+  const button = document.getElementById(`eventFileUploadButton-${eventId}`);
+  const files = Array.from(input?.files || []);
+
+  if (!files.length) {
+    showNotification("warning", "Choose at least one file first");
+    return;
+  }
+
+  const formData = new FormData();
+  files.forEach(file => formData.append("files", file));
+
+  try {
+    if (button) button.disabled = true;
+    const response = await fetch(`/api/events/${eventId}/files`, {
+      method: "POST",
+      headers: {
+        "X-Client-Id": REALTIME_CLIENT_ID,
+      },
+      body: formData
+    });
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.error || "Failed to upload event files");
+    }
+
+    if (input) input.value = "";
+    updateEventFilesList(eventId, result.data || []);
+    showNotification("success", "File upload complete");
+  } catch (error) {
+    console.error("Event file upload failed:", error);
+    showNotification("error", error.message || "Failed to upload event files");
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
+async function deleteEventFile(eventId, filename) {
+  if (!isAdminUser()) {
+    showNotification("error", "Admin privileges required to delete event files");
+    return;
+  }
+
+  const confirmed = await showAppConfirm({
+    title: "Delete File",
+    message: `Delete "${filename}" from this event?`,
+    confirmText: "Delete",
+    cancelText: "Cancel",
+    variant: "danger",
+  });
+  if (!confirmed) return;
+
+  try {
+    const response = await fetch(`/api/events/${eventId}/files/${encodeURIComponent(filename)}`, {
+      method: "DELETE",
+      headers: {
+        "X-Client-Id": REALTIME_CLIENT_ID,
+      },
+    });
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.error || "Failed to delete event file");
+    }
+
+    updateEventFilesList(eventId, result.data || []);
+    showNotification("success", "Event file deleted");
+  } catch (error) {
+    console.error("Event file delete failed:", error);
+    showNotification("error", error.message || "Failed to delete event file");
+  }
+}
+
 
 // ---------------- PDF Settings ----------------
 function normalisePdfSettings(settings = {}) {
@@ -8743,6 +8933,8 @@ async function viewEvent(eventId) {
         </div>
     `;
 
+    content += renderEventNotesFilesSection(event);
+
     // Model Requirements Section (Compact)
     if (event.modelGroups && Object.keys(event.modelGroups).length > 0) {
       content += '<div style="margin-bottom: 25px;"><h4 style="color: #495057; margin-bottom: 15px; font-size: 16px;">📦 Model Requirements</h4>';
@@ -10172,6 +10364,9 @@ async function editEvent(eventId) {
                         <button type="submit" class="btn btn-primary">Update Event</button>
                     </div>
                 </form>
+                <div style="margin-top: 24px;">
+                    ${renderEventNotesFilesSection(event)}
+                </div>
             </div>
             
             <div id="edit-assets-tab" class="edit-tab-content" style="display: none;">
