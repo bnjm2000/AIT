@@ -5409,7 +5409,14 @@ function populateMaintenanceReportTypeFilter() {
     ? new Set(existingCheckboxes.filter(checkbox => checkbox.checked).map(checkbox => checkbox.value))
     : new Set(MAINTENANCE_LOG_TYPES);
 
-  menu.innerHTML = MAINTENANCE_LOG_TYPES.map(type => `
+  const actionButtons = `
+    <div class="maintenance-report-type-actions">
+      <button type="button" onclick="setAllMaintenanceReportTypes(true)">Select all</button>
+      <button type="button" onclick="setAllMaintenanceReportTypes(false)">Deselect all</button>
+    </div>
+  `;
+
+  menu.innerHTML = actionButtons + MAINTENANCE_LOG_TYPES.map(type => `
     <label class="maintenance-report-type-option">
       <input type="checkbox" value="${escapeHtmlAttr(type)}"${selectedBefore.has(type) ? ' checked' : ''}>
       <span>${escapeHtml(type)}</span>
@@ -5419,11 +5426,12 @@ function populateMaintenanceReportTypeFilter() {
   syncMaintenanceReportTypeButton();
 }
 
-function setAllMaintenanceReportTypes(selected) {
+function setAllMaintenanceReportTypes(selected, { updatePreview = true } = {}) {
   getMaintenanceReportTypeCheckboxes().forEach(checkbox => {
     checkbox.checked = selected;
   });
   syncMaintenanceReportTypeButton();
+  if (updatePreview) renderMaintenanceReportPreview();
 }
 
 function toggleMaintenanceReportTypeMenu() {
@@ -5700,7 +5708,7 @@ function clearMaintenanceReportFilters() {
   if (location) location.value = '';
   maintenanceReportSelectedAssetIds.clear();
   maintenanceReportSelectedContainerIds.clear();
-  setAllMaintenanceReportTypes(true);
+  setAllMaintenanceReportTypes(true, { updatePreview: false });
   closeMaintenanceReportTypeMenu();
   renderMaintenanceReportAssetSelections();
   renderMaintenanceReportPreview();
