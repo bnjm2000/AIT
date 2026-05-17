@@ -1,10 +1,3 @@
-2026/04/20 18:29:06,bnjm2000,Assigned specific asset C1ProRHS#07 to event 127
-2026/04/20 18:29:06,bnjm2000,Assigned specific asset C1ProWHS#01 to event 127
-2026/04/20 18:29:07,bnjm2000,Assigned specific asset HLBatt#02 to event 127
-2026/04/20 18:29:07,bnjm2000,Assigned specific asset HLBatt#04 to event 127
-2026/04/20 18:29:07,bnjm2000,Assigned specific asset HLBatt#06 to event 127
-2026/04/20 18:29:07,bnjm2000,Assigned specific asset HLBatt#08 to event 127
-2026/04/20 18:29:07,bnjm2000,Assigned specific asset HLBatt#10 to event 127
 2026/04/20 18:29:07,bnjm2000,Assigned specific asset HLBatt#12 to event 127
 2026/04/20 18:29:07,bnjm2000,Assigned specific asset HLBatt#14 to event 127
 2026/04/20 18:29:07,bnjm2000,Assigned specific asset HLBatt#16 to event 127
@@ -884,7 +877,6 @@
 2026/05/16 20:46:47,bnjm2000,Added 3x Sennheiser SEK(UHF) model to event 141 (total: 3)
 2026/05/16 20:46:48,bnjm2000,Added 1x Sennheiser Spectera Base Station model to event 141 (total: 1)
 2026/05/16 20:47:02,bnjm2000,"Added MISC custom asset 'Cat6 Drum - 50m' (2x, dept AX) to event 141"
-2026/05/16 22:09:13,bnjm2000,"Deleted event 142: test via web interface. Reset 12 asset locations: ULXD4Q#01 (from 'test' to 'Store'), ULXD2#01 (from 'test' to 'Store'), ULXD2#02 (from 'test' to 'Store'), ULXD2#03 (from 'test' to 'Store'), ULXD2#04 (from 'test' to 'Store').... Removed 37 related log entries."
 2026/05/16 22:36:28,bnjm2000,"Updated maintenance log for asset CL5#01: 'Replaced DSP PCB ($1011)
 Service Fee ($FOC)' -> 'Replaced DSP PCB ($1011)
 Service Fee ($FOC)' (also: Location: Store, Marked OK) (edited by bnjm2000)"
@@ -1065,7 +1057,15 @@ XLR connector loosed, soldered back - $40' (also: Location: MiPro Singapore, Cle
 2026/05/17 11:34:08,user,User user logged in via web interface
 2026/05/17 11:34:12,user,User user logged out from web interface
 2026/05/17 11:34:17,bnjm2000,User bnjm2000 logged in via web interface
-2026/05/17 11:34:54,bnjm2000,Created event 142: test via web interface
-2026/05/17 11:35:02,bnjm2000,Added 2x Behringher P1 model to event 142 (total: 2)
-2026/05/17 11:35:13,bnjm2000,Assigned specific asset P1#01 to event 142
-2026/05/17 11:35:23,bnjm2000,Completely removed asset P1#01 from event 142
+2026/05/17 11:48:23,bnjm2000,Deleted event 142: test via web interface. No asset locations to reset. Removed 7 related log entries.
+2026/05/17 11:55:32,bnjm2000,Created event 142: Hermes Double Tour Jewel Exhibition @ Ion Orchard via web interface
+2026/05/17 11:55:41,bnjm2000,Added 6x L-Acoustics 5XT model to event 142 (total: 6)
+2026/05/17 11:55:46,bnjm2000,Added 1x L-Acoustics LA2Xi model to event 142 (total: 1)
+2026/05/17 11:56:49,bnjm2000,Created event 143:  Solemnisation Ceremony of Ben Harbinson & Mallari Batlaw @ 14 Coronation Rd West via web interface
+2026/05/17 11:56:58,bnjm2000,Added 2x Sennheiser DAD(UHF) model to event 143 (total: 2)
+2026/05/17 11:57:02,bnjm2000,Added 5x Sennheiser SEK(UHF) model to event 143 (total: 5)
+2026/05/17 11:57:02,bnjm2000,Added 1x Sennheiser Spectera Base Station model to event 143 (total: 1)
+2026/05/17 11:57:09,bnjm2000,Added 6x Turbosound IP1000 model to event 143 (total: 6)
+2026/05/17 11:57:17,bnjm2000,Added 6x MiPro MR-90 model to event 143 (total: 6)
+2026/05/17 11:57:19,bnjm2000,Added 1x MiPro MT-90A model to event 143 (total: 1)
+2026/05/17 11:57:27,bnjm2000,Added 1x Yamaha QL1 model to event 143 (total: 1)

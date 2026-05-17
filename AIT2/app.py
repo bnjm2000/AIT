@@ -2319,40 +2319,51 @@ def update_event_state(event):
             f"everPrepared={prepared_ever_total}, returned={returned_total}, started={started_total}"
         )
 
-        # 1. All required items have been prepared at some point and all prepared items are returned.
-        if required_total > 0 and prepared_ever_total >= required_total and returned_total >= prepared_ever_total:
+        returnable_counts = _event_returnable_counts(event)
+        returned_any = returnable_counts['returned'] > 0
+        all_required_prepared_ever = required_total == 0 or prepared_ever_total >= required_total
+        all_returnable_assets_returned = (
+            returned_any and
+            all_required_prepared_ever and
+            returnable_counts['returnable'] == 0
+        )
+        is_ready = required_total > 0 and prepared_active_total >= required_total
+        is_active_event_day = event.start_date <= current_date <= event.end_date
+
+        # 1. Every returnable asset is back, and required items were fully prepared.
+        if all_returnable_assets_returned:
             event.state = 'Closed'
 
-        # 2. Last day should take visual priority while the event is still active.
-        elif is_last_day:
+        # 2. Once any asset has been returned, the event is in the return flow.
+        elif returned_any:
+            event.state = 'Returning'
+
+        # 3. Last Day is only the final-day version of an otherwise ongoing event.
+        elif is_last_day and is_active_event_day and is_ready:
             event.state = 'Last Day'
 
-        # 3. Overdue: event ended with prepared, unreturned items.
+        # 4. Overdue: event ended with prepared, unreturned items.
         elif prepared_ever_total > returned_total and current_date > event.end_date:
             event.state = 'Overdue'
 
-        # 4. No requirements at all.
+        # 5. No requirements at all.
         elif required_total == 0:
             event.state = 'Added'
 
-        # 5. Requirements exist, but nothing has been collected/prepared yet.
+        # 6. Requirements exist, but nothing has been collected/prepared yet.
         elif started_total == 0:
             event.state = 'Planning'
 
-        # 6. Some collection/preparation happened, but requirements are not fully prepared.
+        # 7. Some collection/preparation happened, but requirements are not fully prepared.
         elif prepared_active_total < required_total and returned_total == 0:
             event.state = 'Preparing'
 
-        # 7. Required quantity is fully prepared and none returned yet.
-        elif prepared_active_total >= required_total and returned_total == 0:
-            if event.start_date <= current_date <= event.end_date:
+        # 8. Required quantity is fully prepared and none returned yet.
+        elif is_ready and returned_total == 0:
+            if is_active_event_day:
                 event.state = 'Ongoing'
             else:
                 event.state = 'Ready'
-
-        # 8. Some items have been returned, but not all.
-        elif returned_total > 0 and returned_total < prepared_ever_total:
-            event.state = 'Returning'
 
         else:
             logger.debug(f"Event {event.event_id} fell through state calculation; keeping {event.state}")

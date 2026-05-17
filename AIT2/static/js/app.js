@@ -549,7 +549,7 @@ function maintenanceStatusSelectHtml(id, name, selected = 'nochange') {
 }
 
 
-function confirmDegradedAssetUse(assetId, assetDetails = null) {
+async function confirmDegradedAssetUse(assetId, assetDetails = null) {
   const identifier = getAssetIdentifierForApi(assetDetails) || assetId;
   const asset = assetDetails || (Array.isArray(assets)
     ? assets.find(a => getAssetIdentifierForApi(a) === identifier || a.id === identifier || a.displayId === identifier)
@@ -558,13 +558,24 @@ function confirmDegradedAssetUse(assetId, assetDetails = null) {
   if (!isAssetDegraded(asset)) return true;
 
   const label = [asset?.brand, asset?.model, asset?.description].filter(Boolean).join(' ');
-  return confirm(`Warning: ${identifier}${label ? ` (${label})` : ''} is marked as Degraded.\n\nIt can still be used for show, but it may not be fully functional. Continue preparing this asset?`);
+  return showAppConfirm({
+    title: 'Degraded Asset',
+    message: `${identifier}${label ? ` (${label})` : ''} is marked as Degraded.\n\nIt can still be used for show, but it may not be fully functional. Continue preparing this asset?`,
+    confirmText: 'Continue',
+    cancelText: 'Cancel',
+    variant: 'warning',
+  });
 }
 
 function showApiWarning(response) {
   if (response && response.warning) {
-    alert(response.warning);
+    return showAppAlert({
+      title: 'Warning',
+      message: response.warning,
+      variant: 'warning',
+    });
   }
+  return Promise.resolve();
 }
 
 
@@ -679,7 +690,7 @@ function setupSingleAssetClickHandler() {
     if (oldHandler4) document.removeEventListener('click', oldHandler4);
     
     // Create the ONE and ONLY click handler for ALL button types
-    const singleClickHandler = function(event) {
+    const singleClickHandler = async function(event) {
         // Handle prepare/unprepare buttons
         if (event.target.classList.contains('asset-action-btn') || 
             event.target.classList.contains('custom-asset-btn')) {
@@ -741,7 +752,13 @@ function setupSingleAssetClickHandler() {
                 return false;
             }
             
-            if (confirm(`Remove ${assetId} from this event?`)) {
+            if (await showAppConfirm({
+                title: 'Remove Asset',
+                message: `Remove ${assetId} from this event?`,
+                confirmText: 'Remove',
+                cancelText: 'Cancel',
+                variant: 'danger',
+            })) {
                 // Mark as processing
                 processingAssets.add(assetKey);
                 
@@ -1682,6 +1699,267 @@ function closeModal(modalId) {
   }
 }
 
+let appDialogQueue = Promise.resolve();
+
+function ensureAppDialogStyles() {
+  if (document.getElementById('app-dialog-styles')) return;
+
+  const style = document.createElement('style');
+  style.id = 'app-dialog-styles';
+  style.textContent = `
+    .app-dialog-modal {
+      z-index: 3000;
+      background: rgba(17, 24, 39, 0.54);
+      backdrop-filter: blur(8px);
+      padding: 20px;
+    }
+
+    .app-dialog-modal.active {
+      display: flex !important;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .app-dialog-content {
+      width: min(92vw, 460px) !important;
+      max-width: 460px !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      overflow: hidden !important;
+      border: 1px solid rgba(102, 126, 234, 0.18) !important;
+      border-radius: 14px !important;
+      box-shadow: 0 24px 70px rgba(17, 24, 39, 0.28) !important;
+    }
+
+    .app-dialog-accent {
+      height: 4px;
+      background: #667eea;
+    }
+
+    .app-dialog-content[data-variant="danger"] .app-dialog-accent {
+      background: #dc3545;
+    }
+
+    .app-dialog-content[data-variant="warning"] .app-dialog-accent {
+      background: #ffc107;
+    }
+
+    .app-dialog-header {
+      align-items: flex-start !important;
+      gap: 14px;
+      margin: 0 !important;
+      padding: 22px 24px 12px !important;
+      border-bottom: none !important;
+    }
+
+    .app-dialog-title-wrap {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .app-dialog-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 34px;
+      height: 34px;
+      flex: 0 0 34px;
+      border-radius: 50%;
+      background: rgba(102, 126, 234, 0.12);
+      color: #667eea;
+      font-weight: 800;
+      font-size: 18px;
+    }
+
+    .app-dialog-content[data-variant="danger"] .app-dialog-icon {
+      background: rgba(220, 53, 69, 0.12);
+      color: #dc3545;
+    }
+
+    .app-dialog-content[data-variant="warning"] .app-dialog-icon {
+      background: rgba(255, 193, 7, 0.22);
+      color: #856404;
+    }
+
+    .app-dialog-title {
+      color: #2f2f3a !important;
+      font-size: 1.25rem !important;
+      line-height: 1.25;
+    }
+
+    .app-dialog-body {
+      color: #4b5563;
+      font-size: 14px;
+      line-height: 1.55;
+      padding: 0 24px 8px !important;
+      white-space: pre-line;
+    }
+
+    .app-dialog-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      margin: 0 !important;
+      padding: 16px 24px 24px !important;
+      border-top: none !important;
+      text-align: initial !important;
+    }
+
+    .app-dialog-actions .btn {
+      min-width: 88px;
+      white-space: nowrap;
+    }
+
+    @media (max-width: 560px) {
+      .app-dialog-modal {
+        padding: 14px;
+      }
+
+      .app-dialog-header {
+        padding: 20px 20px 10px !important;
+      }
+
+      .app-dialog-body {
+        padding: 0 20px 8px !important;
+      }
+
+      .app-dialog-actions {
+        padding: 14px 20px 20px !important;
+      }
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+function ensureAppDialogModal() {
+  ensureAppDialogStyles();
+
+  let modal = document.getElementById('appDialogModal');
+  if (modal) return modal;
+
+  modal = document.createElement('div');
+  modal.id = 'appDialogModal';
+  modal.className = 'modal app-dialog-modal';
+  modal.innerHTML = `
+    <div class="modal-content app-dialog-content" data-variant="info">
+      <div class="app-dialog-accent"></div>
+      <div class="modal-header app-dialog-header">
+        <div class="app-dialog-title-wrap">
+          <span class="app-dialog-icon" data-dialog-icon aria-hidden="true">i</span>
+          <h3 class="modal-title app-dialog-title" id="appDialogTitle">Notice</h3>
+        </div>
+        <button type="button" class="close-btn" data-dialog-close aria-label="Close dialog">&times;</button>
+      </div>
+      <div class="modal-body app-dialog-body" id="appDialogMessage"></div>
+      <div class="modal-footer app-dialog-actions">
+        <button type="button" class="btn btn-secondary" data-dialog-cancel>Cancel</button>
+        <button type="button" class="btn btn-primary" data-dialog-confirm>OK</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  return modal;
+}
+
+function showAppDialog(options = {}) {
+  const runDialog = () => new Promise((resolve) => {
+    const modal = ensureAppDialogModal();
+    const content = modal.querySelector('.app-dialog-content');
+    const titleEl = modal.querySelector('#appDialogTitle');
+    const messageEl = modal.querySelector('#appDialogMessage');
+    const iconEl = modal.querySelector('[data-dialog-icon]');
+    const confirmButton = modal.querySelector('[data-dialog-confirm]');
+    const cancelButton = modal.querySelector('[data-dialog-cancel]');
+    const closeButton = modal.querySelector('[data-dialog-close]');
+    const variant = options.variant || 'info';
+    const isAlert = options.kind === 'alert';
+    const cancelResult = isAlert ? true : false;
+
+    content.dataset.variant = variant;
+    titleEl.textContent = options.title || (isAlert ? 'Notice' : 'Confirm Action');
+    messageEl.textContent = options.message || '';
+    iconEl.textContent = variant === 'info' ? 'i' : '!';
+    confirmButton.textContent = options.confirmText || (isAlert ? 'OK' : 'Confirm');
+    confirmButton.className = `btn ${variant === 'danger' ? 'btn-danger' : variant === 'warning' ? 'btn-warning' : 'btn-primary'}`;
+    cancelButton.textContent = options.cancelText || 'Cancel';
+    cancelButton.style.display = isAlert ? 'none' : '';
+    closeButton.style.display = options.hideClose ? 'none' : '';
+
+    let settled = false;
+    const previousFocus = document.activeElement;
+
+    const cleanup = () => {
+      modal.classList.remove('active');
+      modal.setAttribute('aria-hidden', 'true');
+      modal.removeEventListener('click', handleBackdropClick);
+      confirmButton.removeEventListener('click', handleConfirm);
+      cancelButton.removeEventListener('click', handleCancel);
+      closeButton.removeEventListener('click', handleClose);
+      document.removeEventListener('keydown', handleKeydown, true);
+
+      if (previousFocus && typeof previousFocus.focus === 'function') {
+        setTimeout(() => {
+          try { previousFocus.focus({ preventScroll: true }); } catch (e) {}
+        }, 0);
+      }
+    };
+
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve(result);
+    };
+
+    const handleConfirm = () => finish(true);
+    const handleCancel = () => finish(false);
+    const handleClose = () => finish(cancelResult);
+    const handleBackdropClick = (event) => {
+      if (event.target === modal) {
+        event.preventDefault();
+        event.stopPropagation();
+        finish(cancelResult);
+      }
+    };
+    const handleKeydown = (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        finish(cancelResult);
+      }
+    };
+
+    modal.addEventListener('click', handleBackdropClick);
+    confirmButton.addEventListener('click', handleConfirm);
+    cancelButton.addEventListener('click', handleCancel);
+    closeButton.addEventListener('click', handleClose);
+    document.addEventListener('keydown', handleKeydown, true);
+
+    modal.classList.add('active');
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-hidden', 'false');
+    titleEl.id = 'appDialogTitle';
+    modal.setAttribute('aria-labelledby', 'appDialogTitle');
+    modal.setAttribute('aria-describedby', 'appDialogMessage');
+    enhanceModalAccessibility(modal);
+    focusModalStart(modal);
+  });
+
+  appDialogQueue = appDialogQueue.catch(() => undefined).then(runDialog);
+  return appDialogQueue;
+}
+
+function showAppConfirm(options = {}) {
+  return showAppDialog({ ...options, kind: 'confirm' });
+}
+
+function showAppAlert(options = {}) {
+  return showAppDialog({ ...options, kind: 'alert', confirmText: options.confirmText || 'OK' });
+}
+
 function enhanceModalAccessibility(root = document) {
   root.querySelectorAll(".close-btn:not([aria-label]), .close:not([aria-label])").forEach((button) => {
     button.setAttribute("aria-label", "Close dialog");
@@ -2343,7 +2621,13 @@ async function saveDepartmentModal() {
   }
 
   if (originalCode && code !== normalizeDepartmentCode(originalCode)) {
-    const ok = confirm(`Rename department code "${originalCode}" to "${code}"?\n\nThis will update matching inventory rows and event model requirements.`);
+    const ok = await showAppConfirm({
+      title: 'Rename Department',
+      message: `Rename department code "${originalCode}" to "${code}"?\n\nThis will update matching inventory rows and event model requirements.`,
+      confirmText: 'Rename',
+      cancelText: 'Cancel',
+      variant: 'warning',
+    });
     if (!ok) return;
   }
 
@@ -2740,7 +3024,14 @@ async function deleteUserAdmin(encodedOriginalUsername) {
     return;
   }
 
-  if (!confirm(`Delete user "${username}"? This cannot be undone.`)) return;
+  const confirmed = await showAppConfirm({
+    title: 'Delete User',
+    message: `Delete user "${username}"? This cannot be undone.`,
+    confirmText: 'Delete',
+    cancelText: 'Cancel',
+    variant: 'danger',
+  });
+  if (!confirmed) return;
 
   try {
     await apiCall(`/api/users/${encodeURIComponent(username)}`, 'DELETE');
@@ -3904,11 +4195,15 @@ async function saveAssetEditModal() {
   const sameOriginalGroupAssets = assets.filter(asset => sameAssetGroup(asset, original));
 
   if (modelOrDescriptionChanged && sameOriginalGroupAssets.length > 1) {
-    const changeAll = confirm(
-      `This asset belongs to a group of ${sameOriginalGroupAssets.length} asset(s) with the same model/description.\n\n` +
-      `Click OK to change all assets of this same model/description type.\n` +
-      `Click Cancel to change only this specific asset.`
-    );
+    const changeAll = await showAppConfirm({
+      title: 'Update Matching Assets',
+      message:
+        `This asset belongs to a group of ${sameOriginalGroupAssets.length} asset(s) with the same model/description.\n\n` +
+        `Choose whether to update all matching assets or only this specific asset.`,
+      confirmText: 'Change All',
+      cancelText: 'Only This Asset',
+      variant: 'info',
+    });
 
     payload.applyTo = changeAll ? 'allSimilar' : 'single';
   }
@@ -5214,7 +5509,14 @@ async function saveContainerEdit(containerId) {
 } 
 
 async function deleteContainer(containerId) {
-  if (!confirm(`Delete container ${containerId}?`)) return;
+  const confirmed = await showAppConfirm({
+    title: 'Delete Container',
+    message: `Delete container ${containerId}?`,
+    confirmText: 'Delete',
+    cancelText: 'Cancel',
+    variant: 'danger',
+  });
+  if (!confirmed) return;
 
   try {
     await apiCall(`/api/containers/${encodeURIComponent(containerId)}`, 'DELETE');
@@ -7392,9 +7694,9 @@ async function processUniversalAsset(eventId) {
                 refreshPrepareUiAfterAssetChange(eventId);
             } else {
                 // Asset is assigned but not prepared - prepare it
-                if (!confirmDegradedAssetUse(assetId, assetDetails)) return;
+                if (!(await confirmDegradedAssetUse(assetId, assetDetails))) return;
                 const response = await apiCall(`/api/events/${eventId}/assign-specific`, 'POST', { assetId });
-                showApiWarning(response);
+                await showApiWarning(response);
                 showFeedback(feedbackDiv, 'success', `✅ ${assetId} assigned and prepared`);
                 
                 // Clear input and focus back on it
@@ -7410,9 +7712,9 @@ async function processUniversalAsset(eventId) {
                 return;
             }
 
-            if (!confirmDegradedAssetUse(assetId, assetDetails)) return;
+            if (!(await confirmDegradedAssetUse(assetId, assetDetails))) return;
             const response = await apiCall(`/api/events/${eventId}/assign-specific`, 'POST', { assetId });
-            showApiWarning(response);
+            await showApiWarning(response);
             showFeedback(feedbackDiv, 'success', `✅ ${assetId} prepared as extra asset`);
 
             input.value = '';
@@ -9579,15 +9881,16 @@ async function markUncheckedAssetCheckMissing() {
 
   const preview = uncheckedAssets.slice(0, 12).map(asset => asset.id).join(', ');
   const extra = uncheckedAssets.length > 12 ? ` and ${uncheckedAssets.length - 12} more` : '';
-  const confirmed = confirm(
-    `Mark ${uncheckedAssets.length} unchecked in-store asset(s) as Missing?
-
-` +
-    `${preview}${extra}
-
-` +
-    `Assets that are out on show or away from Store are excluded and will not be marked missing.`
-  );
+  const confirmed = await showAppConfirm({
+    title: 'Mark Missing',
+    message:
+      `Mark ${uncheckedAssets.length} unchecked in-store asset(s) as Missing?\n\n` +
+      `${preview}${extra}\n\n` +
+      `Assets that are out on show or away from Store are excluded and will not be marked missing.`,
+    confirmText: 'Mark Missing',
+    cancelText: 'Cancel',
+    variant: 'warning',
+  });
 
   if (!confirmed) return;
 
@@ -10391,7 +10694,14 @@ async function updateModelRequirementsSection(eventId) {
 
 async function removeModelFromEvent(eventId, brand, model, department, description = "") {
   const label = `${brand} ${model}${description ? ` (${description})` : ""}`;
-  if (!confirm(`Remove ${label} from this event?`)) return;
+  const confirmed = await showAppConfirm({
+    title: 'Remove Model',
+    message: `Remove ${label} from this event?`,
+    confirmText: 'Remove',
+    cancelText: 'Cancel',
+    variant: 'danger',
+  });
+  if (!confirmed) return;
 
   try {
     await apiCall(`/api/events/${eventId}/models`, "DELETE", {
@@ -10800,9 +11110,9 @@ async function assignSpecificAsset(eventId, assetId, brand, model) {
     
     try {
         await ensureAssetsLoaded();
-        if (!confirmDegradedAssetUse(assetId)) return;
+        if (!(await confirmDegradedAssetUse(assetId))) return;
         const response = await apiCall(`/api/events/${eventId}/assign-specific`, 'POST', { assetId });
-        showApiWarning(response);
+        await showApiWarning(response);
         showNotification('success', `Assigned ${assetId} to event`);
         
         console.log('About to refresh modal with state preservation...');
@@ -10916,14 +11226,22 @@ async function removeAssetFromEvent(eventId, assetId) {
             // Update the model requirements section to reflect changes
             await updateModelRequirementsSection(eventId);
             
-            alert(`Asset ${assetId} removed successfully`);
+            await showAppAlert({
+                title: 'Asset Removed',
+                message: `Asset ${assetId} removed successfully`,
+                variant: 'info',
+            });
         } else {
             throw new Error(response.error || 'Failed to remove asset');
         }
         
     } catch (error) {
         console.error('Error removing asset from event:', error);
-        alert(`Error removing asset: ${error.message}`);
+        await showAppAlert({
+            title: 'Remove Failed',
+            message: `Error removing asset: ${error.message}`,
+            variant: 'danger',
+        });
     }
 }
 
@@ -11072,13 +11390,14 @@ async function deleteEvent(eventId) {
     return;
   }
 
-  if (
-    !confirm(
-      "Are you sure you want to delete this event? This action cannot be undone."
-    )
-  ) {
-    return;
-  }
+  const confirmed = await showAppConfirm({
+    title: 'Delete Event',
+    message: 'Are you sure you want to delete this event? This action cannot be undone.',
+    confirmText: 'Delete',
+    cancelText: 'Cancel',
+    variant: 'danger',
+  });
+  if (!confirmed) return;
 
   try {
     await apiCall(`/api/events/${eventId}`, "DELETE");
@@ -12822,97 +13141,18 @@ async function deleteMaintenanceLog(assetId, logIndex, logId) {
   }
 }
 
-// Add this improved custom confirmation function
+function showCustomConfirm(titleOrMessage, maybeMessage, options = {}) {
+  const hasSeparateMessage = typeof maybeMessage === 'string';
+  const title = hasSeparateMessage ? titleOrMessage : (options.title || 'Confirm Action');
+  const message = hasSeparateMessage ? maybeMessage : titleOrMessage;
+  const destructive = /delete|remove/i.test(`${title} ${message}`);
 
-// Add this custom confirmation function
-function showCustomConfirm(message) {
-  return new Promise((resolve) => {
-    // Create confirmation modal
-    const confirmModalHTML = `
-      <div id="customConfirmModal" style="
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0, 0, 0, 0.5);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 2000;
-      ">
-        <div style="
-          background: white;
-          border-radius: 8px;
-          padding: 30px;
-          max-width: 400px;
-          width: 90%;
-          text-align: center;
-          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-        ">
-          <h3 style="margin: 0 0 15px 0; color: #333;">Confirm Delete</h3>
-          <p style="margin: 0 0 25px 0; color: #666; line-height: 1.4;">${message}</p>
-          <div style="display: flex; gap: 15px; justify-content: center;">
-            <button id="confirmCancel" style="
-              background: #6c757d;
-              color: white;
-              border: none;
-              padding: 10px 20px;
-              border-radius: 5px;
-              cursor: pointer;
-              font-size: 14px;
-            ">Cancel</button>
-            <button id="confirmDelete" style="
-              background: #dc3545;
-              color: white;
-              border: none;
-              padding: 10px 20px;
-              border-radius: 5px;
-              cursor: pointer;
-              font-size: 14px;
-            ">Delete</button>
-          </div>
-        </div>
-      </div>
-    `;
-    
-    // Add modal to body
-    document.body.insertAdjacentHTML('beforeend', confirmModalHTML);
-    
-    // Get modal and buttons
-    const modal = document.getElementById('customConfirmModal');
-    const cancelBtn = document.getElementById('confirmCancel');
-    const deleteBtn = document.getElementById('confirmDelete');
-    
-    // Handle cancel
-    cancelBtn.onclick = () => {
-      modal.remove();
-      resolve(false);
-    };
-    
-    // Handle delete
-    deleteBtn.onclick = () => {
-      modal.remove();
-      resolve(true);
-    };
-    
-    // Handle click outside
-    modal.onclick = (e) => {
-      if (e.target === modal) {
-        modal.remove();
-        resolve(false);
-      }
-    };
-    
-    // Handle escape key
-    const escapeHandler = (e) => {
-      if (e.key === 'Escape') {
-        modal.remove();
-        document.removeEventListener('keydown', escapeHandler);
-        resolve(false);
-      }
-    };
-    document.addEventListener('keydown', escapeHandler);
+  return showAppConfirm({
+    title,
+    message,
+    confirmText: options.confirmText || (destructive ? 'Delete' : 'Confirm'),
+    cancelText: options.cancelText || 'Cancel',
+    variant: options.variant || (destructive ? 'danger' : 'warning'),
   });
 }
 
@@ -15799,8 +16039,14 @@ function exportLogs() {
   showNotification("success", "Logs exported successfully!");
 }
 
-function logout() {
-  if (confirm("Are you sure you want to logout?")) {
+async function logout() {
+  if (await showAppConfirm({
+    title: 'Log Out',
+    message: 'Are you sure you want to logout?',
+    confirmText: 'Log Out',
+    cancelText: 'Cancel',
+    variant: 'warning',
+  })) {
     window.location.href = "/logout";
   }
 }
@@ -16896,12 +17142,12 @@ async function prepareSpecificAsset(eventId, assetId) {
   console.log(`=== PATCHED prepareSpecificAsset CALLED ===`, { eventId, assetId });
   try {
     await ensureAssetsLoaded();
-    if (!confirmDegradedAssetUse(assetId)) {
+    if (!(await confirmDegradedAssetUse(assetId))) {
       updateAllButtonsForAsset(assetId, false);
       return;
     }
     const response = await apiCall(`/api/events/${eventId}/prepare`, 'POST', { assetId });
-    showApiWarning(response);
+    await showApiWarning(response);
     showNotification('success', `${customAssetLabelFromId(assetId)} marked as prepared`);
     updateAllButtonsForAsset(assetId, true);
     setTimeout(() => {

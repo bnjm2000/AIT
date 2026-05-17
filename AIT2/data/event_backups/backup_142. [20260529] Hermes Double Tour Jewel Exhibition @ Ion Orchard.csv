@@ -1,0 +1,2 @@
+EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,CustomCollected,Tag,ForceStateOverride
+142,Hermes Double Tour Jewel Exhibition @ Ion Orchard,20260529,20260614,[],"[""[MODEL]AX|L-Acoustics|5XT|6|5\"" passive coaxial enclosure (black)""]",[],Planning,[],[],[],events,False
