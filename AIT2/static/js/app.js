@@ -473,6 +473,19 @@ function statusBadgeHtml(status, label = null) {
   return `<span class="asset-badge ${assetStatusClass(cleanStatus)}">${escapeHtml(text)}</span>`;
 }
 
+function safePdfHexColour(value, fallback) {
+  const colour = String(value || '').trim();
+  return /^#[0-9A-Fa-f]{6}$/.test(colour) ? colour : fallback;
+}
+
+function pdfInlineBadgeHtml(label, background, color, options = {}) {
+  const bg = safePdfHexColour(background, '#e5e7eb');
+  const fg = safePdfHexColour(color, getReadableTextColour(bg));
+  const extraStyle = options.style ? String(options.style) : '';
+  const title = options.title ? ` title="${escapeHtmlAttr(options.title)}"` : '';
+  return `<span${title} style="display:inline-block;padding:2px 6px;border-radius:999px;font-size:.95em;font-weight:700;line-height:1.2;white-space:nowrap;background:${bg};color:${fg};-webkit-print-color-adjust:exact;print-color-adjust:exact;${extraStyle}">${escapeHtml(label)}</span>`;
+}
+
 function getAssetConditionStatus(asset) {
   if (!asset) return 'available';
   if (asset.isDisposed || asset.status === 'disposed') return 'disposed';
@@ -6319,14 +6332,14 @@ function maintenanceReportRowHtml(row, rowNumber) {
   const assetText = [row.asset?.brand, row.asset?.model, row.asset?.description]
     .filter(Boolean)
     .join(' ');
-  const changesText = row.changes.length ? row.changes.map(safe).join('<br>') : '-';
+  const changesText = row.changes.length ? row.changes.map(maintenanceChangePdfHtml).join('') : '-';
   return `
     <tr>
       <td>${safe(maintenanceReportDateForDisplay(row.log.date))}</td>
       <td><strong>${safe(row.assetId)}</strong></td>
       <td>${safe(assetText || '-')}</td>
       <td>${safe(row.location || '-')}</td>
-      <td>${safe(row.type)}</td>
+      <td>${maintenanceLogTypePdfBadgeHtml(row.type)}</td>
       <td>${safe(row.log.user)}</td>
       <td>${safe(row.log.description)}</td>
       <td>${maintenanceCostDisplayHtml(row.log.cost)}</td>
@@ -6546,7 +6559,7 @@ async function generateMaintenanceReportPdf() {
       .footer { position:absolute; bottom:7mm; left:7mm; right:7mm; text-align:center; font-size:7pt; font-weight:bold; line-height:1.2; }
       .page-number { position:absolute; bottom:3mm; right:7mm; font-size:7pt; }
       .print-btn { position:fixed; top:20px; right:20px; background:#667eea; color:white; border:none; padding:10px 18px; border-radius:6px; cursor:pointer; z-index:999; }
-      @media print { body { background:white; } .page { margin:0; page-break-after:always; break-after:page; } .page:last-child { page-break-after:auto; break-after:auto; } .print-btn { display:none; } }
+      @media print { body, body * { -webkit-print-color-adjust:exact; print-color-adjust:exact; } body { background:white; } .page { margin:0; page-break-after:always; break-after:page; } .page:last-child { page-break-after:auto; break-after:auto; } .print-btn { display:none; } }
     </style></head><body><button class="print-btn" onclick="window.print()">Print / Save as PDF</button>${pagesHtml}</body></html>`;
     win.document.write(html);
     win.document.close();
@@ -9307,18 +9320,28 @@ function maintenanceLogTypeSelectHtml(id, selectedType = DEFAULT_MAINTENANCE_LOG
   `;
 }
 
-function maintenanceLogTypeBadgeHtml(type) {
+function maintenanceLogTypeMeta(type) {
   const normalized = normalizeMaintenanceLogType(type);
   const palette = {
-    "General": "background:#e9ecef;color:#343a40;",
-    "Preventative maintenance": "background:#d1ecf1;color:#0c5460;",
-    "Fault": "background:#f8d7da;color:#721c24;",
-    "Update": "background:#e2d9f3;color:#3d246c;",
-    "Repair": "background:#fff3cd;color:#856404;",
-    "Asset check": "background:#d4edda;color:#155724;"
+    "General": { background: "#e9ecef", color: "#343a40" },
+    "Preventative maintenance": { background: "#d1ecf1", color: "#0c5460" },
+    "Fault": { background: "#f8d7da", color: "#721c24" },
+    "Update": { background: "#e2d9f3", color: "#3d246c" },
+    "Repair": { background: "#fff3cd", color: "#856404" },
+    "Asset check": { background: "#d4edda", color: "#155724" }
   };
   const label = normalized === "Preventative maintenance" ? "Preventative" : normalized;
-  return `<span style="display:inline-block;padding:4px 8px;border-radius:999px;font-size:12px;font-weight:700;white-space:nowrap;${palette[normalized] || palette.General}">${escapeHtml(label)}</span>`;
+  return { normalized, label, ...(palette[normalized] || palette.General) };
+}
+
+function maintenanceLogTypeBadgeHtml(type) {
+  const meta = maintenanceLogTypeMeta(type);
+  return `<span style="display:inline-block;padding:4px 8px;border-radius:999px;font-size:12px;font-weight:700;white-space:nowrap;background:${meta.background};color:${meta.color};">${escapeHtml(meta.label)}</span>`;
+}
+
+function maintenanceLogTypePdfBadgeHtml(type) {
+  const meta = maintenanceLogTypeMeta(type);
+  return pdfInlineBadgeHtml(meta.label, meta.background, meta.color);
 }
 
 function formatMaintenanceCost(value) {
@@ -9383,6 +9406,26 @@ function getMaintenanceChangeLabels(logOrChanges) {
     if (change.kind === 'disposed') return change.action === 'marked' ? 'Marked Disposed' : 'Cleared Disposed';
     return '';
   }).filter(Boolean);
+}
+
+function maintenanceChangeColour(label) {
+  const changeLower = String(label || '').toLowerCase();
+  if (changeLower.includes('cleared ooc') || changeLower.includes('clear ooc') || changeLower.includes('removed ooc') || changeLower.includes('unmark ooc')) return '#28a745';
+  if (changeLower.includes('cleared missing') || changeLower.includes('clear missing') || changeLower.includes('removed missing') || changeLower.includes('unmark missing')) return '#28a745';
+  if (changeLower.includes('cleared degraded')) return '#28a745';
+  if (changeLower.includes('cleared disposed')) return '#28a745';
+  if (changeLower.includes('marked ooc') || changeLower.includes('mark ooc')) return '#dc3545';
+  if (changeLower.includes('marked missing') || changeLower.includes('mark missing')) return '#fd7e14';
+  if (changeLower.includes('marked degraded')) return '#856404';
+  if (changeLower.includes('marked disposed')) return '#6c757d';
+  if (changeLower.includes('location:')) return '#17a2b8';
+  if (changeLower.includes('serial:')) return '#6f42c1';
+  return '#667eea';
+}
+
+function maintenanceChangePdfHtml(label) {
+  const color = maintenanceChangeColour(label);
+  return `<span style="display:block;margin-bottom:2px;color:${color};font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escapeHtml(label)}</span>`;
 }
 
 function getMaintenanceChangeValue(log, kind) {
@@ -17601,10 +17644,41 @@ function inventoryStatusText(status) {
     .replace(/\b\w/g, char => char.toUpperCase());
 }
 
+function inventoryStatusPdfMeta(status) {
+  const cleanStatus = inventoryPlainText(status, 'available').toLowerCase();
+  const palette = {
+    available: { background: '#dcfce7', color: '#14532d' },
+    deployed: { background: '#fef3c7', color: '#78350f' },
+    degraded: { background: '#fef3c7', color: '#78350f' },
+    missing: { background: '#fee2e2', color: '#7f1d1d' },
+    ooc: { background: '#fee2e2', color: '#7f1d1d' },
+    disposed: { background: '#e5e7eb', color: '#374151' }
+  };
+  return {
+    label: inventoryStatusText(cleanStatus),
+    ...(palette[cleanStatus] || palette.available)
+  };
+}
+
+function inventoryStatusPdfBadgeHtml(status, label = null) {
+  const meta = inventoryStatusPdfMeta(status);
+  return pdfInlineBadgeHtml(label || meta.label, meta.background, meta.color, { style: 'margin:0 3px 3px 0;' });
+}
+
 function inventoryDepartmentLabel(code) {
   const dept = getDepartmentMeta(code);
   const deptCode = normalizeDepartmentCode(dept.code || code || 'UN');
   return dept.name && dept.name !== deptCode ? `${deptCode} - ${dept.name}` : deptCode;
+}
+
+function inventoryDepartmentPdfBadgeHtml(code) {
+  const dept = getDepartmentMeta(code);
+  const bg = safePdfHexColour(dept.color, '#e2e3e5');
+  const fg = safePdfHexColour(dept.textColor, getReadableTextColour(bg));
+  return pdfInlineBadgeHtml(inventoryDepartmentLabel(dept.code || code || 'UN'), bg, fg, {
+    title: dept.name || dept.code,
+    style: 'margin:0 3px 3px 0;'
+  });
 }
 
 function inventoryExportQuantity(asset, statusFilter = '') {
@@ -17625,6 +17699,12 @@ function inventoryAssetFlagsText(asset) {
   if (asset?.isDegraded) flags.push('Degraded');
   if (asset?.isDisposed) flags.push('Disposed');
   return flags.length ? flags.join(', ') : 'OK';
+}
+
+function inventoryAssetFlagsPdfHtml(asset) {
+  const status = getAssetConditionStatus(asset);
+  const label = status === 'available' ? 'OK' : inventoryStatusText(status);
+  return inventoryStatusPdfBadgeHtml(status, label);
 }
 
 function inventoryAssetQuantityText(asset) {
@@ -17698,6 +17778,14 @@ function inventoryStatusSummaryText(statusCounts) {
     .join(', ');
 }
 
+function inventoryStatusSummaryPdfHtml(statusCounts) {
+  const entries = Object.entries(statusCounts || {})
+    .sort(([a], [b]) => inventoryStatusText(a).localeCompare(inventoryStatusText(b)));
+  return entries.length
+    ? entries.map(([status, count]) => inventoryStatusPdfBadgeHtml(status, `${inventoryStatusText(status)}: ${count}`)).join('')
+    : '-';
+}
+
 function inventoryGroupedRowRecords(filteredAssets, filters) {
   const groups = groupInventoryAssetsForExport(filteredAssets, filters);
   if (groups.length === 0) {
@@ -17709,12 +17797,12 @@ function inventoryGroupedRowRecords(filteredAssets, filters) {
     return {
       html: `
       <tr>
-        <td>${escapeHtml(group.departmentLabel)}</td>
+        <td>${inventoryDepartmentPdfBadgeHtml(group.department)}</td>
         <td>${escapeHtml(group.brand)}</td>
         <td>${escapeHtml(group.model)}</td>
         <td>${escapeHtml(descriptionText || '-')}</td>
         <td class="number-cell">${escapeHtml(String(group.count))}</td>
-        <td>${escapeHtml(inventoryStatusSummaryText(group.statusCounts) || '-')}</td>
+        <td>${inventoryStatusSummaryPdfHtml(group.statusCounts)}</td>
       </tr>
       `,
       height: 0
@@ -17747,11 +17835,11 @@ function inventoryIndividualRowRecords(filteredAssets) {
         <td>${escapeHtml(inventoryPlainText(asset.description))}</td>
         <td>${escapeHtml(asset.isBulk ? '-' : inventoryPlainText(asset.serial, 'N/A'))}</td>
         <td class="number-cell">${escapeHtml(inventoryAssetQuantityText(asset))}</td>
-        <td>${escapeHtml(inventoryDepartmentLabel(asset.department))}</td>
-        <td>${escapeHtml(inventoryStatusText(asset.status || 'available'))}</td>
+        <td>${inventoryDepartmentPdfBadgeHtml(asset.department)}</td>
+        <td>${inventoryStatusPdfBadgeHtml(asset.status || 'available')}</td>
         <td>${escapeHtml(defaultLocation)}</td>
         <td>${escapeHtml(currentLocation)}</td>
-        <td>${escapeHtml(inventoryAssetFlagsText(asset))}</td>
+        <td>${inventoryAssetFlagsPdfHtml(asset)}</td>
       </tr>
       `,
       height: 0
@@ -18056,7 +18144,8 @@ async function generateInventoryPdf() {
       .footer { position: absolute; bottom: 7mm; left: 7mm; right: 7mm; text-align: center; font-size: 7pt; font-weight: bold; line-height: 1.2; }
       .page-number { position: absolute; bottom: 3mm; right: 7mm; font-size: 7pt; }
       @media print {
-        body { background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        body, body * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        body { background: #fff; }
         .page { margin: 0; page-break-after: always; break-after: page; }
         .page:last-child { page-break-after: auto; break-after: auto; }
         .print-btn { display: none; }
