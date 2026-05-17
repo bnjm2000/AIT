@@ -611,12 +611,12 @@ E906#01,Sennheiser,E906,,"super-cardioid, dynamic instrument microphone",False,F
 E906#02,Sennheiser,E906,,"super-cardioid, dynamic instrument microphone",False,False,False,False,False,1,,AX,Store,Store
 ME36#01,Sennheiser,ME36,,Gooseneck mic,False,False,False,False,False,1,,AX,Store,Store
 ME36#02,Sennheiser,ME36,,Gooseneck mic,False,False,False,False,False,1,,AX,Store,Store
-MKE2#01,Sennheiser,MKE2,86827,"Lavalier microphone, black",False,False,False,False,False,1,,AX,Store,Store
-MKE2#02,Sennheiser,MKE2,86825,"Lavalier microphone, black",False,False,False,False,False,1,,AX,Store,Store
-MKE2#03,Sennheiser,MKE2,,"Lavalier microphone, beige",False,False,False,False,False,1,,AX,Store,
-MKE2#04,Sennheiser,MKE2,,"Lavalier microphone, beige",False,False,False,False,False,1,,AX,Store,
-MKE2#05,Sennheiser,MKE2,,"Lavalier microphone, beige",False,False,False,False,False,1,,AX,Store,
-MKE2#06,Sennheiser,MKE2,,"Lavalier microphone, beige",False,False,False,False,False,1,,AX,Store,
+MKE2#01,Sennheiser,MKE2,86827,Lavalier microphone (black),False,False,False,False,False,1,,AX,Store,Store
+MKE2#02,Sennheiser,MKE2,86825,Lavalier microphone (black),False,False,False,False,False,1,,AX,Store,Store
+MKE2#03,Sennheiser,MKE2,,Lavalier microphone (beige),False,False,False,False,False,1,,AX,Store,
+MKE2#04,Sennheiser,MKE2,,Lavalier microphone (beige),False,False,False,False,False,1,,AX,Store,
+MKE2#05,Sennheiser,MKE2,,Lavalier microphone (beige),False,False,False,False,False,1,,AX,Store,
+MKE2#06,Sennheiser,MKE2,,Lavalier microphone (beige),False,False,False,False,False,1,,AX,Store,
 AD1#01,Shure,AD1,2BI13281704,Beltpack [G56],False,False,False,False,False,1,,AX,Store,Store
 AD1#02,Shure,AD1,2CA26063354,Beltpack [G56],False,False,False,False,False,1,,AX,Store,Store
 AD1#03,Shure,AD1,2CA26063431,Beltpack [G56],False,False,False,False,False,1,,AX,Store,Store
