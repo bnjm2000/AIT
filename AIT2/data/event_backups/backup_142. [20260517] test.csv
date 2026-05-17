@@ -1,0 +1,2 @@
+EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,CustomCollected,Tag,ForceStateOverride
+142,test,20260517,20260517,[],"[""[MODEL]AX|Behringher|P1|2|Wired IEM beltpack"", ""P1#01""]",[],Last Day,"[""P1#01""]",[],[],events,False

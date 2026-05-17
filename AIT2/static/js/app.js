@@ -109,7 +109,7 @@ function applyPermissionUi() {
 
   adminOnlySelectors.forEach(selector => {
     document.querySelectorAll(selector).forEach(el => {
-      el.style.display = isAdminUser() ? '' : 'none';
+      el.style.display = isAdminUser() ? (el.dataset.adminDisplay || 'block') : 'none';
     });
   });
 
@@ -1541,6 +1541,11 @@ function setupMobileNavigation() {
 }
 
 function showSection(sectionName) {
+  const adminOnlySections = new Set(["logs", "maintenance-report", "users", "pdf-settings"]);
+  if (adminOnlySections.has(sectionName) && !isAdminUser()) {
+    return showSection("events");
+  }
+
   const targetSection = document.getElementById(sectionName + "-section");
   if (!targetSection) return;
 
@@ -3381,6 +3386,7 @@ async function loadInventory() {
 
     ensureDepartmentManagerPanel();
     renderDepartmentManager();
+    ensureInventoryExportControls();
 
     // Set up event listeners for filters and sorting
     setupInventoryFilters();
@@ -3391,6 +3397,79 @@ async function loadInventory() {
     document.getElementById("inventory-table-container").innerHTML =
       '<p style="color: red; text-align: center;">Error loading inventory</p>';
   }
+}
+
+function ensureInventoryExportControls() {
+  const controls = document.querySelector('#inventory-section .inventory-controls');
+  if (!controls) return;
+
+  if (!isAdminUser()) {
+    const existingGroup = document.getElementById('inventory-export-controls');
+    if (existingGroup) existingGroup.style.display = 'none';
+    return;
+  }
+
+  const existingCheckbox = document.getElementById('inventory-export-individual');
+  const existingButton = controls.querySelector('[data-inventory-export-pdf="true"], button[onclick="generateInventoryPdf()"]');
+  if (existingCheckbox && existingButton) {
+    existingButton.setAttribute('data-inventory-export-pdf', 'true');
+
+    const existingGroup = document.getElementById('inventory-export-controls');
+    const actionRow = document.getElementById('asset-count')?.parentElement;
+    if (existingGroup) {
+      existingGroup.dataset.adminDisplay = 'flex';
+      existingGroup.style.display = 'flex';
+    }
+    if (existingGroup && actionRow && existingGroup.parentElement !== actionRow) {
+      existingGroup.style.marginLeft = '';
+      actionRow.appendChild(existingGroup);
+    }
+    return;
+  }
+
+  if (document.getElementById('inventory-export-controls')) {
+    return;
+  }
+
+  const row = document.createElement('div');
+  row.id = 'inventory-export-controls';
+  row.style.cssText = [
+    'display:flex',
+    'gap:12px',
+    'align-items:center',
+    'justify-content:flex-end',
+    'flex-wrap:wrap',
+    'margin-left:auto'
+  ].join(';');
+
+  row.innerHTML = `
+    <label style="display:flex;align-items:center;gap:6px;font-size:14px;">
+      <input type="checkbox" id="inventory-export-individual">
+      Show Individual Items
+    </label>
+    <button
+      type="button"
+      class="btn btn-primary"
+      data-inventory-export-pdf="true"
+      style="padding:8px 16px;font-size:14px;"
+    >
+      Export PDF
+    </button>
+  `;
+
+  row.classList.add('admin-only');
+  row.setAttribute('data-admin-only', 'true');
+  row.setAttribute('data-admin-display', 'flex');
+
+  const actionRow = document.getElementById('asset-count')?.parentElement || controls.lastElementChild;
+  if (actionRow && actionRow !== controls.firstElementChild) {
+    actionRow.style.flexWrap = 'wrap';
+    actionRow.appendChild(row);
+  } else {
+    controls.appendChild(row);
+  }
+
+  row.querySelector('[data-inventory-export-pdf="true"]')?.addEventListener('click', generateInventoryPdf);
 }
 
 function setupInventoryFilters() {
@@ -16967,36 +17046,559 @@ function getInventorySortValue(asset, sortBy) {
   return asset[sortBy] || '';
 }
 
-function displayFilteredInventory() {
+function getInventoryFilterState() {
   const searchTerm = document.getElementById('asset-search')?.value.toLowerCase() || '';
-  const deptFilter = document.getElementById('department-filter')?.value || '';
-  const statusFilter = document.getElementById('status-filter')?.value || '';
-  const sortBy = document.getElementById('sort-select')?.value || 'id';
-  const sortDesc = document.getElementById('sort-descending')?.checked || false;
 
-  let filteredAssets = assets.filter((asset) => {
+  return {
+    searchTerm,
+    searchLabel: document.getElementById('asset-search')?.value.trim() || '',
+    deptFilter: document.getElementById('department-filter')?.value || '',
+    statusFilter: document.getElementById('status-filter')?.value || '',
+    sortBy: document.getElementById('sort-select')?.value || 'id',
+    sortDesc: document.getElementById('sort-descending')?.checked || false
+  };
+}
+
+function getFilteredInventoryData() {
+  const filters = getInventoryFilterState();
+  const sourceAssets = Array.isArray(assets) ? assets : [];
+
+  let filteredAssets = sourceAssets.filter((asset) => {
     const deptMeta = getDepartmentMeta(asset.department);
     const searchableText = `${asset.id || ''} ${asset.internalId || ''} ${asset.bulkId || ''} ${asset.brand || ''} ${asset.model || ''} ${asset.serial || ''} ${asset.description || ''} ${asset.department || ''} ${deptMeta.name || ''}`.toLowerCase();
-    const matchesSearch = !searchTerm || searchableText.includes(searchTerm);
-    const matchesDept = !deptFilter || asset.department === deptFilter;
-    const matchesStatus = !statusFilter || asset.status === statusFilter;
+    const matchesSearch = !filters.searchTerm || searchableText.includes(filters.searchTerm);
+    const matchesDept = !filters.deptFilter || asset.department === filters.deptFilter;
+    const matchesStatus = !filters.statusFilter || asset.status === filters.statusFilter;
     return matchesSearch && matchesDept && matchesStatus;
   });
 
   filteredAssets.sort((a, b) => {
-    let aVal = String(getInventorySortValue(a, sortBy) ?? '').toLowerCase();
-    let bVal = String(getInventorySortValue(b, sortBy) ?? '').toLowerCase();
+    let aVal = String(getInventorySortValue(a, filters.sortBy) ?? '').toLowerCase();
+    let bVal = String(getInventorySortValue(b, filters.sortBy) ?? '').toLowerCase();
     const primary = aVal.localeCompare(bVal, undefined, { numeric: true, sensitivity: 'base' });
-    if (primary !== 0) return sortDesc ? -primary : primary;
+    if (primary !== 0) return filters.sortDesc ? -primary : primary;
     const fallbackA = `${a.brand || ''} ${a.model || ''} ${a.description || ''} ${a.internalId || a.id || ''}`.toLowerCase();
     const fallbackB = `${b.brand || ''} ${b.model || ''} ${b.description || ''} ${b.internalId || b.id || ''}`.toLowerCase();
     const secondary = fallbackA.localeCompare(fallbackB, undefined, { numeric: true, sensitivity: 'base' });
-    return sortDesc ? -secondary : secondary;
+    return filters.sortDesc ? -secondary : secondary;
   });
 
+  return {
+    filters,
+    filteredAssets,
+    totalAssets: sourceAssets.length
+  };
+}
+
+function displayFilteredInventory() {
+  const { filteredAssets, totalAssets } = getFilteredInventoryData();
   const countElement = document.getElementById('asset-count');
-  if (countElement) countElement.textContent = `${filteredAssets.length} of ${assets.length} assets`;
+  if (countElement) countElement.textContent = `${filteredAssets.length} of ${totalAssets} assets`;
   displayInventoryTable(filteredAssets);
+}
+
+function inventoryExportDateStamp() {
+  const now = new Date();
+  const pad = value => String(value).padStart(2, '0');
+
+  return {
+    displayDate: now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+    reportNumber: `INV-${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}`
+  };
+}
+
+function inventoryPlainText(value, fallback = '-') {
+  const text = String(value ?? '').trim();
+  return text || fallback;
+}
+
+function inventoryStatusText(status) {
+  const cleanStatus = inventoryPlainText(status, 'available').toLowerCase();
+  if (cleanStatus === 'ooc') return 'OOC';
+  return cleanStatus
+    .replace(/-/g, ' ')
+    .replace(/\b\w/g, char => char.toUpperCase());
+}
+
+function inventoryDepartmentLabel(code) {
+  const dept = getDepartmentMeta(code);
+  const deptCode = normalizeDepartmentCode(dept.code || code || 'UN');
+  return dept.name && dept.name !== deptCode ? `${deptCode} - ${dept.name}` : deptCode;
+}
+
+function inventoryExportQuantity(asset, statusFilter = '') {
+  if (!asset) return 0;
+  const total = Math.max(1, Number(asset.quantity || 1) || 1);
+  if (!asset.isBulk) return 1;
+
+  const available = Math.max(0, Number(asset.availableQuantity ?? total) || 0);
+  if (statusFilter === 'available') return available;
+  if (statusFilter === 'deployed') return Math.max(0, total - available);
+  return total;
+}
+
+function inventoryAssetFlagsText(asset) {
+  const flags = [];
+  if (asset?.isMissing) flags.push('Missing');
+  if (asset?.isOOC) flags.push('OOC');
+  if (asset?.isDegraded) flags.push('Degraded');
+  if (asset?.isDisposed) flags.push('Disposed');
+  return flags.length ? flags.join(', ') : 'OK';
+}
+
+function inventoryAssetQuantityText(asset) {
+  if (!asset?.isBulk) return '1';
+  const total = Math.max(1, Number(asset.quantity || 1) || 1);
+  const available = Math.max(0, Number(asset.availableQuantity ?? total) || 0);
+  return `${available}/${total}`;
+}
+
+function inventoryFilterSummary(filters, rowCount, totalAssets, showIndividual) {
+  const parts = [];
+  if (filters.searchLabel) parts.push(`Search: ${filters.searchLabel}`);
+  if (filters.deptFilter) parts.push(`Department: ${inventoryDepartmentLabel(filters.deptFilter)}`);
+  if (filters.statusFilter) parts.push(`Status: ${inventoryStatusText(filters.statusFilter)}`);
+  if (parts.length === 0) parts.push('Filters: All inventory assets');
+
+  const sortLabelMap = {
+    id: 'Asset ID',
+    brand: 'Brand',
+    model: 'Model',
+    department: 'Department',
+    status: 'Status',
+    location: 'Location'
+  };
+  parts.push(`Sort: ${sortLabelMap[filters.sortBy] || filters.sortBy}${filters.sortDesc ? ' descending' : ' ascending'}`);
+  parts.push(`Rows: ${rowCount} of ${totalAssets}`);
+  parts.push(`Layout: ${showIndividual ? 'Individual assets' : 'Grouped asset counts'}`);
+  return parts;
+}
+
+function groupInventoryAssetsForExport(filteredAssets, filters) {
+  const groups = new Map();
+
+  filteredAssets.forEach(asset => {
+    const department = normalizeDepartmentCode(asset.department || 'UN');
+    const brand = inventoryPlainText(asset.brand, 'Unbranded');
+    const model = inventoryPlainText(asset.model, 'Unspecified model');
+    const key = JSON.stringify([department, brand, model]);
+    const quantity = inventoryExportQuantity(asset, filters.statusFilter);
+
+    if (!groups.has(key)) {
+      groups.set(key, {
+        department,
+        departmentLabel: inventoryDepartmentLabel(department),
+        brand,
+        model,
+        descriptions: new Set(),
+        count: 0,
+        statusCounts: {}
+      });
+    }
+
+    const group = groups.get(key);
+    if (asset.description) group.descriptions.add(asset.description);
+    group.count += quantity;
+    const status = asset.status || 'available';
+    group.statusCounts[status] = (group.statusCounts[status] || 0) + quantity;
+  });
+
+  return Array.from(groups.values()).sort((a, b) => {
+    const aKey = `${a.departmentLabel} ${a.brand} ${a.model}`.toLowerCase();
+    const bKey = `${b.departmentLabel} ${b.brand} ${b.model}`.toLowerCase();
+    return aKey.localeCompare(bKey, undefined, { numeric: true, sensitivity: 'base' });
+  });
+}
+
+function inventoryStatusSummaryText(statusCounts) {
+  return Object.entries(statusCounts || {})
+    .sort(([a], [b]) => inventoryStatusText(a).localeCompare(inventoryStatusText(b)))
+    .map(([status, count]) => `${inventoryStatusText(status)}: ${count}`)
+    .join(', ');
+}
+
+function inventoryGroupedRowRecords(filteredAssets, filters) {
+  const groups = groupInventoryAssetsForExport(filteredAssets, filters);
+  if (groups.length === 0) {
+    return [{ html: '<tr><td colspan="6" class="empty-row">No assets match the selected filters.</td></tr>', height: 0 }];
+  }
+
+  return groups.map(group => {
+    const descriptionText = Array.from(group.descriptions).sort((a, b) => a.localeCompare(b)).join('; ');
+    return {
+      html: `
+      <tr>
+        <td>${escapeHtml(group.departmentLabel)}</td>
+        <td>${escapeHtml(group.brand)}</td>
+        <td>${escapeHtml(group.model)}</td>
+        <td>${escapeHtml(descriptionText || '-')}</td>
+        <td class="number-cell">${escapeHtml(String(group.count))}</td>
+        <td>${escapeHtml(inventoryStatusSummaryText(group.statusCounts) || '-')}</td>
+      </tr>
+      `,
+      height: 0
+    };
+  });
+}
+
+function inventoryGroupedRowsHtml(filteredAssets, filters) {
+  return inventoryGroupedRowRecords(filteredAssets, filters).map(record => record.html).join('');
+}
+
+function inventoryIndividualRowRecords(filteredAssets) {
+  if (filteredAssets.length === 0) {
+    return [{ html: '<tr><td colspan="11" class="empty-row">No assets match the selected filters.</td></tr>', height: 0 }];
+  }
+
+  return filteredAssets.map(asset => {
+    const assetId = asset.isBulk
+      ? inventoryPlainText(asset.internalId || asset.bulkId, 'Bulk Item')
+      : inventoryPlainText(asset.id || asset.internalId);
+    const currentLocation = inventoryPlainText(asset.currentLocation || asset.location || asset.defaultLocation || 'Store');
+    const defaultLocation = inventoryPlainText(asset.defaultLocation || 'Store');
+
+    return {
+      html: `
+      <tr>
+        <td><strong>${escapeHtml(assetId)}</strong></td>
+        <td>${escapeHtml(inventoryPlainText(asset.brand))}</td>
+        <td>${escapeHtml(inventoryPlainText(asset.model))}</td>
+        <td>${escapeHtml(inventoryPlainText(asset.description))}</td>
+        <td>${escapeHtml(asset.isBulk ? '-' : inventoryPlainText(asset.serial, 'N/A'))}</td>
+        <td class="number-cell">${escapeHtml(inventoryAssetQuantityText(asset))}</td>
+        <td>${escapeHtml(inventoryDepartmentLabel(asset.department))}</td>
+        <td>${escapeHtml(inventoryStatusText(asset.status || 'available'))}</td>
+        <td>${escapeHtml(defaultLocation)}</td>
+        <td>${escapeHtml(currentLocation)}</td>
+        <td>${escapeHtml(inventoryAssetFlagsText(asset))}</td>
+      </tr>
+      `,
+      height: 0
+    };
+  });
+}
+
+function inventoryIndividualRowsHtml(filteredAssets) {
+  return inventoryIndividualRowRecords(filteredAssets).map(record => record.html).join('');
+}
+
+function inventoryPdfPageConfig(showIndividual) {
+  return showIndividual
+    ? {
+        orientation: 'landscape',
+        widthMm: 297,
+        heightMm: 210,
+        measureWidthMm: 283,
+        pageFlowHeightMm: 189,
+        footerReserveMm: -10,
+        bodyFontSize: '7.2pt',
+        tableFontSize: '6.8pt',
+        tablePadding: '4px'
+      }
+    : {
+        orientation: 'portrait',
+        widthMm: 210,
+        heightMm: 297,
+        measureWidthMm: 196,
+        pageFlowHeightMm: 276,
+        footerReserveMm: 18,
+        bodyFontSize: '8.4pt',
+        tableFontSize: '8pt',
+        tablePadding: '5px'
+      };
+}
+
+function inventoryPdfColGroup(showIndividual) {
+  if (showIndividual) {
+    return `
+      <col style="width:9%;">
+      <col style="width:9%;">
+      <col style="width:10%;">
+      <col style="width:20%;">
+      <col style="width:9%;">
+      <col style="width:4%;">
+      <col style="width:10%;">
+      <col style="width:7%;">
+      <col style="width:8%;">
+      <col style="width:8%;">
+      <col style="width:6%;">
+    `;
+  }
+
+  return `
+    <col style="width:17%;">
+    <col style="width:18%;">
+    <col style="width:18%;">
+    <col style="width:28%;">
+    <col style="width:8%;">
+    <col style="width:11%;">
+  `;
+}
+
+function inventoryPdfTableHead(showIndividual) {
+  if (showIndividual) {
+    return `
+      ${inventoryPdfColGroup(true)}
+      <thead>
+        <tr>
+          <th>Asset ID</th>
+          <th>Brand</th>
+          <th>Model</th>
+          <th>Description</th>
+          <th>Serial</th>
+          <th>Qty</th>
+          <th>Department</th>
+          <th>Status</th>
+          <th>Default Location</th>
+          <th>Current Location</th>
+          <th>Flags</th>
+        </tr>
+      </thead>
+    `;
+  }
+
+  return `
+    ${inventoryPdfColGroup(false)}
+    <thead>
+      <tr>
+        <th>Department</th>
+        <th>Brand</th>
+        <th>Model</th>
+        <th>Description</th>
+        <th>Count</th>
+        <th>Status Counts</th>
+      </tr>
+    </thead>
+  `;
+}
+
+function inventoryPdfTableHtml(filteredAssets, filters, showIndividual) {
+  if (showIndividual) {
+    return `
+      <table class="inventory-table detail-table">
+        ${inventoryPdfTableHead(true)}
+        <tbody>${inventoryIndividualRowsHtml(filteredAssets)}</tbody>
+      </table>
+    `;
+  }
+
+  return `
+    <table class="inventory-table grouped-table">
+      ${inventoryPdfTableHead(false)}
+      <tbody>${inventoryGroupedRowsHtml(filteredAssets, filters)}</tbody>
+    </table>
+  `;
+}
+
+function buildInventoryPdfPages(filteredAssets, filters, context) {
+  const safe = value => escapeHtml(String(value ?? ''));
+  const logoUrl = escapeHtmlAttr(getPdfLogoUrl());
+  const footerHtml = renderPdfFooterHtml();
+  const showIndividual = !!context.showIndividual;
+  const pageConfig = inventoryPdfPageConfig(showIndividual);
+  const mmToPx = mm => (mm * 96) / 25.4;
+
+  const headerHtml = `
+    <div class="logo-row"><img src="${logoUrl}" alt="Company Logo"></div>
+    <div class="header">
+      <div class="header-left">
+        GENERATED BY:<br>
+        ${safe(context.generatedBy)}<br><br>
+        FILTERS:<br>
+        ${context.filterSummary.map(safe).join('<br>')}
+      </div>
+      <div class="header-right">
+        <div class="report-title">${safe(context.reportTitle)}</div>
+        No. : ${safe(context.reportNumber)}<br>
+        Date : ${safe(context.formattedDate)}
+      </div>
+    </div>
+  `;
+
+  const rowRecords = showIndividual
+    ? inventoryIndividualRowRecords(filteredAssets)
+    : inventoryGroupedRowRecords(filteredAssets, filters);
+
+  const measureBox = document.createElement('div');
+  measureBox.id = '__inventoryMeasureBox';
+  measureBox.style.cssText = `
+    position:absolute;
+    left:-10000px;
+    top:0;
+    visibility:hidden;
+    width:${pageConfig.measureWidthMm}mm;
+    font-family:'Century Gothic', Arial, sans-serif;
+    font-size:${pageConfig.bodyFontSize};
+    line-height:1.25;
+    background:white;
+    z-index:-1;
+  `;
+
+  measureBox.innerHTML = `
+    <style>
+      #__inventoryMeasureBox * { box-sizing:border-box; }
+      #__inventoryMeasureBox .logo-row { display:flex; justify-content:flex-end; margin-bottom:7px; height:39px; }
+      #__inventoryMeasureBox .logo-row img { height:39px; width:auto; object-fit:contain; }
+      #__inventoryMeasureBox .header { display:flex; justify-content:space-between; align-items:flex-start; gap:20px; margin-bottom:18px; }
+      #__inventoryMeasureBox .header-left { flex:1; font-size:8.5pt; font-weight:bold; line-height:1.35; }
+      #__inventoryMeasureBox .header-right { text-align:right; font-size:8.5pt; font-weight:bold; line-height:1.35; min-width:180px; }
+      #__inventoryMeasureBox .report-title { font-size:14pt; font-weight:bold; margin-bottom:5px; }
+      #__inventoryMeasureBox .inventory-table { width:100%; border-collapse:collapse; border:2px solid black; table-layout:fixed; margin-bottom:0; }
+      #__inventoryMeasureBox .inventory-table th { background:#333; color:white; padding:${pageConfig.tablePadding}; text-align:left; font-size:${pageConfig.tableFontSize}; border:1px solid #333; }
+      #__inventoryMeasureBox .inventory-table td { border:1px solid #333; padding:${pageConfig.tablePadding}; font-size:${pageConfig.tableFontSize}; vertical-align:top; line-height:1.25; word-break:break-word; overflow-wrap:anywhere; }
+      #__inventoryMeasureBox .number-cell { text-align:center; white-space:nowrap; }
+      #__inventoryMeasureBox .empty-row { text-align:center; color:#666; padding:18px; }
+    </style>
+    <div id="__inventoryBase">
+      ${headerHtml}
+      <table class="inventory-table">${inventoryPdfTableHead(showIndividual)}</table>
+    </div>
+    <table class="inventory-table">
+      ${inventoryPdfColGroup(showIndividual)}
+      <tbody id="__inventoryMeasureBody"></tbody>
+    </table>
+  `;
+
+  document.body.appendChild(measureBox);
+
+  const measureBody = measureBox.querySelector('#__inventoryMeasureBody');
+  const baseHeight = measureBox.querySelector('#__inventoryBase').getBoundingClientRect().height;
+  const footerReserveMm = Number(pageConfig.footerReserveMm ?? 18);
+  const rowBudget = Math.max(36, mmToPx(pageConfig.pageFlowHeightMm - footerReserveMm) - baseHeight);
+
+  function measureRow(rowHtml) {
+    measureBody.innerHTML = rowHtml;
+    const row = measureBody.querySelector('tr');
+    return row ? row.getBoundingClientRect().height : 0;
+  }
+
+  rowRecords.forEach(record => {
+    record.height = measureRow(record.html);
+  });
+
+  measureBox.remove();
+
+  const pages = [];
+  let index = 0;
+  while (index < rowRecords.length) {
+    const pageRows = [];
+    let pageHeight = 0;
+
+    while (index < rowRecords.length) {
+      const record = rowRecords[index];
+      if (pageRows.length > 0 && pageHeight + record.height > rowBudget) break;
+
+      pageRows.push(record);
+      pageHeight += record.height;
+      index++;
+
+      if (pageRows.length === 1 && record.height > rowBudget) break;
+    }
+
+    pages.push(pageRows);
+  }
+
+  const totalPages = pages.length;
+  return pages.map((pageRows, pageIndex) => `
+    <div class="page">
+      ${headerHtml}
+      <table class="inventory-table ${showIndividual ? 'detail-table' : 'grouped-table'}">
+        ${inventoryPdfTableHead(showIndividual)}
+        <tbody>${pageRows.map(row => row.html).join('')}</tbody>
+      </table>
+      <div class="footer">${footerHtml}</div>
+      <div class="page-number">Page ${pageIndex + 1} of ${totalPages}</div>
+    </div>
+  `).join('');
+}
+
+async function generateInventoryPdf() {
+  let win = null;
+
+  try {
+    if (!isAdminUser()) {
+      showNotification('error', 'Admin privileges required');
+      return;
+    }
+
+    const { filteredAssets, filters, totalAssets } = getFilteredInventoryData();
+    if (filteredAssets.length === 0) {
+      showNotification('warning', 'No assets match the selected filters');
+      return;
+    }
+
+    win = window.open('', '_blank', 'width=1000,height=1000');
+    if (!win) {
+      showNotification('error', 'Pop-up blocked. Please allow pop-ups to export the inventory PDF.');
+      return;
+    }
+
+    win.document.write(`<!DOCTYPE html><html><head><title>Preparing Inventory PDF</title></head><body style="font-family:Arial,sans-serif;padding:24px;">Preparing inventory PDF...</body></html>`);
+    win.document.close();
+
+    await loadPdfSettings(true);
+
+    const showIndividual = document.getElementById('inventory-export-individual')?.checked || false;
+    const stamp = inventoryExportDateStamp();
+    const filterSummary = inventoryFilterSummary(filters, filteredAssets.length, totalAssets, showIndividual);
+    const reportTitle = showIndividual ? 'INVENTORY DETAIL REPORT' : 'INVENTORY SUMMARY REPORT';
+    const pageConfig = inventoryPdfPageConfig(showIndividual);
+    const pagesHtml = buildInventoryPdfPages(filteredAssets, filters, {
+      showIndividual,
+      generatedBy: currentUser?.username || '',
+      filterSummary,
+      reportTitle,
+      reportNumber: stamp.reportNumber,
+      formattedDate: stamp.displayDate
+    });
+
+    const html = `<!DOCTYPE html><html><head><title>${reportTitle}</title><style>
+      @page { size: A4 ${pageConfig.orientation}; margin: 0; }
+      * { box-sizing: border-box; }
+      body { margin: 0; font-family: 'Century Gothic', Arial, sans-serif; color: #000; background: #f0f0f0; font-size: ${pageConfig.bodyFontSize}; line-height: 1.25; }
+      .page { width: ${pageConfig.widthMm}mm; height: ${pageConfig.heightMm}mm; min-height: ${pageConfig.heightMm}mm; margin: 0 auto 12px auto; padding: 7mm 7mm 14mm 7mm; background: white; position: relative; overflow: hidden; page-break-after: always; break-after: page; }
+      .page:last-child { page-break-after: auto; break-after: auto; }
+      .print-btn { position: fixed; top: 20px; right: 20px; background: #667eea; color: #fff; border: none; padding: 10px 18px; border-radius: 6px; cursor: pointer; z-index: 999; font-size: 12px; }
+      .logo-row { display: flex; justify-content: flex-end; margin-bottom: 7px; height: 39px; }
+      .logo-row img { height: 39px; width: auto; object-fit: contain; }
+      .header { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; margin-bottom: 18px; }
+      .header-left { flex: 1; font-size: 8.5pt; font-weight: bold; line-height: 1.35; }
+      .header-right { text-align: right; font-size: 8.5pt; font-weight: bold; line-height: 1.35; min-width: 180px; }
+      .report-title { font-size: 14pt; font-weight: bold; margin-bottom: 5px; }
+      .inventory-table { width: 100%; border-collapse: collapse; border: 2px solid black; table-layout: fixed; margin-bottom: 16px; }
+      .inventory-table thead { display: table-header-group; }
+      .inventory-table tr { break-inside: avoid; page-break-inside: avoid; }
+      .inventory-table th { background: #333; color: #fff; padding: ${pageConfig.tablePadding}; text-align: left; border: 1px solid #333; font-size: ${pageConfig.tableFontSize}; }
+      .inventory-table td { border: 1px solid #333; padding: ${pageConfig.tablePadding}; font-size: ${pageConfig.tableFontSize}; vertical-align: top; line-height: 1.25; word-break: break-word; overflow-wrap: anywhere; }
+      .number-cell { text-align: center; white-space: nowrap; }
+      .empty-row { text-align: center; color: #666; padding: 18px; }
+      .footer { position: absolute; bottom: 7mm; left: 7mm; right: 7mm; text-align: center; font-size: 7pt; font-weight: bold; line-height: 1.2; }
+      .page-number { position: absolute; bottom: 3mm; right: 7mm; font-size: 7pt; }
+      @media print {
+        body { background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .page { margin: 0; page-break-after: always; break-after: page; }
+        .page:last-child { page-break-after: auto; break-after: auto; }
+        .print-btn { display: none; }
+      }
+    </style></head><body>
+      <button class="print-btn" onclick="window.print()">Print / Save as PDF</button>
+      ${pagesHtml}
+    </body></html>`;
+
+    win.document.open();
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    showNotification('success', 'Inventory PDF generated successfully');
+  } catch (error) {
+    console.error('Inventory PDF export failed:', error);
+    if (win && !win.closed) {
+      win.document.open();
+      win.document.write(`<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;padding:24px;">Failed to generate inventory PDF: ${escapeHtml(error.message)}</body></html>`);
+      win.document.close();
+    }
+    showNotification('error', `Failed to generate inventory PDF: ${error.message}`);
+  }
 }
 
 // PATCH 2026-05-14B: transfer grouping, per-asset dropdown actions, undo, and grouped PDFs

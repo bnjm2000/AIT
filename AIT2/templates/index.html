@@ -2526,6 +2526,11 @@
         }
       }
 
+      .admin-only,
+      [data-admin-only="true"] {
+        display: none;
+      }
+
       @media (max-width: 768px) {
         .sync-status {
           max-width: 145px;
@@ -2616,7 +2621,7 @@
             </button>
           </div>
 
-          <div class="nav-section">
+          <div class="nav-section admin-only" data-admin-only="true" data-admin-display="block">
             <h3>Reports</h3>
             <button type="button" class="nav-item" onclick="showSection('maintenance-report')">
               📄 Maintenance Report
@@ -2910,7 +2915,7 @@
                   </select>
                 </div>
               </div>
-              <div style="display: flex; gap: 10px; align-items: center">
+              <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap">
                 <button
                   class="btn btn-secondary"
                   onclick="clearFilters()"
@@ -2933,6 +2938,40 @@
                   id="asset-count"
                   style="color: #666; font-size: 14px; margin-left: auto"
                 ></span>
+                <div
+                  id="inventory-export-controls"
+                  class="admin-only"
+                  data-admin-only="true"
+                  data-admin-display="flex"
+                  style="
+                    display: flex;
+                    gap: 12px;
+                    align-items: center;
+                    justify-content: flex-end;
+                    flex-wrap: wrap;
+                  "
+                >
+                  <label
+                    style="
+                      display: flex;
+                      align-items: center;
+                      gap: 6px;
+                      font-size: 14px;
+                    "
+                  >
+                    <input type="checkbox" id="inventory-export-individual" />
+                    Show Individual Items
+                  </label>
+                  <button
+                    type="button"
+                    class="btn btn-primary"
+                    data-inventory-export-pdf="true"
+                    onclick="generateInventoryPdf()"
+                    style="padding: 8px 16px; font-size: 14px"
+                  >
+                    Export PDF
+                  </button>
+                </div>
               </div>
             </div>
 

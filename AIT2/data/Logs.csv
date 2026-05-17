@@ -1,26 +1,3 @@
-2026/04/20 18:28:26,bnjm2000,Assigned specific asset AD2#16 to event 127
-2026/04/20 18:28:26,bnjm2000,Assigned specific asset AD4Q#01 to event 127
-2026/04/20 18:28:26,bnjm2000,Assigned specific asset AD4Q#02 to event 127
-2026/04/20 18:28:26,bnjm2000,Assigned specific asset AD4Q#03 to event 127
-2026/04/20 18:28:26,bnjm2000,Assigned specific asset AD4Q#04 to event 127
-2026/04/20 18:28:32,bnjm2000,Assigned specific asset DJMA9#01 to event 127
-2026/04/20 18:28:36,bnjm2000,Assigned specific asset DJM900NXS2#01 to event 127
-2026/04/20 18:28:37,bnjm2000,Assigned specific asset CDJ3000#01 to event 127
-2026/04/20 18:28:37,bnjm2000,Assigned specific asset CDJ3000#02 to event 127
-2026/04/20 18:28:38,bnjm2000,Assigned specific asset CDJ2000NXS2#01 to event 127
-2026/04/20 18:28:41,bnjm2000,Assigned specific asset CDJ2000NXS2#02 to event 127
-2026/04/20 18:29:06,bnjm2000,Assigned specific asset HLBatt#01 to event 127
-2026/04/20 18:29:06,bnjm2000,Assigned specific asset HLBatt#03 to event 127
-2026/04/20 18:29:06,bnjm2000,Assigned specific asset HLBatt#05 to event 127
-2026/04/20 18:29:06,bnjm2000,Assigned specific asset HLBatt#07 to event 127
-2026/04/20 18:29:06,bnjm2000,Assigned specific asset HLBatt#09 to event 127
-2026/04/20 18:29:06,bnjm2000,Assigned specific asset HLBatt#11 to event 127
-2026/04/20 18:29:06,bnjm2000,Assigned specific asset HLBatt#13 to event 127
-2026/04/20 18:29:06,bnjm2000,Assigned specific asset HLBatt#15 to event 127
-2026/04/20 18:29:06,bnjm2000,Assigned specific asset C1ProCharger#01 to event 127
-2026/04/20 18:29:06,bnjm2000,Assigned specific asset C1ProRHS#01 to event 127
-2026/04/20 18:29:06,bnjm2000,Assigned specific asset C1ProRHS#03 to event 127
-2026/04/20 18:29:06,bnjm2000,Assigned specific asset C1ProRHS#05 to event 127
 2026/04/20 18:29:06,bnjm2000,Assigned specific asset C1ProRHS#07 to event 127
 2026/04/20 18:29:06,bnjm2000,Assigned specific asset C1ProWHS#01 to event 127
 2026/04/20 18:29:07,bnjm2000,Assigned specific asset HLBatt#02 to event 127
@@ -1069,3 +1046,26 @@ XLR connector loosed, soldered back - $40' (also: Location: MiPro Singapore, Cle
 2026/05/17 00:39:10,bnjm2000,Updated maintenance log for asset MT-90A#04: '2024/11/20 - Send to MiPro for testing' -> '2024/11/20 - Send to MiPro for testing' (also: Location: MiPro Singapore) (edited by bnjm2000)
 2026/05/17 00:39:14,bnjm2000,Updated maintenance log for asset MT-90A#04: 'Handed over to MiPro for PSU testing' -> 'Handed over to MiPro for PSU testing' (also: Location: MiPro Singapore) (edited by bnjm2000)
 2026/05/17 00:45:12,bnjm2000,Updated maintenance log for asset MR-90A#06: 'Sent to MiPro for servicing' -> 'Sent to MiPro for servicing' (also: Location: MiPro Singapore) (edited by bnjm2000)
+2026/05/17 11:21:06,bnjm2000,Updated asset MR-90A#06; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/05/17 11:27:58,bnjm2000,User bnjm2000 logged out from web interface
+2026/05/17 11:28:04,bnjm2000,User bnjm2000 logged in via web interface
+2026/05/17 11:28:15,bnjm2000,Created user user
+2026/05/17 11:28:18,bnjm2000,User bnjm2000 logged out from web interface
+2026/05/17 11:28:22,user,User user logged in via web interface
+2026/05/17 11:30:44,user,User user logged in via web interface
+2026/05/17 11:31:32,user,Asset Check sighted asset 4488#01
+2026/05/17 11:31:35,user,Asset Check sighting removed for asset 4488#01
+2026/05/17 11:31:36,user,Asset Check sighted asset 4488#01
+2026/05/17 11:31:38,user,Asset Check sighted asset 4488#02
+2026/05/17 11:31:42,user,User user logged out from web interface
+2026/05/17 11:31:47,bnjm2000,User bnjm2000 logged in via web interface
+2026/05/17 11:31:58,bnjm2000,Deleted maintenance log for asset 4488#01: 'Asset sighted by user during Asset Check' (deleted by bnjm2000)
+2026/05/17 11:32:01,bnjm2000,Deleted maintenance log for asset 4488#02: 'Asset sighted by user during Asset Check' (deleted by bnjm2000)
+2026/05/17 11:34:05,bnjm2000,User bnjm2000 logged out from web interface
+2026/05/17 11:34:08,user,User user logged in via web interface
+2026/05/17 11:34:12,user,User user logged out from web interface
+2026/05/17 11:34:17,bnjm2000,User bnjm2000 logged in via web interface
+2026/05/17 11:34:54,bnjm2000,Created event 142: test via web interface
+2026/05/17 11:35:02,bnjm2000,Added 2x Behringher P1 model to event 142 (total: 2)
+2026/05/17 11:35:13,bnjm2000,Assigned specific asset P1#01 to event 142
+2026/05/17 11:35:23,bnjm2000,Completely removed asset P1#01 from event 142
