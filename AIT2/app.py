@@ -45,6 +45,8 @@ CORS(app)
 # Global data manager instance
 data_manager = None
 _data_manager_init_lock = threading.RLock()
+_data_reload_lock = threading.RLock()
+_data_snapshot_signature = None
 _background_thread_started = False
 
 # Caching for performance
@@ -216,10 +218,82 @@ def _ranges_overlap(a_start, a_end, b_start, b_end):
 
 def invalidate_cache():
     """Invalidate the asset cache when data changes"""
+    reset_cache()
+    mark_realtime_change('inventory-data')
+
+
+def reset_cache():
+    """Clear in-process derived data without publishing a realtime event."""
     global _cache
     _cache = {'assigned_assets': None,
               'available_assets': None, 'cache_timestamp': None}
-    mark_realtime_change('inventory-data')
+
+
+def _shared_data_signature():
+    """Fingerprint CSV-backed files so separate workers can detect fresh data."""
+    if data_manager is None:
+        return None
+
+    entries = []
+    data_folder = getattr(data_manager, 'data_folder', '') or ''
+    events_folder = getattr(data_manager, 'events_folder', '') or ''
+
+    def add_file(label, path):
+        try:
+            stat = os.stat(path)
+            entries.append((label, stat.st_mtime_ns, stat.st_size))
+        except FileNotFoundError:
+            entries.append((label, 0, 0))
+        except OSError as e:
+            logger.debug("Unable to stat %s for data refresh: %s", path, e)
+            entries.append((label, -1, -1))
+
+    for filename in ('Inventory.csv', 'Logs.csv', 'Users.csv', 'Containers.csv', 'Clients.csv'):
+        add_file(filename, os.path.join(data_folder, filename))
+
+    try:
+        with os.scandir(events_folder) as event_files:
+            for entry in event_files:
+                if not entry.is_file() or not entry.name.endswith('.csv'):
+                    continue
+                try:
+                    stat = entry.stat()
+                    entries.append((f"events/{entry.name}", stat.st_mtime_ns, stat.st_size))
+                except OSError as e:
+                    logger.debug("Unable to stat event file %s: %s", entry.path, e)
+                    entries.append((f"events/{entry.name}", -1, -1))
+    except FileNotFoundError:
+        entries.append(('events/', 0, 0))
+    except OSError as e:
+        logger.debug("Unable to scan events folder for data refresh: %s", e)
+        entries.append(('events/', -1, -1))
+
+    return tuple(sorted(entries))
+
+
+def mark_data_snapshot_current():
+    """Record that this process has loaded the latest CSV-backed data."""
+    global _data_snapshot_signature
+    _data_snapshot_signature = _shared_data_signature()
+
+
+def refresh_shared_data_if_changed(force=False):
+    """Reload CSV data when another process or user has changed the files."""
+    global _data_snapshot_signature
+
+    if data_manager is None:
+        return False
+
+    with _data_reload_lock:
+        current_signature = _shared_data_signature()
+        if not force and _data_snapshot_signature == current_signature:
+            return False
+
+        data_manager.load_all_data()
+        reset_cache()
+        _data_snapshot_signature = _shared_data_signature()
+        logger.info("Reloaded shared CSV data after external change")
+        return True
 
 
 # ---------------- Department configuration helpers ----------------
@@ -2373,6 +2447,41 @@ def update_event_state(event):
         import traceback
         logger.error(f"Traceback: {traceback.format_exc()}")
 
+
+def refresh_event_states_for_read(events_to_check=None):
+    """Keep automatically calculated event states current before read responses."""
+    if data_manager is None:
+        return []
+
+    updated_events = []
+    source_events = events_to_check if events_to_check is not None else data_manager.events.values()
+
+    for event in list(source_events):
+        if not event:
+            continue
+
+        old_state = getattr(event, 'state', 'Added')
+        update_event_state(event)
+
+        if getattr(event, 'state', 'Added') == old_state:
+            continue
+
+        data_manager.save_event(event)
+        updated_events.append({
+            'eventId': event.event_id,
+            'name': event.name,
+            'oldState': old_state,
+            'newState': event.state
+        })
+        logger.info("Event %s state refreshed for read: %s -> %s", event.event_id, old_state, event.state)
+
+    if updated_events:
+        reset_cache()
+        mark_data_snapshot_current()
+        mark_realtime_change('event-state', {'updatedEvents': updated_events[-20:]})
+
+    return updated_events
+
 def cleanup_extra_assets(event):
     """Clean up the extra_assets list - ONLY call this when explicitly needed, not on every view"""
     if not hasattr(event, 'extra_assets'):
@@ -2497,6 +2606,7 @@ def init_data_manager():
             data_manager.setup_data_folder()
             data_manager.check_and_initialize_files()
             data_manager.load_all_data()
+            mark_data_snapshot_current()
             logger.info(f"Data manager initialized with folder: {data_folder}")
             
             # Start the background thread AFTER data_manager is initialized
@@ -2518,6 +2628,8 @@ def ensure_web_runtime_ready():
     """Lazy init for hosted WSGI imports where __main__ is never executed."""
     if data_manager is None:
         init_data_manager()
+    elif request.endpoint != 'static':
+        refresh_shared_data_if_changed()
 
 # Routes
 
@@ -3180,6 +3292,8 @@ def delete_user(username):
 def get_events():
     """Get all events"""
     try:
+        refresh_event_states_for_read()
+
         events_data = []
         for event in data_manager.events.values():
             # Initialize actually_prepared if missing
@@ -3331,6 +3445,8 @@ def get_event(event_id):
         event = data_manager.events.get(event_id)
         if not event:
             return jsonify({'error': 'Event not found'}), 404
+
+        refresh_event_states_for_read([event])
 
         # Initialize lists if they don't exist
         if not hasattr(event, 'actually_prepared'):
@@ -7665,6 +7781,8 @@ def get_stats():
         if not hasattr(data_manager, 'inventory') or data_manager.inventory is None:
             logger.error("Data manager inventory not initialized")
             return jsonify({'error': 'Inventory data not available'}), 500
+
+        refresh_event_states_for_read()
 
         logger.info(f"Getting stats - Events: {len(data_manager.events)}, Inventory: {len(data_manager.inventory)}")
         

@@ -7334,6 +7334,7 @@ async function collectCustomAsset(eventId, encodedAssetId) {
     try {
         await apiCall(`/api/events/${eventId}/custom-assets/collect`, 'POST', { assetId });
         showNotification('success', `${customAssetLabelFromId(assetId)} collected`);
+        await refreshEventOverviewViews();
         setTimeout(() => openPrepareEventModal(eventId), 250);
     } catch (error) {
         showNotification('error', `Failed to collect item: ${error.message}`);
@@ -7345,6 +7346,7 @@ async function uncollectCustomAsset(eventId, encodedAssetId) {
     try {
         await apiCall(`/api/events/${eventId}/custom-assets/uncollect`, 'POST', { assetId });
         showNotification('success', `${customAssetLabelFromId(assetId)} uncollected`);
+        await refreshEventOverviewViews();
         setTimeout(() => openPrepareEventModal(eventId), 250);
     } catch (error) {
         showNotification('error', `Failed to uncollect item: ${error.message}`);
@@ -7425,6 +7427,8 @@ async function addAndPrepareCustomAsset(eventId) {
         if (quantityInput) quantityInput.value = "1";
         if (companyInput) companyInput.value = "";
 
+        await refreshEventOverviewViews();
+
         setTimeout(() => {
             openPrepareEventModal(eventId);
         }, 300);
@@ -7479,6 +7483,8 @@ async function assignAdditionalAsset(eventId, assetId) {
         setTimeout(() => {
             preserveModalState(() => openPrepareEventModal(eventId));
         }, 200);
+
+        await refreshEventOverviewViews();
         
     } catch (error) {
         console.error('Error in assignAdditionalAsset:', error);
@@ -7515,6 +7521,8 @@ async function prepareAssignedAsset(eventId) {
         setTimeout(() => {
             preserveModalState(() => openPrepareEventModal(eventId));
         }, 200);
+
+        await refreshEventOverviewViews();
         
     } catch (error) {
         console.error('Error in prepareAssignedAsset:', error);
@@ -7760,6 +7768,8 @@ async function assignAndPrepareAsset(eventId, assetId) {
         setTimeout(() => {
             preserveModalState(() => openPrepareEventModal(eventId));
         }, 200);
+
+        await refreshEventOverviewViews();
         
     } catch (error) {
         console.error('Error in assignAndPrepareAsset:', error);
@@ -10396,6 +10406,7 @@ async function addCustomAssetToEvent(eventId) {
     if (companyInput) companyInput.value = "";
 
     await updateModelRequirementsSection(eventId);
+    await refreshEventOverviewViews();
 
   } catch (error) {
     showNotification("error", `Failed to add custom asset: ${error.message}`);
@@ -10536,6 +10547,7 @@ async function addModelToEvent(eventId, brand, model, department, description = 
     window.currentEditAvailabilityList = availabilityResponse.data || [];
 
     await updateModelRequirementsSection(eventId);
+    await refreshEventOverviewViews();
 
     const currentSearchTerm =
       document.querySelector('#edit-assets-tab input[placeholder*="Search available asset models"]')?.value;
@@ -10719,6 +10731,7 @@ async function removeModelFromEvent(eventId, brand, model, department, descripti
 
     // Update only the models section without disrupting the search
     await updateModelRequirementsSection(eventId);
+    await refreshEventOverviewViews();
 
     // Refresh the search results to show the model as available again
     const currentSearchTerm =
@@ -10859,6 +10872,7 @@ async function updateModelQuantity(eventId, brand, model, department, newQuantit
 
     // Only update the model requirements section to maintain consistent UI
     await updateModelRequirementsSection(eventId);
+    await refreshEventOverviewViews();
 
     // Refresh the search results if there's an active search
     const currentSearchTerm = document.querySelector('#edit-assets-tab input[placeholder*="Search available asset models"]')?.value;
@@ -11099,6 +11113,8 @@ async function addAssetToEventSimple(eventId, assetId) {
       window.currentEditAvailableAssets =
         window.currentEditAvailableAssets.filter((a) => a.id !== assetId);
     }
+
+    await refreshEventOverviewViews();
   } catch (error) {
     showNotification("error", `Failed to add asset: ${error.message}`);
   }
@@ -11225,6 +11241,7 @@ async function removeAssetFromEvent(eventId, assetId) {
             
             // Update the model requirements section to reflect changes
             await updateModelRequirementsSection(eventId);
+            await refreshEventOverviewViews();
             
             await showAppAlert({
                 title: 'Asset Removed',
@@ -13390,6 +13407,7 @@ async function updateCustomAssetQuantity(eventId, oldAssetId, assetName, assetTy
 
     // Update the model requirements section to show the changes
     await updateModelRequirementsSection(eventId);
+    await refreshEventOverviewViews();
 
   } catch (error) {
     console.error("Error in updateCustomAssetQuantity:", error);
@@ -16064,6 +16082,28 @@ function setRealtimeStatus(state) {
 function getActiveSectionId() {
   const currentSection = document.querySelector(".content-section.active");
   return currentSection ? currentSection.id.replace("-section", "") : "";
+}
+
+async function refreshEventOverviewViews() {
+  const refreshes = [];
+
+  if (document.getElementById('dashboard-section')?.classList.contains('active')) {
+    refreshes.push(loadDashboard());
+  }
+
+  if (document.getElementById('events-section')?.classList.contains('active')) {
+    refreshes.push(loadAllEvents());
+  }
+
+  if (document.getElementById('prepare-section')?.classList.contains('active')) {
+    refreshes.push(loadPrepareEvents());
+  }
+
+  if (document.getElementById('return-section')?.classList.contains('active')) {
+    refreshes.push(loadReturnEvents());
+  }
+
+  await Promise.allSettled(refreshes);
 }
 
 function activeModal(modalId) {

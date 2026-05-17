@@ -1267,7 +1267,7 @@ LEGION#01,Lenovo,Legion 5 Pro,PF3R22QS,16inch Windows Laptop,False,False,False,F
 LEGION#02,Lenovo,Legion 5 Pro,PF3R22RM,16inch Windows Laptop,False,False,False,False,False,1,,VX,Store,Store
 LEGION#03,Lenovo,Legion 5 Pro,PF4LVD48,16inch Windows Laptop,False,False,False,False,False,1,,VX,Store,Store
 LEGION#04,Lenovo,Legion 5 Pro,PF4LW7B4,16inch Windows Laptop,False,False,False,False,False,1,,VX,Store,Store
-MACBOOK#01,Apple,Macbook Pro (A1707),C02WG8EHHTD5,16inch Macbook Pro,False,False,False,False,False,1,,VX,Store,Store
+MACBOOK#01,Apple,Macbook Pro (A1707),C02WG8EHHTD5,15.4inch Macbook Pro (2017),False,False,False,False,False,1,,VX,Store,Store
 MACBOOK#02,Apple,Macbook Pro (A2442),M5P2V176XD,14inch Macbook Pro M1 Pro,False,False,False,False,False,1,,AX,Store,Store
 LUMINODE12,Luminex,Luminode 12,,12 DMX Interface,False,False,False,False,False,1,,LX,Store,Store
 32ADB#01,Custom,32A 3-Phase DB,,,False,False,False,False,False,1,,ELEC,Store,Store
@@ -1290,3 +1290,26 @@ BULK-0014,Global Truss,F34 Corner Block (Black),,Corner Block (black),False,Fals
 BULK-0015,Custom,Sandbag,,Sandbag - 6kg,False,False,False,False,True,20,,STG,Store,
 BULK-0016,Custom,605mm Base plate (carpeted),,605x605mm heavy-duty base plate c/w black carpet,False,False,False,False,True,18,,STG,Store,
 BULK-0017,Custom,605mm Base plate,,605x605mm heavy-duty base plate,False,False,False,False,True,12,,STG,Store,
+PS10R2#01,Nexo,PS10R2,,High-power system with 10in LF and 1in HF drivers,False,False,False,False,False,1,,AX,Store,
+PS10R2#02,Nexo,PS10R2,,High-power system with 10in LF and 1in HF drivers,False,False,False,False,False,1,,AX,Store,
+PS10R2#03,Nexo,PS10R2,,High-power system with 10in LF and 1in HF drivers,False,False,False,False,False,1,,AX,Store,
+PS10R2#04,Nexo,PS10R2,,High-power system with 10in LF and 1in HF drivers,False,False,False,False,False,1,,AX,Store,
+PS10R2#05,Nexo,PS10R2,,High-power system with 10in LF and 1in HF drivers,False,False,False,False,False,1,,AX,Store,
+PS10R2#06,Nexo,PS10R2,,High-power system with 10in LF and 1in HF drivers,False,False,False,False,False,1,,AX,Store,
+LS18#01,Nexo,LS18,,subbass cabinet,False,False,False,False,False,1,,AX,Store,
+LS18#02,Nexo,LS18,,subbass cabinet,False,False,False,False,False,1,,AX,Store,
+LS18#03,Nexo,LS18,,subbass cabinet,False,False,False,False,False,1,,AX,Store,
+LS18#04,Nexo,LS18,,subbass cabinet,False,False,False,False,False,1,,AX,Store,
+LS500#01,Nexo,LS500,,Subwoofer,False,False,False,False,False,1,,AX,Store,
+LS500#02,Nexo,LS500,,Subwoofer,False,False,False,False,False,1,,AX,Store,
+LS500#03,Nexo,LS500,,Subwoofer,False,False,False,False,False,1,,AX,Store,
+LS400#01,Nexo,LS400,,Subwoofer,False,False,False,False,False,1,,AX,Store,
+LS400#02,Nexo,LS400,,Subwoofer,False,False,False,False,False,1,,AX,Store,
+NXAMP4X1#01,Nexo,NXAMP4X1,,Powered TDcontroller,False,False,False,False,False,1,,AX,Store,
+NXAMP4X1#02,Nexo,NXAMP4X1,,Powered TDcontroller,False,False,False,False,False,1,,AX,Store,
+NXAMP4X4#01,Nexo,NXAMP4X4,,Powered TDcontroller,False,False,False,False,False,1,,AX,Store,
+NXAMP4X4#02,Nexo,NXAMP4X4,,Powered TDcontroller,False,False,False,False,False,1,,AX,Store,
+4X4#01,Drawmer,4X4,,Kickbox Portable Active Splitter,False,False,False,False,False,1,,AX,Store,
+MSX48#01,ARX,MSX48,,ISO Transformer Balanced Mic/Line Splitter ( 16 x 3 ),False,False,False,False,False,1,,AX,Store,
+MSX48#02,ARX,MSX48,,ISO Transformer Balanced Mic/Line Splitter ( 16 x 3 ),False,False,False,False,False,1,,AX,Store,
+MSX48#03,ARX,MSX48,,ISO Transformer Balanced Mic/Line Splitter ( 16 x 3 ),False,False,False,False,False,1,,AX,Store,

@@ -39,6 +39,20 @@ class EventStateTests(unittest.TestCase):
 
         self.assertEqual(event.state, 'Preparing')
 
+    def test_assigned_unprepared_asset_is_planning(self):
+        event = self.make_event(['A'], [], [])
+
+        app_module.update_event_state(event)
+
+        self.assertEqual(event.state, 'Planning')
+
+    def test_model_requirement_without_preparation_is_planning(self):
+        event = self.make_event(['[MODEL]AX|Brand|Model|2|Description'], [], [])
+
+        app_module.update_event_state(event)
+
+        self.assertEqual(event.state, 'Planning')
+
     def test_ready_event_on_end_date_is_last_day(self):
         event = self.make_event(['A', 'B'], ['A', 'B'], [])
 

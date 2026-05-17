@@ -66,6 +66,7 @@ class DataManager:
         self.load_clients()
 
     def load_users(self):
+        self.users = {}
         filepath = os.path.join(self.data_folder, 'Users.csv')
         if not os.path.exists(filepath):
             return
@@ -128,6 +129,7 @@ class DataManager:
                 ])
 
     def load_inventory(self):
+        self.inventory = {}
         filepath = os.path.join(self.data_folder, 'Inventory.csv')
         if not os.path.exists(filepath):
             return
@@ -208,6 +210,7 @@ class DataManager:
 
 
     def load_containers(self):
+        self.containers = {}
         filepath = os.path.join(self.data_folder, 'Containers.csv')
         if not os.path.exists(filepath):
             return
@@ -432,6 +435,7 @@ class DataManager:
             del self.event_file_map[event_id]
 
     def load_logs(self):
+        self.logs = []
         filepath = os.path.join(self.data_folder, 'Logs.csv')
         if not os.path.exists(filepath):
             return
@@ -480,6 +484,7 @@ class DataManager:
     
     def load_clients(self):
         import csv, os
+        self.clients = {}
         filepath = os.path.join(self.data_folder, 'Clients.csv')
         if not os.path.exists(filepath):
             # when creating Clients.csv from scratch
