@@ -1267,6 +1267,37 @@
         background: #f8f9fa !important;
       }
 
+      .maintenance-media-selection {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 8px;
+      }
+
+      .maintenance-media-pill,
+      .maintenance-media-link {
+        display: inline-flex;
+        align-items: center;
+        max-width: 180px;
+        padding: 4px 8px;
+        border: 1px solid #d7dde8;
+        border-radius: 6px;
+        background: #f8f9fa;
+        color: #495057;
+        font-size: 12px;
+        line-height: 1.3;
+        text-decoration: none;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .maintenance-media-link:hover {
+        border-color: #667eea;
+        color: #4c5fd7;
+        background: #f3f5ff;
+      }
+
       @keyframes spin {
         0% {
           transform: rotate(0deg);
@@ -3332,6 +3363,18 @@
             ></textarea>
           </div>
 
+          <div class="form-group">
+            <label class="form-label" for="bulkOOCMediaFiles">Photos / Videos (optional)</label>
+            <input
+              type="file"
+              class="form-input"
+              id="bulkOOCMediaFiles"
+              accept="image/*,video/*,.jpg,.jpeg,.png,.mp4,.mov"
+              multiple
+            />
+            <div id="bulkOOCMediaFileList" class="maintenance-media-selection"></div>
+          </div>
+
           <!-- Maintenance Date -->
           <div class="form-group">
             <label class="form-label">Maintenance Date</label>
@@ -3404,6 +3447,18 @@
               required
               placeholder="Describe maintenance/repair work"
             ></textarea>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="singleOOCMediaFiles">Photos / Videos (optional)</label>
+            <input
+              type="file"
+              class="form-input"
+              id="singleOOCMediaFiles"
+              accept="image/*,video/*,.jpg,.jpeg,.png,.mp4,.mov"
+              multiple
+            />
+            <div id="singleOOCMediaFileList" class="maintenance-media-selection"></div>
           </div>
 
           <!-- Maintenance Date -->
@@ -3832,6 +3887,19 @@
               placeholder="Describe the maintenance performed..."
               required
             ></textarea>
+          </div>
+
+          <!-- Maintenance Media -->
+          <div class="form-group">
+            <label class="form-label" for="maintenanceMediaFiles">Photos / Videos (optional)</label>
+            <input
+              type="file"
+              class="form-input"
+              id="maintenanceMediaFiles"
+              accept="image/*,video/*,.jpg,.jpeg,.png,.mp4,.mov"
+              multiple
+            />
+            <div id="maintenanceMediaFileList" class="maintenance-media-selection"></div>
           </div>
 
           <!-- Maintenance Date -->

@@ -1,17 +1,3 @@
-2026/04/21 16:39:53,admin,Assigned specific asset LEDBEAM#23 to event 127
-2026/04/21 16:39:53,admin,Assigned specific asset LEDBEAM#24 to event 127
-2026/04/21 16:40:10,admin,Assigned specific asset LEDBEAM#17 to event 127
-2026/04/21 16:40:10,admin,Assigned specific asset LEDBEAM#18 to event 127
-2026/04/21 16:40:10,admin,Assigned specific asset LEDBEAM#19 to event 127
-2026/04/21 16:40:10,admin,Assigned specific asset LEDBEAM#20 to event 127
-2026/04/21 16:40:50,admin,Added 8x Ayrton Diablo (W.DMX) model to event 127 (total: 8)
-2026/04/21 16:40:55,admin,Removed Ayrton Diablo Profile model from event 127
-2026/04/21 16:41:01,admin,Removed Robe Robin LEDBeam 350 Wash model from event 127
-2026/04/21 16:41:01,admin,Added 16x Robe Robin LEDBeam 350 Wash model to event 127 (total: 16)
-2026/04/21 16:41:47,admin,Assigned specific asset SB18#03 to event 127
-2026/04/21 16:41:51,admin,Assigned specific asset SB18#11 to event 127
-2026/04/21 16:41:55,admin,Assigned specific asset SB18#09 to event 127
-2026/04/21 16:41:58,admin,Assigned specific asset SB18#10 to event 127
 2026/04/21 16:42:14,admin,Assigned specific asset SB18#12 to event 127
 2026/04/21 16:42:19,admin,Assigned specific asset SB18#01 to event 127
 2026/04/21 16:42:45,admin,Assigned specific asset SB18#08 to event 127
@@ -1069,3 +1055,17 @@ XLR connector loosed, soldered back - $40' (also: Location: MiPro Singapore, Cle
 2026/05/17 15:46:02,bnjm2000,Uploaded 2 file(s) to event 131: Wedding of Patricia & Edgar @ Capella
 2026/05/17 15:46:10,bnjm2000,Uploaded 1 file(s) to event 131: Wedding of Patricia & Edgar @ Capella
 2026/05/17 15:46:26,bnjm2000,Uploaded 1 file(s) to event 131: Wedding of Patricia & Edgar @ Capella
+2026/05/17 22:05:49,bnjm2000,User bnjm2000 logged in via web interface
+2026/05/17 22:06:32,bnjm2000,Added 1x Analogue Way Pulse 2 model to event 139 (total: 1)
+2026/05/17 22:07:11,bnjm2000,"Added MISC custom asset 'Truss Lifter' (2x, dept LX) to event 139"
+2026/05/17 22:07:46,bnjm2000,Prepared 4x bulk asset Global Truss F34 Corner Block (Silver) for event 139
+2026/05/17 22:07:47,bnjm2000,Prepared 4x bulk asset Global Truss F34 Truss - 0.5m (Silver) for event 139
+2026/05/17 22:07:48,bnjm2000,Prepared custom item 1x Xingon Aluminium Scaffold for event 139
+2026/05/17 22:07:50,bnjm2000,Assigned specific asset PULSE2#01 to event 139
+2026/05/17 22:07:52,bnjm2000,Prepared custom item 2x Truss Lifter for event 139
+2026/05/17 22:08:46,bnjm2000,User bnjm2000 forced event 86 (Zendesk End of Year Celebration 2025 @ Andaz) state from Returning to Closed
+2026/05/17 22:08:55,bnjm2000,User bnjm2000 forced event 27 (IP 10th Anniversary Client's Party @ Siri House) state from Returning to Closed
+2026/05/17 22:09:00,bnjm2000,User bnjm2000 forced event 37 (SingHealth DUKE-NUS Gala @ Ritz Carlton) state from Returning to Closed
+2026/05/17 22:09:06,bnjm2000,User bnjm2000 forced event 48 (Dry Hire: TTP) state from Returning to Closed
+2026/05/17 22:09:13,bnjm2000,User bnjm2000 forced event 103 (SG Air Show 2026 (Bencon) @ Changi Exhibition Centre) state from Returning to Closed
+2026/05/18 11:06:50,bnjm2000,Updated maintenance log for asset ESPRITE#01: 'Ah Heng reported gobo rotate will stutter' -> 'Operator Ah Heng reported gobo rotate will stutter' (also: Marked Degraded) (edited by bnjm2000)

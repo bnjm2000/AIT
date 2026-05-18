@@ -2002,15 +2002,21 @@ function enhanceNavigationAccessibility() {
 // API functions
 async function apiCall(endpoint, method = "GET", data = null) {
   try {
+    const isFormData = typeof FormData !== 'undefined' && data instanceof FormData;
     const options = {
       method: method,
       headers: {
-        "Content-Type": "application/json",
         "X-Client-Id": REALTIME_CLIENT_ID,
       },
     };
 
-    if (data) {
+    if (isFormData) {
+      options.body = data;
+    } else {
+      options.headers["Content-Type"] = "application/json";
+    }
+
+    if (data && !isFormData) {
       options.body = JSON.stringify(data);
     }
 
@@ -9362,9 +9368,79 @@ function maintenanceCostDisplayHtml(value, emptyHtml = '-') {
   return cost ? `$${escapeHtml(cost)}` : emptyHtml;
 }
 
+function normalizeMaintenanceMedia(media) {
+  if (!Array.isArray(media)) return [];
+  return media
+    .filter(item => item && typeof item === 'object')
+    .map(item => ({
+      id: String(item.id || item.mediaId || ''),
+      name: String(item.name || item.filename || item.originalName || 'Media'),
+      kind: String(item.kind || item.type || '').toLowerCase() === 'video' ? 'video' : 'image',
+      mimeType: String(item.mimeType || item.contentType || ''),
+      size: Number(item.size || 0),
+      url: String(item.url || (item.id ? `/api/maintenance-media/${encodeURIComponent(item.id)}` : ''))
+    }))
+    .filter(item => item.id && item.url);
+}
+
+function maintenanceMediaLinksHtml(media, emptyHtml = '<span style="color:#999;">—</span>') {
+  const items = normalizeMaintenanceMedia(media);
+  if (!items.length) return emptyHtml;
+
+  let imageCount = 0;
+  let videoCount = 0;
+
+  return `
+    <div style="display:flex;flex-wrap:wrap;gap:6px;">
+      ${items.map(item => {
+        const label = item.kind === 'video'
+          ? `Video ${++videoCount}`
+          : `Photo ${++imageCount}`;
+        const title = item.name || label;
+        return `
+          <a
+            class="maintenance-media-link"
+            href="${escapeHtmlAttr(item.url)}"
+            target="_blank"
+            rel="noopener"
+            title="${escapeHtmlAttr(title)}"
+          >${escapeHtml(label)}</a>
+        `;
+      }).join('')}
+    </div>
+  `;
+}
+
+function updateMaintenanceMediaSelection(inputId, listId) {
+  const input = document.getElementById(inputId);
+  const list = document.getElementById(listId);
+  if (!input || !list) return;
+
+  const files = Array.from(input.files || []);
+  list.innerHTML = files.map(file => `
+    <span class="maintenance-media-pill" title="${escapeHtmlAttr(file.name)}">${escapeHtml(file.name)}</span>
+  `).join('');
+}
+
+function maintenancePayloadToRequestData(payload, mediaInputId) {
+  const input = document.getElementById(mediaInputId);
+  const files = Array.from(input?.files || []);
+  if (!files.length) return payload;
+
+  const formData = new FormData();
+  Object.entries(payload).forEach(([key, value]) => {
+    if (value !== null && value !== undefined) {
+      formData.append(key, value);
+    }
+  });
+  files.forEach(file => formData.append('media', file));
+  return formData;
+}
+
 function normalizeMaintenanceLogRecord(log) {
   if (log && typeof log === 'object' && !Array.isArray(log)) {
     return {
+      id: String(log.id || log.logId || ''),
       date: String(log.date || ''),
       user: String(log.user || ''),
       description: String(log.description || ''),
@@ -9373,7 +9449,8 @@ function normalizeMaintenanceLogRecord(log) {
       changes: Array.isArray(log.changes)
         ? log.changes.map(normalizeMaintenanceChange).filter(Boolean)
         : [],
-      source: log.source && typeof log.source === 'object' ? { ...log.source } : {}
+      source: log.source && typeof log.source === 'object' ? { ...log.source } : {},
+      media: normalizeMaintenanceMedia(log.media || log.attachments)
     };
   }
 
@@ -9382,7 +9459,7 @@ function normalizeMaintenanceLogRecord(log) {
     ? { date: parts[0] || '', user: parts[1] || '', description: parts.slice(2).join('\t') || '' }
     : { date: '', user: '', description: String(log || '') };
   const legacy = splitLegacyMaintenanceStatus(parsed.description);
-  return { ...parsed, description: legacy.description, type: DEFAULT_MAINTENANCE_LOG_TYPE, cost: '', changes: legacy.changes, source: {} };
+  return { ...parsed, id: '', description: legacy.description, type: DEFAULT_MAINTENANCE_LOG_TYPE, cost: '', changes: legacy.changes, source: {}, media: [] };
 }
 
 function getMaintenanceLogRecords(asset) {
@@ -12067,7 +12144,8 @@ document.addEventListener("DOMContentLoaded", function () {
             
             // Encode the asset ID for the URL
             const encodedAssetId = encodeURIComponent(assetId);
-            await apiCall(`/api/assets/${encodedAssetId}/maintain`, "POST", maintenanceData);
+            const requestData = maintenancePayloadToRequestData(maintenanceData, "bulkOOCMediaFiles");
+            await apiCall(`/api/assets/${encodedAssetId}/maintain`, "POST", requestData);
             successCount++;
           } catch (error) {
             console.error(`Failed to clear status for ${assetId}:`, error);
@@ -12167,7 +12245,8 @@ document.addEventListener("DOMContentLoaded", function () {
             
             // Encode the asset ID for the URL
             const encodedAssetId = encodeURIComponent(assetId);
-            await apiCall(`/api/assets/${encodedAssetId}/maintain`, "POST", maintenanceData);
+            const requestData = maintenancePayloadToRequestData(maintenanceData, "maintenanceMediaFiles");
+            await apiCall(`/api/assets/${encodedAssetId}/maintain`, "POST", requestData);
             successCount++;
           } catch (error) {
             console.error(`Failed to log maintenance for ${assetId}:`, error);
@@ -12233,6 +12312,25 @@ document.addEventListener("DOMContentLoaded", function () {
         showNotification("error", "Failed to log maintenance");
         console.error("Maintenance error:", error);
       }
+    });
+  }
+
+  const maintenanceMediaFiles = document.getElementById("maintenanceMediaFiles");
+  if (maintenanceMediaFiles) {
+    maintenanceMediaFiles.addEventListener("change", () => {
+      updateMaintenanceMediaSelection("maintenanceMediaFiles", "maintenanceMediaFileList");
+    });
+  }
+  const bulkOOCMediaFiles = document.getElementById("bulkOOCMediaFiles");
+  if (bulkOOCMediaFiles) {
+    bulkOOCMediaFiles.addEventListener("change", () => {
+      updateMaintenanceMediaSelection("bulkOOCMediaFiles", "bulkOOCMediaFileList");
+    });
+  }
+  const singleOOCMediaFiles = document.getElementById("singleOOCMediaFiles");
+  if (singleOOCMediaFiles) {
+    singleOOCMediaFiles.addEventListener("change", () => {
+      updateMaintenanceMediaSelection("singleOOCMediaFiles", "singleOOCMediaFileList");
     });
   }
 
@@ -12424,6 +12522,9 @@ function openMaintenanceModal() {
   const maintenanceCostEl = document.getElementById('maintenanceCost');
   if (maintenanceCostEl) maintenanceCostEl.value = '';
   if (logTypeEl) logTypeEl.value = DEFAULT_MAINTENANCE_LOG_TYPE;
+  const maintenanceMediaEl = document.getElementById('maintenanceMediaFiles');
+  if (maintenanceMediaEl) maintenanceMediaEl.value = '';
+  updateMaintenanceMediaSelection('maintenanceMediaFiles', 'maintenanceMediaFileList');
   
   // Set current date as default
   const today = new Date().toISOString().split('T')[0];
@@ -12834,6 +12935,9 @@ function clearSingleOOC(assetId) {
   document.getElementById('singleOOCNewSerial').value = '';
   const singleCostEl = document.getElementById('singleOOCCost');
   if (singleCostEl) singleCostEl.value = '';
+  const singleMediaEl = document.getElementById('singleOOCMediaFiles');
+  if (singleMediaEl) singleMediaEl.value = '';
+  updateMaintenanceMediaSelection('singleOOCMediaFiles', 'singleOOCMediaFileList');
   
   // Show asset info
   const assetInfoDiv = document.getElementById('singleOOCAssetInfo');
@@ -12889,7 +12993,8 @@ async function processSingleOOCClear() {
       maintenanceData.newSerial = newSerial;
     }
     
-    await apiCall(`/api/assets/${encodeURIComponent(assetId)}/maintain`, "POST", maintenanceData);
+    const requestData = maintenancePayloadToRequestData(maintenanceData, 'singleOOCMediaFiles');
+    await apiCall(`/api/assets/${encodeURIComponent(assetId)}/maintain`, "POST", requestData);
     
     closeModal('singleOOCModal');
     
@@ -12967,7 +13072,7 @@ function showMaintenanceLogModal(asset) {
   const eventHistoryContainerId = `assetEventHistory_${assetSafeId}`;
   let modalContent = `
     <div class="modal" id="maintenanceLogModal" style="display: flex; align-items: center; justify-content: center;">
-      <div class="modal-content" style="max-width: 1200px; width: 95%; height: 95vh; display: flex; flex-direction: column; overflow: hidden; padding: 20px;">
+      <div class="modal-content" style="max-width: 1320px; width: 95%; height: 95vh; display: flex; flex-direction: column; overflow: hidden; padding: 20px;">
         <div class="modal-header" style="flex-shrink: 0; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 2px solid #eee;">
           <h3 class="modal-title">Maintenance Log - ${asset.id}</h3>
           <button class="close-btn" onclick="closeMaintenanceLogModal()">&times;</button>
@@ -13015,6 +13120,7 @@ function showMaintenanceLogModal(asset) {
                     <th style="padding: 12px; font-weight: 600; color: #495057; border-bottom: 2px solid #e9ecef; text-align: left; background: #f8f9fa; width: 100px;">User</th>
                     <th style="padding: 12px; font-weight: 600; color: #495057; border-bottom: 2px solid #e9ecef; text-align: left; background: #f8f9fa; width: 150px;">Type</th>
                     <th style="padding: 12px; font-weight: 600; color: #495057; border-bottom: 2px solid #e9ecef; text-align: left; background: #f8f9fa;">Description</th>
+                    <th style="padding: 12px; font-weight: 600; color: #495057; border-bottom: 2px solid #e9ecef; text-align: left; background: #f8f9fa; width: 150px;">Media</th>
                     <th style="padding: 12px; font-weight: 600; color: #495057; border-bottom: 2px solid #e9ecef; text-align: left; background: #f8f9fa; width: 110px;">Cost</th>
                     <th style="padding: 12px; font-weight: 600; color: #495057; border-bottom: 2px solid #e9ecef; text-align: left; background: #f8f9fa; width: 200px;">Status Changes</th>
                     <th style="padding: 12px; font-weight: 600; color: #495057; border-bottom: 2px solid #e9ecef; width: 50px; text-align: center; background: #f8f9fa;"></th>
@@ -13140,6 +13246,9 @@ function showMaintenanceLogModal(asset) {
             </div>
           </td>
           <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; vertical-align: top; font-size: 13px;">
+            ${maintenanceMediaLinksHtml(log.media)}
+          </td>
+          <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; vertical-align: top; font-size: 13px;">
             ${maintenanceCostDisplayHtml(log.cost, '<span style="color:#999;">—</span>')}
           </td>
           <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; vertical-align: top; word-wrap: break-word; overflow-wrap: break-word; max-width: 200px;">
@@ -13156,7 +13265,7 @@ function showMaintenanceLogModal(asset) {
   } else {
     modalContent += `
       <tr>
-        <td colspan="8" style="text-align: center; color: #666; padding: 30px; font-style: italic;">
+        <td colspan="9" style="text-align: center; color: #666; padding: 30px; font-style: italic;">
           No maintenance records found for this asset.
         </td>
       </tr>
@@ -13336,7 +13445,7 @@ async function deleteMaintenanceLog(assetId, logIndex, logId) {
   // Show custom confirmation dialog
   const shouldDelete = await showCustomConfirm(
     'Delete Maintenance Log', 
-    'Are you sure you want to delete this maintenance log entry? This action cannot be undone and will recalculate the asset status.'
+    'Are you sure you want to delete this maintenance log entry? Attached media will be deleted too. This action cannot be undone and will recalculate the asset status.'
   );
   
   if (!shouldDelete) {
@@ -13737,6 +13846,9 @@ function openBulkOOCModal() {
   if (dateField) {
     dateField.value = today;
   }
+  const bulkMediaEl = document.getElementById('bulkOOCMediaFiles');
+  if (bulkMediaEl) bulkMediaEl.value = '';
+  updateMaintenanceMediaSelection('bulkOOCMediaFiles', 'bulkOOCMediaFileList');
   
   // Update the display of selected assets
   updateSelectedOOCDisplay();
@@ -13902,6 +14014,23 @@ function editMaintenanceLog(assetId, logIndex, logId) {
               >${escapeHtml(currentDescription)}</textarea>
             </div>
 
+            <div class="form-group">
+              <label class="form-label">Attached Media</label>
+              ${maintenanceMediaLinksHtml(logEntry.media, '<span style="color:#6c757d;font-size:13px;">No media attached</span>')}
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="editMaintenanceMediaFiles">Add Photos / Videos</label>
+              <input
+                type="file"
+                class="form-input"
+                id="editMaintenanceMediaFiles"
+                accept="image/*,video/*,.jpg,.jpeg,.png,.mp4,.mov"
+                multiple
+              />
+              <div id="editMaintenanceMediaFileList" class="maintenance-media-selection"></div>
+            </div>
+
             <!-- Repair Cost -->
             <div class="form-group">
               <label class="form-label">Cost (optional)</label>
@@ -13992,6 +14121,12 @@ function editMaintenanceLog(assetId, logIndex, logId) {
   const modal = document.getElementById('editMaintenanceLogModal');
   modal.style.display = 'flex';
   initialiseMaintenanceStatusSelects(modal);
+  const editMediaInput = document.getElementById('editMaintenanceMediaFiles');
+  if (editMediaInput) {
+    editMediaInput.addEventListener('change', () => {
+      updateMaintenanceMediaSelection('editMaintenanceMediaFiles', 'editMaintenanceMediaFileList');
+    });
+  }
   
   // Add form submit handler
   const form = document.getElementById('editMaintenanceLogForm');
@@ -14137,7 +14272,8 @@ async function saveEnhancedMaintenanceLog(assetId, logIndex, logId) {
     console.log('Sending update data:', updateData);
     
     // Call the enhanced update API
-    const response = await apiCall(`/api/assets/${encodeURIComponent(assetId)}/maintenance-log-enhanced/${logIndex}`, 'PUT', updateData);
+    const requestData = maintenancePayloadToRequestData(updateData, 'editMaintenanceMediaFiles');
+    const response = await apiCall(`/api/assets/${encodeURIComponent(assetId)}/maintenance-log-enhanced/${logIndex}`, 'PUT', requestData);
     
     if (response.success) {
       showNotification('success', 'Maintenance log updated successfully');

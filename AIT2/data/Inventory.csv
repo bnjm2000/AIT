@@ -855,7 +855,7 @@ PEARL2010#01,Avolites,Pearl 2010,,Console,False,False,False,False,False,1,,LX,St
 TIGERTOUCH2#01,Avolites,Tiger Touch 2,,Console,False,False,False,False,False,1,,LX,Store,Store
 QUARTZ#01,Avolites,Quartz,QTZHS23122602C,Console,False,False,False,False,False,1,,LX,Store,Store
 QUARTZ#02,Avolites,Quartz,QTZHS23122701C,Console,False,False,False,False,False,1,,LX,Store,Store
-ESPRITE#01,Robe,ESPRITE,S2200820358,Profile LED,False,False,True,False,False,1,"[{""date"":""2026/03/27"",""user"":""bnjm2000"",""description"":""Ah Heng reported gobo rotate will stutter"",""type"":""Fault"",""cost"":"""",""changes"":[{""kind"":""degraded"",""action"":""marked""}],""source"":{}},{""date"":""2026/04/01"",""user"":""bnjm2000"",""description"":""Dean checked and discovered gobo holder feels sandy. Robe failed to repair - ordered new part."",""type"":""Fault"",""cost"":"""",""changes"":[],""source"":{}}]",LX,Store,
+ESPRITE#01,Robe,ESPRITE,S2200820358,Profile LED,False,False,True,False,False,1,"[{""id"":""79cef6e37ab754d92eaac0a2"",""date"":""2026/03/27"",""user"":""bnjm2000"",""description"":""Operator Ah Heng reported gobo rotate will stutter"",""type"":""Fault"",""cost"":"""",""changes"":[{""kind"":""degraded"",""action"":""marked""}],""source"":{}},{""date"":""2026/04/01"",""user"":""bnjm2000"",""description"":""Dean checked and discovered gobo holder feels sandy. Robe failed to repair - ordered new part."",""type"":""Fault"",""cost"":"""",""changes"":[],""source"":{}}]",LX,Store,
 ESPRITE#02,Robe,ESPRITE,S2200820724,Profile LED,False,False,False,False,False,1,,LX,Store,Store
 ESPRITE#03,Robe,ESPRITE,S2200821218,Profile LED,False,False,False,False,False,1,"[{""date"":""2026/01/23"",""user"":""bnjm2000"",""description"":""Jacky reported rust on motor, cleaned off."",""type"":""Fault"",""cost"":"""",""changes"":[],""source"":{}}]",LX,Store,Store
 ESPRITE#04,Robe,ESPRITE,S2200821219,Profile LED,False,False,False,False,False,1,,LX,Store,Store
@@ -1116,7 +1116,7 @@ DN100#05,Klark Teknik,DN100,,,False,False,False,False,False,1,,AX,Store,
 DN200#01,Klark Teknik,DN200,,,False,False,False,False,False,1,,AX,Store,
 DN200#02,Klark Teknik,DN200,,,False,False,False,False,False,1,,AX,Store,
 DN200#03,Klark Teknik,DN200,,,False,False,False,False,False,1,,AX,Store,Store
-PULSE2#01,Analogue Way,Pulse 2,,Video Switcher,False,False,False,False,False,1,,VX,Store,Store
+PULSE2#01,Analogue Way,Pulse 2,,Video Switcher,False,False,False,False,False,1,,VX,Store,Dry Hire: Avery Events
 ISOG2#01,Blackmagic Design,Atem Mini Extreme ISO G2,14156847,Video Switcher,False,False,False,False,False,1,,VX,Store,
 40INCH#01,Sharp,,,"40"" TV",False,False,False,False,False,1,,VX,Store,Store
 40INCH#02,Sharp,,,"40"" TV",False,False,False,False,False,1,,VX,Store,Store

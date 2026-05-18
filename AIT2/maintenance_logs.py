@@ -1,5 +1,6 @@
 import json
 import re
+import secrets
 from datetime import datetime
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
@@ -127,6 +128,59 @@ def normalize_maintenance_log_source(source):
     return clean_source
 
 
+def make_maintenance_log_id():
+    return secrets.token_hex(12)
+
+
+def normalize_maintenance_media(media):
+    if not media:
+        return []
+
+    if isinstance(media, dict):
+        media = [media]
+
+    if not isinstance(media, list):
+        return []
+
+    records = []
+    for item in media:
+        if not isinstance(item, dict):
+            continue
+
+        media_id = _text(item.get('id') or item.get('mediaId')).strip()
+        path = _text(item.get('path') or item.get('storedPath')).strip().replace('\\', '/')
+        name = _text(item.get('name') or item.get('filename') or item.get('originalName')).strip()
+        kind = _text(item.get('kind') or item.get('type')).strip().lower()
+        mime_type = _text(item.get('mimeType') or item.get('contentType')).strip()
+
+        if not media_id or not path:
+            continue
+
+        path_parts = [part for part in path.split('/') if part]
+        if path.startswith('/') or '..' in path_parts:
+            continue
+
+        if kind not in ('image', 'video'):
+            extension = path.rsplit('.', 1)[-1].lower() if '.' in path else ''
+            kind = 'video' if extension in ('mp4', 'mov') else 'image'
+
+        try:
+            size = int(item.get('size') or 0)
+        except (TypeError, ValueError):
+            size = 0
+
+        records.append({
+            'id': media_id,
+            'name': name or media_id,
+            'path': '/'.join(path_parts),
+            'kind': kind,
+            'mimeType': mime_type,
+            'size': max(0, size),
+        })
+
+    return records
+
+
 def normalize_change(change):
     if not isinstance(change, dict):
         return None
@@ -234,6 +288,7 @@ def normalize_maintenance_log(log):
                 return normalize_maintenance_log(entry)
 
         return {
+            'id': _text(log.get('id') or log.get('logId')).strip(),
             'date': _text(log.get('date')).strip(),
             'user': _text(log.get('user')).strip(),
             'description': _text(log.get('description')),
@@ -245,6 +300,7 @@ def normalize_maintenance_log(log):
             'cost': format_maintenance_cost(log.get('cost')),
             'changes': normalize_changes(log.get('changes') or log.get('statusChanges')),
             'source': normalize_maintenance_log_source(log.get('source')),
+            'media': normalize_maintenance_media(log.get('media') or log.get('attachments')),
         }
 
     raw = _text(log)
@@ -269,6 +325,7 @@ def normalize_maintenance_log(log):
 
     description, changes = split_legacy_status_suffix(description)
     return {
+        'id': '',
         'date': date,
         'user': user,
         'description': description,
@@ -276,11 +333,13 @@ def normalize_maintenance_log(log):
         'cost': '',
         'changes': changes,
         'source': {},
+        'media': [],
     }
 
 
-def make_maintenance_log(date, user, description, changes=None, cost='', log_type=DEFAULT_MAINTENANCE_LOG_TYPE, source=None):
+def make_maintenance_log(date, user, description, changes=None, cost='', log_type=DEFAULT_MAINTENANCE_LOG_TYPE, source=None, log_id=None, media=None):
     return normalize_maintenance_log({
+        'id': log_id or make_maintenance_log_id(),
         'date': date,
         'user': user,
         'description': description,
@@ -288,6 +347,7 @@ def make_maintenance_log(date, user, description, changes=None, cost='', log_typ
         'cost': cost,
         'changes': changes or [],
         'source': source or {},
+        'media': media or [],
     })
 
 
@@ -312,6 +372,11 @@ def dump_maintenance_logs(logs):
     records = [normalize_maintenance_log(log) for log in (logs or [])]
     if not records:
         return ''
+    for record in records:
+        if not record.get('id'):
+            record.pop('id', None)
+        if not record.get('media'):
+            record.pop('media', None)
     return json.dumps(records, ensure_ascii=False, separators=(',', ':'))
 
 

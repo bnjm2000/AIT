@@ -8,6 +8,10 @@ from flask_cors import CORS
 from functools import wraps
 import os
 import json
+import mimetypes
+import shutil
+import subprocess
+import tempfile
 from datetime import datetime, timedelta
 from collections import defaultdict
 import logging
@@ -26,6 +30,7 @@ from maintenance_logs import (
     apply_maintenance_log_changes,
     make_change,
     make_maintenance_log,
+    make_maintenance_log_id,
     maintenance_log_to_display_string,
     normalize_maintenance_log,
     normalize_maintenance_log_type,
@@ -3364,6 +3369,334 @@ def _event_file_path(event_id, filename):
     return target
 
 
+MAINTENANCE_IMAGE_EXTENSIONS = {
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.png': 'image/png',
+}
+MAINTENANCE_VIDEO_EXTENSIONS = {
+    '.mp4': 'video/mp4',
+    '.mov': 'video/quicktime',
+}
+CONVERTIBLE_IMAGE_EXTENSIONS = {
+    '.bmp', '.gif', '.heic', '.heif', '.tif', '.tiff', '.webp'
+}
+CONVERTIBLE_VIDEO_EXTENSIONS = {
+    '.3gp', '.avi', '.m4v', '.mkv', '.mpeg', '.mpg', '.webm', '.wmv'
+}
+
+
+def _maintenance_request_payload():
+    if request.form:
+        return request.form.to_dict(flat=True)
+    data = request.get_json(silent=True)
+    return data if isinstance(data, dict) else {}
+
+
+def _uploaded_maintenance_media_files():
+    files = []
+    for key in ('media', 'maintenanceMedia', 'maintenanceMediaFiles', 'files', 'file', 'photos', 'videos'):
+        files.extend(request.files.getlist(key))
+    return [file for file in files if file and file.filename]
+
+
+def _maintenance_media_root(create=False):
+    if not data_manager or not getattr(data_manager, 'data_folder', ''):
+        return None
+    folder = os.path.join(data_manager.data_folder, 'maintenance_media')
+    if create:
+        os.makedirs(folder, exist_ok=True)
+    return folder
+
+
+def _safe_maintenance_media_name(filename, target_ext):
+    raw_name = str(filename or '').replace('\\', '/')
+    basename = os.path.basename(raw_name).strip()
+    base, _ = os.path.splitext(basename)
+    cleaned = sanitize_filename(base)
+    cleaned = re.sub(r'\s+', ' ', cleaned).strip().strip('.')
+    if not cleaned:
+        cleaned = 'maintenance-media'
+
+    target_ext = target_ext if target_ext.startswith('.') else f'.{target_ext}'
+    if len(cleaned) + len(target_ext) > 180:
+        cleaned = cleaned[:180 - len(target_ext)].rstrip()
+
+    return f"{cleaned}{target_ext}"
+
+
+def _maintenance_upload_target(uploaded_file):
+    filename = str(uploaded_file.filename or '')
+    _, ext = os.path.splitext(filename)
+    ext = ext.lower()
+    mime_type = (uploaded_file.mimetype or '').lower()
+
+    if ext in MAINTENANCE_IMAGE_EXTENSIONS:
+        target_ext = '.jpg' if ext == '.jpeg' else ext
+        return 'image', target_ext, False, MAINTENANCE_IMAGE_EXTENSIONS[ext]
+    if mime_type in ('image/jpeg', 'image/jpg'):
+        return 'image', '.jpg', False, 'image/jpeg'
+    if mime_type == 'image/png':
+        return 'image', '.png', False, 'image/png'
+    if mime_type.startswith('image/') or ext in CONVERTIBLE_IMAGE_EXTENSIONS:
+        return 'image', '.png', True, 'image/png'
+
+    if ext in MAINTENANCE_VIDEO_EXTENSIONS:
+        return 'video', ext, False, MAINTENANCE_VIDEO_EXTENSIONS[ext]
+    if mime_type == 'video/mp4':
+        return 'video', '.mp4', False, 'video/mp4'
+    if mime_type in ('video/quicktime', 'video/mov'):
+        return 'video', '.mov', False, 'video/quicktime'
+    if mime_type.startswith('video/') or ext in CONVERTIBLE_VIDEO_EXTENSIONS:
+        return 'video', '.mp4', True, 'video/mp4'
+
+    raise ValueError(f"Unsupported media file: {filename or 'unnamed file'}")
+
+
+def _convert_image_upload(uploaded_file, target_path):
+    try:
+        from PIL import Image, ImageOps
+    except ImportError:
+        return False
+
+    try:
+        uploaded_file.stream.seek(0)
+        with Image.open(uploaded_file.stream) as image:
+            image = ImageOps.exif_transpose(image)
+            if getattr(image, 'is_animated', False):
+                image.seek(0)
+            if image.mode not in ('RGB', 'RGBA', 'L', 'LA'):
+                image = image.convert('RGBA')
+            elif image.mode in ('L', 'LA'):
+                image = image.convert('RGBA')
+            image.save(target_path, format='PNG')
+        return True
+    except Exception as e:
+        logger.warning("Failed to convert image upload %s: %s", uploaded_file.filename, e)
+        return False
+
+
+def _convert_video_upload(uploaded_file, target_path):
+    ffmpeg = shutil.which('ffmpeg')
+    if not ffmpeg:
+        return False
+
+    _, ext = os.path.splitext(str(uploaded_file.filename or ''))
+    ext = ext if ext else '.upload'
+
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            input_path = os.path.join(temp_dir, f"input{ext}")
+            uploaded_file.stream.seek(0)
+            uploaded_file.save(input_path)
+            result = subprocess.run(
+                [
+                    ffmpeg,
+                    '-y',
+                    '-i',
+                    input_path,
+                    '-c:v',
+                    'libx264',
+                    '-c:a',
+                    'aac',
+                    '-movflags',
+                    '+faststart',
+                    target_path,
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=180,
+                check=False,
+            )
+            if result.returncode != 0:
+                logger.warning(
+                    "ffmpeg could not convert maintenance video %s: %s",
+                    uploaded_file.filename,
+                    result.stderr.decode('utf-8', errors='ignore')[-1000:],
+                )
+                return False
+        return os.path.exists(target_path) and os.path.getsize(target_path) > 0
+    except Exception as e:
+        logger.warning("Failed to convert video upload %s: %s", uploaded_file.filename, e)
+        return False
+
+
+def _maintenance_media_abs_path(media):
+    root = _maintenance_media_root(create=False)
+    if not root:
+        return None
+
+    relative_path = str((media or {}).get('path') or '').strip().replace('\\', '/')
+    if not relative_path:
+        return None
+
+    parts = [part for part in relative_path.split('/') if part]
+    if relative_path.startswith('/') or '..' in parts:
+        return None
+
+    target = os.path.abspath(os.path.join(data_manager.data_folder, *parts))
+    base = os.path.abspath(root)
+    if not target.startswith(base + os.sep):
+        return None
+    return target
+
+
+def _cleanup_empty_maintenance_media_folder(path):
+    root = _maintenance_media_root(create=False)
+    if not root or not path:
+        return
+
+    folder = os.path.abspath(os.path.dirname(path))
+    root = os.path.abspath(root)
+    if folder == root or not folder.startswith(root + os.sep):
+        return
+
+    try:
+        if os.path.isdir(folder) and not os.listdir(folder):
+            os.rmdir(folder)
+    except OSError:
+        pass
+
+
+def _delete_maintenance_media_files(log_entry):
+    deleted = 0
+    record = normalize_maintenance_log(log_entry)
+    for media in record.get('media', []) or []:
+        target_path = _maintenance_media_abs_path(media)
+        if not target_path:
+            continue
+        try:
+            if os.path.isfile(target_path):
+                os.remove(target_path)
+                deleted += 1
+            _cleanup_empty_maintenance_media_folder(target_path)
+        except OSError as e:
+            logger.warning("Failed to delete maintenance media %s: %s", target_path, e)
+    return deleted
+
+
+def _save_maintenance_media_files(log_entry, uploaded_files):
+    incoming_files = [file for file in (uploaded_files or []) if file and file.filename]
+    if not incoming_files:
+        return []
+
+    root = _maintenance_media_root(create=True)
+    if not root:
+        raise ValueError('Maintenance media folder could not be created')
+
+    log_id = (log_entry.get('id') or '').strip()
+    if not log_id:
+        log_id = make_maintenance_log_id()
+        log_entry['id'] = log_id
+
+    log_folder = os.path.join(root, log_id)
+    os.makedirs(log_folder, exist_ok=True)
+
+    media_records = []
+    saved_paths = []
+    try:
+        for uploaded_file in incoming_files:
+            kind, target_ext, should_convert, mime_type = _maintenance_upload_target(uploaded_file)
+            media_id = secrets.token_hex(10)
+            target_path = os.path.join(log_folder, f"{media_id}{target_ext}")
+            display_name = _safe_maintenance_media_name(uploaded_file.filename, target_ext)
+
+            if should_convert:
+                converted = (
+                    _convert_image_upload(uploaded_file, target_path)
+                    if kind == 'image'
+                    else _convert_video_upload(uploaded_file, target_path)
+                )
+                if not converted:
+                    if kind == 'image':
+                        raise ValueError(f"Could not convert {uploaded_file.filename} to PNG")
+                    raise ValueError(f"Could not convert {uploaded_file.filename} to MP4")
+            else:
+                uploaded_file.stream.seek(0)
+                uploaded_file.save(target_path)
+
+            if not os.path.isfile(target_path):
+                raise ValueError(f"Could not save {uploaded_file.filename}")
+
+            saved_paths.append(target_path)
+            relative_path = os.path.relpath(target_path, data_manager.data_folder).replace(os.sep, '/')
+            media_records.append({
+                'id': media_id,
+                'name': display_name,
+                'path': relative_path,
+                'kind': kind,
+                'mimeType': mime_type or mimetypes.guess_type(display_name)[0] or '',
+                'size': os.path.getsize(target_path),
+            })
+    except Exception:
+        for path in saved_paths:
+            try:
+                if os.path.isfile(path):
+                    os.remove(path)
+                _cleanup_empty_maintenance_media_folder(path)
+            except OSError:
+                pass
+        raise
+
+    return media_records
+
+
+def _maintenance_media_for_response(media):
+    item = dict(media or {})
+    media_id = str(item.get('id') or '').strip()
+    if media_id:
+        item['url'] = f"/api/maintenance-media/{quote(media_id)}"
+    return item
+
+
+def _maintenance_log_for_response(log_entry):
+    record = normalize_maintenance_log(log_entry)
+    record['media'] = [
+        _maintenance_media_for_response(media)
+        for media in (record.get('media') or [])
+    ]
+    return record
+
+
+def _find_maintenance_media(media_id):
+    media_id = str(media_id or '').strip()
+    if not media_id:
+        return None, None, None
+
+    for asset in (data_manager.inventory.values() if data_manager else []):
+        for log_entry in getattr(asset, 'maintenance_logs', []) or []:
+            record = normalize_maintenance_log(log_entry)
+            for media in record.get('media', []) or []:
+                if str(media.get('id') or '').strip() == media_id:
+                    return asset, record, media
+
+    return None, None, None
+
+
+@app.route('/api/maintenance-media/<media_id>', methods=['GET'])
+@require_auth
+def download_maintenance_media(media_id):
+    """View media attached to a maintenance log."""
+    try:
+        asset, record, media = _find_maintenance_media(media_id)
+        if not asset or not record or not media:
+            return jsonify({'error': 'Media not found'}), 404
+
+        target_path = _maintenance_media_abs_path(media)
+        if not target_path or not os.path.isfile(target_path):
+            return jsonify({'error': 'Media file not found'}), 404
+
+        return send_file(
+            target_path,
+            as_attachment=False,
+            download_name=media.get('name') or os.path.basename(target_path),
+            mimetype=media.get('mimeType') or mimetypes.guess_type(target_path)[0] or 'application/octet-stream'
+        )
+    except Exception as e:
+        logger.error(f"Error downloading maintenance media {media_id}: {e}")
+        return jsonify({'error': 'Failed to load maintenance media'}), 500
+
+
 @app.route('/api/events', methods=['GET'])
 @require_auth
 def get_events():
@@ -4261,6 +4594,7 @@ def delete_maintenance_log(asset_id, log_index):
         
         # Remove the log entry
         asset.maintenance_logs.pop(log_index)
+        deleted_media_count = _delete_maintenance_media_files(deleted_log)
         
         # Recalculate asset status based on remaining logs
         recalculate_asset_status_from_logs(asset)
@@ -4269,7 +4603,8 @@ def delete_maintenance_log(asset_id, log_index):
         data_manager.save_inventory()
         
         # Log the action
-        log_action(f"Deleted maintenance log for asset {asset_id}: '{deleted_description}' (deleted by {session['user']})")
+        media_text = f" and {deleted_media_count} media file(s)" if deleted_media_count else ""
+        log_action(f"Deleted maintenance log{media_text} for asset {asset_id}: '{deleted_description}' (deleted by {session['user']})")
         
         logger.info(f"Successfully deleted maintenance log for asset {asset_id}")
         return jsonify({'success': True, 'message': 'Maintenance log deleted successfully'})
@@ -6513,7 +6848,8 @@ def get_assets():
 
         for asset in data_manager.inventory.values():
             maintenance_records = [] if _is_bulk_asset(asset) else [
-                normalize_maintenance_log(log) for log in (getattr(asset, 'maintenance_logs', []) or [])
+                _maintenance_log_for_response(log)
+                for log in (getattr(asset, 'maintenance_logs', []) or [])
             ]
 
             # Determine current status
@@ -7385,7 +7721,7 @@ def maintain_asset(asset_id):
         if _is_bulk_asset(asset):
             return jsonify({'error': 'Bulk quantity assets do not support maintenance logs'}), 400
 
-        data = request.get_json()
+        data = _maintenance_request_payload()
         logger.info(f"Received data: {data}")
         
         if not data:
@@ -7466,6 +7802,13 @@ def maintain_asset(asset_id):
             cost=repair_cost,
             log_type=log_type
         )
+
+        try:
+            media_records = _save_maintenance_media_files(entry, _uploaded_maintenance_media_files())
+        except ValueError as e:
+            return jsonify({'error': str(e)}), 400
+        if media_records:
+            entry['media'] = media_records
         
         asset.maintenance_logs.append(entry)
 
@@ -7571,7 +7914,7 @@ def update_maintenance_log_enhanced(asset_id, log_index):
         if not asset:
             return jsonify({'error': 'Asset not found'}), 404
 
-        data = request.get_json()
+        data = _maintenance_request_payload()
         if not data:
             return jsonify({'error': 'No data provided'}), 400
         
@@ -7697,8 +8040,17 @@ def update_maintenance_log_enhanced(asset_id, log_index):
             changes_made,
             cost=repair_cost,
             log_type=log_type,
-            source=original_log.get('source') or {}
+            source=original_log.get('source') or {},
+            log_id=original_log.get('id') or None,
+            media=original_log.get('media') or []
         )
+
+        try:
+            new_media_records = _save_maintenance_media_files(updated_log, _uploaded_maintenance_media_files())
+        except ValueError as e:
+            return jsonify({'error': str(e)}), 400
+        if new_media_records:
+            updated_log['media'] = (updated_log.get('media') or []) + new_media_records
         
         logger.info(f"Updated log entry: {updated_log}")
         
