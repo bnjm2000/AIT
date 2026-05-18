@@ -836,6 +836,60 @@
         border-color: #667eea;
       }
 
+      .add-asset-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 14px;
+      }
+
+      .add-asset-prefix-row {
+        display: grid;
+        grid-template-columns: minmax(190px, auto) 1fr;
+        gap: 12px;
+        align-items: center;
+        margin-bottom: 12px;
+      }
+
+      .add-asset-custom-prefix-toggle {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0;
+      }
+
+      .add-asset-preview {
+        border: 1px solid #d9e2ec;
+        background: #f8fafc;
+        border-radius: 8px;
+        padding: 12px;
+        color: #475569;
+        font-size: 14px;
+        line-height: 1.4;
+        margin-bottom: 14px;
+      }
+
+      .add-asset-preview strong {
+        color: #1f2937;
+      }
+
+      .add-asset-preview.error {
+        border-color: #f5c6cb;
+        background: #fff5f5;
+        color: #842029;
+      }
+
+      .add-asset-preview.success {
+        border-color: #badbcc;
+        background: #f6fffb;
+        color: #0f5132;
+      }
+
+      @media (max-width: 768px) {
+        .add-asset-prefix-row {
+          grid-template-columns: 1fr;
+        }
+      }
+
       .modal {
         display: none;
         position: fixed;
@@ -3582,50 +3636,76 @@
 
     <!-- Add Asset Modal -->
     <div id="addAssetModal" class="modal">
-      <div class="modal-content">
+      <div class="modal-content" style="max-width: 860px;">
         <div class="modal-header">
-          <h3 class="modal-title">Add New Asset</h3>
+          <h3 class="modal-title">Add Assets</h3>
           <button class="close-btn" onclick="closeModal('addAssetModal')">
             &times;
           </button>
         </div>
         <form id="addAssetForm">
-          <div class="form-group">
-            <label class="form-label">Brand</label>
-            <input type="text" class="form-input" id="assetBrand" required />
+          <div class="add-asset-grid">
+            <div class="form-group">
+              <label class="form-label">Brand</label>
+              <input type="text" class="form-input" id="assetBrand" list="assetBrandOptions" required />
+              <datalist id="assetBrandOptions"></datalist>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Model Number</label>
+              <input type="text" class="form-input" id="assetModel" list="assetModelOptions" required />
+              <datalist id="assetModelOptions"></datalist>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Department Code</label>
+              <select class="form-input" id="assetDepartment" required>
+                <option value="AX">AX - Audio</option>
+                <option value="LX">LX - Lighting</option>
+                <option value="VX">VX - Video</option>
+                <option value="UN">UN - Unknown</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Quantity to Add</label>
+              <input type="number" class="form-input" id="assetQuantity" min="1" max="500" value="1" />
+            </div>
           </div>
+
           <div class="form-group">
-            <label class="form-label">Model Number</label>
-            <input type="text" class="form-input" id="assetModel" required />
+            <label class="form-label">Description</label>
+            <input type="text" class="form-input" id="assetDescription" list="assetDescriptionOptions" />
+            <datalist id="assetDescriptionOptions"></datalist>
           </div>
+
           <div class="form-group">
             <label class="form-label">
               <input type="checkbox" id="assetIsBulk" style="margin-right: 8px;" />
               Bulk quantity asset / no visible Asset ID
             </label>
-            <div style="color:#666;font-size:12px;margin-top:4px;">Use this for items tracked only by quantity, such as cables, adapters, consumables, or generic stock.</div>
           </div>
-          <div class="form-group" id="assetQuantityGroup" style="display:none;">
-            <label class="form-label">Quantity</label>
-            <input type="number" class="form-input" id="assetQuantity" min="1" value="1" />
+
+          <div id="assetSerialisedFields">
+            <div class="add-asset-prefix-row">
+              <label class="form-label add-asset-custom-prefix-toggle">
+                <input type="checkbox" id="assetUseCustomPrefix" />
+                Custom Asset ID prefix
+              </label>
+              <input type="text" class="form-input" id="assetIdPrefix" placeholder="Auto" disabled />
+            </div>
+
+            <div id="assetIdPreview" class="add-asset-preview">
+              Enter brand and model to preview Asset IDs.
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Serial Numbers</label>
+              <textarea class="form-input" id="assetSerials" rows="5" placeholder="SN-001&#10;SN-002&#10;SN-003"></textarea>
+              <small style="color:#666;font-size:12px;margin-top:6px;display:block;line-height:1.4;">
+                Enter one serial number per line. The first line goes to the first Asset ID, the second line to the second Asset ID, and so on. Leave blank if the assets have no serial numbers.
+              </small>
+              <input type="hidden" id="assetSerial" />
+            </div>
           </div>
-          <div class="form-group" id="assetSerialGroup">
-            <label class="form-label">Serial Number</label>
-            <input type="text" class="form-input" id="assetSerial" />
-          </div>
-          <div class="form-group">
-            <label class="form-label">Description</label>
-            <input type="text" class="form-input" id="assetDescription" />
-          </div>
-          <div class="form-group">
-            <label class="form-label">Department Code</label>
-            <select class="form-input" id="assetDepartment" required>
-              <option value="AX">AX - Audio</option>
-              <option value="LX">LX - Lighting</option>
-              <option value="VX">VX - Video</option>
-              <option value="UN">UN - Unknown</option>
-            </select>
-          </div>
+
           <div style="display: flex; gap: 10px; justify-content: flex-end">
             <button
               type="button"
@@ -3634,7 +3714,7 @@
             >
               Cancel
             </button>
-            <button type="submit" class="btn btn-primary">Add Asset</button>
+            <button type="submit" class="btn btn-primary" id="addAssetSubmitButton">Add Assets</button>
           </div>
         </form>
       </div>

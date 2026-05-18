@@ -65,6 +65,10 @@ _cache = {
 # cannot transfer and return the same physical asset at the same time.
 _transfer_action_lock = threading.RLock()
 
+# Serialise inventory creation so simultaneous Add Assets requests cannot
+# generate the same next Asset ID.
+_inventory_action_lock = threading.RLock()
+
 # Browser realtime update stream.  Server-sent events keep the deployment simple
 # for regular WSGI hosting while still letting every logged-in browser react when
 # another user changes shared inventory/event data.
@@ -628,6 +632,263 @@ def _asset_group_key(asset):
         _clean_group_value(getattr(asset, 'model_number', '')),
         _clean_group_value(getattr(asset, 'description', ''))
     )
+
+
+def _asset_family_key_from_values(brand, model):
+    return (
+        _clean_group_value(brand).lower(),
+        _clean_group_value(model).lower()
+    )
+
+
+def _asset_family_key(asset):
+    return _asset_family_key_from_values(
+        getattr(asset, 'brand', ''),
+        getattr(asset, 'model_number', '')
+    )
+
+
+def _asset_id_parts(asset_id):
+    match = re.match(r'^(.*?)#(\d+)$', str(asset_id or '').strip())
+    if not match:
+        return None, None, 0
+
+    number_text = match.group(2)
+    return match.group(1), int(number_text), len(number_text)
+
+
+def _normalise_asset_id_prefix(value):
+    prefix = str(value or '').strip().upper()
+    prefix = re.sub(r'\s+', ' ', prefix)
+    prefix = prefix.replace('#', '')
+    return prefix.strip()
+
+
+def _prefix_fragment(value):
+    return re.sub(r'[^A-Z0-9]+', '', str(value or '').upper())
+
+
+def _brand_prefix_fragment(brand):
+    words = re.findall(r'[A-Z0-9]+', str(brand or '').upper())
+    if not words:
+        return ''
+
+    if len(words) > 1:
+        return ''.join(word[0] for word in words if word)[:4]
+
+    word = words[0]
+    if len(word) <= 3:
+        return word
+
+    # Short brand mark that keeps prefixes readable while still separating
+    # common same-model collisions such as L-Acoustics P1 -> LAP1.
+    return word[:3]
+
+
+def _default_asset_id_prefix(brand, model, used_prefixes=None, existing_model_brand_collision=False):
+    model_fragment = _prefix_fragment(model)
+    brand_fragment = _brand_prefix_fragment(brand)
+
+    if not model_fragment:
+        model_fragment = brand_fragment or 'ASSET'
+
+    candidate = model_fragment
+    used_prefixes = used_prefixes or {}
+
+    if existing_model_brand_collision or candidate in used_prefixes:
+        candidate = f"{brand_fragment}{model_fragment}" if brand_fragment else model_fragment
+
+    base_candidate = candidate or 'ASSET'
+    counter = 2
+    while candidate in used_prefixes:
+        candidate = f"{base_candidate}{counter}"
+        counter += 1
+
+    return candidate
+
+
+def _prefix_usage_summary():
+    summary = defaultdict(lambda: {
+        'count': 0,
+        'maxNumber': 0,
+        'width': 2,
+        'families': defaultdict(int),
+        'familyLabels': {}
+    })
+
+    for item in data_manager.inventory.values():
+        if not item or _is_bulk_asset(item):
+            continue
+
+        prefix, number, width = _asset_id_parts(getattr(item, 'asset_id', ''))
+        if not prefix:
+            continue
+
+        normalised_prefix = _normalise_asset_id_prefix(prefix)
+        if not normalised_prefix:
+            continue
+
+        family = _asset_family_key(item)
+        entry = summary[normalised_prefix]
+        entry['count'] += 1
+        entry['maxNumber'] = max(entry['maxNumber'], number)
+        entry['width'] = max(entry['width'], width or 2)
+        entry['families'][family] += 1
+        entry['familyLabels'].setdefault(family, (
+            _clean_group_value(getattr(item, 'brand', '')),
+            _clean_group_value(getattr(item, 'model_number', ''))
+        ))
+
+    return summary
+
+
+def _best_existing_prefix_for_family(family_key, usage):
+    candidates = []
+
+    for prefix, entry in usage.items():
+        family_count = entry['families'].get(family_key, 0)
+        if family_count <= 0:
+            continue
+
+        candidates.append((
+            -family_count,
+            -entry['maxNumber'],
+            prefix
+        ))
+
+    if not candidates:
+        return None
+
+    candidates.sort()
+    return candidates[0][2]
+
+
+def _asset_id_plan_for_request(data):
+    data = data or {}
+
+    brand = str(data.get('brand', '') or '').strip()
+    model_number = str(data.get('model', '') or '').strip()
+    description = str(data.get('description', '') or '').strip()
+    department = _normalise_department_code(data.get('department', 'UN')) or 'UN'
+    is_bulk = _request_bool(data.get('isBulk'), default=False)
+
+    if not brand:
+        raise ValueError('Brand is required')
+
+    if not model_number:
+        raise ValueError('Model number is required')
+
+    if is_bulk:
+        quantity = max(1, _safe_int(data.get('quantity', 1), 1))
+        return {
+            'isBulk': True,
+            'brand': brand,
+            'model': model_number,
+            'description': description,
+            'department': department,
+            'quantity': quantity,
+            'prefix': '',
+            'startNumber': None,
+            'nextNumber': None,
+            'ids': [],
+            'serials': [],
+            'existingCount': 0,
+            'message': ''
+        }
+
+    quantity = max(1, _safe_int(data.get('quantity', 1), 1))
+    quantity = min(quantity, 500)
+    family_key = _asset_family_key_from_values(brand, model_number)
+    usage = _prefix_usage_summary()
+    custom_prefix = _normalise_asset_id_prefix(data.get('assetIdPrefix'))
+
+    if custom_prefix:
+        prefix = custom_prefix
+    else:
+        existing_prefix = _best_existing_prefix_for_family(family_key, usage)
+
+        if existing_prefix:
+            prefix = existing_prefix
+        else:
+            model_key = _clean_group_value(model_number).lower()
+            has_model_brand_collision = any(
+                _clean_group_value(getattr(item, 'model_number', '')).lower() == model_key and
+                _asset_family_key(item) != family_key
+                for item in data_manager.inventory.values()
+                if item and not _is_bulk_asset(item)
+            )
+
+            used_by_other_families = {
+                used_prefix: entry
+                for used_prefix, entry in usage.items()
+                if family_key not in entry['families']
+            }
+            prefix = _default_asset_id_prefix(
+                brand,
+                model_number,
+                used_by_other_families,
+                existing_model_brand_collision=has_model_brand_collision
+            )
+
+    if not prefix:
+        raise ValueError('Asset ID prefix is required')
+
+    prefix_entry = usage.get(prefix)
+    if prefix_entry:
+        other_families = [
+            family for family in prefix_entry['families'].keys()
+            if family != family_key
+        ]
+
+        if other_families:
+            examples = []
+            for other_brand, other_model in other_families[:3]:
+                brand_label, model_label = prefix_entry.get('familyLabels', {}).get(
+                    (other_brand, other_model),
+                    (other_brand, other_model)
+                )
+                label = ' '.join(part for part in [brand_label, model_label] if part).strip()
+                examples.append(label or 'another asset type')
+            raise ValueError(
+                f'Asset ID prefix {prefix} is already used by {", ".join(examples)}. Choose a unique prefix.'
+            )
+
+    next_number = (prefix_entry or {}).get('maxNumber', 0) + 1
+    width = max(2, (prefix_entry or {}).get('width', 2), len(str(next_number + quantity - 1)))
+    ids = [f"{prefix}#{number:0{width}d}" for number in range(next_number, next_number + quantity)]
+
+    collisions = [asset_id for asset_id in ids if asset_id in data_manager.inventory]
+    if collisions:
+        raise ValueError(f'Generated Asset ID already exists: {collisions[0]}')
+
+    raw_serials = data.get('serials')
+    if isinstance(raw_serials, list):
+        serials = [str(serial or '').strip() for serial in raw_serials]
+    else:
+        serial = str(data.get('serial', '') or '').strip()
+        serials = [serial] if serial else []
+
+    serials = (serials + [''] * quantity)[:quantity]
+
+    existing_count = 0
+    if prefix_entry:
+        existing_count = prefix_entry['families'].get(family_key, 0)
+
+    return {
+        'isBulk': False,
+        'brand': brand,
+        'model': model_number,
+        'description': description,
+        'department': department,
+        'quantity': quantity,
+        'prefix': prefix,
+        'startNumber': next_number,
+        'nextNumber': next_number + quantity,
+        'ids': ids,
+        'serials': serials,
+        'existingCount': existing_count,
+        'message': f"{prefix} continues from #{next_number:0{width}d}"
+    }
 
 
 
@@ -7384,65 +7645,65 @@ def get_event_assets(event_id):
 @app.route('/api/assets', methods=['POST'])
 @require_auth
 def create_asset():
-    """Create a new asset"""
+    """Create one or more assets."""
     try:
-        data = request.get_json()
+        data = request.get_json() or {}
 
-        # Validate required fields
-        required_fields = ['brand', 'model']
-        missing_fields = [
-            field for field in required_fields if not data.get(field, '').strip()]
-        if missing_fields:
-            return jsonify({'error': f'Missing required fields: {", ".join(missing_fields)}'}), 400
+        with _inventory_action_lock:
+            plan = _asset_id_plan_for_request(data)
 
-        # Generate asset ID. Bulk assets use an internal ID only; it is not shown as an asset ID in the UI.
-        model_number = data['model'].strip()
-        is_bulk = bool(data.get('isBulk', False))
+            if plan['isBulk']:
+                existing_bulk_numbers = []
+                for item_id in data_manager.inventory.keys():
+                    if str(item_id).startswith('BULK-'):
+                        existing_bulk_numbers.append(_safe_int(str(item_id).replace('BULK-', ''), 0))
+                created_asset_ids = [f"BULK-{(max(existing_bulk_numbers, default=0) + 1):04d}"]
+                asset = InventoryItem(
+                    asset_id=created_asset_ids[0],
+                    brand=plan['brand'],
+                    model_number=plan['model'],
+                    serial_number='',
+                    description=plan['description'],
+                    is_missing=False,
+                    is_ooc=False,
+                    is_degraded=bool(data.get('isDegraded', False)),
+                    is_disposed=bool(data.get('isDisposed', False)),
+                    maintenance_logs=[],
+                    department_code=plan['department'],
+                    default_location='Store',
+                    current_location='',
+                    is_bulk=True,
+                    quantity=plan['quantity']
+                )
+                data_manager.inventory[created_asset_ids[0]] = asset
+            else:
+                created_asset_ids = []
+                for index, asset_id in enumerate(plan['ids']):
+                    asset = InventoryItem(
+                        asset_id=asset_id,
+                        brand=plan['brand'],
+                        model_number=plan['model'],
+                        serial_number=plan['serials'][index],
+                        description=plan['description'],
+                        is_missing=False,
+                        is_ooc=False,
+                        is_degraded=bool(data.get('isDegraded', False)),
+                        is_disposed=bool(data.get('isDisposed', False)),
+                        maintenance_logs=[],
+                        department_code=plan['department'],
+                        default_location='Store',
+                        current_location='',
+                        is_bulk=False,
+                        quantity=1
+                    )
+                    data_manager.inventory[asset_id] = asset
+                    created_asset_ids.append(asset_id)
 
-        if is_bulk:
-            existing_bulk_numbers = []
-            for item_id in data_manager.inventory.keys():
-                if str(item_id).startswith('BULK-'):
-                    existing_bulk_numbers.append(_safe_int(str(item_id).replace('BULK-', ''), 0))
-            asset_id = f"BULK-{(max(existing_bulk_numbers, default=0) + 1):04d}"
-            quantity = max(1, _safe_int(data.get('quantity', 1), 1))
-            serial_number = ''
-        else:
-            existing_items = [
-                item for item in data_manager.inventory.values()
-                if not _is_bulk_asset(item) and item.model_number.lower() == model_number.lower()
-            ]
-            next_number = len(existing_items) + 1
-            asset_id = f"{model_number}#{next_number:02d}"
-            quantity = 1
-            serial_number = data.get('serial', '').strip()
-
-        # Create new asset
-        asset = InventoryItem(
-            asset_id=asset_id,
-            brand=data['brand'].strip(),
-            model_number=model_number,
-            serial_number=serial_number,
-            description=data.get('description', '').strip(),
-            is_missing=False,
-            is_ooc=False,
-            is_degraded=bool(data.get('isDegraded', False)),
-            is_disposed=bool(data.get('isDisposed', False)),
-            maintenance_logs=[],
-            department_code=data.get('department', 'UN').strip(),
-            default_location='Store',
-            current_location='',
-            is_bulk=is_bulk,
-            quantity=quantity
-        )
-
-        # Save asset
-        data_manager.inventory[asset_id] = asset
-        data_manager.save_inventory()
+            data_manager.save_inventory()
 
         # Auto-register the asset's department if it is new.
         departments = _load_departments()
-        dept_code = _normalise_department_code(asset.department_code) or 'UN'
+        dept_code = _normalise_department_code(plan['department']) or 'UN'
         if dept_code not in departments:
             departments[dept_code] = _department_record(dept_code)
             _save_departments(departments)
@@ -7450,12 +7711,53 @@ def create_asset():
         # Invalidate cache
         invalidate_cache()
 
-        log_action(f"Added asset {asset_id} via web interface")
+        if len(created_asset_ids) == 1:
+            log_action(f"Added asset {created_asset_ids[0]} via web interface")
+            message = 'Asset created successfully'
+        else:
+            log_action(f"Added assets {created_asset_ids[0]} to {created_asset_ids[-1]} via web interface")
+            message = f'{len(created_asset_ids)} assets created successfully'
 
-        return jsonify({'success': True, 'message': 'Asset created successfully', 'assetId': asset_id})
+        return jsonify({
+            'success': True,
+            'message': message,
+            'assetId': created_asset_ids[0],
+            'assetIds': created_asset_ids,
+            'prefix': plan.get('prefix', ''),
+            'count': len(created_asset_ids)
+        })
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
     except Exception as e:
-        logger.error(f"Error creating asset: {e}")
+        logger.error(f"Error creating asset: {e}", exc_info=True)
         return jsonify({'error': 'Failed to create asset'}), 500
+
+
+@app.route('/api/assets/serial-preview', methods=['POST'])
+@require_auth
+def preview_asset_serial_ids():
+    """Preview the Asset IDs that the Add Assets workflow will create."""
+    try:
+        data = request.get_json() or {}
+        plan = _asset_id_plan_for_request(data)
+        return jsonify({
+            'success': True,
+            'data': {
+                'isBulk': plan['isBulk'],
+                'prefix': plan['prefix'],
+                'startNumber': plan['startNumber'],
+                'nextNumber': plan['nextNumber'],
+                'ids': plan['ids'],
+                'count': plan['quantity'],
+                'existingCount': plan['existingCount'],
+                'message': plan['message']
+            }
+        })
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        logger.error(f"Error previewing asset IDs: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to preview asset IDs'}), 500
 
 
 @app.route('/api/assets/<path:asset_id>', methods=['PUT'])

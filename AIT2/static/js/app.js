@@ -1694,6 +1694,10 @@ function openModal(modalId) {
       modal.style.zIndex = "1100";
     }
 
+    if (modalId === "addAssetModal") {
+      prepareAddAssetModal();
+    }
+
     focusModalStart(modal);
   }
 }
@@ -11751,6 +11755,290 @@ async function deleteEvent(eventId) {
 }
 
 
+let __addAssetPreviewTimer = null;
+let __addAssetPreviewSequence = 0;
+
+function addAssetField(id) {
+  return document.getElementById(id);
+}
+
+function addAssetValue(id) {
+  return (addAssetField(id)?.value || '').trim();
+}
+
+function addAssetQuantityValue() {
+  return Math.max(1, Math.min(500, parseInt(addAssetValue('assetQuantity') || '1', 10) || 1));
+}
+
+function addAssetSerialList() {
+  const serialText = addAssetField('assetSerials')?.value || '';
+  return serialText
+    .split(/\r?\n/)
+    .map(value => value.trim())
+    .filter(Boolean);
+}
+
+function collectAddAssetPayload() {
+  const useCustomPrefix = addAssetField('assetUseCustomPrefix')?.checked || false;
+  const isBulk = addAssetField('assetIsBulk')?.checked || false;
+  const serials = isBulk ? [] : addAssetSerialList();
+
+  if (addAssetField('assetSerial')) {
+    addAssetField('assetSerial').value = serials[0] || '';
+  }
+
+  const payload = {
+    brand: addAssetValue('assetBrand'),
+    model: addAssetValue('assetModel'),
+    description: addAssetValue('assetDescription'),
+    department: addAssetValue('assetDepartment') || 'UN',
+    isBulk,
+    quantity: addAssetQuantityValue(),
+    serials
+  };
+
+  if (!isBulk && useCustomPrefix) {
+    payload.assetIdPrefix = addAssetValue('assetIdPrefix');
+  }
+
+  return payload;
+}
+
+function uniqueSorted(values) {
+  return Array.from(new Set(values.filter(Boolean))).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+}
+
+function populateDatalist(id, values) {
+  const datalist = addAssetField(id);
+  if (!datalist) return;
+  datalist.innerHTML = uniqueSorted(values)
+    .map(value => `<option value="${escapeHtmlAttr(value)}"></option>`)
+    .join('');
+}
+
+function normalizeAddAssetLookup(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function addAssetSourceAssets() {
+  return (assets || []).filter(asset => asset && !asset.isBulk);
+}
+
+function mostCommonAddAssetValue(values) {
+  const counts = new Map();
+  values
+    .map(value => String(value || '').trim())
+    .filter(Boolean)
+    .forEach(value => {
+      const key = normalizeAddAssetLookup(value);
+      const existing = counts.get(key) || { value, count: 0 };
+      existing.count += 1;
+      counts.set(key, existing);
+    });
+
+  return Array.from(counts.values())
+    .sort((a, b) => b.count - a.count || a.value.localeCompare(b.value, undefined, { sensitivity: 'base' }))[0]?.value || '';
+}
+
+function setAddAssetAutofillValue(id, value) {
+  const element = addAssetField(id);
+  if (!element || !value) return;
+  element.value = value;
+  element.dataset.addAssetAutofilled = 'true';
+}
+
+function canReplaceAddAssetField(id) {
+  const element = addAssetField(id);
+  return !!element && (!String(element.value || '').trim() || element.dataset.addAssetAutofilled === 'true');
+}
+
+function populateAddAssetSuggestions() {
+  const sourceAssets = addAssetSourceAssets();
+  const brandInput = normalizeAddAssetLookup(addAssetValue('assetBrand'));
+  const modelInput = normalizeAddAssetLookup(addAssetValue('assetModel'));
+
+  populateDatalist('assetBrandOptions', sourceAssets.map(asset => asset.brand || ''));
+
+  const brandMatchedAssets = brandInput
+    ? sourceAssets.filter(asset => normalizeAddAssetLookup(asset.brand).startsWith(brandInput))
+    : [];
+
+  populateDatalist('assetModelOptions', brandMatchedAssets.map(asset => asset.model || ''));
+
+  const exactBrandModelAssets = sourceAssets.filter(asset => (
+    normalizeAddAssetLookup(asset.brand) === brandInput &&
+    normalizeAddAssetLookup(asset.model) === modelInput
+  ));
+
+  populateDatalist('assetDescriptionOptions', exactBrandModelAssets.map(asset => asset.description || ''));
+}
+
+function applyKnownAssetDefaults() {
+  const brand = normalizeAddAssetLookup(addAssetValue('assetBrand'));
+  const model = normalizeAddAssetLookup(addAssetValue('assetModel'));
+  const matches = addAssetSourceAssets().filter(asset => (
+    normalizeAddAssetLookup(asset.brand) === brand &&
+    normalizeAddAssetLookup(asset.model) === model
+  ));
+
+  if (!matches.length) {
+    if (addAssetField('assetDescription')?.dataset.addAssetAutofilled === 'true') {
+      addAssetField('assetDescription').value = '';
+      addAssetField('assetDescription').dataset.addAssetAutofilled = '';
+    }
+    if (addAssetField('assetDepartment')?.dataset.addAssetAutofilled === 'true') {
+      addAssetField('assetDepartment').value = 'AX';
+    }
+    return;
+  }
+
+  const description = mostCommonAddAssetValue(matches.map(asset => asset.description));
+  const department = mostCommonAddAssetValue(matches.map(asset => asset.department)) || 'UN';
+
+  if (description && canReplaceAddAssetField('assetDescription')) {
+    setAddAssetAutofillValue('assetDescription', description);
+  }
+
+  if (department && canReplaceAddAssetField('assetDepartment')) {
+    setAddAssetAutofillValue('assetDepartment', department);
+  }
+}
+
+function syncAddAssetSuggestionsAndDefaults() {
+  populateAddAssetSuggestions();
+  applyKnownAssetDefaults();
+  scheduleAddAssetPreview();
+}
+
+function renderAddAssetPreview(className, html) {
+  const preview = addAssetField('assetIdPreview');
+  if (!preview) return;
+  preview.className = `add-asset-preview${className ? ` ${className}` : ''}`;
+  preview.innerHTML = html;
+}
+
+function previewAssetIdList(ids) {
+  if (!ids || ids.length === 0) return '';
+  if (ids.length <= 8) return ids.map(id => `<strong>${escapeHtml(id)}</strong>`).join(', ');
+  return [
+    ...ids.slice(0, 4).map(id => `<strong>${escapeHtml(id)}</strong>`),
+    '&hellip;',
+    `<strong>${escapeHtml(ids[ids.length - 1])}</strong>`
+  ].join(', ');
+}
+
+function scheduleAddAssetPreview() {
+  clearTimeout(__addAssetPreviewTimer);
+  __addAssetPreviewTimer = setTimeout(updateAddAssetPreview, 180);
+}
+
+async function updateAddAssetPreview() {
+  const payload = collectAddAssetPayload();
+  const prefixInput = addAssetField('assetIdPrefix');
+  const submitButton = addAssetField('addAssetSubmitButton');
+
+  if (submitButton) {
+    submitButton.textContent = payload.isBulk ? 'Add Bulk Asset' : (payload.quantity > 1 ? `Add ${payload.quantity} Assets` : 'Add Asset');
+  }
+
+  if (payload.isBulk) {
+    if (prefixInput) prefixInput.placeholder = 'Not used for bulk assets';
+    renderAddAssetPreview('', `Bulk quantity asset: <strong>${escapeHtml(String(payload.quantity))}</strong> total item(s).`);
+    return;
+  }
+
+  if (!payload.brand || !payload.model) {
+    if (prefixInput) prefixInput.placeholder = 'Auto';
+    renderAddAssetPreview('', 'Enter brand and model to preview Asset IDs.');
+    return;
+  }
+
+  const sequence = ++__addAssetPreviewSequence;
+
+  try {
+    const response = await fetch('/api/assets/serial-preview', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Client-Id': REALTIME_CLIENT_ID,
+      },
+      body: JSON.stringify(payload)
+    });
+    const result = await response.json();
+
+    if (sequence !== __addAssetPreviewSequence) return;
+
+    if (!response.ok) {
+      throw new Error(result.error || 'Unable to preview Asset IDs');
+    }
+
+    const data = result.data || {};
+    const existingText = data.existingCount
+      ? `${data.existingCount} existing asset(s) in this brand/model prefix.`
+      : 'New brand/model prefix.';
+
+    if (prefixInput && !addAssetField('assetUseCustomPrefix')?.checked) {
+      prefixInput.placeholder = data.prefix ? `Auto: ${data.prefix}` : 'Auto';
+    }
+
+    const serialCount = addAssetSerialList().length;
+    const serialText = serialCount
+      ? `<div>${serialCount} serial number(s) entered.</div>`
+      : '';
+
+    renderAddAssetPreview('success', `
+      <div>${existingText}</div>
+      <div>${escapeHtml(String(data.count || payload.quantity))} asset(s): ${previewAssetIdList(data.ids || [])}</div>
+      ${serialText}
+    `);
+  } catch (error) {
+    if (sequence !== __addAssetPreviewSequence) return;
+    renderAddAssetPreview('error', escapeHtml(error.message || 'Unable to preview Asset IDs'));
+  }
+}
+
+function updateAddAssetBulkFields() {
+  const isBulk = addAssetField('assetIsBulk')?.checked || false;
+  const serialisedFields = addAssetField('assetSerialisedFields');
+  if (serialisedFields) serialisedFields.style.display = isBulk ? 'none' : 'block';
+  if (isBulk && addAssetField('assetSerials')) addAssetField('assetSerials').value = '';
+  scheduleAddAssetPreview();
+}
+
+async function prepareAddAssetModal() {
+  try {
+    if (!Array.isArray(assets) || assets.length === 0) {
+      const response = await apiCall('/api/assets');
+      assets = response.data || [];
+    }
+    populateAddAssetSuggestions();
+    if (addAssetField('assetDepartment') && addAssetField('assetDepartment').dataset.addAssetAutofilled !== '') {
+      addAssetField('assetDepartment').dataset.addAssetAutofilled = 'true';
+    }
+    applyKnownAssetDefaults();
+    updateAddAssetBulkFields();
+    scheduleAddAssetPreview();
+  } catch (error) {
+    console.warn('Could not prepare Add Assets modal:', error);
+  }
+}
+
+function resetAddAssetForm() {
+  const form = addAssetField('addAssetForm');
+  if (form) form.reset();
+  if (addAssetField('assetQuantity')) addAssetField('assetQuantity').value = 1;
+  if (addAssetField('assetUseCustomPrefix')) addAssetField('assetUseCustomPrefix').checked = false;
+  if (addAssetField('assetIdPrefix')) {
+    addAssetField('assetIdPrefix').value = '';
+    addAssetField('assetIdPrefix').disabled = true;
+    addAssetField('assetIdPrefix').placeholder = 'Auto';
+  }
+  if (addAssetField('assetDescription')) addAssetField('assetDescription').dataset.addAssetAutofilled = '';
+  if (addAssetField('assetDepartment')) addAssetField('assetDepartment').dataset.addAssetAutofilled = 'true';
+  populateAddAssetSuggestions();
+  updateAddAssetBulkFields();
+}
+
 
 // Form handlers
 document.addEventListener("DOMContentLoaded", function () {
@@ -11799,17 +12087,55 @@ document.addEventListener("DOMContentLoaded", function () {
 
   const assetIsBulkToggle = document.getElementById('assetIsBulk');
   if (assetIsBulkToggle) {
-    const updateBulkAssetFields = () => {
-      const isBulk = assetIsBulkToggle.checked;
-      const serialGroup = document.getElementById('assetSerialGroup');
-      const quantityGroup = document.getElementById('assetQuantityGroup');
-      const serialInput = document.getElementById('assetSerial');
-      if (serialGroup) serialGroup.style.display = isBulk ? 'none' : 'block';
-      if (quantityGroup) quantityGroup.style.display = isBulk ? 'block' : 'none';
-      if (serialInput && isBulk) serialInput.value = '';
+    assetIsBulkToggle.addEventListener('change', updateAddAssetBulkFields);
+    updateAddAssetBulkFields();
+  }
+
+  const addAssetInputs = [
+    'assetBrand',
+    'assetModel',
+    'assetDescription',
+    'assetDepartment',
+    'assetQuantity',
+    'assetSerials',
+    'assetIdPrefix'
+  ];
+
+  addAssetInputs.forEach(id => {
+    const element = document.getElementById(id);
+    if (!element) return;
+    element.addEventListener('input', scheduleAddAssetPreview);
+    element.addEventListener('change', scheduleAddAssetPreview);
+  });
+
+  ['assetBrand', 'assetModel'].forEach(id => {
+    const element = document.getElementById(id);
+    if (!element) return;
+    element.addEventListener('input', syncAddAssetSuggestionsAndDefaults);
+    element.addEventListener('change', syncAddAssetSuggestionsAndDefaults);
+  });
+
+  ['assetDescription', 'assetDepartment'].forEach(id => {
+    const element = document.getElementById(id);
+    if (!element) return;
+    const markManual = (event) => {
+      if (event.isTrusted) element.dataset.addAssetAutofilled = '';
     };
-    assetIsBulkToggle.addEventListener('change', updateBulkAssetFields);
-    updateBulkAssetFields();
+    element.addEventListener('input', markManual);
+    element.addEventListener('change', markManual);
+  });
+
+  const customPrefixToggle = document.getElementById('assetUseCustomPrefix');
+  if (customPrefixToggle) {
+    customPrefixToggle.addEventListener('change', () => {
+      const prefixInput = document.getElementById('assetIdPrefix');
+      if (prefixInput) {
+        prefixInput.disabled = !customPrefixToggle.checked;
+        if (!customPrefixToggle.checked) prefixInput.value = '';
+        if (customPrefixToggle.checked) setTimeout(() => prefixInput.focus({ preventScroll: true }), 0);
+      }
+      scheduleAddAssetPreview();
+    });
   }
 
   // Add Asset Form
@@ -11818,20 +12144,21 @@ document.addEventListener("DOMContentLoaded", function () {
     .addEventListener("submit", async function (e) {
       e.preventDefault();
 
-      const assetData = {
-        brand: document.getElementById("assetBrand").value,
-        model: document.getElementById("assetModel").value,
-        serial: document.getElementById("assetSerial").value,
-        description: document.getElementById("assetDescription").value,
-        department: document.getElementById("assetDepartment").value,
-        isBulk: document.getElementById("assetIsBulk")?.checked || false,
-        quantity: parseInt(document.getElementById("assetQuantity")?.value || "1", 10) || 1,
-      };
+      const assetData = collectAddAssetPayload();
+
+      if (!assetData.isBulk && addAssetField('assetUseCustomPrefix')?.checked && !assetData.assetIdPrefix) {
+        showNotification('warning', 'Custom Asset ID prefix is empty');
+        return;
+      }
 
       try {
-        await apiCall("/api/assets", "POST", assetData);
+        const response = await apiCall("/api/assets", "POST", assetData);
         closeModal("addAssetModal");
-        showNotification("success", "Asset added successfully!");
+        const createdIds = response.assetIds || [];
+        const createdMessage = createdIds.length > 1
+          ? `Added ${createdIds.length} assets: ${createdIds[0]} to ${createdIds[createdIds.length - 1]}`
+          : `Added ${createdIds[0] || 'asset'}`;
+        showNotification("success", createdMessage);
 
         // Refresh inventory if we're on that page
         if (
@@ -11839,19 +12166,20 @@ document.addEventListener("DOMContentLoaded", function () {
             .getElementById("inventory-section")
             .classList.contains("active")
         ) {
-          loadInventory();
+          await loadInventory();
+        } else {
+          const assetsResponse = await apiCall('/api/assets');
+          assets = assetsResponse.data || [];
         }
 
         // Refresh dashboard stats
         loadDashboard();
 
         // Reset form
-        document.getElementById("addAssetForm").reset();
-        if (document.getElementById("assetQuantity")) document.getElementById("assetQuantity").value = 1;
-        if (document.getElementById("assetQuantityGroup")) document.getElementById("assetQuantityGroup").style.display = "none";
-        if (document.getElementById("assetSerialGroup")) document.getElementById("assetSerialGroup").style.display = "block";
+        resetAddAssetForm();
+        populateAddAssetSuggestions();
       } catch (error) {
-        showNotification("error", "Failed to add asset");
+        renderAddAssetPreview('error', escapeHtml(error.message || 'Failed to add assets'));
       }
     });
 
