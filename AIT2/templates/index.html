@@ -2000,6 +2000,52 @@
         max-width: min(1200px, calc(100vw - 32px));
       }
 
+      .modal-actions {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      .modal-actions .btn,
+      .modal-actions button {
+        margin: 0;
+      }
+
+      #maintenanceLogModal .modal-content {
+        width: min(1320px, calc(100vw - 32px)) !important;
+        height: min(95vh, calc(100dvh - 32px)) !important;
+        max-height: calc(100dvh - 32px) !important;
+      }
+
+      #maintenanceLogModal .asset-event-history-wrap,
+      #maintenanceLogModal .maintenance-log-table-wrap {
+        max-width: 100%;
+        overflow: auto !important;
+        -webkit-overflow-scrolling: touch;
+      }
+
+      #maintenanceLogModal .asset-event-history-table {
+        min-width: 560px;
+      }
+
+      #maintenanceLogModal .maintenance-log-table {
+        min-width: 980px;
+      }
+
+      #maintenanceLogModal .maintenance-history-title-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      #maintenanceLogModal .maintenance-log-mobile-add {
+        display: none;
+      }
+
       .notification {
         max-width: calc(100vw - 32px);
         overflow-wrap: anywhere;
@@ -2247,6 +2293,80 @@
           gap: 12px;
         }
 
+        .modal-actions {
+          justify-content: stretch !important;
+        }
+
+        .modal-actions .btn,
+        .modal-actions button {
+          flex: 1 1 150px;
+          min-height: 44px;
+        }
+
+        #maintenanceLogModal {
+          padding: 10px 10px max(10px, env(safe-area-inset-bottom));
+        }
+
+        #maintenanceLogModal .modal-content {
+          height: auto !important;
+          max-height: calc(100dvh - 20px - env(safe-area-inset-bottom)) !important;
+          overflow-y: auto !important;
+          overflow-x: hidden !important;
+        }
+
+        #maintenanceLogModal .modal-header {
+          top: -16px;
+        }
+
+        #maintenanceLogModal .modal-body {
+          display: block !important;
+          overflow: visible !important;
+          min-height: auto !important;
+        }
+
+        #maintenanceLogModal .maintenance-log-section {
+          margin-bottom: 14px !important;
+        }
+
+        #maintenanceLogModal .asset-event-history-wrap {
+          max-height: 32dvh !important;
+        }
+
+        #maintenanceLogModal .maintenance-history-section {
+          display: block !important;
+          min-height: auto !important;
+        }
+
+        #maintenanceLogModal .maintenance-log-table-wrap {
+          max-height: 42dvh !important;
+          min-height: 180px;
+        }
+
+        #maintenanceLogModal .maintenance-log-mobile-add {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        #maintenanceLogModal .maintenance-log-footer {
+          position: static;
+          z-index: 6;
+          margin: 16px 0 0 !important;
+          padding: 12px 0 calc(12px + env(safe-area-inset-bottom)) !important;
+          border-top: 1px solid var(--border-soft);
+          background: #fff;
+          text-align: initial !important;
+        }
+
+        #maintenanceLogModal .maintenance-log-footer-add {
+          display: none;
+        }
+
+        #editMaintenanceLogModal .modal-content {
+          max-height: calc(100dvh - 20px - env(safe-area-inset-bottom)) !important;
+          overflow-y: auto !important;
+        }
+
         .modal-title,
         .modal-header h2,
         .modal-header h3 {
@@ -2264,6 +2384,7 @@
         .content-header .btn,
         .section-actions .btn,
         .event-actions .btn,
+        .modal-actions .btn,
         .modal-footer .btn {
           flex: 1 1 100%;
         }
@@ -3459,7 +3580,7 @@
             />
           </div>
           
-          <div style="display: flex; gap: 10px; justify-content: flex-end">
+          <div class="modal-actions" style="display: flex; gap: 10px; justify-content: flex-end">
             <button
               type="button"
               class="btn btn-secondary"
@@ -3570,7 +3691,7 @@
           
           <input type="hidden" id="singleOOCAssetId" />
           
-          <div style="display: flex; gap: 10px; justify-content: flex-end">
+          <div class="modal-actions" style="display: flex; gap: 10px; justify-content: flex-end">
             <button
               type="button"
               class="btn btn-secondary"
@@ -3620,7 +3741,7 @@
               <option value="dry hire">Dry Hire</option>
             </select>
           </div>
-          <div style="display: flex; gap: 10px; justify-content: flex-end">
+          <div class="modal-actions" style="display: flex; gap: 10px; justify-content: flex-end">
             <button
               type="button"
               class="btn btn-secondary"
@@ -3706,7 +3827,7 @@
             </div>
           </div>
 
-          <div style="display: flex; gap: 10px; justify-content: flex-end">
+          <div class="modal-actions" style="display: flex; gap: 10px; justify-content: flex-end">
             <button
               type="button"
               class="btn btn-secondary"
@@ -3757,7 +3878,7 @@
           <input type="hidden" id="editQuantityDepartment" />
           <input type="hidden" id="editQuantityCurrentQty" />
           <input type="hidden" id="editQuantityDescription" value="">
-          <div style="display: flex; gap: 10px; justify-content: flex-end">
+          <div class="modal-actions" style="display: flex; gap: 10px; justify-content: flex-end">
             <button
               type="button"
               class="btn btn-secondary"
@@ -3798,7 +3919,7 @@
         <div id="eventDetailsContent" class="modal-body">
           <!-- Event details will be populated here -->
         </div>
-        <div class="modal-footer">
+        <div class="modal-footer modal-actions">
           <button onclick="openDeliveryOrderTab(window.currentEventId)" class="btn btn-primary" style="margin-right: 10px;">
             📄 Generate Delivery Order
           </button>
@@ -3870,7 +3991,7 @@
               <option value="">Select destination event...</option>
             </select>
           </div>
-          <div style="display: flex; gap: 10px; justify-content: flex-end">
+          <div class="modal-actions" style="display: flex; gap: 10px; justify-content: flex-end">
             <button
               type="button"
               class="btn btn-secondary"
@@ -4038,7 +4159,7 @@
           </div>
 
           <!-- Form Buttons -->
-          <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+          <div class="modal-actions" style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
             <button
               type="button"
               class="btn btn-secondary"
@@ -4076,7 +4197,7 @@
             />
           </div>
           <input type="hidden" id="prepareEventId" />
-          <div style="display: flex; gap: 10px; justify-content: flex-end">
+          <div class="modal-actions" style="display: flex; gap: 10px; justify-content: flex-end">
             <button
               type="button"
               class="btn btn-secondary"
@@ -4107,7 +4228,7 @@
             <input type="text" class="form-input" id="returnAssetId" required />
           </div>
           <input type="hidden" id="returnEventId" />
-          <div style="display: flex; gap: 10px; justify-content: flex-end">
+          <div class="modal-actions" style="display: flex; gap: 10px; justify-content: flex-end">
             <button
               type="button"
               class="btn btn-secondary"

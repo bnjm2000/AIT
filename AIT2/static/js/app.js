@@ -2725,7 +2725,7 @@ function ensureDepartmentModal() {
           <span id="departmentPreviewBadge" class="asset-badge">DEPT</span>
         </div>
       </div>
-      <div class="modal-footer" style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
+      <div class="modal-footer modal-actions" style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
         <button class="btn btn-secondary" onclick="closeModal('departmentModal')">Cancel</button>
         <button class="btn btn-success" onclick="saveDepartmentModal()">Save Department</button>
       </div>
@@ -3193,7 +3193,7 @@ function ensureResetPasswordModal() {
         </div>
       </div>
 
-      <div class="modal-footer">
+      <div class="modal-footer modal-actions">
         <button class="btn btn-secondary" onclick="closeModal('resetUserPasswordModal')">Cancel</button>
         <button class="btn btn-warning" onclick="confirmResetPasswordModal()">Reset Password</button>
       </div>
@@ -3725,7 +3725,7 @@ function showForceStateModal(eventId, currentState) {
                             <strong>ℹ️ Note:</strong> This event's state is currently forced. You can return it to automatic state management.
                         </div>
                     </div>
-                    <div class="modal-footer">
+                    <div class="modal-footer modal-actions">
                         <button type="button" class="btn btn-secondary" id="forceStateCancelBtn">Cancel</button>
                         <button type="button" class="btn btn-warning" id="removeForceBtn" style="display: none;" onclick="handleRemoveForcedState()">Remove Force</button>
                         <button type="button" class="btn btn-primary" id="forceStateConfirmBtn">Force State</button>
@@ -4289,7 +4289,7 @@ function ensureAssetEditModal() {
         </div>
       </div>
 
-      <div class="modal-footer" style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
+      <div class="modal-footer modal-actions" style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
         <button class="btn btn-secondary" onclick="closeModal('editAssetModal')">Cancel</button>
         <button class="btn btn-success" onclick="saveAssetEditModal()">Save Changes</button>
       </div>
@@ -7003,7 +7003,7 @@ async function openPrepareEventModal(eventId) {
                 </div>
                 
                 <!-- Actions -->
-                <div style="margin-top: 20px; text-align: right; padding-top: 20px; border-top: 2px solid #e9ecef;">
+                <div class="modal-actions" style="margin-top: 20px; text-align: right; padding-top: 20px; border-top: 2px solid #e9ecef;">
                     <button class="btn btn-secondary" onclick="closeModal('prepareEventModal')">Close</button>
                     <button class="btn btn-primary" onclick="finishEventPreparation(${eventId})">Finish Preparation</button>
                 </div>
@@ -8487,7 +8487,7 @@ async function openReturnAssetsModal() {
                 </div>
 
                 <!-- Actions -->
-                <div style="margin-top: 30px; text-align: right; padding-top: 20px; border-top: 2px solid #e9ecef;">
+                <div class="modal-actions" style="margin-top: 30px; text-align: right; padding-top: 20px; border-top: 2px solid #e9ecef;">
                     <button class="btn btn-secondary" onclick="closeModal('returnAssetsModalNew')">Close</button>
                 </div>
             </div>
@@ -10484,7 +10484,7 @@ async function editEvent(eventId) {
                         <label class="form-label">End Date</label>
                         <input type="date" class="form-input" id="editEventEndDate" value="${formatDateForInput(event.endDate)}" required>
                     </div>
-                    <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+                    <div class="modal-actions" style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
                         <button type="submit" class="btn btn-primary">Update Event</button>
                     </div>
                 </form>
@@ -13399,15 +13399,15 @@ function showMaintenanceLogModal(asset) {
   const assetSafeId = asset.id.replace(/[^a-zA-Z0-9]/g, '_');
   const eventHistoryContainerId = `assetEventHistory_${assetSafeId}`;
   let modalContent = `
-    <div class="modal" id="maintenanceLogModal" style="display: flex; align-items: center; justify-content: center;">
-      <div class="modal-content" style="max-width: 1320px; width: 95%; height: 95vh; display: flex; flex-direction: column; overflow: hidden; padding: 20px;">
-        <div class="modal-header" style="flex-shrink: 0; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 2px solid #eee;">
+    <div class="modal maintenance-log-modal" id="maintenanceLogModal" style="display: flex; align-items: center; justify-content: center;">
+      <div class="modal-content maintenance-log-content" style="max-width: 1320px; width: 95%; height: 95vh; display: flex; flex-direction: column; overflow: hidden; padding: 20px;">
+        <div class="modal-header maintenance-log-header" style="flex-shrink: 0; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 2px solid #eee;">
           <h3 class="modal-title">Maintenance Log - ${asset.id}</h3>
           <button class="close-btn" onclick="closeMaintenanceLogModal()">&times;</button>
         </div>
-        <div class="modal-body" style="flex: 1; display: flex; flex-direction: column; overflow: hidden; min-height: 0;">
+        <div class="modal-body maintenance-log-body" style="flex: 1; display: flex; flex-direction: column; overflow: hidden; min-height: 0;">
           <!-- Asset Info -->
-          <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px; flex-shrink: 0;">
+          <div class="maintenance-log-section maintenance-log-summary" style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px; flex-shrink: 0;">
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
               <div>
                 <strong>Asset ID:</strong> ${asset.id}<br>
@@ -13427,20 +13427,25 @@ function showMaintenanceLogModal(asset) {
             </div>
           </div>
           <!-- Prepared Event / Dry Hire History -->
-          <div style="background: #fff; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #e9ecef; flex-shrink: 0;">
+          <div class="maintenance-log-section event-history-section" style="background: #fff; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #e9ecef; flex-shrink: 0;">
             <h4 style="margin: 0 0 10px 0; color: #495057;">Prepared Event / Dry Hire History</h4>
-            <div id="${eventHistoryContainerId}" style="max-height: 220px; overflow-y: auto; border: 1px solid #e9ecef; border-radius: 8px; background: #ffffff;">
+            <div id="${eventHistoryContainerId}" class="asset-event-history-wrap" style="max-height: 220px; overflow-y: auto; border: 1px solid #e9ecef; border-radius: 8px; background: #ffffff;">
               <div style="padding: 12px; color: #6c757d; font-style: italic;">Loading…</div>
             </div>
           </div>
 
           <!-- Maintenance Logs -->
-          <div style="flex: 1; display: flex; flex-direction: column; min-height: 0;">
-            <h4 style="margin-bottom: 15px; color: #495057; flex-shrink: 0;">
-              Maintenance History - Total: ${maintenanceRecords.length} entries
-            </h4>
-            <div style="flex: 1; overflow-y: scroll; border: 1px solid #e9ecef; border-radius: 8px; background: white;">
-             <table style="width: 100%; border-collapse: collapse; font-size: 14px; table-layout: fixed;">
+          <div class="maintenance-log-section maintenance-history-section" style="flex: 1; display: flex; flex-direction: column; min-height: 0;">
+            <div class="maintenance-history-title-row" style="margin-bottom: 15px; color: #495057; flex-shrink: 0;">
+              <h4 style="margin: 0;">
+                Maintenance History - Total: ${maintenanceRecords.length} entries
+              </h4>
+              <button type="button" class="btn btn-primary maintenance-log-mobile-add" onclick="addNewLogEntryFromModal('${asset.id}')">
+                📝 Add New Log Entry
+              </button>
+            </div>
+            <div class="maintenance-log-table-wrap" style="flex: 1; overflow-y: scroll; border: 1px solid #e9ecef; border-radius: 8px; background: white;">
+             <table class="maintenance-log-table" style="width: 100%; border-collapse: collapse; font-size: 14px; table-layout: fixed;">
                 <thead style="position: sticky; top: 0; background: #f8f9fa; z-index: 10; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
                   <tr>
                     <th style="padding: 12px; font-weight: 600; color: #495057; border-bottom: 2px solid #e9ecef; text-align: left; background: #f8f9fa; width: 50px;">#</th>
@@ -13608,13 +13613,11 @@ function showMaintenanceLogModal(asset) {
             </div>
             
             <!-- Action Buttons -->
-            <div style="margin-top: 20px; padding-top: 15px; border-top: 2px solid #eee; text-align: center; flex-shrink: 0;">
-              <button onclick="addNewLogEntryFromModal('${asset.id}')" 
-                      style="background: #667eea; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-size: 14px; margin-right: 10px; cursor: pointer;">
+            <div class="modal-actions maintenance-log-footer" style="margin-top: 20px; padding-top: 15px; border-top: 2px solid #eee; text-align: center; flex-shrink: 0;">
+              <button type="button" class="btn btn-primary maintenance-log-footer-add" onclick="addNewLogEntryFromModal('${asset.id}')">
                 📝 Add New Log Entry
               </button>
-              <button onclick="closeMaintenanceLogModal()" 
-                      style="background: #6c757d; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-size: 14px; cursor: pointer;">
+              <button type="button" class="btn btn-secondary" onclick="closeMaintenanceLogModal()">
                 Close
               </button>
             </div>
@@ -13635,6 +13638,14 @@ function showMaintenanceLogModal(asset) {
   // Show modal
   const modal = document.getElementById('maintenanceLogModal');
   modal.style.display = 'flex';
+  modal.setAttribute('role', 'dialog');
+  modal.setAttribute('aria-modal', 'true');
+  modal.setAttribute('aria-hidden', 'false');
+  modal.setAttribute('aria-labelledby', 'maintenanceLogTitle');
+  const titleEl = modal.querySelector('.modal-title');
+  if (titleEl) titleEl.id = 'maintenanceLogTitle';
+  enhanceModalAccessibility(modal);
+  focusModalStart(modal);
     // Load prepared event/dry hire history
   setTimeout(() => loadAssetEventHistory(asset.id, eventHistoryContainerId), 0);
   
@@ -13716,7 +13727,7 @@ async function loadAssetEventHistory(assetId, containerId) {
     }).join('');
 
     container.innerHTML = `
-      <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+      <table class="asset-event-history-table" style="width: 100%; border-collapse: collapse; font-size: 14px;">
         <thead style="position: sticky; top: 0; background: #f8f9fa; z-index: 5;">
           <tr>
             <th style="padding: 10px; text-align: left; width: 90px; border-bottom: 2px solid #e9ecef;">Type</th>
@@ -14267,7 +14278,7 @@ function editMaintenanceLog(assetId, logIndex, logId) {
   // Create the enhanced edit modal
   const modalContent = `
     <div class="modal" id="editMaintenanceLogModal" style="display: flex; align-items: center; justify-content: center; z-index: 1100;">
-      <div class="modal-content" style="max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto;">
+      <div class="modal-content maintenance-edit-content" style="max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto;">
         <div class="modal-header">
           <h3 class="modal-title">Edit Maintenance Log - ${assetId}</h3>
           <button class="close-btn" onclick="cancelEditMaintenanceLogModal()">&times;</button>
@@ -14408,7 +14419,7 @@ function editMaintenanceLog(assetId, logIndex, logId) {
             </div>
 
             <!-- Form Buttons -->
-            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+            <div class="modal-actions" style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
               <button
                 type="button"
                 class="btn btn-secondary"
@@ -14448,6 +14459,11 @@ function editMaintenanceLog(assetId, logIndex, logId) {
   // Show modal
   const modal = document.getElementById('editMaintenanceLogModal');
   modal.style.display = 'flex';
+  modal.setAttribute('role', 'dialog');
+  modal.setAttribute('aria-modal', 'true');
+  modal.setAttribute('aria-hidden', 'false');
+  enhanceModalAccessibility(modal);
+  focusModalStart(modal);
   initialiseMaintenanceStatusSelects(modal);
   const editMediaInput = document.getElementById('editMaintenanceMediaFiles');
   if (editMediaInput) {
