@@ -892,6 +892,42 @@ let barcodeScannerState = {
   handling: false
 };
 
+const HTML5_QRCODE_FORMAT_NAMES = [
+  'QR_CODE',
+  'AZTEC',
+  'CODE_128',
+  'CODE_39',
+  'CODE_93',
+  'CODABAR',
+  'DATA_MATRIX',
+  'EAN_13',
+  'EAN_8',
+  'ITF',
+  'MAXICODE',
+  'PDF_417',
+  'RSS_14',
+  'RSS_EXPANDED',
+  'UPC_A',
+  'UPC_E',
+  'UPC_EAN_EXTENSION'
+];
+
+const NATIVE_BARCODE_FORMATS = [
+  'qr_code',
+  'aztec',
+  'code_128',
+  'code_39',
+  'code_93',
+  'codabar',
+  'data_matrix',
+  'ean_13',
+  'ean_8',
+  'itf',
+  'pdf417',
+  'upc_a',
+  'upc_e'
+];
+
 function normalizeScannedIdentifier(rawValue) {
   let value = String(rawValue || '')
     .replace(/[\u0000-\u001f]+/g, ' ')
@@ -1101,18 +1137,62 @@ function getHtml5QrcodeFormats() {
   const formats = window.Html5QrcodeSupportedFormats;
   if (!formats) return [];
 
-  return [
-    formats.QR_CODE,
-    formats.CODE_128,
-    formats.CODE_39,
-    formats.CODE_93,
-    formats.CODABAR,
-    formats.EAN_13,
-    formats.EAN_8,
-    formats.ITF,
-    formats.UPC_A,
-    formats.UPC_E
-  ].filter(format => typeof format !== 'undefined');
+  return HTML5_QRCODE_FORMAT_NAMES
+    .map(name => formats[name])
+    .filter(format => typeof format !== 'undefined');
+}
+
+function getHtml5QrcodeConfig() {
+  const formats = getHtml5QrcodeFormats();
+  return formats.length > 0 ? { formatsToSupport: formats, verbose: false } : { verbose: false };
+}
+
+function getBarcodeScannerQrbox(viewfinderWidth, viewfinderHeight) {
+  const width = Number(viewfinderWidth) || 0;
+  const height = Number(viewfinderHeight) || 0;
+
+  if (!width || !height) {
+    return { width: 320, height: 200 };
+  }
+
+  const scanWidth = Math.min(Math.floor(width * 0.92), 520);
+  const scanHeight = Math.min(Math.floor(height * 0.62), 260, scanWidth);
+  const minWidth = Math.min(180, width);
+  const minHeight = Math.min(160, height);
+
+  return {
+    width: Math.min(width, Math.max(minWidth, scanWidth)),
+    height: Math.min(height, Math.max(minHeight, scanHeight))
+  };
+}
+
+function getBarcodeScannerCameraConfig() {
+  return {
+    fps: 12,
+    qrbox: getBarcodeScannerQrbox,
+    aspectRatio: 1.7777778
+  };
+}
+
+async function createNativeBarcodeDetector() {
+  let formats = NATIVE_BARCODE_FORMATS;
+
+  try {
+    if (typeof BarcodeDetector.getSupportedFormats === 'function') {
+      const supportedFormats = await BarcodeDetector.getSupportedFormats();
+      formats = NATIVE_BARCODE_FORMATS.filter(format => supportedFormats.includes(format));
+    }
+  } catch (e) {
+    formats = NATIVE_BARCODE_FORMATS;
+  }
+
+  try {
+    return formats.length > 0
+      ? new BarcodeDetector({ formats })
+      : new BarcodeDetector();
+  } catch (e) {
+    return new BarcodeDetector();
+  }
 }
 
 function loadHtml5Qrcode() {
@@ -1213,25 +1293,7 @@ async function startNativeBarcodeScanner() {
   video.srcObject = stream;
   await video.play();
 
-  const formats = [
-    'qr_code',
-    'code_128',
-    'code_39',
-    'code_93',
-    'codabar',
-    'ean_13',
-    'ean_8',
-    'itf',
-    'upc_a',
-    'upc_e'
-  ];
-
-  let detector;
-  try {
-    detector = new BarcodeDetector({ formats });
-  } catch (e) {
-    detector = new BarcodeDetector();
-  }
+  const detector = await createNativeBarcodeDetector();
 
   const detectLoop = async () => {
     if (!barcodeScannerState.nativeVideo || barcodeScannerState.handling) return;
@@ -1262,18 +1324,12 @@ async function startHtml5BarcodeScanner() {
   if (!loaded || !window.Html5Qrcode) return false;
 
   reader.innerHTML = '';
-  const formats = getHtml5QrcodeFormats();
-  const config = formats.length > 0 ? { formatsToSupport: formats, verbose: false } : { verbose: false };
-  const scanner = new Html5Qrcode(readerId, config);
+  const scanner = new Html5Qrcode(readerId, getHtml5QrcodeConfig());
   barcodeScannerState.html5 = scanner;
 
   await scanner.start(
     { facingMode: 'environment' },
-    {
-      fps: 10,
-      qrbox: { width: 280, height: 220 },
-      aspectRatio: 1.7777778
-    },
+    getBarcodeScannerCameraConfig(),
     decodedText => handleBarcodeScanResult(decodedText),
     () => {}
   );
@@ -1333,27 +1389,41 @@ async function scanBarcodeImageFile(input) {
   try {
     await stopBarcodeScannerCamera(false);
 
+    let lastScanError = null;
     const loaded = await loadHtml5Qrcode();
     if (loaded && window.Html5Qrcode) {
-      const scanner = new Html5Qrcode('barcodeScannerReader');
+      const scanner = new Html5Qrcode('barcodeScannerReader', getHtml5QrcodeConfig());
       barcodeScannerState.html5 = scanner;
-      const result = await scanner.scanFile(file, true);
-      await handleBarcodeScanResult(result);
-      return;
+
+      try {
+        const result = await scanner.scanFile(file, true);
+        await handleBarcodeScanResult(result);
+        return;
+      } catch (error) {
+        lastScanError = error;
+        await stopBarcodeScannerCamera(false);
+      }
     }
 
     if (!window.BarcodeDetector) {
-      throw new Error('Photo scanning is not available in this browser');
+      throw lastScanError || new Error('Photo scanning is not available in this browser');
     }
 
-    const bitmap = await createImageBitmap(file);
-    const detector = new BarcodeDetector();
-    const codes = await detector.detect(bitmap);
-    if (!codes || codes.length === 0) {
-      throw new Error('No QR code or barcode found in the photo');
-    }
+    let bitmap = null;
+    try {
+      bitmap = await createImageBitmap(file);
+      const detector = await createNativeBarcodeDetector();
+      const codes = await detector.detect(bitmap);
+      if (!codes || codes.length === 0) {
+        throw lastScanError || new Error('No QR code or barcode found in the photo');
+      }
 
-    await handleBarcodeScanResult(codes[0].rawValue || '');
+      await handleBarcodeScanResult(codes[0].rawValue || '');
+    } finally {
+      if (bitmap && typeof bitmap.close === 'function') {
+        bitmap.close();
+      }
+    }
   } catch (error) {
     console.error('Photo scan failed:', error);
     setBarcodeScannerStatus(error.message || 'Photo scan failed', 'error');
@@ -1375,7 +1445,7 @@ function submitBarcodeScannerManual() {
 function scanForPrepare(eventId) {
   openBarcodeScanner({
     title: 'Scan To Prepare',
-    instructions: 'Scan an asset, serial number, or container code to prepare it for this event.',
+    instructions: 'Scan an asset ID, barcode, serial number, or container code to prepare it for this event.',
     onScan: async identifier => {
       const input = document.getElementById('universalAssetInput');
       if (input) input.value = identifier;
@@ -1463,7 +1533,7 @@ async function addIdentifierToMaintenanceSelection(identifier) {
 function scanForMaintenance() {
   openBarcodeScanner({
     title: 'Scan For Maintenance',
-    instructions: 'Scan an asset or container code to add it to this maintenance log.',
+    instructions: 'Scan an asset ID, barcode, serial number, or container code to add it to this maintenance log.',
     onScan: async identifier => {
       await addIdentifierToMaintenanceSelection(identifier);
     }
@@ -1473,7 +1543,7 @@ function scanForMaintenance() {
 function scanForAssetCheck(targetInputId, actionName) {
   openBarcodeScanner({
     title: 'Scan For Asset Check',
-    instructions: 'Scan an Asset ID or serial number for the asset check.',
+    instructions: 'Scan an Asset ID, barcode, or serial number for the asset check.',
     onScan: async identifier => {
       const input = document.getElementById(targetInputId);
       if (input) input.value = identifier;
