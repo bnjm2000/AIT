@@ -1037,7 +1037,8 @@
         background: #fff3cd;
         color: #856404;
       }
-      .status-disposed {
+      .status-disposed,
+      .status-decommissioned {
         background: #e2e3e5;
         color: #383d41;
       }
@@ -1828,7 +1829,8 @@
         color: #856404;
       }
 
-      .status-disposed {
+      .status-disposed,
+      .status-decommissioned {
         background: #e2e3e5;
         color: #383d41;
       }
@@ -2632,7 +2634,8 @@
         color: #7f1d1d;
       }
 
-      .status-disposed {
+      .status-disposed,
+      .status-decommissioned {
         background: #e5e7eb;
         color: #374151;
       }
@@ -3098,7 +3101,7 @@
                     <option value="missing">Missing</option>
                     <option value="ooc">Out of Commission</option>
                     <option value="degraded">Degraded</option>
-                    <option value="disposed">Disposed</option>
+                    <option value="decommissioned">Decommissioned</option>
                   </select>
                 </div>
                 <div class="form-group" style="margin-bottom: 0">
@@ -4151,7 +4154,7 @@
               <option value="ooc" style="color:#dc3545;font-weight:600;">OOC</option>
               <option value="missing" style="color:#fd7e14;font-weight:600;">Missing</option>
               <option value="degraded" style="color:#856404;font-weight:600;">Degraded</option>
-              <option value="disposed" style="color:#6c757d;font-weight:600;">Disposed</option>
+              <option value="decommissioned" style="color:#6c757d;font-weight:600;">Decommissioned</option>
             </select>
             <small style="color:#666;font-size:12px;margin-top:6px;display:block;">
               Assets can only have one status. To change a non-OK asset to another status, mark it as OK first.

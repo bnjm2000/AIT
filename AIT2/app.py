@@ -1053,6 +1053,11 @@ def _is_disposed(asset):
     return bool(getattr(asset, 'is_disposed', False))
 
 
+def _normalise_asset_status_name(value):
+    status = str(value or '').strip().lower()
+    return 'decommissioned' if status == 'disposed' else status
+
+
 def _asset_inventory_quantity(asset):
     if not asset or _is_disposed(asset):
         return 0
@@ -1063,7 +1068,7 @@ def _asset_status_value(asset, assigned_assets=None):
     if not asset:
         return 'unknown'
     if _is_disposed(asset):
-        return 'disposed'
+        return 'decommissioned'
     if getattr(asset, 'is_missing', False):
         return 'missing'
     if getattr(asset, 'is_ooc', False):
@@ -1075,7 +1080,7 @@ def _asset_status_value(asset, assigned_assets=None):
     return 'available'
 
 
-ASSET_CONDITION_STATUSES = ('ooc', 'missing', 'degraded', 'disposed')
+ASSET_CONDITION_STATUSES = ('ooc', 'missing', 'degraded', 'decommissioned')
 
 
 def _asset_condition_status(asset):
@@ -1083,7 +1088,7 @@ def _asset_condition_status(asset):
     if not asset:
         return 'unknown'
     if _is_disposed(asset):
-        return 'disposed'
+        return 'decommissioned'
     if getattr(asset, 'is_missing', False):
         return 'missing'
     if getattr(asset, 'is_ooc', False):
@@ -1104,7 +1109,7 @@ def _apply_exclusive_asset_status(asset, target_status):
         asset.is_missing = True
     elif target_status == 'degraded':
         asset.is_degraded = True
-    elif target_status == 'disposed':
+    elif target_status in ('disposed', 'decommissioned'):
         asset.is_disposed = True
 
 
@@ -1116,11 +1121,11 @@ def _normalise_asset_status_flags(asset):
 def _status_changes_for_request(data, current_status=None):
     """Return (target_status, changes, error).
 
-    target_status is one of: None, 'ok', 'ooc', 'missing', 'degraded', 'disposed'.
+    target_status is one of: None, 'ok', 'ooc', 'missing', 'degraded', 'decommissioned'.
     None means no status change requested.
     """
     data = data or {}
-    current_status = str(current_status or '').strip().lower()
+    current_status = _normalise_asset_status_name(current_status)
     if current_status == 'available':
         current_status = 'ok'
 
@@ -1155,7 +1160,8 @@ def _status_changes_for_request(data, current_status=None):
             'out_of_commission': 'ooc',
             'missing': 'missing',
             'degraded': 'degraded',
-            'disposed': 'disposed',
+            'decommissioned': 'decommissioned',
+            'disposed': 'decommissioned',
         }
         if value not in aliases:
             return None, [], f'Invalid asset status: {explicit}'
@@ -1171,7 +1177,7 @@ def _status_changes_for_request(data, current_status=None):
         'ooc': bool(data.get('markOOC', False)),
         'missing': bool(data.get('markMissing', False)),
         'degraded': bool(data.get('markDegraded', False)),
-        'disposed': bool(data.get('markDisposed', False)),
+        'decommissioned': bool(data.get('markDecommissioned', False) or data.get('markDisposed', False)),
     }
     marked = [kind for kind, enabled in mark_flags.items() if enabled]
     if len(marked) > 1:
@@ -1184,7 +1190,7 @@ def _status_changes_for_request(data, current_status=None):
         'ooc': bool(data.get('unmarkOOC', False)),
         'missing': bool(data.get('unmarkMissing', False)),
         'degraded': bool(data.get('unmarkDegraded', False)),
-        'disposed': bool(data.get('unmarkDisposed', False)),
+        'decommissioned': bool(data.get('unmarkDecommissioned', False) or data.get('unmarkDisposed', False)),
     }
     cleared = [kind for kind, enabled in clear_flags.items() if enabled]
     if cleared:
@@ -1290,7 +1296,7 @@ def _status_action_label(target_status):
         'ooc': 'OOC',
         'missing': 'Missing',
         'degraded': 'Degraded',
-        'disposed': 'Disposed',
+        'decommissioned': 'Decommissioned',
     }.get(target_status or '', '')
 
 
@@ -1298,12 +1304,60 @@ def _asset_prepare_block_reason(asset):
     if not asset:
         return 'Asset not found'
     if _is_disposed(asset):
-        return 'Asset is disposed and cannot be prepared'
+        return 'Asset is decommissioned and cannot be prepared'
     if getattr(asset, 'is_missing', False):
         return 'Asset is marked as missing'
     if getattr(asset, 'is_ooc', False):
         return 'Asset is out of commission'
     return ''
+
+
+def _payload_bool(data, keys, default=None):
+    for key in keys:
+        if key in data:
+            return _request_bool(data.get(key), False)
+    return default
+
+
+def _prepare_scan_options(data):
+    """Return options that control whether scanned extras become event demand."""
+    data = data or {}
+    prepare_source = str(data.get('source') or data.get('prepareSource') or '').strip().lower()
+    from_container = bool(
+        data.get('fromContainer') or
+        data.get('isContainerBatch') or
+        prepare_source in ('container', 'quick-add-container')
+    )
+    explicit_quick_add = _payload_bool(
+        data,
+        ('quickAdd', 'quick_add', 'addScannedAssetsToEvent', 'addToEvent'),
+        default=None
+    )
+
+    return {
+        'source': prepare_source,
+        'fromContainer': from_container,
+        'quickAddSpecified': explicit_quick_add is not None,
+        # Existing container scans historically became part of the event. An
+        # explicit quickAdd=false from the UI now overrides that legacy default.
+        'addScannedAssetsToEvent': bool(from_container if explicit_quick_add is None else explicit_quick_add),
+    }
+
+
+def _verify_current_admin_password(password):
+    username = session.get('user')
+    user = data_manager.users.get(username) if data_manager else None
+
+    if not user or not getattr(user, 'is_admin', False):
+        return False, 'Admin privileges required'
+
+    if not password:
+        return False, 'Admin password is required'
+
+    if hash_password(str(password), user.salt) != user.password_hash:
+        return False, 'Admin password is incorrect'
+
+    return True, ''
 
 
 def _find_inventory_asset_by_identifier(identifier):
@@ -2035,7 +2089,7 @@ def get_available_assets_for_event(event_id):
     This endpoint intentionally shows only assets that can actually be prepared
     for this event:
       - not missing
-      - not disposed
+      - not decommissioned
       - not out of commission
       - not already prepared/assigned to this same event
       - not specifically out for another overlapping event and not returned
@@ -2547,9 +2601,9 @@ def _ensure_event_model_requirement_covers_asset(event, asset, additional_quanti
         return 0
 
     delta = minimum_required - current_required
-    changed = _add_or_increment_model_marker(event.prepared_items, group, delta)
-    changed += _add_or_increment_asset_model_row(event.asset_models, group, delta)
-    return changed
+    _add_or_increment_model_marker(event.prepared_items, group, delta)
+    _add_or_increment_asset_model_row(event.asset_models, group, delta)
+    return delta
 
 def _update_single_asset_event_model_references(event, old_group, new_group):
     """
@@ -3505,6 +3559,42 @@ def update_department(department_code):
     except Exception as e:
         logger.error(f"Error updating department {department_code}: {e}", exc_info=True)
         return jsonify({'error': 'Failed to update department'}), 500
+
+
+@app.route('/api/departments/<path:department_code>', methods=['DELETE'])
+@require_admin
+def delete_department(department_code):
+    """Admin: delete an unused department tag."""
+    try:
+        code = _normalise_department_code(unquote_plus(department_code))
+        if not code:
+            return jsonify({'error': 'Department code is required'}), 400
+
+        departments = _load_departments()
+        if code not in departments:
+            return jsonify({'error': f'Department {code} not found'}), 404
+
+        asset_count = 0
+        for asset in data_manager.inventory.values():
+            if _normalise_department_code(getattr(asset, 'department_code', '')) != code:
+                continue
+            asset_count += max(1, _safe_int(getattr(asset, 'quantity', 1), 1)) if _is_bulk_asset(asset) else 1
+
+        if asset_count:
+            return jsonify({
+                'error': f'Department {code} cannot be deleted because it still has {asset_count} asset(s). Move or delete those assets first.',
+                'assetCount': asset_count,
+            }), 409
+
+        removed = departments.pop(code)
+        _save_departments(departments)
+        invalidate_cache()
+        log_action(f"Deleted department {code} ({removed.get('name') or code})")
+
+        return jsonify({'success': True, 'message': 'Department deleted successfully'})
+    except Exception as e:
+        logger.error(f"Error deleting department {department_code}: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to delete department'}), 500
 
 
 @app.route('/api/users', methods=['GET'])
@@ -4740,7 +4830,7 @@ def get_event_model_availability(event_id):
 
     Rules:
     - Group by department + brand + model + description.
-    - Exclude Missing and Disposed assets.
+    - Exclude Missing and decommissioned assets.
     - Include OOC and Degraded assets as inventory because they may be fixed/usable by event day.
     - Subtract current event's requested quantity.
     - Subtract overlapping events' requested quantity.
@@ -4753,7 +4843,7 @@ def get_event_model_availability(event_id):
 
         physical_by_key = defaultdict(int)
 
-        # Physical inventory: exclude Missing and Disposed, include OOC and Degraded
+        # Physical inventory: exclude Missing and decommissioned, include OOC and Degraded
         for asset in data_manager.inventory.values():
             if not asset:
                 continue
@@ -5045,7 +5135,7 @@ def recalculate_asset_status_from_logs(asset):
 
         logger.info(
             f"Final status for {asset.asset_id}: "
-            f"OOC={asset.is_ooc}, Missing={asset.is_missing}, Degraded={_is_degraded(asset)}, Disposed={_is_disposed(asset)}, Location='{asset.current_location}'"
+            f"OOC={asset.is_ooc}, Missing={asset.is_missing}, Degraded={_is_degraded(asset)}, Decommissioned={_is_disposed(asset)}, Location='{asset.current_location}'"
         )
 
     except Exception as e:
@@ -5141,7 +5231,7 @@ def add_asset_to_event(event_id):
         if not event:
             return jsonify({'error': 'Event not found'}), 404
 
-        data = request.get_json()
+        data = request.get_json() or {}
         asset_id = data.get('assetId', '').strip()
 
         if not asset_id:
@@ -5175,7 +5265,7 @@ def add_asset_to_event(event_id):
                 return jsonify({'error': 'Asset not found'}), 404
 
             if _is_disposed(asset):
-                return jsonify({'error': 'Cannot assign disposed asset'}), 400
+                return jsonify({'error': 'Cannot assign decommissioned asset'}), 400
 
             if asset.is_missing:
                 return jsonify({'error': 'Cannot assign missing asset'}), 400
@@ -5260,7 +5350,7 @@ def manage_event_models(event_id):
             # Server-side hard cap:
             # Users may overbook against clashing events, but they may not request
             # more than the physical inventory for this exact model/description group.
-            # Missing and Disposed assets are excluded. OOC and Degraded assets are included.
+            # Missing and decommissioned assets are excluded. OOC and Degraded assets are included.
             inv_count = sum(
                 _asset_inventory_quantity(asset)
                 for asset in data_manager.inventory.values()
@@ -5438,8 +5528,10 @@ def prepare_event_asset(event_id):
         if not event:
             return jsonify({'error': 'Event not found'}), 404
 
-        data = request.get_json()
+        data = request.get_json() or {}
         asset_id = data.get('assetId', '').strip()
+        scan_options = _prepare_scan_options(data)
+        add_scanned_assets_to_event = scan_options['addScannedAssetsToEvent']
 
         if not asset_id:
             return jsonify({'error': 'Asset ID is required'}), 400
@@ -5456,6 +5548,25 @@ def prepare_event_asset(event_id):
 
         # Check if already prepared
         if asset_id in event.actually_prepared:
+            if add_scanned_assets_to_event and asset_id in event.extra_assets:
+                asset = data_manager.inventory.get(asset_id)
+                if asset:
+                    added_requirement_units = _ensure_event_model_requirement_covers_asset(event, asset, 1)
+                    event.extra_assets.remove(asset_id)
+                    update_event_state(event)
+                    data_manager.save_event(event)
+                    invalidate_cache()
+                    log_action(f"Promoted prepared extra asset {asset_id} into event {event_id}")
+                    return jsonify({
+                        'success': True,
+                        'message': f'Asset {asset_id} added into event requirements',
+                        'data': {
+                            'assetId': asset_id,
+                            'isExtra': False,
+                            'addedToEvent': True,
+                            'addedRequirementUnits': added_requirement_units,
+                        }
+                    })
             return jsonify({'error': 'Asset is already prepared'}), 400
 
         custom = _parse_custom_marker(asset_id)
@@ -5484,13 +5595,19 @@ def prepare_event_asset(event_id):
             if block_reason:
                 return jsonify({'error': block_reason}), 400
 
-            # A manual/individual prepare only fills an existing open model slot.
-            # If the matching model requirement is already full, or if this asset
-            # was not originally required, keep it as an extra asset instead of
-            # increasing the event requirement.
-            fulfills_model_requirement = _event_model_requirement_remaining_for_asset(event, asset) > 0
+            if add_scanned_assets_to_event:
+                added_requirement_units = _ensure_event_model_requirement_covers_asset(event, asset, 1)
+                fulfills_model_requirement = True
+            else:
+                # A manual/individual prepare only fills an existing open model slot.
+                # If the matching model requirement is already full, or if this asset
+                # was not originally required, keep it as an extra asset instead of
+                # increasing the event requirement.
+                added_requirement_units = 0
+                fulfills_model_requirement = _event_model_requirement_remaining_for_asset(event, asset) > 0
             logger.info(
-                f"Manual prepare {asset_id}: fillsExistingRequirement={fulfills_model_requirement}"
+                f"Manual prepare {asset_id}: addToEvent={add_scanned_assets_to_event}; "
+                f"fillsExistingRequirement={fulfills_model_requirement}; addedUnits={added_requirement_units}"
             )
             
             # Add to prepared_items if not already there. This keeps the physical
@@ -5525,7 +5642,16 @@ def prepare_event_asset(event_id):
 
         log_action(f"Prepared asset {asset_id} for event {event_id}")
 
-        response_payload = {'success': True, 'message': f'Asset {asset_id} prepared for event'}
+        response_payload = {
+            'success': True,
+            'message': f'Asset {asset_id} prepared for event',
+            'data': {
+                'assetId': asset_id,
+                'isExtra': asset_id in getattr(event, 'extra_assets', []),
+                'addedToEvent': add_scanned_assets_to_event,
+                'addedRequirementUnits': locals().get('added_requirement_units', 0),
+            }
+        }
         prepared_asset = data_manager.inventory.get(asset_id)
         if prepared_asset and _is_degraded(prepared_asset):
             response_payload['warning'] = f'Asset {asset_id} is marked as Degraded. It can be used, but please verify the limitation before show.'
@@ -5653,7 +5779,7 @@ def unprepare_event_asset(event_id):
         if not event:
             return jsonify({'error': 'Event not found'}), 404
 
-        data = request.get_json()
+        data = request.get_json() or {}
         asset_id = data.get('assetId', '').strip()
 
         if not asset_id:
@@ -5937,8 +6063,10 @@ def assign_specific_asset_to_model(event_id):
         if not event:
             return jsonify({'error': 'Event not found'}), 404
 
-        data = request.get_json()
+        data = request.get_json() or {}
         asset_id = data.get('assetId', '').strip()
+        scan_options = _prepare_scan_options(data)
+        add_scanned_assets_to_event = scan_options['addScannedAssetsToEvent']
 
         if not asset_id:
             return jsonify({'error': 'Asset ID is required'}), 400
@@ -5950,7 +6078,7 @@ def assign_specific_asset_to_model(event_id):
         bulk_asset = data_manager.inventory.get(asset_id)
         if bulk_asset and _is_bulk_asset(bulk_asset):
             if _is_disposed(bulk_asset):
-                return jsonify({'error': 'Bulk asset is disposed and cannot be prepared'}), 400
+                return jsonify({'error': 'Bulk asset is decommissioned and cannot be prepared'}), 400
 
             if getattr(bulk_asset, 'is_missing', False):
                 return jsonify({'error': 'Bulk asset is marked as missing'}), 400
@@ -5976,11 +6104,24 @@ def assign_specific_asset_to_model(event_id):
             if marker not in event.actually_prepared:
                 event.actually_prepared.append(marker)
 
+            added_requirement_units = 0
+            if add_scanned_assets_to_event:
+                added_requirement_units = _ensure_event_model_requirement_covers_asset(event, bulk_asset, quantity)
+
             update_event_state(event)
             data_manager.save_event(event)
             invalidate_cache()
             log_action(f"Prepared {quantity}x bulk asset {bulk_asset.brand} {bulk_asset.model_number} for event {event_id}")
-            return jsonify({'success': True, 'message': f'Prepared {quantity}x {bulk_asset.brand} {bulk_asset.model_number}'})
+            return jsonify({
+                'success': True,
+                'message': f'Prepared {quantity}x {bulk_asset.brand} {bulk_asset.model_number}',
+                'data': {
+                    'assetId': marker,
+                    'isExtra': False,
+                    'addedToEvent': add_scanned_assets_to_event,
+                    'addedRequirementUnits': added_requirement_units,
+                }
+            })
 
         # Initialize lists if they don't exist
         if not hasattr(event, 'actually_prepared'):
@@ -5990,6 +6131,25 @@ def assign_specific_asset_to_model(event_id):
 
         # Check if asset is already assigned
         if asset_id in event.actually_prepared:
+            if add_scanned_assets_to_event and asset_id in event.extra_assets:
+                asset = data_manager.inventory.get(asset_id)
+                if asset:
+                    added_requirement_units = _ensure_event_model_requirement_covers_asset(event, asset, 1)
+                    event.extra_assets.remove(asset_id)
+                    update_event_state(event)
+                    data_manager.save_event(event)
+                    invalidate_cache()
+                    log_action(f"Promoted prepared extra asset {asset_id} into event {event_id}")
+                    return jsonify({
+                        'success': True,
+                        'message': f'Asset {asset_id} added into event requirements',
+                        'data': {
+                            'assetId': asset_id,
+                            'isExtra': False,
+                            'addedToEvent': True,
+                            'addedRequirementUnits': added_requirement_units,
+                        }
+                    })
             return jsonify({'error': 'Asset is already assigned to this event'}), 400
 
         # For regular assets, perform checks
@@ -6012,24 +6172,15 @@ def assign_specific_asset_to_model(event_id):
                         asset_id not in other_event.returned_items):
                         return jsonify({'error': f'Asset is already assigned to event {other_event_id}: {other_event.name}'}), 400
 
-            prepare_source = str(
-                data.get('source') or data.get('prepareSource') or ''
-            ).strip().lower()
-            from_container = bool(
-                data.get('fromContainer') or
-                data.get('isContainerBatch') or
-                prepare_source == 'container'
-            )
-
-            if from_container:
-                # Container prepares are allowed to raise the requirement so the
-                # whole container contents become part of the event packing list.
+            if add_scanned_assets_to_event:
+                # Quick-add prepares are allowed to raise the requirement so the
+                # scanned asset becomes part of the event packing list.
                 added_requirement_units = _ensure_event_model_requirement_covers_asset(event, asset, 1)
                 fills_existing_requirement = True
 
                 if added_requirement_units:
                     logger.info(
-                        f"Added {added_requirement_units} model requirement unit(s) for container asset {asset_id}: "
+                        f"Added {added_requirement_units} model requirement unit(s) for scanned asset {asset_id}: "
                         f"[{asset.department_code}] {asset.brand} {asset.model_number} {asset.description}"
                     )
             else:
@@ -6040,7 +6191,8 @@ def assign_specific_asset_to_model(event_id):
                 fills_existing_requirement = _event_model_requirement_remaining_for_asset(event, asset) > 0
 
             logger.info(
-                f"Asset {asset_id}: fromContainer={from_container}; "
+                f"Asset {asset_id}: fromContainer={scan_options['fromContainer']}; "
+                f"addToEvent={add_scanned_assets_to_event}; "
                 f"fillsExistingRequirement={fills_existing_requirement}; addedUnits={added_requirement_units}"
             )
             
@@ -6079,7 +6231,16 @@ def assign_specific_asset_to_model(event_id):
 
         log_action(f"Assigned specific asset {asset_id} to event {event_id}")
 
-        response_payload = {'success': True, 'message': f'Asset {asset_id} assigned to event'}
+        response_payload = {
+            'success': True,
+            'message': f'Asset {asset_id} assigned to event',
+            'data': {
+                'assetId': asset_id,
+                'isExtra': asset_id in getattr(event, 'extra_assets', []),
+                'addedToEvent': add_scanned_assets_to_event,
+                'addedRequirementUnits': locals().get('added_requirement_units', 0),
+            }
+        }
         assigned_asset = data_manager.inventory.get(asset_id)
         if assigned_asset and _is_degraded(assigned_asset):
             response_payload['warning'] = f'Asset {asset_id} is marked as Degraded. It can be used, but please verify the limitation before show.'
@@ -7256,7 +7417,7 @@ def get_assets():
 
             # Determine current status
             status = _asset_status_value(asset, assigned_assets)
-            if _is_bulk_asset(asset) and status not in ('disposed', 'missing', 'ooc'):
+            if _is_bulk_asset(asset) and status not in ('decommissioned', 'missing', 'ooc'):
                 out_qty = 0
                 for ev in data_manager.events.values():
                     out_qty += max(
@@ -7372,8 +7533,8 @@ def _asset_check_asset_to_dict(asset, group_key):
         status = 'bulk'
     elif _is_disposed(asset):
         excluded = True
-        exclusion_reason = 'Disposed asset - no longer in usable inventory'
-        status = 'disposed'
+        exclusion_reason = 'Decommissioned asset - no longer in usable inventory'
+        status = 'decommissioned'
     elif getattr(asset, 'is_missing', False):
         excluded = True
         exclusion_reason = 'Already marked Missing'
@@ -7442,6 +7603,7 @@ def _asset_check_build_group(seed_asset):
         'checkable': len([a for a in assets_payload if a['checkEligible']]),
         'excluded': len([a for a in assets_payload if a['excluded'] and not a['isMissing'] and not a.get('isDisposed')]),
         'missing': len([a for a in assets_payload if a['isMissing']]),
+        'decommissioned': len([a for a in assets_payload if a.get('isDisposed')]),
         'disposed': len([a for a in assets_payload if a.get('isDisposed')]),
     }
 
@@ -7719,7 +7881,7 @@ def get_available_assets():
     Get assets that can be requested for future events.
 
     Rules:
-    - Exclude Missing and Disposed assets.
+    - Exclude Missing and decommissioned assets.
     - Include OOC and Degraded assets because they may be repaired/usable before the event date.
     - Do not subtract clashing events here; event-date availability is handled by
       /api/events/<event_id>/availability.
@@ -7808,7 +7970,7 @@ def create_asset():
                     is_missing=False,
                     is_ooc=False,
                     is_degraded=bool(data.get('isDegraded', False)),
-                    is_disposed=bool(data.get('isDisposed', False)),
+                    is_disposed=bool(data.get('isDisposed', False) or data.get('isDecommissioned', False)),
                     maintenance_logs=[],
                     department_code=plan['department'],
                     default_location='Store',
@@ -7829,7 +7991,7 @@ def create_asset():
                         is_missing=False,
                         is_ooc=False,
                         is_degraded=bool(data.get('isDegraded', False)),
-                        is_disposed=bool(data.get('isDisposed', False)),
+                        is_disposed=bool(data.get('isDisposed', False) or data.get('isDecommissioned', False)),
                         maintenance_logs=[],
                         department_code=plan['department'],
                         default_location='Store',
@@ -7899,6 +8061,104 @@ def preview_asset_serial_ids():
     except Exception as e:
         logger.error(f"Error previewing asset IDs: {e}", exc_info=True)
         return jsonify({'error': 'Failed to preview asset IDs'}), 500
+
+
+def _active_event_usage_for_asset(asset_id):
+    """Return active event references that should block deleting an inventory item."""
+    usage = []
+    for event in data_manager.events.values():
+        returned = set(getattr(event, 'returned_items', []) or [])
+        active = False
+
+        for ref in (getattr(event, 'prepared_items', []) or []) + (getattr(event, 'actually_prepared', []) or []):
+            if ref in returned:
+                continue
+
+            if ref == asset_id:
+                active = True
+                break
+
+            marker = _parse_bulk_marker(ref)
+            if marker and marker.get('bulkId') == asset_id:
+                active = True
+                break
+
+        if active:
+            usage.append({
+                'eventId': getattr(event, 'event_id', None),
+                'eventName': getattr(event, 'name', ''),
+            })
+
+    return usage
+
+
+@app.route('/api/assets/<path:asset_id>', methods=['DELETE'])
+@require_admin
+def delete_asset(asset_id):
+    """Admin-only asset deletion with password reconfirmation."""
+    try:
+        decoded_asset_id = unquote_plus(asset_id)
+        data = request.get_json(silent=True) or {}
+
+        verified, password_error = _verify_current_admin_password(data.get('password'))
+        if not verified:
+            return jsonify({'error': password_error}), 400 if password_error == 'Admin password is required' else 403
+
+        with _inventory_action_lock:
+            asset = data_manager.inventory.get(decoded_asset_id)
+            if not asset:
+                return jsonify({'error': 'Asset not found'}), 404
+
+            active_usage = _active_event_usage_for_asset(decoded_asset_id)
+            if active_usage:
+                first = active_usage[0]
+                return jsonify({
+                    'error': (
+                        f"Asset {decoded_asset_id} is still assigned or prepared for "
+                        f"Event {first.get('eventId')}: {first.get('eventName')}. Return or remove it before deleting."
+                    ),
+                    'activeEvents': active_usage,
+                }), 409
+
+            deleted_media_count = 0
+            for log_entry in getattr(asset, 'maintenance_logs', []) or []:
+                deleted_media_count += _delete_maintenance_media_files(log_entry)
+
+            containers_updated = 0
+            container_refs_removed = 0
+            for container in data_manager.containers.values():
+                before = len(container.asset_ids)
+                container.asset_ids = [ref for ref in container.asset_ids if ref != decoded_asset_id]
+                removed = before - len(container.asset_ids)
+                if removed:
+                    containers_updated += 1
+                    container_refs_removed += removed
+
+            del data_manager.inventory[decoded_asset_id]
+            data_manager.save_inventory()
+            if containers_updated:
+                data_manager.save_containers()
+
+        invalidate_cache()
+        log_action(
+            f"Deleted asset {decoded_asset_id}; containersUpdated={containers_updated}; "
+            f"containerRefsRemoved={container_refs_removed}; mediaDeleted={deleted_media_count}"
+        )
+
+        return jsonify({
+            'success': True,
+            'message': 'Asset deleted successfully',
+            'data': {
+                'assetId': decoded_asset_id,
+                'containersUpdated': containers_updated,
+                'containerRefsRemoved': container_refs_removed,
+                'mediaDeleted': deleted_media_count,
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"Error deleting asset {asset_id}: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to delete asset'}), 500
 
 
 @app.route('/api/assets/<path:asset_id>', methods=['PUT'])
@@ -8007,8 +8267,8 @@ def update_asset(asset_id):
         if 'isDegraded' in data:
             asset.is_degraded = bool(data.get('isDegraded'))
 
-        if 'isDisposed' in data:
-            asset.is_disposed = bool(data.get('isDisposed'))
+        if 'isDisposed' in data or 'isDecommissioned' in data:
+            asset.is_disposed = bool(data.get('isDisposed') or data.get('isDecommissioned'))
 
         _normalise_asset_status_flags(asset)
 
@@ -8807,7 +9067,7 @@ def get_stats():
             [a for a in data_manager.inventory.values() if a.is_ooc and not _is_disposed(a)])
         degraded_assets = len(
             [a for a in data_manager.inventory.values() if _is_degraded(a) and not _is_disposed(a)])
-        disposed_assets = len(
+        decommissioned_assets = len(
             [a for a in data_manager.inventory.values() if _is_disposed(a)])
 
         stats_data = {
@@ -8818,7 +9078,8 @@ def get_stats():
             'missingAssets': missing_assets,
             'oocAssets': ooc_assets,
             'degradedAssets': degraded_assets,
-            'disposedAssets': disposed_assets
+            'decommissionedAssets': decommissioned_assets,
+            'disposedAssets': decommissioned_assets
         }
         
         logger.info(f"Returning stats: {stats_data}")

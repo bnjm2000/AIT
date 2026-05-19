@@ -5,7 +5,7 @@ from datetime import datetime
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 
-STATUS_CHANGE_KINDS = ('ooc', 'missing', 'degraded', 'disposed')
+STATUS_CHANGE_KINDS = ('ooc', 'missing', 'degraded', 'decommissioned')
 DEFAULT_MAINTENANCE_LOG_TYPE = 'General'
 ASSET_CHECK_LOG_TYPE = 'Asset check'
 USER_MAINTENANCE_LOG_TYPES = (
@@ -61,13 +61,21 @@ DEGRADED_CLEARED = {
     'unmark degraded',
 }
 
-DISPOSED_MARKED = {
+DECOMMISSIONED_MARKED = {
+    'marked decommissioned',
+    'mark decommissioned',
+    'decommissioned',
     'marked disposed',
     'mark disposed',
     'disposed',
 }
 
-DISPOSED_CLEARED = {
+DECOMMISSIONED_CLEARED = {
+    'cleared decommissioned',
+    'clear decommissioned',
+    'removed decommissioned',
+    'unmarked decommissioned',
+    'unmark decommissioned',
     'cleared disposed',
     'clear disposed',
     'removed disposed',
@@ -186,6 +194,9 @@ def normalize_change(change):
         return None
 
     kind = _text(change.get('kind') or change.get('type')).strip().lower()
+    if kind == 'disposed':
+        kind = 'decommissioned'
+
     if kind in ('location', 'serial'):
         value = _text(change.get('value')).strip()
         return {'kind': kind, 'value': value} if value else None
@@ -221,6 +232,8 @@ def normalize_changes(changes):
         for kind in STATUS_CHANGE_KINDS:
             if changes.get(kind):
                 normalized.append(make_change(kind, action=changes.get(kind)))
+        if changes.get('disposed'):
+            normalized.append(make_change('decommissioned', action=changes.get('disposed')))
         return [change for change in normalized if change]
 
     normalized = []
@@ -252,10 +265,10 @@ def _legacy_change_from_part(part):
         return make_change('degraded', action='marked')
     if part_lower in DEGRADED_CLEARED:
         return make_change('degraded', action='cleared')
-    if part_lower in DISPOSED_MARKED:
-        return make_change('disposed', action='marked')
-    if part_lower in DISPOSED_CLEARED:
-        return make_change('disposed', action='cleared')
+    if part_lower in DECOMMISSIONED_MARKED:
+        return make_change('decommissioned', action='marked')
+    if part_lower in DECOMMISSIONED_CLEARED:
+        return make_change('decommissioned', action='cleared')
 
     return None
 
@@ -428,14 +441,14 @@ def status_change_labels(log_or_changes):
                     'ooc': 'Marked OOC',
                     'missing': 'Marked Missing',
                     'degraded': 'Marked Degraded',
-                    'disposed': 'Marked Disposed',
+                    'decommissioned': 'Marked Decommissioned',
                 }.get(kind, f"Marked {kind.title()}"))
             else:
                 labels.append({
                     'ooc': 'Cleared OOC',
                     'missing': 'Cleared Missing',
                     'degraded': 'Cleared Degraded',
-                    'disposed': 'Cleared Disposed',
+                    'decommissioned': 'Cleared Decommissioned',
                 }.get(kind, f"Cleared {kind.title()}"))
 
     if all_statuses_cleared and not status_marked:
@@ -467,7 +480,7 @@ def _set_exclusive_asset_status(asset, status):
         asset.is_missing = True
     elif status == 'degraded':
         asset.is_degraded = True
-    elif status == 'disposed':
+    elif status in ('disposed', 'decommissioned'):
         asset.is_disposed = True
 
 
@@ -488,5 +501,5 @@ def apply_maintenance_log_changes(asset, log):
                     'ooc': 'is_ooc',
                     'missing': 'is_missing',
                     'degraded': 'is_degraded',
-                    'disposed': 'is_disposed',
+                    'decommissioned': 'is_disposed',
                 }[kind], False)

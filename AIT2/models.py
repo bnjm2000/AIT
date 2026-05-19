@@ -56,7 +56,7 @@ class InventoryItem:
         self.is_ooc = is_ooc  # Out of Commission
         # Degraded means the asset is not fully functional, but can still be used for show.
         self.is_degraded = bool(is_degraded)
-        # Disposed means the asset is no longer part of usable inventory and cannot be prepared.
+        # Decommissioned means the asset is no longer part of usable inventory and cannot be prepared.
         self.is_disposed = bool(is_disposed)
 
         # Asset condition statuses are mutually exclusive. If older CSV data has

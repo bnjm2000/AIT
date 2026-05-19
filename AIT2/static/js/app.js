@@ -450,6 +450,122 @@ function getEventExtraQuantity(event) {
   return Array.isArray(event.extraAssets) ? event.extraAssets.length : 0;
 }
 
+const PREPARE_QUICK_ADD_STORAGE_KEY = 'ait.prepare.quickAddEnabled';
+
+function getPrepareQuickAddEnabled() {
+  try {
+    return localStorage.getItem(PREPARE_QUICK_ADD_STORAGE_KEY) === 'true';
+  } catch (error) {
+    return false;
+  }
+}
+
+function setPrepareQuickAddEnabled(enabled) {
+  const isEnabled = !!enabled;
+  try {
+    localStorage.setItem(PREPARE_QUICK_ADD_STORAGE_KEY, isEnabled ? 'true' : 'false');
+  } catch (error) {}
+
+  const toggle = document.getElementById('prepareQuickAddToggle');
+  const state = document.getElementById('prepareQuickAddToggleState');
+  if (toggle) toggle.checked = isEnabled;
+  if (state) {
+    state.textContent = isEnabled ? 'On' : 'Off';
+    state.style.background = isEnabled ? '#d4edda' : '#e9ecef';
+    state.style.color = isEnabled ? '#155724' : '#495057';
+  }
+}
+
+function handlePrepareQuickAddToggle(toggle) {
+  setPrepareQuickAddEnabled(!!toggle?.checked);
+}
+
+function prepareQuickAddPayload() {
+  const quickAdd = getPrepareQuickAddEnabled();
+  return {
+    quickAdd,
+    addScannedAssetsToEvent: quickAdd,
+    source: quickAdd ? 'quick-add' : 'manual-scan'
+  };
+}
+
+function ensurePrepareQuickAddToggleStyles() {
+  if (document.getElementById('prepare-quick-add-toggle-styles')) return;
+
+  const style = document.createElement('style');
+  style.id = 'prepare-quick-add-toggle-styles';
+  style.textContent = `
+    .prepare-quick-add-switch {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 32px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.75);
+      border: 1px solid rgba(21,87,36,0.18);
+      cursor: pointer;
+      user-select: none;
+    }
+    .prepare-quick-add-switch input {
+      position: absolute;
+      opacity: 0;
+      pointer-events: none;
+    }
+    .prepare-quick-add-switch-slider {
+      position: relative;
+      width: 42px;
+      height: 24px;
+      border-radius: 999px;
+      background: #adb5bd;
+      transition: background 0.2s ease;
+      flex: 0 0 auto;
+    }
+    .prepare-quick-add-switch-slider::after {
+      content: '';
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: white;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+      transition: transform 0.2s ease;
+    }
+    .prepare-quick-add-switch input:checked + .prepare-quick-add-switch-slider {
+      background: #28a745;
+    }
+    .prepare-quick-add-switch input:checked + .prepare-quick-add-switch-slider::after {
+      transform: translateX(18px);
+    }
+    .prepare-quick-add-switch input:focus-visible + .prepare-quick-add-switch-slider {
+      outline: 2px solid #155724;
+      outline-offset: 2px;
+    }
+    .prepare-quick-add-switch-label {
+      font-weight: 700;
+      color: #155724;
+      font-size: 13px;
+      line-height: 1;
+      white-space: nowrap;
+    }
+    .prepare-quick-add-switch-state {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 34px;
+      padding: 3px 7px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1;
+      transition: background 0.2s ease, color 0.2s ease;
+    }
+  `;
+  document.head.appendChild(style);
+}
+
 
 function getAssetIdentifierForApi(asset) {
   return asset?.internalId || asset?.bulkId || asset?.id || '';
@@ -460,7 +576,7 @@ function isAssetDegraded(asset) {
 }
 
 function isAssetDisposed(asset) {
-  return !!(asset && (asset.isDisposed || asset.status === 'disposed'));
+  return !!(asset && (asset.isDisposed || asset.isDecommissioned || asset.status === 'disposed' || asset.status === 'decommissioned'));
 }
 
 function assetStatusClass(status) {
@@ -488,7 +604,7 @@ function pdfInlineBadgeHtml(label, background, color, options = {}) {
 
 function getAssetConditionStatus(asset) {
   if (!asset) return 'available';
-  if (asset.isDisposed || asset.status === 'disposed') return 'disposed';
+  if (asset.isDisposed || asset.isDecommissioned || asset.status === 'disposed' || asset.status === 'decommissioned') return 'decommissioned';
   if (asset.isMissing || asset.status === 'missing') return 'missing';
   if (asset.isOOC || asset.status === 'ooc') return 'ooc';
   if (asset.isDegraded || asset.status === 'degraded') return 'degraded';
@@ -511,7 +627,8 @@ function maintenanceStatusMeta(value) {
     ooc: { label: 'OOC', color: '#dc3545' },
     missing: { label: 'Missing', color: '#fd7e14' },
     degraded: { label: 'Degraded', color: '#856404' },
-    disposed: { label: 'Disposed', color: '#6c757d' }
+    decommissioned: { label: 'Decommissioned', color: '#6c757d' },
+    disposed: { label: 'Decommissioned', color: '#6c757d' }
   };
   return map[cleanValue] || map.nochange;
 }
@@ -553,7 +670,7 @@ function maintenanceStatusSelectHtml(id, name, selected = 'nochange') {
       ${option('ooc')}
       ${option('missing')}
       ${option('degraded')}
-      ${option('disposed')}
+      ${option('decommissioned')}
     </select>
     <small style="color:#666;font-size:12px;margin-top:6px;display:block;">
       Assets can only have one status. To change a non-OK asset to another status, mark it as OK first.
@@ -2751,7 +2868,10 @@ function renderDepartmentManager() {
             <td>${departmentBadgeHtml(dept.code, true)}</td>
             <td><span style="display:inline-flex;align-items:center;gap:8px;"><span style="width:22px;height:22px;border-radius:6px;border:1px solid #ccc;background:${escapeHtmlAttr(dept.color || '#e2e3e5')};display:inline-block;"></span>${escapeHtml(dept.color || '')}</span></td>
             <td>${Number(dept.assetCount || 0)}</td>
-            <td><button class="btn btn-warning btn-sm" onclick="openDepartmentModal('${encodeURIComponent(dept.code)}')">Edit</button></td>
+            <td>
+              <button class="btn btn-warning btn-sm" onclick="openDepartmentModal('${encodeURIComponent(dept.code)}')">Edit</button>
+              <button class="btn btn-danger btn-sm" onclick="deleteDepartment('${encodeURIComponent(dept.code)}')">Delete</button>
+            </td>
           </tr>
         `).join('')}
       </tbody>
@@ -2934,6 +3054,38 @@ async function saveDepartmentModal() {
     await loadInventory();
   } catch (error) {
     showNotification('error', `Failed to save department: ${error.message}`);
+  }
+}
+
+async function deleteDepartment(encodedCode) {
+  if (!currentUser || !currentUser.isAdmin) {
+    showNotification('error', 'Admin privileges required');
+    return;
+  }
+
+  const code = decodeURIComponent(encodedCode || '');
+  const dept = getDepartmentMeta(code);
+  const ok = await showAppConfirm({
+    title: 'Delete Department',
+    message: `Delete department "${dept.code}"?\n\nThis is only allowed when no assets are assigned to it.`,
+    confirmText: 'Delete',
+    cancelText: 'Cancel',
+    variant: 'danger',
+  });
+  if (!ok) return;
+
+  try {
+    await apiCall(`/api/departments/${encodeURIComponent(dept.code)}`, 'DELETE');
+    showNotification('success', `Department ${dept.code} deleted`);
+    departmentsLoaded = false;
+    await loadDepartments(true);
+    await loadInventory();
+  } catch (error) {
+    await showAppAlert({
+      title: 'Department Not Deleted',
+      message: error.message,
+      variant: 'warning',
+    });
   }
 }
 
@@ -4247,6 +4399,9 @@ function displayInventoryTable(assetsToShow) {
             isAdmin
               ? `<button class="btn btn-warning btn-sm" onclick="openEditAssetModal('${encodedAssetId}')" title="Edit asset attributes">
                    Edit
+                 </button>
+                 <button class="btn btn-danger btn-sm" onclick="openDeleteAssetModal('${encodedAssetId}')" title="Delete asset">
+                   Delete
                  </button>`
               : ''
           }
@@ -4351,7 +4506,7 @@ function ensureAssetEditModal() {
             <option value="ooc">OOC</option>
             <option value="missing">Missing</option>
             <option value="degraded">Degraded</option>
-            <option value="disposed">Disposed</option>
+            <option value="decommissioned">Decommissioned</option>
           </select>
           <small style="color:#666;font-size:12px;margin-top:6px;display:block;">
             Assets can only have one status at a time.
@@ -4360,6 +4515,7 @@ function ensureAssetEditModal() {
       </div>
 
       <div class="modal-footer modal-actions" style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
+        <button class="btn btn-danger" onclick="openDeleteAssetModal()" style="margin-right:auto;">Delete Asset</button>
         <button class="btn btn-secondary" onclick="closeModal('editAssetModal')">Cancel</button>
         <button class="btn btn-success" onclick="saveAssetEditModal()">Save Changes</button>
       </div>
@@ -4442,7 +4598,7 @@ async function saveAssetEditModal() {
     isMissing: document.getElementById('editAssetStatus')?.value === 'missing',
     isOOC: document.getElementById('editAssetStatus')?.value === 'ooc',
     isDegraded: document.getElementById('editAssetStatus')?.value === 'degraded',
-    isDisposed: document.getElementById('editAssetStatus')?.value === 'disposed',
+    isDecommissioned: document.getElementById('editAssetStatus')?.value === 'decommissioned',
     quantity: parseInt(document.getElementById('editAssetQuantity')?.value || '1', 10) || 1,
     applyTo: 'single'
   };
@@ -4526,6 +4682,117 @@ async function saveAssetEditModal() {
 
   } catch (error) {
     showNotification('error', `Failed to update asset: ${error.message}`);
+  }
+}
+
+function ensureDeleteAssetModal() {
+  if (document.getElementById('deleteAssetModal')) return;
+
+  const modal = document.createElement('div');
+  modal.id = 'deleteAssetModal';
+  modal.className = 'modal';
+  modal.innerHTML = `
+    <div class="modal-content" style="max-width:480px;">
+      <div class="modal-header">
+        <h3 class="modal-title">Delete Asset</h3>
+        <button class="close-btn" onclick="closeModal('deleteAssetModal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div style="background:#f8d7da;border:1px solid #f5c2c7;color:#842029;padding:12px;border-radius:8px;margin-bottom:14px;">
+          This permanently deletes the asset from inventory. Enter your admin password to confirm.
+        </div>
+        <div id="deleteAssetSummary" style="margin-bottom:14px;color:#495057;font-size:14px;"></div>
+        <div class="form-group">
+          <label class="form-label" for="deleteAssetPassword">Admin Password</label>
+          <input id="deleteAssetPassword" type="password" class="form-input" autocomplete="current-password">
+        </div>
+      </div>
+      <div class="modal-footer modal-actions" style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
+        <button class="btn btn-secondary" onclick="closeModal('deleteAssetModal')">Cancel</button>
+        <button class="btn btn-danger" onclick="confirmDeleteAsset()">Delete Asset</button>
+      </div>
+    </div>
+  `;
+
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) closeModal('deleteAssetModal');
+  });
+
+  document.body.appendChild(modal);
+}
+
+function openDeleteAssetModal(encodedAssetId = '') {
+  if (!currentUser || !currentUser.isAdmin) {
+    showNotification('error', 'Admin privileges required');
+    return;
+  }
+
+  ensureDeleteAssetModal();
+
+  let assetId = '';
+  if (encodedAssetId) {
+    assetId = decodeURIComponent(encodedAssetId);
+  } else {
+    const editModal = document.getElementById('editAssetModal');
+    const original = JSON.parse(editModal?.dataset.originalAsset || '{}');
+    assetId = original.id || '';
+  }
+
+  const asset = assets.find(a => getAssetIdentifierForApi(a) === assetId);
+  const modal = document.getElementById('deleteAssetModal');
+  modal.dataset.assetId = assetId;
+  document.getElementById('deleteAssetPassword').value = '';
+  document.getElementById('deleteAssetSummary').innerHTML = asset
+    ? `<strong>${escapeHtml(assetId)}</strong><br>${escapeHtml([asset.brand, asset.model, asset.description].filter(Boolean).join(' ') || 'Asset')}`
+    : `<strong>${escapeHtml(assetId)}</strong>`;
+
+  openModal('deleteAssetModal');
+  setTimeout(() => document.getElementById('deleteAssetPassword')?.focus(), 100);
+}
+
+async function confirmDeleteAsset() {
+  if (!currentUser || !currentUser.isAdmin) {
+    showNotification('error', 'Admin privileges required');
+    return;
+  }
+
+  const modal = document.getElementById('deleteAssetModal');
+  const assetId = modal?.dataset.assetId || '';
+  const password = document.getElementById('deleteAssetPassword')?.value || '';
+
+  if (!assetId) {
+    showNotification('error', 'Asset ID missing');
+    return;
+  }
+
+  if (!password) {
+    showNotification('warning', 'Enter your admin password');
+    return;
+  }
+
+  try {
+    const res = await apiCall(`/api/assets/${encodeURIComponent(assetId)}`, 'DELETE', { password });
+    const data = res.data || {};
+
+    closeModal('deleteAssetModal');
+    closeModal('editAssetModal');
+
+    let message = `Deleted asset ${assetId}`;
+    if (data.containersUpdated) message += `; removed from ${data.containersUpdated} container(s)`;
+    showNotification('success', message);
+
+    await loadInventory();
+    if (document.getElementById('events-section')?.classList.contains('active')) {
+      await loadAllEvents();
+    }
+    if (document.getElementById('prepare-section')?.classList.contains('active')) {
+      await loadPrepareEvents();
+    }
+    if (document.getElementById('containers-section')?.classList.contains('active')) {
+      await loadContainers();
+    }
+  } catch (error) {
+    showNotification('error', `Failed to delete asset: ${error.message}`);
   }
 }
 
@@ -6739,6 +7006,7 @@ function createPrepareEventCard(event) {
 async function openPrepareEventModal(eventId) {
     try {
         window.currentPrepareEventId = eventId;
+        ensurePrepareQuickAddToggleStyles();
         const [eventResponse, availableAssetsResponse] = await Promise.all([
             apiCall(`/api/events/${eventId}`),
             apiCall(`/api/assets/available-for-event/${eventId}`)
@@ -6746,6 +7014,7 @@ async function openPrepareEventModal(eventId) {
         
         const event = eventResponse.data;
         const availableAssets = availableAssetsResponse.data;
+        const quickAddEnabled = getPrepareQuickAddEnabled();
         
         document.getElementById('prepareEventTitle').textContent = `Prepare Assets - Event ${event.id}: ${event.name}`;
         
@@ -6772,7 +7041,15 @@ async function openPrepareEventModal(eventId) {
 
                 <!-- Quick Asset Search Bar -->
                 <div style="margin-bottom: 10px; padding: 10px; background: #e8f5e8; border-radius: 8px; border: 2px solid #28a745;">
-                    <h4 style="color: #155724; margin-bottom: 15px;">Prepare or Assign Assets</h4>
+                    <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:15px;">
+                        <h4 style="color: #155724; margin:0;">Prepare or Assign Assets</h4>
+                        <label class="prepare-quick-add-switch" title="When on, scanned extra assets become event requirements instead of extra assets.">
+                            <input type="checkbox" id="prepareQuickAddToggle" ${quickAddEnabled ? 'checked' : ''} onchange="handlePrepareQuickAddToggle(this)" aria-label="Quick-add">
+                            <span class="prepare-quick-add-switch-slider" aria-hidden="true"></span>
+                            <span class="prepare-quick-add-switch-label">Quick-add</span>
+                            <span id="prepareQuickAddToggleState" class="prepare-quick-add-switch-state" style="background:${quickAddEnabled ? '#d4edda' : '#e9ecef'}; color:${quickAddEnabled ? '#155724' : '#495057'};">${quickAddEnabled ? 'On' : 'Off'}</span>
+                        </label>
+                    </div>
                     <div class="form-group">
                         <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:stretch;">
                             <input type="text" class="form-input" id="universalAssetInput" 
@@ -7081,6 +7358,7 @@ async function openPrepareEventModal(eventId) {
         `;
         
         document.getElementById('prepareEventContent').innerHTML = content;
+        setPrepareQuickAddEnabled(quickAddEnabled);
         openModal('prepareEventModal');
         
         // Store available assets for the additional asset search
@@ -7878,6 +8156,8 @@ async function processUniversalAsset(eventId) {
     const input = document.getElementById('universalAssetInput');
     const feedbackDiv = document.getElementById('universal-asset-feedback');
     let assetId = normalizeScannedIdentifier(input.value);
+    const quickAddEnabled = getPrepareQuickAddEnabled();
+    const scanPayload = prepareQuickAddPayload();
     
     if (!assetId) {
         showFeedback(feedbackDiv, 'warning', 'Please enter an asset ID');
@@ -7927,6 +8207,7 @@ async function processUniversalAsset(eventId) {
         let isAlreadyPrepared = false;
         let isReturned = false;
         let fulfillsModelRequirement = false;
+        let isExtra = false;
         
         // Check if asset is directly in prepared_items (assigned)
         if (event.preparedItems && event.preparedItems.includes(assetId)) {
@@ -7941,6 +8222,10 @@ async function processUniversalAsset(eventId) {
         // Check if asset is returned
         if (event.returnedItems && event.returnedItems.includes(assetId)) {
             isReturned = true;
+        }
+
+        if (event.extraAssets && event.extraAssets.includes(assetId)) {
+            isExtra = true;
         }
         
         // Check if asset fulfills any model requirement
@@ -7981,14 +8266,21 @@ async function processUniversalAsset(eventId) {
         
         if (isAssigned) {
             if (isAlreadyPrepared) {
-                showFeedback(feedbackDiv, 'info', `${assetId} is already prepared for this event`);
+                if (quickAddEnabled && isExtra) {
+                    const response = await apiCall(`/api/events/${eventId}/assign-specific`, 'POST', { assetId, ...scanPayload });
+                    await showApiWarning(response);
+                    showFeedback(feedbackDiv, 'success', `✅ ${assetId} added into the event`);
+                } else {
+                    showFeedback(feedbackDiv, 'info', `${assetId} is already prepared for this event`);
+                }
                 refreshPrepareUiAfterAssetChange(eventId);
             } else {
                 // Asset is assigned but not prepared - prepare it
                 if (!(await confirmDegradedAssetUse(assetId, assetDetails))) return;
-                const response = await apiCall(`/api/events/${eventId}/assign-specific`, 'POST', { assetId });
+                const response = await apiCall(`/api/events/${eventId}/assign-specific`, 'POST', { assetId, ...scanPayload });
                 await showApiWarning(response);
-                showFeedback(feedbackDiv, 'success', `✅ ${assetId} assigned and prepared`);
+                const responseIsExtra = !!(response?.data?.isExtra);
+                showFeedback(feedbackDiv, 'success', responseIsExtra ? `✅ ${assetId} prepared as extra asset` : `✅ ${assetId} assigned and prepared`);
                 
                 // Clear input and focus back on it
                 input.value = '';
@@ -8004,9 +8296,10 @@ async function processUniversalAsset(eventId) {
             }
 
             if (!(await confirmDegradedAssetUse(assetId, assetDetails))) return;
-            const response = await apiCall(`/api/events/${eventId}/assign-specific`, 'POST', { assetId });
+            const response = await apiCall(`/api/events/${eventId}/assign-specific`, 'POST', { assetId, ...scanPayload });
             await showApiWarning(response);
-            showFeedback(feedbackDiv, 'success', `✅ ${assetId} prepared as extra asset`);
+            const responseIsExtra = !!(response?.data?.isExtra);
+            showFeedback(feedbackDiv, 'success', responseIsExtra ? `✅ ${assetId} prepared as extra asset` : `✅ ${assetId} added into the event`);
 
             input.value = '';
             input.focus();
@@ -9315,11 +9608,13 @@ function normalizeMaintenanceChange(change) {
     return value ? { kind, value } : null;
   }
 
-  if (kind === 'ooc' || kind === 'missing' || kind === 'degraded' || kind === 'disposed') {
+  const normalizedKind = kind === 'disposed' ? 'decommissioned' : kind;
+
+  if (normalizedKind === 'ooc' || normalizedKind === 'missing' || normalizedKind === 'degraded' || normalizedKind === 'decommissioned') {
     const rawAction = String(change.action || '').trim().toLowerCase();
-    if (['mark', 'marked'].includes(rawAction)) return { kind, action: 'marked' };
+    if (['mark', 'marked'].includes(rawAction)) return { kind: normalizedKind, action: 'marked' };
     if (['clear', 'cleared', 'remove', 'removed', 'unmark', 'unmarked'].includes(rawAction)) {
-      return { kind, action: 'cleared' };
+      return { kind: normalizedKind, action: 'cleared' };
     }
   }
 
@@ -9354,11 +9649,11 @@ function maintenanceChangeFromLegacyPart(part) {
   if (['cleared degraded', 'clear degraded', 'removed degraded', 'unmarked degraded', 'unmark degraded'].includes(lower)) {
     return { kind: 'degraded', action: 'cleared' };
   }
-  if (['marked disposed', 'mark disposed'].includes(lower)) {
-    return { kind: 'disposed', action: 'marked' };
+  if (['marked decommissioned', 'mark decommissioned', 'marked disposed', 'mark disposed'].includes(lower)) {
+    return { kind: 'decommissioned', action: 'marked' };
   }
-  if (['cleared disposed', 'clear disposed', 'removed disposed', 'unmarked disposed', 'unmark disposed'].includes(lower)) {
-    return { kind: 'disposed', action: 'cleared' };
+  if (['cleared decommissioned', 'clear decommissioned', 'removed decommissioned', 'unmarked decommissioned', 'unmark decommissioned', 'cleared disposed', 'clear disposed', 'removed disposed', 'unmarked disposed', 'unmark disposed'].includes(lower)) {
+    return { kind: 'decommissioned', action: 'cleared' };
   }
 
   return null;
@@ -9554,7 +9849,7 @@ function getMaintenanceChangeLabels(logOrChanges) {
     if (change.kind === 'ooc') return change.action === 'marked' ? 'Marked OOC' : 'Cleared OOC';
     if (change.kind === 'missing') return change.action === 'marked' ? 'Marked Missing' : 'Cleared Missing';
     if (change.kind === 'degraded') return change.action === 'marked' ? 'Marked Degraded' : 'Cleared Degraded';
-    if (change.kind === 'disposed') return change.action === 'marked' ? 'Marked Disposed' : 'Cleared Disposed';
+    if (change.kind === 'decommissioned' || change.kind === 'disposed') return change.action === 'marked' ? 'Marked Decommissioned' : 'Cleared Decommissioned';
     return '';
   }).filter(Boolean);
 }
@@ -9564,11 +9859,11 @@ function maintenanceChangeColour(label) {
   if (changeLower.includes('cleared ooc') || changeLower.includes('clear ooc') || changeLower.includes('removed ooc') || changeLower.includes('unmark ooc')) return '#28a745';
   if (changeLower.includes('cleared missing') || changeLower.includes('clear missing') || changeLower.includes('removed missing') || changeLower.includes('unmark missing')) return '#28a745';
   if (changeLower.includes('cleared degraded')) return '#28a745';
-  if (changeLower.includes('cleared disposed')) return '#28a745';
+  if (changeLower.includes('cleared decommissioned') || changeLower.includes('cleared disposed')) return '#28a745';
   if (changeLower.includes('marked ooc') || changeLower.includes('mark ooc')) return '#dc3545';
   if (changeLower.includes('marked missing') || changeLower.includes('mark missing')) return '#fd7e14';
   if (changeLower.includes('marked degraded')) return '#856404';
-  if (changeLower.includes('marked disposed')) return '#6c757d';
+  if (changeLower.includes('marked decommissioned') || changeLower.includes('marked disposed')) return '#6c757d';
   if (changeLower.includes('location:')) return '#17a2b8';
   if (changeLower.includes('serial:')) return '#6f42c1';
   return '#667eea';
@@ -12637,8 +12932,8 @@ document.addEventListener("DOMContentLoaded", function () {
               unmarkMissing: statusValue === 'ok',
               markDegraded: statusValue === 'degraded',
               unmarkDegraded: statusValue === 'ok',
-              markDisposed: statusValue === 'disposed',
-              unmarkDisposed: statusValue === 'ok'
+              markDecommissioned: statusValue === 'decommissioned',
+              unmarkDecommissioned: statusValue === 'ok'
             };
             
             // Encode the asset ID for the URL
@@ -12663,8 +12958,8 @@ document.addEventListener("DOMContentLoaded", function () {
             statusMessage = " and marked as Missing";
           } else if (statusValue === 'degraded') {
             statusMessage = " and marked as Degraded";
-          } else if (statusValue === 'disposed') {
-            statusMessage = " and marked as Disposed";
+          } else if (statusValue === 'decommissioned') {
+            statusMessage = " and marked as Decommissioned";
           } else if (statusValue === 'ok') {
             statusMessage = " and marked as OK";
           }
@@ -13203,7 +13498,7 @@ function switchMaintenanceTab(tabName) {
 async function loadOOCAssets() {
   try {
     const response = await apiCall("/api/assets");
-    const oocAndMissingAssets = response.data.filter(asset => asset.isOOC || asset.isMissing || asset.isDegraded || asset.isDisposed);
+    const oocAndMissingAssets = response.data.filter(asset => asset.isOOC || asset.isMissing || asset.isDegraded || asset.isDisposed || asset.isDecommissioned);
     
     displayOOCAssets(oocAndMissingAssets);
     
@@ -13225,7 +13520,7 @@ function displayOOCAssets(oocAssets) {
 
   if (oocAssets.length === 0) {
     container.innerHTML =
-      '<p style="text-align: center; color: #666; padding: 40px;">🎉 No assets are currently marked as OOC, Missing, Degraded, or Disposed!</p>';
+      '<p style="text-align: center; color: #666; padding: 40px;">No assets are currently marked as OOC, Missing, Degraded, or Decommissioned.</p>';
     return;
   }
 
@@ -13597,10 +13892,10 @@ function showMaintenanceLogModal(asset) {
           } else if (changeLower.includes('cleared degraded')) {
             color = '#28a745';
             icon = '✅';
-          } else if (changeLower.includes('marked disposed')) {
+          } else if (changeLower.includes('marked decommissioned') || changeLower.includes('marked disposed')) {
             color = '#6c757d';
-            icon = '🗑️';
-          } else if (changeLower.includes('cleared disposed')) {
+            icon = '!';
+          } else if (changeLower.includes('cleared decommissioned') || changeLower.includes('cleared disposed')) {
             color = '#28a745';
             icon = '✅';
           } else if (changeLower.includes('location:')) {
@@ -14326,10 +14621,10 @@ function editMaintenanceLog(assetId, logIndex, logId) {
   // Older logs may only contain one clear action (e.g. Clear OOC). In this
   // cleaned-up UI, any clear action means the dropdown should show OK / Clear Status.
   let defaultStatusValue = 'nochange';
-  const statusKinds = ['ooc', 'missing', 'degraded', 'disposed'];
+  const statusKinds = ['ooc', 'missing', 'degraded', 'decommissioned', 'disposed'];
   let hasAnyClearStatusChange = false;
   for (const change of logEntry.changes || []) {
-    const kind = String(change.kind || '').toLowerCase();
+    const kind = String(change.kind || '').toLowerCase() === 'disposed' ? 'decommissioned' : String(change.kind || '').toLowerCase();
     const action = String(change.action || '').toLowerCase();
 
     if (statusKinds.includes(kind) && action === 'marked') {
@@ -14679,8 +14974,8 @@ async function saveEnhancedMaintenanceLog(assetId, logIndex, logId) {
       unmarkMissing: statusValue === 'ok',
       markDegraded: statusValue === 'degraded',
       unmarkDegraded: statusValue === 'ok',
-      markDisposed: statusValue === 'disposed',
-      unmarkDisposed: statusValue === 'ok'
+      markDecommissioned: statusValue === 'decommissioned',
+      unmarkDecommissioned: statusValue === 'ok'
     };
     
     console.log('Sending update data:', updateData);
@@ -18011,6 +18306,7 @@ async function unprepareSpecificAsset(eventId, assetId) {
 async function processUniversalContainer(eventId, containerId) {
   const feedbackDiv = document.getElementById('universal-asset-feedback');
   const input = document.getElementById('universalAssetInput');
+  const quickAddEnabled = getPrepareQuickAddEnabled();
   const container = await getContainerById(containerId, true);
   if (!container) {
     if (feedbackDiv) showFeedback(feedbackDiv, 'error', `Container ${containerId} not found`);
@@ -18028,7 +18324,9 @@ async function processUniversalContainer(eventId, containerId) {
       feedbackDiv,
       'info',
       `Processing container <strong>${escapeHtml(containerId)}</strong> (${assetIds.length} assets)…<br>` +
-      `New asset types found in the container will be added to this event automatically.`
+      (quickAddEnabled
+        ? `Scanned container assets will be added into this event.`
+        : `Extra container assets will remain listed as extra assets.`)
     );
   }
 
@@ -18043,7 +18341,7 @@ async function processUniversalContainer(eventId, containerId) {
 
   const preparedSet = new Set(event.actuallyPrepared || []);
   const returnedSet = new Set(event.returnedItems || []);
-  const results = { prepared: [], skippedPrepared: [], skippedReturned: [], failed: [] };
+  const results = { prepared: [], addedToEvent: [], extra: [], skippedPrepared: [], skippedReturned: [], failed: [] };
 
   window.__processingContainerBatch = true;
   try {
@@ -18052,9 +18350,17 @@ async function processUniversalContainer(eventId, containerId) {
       if (preparedSet.has(aid)) { results.skippedPrepared.push(aid); continue; }
       try {
         await apiCall(`/api/events/${eventId}/assign-specific`, 'POST', {
+          quickAdd: quickAddEnabled,
+          addScannedAssetsToEvent: quickAddEnabled,
           assetId: aid,
           fromContainer: true,
-          source: 'container'
+          source: quickAddEnabled ? 'quick-add-container' : 'container'
+        }).then((response) => {
+          if (response?.data?.isExtra) {
+            results.extra.push(aid);
+          } else {
+            results.addedToEvent.push(aid);
+          }
         });
         results.prepared.push(aid);
         preparedSet.add(aid);
@@ -18076,12 +18382,16 @@ async function processUniversalContainer(eventId, containerId) {
     <div style="margin-top:6px;">
       <div><strong>Summary</strong> (Container ${escapeHtml(containerId)}):</div>
       <div>✅ Prepared / added to event: <strong>${results.prepared.length}</strong> / ${total}</div>
+      <div>➕ Added into event requirements: <strong>${results.addedToEvent.length}</strong></div>
+      <div>Extra assets: <strong>${results.extra.length}</strong></div>
       <div>ℹ️ Already prepared: <strong>${results.skippedPrepared.length}</strong></div>
       <div>↩️ Returned in this event: <strong>${results.skippedReturned.length}</strong></div>
       <div style="${failed ? 'color:#a00;' : ''}">⚠️ Failed: <strong>${failed}</strong></div>
     </div>
     <details style="margin-top:10px;"><summary style="cursor:pointer;">Show details</summary>
       ${listToHtml('Prepared / added', results.prepared)}
+      ${listToHtml('Added into event requirements', results.addedToEvent)}
+      ${listToHtml('Extra assets', results.extra)}
       ${listToHtml('Skipped (already prepared)', results.skippedPrepared)}
       ${listToHtml('Skipped (returned)', results.skippedReturned)}
       ${failuresToHtml(results.failed)}
@@ -18188,6 +18498,7 @@ function inventoryPlainText(value, fallback = '-') {
 
 function inventoryStatusText(status) {
   const cleanStatus = inventoryPlainText(status, 'available').toLowerCase();
+  if (cleanStatus === 'disposed') return 'Decommissioned';
   if (cleanStatus === 'ooc') return 'OOC';
   return cleanStatus
     .replace(/-/g, ' ')
@@ -18202,6 +18513,7 @@ function inventoryStatusPdfMeta(status) {
     degraded: { background: '#fef3c7', color: '#78350f' },
     missing: { background: '#fee2e2', color: '#7f1d1d' },
     ooc: { background: '#fee2e2', color: '#7f1d1d' },
+    decommissioned: { background: '#e5e7eb', color: '#374151' },
     disposed: { background: '#e5e7eb', color: '#374151' }
   };
   return {
@@ -18247,7 +18559,7 @@ function inventoryAssetFlagsText(asset) {
   if (asset?.isMissing) flags.push('Missing');
   if (asset?.isOOC) flags.push('OOC');
   if (asset?.isDegraded) flags.push('Degraded');
-  if (asset?.isDisposed) flags.push('Disposed');
+  if (asset?.isDisposed || asset?.isDecommissioned) flags.push('Decommissioned');
   return flags.length ? flags.join(', ') : 'OK';
 }
 
