@@ -1,1 +1,1 @@
-{"id": "1779087414983-1-957e5972", "topic": "data-changed", "details": {"topics": ["activity-log"], "changes": [{"topic": "activity-log", "details": {"action": "User bnjm2000 logged in via web interface"}}], "path": "/login", "method": "POST"}, "actor": "bnjm2000", "originClientId": "", "timestamp": "2026-05-18T14:56:54"}
+{"id": "1779162395472-1-dbcd4a54", "topic": "inventory-data", "details": {}, "actor": "system", "originClientId": "", "timestamp": "2026-05-19T11:46:35"}

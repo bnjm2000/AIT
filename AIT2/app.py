@@ -77,6 +77,147 @@ _realtime_subscribers_lock = threading.RLock()
 _realtime_sequence = 0
 
 
+def _truthy_env(name, default=False):
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return str(value).strip().lower() in ('1', 'true', 'yes', 'y', 'on')
+
+
+def _local_lan_ip():
+    """Best-effort local IP for the development HTTPS certificate SAN list."""
+    import socket
+
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        # No packets are actually sent; this only lets the OS pick the LAN iface.
+        sock.connect(('8.8.8.8', 80))
+        return sock.getsockname()[0]
+    except OSError:
+        return None
+    finally:
+        sock.close()
+
+
+def _certificate_hosts():
+    hosts = {'localhost', '127.0.0.1', '::1'}
+
+    lan_ip = _local_lan_ip()
+    if lan_ip:
+        hosts.add(lan_ip)
+
+    configured_hosts = os.environ.get('SSL_HOSTS', '')
+    for host in configured_hosts.split(','):
+        host = host.strip()
+        if host:
+            hosts.add(host)
+
+    return sorted(hosts)
+
+
+def _generate_self_signed_certificate(cert_file, key_file):
+    """Create a persistent self-signed certificate for local/LAN HTTPS."""
+    import ipaddress
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    from cryptography.x509.oid import NameOID
+
+    os.makedirs(os.path.dirname(cert_file), exist_ok=True)
+    hosts = _certificate_hosts()
+
+    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    subject = issuer = x509.Name([
+        x509.NameAttribute(NameOID.COUNTRY_NAME, 'SG'),
+        x509.NameAttribute(NameOID.ORGANIZATION_NAME, 'AVEC Inventory Tracker'),
+        x509.NameAttribute(NameOID.COMMON_NAME, hosts[0] if hosts else 'localhost'),
+    ])
+
+    san_entries = []
+    for host in hosts:
+        try:
+            san_entries.append(x509.IPAddress(ipaddress.ip_address(host)))
+        except ValueError:
+            san_entries.append(x509.DNSName(host))
+
+    certificate = (
+        x509.CertificateBuilder()
+        .subject_name(subject)
+        .issuer_name(issuer)
+        .public_key(private_key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(datetime.utcnow() - timedelta(minutes=5))
+        .not_valid_after(datetime.utcnow() + timedelta(days=825))
+        .add_extension(x509.SubjectAlternativeName(san_entries), critical=False)
+        .sign(private_key, hashes.SHA256())
+    )
+
+    with open(key_file, 'wb') as f:
+        f.write(private_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.TraditionalOpenSSL,
+            encryption_algorithm=serialization.NoEncryption(),
+        ))
+
+    with open(cert_file, 'wb') as f:
+        f.write(certificate.public_bytes(serialization.Encoding.PEM))
+
+    logger.info('Generated HTTPS self-signed certificate at %s', cert_file)
+
+
+def get_ssl_context():
+    """
+    Return the Flask ssl_context.
+
+    HTTPS is enabled by default because this app defaults to port 5443. To run
+    plain HTTP for local testing, start with ENABLE_HTTPS=0.
+
+    Optional production/LAN certificate paths:
+      SSL_CERT_FILE=/path/fullchain.pem
+      SSL_KEY_FILE=/path/privkey.pem
+    """
+    if not _truthy_env('ENABLE_HTTPS', True):
+        return None
+
+    cert_file = os.environ.get('SSL_CERT_FILE') or os.environ.get('SSL_CERT')
+    key_file = os.environ.get('SSL_KEY_FILE') or os.environ.get('SSL_KEY')
+
+    if cert_file and key_file:
+        if not os.path.exists(cert_file):
+            raise FileNotFoundError(f'SSL certificate file not found: {cert_file}')
+        if not os.path.exists(key_file):
+            raise FileNotFoundError(f'SSL key file not found: {key_file}')
+        return (cert_file, key_file)
+
+    cert_dir = os.environ.get('CERT_DIR') or os.path.join(os.path.dirname(os.path.abspath(__file__)), 'certs')
+    cert_file = os.path.join(cert_dir, 'avec_inventory_selfsigned.crt')
+    key_file = os.path.join(cert_dir, 'avec_inventory_selfsigned.key')
+
+    if not os.path.exists(cert_file) or not os.path.exists(key_file):
+        _generate_self_signed_certificate(cert_file, key_file)
+
+    return (cert_file, key_file)
+
+
+def run_https_app(flask_app):
+    host = os.environ.get('HOST', '0.0.0.0')
+    port = int(os.environ.get('PORT', '5443'))
+    ssl_context = get_ssl_context()
+    scheme = 'https' if ssl_context else 'http'
+
+    flask_app.config['PREFERRED_URL_SCHEME'] = scheme
+    flask_app.config['SESSION_COOKIE_SECURE'] = bool(ssl_context)
+    flask_app.config.setdefault('SESSION_COOKIE_SAMESITE', 'Lax')
+    logger.info('Starting AVEC Inventory Tracker at %s://%s:%s', scheme, host, port)
+
+    flask_app.run(
+        debug=os.environ.get('FLASK_DEBUG') == '1',
+        host=host,
+        port=port,
+        ssl_context=ssl_context,
+    )
+
+
 def _realtime_state_path():
     if not data_manager or not getattr(data_manager, 'data_folder', ''):
         return None
@@ -9106,12 +9247,7 @@ def client_item(name):
 if __name__ == '__main__':
     try:
         init_data_manager()
-
-        app.run(
-            debug=os.environ.get('FLASK_DEBUG') == '1',
-            host=os.environ.get('HOST', '0.0.0.0'),
-            port=int(os.environ.get('PORT', '5443')),
-        )
+        run_https_app(app)
     except Exception as e:
         logger.error(f"Failed to start application: {e}")
         raise
