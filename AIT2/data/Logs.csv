@@ -1,5 +1,3 @@
-2026/04/21 16:42:19,admin,Assigned specific asset SB18#01 to event 127
-2026/04/21 16:42:45,admin,Assigned specific asset SB18#08 to event 127
 2026/04/21 16:42:48,admin,Assigned specific asset SB18#07 to event 127
 2026/04/21 16:43:07,admin,Assigned specific asset KARAII#06 to event 127
 2026/04/21 16:43:08,admin,Assigned specific asset KARAII#05 to event 127
@@ -1069,3 +1067,5 @@ XLR connector loosed, soldered back - $40' (also: Location: MiPro Singapore, Cle
 2026/05/17 22:09:13,bnjm2000,User bnjm2000 forced event 103 (SG Air Show 2026 (Bencon) @ Changi Exhibition Centre) state from Returning to Closed
 2026/05/18 11:06:50,bnjm2000,Updated maintenance log for asset ESPRITE#01: 'Ah Heng reported gobo rotate will stutter' -> 'Operator Ah Heng reported gobo rotate will stutter' (also: Marked Degraded) (edited by bnjm2000)
 2026/05/18 14:56:54,bnjm2000,User bnjm2000 logged in via web interface
+2026/05/19 11:54:58,bnjm2000,Created user cjamie
+2026/05/19 11:55:03,bnjm2000,Created user admin
