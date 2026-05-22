@@ -1752,6 +1752,121 @@ def _bulk_quantity_for_asset_in_values(values, bulk_id):
     return total
 
 
+def _event_model_quantities_by_key(event):
+    totals = defaultdict(int)
+    for item in getattr(event, 'prepared_items', []) or []:
+        key, quantity = _parse_model_assignment_key(item)
+        if key:
+            totals[key] += quantity
+    return totals
+
+
+def _event_active_specific_quantities_by_key(event):
+    """Count specific inventory assets still tied up by one event.
+
+    Regular asset IDs count as one unit. Bulk markers count their marker
+    quantity. Returned references are ignored because those units are back in
+    stock for overlapping-date availability.
+    """
+    totals = defaultdict(int)
+    if not event:
+        return totals
+
+    returned = set(getattr(event, 'returned_items', []) or [])
+    seen_regular_assets = set()
+    seen_bulk_markers = set()
+
+    for values in (
+        getattr(event, 'prepared_items', []) or [],
+        getattr(event, 'actually_prepared', []) or [],
+    ):
+        for ref in values:
+            if not isinstance(ref, str) or not ref or ref in returned:
+                continue
+
+            marker = _parse_bulk_marker(ref)
+            if marker:
+                marker_key = (marker['bulkId'], marker['quantity'], ref)
+                if marker_key in seen_bulk_markers:
+                    continue
+                seen_bulk_markers.add(marker_key)
+
+                bulk_asset = data_manager.inventory.get(marker['bulkId']) if data_manager else None
+                if not bulk_asset or not _is_bulk_asset(bulk_asset):
+                    continue
+                if getattr(bulk_asset, 'is_missing', False) or _is_disposed(bulk_asset):
+                    continue
+                totals[_asset_group_key(bulk_asset)] += marker['quantity']
+                continue
+
+            if ref.startswith('[MODEL]') or _is_custom_ref(ref):
+                continue
+
+            if ref in seen_regular_assets:
+                continue
+            seen_regular_assets.add(ref)
+
+            asset = data_manager.inventory.get(ref) if data_manager else None
+            if not asset or _is_bulk_asset(asset):
+                continue
+            if getattr(asset, 'is_missing', False) or _is_disposed(asset):
+                continue
+            totals[_asset_group_key(asset)] += 1
+
+    return totals
+
+
+def _event_reserved_quantities_by_key(event):
+    model_quantities = _event_model_quantities_by_key(event)
+    specific_quantities = _event_active_specific_quantities_by_key(event)
+    reserved = defaultdict(int)
+
+    for key in set(model_quantities.keys()) | set(specific_quantities.keys()):
+        reserved[key] = max(model_quantities.get(key, 0), specific_quantities.get(key, 0))
+
+    return reserved
+
+
+def _active_physical_asset_refs_for_event(event):
+    """Specific non-bulk asset IDs assigned/prepared for an event and not returned."""
+    refs = set()
+    if not event:
+        return refs
+
+    returned = set(getattr(event, 'returned_items', []) or [])
+    for values in (
+        getattr(event, 'prepared_items', []) or [],
+        getattr(event, 'actually_prepared', []) or [],
+    ):
+        for ref in values:
+            if not isinstance(ref, str) or not ref or ref in returned:
+                continue
+            if ref.startswith('[MODEL]') or _is_bulk_ref(ref) or _is_custom_ref(ref):
+                continue
+            if ref in data_manager.inventory:
+                refs.add(ref)
+
+    return refs
+
+
+def _find_overlapping_event_using_asset(asset_id, target_event):
+    if not asset_id or not target_event:
+        return None
+
+    my_start = getattr(target_event, 'start_date', '')
+    my_end = getattr(target_event, 'end_date', '')
+
+    for other in data_manager.events.values():
+        if not other or other.event_id == target_event.event_id:
+            continue
+        if not _ranges_overlap(my_start, my_end, getattr(other, 'start_date', ''), getattr(other, 'end_date', '')):
+            continue
+        if asset_id in _active_physical_asset_refs_for_event(other):
+            return other
+
+    return None
+
+
 def _sum_assigned_quantity(model_group, include_extra=True):
     """Quantity assigned to a model group.
 
@@ -2106,34 +2221,7 @@ def get_available_assets_for_event(event_id):
         my_start = getattr(event, 'start_date', '')
         my_end = getattr(event, 'end_date', '')
 
-        def is_physical_asset_ref(value):
-            """True only for real inventory asset IDs, not model/custom/bulk markers."""
-            if not isinstance(value, str) or not value:
-                return False
-            return not (
-                value.startswith('[MODEL]') or
-                value.startswith('[BULK]') or
-                _is_custom_ref(value)
-            )
-
-        def active_physical_refs_for_event(source_event):
-            """Specific physical asset IDs attached/prepared for an event and not returned."""
-            returned = set(getattr(source_event, 'returned_items', []) or [])
-            refs = set()
-
-            # Legacy/direct workflows can store real asset IDs in prepared_items.
-            for ref in getattr(source_event, 'prepared_items', []) or []:
-                if is_physical_asset_ref(ref) and ref not in returned:
-                    refs.add(ref)
-
-            # Model workflow stores scanned/prepared physical IDs here.
-            for ref in getattr(source_event, 'actually_prepared', []) or []:
-                if is_physical_asset_ref(ref) and ref not in returned:
-                    refs.add(ref)
-
-            return refs
-
-        current_event_refs = active_physical_refs_for_event(event)
+        current_event_refs = _active_physical_asset_refs_for_event(event)
         busy_elsewhere = set()
 
         for other in data_manager.events.values():
@@ -2142,7 +2230,7 @@ def get_available_assets_for_event(event_id):
             if not _ranges_overlap(my_start, my_end, getattr(other, 'start_date', ''), getattr(other, 'end_date', '')):
                 continue
 
-            busy_elsewhere.update(active_physical_refs_for_event(other))
+            busy_elsewhere.update(_active_physical_asset_refs_for_event(other))
 
         final_list = []
 
@@ -4854,14 +4942,9 @@ def get_event_model_availability(event_id):
             key = _asset_group_key(asset)
             physical_by_key[key] += _asset_inventory_quantity(asset)
 
-        # Quantity already requested in this same event
-        used_here_by_key = defaultdict(int)
-
-        for item in getattr(event, 'prepared_items', []) or []:
-            key, quantity = _parse_model_assignment_key(item)
-
-            if key:
-                used_here_by_key[key] += quantity
+        # Quantity already reserved/requested in this same event.  This includes
+        # normal model rows plus any specific prepared bulk/individual assets.
+        used_here_by_key = _event_reserved_quantities_by_key(event)
 
         # Demand from overlapping events
         overlap_by_key = defaultdict(int)
@@ -4881,42 +4964,8 @@ def get_event_model_availability(event_id):
             ):
                 continue
 
-            other_model_qty_by_key = defaultdict(int)
-            other_specific_by_key = defaultdict(int)
-            returned_other = set(getattr(other, 'returned_items', []) or [])
-
-            for item in getattr(other, 'prepared_items', []) or []:
-                key, quantity = _parse_model_assignment_key(item)
-
-                if key:
-                    other_model_qty_by_key[key] += quantity
-                    continue
-
-                if not isinstance(item, str):
-                    continue
-
-                if _is_custom_ref(item):
-                    continue
-
-                if item in returned_other:
-                    continue
-
-                asset = data_manager.inventory.get(item)
-
-                if not asset:
-                    continue
-
-                # Missing assets should not count as usable inventory.
-                if getattr(asset, 'is_missing', False) or _is_disposed(asset):
-                    continue
-
-                other_specific_by_key[_asset_group_key(asset)] += 1
-
-            for key in set(other_model_qty_by_key.keys()) | set(other_specific_by_key.keys()):
-                overlap_by_key[key] += max(
-                    other_model_qty_by_key.get(key, 0),
-                    other_specific_by_key.get(key, 0)
-                )
+            for key, quantity in _event_reserved_quantities_by_key(other).items():
+                overlap_by_key[key] += quantity
 
         result = []
 
@@ -4936,6 +4985,7 @@ def get_event_model_availability(event_id):
                 'physicalGlobal': physical,
                 'usedInThisEvent': used_here,
                 'overlappingDemand': overlap,
+                'unavailable': used_here + overlap,
                 'available': available,
                 'adjustedGlobal': available
             })
@@ -5270,6 +5320,12 @@ def add_asset_to_event(event_id):
             if asset.is_missing:
                 return jsonify({'error': 'Cannot assign missing asset'}), 400
 
+            busy_event = _find_overlapping_event_using_asset(asset_id, event)
+            if busy_event:
+                return jsonify({
+                    'error': f'Asset is already assigned to overlapping event {busy_event.event_id}: {busy_event.name}'
+                }), 400
+
         # Add the asset as UNPREPARED (just assigned to event)
         event.prepared_items.append(asset_id)
 
@@ -5594,6 +5650,12 @@ def prepare_event_asset(event_id):
             block_reason = _asset_prepare_block_reason(asset)
             if block_reason:
                 return jsonify({'error': block_reason}), 400
+
+            busy_event = _find_overlapping_event_using_asset(asset_id, event)
+            if busy_event:
+                return jsonify({
+                    'error': f'Asset is already assigned to overlapping event {busy_event.event_id}: {busy_event.name}'
+                }), 400
 
             if add_scanned_assets_to_event:
                 added_requirement_units = _ensure_event_model_requirement_covers_asset(event, asset, 1)
@@ -6093,7 +6155,16 @@ def assign_specific_asset_to_model(event_id):
                 quantity = _bulk_remaining_for_event_group(event, bulk_asset)
             if quantity <= 0:
                 quantity = 1
-            quantity = min(quantity, max(1, _safe_int(getattr(bulk_asset, 'quantity', 1), 1)))
+
+            available_quantity = _bulk_available_quantity_for_event(bulk_asset, event)
+            if available_quantity <= 0:
+                return jsonify({'error': 'No quantity is available for this event date range'}), 400
+
+            quantity = min(
+                quantity,
+                max(1, _safe_int(getattr(bulk_asset, 'quantity', 1), 1)),
+                available_quantity
+            )
 
             marker = _bulk_marker(asset_id, quantity)
             if marker in event.actually_prepared and marker not in event.returned_items:
@@ -6164,13 +6235,11 @@ def assign_specific_asset_to_model(event_id):
             if block_reason:
                 return jsonify({'error': block_reason}), 400
 
-            # Check if asset is assigned to another active event
-            assigned_assets = get_assigned_assets()
-            if asset_id in assigned_assets:
-                for other_event_id, other_event in data_manager.events.items():
-                    if (asset_id in other_event.prepared_items and 
-                        asset_id not in other_event.returned_items):
-                        return jsonify({'error': f'Asset is already assigned to event {other_event_id}: {other_event.name}'}), 400
+            busy_event = _find_overlapping_event_using_asset(asset_id, event)
+            if busy_event:
+                return jsonify({
+                    'error': f'Asset is already assigned to overlapping event {busy_event.event_id}: {busy_event.name}'
+                }), 400
 
             if add_scanned_assets_to_event:
                 # Quick-add prepares are allowed to raise the requirement so the

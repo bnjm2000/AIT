@@ -8971,7 +8971,7 @@ async function loadEventAssetsForReturn() {
             items.forEach((asset, index) => {
                 const custom = asset.parsedCustom;
                 const isBulk = asset.isBulk || String(asset.id || '').startsWith('[BULK]');
-                const safeId = escapeJs(asset.id);
+                const encodedAssetId = encodeURIComponent(asset.id);
                 const rowBg = index % 2 === 0 ? '#f8f9fa' : 'white';
                 let title = '';
                 let subtitle = '';
@@ -8997,7 +8997,7 @@ async function loadEventAssetsForReturn() {
                             ${subtitle ? `<div style="color:#666; font-size:11px; margin-top:2px; overflow-wrap:anywhere;">${escapeHtml(subtitle)}</div>` : ''}
                         </div>
                         <div style="display:flex; align-items:center; gap:8px; flex-shrink:0;">
-                            <button class="btn btn-warning return-asset-btn" style="padding:6px 12px; font-size:12px;" onclick="returnSpecificAssetNew(${eventId}, '${safeId}')">Return</button>
+                            <button class="btn btn-warning return-asset-btn" data-return-event-id="${eventId}" data-return-asset-id="${escapeHtmlAttr(encodedAssetId)}" style="padding:6px 12px; font-size:12px;" onclick="returnSpecificAssetNew(${eventId}, '${escapeJs(encodedAssetId)}', this)">Return</button>
                         </div>
                     </div>
                 `;
@@ -9019,9 +9019,27 @@ async function loadEventAssetsForReturn() {
 }
 
 
-async function returnSpecificAssetNew(eventId, assetId) {
+function decodeReturnAssetArgument(value) {
+    try {
+        return decodeURIComponent(String(value || ''));
+    } catch (error) {
+        return String(value || '');
+    }
+}
+
+function findReturnAssetButton(eventId, assetId) {
+    const encodedAssetId = encodeURIComponent(String(assetId || ''));
+    return Array.from(document.querySelectorAll('.return-asset-btn')).find(button =>
+        button.dataset.returnEventId === String(eventId) &&
+        button.dataset.returnAssetId === encodedAssetId
+    ) || null;
+}
+
+async function returnSpecificAssetNew(eventId, assetId, buttonElement = null) {
+    const decodedAssetId = decodeReturnAssetArgument(assetId);
+
     // Prevent multiple clicks
-    const buttonElement = document.querySelector(`[onclick*="returnSpecificAssetNew(${eventId}, '${assetId}')"]`);
+    buttonElement = buttonElement || findReturnAssetButton(eventId, decodedAssetId);
     if (buttonElement && buttonElement.disabled) {
         return;
     }
@@ -9034,8 +9052,8 @@ async function returnSpecificAssetNew(eventId, assetId) {
             buttonElement.textContent = 'Returning...';
         }
         
-        await apiCall(`/api/events/${eventId}/return`, 'POST', { assetId });
-        showNotification('success', `${assetId} returned successfully`);
+        await apiCall(`/api/events/${eventId}/return`, 'POST', { assetId: decodedAssetId });
+        showNotification('success', `${customAssetLabelFromId(decodedAssetId)} returned successfully`);
         
         // Remove the asset from the UI with animation
         const parentItem = buttonElement ? buttonElement.closest('.return-asset-item') : null;
@@ -11943,7 +11961,35 @@ async function removeAssetFromEvent(eventId, assetId) {
             message: `Error removing asset: ${error.message}`,
             variant: 'danger',
         });
-    }
+  }
+}
+
+function modelAvailabilityLabel(available, requested, physical, overlap) {
+  const availableQty = Math.max(0, Number(available || 0));
+  const requestedQty = Math.max(1, parseInt(requested, 10) || 1);
+  const physicalQty = Math.max(0, Number(physical || 0));
+  const overlapQty = Math.max(0, Number(overlap || 0));
+
+  let label = requestedQty > 1
+    ? `${Math.min(availableQty, requestedQty)}/${requestedQty} available`
+    : `${availableQty}/${physicalQty || availableQty} available`;
+
+  if (overlapQty > 0) {
+    label += ` (${overlapQty} used on overlapping events)`;
+  }
+
+  return label;
+}
+
+function updateModelAvailabilityLabel(qtyInputId) {
+  const input = document.getElementById(qtyInputId);
+  const label = document.getElementById(`${qtyInputId}-availability`);
+  if (!input || !label) return;
+
+  const available = Number(label.dataset.available || 0);
+  const physical = Number(label.dataset.physical || 0);
+  const overlap = Number(label.dataset.overlap || 0);
+  label.textContent = modelAvailabilityLabel(available, input.value, physical, overlap);
 }
 
 function filterAvailableModels(searchTerm) {
@@ -12006,7 +12052,9 @@ function filterAvailableModels(searchTerm) {
     if (entry) {
       return {
         adjusted: (entry.available ?? 0),     // per-description display value from backend
-        physical: (entry.physical ?? m.count) // per-description physical from backend
+        physical: (entry.physical ?? m.count), // per-description physical from backend
+        overlap: (entry.overlappingDemand ?? 0),
+        usedHere: (entry.usedInThisEvent ?? 0)
       };
     }
 
@@ -12019,11 +12067,16 @@ function filterAvailableModels(searchTerm) {
     if (entry) {
       // We must never exceed this card’s own physical count
       const display = Math.max(0, Math.min(entry.adjustedGlobal ?? entry.available ?? 0, m.count));
-      return { adjusted: display, physical: m.count };
+      return {
+        adjusted: display,
+        physical: m.count,
+        overlap: (entry.overlappingDemand ?? 0),
+        usedHere: (entry.usedInThisEvent ?? 0)
+      };
     }
 
     // 3) final fallback: show physical only
-    return { adjusted: m.count, physical: m.count };
+    return { adjusted: m.count, physical: m.count, overlap: 0, usedHere: 0 };
   };
 
   let html = '';
@@ -12035,23 +12088,24 @@ function filterAvailableModels(searchTerm) {
       model.description || ''
     );
 
-    const { adjusted, physical } = adjustedAvailFor(model);
+    const { adjusted, physical, overlap } = adjustedAvailFor(model);
     const displayCount = Math.max(0, adjusted);
     const color = adjusted < 1 ? '#dc3545' : '#28a745'; // RED if fewer than 1 remaining
+    const availabilityText = modelAvailabilityLabel(displayCount, 1, physical, overlap);
 
     html += `
       <div style="padding: 12px; border-bottom: 1px solid #f1f1f1; display: flex; justify-content: space-between; align-items: center;">
         <div style="flex: 1;">
           <div style="font-weight: 500; margin-bottom: 4px;">${model.brand} ${model.model}</div>
           <div style="color: #666; font-size: 13px; margin-bottom: 2px;">${model.description}</div>
-          <div style="font-size: 12px; color: ${color};">${displayCount} available</div>
+          <div id="${qtyInputId}-availability" data-available="${displayCount}" data-physical="${physical}" data-overlap="${overlap}" style="font-size: 12px; color: ${color};">${availabilityText}</div>
         </div>
         <div style="display: flex; align-items: center; gap: 10px;">
           <!-- IMPORTANT: we keep max bound to PHYSICAL so we do NOT prevent adding when adjusted < 1 -->
           <input type="number" id="${qtyInputId}" min="1" max="${physical}" value="1"
               style="width: 60px; padding: 4px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;"
-              oninput="validateQuantityInput('${qtyInputId}', ${physical})"
-              onblur="handleQuantityBlur('${qtyInputId}', ${physical})"
+              oninput="validateQuantityInput('${qtyInputId}', ${physical}); updateModelAvailabilityLabel('${qtyInputId}')"
+              onblur="handleQuantityBlur('${qtyInputId}', ${physical}); updateModelAvailabilityLabel('${qtyInputId}')"
               onkeydown="handleQuantityKeydown(event)">
         <button class="btn btn-primary add-model-btn" style="padding: 6px 12px; font-size: 12px;"
                 data-event-id="${eventId}"
