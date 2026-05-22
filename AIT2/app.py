@@ -1752,6 +1752,51 @@ def _bulk_quantity_for_asset_in_values(values, bulk_id):
     return total
 
 
+def _format_event_date_for_response(date_value):
+    if not date_value:
+        return ''
+    try:
+        return format_date_output(date_value)
+    except Exception:
+        return str(date_value)
+
+
+def _bulk_deployments_for_asset(bulk_id):
+    deployments = []
+    if not bulk_id or not data_manager:
+        return deployments
+
+    for event in data_manager.events.values():
+        prepared_qty = _bulk_quantity_for_asset_in_values(
+            getattr(event, 'actually_prepared', []) or [],
+            bulk_id
+        )
+        returned_qty = _bulk_quantity_for_asset_in_values(
+            getattr(event, 'returned_items', []) or [],
+            bulk_id
+        )
+        deployed_qty = max(prepared_qty - returned_qty, 0)
+        if deployed_qty <= 0:
+            continue
+
+        deployments.append({
+            'eventId': event.event_id,
+            'eventName': getattr(event, 'name', '') or f"Event {event.event_id}",
+            'startDate': _format_event_date_for_response(getattr(event, 'start_date', '')),
+            'endDate': _format_event_date_for_response(getattr(event, 'end_date', '')),
+            'quantity': deployed_qty,
+            '_sortStartDate': getattr(event, 'start_date', '') or '',
+            '_sortEndDate': getattr(event, 'end_date', '') or '',
+        })
+
+    deployments.sort(key=lambda row: (row['_sortStartDate'], row['_sortEndDate'], row['eventId']))
+    for row in deployments:
+        row.pop('_sortStartDate', None)
+        row.pop('_sortEndDate', None)
+
+    return deployments
+
+
 def _event_model_quantities_by_key(event):
     totals = defaultdict(int)
     for item in getattr(event, 'prepared_items', []) or []:
@@ -1849,7 +1894,7 @@ def _active_physical_asset_refs_for_event(event):
     return refs
 
 
-def _find_overlapping_event_using_asset(asset_id, target_event):
+def _find_event_using_asset(asset_id, target_event, require_overlap=False):
     if not asset_id or not target_event:
         return None
 
@@ -1859,7 +1904,7 @@ def _find_overlapping_event_using_asset(asset_id, target_event):
     for other in data_manager.events.values():
         if not other or other.event_id == target_event.event_id:
             continue
-        if not _ranges_overlap(my_start, my_end, getattr(other, 'start_date', ''), getattr(other, 'end_date', '')):
+        if require_overlap and not _ranges_overlap(my_start, my_end, getattr(other, 'start_date', ''), getattr(other, 'end_date', '')):
             continue
         if asset_id in _active_physical_asset_refs_for_event(other):
             return other
@@ -2062,7 +2107,7 @@ def _bulk_remaining_for_event_group(event, bulk_asset):
     return max(required - prepared, 0)
 
 
-def _bulk_available_quantity_for_event(bulk_asset, target_event):
+def _bulk_available_quantity_for_event(bulk_asset, target_event, require_overlap=False):
     if not bulk_asset or not _is_bulk_asset(bulk_asset):
         return 0
 
@@ -2077,7 +2122,7 @@ def _bulk_available_quantity_for_event(bulk_asset, target_event):
     for other in data_manager.events.values():
         if not other or other.event_id == target_event.event_id:
             continue
-        if not _ranges_overlap(my_start, my_end, getattr(other, 'start_date', ''), getattr(other, 'end_date', '')):
+        if require_overlap and not _ranges_overlap(my_start, my_end, getattr(other, 'start_date', ''), getattr(other, 'end_date', '')):
             continue
 
         prepared_qty = _bulk_quantity_for_asset_in_values(getattr(other, 'actually_prepared', []) or [], bulk_asset.asset_id)
@@ -2207,7 +2252,7 @@ def get_available_assets_for_event(event_id):
       - not decommissioned
       - not out of commission
       - not already prepared/assigned to this same event
-      - not specifically out for another overlapping event and not returned
+      - not specifically out for any other event and not returned
 
     It does NOT reserve/hide assets simply because another overlapping event has
     an unprepared [MODEL] requirement.  Model requirements are planning demand;
@@ -2218,16 +2263,11 @@ def get_available_assets_for_event(event_id):
         if not event:
             return jsonify({'error': 'Event not found'}), 404
 
-        my_start = getattr(event, 'start_date', '')
-        my_end = getattr(event, 'end_date', '')
-
         current_event_refs = _active_physical_asset_refs_for_event(event)
         busy_elsewhere = set()
 
         for other in data_manager.events.values():
             if not other or other.event_id == event_id:
-                continue
-            if not _ranges_overlap(my_start, my_end, getattr(other, 'start_date', ''), getattr(other, 'end_date', '')):
                 continue
 
             busy_elsewhere.update(_active_physical_asset_refs_for_event(other))
@@ -5320,10 +5360,10 @@ def add_asset_to_event(event_id):
             if asset.is_missing:
                 return jsonify({'error': 'Cannot assign missing asset'}), 400
 
-            busy_event = _find_overlapping_event_using_asset(asset_id, event)
+            busy_event = _find_event_using_asset(asset_id, event)
             if busy_event:
                 return jsonify({
-                    'error': f'Asset is already assigned to overlapping event {busy_event.event_id}: {busy_event.name}'
+                    'error': f'Asset is already assigned to another event {busy_event.event_id}: {busy_event.name}'
                 }), 400
 
         # Add the asset as UNPREPARED (just assigned to event)
@@ -5651,10 +5691,10 @@ def prepare_event_asset(event_id):
             if block_reason:
                 return jsonify({'error': block_reason}), 400
 
-            busy_event = _find_overlapping_event_using_asset(asset_id, event)
+            busy_event = _find_event_using_asset(asset_id, event)
             if busy_event:
                 return jsonify({
-                    'error': f'Asset is already assigned to overlapping event {busy_event.event_id}: {busy_event.name}'
+                    'error': f'Asset is already assigned to another event {busy_event.event_id}: {busy_event.name}'
                 }), 400
 
             if add_scanned_assets_to_event:
@@ -6235,10 +6275,10 @@ def assign_specific_asset_to_model(event_id):
             if block_reason:
                 return jsonify({'error': block_reason}), 400
 
-            busy_event = _find_overlapping_event_using_asset(asset_id, event)
+            busy_event = _find_event_using_asset(asset_id, event)
             if busy_event:
                 return jsonify({
-                    'error': f'Asset is already assigned to overlapping event {busy_event.event_id}: {busy_event.name}'
+                    'error': f'Asset is already assigned to another event {busy_event.event_id}: {busy_event.name}'
                 }), 400
 
             if add_scanned_assets_to_event:
@@ -7483,24 +7523,26 @@ def get_assets():
                 _maintenance_log_for_response(log)
                 for log in (getattr(asset, 'maintenance_logs', []) or [])
             ]
+            is_bulk = _is_bulk_asset(asset)
+            total_quantity = max(1, _safe_int(getattr(asset, 'quantity', 1), 1)) if is_bulk else 1
+            bulk_deployments = _bulk_deployments_for_asset(asset.asset_id) if is_bulk else []
+            deployed_quantity = sum(item['quantity'] for item in bulk_deployments)
+            available_quantity = (
+                0 if _is_disposed(asset)
+                else max(0, total_quantity - deployed_quantity) if is_bulk
+                else 1
+            )
 
             # Determine current status
             status = _asset_status_value(asset, assigned_assets)
-            if _is_bulk_asset(asset) and status not in ('decommissioned', 'missing', 'ooc'):
-                out_qty = 0
-                for ev in data_manager.events.values():
-                    out_qty += max(
-                        _bulk_quantity_for_asset_in_values(getattr(ev, 'actually_prepared', []) or [], asset.asset_id) -
-                        _bulk_quantity_for_asset_in_values(getattr(ev, 'returned_items', []) or [], asset.asset_id),
-                        0
-                    )
-                status = 'deployed' if out_qty > 0 else ('degraded' if _is_degraded(asset) else 'available')
+            if is_bulk and status not in ('decommissioned', 'missing', 'ooc'):
+                status = 'deployed' if deployed_quantity > 0 else ('degraded' if _is_degraded(asset) else 'available')
 
             assets_data.append({
-                'id': '' if _is_bulk_asset(asset) else asset.asset_id,
+                'id': '' if is_bulk else asset.asset_id,
                 'internalId': asset.asset_id,
-                'bulkId': asset.asset_id if _is_bulk_asset(asset) else '',
-                'displayId': '' if _is_bulk_asset(asset) else asset.asset_id,
+                'bulkId': asset.asset_id if is_bulk else '',
+                'displayId': '' if is_bulk else asset.asset_id,
                 'brand': asset.brand,
                 'model': asset.model_number,
                 'serial': asset.serial_number,
@@ -7522,9 +7564,11 @@ def get_assets():
                     for log in maintenance_records
                 ],
                 'maintenanceLogRecords': maintenance_records,
-                'isBulk': _is_bulk_asset(asset),
-                'quantity': max(1, _safe_int(getattr(asset, 'quantity', 1), 1)) if _is_bulk_asset(asset) else 1,
-                'availableQuantity': 0 if _is_disposed(asset) else (max(0, max(1, _safe_int(getattr(asset, 'quantity', 1), 1)) - sum(max(_bulk_quantity_for_asset_in_values(getattr(ev, 'actually_prepared', []) or [], asset.asset_id) - _bulk_quantity_for_asset_in_values(getattr(ev, 'returned_items', []) or [], asset.asset_id), 0) for ev in data_manager.events.values())) if _is_bulk_asset(asset) else 1)
+                'isBulk': is_bulk,
+                'quantity': total_quantity,
+                'availableQuantity': available_quantity,
+                'deployedQuantity': deployed_quantity if is_bulk else 0,
+                'bulkDeployments': bulk_deployments if is_bulk else []
             })
 
         return jsonify({'success': True, 'data': assets_data})

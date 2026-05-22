@@ -4288,6 +4288,64 @@ function ensureInventoryTableStyles() {
       color: #aaa;
     }
 
+    .inventory-compact-table .bulk-quantity-cell {
+      min-width: 130px;
+    }
+
+    .bulk-deployment-details {
+      margin-top: 5px;
+      font-size: 12px;
+      line-height: 1.25;
+    }
+
+    .bulk-deployment-details summary {
+      cursor: pointer;
+      color: #0f5f78;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .bulk-deployment-menu {
+      margin-top: 6px;
+      min-width: 220px;
+      max-width: 300px;
+      padding: 7px 8px;
+      border: 1px solid #d5e3ea;
+      border-radius: 6px;
+      background: #f8fafc;
+      color: #1f2937;
+      box-shadow: 0 4px 10px rgba(15, 23, 42, 0.08);
+    }
+
+    .bulk-deployment-row + .bulk-deployment-row {
+      margin-top: 7px;
+      padding-top: 7px;
+      border-top: 1px solid #e5e7eb;
+    }
+
+    .bulk-deployment-main,
+    .bulk-deployment-meta {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .bulk-deployment-event {
+      font-weight: 700;
+      overflow-wrap: anywhere;
+    }
+
+    .bulk-deployment-event-id,
+    .bulk-deployment-dates {
+      color: #64748b;
+    }
+
+    .bulk-deployment-qty {
+      color: #78350f;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
     .inventory-actions-cell {
       white-space: nowrap;
       display: flex;
@@ -4319,6 +4377,57 @@ function ensureInventoryTableStyles() {
   `;
 
   document.head.appendChild(style);
+}
+
+function bulkDeploymentDateText(deployment) {
+  const startDate = deployment?.startDate ? formatDate(deployment.startDate) : '';
+  const endDate = deployment?.endDate ? formatDate(deployment.endDate) : '';
+  if (!startDate && !endDate) return '';
+  if (!endDate || startDate === endDate) return startDate;
+  return `${startDate} - ${endDate}`;
+}
+
+function bulkDeploymentDetailsHtml(asset) {
+  if (!asset?.isBulk || !Array.isArray(asset.bulkDeployments)) return '';
+
+  const deployments = asset.bulkDeployments
+    .map(deployment => ({
+      ...deployment,
+      quantity: Math.max(0, Number(deployment?.quantity || 0) || 0)
+    }))
+    .filter(deployment => deployment.quantity > 0);
+
+  if (deployments.length === 0) return '';
+
+  const deployedTotal = Math.max(
+    0,
+    Number(asset.deployedQuantity ?? deployments.reduce((sum, item) => sum + item.quantity, 0)) || 0
+  );
+
+  return `
+    <details class="bulk-deployment-details">
+      <summary>${escapeHtml(String(deployedTotal))} deployed</summary>
+      <div class="bulk-deployment-menu" role="list">
+        ${deployments.map((deployment) => {
+          const eventId = deployment.eventId ? `#${deployment.eventId}` : '';
+          const eventName = deployment.eventName || (deployment.eventId ? `Event ${deployment.eventId}` : 'Event');
+          const dateText = bulkDeploymentDateText(deployment);
+          return `
+            <div class="bulk-deployment-row" role="listitem">
+              <div class="bulk-deployment-main">
+                <span class="bulk-deployment-event">${escapeHtml(eventName)}</span>
+                ${eventId ? `<span class="bulk-deployment-event-id">${escapeHtml(eventId)}</span>` : ''}
+              </div>
+              <div class="bulk-deployment-meta">
+                <span class="bulk-deployment-dates">${escapeHtml(dateText || 'Date not set')}</span>
+                <span class="bulk-deployment-qty">${escapeHtml(String(deployment.quantity))} deployed</span>
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    </details>
+  `;
 }
 
 function displayInventoryTable(assetsToShow) {
@@ -4357,6 +4466,9 @@ function displayInventoryTable(assetsToShow) {
   assetsToShow.forEach((asset) => {
     const encodedAssetId = encodeURIComponent(getAssetIdentifierForApi(asset));
     const description = asset.description || "";
+    const quantityHtml = asset.isBulk
+      ? `${escapeHtml(String(asset.availableQuantity ?? asset.quantity ?? 1))}/${escapeHtml(String(asset.quantity ?? 1))}${bulkDeploymentDetailsHtml(asset)}`
+      : '1';
 
     tableHTML += `
       <tr>
@@ -4374,7 +4486,7 @@ function displayInventoryTable(assetsToShow) {
 
         <td>${asset.isBulk ? '—' : escapeHtml(asset.serial || "N/A")}</td>
 
-        <td>${asset.isBulk ? `${escapeHtml(String(asset.availableQuantity ?? asset.quantity ?? 1))}/${escapeHtml(String(asset.quantity ?? 1))}` : '1'}</td>
+        <td class="${asset.isBulk ? 'bulk-quantity-cell' : ''}">${quantityHtml}</td>
 
         <td>
           ${departmentBadgeHtml(asset.department)}

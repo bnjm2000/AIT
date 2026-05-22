@@ -61,6 +61,9 @@ class EventAvailabilityOverlapTests(unittest.TestCase):
         description='Regular item',
         is_bulk=False,
         quantity=1,
+        is_missing=False,
+        is_ooc=False,
+        is_degraded=False,
     ):
         return InventoryItem(
             asset_id=asset_id,
@@ -68,13 +71,15 @@ class EventAvailabilityOverlapTests(unittest.TestCase):
             model_number=model,
             serial_number=f'SN-{asset_id}',
             description=description,
-            is_missing=False,
+            is_missing=is_missing,
             maintenance_logs=[],
             department_code='AX',
             default_location='Store',
             current_location='',
+            is_ooc=is_ooc,
             is_bulk=is_bulk,
             quantity=quantity,
+            is_degraded=is_degraded,
         )
 
     def login_as(self, username='normal', is_admin=False):
@@ -129,7 +134,7 @@ class EventAvailabilityOverlapTests(unittest.TestCase):
         self.assertEqual(bulk['overlappingDemand'], 4)
         self.assertEqual(bulk['available'], 2)
 
-    def test_prepare_dropdown_hides_assets_assigned_to_overlapping_events_only(self):
+    def test_prepare_dropdown_hides_assets_assigned_to_any_other_event(self):
         self.make_event(100)
         self.make_event(101, prepared=['A#01'])
         self.make_event(102, start='20260601', end='20260601', prepared=['A#02'])
@@ -141,8 +146,25 @@ class EventAvailabilityOverlapTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
         ids = {item['id'] or item.get('bulkId') for item in response.get_json()['data']}
         self.assertNotIn('A#01', ids)
-        self.assertIn('A#02', ids)
+        self.assertNotIn('A#02', ids)
         self.assertIn('A#03', ids)
+
+    def test_prepare_dropdown_excludes_missing_and_ooc_but_includes_degraded(self):
+        self.make_event(100)
+        self.data_manager.inventory['MISS#01'] = self.make_asset('MISS#01', is_missing=True)
+        self.data_manager.inventory['OOC#01'] = self.make_asset('OOC#01', is_ooc=True)
+        self.data_manager.inventory['DEG#01'] = self.make_asset('DEG#01', is_degraded=True)
+
+        self.login_as()
+        response = self.client.get('/api/assets/available-for-event/100')
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        assets = response.get_json()['data']
+        by_id = {item['id'] or item.get('bulkId'): item for item in assets}
+        self.assertNotIn('MISS#01', by_id)
+        self.assertNotIn('OOC#01', by_id)
+        self.assertIn('DEG#01', by_id)
+        self.assertTrue(by_id['DEG#01']['isDegraded'])
 
     def test_bulk_prepare_is_capped_by_overlapping_event_availability(self):
         target = self.make_event(
@@ -165,6 +187,65 @@ class EventAvailabilityOverlapTests(unittest.TestCase):
         self.assertEqual(response.get_json()['data']['assetId'], marker)
         self.assertIn(marker, target.actually_prepared)
 
+    def test_bulk_prepare_is_capped_by_any_other_event_availability(self):
+        target = self.make_event(
+            100,
+            prepared=['[MODEL]AX|TestBrand|BulkModel|4|Bulk item'],
+        )
+        self.make_event(
+            101,
+            start='20260601',
+            end='20260601',
+            actual=[app_module._bulk_marker('BULK-0001', 4)],
+        )
+
+        self.login_as()
+        response = self.client.post(
+            '/api/events/100/assign-specific',
+            json={'assetId': 'BULK-0001'},
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        marker = app_module._bulk_marker('BULK-0001', 2)
+        self.assertEqual(response.get_json()['data']['assetId'], marker)
+        self.assertIn(marker, target.actually_prepared)
+
+    def test_inventory_bulk_asset_includes_deployment_breakdown(self):
+        returned_marker = app_module._bulk_marker('BULK-0001', 3)
+        self.make_event(
+            101,
+            start='20260521',
+            end='20260522',
+            actual=[app_module._bulk_marker('BULK-0001', 4)],
+        )
+        self.make_event(
+            102,
+            start='20260523',
+            end='20260523',
+            actual=[app_module._bulk_marker('BULK-0001', 1)],
+        )
+        self.make_event(
+            103,
+            actual=[returned_marker],
+            returned=[returned_marker],
+        )
+
+        self.login_as()
+        response = self.client.get('/api/assets')
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        bulk_asset = next(item for item in response.get_json()['data'] if item['bulkId'] == 'BULK-0001')
+        self.assertEqual(bulk_asset['status'], 'deployed')
+        self.assertEqual(bulk_asset['availableQuantity'], 1)
+        self.assertEqual(bulk_asset['deployedQuantity'], 5)
+
+        deployments = bulk_asset['bulkDeployments']
+        self.assertEqual([item['eventId'] for item in deployments], [101, 102])
+        self.assertEqual([item['quantity'] for item in deployments], [4, 1])
+        self.assertEqual(deployments[0]['eventName'], 'Event 101')
+        self.assertEqual(deployments[0]['startDate'], '2026/05/21')
+        self.assertEqual(deployments[0]['endDate'], '2026/05/22')
+
     def test_normal_user_can_return_individual_bulk_marker(self):
         marker = app_module._bulk_marker('BULK-0001', 2)
         event = self.make_event(
@@ -178,6 +259,21 @@ class EventAvailabilityOverlapTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
         self.assertIn(marker, event.returned_items)
+
+    def test_degraded_asset_can_prepare_with_warning(self):
+        event = self.make_event(
+            100,
+            prepared=['[MODEL]AX|TestBrand|RegularModel|1|Regular item'],
+        )
+        self.data_manager.inventory['A#01'].is_degraded = True
+
+        self.login_as()
+        response = self.client.post('/api/events/100/assign-specific', json={'assetId': 'A#01'})
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertIn('warning', response.get_json())
+        self.assertIn('Degraded', response.get_json()['warning'])
+        self.assertIn('A#01', event.actually_prepared)
 
 
 if __name__ == '__main__':
