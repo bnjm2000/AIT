@@ -141,8 +141,8 @@ DAD9003#07,DPA,DAD 9003,,MicroLock to 3-pin LEMO,False,False,False,False,False,1
 DAD9003#08,DPA,DAD 9003,,MicroLock to 3-pin LEMO,False,False,False,False,False,1,,AX,Store,Store
 DAD9003#09,DPA,DAD 9003,,MicroLock to 3-pin LEMO,False,False,False,False,False,1,,AX,Store,Store
 DAD9003#10,DPA,DAD 9003,,MicroLock to 3-pin LEMO,False,False,False,False,False,1,,AX,Store,Store
-EVOLVE50#01,EV,EVOLVE 50,405294795801150521,Portable column system,False,False,False,False,False,1,,AX,Store,Store
-EVOLVE50#02,EV,EVOLVE 50,405294795801160310,Portable column system,False,False,False,False,False,1,,AX,Store,Store
+EVOLVE50#01,EV,EVOLVE 50,405294795801150521,Portable column system,False,False,False,False,False,1,,AX,Store,Rolex Event @ New Bahru
+EVOLVE50#02,EV,EVOLVE 50,405294795801160310,Portable column system,False,False,False,False,False,1,,AX,Store,Rolex Event @ New Bahru
 EVOLVE50#03,EV,EVOLVE 50,405294795801160374,Portable column system,False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
 EVOLVE50#04,EV,EVOLVE 50,405294795801160383,Portable column system,False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
 EVOLVE50#05,EV,EVOLVE 50,405294795801160390,Portable column system,False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
@@ -393,9 +393,9 @@ LA4X#07,L-Acoustics,LA4X,1180053692,Amplified controller,False,False,False,False
 LA4X#08,L-Acoustics,LA4X,1180051680,Amplified controller,False,False,False,False,False,1,,AX,Store,
 LA4X#09,L-Acoustics,LA4X,1180053978,Amplified controller,False,False,False,False,False,1,,AX,Store,Store
 LA4X#10,L-Acoustics,LA4X,1180053926,Amplified controller,False,False,False,False,False,1,,AX,Store,Store
-LA12X#01,L-Acoustics,LA12X,1140035138,Amplified controller,False,False,False,False,False,1,,AX,Store,Store
-LA12X#02,L-Acoustics,LA12X,1140037808,Amplified controller,False,False,False,False,False,1,,AX,Store,Store
-LA12X#03,L-Acoustics,LA12X,1140037839,Amplified controller,False,False,False,False,False,1,,AX,Store,Store
+LA12X#01,L-Acoustics,LA12X,1140035138,Amplified controller,False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
+LA12X#02,L-Acoustics,LA12X,1140037808,Amplified controller,False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
+LA12X#03,L-Acoustics,LA12X,1140037839,Amplified controller,False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
 LA12X#04,L-Acoustics,LA12X,1140037868,Amplified controller,False,False,False,False,False,1,,AX,Store,Store
 LA12X#05,L-Acoustics,LA12X,1140037870,Amplified controller,False,False,False,False,False,1,,AX,Store,Store
 LA12X#06,L-Acoustics,LA12X,1140037871,Amplified controller,False,False,False,False,False,1,,AX,Store,Store
@@ -405,38 +405,38 @@ KARAII#01,L-Acoustics,KARAII,2190019410,Long Throw Concert Sound Loudspeaker,Fal
 KARAII#02,L-Acoustics,KARAII,2190019417,Long Throw Concert Sound Loudspeaker,False,False,False,False,False,1,,AX,Store,Store
 KARAII#03,L-Acoustics,KARAII,2190019468,Long Throw Concert Sound Loudspeaker,False,False,False,False,False,1,,AX,Store,Store
 KARAII#04,L-Acoustics,KARAII,2190019475,Long Throw Concert Sound Loudspeaker,False,False,False,False,False,1,,AX,Store,Store
-KARAII#05,L-Acoustics,KARAII,2190019478,Long Throw Concert Sound Loudspeaker,False,False,False,False,False,1,,AX,Store,Store
-KARAII#06,L-Acoustics,KARAII,2190019486,Long Throw Concert Sound Loudspeaker,False,False,False,False,False,1,,AX,Store,Store
-KARAII#07,L-Acoustics,KARAII,2190019517,Long Throw Concert Sound Loudspeaker,False,False,False,False,False,1,,AX,Store,Store
-KARAII#08,L-Acoustics,KARAII,2190019528,Long Throw Concert Sound Loudspeaker,False,False,False,False,False,1,,AX,Store,Store
-KARAII#09,L-Acoustics,KARAII,2190019555,Long Throw Concert Sound Loudspeaker,False,False,False,False,False,1,,AX,Store,Store
-KARAII#10,L-Acoustics,KARAII,2190019559,Long Throw Concert Sound Loudspeaker,False,False,False,False,False,1,,AX,Store,Store
+KARAII#05,L-Acoustics,KARAII,2190019478,Long Throw Concert Sound Loudspeaker,False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
+KARAII#06,L-Acoustics,KARAII,2190019486,Long Throw Concert Sound Loudspeaker,False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
+KARAII#07,L-Acoustics,KARAII,2190019517,Long Throw Concert Sound Loudspeaker,False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
+KARAII#08,L-Acoustics,KARAII,2190019528,Long Throw Concert Sound Loudspeaker,False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
+KARAII#09,L-Acoustics,KARAII,2190019555,Long Throw Concert Sound Loudspeaker,False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
+KARAII#10,L-Acoustics,KARAII,2190019559,Long Throw Concert Sound Loudspeaker,False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
 KARAII#11,L-Acoustics,KARAII,2190019568,Long Throw Concert Sound Loudspeaker,False,False,False,False,False,1,,AX,Store,Store
 KARAII#12,L-Acoustics,KARAII,2190019607,Long Throw Concert Sound Loudspeaker,False,False,False,False,False,1,,AX,Store,Store
-KARAII#13,L-Acoustics,KARAII,2190019608,Long Throw Concert Sound Loudspeaker,False,False,False,False,False,1,,AX,Store,Store
-KARAII#14,L-Acoustics,KARAII,2190019609,Long Throw Concert Sound Loudspeaker,False,False,False,False,False,1,,AX,Store,Store
-KARAII#15,L-Acoustics,KARAII,2190019610,Long Throw Concert Sound Loudspeaker,False,False,False,False,False,1,,AX,Store,Store
-KARAII#16,L-Acoustics,KARAII,2190019620,Long Throw Concert Sound Loudspeaker,False,False,False,False,False,1,,AX,Store,Store
+KARAII#13,L-Acoustics,KARAII,2190019608,Long Throw Concert Sound Loudspeaker,False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
+KARAII#14,L-Acoustics,KARAII,2190019609,Long Throw Concert Sound Loudspeaker,False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
+KARAII#15,L-Acoustics,KARAII,2190019610,Long Throw Concert Sound Loudspeaker,False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
+KARAII#16,L-Acoustics,KARAII,2190019620,Long Throw Concert Sound Loudspeaker,False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
 KARAII#17,L-Acoustics,KARAII,2190021406,Long Throw Concert Sound Loudspeaker,False,False,False,False,False,1,,AX,Store,Store
-KARAII#18,L-Acoustics,KARAII,2190021407,Long Throw Concert Sound Loudspeaker,False,False,False,False,False,1,,AX,Store,Store
-KARAII#19,L-Acoustics,KARAII,2190021408,Long Throw Concert Sound Loudspeaker,False,False,False,False,False,1,,AX,Store,Store
+KARAII#18,L-Acoustics,KARAII,2190021407,Long Throw Concert Sound Loudspeaker,False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
+KARAII#19,L-Acoustics,KARAII,2190021408,Long Throw Concert Sound Loudspeaker,False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
 KARAII#20,L-Acoustics,KARAII,2190021409,Long Throw Concert Sound Loudspeaker,False,False,False,False,False,1,,AX,Store,Store
 KARAII#21,L-Acoustics,KARAII,2190021410,Long Throw Concert Sound Loudspeaker,False,False,False,False,False,1,,AX,Store,Store
 KARAII#22,L-Acoustics,KARAII,2190021553,Long Throw Concert Sound Loudspeaker,False,False,False,False,False,1,,AX,Store,Store
 KARAII#23,L-Acoustics,KARAII,2190021557,Long Throw Concert Sound Loudspeaker,False,False,False,False,False,1,,AX,Store,Store
 KARAII#24,L-Acoustics,KARAII,2190021558,Long Throw Concert Sound Loudspeaker,False,False,False,False,False,1,,AX,Store,Store
-SB18#01,L-Acoustics,SB18,780022277,"High power compact subwoofer: 1 x 18""",False,False,False,False,False,1,,AX,Store,Store
+SB18#01,L-Acoustics,SB18,780022277,"High power compact subwoofer: 1 x 18""",False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
 SB18#02,L-Acoustics,SB18,780022279,"High power compact subwoofer: 1 x 18""",False,False,False,False,False,1,,AX,Store,Store
 SB18#03,L-Acoustics,SB18,780022861,"High power compact subwoofer: 1 x 18""",False,False,False,False,False,1,,AX,Store,Store
 SB18#04,L-Acoustics,SB18,780022862,"High power compact subwoofer: 1 x 18""",False,False,False,False,False,1,,AX,Store,Store
 SB18#05,L-Acoustics,SB18,780022920,"High power compact subwoofer: 1 x 18""",False,False,False,False,False,1,,AX,Store,Store
 SB18#06,L-Acoustics,SB18,780022923,"High power compact subwoofer: 1 x 18""",False,False,False,False,False,1,,AX,Store,Store
-SB18#07,L-Acoustics,SB18,780022928,"High power compact subwoofer: 1 x 18""",False,False,False,False,False,1,,AX,Store,Store
-SB18#08,L-Acoustics,SB18,780022929,"High power compact subwoofer: 1 x 18""",False,False,False,False,False,1,,AX,Store,Store
-SB18#09,L-Acoustics,SB18,780023835,"High power compact subwoofer: 1 x 18""",False,False,False,False,False,1,,AX,Store,Store
-SB18#10,L-Acoustics,SB18,780023853,"High power compact subwoofer: 1 x 18""",False,False,False,False,False,1,,AX,Store,Store
+SB18#07,L-Acoustics,SB18,780022928,"High power compact subwoofer: 1 x 18""",False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
+SB18#08,L-Acoustics,SB18,780022929,"High power compact subwoofer: 1 x 18""",False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
+SB18#09,L-Acoustics,SB18,780023835,"High power compact subwoofer: 1 x 18""",False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
+SB18#10,L-Acoustics,SB18,780023853,"High power compact subwoofer: 1 x 18""",False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
 SB18#11,L-Acoustics,SB18,780023871,"High power compact subwoofer: 1 x 18""",False,False,False,False,False,1,,AX,Store,Store
-SB18#12,L-Acoustics,SB18,780023872,"High power compact subwoofer: 1 x 18""",False,False,False,False,False,1,,AX,Store,Store
+SB18#12,L-Acoustics,SB18,780023872,"High power compact subwoofer: 1 x 18""",False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
 LS10#01,L-Acoustics,LS10,1670010429,"10-port Ethernet AVB Switch, Avnu-certified",False,False,False,False,False,1,,AX,Store,Store
 LS10#02,L-Acoustics,LS10,1670010391,"10-port Ethernet AVB Switch, Avnu-certified",False,False,False,False,False,1,,AX,Store,Store
 LS10#03,L-Acoustics,LS10,1670010355,"10-port Ethernet AVB Switch, Avnu-certified",False,False,False,False,False,1,,AX,Store,Store
@@ -454,7 +454,7 @@ MBAR#03,L-Acoustics,M-BAR,900009093,Extension bar for rigging frame,False,False,
 MBAR#04,L-Acoustics,M-BAR,900009095,Extension bar for rigging frame,False,False,False,False,False,1,,AX,Store,
 MJACK#01,L-Acoustics,M-JACK,,,False,False,False,False,False,1,,AX,Store,
 MJACK#02,L-Acoustics,M-JACK,,,False,False,False,False,False,1,,AX,Store,
-LAP1#01,L-Acoustics,P1,1400004120,Digital audio processor and measurement platform: 20x 18 mic/line AES/EBU and AVB. CE version.,False,False,False,False,False,1,,AX,Store,Store
+LAP1#01,L-Acoustics,P1,1400004120,Digital audio processor and measurement platform: 20x 18 mic/line AES/EBU and AVB. CE version.,False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
 X-UL12#01,L-Acoustics,X-UL12,1210008336,Long U-bracket for X12,False,False,False,False,False,1,,AX,Store,Store
 X-UL12#02,L-Acoustics,X-UL12,1210008580,Long U-bracket for X12,False,False,False,False,False,1,,AX,Store,Store
 X-UL12#03,L-Acoustics,X-UL12,1210008583,Long U-bracket for X12,False,False,False,False,False,1,,AX,Store,Store
@@ -535,10 +535,10 @@ X8#05,L-Acoustics,X8,1260040518,"8"" passive coaxial enclosure",False,False,Fals
 X8#06,L-Acoustics,X8,1260040522,"8"" passive coaxial enclosure",False,False,False,False,False,1,,AX,Store,Store
 X8#07,L-Acoustics,X8,1260040523,"8"" passive coaxial enclosure",False,False,False,False,False,1,,AX,Store,Store
 X8#08,L-Acoustics,X8,1260040525,"8"" passive coaxial enclosure",False,False,False,False,False,1,,AX,Store,Store
-X8#09,L-Acoustics,X8,1260040530,"8"" passive coaxial enclosure",False,False,False,False,False,1,,AX,Store,Store
-X8#10,L-Acoustics,X8,1260040532,"8"" passive coaxial enclosure",False,False,False,False,False,1,,AX,Store,Store
-X8#11,L-Acoustics,X8,1260040538,"8"" passive coaxial enclosure",False,False,False,False,False,1,,AX,Store,Store
-X8#12,L-Acoustics,X8,1260040685,"8"" passive coaxial enclosure",False,False,False,False,False,1,,AX,Store,Store
+X8#09,L-Acoustics,X8,1260040530,"8"" passive coaxial enclosure",False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
+X8#10,L-Acoustics,X8,1260040532,"8"" passive coaxial enclosure",False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
+X8#11,L-Acoustics,X8,1260040538,"8"" passive coaxial enclosure",False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
+X8#12,L-Acoustics,X8,1260040685,"8"" passive coaxial enclosure",False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
 X8#13,L-Acoustics,X8,1260040534,"8"" passive coaxial enclosure",False,False,False,False,False,1,,AX,Store,Store
 X8#14,L-Acoustics,X8,1260040626,"8"" passive coaxial enclosure",False,False,False,False,False,1,,AX,Store,Store
 X8#15,L-Acoustics,X8,1260040643,"8"" passive coaxial enclosure",False,False,False,False,False,1,,AX,Store,Store
@@ -571,7 +571,7 @@ MT-90A#01,MiPro,MT-90A,858290901A,Interlink Transmitter,False,False,False,False,
 MT-90A#02,MiPro,MT-90A,858290902A,Interlink Transmitter,False,False,False,False,False,1,"[{""date"":""2024/11/20"",""user"":""bnjm2000"",""description"":""2024/11/20 - Send to MiPro for testing"",""type"":""General"",""cost"":"""",""changes"":[],""source"":{}},{""date"":""2024/11/26"",""user"":""bnjm2000"",""description"":""2024/11/26 - Collected back from MiPro after testing"",""type"":""General"",""cost"":"""",""changes"":[],""source"":{}}]",AX,Store,
 MT-90A#03,MiPro,MT-90A,858290899A,Interlink Transmitter,False,False,False,False,False,1,"[{""date"":""2024/11/20"",""user"":""bnjm2000"",""description"":""2024/11/20 - Send to MiPro for testing"",""type"":""General"",""cost"":"""",""changes"":[],""source"":{}},{""date"":""2024/11/26"",""user"":""bnjm2000"",""description"":""changed transmitter to same type (Old S/N: 809264158A)"",""type"":""Repair"",""cost"":"""",""changes"":[{""kind"":""serial"",""value"":""858290899A""}],""source"":{}},{""date"":""2024/11/26"",""user"":""bnjm2000"",""description"":""2024/11/26 - Collected back from MiPro after testing"",""type"":""General"",""cost"":"""",""changes"":[],""source"":{}}]",AX,Store,Wedding of Patricia & Edgar @ Capella
 MT-90A#04,MiPro,MT-90A,858290898A,Interlink Transmitter,False,False,False,False,False,1,"[{""date"":""2024/11/20"",""user"":""bnjm2000"",""description"":""2024/11/20 - Send to MiPro for testing"",""type"":""General"",""cost"":"""",""changes"":[{""kind"":""location"",""value"":""MiPro Singapore""}],""source"":{}},{""date"":""2024/11/26"",""user"":""bnjm2000"",""description"":""2024/11/26 - Collected back from MiPro after testing"",""type"":""General"",""cost"":"""",""changes"":[{""kind"":""location"",""value"":""Store""}],""source"":{}},{""date"":""2024/10/15"",""user"":""bnjm2000"",""description"":""Device keeps restarting, suspect PSU faulty (Wedding of Kenneth and Wong Mei Yin)"",""type"":""Fault"",""cost"":"""",""changes"":[{""kind"":""ooc"",""action"":""marked""}],""source"":{}},{""date"":""2024/10/24"",""user"":""bnjm2000"",""description"":""Handed over to MiPro for PSU testing"",""type"":""General"",""cost"":"""",""changes"":[{""kind"":""location"",""value"":""MiPro Singapore""}],""source"":{}},{""date"":""2024/11/13"",""user"":""bnjm2000"",""description"":""Collected back from MiPro, PSU replaced"",""type"":""Repair"",""cost"":""0.00"",""changes"":[{""kind"":""location"",""value"":""MiPro Singapore""},{""kind"":""ooc"",""action"":""cleared""}],""source"":{}}]",AX,Store,Wedding of Patricia & Edgar @ Capella
-GSM4212P#01,Netgear,GSM4212P,6VB52B51A0392,Managed Switch,False,False,False,False,False,1,,AX,Store,Store
+GSM4212P#01,Netgear,GSM4212P,6VB52B51A0392,Managed Switch,False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
 GSM4212P#02,Netgear,GSM4212P,6VB52B5AA039B,Managed Switch,False,False,False,False,False,1,,AX,Store,Store
 GSM4212P#03,Netgear,GSM4212P,6VB52B5CA03B9,Managed Switch,False,False,False,False,False,1,,AX,Store,Store
 GSM4212P#04,Netgear,GSM4212P,6VB52B52A0393,Managed Switch,False,False,False,False,False,1,,AX,Store,Store
@@ -586,11 +586,11 @@ CDJ2000NXS#01,Pioneer,CDJ2000NXS,,Professional DJ multi player (Black),False,Fal
 CDJ2000NXS#02,Pioneer,CDJ2000NXS,,Professional DJ multi player (Black),False,False,False,False,False,1,,AX,Store,Store
 CDJ2000NXS2#01,Pioneer,CDJ2000NXS2,,Professional DJ multi player (black),False,False,False,False,False,1,"[{""date"":""2025/10/15"",""user"":""bnjm2000"",""description"":""Screen flickered and stopped working (GRAFF @ Ion Art Gallery)"",""type"":""Fault"",""cost"":"""",""changes"":[{""kind"":""ooc"",""action"":""marked""}],""source"":{}},{""date"":""2025/10/16"",""user"":""bnjm2000"",""description"":""Equipment sent for repair"",""type"":""General"",""cost"":"""",""changes"":[{""kind"":""location"",""value"":""Avery Events""}],""source"":{}},{""date"":""2025/12/10"",""user"":""bnjm2000"",""description"":""Equipment returned repaired - screen changed. ($320)"",""type"":""Repair"",""cost"":""320.00"",""changes"":[{""kind"":""location"",""value"":""Store""},{""kind"":""ooc"",""action"":""cleared""}],""source"":{}}]",AX,Store,Store
 CDJ2000NXS2#02,Pioneer,CDJ2000NXS2,,Professional DJ multi player (black),False,False,False,False,False,1,,AX,Store,Store
-CDJ3000#01,Pioneer,CDJ3000,CDMP038151EH,Professional DJ multi player (Black),False,False,False,False,False,1,"[{""date"":""2024/09/22"",""user"":""bnjm2000"",""description"":""Buttons and jog wheel melted under sun (F1 @ ShowCo)"",""type"":""Fault"",""cost"":"""",""changes"":[{""kind"":""ooc"",""action"":""marked""}],""source"":{}},{""date"":""2024/10/03"",""user"":""bnjm2000"",""description"":""Received spare from ShowCo while repairs underway (S/N: BHMP026156EH)"",""type"":""General"",""cost"":"""",""changes"":[{""kind"":""ooc"",""action"":""cleared""}],""source"":{}},{""date"":""2025/03/15"",""user"":""bnjm2000"",""description"":""Collected back, tested working. (Wedding of Barbara and Ker Wei)"",""type"":""General"",""cost"":"""",""changes"":[],""source"":{}}]",AX,Store,Store
-CDJ3000#02,Pioneer,CDJ3000,CDMP038159EH,Professional DJ multi player (Black),False,False,False,False,False,1,"[{""date"":""2024/09/22"",""user"":""bnjm2000"",""description"":""22/09/2024 - Buttons and jog wheel melted under sun (F1 @ ShowCo)"",""type"":""Fault"",""cost"":"""",""changes"":[{""kind"":""ooc"",""action"":""marked""}],""source"":{}},{""date"":""2024/10/03"",""user"":""bnjm2000"",""description"":""03/10/2024 - Received spare from ShowCo while repairs underway (S/N: BHMP026170EH)"",""type"":""General"",""cost"":"""",""changes"":[{""kind"":""ooc"",""action"":""cleared""}],""source"":{}},{""date"":""2025/03/15"",""user"":""bnjm2000"",""description"":""Collected back, tested working. (Wedding of Barbara and Ker Wei)"",""type"":""General"",""cost"":"""",""changes"":[],""source"":{}}]",AX,Store,Store
+CDJ3000#01,Pioneer,CDJ3000,CDMP038151EH,Professional DJ multi player (Black),False,False,False,False,False,1,"[{""date"":""2024/09/22"",""user"":""bnjm2000"",""description"":""Buttons and jog wheel melted under sun (F1 @ ShowCo)"",""type"":""Fault"",""cost"":"""",""changes"":[{""kind"":""ooc"",""action"":""marked""}],""source"":{}},{""date"":""2024/10/03"",""user"":""bnjm2000"",""description"":""Received spare from ShowCo while repairs underway (S/N: BHMP026156EH)"",""type"":""General"",""cost"":"""",""changes"":[{""kind"":""ooc"",""action"":""cleared""}],""source"":{}},{""date"":""2025/03/15"",""user"":""bnjm2000"",""description"":""Collected back, tested working. (Wedding of Barbara and Ker Wei)"",""type"":""General"",""cost"":"""",""changes"":[],""source"":{}}]",AX,Store,Wedding of Patricia & Edgar @ Capella
+CDJ3000#02,Pioneer,CDJ3000,CDMP038159EH,Professional DJ multi player (Black),False,False,False,False,False,1,"[{""date"":""2024/09/22"",""user"":""bnjm2000"",""description"":""22/09/2024 - Buttons and jog wheel melted under sun (F1 @ ShowCo)"",""type"":""Fault"",""cost"":"""",""changes"":[{""kind"":""ooc"",""action"":""marked""}],""source"":{}},{""date"":""2024/10/03"",""user"":""bnjm2000"",""description"":""03/10/2024 - Received spare from ShowCo while repairs underway (S/N: BHMP026170EH)"",""type"":""General"",""cost"":"""",""changes"":[{""kind"":""ooc"",""action"":""cleared""}],""source"":{}},{""date"":""2025/03/15"",""user"":""bnjm2000"",""description"":""Collected back, tested working. (Wedding of Barbara and Ker Wei)"",""type"":""General"",""cost"":"""",""changes"":[],""source"":{}}]",AX,Store,Wedding of Patricia & Edgar @ Capella
 DJM900NXS#01,Pioneer,DJM-900NXS,,DJ Mixer,False,False,False,False,False,1,,AX,Store,
 DJM900NXS2#01,Pioneer,DJM-900NXS2,,4-channel pro-DJ mixer,False,False,False,False,False,1,,AX,Store,Store
-DJMA9#01,Pioneer,DJM-A9,,4-channel pro-DJ mixer,False,False,False,False,False,1,,AX,Store,Store
+DJMA9#01,Pioneer,DJM-A9,,4-channel pro-DJ mixer,False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
 COMBINE4#01,RF Venue,Combine4,J6803014t2d4-124,active transmitter combiner,False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
 E904#01,Sennheiser,E904,1471264124,Dynamic cardioid instrument microphone,False,False,False,False,False,1,,AX,Store,Store
 E904#02,Sennheiser,E904,,Dynamic cardioid instrument microphone,False,False,False,False,False,1,,AX,Store,Store
@@ -599,8 +599,8 @@ E904#04,Sennheiser,E904,,Dynamic cardioid instrument microphone,False,False,Fals
 E904#05,Sennheiser,E904,,Dynamic cardioid instrument microphone,False,False,False,False,False,1,,AX,Store,Store
 E906#01,Sennheiser,E906,,"super-cardioid, dynamic instrument microphone",False,False,False,False,False,1,,AX,Store,
 E906#02,Sennheiser,E906,,"super-cardioid, dynamic instrument microphone",False,False,False,False,False,1,,AX,Store,Store
-ME36#01,Sennheiser,ME36,,Gooseneck mic,False,False,False,False,False,1,,AX,Store,Store
-ME36#02,Sennheiser,ME36,,Gooseneck mic,False,False,False,False,False,1,,AX,Store,Store
+ME36#01,Sennheiser,ME36,,Gooseneck mic,False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
+ME36#02,Sennheiser,ME36,,Gooseneck mic,False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
 MKE2#01,Sennheiser,MKE2,86827,Lavalier microphone (black),False,False,False,False,False,1,,AX,Store,Store
 MKE2#02,Sennheiser,MKE2,86825,Lavalier microphone (black),False,False,False,False,False,1,,AX,Store,Store
 MKE2#03,Sennheiser,MKE2,,Lavalier microphone (beige),False,False,False,False,False,1,,AX,Store,
@@ -639,11 +639,11 @@ AD2#13,Shure,AD2,2CC22174217,Handheld Microphone [G56],False,False,False,False,F
 AD2#14,Shure,AD2,2CC22173949,Handheld Microphone [G56],False,False,False,False,False,1,,AX,Store,Store
 AD2#15,Shure,AD2,2CC22174180,Handheld Microphone [G56],False,False,False,False,False,1,,AX,Store,Store
 AD2#16,Shure,AD2,2SC0752116,Handheld Microphone [G56],False,False,False,False,False,1,,AX,Store,Store
-AD3#01,Shure,AD3,3CE17731585,Plug-on Transmitter,False,False,False,False,False,1,,AX,Store,Store
-AD3#02,Shure,AD3,3CB24309820,Plug-on Transmitter,False,False,False,False,False,1,,AX,Store,Store
+AD3#01,Shure,AD3,3CE17731585,Plug-on Transmitter,False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
+AD3#02,Shure,AD3,3CB24309820,Plug-on Transmitter,False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
 AD3#03,Shure,AD3,3B21414454,Plug-on Transmitter,False,False,False,False,False,1,,AX,Store,Store
 AD3#04,Shure,AD3,3TH09460854,Plug-on Transmitter,False,False,False,False,False,1,,AX,Store,Store
-AD4D#01,Shure,AD4D,,Two-Channel Digital Wireless Receiver,False,False,False,False,False,1,,AX,Store,Store
+AD4D#01,Shure,AD4D,,Two-Channel Digital Wireless Receiver,False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
 AD4Q#01,Shure,AD4Q,,Four-Channel Digital Wireless Receiver,False,False,False,False,False,1,,AX,Store,Store
 AD4Q#02,Shure,AD4Q,,Four-Channel Digital Wireless Receiver,False,False,False,False,False,1,,AX,Store,Store
 AD4Q#03,Shure,AD4Q,2CA25976600,Four-Channel Digital Wireless Receiver,False,False,False,False,False,1,"[{""date"":""2025/11/20"",""user"":""bnjm2000"",""description"":""Sent to E&E for repairs"",""type"":""General"",""cost"":"""",""changes"":[{""kind"":""location"",""value"":""E&E""}],""source"":{}},{""date"":""2025/11/16"",""user"":""bnjm2000"",""description"":""Discovered \""B\"" antenna not working, even when connected directly to antenna (Wedding of Andrew Chua & Nicolette Ong @ TRCM)"",""type"":""Fault"",""cost"":"""",""changes"":[{""kind"":""ooc"",""action"":""marked""}],""source"":{}},{""date"":""2025/12/31"",""user"":""bnjm2000"",""description"":""SR21913:\nReplaced 188A24072  AMPLIFIER,DRIVER,HI GAIN,0.25W,SOT-89 IC - $30\nService charge - $120"",""type"":""Repair"",""cost"":""150.00"",""changes"":[{""kind"":""location"",""value"":""E&E""},{""kind"":""ooc"",""action"":""cleared""}],""source"":{}},{""date"":""2026/01/27"",""user"":""bnjm2000"",""description"":""Collected back from E&E, tested working."",""type"":""General"",""cost"":"""",""changes"":[{""kind"":""location"",""value"":""Store""}],""source"":{}}]",AX,Store,Store
@@ -725,31 +725,31 @@ ULXD1#16,Shure,ULXD1,3BI28076373,Beltpack [G52],False,False,False,False,False,1,
 ULXD1#17,Shure,ULXD1,3BI28076436,Beltpack [G52],False,False,False,False,False,1,,AX,Store,Store
 ULXD1#18,Shure,ULXD1,3BI28078539,Beltpack [G52],False,False,False,False,False,1,,AX,Store,
 ULXD1#19,Shure,ULXD1,3EC18480865,Beltpack [L50],False,False,False,False,False,1,,AX,Store,Store
-ULXD2#01,Shure,ULXD2,2NK0071080-01,Handheld Microphone [L50],False,False,False,False,False,1,,AX,Store,Store
-ULXD2#02,Shure,ULXD2,2PH3049605,Handheld Microphone [L50],False,False,False,False,False,1,,AX,Store,Store
-ULXD2#03,Shure,ULXD2,2OB0659314-01,Handheld Microphone [L50],False,False,False,False,False,1,"[{""date"":""2026/03/22"",""user"":""bnjm2000"",""description"":""Handheld dropped by emcee, capsule broke off (Wedding of Russell & Cassandra @ Shangri-La Island Ballroom)"",""type"":""Fault"",""cost"":"""",""changes"":[{""kind"":""ooc"",""action"":""marked""}],""source"":{}},{""date"":""2026/04/17"",""user"":""bnjm2000"",""description"":""Bought new capsule from E&E, replaced whole capsule - $214"",""type"":""Repair"",""cost"":""214.00"",""changes"":[{""kind"":""location"",""value"":""E&E""},{""kind"":""ooc"",""action"":""cleared""}],""source"":{}}]",AX,Store,
-ULXD2#04,Shure,ULXD2,2PK2362933,Handheld Microphone [L50],False,False,False,False,False,1,,AX,Store,Store
+ULXD2#01,Shure,ULXD2,2NK0071080-01,Handheld Microphone [L50],False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
+ULXD2#02,Shure,ULXD2,2PH3049605,Handheld Microphone [L50],False,False,False,False,False,1,"[{""id"":""e05fe241846549c80838892c"",""date"":""2026/05/21"",""user"":""bnjm2000"",""description"":""Asset sighted by bnjm2000 during Asset Check"",""type"":""Asset check"",""cost"":"""",""changes"":[],""source"":{""kind"":""asset_check_sighting"",""checkId"":""asset-check-366d24e1-1c3f-467e-ac96-2e177a086b2e"",""groupKey"":""AX|Shure|ULXD2|Handheld Microphone [L50]"",""createdAt"":""2026-05-21T17:39:08""}}]",AX,Store,Store
+ULXD2#03,Shure,ULXD2,2OB0659314-01,Handheld Microphone [L50],False,False,False,False,False,1,"[{""date"":""2026/03/22"",""user"":""bnjm2000"",""description"":""Handheld dropped by emcee, capsule broke off (Wedding of Russell & Cassandra @ Shangri-La Island Ballroom)"",""type"":""Fault"",""cost"":"""",""changes"":[{""kind"":""ooc"",""action"":""marked""}],""source"":{}},{""date"":""2026/04/17"",""user"":""bnjm2000"",""description"":""Bought new capsule from E&E, replaced whole capsule - $214"",""type"":""Repair"",""cost"":""214.00"",""changes"":[{""kind"":""location"",""value"":""E&E""},{""kind"":""ooc"",""action"":""cleared""}],""source"":{}}]",AX,Store,Wedding of Patricia & Edgar @ Capella
+ULXD2#04,Shure,ULXD2,2PK2362933,Handheld Microphone [L50],False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
 ULXD2#05,Shure,ULXD2,20A1395239-01,Handheld Microphone [L50],False,False,False,False,False,1,"[{""date"":""2025/11/27"",""user"":""bnjm2000"",""description"":""Discovered capsule broken and sponge disintegrated (Loro Piana @ Jiak Kim House)"",""type"":""Fault"",""cost"":"""",""changes"":[{""kind"":""ooc"",""action"":""marked""}],""source"":{}},{""date"":""2026/01/08"",""user"":""bnjm2000"",""description"":""Sent to E&E for servicing"",""type"":""General"",""cost"":"""",""changes"":[{""kind"":""location"",""value"":""E&E""}],""source"":{}},{""date"":""2026/01/12"",""user"":""bnjm2000"",""description"":""SR22011:\nE&E quoted to replace capsule ($267), with service fee ($120).\nDecided to cancel repair and buy the capsule from Sales."",""type"":""General"",""cost"":"""",""changes"":[{""kind"":""location"",""value"":""Store""}],""source"":{}},{""date"":""2026/01/27"",""user"":""bnjm2000"",""description"":""Purchased new B58A Capsule to replace. ($214)\nCapsule SN: 3EH15266104"",""type"":""Repair"",""cost"":""214.00"",""changes"":[{""kind"":""location"",""value"":""E&E""},{""kind"":""ooc"",""action"":""cleared""}],""source"":{}}]",AX,Store,
 ULXD2#06,Shure,ULXD2,2PK2362926,Handheld Microphone [L50],False,False,False,False,False,1,,AX,Store,
 ULXD2#07,Shure,ULXD2,2QK2204370,Handheld Microphone [L50],False,False,False,False,False,1,,AX,Store,
-ULXD2#08,Shure,ULXD2,2OB0659317-01,Handheld Microphone [L50],False,False,False,False,False,1,,AX,Store,Store
-ULXD2#09,Shure,ULXD2,2NK0771081-01,Handheld Microphone [L50],False,False,False,False,False,1,,AX,Store,
+ULXD2#08,Shure,ULXD2,2OB0659317-01,Handheld Microphone [L50],False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
+ULXD2#09,Shure,ULXD2,2NK0771081-01,Handheld Microphone [L50],False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
 ULXD2#10,Shure,ULXD2,2PK2362922,Handheld Microphone [L50],False,False,False,False,False,1,,AX,Store,Store
 ULXD2#11,Shure,ULXD2,2RC0141727,Handheld Microphone [L50],False,False,False,False,False,1,"[{""date"":""2025/06/21"",""user"":""bnjm2000"",""description"":""Battery prong dropped out, unable to turn on (Wedding of Jeremy and Julia @ The Pyramid Club)"",""type"":""Fault"",""cost"":"""",""changes"":[{""kind"":""location"",""value"":""Store""},{""kind"":""ooc"",""action"":""marked""}],""source"":{}},{""date"":""2025/07/10"",""user"":""bnjm2000"",""description"":""Sent to E&E for service."",""type"":""General"",""cost"":"""",""changes"":[{""kind"":""location"",""value"":""E&E""}],""source"":{}},{""date"":""2025/09/11"",""user"":""bnjm2000"",""description"":""Replace battery pin $5\nReplace rubber slot $5\nService charge $60"",""type"":""Repair"",""cost"":""70.00"",""changes"":[{""kind"":""location"",""value"":""E&E""},{""kind"":""ooc"",""action"":""cleared""}],""source"":{}},{""date"":""2025/11/12"",""user"":""bnjm2000"",""description"":""Collected back from E&E."",""type"":""General"",""cost"":"""",""changes"":[{""kind"":""location"",""value"":""Store""}],""source"":{}}]",AX,Store,Store
-ULXD2#12,Shure,ULXD2,2NK0771082-01,Handheld Microphone [L50],False,False,False,False,False,1,,AX,Store,Store
+ULXD2#12,Shure,ULXD2,2NK0771082-01,Handheld Microphone [L50],False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
 ULXD2#13,Shure,ULXD2,3CC16144846,Handheld Microphone [G52],False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
 ULXD2#14,Shure,ULXD2,3CC16144872,Handheld Microphone [G52],False,False,False,False,False,1,,AX,Store,Store
 ULXD2#15,Shure,ULXD2,3CC16145063,Handheld Microphone [G52],False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
 ULXD2#16,Shure,ULXD2,3CC16145013,Handheld Microphone [G52],False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
 ULXD2#17,Shure,ULXD2,3CC16145099,Handheld Microphone [G52],False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
 ULXD2#18,Shure,ULXD2,3CC16145049,Handheld Microphone [G52],False,False,False,False,False,1,,AX,Store,Store
-ULXD4D#01,Shure,ULXD4D,,Dual Channel Receiver [L50],False,False,False,False,False,1,,AX,Store,Store
+ULXD4D#01,Shure,ULXD4D,,Dual Channel Receiver [L50],False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
 ULXD4D#02,Shure,ULXD4D,,Dual Channel Receiver [L50],False,False,False,False,False,1,,AX,Store,
 ULXD4D#03,Shure,ULXD4D,,Dual Channel Receiver [L50],False,False,False,False,False,1,,AX,Store,Store
 ULXD4D#04,Shure,ULXD4D,,Dual Channel Receiver [L50],False,False,False,False,False,1,,AX,Store,Store
 ULXD4D#05,Shure,ULXD4D,3BH26487024,Dual Channel Receiver [G52],False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
 ULXD4D#06,Shure,ULXD4D,3BH26487098,Dual Channel Receiver [G52],False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
-ULXD4Q#01,Shure,ULXD4Q,,Quad Channel Receiver [L50],False,False,False,False,False,1,,AX,Store,Store
+ULXD4Q#01,Shure,ULXD4Q,,Quad Channel Receiver [L50],False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
 ULXD4Q#02,Shure,ULXD4Q,3BF11462545,Quad Channel Receiver [G52],False,False,False,False,False,1,,AX,Store,Store
 ULXD4Q#03,Shure,ULXD4Q,3BF11462711,Quad Channel Receiver [G52],False,False,False,False,False,1,,AX,Store,Store
 WL184#01,Shure,WL184,,supercardioid condenser lavalier microphone,False,False,False,False,False,1,,AX,Store,
@@ -790,9 +790,9 @@ UE STAND #07,Ultimate Support,TS-100B,,Air-powered speaker stand,False,False,Fal
 UE STAND #08,Ultimate Support,TS-100B,,Air-powered speaker stand,False,False,False,False,False,1,,AX,Store,
 WARWICK STAND #01,Warwick,RS28400B,,Hand Crank Speaker Stand,False,False,False,False,False,1,,AX,Store,
 WARWICK STAND #02,Warwick,RS28400B,,Hand Crank Speaker Stand,False,False,False,False,False,1,,AX,Store,
-CL5#01,Yamaha,CL5,WTASK01015,Digital Mixer,False,False,False,False,False,1,"[{""date"":""2024/09/12"",""user"":""bnjm2000"",""description"":""Sent into Yamaha for fader servicing, sometimes get stuck"",""type"":""Fault"",""cost"":"""",""changes"":[{""kind"":""location"",""value"":""Yamaha Service Center""},{""kind"":""degraded"",""action"":""marked""}],""source"":{}},{""date"":""2024/10/22"",""user"":""bnjm2000"",""description"":""Replaced faulty faders: CH 1-8, 9-16, Centralogic CH 7,8 ($684) Service fee ($369.73)"",""type"":""Repair"",""cost"":""1053.73"",""changes"":[{""kind"":""location"",""value"":""Yamaha Service Center""},{""kind"":""degraded"",""action"":""cleared""}],""source"":{}},{""date"":""2025/01/16"",""user"":""bnjm2000"",""description"":""Unable to connect to dante network (Dante Module Error) (Wedding of Benjamin and Rachel @ Ritz Garden Pavilion)"",""type"":""Fault"",""cost"":"""",""changes"":[{""kind"":""ooc"",""action"":""marked""}],""source"":{}},{""date"":""2025/01/17"",""user"":""bnjm2000"",""description"":""Sent in to Yamaha for repairs"",""type"":""General"",""cost"":"""",""changes"":[{""kind"":""location"",""value"":""Yamaha Service Center""}],""source"":{}},{""date"":""2025/02/06"",""user"":""bnjm2000"",""description"":""Replaced Dante Module ($631)\nReplaced DNTU PCB ($672)\nReplaced FFC Cable ($10)\nService fee ($FOC)"",""type"":""Repair"",""cost"":""1313.00"",""changes"":[{""kind"":""location"",""value"":""Yamaha Service Center""},{""kind"":""ooc"",""action"":""cleared""}],""source"":{}},{""date"":""2025/02/13"",""user"":""bnjm2000"",""description"":""Dante clock suddenly unlocked and could not lock back, phantom noise on both inputs and outputs\n(Wedding of Aim and Singhis @ TCP)"",""type"":""Fault"",""cost"":"""",""changes"":[{""kind"":""location"",""value"":""Yamaha Service Center""},{""kind"":""ooc"",""action"":""marked""}],""source"":{}},{""date"":""2025/02/27"",""user"":""bnjm2000"",""description"":""Replaced DSP PCB ($1011)\nService Fee ($FOC)"",""type"":""Repair"",""cost"":""1011.00"",""changes"":[{""kind"":""location"",""value"":""Yamaha Service Center""},{""kind"":""ooc"",""action"":""cleared""}],""source"":{}}]",AX,Store,
-DM3#01,Yamaha,DM3,BGDK01029,Digital Mixer,False,False,False,False,False,1,"[{""date"":""2024/09/04"",""user"":""bnjm2000"",""description"":""Reported cannot power on from Niche AV"",""type"":""Fault"",""cost"":"""",""changes"":[{""kind"":""ooc"",""action"":""marked""}],""source"":{}},{""date"":""2024/09/12"",""user"":""bnjm2000"",""description"":""sent to Yamaha for servicing"",""type"":""General"",""cost"":"""",""changes"":[{""kind"":""location"",""value"":""Yamaha Service Center""}],""source"":{}},{""date"":""2024/10/24"",""user"":""bnjm2000"",""description"":""Replaced PCB (report no. PA842034) $586.84 (FOC, under warraty)"",""type"":""Repair"",""cost"":""0.00"",""changes"":[{""kind"":""location"",""value"":""Yamaha Service Center""},{""kind"":""ooc"",""action"":""cleared""}],""source"":{}},{""date"":""2024/11/07"",""user"":""bnjm2000"",""description"":""Collected from Yamaha"",""type"":""General"",""cost"":"""",""changes"":[{""kind"":""location"",""value"":""Store""}],""source"":{}}]",AX,Store,Dry Hire: Avery Events
-DM3#02,Yamaha,DM3,BGDI01076,Digital Mixer,False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
+CL5#01,Yamaha,CL5,WTASK01015,Digital Mixer,False,False,False,False,False,1,"[{""date"":""2024/09/12"",""user"":""bnjm2000"",""description"":""Sent into Yamaha for fader servicing, sometimes get stuck"",""type"":""Fault"",""cost"":"""",""changes"":[{""kind"":""location"",""value"":""Yamaha Service Center""},{""kind"":""degraded"",""action"":""marked""}],""source"":{}},{""date"":""2024/10/22"",""user"":""bnjm2000"",""description"":""Replaced faulty faders: CH 1-8, 9-16, Centralogic CH 7,8 ($684) Service fee ($369.73)"",""type"":""Repair"",""cost"":""1053.73"",""changes"":[{""kind"":""location"",""value"":""Yamaha Service Center""},{""kind"":""degraded"",""action"":""cleared""}],""source"":{}},{""date"":""2025/01/16"",""user"":""bnjm2000"",""description"":""Unable to connect to dante network (Dante Module Error) (Wedding of Benjamin and Rachel @ Ritz Garden Pavilion)"",""type"":""Fault"",""cost"":"""",""changes"":[{""kind"":""ooc"",""action"":""marked""}],""source"":{}},{""date"":""2025/01/17"",""user"":""bnjm2000"",""description"":""Sent in to Yamaha for repairs"",""type"":""General"",""cost"":"""",""changes"":[{""kind"":""location"",""value"":""Yamaha Service Center""}],""source"":{}},{""date"":""2025/02/06"",""user"":""bnjm2000"",""description"":""Replaced Dante Module ($631)\nReplaced DNTU PCB ($672)\nReplaced FFC Cable ($10)\nService fee ($FOC)"",""type"":""Repair"",""cost"":""1313.00"",""changes"":[{""kind"":""location"",""value"":""Yamaha Service Center""},{""kind"":""ooc"",""action"":""cleared""}],""source"":{}},{""date"":""2025/02/13"",""user"":""bnjm2000"",""description"":""Dante clock suddenly unlocked and could not lock back, phantom noise on both inputs and outputs\n(Wedding of Aim and Singhis @ TCP)"",""type"":""Fault"",""cost"":"""",""changes"":[{""kind"":""location"",""value"":""Yamaha Service Center""},{""kind"":""ooc"",""action"":""marked""}],""source"":{}},{""date"":""2025/02/27"",""user"":""bnjm2000"",""description"":""Replaced DSP PCB ($1011)\nService Fee ($FOC)"",""type"":""Repair"",""cost"":""1011.00"",""changes"":[{""kind"":""location"",""value"":""Yamaha Service Center""},{""kind"":""ooc"",""action"":""cleared""}],""source"":{}}]",AX,Store,Wedding of Patricia & Edgar @ Capella
+DM3#01,Yamaha,DM3,BGDK01029,Digital Mixer,False,False,False,False,False,1,"[{""date"":""2024/09/04"",""user"":""bnjm2000"",""description"":""Reported cannot power on from Niche AV"",""type"":""Fault"",""cost"":"""",""changes"":[{""kind"":""ooc"",""action"":""marked""}],""source"":{}},{""date"":""2024/09/12"",""user"":""bnjm2000"",""description"":""sent to Yamaha for servicing"",""type"":""General"",""cost"":"""",""changes"":[{""kind"":""location"",""value"":""Yamaha Service Center""}],""source"":{}},{""date"":""2024/10/24"",""user"":""bnjm2000"",""description"":""Replaced PCB (report no. PA842034) $586.84 (FOC, under warraty)"",""type"":""Repair"",""cost"":""0.00"",""changes"":[{""kind"":""location"",""value"":""Yamaha Service Center""},{""kind"":""ooc"",""action"":""cleared""}],""source"":{}},{""date"":""2024/11/07"",""user"":""bnjm2000"",""description"":""Collected from Yamaha"",""type"":""General"",""cost"":"""",""changes"":[{""kind"":""location"",""value"":""Store""}],""source"":{}}]",AX,Store,Store
+DM3#02,Yamaha,DM3,BGDI01076,Digital Mixer,False,False,False,False,False,1,,AX,Store,Rolex Event @ New Bahru
 DM7#01,Yamaha,DM7,21EGEI01036,Digital Mixer,False,False,False,False,False,1,,AX,Store,Store
 DXR8#01,Yamaha,DXR8,EESM01180,"Active 8"" Speaker",False,False,False,False,False,1,,AX,Store,Store
 DXR10#01,Yamaha,DXR10,EESX01317,"Active 10"" Speaker",False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
@@ -811,7 +811,7 @@ MG12XU#02,Yamaha,MG12XU,,12-Channel Analog Mixing Console with FX,False,False,Fa
 MG10#01,Yamaha,MG10,ECWH01433,10-Channel Analogue Mixer,False,False,False,False,False,1,,AX,Store,Store
 MG124CX#01,Yamaha,MG124CX,,12-Input Stereo Mixer with Compression and Effects,False,False,False,False,False,1,,AX,Store,
 MG124CX#02,Yamaha,MG124CX,,12-Input Stereo Mixer with Compression and Effects,False,False,False,False,False,1,,AX,Store,
-QL1#01,Yamaha,QL1,WTAUM01016,Digital Mixer,False,False,False,False,False,1,,AX,Store,Store
+QL1#01,Yamaha,QL1,WTAUM01016,Digital Mixer,False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
 QL1#02,Yamaha,QL1,EAXP01044,Digital Mixer,False,False,False,False,False,1,,AX,Store,Store
 QL5#01,Yamaha,QL5,,Digital Mixer,False,False,False,False,False,1,,AX,Store,Store
 RO8-D #01,Yamaha,Ro8-d,,8-channel Remote Output Rack,False,False,False,False,False,1,,AX,Store,Store
@@ -1054,7 +1054,7 @@ NICKWASH#12,DTS,NickWash 600,,self-contained compact high-output LED moving head
 MVSHAZER#01,Le Maitre,MVS Hazer,5317,Hazer machine,False,False,False,False,False,1,,LX,Store,Wedding of Patricia & Edgar @ Capella
 MVSHAZER#02,Le Maitre,MVS Hazer,2222,Hazer machine,False,False,False,False,False,1,,LX,Store,Wedding of Patricia & Edgar @ Capella
 63ADB#01,Custom,63A 3-Phase DB,,,False,False,False,False,False,1,,ELEC,Store,Store
-63ADB#02,Custom,63A 3-Phase DB,,,False,False,False,False,False,1,,ELEC,Store,Store
+63ADB#02,Custom,63A 3-Phase DB,,,False,False,False,False,False,1,,ELEC,Store,Wedding of Patricia & Edgar @ Capella
 32ADB#02,Custom,32A 3-Phase DB,,,False,False,False,False,False,1,,ELEC,Store,Store
 LX TREE #01,Versa-Stand,,,Winch Up Lighting Stand,False,False,False,False,False,1,,LX,Store,
 LX TREE #02,Versa-Stand,,,Winch Up Lighting Stand,False,False,False,False,False,1,,LX,Store,
@@ -1075,8 +1075,8 @@ J48M#03,Radial Engineering,J48 Mono,1466825,Phantom Powered Active Direct Box,Fa
 J48M#04,Radial Engineering,J48 Mono,1466872,Phantom Powered Active Direct Box,False,False,False,False,False,1,,AX,Store,Store
 J48M#05,Radial Engineering,J48 Mono,1466797,Phantom Powered Active Direct Box,False,False,False,False,False,1,,AX,Store,Store
 J48M#06,Radial Engineering,J48 Mono,1466844,Phantom Powered Active Direct Box,False,False,False,False,False,1,,AX,Store,Store
-J48M#07,Radial Engineering,J48 Mono,,Phantom Powered Active Direct Box,False,False,False,False,False,1,,AX,Store,Store
-J48M#08,Radial Engineering,J48 Mono,,Phantom Powered Active Direct Box,False,False,False,False,False,1,,AX,Store,Store
+J48M#07,Radial Engineering,J48 Mono,,Phantom Powered Active Direct Box,False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
+J48M#08,Radial Engineering,J48 Mono,,Phantom Powered Active Direct Box,False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
 J48M#09,Radial Engineering,J48 Mono,,Phantom Powered Active Direct Box,False,False,False,False,False,1,,AX,Store,Store
 J48M#10,Radial Engineering,J48 Mono,,Phantom Powered Active Direct Box,False,False,False,False,False,1,,AX,Store,Store
 J48S#01,Radial Engineering,J48 Stereo,1294292,Phantom Powered Active Direct Box,False,False,False,False,False,1,,AX,Store,
@@ -1090,8 +1090,8 @@ JDIM#02,Radial Engineering,JDI Mono,1682509,Passive Direct Box,False,False,False
 JDIM#03,Radial Engineering,JDI Mono,1682514,Passive Direct Box,False,False,False,False,False,1,,AX,Store,Store
 JDIM#04,Radial Engineering,JDI Mono,1682546,Passive Direct Box,False,False,False,False,False,1,,AX,Store,Store
 JDIS#01,Radial Engineering,JDI Stereo,1454842,Passive Direct Box,False,False,False,False,False,1,,AX,Store,Store
-JDIS#02,Radial Engineering,JDI Stereo,1703726,Passive Direct Box,False,False,False,False,False,1,,AX,Store,Store
-JDIS#03,Radial Engineering,JDI Stereo,1703775,Passive Direct Box,False,False,False,False,False,1,,AX,Store,Store
+JDIS#02,Radial Engineering,JDI Stereo,1703726,Passive Direct Box,False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
+JDIS#03,Radial Engineering,JDI Stereo,1703775,Passive Direct Box,False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
 JDIS#04,Radial Engineering,JDI Stereo,1703777,Passive Direct Box,False,False,False,False,False,1,,AX,Store,Store
 USBPRO#01,Radial Engineering,USB-Pro,1550806,USB direct box,False,False,False,False,False,1,,AX,Store,
 USBPRO#02,Radial Engineering,USB-Pro,1550781,USB direct box,False,False,False,False,False,1,,AX,Store,
@@ -1105,7 +1105,7 @@ DN100#05,Klark Teknik,DN100,,,False,False,False,False,False,1,,AX,Store,
 DN200#01,Klark Teknik,DN200,,,False,False,False,False,False,1,,AX,Store,
 DN200#02,Klark Teknik,DN200,,,False,False,False,False,False,1,,AX,Store,
 DN200#03,Klark Teknik,DN200,,,False,False,False,False,False,1,,AX,Store,Store
-PULSE2#01,Analogue Way,Pulse 2,,Video Switcher,False,False,False,False,False,1,,VX,Store,Dry Hire: Avery Events
+PULSE2#01,Analogue Way,Pulse 2,,Video Switcher,False,False,False,False,False,1,,VX,Store,Store
 ISOG2#01,Blackmagic Design,Atem Mini Extreme ISO G2,14156847,Video Switcher,False,False,False,False,False,1,,VX,Store,
 40INCH#01,Sharp,,,"40"" TV",False,False,False,False,False,1,,VX,Store,Store
 40INCH#02,Sharp,,,"40"" TV",False,False,False,False,False,1,,VX,Store,Store
@@ -1144,19 +1144,19 @@ LG50#01,LG,50NANO75TPA,104INZY62629,"50"" Crystal UHD 4K Smart TV (2020)",False,
 LG50#02,LG,50NANO75TPA,209INHZ4B729,"50"" Crystal UHD 4K Smart TV (2020)",False,False,False,False,False,1,,VX,Store,
 LG50#03,LG,50NANO75TPA,209INVM4B727,"50"" Crystal UHD 4K Smart TV (2020)",False,False,False,False,False,1,,VX,Store,
 LG50#04,LG,50NANO75TPA,209INPT4B728,"50"" Crystal UHD 4K Smart TV (2020)",False,False,False,False,False,1,,VX,Store,
-CMD8#01,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,False,False,False,1,"[{""date"":""2025/09/09"",""user"":""bnjm2000"",""description"":""Maintenance done - greased chain"",""type"":""General"",""cost"":"""",""changes"":[],""source"":{}}]",STG,Store,Store
-CMD8#02,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,False,False,False,1,"[{""date"":""2025/09/09"",""user"":""bnjm2000"",""description"":""Maintenance done - greased chain"",""type"":""General"",""cost"":"""",""changes"":[],""source"":{}}]",STG,Store,Store
-CMD8#03,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,False,False,False,1,"[{""date"":""2025/09/09"",""user"":""bnjm2000"",""description"":""Maintenance done - greased chain"",""type"":""General"",""cost"":"""",""changes"":[],""source"":{}}]",STG,Store,Store
-CMD8#04,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,False,False,False,1,"[{""date"":""2025/09/09"",""user"":""bnjm2000"",""description"":""Maintenance done - greased chain"",""type"":""General"",""cost"":"""",""changes"":[],""source"":{}}]",STG,Store,Store
-CMD8#05,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,False,False,False,1,"[{""date"":""2025/09/09"",""user"":""bnjm2000"",""description"":""Maintenance done - greased chain"",""type"":""General"",""cost"":"""",""changes"":[],""source"":{}}]",STG,Store,Store
-CMD8#06,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,False,False,False,1,"[{""date"":""2025/09/09"",""user"":""bnjm2000"",""description"":""Maintenance done - greased chain"",""type"":""General"",""cost"":"""",""changes"":[],""source"":{}}]",STG,Store,Store
-CMD8#07,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,False,False,False,1,"[{""date"":""2025/09/09"",""user"":""bnjm2000"",""description"":""Maintenance done - greased chain"",""type"":""General"",""cost"":"""",""changes"":[],""source"":{}}]",STG,Store,Store
-CMD8#08,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,False,False,False,1,"[{""date"":""2025/09/09"",""user"":""bnjm2000"",""description"":""Maintenance done - greased chain"",""type"":""General"",""cost"":"""",""changes"":[],""source"":{}}]",STG,Store,Store
-CMD8#09,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,False,False,False,1,"[{""date"":""2025/09/09"",""user"":""bnjm2000"",""description"":""Maintenance done - greased chain"",""type"":""General"",""cost"":"""",""changes"":[],""source"":{}}]",STG,Store,Store
-CMD8#10,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,False,False,False,1,"[{""date"":""2025/09/09"",""user"":""bnjm2000"",""description"":""Maintenance done - greased chain"",""type"":""General"",""cost"":"""",""changes"":[],""source"":{}}]",STG,Store,Store
-CMD8#11,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,False,False,False,1,"[{""date"":""2025/09/09"",""user"":""bnjm2000"",""description"":""Maintenance done - greased chain"",""type"":""General"",""cost"":"""",""changes"":[],""source"":{}}]",STG,Store,Store
-CMD8#12,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,False,False,False,1,"[{""date"":""2025/09/09"",""user"":""bnjm2000"",""description"":""Maintenance done - greased chain"",""type"":""General"",""cost"":"""",""changes"":[],""source"":{}}]",STG,Store,Store
-CONTROLLER#01,Custom,Chain Hoist Controller,,Chain Hoist Controller,False,False,False,False,False,1,,STG,Store,Store
+CMD8#01,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,False,False,False,1,"[{""date"":""2025/09/09"",""user"":""bnjm2000"",""description"":""Maintenance done - greased chain"",""type"":""General"",""cost"":"""",""changes"":[],""source"":{}}]",STG,Store,Rolex Event @ New Bahru
+CMD8#02,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,False,False,False,1,"[{""date"":""2025/09/09"",""user"":""bnjm2000"",""description"":""Maintenance done - greased chain"",""type"":""General"",""cost"":"""",""changes"":[],""source"":{}}]",STG,Store,Rolex Event @ New Bahru
+CMD8#03,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,False,False,False,1,"[{""date"":""2025/09/09"",""user"":""bnjm2000"",""description"":""Maintenance done - greased chain"",""type"":""General"",""cost"":"""",""changes"":[],""source"":{}}]",STG,Store,Rolex Event @ New Bahru
+CMD8#04,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,False,False,False,1,"[{""date"":""2025/09/09"",""user"":""bnjm2000"",""description"":""Maintenance done - greased chain"",""type"":""General"",""cost"":"""",""changes"":[],""source"":{}}]",STG,Store,Rolex Event @ New Bahru
+CMD8#05,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,False,False,False,1,"[{""date"":""2025/09/09"",""user"":""bnjm2000"",""description"":""Maintenance done - greased chain"",""type"":""General"",""cost"":"""",""changes"":[],""source"":{}}]",STG,Store,Rolex Event @ New Bahru
+CMD8#06,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,False,False,False,1,"[{""date"":""2025/09/09"",""user"":""bnjm2000"",""description"":""Maintenance done - greased chain"",""type"":""General"",""cost"":"""",""changes"":[],""source"":{}}]",STG,Store,Rolex Event @ New Bahru
+CMD8#07,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,False,False,False,1,"[{""date"":""2025/09/09"",""user"":""bnjm2000"",""description"":""Maintenance done - greased chain"",""type"":""General"",""cost"":"""",""changes"":[],""source"":{}}]",STG,Store,Rolex Event @ New Bahru
+CMD8#08,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,False,False,False,1,"[{""date"":""2025/09/09"",""user"":""bnjm2000"",""description"":""Maintenance done - greased chain"",""type"":""General"",""cost"":"""",""changes"":[],""source"":{}}]",STG,Store,Rolex Event @ New Bahru
+CMD8#09,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,False,False,False,1,"[{""date"":""2025/09/09"",""user"":""bnjm2000"",""description"":""Maintenance done - greased chain"",""type"":""General"",""cost"":"""",""changes"":[],""source"":{}}]",STG,Store,Rolex Event @ New Bahru
+CMD8#10,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,False,False,False,1,"[{""date"":""2025/09/09"",""user"":""bnjm2000"",""description"":""Maintenance done - greased chain"",""type"":""General"",""cost"":"""",""changes"":[],""source"":{}}]",STG,Store,Rolex Event @ New Bahru
+CMD8#11,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,False,False,False,1,"[{""date"":""2025/09/09"",""user"":""bnjm2000"",""description"":""Maintenance done - greased chain"",""type"":""General"",""cost"":"""",""changes"":[],""source"":{}}]",STG,Store,Rolex Event @ New Bahru
+CMD8#12,Chain Master,D8,,1 ton electric chain hoist c/w 18m chain,False,False,False,False,False,1,"[{""date"":""2025/09/09"",""user"":""bnjm2000"",""description"":""Maintenance done - greased chain"",""type"":""General"",""cost"":"""",""changes"":[],""source"":{}}]",STG,Store,Rolex Event @ New Bahru
+CONTROLLER#01,Custom,Chain Hoist Controller,,Chain Hoist Controller,False,False,False,False,False,1,,STG,Store,Rolex Event @ New Bahru
 HERCULES 8#01,Fenix,HERCULES 8,180439_30,Frontal lifting tower array lifter,False,False,False,False,False,1,"[{""date"":""2025/07/03"",""user"":""bnjm2000"",""description"":""Discovered frayed metal cable during BBC 2025 @ GBTB"",""type"":""Fault"",""cost"":"""",""changes"":[{""kind"":""ooc"",""action"":""marked""}],""source"":{}},{""date"":""2025/07/09"",""user"":""bnjm2000"",""description"":""Sent to LSD or servicing (Service order no. 1636)"",""type"":""General"",""cost"":"""",""changes"":[{""kind"":""location"",""value"":""LSD SG""}],""source"":{}},{""date"":""2025/09/16"",""user"":""bnjm2000"",""description"":""Collected back from LSD, tested working"",""type"":""General"",""cost"":"""",""changes"":[{""kind"":""location"",""value"":""Store""},{""kind"":""ooc"",""action"":""cleared""},{""kind"":""missing"",""action"":""cleared""}],""source"":{}},{""date"":""2026/04/21"",""user"":""bnjm2000"",""description"":""Scratched arm and bent handle (Dry Rental: XC Lighting)"",""type"":""Fault"",""cost"":"""",""changes"":[],""source"":{}}]",AX,Store,Store
 HERCULES 8#02,Fenix,HERCULES 8,180439_28,Frontal lifting tower array lifter,False,False,False,False,False,1,"[{""date"":""2026/04/21"",""user"":""bnjm2000"",""description"":""Missing securing pin and 2 stopper (Dry Rental: XC Lighting)"",""type"":""General"",""cost"":"""",""changes"":[],""source"":{}}]",AX,Store,Store
 MASTER4KTX#01,Accsoon,Cineview Master 4K TX,WIT07-0137-BE0F,Wireless SDI/HDMI Transmitter,False,False,False,False,False,1,,VX,Store,
@@ -1170,19 +1170,19 @@ CLICKER#02,DSAN,PerfectCue Mini,,Professional Wireless Clicker,False,False,False
 PERFECTCUE#02,DSAN,PerfectCue Mini,15-8294,Professional Wireless Clicker,False,False,False,False,False,1,,VX,Store,Store
 CLICKER#03,DSAN,PerfectCue Mini,,Professional Wireless Clicker,False,False,False,False,False,1,,VX,Store,Store
 CLICKER#04,DSAN,PerfectCue Mini,,Professional Wireless Clicker,False,False,False,False,False,1,,VX,Store,Store
-SBS#01,Sennheiser,Spectera Base Station,1205000475,1RU Spectera Base Station,False,False,False,False,False,1,"[{""date"":""2026/03/12"",""user"":""bnjm2000"",""description"":""Updated to v1.2.6"",""type"":""Update"",""cost"":"""",""changes"":[],""source"":{}},{""date"":""2026/04/20"",""user"":""bnjm2000"",""description"":""Updated to v1.3.0"",""type"":""Update"",""cost"":"""",""changes"":[],""source"":{}},{""date"":""2026/05/02"",""user"":""bnjm2000"",""description"":""Installed MADI slot card SN: 1445001225"",""type"":""General"",""cost"":"""",""changes"":[],""source"":{}}]",AX,Store,
-SEK#01,Sennheiser,SEK(UHF),1165001727,Spectera Bidirectional bodypack,False,False,False,False,False,1,"[{""date"":""2026/03/12"",""user"":""bnjm2000"",""description"":""Updated to v1.2.6"",""type"":""General"",""cost"":"""",""changes"":[],""source"":{}}]",AX,Store,Store
+SBS#01,Sennheiser,Spectera Base Station,1205000475,1RU Spectera Base Station,False,False,False,False,False,1,"[{""date"":""2026/03/12"",""user"":""bnjm2000"",""description"":""Updated to v1.2.6"",""type"":""Update"",""cost"":"""",""changes"":[],""source"":{}},{""date"":""2026/04/20"",""user"":""bnjm2000"",""description"":""Updated to v1.3.0"",""type"":""Update"",""cost"":"""",""changes"":[],""source"":{}},{""date"":""2026/05/02"",""user"":""bnjm2000"",""description"":""Installed MADI slot card SN: 1445001225"",""type"":""General"",""cost"":"""",""changes"":[],""source"":{}}]",AX,Store,Wedding of Patricia & Edgar @ Capella
+SEK#01,Sennheiser,SEK(UHF),1165001727,Spectera Bidirectional bodypack,False,False,False,False,False,1,"[{""date"":""2026/03/12"",""user"":""bnjm2000"",""description"":""Updated to v1.2.6"",""type"":""General"",""cost"":"""",""changes"":[],""source"":{}}]",AX,Store,Wedding of Patricia & Edgar @ Capella
 SEK#02,Sennheiser,SEK(UHF),1165001729,Spectera Bidirectional bodypack,False,False,False,False,False,1,"[{""date"":""2026/03/12"",""user"":""bnjm2000"",""description"":""Updated to v1.2.6"",""type"":""General"",""cost"":"""",""changes"":[],""source"":{}}]",AX,Store,Store
-SEK#03,Sennheiser,SEK(UHF),1195001949,Spectera Bidirectional bodypack,False,False,False,False,False,1,"[{""date"":""2026/03/12"",""user"":""bnjm2000"",""description"":""Updated to v1.2.6"",""type"":""General"",""cost"":"""",""changes"":[],""source"":{}}]",AX,Store,Store
-SEK#04,Sennheiser,SEK(UHF),1195001964,Spectera Bidirectional bodypack,False,False,False,False,False,1,"[{""date"":""2026/03/12"",""user"":""bnjm2000"",""description"":""Updated to v1.2.6"",""type"":""General"",""cost"":"""",""changes"":[],""source"":{}}]",AX,Store,Store
-SEK#05,Sennheiser,SEK(UHF),1195001965,Spectera Bidirectional bodypack,False,False,False,False,False,1,"[{""date"":""2026/03/12"",""user"":""bnjm2000"",""description"":""Updated to v1.2.6"",""type"":""General"",""cost"":"""",""changes"":[],""source"":{}}]",AX,Store,Store
-SEK#06,Sennheiser,SEK(UHF),1195001966,Spectera Bidirectional bodypack,False,False,False,False,False,1,"[{""date"":""2026/03/12"",""user"":""bnjm2000"",""description"":""Updated to v1.2.6"",""type"":""General"",""cost"":"""",""changes"":[],""source"":{}}]",AX,Store,Store
-SEK#07,Sennheiser,SEK(UHF),1195001968,Spectera Bidirectional bodypack,False,False,False,False,False,1,"[{""date"":""2026/03/12"",""user"":""bnjm2000"",""description"":""Updated to v1.2.6"",""type"":""General"",""cost"":"""",""changes"":[],""source"":{}}]",AX,Store,Store
-SEK#08,Sennheiser,SEK(UHF),1195001986,Spectera Bidirectional bodypack,False,False,False,False,False,1,"[{""date"":""2026/03/12"",""user"":""bnjm2000"",""description"":""Updated to v1.2.6"",""type"":""General"",""cost"":"""",""changes"":[],""source"":{}}]",AX,Store,Store
-SEK#09,Sennheiser,SEK(UHF),1195002041,Spectera Bidirectional bodypack,False,False,False,False,False,1,"[{""date"":""2026/03/12"",""user"":""bnjm2000"",""description"":""Updated to v1.2.6"",""type"":""General"",""cost"":"""",""changes"":[],""source"":{}}]",AX,Store,Store
-SEK#10,Sennheiser,SEK(UHF),1195002042,Spectera Bidirectional bodypack,False,False,False,False,False,1,"[{""date"":""2026/03/12"",""user"":""bnjm2000"",""description"":""Updated to v1.2.6"",""type"":""General"",""cost"":"""",""changes"":[],""source"":{}}]",AX,Store,Store
-DAD#01,Sennheiser,DAD(UHF),1185001690,Spectera Bidirectional digital antenna,False,False,False,False,False,1,"[{""date"":""2026/03/12"",""user"":""bnjm2000"",""description"":""Updated to v1.2.6"",""type"":""General"",""cost"":"""",""changes"":[],""source"":{}}]",AX,Store,Store
-DAD#02,Sennheiser,DAD(UHF),1185001691,Spectera Bidirectional digital antenna,False,False,False,False,False,1,"[{""date"":""2026/03/12"",""user"":""bnjm2000"",""description"":""Updated to v1.2.6"",""type"":""General"",""cost"":"""",""changes"":[],""source"":{}}]",AX,Store,Store
+SEK#03,Sennheiser,SEK(UHF),1195001949,Spectera Bidirectional bodypack,False,False,False,False,False,1,"[{""date"":""2026/03/12"",""user"":""bnjm2000"",""description"":""Updated to v1.2.6"",""type"":""General"",""cost"":"""",""changes"":[],""source"":{}}]",AX,Store,Wedding of Patricia & Edgar @ Capella
+SEK#04,Sennheiser,SEK(UHF),1195001964,Spectera Bidirectional bodypack,False,False,False,False,False,1,"[{""date"":""2026/03/12"",""user"":""bnjm2000"",""description"":""Updated to v1.2.6"",""type"":""General"",""cost"":"""",""changes"":[],""source"":{}}]",AX,Store,Wedding of Patricia & Edgar @ Capella
+SEK#05,Sennheiser,SEK(UHF),1195001965,Spectera Bidirectional bodypack,False,False,False,False,False,1,"[{""date"":""2026/03/12"",""user"":""bnjm2000"",""description"":""Updated to v1.2.6"",""type"":""General"",""cost"":"""",""changes"":[],""source"":{}}]",AX,Store,Wedding of Patricia & Edgar @ Capella
+SEK#06,Sennheiser,SEK(UHF),1195001966,Spectera Bidirectional bodypack,False,False,False,False,False,1,"[{""date"":""2026/03/12"",""user"":""bnjm2000"",""description"":""Updated to v1.2.6"",""type"":""General"",""cost"":"""",""changes"":[],""source"":{}}]",AX,Store,Wedding of Patricia & Edgar @ Capella
+SEK#07,Sennheiser,SEK(UHF),1195001968,Spectera Bidirectional bodypack,False,False,False,False,False,1,"[{""date"":""2026/03/12"",""user"":""bnjm2000"",""description"":""Updated to v1.2.6"",""type"":""General"",""cost"":"""",""changes"":[],""source"":{}}]",AX,Store,Wedding of Patricia & Edgar @ Capella
+SEK#08,Sennheiser,SEK(UHF),1195001986,Spectera Bidirectional bodypack,False,False,False,False,False,1,"[{""date"":""2026/03/12"",""user"":""bnjm2000"",""description"":""Updated to v1.2.6"",""type"":""General"",""cost"":"""",""changes"":[],""source"":{}}]",AX,Store,Wedding of Patricia & Edgar @ Capella
+SEK#09,Sennheiser,SEK(UHF),1195002041,Spectera Bidirectional bodypack,False,False,False,False,False,1,"[{""date"":""2026/03/12"",""user"":""bnjm2000"",""description"":""Updated to v1.2.6"",""type"":""General"",""cost"":"""",""changes"":[],""source"":{}}]",AX,Store,Wedding of Patricia & Edgar @ Capella
+SEK#10,Sennheiser,SEK(UHF),1195002042,Spectera Bidirectional bodypack,False,False,False,False,False,1,"[{""date"":""2026/03/12"",""user"":""bnjm2000"",""description"":""Updated to v1.2.6"",""type"":""General"",""cost"":"""",""changes"":[],""source"":{}}]",AX,Store,Wedding of Patricia & Edgar @ Capella
+DAD#01,Sennheiser,DAD(UHF),1185001690,Spectera Bidirectional digital antenna,False,False,False,False,False,1,"[{""date"":""2026/03/12"",""user"":""bnjm2000"",""description"":""Updated to v1.2.6"",""type"":""General"",""cost"":"""",""changes"":[],""source"":{}}]",AX,Store,Wedding of Patricia & Edgar @ Capella
+DAD#02,Sennheiser,DAD(UHF),1185001691,Spectera Bidirectional digital antenna,False,False,False,False,False,1,"[{""date"":""2026/03/12"",""user"":""bnjm2000"",""description"":""Updated to v1.2.6"",""type"":""General"",""cost"":"""",""changes"":[],""source"":{}}]",AX,Store,Wedding of Patricia & Edgar @ Capella
 L6000#01,Sennheiser,L6000,1134005936,Rackmount Charger,False,False,False,False,False,1,,AX,Store,
 LM6070#01,Sennheiser,LM6070,,Charging module for the L 6000 rack-mount charger,False,False,False,False,False,1,,AX,Store,
 LM6070#02,Sennheiser,LM6070,,Charging module for the L 6000 rack-mount charger,False,False,False,False,False,1,,AX,Store,
@@ -1306,3 +1306,5 @@ BULK-0018,Versa-Stand,Music stand,,,False,False,False,False,True,6,,MI,Store,
 BULK-0019,K&M,21020-500-55,,Tall boom mic stand,False,False,False,False,True,26,,AX,Store,
 BULK-0020,Custom,300mm base plate,,Pipe and drape base plate,False,False,False,False,True,12,,STG,Store,
 BULK-0021,Audio-Technica,AT8668,,Anti-shock microphone stand,False,False,False,False,True,10,,AX,Store,
+63ADB#03,Custom,63A 3-Phase DB,,"12x 16A 1P
+2x 32A 3P",False,False,False,False,False,1,,ELEC,Store,

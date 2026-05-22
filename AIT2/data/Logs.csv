@@ -1,173 +1,3 @@
-2026/04/27 12:05:14,bnjm2000,Assigned specific asset DXR12#02 to event 130
-2026/04/27 12:05:16,bnjm2000,Assigned specific asset DXR12#03 to event 130
-2026/04/27 12:05:17,bnjm2000,Assigned specific asset DXR12#04 to event 130
-2026/04/27 12:05:17,bnjm2000,Assigned specific asset DXR12#05 to event 130
-2026/04/27 12:05:18,bnjm2000,Assigned specific asset DXR12#06 to event 130
-2026/04/27 12:31:16,bnjm2000,Completely removed asset PB#46 from event 127
-2026/04/27 12:31:35,bnjm2000,Assigned specific asset PB#32 to event 127
-2026/04/27 12:32:27,bnjm2000,Prepared asset PB#48 for event 127
-2026/04/27 12:35:07,bnjm2000,User bnjm2000 removed forced state override for event 127 (Wedding of Avinash & Rachel @ Capella): Preparing -> Overdue
-2026/04/27 12:35:17,bnjm2000,Returned all assets for department LX in event 127: 84 items
-2026/04/27 12:35:23,bnjm2000,Returned all assets for department AX in event 127: 200 items
-2026/04/27 16:09:35,bnjm2000,Updated maintenance log for asset PB#26: 'Display died while charging. [Marked OOC]' -> 'Display died while charging.' (also: Marked OOC) (edited by bnjm2000)
-2026/04/27 17:04:19,bnjm2000,Removed Ayrton Diablo Profile model from event 129
-2026/04/27 17:04:30,bnjm2000,Added 6x MiPro MR-90 model to event 129 (total: 6)
-2026/04/27 17:04:32,bnjm2000,Added 2x MiPro MT-90A model to event 129 (total: 2)
-2026/04/29 11:25:25,bnjm2000,User bnjm2000 logged in via web interface
-2026/04/29 11:28:20,bnjm2000,Assigned specific asset SAMSUNG55#05 to event 128
-2026/04/29 11:28:23,bnjm2000,Assigned specific asset SAMSUNG55#06 to event 128
-2026/04/30 10:50:54,bnjm2000,User bnjm2000 logged in via web interface
-2026/05/02 14:41:53,bnjm2000,Maintenance logged for asset SBS#01: Updated to v1.3.0
-2026/05/02 14:42:10,bnjm2000,Maintenance logged for asset SBS#01: Installed MADI slot card
-2026/05/02 14:43:15,bnjm2000,Created event 131: Wedding of Patricia & Edgar @ Capella via web interface
-2026/05/02 14:43:22,bnjm2000,Added 2x L-Acoustics M-BUMP model to event 131 (total: 2)
-2026/05/02 14:43:29,bnjm2000,Added 12x L-Acoustics KARAII model to event 131 (total: 12)
-2026/05/02 14:43:36,bnjm2000,Added 8x L-Acoustics X8 model to event 131 (total: 8)
-2026/05/02 14:44:30,bnjm2000,Updated event 128: Tiffany & Co. Event @ Ion Orchard via web interface
-2026/05/02 14:44:39,bnjm2000,Added 1x Yamaha Rio1608-d2 model to event 131 (total: 1)
-2026/05/02 14:44:40,bnjm2000,Added 1x Yamaha Rio3224-d2 model to event 131 (total: 1)
-2026/05/02 14:44:48,bnjm2000,Added 1x Shure ULXD4Q model to event 131 (total: 1)
-2026/05/02 14:44:55,bnjm2000,Added 1x Shure ULXD2 model to event 131 (total: 1)
-2026/05/02 14:45:00,bnjm2000,Added 1x Shure ULXD1 model to event 131 (total: 1)
-2026/05/02 14:45:03,bnjm2000,Added 1x Shure ULXD1 model to event 131 (total: 2)
-2026/05/02 14:45:07,bnjm2000,Added 1x Yamaha DM3 model to event 131 (total: 1)
-2026/05/02 14:45:12,bnjm2000,Added 1x Yamaha QL5 model to event 131 (total: 1)
-2026/05/02 14:45:19,bnjm2000,Added 64x Astera Pixel Brick model to event 131 (total: 64)
-2026/05/02 14:45:32,bnjm2000,Added 16x Robe Robin LEDBeam 350 Wash model to event 131 (total: 16)
-2026/05/02 14:45:42,bnjm2000,Added 8x Ayrton Diablo (W.DMX) model to event 131 (total: 8)
-2026/05/02 14:46:00,bnjm2000,Added 3x L-Acoustics LA12X model to event 131 (total: 3)
-2026/05/02 14:46:05,bnjm2000,Added 2x L-Acoustics LA4X model to event 131 (total: 2)
-2026/05/02 14:46:12,bnjm2000,Added 1x 63A 3-Phase DB Custom DB model to event 131 (total: 1)
-2026/05/02 14:46:17,bnjm2000,Added 1x GrandMA3 Compact XT model to event 131 (total: 1)
-2026/05/02 14:46:23,bnjm2000,Added 6x L-Acoustics SB18 model to event 131 (total: 6)
-2026/05/02 14:46:45,bnjm2000,Added 2x MiPro MT-90A model to event 131 (total: 2)
-2026/05/02 14:46:47,bnjm2000,Added 6x MiPro MR-90 model to event 131 (total: 6)
-2026/05/02 14:46:58,bnjm2000,Added 1x L-Acoustics P1 model to event 131 (total: 1)
-2026/05/02 14:47:03,bnjm2000,Added 2x Netgear GSM4212P model to event 131 (total: 2)
-2026/05/02 14:47:28,bnjm2000,Removed Shure ULXD4Q model from event 131
-2026/05/02 14:47:28,bnjm2000,Added 2x Shure ULXD4Q model to event 131 (total: 2)
-2026/05/02 14:47:42,bnjm2000,Added 1x Shure ULXD4D model to event 131 (total: 1)
-2026/05/02 14:48:05,bnjm2000,Added 6x Shure ULXD2 model to event 131 (total: 6)
-2026/05/02 14:48:14,bnjm2000,Removed Shure ULXD4Q model from event 131
-2026/05/02 14:48:21,bnjm2000,Added 1x Shure ULXD4Q model to event 131 (total: 1)
-2026/05/02 14:48:23,bnjm2000,Added 2x Shure ULXD4Q model to event 131 (total: 2)
-2026/05/02 14:48:37,bnjm2000,Removed Shure ULXD1 model from event 131
-2026/05/02 14:48:37,bnjm2000,Added 4x Shure ULXD1 model to event 131 (total: 4)
-2026/05/02 14:48:45,bnjm2000,Removed Shure ULXD2 model from event 131
-2026/05/02 14:48:45,bnjm2000,Added 4x Shure ULXD2 model to event 131 (total: 4)
-2026/05/02 14:48:57,bnjm2000,Added 4x DPA 4099 model to event 131 (total: 4)
-2026/05/02 14:49:03,bnjm2000,Added 5x DPA DAD 6010 model to event 131 (total: 5)
-2026/05/02 14:49:45,bnjm2000,Added 4x Yamaha DXR10 model to event 131 (total: 4)
-2026/05/02 14:50:24,bnjm2000,Added 1x Pioneer DJM-A9 model to event 131 (total: 1)
-2026/05/02 14:50:29,bnjm2000,Added 2x Pioneer CDJ3000 model to event 131 (total: 2)
-2026/05/02 14:52:19,bnjm2000,Added 4x EV EVOLVE 50 model to event 131 (total: 4)
-2026/05/02 14:53:19,bnjm2000,Created event 132: Rolex Event @ New Bahru via web interface
-2026/05/02 14:53:27,bnjm2000,Added 15x L-Acoustics X8 model to event 132 (total: 15)
-2026/05/02 14:53:30,bnjm2000,Removed L-Acoustics X8 model from event 132
-2026/05/02 14:53:33,bnjm2000,Added 8x L-Acoustics X8 model to event 132 (total: 8)
-2026/05/02 14:53:40,bnjm2000,Added 1x L-Acoustics LA4X model to event 132 (total: 1)
-2026/05/02 14:53:44,bnjm2000,Added 2x L-Acoustics LA2Xi model to event 132 (total: 2)
-2026/05/02 14:53:56,bnjm2000,Added 6x L-Acoustics 5XTW model to event 132 (total: 6)
-2026/05/02 14:54:02,bnjm2000,Added 1x Yamaha DM3 model to event 132 (total: 1)
-2026/05/02 14:54:07,bnjm2000,Added 2x L-Acoustics Syva Low model to event 132 (total: 2)
-2026/05/02 14:54:08,bnjm2000,Added 2x L-Acoustics Syva model to event 132 (total: 2)
-2026/05/02 14:54:57,bnjm2000,Added 1x Apple IPAD model to event 132 (total: 1)
-2026/05/02 14:55:01,bnjm2000,Added 1x Interspace Industries PCBB3 model to event 132 (total: 1)
-2026/05/02 14:55:10,bnjm2000,Added 2x Apple IPAD model to event 131 (total: 2)
-2026/05/02 14:55:15,bnjm2000,Added 4x Interspace Industries PCBB3 model to event 131 (total: 4)
-2026/05/02 14:55:24,bnjm2000,Updated event 131: Wedding of Patricia & Edgar @ Capella via web interface
-2026/05/02 14:56:21,bnjm2000,Added 2x Radial Engineering J48 Stereo model to event 131 (total: 2)
-2026/05/02 14:56:23,bnjm2000,Added 2x Radial Engineering JDI Stereo model to event 131 (total: 2)
-2026/05/02 14:56:30,bnjm2000,Added 1x Radial Engineering J48 Mono model to event 131 (total: 1)
-2026/05/02 14:56:40,bnjm2000,Added 2x Shure AD3 model to event 131 (total: 2)
-2026/05/02 14:56:42,bnjm2000,Added 1x Shure AD4D model to event 131 (total: 1)
-2026/05/02 14:56:48,bnjm2000,Added 2x Sennheiser ME36 model to event 131 (total: 2)
-2026/05/02 15:00:13,bnjm2000,"Updated maintenance log for asset ULXD2#11: 'Collected back from E&E, replaced battery contact pin and bumper [Location: Store, Cleared OOC, Cleared Missing]' -> 'Collected back from E&E, replaced battery contact pin and bumper' (also: Location: Store, Cleared OOC) (edited by bnjm2000)"
-2026/05/02 15:04:47,bnjm2000,"Updated maintenance log for asset MR-90A#05: 'Technician tested working, went to MiPro office to check before collecting. Audio came through but unit kept skipping channels. MiPro did a 1-to-1 swap. New SN: 878292431A Old SN:878292435A [Cleared OOC]' -> 'Technician tested working, went to MiPro office to check before collecting. Audio came through but unit kept skipping channels. MiPro did a 1-to-1 swap. New SN: 878292431A Old SN:878292435A' (also: Cleared OOC) (edited by bnjm2000)"
-2026/05/02 15:04:55,bnjm2000,"Updated maintenance log for asset MR-90A#05: 'Technician tested working, went to MiPro office to check before collecting. Audio came through but unit kept skipping channels. MiPro did a 1-to-1 swap. New SN: 878292431A Old SN:878292435A [Cleared OOC]' -> 'Technician tested working, went to MiPro office to check before collecting. Audio came through but unit kept skipping channels. MiPro did a 1-to-1 swap. New SN: 878292431A Old SN:878292435A' (also: Serial: 878292435A, Cleared OOC) (edited by bnjm2000)"
-2026/05/02 15:05:05,bnjm2000,"Updated maintenance log for asset MR-90A#05: 'Technician tested working, went to MiPro office to check before collecting. Audio came through but unit kept skipping channels. MiPro did a 1-to-1 swap. New SN: 878292431A Old SN:878292435A [Serial: 878292435A, Cleared OOC]' -> 'Technician tested working, went to MiPro office to check before collecting. Audio came through but unit kept skipping channels. MiPro did a 1-to-1 swap. New SN: 878292431A Old SN:878292435A' (also: Serial: 878292431A, Cleared OOC) (edited by bnjm2000)"
-2026/05/02 15:06:16,bnjm2000,Updated maintenance log for asset MT-90A#04: 'Handed over to MiPro for PSU testing [Location: MiPro]' -> 'Handed over to MiPro for PSU testing' (also: Location: MiPro) (edited by bnjm2000)
-2026/05/02 16:01:07,bnjm2000,Assigned specific asset IPAD#01 to event 132
-2026/05/02 16:01:15,bnjm2000,Completely removed asset IPAD#01 from event 132
-2026/05/02 16:01:38,bnjm2000,Deleted event 133: re via web interface. No asset locations to reset. Removed 3 related log entries.
-2026/05/02 16:23:21,bnjm2000,Assigned specific asset MBUMP#01 to event 131
-2026/05/02 16:23:21,bnjm2000,Assigned specific asset MBUMP#03 to event 131
-2026/05/02 16:23:23,bnjm2000,Assigned specific asset LA4X#01 to event 131
-2026/05/02 16:23:24,bnjm2000,Assigned specific asset LA4X#03 to event 131
-2026/05/02 16:23:35,bnjm2000,Completely removed asset MBUMP#01 from event 131
-2026/05/02 16:23:36,bnjm2000,Completely removed asset MBUMP#03 from event 131
-2026/05/02 16:23:37,bnjm2000,Completely removed asset LA4X#03 from event 131
-2026/05/02 16:23:38,bnjm2000,Completely removed asset LA4X#01 from event 131
-2026/05/04 16:31:15,bnjm2000,User bnjm2000 logged in via web interface
-2026/05/04 16:31:37,bnjm2000,Updated maintenance log for asset SBS#01: 'Installed MADI slot card' -> 'Installed MADI slot card SN: 1445001225' (edited by bnjm2000)
-2026/05/05 10:54:30,bnjm2000,User bnjm2000 logged in via web interface
-2026/05/05 10:57:09,bnjm2000,Created event 133: Dry Hire: T2 via web interface
-2026/05/05 10:57:15,bnjm2000,Added 2x MiPro MT-90A model to event 133 (total: 2)
-2026/05/05 10:57:17,bnjm2000,Added 2x MiPro MR-90 model to event 133 (total: 2)
-2026/05/05 10:57:28,bnjm2000,Assigned specific asset MR-90A#06 to event 133
-2026/05/05 10:57:30,bnjm2000,Assigned specific asset MR-90A#04 to event 133
-2026/05/05 10:57:37,bnjm2000,Assigned specific asset MT-90A#03 to event 133
-2026/05/05 10:57:37,bnjm2000,Assigned specific asset MT-90A#04 to event 133
-2026/05/05 10:58:48,bnjm2000,Saved client Terence Wong
-2026/05/05 11:14:36,bnjm2000,Added 1x RF Venue Combine4 model to event 133 (total: 1)
-2026/05/05 11:14:57,bnjm2000,Added 1x RF Venue Combine4 model to event 127 (total: 1)
-2026/05/05 11:15:44,bnjm2000,Removed RF Venue Combine4 model from event 127
-2026/05/05 11:17:15,bnjm2000,Added 1x RF Venue Combine4 model to event 111 (total: 1)
-2026/05/05 11:17:46,bnjm2000,User bnjm2000 forced event 111 (Damiani Jewellery Dinner @ Artyzen Hotel) state from Closed to Preparing
-2026/05/05 11:17:50,bnjm2000,Assigned specific asset COMBINE4#01 to event 111
-2026/05/05 11:17:54,bnjm2000,Returned asset COMBINE4#01 from event 111
-2026/05/05 11:17:58,bnjm2000,User bnjm2000 removed forced state override for event 111 (Damiani Jewellery Dinner @ Artyzen Hotel): Preparing -> Closed
-2026/05/05 11:18:44,bnjm2000,Added 1x RF Venue Combine4 model to event 29 (total: 1)
-2026/05/05 11:18:51,bnjm2000,User bnjm2000 forced event 29 (dearGENTLEFOLK @ Restaurant Born) state from Closed to Preparing
-2026/05/05 11:18:55,bnjm2000,Assigned specific asset COMBINE4#01 to event 29
-2026/05/05 11:18:59,bnjm2000,User bnjm2000 removed forced state override for event 29 (dearGENTLEFOLK @ Restaurant Born): Preparing -> Overdue
-2026/05/05 11:19:03,bnjm2000,Returned asset COMBINE4#01 from event 29
-2026/05/05 11:20:27,bnjm2000,Added 12x Chain Master D8 model to event 132 (total: 12)
-2026/05/05 11:20:33,bnjm2000,Added 1x Custom Chain Hoist Controller model to event 132 (total: 1)
-2026/05/05 11:22:02,bnjm2000,Added 1x RF Venue Combine4 model to event 129 (total: 1)
-2026/05/05 11:22:18,bnjm2000,Added 1x RF Venue Combine4 model to event 131 (total: 1)
-2026/05/05 11:23:13,bnjm2000,Updated event 55: Dry Hire: Variety Communications via web interface
-2026/05/05 11:23:17,bnjm2000,Updated event 23: Dry Hire: Variety Communications via web interface
-2026/05/05 11:37:37,bnjm2000,Assigned asset [MISC]Media Player;5 to event 133 (unprepared)
-2026/05/05 11:37:43,bnjm2000,Assigned specific asset COMBINE4#01 to event 133
-2026/05/05 11:37:46,bnjm2000,Prepared asset [MISC]Media Player;5 for event 133
-2026/05/05 15:42:22,bnjm2000,Marked asset PB#34 as Out of Commission
-2026/05/05 15:42:22,bnjm2000,Maintenance logged for asset PB#34: Screen died while charging
-2026/05/05 15:42:22,bnjm2000,Marked asset PB#60 as Out of Commission
-2026/05/05 15:42:22,bnjm2000,Maintenance logged for asset PB#60: Screen died while charging
-2026/05/05 15:42:58,bnjm2000,Removed Out of Commission status from asset PB#34
-2026/05/05 15:42:58,bnjm2000,Maintenance logged for asset PB#34: Ben changed PB15-HOU-BC - $39.52
-2026/05/05 15:42:58,bnjm2000,Removed Out of Commission status from asset PB#60
-2026/05/05 15:42:58,bnjm2000,Maintenance logged for asset PB#60: Ben changed PB15-HOU-BC - $39.52
-2026/05/05 16:03:24,bnjm2000,Updated event 133: Dry Hire: Variety Communications via web interface
-2026/05/06 10:30:45,bnjm2000,User bnjm2000 logged in via web interface
-2026/05/06 10:35:35,bnjm2000,Added 1x Shure HA-8091 model to event 129 (total: 1)
-2026/05/06 10:35:56,bnjm2000,Added 1x Shure HA-8091 model to event 127 (total: 1)
-2026/05/06 10:36:13,bnjm2000,Added 1x Shure PA805SWB model to event 126 (total: 1)
-2026/05/06 10:36:18,bnjm2000,User bnjm2000 forced event 126 (Hermes Sorry it was yesterday @ Liat Towers) state from Closed to Preparing
-2026/05/06 10:36:22,bnjm2000,User bnjm2000 forced event 127 (Wedding of Avinash & Rachel @ Capella) state from Closed to Preparing
-2026/05/06 10:36:29,bnjm2000,Assigned specific asset PA805SWB#01 to event 126
-2026/05/06 10:36:39,bnjm2000,Assigned specific asset HA8091#01 to event 127
-2026/05/06 10:36:52,bnjm2000,Returned asset HA8091#01 from event 127
-2026/05/06 10:36:55,bnjm2000,Returned asset PA805SWB#01 from event 126
-2026/05/06 10:37:00,bnjm2000,User bnjm2000 removed forced state override for event 127 (Wedding of Avinash & Rachel @ Capella): Preparing -> Closed
-2026/05/06 10:37:01,bnjm2000,User bnjm2000 removed forced state override for event 126 (Hermes Sorry it was yesterday @ Liat Towers): Preparing -> Closed
-2026/05/06 10:38:29,bnjm2000,Added 1x Shure HA-8091 model to event 110 (total: 1)
-2026/05/06 10:38:32,bnjm2000,User bnjm2000 forced event 110 (Louis Vuitton Spring Summer Trunk Show 2026 @ Japanese Garden) state from Closed to Preparing
-2026/05/06 10:39:14,bnjm2000,User bnjm2000 forced event 105 (Performance Motor CNY Dinner @ St Regis) state from Closed to Preparing
-2026/05/06 10:40:14,bnjm2000,Assigned specific asset MACBOOK#01 to event 105
-2026/05/06 10:40:21,bnjm2000,Assigned specific asset HA8091#01 to event 110
-2026/05/06 10:40:32,bnjm2000,Returned all assets for department AX in event 110: 1 items
-2026/05/06 10:40:33,bnjm2000,Returned asset MACBOOK#01 from event 105
-2026/05/06 10:40:39,bnjm2000,User bnjm2000 removed forced state override for event 110 (Louis Vuitton Spring Summer Trunk Show 2026 @ Japanese Garden): Preparing -> Closed
-2026/05/06 10:40:41,bnjm2000,User bnjm2000 removed forced state override for event 105 (Performance Motor CNY Dinner @ St Regis): Preparing -> Preparing
-2026/05/06 10:41:19,bnjm2000,Removed Lenovo Legion 5 Pro model from event 105
-2026/05/06 12:50:54,bnjm2000,Removed L-Acoustics X8 model from event 131
-2026/05/06 12:52:51,bnjm2000,Added 1x Sennheiser Base Station model to event 131 (total: 1)
-2026/05/06 12:52:57,bnjm2000,Added 2x Sennheiser DAD(UHF) model to event 131 (total: 2)
-2026/05/06 12:53:04,bnjm2000,Added 7x Sennheiser SEK(UHF) model to event 131 (total: 7)
-2026/05/06 12:53:28,bnjm2000,Removed L-Acoustics 5XTW model from event 132
-2026/05/06 12:53:49,bnjm2000,Added 8x L-Acoustics X-UL8 model to event 132 (total: 8)
 2026/05/06 12:54:09,bnjm2000,Added 8x L-Acoustics 5XT model to event 132 (total: 8)
 2026/05/06 12:54:17,bnjm2000,Added 8x L-Acoustics ETR5 model to event 132 (total: 8)
 2026/05/06 12:56:11,bnjm2000,Removed L-Acoustics LA4X model from event 132
@@ -1069,3 +899,173 @@ XLR connector loosed, soldered back - $40' (also: Location: MiPro Singapore, Cle
 2026/05/19 16:57:22,bnjm2000,Assigned specific asset LEDBEAM#14 to event 131
 2026/05/19 16:57:22,bnjm2000,Assigned specific asset LEDBEAM#15 to event 131
 2026/05/19 16:57:22,bnjm2000,Assigned specific asset LEDBEAM#16 to event 131
+2026/05/20 09:29:31,bnjm2000,User bnjm2000 logged in via web interface
+2026/05/20 09:37:29,bnjm2000,User bnjm2000 logged in via web interface
+2026/05/20 10:47:15,cjamie,User cjamie logged in via web interface
+2026/05/20 11:28:41,cjamie,Prepared 1x bulk asset Custom 605mm Base plate (carpeted) for event 131
+2026/05/20 11:28:41,cjamie,Prepared 7x bulk asset Custom 605mm Base plate for event 131
+2026/05/20 11:28:43,cjamie,Prepared 1x bulk asset Custom 605mm Base plate for event 131
+2026/05/20 11:28:57,cjamie,Prepared 1x bulk asset Global Truss F34 Truss - 2m (Silver) for event 131
+2026/05/20 11:28:57,cjamie,Prepared 7x bulk asset Global Truss F34 Truss - 1m (Silver) for event 131
+2026/05/20 11:28:59,cjamie,Prepared 10x bulk asset Global Truss F34 Truss - 0.5m (Silver) for event 131
+2026/05/20 11:29:00,cjamie,Prepared 3x bulk asset Global Truss F34 Truss - 3m (Silver) for event 131
+2026/05/20 11:29:03,cjamie,Prepared 2x bulk asset Global Truss F34 Corner Block (Silver) for event 131
+2026/05/20 12:55:35,cjamie,User cjamie logged in via web interface
+2026/05/20 12:55:53,cjamie,User cjamie logged in via web interface
+2026/05/20 13:40:22,cjamie,User cjamie logged in via web interface
+2026/05/21 17:33:11,bnjm2000,Prepared 12x bulk asset Global Truss F34 Corner Block (Black) for event 132
+2026/05/21 17:36:36,bnjm2000,Collected loan/rental item 2x Rosco Braq Cube for event 131
+2026/05/21 17:39:08,bnjm2000,Asset Check sighted asset ULXD2#02
+2026/05/22 17:49:13,bnjm2000,User bnjm2000 logged in via web interface
+2026/05/22 18:03:51,bnjm2000,Removed Audio-Technica AT8668 model from event 131
+2026/05/22 18:04:07,bnjm2000,Added 2x Audio-Technica AT8668 model to event 131 (total: 2)
+2026/05/22 18:04:40,bnjm2000,Prepared 2x bulk asset Audio-Technica AT8668 for event 131
+2026/05/22 18:04:42,bnjm2000,Unprepared bulk asset marker [BULK]BULK-0021|2 from event 131
+2026/05/22 18:04:53,bnjm2000,Assigned specific asset LAP1#01 to event 131
+2026/05/22 18:05:00,bnjm2000,Assigned specific asset GSM4212P#01 to event 131
+2026/05/22 18:05:04,bnjm2000,Assigned specific asset CDJ3000#01 to event 131
+2026/05/22 18:05:04,bnjm2000,Assigned specific asset CDJ3000#02 to event 131
+2026/05/22 18:05:07,bnjm2000,Assigned specific asset DJMA9#01 to event 131
+2026/05/22 18:05:22,bnjm2000,Assigned specific asset SBS#01 to event 131
+2026/05/22 18:05:34,bnjm2000,Removed Sennheiser Base Station model from event 131
+2026/05/22 18:05:42,bnjm2000,Removed Sennheiser DAD(UHF) model from event 131
+2026/05/22 18:05:59,bnjm2000,Added 2x Sennheiser DAD(UHF) model to event 131 (total: 2)
+2026/05/22 18:06:03,bnjm2000,Added 1x Sennheiser Spectera Base Station model to event 131 (total: 1)
+2026/05/22 18:06:08,bnjm2000,Removed Sennheiser SEK(UHF) model from event 131
+2026/05/22 18:06:14,bnjm2000,Added 7x Sennheiser SEK(UHF) model to event 131 (total: 7)
+2026/05/22 18:06:32,bnjm2000,Completely removed asset SBS#01 from event 131
+2026/05/22 18:06:34,bnjm2000,Assigned specific asset SBS#01 to event 131
+2026/05/22 18:06:42,bnjm2000,Assigned specific asset DAD#01 to event 131
+2026/05/22 18:06:43,bnjm2000,Assigned specific asset DAD#02 to event 131
+2026/05/22 18:07:41,bnjm2000,Assigned specific asset SB18#01 to event 131
+2026/05/22 18:07:44,bnjm2000,Assigned specific asset SB18#07 to event 131
+2026/05/22 18:07:45,bnjm2000,Assigned specific asset SB18#08 to event 131
+2026/05/22 18:07:45,bnjm2000,Assigned specific asset SB18#09 to event 131
+2026/05/22 18:07:48,bnjm2000,Assigned specific asset SB18#10 to event 131
+2026/05/22 18:07:49,bnjm2000,Assigned specific asset SB18#12 to event 131
+2026/05/22 18:08:09,bnjm2000,Assigned specific asset KARAII#05 to event 131
+2026/05/22 18:08:09,bnjm2000,Assigned specific asset KARAII#06 to event 131
+2026/05/22 18:08:17,bnjm2000,Assigned specific asset KARAII#07 to event 131
+2026/05/22 18:08:18,bnjm2000,Assigned specific asset KARAII#08 to event 131
+2026/05/22 18:08:21,bnjm2000,Assigned specific asset KARAII#09 to event 131
+2026/05/22 18:08:32,bnjm2000,Assigned specific asset KARAII#13 to event 131
+2026/05/22 18:08:33,bnjm2000,Assigned specific asset KARAII#14 to event 131
+2026/05/22 18:08:33,bnjm2000,Assigned specific asset KARAII#15 to event 131
+2026/05/22 18:08:37,bnjm2000,Assigned specific asset KARAII#16 to event 131
+2026/05/22 18:08:38,bnjm2000,Assigned specific asset KARAII#18 to event 131
+2026/05/22 18:08:42,bnjm2000,Assigned specific asset KARAII#19 to event 131
+2026/05/22 18:09:04,bnjm2000,Assigned specific asset KARAII#10 to event 131
+2026/05/22 18:11:35,bnjm2000,Assigned specific asset J48M#07 to event 131
+2026/05/22 18:11:36,bnjm2000,Assigned specific asset J48M#08 to event 131
+2026/05/22 18:12:16,bnjm2000,Assigned specific asset JDIS#02 to event 131
+2026/05/22 18:12:17,bnjm2000,Assigned specific asset JDIS#03 to event 131
+2026/05/22 18:12:47,bnjm2000,Removed Radial Engineering JDI Mono model from event 131
+2026/05/22 18:12:57,bnjm2000,Added 2x Radial Engineering J48 Stereo model to event 131 (total: 2)
+2026/05/22 18:13:04,bnjm2000,Removed Radial Engineering J48 Mono model from event 131
+2026/05/22 18:13:04,bnjm2000,Added 2x Radial Engineering J48 Mono model to event 131 (total: 2)
+2026/05/22 18:13:34,bnjm2000,Completely removed asset J48M#08 from event 131
+2026/05/22 18:13:38,bnjm2000,Assigned specific asset J48M#08 to event 131
+2026/05/22 18:15:14,bnjm2000,Assigned specific asset ME36#01 to event 131
+2026/05/22 18:15:14,bnjm2000,Assigned specific asset ME36#02 to event 131
+2026/05/22 18:15:20,bnjm2000,Assigned specific asset AD3#01 to event 131
+2026/05/22 18:15:20,bnjm2000,Assigned specific asset AD3#02 to event 131
+2026/05/22 18:15:23,bnjm2000,Assigned specific asset AD4D#01 to event 131
+2026/05/22 18:15:32,bnjm2000,Assigned specific asset CL5#01 to event 131
+2026/05/22 18:15:45,bnjm2000,Assigned specific asset LA12X#01 to event 131
+2026/05/22 18:15:46,bnjm2000,Assigned specific asset LA12X#02 to event 131
+2026/05/22 18:15:46,bnjm2000,Assigned specific asset LA12X#03 to event 131
+2026/05/22 18:15:53,bnjm2000,Removed L-Acoustics LA4X model from event 131
+2026/05/22 18:15:57,bnjm2000,Added 1x L-Acoustics LA12X model to event 131 (total: 4)
+2026/05/22 18:16:01,bnjm2000,Added 1x L-Acoustics LA4X model to event 131 (total: 1)
+2026/05/22 18:17:14,bnjm2000,Assigned specific asset ULXD4Q#01 to event 131
+2026/05/22 18:18:05,bnjm2000,Assigned specific asset SEK#03 to event 131
+2026/05/22 18:18:05,bnjm2000,Assigned specific asset SEK#04 to event 131
+2026/05/22 18:18:05,bnjm2000,Assigned specific asset SEK#05 to event 131
+2026/05/22 18:18:11,bnjm2000,Assigned specific asset SEK#06 to event 131
+2026/05/22 18:18:11,bnjm2000,Assigned specific asset SEK#08 to event 131
+2026/05/22 18:18:14,bnjm2000,Assigned specific asset SEK#09 to event 131
+2026/05/22 18:18:19,bnjm2000,Assigned specific asset SEK#10 to event 131
+2026/05/22 18:18:52,bnjm2000,Assigned specific asset ULXD2#01 to event 131
+2026/05/22 18:18:53,bnjm2000,Assigned specific asset ULXD2#03 to event 131
+2026/05/22 18:18:56,bnjm2000,Assigned specific asset ULXD2#04 to event 131
+2026/05/22 18:18:58,bnjm2000,Assigned specific asset ULXD2#08 to event 131
+2026/05/22 18:18:59,bnjm2000,Assigned specific asset ULXD2#09 to event 131
+2026/05/22 18:19:02,bnjm2000,Assigned specific asset ULXD2#12 to event 131
+2026/05/22 18:19:34,bnjm2000,Added asset 63ADB#03 via web interface
+2026/05/22 18:20:05,bnjm2000,Updated asset 63ADB#03; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/05/22 18:20:18,bnjm2000,Assigned specific asset 63ADB#02 to event 131
+2026/05/22 18:20:42,bnjm2000,Assigned specific asset 63ADB#03 to event 132
+2026/05/22 18:20:53,bnjm2000,Assigned specific asset CONTROLLER#01 to event 132
+2026/05/22 18:20:56,bnjm2000,Assigned specific asset CMD8#01 to event 132
+2026/05/22 18:20:56,bnjm2000,Assigned specific asset CMD8#02 to event 132
+2026/05/22 18:21:00,bnjm2000,Assigned specific asset CMD8#03 to event 132
+2026/05/22 18:21:00,bnjm2000,Assigned specific asset CMD8#04 to event 132
+2026/05/22 18:21:01,bnjm2000,Assigned specific asset CMD8#05 to event 132
+2026/05/22 18:21:03,bnjm2000,Assigned specific asset CMD8#07 to event 132
+2026/05/22 18:21:04,bnjm2000,Assigned specific asset CMD8#08 to event 132
+2026/05/22 18:21:06,bnjm2000,Assigned specific asset CMD8#06 to event 132
+2026/05/22 18:21:06,bnjm2000,Assigned specific asset CMD8#09 to event 132
+2026/05/22 18:21:07,bnjm2000,Assigned specific asset CMD8#10 to event 132
+2026/05/22 18:21:08,bnjm2000,Assigned specific asset CMD8#11 to event 132
+2026/05/22 18:21:09,bnjm2000,Assigned specific asset CMD8#12 to event 132
+2026/05/22 18:21:28,bnjm2000,Prepared custom item 2x Rosco Braq Cube for event 131
+2026/05/22 18:21:31,bnjm2000,Collected loan/rental item 1x Adjustable chair for keyboardist for event 131
+2026/05/22 18:21:32,bnjm2000,Collected loan/rental item 1x Drum stool for event 131
+2026/05/22 18:21:33,bnjm2000,Collected loan/rental item 2x Guitar stand for event 131
+2026/05/22 18:21:33,bnjm2000,Collected loan/rental item 5x Music stand for event 131
+2026/05/22 18:21:35,bnjm2000,Prepared custom item 1x Adjustable chair for keyboardist for event 131
+2026/05/22 18:21:35,bnjm2000,Prepared custom item 1x Drum stool for event 131
+2026/05/22 18:21:36,bnjm2000,Prepared custom item 2x Guitar stand for event 131
+2026/05/22 18:21:36,bnjm2000,Prepared custom item 5x Music stand for event 131
+2026/05/22 18:21:45,bnjm2000,Collected loan/rental item 1x Yamaha RD700 for event 131
+2026/05/22 18:21:47,bnjm2000,Prepared custom item 1x Yamaha RD700 for event 131
+2026/05/22 18:26:25,bnjm2000,Added asset 63ADB#03 via web interface
+2026/05/22 18:26:58,bnjm2000,Updated asset 63ADB#03; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/05/22 18:27:19,bnjm2000,Unprepared bulk asset marker [BULK]BULK-0017|7 from event 131
+2026/05/22 18:27:25,bnjm2000,Unprepared bulk asset marker [BULK]BULK-0017|1 from event 131
+2026/05/22 18:27:29,bnjm2000,Prepared 7x bulk asset Custom 605mm Base plate for event 131
+2026/05/22 18:27:46,bnjm2000,Unprepared bulk asset marker [BULK]BULK-0006|10 from event 131
+2026/05/22 18:27:48,bnjm2000,Unprepared bulk asset marker [BULK]BULK-0005|7 from event 131
+2026/05/22 18:27:48,bnjm2000,Unprepared bulk asset marker [BULK]BULK-0003|1 from event 131
+2026/05/22 18:27:49,bnjm2000,Unprepared bulk asset marker [BULK]BULK-0001|3 from event 131
+2026/05/22 18:27:50,bnjm2000,Unprepared bulk asset marker [BULK]BULK-0007|2 from event 131
+2026/05/22 18:27:50,bnjm2000,Unprepared bulk asset marker [BULK]BULK-0017|7 from event 131
+2026/05/22 18:27:51,bnjm2000,Unprepared bulk asset marker [BULK]BULK-0016|1 from event 131
+2026/05/22 18:28:13,bnjm2000,"Removed custom asset [CUSTOM]{""company"":"""",""department"":""ELEC"",""name"":""63A 3P Cable - 20m"",""quantity"":1,""type"":""MISC"",""uid"":""ca02d9adcb8b7c31"",""version"":2} from event 131"
+2026/05/22 18:28:28,bnjm2000,"Added MISC custom asset '63A 3P Cable - 10m' (2x, dept ELEC) to event 131"
+2026/05/22 18:30:37,bnjm2000,Returned asset DM3#01 from event 139
+2026/05/22 18:30:39,bnjm2000,Returned asset PULSE2#01 from event 139
+2026/05/22 18:30:47,bnjm2000,Returned all assets for department LX in event 139: 2 items
+2026/05/22 18:30:54,bnjm2000,Returned all assets for department STG in event 139: 3 items
+2026/05/22 18:33:18,bnjm2000,Completely removed asset DM3#02 from event 131
+2026/05/22 18:33:27,bnjm2000,Removed Yamaha DM3 model from event 131
+2026/05/22 18:33:32,bnjm2000,Added 1x Yamaha QL1 model to event 131 (total: 1)
+2026/05/22 18:33:41,bnjm2000,Assigned specific asset QL1#01 to event 131
+2026/05/22 18:33:53,bnjm2000,Prepared custom item 2x 63A 3P Cable - 10m for event 131
+2026/05/22 18:34:22,bnjm2000,Assigned specific asset DM3#02 to event 132
+2026/05/22 18:35:01,bnjm2000,Assigned specific asset ULXD4D#01 to event 131
+2026/05/22 18:37:03,bnjm2000,Removed Sennheiser SEK(UHF) model from event 131
+2026/05/22 18:37:04,bnjm2000,Added 9x Sennheiser SEK(UHF) model to event 131 (total: 9)
+2026/05/22 18:37:27,bnjm2000,Removed L-Acoustics X8 model from event 131
+2026/05/22 18:38:13,bnjm2000,Returned all assets for department AX in event 140: 1 items
+2026/05/22 18:38:17,bnjm2000,Returned all assets for department STG in event 140: 1 items
+2026/05/22 19:32:48,bnjm2000,Added 4x L-Acoustics X8 model to event 131 (total: 4)
+2026/05/22 19:35:09,bnjm2000,Assigned specific asset X8#12 to event 131
+2026/05/22 19:35:10,bnjm2000,Assigned specific asset X8#11 to event 131
+2026/05/22 19:35:12,bnjm2000,Assigned specific asset X8#09 to event 131
+2026/05/22 19:35:13,bnjm2000,Assigned specific asset X8#10 to event 131
+2026/05/22 19:35:26,bnjm2000,Assigned specific asset SEK#07 to event 131
+2026/05/22 19:35:26,bnjm2000,Assigned specific asset SEK#01 to event 131
+2026/05/22 19:35:51,bnjm2000,Prepared custom item 1x Socapex Cable - 30m for event 131
+2026/05/22 19:35:54,bnjm2000,Prepared 4x bulk asset Versa-Stand Music stand for event 131
+2026/05/22 19:36:12,bnjm2000,Removed Custom 605mm Base plate (carpeted) model from event 131
+2026/05/22 19:36:12,bnjm2000,Added 2x Custom 605mm Base plate (carpeted) model to event 131 (total: 2)
+2026/05/22 19:36:18,bnjm2000,Removed Custom 605mm Base plate model from event 131
+2026/05/22 19:36:19,bnjm2000,Added 2x Custom 605mm Base plate model to event 131 (total: 2)
+2026/05/22 19:36:24,bnjm2000,Removed Custom 605mm Base plate (carpeted) model from event 131
+2026/05/22 19:36:24,bnjm2000,Added 6x Custom 605mm Base plate (carpeted) model to event 131 (total: 6)
+2026/05/22 19:36:32,bnjm2000,Prepared 2x bulk asset Custom 605mm Base plate for event 131
+2026/05/22 19:36:33,bnjm2000,Prepared 6x bulk asset Custom 605mm Base plate (carpeted) for event 131
+2026/05/22 19:36:51,bnjm2000,Prepared 2x bulk asset Audio-Technica AT8668 for event 131
+2026/05/22 19:37:49,bnjm2000,Assigned specific asset EVOLVE50#01 to event 132
+2026/05/22 19:37:50,bnjm2000,Assigned specific asset EVOLVE50#02 to event 132

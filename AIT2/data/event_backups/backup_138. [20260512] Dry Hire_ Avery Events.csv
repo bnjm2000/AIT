@@ -1,2 +1,2 @@
-EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,Tag,ForceStateOverride
-138,Dry Hire: Avery Events,20260512,20260512,[],"[""[MODEL]SK|Custom|Sandbag|20|Sandbag - 6kg""]","[""[BULK]BULK-0015|20""]",Closed,"[""[BULK]BULK-0015|20""]",[],dry hire,False
+EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,CustomCollected,Tag,ForceStateOverride,Notes
+138,Dry Hire: Avery Events,20260512,20260512,[],"[""[MODEL]STG|Custom|Sandbag|20|Sandbag - 6kg""]","[""[BULK]BULK-0015|20""]",Returning,"[""[BULK]BULK-0015|20""]",[],[],dry hire,False,
