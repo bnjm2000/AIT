@@ -2469,6 +2469,22 @@ def _replace_asset_id_in_list(values, old_asset_id, new_asset_id):
     return changed
 
 
+def _replace_bulk_asset_id_in_list(values, old_asset_id, new_asset_id):
+    if not isinstance(values, list):
+        return 0
+
+    changed = 0
+
+    for index, value in enumerate(values):
+        marker = _parse_bulk_marker(value)
+
+        if marker and marker.get('bulkId') == old_asset_id:
+            values[index] = _bulk_marker(new_asset_id, marker.get('quantity', 1))
+            changed += 1
+
+    return changed
+
+
 def _parse_model_marker(value):
     if not isinstance(value, str) or not value.startswith('[MODEL]'):
         return None
@@ -2557,6 +2573,50 @@ def _event_has_asset_reference(event, asset_id):
     if not asset_id:
         return False
 
+    return _event_asset_reference_quantity(event, asset_id) > 0
+
+
+def _event_reference_lists(event):
+    return (
+        getattr(event, 'prepared_items', []) or [],
+        getattr(event, 'actually_prepared', []) or [],
+        getattr(event, 'returned_items', []) or [],
+        getattr(event, 'extra_assets', []) or []
+    )
+
+
+def _event_asset_reference_quantity(event, asset_id):
+    if not event or not asset_id:
+        return 0
+
+    asset = data_manager.inventory.get(asset_id) if data_manager else None
+
+    if asset and _is_bulk_asset(asset):
+        quantity = 0
+        seen_markers = set()
+        has_direct_reference = False
+
+        for values in _event_reference_lists(event):
+            if not isinstance(values, list):
+                continue
+
+            for value in values:
+                if value == asset_id:
+                    has_direct_reference = True
+                    continue
+
+                marker = _parse_bulk_marker(value)
+                if not marker or marker.get('bulkId') != asset_id:
+                    continue
+
+                if value in seen_markers:
+                    continue
+
+                seen_markers.add(value)
+                quantity += max(1, _safe_int(marker.get('quantity'), 1))
+
+        return quantity or (1 if has_direct_reference else 0)
+
     lists_to_check = (
         getattr(event, 'prepared_items', []) or [],
         getattr(event, 'actually_prepared', []) or [],
@@ -2564,7 +2624,56 @@ def _event_has_asset_reference(event, asset_id):
         getattr(event, 'extra_assets', []) or []
     )
 
-    return any(asset_id in values for values in lists_to_check if isinstance(values, list))
+    return 1 if any(asset_id in values for values in lists_to_check if isinstance(values, list)) else 0
+
+
+def _event_has_model_group_reference(event, group):
+    if not event or not group:
+        return False
+
+    for item in getattr(event, 'prepared_items', []) or []:
+        if _model_marker_matches_group(_parse_model_marker(item), group):
+            return True
+
+    old_display = _display_model_description(group)
+
+    for row in getattr(event, 'asset_models', []) or []:
+        if not isinstance(row, dict):
+            continue
+
+        if str(row.get('model_description', '')).strip() == old_display:
+            return True
+
+    return False
+
+
+def _event_has_specific_group_asset_reference(event, group):
+    if not event or not group:
+        return False
+
+    seen = set()
+
+    for values in _event_reference_lists(event):
+        if not isinstance(values, list):
+            continue
+
+        for value in values:
+            if not isinstance(value, str) or value in seen:
+                continue
+            seen.add(value)
+
+            marker = _parse_bulk_marker(value)
+            if marker:
+                asset = data_manager.inventory.get(marker.get('bulkId')) if data_manager else None
+            elif value.startswith('[MODEL]') or _is_custom_ref(value):
+                continue
+            else:
+                asset = data_manager.inventory.get(value) if data_manager else None
+
+            if asset and _asset_matches_group(asset, group):
+                return True
+
+    return False
 
 
 def _add_or_increment_model_marker(prepared_items, group, quantity_to_add=1):
@@ -2733,10 +2842,91 @@ def _ensure_event_model_requirement_covers_asset(event, asset, additional_quanti
     _add_or_increment_asset_model_row(event.asset_models, group, delta)
     return delta
 
-def _update_single_asset_event_model_references(event, old_group, new_group):
+
+def _move_model_marker_quantity(prepared_items, old_group, new_group, quantity_to_move=1):
+    if not isinstance(prepared_items, list):
+        return 0
+
+    remaining = max(1, _safe_int(quantity_to_move, 1))
+    moved = 0
+    changed = 0
+    rebuilt_items = []
+
+    for item in prepared_items:
+        marker = _parse_model_marker(item)
+
+        if remaining <= 0 or not _model_marker_matches_group(marker, old_group):
+            rebuilt_items.append(item)
+            continue
+
+        old_qty = max(0, _safe_int(marker.get('quantity'), 1))
+        move_qty = min(old_qty, remaining)
+
+        if move_qty <= 0:
+            rebuilt_items.append(item)
+            continue
+
+        leftover_qty = old_qty - move_qty
+        if leftover_qty > 0:
+            rebuilt_items.append(_make_model_marker(old_group, leftover_qty))
+
+        moved += move_qty
+        remaining -= move_qty
+        changed += 1
+
+    if moved:
+        prepared_items[:] = rebuilt_items
+        changed += _add_or_increment_model_marker(prepared_items, new_group, moved)
+
+    return changed
+
+
+def _move_asset_model_row_quantity(asset_models, old_group, new_group, quantity_to_move=1):
+    if not isinstance(asset_models, list):
+        return 0
+
+    old_display = _display_model_description(old_group)
+    remaining = max(1, _safe_int(quantity_to_move, 1))
+    moved = 0
+    changed = 0
+
+    for row in list(asset_models):
+        if remaining <= 0:
+            break
+
+        if not isinstance(row, dict):
+            continue
+
+        if str(row.get('model_description', '')).strip() != old_display:
+            continue
+
+        old_qty = max(0, _safe_int(row.get('quantity'), 1))
+        move_qty = min(old_qty, remaining)
+
+        if move_qty <= 0:
+            continue
+
+        leftover_qty = old_qty - move_qty
+        if leftover_qty > 0:
+            row['quantity'] = leftover_qty
+        else:
+            asset_models.remove(row)
+
+        moved += move_qty
+        remaining -= move_qty
+        changed += 1
+
+    if moved:
+        changed += _add_or_increment_asset_model_row(asset_models, new_group, moved)
+
+    return changed
+
+
+def _update_single_asset_event_model_references(event, old_group, new_group, quantity_to_move=1):
     """
-    For a single asset edit, update only one unit of the old model/description
-    requirement inside events where that exact asset was prepared/returned before.
+    For a single asset edit, update only the referenced quantity of the old
+    model/description requirement inside events where that exact asset was
+    assigned, prepared, or returned before.
 
     Example:
     Old event has:
@@ -2749,64 +2939,18 @@ def _update_single_asset_event_model_references(event, old_group, new_group):
         [MODEL]AX|Yamaha|QL5|1|Console
         [MODEL]AX|Yamaha|DM7 Compact|1|Console
 
-    This preserves total quantity and does not affect return logic.
+    Bulk quantity assets may move more than one unit. This preserves total
+    requirement quantity and does not affect return logic.
     """
     changed = 0
 
     # Newer web workflow: prepared_items contains [MODEL] rows.
     prepared_items = getattr(event, 'prepared_items', []) or []
-
-    if isinstance(prepared_items, list):
-        for index, item in enumerate(list(prepared_items)):
-            marker = _parse_model_marker(item)
-
-            if not _model_marker_matches_group(marker, old_group):
-                continue
-
-            try:
-                old_qty = int(marker['quantity'])
-            except Exception:
-                old_qty = 1
-
-            if old_qty <= 1:
-                prepared_items[index] = _make_model_marker(new_group, 1)
-                changed += 1
-            else:
-                prepared_items[index] = _make_model_marker(old_group, old_qty - 1)
-                changed += 1
-                changed += _add_or_increment_model_marker(prepared_items, new_group, 1)
-
-            # Only move ONE unit because only ONE asset was edited.
-            break
+    changed += _move_model_marker_quantity(prepared_items, old_group, new_group, quantity_to_move)
 
     # Older saved events may still contain display rows in asset_models.
     asset_models = getattr(event, 'asset_models', []) or []
-    old_display = _display_model_description(old_group)
-
-    if isinstance(asset_models, list):
-        for index, row in enumerate(list(asset_models)):
-            if not isinstance(row, dict):
-                continue
-
-            if str(row.get('model_description', '')).strip() != old_display:
-                continue
-
-            try:
-                old_qty = int(row.get('quantity', 1))
-            except Exception:
-                old_qty = 1
-
-            if old_qty <= 1:
-                row['model_description'] = _display_model_description(new_group)
-                row['quantity'] = 1
-                changed += 1
-            else:
-                row['quantity'] = old_qty - 1
-                changed += 1
-                changed += _add_or_increment_asset_model_row(asset_models, new_group, 1)
-
-            # Only move ONE unit because only ONE asset was edited.
-            break
+    changed += _move_asset_model_row_quantity(asset_models, old_group, new_group, quantity_to_move)
 
     return changed
 
@@ -8301,10 +8445,10 @@ def update_asset(asset_id):
         old_group = _asset_group_from_item(asset)
 
         new_asset_id = (
-            data.get('internalId') or
             data.get('id') or
             data.get('assetId') or
             data.get('newId') or
+            data.get('internalId') or
             old_asset_id
         ).strip()
 
@@ -8341,17 +8485,29 @@ def update_asset(asset_id):
         else:
             target_assets = [asset]
 
-        # For single-asset model/description edits, remember which events this
-        # exact asset appeared in BEFORE changing the inventory object.
+        # For single-asset model/description edits, remember event references
+        # BEFORE changing the inventory object. Assigned/prepared events move
+        # only the referenced quantity. Model-only rows with no physical assets
+        # assigned yet can safely move as a whole planning row.
         #
         # This lets old prepared/returned events follow the edited asset,
         # similar to how an Asset ID rename already follows the same asset.
-        single_asset_event_ids_to_rewrite = set()
+        single_asset_event_quantities_to_rewrite = {}
+        unassigned_model_event_ids_to_rewrite = set()
 
         if apply_to == 'single' and group_changed:
             for event in data_manager.events.values():
-                if _event_has_asset_reference(event, old_asset_id):
-                    single_asset_event_ids_to_rewrite.add(event.event_id)
+                referenced_quantity = _event_asset_reference_quantity(event, old_asset_id)
+
+                if referenced_quantity > 0:
+                    single_asset_event_quantities_to_rewrite[event.event_id] = referenced_quantity
+                    continue
+
+                if (
+                    _event_has_model_group_reference(event, old_group)
+                    and not _event_has_specific_group_asset_reference(event, old_group)
+                ):
+                    unassigned_model_event_ids_to_rewrite.add(event.event_id)
 
         # Apply shared fields.
         # These are safe to apply to all same-type assets when admin chooses "all".
@@ -8427,7 +8583,17 @@ def update_asset(asset_id):
                     old_asset_id,
                     new_asset_id
                 )
+                event_changed += _replace_bulk_asset_id_in_list(
+                    getattr(event, 'prepared_items', []),
+                    old_asset_id,
+                    new_asset_id
+                )
                 event_changed += _replace_asset_id_in_list(
+                    getattr(event, 'returned_items', []),
+                    old_asset_id,
+                    new_asset_id
+                )
+                event_changed += _replace_bulk_asset_id_in_list(
                     getattr(event, 'returned_items', []),
                     old_asset_id,
                     new_asset_id
@@ -8437,22 +8603,32 @@ def update_asset(asset_id):
                     old_asset_id,
                     new_asset_id
                 )
+                event_changed += _replace_bulk_asset_id_in_list(
+                    getattr(event, 'actually_prepared', []),
+                    old_asset_id,
+                    new_asset_id
+                )
                 event_changed += _replace_asset_id_in_list(
                     getattr(event, 'extra_assets', []),
                     old_asset_id,
                     new_asset_id
                 )
+                event_changed += _replace_bulk_asset_id_in_list(
+                    getattr(event, 'extra_assets', []),
+                    old_asset_id,
+                    new_asset_id
+                )
 
-            # Only rewrite model requirement rows if admin chose to update all
-            # assets of the old model/description group.
             # Rewrite model requirement rows when model/description changes.
             #
             # allSimilar:
             #   Rewrite the whole old model/description group everywhere.
             #
             # single:
-            #   Rewrite only ONE unit in events where this exact asset was
-            #   previously prepared/returned/assigned.
+            #   Rewrite the referenced quantity in events where this exact
+            #   asset was previously assigned/prepared/returned. If a matching
+            #   model row exists but no physical assets are assigned yet, move
+            #   that whole planning row so unstarted events stay current too.
             if group_changed:
                 if apply_to == 'allSimilar':
                     model_changes = _update_event_model_group_references(
@@ -8460,8 +8636,15 @@ def update_asset(asset_id):
                         old_group,
                         new_group
                     )
-                elif event.event_id in single_asset_event_ids_to_rewrite:
+                elif event.event_id in single_asset_event_quantities_to_rewrite:
                     model_changes = _update_single_asset_event_model_references(
+                        event,
+                        old_group,
+                        new_group,
+                        single_asset_event_quantities_to_rewrite[event.event_id]
+                    )
+                elif event.event_id in unassigned_model_event_ids_to_rewrite:
+                    model_changes = _update_event_model_group_references(
                         event,
                         old_group,
                         new_group
