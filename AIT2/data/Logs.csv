@@ -1,97 +1,3 @@
-2026/05/06 12:54:09,bnjm2000,Added 8x L-Acoustics 5XT model to event 132 (total: 8)
-2026/05/06 12:54:17,bnjm2000,Added 8x L-Acoustics ETR5 model to event 132 (total: 8)
-2026/05/06 12:56:11,bnjm2000,Removed L-Acoustics LA4X model from event 132
-2026/05/06 12:56:11,bnjm2000,Added 2x L-Acoustics LA4X model to event 132 (total: 2)
-2026/05/06 13:00:36,bnjm2000,Created event 134: Wedding of Henry & Janet @ Capella via web interface
-2026/05/06 13:14:24,bnjm2000,Created container ALL PIXEL BRICKS (64 assets)
-2026/05/06 13:16:31,bnjm2000,Renamed container LEDBEAM Case #01 -> LEDBeam Case #01 (4 assets)
-2026/05/06 13:16:38,bnjm2000,Renamed container LEDBEAM Case #02 -> LEDBeam Case #02 (4 assets)
-2026/05/06 13:16:49,bnjm2000,Renamed container LEDBEAM Case #03 -> LEDBeam Case #03 (4 assets)
-2026/05/06 13:16:57,bnjm2000,Renamed container LEDBEAM Case #04 -> LEDBeam Case #04 (4 assets)
-2026/05/06 13:17:03,bnjm2000,Renamed container LEDBEAM Case #05 -> LEDBeam Case #05 (4 assets)
-2026/05/06 13:17:09,bnjm2000,Renamed container LEDBEAM Case #06 -> LEDBeam Case #06 (4 assets)
-2026/05/08 11:07:18,bnjm2000,User bnjm2000 logged in via web interface
-2026/05/08 11:07:27,bnjm2000,User bnjm2000 logged out from web interface
-2026/05/08 11:07:37,bnjm2000,User bnjm2000 logged in via web interface
-2026/05/08 13:56:08,bnjm2000,User bnjm2000 logged in via web interface
-2026/05/08 13:59:11,bnjm2000,User bnjm2000 logged out from web interface
-2026/05/08 14:01:55,admin,User admin logged in via web interface
-2026/05/08 14:16:35,bnjm2000,User bnjm2000 logged in via web interface
-2026/05/08 14:22:03,bnjm2000,User bnjm2000 logged out from web interface
-2026/05/08 14:22:56,system,Failed login attempt for username: bnjm2000
-2026/05/08 14:23:02,bnjm2000,User bnjm2000 logged in via web interface
-2026/05/08 14:23:16,bnjm2000,User bnjm2000 logged out from web interface
-2026/05/08 14:23:38,bnjm2000,User bnjm2000 logged in via web interface
-2026/05/08 14:29:28,bnjm2000,Updated user feezahmnsr
-2026/05/08 14:29:29,bnjm2000,Updated user admin
-2026/05/08 14:29:31,bnjm2000,Updated user admin
-2026/05/08 14:29:40,bnjm2000,User bnjm2000 logged out from web interface
-2026/05/08 14:29:42,system,Inactive login attempt for username: admin
-2026/05/08 14:30:25,bnjm2000,User bnjm2000 logged in via web interface
-2026/05/08 14:31:12,bnjm2000,User bnjm2000 logged out from web interface
-2026/05/08 14:34:39,bnjm2000,User bnjm2000 logged in via web interface
-2026/05/08 14:39:26,bnjm2000,Deleted user admin
-2026/05/08 14:40:28,bnjm2000,User bnjm2000 logged in via web interface
-2026/05/08 14:41:46,bnjm2000,Created user cterence
-2026/05/08 14:41:54,bnjm2000,User bnjm2000 logged out from web interface
-2026/05/08 14:42:08,cterence,User cterence logged in via web interface
-2026/05/08 14:46:07,cterence,User cterence logged out from web interface
-2026/05/08 14:46:20,bnjm2000,User bnjm2000 logged in via web interface
-2026/05/08 14:46:49,bnjm2000,Created user tjacky
-2026/05/08 14:46:54,bnjm2000,User bnjm2000 logged out from web interface
-2026/05/08 14:47:04,system,Failed login attempt for username: tjacky
-2026/05/08 14:47:11,tjacky,User tjacky logged in via web interface
-2026/05/08 14:47:21,tjacky,User tjacky logged out from web interface
-2026/05/08 16:02:27,bnjm2000,User bnjm2000 logged out from web interface
-2026/05/08 16:02:32,bnjm2000,User bnjm2000 logged in via web interface
-2026/05/08 16:19:14,bnjm2000,Updated asset 32ADB#01 -> 32ADB #01; applyTo=single; updatedAssets=1; eventsUpdated=3; containersUpdated=0
-2026/05/08 16:19:43,bnjm2000,Updated asset 32ADB #01 -> 32ADB#01; applyTo=single; updatedAssets=1; eventsUpdated=3; containersUpdated=0
-2026/05/08 16:20:09,bnjm2000,Updated asset 32ADB#01 -> 32A DB#01; applyTo=single; updatedAssets=1; eventsUpdated=3; containersUpdated=0
-2026/05/08 16:20:21,bnjm2000,Updated asset 32A DB#01 -> 32ADB#01; applyTo=single; updatedAssets=1; eventsUpdated=3; containersUpdated=0
-2026/05/08 16:40:49,bnjm2000,Updated asset C1ProCharger#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
-2026/05/08 16:41:01,bnjm2000,Updated asset C1ProCharger#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
-2026/05/08 16:42:19,bnjm2000,Updated asset C1ProCharger#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
-2026/05/08 16:42:30,bnjm2000,Updated asset C1ProCharger#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
-2026/05/08 16:47:36,bnjm2000,Updated asset C1ProCharger#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
-2026/05/08 17:18:22,bnjm2000,User bnjm2000 logged in via web interface
-2026/05/08 17:45:03,bnjm2000,Updated event 133: Dry Hire: T2 via web interface
-2026/05/08 18:41:34,bnjm2000,User bnjm2000 logged in via web interface
-2026/05/08 18:42:14,bnjm2000,Updated user cterence
-2026/05/08 18:42:19,bnjm2000,Updated user feezahmnsr
-2026/05/09 14:21:14,bnjm2000,Returned all assets for department MISC in event 133: 1 items
-2026/05/09 14:21:15,bnjm2000,Returned all assets for department AX in event 133: 5 items
-2026/05/09 14:22:40,bnjm2000,Updated event 93: Countdown @ NS Temple via web interface
-2026/05/09 20:04:29,bnjm2000,Created event 135: NSBA Ground Breaking Ceremony @ Senja Close via web interface
-2026/05/09 20:04:46,bnjm2000,Created event 136: NSBA Ground Breaking Ceremony @ Temple via web interface
-2026/05/09 20:05:18,bnjm2000,Created event 137: ArunDitha Performance via web interface
-2026/05/09 20:05:26,bnjm2000,Updated event 137: ArunDitha Performance @ STPI via web interface
-2026/05/09 20:07:07,bnjm2000,Removed L-Acoustics ETR5 model from event 132
-2026/05/09 20:07:07,bnjm2000,Added 6x L-Acoustics ETR5 model to event 132 (total: 6)
-2026/05/09 20:07:15,bnjm2000,Removed L-Acoustics 5XT model from event 132
-2026/05/09 20:07:15,bnjm2000,Added 6x L-Acoustics 5XT model to event 132 (total: 6)
-2026/05/09 20:07:23,bnjm2000,Removed L-Acoustics LA2Xi model from event 132
-2026/05/09 20:07:23,bnjm2000,Added 1x L-Acoustics LA2Xi model to event 132 (total: 1)
-2026/05/09 20:07:27,bnjm2000,Removed L-Acoustics LA4X model from event 132
-2026/05/09 20:07:27,bnjm2000,Added 1x L-Acoustics LA4X model to event 132 (total: 1)
-2026/05/09 20:07:34,bnjm2000,Removed L-Acoustics X-UL8 model from event 132
-2026/05/09 20:07:36,bnjm2000,Removed L-Acoustics X8 model from event 132
-2026/05/09 20:07:48,bnjm2000,Removed L-Acoustics LA2Xi model from event 132
-2026/05/09 20:07:48,bnjm2000,Added 2x L-Acoustics LA2Xi model to event 132 (total: 2)
-2026/05/09 20:08:06,bnjm2000,Updated asset IPAD#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
-2026/05/09 20:08:11,bnjm2000,Updated asset IPAD#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
-2026/05/09 20:08:16,bnjm2000,Updated asset IPAD#03; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
-2026/05/09 20:08:30,bnjm2000,Removed Apple IPAD model from event 129
-2026/05/09 20:08:33,bnjm2000,Added 1x Apple iPad model to event 129 (total: 1)
-2026/05/09 20:08:39,bnjm2000,Removed Apple IPAD model from event 131
-2026/05/09 20:08:43,bnjm2000,Added 2x Apple iPad model to event 131 (total: 2)
-2026/05/09 20:08:47,bnjm2000,Removed Apple IPAD model from event 132
-2026/05/09 20:08:52,bnjm2000,Added 2x Apple iPad model to event 132 (total: 2)
-2026/05/09 20:09:35,bnjm2000,Updated asset IPAD#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
-2026/05/09 20:09:39,bnjm2000,Updated asset IPAD#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
-2026/05/09 20:09:42,bnjm2000,Updated asset IPAD#03; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
-2026/05/09 20:13:14,bnjm2000,Updated asset C1ProCharger#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
-2026/05/09 20:13:33,bnjm2000,Updated asset C1ProCharger#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
-2026/05/09 20:14:21,bnjm2000,Updated asset C1ProCharger#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
 2026/05/11 10:22:30,bnjm2000,Updated user feezahmnsr
 2026/05/11 10:32:00,bnjm2000,Updated asset C1ProCharger#01; applyTo=single; updatedAssets=1; eventsUpdated=15; containersUpdated=0
 2026/05/11 10:32:32,bnjm2000,Updated asset C1ProCharger#01; applyTo=single; updatedAssets=1; eventsUpdated=15; containersUpdated=0
@@ -1069,3 +975,97 @@ XLR connector loosed, soldered back - $40' (also: Location: MiPro Singapore, Cle
 2026/05/22 19:36:51,bnjm2000,Prepared 2x bulk asset Audio-Technica AT8668 for event 131
 2026/05/22 19:37:49,bnjm2000,Assigned specific asset EVOLVE50#01 to event 132
 2026/05/22 19:37:50,bnjm2000,Assigned specific asset EVOLVE50#02 to event 132
+2026/05/22 19:51:14,bnjm2000,Removed Yamaha CL5 model from event 131
+2026/05/22 19:51:19,bnjm2000,Added 1x Yamaha DM7 model to event 131 (total: 1)
+2026/05/22 19:51:44,bnjm2000,Assigned specific asset DM7#01 to event 131
+2026/05/22 20:13:23,bnjm2000,"Added MISC custom asset 'Laptop Stand' (1x, dept AX) to event 131"
+2026/05/22 20:13:54,bnjm2000,User bnjm2000 logged in via web interface
+2026/05/22 20:15:00,bnjm2000,Assigned specific asset J48S#02 to event 131
+2026/05/22 20:15:04,bnjm2000,Assigned specific asset J48S#04 to event 131
+2026/05/22 20:16:09,bnjm2000,Assigned specific asset GSM4212P#04 to event 131
+2026/05/22 20:16:30,bnjm2000,Assigned specific asset LA4X#08 to event 131
+2026/05/22 20:16:39,bnjm2000,Assigned specific asset LA12X#07 to event 131
+2026/05/22 20:17:02,bnjm2000,Assigned specific asset MBUMP#03 to event 131
+2026/05/22 20:17:02,bnjm2000,Assigned specific asset MBUMP#04 to event 131
+2026/05/22 20:17:31,bnjm2000,Assigned specific asset MBAR#02 to event 131
+2026/05/22 20:17:32,bnjm2000,Assigned specific asset MBAR#04 to event 131
+2026/05/22 20:20:48,bnjm2000,Assigned specific asset 5XT#01 to event 132
+2026/05/22 20:20:48,bnjm2000,Assigned specific asset 5XT#02 to event 132
+2026/05/22 20:20:48,bnjm2000,Assigned specific asset 5XT#03 to event 132
+2026/05/22 20:20:50,bnjm2000,Assigned specific asset 5XT#04 to event 132
+2026/05/22 20:20:54,bnjm2000,Assigned specific asset ETR5#01 to event 132
+2026/05/22 20:20:55,bnjm2000,Assigned specific asset ETR5#02 to event 132
+2026/05/22 20:20:56,bnjm2000,Assigned specific asset ETR5#03 to event 132
+2026/05/22 20:21:02,bnjm2000,Assigned specific asset ETR5#04 to event 132
+2026/05/22 20:21:28,bnjm2000,Assigned specific asset IPAD#03 to event 132
+2026/05/22 20:21:43,bnjm2000,Assigned specific asset PCBB#03 to event 132
+2026/05/22 20:21:45,bnjm2000,Assigned specific asset PCBB#06 to event 132
+2026/05/22 20:23:01,bnjm2000,Assigned specific asset LA2XI#01 to event 132
+2026/05/22 20:23:03,bnjm2000,Assigned specific asset DXR8#01 to event 132
+2026/05/22 20:26:54,bnjm2000,Assigned specific asset IPAD#01 to event 131
+2026/05/22 20:26:54,bnjm2000,Assigned specific asset IPAD#02 to event 131
+2026/05/22 20:27:00,bnjm2000,Assigned specific asset PCBB#02 to event 131
+2026/05/22 20:27:03,bnjm2000,Assigned specific asset PCBB#04 to event 131
+2026/05/22 20:27:09,bnjm2000,Assigned specific asset PCBB#09 to event 131
+2026/05/22 20:27:10,bnjm2000,Assigned specific asset PCBB#10 to event 131
+2026/05/22 20:27:10,bnjm2000,Assigned specific asset PCBB#11 to event 131
+2026/05/22 20:27:18,bnjm2000,Removed Interspace Industries PCBB3 model from event 131
+2026/05/22 20:27:18,bnjm2000,Added 5x Interspace Industries PCBB3 model to event 131 (total: 5)
+2026/05/22 20:27:25,bnjm2000,Completely removed asset PCBB#11 from event 131
+2026/05/22 20:27:28,bnjm2000,Assigned specific asset PCBB#11 to event 131
+2026/05/22 20:27:47,bnjm2000,Prepared custom item 1x Laptop Stand for event 131
+2026/05/22 20:36:51,bnjm2000,Added 1x Yamaha MG12XU model to event 137 (total: 1)
+2026/05/22 20:36:58,bnjm2000,"Added MISC custom asset 'Mic clip' (1x, dept AX) to event 137"
+2026/05/22 20:37:07,bnjm2000,"Added MISC custom asset 'TS cable' (4x, dept AX) to event 137"
+2026/05/22 20:37:11,bnjm2000,Added 1x Radial Engineering JDI Stereo model to event 137 (total: 1)
+2026/05/22 20:37:37,bnjm2000,Updated event 141: Wave to Earth Busking Event @ *Scape via web interface
+2026/05/22 20:37:59,bnjm2000,"Added MISC custom asset '32A 1P DB Box' (1x, dept ELEC) to event 141"
+2026/05/22 20:38:11,bnjm2000,"Added MISC custom asset '32A 1P Cable - 10m' (1x, dept ELEC) to event 141"
+2026/05/22 20:52:53,bnjm2000,Removed Apple iPad model from event 134
+2026/05/22 20:52:53,bnjm2000,Added 2x Apple iPad model to event 134 (total: 2)
+2026/05/22 21:12:59,bnjm2000,Added asset BULK-0022 via web interface
+2026/05/22 21:13:28,bnjm2000,Updated asset BULK-0020; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/05/22 21:14:14,bnjm2000,Added asset BULK-0023 via web interface
+2026/05/22 21:14:41,bnjm2000,Added asset BULK-0024 via web interface
+2026/05/22 21:14:52,bnjm2000,Updated asset BULK-0024; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/05/22 21:15:00,bnjm2000,Added 2x Custom 380mm model to event 132 (total: 2)
+2026/05/22 21:15:12,bnjm2000,Added 2x Global Truss F34 Truss - 1m (Silver) model to event 132 (total: 2)
+2026/05/22 21:15:35,bnjm2000,Removed Custom 300mm base plate model from event 140
+2026/05/22 21:15:42,bnjm2000,Added 10x Custom 300mm Base plate model to event 140 (total: 10)
+2026/05/22 21:15:51,bnjm2000,User bnjm2000 forced event 140 (Dry Hire: Avery Events) state from Closed to Preparing
+2026/05/22 21:15:56,bnjm2000,Unprepared bulk asset marker [BULK]BULK-0020|10 from event 140
+2026/05/22 21:16:00,bnjm2000,Prepared 10x bulk asset Custom 300mm Base plate for event 140
+2026/05/22 21:16:09,bnjm2000,Returned all assets for department STG in event 140: 1 items
+2026/05/22 21:16:13,bnjm2000,User bnjm2000 removed forced state override for event 140 (Dry Hire: Avery Events): Preparing -> Closed
+2026/05/22 21:40:27,bnjm2000,Prepared 2x bulk asset Custom 380mm for event 132
+2026/05/22 21:40:33,bnjm2000,Prepared 3x bulk asset Global Truss F34 Truss - 0.5m (Black) for event 132
+2026/05/22 21:40:34,bnjm2000,Prepared 6x bulk asset Global Truss F34 Truss - 1.5m (Black) for event 132
+2026/05/22 21:40:35,bnjm2000,Prepared 2x bulk asset Global Truss F34 Truss - 1m (Black) for event 132
+2026/05/22 21:40:36,bnjm2000,Prepared 2x bulk asset Global Truss F34 Truss - 1m (Silver) for event 132
+2026/05/22 21:40:37,bnjm2000,Prepared 4x bulk asset Global Truss F34 Truss - 2.5m (Black) for event 132
+2026/05/22 21:40:38,bnjm2000,Prepared 15x bulk asset Global Truss F34 Truss - 2m (Black) for event 132
+2026/05/22 21:40:39,bnjm2000,Prepared 9x bulk asset Global Truss F34 Truss - 3m (Black) for event 132
+2026/05/22 21:40:40,bnjm2000,Prepared custom item 40x Mini Profile - 3200K for event 132
+2026/05/22 21:45:13,bnjm2000,Removed Global Truss F34 Truss - 0.5m (Silver) model from event 131
+2026/05/22 21:45:19,bnjm2000,Removed Global Truss F34 Truss - 3m (Silver) model from event 131
+2026/05/22 21:45:20,bnjm2000,Removed Global Truss F34 Truss - 2m (Silver) model from event 131
+2026/05/22 21:45:22,bnjm2000,Removed Global Truss F34 Truss - 1m (Silver) model from event 131
+2026/05/22 21:45:41,bnjm2000,Added 7x Global Truss F34 Truss - 1m (Silver) model to event 131 (total: 7)
+2026/05/22 21:46:05,bnjm2000,Added 10x Global Truss F34 Truss - 0.5m (Silver) model to event 131 (total: 10)
+2026/05/22 21:53:17,bnjm2000,Added 2x Global Truss F34 Truss - 1.5m (Silver) model to event 131 (total: 2)
+2026/05/22 21:53:20,bnjm2000,Added 3x Global Truss F34 Truss - 1.5m (Silver) model to event 131 (total: 5)
+2026/05/22 21:53:27,bnjm2000,Added 2x Global Truss F34 Truss - 1m (Black) model to event 131 (total: 2)
+2026/05/22 21:53:34,bnjm2000,Added 3x Global Truss F34 Truss - 0.5m (Black) model to event 131 (total: 3)
+2026/05/22 21:55:36,bnjm2000,User bnjm2000 logged in via web interface
+2026/05/22 21:56:05,bnjm2000,Prepared 3x bulk asset Global Truss F34 Truss - 0.5m (Black) for event 131
+2026/05/22 21:56:51,bnjm2000,Prepared 10x bulk asset Global Truss F34 Truss - 0.5m (Silver) for event 131
+2026/05/22 21:57:09,bnjm2000,Prepared 5x bulk asset Global Truss F34 Truss - 1.5m (Silver) for event 131
+2026/05/22 21:59:54,bnjm2000,Removed Global Truss F34 Truss - 1m (Silver) model from event 131
+2026/05/22 21:59:54,bnjm2000,Added 5x Global Truss F34 Truss - 1m (Silver) model to event 131 (total: 5)
+2026/05/22 21:59:58,bnjm2000,Removed Global Truss F34 Truss - 1m (Black) model from event 131
+2026/05/22 21:59:58,bnjm2000,Added 4x Global Truss F34 Truss - 1m (Black) model to event 131 (total: 4)
+2026/05/22 22:00:06,bnjm2000,Prepared 2x bulk asset Global Truss F34 Corner Block (Silver) for event 131
+2026/05/22 22:00:06,bnjm2000,Prepared 4x bulk asset Global Truss F34 Truss - 1m (Black) for event 131
+2026/05/22 22:00:07,bnjm2000,Prepared 5x bulk asset Global Truss F34 Truss - 1m (Silver) for event 131
+2026/05/22 22:04:20,bnjm2000,Assigned specific asset RIO1608-D2 #01 to event 131
+2026/05/22 22:04:22,bnjm2000,Assigned specific asset RIO3224-D2 #01 to event 131

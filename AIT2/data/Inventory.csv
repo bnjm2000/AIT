@@ -1,7 +1,7 @@
 AssetID,Brand,ModelNumber,SerialNumber,Description,IsMissing,IsOOC,IsDegraded,IsDisposed,IsBulk,Quantity,MaintenanceLogs,DepartmentCode,DefaultLocation,CurrentLocation
-IPAD#01,Apple,iPad,YVTP9HPX47,(10th Generation),False,False,False,False,False,1,,AX,Store,Store
-IPAD#02,Apple,iPad,JX9KXKKPF4,(10th Generation),False,False,False,False,False,1,"[{""date"":""2026/04/15"",""user"":""bnjm2000"",""description"":""Updated to iPadOS 26.4.1"",""type"":""Update"",""cost"":"""",""changes"":[],""source"":{}}]",AX,Store,
-IPAD#03,Apple,iPad,TFQYL2K0JW,(10th Generation),False,False,False,False,False,1,"[{""date"":""2026/03/04"",""user"":""bnjm2000"",""description"":""Found without 3.5mm adapter. Replaced (110: Louis Vuitton Spring Summer Trunk Show 2026 @ Japanese Garden)"",""type"":""Fault"",""cost"":"""",""changes"":[],""source"":{}},{""date"":""2026/04/15"",""user"":""bnjm2000"",""description"":""Updated to iPadOS 26.4.1"",""type"":""Update"",""cost"":"""",""changes"":[],""source"":{}}]",AX,Store,
+IPAD#01,Apple,iPad,YVTP9HPX47,(10th Generation),False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
+IPAD#02,Apple,iPad,JX9KXKKPF4,(10th Generation),False,False,False,False,False,1,"[{""date"":""2026/04/15"",""user"":""bnjm2000"",""description"":""Updated to iPadOS 26.4.1"",""type"":""Update"",""cost"":"""",""changes"":[],""source"":{}}]",AX,Store,Wedding of Patricia & Edgar @ Capella
+IPAD#03,Apple,iPad,TFQYL2K0JW,(10th Generation),False,False,False,False,False,1,"[{""date"":""2026/03/04"",""user"":""bnjm2000"",""description"":""Found without 3.5mm adapter. Replaced (110: Louis Vuitton Spring Summer Trunk Show 2026 @ Japanese Garden)"",""type"":""Fault"",""cost"":"""",""changes"":[],""source"":{}},{""date"":""2026/04/15"",""user"":""bnjm2000"",""description"":""Updated to iPadOS 26.4.1"",""type"":""Update"",""cost"":"""",""changes"":[],""source"":{}}]",AX,Store,Rolex Event @ New Bahru
 C451B#01,AKG,C451B,VI0803-107486,Cardioid condenser microphone,False,False,False,False,False,1,,AX,Store,Store
 C451B#02,AKG,C451B,VI0803-106725,Cardioid condenser microphone,False,False,False,False,False,1,,AX,Store,Store
 C451B#03,AKG,C451B,VI0803-106979,Cardioid condenser microphone,False,False,False,False,False,1,,AX,Store,
@@ -175,16 +175,16 @@ C1ProRHS#07,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC008667,,False,Fal
 C1ProRHS#08,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC007AB4,,False,False,False,False,False,1,"[{""date"":""2025/12/04"",""user"":""bnjm2000"",""description"":""Headset speaker foam disintegrated, replaced."",""type"":""Repair"",""cost"":"""",""changes"":[],""source"":{}}]",AX,Store,Store
 C1ProWHS#01,Hollyland,Solidcom C1 Pro Wired Headset for Hub,2223170XX0D0036E,,False,False,False,False,False,1,,AX,Store,Store
 PCBB#01,Interspace Industries,PCBB3,,PC Balance Box,False,False,False,False,False,1,,AX,Store,Store
-PCBB#02,Interspace Industries,PCBB3,,PC Balance Box,False,False,False,False,False,1,,AX,Store,Store
-PCBB#03,Interspace Industries,PCBB3,,PC Balance Box,False,False,False,False,False,1,,AX,Store,Store
-PCBB#04,Interspace Industries,PCBB3,,PC Balance Box,False,False,False,False,False,1,,AX,Store,Store
+PCBB#02,Interspace Industries,PCBB3,,PC Balance Box,False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
+PCBB#03,Interspace Industries,PCBB3,,PC Balance Box,False,False,False,False,False,1,,AX,Store,Rolex Event @ New Bahru
+PCBB#04,Interspace Industries,PCBB3,,PC Balance Box,False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
 PCBB#05,Interspace Industries,PCBB3,,PC Balance Box,False,False,False,False,False,1,,AX,Store,Store
-PCBB#06,Interspace Industries,PCBB3,,PC Balance Box,False,False,False,False,False,1,,AX,Store,Store
+PCBB#06,Interspace Industries,PCBB3,,PC Balance Box,False,False,False,False,False,1,,AX,Store,Rolex Event @ New Bahru
 PCBB#07,Interspace Industries,PCBB3,,PC Balance Box,False,False,False,False,False,1,,AX,Store,Store
 PCBB#08,Interspace Industries,PCBB3,,PC Balance Box,False,False,False,False,False,1,,AX,Store,
-PCBB#09,Interspace Industries,PCBB3,,PC Balance Box,False,False,False,False,False,1,,AX,Store,Store
-PCBB#10,Interspace Industries,PCBB3,,PC Balance Box,False,False,False,False,False,1,,AX,Store,Store
-PCBB#11,Interspace Industries,PCBB3,,PC Balance Box,False,False,False,False,False,1,,AX,Store,Store
+PCBB#09,Interspace Industries,PCBB3,,PC Balance Box,False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
+PCBB#10,Interspace Industries,PCBB3,,PC Balance Box,False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
+PCBB#11,Interspace Industries,PCBB3,,PC Balance Box,False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
 PCBB#12,Interspace Industries,PCBB,,PC Balance Box,False,False,False,False,False,1,,AX,Store,
 PCBB#13,Interspace Industries,PCBB,,PC Balance Box,False,False,False,False,False,1,,AX,Store,Store
 PCBB#14,Interspace Industries,PCBB,,PC Balance Box,False,False,False,False,False,1,,AX,Store,Store
@@ -243,10 +243,10 @@ ETR5W#17,L-Acoustics,ETR5W,,Adjustable U-bracket: 5XTW,False,False,False,False,F
 ETR5W#18,L-Acoustics,ETR5W,,Adjustable U-bracket: 5XTW,False,False,False,False,False,1,,AX,Store,Store
 ETR5W#19,L-Acoustics,ETR5W,44005187,Adjustable U-bracket: 5XTW,False,False,False,False,False,1,,AX,Store,Store
 ETR5W#20,L-Acoustics,ETR5W,,Adjustable U-bracket: 5XTW,False,False,False,False,False,1,,AX,Store,Store
-5XT#01,L-Acoustics,5XT,260038164,"5"" passive coaxial enclosure (black)",False,False,False,False,False,1,,AX,Store,Store
-5XT#02,L-Acoustics,5XT,260044263,"5"" passive coaxial enclosure (black)",False,False,False,False,False,1,,AX,Store,Store
-5XT#03,L-Acoustics,5XT,260044264,"5"" passive coaxial enclosure (black)",False,False,False,False,False,1,,AX,Store,Store
-5XT#04,L-Acoustics,5XT,260044265,"5"" passive coaxial enclosure (black)",False,False,False,False,False,1,,AX,Store,Store
+5XT#01,L-Acoustics,5XT,260038164,"5"" passive coaxial enclosure (black)",False,False,False,False,False,1,,AX,Store,Rolex Event @ New Bahru
+5XT#02,L-Acoustics,5XT,260044263,"5"" passive coaxial enclosure (black)",False,False,False,False,False,1,,AX,Store,Rolex Event @ New Bahru
+5XT#03,L-Acoustics,5XT,260044264,"5"" passive coaxial enclosure (black)",False,False,False,False,False,1,,AX,Store,Rolex Event @ New Bahru
+5XT#04,L-Acoustics,5XT,260044265,"5"" passive coaxial enclosure (black)",False,False,False,False,False,1,,AX,Store,Rolex Event @ New Bahru
 5XT#05,L-Acoustics,5XT,260044285,"5"" passive coaxial enclosure (black)",False,False,False,False,False,1,,AX,Store,Store
 5XT#06,L-Acoustics,5XT,260044288,"5"" passive coaxial enclosure (black)",False,False,False,False,False,1,,AX,Store,Store
 5XT#07,L-Acoustics,5XT,260044300,"5"" passive coaxial enclosure (black)",False,False,False,False,False,1,,AX,Store,Store
@@ -311,10 +311,10 @@ ETR5W#20,L-Acoustics,ETR5W,,Adjustable U-bracket: 5XTW,False,False,False,False,F
 5XT#66,L-Acoustics,5XT,260053860,"5"" passive coaxial enclosure (black)",False,False,False,False,False,1,,AX,Store,Store
 5XT#67,L-Acoustics,5XT,260053869,"5"" passive coaxial enclosure (black)",False,False,False,False,False,1,,AX,Store,Store
 5XT#68,L-Acoustics,5XT,260053893,"5"" passive coaxial enclosure (black)",False,False,False,False,False,1,,AX,Store,Store
-ETR5#01,L-Acoustics,ETR5,440027215,Adjustable U-bracket: 5XT,False,False,False,False,False,1,,AX,Store,Store
-ETR5#02,L-Acoustics,ETR5,440027236,Adjustable U-bracket: 5XT,False,False,False,False,False,1,,AX,Store,Store
-ETR5#03,L-Acoustics,ETR5,440031349,Adjustable U-bracket: 5XT,False,False,False,False,False,1,,AX,Store,Store
-ETR5#04,L-Acoustics,ETR5,440031356,Adjustable U-bracket: 5XT,False,False,False,False,False,1,,AX,Store,Store
+ETR5#01,L-Acoustics,ETR5,440027215,Adjustable U-bracket: 5XT,False,False,False,False,False,1,,AX,Store,Rolex Event @ New Bahru
+ETR5#02,L-Acoustics,ETR5,440027236,Adjustable U-bracket: 5XT,False,False,False,False,False,1,,AX,Store,Rolex Event @ New Bahru
+ETR5#03,L-Acoustics,ETR5,440031349,Adjustable U-bracket: 5XT,False,False,False,False,False,1,,AX,Store,Rolex Event @ New Bahru
+ETR5#04,L-Acoustics,ETR5,440031356,Adjustable U-bracket: 5XT,False,False,False,False,False,1,,AX,Store,Rolex Event @ New Bahru
 ETR5#05,L-Acoustics,ETR5,440031388,Adjustable U-bracket: 5XT,False,False,False,False,False,1,,AX,Store,Store
 ETR5#06,L-Acoustics,ETR5,440031793,Adjustable U-bracket: 5XT,False,False,False,False,False,1,,AX,Store,Store
 ETR5#07,L-Acoustics,ETR5,440031849,Adjustable U-bracket: 5XT,False,False,False,False,False,1,,AX,Store,Store
@@ -379,7 +379,7 @@ ETR5#65,L-Acoustics,ETR5,440041134,Adjustable U-bracket: 5XT,False,False,False,F
 ETR5#66,L-Acoustics,ETR5,440041150,Adjustable U-bracket: 5XT,False,False,False,False,False,1,,AX,Store,
 ETR5#67,L-Acoustics,ETR5,440041156,Adjustable U-bracket: 5XT,False,False,False,False,False,1,,AX,Store,
 ETR5#68,L-Acoustics,ETR5,440041158,Adjustable U-bracket: 5XT,False,False,False,False,False,1,,AX,Store,
-LA2XI#01,L-Acoustics,LA2Xi,1730003008,Amplified controller,False,False,False,False,False,1,,AX,Store,Store
+LA2XI#01,L-Acoustics,LA2Xi,1730003008,Amplified controller,False,False,False,False,False,1,,AX,Store,Rolex Event @ New Bahru
 LA2XI#02,L-Acoustics,LA2Xi,1730003010,Amplified controller,False,False,False,False,False,1,,AX,Store,Store
 LA2XI#03,L-Acoustics,LA2Xi,1730003047,Amplified controller,False,False,False,False,False,1,,AX,Store,Store
 LA2XI#04,L-Acoustics,LA2Xi,1730005059,Amplified controller,False,False,False,False,False,1,,AX,Store,Store
@@ -390,7 +390,7 @@ LA4X#04,L-Acoustics,LA4X,1180053934,Amplified controller,False,False,False,False
 LA4X#05,L-Acoustics,LA4X,1180053927,Amplified controller,False,False,False,False,False,1,,AX,Store,Store
 LA4X#06,L-Acoustics,LA4X,1180051467,Amplified controller,False,False,False,False,False,1,,AX,Store,Store
 LA4X#07,L-Acoustics,LA4X,1180053692,Amplified controller,False,False,False,False,False,1,,AX,Store,Store
-LA4X#08,L-Acoustics,LA4X,1180051680,Amplified controller,False,False,False,False,False,1,,AX,Store,
+LA4X#08,L-Acoustics,LA4X,1180051680,Amplified controller,False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
 LA4X#09,L-Acoustics,LA4X,1180053978,Amplified controller,False,False,False,False,False,1,,AX,Store,Store
 LA4X#10,L-Acoustics,LA4X,1180053926,Amplified controller,False,False,False,False,False,1,,AX,Store,Store
 LA12X#01,L-Acoustics,LA12X,1140035138,Amplified controller,False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
@@ -399,7 +399,7 @@ LA12X#03,L-Acoustics,LA12X,1140037839,Amplified controller,False,False,False,Fal
 LA12X#04,L-Acoustics,LA12X,1140037868,Amplified controller,False,False,False,False,False,1,,AX,Store,Store
 LA12X#05,L-Acoustics,LA12X,1140037870,Amplified controller,False,False,False,False,False,1,,AX,Store,Store
 LA12X#06,L-Acoustics,LA12X,1140037871,Amplified controller,False,False,False,False,False,1,,AX,Store,Store
-LA12X#07,L-Acoustics,LA12X,1140039534,Amplified controller,False,False,False,False,False,1,,AX,Store,Store
+LA12X#07,L-Acoustics,LA12X,1140039534,Amplified controller,False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
 LA12X#08,L-Acoustics,LA12X,1140039542,Amplified controller,False,False,False,False,False,1,,AX,Store,Store
 KARAII#01,L-Acoustics,KARAII,2190019410,Long Throw Concert Sound Loudspeaker,False,False,False,False,False,1,,AX,Store,Store
 KARAII#02,L-Acoustics,KARAII,2190019417,Long Throw Concert Sound Loudspeaker,False,False,False,False,False,1,,AX,Store,Store
@@ -445,13 +445,13 @@ LS10#05,L-Acoustics,LS10,1670010373,"10-port Ethernet AVB Switch, Avnu-certified
 LS10#06,L-Acoustics,LS10,1670010374,"10-port Ethernet AVB Switch, Avnu-certified",False,False,False,False,False,1,,AX,Store,Store
 MBUMP#01,L-Acoustics,M-BUMP,890009396,Bumper for flying or stacking KARA (II)/SB18,False,False,False,False,False,1,,AX,Store,Store
 MBUMP#02,L-Acoustics,M-BUMP,890009399,Bumper for flying or stacking KARA (II)/SB18,False,False,False,False,False,1,,AX,Store,Store
-MBUMP#03,L-Acoustics,M-BUMP,890009866,Bumper for flying or stacking KARA (II)/SB18,False,False,False,False,False,1,,AX,Store,Store
-MBUMP#04,L-Acoustics,M-BUMP,890010152,Bumper for flying or stacking KARA (II)/SB18,False,False,False,False,False,1,,AX,Store,Store
+MBUMP#03,L-Acoustics,M-BUMP,890009866,Bumper for flying or stacking KARA (II)/SB18,False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
+MBUMP#04,L-Acoustics,M-BUMP,890010152,Bumper for flying or stacking KARA (II)/SB18,False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
 MBUMP#05,L-Acoustics,M-BUMP,890010057,Bumper for flying or stacking KARA (II)/SB18,False,False,False,False,False,1,,AX,Store,Store
 MBAR#01,L-Acoustics,M-BAR,900009077,Extension bar for rigging frame,False,False,False,False,False,1,,AX,Store,Store
-MBAR#02,L-Acoustics,M-BAR,900009092,Extension bar for rigging frame,False,False,False,False,False,1,,AX,Store,
+MBAR#02,L-Acoustics,M-BAR,900009092,Extension bar for rigging frame,False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
 MBAR#03,L-Acoustics,M-BAR,900009093,Extension bar for rigging frame,False,False,False,False,False,1,,AX,Store,Store
-MBAR#04,L-Acoustics,M-BAR,900009095,Extension bar for rigging frame,False,False,False,False,False,1,,AX,Store,
+MBAR#04,L-Acoustics,M-BAR,900009095,Extension bar for rigging frame,False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
 MJACK#01,L-Acoustics,M-JACK,,,False,False,False,False,False,1,,AX,Store,
 MJACK#02,L-Acoustics,M-JACK,,,False,False,False,False,False,1,,AX,Store,
 LAP1#01,L-Acoustics,P1,1400004120,Digital audio processor and measurement platform: 20x 18 mic/line AES/EBU and AVB. CE version.,False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
@@ -574,7 +574,7 @@ MT-90A#04,MiPro,MT-90A,858290898A,Interlink Transmitter,False,False,False,False,
 GSM4212P#01,Netgear,GSM4212P,6VB52B51A0392,Managed Switch,False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
 GSM4212P#02,Netgear,GSM4212P,6VB52B5AA039B,Managed Switch,False,False,False,False,False,1,,AX,Store,Store
 GSM4212P#03,Netgear,GSM4212P,6VB52B5CA03B9,Managed Switch,False,False,False,False,False,1,,AX,Store,Store
-GSM4212P#04,Netgear,GSM4212P,6VB52B52A0393,Managed Switch,False,False,False,False,False,1,,AX,Store,Store
+GSM4212P#04,Netgear,GSM4212P,6VB52B52A0393,Managed Switch,False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
 KM184#01,Neumann,KM184,199064,small-diaphragm cardioid condenser microphone,False,False,False,False,False,1,,AX,Store,
 KM184#02,Neumann,KM184,199065,small-diaphragm cardioid condenser microphone,False,False,False,False,False,1,,AX,Store,
 KM184#03,Neumann,KM184,217557,small-diaphragm cardioid condenser microphone,False,False,False,False,False,1,,AX,Store,
@@ -793,8 +793,8 @@ WARWICK STAND #02,Warwick,RS28400B,,Hand Crank Speaker Stand,False,False,False,F
 CL5#01,Yamaha,CL5,WTASK01015,Digital Mixer,False,False,False,False,False,1,"[{""date"":""2024/09/12"",""user"":""bnjm2000"",""description"":""Sent into Yamaha for fader servicing, sometimes get stuck"",""type"":""Fault"",""cost"":"""",""changes"":[{""kind"":""location"",""value"":""Yamaha Service Center""},{""kind"":""degraded"",""action"":""marked""}],""source"":{}},{""date"":""2024/10/22"",""user"":""bnjm2000"",""description"":""Replaced faulty faders: CH 1-8, 9-16, Centralogic CH 7,8 ($684) Service fee ($369.73)"",""type"":""Repair"",""cost"":""1053.73"",""changes"":[{""kind"":""location"",""value"":""Yamaha Service Center""},{""kind"":""degraded"",""action"":""cleared""}],""source"":{}},{""date"":""2025/01/16"",""user"":""bnjm2000"",""description"":""Unable to connect to dante network (Dante Module Error) (Wedding of Benjamin and Rachel @ Ritz Garden Pavilion)"",""type"":""Fault"",""cost"":"""",""changes"":[{""kind"":""ooc"",""action"":""marked""}],""source"":{}},{""date"":""2025/01/17"",""user"":""bnjm2000"",""description"":""Sent in to Yamaha for repairs"",""type"":""General"",""cost"":"""",""changes"":[{""kind"":""location"",""value"":""Yamaha Service Center""}],""source"":{}},{""date"":""2025/02/06"",""user"":""bnjm2000"",""description"":""Replaced Dante Module ($631)\nReplaced DNTU PCB ($672)\nReplaced FFC Cable ($10)\nService fee ($FOC)"",""type"":""Repair"",""cost"":""1313.00"",""changes"":[{""kind"":""location"",""value"":""Yamaha Service Center""},{""kind"":""ooc"",""action"":""cleared""}],""source"":{}},{""date"":""2025/02/13"",""user"":""bnjm2000"",""description"":""Dante clock suddenly unlocked and could not lock back, phantom noise on both inputs and outputs\n(Wedding of Aim and Singhis @ TCP)"",""type"":""Fault"",""cost"":"""",""changes"":[{""kind"":""location"",""value"":""Yamaha Service Center""},{""kind"":""ooc"",""action"":""marked""}],""source"":{}},{""date"":""2025/02/27"",""user"":""bnjm2000"",""description"":""Replaced DSP PCB ($1011)\nService Fee ($FOC)"",""type"":""Repair"",""cost"":""1011.00"",""changes"":[{""kind"":""location"",""value"":""Yamaha Service Center""},{""kind"":""ooc"",""action"":""cleared""}],""source"":{}}]",AX,Store,Wedding of Patricia & Edgar @ Capella
 DM3#01,Yamaha,DM3,BGDK01029,Digital Mixer,False,False,False,False,False,1,"[{""date"":""2024/09/04"",""user"":""bnjm2000"",""description"":""Reported cannot power on from Niche AV"",""type"":""Fault"",""cost"":"""",""changes"":[{""kind"":""ooc"",""action"":""marked""}],""source"":{}},{""date"":""2024/09/12"",""user"":""bnjm2000"",""description"":""sent to Yamaha for servicing"",""type"":""General"",""cost"":"""",""changes"":[{""kind"":""location"",""value"":""Yamaha Service Center""}],""source"":{}},{""date"":""2024/10/24"",""user"":""bnjm2000"",""description"":""Replaced PCB (report no. PA842034) $586.84 (FOC, under warraty)"",""type"":""Repair"",""cost"":""0.00"",""changes"":[{""kind"":""location"",""value"":""Yamaha Service Center""},{""kind"":""ooc"",""action"":""cleared""}],""source"":{}},{""date"":""2024/11/07"",""user"":""bnjm2000"",""description"":""Collected from Yamaha"",""type"":""General"",""cost"":"""",""changes"":[{""kind"":""location"",""value"":""Store""}],""source"":{}}]",AX,Store,Store
 DM3#02,Yamaha,DM3,BGDI01076,Digital Mixer,False,False,False,False,False,1,,AX,Store,Rolex Event @ New Bahru
-DM7#01,Yamaha,DM7,21EGEI01036,Digital Mixer,False,False,False,False,False,1,,AX,Store,Store
-DXR8#01,Yamaha,DXR8,EESM01180,"Active 8"" Speaker",False,False,False,False,False,1,,AX,Store,Store
+DM7#01,Yamaha,DM7,21EGEI01036,Digital Mixer,False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
+DXR8#01,Yamaha,DXR8,EESM01180,"Active 8"" Speaker",False,False,False,False,False,1,,AX,Store,Rolex Event @ New Bahru
 DXR10#01,Yamaha,DXR10,EESX01317,"Active 10"" Speaker",False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
 DXR10#02,Yamaha,DXR10,EEZP01075,"Active 10"" Speaker",False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
 DXR10#03,Yamaha,DXR10,EERY01349,"Active 10"" Speaker",False,False,False,False,False,1,,AX,Store,Store
@@ -816,10 +816,10 @@ QL1#02,Yamaha,QL1,EAXP01044,Digital Mixer,False,False,False,False,False,1,,AX,St
 QL5#01,Yamaha,QL5,,Digital Mixer,False,False,False,False,False,1,,AX,Store,Store
 RO8-D #01,Yamaha,Ro8-d,,8-channel Remote Output Rack,False,False,False,False,False,1,,AX,Store,Store
 RIO1608-D #01,Yamaha,Rio1608-d,,High Performance I/O Rack,False,False,False,False,False,1,"[{""date"":""2024/11/13"",""user"":""bnjm2000"",""description"":""2024/11/13 - Updated firmware version to v5.80"",""type"":""Update"",""cost"":"""",""changes"":[],""source"":{}}]",AX,Store,Store
-RIO1608-D2 #01,Yamaha,Rio1608-d2,EEYP01258,High Performance I/O Rack,False,False,False,False,False,1,"[{""date"":""2024/11/13"",""user"":""bnjm2000"",""description"":""2024/11/13 - Updated firmware version to v1.85"",""type"":""Update"",""cost"":"""",""changes"":[],""source"":{}}]",AX,Store,Store
+RIO1608-D2 #01,Yamaha,Rio1608-d2,EEYP01258,High Performance I/O Rack,False,False,False,False,False,1,"[{""date"":""2024/11/13"",""user"":""bnjm2000"",""description"":""2024/11/13 - Updated firmware version to v1.85"",""type"":""Update"",""cost"":"""",""changes"":[],""source"":{}}]",AX,Store,Wedding of Patricia & Edgar @ Capella
 RIO3224-D #01,Yamaha,Rio3224-d,,High Performance I/O Rack,False,False,False,False,False,1,"[{""date"":""2024/11/13"",""user"":""bnjm2000"",""description"":""2024/11/13 - Updated firmware to v5.80"",""type"":""Update"",""cost"":"""",""changes"":[],""source"":{}},{""date"":""2026/03/27"",""user"":""bnjm2000"",""description"":""Channel 14 reported softer than the rest by T2, Dol operator. (Dry Rental: SCM)"",""type"":""Fault"",""cost"":"""",""changes"":[],""source"":{}}]",AX,Store,Store
 RIO3224-D #02,Yamaha,Rio3224-d,,High Performance I/O Rack,False,False,False,False,False,1,"[{""date"":""2024/11/13"",""user"":""bnjm2000"",""description"":""2024/11/13 - Updated firmware to v5.80"",""type"":""Update"",""cost"":"""",""changes"":[],""source"":{}}]",AX,Store,Store
-RIO3224-D2 #01,Yamaha,Rio3224-d2,EEDX01062,High Performance I/O Rack,False,False,False,False,False,1,"[{""date"":""2024/11/13"",""user"":""bnjm2000"",""description"":""2024/11/13 - Updated firmware to v1.85"",""type"":""Update"",""cost"":"""",""changes"":[],""source"":{}}]",AX,Store,Store
+RIO3224-D2 #01,Yamaha,Rio3224-d2,EEDX01062,High Performance I/O Rack,False,False,False,False,False,1,"[{""date"":""2024/11/13"",""user"":""bnjm2000"",""description"":""2024/11/13 - Updated firmware to v1.85"",""type"":""Update"",""cost"":"""",""changes"":[],""source"":{}}]",AX,Store,Wedding of Patricia & Edgar @ Capella
 SBC800#01,Shure,SBC800,,8-bay battery charger,False,False,False,False,False,1,,AX,Store,
 SB900#01,Shure,SB900,,Rechargeable Battery,False,False,False,False,False,1,,AX,Store,
 SB900#02,Shure,SB900,,Rechargeable Battery,False,False,False,False,False,1,,AX,Store,
@@ -1080,9 +1080,9 @@ J48M#08,Radial Engineering,J48 Mono,,Phantom Powered Active Direct Box,False,Fal
 J48M#09,Radial Engineering,J48 Mono,,Phantom Powered Active Direct Box,False,False,False,False,False,1,,AX,Store,Store
 J48M#10,Radial Engineering,J48 Mono,,Phantom Powered Active Direct Box,False,False,False,False,False,1,,AX,Store,Store
 J48S#01,Radial Engineering,J48 Stereo,1294292,Phantom Powered Active Direct Box,False,False,False,False,False,1,,AX,Store,
-J48S#02,Radial Engineering,J48 Stereo,447219,Phantom Powered Active Direct Box,False,False,False,False,False,1,,AX,Store,Store
+J48S#02,Radial Engineering,J48 Stereo,447219,Phantom Powered Active Direct Box,False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
 J48S#03,Radial Engineering,J48 Stereo,1477169,Phantom Powered Active Direct Box,False,False,False,False,False,1,,AX,Store,Store
-J48S#04,Radial Engineering,J48 Stereo,1477195,Phantom Powered Active Direct Box,False,False,False,False,False,1,,AX,Store,Store
+J48S#04,Radial Engineering,J48 Stereo,1477195,Phantom Powered Active Direct Box,False,False,False,False,False,1,,AX,Store,Wedding of Patricia & Edgar @ Capella
 J48S#05,Radial Engineering,J48 Stereo,1477239,Phantom Powered Active Direct Box,False,False,False,False,False,1,,AX,Store,Store
 J48S#06,Radial Engineering,J48 Stereo,1477193,Phantom Powered Active Direct Box,False,False,False,False,False,1,"[{""date"":""2025/10/18"",""user"":""bnjm2000"",""description"":""Reported R side no sound (Wedding of Matthew Chia & Teresa Su @ Capella)"",""type"":""Fault"",""cost"":"""",""changes"":[{""kind"":""ooc"",""action"":""marked""}],""source"":{}},{""date"":""2025/12/22"",""user"":""bnjm2000"",""description"":""Tested working by Rafie."",""type"":""General"",""cost"":"""",""changes"":[{""kind"":""ooc"",""action"":""cleared""}],""source"":{}}]",AX,Store,Store
 JDIM#01,Radial Engineering,JDI Mono,1662070,Passive Direct Box,False,False,False,False,False,1,,AX,Store,Store
@@ -1304,7 +1304,10 @@ MSX48#02,ARX,MSX48,,ISO Transformer Balanced Mic/Line Splitter ( 16 x 3 ),False,
 MSX48#03,ARX,MSX48,,ISO Transformer Balanced Mic/Line Splitter ( 16 x 3 ),False,False,False,False,False,1,,AX,Store,
 BULK-0018,Versa-Stand,Music stand,,,False,False,False,False,True,6,,MI,Store,
 BULK-0019,K&M,21020-500-55,,Tall boom mic stand,False,False,False,False,True,26,,AX,Store,
-BULK-0020,Custom,300mm base plate,,Pipe and drape base plate,False,False,False,False,True,12,,STG,Store,
+BULK-0020,Custom,300mm Base plate,,Pipe and drape base plate,False,False,False,False,True,12,,STG,Store,
 BULK-0021,Audio-Technica,AT8668,,Anti-shock microphone stand,False,False,False,False,True,10,,AX,Store,
 63ADB#03,Custom,63A 3-Phase DB,,"12x 16A 1P
 2x 32A 3P",False,False,False,False,False,1,,ELEC,Store,
+BULK-0022,Custom,380mm,,medium-duty top plate,False,False,False,False,True,5,,STG,Store,
+BULK-0023,Custom,308mm,,light-duty top plate,False,False,False,False,True,10,,STG,Store,
+BULK-0024,Custom,308mm (Black),,light-duty top plate,False,False,False,False,True,8,,STG,Store,
