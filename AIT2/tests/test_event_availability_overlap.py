@@ -110,7 +110,7 @@ class EventAvailabilityOverlapTests(unittest.TestCase):
         data = response.get_json()['data']
         return next(
             item for item in data
-            if item['model'] == model and item['description'] == description
+            if item['model'] == model
         )
 
     def test_model_availability_counts_overlapping_regular_and_bulk_usage(self):
@@ -128,6 +128,7 @@ class EventAvailabilityOverlapTests(unittest.TestCase):
         bulk = self.availability_entry(100, 'BulkModel', 'Bulk item')
 
         self.assertEqual(regular['physical'], 6)
+        self.assertEqual(regular['description'], '')
         self.assertEqual(regular['overlappingDemand'], 4)
         self.assertEqual(regular['available'], 2)
         self.assertEqual(bulk['physical'], 6)

@@ -759,19 +759,17 @@ def _clean_group_value(value, uppercase=False):
 
 def _asset_group_key(asset):
     """
-    Exact model group key.
+    Asset model type key.
 
-    This intentionally includes description so variants like:
-    - Shure ULXD4D Dual Channel Receiver [L50]
-    - Shure ULXD4D Dual Channel Receiver [G52]
-
-    are counted separately.
+    Model types are identified by department, brand, and model number only.
+    Description is display/detail text and must not split availability,
+    preparation, transfer, or asset-check groups.
     """
     return (
         _clean_group_value(getattr(asset, 'department_code', ''), True),
         _clean_group_value(getattr(asset, 'brand', '')),
         _clean_group_value(getattr(asset, 'model_number', '')),
-        _clean_group_value(getattr(asset, 'description', ''))
+        ''
     )
 
 
@@ -1722,7 +1720,7 @@ def _model_key_from_parts(dept, brand, model, description=''):
         _clean_group_value(dept, True),
         _clean_group_value(brand),
         _clean_group_value(model),
-        _clean_group_value(description)
+        ''
     )
 
 
@@ -2181,13 +2179,11 @@ def _parse_model_assignment_key(value):
     except Exception:
         quantity = 0
 
-    description = parts[4] if len(parts) > 4 else ''
-
     key = (
         _clean_group_value(parts[0], True),
         _clean_group_value(parts[1]),
         _clean_group_value(parts[2]),
-        _clean_group_value(description)
+        ''
     )
 
     return key, quantity
@@ -2434,8 +2430,7 @@ def _asset_matches_group(asset, group):
     return (
         (asset.department_code or '').strip().upper() == group['department'] and
         (asset.brand or '').strip() == group['brand'] and
-        (asset.model_number or '').strip() == group['model'] and
-        (asset.description or '').strip() == group['description']
+        (asset.model_number or '').strip() == group['model']
     )
 
 
@@ -2522,15 +2517,14 @@ def _model_marker_matches_group(marker, group):
         marker and
         marker['department'] == group['department'] and
         marker['brand'] == group['brand'] and
-        marker['model'] == group['model'] and
-        marker['description'] == group['description']
+        marker['model'] == group['model']
     )
 
 
 def _update_event_model_group_references(event, old_group, new_group):
     """
     Updates event-level model requirement rows when admin chooses
-    to update all assets of the same model/description group.
+    to update all assets of the same model type.
     """
     changed = 0
 
@@ -2925,7 +2919,7 @@ def _move_asset_model_row_quantity(asset_models, old_group, new_group, quantity_
 def _update_single_asset_event_model_references(event, old_group, new_group, quantity_to_move=1):
     """
     For a single asset edit, update only the referenced quantity of the old
-    model/description requirement inside events where that exact asset was
+    model requirement inside events where that exact asset was
     assigned, prepared, or returned before.
 
     Example:
@@ -3089,8 +3083,7 @@ def update_event_state(event):
                         if (specific_asset and
                             specific_asset.brand == brand and
                             specific_asset.model_number == model and
-                            specific_asset.department_code == dept and
-                            (specific_asset.description or '') == (description or '')):
+                            specific_asset.department_code == dept):
 
                             assigned_to_this_model += 1
                             if specific_asset_id in event.returned_items:
@@ -4493,7 +4486,7 @@ def get_events():
                             quantity = int(parts[3])
                             description = parts[4] if len(parts) > 4 else ''
                             
-                            model_key = f"{dept}|{brand}|{model}|{description}"
+                            model_key = '|'.join(_model_key_from_parts(dept, brand, model))
                             
                             if model_key not in model_groups:
                                 model_groups[model_key] = {
@@ -4505,6 +4498,8 @@ def get_events():
                                     'assignedAssets': [],
                                     'status': 'pending'
                                 }
+                            else:
+                                model_groups[model_key]['requiredQuantity'] += quantity
                             
                             # Find assigned specific assets for this model.
                             # Extras are included in assignedAssets so model cards can show
@@ -4517,8 +4512,7 @@ def get_events():
                                 if (specific_asset and 
                                     specific_asset.brand == brand and 
                                     specific_asset.model_number == model and
-                                    specific_asset.department_code == dept and
-                                    (specific_asset.description or '') == (description or '')):
+                                    specific_asset.department_code == dept):
                                     
                                     asset_status = 'returned' if specific_asset_id in event.returned_items else 'prepared'
                                     
@@ -4777,7 +4771,7 @@ def get_event(event_id):
                         quantity = int(parts[3])
                         description = parts[4] if len(parts) > 4 else ''
 
-                        model_key = f"{dept}|{brand}|{model}|{description}"
+                        model_key = '|'.join(_model_key_from_parts(dept, brand, model))
 
                         if model_key not in model_groups:
                             model_groups[model_key] = {
@@ -4789,6 +4783,8 @@ def get_event(event_id):
                                 'assignedAssets': [],
                                 'status': 'pending'
                             }
+                        else:
+                            model_groups[model_key]['requiredQuantity'] += quantity
 
                         # Find assigned specific assets for this model
                         # Check both actually_prepared and all inventory assets
@@ -4814,8 +4810,7 @@ def get_event(event_id):
                                 if (specific_asset and 
                                     specific_asset.brand == brand and 
                                     specific_asset.model_number == model and
-                                    specific_asset.department_code == dept and
-                                    (specific_asset.description or '') == (description or '')):
+                                    specific_asset.department_code == dept):
 
                                     # Check if this asset is returned
                                     asset_status = 'returned' if specific_asset_id in event.returned_items else 'prepared'
@@ -5101,7 +5096,7 @@ def get_event_model_availability(event_id):
     Compute model availability for an event.
 
     Rules:
-    - Group by department + brand + model + description.
+    - Group by department + brand + model. Description is display text only.
     - Exclude Missing and decommissioned assets.
     - Include OOC and Degraded assets as inventory because they may be fixed/usable by event day.
     - Subtract current event's requested quantity.
@@ -5580,16 +5575,11 @@ def manage_event_models(event_id):
 
             logger.info(f"Final description for {brand} {model}: '{full_description}' (length: {len(full_description)})")
 
-            group_key = (
-                _clean_group_value(department, True),
-                _clean_group_value(brand),
-                _clean_group_value(model),
-                _clean_group_value(full_description)
-            )
+            group_key = _model_key_from_parts(department, brand, model)
 
             # Server-side hard cap:
             # Users may overbook against clashing events, but they may not request
-            # more than the physical inventory for this exact model/description group.
+            # more than the physical inventory for this model type.
             # Missing and decommissioned assets are excluded. OOC and Degraded assets are included.
             inv_count = sum(
                 _asset_inventory_quantity(asset)
@@ -5623,16 +5613,18 @@ def manage_event_models(event_id):
             # Log current prepared_items
             logger.info(f"Current prepared_items: {event.prepared_items}")
 
-            # Check if this model already exists in the event (including description)
-            existing_model_id = None
+            # Check if this model already exists in the event. Description is
+            # display text only and does not split model type quantities.
+            existing_model_ids = []
             existing_quantity = 0
+            display_description = full_description
 
             for item in event.prepared_items:
                 logger.info(f"Checking item: '{item}'")
                 if item.startswith('[MODEL]'):
                     parts = item[7:].split('|')
                     logger.info(f"Item parts: {parts}")
-                    if len(parts) >= 5:  # dept|brand|model|qty|description
+                    if len(parts) >= 4:  # dept|brand|model|qty|description
                         item_dept = parts[0]
                         item_brand = parts[1]
                         item_model = parts[2]
@@ -5640,28 +5632,27 @@ def manage_event_models(event_id):
                         
                         logger.info(f"Item details - Dept: '{item_dept}', Brand: '{item_brand}', Model: '{item_model}', Desc: '{item_description}'")
                         
-                        # Match on department, brand, model, AND description
                         if (item_dept == department and 
                             item_brand == brand and 
-                            item_model == model and
-                            item_description == full_description):
-                            existing_model_id = item
-                            existing_quantity = int(parts[3])
-                            logger.info(f"FOUND EXISTING MODEL: '{existing_model_id}' with quantity {existing_quantity}")
-                            break
-                        else:
-                            logger.info(f"No match - descriptions differ: '{item_description}' vs '{full_description}'")
+                            item_model == model):
+                            existing_model_ids.append(item)
+                            existing_quantity += _safe_int(parts[3], 0)
+                            if not display_description and item_description:
+                                display_description = item_description
+                            logger.info(f"FOUND EXISTING MODEL: '{item}'")
 
-            if existing_model_id:
-                logger.info(f"Updating existing model, removing: '{existing_model_id}'")
-                event.prepared_items.remove(existing_model_id)
+            if existing_model_ids:
+                logger.info(f"Updating existing model rows, removing: {existing_model_ids}")
+                for existing_model_id in existing_model_ids:
+                    event.prepared_items.remove(existing_model_id)
                 new_quantity = existing_quantity + quantity
             else:
                 logger.info("Creating new model assignment")
                 new_quantity = quantity
 
-            # Create consolidated model assignment identifier with FULL description
-            model_id = f"[MODEL]{department}|{brand}|{model}|{new_quantity}|{full_description}"
+            # Create consolidated model assignment identifier. The description
+            # remains for display only; identity is department + brand + model.
+            model_id = f"[MODEL]{department}|{brand}|{model}|{new_quantity}|{display_description}"
             logger.info(f"Creating model assignment: '{model_id}'")
             event.prepared_items.append(model_id)
             
@@ -5694,7 +5685,6 @@ def manage_event_models(event_id):
             if not brand or not model or not department:
                 return jsonify({'error': 'Brand, model, and department are required'}), 400
 
-            items_to_remove = []
             # Find matching model assignments for this dept/brand/model
             description_to_match = (data.get('description') or '').strip()
 
@@ -5718,18 +5708,12 @@ def manage_event_models(event_id):
             if not candidates:
                 return jsonify({'error': 'Model assignment not found'}), 404
 
-            # If description is not provided, only allow delete when unambiguous
-            if not description_to_match:
-                if len(candidates) == 1:
-                    items_to_remove = [candidates[0][0]]
-                else:
-                    return jsonify({
-                        'error': 'Multiple variants exist for this model. Description is required to remove a specific one.'
-                    }), 400
-            else:
+            if description_to_match:
                 items_to_remove = [it for (it, desc) in candidates if desc == description_to_match]
                 if not items_to_remove:
-                    return jsonify({'error': 'Model assignment not found'}), 404
+                    items_to_remove = [it for (it, _desc) in candidates]
+            else:
+                items_to_remove = [it for (it, _desc) in candidates]
 
             # Remove the items
             for item in items_to_remove:
@@ -6758,7 +6742,7 @@ def _asset_match_key(asset):
         _norm(getattr(asset, 'department_code', ''), True),
         _norm(getattr(asset, 'brand', '')),
         _norm(getattr(asset, 'model_number', '')),
-        _norm(getattr(asset, 'description', '')),
+        '',
     )
 
 
@@ -6785,7 +6769,7 @@ def _model_marker_to_requirement(marker):
             _norm(parsed['department'], True),
             _norm(parsed['brand']),
             _norm(parsed['model']),
-            _norm(parsed.get('description', '')),
+            '',
         )
     }
 
@@ -8427,7 +8411,7 @@ def update_asset(asset_id):
     Supports:
     - renaming Asset ID and cascading it through all event files and containers
     - editing one asset only
-    - editing all assets that originally shared the same department/brand/model/description group
+    - editing all assets that originally shared the same department/brand/model type
     """
     try:
         old_asset_id = unquote_plus(asset_id)
@@ -8476,7 +8460,7 @@ def update_asset(asset_id):
 
         group_changed = new_group != old_group
 
-        # Which inventory rows should receive the shared model/description change?
+        # Which inventory rows should receive the shared model-type change?
         if apply_to == 'allSimilar':
             target_assets = [
                 item for item in data_manager.inventory.values()
@@ -8485,7 +8469,7 @@ def update_asset(asset_id):
         else:
             target_assets = [asset]
 
-        # For single-asset model/description edits, remember event references
+        # For single-asset model-type edits, remember event references
         # BEFORE changing the inventory object. Assigned/prepared events move
         # only the referenced quantity. Model-only rows with no physical assets
         # assigned yet can safely move as a whole planning row.
@@ -8619,10 +8603,10 @@ def update_asset(asset_id):
                     new_asset_id
                 )
 
-            # Rewrite model requirement rows when model/description changes.
+            # Rewrite model requirement rows when model-type fields change.
             #
             # allSimilar:
-            #   Rewrite the whole old model/description group everywhere.
+            #   Rewrite the whole old model type everywhere.
             #
             # single:
             #   Rewrite the referenced quantity in events where this exact

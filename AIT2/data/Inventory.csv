@@ -16,8 +16,8 @@ B91A#01,Shure,Beta 91A,98A14333,Boundary condenser microphone,False,False,False,
 B52A#01,Shure,Beta 52A,3AL13116579,Kick drum mic,False,False,False,False,False,1,,AX,Store,Store
 C411#01,AKG,C411,VI0821-375594,PP Miniature condenser vibration pickup mic,False,False,False,False,False,1,,AX,Store,
 CT3#01,DBX,CT3,11065310806,advanced cable tester,False,False,False,False,False,1,,AX,Store,
-4088#01,DPA,4088,,"Directional Headset, beige",False,False,False,False,False,1,,AX,Store,
-4088#02,DPA,4088,,"Directional Headset, beige",False,False,False,False,False,1,,AX,Store,
+4088#01,DPA,4088 (beige),,Directional Headset,False,False,False,False,False,1,,AX,Store,
+4088#02,DPA,4088 (beige),,Directional Headset,False,False,False,False,False,1,,AX,Store,
 4099#01,DPA,4099,E46719,Instrument Microphone,False,False,False,False,False,1,"[{""date"":""2025/07/14"",""user"":""bnjm2000"",""description"":""Inventory check, cable is exposed"",""type"":""General"",""cost"":"""",""changes"":[],""source"":{}}]",AX,Store,
 4099#02,DPA,4099,E46935,Instrument Microphone,False,True,False,False,False,1,"[{""date"":""2025/07/14"",""user"":""bnjm2000"",""description"":""Inventory check, no sponge, cable exposed"",""type"":""Fault"",""cost"":"""",""changes"":[{""kind"":""ooc"",""action"":""marked""}],""source"":{}}]",AX,Store,
 4099#03,DPA,4099,E47127,Instrument Microphone,False,True,False,False,False,1,"[{""date"":""2025/07/14"",""user"":""bnjm2000"",""description"":""Inventory check, cable is oxidised and disintegrating"",""type"":""Fault"",""cost"":"""",""changes"":[{""kind"":""ooc"",""action"":""marked""}],""source"":{}}]",AX,Store,
@@ -37,40 +37,40 @@ CT3#01,DBX,CT3,11065310806,advanced cable tester,False,False,False,False,False,1
 4099#17,DPA,4099,EG3977,Instrument Microphone,False,False,False,False,False,1,,AX,Store,Store
 4288#01,DPA,4288,,Directional Headset,False,False,False,False,False,1,,AX,Store,
 4288#02,DPA,4288,,Directional Headset,False,False,False,False,False,1,,AX,Store,
-4466#01,DPA,4466,C073762,Omnidirectional Headset (beige),False,False,False,False,False,1,"[{""date"":""2026/03/14"",""user"":""bnjm2000"",""description"":""Noted sound muffled (Interwoven《绚》@ SCCC) by Engineer Wei Zheng"",""type"":""General"",""cost"":"""",""changes"":[],""source"":{}}]",AX,Store,Store
-4466#02,DPA,4466,C074934,Omnidirectional Headset (beige),False,False,False,False,False,1,,AX,Store,Store
-4466#03,DPA,4466,C075186,Omnidirectional Headset (beige),False,False,False,False,False,1,,AX,Store,Store
-4466#04,DPA,4466,C056033,Omnidirectional Headset (beige),False,False,False,False,False,1,,AX,Store,Store
-4466#05,DPA,4466,C074966,Omnidirectional Headset (beige),False,False,False,False,False,1,,AX,Store,Store
-4466#06,DPA,4466,C075149,Omnidirectional Headset (beige),False,False,False,False,False,1,,AX,Store,Store
-4488#01,DPA,4488,M069287,Directional Headset (beige),False,False,False,False,False,1,,AX,Store,
-4488#02,DPA,4488,M068571,Directional Headset (beige),False,False,False,False,False,1,,AX,Store,
-4488#03,DPA,4488,M069881,Directional Headset (beige),False,False,False,False,False,1,,AX,Store,Store
-4488#04,DPA,4488,M069448,Directional Headset (beige),False,False,False,False,False,1,,AX,Store,Store
-4488#05,DPA,4488,M071554,Directional Headset (beige),False,False,False,False,False,1,,AX,Store,Store
-4488#06,DPA,4488,M068245,Directional Headset (beige),False,False,False,False,False,1,,AX,Store,Store
-4488#07,DPA,4488,M069285,Directional Headset (beige),False,False,False,False,False,1,,AX,Store,Store
-4488#08,DPA,4488,M068376,Directional Headset (beige),False,False,False,False,False,1,,AX,Store,Store
-4488#09,DPA,4488,M070024,Directional Headset (beige),False,False,False,False,False,1,,AX,Store,
-4488#10,DPA,4488,M069545,Directional Headset (beige),False,False,False,False,False,1,,AX,Store,
-4488#11,DPA,4488,M069673,Directional Headset (beige),False,False,False,False,False,1,,AX,Store,Store
-4488#12,DPA,4488,M070071,Directional Headset (beige),False,False,False,False,False,1,,AX,Store,Store
-6061#01,DPA,6061,R311927,Omni Submini Lavalier Microphone (beige),False,False,False,False,False,1,,AX,Store,
-6061#02,DPA,6061,R311977,Omni Submini Lavalier Microphone (beige),False,False,False,False,False,1,,AX,Store,
-6061#03,DPA,6061,R311988,Omni Submini Lavalier Microphone (beige),False,False,False,False,False,1,,AX,Store,Store
-6061#04,DPA,6061,R316442,Omni Submini Lavalier Microphone (beige),False,False,False,False,False,1,,AX,Store,Store
-6061#05,DPA,6061,R316445,Omni Submini Lavalier Microphone (beige),False,False,False,False,False,1,,AX,Store,
-6061#06,DPA,6061,R316447,Omni Submini Lavalier Microphone (beige),False,False,False,False,False,1,,AX,Store,
-6061#07,DPA,6061,R317526,Omni Submini Lavalier Microphone (beige),False,False,False,False,False,1,,AX,Store,
-6061#08,DPA,6061,R317528,Omni Submini Lavalier Microphone (beige),False,False,False,False,False,1,,AX,Store,
-6061#09,DPA,6061,R317530,Omni Submini Lavalier Microphone (beige),False,False,False,False,False,1,,AX,Store,
-6061#10,DPA,6061,R317531,Omni Submini Lavalier Microphone (beige),False,False,False,False,False,1,,AX,Store,
-6061#11,DPA,6061,R317534,Omni Submini Lavalier Microphone (beige),False,False,False,False,False,1,,AX,Store,
-6061#12,DPA,6061,R317535,Omni Submini Lavalier Microphone (beige),False,False,False,False,False,1,,AX,Store,
-6061#13,DPA,6061,R283616,Omni Submini Lavalier Microphone (black),False,False,False,False,False,1,,AX,Store,Store
-6061#14,DPA,6061,R283623,Omni Submini Lavalier Microphone (black),False,False,False,False,False,1,,AX,Store,Store
-6061#15,DPA,6061,R283625,Omni Submini Lavalier Microphone (black),False,False,False,False,False,1,,AX,Store,Store
-6061#16,DPA,6061,R283632,Omni Submini Lavalier Microphone (black),False,False,False,False,False,1,,AX,Store,Store
+4466#01,DPA,4466 (beige),C073762,Omnidirectional Headset,False,False,False,False,False,1,"[{""date"":""2026/03/14"",""user"":""bnjm2000"",""description"":""Noted sound muffled (Interwoven《绚》@ SCCC) by Engineer Wei Zheng"",""type"":""General"",""cost"":"""",""changes"":[],""source"":{}}]",AX,Store,Store
+4466#02,DPA,4466 (beige),C074934,Omnidirectional Headset,False,False,False,False,False,1,,AX,Store,Store
+4466#03,DPA,4466 (beige),C075186,Omnidirectional Headset,False,False,False,False,False,1,,AX,Store,Store
+4466#04,DPA,4466 (beige),C056033,Omnidirectional Headset,False,False,False,False,False,1,,AX,Store,Store
+4466#05,DPA,4466 (beige),C074966,Omnidirectional Headset,False,False,False,False,False,1,,AX,Store,Store
+4466#06,DPA,4466 (beige),C075149,Omnidirectional Headset,False,False,False,False,False,1,,AX,Store,Store
+4488#01,DPA,4488 (beige),M069287,Directional Headset,False,False,False,False,False,1,,AX,Store,
+4488#02,DPA,4488 (beige),M068571,Directional Headset,False,False,False,False,False,1,,AX,Store,
+4488#03,DPA,4488 (beige),M069881,Directional Headset,False,False,False,False,False,1,,AX,Store,Store
+4488#04,DPA,4488 (beige),M069448,Directional Headset,False,False,False,False,False,1,,AX,Store,Store
+4488#05,DPA,4488 (beige),M071554,Directional Headset,False,False,False,False,False,1,,AX,Store,Store
+4488#06,DPA,4488 (beige),M068245,Directional Headset,False,False,False,False,False,1,,AX,Store,Store
+4488#07,DPA,4488 (beige),M069285,Directional Headset,False,False,False,False,False,1,,AX,Store,Store
+4488#08,DPA,4488 (beige),M068376,Directional Headset,False,False,False,False,False,1,,AX,Store,Store
+4488#09,DPA,4488 (beige),M070024,Directional Headset,False,False,False,False,False,1,,AX,Store,
+4488#10,DPA,4488 (beige),M069545,Directional Headset,False,False,False,False,False,1,,AX,Store,
+4488#11,DPA,4488 (beige),M069673,Directional Headset,False,False,False,False,False,1,,AX,Store,Store
+4488#12,DPA,4488 (beige),M070071,Directional Headset,False,False,False,False,False,1,,AX,Store,Store
+6061#01,DPA,6061 (beige),R311927,Omni Submini Lavalier Microphone,False,False,False,False,False,1,,AX,Store,
+6061#02,DPA,6061 (beige),R311977,Omni Submini Lavalier Microphone,False,False,False,False,False,1,,AX,Store,
+6061#03,DPA,6061 (beige),R311988,Omni Submini Lavalier Microphone,False,False,False,False,False,1,,AX,Store,Store
+6061#04,DPA,6061 (beige),R316442,Omni Submini Lavalier Microphone,False,False,False,False,False,1,,AX,Store,Store
+6061#05,DPA,6061 (beige),R316445,Omni Submini Lavalier Microphone,False,False,False,False,False,1,,AX,Store,
+6061#06,DPA,6061 (beige),R316447,Omni Submini Lavalier Microphone,False,False,False,False,False,1,,AX,Store,
+6061#07,DPA,6061 (beige),R317526,Omni Submini Lavalier Microphone,False,False,False,False,False,1,,AX,Store,
+6061#08,DPA,6061 (beige),R317528,Omni Submini Lavalier Microphone,False,False,False,False,False,1,,AX,Store,
+6061#09,DPA,6061 (beige),R317530,Omni Submini Lavalier Microphone,False,False,False,False,False,1,,AX,Store,
+6061#10,DPA,6061 (beige),R317531,Omni Submini Lavalier Microphone,False,False,False,False,False,1,,AX,Store,
+6061#11,DPA,6061 (beige),R317534,Omni Submini Lavalier Microphone,False,False,False,False,False,1,,AX,Store,
+6061#12,DPA,6061 (beige),R317535,Omni Submini Lavalier Microphone,False,False,False,False,False,1,,AX,Store,
+6061#13,DPA,6061 (black),R283616,Omni Submini Lavalier Microphone,False,False,False,False,False,1,,AX,Store,Store
+6061#14,DPA,6061 (black),R283623,Omni Submini Lavalier Microphone,False,False,False,False,False,1,,AX,Store,Store
+6061#15,DPA,6061 (black),R283625,Omni Submini Lavalier Microphone,False,False,False,False,False,1,,AX,Store,Store
+6061#16,DPA,6061 (black),R283632,Omni Submini Lavalier Microphone,False,False,False,False,False,1,,AX,Store,Store
 4061#01,DPA,4061,R238770,Omni Submini Lavalier Microphone,False,False,True,False,False,1,"[{""date"":""2024/11/19"",""user"":""bnjm2000"",""description"":""Sleeving disintegrated/tore after removing from instrument (SLMA @ Jia He Grand Restaurant)"",""type"":""Fault"",""cost"":"""",""changes"":[{""kind"":""degraded"",""action"":""marked""}],""source"":{}}]",AX,Store,
 4061#02,DPA,4061,R238785,Omni Submini Lavalier Microphone,False,False,True,False,False,1,"[{""date"":""2025/08/15"",""user"":""bnjm2000"",""description"":""Sleeving disintegrated/tore after removing from instrument (Tampest & Tranquility @ Blackbox)"",""type"":""Fault"",""cost"":"""",""changes"":[{""kind"":""degraded"",""action"":""marked""}],""source"":{}}]",AX,Store,
 DAD6001#01,DPA,DAD 6001,,Microdot to 3-Pin XLR Adapter,False,False,False,False,False,1,,AX,Store,Store
@@ -601,12 +601,12 @@ E906#01,Sennheiser,E906,,"super-cardioid, dynamic instrument microphone",False,F
 E906#02,Sennheiser,E906,,"super-cardioid, dynamic instrument microphone",False,False,False,False,False,1,,AX,Store,Store
 ME36#01,Sennheiser,ME36,,Gooseneck mic,False,False,False,False,False,1,,AX,Store,Wedding of Henry & Janet @ Capella
 ME36#02,Sennheiser,ME36,,Gooseneck mic,False,False,False,False,False,1,,AX,Store,Wedding of Henry & Janet @ Capella
-MKE2#01,Sennheiser,MKE2,86827,Lavalier microphone (black),False,False,False,False,False,1,,AX,Store,Store
-MKE2#02,Sennheiser,MKE2,86825,Lavalier microphone (black),False,False,False,False,False,1,,AX,Store,Store
-MKE2#03,Sennheiser,MKE2,,Lavalier microphone (beige),False,False,False,False,False,1,,AX,Store,
-MKE2#04,Sennheiser,MKE2,,Lavalier microphone (beige),False,False,False,False,False,1,,AX,Store,
-MKE2#05,Sennheiser,MKE2,,Lavalier microphone (beige),False,False,False,False,False,1,,AX,Store,
-MKE2#06,Sennheiser,MKE2,,Lavalier microphone (beige),False,False,False,False,False,1,,AX,Store,
+MKE2#01,Sennheiser,MKE2 (black),86827,Lavalier microphone,False,False,False,False,False,1,,AX,Store,Store
+MKE2#02,Sennheiser,MKE2 (black),86825,Lavalier microphone,False,False,False,False,False,1,,AX,Store,Store
+MKE2#03,Sennheiser,MKE2 (beige),,Lavalier microphone,False,False,False,False,False,1,,AX,Store,
+MKE2#04,Sennheiser,MKE2 (beige),,Lavalier microphone,False,False,False,False,False,1,,AX,Store,
+MKE2#05,Sennheiser,MKE2 (beige),,Lavalier microphone,False,False,False,False,False,1,,AX,Store,
+MKE2#06,Sennheiser,MKE2 (beige),,Lavalier microphone,False,False,False,False,False,1,,AX,Store,
 AD1#01,Shure,AD1,2BI13281704,Beltpack [G56],False,False,False,False,False,1,,AX,Store,Store
 AD1#02,Shure,AD1,2CA26063354,Beltpack [G56],False,False,False,False,False,1,,AX,Store,Store
 AD1#03,Shure,AD1,2CA26063431,Beltpack [G56],False,False,False,False,False,1,,AX,Store,Store
@@ -706,52 +706,52 @@ B58A#01,Shure,Beta 58A,,supercardioid dynamic vocal microphone,False,False,False
 B58A#02,Shure,Beta 58A,,supercardioid dynamic vocal microphone,False,False,False,False,False,1,,AX,Store,Store
 B58A#03,Shure,Beta 58A,,supercardioid dynamic vocal microphone,False,False,False,False,False,1,,AX,Store,Store
 B58A#04,Shure,Beta 58A,,supercardioid dynamic vocal microphone,False,False,False,False,False,1,,AX,Store,Store
-ULXD1#01,Shure,ULXD1,1ND2342330-01,Beltpack [L50],False,False,False,False,False,1,,AX,Store,Store
-ULXD1#02,Shure,ULXD1,1ML0246448,Beltpack [L50],False,False,False,False,False,1,,AX,Store,Store
-ULXD1#03,Shure,ULXD1,1NB0326366-01,Beltpack [L50],False,False,False,False,False,1,,AX,Store,Store
-ULXD1#04,Shure,ULXD1,1ND2342613-01,Beltpack [L50],False,False,False,False,False,1,,AX,Store,Store
-ULXD1#05,Shure,ULXD1,1ND23423459-01,Beltpack [L50],False,False,False,False,False,1,,AX,Store,Store
-ULXD1#06,Shure,ULXD1,1ND2342323-01,Beltpack [L50],False,False,False,False,False,1,,AX,Store,Store
-ULXD1#07,Shure,ULXD1,1ND2342445-01,Beltpack [L50],False,False,False,False,False,1,,AX,Store,Store
-ULXD1#08,Shure,ULXD1,1ND2342622-01,Beltpack [L50],False,False,False,False,False,1,,AX,Store,Store
-ULXD1#09,Shure,ULXD1,1ML0246482-01,Beltpack [L50],False,False,False,False,False,1,,AX,Store,Store
-ULXD1#10,Shure,ULXD1,1ND2342618-01,Beltpack [L50],False,False,False,False,False,1,,AX,Store,Store
-ULXD1#11,Shure,ULXD1,2QJ0777983,Beltpack [L50],False,False,False,False,False,1,,AX,Store,Store
-ULXD1#12,Shure,ULXD1,,Beltpack [L50],True,False,False,False,False,1,,AX,Store,
-ULXD1#13,Shure,ULXD1,3BI28076309,Beltpack [G52],False,False,False,False,False,1,,AX,Store,Store
-ULXD1#14,Shure,ULXD1,3BI28074129,Beltpack [G52],False,False,False,False,False,1,,AX,Store,Store
-ULXD1#15,Shure,ULXD1,3BI28076513,Beltpack [G52],False,False,False,False,False,1,,AX,Store,Store
-ULXD1#16,Shure,ULXD1,3BI28076373,Beltpack [G52],False,False,False,False,False,1,,AX,Store,Store
-ULXD1#17,Shure,ULXD1,3BI28076436,Beltpack [G52],False,False,False,False,False,1,,AX,Store,Store
-ULXD1#18,Shure,ULXD1,3BI28078539,Beltpack [G52],False,False,False,False,False,1,,AX,Store,
-ULXD1#19,Shure,ULXD1,3EC18480865,Beltpack [L50],False,False,False,False,False,1,,AX,Store,Store
-ULXD2#01,Shure,ULXD2,2NK0071080-01,Handheld Microphone [L50],False,False,False,False,False,1,,AX,Store,Wedding of Henry & Janet @ Capella
-ULXD2#02,Shure,ULXD2,2PH3049605,Handheld Microphone [L50],False,False,False,False,False,1,"[{""id"":""e05fe241846549c80838892c"",""date"":""2026/05/21"",""user"":""bnjm2000"",""description"":""Asset sighted by bnjm2000 during Asset Check"",""type"":""Asset check"",""cost"":"""",""changes"":[],""source"":{""kind"":""asset_check_sighting"",""checkId"":""asset-check-366d24e1-1c3f-467e-ac96-2e177a086b2e"",""groupKey"":""AX|Shure|ULXD2|Handheld Microphone [L50]"",""createdAt"":""2026-05-21T17:39:08""}}]",AX,Store,Store
-ULXD2#03,Shure,ULXD2,2OB0659314-01,Handheld Microphone [L50],False,False,False,False,False,1,"[{""date"":""2026/03/22"",""user"":""bnjm2000"",""description"":""Handheld dropped by emcee, capsule broke off (Wedding of Russell & Cassandra @ Shangri-La Island Ballroom)"",""type"":""Fault"",""cost"":"""",""changes"":[{""kind"":""ooc"",""action"":""marked""}],""source"":{}},{""date"":""2026/04/17"",""user"":""bnjm2000"",""description"":""Bought new capsule from E&E, replaced whole capsule - $214"",""type"":""Repair"",""cost"":""214.00"",""changes"":[{""kind"":""location"",""value"":""E&E""},{""kind"":""ooc"",""action"":""cleared""}],""source"":{}}]",AX,Store,Wedding of Henry & Janet @ Capella
-ULXD2#04,Shure,ULXD2,2PK2362933,Handheld Microphone [L50],False,False,False,False,False,1,,AX,Store,Store
-ULXD2#05,Shure,ULXD2,20A1395239-01,Handheld Microphone [L50],False,False,False,False,False,1,"[{""date"":""2025/11/27"",""user"":""bnjm2000"",""description"":""Discovered capsule broken and sponge disintegrated (Loro Piana @ Jiak Kim House)"",""type"":""Fault"",""cost"":"""",""changes"":[{""kind"":""ooc"",""action"":""marked""}],""source"":{}},{""date"":""2026/01/08"",""user"":""bnjm2000"",""description"":""Sent to E&E for servicing"",""type"":""General"",""cost"":"""",""changes"":[{""kind"":""location"",""value"":""E&E""}],""source"":{}},{""date"":""2026/01/12"",""user"":""bnjm2000"",""description"":""SR22011:\nE&E quoted to replace capsule ($267), with service fee ($120).\nDecided to cancel repair and buy the capsule from Sales."",""type"":""General"",""cost"":"""",""changes"":[{""kind"":""location"",""value"":""Store""}],""source"":{}},{""date"":""2026/01/27"",""user"":""bnjm2000"",""description"":""Purchased new B58A Capsule to replace. ($214)\nCapsule SN: 3EH15266104"",""type"":""Repair"",""cost"":""214.00"",""changes"":[{""kind"":""location"",""value"":""E&E""},{""kind"":""ooc"",""action"":""cleared""}],""source"":{}}]",AX,Store,
-ULXD2#06,Shure,ULXD2,2PK2362926,Handheld Microphone [L50],False,False,False,False,False,1,,AX,Store,
-ULXD2#07,Shure,ULXD2,2QK2204370,Handheld Microphone [L50],False,False,False,False,False,1,,AX,Store,
-ULXD2#08,Shure,ULXD2,2OB0659317-01,Handheld Microphone [L50],False,False,False,False,False,1,,AX,Store,Wedding of Henry & Janet @ Capella
-ULXD2#09,Shure,ULXD2,2NK0771081-01,Handheld Microphone [L50],False,False,False,False,False,1,,AX,Store,Wedding of Henry & Janet @ Capella
-ULXD2#10,Shure,ULXD2,2PK2362922,Handheld Microphone [L50],False,False,False,False,False,1,,AX,Store,Wedding of Henry & Janet @ Capella
-ULXD2#11,Shure,ULXD2,2RC0141727,Handheld Microphone [L50],False,False,False,False,False,1,"[{""date"":""2025/06/21"",""user"":""bnjm2000"",""description"":""Battery prong dropped out, unable to turn on (Wedding of Jeremy and Julia @ The Pyramid Club)"",""type"":""Fault"",""cost"":"""",""changes"":[{""kind"":""location"",""value"":""Store""},{""kind"":""ooc"",""action"":""marked""}],""source"":{}},{""date"":""2025/07/10"",""user"":""bnjm2000"",""description"":""Sent to E&E for service."",""type"":""General"",""cost"":"""",""changes"":[{""kind"":""location"",""value"":""E&E""}],""source"":{}},{""date"":""2025/09/11"",""user"":""bnjm2000"",""description"":""Replace battery pin $5\nReplace rubber slot $5\nService charge $60"",""type"":""Repair"",""cost"":""70.00"",""changes"":[{""kind"":""location"",""value"":""E&E""},{""kind"":""ooc"",""action"":""cleared""}],""source"":{}},{""date"":""2025/11/12"",""user"":""bnjm2000"",""description"":""Collected back from E&E."",""type"":""General"",""cost"":"""",""changes"":[{""kind"":""location"",""value"":""Store""}],""source"":{}}]",AX,Store,Store
-ULXD2#12,Shure,ULXD2,2NK0771082-01,Handheld Microphone [L50],False,False,False,False,False,1,,AX,Store,Store
-ULXD2#13,Shure,ULXD2,3CC16144846,Handheld Microphone [G52],False,False,False,False,False,1,,AX,Store,Store
-ULXD2#14,Shure,ULXD2,3CC16144872,Handheld Microphone [G52],False,False,False,False,False,1,,AX,Store,Store
-ULXD2#15,Shure,ULXD2,3CC16145063,Handheld Microphone [G52],False,False,False,False,False,1,,AX,Store,Store
-ULXD2#16,Shure,ULXD2,3CC16145013,Handheld Microphone [G52],False,False,False,False,False,1,,AX,Store,Store
-ULXD2#17,Shure,ULXD2,3CC16145099,Handheld Microphone [G52],False,False,False,False,False,1,,AX,Store,Store
-ULXD2#18,Shure,ULXD2,3CC16145049,Handheld Microphone [G52],False,False,False,False,False,1,,AX,Store,Store
-ULXD4D#01,Shure,ULXD4D,,Dual Channel Receiver [L50],False,False,False,False,False,1,,AX,Store,Store
-ULXD4D#02,Shure,ULXD4D,,Dual Channel Receiver [L50],False,False,False,False,False,1,,AX,Store,
-ULXD4D#03,Shure,ULXD4D,,Dual Channel Receiver [L50],False,False,False,False,False,1,,AX,Store,Store
-ULXD4D#04,Shure,ULXD4D,,Dual Channel Receiver [L50],False,False,False,False,False,1,,AX,Store,Wedding of Henry & Janet @ Capella
-ULXD4D#05,Shure,ULXD4D,3BH26487024,Dual Channel Receiver [G52],False,False,False,False,False,1,,AX,Store,Store
-ULXD4D#06,Shure,ULXD4D,3BH26487098,Dual Channel Receiver [G52],False,False,False,False,False,1,,AX,Store,Store
-ULXD4Q#01,Shure,ULXD4Q,,Quad Channel Receiver [L50],False,False,False,False,False,1,,AX,Store,Wedding of Henry & Janet @ Capella
-ULXD4Q#02,Shure,ULXD4Q,3BF11462545,Quad Channel Receiver [G52],False,False,False,False,False,1,,AX,Store,Store
-ULXD4Q#03,Shure,ULXD4Q,3BF11462711,Quad Channel Receiver [G52],False,False,False,False,False,1,,AX,Store,Store
+ULXD1#01,Shure,ULXD1 [L50],1ND2342330-01,Beltpack,False,False,False,False,False,1,,AX,Store,Store
+ULXD1#02,Shure,ULXD1 [L50],1ML0246448,Beltpack,False,False,False,False,False,1,,AX,Store,Store
+ULXD1#03,Shure,ULXD1 [L50],1NB0326366-01,Beltpack,False,False,False,False,False,1,,AX,Store,Store
+ULXD1#04,Shure,ULXD1 [L50],1ND2342613-01,Beltpack,False,False,False,False,False,1,,AX,Store,Store
+ULXD1#05,Shure,ULXD1 [L50],1ND23423459-01,Beltpack,False,False,False,False,False,1,,AX,Store,Store
+ULXD1#06,Shure,ULXD1 [L50],1ND2342323-01,Beltpack,False,False,False,False,False,1,,AX,Store,Store
+ULXD1#07,Shure,ULXD1 [L50],1ND2342445-01,Beltpack,False,False,False,False,False,1,,AX,Store,Store
+ULXD1#08,Shure,ULXD1 [L50],1ND2342622-01,Beltpack,False,False,False,False,False,1,,AX,Store,Store
+ULXD1#09,Shure,ULXD1 [L50],1ML0246482-01,Beltpack,False,False,False,False,False,1,,AX,Store,Store
+ULXD1#10,Shure,ULXD1 [L50],1ND2342618-01,Beltpack,False,False,False,False,False,1,,AX,Store,Store
+ULXD1#11,Shure,ULXD1 [L50],2QJ0777983,Beltpack,False,False,False,False,False,1,,AX,Store,Store
+ULXD1#12,Shure,ULXD1 [L50],,Beltpack,True,False,False,False,False,1,,AX,Store,
+ULXD1#13,Shure,ULXD1 [G52],3BI28076309,Beltpack,False,False,False,False,False,1,,AX,Store,Store
+ULXD1#14,Shure,ULXD1 [G52],3BI28074129,Beltpack,False,False,False,False,False,1,,AX,Store,Store
+ULXD1#15,Shure,ULXD1 [G52],3BI28076513,Beltpack,False,False,False,False,False,1,,AX,Store,Store
+ULXD1#16,Shure,ULXD1 [G52],3BI28076373,Beltpack,False,False,False,False,False,1,,AX,Store,Store
+ULXD1#17,Shure,ULXD1 [G52],3BI28076436,Beltpack,False,False,False,False,False,1,,AX,Store,Store
+ULXD1#18,Shure,ULXD1 [G52],3BI28078539,Beltpack,False,False,False,False,False,1,,AX,Store,
+ULXD1#19,Shure,ULXD1 [L50],3EC18480865,Beltpack,False,False,False,False,False,1,,AX,Store,Store
+ULXD2#01,Shure,ULXD2 [L50],2NK0071080-01,Handheld Microphone,False,False,False,False,False,1,,AX,Store,Wedding of Henry & Janet @ Capella
+ULXD2#02,Shure,ULXD2 [L50],2PH3049605,Handheld Microphone,False,False,False,False,False,1,"[{""id"":""e05fe241846549c80838892c"",""date"":""2026/05/21"",""user"":""bnjm2000"",""description"":""Asset sighted by bnjm2000 during Asset Check"",""type"":""Asset check"",""cost"":"""",""changes"":[],""source"":{""kind"":""asset_check_sighting"",""checkId"":""asset-check-366d24e1-1c3f-467e-ac96-2e177a086b2e"",""groupKey"":""AX|Shure|ULXD2|Handheld Microphone [L50]"",""createdAt"":""2026-05-21T17:39:08""}}]",AX,Store,Store
+ULXD2#03,Shure,ULXD2 [L50],2OB0659314-01,Handheld Microphone,False,False,False,False,False,1,"[{""date"":""2026/03/22"",""user"":""bnjm2000"",""description"":""Handheld dropped by emcee, capsule broke off (Wedding of Russell & Cassandra @ Shangri-La Island Ballroom)"",""type"":""Fault"",""cost"":"""",""changes"":[{""kind"":""ooc"",""action"":""marked""}],""source"":{}},{""date"":""2026/04/17"",""user"":""bnjm2000"",""description"":""Bought new capsule from E&E, replaced whole capsule - $214"",""type"":""Repair"",""cost"":""214.00"",""changes"":[{""kind"":""location"",""value"":""E&E""},{""kind"":""ooc"",""action"":""cleared""}],""source"":{}}]",AX,Store,Wedding of Henry & Janet @ Capella
+ULXD2#04,Shure,ULXD2 [L50],2PK2362933,Handheld Microphone,False,False,False,False,False,1,,AX,Store,Store
+ULXD2#05,Shure,ULXD2 [L50],20A1395239-01,Handheld Microphone,False,False,False,False,False,1,"[{""date"":""2025/11/27"",""user"":""bnjm2000"",""description"":""Discovered capsule broken and sponge disintegrated (Loro Piana @ Jiak Kim House)"",""type"":""Fault"",""cost"":"""",""changes"":[{""kind"":""ooc"",""action"":""marked""}],""source"":{}},{""date"":""2026/01/08"",""user"":""bnjm2000"",""description"":""Sent to E&E for servicing"",""type"":""General"",""cost"":"""",""changes"":[{""kind"":""location"",""value"":""E&E""}],""source"":{}},{""date"":""2026/01/12"",""user"":""bnjm2000"",""description"":""SR22011:\nE&E quoted to replace capsule ($267), with service fee ($120).\nDecided to cancel repair and buy the capsule from Sales."",""type"":""General"",""cost"":"""",""changes"":[{""kind"":""location"",""value"":""Store""}],""source"":{}},{""date"":""2026/01/27"",""user"":""bnjm2000"",""description"":""Purchased new B58A Capsule to replace. ($214)\nCapsule SN: 3EH15266104"",""type"":""Repair"",""cost"":""214.00"",""changes"":[{""kind"":""location"",""value"":""E&E""},{""kind"":""ooc"",""action"":""cleared""}],""source"":{}}]",AX,Store,
+ULXD2#06,Shure,ULXD2 [L50],2PK2362926,Handheld Microphone,False,False,False,False,False,1,,AX,Store,
+ULXD2#07,Shure,ULXD2 [L50],2QK2204370,Handheld Microphone,False,False,False,False,False,1,,AX,Store,
+ULXD2#08,Shure,ULXD2 [L50],2OB0659317-01,Handheld Microphone,False,False,False,False,False,1,,AX,Store,Wedding of Henry & Janet @ Capella
+ULXD2#09,Shure,ULXD2 [L50],2NK0771081-01,Handheld Microphone,False,False,False,False,False,1,,AX,Store,Wedding of Henry & Janet @ Capella
+ULXD2#10,Shure,ULXD2 [L50],2PK2362922,Handheld Microphone,False,False,False,False,False,1,,AX,Store,Wedding of Henry & Janet @ Capella
+ULXD2#11,Shure,ULXD2 [L50],2RC0141727,Handheld Microphone,False,False,False,False,False,1,"[{""date"":""2025/06/21"",""user"":""bnjm2000"",""description"":""Battery prong dropped out, unable to turn on (Wedding of Jeremy and Julia @ The Pyramid Club)"",""type"":""Fault"",""cost"":"""",""changes"":[{""kind"":""location"",""value"":""Store""},{""kind"":""ooc"",""action"":""marked""}],""source"":{}},{""date"":""2025/07/10"",""user"":""bnjm2000"",""description"":""Sent to E&E for service."",""type"":""General"",""cost"":"""",""changes"":[{""kind"":""location"",""value"":""E&E""}],""source"":{}},{""date"":""2025/09/11"",""user"":""bnjm2000"",""description"":""Replace battery pin $5\nReplace rubber slot $5\nService charge $60"",""type"":""Repair"",""cost"":""70.00"",""changes"":[{""kind"":""location"",""value"":""E&E""},{""kind"":""ooc"",""action"":""cleared""}],""source"":{}},{""date"":""2025/11/12"",""user"":""bnjm2000"",""description"":""Collected back from E&E."",""type"":""General"",""cost"":"""",""changes"":[{""kind"":""location"",""value"":""Store""}],""source"":{}}]",AX,Store,Store
+ULXD2#12,Shure,ULXD2 [L50],2NK0771082-01,Handheld Microphone,False,False,False,False,False,1,,AX,Store,Store
+ULXD2#13,Shure,ULXD2 [G52],3CC16144846,Handheld Microphone,False,False,False,False,False,1,,AX,Store,Store
+ULXD2#14,Shure,ULXD2 [G52],3CC16144872,Handheld Microphone,False,False,False,False,False,1,,AX,Store,Store
+ULXD2#15,Shure,ULXD2 [G52],3CC16145063,Handheld Microphone,False,False,False,False,False,1,,AX,Store,Store
+ULXD2#16,Shure,ULXD2 [G52],3CC16145013,Handheld Microphone,False,False,False,False,False,1,,AX,Store,Store
+ULXD2#17,Shure,ULXD2 [G52],3CC16145099,Handheld Microphone,False,False,False,False,False,1,,AX,Store,Store
+ULXD2#18,Shure,ULXD2 [G52],3CC16145049,Handheld Microphone,False,False,False,False,False,1,,AX,Store,Store
+ULXD4D#01,Shure,ULXD4D [L50],,Dual Channel Receiver,False,False,False,False,False,1,,AX,Store,Store
+ULXD4D#02,Shure,ULXD4D [L50],,Dual Channel Receiver,False,False,False,False,False,1,,AX,Store,
+ULXD4D#03,Shure,ULXD4D [L50],,Dual Channel Receiver,False,False,False,False,False,1,,AX,Store,Store
+ULXD4D#04,Shure,ULXD4D [L50],,Dual Channel Receiver,False,False,False,False,False,1,,AX,Store,Wedding of Henry & Janet @ Capella
+ULXD4D#05,Shure,ULXD4D [G52],3BH26487024,Dual Channel Receiver,False,False,False,False,False,1,,AX,Store,Store
+ULXD4D#06,Shure,ULXD4D [G52],3BH26487098,Dual Channel Receiver,False,False,False,False,False,1,,AX,Store,Store
+ULXD4Q#01,Shure,ULXD4Q [L50],,Quad Channel Receiver,False,False,False,False,False,1,,AX,Store,Wedding of Henry & Janet @ Capella
+ULXD4Q#02,Shure,ULXD4Q [G52],3BF11462545,Quad Channel Receiver,False,False,False,False,False,1,,AX,Store,Store
+ULXD4Q#03,Shure,ULXD4Q [G52],3BF11462711,Quad Channel Receiver,False,False,False,False,False,1,,AX,Store,Store
 WL184#01,Shure,WL184,,supercardioid condenser lavalier microphone,False,False,False,False,False,1,,AX,Store,
 WL184#02,Shure,WL184,,supercardioid condenser lavalier microphone,False,False,False,False,False,1,,AX,Store,
 WL184#03,Shure,WL184,,supercardioid condenser lavalier microphone,False,False,False,False,False,1,,AX,Store,

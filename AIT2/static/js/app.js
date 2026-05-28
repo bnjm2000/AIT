@@ -734,11 +734,11 @@ function clearDoEdits(eventId) {
 }
 /* stable key for model-group rows */
 function makeModelKey(mg) {
-  return `MG|${mg.department||''}|${mg.brand||''}|${mg.model||''}|${mg.description||''}`;
+  return `MG|${mg.department||''}|${mg.brand||''}|${mg.model||''}`;
 }
 
 function makeQtyInputId(department, brand, model, description = '') {
-  const raw = `${department || ''}|${brand || ''}|${model || ''}|${description || ''}`;
+  const raw = `${department || ''}|${brand || ''}|${model || ''}`;
 
   return `qty-${encodeURIComponent(raw)
     .replace(/%/g, '_')
@@ -4539,8 +4539,7 @@ function sameAssetGroup(asset, group) {
   return (
     normalizeAssetGroupValue(asset.department, true) === normalizeAssetGroupValue(group.department, true) &&
     normalizeAssetGroupValue(asset.brand) === normalizeAssetGroupValue(group.brand) &&
-    normalizeAssetGroupValue(asset.model) === normalizeAssetGroupValue(group.model) &&
-    normalizeAssetGroupValue(asset.description) === normalizeAssetGroupValue(group.description)
+    normalizeAssetGroupValue(asset.model) === normalizeAssetGroupValue(group.model)
   );
 }
 
@@ -7298,8 +7297,7 @@ async function openPrepareEventModal(eventId) {
                     const modelAvailableAssets = availableAssets.filter(a => 
                         a.brand === modelGroup.brand && 
                         a.model === modelGroup.model && 
-                        a.department === modelGroup.department &&
-                        (a.description || '') === (modelGroup.description || '')
+                        a.department === modelGroup.department
                     );
 
                     if (isBulkModelGroupForPrepare(modelGroup, modelAvailableAssets, modelGroup.assignedAssets || [])) {
@@ -8350,13 +8348,11 @@ async function processUniversalAsset(eventId) {
                             const reqDept = parts[0];
                             const reqBrand = parts[1];
                             const reqModel = parts[2];
-                            const reqDescription = parts[4] || '';
                             
-                            // Check if this asset matches the model requirement (including description)
+                            // Description is display text only; type matching uses department, brand, and model.
                             if (assetDetails.department === reqDept && 
                                 assetDetails.brand === reqBrand && 
-                                assetDetails.model === reqModel &&
-                                (assetDetails.description || '') === reqDescription) {
+                                assetDetails.model === reqModel) {
                                 fulfillsModelRequirement = true;
                                 break;
                             }
@@ -11297,8 +11293,7 @@ async function addModelToEvent(eventId, brand, model, department, description = 
     const availabilityEntry = availabilityList.find(entry =>
       entry.department === department &&
       entry.brand === brand &&
-      entry.model === model &&
-      (entry.description || '') === cleanDescription
+      entry.model === model
     );
 
     const physicalCount = availabilityEntry
@@ -11306,15 +11301,13 @@ async function addModelToEvent(eventId, brand, model, department, description = 
       : availableAssets.filter(asset =>
           asset.department === department &&
           asset.brand === brand &&
-          asset.model === model &&
-          (asset.description || '') === cleanDescription
+          asset.model === model
         ).length;
 
     const currentGroup = Object.values(eventData.modelGroups || {}).find(group =>
       group.department === department &&
       group.brand === brand &&
-      group.model === model &&
-      (group.description || '') === cleanDescription
+      group.model === model
     );
 
     const currentlyRequestedHere = Number(currentGroup?.requiredQuantity || 0);
@@ -11593,8 +11586,7 @@ function populateEditQuantityModal(eventId, brand, model, department, currentQua
   const availabilityEntry = availabilityList.find(entry =>
     entry.department === department &&
     entry.brand === brand &&
-    entry.model === model &&
-    (entry.description || '') === cleanDescription
+    entry.model === model
   );
 
   const maxQuantity = availabilityEntry
@@ -11602,8 +11594,7 @@ function populateEditQuantityModal(eventId, brand, model, department, currentQua
     : availableAssets.filter(asset =>
         asset.department === department &&
         asset.brand === brand &&
-        asset.model === model &&
-        (asset.description || '') === cleanDescription
+        asset.model === model
       ).length;
 
   // Populate modal
@@ -12121,19 +12112,25 @@ function filterAvailableModels(searchTerm) {
     return;
   }
 
-  // Group ALL non-missing/OOC assets by model (physical pool)
+  // Group ALL non-missing/OOC assets by model type (physical pool).
   const modelGroups = {};
   availableAssets.forEach(asset => {
-    const modelKey = `${asset.department}|${asset.brand}|${asset.model}|${escapeJs(asset.description || '')}`;
+    const modelKey = `${asset.department}|${asset.brand}|${asset.model}`;
     if (!modelGroups[modelKey]) {
       modelGroups[modelKey] = {
         department: asset.department,
         brand: asset.brand,
         model: asset.model,
-        description: asset.description || '',
+        description: '',
+        descriptionParts: [],
         count: 0,     // physical count
         assets: []
       };
+    }
+    const description = String(asset.description || '').trim();
+    if (description && !modelGroups[modelKey].descriptionParts.includes(description)) {
+      modelGroups[modelKey].descriptionParts.push(description);
+      modelGroups[modelKey].description = modelGroups[modelKey].descriptionParts.sort().join(' / ');
     }
     modelGroups[modelKey].count += asset.isBulk ? Number(asset.quantity || 1) : 1;
     modelGroups[modelKey].assets.push(asset);
@@ -12154,40 +12151,20 @@ function filterAvailableModels(searchTerm) {
   const adjustedAvailFor = (m) => {
     const list = window.currentEditAvailabilityList || [];
 
-    // 1) try exact 4-tuple match (dept, brand, model, desc)
-    let entry = list.find(e =>
-      e.department === m.department &&
-      e.brand === m.brand &&
-      e.model === m.model &&
-      (e.description || '') === (m.description || '')
-    );
-    if (entry) {
-      return {
-        adjusted: (entry.available ?? 0),     // per-description display value from backend
-        physical: (entry.physical ?? m.count), // per-description physical from backend
-        overlap: (entry.overlappingDemand ?? 0),
-        usedHere: (entry.usedInThisEvent ?? 0)
-      };
-    }
-
-    // 2) fall back to 3-tuple match (dept, brand, model) ignoring description
-    entry = list.find(e =>
+    const entry = list.find(e =>
       e.department === m.department &&
       e.brand === m.brand &&
       e.model === m.model
     );
     if (entry) {
-      // We must never exceed this card’s own physical count
-      const display = Math.max(0, Math.min(entry.adjustedGlobal ?? entry.available ?? 0, m.count));
       return {
-        adjusted: display,
-        physical: m.count,
+        adjusted: (entry.available ?? 0),
+        physical: (entry.physical ?? m.count),
         overlap: (entry.overlappingDemand ?? 0),
         usedHere: (entry.usedInThisEvent ?? 0)
       };
     }
 
-    // 3) final fallback: show physical only
     return { adjusted: m.count, physical: m.count, overlap: 0, usedHere: 0 };
   };
 
@@ -17262,11 +17239,10 @@ function getAssetIdsByItem(event, item, department) {
     const keyParts = String(item.key || '').split('|');
     if (keyParts.length < 4) return assetIds;
 
-    // makeModelKey format: MG|department|brand|model|description
+    // makeModelKey format: MG|department|brand|model
     const deptCodeFromKey = normalizeDepartmentCode(keyParts[1] || getDepartmentCodeForDoName(department));
     const brand = keyParts[2] || '';
     const model = keyParts[3] || '';
-    const description = keyParts.slice(4).join('|') || '';
 
     const departmentAssets = event.assetsByDepartment[deptCodeFromKey] || [];
     departmentAssets.forEach(asset => {
@@ -17274,7 +17250,7 @@ function getAssetIdsByItem(event, item, department) {
         if (asset.isBulk || String(asset.id).startsWith('[BULK]') || isCustomAssetId(asset.id) || String(asset.id).startsWith('[MODEL]')) return;
         if (asset.status === 'returned') return;
 
-        if (asset.brand === brand && asset.model === model && String(asset.description || '') === String(description || '')) {
+        if (asset.brand === brand && asset.model === model) {
             assetIds.push(asset.id);
         }
     });
