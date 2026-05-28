@@ -2,6 +2,7 @@ import os
 import csv
 import json
 import logging
+import re
 import shutil
 from models import User, InventoryItem, Container, Event, LogEntry, hash_password
 from utils import sanitize_filename, open_csv_robust, clean_csv_cell
@@ -10,6 +11,7 @@ from maintenance_logs import dump_maintenance_logs, load_maintenance_logs
 # Constants
 MAX_LOG_LINES = 1000
 logger = logging.getLogger(__name__)
+EVENT_LOG_EVENT_ID_RE = re.compile(r'\bevent\s+(\d+)\b', re.IGNORECASE)
 
 class DataManager:
     def __init__(self, data_folder):
@@ -113,7 +115,98 @@ class DataManager:
         self.load_containers()
         self.load_events()
         self.load_logs()
+        self.migrate_event_logs_from_system_logs()
         self.load_clients()
+
+    def event_ids_from_log_action(self, action):
+        action_text = str(action or '')
+        action_lower = action_text.lower()
+        if re.match(r'\s*deleted event\s+\d+\b', action_lower):
+            return []
+        if 'due to deletion of event ' in action_lower:
+            return []
+
+        event_ids = []
+        for match in EVENT_LOG_EVENT_ID_RE.finditer(action_text):
+            try:
+                event_id = int(match.group(1))
+            except (TypeError, ValueError):
+                continue
+            if event_id not in event_ids:
+                event_ids.append(event_id)
+        return event_ids
+
+    def event_log_to_dict(self, log):
+        if isinstance(log, LogEntry):
+            timestamp = log.timestamp
+            user = log.user
+            action = log.action
+        elif isinstance(log, dict):
+            timestamp = log.get('timestamp') or log.get('date') or ''
+            user = log.get('user') or ''
+            action = log.get('action') or log.get('description') or ''
+        else:
+            timestamp = ''
+            user = ''
+            action = str(log or '')
+
+        return {
+            'timestamp': str(timestamp or ''),
+            'user': str(user or ''),
+            'action': str(action or '')
+        }
+
+    def normalize_event_logs(self, logs):
+        normalized = []
+        for log in logs or []:
+            record = self.event_log_to_dict(log)
+            if record['timestamp'] or record['user'] or record['action']:
+                normalized.append(record)
+        return normalized
+
+    def append_event_log(self, event, log):
+        record = self.event_log_to_dict(log)
+        logs = self.normalize_event_logs(getattr(event, 'event_logs', []))
+        key = (record['timestamp'], record['user'], record['action'])
+        if key not in {(item['timestamp'], item['user'], item['action']) for item in logs}:
+            logs.append(record)
+        event.event_logs = logs
+        return record
+
+    def migrate_event_logs_from_system_logs(self):
+        if not self.logs or not self.events:
+            return 0
+
+        migrated = 0
+        touched_event_ids = set()
+        system_logs = []
+
+        for log in self.logs:
+            event_ids = [
+                event_id
+                for event_id in self.event_ids_from_log_action(getattr(log, 'action', ''))
+                if event_id in self.events
+            ]
+
+            if not event_ids:
+                system_logs.append(log)
+                continue
+
+            for event_id in event_ids:
+                self.append_event_log(self.events[event_id], log)
+                touched_event_ids.add(event_id)
+            migrated += 1
+
+        if not migrated:
+            return 0
+
+        for event_id in sorted(touched_event_ids):
+            self.save_event(self.events[event_id])
+
+        self.logs = system_logs
+        self.save_logs()
+        logger.info("Migrated %s event-related log entries into %s event file(s).", migrated, len(touched_event_ids))
+        return migrated
 
     def load_users(self):
         self.users = {}
@@ -372,6 +465,14 @@ class DataManager:
                         logger.error("Error parsing 'CustomCollected' in event file %s: %s. Setting to empty list.", filename, e)
                         custom_collected = []
 
+                event_logs = []
+                if event_data.get('EventLogs'):
+                    try:
+                        event_logs = self.normalize_event_logs(json.loads(event_data['EventLogs']))
+                    except json.JSONDecodeError as e:
+                        logger.error("Error parsing 'EventLogs' in event file %s: %s. Setting to empty list.", filename, e)
+                        event_logs = []
+
                 state = event_data.get('State', 'Added')
                 tag = event_data.get('Tag', 'events')
                 force_state_override = event_data.get('ForceStateOverride', 'False') == 'True'
@@ -390,7 +491,8 @@ class DataManager:
                     tag=tag,
                     force_state_override=force_state_override,
                     custom_collected=custom_collected,
-                    notes=raw_notes
+                    notes=raw_notes,
+                    event_logs=event_logs
                 )
 
                 event.actually_prepared = actually_prepared
@@ -399,6 +501,7 @@ class DataManager:
                 event.force_state_override = force_state_override
                 event.custom_collected = custom_collected
                 event.notes = raw_notes
+                event.event_logs = event_logs
 
                 self.events[event_id] = event
                 self.event_file_map[event_id] = filename
@@ -421,6 +524,7 @@ class DataManager:
         force_state_override = getattr(event, 'force_state_override', False)
         custom_collected = getattr(event, 'custom_collected', [])
         notes = getattr(event, 'notes', '')
+        event_logs = self.normalize_event_logs(getattr(event, 'event_logs', []))
         
         # VALIDATION: Don't save if critical data is missing
         if not hasattr(event, 'prepared_items'):
@@ -441,6 +545,7 @@ class DataManager:
             actually_prepared_json = json.dumps(actually_prepared)
             extra_assets_json = json.dumps(extra_assets)
             custom_collected_json = json.dumps(custom_collected)
+            event_logs_json = json.dumps(event_logs)
         except (TypeError, ValueError) as e:
             logger.error("Cannot serialize event %s data to JSON: %s", event.event_id, e)
             logger.error("prepared_items: %s", event.prepared_items)
@@ -448,7 +553,7 @@ class DataManager:
             return
         
         with open(filepath, 'w', newline='', encoding='utf-8') as f:
-            fieldnames = ['EventID', 'Name', 'StartDate', 'EndDate', 'AssetModels', 'PreparedItems', 'ReturnedItems', 'State', 'ActuallyPrepared', 'ExtraAssets', 'CustomCollected', 'Tag', 'ForceStateOverride', 'Notes']
+            fieldnames = ['EventID', 'Name', 'StartDate', 'EndDate', 'AssetModels', 'PreparedItems', 'ReturnedItems', 'State', 'ActuallyPrepared', 'ExtraAssets', 'CustomCollected', 'Tag', 'ForceStateOverride', 'EventLogs', 'Notes']
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
             
@@ -466,6 +571,7 @@ class DataManager:
                 'CustomCollected': custom_collected_json,
                 'Tag': tag,
                 'ForceStateOverride': str(force_state_override),
+                'EventLogs': event_logs_json,
                 'Notes': notes
             }
             

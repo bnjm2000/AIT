@@ -87,7 +87,7 @@ class Container:
         self.asset_ids = asset_ids  # List of asset IDs
 
 class Event:
-    def __init__(self, event_id, name, start_date, end_date, asset_models, prepared_items=None, state='Added', returned_items=None, actually_prepared=None, extra_assets=None, tag='event', force_state_override=False, custom_collected=None, notes=''):
+    def __init__(self, event_id, name, start_date, end_date, asset_models, prepared_items=None, state='Added', returned_items=None, actually_prepared=None, extra_assets=None, tag='event', force_state_override=False, custom_collected=None, notes='', event_logs=None):
         self.event_id = event_id
         self.name = name
         self.start_date = start_date
@@ -104,6 +104,7 @@ class Event:
         self.tag = tag
         self.force_state_override = force_state_override  # Flag to track if state was manually forced
         self.notes = notes or ''
+        self.event_logs = event_logs if event_logs is not None else []
 
 class LogEntry:
     def __init__(self, timestamp, user, action):

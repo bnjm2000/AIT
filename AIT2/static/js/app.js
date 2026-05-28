@@ -2842,7 +2842,12 @@ function renderDepartmentManager() {
   const container = document.getElementById('department-admin-table');
   if (!container) return;
 
-  const list = sortedDepartmentList();
+  const list = sortedDepartmentList().filter((dept) => {
+    const code = normalizeDepartmentCode(dept.code);
+    if (code === 'LOAN' || code === 'MISC') return false;
+    if (code === 'UN' && Number(dept.assetCount || 0) === 0) return false;
+    return true;
+  });
   if (list.length === 0) {
     container.innerHTML = '<p style="color:#666;text-align:center;padding:20px;">No departments found.</p>';
     return;
@@ -6218,9 +6223,9 @@ async function loadLogs() {
     logs.forEach((log) => {
       tableHTML += `
                 <tr>
-                    <td>${log.timestamp}</td>
-                    <td>${log.user}</td>
-                    <td>${log.action}</td>
+                    <td>${escapeHtml(log.timestamp)}</td>
+                    <td>${escapeHtml(log.user)}</td>
+                    <td>${escapeHtml(log.action)}</td>
                 </tr>
             `;
     });
@@ -9680,7 +9685,7 @@ async function viewEvent(eventId) {
     eventDetailsContent.handleModelToggle = handleModelToggle;
     eventDetailsContent.addEventListener('click', handleModelToggle);
 
-    const logHTML = await createEventLogViewer(event.id, event.name);
+    const logHTML = await createEventLogViewer(event.id, event.name, event.eventLogs || []);
     eventDetailsContent.innerHTML += logHTML;
     
     openModal("eventDetailsModal");
@@ -10753,31 +10758,18 @@ function toggleEventLogSection(sectionId) {
   }
 }
 
-async function createEventLogViewer(eventId, eventName) {
+async function createEventLogViewer(eventId, eventName, eventLogs = []) {
   try {
-    // Use your API to get logs
-    const response = await apiCall('/api/logs');
-    const logs = response.data || [];
-    
-    // Filter logs for this event
+    const logs = Array.isArray(eventLogs) ? eventLogs : [];
     const relevantLogs = logs
-      .filter(log => {
-        if (!log.action) return false;
-        const action = log.action.toLowerCase();
-        const eventRef = `event ${eventId}`;
-        return action.includes(eventRef) && 
-               (action.includes('assigned') || 
-                action.includes('prepared') || 
-                action.includes('returned') || 
-                action.includes('unprepared'));
-      })
+      .filter(log => log && log.action)
       .map(log => ({
-        date: log.timestamp,
-        user: log.user,
-        action: log.action,
-        timestamp: new Date(log.timestamp).getTime()
+        date: log.timestamp || log.date || '',
+        user: log.user || 'system',
+        action: log.action || '',
+        sortValue: String(log.timestamp || log.date || '')
       }))
-      .sort((a, b) => b.timestamp - a.timestamp);
+      .sort((a, b) => b.sortValue.localeCompare(a.sortValue));
 
     // Helper functions
     const getActionIcon = (actionType) => {
@@ -10802,10 +10794,10 @@ async function createEventLogViewer(eventId, eventName) {
 
     const getActionType = (action) => {
       const actionLower = action.toLowerCase();
-      if (actionLower.includes('prepared')) return 'prepared';
+      if (actionLower.includes('unprepared')) return 'unprepared';
       if (actionLower.includes('returned')) return 'returned';
       if (actionLower.includes('assigned')) return 'assigned';
-      if (actionLower.includes('unprepared')) return 'unprepared';
+      if (actionLower.includes('prepared')) return 'prepared';
       return 'other';
     };
 
@@ -10841,7 +10833,7 @@ async function createEventLogViewer(eventId, eventName) {
         <div style="display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none;" onclick="toggleEventLogSection('${logSectionId}')">
           <h3 style="margin: 0; color: #333; font-size: 18px; display: flex; align-items: center; gap: 10px;">
             📋 Event Activity Log
-            <span style="font-size: 14px; color: #666; font-weight: normal;">(${eventName})</span>
+            <span style="font-size: 14px; color: #666; font-weight: normal;">(${escapeHtml(eventName)})</span>
             ${relevantLogs.length > 0 ? `<span style="background: #007bff; color: white; border-radius: 12px; padding: 2px 8px; font-size: 12px; font-weight: bold;">${relevantLogs.length}</span>` : ''}
           </h3>
           <span id="${logSectionId}-toggle" style="font-size: 18px; color: #666; font-weight: bold;">▶</span>
@@ -10853,7 +10845,7 @@ async function createEventLogViewer(eventId, eventName) {
       logHTML += `
         <div style="text-align: center; padding: 40px 0; color: #666;">
           <div style="font-size: 48px; margin-bottom: 10px;">📋</div>
-          <p>No asset activity recorded for this event yet.</p>
+          <p>No activity recorded for this event yet.</p>
         </div>
       `;
     } else {
@@ -10862,25 +10854,25 @@ async function createEventLogViewer(eventId, eventName) {
       relevantLogs.forEach((log, index) => {
         const actionType = getActionType(log.action);
         const assetId = extractAssetId(log.action);
-        
+
         logHTML += `
           <div style="padding: 15px; border-radius: 8px; border-left: 4px solid; margin-bottom: 12px; ${getActionColor(actionType)}">
             <div style="display: flex; align-items: start; gap: 12px;">
               <span style="font-size: 18px; line-height: 1;">${getActionIcon(actionType)}</span>
               <div style="flex: 1;">
                 <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
-                  <span style="font-weight: bold; color: #333;">${log.user}</span>
+                  <span style="font-weight: bold; color: #333;">${escapeHtml(log.user)}</span>
                   <span style="color: #999; font-size: 12px;">•</span>
-                  <span style="color: #666; font-size: 13px;">${log.date}</span>
+                  <span style="color: #666; font-size: 13px;">${escapeHtml(log.date)}</span>
                 </div>
                 ${assetId ? `
                   <div style="margin: 6px 0;">
                     <span style="font-family: 'Courier New', monospace; background: #f8f9fa; padding: 3px 6px; border-radius: 3px; font-size: 12px; color: #495057;">
-                      ${assetId}
+                      ${escapeHtml(assetId)}
                     </span>
                   </div>
                 ` : ''}
-                <p style="margin: 6px 0 0 0; color: #555; font-size: 13px; line-height: 1.4;">${log.action}</p>
+                <p style="margin: 6px 0 0 0; color: #555; font-size: 13px; line-height: 1.4;">${escapeHtml(log.action)}</p>
               </div>
             </div>
           </div>
@@ -17274,7 +17266,7 @@ function exportLogs() {
   const encodedUri = encodeURI(csvContent);
   const link = document.createElement("a");
   link.setAttribute("href", encodedUri);
-  link.setAttribute("download", "activity_logs.csv");
+  link.setAttribute("download", "system_logs.csv");
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);

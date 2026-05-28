@@ -2397,16 +2397,33 @@ def _maintenance_log_permission(asset, log_index, allow_admin=True):
     return True, ''
 
 def log_action(action):
-    """Helper function to log actions"""
+    """Helper function to log actions."""
     try:
         log_entry = LogEntry(
             timestamp=datetime.now().strftime("%Y/%m/%d %H:%M:%S"),
             user=session.get('user', 'system'),
             action=action
         )
-        data_manager.logs.append(log_entry)
-        data_manager.save_logs()
-        mark_realtime_change('activity-log', {'action': action})
+
+        event_ids = []
+        if data_manager and hasattr(data_manager, 'event_ids_from_log_action'):
+            event_ids = [
+                event_id
+                for event_id in data_manager.event_ids_from_log_action(action)
+                if event_id in data_manager.events
+            ]
+
+        if event_ids:
+            for event_id in event_ids:
+                event = data_manager.events[event_id]
+                data_manager.append_event_log(event, log_entry)
+                data_manager.save_event(event)
+            mark_realtime_change('event-log', {'eventIds': event_ids, 'action': action})
+        else:
+            data_manager.logs.append(log_entry)
+            data_manager.save_logs()
+            mark_realtime_change('activity-log', {'action': action})
+
         logger.info(f"Action logged: {action}")
     except Exception as e:
         logger.error(f"Failed to log action: {e}")
@@ -4956,7 +4973,8 @@ def get_event(event_id):
             'forceStateOverride': getattr(event, 'force_state_override', False),
             'notes': getattr(event, 'notes', '') or '',
             'files': _event_files_for_response(event.event_id),
-            'canDeleteFiles': _current_user_is_admin()
+            'canDeleteFiles': _current_user_is_admin(),
+            'eventLogs': data_manager.normalize_event_logs(getattr(event, 'event_logs', []))
         }
 
         return jsonify({'success': True, 'data': event_data})
@@ -5397,7 +5415,6 @@ def delete_event(event_id):
                     old_location = asset.current_location
                     asset.current_location = asset.default_location or ""
                     assets_reset.append(f"{asset_id} (from '{old_location}' to '{asset.current_location or 'Store'}')")
-                    log_action(f"Reset location for asset {asset_id} due to deletion of Event {event_id}")
 
         # Reset assets from actually_prepared (in case there are any not in prepared_items)
         if hasattr(event, 'actually_prepared'):
@@ -5408,7 +5425,6 @@ def delete_event(event_id):
                         old_location = asset.current_location
                         asset.current_location = asset.default_location or ""
                         assets_reset.append(f"{asset_id} (from '{old_location}' to '{asset.current_location or 'Store'}')")
-                        log_action(f"Reset location for asset {asset_id} due to deletion of Event {event_id}")
 
         # Save inventory changes
         data_manager.save_inventory()
@@ -5417,34 +5433,15 @@ def delete_event(event_id):
         del data_manager.events[event_id]
         data_manager.delete_event_file(event_id)
 
-        # Delete related logs
-        logs_deleted = 0
-        logs_to_keep = []
-        
-        for log in data_manager.logs:
-            # Check if this log is related to the deleted event
-            if (f"event {event_id}" in log.action.lower() or 
-                f"Event {event_id}" in log.action or
-                f"to event {event_id}" in log.action.lower() or
-                f"from event {event_id}" in log.action.lower()):
-                logs_deleted += 1
-            else:
-                logs_to_keep.append(log)
-        
-        # Update the logs list
-        data_manager.logs = logs_to_keep
-        
-        # Save the updated logs
-        data_manager.save_logs()
-
         # Invalidate cache
         invalidate_cache()
 
-        # Log the deletion with details of reset assets and deleted logs
+        # Log the deletion with details of reset assets. Event-specific logs were
+        # stored inside the deleted event file, so they are removed with the event.
         if assets_reset:
-            log_action(f"Deleted event {event_id}: {event_name} via web interface. Reset {len(assets_reset)} asset locations: {', '.join(assets_reset[:5])}{'...' if len(assets_reset) > 5 else ''}. Removed {logs_deleted} related log entries.")
+            log_action(f"Deleted event {event_id}: {event_name} via web interface. Reset {len(assets_reset)} asset locations: {', '.join(assets_reset[:5])}{'...' if len(assets_reset) > 5 else ''}.")
         else:
-            log_action(f"Deleted event {event_id}: {event_name} via web interface. No asset locations to reset. Removed {logs_deleted} related log entries.")
+            log_action(f"Deleted event {event_id}: {event_name} via web interface. No asset locations to reset.")
 
         return jsonify({'success': True, 'message': 'Event deleted successfully', 'assetsReset': len(assets_reset)})
     except Exception as e:
@@ -9286,9 +9283,8 @@ def container_resource(container_id):
 @app.route('/api/logs', methods=['GET'])
 @require_auth
 def get_logs():
-    """Get activity logs"""
+    """Get system activity logs."""
     try:
-        # Get all logs (not just last 100) for event activity tracking
         logs_data = []
         for log in data_manager.logs:
             logs_data.append({

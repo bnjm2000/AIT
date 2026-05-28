@@ -6,7 +6,7 @@ from urllib.parse import quote
 
 import app as app_module
 from data_manager import DataManager
-from models import Event, User, hash_password
+from models import Event, LogEntry, User, hash_password
 
 
 class EventNotesFilesTests(unittest.TestCase):
@@ -68,6 +68,29 @@ class EventNotesFilesTests(unittest.TestCase):
             self.data_manager.events[1].notes,
             'Crew call: 10am\nBring backup adapters.'
         )
+        self.assertEqual(self.data_manager.logs, [])
+        event_logs = self.data_manager.events[1].event_logs
+        self.assertEqual(len(event_logs), 1)
+        self.assertIn('Updated notes for event 1', event_logs[0]['action'])
+
+        response = self.client.get('/api/events/1')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()['data']['eventLogs'][0]['action'], event_logs[0]['action'])
+
+    def test_existing_event_logs_migrate_out_of_system_log(self):
+        self.data_manager.logs = [
+            LogEntry('2026/05/28 10:00:00', 'admin', 'Prepared asset A#01 for event 1'),
+            LogEntry('2026/05/28 10:01:00', 'admin', 'User admin logged in via web interface'),
+        ]
+        self.data_manager.save_logs()
+
+        self.data_manager.load_all_data()
+
+        self.assertEqual(len(self.data_manager.logs), 1)
+        self.assertEqual(self.data_manager.logs[0].action, 'User admin logged in via web interface')
+        event_logs = self.data_manager.events[1].event_logs
+        self.assertEqual(len(event_logs), 1)
+        self.assertEqual(event_logs[0]['action'], 'Prepared asset A#01 for event 1')
 
     def test_users_can_upload_files_but_only_admins_can_delete_them(self):
         self.login_as('normal')
