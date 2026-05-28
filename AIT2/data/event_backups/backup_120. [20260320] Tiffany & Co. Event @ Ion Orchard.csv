@@ -1,2 +1,2 @@
-EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,Tag,ForceStateOverride
-120,Tiffany & Co. Event @ Ion Orchard,20260320,20260324,[],"[""[MODEL]VX|Samsung|UN55TU8000F|2|55\"" Crystal UHD 4K Smart TV (2020)"", ""SAMSUNG55#03"", ""SAMSUNG55#04""]",[],Ongoing,"[""SAMSUNG55#03"", ""SAMSUNG55#04""]",[],events,False
+EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,CustomCollected,Tag,ForceStateOverride,Notes
+120,Tiffany & Co. Event @ Ion Orchard,20260320,20260324,[],"[""[MODEL]VX|Samsung|UN55TU8000F|2|55\"" Crystal UHD 4K Smart TV (2020)"", ""SAMSUNG55#03"", ""SAMSUNG55#04""]","[""SAMSUNG55#03"", ""SAMSUNG55#04""]",Returning,[],[],[],events,False,

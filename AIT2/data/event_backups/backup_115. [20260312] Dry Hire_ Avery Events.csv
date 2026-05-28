@@ -1,2 +1,2 @@
-EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,Tag,ForceStateOverride
-115,Dry Hire: Avery Events,20260312,20260312,[],"[""[MODEL]VX|Accsoon|Cineview Master 4K RX|2|Wireless SDI/HDMI Receiver"", ""MASTER4KRX#01"", ""MASTER4KRX#03""]",[],Overdue,"[""MASTER4KRX#01"", ""MASTER4KRX#03""]",[],dry hire,False
+EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,CustomCollected,Tag,ForceStateOverride,Notes
+115,Dry Hire: Avery Events,20260312,20260312,[],"[""[MODEL]VX|Accsoon|Cineview Master 4K RX|2|Wireless SDI/HDMI Receiver"", ""MASTER4KRX#01"", ""MASTER4KRX#03""]","[""MASTER4KRX#01"", ""MASTER4KRX#03""]",Returning,[],[],[],dry hire,False,

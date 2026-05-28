@@ -1,307 +1,3 @@
-2026/05/15 22:29:01,bnjm2000,Assigned specific asset 5XT#03 to event 139
-2026/05/15 22:29:07,bnjm2000,Completely removed asset 5XT#03 from event 139
-2026/05/15 23:44:07,bnjm2000,Set asset DXR12#04 status to Degraded
-2026/05/15 23:44:07,bnjm2000,Maintenance logged for asset DXR12#04: Fan not working (130: Dry Hire: Avery Events)
-2026/05/15 23:44:59,bnjm2000,"Updated maintenance log for asset DXR12#04: 'Fan not working (130: Dry Hire: Avery Events)' -> 'Fan not working, will overheat and go into Protect Mode (130: Dry Hire: Avery Events)' (also: Marked Degraded) (edited by bnjm2000)"
-2026/05/16 00:04:39,bnjm2000,Deleted user user
-2026/05/16 14:32:58,bnjm2000,Created department ELEC (Electrical)
-2026/05/16 14:33:20,bnjm2000,Updated department ELEC -> ELEC; name='Electrical' -> 'Electrical'; assetsUpdated=0; eventsUpdated=0
-2026/05/16 14:33:40,bnjm2000,Updated asset 32ADB#01; applyTo=single; updatedAssets=1; eventsUpdated=3; containersUpdated=0
-2026/05/16 14:33:46,bnjm2000,Updated asset 32ADB#02; applyTo=single; updatedAssets=1; eventsUpdated=2; containersUpdated=0
-2026/05/16 14:33:51,bnjm2000,Updated asset 63ADB#01; applyTo=single; updatedAssets=1; eventsUpdated=3; containersUpdated=0
-2026/05/16 14:33:57,bnjm2000,Updated asset 63ADB#02; applyTo=single; updatedAssets=1; eventsUpdated=1; containersUpdated=0
-2026/05/16 14:35:32,bnjm2000,Created event 140: Dry Hire: Avery Events via web interface
-2026/05/16 14:35:56,bnjm2000,"Added MISC custom asset '8-core XLR - 20m' (2x, dept AX) to event 140"
-2026/05/16 14:36:21,bnjm2000,"Added MISC custom asset '300mm Base plate' (6x, dept STG) to event 140"
-2026/05/16 14:36:29,bnjm2000,Prepared custom item 2x 8-core XLR - 20m for event 140
-2026/05/16 14:36:30,bnjm2000,Prepared custom item 6x 300mm Base plate for event 140
-2026/05/16 20:36:24,bnjm2000,Deleted event 141: Wave to Earth Busking Event @ SMU Campus Green via web interface. No asset locations to reset. Removed 6 related log entries.
-2026/05/16 20:42:29,bnjm2000,Updated asset BULK-0016; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
-2026/05/16 20:42:33,bnjm2000,Updated asset BULK-0017; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
-2026/05/16 20:43:06,bnjm2000,Updated asset BULK-0016; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
-2026/05/16 20:43:09,bnjm2000,Updated asset BULK-0017; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
-2026/05/16 20:44:28,bnjm2000,Added 2x Global Truss F34 Truss - 3m (Silver) model to event 131 (total: 3)
-2026/05/16 20:44:36,bnjm2000,Added 2x Global Truss F34 Corner Block (Silver) model to event 131 (total: 2)
-2026/05/16 20:44:54,bnjm2000,Removed Custom 600mm Base plate (carpeted) model from event 131
-2026/05/16 20:44:59,bnjm2000,Added 3x Custom 605mm Base plate (carpeted) model to event 131 (total: 3)
-2026/05/16 20:46:33,bnjm2000,Created event 141:  Wave to Earth Busking Event @ SMU Campus Green via web interface
-2026/05/16 20:46:41,bnjm2000,Added 3x Shure SM57 model to event 141 (total: 3)
-2026/05/16 20:46:46,bnjm2000,Added 1x Sennheiser DAD(UHF) model to event 141 (total: 1)
-2026/05/16 20:46:47,bnjm2000,Added 3x Sennheiser SEK(UHF) model to event 141 (total: 3)
-2026/05/16 20:46:48,bnjm2000,Added 1x Sennheiser Spectera Base Station model to event 141 (total: 1)
-2026/05/16 20:47:02,bnjm2000,"Added MISC custom asset 'Cat6 Drum - 50m' (2x, dept AX) to event 141"
-2026/05/16 22:36:28,bnjm2000,"Updated maintenance log for asset CL5#01: 'Replaced DSP PCB ($1011)
-Service Fee ($FOC)' -> 'Replaced DSP PCB ($1011)
-Service Fee ($FOC)' (also: Location: Store, Marked OK) (edited by bnjm2000)"
-2026/05/16 22:36:40,bnjm2000,"Updated maintenance log for asset CL5#01: 'Replaced DSP PCB ($1011)
-Service Fee ($FOC)' -> 'Replaced DSP PCB ($1011)
-Service Fee ($FOC)' (also: Location: Store, Marked OK) (edited by bnjm2000)"
-2026/05/16 22:44:32,bnjm2000,"Updated maintenance log for asset CL5#01: 'Replaced DSP PCB ($1011)
-Service Fee ($FOC)' -> 'Replaced DSP PCB ($1011)
-Service Fee ($FOC)' (also: Location: Store, Cleared OOC) (edited by bnjm2000)"
-2026/05/16 22:44:49,bnjm2000,"Updated maintenance log for asset CL5#01: 'Replaced Dante Module ($631)
-Replaced DNTU PCB ($672)
-Replaced FFC Cable ($10)
-Service fee ($FOC)' -> 'Replaced Dante Module ($631)
-Replaced DNTU PCB ($672)
-Replaced FFC Cable ($10)
-Service fee ($FOC)' (also: Location: Store) (edited by bnjm2000)"
-2026/05/16 22:45:26,bnjm2000,"Updated maintenance log for asset CL5#01: 'Replaced faulty faders: CH 1-8, 9-16, Centralogic CH 7,8 ($684) Service fee ($369.73)' -> 'Replaced faulty faders: CH 1-8, 9-16, Centralogic CH 7,8 ($684) Service fee ($369.73)' (also: Location: Store) (edited by bnjm2000)"
-2026/05/16 22:45:42,bnjm2000,"Updated maintenance log for asset CL5#01: 'Replaced Dante Module ($631)
-Replaced DNTU PCB ($672)
-Replaced FFC Cable ($10)
-Service fee ($FOC)' -> 'Replaced Dante Module ($631)
-Replaced DNTU PCB ($672)
-Replaced FFC Cable ($10)
-Service fee ($FOC)' (also: Location: Store) (edited by bnjm2000)"
-2026/05/16 22:45:45,bnjm2000,"Updated maintenance log for asset CL5#01: 'Replaced DSP PCB ($1011)
-Service Fee ($FOC)' -> 'Replaced DSP PCB ($1011)
-Service Fee ($FOC)' (also: Location: Store, Cleared OOC) (edited by bnjm2000)"
-2026/05/16 22:45:57,bnjm2000,"Updated maintenance log for asset CL5#01: 'Replaced faulty faders: CH 1-8, 9-16, Centralogic CH 7,8 ($684) Service fee ($369.73)' -> 'Replaced faulty faders: CH 1-8, 9-16, Centralogic CH 7,8 ($684) Service fee ($369.73)' (also: Location: Store) (edited by bnjm2000)"
-2026/05/16 22:46:10,bnjm2000,"Updated maintenance log for asset CL5#01: 'Sent into Yamaha for fader servicing, sometimes get stuck' -> 'Sent into Yamaha for fader servicing, sometimes get stuck' (also: Location: Yamaha Service Center, Marked OOC) (edited by bnjm2000)"
-2026/05/16 22:46:14,bnjm2000,"Updated maintenance log for asset CL5#01: 'Replaced faulty faders: CH 1-8, 9-16, Centralogic CH 7,8 ($684) Service fee ($369.73)' -> 'Replaced faulty faders: CH 1-8, 9-16, Centralogic CH 7,8 ($684) Service fee ($369.73)' (also: Location: Store) (edited by bnjm2000)"
-2026/05/16 22:50:12,bnjm2000,"Updated maintenance log for asset CL5#01: 'Replaced faulty faders: CH 1-8, 9-16, Centralogic CH 7,8 ($684) Service fee ($369.73)' -> 'Replaced faulty faders: CH 1-8, 9-16, Centralogic CH 7,8 ($684) Service fee ($369.73)' (also: Location: Store) (edited by bnjm2000)"
-2026/05/16 22:50:15,bnjm2000,"Updated maintenance log for asset CL5#01: 'Replaced faulty faders: CH 1-8, 9-16, Centralogic CH 7,8 ($684) Service fee ($369.73)' -> 'Replaced faulty faders: CH 1-8, 9-16, Centralogic CH 7,8 ($684) Service fee ($369.73)' (also: Location: Store, Cleared OOC) (edited by bnjm2000)"
-2026/05/16 22:50:20,bnjm2000,"Updated maintenance log for asset CL5#01: 'Replaced Dante Module ($631)
-Replaced DNTU PCB ($672)
-Replaced FFC Cable ($10)
-Service fee ($FOC)' -> 'Replaced Dante Module ($631)
-Replaced DNTU PCB ($672)
-Replaced FFC Cable ($10)
-Service fee ($FOC)' (also: Location: Store, Cleared OOC) (edited by bnjm2000)"
-2026/05/16 22:50:36,bnjm2000,"Updated maintenance log for asset CL5#01: 'Sent into Yamaha for fader servicing, sometimes get stuck' -> 'Sent into Yamaha for fader servicing, sometimes get stuck' (also: Location: Yamaha Service Center, Marked Degraded) (edited by bnjm2000)"
-2026/05/16 22:50:40,bnjm2000,"Updated maintenance log for asset CL5#01: 'Replaced faulty faders: CH 1-8, 9-16, Centralogic CH 7,8 ($684) Service fee ($369.73)' -> 'Replaced faulty faders: CH 1-8, 9-16, Centralogic CH 7,8 ($684) Service fee ($369.73)' (also: Location: Store, Cleared Degraded) (edited by bnjm2000)"
-2026/05/16 22:51:51,bnjm2000,"Updated maintenance log for asset DXR12#01: 'Replace fan - $18
-Technical charges - $122.94' -> 'Replace fan - $18
-Technical charges - $122.94' (also: Location: Store, Cleared OOC) (edited by bnjm2000)"
-2026/05/16 22:52:00,bnjm2000,"Updated maintenance log for asset DXR12#01: 'Collected from Yamaha, replaced woofer - $185' -> 'Collected from Yamaha, replaced woofer - $185' (also: Location: Store, Cleared OOC) (edited by bnjm2000)"
-2026/05/16 22:52:40,bnjm2000,Updated maintenance log for asset MT-90A#01: '2024/11/20 - Send to MiPro for testing' -> '2024/11/20 - Send to MiPro for testing' (edited by bnjm2000)
-2026/05/16 22:53:46,bnjm2000,Updated maintenance log for asset MT-90A#01: '2024/11/20 - Send to MiPro for testing' -> '2024/11/20 - Send to MiPro for testing' (edited by bnjm2000)
-2026/05/16 22:53:53,bnjm2000,Updated maintenance log for asset MT-90A#02: '2024/11/20 - Send to MiPro for testing' -> '2024/11/20 - Send to MiPro for testing' (edited by bnjm2000)
-2026/05/16 22:54:03,bnjm2000,Updated maintenance log for asset MT-90A#03: '2024/11/20 - Send to MiPro for testing' -> '2024/11/20 - Send to MiPro for testing' (edited by bnjm2000)
-2026/05/16 22:54:31,bnjm2000,Updated maintenance log for asset MT-90A#04: '2024/11/20 - Send to MiPro for testing' -> '2024/11/20 - Send to MiPro for testing' (edited by bnjm2000)
-2026/05/16 22:57:58,bnjm2000,"Updated maintenance log for asset MT-90A#04: 'Device keeps restarting, suspect PSU faulty (Wedding of Kenneth and Wong Mei Yin)' -> 'Device keeps restarting, suspect PSU faulty (Wedding of Kenneth and Wong Mei Yin)' (also: Marked OOC) (edited by bnjm2000)"
-2026/05/16 22:58:07,bnjm2000,"Updated maintenance log for asset MT-90A#04: 'Collected back from MiPro' -> 'Collected back from MiPro' (also: Location: Store, Cleared OOC) (edited by bnjm2000)"
-2026/05/16 22:58:17,bnjm2000,"Updated maintenance log for asset MT-90A#04: 'Collected back from MiPro' -> 'Collected back from MiPro, PSU replaced' (also: Location: Store, Cleared OOC) (edited by bnjm2000)"
-2026/05/16 22:58:35,bnjm2000,Updated maintenance log for asset MT-90A#03: 'changed transmitter to same type (Old S/N: 809264158A)' -> 'changed transmitter to same type (Old S/N: 809264158A)' (edited by bnjm2000)
-2026/05/16 22:59:14,bnjm2000,Updated asset MT-90A#03; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
-2026/05/16 22:59:23,bnjm2000,Updated maintenance log for asset MT-90A#03: 'changed transmitter to same type (Old S/N: 809264158A)' -> 'changed transmitter to same type (Old S/N: 809264158A)' (also: Serial: 858290899A) (edited by bnjm2000)
-2026/05/16 22:59:49,bnjm2000,Updated maintenance log for asset MT-90A#03: 'changed transmitter to same type (Old S/N: 809264158A)' -> 'changed transmitter to same type (Old S/N: 809264158A)' (also: Serial: 858290899A) (edited by bnjm2000)
-2026/05/16 22:59:54,bnjm2000,Updated maintenance log for asset MT-90A#03: 'changed transmitter to same type (Old S/N: 809264158A)' -> 'changed transmitter to same type (Old S/N: 809264158A)' (also: Serial: 858290899A) (edited by bnjm2000)
-2026/05/16 23:04:43,bnjm2000,"Updated maintenance log for asset DXR12#01: 'dropped from ledge, distorting (Siong Leng Musical Association @ Thian Hock Keng Temple)' -> 'dropped from ledge, distorting (Siong Leng Musical Association @ Thian Hock Keng Temple)' (also: Marked OOC) (edited by bnjm2000)"
-2026/05/16 23:04:48,bnjm2000,"Updated maintenance log for asset DXR12#01: 'Sent back to Yamaha for servicing as woofer was still distorting.' -> 'Sent back to Yamaha for servicing as woofer was still distorting.' (also: Location: Yamaha Service Center, Marked OOC) (edited by bnjm2000)"
-2026/05/16 23:04:58,bnjm2000,"Updated maintenance log for asset CL5#01: 'Sent into Yamaha for fader servicing, sometimes get stuck' -> 'Sent into Yamaha for fader servicing, sometimes get stuck' (also: Location: Yamaha Service Center, Marked Degraded) (edited by bnjm2000)"
-2026/05/16 23:05:02,bnjm2000,Updated maintenance log for asset CL5#01: 'Unable to connect to dante network (Dante Module Error) (Wedding of Benjamin and Rachel @ Ritz Garden Pavilion)' -> 'Unable to connect to dante network (Dante Module Error) (Wedding of Benjamin and Rachel @ Ritz Garden Pavilion)' (also: Marked OOC) (edited by bnjm2000)
-2026/05/16 23:05:07,bnjm2000,"Updated maintenance log for asset CL5#01: 'Dante clock suddenly unlocked and could not lock back, phantom noise on both inputs and outputs
-(Wedding of Aim and Singhis @ TCP)' -> 'Dante clock suddenly unlocked and could not lock back, phantom noise on both inputs and outputs
-(Wedding of Aim and Singhis @ TCP)' (also: Location: Yamaha Service Center, Marked OOC) (edited by bnjm2000)"
-2026/05/16 23:14:28,bnjm2000,Updated maintenance log for asset SBS#01: 'Updated to v1.2.6' -> 'Updated to v1.2.6' (edited by bnjm2000)
-2026/05/16 23:14:32,bnjm2000,Updated maintenance log for asset SBS#01: 'Updated to v1.3.0' -> 'Updated to v1.3.0' (edited by bnjm2000)
-2026/05/16 23:14:47,bnjm2000,Updated maintenance log for asset IPAD#02: 'Updated to iPadOS 26.4.1' -> 'Updated to iPadOS 26.4.1' (edited by bnjm2000)
-2026/05/16 23:14:53,bnjm2000,Updated maintenance log for asset IPAD#03: 'Updated to iPadOS 26.4.1' -> 'Updated to iPadOS 26.4.1' (edited by bnjm2000)
-2026/05/16 23:15:01,bnjm2000,Updated maintenance log for asset IPAD#03: 'Found without 3.5mm adapter. Replaced (110: Louis Vuitton Spring Summer Trunk Show 2026 @ Japanese Garden)' -> 'Found without 3.5mm adapter. Replaced (110: Louis Vuitton Spring Summer Trunk Show 2026 @ Japanese Garden)' (edited by bnjm2000)
-2026/05/16 23:29:17,bnjm2000,Updated maintenance log for asset PB#31: 'Cell 4 overvolt' -> 'Cell 4 overvolt' (edited by bnjm2000)
-2026/05/16 23:30:23,bnjm2000,"Maintenance logged for asset PB#31: Replaced PB15 Battery Pack PB15-Bat
-$52.00 but free (goodwill this time)"
-2026/05/16 23:30:31,bnjm2000,"Updated maintenance log for asset PB#31: 'Replaced PB15 Battery Pack PB15-Bat
-$52.00 but free (goodwill this time)' -> 'Replaced PB15 Battery Pack PB15-Bat
-$52.00 but free (goodwill this time)' (edited by bnjm2000)"
-2026/05/16 23:44:05,bnjm2000,Updated asset DXR12#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
-2026/05/16 23:44:10,bnjm2000,Updated asset DXR12#04; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
-2026/05/17 00:27:09,bnjm2000,"Updated maintenance log for asset ULXD2#11: 'Replace battery pin $5
-Replace rubber slot $5
-Service charge $60' -> 'Replace battery pin $5
-Replace rubber slot $5
-Service charge $60' (also: Cleared OOC) (edited by bnjm2000)"
-2026/05/17 00:27:23,bnjm2000,"Updated maintenance log for asset ULXD2#11: 'Collected back from E&E, replaced battery contact pin and bumper' -> 'Collected back from E&E.' (also: Location: Store) (edited by bnjm2000)"
-2026/05/17 00:27:59,bnjm2000,Updated maintenance log for asset AD2#02: 'Collected from E&E' -> 'Collected from E&E' (also: Location: Store) (edited by bnjm2000)
-2026/05/17 00:28:05,bnjm2000,Updated maintenance log for asset AD2#02: 'Replaced display bezel $25 Service charge $60' -> 'Replaced display bezel $25 Service charge $60' (also: Location: E&E) (edited by bnjm2000)
-2026/05/17 00:28:10,bnjm2000,"Updated maintenance log for asset AD2#02: 'Collected from E&E' -> 'Collected from E&E' (also: Location: Store, Marked OOC) (edited by bnjm2000)"
-2026/05/17 00:28:14,bnjm2000,Updated maintenance log for asset AD2#02: 'Replaced display bezel $25 Service charge $60' -> 'Replaced display bezel $25 Service charge $60' (also: Location: E&E) (edited by bnjm2000)
-2026/05/17 00:28:21,bnjm2000,Updated maintenance log for asset AD2#02: 'Replaced display bezel $25 Service charge $60' -> 'Replaced display bezel $25 Service charge $60' (also: Location: E&E) (edited by bnjm2000)
-2026/05/17 00:28:27,bnjm2000,"Updated maintenance log for asset AD2#02: 'Collected from E&E' -> 'Collected from E&E' (also: Location: Store, Marked OOC) (edited by bnjm2000)"
-2026/05/17 00:28:32,bnjm2000,"Updated maintenance log for asset AD2#02: 'Replaced display bezel $25 Service charge $60' -> 'Replaced display bezel $25 Service charge $60' (also: Location: E&E, Cleared OOC) (edited by bnjm2000)"
-2026/05/17 00:28:38,bnjm2000,Updated maintenance log for asset AD2#02: 'Collected from E&E' -> 'Collected from E&E' (also: Location: Store) (edited by bnjm2000)
-2026/05/17 00:29:32,bnjm2000,Updated maintenance log for asset AD2#07: 'Collected back from E&E. Tested working.' -> 'Collected back from E&E. Tested working.' (also: Location: Store) (edited by bnjm2000)
-2026/05/17 00:30:19,bnjm2000,Updated maintenance log for asset AD2#11: 'Replaced grill as it was rusty' -> 'Replaced grill as it was rusty' (edited by bnjm2000)
-2026/05/17 00:30:28,bnjm2000,Updated maintenance log for asset AD2#13: 'Replaced grill as it was rusty' -> 'Replaced grill as it was rusty' (edited by bnjm2000)
-2026/05/17 00:30:52,bnjm2000,"Updated maintenance log for asset AD4Q#03: 'Collected back from E&E, tested working.' -> 'Collected back from E&E, tested working.' (also: Location: Store) (edited by bnjm2000)"
-2026/05/17 00:31:37,bnjm2000,"Updated maintenance log for asset AD4Q#03: 'SR21913:
-Replaced 188A24072  AMPLIFIER,DRIVER,HI GAIN,0.25W,SOT-89 IC - $30
-Service charge - $120' -> 'SR21913:
-Replaced 188A24072  AMPLIFIER,DRIVER,HI GAIN,0.25W,SOT-89 IC - $30
-Service charge - $120' (also: Location: E&E, Cleared OOC) (edited by bnjm2000)"
-2026/05/17 00:32:09,bnjm2000,"Updated maintenance log for asset AD2#07: 'SR22010:
-Replaced PCB-L3 BASIC HH AUDIO, AD2  (190A25389) - $72
-65D25724A BEZEL, DISPLAY, G56, AD2 - $20
-Service charge - $60' -> 'SR22010:
-Replaced PCB-L3 BASIC HH AUDIO, AD2  (190A25389) - $72
-65D25724A BEZEL, DISPLAY, G56, AD2 - $20
-Service charge - $60' (also: Location: E&E, Cleared OOC) (edited by bnjm2000)"
-2026/05/17 00:32:28,bnjm2000,"Updated maintenance log for asset ULXD2#03: 'Bought new capsule from E&E, replaced whole capsule - $214' -> 'Bought new capsule from E&E, replaced whole capsule - $214' (also: Location: E&E, Cleared OOC) (edited by bnjm2000)"
-2026/05/17 00:32:41,bnjm2000,"Updated maintenance log for asset ULXD2#05: 'Purchased new B58A Capsule to replace. ($214)
-Capsule SN: 3EH15266104' -> 'Purchased new B58A Capsule to replace. ($214)
-Capsule SN: 3EH15266104' (also: Location: E&E, Cleared OOC) (edited by bnjm2000)"
-2026/05/17 00:33:06,bnjm2000,"Updated maintenance log for asset ULXD2#05: 'SR22011:
-E&E quoted to replace capsule ($267), with service fee ($120).
-Decided to cancel repair and buy the capsule from Sales.' -> 'SR22011:
-E&E quoted to replace capsule ($267), with service fee ($120).
-Decided to cancel repair and buy the capsule from Sales.' (also: Location: Store) (edited by bnjm2000)"
-2026/05/17 00:33:22,bnjm2000,"Updated maintenance log for asset ULXD2#11: 'Replace battery pin $5
-Replace rubber slot $5
-Service charge $60' -> 'Replace battery pin $5
-Replace rubber slot $5
-Service charge $60' (also: Location: E&E, Cleared OOC) (edited by bnjm2000)"
-2026/05/17 00:33:50,bnjm2000,Updated asset ULXD2#03; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
-2026/05/17 00:33:56,bnjm2000,Updated asset ULXD2#05; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
-2026/05/17 00:34:29,bnjm2000,"Updated maintenance log for asset CL5#01: 'Replaced DSP PCB ($1011)
-Service Fee ($FOC)' -> 'Replaced DSP PCB ($1011)
-Service Fee ($FOC)' (also: Location: Yamaha Service Center, Cleared OOC) (edited by bnjm2000)"
-2026/05/17 00:34:36,bnjm2000,"Updated maintenance log for asset CL5#01: 'Replaced Dante Module ($631)
-Replaced DNTU PCB ($672)
-Replaced FFC Cable ($10)
-Service fee ($FOC)' -> 'Replaced Dante Module ($631)
-Replaced DNTU PCB ($672)
-Replaced FFC Cable ($10)
-Service fee ($FOC)' (also: Location: Yamaha Service Center, Cleared OOC) (edited by bnjm2000)"
-2026/05/17 00:34:45,bnjm2000,"Updated maintenance log for asset CL5#01: 'Replaced faulty faders: CH 1-8, 9-16, Centralogic CH 7,8 ($684) Service fee ($369.73)' -> 'Replaced faulty faders: CH 1-8, 9-16, Centralogic CH 7,8 ($684) Service fee ($369.73)' (also: Location: Yamaha Service Center, Cleared Degraded) (edited by bnjm2000)"
-2026/05/17 00:35:09,bnjm2000,Updated asset CL5#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
-2026/05/17 00:35:36,bnjm2000,"Updated maintenance log for asset DM3#01: 'Replaced PCB (report no. PA842034) $586.84' -> 'Replaced PCB (report no. PA842034) $586.84 (FOC, under warraty)' (also: Cleared OOC) (edited by bnjm2000)"
-2026/05/17 00:35:42,bnjm2000,"Updated maintenance log for asset DM3#01: 'Replaced PCB (report no. PA842034) $586.84 (FOC, under warraty)' -> 'Replaced PCB (report no. PA842034) $586.84 (FOC, under warraty)' (also: Location: Yamaha Service Center, Cleared OOC) (edited by bnjm2000)"
-2026/05/17 00:36:02,bnjm2000,Updated maintenance log for asset DM3#01: 'Reported cannot power on from Niche' -> 'Reported cannot power on from Niche AV' (also: Marked OOC) (edited by bnjm2000)
-2026/05/17 00:36:22,bnjm2000,"Updated maintenance log for asset DXR12#01: 'Replace fan - $18
-Technical charges - $122.94' -> 'Replace fan - $18
-Technical charges - $122.94' (also: Location: Yamaha Service Center, Cleared OOC) (edited by bnjm2000)"
-2026/05/17 00:36:27,bnjm2000,"Updated maintenance log for asset DXR12#01: 'Collected from Yamaha, replaced woofer - $185' -> 'Collected from Yamaha, replaced woofer - $185' (also: Location: Yamaha Service Center, Cleared OOC) (edited by bnjm2000)"
-2026/05/17 00:37:09,bnjm2000,"Updated maintenance log for asset MR-90A#04: 'Collected back from MiPro, repaired
-XLR connector loosed, soldered back - $40' -> 'Collected back from MiPro, repaired
-XLR connector loosed, soldered back - $40' (also: Location: MiPro Singapore, Cleared OOC) (edited by bnjm2000)"
-2026/05/17 00:37:13,bnjm2000,Updated maintenance log for asset MR-90A#04: 'Sent to MiPro for servicing' -> 'Sent to MiPro for servicing' (also: Location: MiPro Singapore) (edited by bnjm2000)
-2026/05/17 00:37:28,bnjm2000,Updated maintenance log for asset MR-90A#04: '2024/11/11 - Handed over to MiPro for repair' -> '2024/11/11 - Handed over to MiPro for repair' (also: Location: MiPro Singapore) (edited by bnjm2000)
-2026/05/17 00:37:34,bnjm2000,Updated maintenance log for asset MR-90A#04: '2024/11/13 - Collected back from MiPro' -> '2024/11/13 - Collected back from MiPro' (also: Location: Store) (edited by bnjm2000)
-2026/05/17 00:38:08,bnjm2000,"Updated maintenance log for asset MR-90A#05: 'Technician tested working, went to MiPro office to check before collecting. Audio came through but unit kept skipping channels. MiPro did a 1-to-1 swap. New SN: 878292431A Old SN:878292435A' -> 'Technician tested working, went to MiPro office to check before collecting. Audio came through but unit kept skipping channels. MiPro did a 1-to-1 swap. New SN: 878292431A Old SN:878292435A' (also: Location: MiPro Singapore, Serial: 878292431A, Cleared OOC) (edited by bnjm2000)"
-2026/05/17 00:38:23,bnjm2000,"Updated maintenance log for asset MR-90A#06: 'Collected back from MiPro, repaired
-XLR connector loosed, soldered back - $40' -> 'Collected back from MiPro, repaired
-XLR connector loosed, soldered back - $40' (also: Location: MiPro Singapore, Cleared OOC) (edited by bnjm2000)"
-2026/05/17 00:38:32,bnjm2000,Updated asset MR-90A#04; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
-2026/05/17 00:38:35,bnjm2000,Updated asset MR-90A#06; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
-2026/05/17 00:38:39,bnjm2000,Updated asset MR-90A#05; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
-2026/05/17 00:39:00,bnjm2000,"Updated maintenance log for asset MT-90A#04: 'Collected back from MiPro, PSU replaced' -> 'Collected back from MiPro, PSU replaced' (also: Location: MiPro Singapore, Cleared OOC) (edited by bnjm2000)"
-2026/05/17 00:39:07,bnjm2000,Updated maintenance log for asset MT-90A#04: '2024/11/26 - Collected back from MiPro after testing' -> '2024/11/26 - Collected back from MiPro after testing' (also: Location: Store) (edited by bnjm2000)
-2026/05/17 00:39:10,bnjm2000,Updated maintenance log for asset MT-90A#04: '2024/11/20 - Send to MiPro for testing' -> '2024/11/20 - Send to MiPro for testing' (also: Location: MiPro Singapore) (edited by bnjm2000)
-2026/05/17 00:39:14,bnjm2000,Updated maintenance log for asset MT-90A#04: 'Handed over to MiPro for PSU testing' -> 'Handed over to MiPro for PSU testing' (also: Location: MiPro Singapore) (edited by bnjm2000)
-2026/05/17 00:45:12,bnjm2000,Updated maintenance log for asset MR-90A#06: 'Sent to MiPro for servicing' -> 'Sent to MiPro for servicing' (also: Location: MiPro Singapore) (edited by bnjm2000)
-2026/05/17 11:21:06,bnjm2000,Updated asset MR-90A#06; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
-2026/05/17 11:27:58,bnjm2000,User bnjm2000 logged out from web interface
-2026/05/17 11:28:04,bnjm2000,User bnjm2000 logged in via web interface
-2026/05/17 11:28:15,bnjm2000,Created user user
-2026/05/17 11:28:18,bnjm2000,User bnjm2000 logged out from web interface
-2026/05/17 11:28:22,user,User user logged in via web interface
-2026/05/17 11:30:44,user,User user logged in via web interface
-2026/05/17 11:31:32,user,Asset Check sighted asset 4488#01
-2026/05/17 11:31:35,user,Asset Check sighting removed for asset 4488#01
-2026/05/17 11:31:36,user,Asset Check sighted asset 4488#01
-2026/05/17 11:31:38,user,Asset Check sighted asset 4488#02
-2026/05/17 11:31:42,user,User user logged out from web interface
-2026/05/17 11:31:47,bnjm2000,User bnjm2000 logged in via web interface
-2026/05/17 11:31:58,bnjm2000,Deleted maintenance log for asset 4488#01: 'Asset sighted by user during Asset Check' (deleted by bnjm2000)
-2026/05/17 11:32:01,bnjm2000,Deleted maintenance log for asset 4488#02: 'Asset sighted by user during Asset Check' (deleted by bnjm2000)
-2026/05/17 11:34:05,bnjm2000,User bnjm2000 logged out from web interface
-2026/05/17 11:34:08,user,User user logged in via web interface
-2026/05/17 11:34:12,user,User user logged out from web interface
-2026/05/17 11:34:17,bnjm2000,User bnjm2000 logged in via web interface
-2026/05/17 11:48:23,bnjm2000,Deleted event 142: test via web interface. No asset locations to reset. Removed 7 related log entries.
-2026/05/17 11:55:32,bnjm2000,Created event 142: Hermes Double Tour Jewel Exhibition @ Ion Orchard via web interface
-2026/05/17 11:55:41,bnjm2000,Added 6x L-Acoustics 5XT model to event 142 (total: 6)
-2026/05/17 11:55:46,bnjm2000,Added 1x L-Acoustics LA2Xi model to event 142 (total: 1)
-2026/05/17 11:56:49,bnjm2000,Created event 143:  Solemnisation Ceremony of Ben Harbinson & Mallari Batlaw @ 14 Coronation Rd West via web interface
-2026/05/17 11:56:58,bnjm2000,Added 2x Sennheiser DAD(UHF) model to event 143 (total: 2)
-2026/05/17 11:57:02,bnjm2000,Added 5x Sennheiser SEK(UHF) model to event 143 (total: 5)
-2026/05/17 11:57:02,bnjm2000,Added 1x Sennheiser Spectera Base Station model to event 143 (total: 1)
-2026/05/17 11:57:09,bnjm2000,Added 6x Turbosound IP1000 model to event 143 (total: 6)
-2026/05/17 11:57:17,bnjm2000,Added 6x MiPro MR-90 model to event 143 (total: 6)
-2026/05/17 11:57:19,bnjm2000,Added 1x MiPro MT-90A model to event 143 (total: 1)
-2026/05/17 11:57:27,bnjm2000,Added 1x Yamaha QL1 model to event 143 (total: 1)
-2026/05/17 12:12:05,bnjm2000,Added 4x DPA 4099 model to event 143 (total: 4)
-2026/05/17 12:14:05,bnjm2000,Added 4x Global Truss F34 Truss - 0.5m (Silver) model to event 139 (total: 4)
-2026/05/17 12:15:34,bnjm2000,"Added MISC custom asset 'Xingon Aluminium Scaffold' (1x, dept STG) to event 139"
-2026/05/17 12:24:03,bnjm2000,Updated asset MACBOOK#01; applyTo=single; updatedAssets=1; eventsUpdated=2; containersUpdated=0
-2026/05/17 12:33:37,bnjm2000,Added asset PS10R2#01 via web interface
-2026/05/17 12:33:59,bnjm2000,Added asset PS10R2#02 via web interface
-2026/05/17 12:34:08,bnjm2000,Added asset PS10R2#03 via web interface
-2026/05/17 12:34:15,bnjm2000,Added asset PS10R2#04 via web interface
-2026/05/17 12:34:22,bnjm2000,Added asset PS10R2#05 via web interface
-2026/05/17 12:34:31,bnjm2000,Added asset PS10R2#06 via web interface
-2026/05/17 12:35:18,bnjm2000,Added asset LS18#01 via web interface
-2026/05/17 12:35:26,bnjm2000,Added asset LS18#02 via web interface
-2026/05/17 12:35:34,bnjm2000,Added asset LS18#03 via web interface
-2026/05/17 12:35:42,bnjm2000,Added asset LS18#04 via web interface
-2026/05/17 12:36:21,bnjm2000,Added asset LS500#01 via web interface
-2026/05/17 12:36:28,bnjm2000,Added asset LS500#02 via web interface
-2026/05/17 12:36:34,bnjm2000,Added asset LS500#03 via web interface
-2026/05/17 12:36:41,bnjm2000,Added asset LS400#01 via web interface
-2026/05/17 12:36:49,bnjm2000,Added asset LS400#02 via web interface
-2026/05/17 12:37:48,bnjm2000,Added asset NXAMP4X1#01 via web interface
-2026/05/17 12:38:01,bnjm2000,Added asset NXAMP4X1#02 via web interface
-2026/05/17 12:38:09,bnjm2000,Added asset NXAMP4X4#01 via web interface
-2026/05/17 12:38:19,bnjm2000,Added asset NXAMP4X4#02 via web interface
-2026/05/17 12:40:10,bnjm2000,Added asset 4X4#01 via web interface
-2026/05/17 12:41:02,bnjm2000,Added asset MSX48#01 via web interface
-2026/05/17 12:41:10,bnjm2000,Added asset MSX48#02 via web interface
-2026/05/17 12:41:18,bnjm2000,Added asset MSX48#03 via web interface
-2026/05/17 13:32:17,bnjm2000,Updated asset MKE2#03; applyTo=allSimilar; updatedAssets=4; eventsUpdated=0; containersUpdated=0
-2026/05/17 13:32:26,bnjm2000,Updated asset MKE2#01; applyTo=allSimilar; updatedAssets=2; eventsUpdated=2; containersUpdated=0
-2026/05/17 15:46:02,bnjm2000,Uploaded 2 file(s) to event 131: Wedding of Patricia & Edgar @ Capella
-2026/05/17 15:46:10,bnjm2000,Uploaded 1 file(s) to event 131: Wedding of Patricia & Edgar @ Capella
-2026/05/17 15:46:26,bnjm2000,Uploaded 1 file(s) to event 131: Wedding of Patricia & Edgar @ Capella
-2026/05/17 22:05:49,bnjm2000,User bnjm2000 logged in via web interface
-2026/05/17 22:06:32,bnjm2000,Added 1x Analogue Way Pulse 2 model to event 139 (total: 1)
-2026/05/17 22:07:11,bnjm2000,"Added MISC custom asset 'Truss Lifter' (2x, dept LX) to event 139"
-2026/05/17 22:07:46,bnjm2000,Prepared 4x bulk asset Global Truss F34 Corner Block (Silver) for event 139
-2026/05/17 22:07:47,bnjm2000,Prepared 4x bulk asset Global Truss F34 Truss - 0.5m (Silver) for event 139
-2026/05/17 22:07:48,bnjm2000,Prepared custom item 1x Xingon Aluminium Scaffold for event 139
-2026/05/17 22:07:50,bnjm2000,Assigned specific asset PULSE2#01 to event 139
-2026/05/17 22:07:52,bnjm2000,Prepared custom item 2x Truss Lifter for event 139
-2026/05/17 22:08:46,bnjm2000,User bnjm2000 forced event 86 (Zendesk End of Year Celebration 2025 @ Andaz) state from Returning to Closed
-2026/05/17 22:08:55,bnjm2000,User bnjm2000 forced event 27 (IP 10th Anniversary Client's Party @ Siri House) state from Returning to Closed
-2026/05/17 22:09:00,bnjm2000,User bnjm2000 forced event 37 (SingHealth DUKE-NUS Gala @ Ritz Carlton) state from Returning to Closed
-2026/05/17 22:09:06,bnjm2000,User bnjm2000 forced event 48 (Dry Hire: TTP) state from Returning to Closed
-2026/05/17 22:09:13,bnjm2000,User bnjm2000 forced event 103 (SG Air Show 2026 (Bencon) @ Changi Exhibition Centre) state from Returning to Closed
-2026/05/18 11:06:50,bnjm2000,Updated maintenance log for asset ESPRITE#01: 'Ah Heng reported gobo rotate will stutter' -> 'Operator Ah Heng reported gobo rotate will stutter' (also: Marked Degraded) (edited by bnjm2000)
-2026/05/18 14:56:54,bnjm2000,User bnjm2000 logged in via web interface
-2026/05/19 11:54:58,bnjm2000,Created user cjamie
-2026/05/19 11:55:03,bnjm2000,Created user admin
-2026/05/19 12:36:44,cjamie,Set asset ESPRITE#01 status to OK
-2026/05/19 12:36:44,cjamie,Maintenance logged for asset ESPRITE#01: Gobo holder replaced
-2026/05/19 12:42:42,bnjm2000,Added 7x Global Truss F34 Truss - 1m (Silver) model to event 131 (total: 7)
-2026/05/19 12:42:50,bnjm2000,Added 10x Global Truss F34 Truss - 0.5m (Silver) model to event 131 (total: 10)
-2026/05/19 12:43:05,bnjm2000,Added 5x Custom 605mm Base plate model to event 131 (total: 5)
-2026/05/19 12:44:01,bnjm2000,Removed Custom 605mm Base plate model from event 131
-2026/05/19 12:44:02,bnjm2000,Added 7x Custom 605mm Base plate model to event 131 (total: 7)
-2026/05/19 12:44:34,bnjm2000,Removed Custom 605mm Base plate (carpeted) model from event 131
-2026/05/19 12:44:34,bnjm2000,Added 1x Custom 605mm Base plate (carpeted) model to event 131 (total: 1)
-2026/05/19 12:46:06,bnjm2000,Created department MI (Musical Instruments)
-2026/05/19 12:46:30,bnjm2000,"Added LOAN custom asset 'Music stand' (5x, dept MI) to event 131"
-2026/05/19 12:46:54,bnjm2000,"Added LOAN custom asset 'Yamaha RD700' (1x, dept MI) to event 131"
-2026/05/19 12:47:06,bnjm2000,"Added LOAN custom asset 'Guitar stand' (2x, dept MI) to event 131"
-2026/05/19 12:48:08,bnjm2000,Removed Radial Engineering J48 Stereo model from event 131
-2026/05/19 12:48:15,bnjm2000,Added 2x Radial Engineering JDI Mono model to event 131 (total: 2)
-2026/05/19 12:50:02,bnjm2000,Updated notes for event 131: Wedding of Patricia & Edgar @ Capella
-2026/05/19 12:50:21,bnjm2000,Removed Shure ULXD4Q model from event 131
-2026/05/19 12:50:29,bnjm2000,Removed Shure ULXD1 model from event 131
-2026/05/19 12:50:37,bnjm2000,Added 2x Shure ULXD4D model to event 131 (total: 2)
-2026/05/19 12:51:23,bnjm2000,Updated maintenance log for asset ESPRITE#01: 'Gobo holder replaced' -> 'Gobo holder replaced' (also: Cleared Degraded) (edited by bnjm2000)
-2026/05/19 12:55:08,bnjm2000,Assigned specific asset LEDBEAM#01 to event 131
-2026/05/19 12:55:08,bnjm2000,Assigned specific asset LEDBEAM#02 to event 131
-2026/05/19 12:55:08,bnjm2000,Assigned specific asset LEDBEAM#03 to event 131
-2026/05/19 12:55:09,bnjm2000,Assigned specific asset LEDBEAM#04 to event 131
-2026/05/19 12:55:26,bnjm2000,Assigned specific asset LEDBEAM#05 to event 131
-2026/05/19 12:55:27,bnjm2000,Assigned specific asset LEDBEAM#06 to event 131
-2026/05/19 12:55:27,bnjm2000,Assigned specific asset LEDBEAM#07 to event 131
-2026/05/19 12:55:27,bnjm2000,Assigned specific asset LEDBEAM#08 to event 131
-2026/05/19 12:55:31,bnjm2000,Assigned specific asset LEDBEAM#09 to event 131
-2026/05/19 12:55:31,bnjm2000,Assigned specific asset LEDBEAM#10 to event 131
-2026/05/19 12:55:32,bnjm2000,Assigned specific asset LEDBEAM#11 to event 131
 2026/05/19 12:55:32,bnjm2000,Assigned specific asset LEDBEAM#12 to event 131
 2026/05/19 12:55:48,bnjm2000,Assigned specific asset DIABLO#01 to event 131
 2026/05/19 12:55:49,bnjm2000,Assigned specific asset DIABLO#02 to event 131
@@ -1069,3 +765,236 @@ XLR connector loosed, soldered back - $40' (also: Location: MiPro Singapore, Cle
 2026/05/27 13:18:14,bnjm2000,"Removed custom asset [CUSTOM]{""company"":"""",""department"":""LX"",""name"":""Mini Profile - 3200K"",""quantity"":40,""type"":""MISC"",""uid"":""75d962bc1c3db665"",""version"":2} from event 132"
 2026/05/27 13:18:23,bnjm2000,Added 1x Avolites Quartz model to event 132 (total: 1)
 2026/05/27 13:18:58,bnjm2000,Assigned specific asset QUARTZ#02 to event 132
+2026/05/28 13:16:14,tjacky,User tjacky logged in via web interface
+2026/05/28 13:17:04,tjacky,User tjacky logged in via web interface
+2026/05/28 13:25:03,tjacky,User tjacky logged in via web interface
+2026/05/28 13:30:56,tjacky,Assigned specific asset KARAII#01 to event 134
+2026/05/28 13:30:57,tjacky,Assigned specific asset KARAII#02 to event 134
+2026/05/28 13:30:57,tjacky,Assigned specific asset KARAII#03 to event 134
+2026/05/28 13:30:57,tjacky,Assigned specific asset LA12X#01 to event 134
+2026/05/28 13:31:06,tjacky,Assigned specific asset C1ProWHS#01 to event 134
+2026/05/28 13:31:21,tjacky,Assigned specific asset KARAII#04 to event 134
+2026/05/28 13:31:21,tjacky,Assigned specific asset KARAII#05 to event 134
+2026/05/28 13:31:24,tjacky,Assigned specific asset KARAII#06 to event 134
+2026/05/28 13:31:26,tjacky,Assigned specific asset KARAII#07 to event 134
+2026/05/28 13:31:28,tjacky,Assigned specific asset KARAII#08 to event 134
+2026/05/28 13:31:30,tjacky,Assigned specific asset KARAII#09 to event 134
+2026/05/28 13:32:44,tjacky,Assigned specific asset KARAII#10 to event 134
+2026/05/28 13:32:46,tjacky,Assigned specific asset KARAII#11 to event 134
+2026/05/28 13:32:53,tjacky,Assigned specific asset KARAII#12 to event 134
+2026/05/28 13:32:57,tjacky,Completely removed asset C1ProWHS#01 from event 134
+2026/05/28 13:33:19,tjacky,Assigned specific asset LA12X#02 to event 134
+2026/05/28 13:33:21,tjacky,Assigned specific asset LA12X#03 to event 134
+2026/05/28 13:33:23,tjacky,Assigned specific asset LA12X#04 to event 134
+2026/05/28 13:33:34,tjacky,Assigned specific asset LAP1#01 to event 134
+2026/05/28 13:33:43,tjacky,Assigned specific asset X8#09 to event 134
+2026/05/28 13:33:52,tjacky,Assigned specific asset X8#10 to event 134
+2026/05/28 13:33:56,tjacky,Assigned specific asset X8#11 to event 134
+2026/05/28 13:34:00,tjacky,Assigned specific asset X8#12 to event 134
+2026/05/28 13:35:51,tjacky,Assigned specific asset GSM4212P#04 to event 134
+2026/05/28 13:36:02,tjacky,Assigned specific asset GSM4212P#01 to event 134
+2026/05/28 13:37:35,tjacky,Assigned specific asset J48M#01 to event 134
+2026/05/28 13:37:44,tjacky,Assigned specific asset J48M#08 to event 134
+2026/05/28 13:38:05,bnjm2000,User bnjm2000 logged in via web interface
+2026/05/28 13:39:10,tjacky,Assigned specific asset JDIS#03 to event 134
+2026/05/28 13:39:20,tjacky,Assigned specific asset JDIS#02 to event 134
+2026/05/28 13:39:39,tjacky,Assigned specific asset JDIS#01 to event 134
+2026/05/28 13:39:43,tjacky,Assigned specific asset JDIS#04 to event 134
+2026/05/28 13:47:32,bnjm2000,Completely removed asset LA12X#04 from event 134
+2026/05/28 13:47:32,bnjm2000,Completely removed asset LA12X#03 from event 134
+2026/05/28 13:47:33,bnjm2000,Completely removed asset LA12X#02 from event 134
+2026/05/28 13:47:34,bnjm2000,Completely removed asset LA12X#01 from event 134
+2026/05/28 13:47:58,bnjm2000,Assigned specific asset LA12X#04 to event 134
+2026/05/28 13:47:59,bnjm2000,Assigned specific asset LA12X#05 to event 134
+2026/05/28 13:48:00,bnjm2000,Assigned specific asset LA12X#06 to event 134
+2026/05/28 13:48:16,bnjm2000,Assigned specific asset LA12X#08 to event 134
+2026/05/28 13:48:18,bnjm2000,Completely removed asset KARAII#12 from event 134
+2026/05/28 13:48:19,bnjm2000,Completely removed asset KARAII#11 from event 134
+2026/05/28 13:48:19,bnjm2000,Completely removed asset KARAII#10 from event 134
+2026/05/28 13:48:20,bnjm2000,Completely removed asset KARAII#09 from event 134
+2026/05/28 13:48:21,bnjm2000,Completely removed asset KARAII#07 from event 134
+2026/05/28 13:48:24,bnjm2000,Completely removed asset KARAII#01 from event 134
+2026/05/28 13:48:24,bnjm2000,Completely removed asset KARAII#02 from event 134
+2026/05/28 13:48:24,bnjm2000,Completely removed asset KARAII#03 from event 134
+2026/05/28 13:48:28,bnjm2000,Completely removed asset KARAII#04 from event 134
+2026/05/28 13:48:28,bnjm2000,Completely removed asset KARAII#05 from event 134
+2026/05/28 13:48:28,bnjm2000,Completely removed asset KARAII#06 from event 134
+2026/05/28 13:48:28,bnjm2000,Completely removed asset KARAII#08 from event 134
+2026/05/28 13:48:42,bnjm2000,Completely removed asset X8#12 from event 134
+2026/05/28 13:48:42,bnjm2000,Completely removed asset X8#11 from event 134
+2026/05/28 13:48:43,bnjm2000,Completely removed asset X8#10 from event 134
+2026/05/28 13:48:43,bnjm2000,Completely removed asset X8#09 from event 134
+2026/05/28 13:48:48,bnjm2000,Assigned specific asset X8#16 to event 134
+2026/05/28 13:48:48,bnjm2000,Assigned specific asset X8#15 to event 134
+2026/05/28 13:48:48,bnjm2000,Assigned specific asset X8#14 to event 134
+2026/05/28 13:48:52,bnjm2000,Assigned specific asset X8#13 to event 134
+2026/05/28 13:48:59,bnjm2000,Assigned specific asset DAD#01 to event 134
+2026/05/28 13:49:00,bnjm2000,Assigned specific asset DAD#02 to event 134
+2026/05/28 13:49:36,bnjm2000,Assigned specific asset SBS#01 to event 134
+2026/05/28 13:52:49,bnjm2000,Assigned specific asset AD3#03 to event 134
+2026/05/28 13:53:05,bnjm2000,Assigned specific asset AD3#04 to event 134
+2026/05/28 13:54:13,bnjm2000,Assigned specific asset J48S#04 to event 134
+2026/05/28 13:55:25,bnjm2000,Assigned specific asset SEK#10 to event 134
+2026/05/28 13:55:38,bnjm2000,Assigned specific asset SEK#06 to event 134
+2026/05/28 13:55:48,bnjm2000,Assigned specific asset SEK#01 to event 134
+2026/05/28 13:56:00,bnjm2000,Assigned specific asset SEK#04 to event 134
+2026/05/28 13:56:10,bnjm2000,Assigned specific asset SEK#09 to event 134
+2026/05/28 13:56:23,bnjm2000,Assigned specific asset SEK#07 to event 134
+2026/05/28 13:56:49,bnjm2000,Assigned specific asset SEK#03 to event 134
+2026/05/28 13:57:05,bnjm2000,Assigned specific asset SEK#08 to event 134
+2026/05/28 14:07:41,bnjm2000,Assigned specific asset MBAR#02 to event 134
+2026/05/28 14:07:45,bnjm2000,Assigned specific asset MBAR#04 to event 134
+2026/05/28 14:07:55,bnjm2000,Assigned specific asset MBUMP#03 to event 134
+2026/05/28 14:07:55,bnjm2000,Assigned specific asset MBUMP#04 to event 134
+2026/05/28 14:14:11,bnjm2000,Assigned specific asset ULXD2#01 to event 134
+2026/05/28 14:14:30,bnjm2000,Assigned specific asset ULXD2#03 to event 134
+2026/05/28 14:14:55,bnjm2000,Assigned specific asset ULXD2#10 to event 134
+2026/05/28 14:15:10,bnjm2000,Assigned specific asset ULXD2#08 to event 134
+2026/05/28 14:15:20,bnjm2000,Assigned specific asset ULXD2#09 to event 134
+2026/05/28 14:17:08,bnjm2000,Assigned specific asset IP1000#02 to event 134
+2026/05/28 14:17:09,bnjm2000,Assigned specific asset IP1000#03 to event 134
+2026/05/28 14:17:13,bnjm2000,Assigned specific asset IP1000#01 to event 134
+2026/05/28 14:17:13,bnjm2000,Assigned specific asset IP1000#04 to event 134
+2026/05/28 14:36:31,bnjm2000,Assigned specific asset SM58S#03 to event 134
+2026/05/28 14:36:53,bnjm2000,Assigned specific asset E906#01 to event 134
+2026/05/28 14:38:49,bnjm2000,Assigned specific asset C451B#10 to event 134
+2026/05/28 14:39:07,bnjm2000,Assigned specific asset C451B#09 to event 134
+2026/05/28 14:39:18,bnjm2000,Assigned specific asset C451B#02 to event 134
+2026/05/28 14:39:26,bnjm2000,Assigned specific asset MR-90A#01 to event 134
+2026/05/28 14:39:26,bnjm2000,Assigned specific asset MR-90A#02 to event 134
+2026/05/28 14:39:26,bnjm2000,Assigned specific asset MR-90A#03 to event 134
+2026/05/28 14:39:28,bnjm2000,Assigned specific asset MR-90A#04 to event 134
+2026/05/28 14:39:28,bnjm2000,Assigned specific asset MR-90A#05 to event 134
+2026/05/28 14:39:29,bnjm2000,Assigned specific asset MR-90A#06 to event 134
+2026/05/28 14:39:33,bnjm2000,Assigned specific asset MT-90A#03 to event 134
+2026/05/28 14:39:34,bnjm2000,Assigned specific asset MT-90A#04 to event 134
+2026/05/28 14:39:44,bnjm2000,Prepared custom item 1x 32A 3P Cable - 3m for event 134
+2026/05/28 14:39:55,bnjm2000,Assigned specific asset IPAD#02 to event 134
+2026/05/28 14:40:24,bnjm2000,Assigned specific asset CL5#01 to event 134
+2026/05/28 14:43:43,bnjm2000,Assigned specific asset HLBatt#01 to event 134
+2026/05/28 14:43:43,bnjm2000,Assigned specific asset HLBatt#03 to event 134
+2026/05/28 14:43:43,bnjm2000,Assigned specific asset HLBatt#05 to event 134
+2026/05/28 14:43:43,bnjm2000,Assigned specific asset HLBatt#07 to event 134
+2026/05/28 14:43:43,bnjm2000,Assigned specific asset HLBatt#09 to event 134
+2026/05/28 14:43:43,bnjm2000,Assigned specific asset HLBatt#11 to event 134
+2026/05/28 14:43:43,bnjm2000,Assigned specific asset HLBatt#13 to event 134
+2026/05/28 14:43:44,bnjm2000,Assigned specific asset HLBatt#15 to event 134
+2026/05/28 14:43:44,bnjm2000,Assigned specific asset C1ProCharger#01 to event 134
+2026/05/28 14:43:44,bnjm2000,Assigned specific asset C1ProRHS#01 to event 134
+2026/05/28 14:43:44,bnjm2000,Assigned specific asset C1ProRHS#03 to event 134
+2026/05/28 14:43:44,bnjm2000,Assigned specific asset C1ProRHS#05 to event 134
+2026/05/28 14:43:44,bnjm2000,Assigned specific asset C1ProRHS#07 to event 134
+2026/05/28 14:43:44,bnjm2000,Assigned specific asset C1ProWHS#01 to event 134
+2026/05/28 14:43:44,bnjm2000,Assigned specific asset HLBatt#02 to event 134
+2026/05/28 14:43:44,bnjm2000,Assigned specific asset HLBatt#04 to event 134
+2026/05/28 14:43:44,bnjm2000,Assigned specific asset HLBatt#06 to event 134
+2026/05/28 14:43:45,bnjm2000,Assigned specific asset HLBatt#08 to event 134
+2026/05/28 14:43:45,bnjm2000,Assigned specific asset HLBatt#10 to event 134
+2026/05/28 14:43:45,bnjm2000,Assigned specific asset HLBatt#12 to event 134
+2026/05/28 14:43:45,bnjm2000,Assigned specific asset HLBatt#14 to event 134
+2026/05/28 14:43:45,bnjm2000,Assigned specific asset HLBatt#16 to event 134
+2026/05/28 14:43:45,bnjm2000,Assigned specific asset C1ProHub#01 to event 134
+2026/05/28 14:43:45,bnjm2000,Assigned specific asset C1ProRHS#02 to event 134
+2026/05/28 14:43:45,bnjm2000,Assigned specific asset C1ProRHS#04 to event 134
+2026/05/28 14:43:45,bnjm2000,Assigned specific asset C1ProRHS#06 to event 134
+2026/05/28 14:43:45,bnjm2000,Assigned specific asset C1ProRHS#08 to event 134
+2026/05/28 14:44:35,bnjm2000,Added 1x Shure ULXD4Q model to event 134 (total: 1)
+2026/05/28 14:44:44,bnjm2000,Removed Shure ULXD4D model from event 134
+2026/05/28 14:44:44,bnjm2000,Added 1x Shure ULXD4D model to event 134 (total: 1)
+2026/05/28 14:47:22,bnjm2000,Assigned specific asset ULXD4D#04 to event 134
+2026/05/28 14:47:26,bnjm2000,Assigned specific asset ULXD4Q#01 to event 134
+2026/05/28 14:47:38,bnjm2000,Added 3x AKG C451B model to event 134 (total: 6)
+2026/05/28 14:47:44,bnjm2000,Removed AKG C451B model from event 134
+2026/05/28 14:47:44,bnjm2000,Added 3x AKG C451B model to event 134 (total: 3)
+2026/05/28 14:47:58,bnjm2000,Removed Shure AD3 model from event 134
+2026/05/28 14:47:58,bnjm2000,Added 3x Shure AD3 model to event 134 (total: 3)
+2026/05/28 14:48:01,bnjm2000,Removed Shure SM58S model from event 134
+2026/05/28 14:48:01,bnjm2000,Added 2x Shure SM58S model to event 134 (total: 2)
+2026/05/28 14:48:05,bnjm2000,Removed Shure AD3 model from event 134
+2026/05/28 14:48:05,bnjm2000,Added 2x Shure AD3 model to event 134 (total: 2)
+2026/05/28 14:48:08,bnjm2000,Removed Shure SM58S model from event 134
+2026/05/28 14:48:08,bnjm2000,Added 1x Shure SM58S model to event 134 (total: 1)
+2026/05/28 14:48:24,bnjm2000,Added 2x Shure SM57 model to event 134 (total: 2)
+2026/05/28 14:48:32,bnjm2000,Assigned specific asset SM57#04 to event 134
+2026/05/28 14:48:33,bnjm2000,Assigned specific asset SM57#05 to event 134
+2026/05/28 14:48:47,bnjm2000,Assigned specific asset ME36#01 to event 134
+2026/05/28 14:48:52,bnjm2000,Assigned specific asset ME36#02 to event 134
+2026/05/28 14:49:18,bnjm2000,Removed Shure ULXD2 model from event 134
+2026/05/28 14:49:18,bnjm2000,Added 5x Shure ULXD2 model to event 134 (total: 5)
+2026/05/28 14:49:36,bnjm2000,Assigned specific asset COMPACTXT#01 to event 134
+2026/05/28 14:49:43,bnjm2000,Assigned specific asset PB#01 to event 134
+2026/05/28 14:49:43,bnjm2000,Assigned specific asset PB#02 to event 134
+2026/05/28 14:49:43,bnjm2000,Assigned specific asset PB#03 to event 134
+2026/05/28 14:49:43,bnjm2000,Assigned specific asset PB#05 to event 134
+2026/05/28 14:49:43,bnjm2000,Assigned specific asset PB#04 to event 134
+2026/05/28 14:49:43,bnjm2000,Assigned specific asset PB#06 to event 134
+2026/05/28 14:49:43,bnjm2000,Assigned specific asset PB#08 to event 134
+2026/05/28 14:49:44,bnjm2000,Assigned specific asset PB#07 to event 134
+2026/05/28 14:49:44,bnjm2000,Assigned specific asset PB#09 to event 134
+2026/05/28 14:49:44,bnjm2000,Assigned specific asset PB#10 to event 134
+2026/05/28 14:49:44,bnjm2000,Assigned specific asset PB#11 to event 134
+2026/05/28 14:49:44,bnjm2000,Assigned specific asset PB#12 to event 134
+2026/05/28 14:49:44,bnjm2000,Assigned specific asset PB#13 to event 134
+2026/05/28 14:49:44,bnjm2000,Assigned specific asset PB#14 to event 134
+2026/05/28 14:49:44,bnjm2000,Assigned specific asset PB#15 to event 134
+2026/05/28 14:49:45,bnjm2000,Assigned specific asset PB#16 to event 134
+2026/05/28 14:49:45,bnjm2000,Assigned specific asset PB#17 to event 134
+2026/05/28 14:49:45,bnjm2000,Assigned specific asset PB#18 to event 134
+2026/05/28 14:49:45,bnjm2000,Assigned specific asset PB#19 to event 134
+2026/05/28 14:49:45,bnjm2000,Assigned specific asset PB#20 to event 134
+2026/05/28 14:49:45,bnjm2000,Assigned specific asset PB#21 to event 134
+2026/05/28 14:49:45,bnjm2000,Assigned specific asset PB#22 to event 134
+2026/05/28 14:49:45,bnjm2000,Assigned specific asset PB#23 to event 134
+2026/05/28 14:49:46,bnjm2000,Assigned specific asset PB#24 to event 134
+2026/05/28 14:49:46,bnjm2000,Assigned specific asset PB#25 to event 134
+2026/05/28 14:49:46,bnjm2000,Assigned specific asset PB#26 to event 134
+2026/05/28 14:49:46,bnjm2000,Assigned specific asset PB#27 to event 134
+2026/05/28 14:49:46,bnjm2000,Assigned specific asset PB#28 to event 134
+2026/05/28 14:49:46,bnjm2000,Assigned specific asset PB#29 to event 134
+2026/05/28 14:49:46,bnjm2000,Assigned specific asset PB#30 to event 134
+2026/05/28 14:49:46,bnjm2000,Assigned specific asset PB#31 to event 134
+2026/05/28 14:49:46,bnjm2000,Assigned specific asset PB#32 to event 134
+2026/05/28 14:49:47,bnjm2000,Assigned specific asset PB#33 to event 134
+2026/05/28 14:49:47,bnjm2000,Assigned specific asset PB#34 to event 134
+2026/05/28 14:49:47,bnjm2000,Assigned specific asset PB#35 to event 134
+2026/05/28 14:49:47,bnjm2000,Assigned specific asset PB#36 to event 134
+2026/05/28 14:49:47,bnjm2000,Assigned specific asset PB#37 to event 134
+2026/05/28 14:49:47,bnjm2000,Assigned specific asset PB#38 to event 134
+2026/05/28 14:49:47,bnjm2000,Assigned specific asset PB#39 to event 134
+2026/05/28 14:49:47,bnjm2000,Assigned specific asset PB#40 to event 134
+2026/05/28 14:49:48,bnjm2000,Assigned specific asset PB#41 to event 134
+2026/05/28 14:49:48,bnjm2000,Assigned specific asset PB#42 to event 134
+2026/05/28 14:49:48,bnjm2000,Assigned specific asset PB#43 to event 134
+2026/05/28 14:49:48,bnjm2000,Assigned specific asset PB#44 to event 134
+2026/05/28 14:49:48,bnjm2000,Assigned specific asset PB#45 to event 134
+2026/05/28 14:49:48,bnjm2000,Assigned specific asset PB#46 to event 134
+2026/05/28 14:49:48,bnjm2000,Assigned specific asset PB#47 to event 134
+2026/05/28 14:49:48,bnjm2000,Assigned specific asset PB#48 to event 134
+2026/05/28 14:49:49,bnjm2000,Assigned specific asset PB#49 to event 134
+2026/05/28 14:49:49,bnjm2000,Assigned specific asset PB#50 to event 134
+2026/05/28 14:49:49,bnjm2000,Assigned specific asset PB#51 to event 134
+2026/05/28 14:49:49,bnjm2000,Assigned specific asset PB#52 to event 134
+2026/05/28 14:49:49,bnjm2000,Assigned specific asset PB#53 to event 134
+2026/05/28 14:49:49,bnjm2000,Assigned specific asset PB#54 to event 134
+2026/05/28 14:49:49,bnjm2000,Assigned specific asset PB#55 to event 134
+2026/05/28 14:49:50,bnjm2000,Assigned specific asset PB#56 to event 134
+2026/05/28 14:49:50,bnjm2000,Assigned specific asset PB#57 to event 134
+2026/05/28 14:49:50,bnjm2000,Assigned specific asset PB#58 to event 134
+2026/05/28 14:49:50,bnjm2000,Assigned specific asset PB#59 to event 134
+2026/05/28 14:49:50,bnjm2000,Assigned specific asset PB#60 to event 134
+2026/05/28 14:49:50,bnjm2000,Assigned specific asset PB#61 to event 134
+2026/05/28 14:49:50,bnjm2000,Assigned specific asset PB#62 to event 134
+2026/05/28 14:49:50,bnjm2000,Assigned specific asset PB#63 to event 134
+2026/05/28 14:49:51,bnjm2000,Assigned specific asset PB#64 to event 134
+2026/05/28 14:50:07,bnjm2000,Completely removed asset ULXD2#09 from event 134
+2026/05/28 14:50:14,bnjm2000,Assigned specific asset ULXD2#09 to event 134
+2026/05/28 14:51:00,bnjm2000,Added 8x Ayrton Diablo Profile model to event 134 (total: 8)
+2026/05/28 14:51:04,bnjm2000,Removed Ayrton Diablo (W.DMX) model from event 134
+2026/05/28 14:52:46,bnjm2000,Updated asset 63ADB#03; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/05/28 14:52:55,bnjm2000,Completely removed asset 63ADB#03 from event 132
+2026/05/28 14:52:56,bnjm2000,Assigned specific asset 63ADB#03 to event 132
+2026/05/28 15:01:05,bnjm2000,"Added MISC custom asset 'NL2 Cable case' (1x, dept AX) to event 142"
+2026/05/28 15:01:53,bnjm2000,Added 2x L-Acoustics X12 model to event 141 (total: 2)
+2026/05/28 15:01:55,bnjm2000,Added 2x L-Acoustics X12 model to event 141 (total: 4)
+2026/05/28 15:02:03,bnjm2000,Added 2x L-Acoustics SB18 model to event 141 (total: 2)
+2026/05/28 15:02:37,bnjm2000,Added 2x L-Acoustics LA4X model to event 141 (total: 2)
