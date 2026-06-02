@@ -1,3 +1,5 @@
+"""Shared filename and CSV text helpers."""
+
 import io
 import re
 
@@ -6,7 +8,7 @@ def sanitize_filename(filename):
     return re.sub(r'[<>:"/\\|?*]', '_', filename)
 
 
-# --- robust csv helpers ---
+# CSV files may come from spreadsheet exports with different encodings.
 
 _FALLBACK_ENCODINGS = ("utf-8-sig", "utf-8", "cp1252", "latin-1")
 

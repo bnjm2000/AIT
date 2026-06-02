@@ -1,4 +1,4 @@
-// Global variables
+// Application state
 let currentUser = null;
 let events = [];
 let assets = [];
@@ -82,7 +82,7 @@ async function getContainerById(containerId, force = false) {
 // used to avoid container recursion
 window.__processingContainerBatch = false;
 
-// Global utility function for HTML escaping
+// HTML escaping helpers
 function escapeHtml(str) {
   if (!str) return '';
   const div = document.createElement('div');
@@ -152,7 +152,7 @@ function canCurrentUserModifyMaintenanceLog(log) {
 }
 
 
-// PATCH: attribute-safe HTML escaper (handles quotes too)
+// Attribute-safe escaping for inline handlers and data attributes.
 function escapeHtmlAttr(str) {
   return String(str ?? '')
     .replace(/&/g, '&amp;')
@@ -716,7 +716,7 @@ function getAssignedAssetDisplay(asset) {
 }
 
 
-/* PATCH A — Delivery Order (DO) edit helpers */
+// Delivery Order edit state
 function getDoEdits(eventId, deptNames = []) {
   const blank = ensureDoEditBuckets({ overrides: {}, custom: {}, ordering: {} }, deptNames);
   try {
@@ -748,7 +748,7 @@ function makeQtyInputId(department, brand, model, description = '') {
 let isClickHandlerSetup = false;
 let processingAssets = new Set();
 
-// Universal date formatting function to handle YYYY/MM/DD format from backend
+// Date formatting for server-provided event dates.
 function formatDate(dateStr) {
   if (!dateStr) return '';
   
@@ -5752,10 +5752,8 @@ function ensureContainerCrudModal() {
 }
 
 
-// ---------------- Container Asset Selector (same UX as Maintenance selector) ----------------
-// ---------------- Container Asset Selector (same UX as Maintenance selector) ----------------
+// ---------------- Container Asset Selector ----------------
 
-// stronger loader: ensures assets are actually the full inventory list (id/brand/model present)
 async function ensureAssetsLoadedForContainerSelector(force = false) {
   const looksValid =
     Array.isArray(assets) &&
@@ -5765,7 +5763,6 @@ async function ensureAssetsLoadedForContainerSelector(force = false) {
     typeof assets[0].brand !== "undefined" &&
     typeof assets[0].model !== "undefined";
 
-  // If assets already look correct and not forcing refresh, do nothing
   if (!force && looksValid) return true;
 
   try {
@@ -5779,15 +5776,10 @@ async function ensureAssetsLoadedForContainerSelector(force = false) {
   }
 }
 
-// IMPORTANT: this prevents “typing but nothing happens” by:
-// - replacing the input node to wipe any stale listeners
-// - binding input events cleanly every time the modal opens
-
 async function initContainerAssetSelector(initialAssetIds = []) {
   const resultsEl = document.getElementById("availableContainerAssets");
   const searchElInitial = document.getElementById("containerAssetSearch");
 
-  // lock UI during load so user can’t type before assets + listeners are ready
   if (searchElInitial) {
     searchElInitial.disabled = true;
     searchElInitial.placeholder = "Loading assets…";
@@ -5797,40 +5789,32 @@ async function initContainerAssetSelector(initialAssetIds = []) {
       '<div style="padding:20px;text-align:center;color:#666;">Loading assets…</div>';
   }
 
-  // FORCE refresh from /api/assets so selector always has correct asset objects
   await ensureAssetsLoadedForContainerSelector(true);
 
-  // set selected assets
   selectedContainerAssets = new Set(Array.isArray(initialAssetIds) ? initialAssetIds : []);
   updateSelectedContainerAssetsDisplay();
 
-  // re-bind listeners reliably
   const searchEl = bindContainerAssetSearchHandlers();
 
-  // enable once ready
   if (searchEl) {
     searchEl.disabled = false;
     searchEl.placeholder = "Search by asset ID / brand / model / serial... (Press Enter for exact ID)";
   }
 
-  // default panel message
   if (resultsEl) {
     resultsEl.innerHTML =
       '<div style="padding:20px;text-align:center;color:#666;">Type at least 2 characters to search...</div>';
   }
 
-  // if user already typed something quickly, render results
   try { searchContainerAssets(); } catch (err) { console.error("Container search init failed:", err); }
 }
 
-// container modal asset-search: bind once per modal open, reliably
 let _containerAssetSearchAC = null;
 
 function bindContainerAssetSearchHandlers() {
   const el = document.getElementById("containerAssetSearch");
   if (!el) return null;
 
-  // remove any previous listeners from earlier opens
   try { _containerAssetSearchAC?.abort(); } catch (_) {}
   _containerAssetSearchAC = new AbortController();
   const { signal } = _containerAssetSearchAC;
@@ -5852,13 +5836,12 @@ function bindContainerAssetSearchHandlers() {
     }, 50);
   };
 
-  // search live while typing (same behavior as maintenance selector)
   el.addEventListener("input", scheduleSearch, { signal });
   el.addEventListener("keyup", scheduleSearch, { signal });
   el.addEventListener("paste", scheduleSearch, { signal });
   el.addEventListener("change", scheduleSearch, { signal });
 
-  // Enter-to-add exact asset ID / serial / container ID
+  // Enter adds an exact asset, serial, or container match.
   el.addEventListener(
     "keydown",
     (e) => {
@@ -5870,7 +5853,6 @@ function bindContainerAssetSearchHandlers() {
     { signal }
   );
 
-  // run once in case there's already text in the field
   scheduleSearch();
 
   return el;
@@ -9376,7 +9358,7 @@ async function viewEvent(eventId) {
     ).textContent = `${event.tag === 'dry hire' ? 'Dry Hire' : 'Event'} ${event.id}: ${event.name}`;
 
     const formatDate = (dateStr) => {
-      // Fix: Convert YYYY/MM/DD format to a format that Date constructor can understand
+      // Convert server date strings before using the browser Date parser.
       if (dateStr && dateStr.includes('/')) {
         // Convert YYYY/MM/DD to YYYY-MM-DD for proper parsing
         const dateParts = dateStr.split('/');
@@ -11156,7 +11138,7 @@ async function loadEditEventAssets(eventId) {
 
     document.getElementById("edit-assets-tab").innerHTML = content;
 
-    // IMPORTANT: Use updateModelRequirementsSection to populate the current-asset-models 
+    // Rebuild model requirements from the latest event payload.
     // This ensures consistent UI with Edit/Remove buttons
     await updateModelRequirementsSection(eventId);
 
@@ -12182,7 +12164,7 @@ function filterAvailableModels(searchTerm) {
           <div id="${qtyInputId}-availability" data-available="${displayCount}" data-physical="${physical}" data-overlap="${overlap}" style="font-size: 12px; color: ${color};">${availabilityText}</div>
         </div>
         <div style="display: flex; align-items: center; gap: 10px;">
-          <!-- IMPORTANT: we keep max bound to PHYSICAL so we do NOT prevent adding when adjusted < 1 -->
+          <!-- The maximum stays bound to physical availability so adjusted counts below 1 can still be requested. -->
           <input type="number" id="${qtyInputId}" min="1" max="${physical}" value="1"
               style="width: 60px; padding: 4px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;"
               oninput="validateQuantityInput('${qtyInputId}', ${physical}); updateModelAvailabilityLabel('${qtyInputId}')"
@@ -15836,7 +15818,7 @@ function generatePdfDO(data) {
             html, body { margin: 0 !important; padding: 7mm !important; }
         }
         
-                /* PATCH: Delivery Order measured pagination */
+                /* Delivery Order measured pagination */
         body {
             margin: 0;
             padding: 0;
@@ -16536,9 +16518,7 @@ function generateExcelDO(data) {
     showNotification('success', 'Excel delivery order generated successfully');
 }
 
-// Keep the existing helper functions
-
-// Function to ensure assets are loaded before using them
+// Delivery order generation helpers
 async function ensureAssetsLoaded() {
     if (!assets || assets.length === 0) {
         console.log('Assets not loaded, fetching from API...');
@@ -16558,12 +16538,7 @@ async function ensureAssetsLoaded() {
     }
 }
 
-// Add these functions before the populateDeliveryItemsPreview function
-
-// Helper function to reorder items within a department
-// Replace the existing reordering functions with these enhanced versions
-
-// Enhanced helper function to reorder any type of items within a department
+// Delivery order item ordering
 function reorderDoItems(eventId, dept, fromIndex, toIndex) {
   const state = getDoEdits(eventId);
   
@@ -16598,7 +16573,6 @@ function reorderDoItems(eventId, dept, fromIndex, toIndex) {
   return true;
 }
 
-// Enhanced function to apply ordering to grouped items
 function applyDoOrdering(items, dept, eventId) {
   const state = getDoEdits(eventId);
   
@@ -16627,9 +16601,6 @@ function applyDoOrdering(items, dept, eventId) {
   return orderedItems;
 }
 
-// Setup drag and drop handlers for DO items (enhanced)
-
-// Helper function to clear ordering when DO edits are reset
 function clearDoOrdering(eventId) {
   const state = getDoEdits(eventId);
   if (state.ordering) {
@@ -16638,7 +16609,6 @@ function clearDoOrdering(eventId) {
   }
 }
 
-// Setup drag and drop handlers for DO items
 function setupDoItemDragHandlers(previewContainer, eventId) {
   let draggedElement = null;
   let draggedIndex = null;
@@ -16713,9 +16683,7 @@ function setupDoItemDragHandlers(previewContainer, eventId) {
   });
 }
 
-// Helper function to update item indices after reordering
-
-// NON-BULLET DO PREVIEW + EDIT MODE with consistent styling
+// Delivery order preview and inline editing
 async function populateDeliveryItemsPreview(event) {
   const previewContainer = document.getElementById('deliveryItemsPreview');
   if (!previewContainer) return;
@@ -16731,7 +16699,6 @@ async function populateDeliveryItemsPreview(event) {
     const depts = groupItemsByDepartment(event);
     const editMode = !!document.querySelector('#doEditToggle')?.checked;
 
-    // Updated styles to match application theme
     let html = `
       <style>
         .do-items-container {
@@ -17699,7 +17666,7 @@ function ensureKnownClientsButton() {
   if (input.parentElement) input.parentElement.appendChild(btn);
   else input.insertAdjacentElement('afterend', btn);
 }
-// PATCH B – full replacement of openClientsManager (adds Edit & Delete) with consistent styling
+// Client directory manager
 async function openClientsManager() {
   const modal = document.createElement('div');
   modal.className = 'modal active';
@@ -17977,7 +17944,7 @@ async function openClientsManager() {
   await refreshList('');
 }
 
-// PATCH 2026-05-14: event list views, refresh after unprepare, container model additions, and transfer return-to-office view
+// Event list view controls and transfer state
 let transferReturnToOfficeCache = [];
 let transferPanelMode = 'common';
 
@@ -18396,7 +18363,6 @@ async function loadReturnEvents() {
 }
 
 async function prepareSpecificAsset(eventId, assetId) {
-  console.log(`=== PATCHED prepareSpecificAsset CALLED ===`, { eventId, assetId });
   try {
     await ensureAssetsLoaded();
     if (!(await confirmDegradedAssetUse(assetId))) {
@@ -18420,7 +18386,6 @@ async function prepareSpecificAsset(eventId, assetId) {
 }
 
 async function unprepareSpecificAsset(eventId, assetId) {
-  console.log(`=== PATCHED unprepareSpecificAsset CALLED ===`, { eventId, assetId });
   try {
     await apiCall(`/api/events/${eventId}/unprepare`, 'POST', { assetId });
     showNotification('success', `${customAssetLabelFromId(assetId)} unprepared`);
@@ -18553,7 +18518,7 @@ async function processUniversalContainer(eventId, containerId) {
   });
 })();
 
-// PATCH 2026-05-14: keep bulk inventory rows in the selected sort order instead of grouping blank IDs first
+// Inventory sorting and export helpers
 function getInventorySortValue(asset, sortBy) {
   if (!asset) return '';
   if (sortBy === 'id') return asset.isBulk ? (asset.internalId || asset.bulkId || `${asset.brand || ''} ${asset.model || ''} ${asset.description || ''}`) : (asset.id || asset.internalId || '');
@@ -19167,7 +19132,7 @@ async function generateInventoryPdf() {
   }
 }
 
-// PATCH 2026-05-14B: transfer grouping, per-asset dropdown actions, undo, and grouped PDFs
+// Transfer grouping, actions, and grouped PDFs
 window.__transferActionState = window.__transferActionState || {};
 
 
@@ -19285,7 +19250,7 @@ function renderTransferWorkspace() {
 
 
 
-// PATCH 2026-05-14C: preserve prepare/transfer dropdowns and make transfer/return state server-visible.
+// Preserve prepare and transfer panel state during async refreshes.
 function __aitCapturePrepareOpenState() {
   const state = {
     expandedSections: [],
@@ -19520,7 +19485,7 @@ async function undoReturnOfficeDropdownAsset(encodedAssetId) {
   }
 }
 
-// PATCH 2026-05-14D: third Transfer Assets view — what still needs to come from office for the destination event.
+// Transfer assets needed from office for the destination event.
 var transferNeededFromOfficeCache = [];
 
 function transferModeMeta(mode) {

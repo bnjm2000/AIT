@@ -1,19 +1,51 @@
-import os
+"""CSV-backed persistence for users, inventory, events, logs, and clients."""
+
 import csv
 import json
 import logging
+import os
 import re
 import shutil
-from models import User, InventoryItem, Container, Event, LogEntry, hash_password
-from utils import sanitize_filename, open_csv_robust, clean_csv_cell
-from maintenance_logs import dump_maintenance_logs, load_maintenance_logs
 
-# Constants
+from maintenance_logs import dump_maintenance_logs, load_maintenance_logs
+from models import Client, Container, Event, InventoryItem, LogEntry, User, hash_password
+from utils import clean_csv_cell, open_csv_robust, sanitize_filename
+
+
+# File and CSV schema definitions
 MAX_LOG_LINES = 1000
+REQUIRED_DATA_FILES = ('Inventory.csv', 'Logs.csv', 'Users.csv', 'Containers.csv', 'Clients.csv')
+UTF8_ENCODINGS = ('utf-8', 'utf-8-sig')
+INVENTORY_FIELDNAMES = [
+    'AssetID', 'Brand', 'ModelNumber', 'SerialNumber', 'Description',
+    'IsMissing', 'IsOOC', 'IsDegraded', 'IsDisposed', 'IsBulk', 'Quantity',
+    'MaintenanceLogs', 'DepartmentCode', 'DefaultLocation', 'CurrentLocation'
+]
+EVENT_FIELDNAMES = [
+    'EventID', 'Name', 'StartDate', 'EndDate', 'AssetModels', 'PreparedItems',
+    'ReturnedItems', 'State', 'ActuallyPrepared', 'ExtraAssets', 'CustomCollected',
+    'Tag', 'ForceStateOverride', 'EventLogs', 'Notes'
+]
+CLIENT_FIELDNAMES = ['Name', 'Company', 'Address1', 'Address2', 'Address3', 'PostalCode', 'Phone']
+
 logger = logging.getLogger(__name__)
 EVENT_LOG_EVENT_ID_RE = re.compile(r'\bevent\s+(\d+)\b', re.IGNORECASE)
 
+
+def _parse_bool(value, default=False):
+    """Parse loose CSV boolean values while preserving old admin labels."""
+    if value is None:
+        return default
+    return str(value).strip().lower() in ('true', '1', 'yes', 'y', 'admin')
+
+
+def _is_csv_true(value):
+    return value == 'True'
+
+
 class DataManager:
+    """Owns the in-memory data model and its CSV persistence format."""
+
     def __init__(self, data_folder):
         self.data_folder = data_folder
         self.events_folder = os.path.join(data_folder, 'events')
@@ -24,6 +56,11 @@ class DataManager:
         self.event_file_map = {}
         self.logs = []
         self.clients = {}
+
+    # ---------------- Path helpers ----------------
+
+    def _data_path(self, filename):
+        return os.path.join(self.data_folder, filename)
 
     def _event_filename(self, event):
         sanitized_name = sanitize_filename(event.name)
@@ -74,15 +111,16 @@ class DataManager:
         except OSError:
             logger.warning("Event folder %s was not empty after merge.", old_folder)
 
+    # ---------------- Application bootstrap ----------------
+
     def setup_data_folder(self):
         if not os.path.exists(self.events_folder):
             os.makedirs(self.events_folder)
 
     def check_and_initialize_files(self):
-        required_files = ['Inventory.csv', 'Logs.csv', 'Users.csv', 'Containers.csv', 'Clients.csv']
         missing_files = []
-        for filename in required_files:
-            filepath = os.path.join(self.data_folder, filename)
+        for filename in REQUIRED_DATA_FILES:
+            filepath = self._data_path(filename)
             if not os.path.exists(filepath):
                 missing_files.append(filename)
         if missing_files:
@@ -92,15 +130,13 @@ class DataManager:
             logger.info("All required files are present.")
 
     def initialize_files(self):
-        required_files = ['Inventory.csv', 'Logs.csv', 'Users.csv', 'Containers.csv', 'Clients.csv']
-        for filename in required_files:
-            filepath = os.path.join(self.data_folder, filename)
+        for filename in REQUIRED_DATA_FILES:
+            filepath = self._data_path(filename)
             if not os.path.exists(filepath):
                 with open(filepath, 'w', newline='') as f:
-                    pass  # Create empty file
+                    pass
         
-        # Add default admin user if Users.csv was missing or empty
-        users_file = os.path.join(self.data_folder, 'Users.csv')
+        users_file = self._data_path('Users.csv')
         if os.path.getsize(users_file) == 0:
             salt = 'admin'
             password_hash = hash_password('admin', salt)
@@ -108,6 +144,8 @@ class DataManager:
             self.save_users()
             logger.info("Default admin user created.")
         logger.info("Required files have been initialized.")
+
+    # ---------------- Bulk loading ----------------
 
     def load_all_data(self):
         self.load_users()
@@ -117,6 +155,8 @@ class DataManager:
         self.load_logs()
         self.migrate_event_logs_from_system_logs()
         self.load_clients()
+
+    # ---------------- Event log normalization ----------------
 
     def event_ids_from_log_action(self, action):
         action_text = str(action or '')
@@ -208,9 +248,11 @@ class DataManager:
         logger.info("Migrated %s event-related log entries into %s event file(s).", migrated, len(touched_event_ids))
         return migrated
 
+    # ---------------- Users ----------------
+
     def load_users(self):
         self.users = {}
-        filepath = os.path.join(self.data_folder, 'Users.csv')
+        filepath = self._data_path('Users.csv')
         if not os.path.exists(filepath):
             return
 
@@ -238,28 +280,22 @@ class DataManager:
                 password_hash = row[1]
                 salt = row[2]
 
-                def parse_bool(value, default=False):
-                    if value is None:
-                        return default
-                    return str(value).strip().lower() in ('true', '1', 'yes', 'y', 'admin')
-
-                is_admin = parse_bool(row[3], False)
+                is_admin = _parse_bool(row[3], False)
 
                 if len(row) >= 5:
-                    is_active = parse_bool(row[4], True)
+                    is_active = _parse_bool(row[4], True)
                 else:
-                    # Backward compatibility: old existing users stay active
+                    # Older user rows did not store activity status.
                     is_active = True
                     needs_save = True
 
                 self.users[username] = User(username, password_hash, salt, is_admin, is_active)
 
-        # Auto-upgrade Users.csv from 4 columns to 5 columns
         if needs_save:
             self.save_users()
 
     def save_users(self):
-        filepath = os.path.join(self.data_folder, 'Users.csv')
+        filepath = self._data_path('Users.csv')
         with open(filepath, 'w', newline='') as f:
             writer = csv.writer(f)
             for user in self.users.values():
@@ -271,6 +307,8 @@ class DataManager:
                     getattr(user, 'is_active', True)
                 ])
 
+    # ---------------- Inventory ----------------
+
     def _read_inventory_file(self, filepath):
         inventory = {}
         if not os.path.exists(filepath):
@@ -278,22 +316,21 @@ class DataManager:
 
         f, enc = open_csv_robust(filepath)
         try:
-            if enc not in ("utf-8", "utf-8-sig"):
+            if enc not in UTF8_ENCODINGS:
                 logger.warning("Inventory.csv decoded using %s. Consider re-saving as UTF-8.", enc)
             reader = csv.DictReader(f)
             for row in reader:
                 if not row:
                     continue
 
-                # clean all values
                 row = {k: clean_csv_cell(v) for k, v in row.items()}
 
                 maintenance_logs = load_maintenance_logs(row.get('MaintenanceLogs', ''))
                 department_code = row.get('DepartmentCode', 'UN')
-                is_ooc = row.get('IsOOC', 'False') == 'True'
-                is_degraded = row.get('IsDegraded', 'False') == 'True'
-                is_disposed = row.get('IsDisposed', 'False') == 'True'
-                is_bulk = row.get('IsBulk', 'False') == 'True'
+                is_ooc = _is_csv_true(row.get('IsOOC'))
+                is_degraded = _is_csv_true(row.get('IsDegraded'))
+                is_disposed = _is_csv_true(row.get('IsDisposed'))
+                is_bulk = _is_csv_true(row.get('IsBulk'))
                 try:
                     quantity = int(row.get('Quantity', '1') or '1')
                 except ValueError:
@@ -305,7 +342,7 @@ class DataManager:
                     model_number=row.get('ModelNumber', ''),
                     serial_number=row.get('SerialNumber', ''),
                     description=row.get('Description', ''),
-                    is_missing=row.get('IsMissing', 'False') == 'True',
+                    is_missing=_is_csv_true(row.get('IsMissing')),
                     is_ooc=is_ooc,
                     is_degraded=is_degraded,
                     is_disposed=is_disposed,
@@ -325,11 +362,11 @@ class DataManager:
         return inventory
 
     def load_inventory(self):
-        filepath = os.path.join(self.data_folder, 'Inventory.csv')
+        filepath = self._data_path('Inventory.csv')
         self.inventory = self._read_inventory_file(filepath)
 
     def save_inventory(self, preserve_unknown=True, drop_asset_ids=None):
-        filepath = os.path.join(self.data_folder, 'Inventory.csv')
+        filepath = self._data_path('Inventory.csv')
         drop_asset_ids = {str(asset_id) for asset_id in (drop_asset_ids or []) if str(asset_id)}
         inventory_to_write = {
             asset_id: item
@@ -345,11 +382,7 @@ class DataManager:
                     inventory_to_write[asset_id] = disk_item
 
         with open(filepath, 'w', newline='', encoding='utf-8') as f:
-            fieldnames = [
-                'AssetID', 'Brand', 'ModelNumber', 'SerialNumber', 'Description',
-                'IsMissing', 'IsOOC', 'IsDegraded', 'IsDisposed', 'IsBulk', 'Quantity', 'MaintenanceLogs', 'DepartmentCode', 'DefaultLocation', 'CurrentLocation'
-            ]
-            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer = csv.DictWriter(f, fieldnames=INVENTORY_FIELDNAMES)
             writer.writeheader()
             for item in inventory_to_write.values():
                 writer.writerow({
@@ -371,16 +404,17 @@ class DataManager:
                 })
         self.inventory = inventory_to_write
 
+    # ---------------- Containers ----------------
 
     def load_containers(self):
         self.containers = {}
-        filepath = os.path.join(self.data_folder, 'Containers.csv')
+        filepath = self._data_path('Containers.csv')
         if not os.path.exists(filepath):
             return
 
         f, enc = open_csv_robust(filepath)
         try:
-            if enc not in ("utf-8", "utf-8-sig"):
+            if enc not in UTF8_ENCODINGS:
                 logger.warning("Containers.csv decoded using %s. Consider re-saving as UTF-8.", enc)
             reader = csv.reader(f)
             for row in reader:
@@ -396,11 +430,23 @@ class DataManager:
             f.close()
 
     def save_containers(self):
-        filepath = os.path.join(self.data_folder, 'Containers.csv')
+        filepath = self._data_path('Containers.csv')
         with open(filepath, 'w', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
             for container in self.containers.values():
                 writer.writerow([container.container_id, '|'.join(container.asset_ids)])
+
+    # ---------------- Events ----------------
+
+    def _load_event_json_list(self, event_data, fieldname, filename):
+        value = event_data.get(fieldname)
+        if not value:
+            return []
+        try:
+            return json.loads(value)
+        except json.JSONDecodeError as e:
+            logger.error("Error parsing '%s' in event file %s: %s. Setting to empty list.", fieldname, filename, e)
+            return []
 
     def load_events(self):
         self.events = {}
@@ -415,7 +461,7 @@ class DataManager:
             filepath = os.path.join(self.events_folder, filename)
             f, enc = open_csv_robust(filepath)
             try:
-                if enc not in ("utf-8", "utf-8-sig"):
+                if enc not in UTF8_ENCODINGS:
                     logger.warning("Event file %s decoded using %s. Consider re-saving as UTF-8.", filename, enc)
 
                 reader = csv.DictReader(f)
@@ -447,55 +493,19 @@ class DataManager:
 
                 prepared_items = []
                 if event_data.get('PreparedItems'):
-                    try:
-                        prepared_items = json.loads(event_data['PreparedItems'])
-                    except json.JSONDecodeError as e:
-                        logger.error("Error parsing 'PreparedItems' in event file %s: %s. Setting to empty list.", filename, e)
-                        prepared_items = []
+                    prepared_items = self._load_event_json_list(event_data, 'PreparedItems', filename)
 
-                returned_items = []
-                if event_data.get('ReturnedItems'):
-                    try:
-                        returned_items = json.loads(event_data['ReturnedItems'])
-                    except json.JSONDecodeError as e:
-                        logger.error("Error parsing 'ReturnedItems' in event file %s: %s. Setting to empty list.", filename, e)
-                        returned_items = []
-
-                actually_prepared = []
-                if event_data.get('ActuallyPrepared'):
-                    try:
-                        actually_prepared = json.loads(event_data['ActuallyPrepared'])
-                    except json.JSONDecodeError as e:
-                        logger.error("Error parsing 'ActuallyPrepared' in event file %s: %s. Setting to empty list.", filename, e)
-                        actually_prepared = []
-
-                extra_assets = []
-                if event_data.get('ExtraAssets'):
-                    try:
-                        extra_assets = json.loads(event_data['ExtraAssets'])
-                    except json.JSONDecodeError as e:
-                        logger.error("Error parsing 'ExtraAssets' in event file %s: %s. Setting to empty list.", filename, e)
-                        extra_assets = []
-
-                custom_collected = []
-                if event_data.get('CustomCollected'):
-                    try:
-                        custom_collected = json.loads(event_data['CustomCollected'])
-                    except json.JSONDecodeError as e:
-                        logger.error("Error parsing 'CustomCollected' in event file %s: %s. Setting to empty list.", filename, e)
-                        custom_collected = []
-
+                returned_items = self._load_event_json_list(event_data, 'ReturnedItems', filename)
+                actually_prepared = self._load_event_json_list(event_data, 'ActuallyPrepared', filename)
+                extra_assets = self._load_event_json_list(event_data, 'ExtraAssets', filename)
+                custom_collected = self._load_event_json_list(event_data, 'CustomCollected', filename)
                 event_logs = []
                 if event_data.get('EventLogs'):
-                    try:
-                        event_logs = self.normalize_event_logs(json.loads(event_data['EventLogs']))
-                    except json.JSONDecodeError as e:
-                        logger.error("Error parsing 'EventLogs' in event file %s: %s. Setting to empty list.", filename, e)
-                        event_logs = []
+                    event_logs = self.normalize_event_logs(self._load_event_json_list(event_data, 'EventLogs', filename))
 
                 state = event_data.get('State', 'Added')
                 tag = event_data.get('Tag', 'events')
-                force_state_override = event_data.get('ForceStateOverride', 'False') == 'True'
+                force_state_override = _is_csv_true(event_data.get('ForceStateOverride'))
 
                 event = Event(
                     event_id=event_id,
@@ -529,7 +539,6 @@ class DataManager:
                 f.close()
 
     def save_event(self, event):
-        # Create backup before saving
         if hasattr(self, 'event_file_map') and event.event_id in self.event_file_map:
             self.backup_event_file(event.event_id)
         
@@ -537,7 +546,7 @@ class DataManager:
         filepath = os.path.join(self.events_folder, filename)
         old_filename = self.event_file_map.get(event.event_id)
         
-        # Ensure attributes exist
+        # Older Event instances may not have newer fields until they are saved once.
         actually_prepared = getattr(event, 'actually_prepared', [])
         extra_assets = getattr(event, 'extra_assets', [])
         tag = getattr(event, 'tag', 'events')
@@ -546,7 +555,6 @@ class DataManager:
         notes = getattr(event, 'notes', '')
         event_logs = self.normalize_event_logs(getattr(event, 'event_logs', []))
         
-        # VALIDATION: Don't save if critical data is missing
         if not hasattr(event, 'prepared_items'):
             logger.error("Event %s missing prepared_items - NOT SAVING to prevent data loss!", event.event_id)
             return
@@ -573,8 +581,7 @@ class DataManager:
             return
         
         with open(filepath, 'w', newline='', encoding='utf-8') as f:
-            fieldnames = ['EventID', 'Name', 'StartDate', 'EndDate', 'AssetModels', 'PreparedItems', 'ReturnedItems', 'State', 'ActuallyPrepared', 'ExtraAssets', 'CustomCollected', 'Tag', 'ForceStateOverride', 'EventLogs', 'Notes']
-            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer = csv.DictWriter(f, fieldnames=EVENT_FIELDNAMES)
             writer.writeheader()
             
             row_data = {
@@ -618,15 +625,17 @@ class DataManager:
         if folder and os.path.isdir(folder):
             shutil.rmtree(folder)
 
+    # ---------------- System logs ----------------
+
     def load_logs(self):
         self.logs = []
-        filepath = os.path.join(self.data_folder, 'Logs.csv')
+        filepath = self._data_path('Logs.csv')
         if not os.path.exists(filepath):
             return
 
         f, enc = open_csv_robust(filepath)
         try:
-            if enc not in ("utf-8", "utf-8-sig"):
+            if enc not in UTF8_ENCODINGS:
                 logger.warning("Logs.csv decoded using %s. Consider re-saving as UTF-8.", enc)
             reader = csv.reader(f)
             for row in reader:
@@ -640,7 +649,7 @@ class DataManager:
             f.close()
 
     def save_logs(self):
-        filepath = os.path.join(self.data_folder, 'Logs.csv')
+        filepath = self._data_path('Logs.csv')
         with open(filepath, 'w', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
             for log in self.logs[-MAX_LOG_LINES:]:
@@ -665,17 +674,17 @@ class DataManager:
                 logger.warning("Event file %s does not exist. No backup created.", filename)
         else:
             logger.warning("No file mapping found for Event ID %s. Cannot create backup.", event_id)
-    
+
+    # ---------------- Clients ----------------
+
     def load_clients(self):
-        import csv, os
         self.clients = {}
-        filepath = os.path.join(self.data_folder, 'Clients.csv')
+        filepath = self._data_path('Clients.csv')
         if not os.path.exists(filepath):
-            # when creating Clients.csv from scratch
-            with open(os.path.join(self.data_folder, 'Clients.csv'), 'w', newline='', encoding='utf-8') as f:
+            with open(filepath, 'w', newline='', encoding='utf-8') as f:
                 writer = csv.writer(f)
-                writer.writerow(['Name','Company','Address1','Address2','Address3','PostalCode','Phone'])
-        from models import Client
+                writer.writerow(CLIENT_FIELDNAMES)
+
         with open(filepath, 'r', newline='', encoding='utf-8') as f:
             reader = csv.DictReader(f)
             for row in reader:
@@ -694,11 +703,9 @@ class DataManager:
                     self.clients[c.name] = c
 
     def save_clients(self):
-        import csv, os
-        filepath = os.path.join(self.data_folder, 'Clients.csv')
-        fieldnames = ['Name', 'Company', 'Address1', 'Address2', 'Address3', 'PostalCode', 'Phone']
+        filepath = self._data_path('Clients.csv')
         with open(filepath, 'w', newline='', encoding='utf-8') as f:
-            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer = csv.DictWriter(f, fieldnames=CLIENT_FIELDNAMES)
             writer.writeheader()
             for c in sorted(self.clients.values(), key=lambda x: x.name.lower()):
                 writer.writerow({

@@ -1,27 +1,40 @@
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for, send_file, Response, stream_with_context, g, has_request_context
+"""Flask application for the AVEC Inventory Tracker."""
+
 import csv
-from urllib.parse import unquote_plus, quote
-import os
-import re
-import queue
-from flask_cors import CORS
-from functools import wraps
-import os
 import json
+import logging
 import mimetypes
+import os
+import queue
+import re
+import secrets
 import shutil
 import subprocess
 import tempfile
-from datetime import datetime, timedelta
 from collections import defaultdict
-import logging
+from datetime import datetime, timedelta
+from functools import wraps
+from types import SimpleNamespace
+from urllib.parse import quote, unquote_plus
 import threading
 import time
-import secrets
-from types import SimpleNamespace
 
-# Import your existing modules
-from models import User, InventoryItem, Container, Event, LogEntry, hash_password, format_date_output, dates_overlap
+from flask import (
+    Flask,
+    Response,
+    g,
+    has_request_context,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    send_file,
+    session,
+    stream_with_context,
+    url_for,
+)
+from flask_cors import CORS
+
 from data_manager import DataManager
 from maintenance_logs import (
     ASSET_CHECK_LOG_TYPE,
@@ -37,9 +50,21 @@ from maintenance_logs import (
     parse_maintenance_log_date,
     status_change_labels,
 )
+from models import (
+    Container,
+    Event,
+    InventoryItem,
+    LogEntry,
+    User,
+    dates_overlap,
+    format_date_output,
+    hash_password,
+)
 from utils import sanitize_filename
 
-# Configure logging
+
+# ---------------- Application setup ----------------
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -47,31 +72,23 @@ app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'AVEC')
 CORS(app)
 
-# Global data manager instance
 data_manager = None
 _data_manager_init_lock = threading.RLock()
 _data_reload_lock = threading.RLock()
 _data_snapshot_signature = None
 _background_thread_started = False
 
-# Caching for performance
 _cache = {
     'assigned_assets': None,
     'available_assets': None,
     'cache_timestamp': None
 }
 
-# Serialise transfer/return mutations so multiple users on different devices
-# cannot transfer and return the same physical asset at the same time.
+# Cross-device actions can otherwise race on the same physical asset.
 _transfer_action_lock = threading.RLock()
-
-# Serialise inventory creation so simultaneous Add Assets requests cannot
-# generate the same next Asset ID.
 _inventory_action_lock = threading.RLock()
 
-# Browser realtime update stream.  Server-sent events keep the deployment simple
-# for regular WSGI hosting while still letting every logged-in browser react when
-# another user changes shared inventory/event data.
+# Server-sent events notify logged-in browsers when shared CSV data changes.
 _realtime_subscribers = {}
 _realtime_subscribers_lock = threading.RLock()
 _realtime_sequence = 0
