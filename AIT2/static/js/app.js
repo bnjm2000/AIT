@@ -999,14 +999,17 @@ function escapeHtmlAttribute(str) {
 }
 
 const BARCODE_SCANNER_SCRIPT_URL = 'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js';
+const BARCODE_SCANNER_NATIVE_INTERVAL_MS = 125;
 let barcodeScannerScriptPromise = null;
 let barcodeScannerState = {
   html5: null,
   stream: null,
   nativeTimer: null,
   nativeVideo: null,
+  nativeDetector: null,
   onScan: null,
-  handling: false
+  handling: false,
+  statusTimer: null
 };
 
 const HTML5_QRCODE_FORMAT_NAMES = [
@@ -1122,24 +1125,33 @@ function ensureBarcodeScannerStyles() {
     }
 
     #barcodeScannerModal .modal-content {
-      max-width: 560px;
+      max-width: 680px;
     }
 
     .barcode-scanner-reader {
       overflow: hidden;
       border-radius: 12px;
       background: #111827;
-      min-height: 260px;
+      min-height: 340px;
       display: flex;
       align-items: center;
       justify-content: center;
       color: #fff;
+      position: relative;
     }
 
     .barcode-scanner-reader video {
       width: 100%;
-      max-height: 60vh;
-      object-fit: cover;
+      height: 100%;
+      max-height: 68vh;
+      object-fit: contain;
+    }
+
+    .barcode-scanner-reader img,
+    .barcode-scanner-reader canvas {
+      max-width: 100%;
+      max-height: 68vh;
+      object-fit: contain;
     }
 
     .barcode-scanner-status {
@@ -1178,7 +1190,7 @@ function ensureBarcodeScannerStyles() {
       }
 
       .barcode-scanner-reader {
-        min-height: 320px;
+        min-height: 420px;
       }
 
       .barcode-scanner-manual-row .btn,
@@ -1250,6 +1262,122 @@ function setBarcodeScannerStatus(message, type = 'info') {
   el.textContent = message || '';
 }
 
+function scheduleBarcodeScannerHint() {
+  if (barcodeScannerState.statusTimer) {
+    clearTimeout(barcodeScannerState.statusTimer);
+  }
+
+  barcodeScannerState.statusTimer = setTimeout(() => {
+    if (!barcodeScannerState.handling && document.getElementById('barcodeScannerModal')?.classList.contains('active')) {
+      setBarcodeScannerStatus('Move closer until the code fills more of the camera view, or use Take Photo for difficult labels.');
+    }
+  }, 7000);
+}
+
+function getBarcodeScannerVideoConstraints(overrides = {}) {
+  return {
+    facingMode: { ideal: 'environment' },
+    width: { ideal: 1920 },
+    height: { ideal: 1080 },
+    ...overrides
+  };
+}
+
+function isLikelyRearCameraLabel(label) {
+  return /back|rear|environment|world|wide/i.test(String(label || ''));
+}
+
+function getPrimaryVideoTrack(stream) {
+  return stream?.getVideoTracks?.()[0] || null;
+}
+
+async function enhanceBarcodeScannerStream(stream) {
+  const track = getPrimaryVideoTrack(stream);
+  if (!track?.getCapabilities || !track.applyConstraints) return;
+
+  let capabilities = {};
+  try {
+    capabilities = track.getCapabilities() || {};
+  } catch (e) {
+    return;
+  }
+
+  const advanced = [];
+  if (Array.isArray(capabilities.focusMode) && capabilities.focusMode.includes('continuous')) {
+    advanced.push({ focusMode: 'continuous' });
+  }
+  if (Array.isArray(capabilities.exposureMode) && capabilities.exposureMode.includes('continuous')) {
+    advanced.push({ exposureMode: 'continuous' });
+  }
+  if (Array.isArray(capabilities.whiteBalanceMode) && capabilities.whiteBalanceMode.includes('continuous')) {
+    advanced.push({ whiteBalanceMode: 'continuous' });
+  }
+
+  if (advanced.length === 0) return;
+
+  try {
+    await track.applyConstraints({ advanced });
+  } catch (e) {
+    // Camera focus/exposure hints are best effort and vary by browser.
+  }
+}
+
+async function getBarcodeScannerMediaStream() {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    throw new Error('Camera scanning is not available in this browser');
+  }
+
+  const attempts = [
+    { video: getBarcodeScannerVideoConstraints(), audio: false },
+    { video: { facingMode: { ideal: 'environment' } }, audio: false },
+    { video: true, audio: false }
+  ];
+
+  let lastError = null;
+  let stream = null;
+  for (const constraints of attempts) {
+    try {
+      stream = await navigator.mediaDevices.getUserMedia(constraints);
+      break;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  if (!stream) throw lastError || new Error('Camera scanning is not available');
+
+  const track = getPrimaryVideoTrack(stream);
+  const currentLabel = track?.label || '';
+  if (
+    currentLabel &&
+    !isLikelyRearCameraLabel(currentLabel) &&
+    navigator.mediaDevices?.enumerateDevices
+  ) {
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const rearCamera = devices.find(device => (
+        device.kind === 'videoinput' &&
+        device.deviceId &&
+        isLikelyRearCameraLabel(device.label)
+      ));
+
+      if (rearCamera) {
+        const rearStream = await navigator.mediaDevices.getUserMedia({
+          video: getBarcodeScannerVideoConstraints({ deviceId: { exact: rearCamera.deviceId } }),
+          audio: false
+        });
+        stream.getTracks().forEach(existingTrack => existingTrack.stop());
+        stream = rearStream;
+      }
+    } catch (e) {
+      // The initial environment-facing stream is still usable.
+    }
+  }
+
+  await enhanceBarcodeScannerStream(stream);
+  return stream;
+}
+
 function getHtml5QrcodeFormats() {
   const formats = window.Html5QrcodeSupportedFormats;
   if (!formats) return [];
@@ -1261,7 +1389,18 @@ function getHtml5QrcodeFormats() {
 
 function getHtml5QrcodeConfig() {
   const formats = getHtml5QrcodeFormats();
-  return formats.length > 0 ? { formatsToSupport: formats, verbose: false } : { verbose: false };
+  const config = {
+    verbose: false,
+    experimentalFeatures: {
+      useBarCodeDetectorIfSupported: true
+    }
+  };
+
+  if (formats.length > 0) {
+    config.formatsToSupport = formats;
+  }
+
+  return config;
 }
 
 function getBarcodeScannerQrbox(viewfinderWidth, viewfinderHeight) {
@@ -1272,10 +1411,10 @@ function getBarcodeScannerQrbox(viewfinderWidth, viewfinderHeight) {
     return { width: 320, height: 200 };
   }
 
-  const scanWidth = Math.min(Math.floor(width * 0.92), 520);
-  const scanHeight = Math.min(Math.floor(height * 0.62), 260, scanWidth);
-  const minWidth = Math.min(180, width);
-  const minHeight = Math.min(160, height);
+  const scanWidth = Math.min(Math.floor(width * 0.96), 680);
+  const scanHeight = Math.min(Math.floor(height * 0.86), 520);
+  const minWidth = Math.min(240, width);
+  const minHeight = Math.min(220, height);
 
   return {
     width: Math.min(width, Math.max(minWidth, scanWidth)),
@@ -1285,9 +1424,12 @@ function getBarcodeScannerQrbox(viewfinderWidth, viewfinderHeight) {
 
 function getBarcodeScannerCameraConfig() {
   return {
-    fps: 12,
+    fps: 18,
     qrbox: getBarcodeScannerQrbox,
-    aspectRatio: 1.7777778
+    disableFlip: true,
+    experimentalFeatures: {
+      useBarCodeDetectorIfSupported: true
+    }
   };
 }
 
@@ -1329,10 +1471,17 @@ function loadHtml5Qrcode() {
 }
 
 async function stopBarcodeScannerCamera(clearReader = true) {
+  if (barcodeScannerState.statusTimer) {
+    clearTimeout(barcodeScannerState.statusTimer);
+    barcodeScannerState.statusTimer = null;
+  }
+
   if (barcodeScannerState.nativeTimer) {
     clearTimeout(barcodeScannerState.nativeTimer);
     barcodeScannerState.nativeTimer = null;
   }
+
+  barcodeScannerState.nativeDetector = null;
 
   if (barcodeScannerState.html5) {
     try {
@@ -1386,6 +1535,41 @@ async function handleBarcodeScanResult(rawValue) {
   }
 }
 
+async function startNativeBarcodeDetectionLoop(video) {
+  if (!window.BarcodeDetector || !video) return false;
+
+  let detector = barcodeScannerState.nativeDetector;
+  if (!detector) {
+    detector = await createNativeBarcodeDetector();
+    barcodeScannerState.nativeDetector = detector;
+  }
+
+  barcodeScannerState.nativeVideo = video;
+
+  const detectLoop = async () => {
+    if (barcodeScannerState.nativeVideo !== video || barcodeScannerState.handling) return;
+
+    try {
+      if (video.readyState >= 2) {
+        const codes = await detector.detect(video);
+        if (barcodeScannerState.nativeVideo !== video || barcodeScannerState.handling) return;
+        if (codes && codes.length > 0) {
+          await handleBarcodeScanResult(codes[0].rawValue || '');
+          return;
+        }
+      }
+    } catch (e) {
+      console.warn('Native barcode detection failed:', e);
+    }
+
+    if (barcodeScannerState.nativeVideo !== video || barcodeScannerState.handling) return;
+    barcodeScannerState.nativeTimer = setTimeout(detectLoop, BARCODE_SCANNER_NATIVE_INTERVAL_MS);
+  };
+
+  detectLoop();
+  return true;
+}
+
 async function startNativeBarcodeScanner() {
   if (!window.BarcodeDetector || !navigator.mediaDevices?.getUserMedia) {
     throw new Error('Camera scanning is not available in this browser');
@@ -1400,36 +1584,15 @@ async function startNativeBarcodeScanner() {
   video.muted = true;
   reader.appendChild(video);
 
-  const stream = await navigator.mediaDevices.getUserMedia({
-    video: { facingMode: { ideal: 'environment' } },
-    audio: false
-  });
+  const stream = await getBarcodeScannerMediaStream();
 
   barcodeScannerState.stream = stream;
-  barcodeScannerState.nativeVideo = video;
   video.srcObject = stream;
   await video.play();
 
-  const detector = await createNativeBarcodeDetector();
-
-  const detectLoop = async () => {
-    if (!barcodeScannerState.nativeVideo || barcodeScannerState.handling) return;
-
-    try {
-      const codes = await detector.detect(video);
-      if (codes && codes.length > 0) {
-        await handleBarcodeScanResult(codes[0].rawValue || '');
-        return;
-      }
-    } catch (e) {
-      console.warn('Native barcode detection failed:', e);
-    }
-
-    barcodeScannerState.nativeTimer = setTimeout(detectLoop, 250);
-  };
-
   setBarcodeScannerStatus('Camera ready. Point it at the QR code or barcode.');
-  detectLoop();
+  scheduleBarcodeScannerHint();
+  await startNativeBarcodeDetectionLoop(video);
 }
 
 async function startHtml5BarcodeScanner() {
@@ -1444,14 +1607,55 @@ async function startHtml5BarcodeScanner() {
   const scanner = new Html5Qrcode(readerId, getHtml5QrcodeConfig());
   barcodeScannerState.html5 = scanner;
 
-  await scanner.start(
-    { facingMode: 'environment' },
-    getBarcodeScannerCameraConfig(),
-    decodedText => handleBarcodeScanResult(decodedText),
-    () => {}
-  );
+  const cameraRequests = [
+    getBarcodeScannerVideoConstraints(),
+    { facingMode: { ideal: 'environment' } },
+    { facingMode: 'environment' }
+  ];
+  let lastStartError = null;
+
+  for (const cameraRequest of cameraRequests) {
+    try {
+      await scanner.start(
+        cameraRequest,
+        getBarcodeScannerCameraConfig(),
+        decodedText => handleBarcodeScanResult(decodedText),
+        () => {}
+      );
+      lastStartError = null;
+      break;
+    } catch (error) {
+      lastStartError = error;
+      try {
+        await scanner.stop();
+      } catch (e) {
+        // The failed attempt may not have reached a running state.
+      }
+    }
+  }
+
+  if (lastStartError) {
+    try {
+      await scanner.clear();
+    } catch (e) {
+      // Clear is best effort when start fails.
+    }
+    barcodeScannerState.html5 = null;
+    throw lastStartError;
+  }
+
+  const video = reader.querySelector('video');
+  if (video?.srcObject) {
+    await enhanceBarcodeScannerStream(video.srcObject);
+  }
+  if (video) {
+    startNativeBarcodeDetectionLoop(video).catch(error => {
+      console.warn('Native barcode detection unavailable:', error);
+    });
+  }
 
   setBarcodeScannerStatus('Camera ready. Point it at the QR code or barcode.');
+  scheduleBarcodeScannerHint();
   return true;
 }
 
@@ -1497,6 +1701,121 @@ async function closeBarcodeScanner() {
   closeModal('barcodeScannerModal');
 }
 
+async function scanBarcodeFileWithHtml5Qrcode(file) {
+  const loaded = await loadHtml5Qrcode();
+  if (!loaded || !window.Html5Qrcode) {
+    throw new Error('Photo scanning is not available in this browser');
+  }
+
+  const scanner = new Html5Qrcode('barcodeScannerReader', getHtml5QrcodeConfig());
+  barcodeScannerState.html5 = scanner;
+
+  if (typeof scanner.scanFileV2 === 'function') {
+    const result = await scanner.scanFileV2(file, true);
+    return result?.decodedText || result?.result?.text || '';
+  }
+
+  return scanner.scanFile(file, true);
+}
+
+function loadBarcodeScannerImage(file) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    const url = URL.createObjectURL(file);
+
+    image.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(image);
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('Unable to read photo'));
+    };
+    image.src = url;
+  });
+}
+
+function createBarcodeScannerPhotoCanvas(image, { rotation = 0, contrast = false } = {}) {
+  const sourceWidth = image.naturalWidth || image.width || 1;
+  const sourceHeight = image.naturalHeight || image.height || 1;
+  const maxSide = 1800;
+  const scale = Math.min(1, maxSide / Math.max(sourceWidth, sourceHeight));
+  const targetWidth = Math.max(1, Math.round(sourceWidth * scale));
+  const targetHeight = Math.max(1, Math.round(sourceHeight * scale));
+  const normalizedRotation = ((rotation % 360) + 360) % 360;
+  const swapsAxes = normalizedRotation === 90 || normalizedRotation === 270;
+  const canvas = document.createElement('canvas');
+  canvas.width = swapsAxes ? targetHeight : targetWidth;
+  canvas.height = swapsAxes ? targetWidth : targetHeight;
+
+  const context = canvas.getContext('2d');
+  context.save();
+  context.translate(canvas.width / 2, canvas.height / 2);
+  context.rotate(normalizedRotation * Math.PI / 180);
+  context.drawImage(image, -targetWidth / 2, -targetHeight / 2, targetWidth, targetHeight);
+  context.restore();
+
+  if (contrast) {
+    const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+    const data = imageData.data;
+    for (let i = 0; i < data.length; i += 4) {
+      const gray = (data[i] * 0.299) + (data[i + 1] * 0.587) + (data[i + 2] * 0.114);
+      const boosted = Math.max(0, Math.min(255, ((gray - 128) * 1.45) + 128));
+      data[i] = boosted;
+      data[i + 1] = boosted;
+      data[i + 2] = boosted;
+    }
+    context.putImageData(imageData, 0, 0);
+  }
+
+  return canvas;
+}
+
+async function detectBarcodeInPhotoWithNativeDetector(file) {
+  if (!window.BarcodeDetector) {
+    throw new Error('Photo scanning is not available in this browser');
+  }
+
+  const detector = await createNativeBarcodeDetector();
+  let lastError = null;
+
+  if (window.createImageBitmap) {
+    let bitmap = null;
+    try {
+      bitmap = await createImageBitmap(file);
+      const codes = await detector.detect(bitmap);
+      if (codes && codes.length > 0) return codes[0].rawValue || '';
+    } catch (error) {
+      lastError = error;
+    } finally {
+      if (bitmap && typeof bitmap.close === 'function') {
+        bitmap.close();
+      }
+    }
+  }
+
+  const image = await loadBarcodeScannerImage(file);
+  const variantOptions = [
+    {},
+    { contrast: true },
+    { rotation: 90 },
+    { rotation: 180 },
+    { rotation: 270 }
+  ];
+
+  for (const options of variantOptions) {
+    try {
+      const variant = createBarcodeScannerPhotoCanvas(image, options);
+      const codes = await detector.detect(variant);
+      if (codes && codes.length > 0) return codes[0].rawValue || '';
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError || new Error('No QR code or barcode found in the photo');
+}
+
 async function scanBarcodeImageFile(input) {
   const file = input?.files?.[0];
   if (!file) return;
@@ -1507,39 +1826,20 @@ async function scanBarcodeImageFile(input) {
     await stopBarcodeScannerCamera(false);
 
     let lastScanError = null;
-    const loaded = await loadHtml5Qrcode();
-    if (loaded && window.Html5Qrcode) {
-      const scanner = new Html5Qrcode('barcodeScannerReader', getHtml5QrcodeConfig());
-      barcodeScannerState.html5 = scanner;
-
-      try {
-        const result = await scanner.scanFile(file, true);
-        await handleBarcodeScanResult(result);
-        return;
-      } catch (error) {
-        lastScanError = error;
-        await stopBarcodeScannerCamera(false);
-      }
-    }
-
-    if (!window.BarcodeDetector) {
-      throw lastScanError || new Error('Photo scanning is not available in this browser');
-    }
-
-    let bitmap = null;
     try {
-      bitmap = await createImageBitmap(file);
-      const detector = await createNativeBarcodeDetector();
-      const codes = await detector.detect(bitmap);
-      if (!codes || codes.length === 0) {
-        throw lastScanError || new Error('No QR code or barcode found in the photo');
-      }
+      const result = await scanBarcodeFileWithHtml5Qrcode(file);
+      await handleBarcodeScanResult(result);
+      return;
+    } catch (error) {
+      lastScanError = error;
+      await stopBarcodeScannerCamera(false);
+    }
 
-      await handleBarcodeScanResult(codes[0].rawValue || '');
-    } finally {
-      if (bitmap && typeof bitmap.close === 'function') {
-        bitmap.close();
-      }
+    try {
+      const result = await detectBarcodeInPhotoWithNativeDetector(file);
+      await handleBarcodeScanResult(result);
+    } catch (error) {
+      throw lastScanError || error;
     }
   } catch (error) {
     console.error('Photo scan failed:', error);
