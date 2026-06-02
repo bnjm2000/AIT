@@ -1419,6 +1419,19 @@ def _ensure_event_custom_lists(event):
         event.custom_collected = []
 
 
+def _remove_direct_asset_ref_from_prepared_items(event, asset_id):
+    """Remove duplicated physical refs when a model row owns the requirement."""
+    if not event or not asset_id:
+        return 0
+    if not hasattr(event, 'prepared_items') or event.prepared_items is None:
+        event.prepared_items = []
+        return 0
+
+    before = len(event.prepared_items)
+    event.prepared_items[:] = [ref for ref in event.prepared_items if ref != asset_id]
+    return before - len(event.prepared_items)
+
+
 def _normalise_custom_type(asset_type):
     value = str(asset_type or 'MISC').strip().upper()
     return 'LOAN' if value in ('LOAN', 'RENTAL', 'LOAN/RENTAL', 'RENT') else 'MISC'
@@ -3012,19 +3025,7 @@ def get_assigned_assets():
         assigned_assets = set()
         for event in data_manager.events.values():
             try:
-                # Ensure event has prepared_items attribute
-                if not hasattr(event, 'prepared_items'):
-                    logger.warning(f"Event {getattr(event, 'event_id', 'unknown')} missing prepared_items")
-                    continue
-                    
-                # Ensure event has returned_items attribute
-                if not hasattr(event, 'returned_items'):
-                    event.returned_items = []
-                    
-                for asset_id in event.prepared_items:
-                    if (asset_id not in event.returned_items and
-                            not (asset_id.startswith('[MODEL]') or asset_id.startswith('[BULK]') or _is_custom_ref(asset_id))):
-                        assigned_assets.add(asset_id)
+                assigned_assets.update(_active_physical_asset_refs_for_event(event))
                         
             except Exception as e:
                 logger.error(f"Error processing event {getattr(event, 'event_id', 'unknown')}: {e}")
@@ -4640,6 +4641,7 @@ def get_event(event_id):
             event.actually_prepared = []
         if not hasattr(event, 'extra_assets'):
             event.extra_assets = []
+        extra_asset_ids = set(getattr(event, 'extra_assets', []) or [])
 
         # Get detailed asset information grouped by department
         assets_by_department = defaultdict(list)
@@ -4724,7 +4726,8 @@ def get_event(event_id):
                 else:
                     assigned_assets.append(asset_info)
 
-        # Also process any assets that are in actually_prepared but not in prepared_items
+        # Also process any assets that are in actually_prepared but not in prepared_items.
+        # Model-fulfilled assets live here; only explicit extra_assets are extras.
         for asset_id in event.actually_prepared:
             # Check if this asset was already processed above
             already_processed = False
@@ -4734,10 +4737,10 @@ def get_event(event_id):
                     break
 
             if not already_processed:
-                # This is an asset in actually_prepared but not in prepared_items (truly extra)
                 asset = data_manager.inventory.get(asset_id)
                 if asset:
                     dept = asset.department_code
+                    is_extra = asset_id in extra_asset_ids
 
                     # Determine status
                     if asset_id in event.returned_items:
@@ -4757,7 +4760,7 @@ def get_event(event_id):
                         'isMissing': asset.is_missing,
                         'isOOC': asset.is_ooc,
                         'isLoanOrMisc': False,
-                        'isExtra': True  # Always extra if in actually_prepared but not prepared_items
+                        'isExtra': is_extra
                     }
 
                     assets_by_department[dept].append(asset_info)
@@ -5773,6 +5776,7 @@ def prepare_event_asset(event_id):
                 asset = data_manager.inventory.get(asset_id)
                 if asset:
                     added_requirement_units = _ensure_event_model_requirement_covers_asset(event, asset, 1)
+                    _remove_direct_asset_ref_from_prepared_items(event, asset_id)
                     event.extra_assets.remove(asset_id)
                     update_event_state(event)
                     data_manager.save_event(event)
@@ -5837,16 +5841,18 @@ def prepare_event_asset(event_id):
                 f"fillsExistingRequirement={fulfills_model_requirement}; addedUnits={added_requirement_units}"
             )
             
-            # Add to prepared_items if not already there. This keeps the physical
-            # asset visible in the event detail list without changing model demand.
-            if asset_id not in event.prepared_items:
-                event.prepared_items.append(asset_id)
-            
             if fulfills_model_requirement:
+                removed_refs = _remove_direct_asset_ref_from_prepared_items(event, asset_id)
+                if removed_refs:
+                    logger.info(f"Removed {asset_id} from prepared_items because it fulfills a model requirement")
                 if asset_id in event.extra_assets:
                     event.extra_assets.remove(asset_id)
                     logger.info(f"Removed {asset_id} from extra_assets (fills open model requirement). Extra assets: {event.extra_assets}")
             else:
+                # Loose extras and direct specific-asset events still need an
+                # explicit prepared_items row so they remain part of the packing list.
+                if asset_id not in event.prepared_items:
+                    event.prepared_items.append(asset_id)
                 if asset_id not in event.extra_assets:
                     event.extra_assets.append(asset_id)
                     logger.info(f"Added manual extra asset {asset_id} to event {event_id}. Extra assets: {event.extra_assets}")
@@ -6042,23 +6048,35 @@ def unprepare_event_asset(event_id):
             log_action(f"Unprepared custom item {_custom_display_name(custom)} from event {event_id}")
             return jsonify({'success': True, 'message': 'Custom item unprepared'})
 
-        # Initialize actually_prepared if it doesn't exist
-        if not hasattr(event, 'actually_prepared'):
-            event.actually_prepared = []
+        _ensure_event_custom_lists(event)
 
-        # Check if asset is assigned to this event first
-        if asset_id not in event.prepared_items:
+        asset_is_attached = (
+            asset_id in event.prepared_items or
+            asset_id in event.actually_prepared or
+            asset_id in event.returned_items or
+            asset_id in event.extra_assets
+        )
+
+        # Check if asset is attached to this event first
+        if not asset_is_attached:
             return jsonify({'error': 'Asset is not assigned to this event'}), 400
 
         # LOG THE UNPREPARE ACTION
         log_asset_change(event_id, asset_id, "UNPREPARING", "completely removing asset from event [unprepare_event_asset]")
 
-        # Remove from prepared list (completely unassign the asset)
-        event.prepared_items.remove(asset_id)
+        # Remove from prepared list if this was a loose extra/direct asset. Model-
+        # fulfilled physical assets may now live only in actually_prepared.
+        if asset_id in event.prepared_items:
+            event.prepared_items.remove(asset_id)
         
         # Remove from actually_prepared if it's there
         if asset_id in event.actually_prepared:
             event.actually_prepared.remove(asset_id)
+
+        # Remove from returned_items if it's there. Leaving this behind forces the
+        # event into Returning even after the asset was removed from the event.
+        if asset_id in event.returned_items:
+            event.returned_items.remove(asset_id)
         
         # Remove from extra_assets if it's there
         if hasattr(event, 'extra_assets') and asset_id in event.extra_assets:
@@ -6137,8 +6155,11 @@ def return_event_asset(event_id):
             log_action(f"Returned custom item {_custom_display_name(custom)} from event {event_id}")
             return jsonify({'success': True, 'message': f"{_custom_display_name(custom)} returned successfully"})
 
-        # Check if asset is prepared for this event
-        if asset_id not in event.prepared_items:
+        _ensure_event_custom_lists(event)
+
+        # Check if asset is prepared/assigned for this event. Model-fulfilled
+        # physical assets are tracked in actually_prepared, not prepared_items.
+        if asset_id not in event.prepared_items and asset_id not in event.actually_prepared:
             return jsonify({'error': 'Asset is not assigned to this event'}), 400
 
         # Check if asset is already returned
@@ -6371,6 +6392,7 @@ def assign_specific_asset_to_model(event_id):
                 asset = data_manager.inventory.get(asset_id)
                 if asset:
                     added_requirement_units = _ensure_event_model_requirement_covers_asset(event, asset, 1)
+                    _remove_direct_asset_ref_from_prepared_items(event, asset_id)
                     event.extra_assets.remove(asset_id)
                     update_event_state(event)
                     data_manager.save_event(event)
@@ -6430,18 +6452,19 @@ def assign_specific_asset_to_model(event_id):
                 f"fillsExistingRequirement={fills_existing_requirement}; addedUnits={added_requirement_units}"
             )
             
-            # Keep the specific asset linked to the event. Model rows track the
-            # requested type/quantity; this direct reference keeps the prepared
-            # physical unit visible in the All Assets section.
-            if asset_id not in event.prepared_items:
-                event.prepared_items.append(asset_id)
-                logger.info(f"Added {asset_id} to prepared_items")
-            
             if fills_existing_requirement:
+                removed_refs = _remove_direct_asset_ref_from_prepared_items(event, asset_id)
+                if removed_refs:
+                    logger.info(f"Removed {asset_id} from prepared_items because it fulfills a model requirement")
                 if asset_id in event.extra_assets:
                     event.extra_assets.remove(asset_id)
                     logger.info(f"Removed {asset_id} from extra_assets. Extra assets: {event.extra_assets}")
             else:
+                # Loose extras and direct specific-asset events still need an
+                # explicit prepared_items row so they remain part of the packing list.
+                if asset_id not in event.prepared_items:
+                    event.prepared_items.append(asset_id)
+                    logger.info(f"Added {asset_id} to prepared_items")
                 if asset_id not in event.extra_assets:
                     event.extra_assets.append(asset_id)
                     logger.info(f"Added individual extra asset {asset_id}. Extra assets: {event.extra_assets}")
@@ -7141,8 +7164,7 @@ def _transfer_one_asset(from_event, to_event, asset_id):
     if not _asset_fulfills_event_model_requirement(to_event, asset):
         _ensure_event_has_model_requirement_for_asset(to_event, asset, 1)
 
-    if asset_id not in to_event.prepared_items:
-        to_event.prepared_items.append(asset_id)
+    _remove_direct_asset_ref_from_prepared_items(to_event, asset_id)
     if asset_id in to_event.returned_items:
         to_event.returned_items.remove(asset_id)
     if asset_id not in to_event.actually_prepared:
@@ -7358,7 +7380,7 @@ def _undo_transfer_one_asset(from_event, to_event, asset_id):
     # Put it back as active on the source event.
     if asset_id in from_event.returned_items:
         from_event.returned_items.remove(asset_id)
-    if asset_id not in from_event.prepared_items:
+    if not _asset_fulfills_event_model_requirement(from_event, asset) and asset_id not in from_event.prepared_items:
         from_event.prepared_items.append(asset_id)
     if asset_id not in from_event.actually_prepared:
         from_event.actually_prepared.append(asset_id)
@@ -7422,7 +7444,7 @@ def _undo_return_source_asset_to_office(from_event, asset_id):
         raise ValueError(f'Asset {asset_id} is not marked as returned from the source event')
 
     from_event.returned_items.remove(asset_id)
-    if asset_id not in from_event.prepared_items:
+    if not _asset_fulfills_event_model_requirement(from_event, asset) and asset_id not in from_event.prepared_items:
         from_event.prepared_items.append(asset_id)
     if asset_id not in from_event.actually_prepared:
         from_event.actually_prepared.append(asset_id)
@@ -8160,25 +8182,47 @@ def get_event_assets(event_id):
     if not event:
         return jsonify({'error': 'Event not found'}), 404
 
+    _ensure_event_custom_lists(event)
     event_assets = []
-    for asset_id in event.prepared_items:
-        if not _is_custom_ref(asset_id):
-            asset = data_manager.inventory.get(asset_id)
-            if asset:
-                event_assets.append({
-                    'id': asset.asset_id,
-                    'brand': asset.brand,
-                    'model': asset.model_number,
-                    'description': asset.description,
-                    'serial': asset.serial_number,
-                    'department': asset.department_code,
-                    'status': 'returned' if asset_id in event.returned_items else 'prepared',
-                    'location': asset.current_location,
-                    'isMissing': asset.is_missing,
-                    'isOOC': asset.is_ooc,
-                    'isDegraded': _is_degraded(asset),
-                    'isDisposed': _is_disposed(asset)
-                })
+    seen_asset_ids = set()
+    asset_refs = (
+        list(getattr(event, 'prepared_items', []) or []) +
+        list(getattr(event, 'actually_prepared', []) or []) +
+        list(getattr(event, 'returned_items', []) or [])
+    )
+    for asset_id in asset_refs:
+        if (
+            asset_id in seen_asset_ids or
+            not _is_real_asset_ref(asset_id) or
+            _is_bulk_ref(asset_id) or
+            _is_custom_ref(asset_id)
+        ):
+            continue
+
+        asset = data_manager.inventory.get(asset_id)
+        if asset:
+            seen_asset_ids.add(asset_id)
+            if asset_id in event.returned_items:
+                status = 'returned'
+            elif asset_id in event.actually_prepared:
+                status = 'prepared'
+            else:
+                status = 'assigned'
+
+            event_assets.append({
+                'id': asset.asset_id,
+                'brand': asset.brand,
+                'model': asset.model_number,
+                'description': asset.description,
+                'serial': asset.serial_number,
+                'department': asset.department_code,
+                'status': status,
+                'location': asset.current_location,
+                'isMissing': asset.is_missing,
+                'isOOC': asset.is_ooc,
+                'isDegraded': _is_degraded(asset),
+                'isDisposed': _is_disposed(asset)
+            })
 
     return jsonify({'success': True, 'data': event_assets})
 
@@ -8373,7 +8417,7 @@ def delete_asset(asset_id):
                     container_refs_removed += removed
 
             del data_manager.inventory[decoded_asset_id]
-            data_manager.save_inventory()
+            data_manager.save_inventory(drop_asset_ids=[decoded_asset_id])
             if containers_updated:
                 data_manager.save_containers()
 
@@ -8642,7 +8686,7 @@ def update_asset(asset_id):
                 data_manager.save_event(event)
                 events_updated += 1
 
-        data_manager.save_inventory()
+        data_manager.save_inventory(drop_asset_ids=[old_asset_id] if new_asset_id != old_asset_id else None)
 
         # Auto-register the new/edited department so filters and badges can use it immediately.
         departments = _load_departments()

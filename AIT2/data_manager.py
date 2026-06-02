@@ -271,11 +271,10 @@ class DataManager:
                     getattr(user, 'is_active', True)
                 ])
 
-    def load_inventory(self):
-        self.inventory = {}
-        filepath = os.path.join(self.data_folder, 'Inventory.csv')
+    def _read_inventory_file(self, filepath):
+        inventory = {}
         if not os.path.exists(filepath):
-            return
+            return inventory
 
         f, enc = open_csv_robust(filepath)
         try:
@@ -319,12 +318,32 @@ class DataManager:
                 )
 
                 if item.asset_id:
-                    self.inventory[item.asset_id] = item
+                    inventory[item.asset_id] = item
         finally:
             f.close()
 
-    def save_inventory(self):
+        return inventory
+
+    def load_inventory(self):
         filepath = os.path.join(self.data_folder, 'Inventory.csv')
+        self.inventory = self._read_inventory_file(filepath)
+
+    def save_inventory(self, preserve_unknown=True, drop_asset_ids=None):
+        filepath = os.path.join(self.data_folder, 'Inventory.csv')
+        drop_asset_ids = {str(asset_id) for asset_id in (drop_asset_ids or []) if str(asset_id)}
+        inventory_to_write = {
+            asset_id: item
+            for asset_id, item in self.inventory.items()
+            if asset_id not in drop_asset_ids
+        }
+
+        if preserve_unknown:
+            for asset_id, disk_item in self._read_inventory_file(filepath).items():
+                if asset_id in drop_asset_ids:
+                    continue
+                if asset_id not in inventory_to_write:
+                    inventory_to_write[asset_id] = disk_item
+
         with open(filepath, 'w', newline='', encoding='utf-8') as f:
             fieldnames = [
                 'AssetID', 'Brand', 'ModelNumber', 'SerialNumber', 'Description',
@@ -332,7 +351,7 @@ class DataManager:
             ]
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
-            for item in self.inventory.values():
+            for item in inventory_to_write.values():
                 writer.writerow({
                     'AssetID': item.asset_id,
                     'Brand': item.brand,
@@ -350,6 +369,7 @@ class DataManager:
                     'DefaultLocation': item.default_location,
                     'CurrentLocation': item.current_location
                 })
+        self.inventory = inventory_to_write
 
 
     def load_containers(self):

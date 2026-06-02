@@ -123,14 +123,113 @@ class PrepareQuickAddAndAdminDeleteTests(unittest.TestCase):
         self.assertNotIn('A#02', event.extra_assets)
         self.assertIn('[MODEL]AX|TestBrand|TestModel|2|Matching item', event.prepared_items)
 
+    def test_model_prepare_does_not_delete_or_duplicate_inventory_asset(self):
+        event = self.make_event(
+            event_id=103,
+            prepared=['[MODEL]AX|TestBrand|TestModel|1|Matching item'],
+            actual=[],
+            extra=[],
+        )
+
+        response = self.post_assign(event.event_id, asset_id='A#01')
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertIn('A#01', self.data_manager.inventory)
+        self.assertIn('A#01', event.actually_prepared)
+        self.assertNotIn('A#01', event.prepared_items)
+        self.assertEqual(event.prepared_items, ['[MODEL]AX|TestBrand|TestModel|1|Matching item'])
+
+        response = self.client.get('/api/assets')
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        asset = next(item for item in response.get_json()['data'] if item['internalId'] == 'A#01')
+        self.assertEqual(asset['status'], 'deployed')
+
+        response = self.client.get(f'/api/events/{event.event_id}')
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        event_data = response.get_json()['data']
+        model_assets = [
+            assigned
+            for group in event_data['modelGroups'].values()
+            for assigned in group.get('assignedAssets', [])
+        ]
+        self.assertEqual(model_assets[0]['id'], 'A#01')
+        self.assertFalse(model_assets[0].get('isExtra'))
+
+        department_assets = [
+            asset
+            for assets in event_data['assetsByDepartment'].values()
+            for asset in assets
+        ]
+        detail_asset = next(asset for asset in department_assets if asset['id'] == 'A#01')
+        self.assertFalse(detail_asset.get('isExtra'))
+
     def test_quick_add_false_overrides_container_auto_add(self):
-        event = self.make_event(event_id=103)
+        event = self.make_event(event_id=104)
 
         response = self.post_assign(event.event_id, quickAdd=False, fromContainer=True, source='container')
 
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
         self.assertTrue(response.get_json()['data']['isExtra'])
         self.assertIn('A#02', event.extra_assets)
+
+    def test_unprepare_clears_stale_returned_marker_for_model_asset(self):
+        event = self.make_event(
+            event_id=105,
+            prepared=['[MODEL]AX|TestBrand|TestModel|1|Matching item'],
+            actual=[],
+            extra=[],
+        )
+        event.returned_items = ['A#01']
+        event.state = 'Returning'
+
+        self.login_as('normal')
+        response = self.client.post(f'/api/events/{event.event_id}/unprepare', json={'assetId': 'A#01'})
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertNotIn('A#01', event.returned_items)
+        self.assertNotEqual(event.state, 'Returning')
+
+    def test_inventory_save_preserves_rows_unknown_to_stale_process(self):
+        disk_manager = DataManager(self.tempdir.name)
+        disk_manager.inventory = {
+            'A#01': self.make_asset('A#01'),
+            'Z#99': self.make_asset('Z#99'),
+        }
+        disk_manager.save_inventory()
+
+        stale_manager = DataManager(self.tempdir.name)
+        stale_manager.inventory = {
+            'A#01': self.make_asset('A#01'),
+        }
+        stale_manager.inventory['A#01'].current_location = 'Event 1'
+        stale_manager.save_inventory()
+
+        reloaded = DataManager(self.tempdir.name)
+        reloaded.load_inventory()
+        self.assertIn('A#01', reloaded.inventory)
+        self.assertIn('Z#99', reloaded.inventory)
+        self.assertEqual(reloaded.inventory['A#01'].current_location, 'Event 1')
+
+    def test_inventory_save_can_drop_one_explicit_asset_without_losing_unknown_rows(self):
+        disk_manager = DataManager(self.tempdir.name)
+        disk_manager.inventory = {
+            'A#01': self.make_asset('A#01'),
+            'B#01': self.make_asset('B#01'),
+            'Z#99': self.make_asset('Z#99'),
+        }
+        disk_manager.save_inventory()
+
+        stale_manager = DataManager(self.tempdir.name)
+        stale_manager.inventory = {
+            'A#01': self.make_asset('A#01'),
+        }
+        stale_manager.save_inventory(drop_asset_ids=['B#01'])
+
+        reloaded = DataManager(self.tempdir.name)
+        reloaded.load_inventory()
+        self.assertIn('A#01', reloaded.inventory)
+        self.assertNotIn('B#01', reloaded.inventory)
+        self.assertIn('Z#99', reloaded.inventory)
 
     def test_decommissioned_status_is_exposed_with_new_name(self):
         self.data_manager.inventory['D#01'] = self.make_asset('D#01', is_disposed=True)
