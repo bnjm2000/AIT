@@ -2228,6 +2228,9 @@ function showSection(sectionName) {
     case "pdf-settings":
       loadPdfSettingsSection();
       break;
+    case "change-password":
+      loadChangePasswordSection();
+      break;
     case "delivery-order":
       break;
   }
@@ -3489,10 +3492,162 @@ async function deleteDepartment(encodedCode) {
 
 // ---------------- Admin User Management ----------------
 
-async function setupAdminUserManagementTab() {
-  try {
+async function setupChangePasswordTab() {
+  if (!currentUser) {
     const res = await apiCall('/api/current-user');
     currentUser = res.data;
+  }
+
+  ensureChangePasswordNavItem();
+  ensureChangePasswordSection();
+}
+
+function ensureChangePasswordNavItem() {
+  if (document.querySelector(`[onclick="showSection('change-password')"]`)) return;
+
+  const settingsSection = Array.from(document.querySelectorAll('.nav-section'))
+    .find(section => {
+      const heading = section.querySelector('h3');
+      return heading && heading.textContent.trim() === 'Settings';
+    });
+
+  if (!settingsSection) {
+    console.warn('Could not find Settings section for Change Password tab');
+    return;
+  }
+
+  const passwordTab = document.createElement('button');
+  passwordTab.type = 'button';
+  passwordTab.className = 'nav-item';
+  passwordTab.setAttribute('onclick', "showSection('change-password')");
+  passwordTab.textContent = '🔐 Change Password';
+
+  const logoutButton = settingsSection.querySelector(`[onclick="logout()"]`);
+
+  if (logoutButton) {
+    settingsSection.insertBefore(passwordTab, logoutButton);
+  } else {
+    settingsSection.appendChild(passwordTab);
+  }
+}
+
+function ensureChangePasswordSection() {
+  if (document.getElementById('change-password-section')) return;
+
+  const firstSection = document.querySelector('.content-section');
+  const sectionParent = firstSection ? firstSection.parentElement : document.body;
+
+  const section = document.createElement('div');
+  section.id = 'change-password-section';
+  section.className = 'content-section';
+
+  section.innerHTML = `
+    <div class="content-header">
+      <h2 class="content-title">Change Password</h2>
+    </div>
+
+    <div class="form-container" style="max-width:520px;">
+      <form id="changePasswordForm" onsubmit="submitChangePassword(event)">
+        <div class="form-group">
+          <label class="form-label" for="currentPasswordInput">Current Password</label>
+          <input
+            id="currentPasswordInput"
+            type="password"
+            class="form-input"
+            autocomplete="current-password"
+          >
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="newPasswordInput">New Password</label>
+          <input
+            id="newPasswordInput"
+            type="password"
+            class="form-input"
+            autocomplete="new-password"
+          >
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="confirmPasswordInput">Confirm Password</label>
+          <input
+            id="confirmPasswordInput"
+            type="password"
+            class="form-input"
+            autocomplete="new-password"
+          >
+        </div>
+
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:8px;">
+          <button type="submit" id="changePasswordSubmit" class="btn btn-primary">Save Password</button>
+          <button type="button" class="btn btn-secondary" onclick="resetChangePasswordForm()">Clear</button>
+        </div>
+      </form>
+    </div>
+  `;
+
+  sectionParent.appendChild(section);
+}
+
+function resetChangePasswordForm() {
+  const form = document.getElementById('changePasswordForm');
+  if (form) form.reset();
+}
+
+function loadChangePasswordSection() {
+  ensureChangePasswordSection();
+  const input = document.getElementById('currentPasswordInput');
+  if (input) {
+    setTimeout(() => input.focus({ preventScroll: true }), 0);
+  }
+}
+
+async function submitChangePassword(event) {
+  if (event) event.preventDefault();
+
+  const currentPassword = document.getElementById('currentPasswordInput')?.value || '';
+  const newPassword = document.getElementById('newPasswordInput')?.value || '';
+  const confirmPassword = document.getElementById('confirmPasswordInput')?.value || '';
+  const submitButton = document.getElementById('changePasswordSubmit');
+
+  if (!currentPassword) {
+    showNotification('warning', 'Current password is required');
+    return;
+  }
+
+  if (!newPassword) {
+    showNotification('warning', 'New password is required');
+    return;
+  }
+
+  if (newPassword !== confirmPassword) {
+    showNotification('warning', 'New passwords do not match');
+    return;
+  }
+
+  if (submitButton) submitButton.disabled = true;
+
+  try {
+    await apiCall('/api/current-user/password', 'PUT', {
+      currentPassword,
+      newPassword
+    });
+
+    resetChangePasswordForm();
+    showNotification('success', 'Password changed');
+  } catch (error) {
+    showNotification('error', `Failed to change password: ${error.message}`);
+  } finally {
+    if (submitButton) submitButton.disabled = false;
+  }
+}
+
+async function setupAdminUserManagementTab() {
+  try {
+    if (!currentUser) {
+      const res = await apiCall('/api/current-user');
+      currentUser = res.data;
+    }
 
     if (!currentUser || !currentUser.isAdmin) return;
 
@@ -18389,7 +18544,8 @@ async function initializeApp() {
     // Load configurable PDF logo/footer settings used by generated PDFs.
     await loadPdfSettings(true);
 
-    // Load the current user and add admin-only Settings tabs.
+    // Load the current user and add Settings tabs.
+    await setupChangePasswordTab();
     await setupAdminUserManagementTab();
     await setupPdfSettingsTab();
     applyPermissionUi();

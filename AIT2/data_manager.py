@@ -7,7 +7,7 @@ import os
 import re
 import shutil
 
-from maintenance_logs import dump_maintenance_logs, load_maintenance_logs
+from maintenance_logs import dump_maintenance_logs, load_maintenance_logs, normalize_maintenance_log
 from models import Client, Container, Event, InventoryItem, LogEntry, User, hash_password
 from utils import clean_csv_cell, open_csv_robust, sanitize_filename
 
@@ -41,6 +41,25 @@ def _parse_bool(value, default=False):
 
 def _is_csv_true(value):
     return value == 'True'
+
+
+def _replace_generated_username_references(text, old_username, new_username):
+    """Update app-generated username text without rewriting arbitrary notes."""
+    if not text or not old_username or old_username == new_username:
+        return text
+
+    updated = str(text)
+    replacements = (
+        (f"Asset sighted by {old_username} during Asset Check", f"Asset sighted by {new_username} during Asset Check"),
+        (f"username: {old_username}", f"username: {new_username}"),
+        (f"User {old_username} ", f"User {new_username} "),
+        (f"User {old_username}", f"User {new_username}"),
+        (f"user {old_username}", f"user {new_username}"),
+        (f"by {old_username}", f"by {new_username}"),
+    )
+    for old_text, new_text in replacements:
+        updated = updated.replace(old_text, new_text)
+    return updated
 
 
 class DataManager:
@@ -306,6 +325,104 @@ class DataManager:
                     user.is_admin,
                     getattr(user, 'is_active', True)
                 ])
+
+    def update_username_references(self, old_username, new_username):
+        """Rename historical user references owned by the live CSV data set."""
+        old_username = str(old_username or '').strip()
+        new_username = str(new_username or '').strip()
+        counts = {
+            'systemLogs': 0,
+            'eventLogs': 0,
+            'events': 0,
+            'maintenanceLogs': 0,
+            'assets': 0,
+        }
+        if not old_username or not new_username or old_username == new_username:
+            return counts
+
+        logs_changed = False
+        for log in self.logs:
+            changed = False
+            if getattr(log, 'user', '') == old_username:
+                log.user = new_username
+                changed = True
+
+            action = getattr(log, 'action', '')
+            updated_action = _replace_generated_username_references(action, old_username, new_username)
+            if updated_action != action:
+                log.action = updated_action
+                changed = True
+
+            if changed:
+                logs_changed = True
+                counts['systemLogs'] += 1
+
+        if logs_changed:
+            self.save_logs()
+
+        for event in self.events.values():
+            event_changed = False
+            updated_logs = []
+            for record in self.normalize_event_logs(getattr(event, 'event_logs', [])):
+                changed = False
+                if record.get('user', '') == old_username:
+                    record['user'] = new_username
+                    changed = True
+
+                action = record.get('action', '')
+                updated_action = _replace_generated_username_references(action, old_username, new_username)
+                if updated_action != action:
+                    record['action'] = updated_action
+                    changed = True
+
+                if changed:
+                    event_changed = True
+                    counts['eventLogs'] += 1
+                updated_logs.append(record)
+
+            if event_changed:
+                event.event_logs = updated_logs
+                self.save_event(event)
+                counts['events'] += 1
+
+        inventory_changed = False
+        for item in self.inventory.values():
+            item_changed = False
+            updated_logs = []
+            for log in getattr(item, 'maintenance_logs', []) or []:
+                record = normalize_maintenance_log(log)
+                changed = False
+
+                if record.get('user', '') == old_username:
+                    record['user'] = new_username
+                    changed = True
+
+                source = record.get('source') or {}
+                if source.get('kind') == 'asset_check_sighting':
+                    description = record.get('description', '')
+                    updated_description = _replace_generated_username_references(
+                        description,
+                        old_username,
+                        new_username
+                    )
+                    if updated_description != description:
+                        record['description'] = updated_description
+                        changed = True
+
+                if changed:
+                    item_changed = True
+                    counts['maintenanceLogs'] += 1
+                updated_logs.append(record)
+
+            if item_changed:
+                item.maintenance_logs = updated_logs
+                inventory_changed = True
+                counts['assets'] += 1
+
+        if inventory_changed:
+            self.save_inventory()
+
+        return counts
 
     # ---------------- Inventory ----------------
 

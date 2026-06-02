@@ -3565,6 +3565,43 @@ def get_current_user():
     })
 
 
+@app.route('/api/current-user/password', methods=['PUT'])
+@require_auth
+def change_current_user_password():
+    """Allow the signed-in user to change their own password."""
+    try:
+        username = session.get('user')
+        user = data_manager.users.get(username)
+
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+
+        data = request.get_json() or {}
+        current_password = data.get('currentPassword') or ''
+        new_password = data.get('newPassword') or ''
+
+        if not current_password:
+            return jsonify({'error': 'Current password is required'}), 400
+
+        if not new_password:
+            return jsonify({'error': 'New password is required'}), 400
+
+        if hash_password(current_password, user.salt) != user.password_hash:
+            return jsonify({'error': 'Current password is incorrect'}), 403
+
+        user.salt = secrets.token_hex(16)
+        user.password_hash = hash_password(new_password, user.salt)
+
+        data_manager.save_users()
+        log_action("Changed own password")
+
+        return jsonify({'success': True, 'message': 'Password changed successfully'})
+
+    except Exception as e:
+        logger.error(f"Error changing password for current user: {e}")
+        return jsonify({'error': 'Failed to change password'}), 500
+
+
 @app.route('/api/pdf-settings', methods=['GET'])
 @require_auth
 def get_pdf_settings():
@@ -3987,6 +4024,10 @@ def update_user(username):
             return jsonify({'error': 'User not found'}), 404
 
         data = request.get_json() or {}
+        username_changed = False
+        renamed_from = old_username
+        renamed_to = old_username
+        rename_counts = None
 
         # Rename user
         if 'username' in data:
@@ -4002,10 +4043,14 @@ def update_user(username):
                 del data_manager.users[old_username]
                 user.username = new_username
                 data_manager.users[new_username] = user
+                username_changed = True
+                renamed_to = new_username
 
                 # If admin renamed themselves, keep session valid
                 if session.get('user') == old_username:
                     session['user'] = new_username
+
+                rename_counts = data_manager.update_username_references(old_username, new_username)
 
         # Update admin privilege
         if 'isAdmin' in data:
@@ -4029,7 +4074,19 @@ def update_user(username):
             user.is_active = new_is_active
 
         data_manager.save_users()
-        log_action(f"Updated user {user.username}")
+        if username_changed:
+            if rename_counts is None:
+                rename_counts = {}
+            log_action(
+                f"Renamed user {renamed_from} -> {renamed_to}; "
+                f"updated {rename_counts.get('systemLogs', 0)} system log(s), "
+                f"{rename_counts.get('eventLogs', 0)} event log(s), "
+                f"{rename_counts.get('maintenanceLogs', 0)} maintenance record(s)"
+            )
+            if rename_counts.get('maintenanceLogs', 0):
+                invalidate_cache()
+        else:
+            log_action(f"Updated user {user.username}")
 
         return jsonify({
             'success': True,
