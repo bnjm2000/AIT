@@ -73,6 +73,7 @@ class InventoryItem:
         quantity=1,
         is_degraded=False,
         is_disposed=False,
+        date_of_purchase='',
     ):
         self.asset_id = asset_id
         self.brand = brand
@@ -100,6 +101,7 @@ class InventoryItem:
         self.department_code = department_code.upper()
         self.default_location = default_location
         self.current_location = current_location
+        self.date_of_purchase = date_of_purchase or ''
         self.is_bulk = is_bulk
         try:
             self.quantity = max(1, int(quantity)) if is_bulk else 1

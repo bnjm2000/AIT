@@ -7,6 +7,7 @@ let logs = [];
 let stats = {};
 let departments = {};
 let departmentsLoaded = false;
+let selectedInventoryAssetIds = new Set();
 let __autoRefreshInFlight = false;
 let __realtimeRefreshQueued = false;
 let __realtimeRefreshTimer = null;
@@ -569,6 +570,31 @@ function ensurePrepareQuickAddToggleStyles() {
 
 function getAssetIdentifierForApi(asset) {
   return asset?.internalId || asset?.bulkId || asset?.id || '';
+}
+
+function normalizeAssetPurchaseDateValue(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+
+  const isoMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (isoMatch) return raw;
+
+  const slashMatch = raw.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/);
+  if (slashMatch) {
+    return `${slashMatch[1]}-${slashMatch[2].padStart(2, '0')}-${slashMatch[3].padStart(2, '0')}`;
+  }
+
+  const compactMatch = raw.match(/^(\d{4})(\d{2})(\d{2})$/);
+  if (compactMatch) return `${compactMatch[1]}-${compactMatch[2]}-${compactMatch[3]}`;
+
+  return raw;
+}
+
+function formatAssetPurchaseDate(value) {
+  const normalized = normalizeAssetPurchaseDateValue(value);
+  const match = normalized.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return normalized || '—';
+  return `${match[1]}/${match[2]}/${match[3]}`;
 }
 
 function isAssetDegraded(asset) {
@@ -4483,6 +4509,7 @@ async function loadInventory() {
 
     ensureDepartmentManagerPanel();
     renderDepartmentManager();
+    ensureInventoryBulkEditControls();
     ensureInventoryExportControls();
 
     // Set up event listeners for filters and sorting
@@ -4569,6 +4596,48 @@ function ensureInventoryExportControls() {
   row.querySelector('[data-inventory-export-pdf="true"]')?.addEventListener('click', generateInventoryPdf);
 }
 
+function ensureInventoryBulkEditControls() {
+  const controls = document.querySelector('#inventory-section .inventory-controls');
+  if (!controls) return;
+
+  let group = document.getElementById('inventory-bulk-edit-controls');
+  if (!isAdminUser()) {
+    if (group) group.style.display = 'none';
+    return;
+  }
+
+  if (!group) {
+    group = document.createElement('div');
+    group.id = 'inventory-bulk-edit-controls';
+    group.className = 'admin-only';
+    group.setAttribute('data-admin-only', 'true');
+    group.setAttribute('data-admin-display', 'flex');
+    group.style.cssText = [
+      'display:flex',
+      'gap:10px',
+      'align-items:center',
+      'flex-wrap:wrap'
+    ].join(';');
+    group.innerHTML = `
+      <span id="inventory-selected-count" style="color:#495057;font-size:14px;font-weight:700;">0 selected</span>
+      <button type="button" id="inventory-bulk-edit-button" class="btn btn-warning" style="padding:8px 16px;font-size:14px;" disabled>Edit Selected</button>
+      <button type="button" id="inventory-clear-selection-button" class="btn btn-secondary" style="padding:8px 16px;font-size:14px;" disabled>Clear Selection</button>
+    `;
+
+    const actionRow = document.getElementById('asset-count')?.parentElement || controls.lastElementChild;
+    if (actionRow) {
+      actionRow.insertBefore(group, document.getElementById('asset-count') || actionRow.firstChild);
+    } else {
+      controls.appendChild(group);
+    }
+
+    document.getElementById('inventory-bulk-edit-button')?.addEventListener('click', openBulkAssetEditModal);
+    document.getElementById('inventory-clear-selection-button')?.addEventListener('click', clearInventorySelection);
+  }
+
+  group.style.display = 'flex';
+}
+
 function setupInventoryFilters() {
   // Remove existing listeners to prevent duplicates
   const searchInput = document.getElementById("asset-search");
@@ -4623,7 +4692,7 @@ function ensureInventoryTableStyles() {
     .inventory-compact-table {
       table-layout: auto;
       width: 100%;
-      min-width: 780px;
+      min-width: 980px;
     }
 
     .inventory-compact-table th,
@@ -4641,6 +4710,19 @@ function ensureInventoryTableStyles() {
     .inventory-compact-table .asset-id-cell {
       font-weight: 700;
       white-space: nowrap;
+    }
+
+    .inventory-compact-table .inventory-select-cell {
+      width: 38px;
+      min-width: 38px;
+      text-align: center;
+      vertical-align: middle;
+    }
+
+    .inventory-compact-table .inventory-select-cell input {
+      width: 16px;
+      height: 16px;
+      cursor: pointer;
     }
 
     .inventory-compact-table .asset-description-cell {
@@ -4661,6 +4743,11 @@ function ensureInventoryTableStyles() {
 
     .inventory-compact-table .bulk-quantity-cell {
       min-width: 130px;
+    }
+
+    .inventory-compact-table .asset-purchase-date-cell {
+      white-space: nowrap;
+      color: #495057;
     }
 
     .bulk-deployment-details {
@@ -4738,7 +4825,7 @@ function ensureInventoryTableStyles() {
 
     @media (max-width: 768px) {
       .inventory-compact-table {
-        min-width: 680px;
+        min-width: 900px;
       }
 
       .inventory-actions-cell {
@@ -4801,6 +4888,79 @@ function bulkDeploymentDetailsHtml(asset) {
   `;
 }
 
+function inventoryAssetIdentifier(asset) {
+  return getAssetIdentifierForApi(asset);
+}
+
+function pruneInventorySelection() {
+  const validIds = new Set((assets || []).map(inventoryAssetIdentifier).filter(Boolean));
+  Array.from(selectedInventoryAssetIds).forEach(assetId => {
+    if (!validIds.has(assetId)) selectedInventoryAssetIds.delete(assetId);
+  });
+}
+
+function getSelectedInventoryAssets() {
+  pruneInventorySelection();
+  return (assets || []).filter(asset => selectedInventoryAssetIds.has(inventoryAssetIdentifier(asset)));
+}
+
+function updateInventorySelectionUi(currentVisibleAssets = null) {
+  pruneInventorySelection();
+
+  const selectedCount = selectedInventoryAssetIds.size;
+  const countEl = document.getElementById('inventory-selected-count');
+  const editButton = document.getElementById('inventory-bulk-edit-button');
+  const clearButton = document.getElementById('inventory-clear-selection-button');
+
+  if (countEl) countEl.textContent = `${selectedCount} selected`;
+  if (editButton) editButton.disabled = selectedCount === 0;
+  if (clearButton) clearButton.disabled = selectedCount === 0;
+
+  document.querySelectorAll('.inventory-row-select').forEach(input => {
+    input.checked = selectedInventoryAssetIds.has(input.dataset.assetId || '');
+  });
+
+  const visibleAssets = currentVisibleAssets || getFilteredInventoryData().filteredAssets || [];
+  const visibleIds = visibleAssets.map(inventoryAssetIdentifier).filter(Boolean);
+  const selectedVisibleCount = visibleIds.filter(assetId => selectedInventoryAssetIds.has(assetId)).length;
+  const selectAll = document.getElementById('inventory-select-all-current');
+
+  if (selectAll) {
+    selectAll.checked = visibleIds.length > 0 && selectedVisibleCount === visibleIds.length;
+    selectAll.indeterminate = selectedVisibleCount > 0 && selectedVisibleCount < visibleIds.length;
+    selectAll.disabled = visibleIds.length === 0;
+  }
+}
+
+function toggleInventoryAssetSelection(assetId, checked) {
+  const normalized = String(assetId || '').trim();
+  if (!normalized) return;
+
+  if (checked) selectedInventoryAssetIds.add(normalized);
+  else selectedInventoryAssetIds.delete(normalized);
+
+  updateInventorySelectionUi();
+}
+
+function toggleInventorySelectAll(checked) {
+  const { filteredAssets } = getFilteredInventoryData();
+  filteredAssets.forEach(asset => {
+    const assetId = inventoryAssetIdentifier(asset);
+    if (!assetId) return;
+    if (checked) selectedInventoryAssetIds.add(assetId);
+    else selectedInventoryAssetIds.delete(assetId);
+  });
+
+  updateInventorySelectionUi(filteredAssets);
+  displayInventoryTable(filteredAssets);
+}
+
+function clearInventorySelection() {
+  selectedInventoryAssetIds.clear();
+  updateInventorySelectionUi();
+  displayFilteredInventory();
+}
+
 function displayInventoryTable(assetsToShow) {
   ensureInventoryTableStyles();
 
@@ -4809,21 +4969,29 @@ function displayInventoryTable(assetsToShow) {
   if (assetsToShow.length === 0) {
     container.innerHTML =
       '<p style="text-align: center; color: #666; padding: 40px;">No assets found.</p>';
+    updateInventorySelectionUi([]);
     return;
   }
 
   const isAdmin = currentUser && currentUser.isAdmin;
+  const selectionHeaderHtml = isAdmin
+    ? `<th class="inventory-select-cell">
+         <input type="checkbox" id="inventory-select-all-current" onchange="toggleInventorySelectAll(this.checked)" title="Select all visible assets" aria-label="Select all visible assets">
+       </th>`
+    : '';
 
   let tableHTML = `
     <table class="table inventory-compact-table">
       <thead>
         <tr>
+          ${selectionHeaderHtml}
           <th>Asset ID</th>
           <th>Brand</th>
           <th>Model</th>
           <th>Description</th>
           <th>Serial</th>
           <th>Qty</th>
+          <th>Purchased</th>
           <th>Department</th>
           <th>Status</th>
           <th>Location</th>
@@ -4836,13 +5004,27 @@ function displayInventoryTable(assetsToShow) {
 
   assetsToShow.forEach((asset) => {
     const encodedAssetId = encodeURIComponent(getAssetIdentifierForApi(asset));
+    const assetIdentifier = inventoryAssetIdentifier(asset);
     const description = asset.description || "";
     const quantityHtml = asset.isBulk
       ? `${escapeHtml(String(asset.availableQuantity ?? asset.quantity ?? 1))}/${escapeHtml(String(asset.quantity ?? 1))}${bulkDeploymentDetailsHtml(asset)}`
       : '1';
+    const selectionCellHtml = isAdmin
+      ? `<td class="inventory-select-cell">
+           <input
+             type="checkbox"
+             class="inventory-row-select"
+             data-asset-id="${escapeHtmlAttr(assetIdentifier)}"
+             ${selectedInventoryAssetIds.has(assetIdentifier) ? 'checked' : ''}
+             onchange="toggleInventoryAssetSelection(this.dataset.assetId, this.checked)"
+             aria-label="Select ${escapeHtmlAttr(assetIdentifier || 'asset')}"
+           >
+         </td>`
+      : '';
 
     tableHTML += `
       <tr>
+        ${selectionCellHtml}
         <td class="asset-id-cell">${asset.isBulk ? '<span class="asset-badge status-available">Bulk Item</span>' : escapeHtml(asset.id)}</td>
         <td>${escapeHtml(asset.brand || "")}</td>
         <td>${escapeHtml(asset.model || "")}</td>
@@ -4858,6 +5040,8 @@ function displayInventoryTable(assetsToShow) {
         <td>${asset.isBulk ? '—' : escapeHtml(asset.serial || "N/A")}</td>
 
         <td class="${asset.isBulk ? 'bulk-quantity-cell' : ''}">${quantityHtml}</td>
+
+        <td class="asset-purchase-date-cell">${escapeHtml(formatAssetPurchaseDate(asset.dateOfPurchase || asset.purchaseDate || ''))}</td>
 
         <td>
           ${departmentBadgeHtml(asset.department)}
@@ -4899,6 +5083,7 @@ function displayInventoryTable(assetsToShow) {
   `;
 
   container.innerHTML = `<div class="responsive-table-wrap">${tableHTML}</div>`;
+  updateInventorySelectionUi(assetsToShow);
 }
 
 function normalizeAssetGroupValue(value, uppercase = false) {
@@ -4953,6 +5138,11 @@ function ensureAssetEditModal() {
           <div class="form-group" id="editAssetSerialGroup">
             <label class="form-label">Serial</label>
             <input id="editAssetSerial" class="form-input">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Date of Purchase</label>
+            <input id="editAssetDateOfPurchase" type="date" class="form-input">
           </div>
 
           <div class="form-group" id="editAssetQuantityGroup" style="display:none;">
@@ -5033,6 +5223,7 @@ function openEditAssetModal(encodedAssetId) {
     brand: asset.brand || '',
     model: asset.model || '',
     description: asset.description || '',
+    dateOfPurchase: asset.dateOfPurchase || asset.purchaseDate || '',
     department: asset.department || ''
   });
 
@@ -5045,6 +5236,7 @@ function openEditAssetModal(encodedAssetId) {
   document.getElementById('editAssetBrand').value = asset.brand || '';
   document.getElementById('editAssetModel').value = asset.model || '';
   document.getElementById('editAssetSerial').value = asset.serial || '';
+  document.getElementById('editAssetDateOfPurchase').value = normalizeAssetPurchaseDateValue(asset.dateOfPurchase || asset.purchaseDate || '');
   document.getElementById('editAssetDescription').value = asset.description || '';
   document.getElementById('editAssetDepartment').value = asset.department || 'UN';
   document.getElementById('editAssetDefaultLocation').value = asset.defaultLocation || 'Store';
@@ -5073,6 +5265,7 @@ async function saveAssetEditModal() {
     brand: document.getElementById('editAssetBrand').value.trim(),
     model: document.getElementById('editAssetModel').value.trim(),
     serial: document.getElementById('editAssetSerial').value.trim(),
+    dateOfPurchase: document.getElementById('editAssetDateOfPurchase').value.trim(),
     description: document.getElementById('editAssetDescription').value.trim(),
     department: document.getElementById('editAssetDepartment').value.trim().toUpperCase(),
     defaultLocation: document.getElementById('editAssetDefaultLocation').value.trim(),
@@ -5164,6 +5357,345 @@ async function saveAssetEditModal() {
 
   } catch (error) {
     showNotification('error', `Failed to update asset: ${error.message}`);
+  }
+}
+
+function commonInventoryAssetValue(selectedAssets, getter) {
+  if (!selectedAssets.length) return '';
+  const values = selectedAssets.map(asset => String(getter(asset) || ''));
+  return values.every(value => value === values[0]) ? values[0] : '';
+}
+
+function selectedInventoryAssetSummaryHtml(selectedAssets) {
+  const ids = selectedAssets.map(inventoryAssetIdentifier).filter(Boolean);
+  const previewIds = ids.slice(0, 8);
+  const moreCount = Math.max(0, ids.length - previewIds.length);
+
+  return `
+    <strong>${escapeHtml(String(ids.length))} asset${ids.length === 1 ? '' : 's'} selected</strong>
+    <div style="margin-top:6px;color:#495057;line-height:1.45;">
+      ${previewIds.map(id => `<span class="asset-badge status-available" style="margin:0 4px 4px 0;">${escapeHtml(id)}</span>`).join('')}
+      ${moreCount ? `<span style="color:#666;">+${escapeHtml(String(moreCount))} more</span>` : ''}
+    </div>
+  `;
+}
+
+function ensureBulkAssetEditModal() {
+  if (document.getElementById('bulkAssetEditModal')) return;
+
+  const modal = document.createElement('div');
+  modal.id = 'bulkAssetEditModal';
+  modal.className = 'modal';
+  modal.innerHTML = `
+    <div class="modal-content" style="max-width:820px;">
+      <div class="modal-header">
+        <h3 class="modal-title">Edit Selected Assets</h3>
+        <button class="close-btn" onclick="closeModal('bulkAssetEditModal')">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        <div id="bulkEditAssetSummary" style="background:#f8f9fa;border:1px solid #e9ecef;border-radius:8px;padding:12px;margin-bottom:16px;"></div>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;">
+          <div class="form-group">
+            <label class="form-label">
+              <input type="checkbox" id="bulkEditUseDateOfPurchase" style="margin-right:8px;">
+              Date of Purchase
+            </label>
+            <input id="bulkEditDateOfPurchase" type="date" class="form-input" disabled>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">
+              <input type="checkbox" id="bulkEditUseDepartment" style="margin-right:8px;">
+              Department
+            </label>
+            <input id="bulkEditDepartment" class="form-input" list="department-code-options" placeholder="AX / LX / VX / UN" disabled>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">
+              <input type="checkbox" id="bulkEditUseBrand" style="margin-right:8px;">
+              Brand
+            </label>
+            <input id="bulkEditBrand" class="form-input" disabled>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">
+              <input type="checkbox" id="bulkEditUseModel" style="margin-right:8px;">
+              Model
+            </label>
+            <input id="bulkEditModel" class="form-input" disabled>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">
+              <input type="checkbox" id="bulkEditUseDefaultLocation" style="margin-right:8px;">
+              Default Location
+            </label>
+            <input id="bulkEditDefaultLocation" class="form-input" placeholder="Store" disabled>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">
+              <input type="checkbox" id="bulkEditUseCurrentLocation" style="margin-right:8px;">
+              Current Location
+            </label>
+            <input id="bulkEditCurrentLocation" class="form-input" placeholder="Leave blank for default" disabled>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">
+              <input type="checkbox" id="bulkEditUseStatus" style="margin-right:8px;">
+              Asset Status
+            </label>
+            <select id="bulkEditStatus" class="form-input" disabled>
+              <option value="ok">OK</option>
+              <option value="ooc">OOC</option>
+              <option value="missing">Missing</option>
+              <option value="degraded">Degraded</option>
+              <option value="decommissioned">Decommissioned</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">
+            <input type="checkbox" id="bulkEditUseDescription" style="margin-right:8px;">
+            Description
+          </label>
+          <textarea id="bulkEditDescription" class="form-input" rows="3" disabled></textarea>
+        </div>
+      </div>
+
+      <div class="modal-footer modal-actions" style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
+        <button class="btn btn-secondary" onclick="closeModal('bulkAssetEditModal')">Cancel</button>
+        <button class="btn btn-success" onclick="saveBulkAssetEditModal()">Save Changes</button>
+      </div>
+    </div>
+  `;
+
+  modal.addEventListener('click', (event) => {
+    if (event.target === modal) closeModal('bulkAssetEditModal');
+  });
+
+  document.body.appendChild(modal);
+
+  [
+    'DateOfPurchase',
+    'Department',
+    'Brand',
+    'Model',
+    'DefaultLocation',
+    'CurrentLocation',
+    'Status',
+    'Description'
+  ].forEach(name => {
+    document.getElementById(`bulkEditUse${name}`)?.addEventListener('change', syncBulkAssetEditFields);
+  });
+}
+
+function syncBulkAssetEditFields() {
+  [
+    ['bulkEditUseDateOfPurchase', 'bulkEditDateOfPurchase'],
+    ['bulkEditUseDepartment', 'bulkEditDepartment'],
+    ['bulkEditUseBrand', 'bulkEditBrand'],
+    ['bulkEditUseModel', 'bulkEditModel'],
+    ['bulkEditUseDefaultLocation', 'bulkEditDefaultLocation'],
+    ['bulkEditUseCurrentLocation', 'bulkEditCurrentLocation'],
+    ['bulkEditUseStatus', 'bulkEditStatus'],
+    ['bulkEditUseDescription', 'bulkEditDescription']
+  ].forEach(([checkboxId, inputId]) => {
+    const checkbox = document.getElementById(checkboxId);
+    const input = document.getElementById(inputId);
+    if (input) input.disabled = !(checkbox && checkbox.checked);
+  });
+}
+
+function resetBulkAssetEditChecks() {
+  [
+    'bulkEditUseDateOfPurchase',
+    'bulkEditUseDepartment',
+    'bulkEditUseBrand',
+    'bulkEditUseModel',
+    'bulkEditUseDefaultLocation',
+    'bulkEditUseCurrentLocation',
+    'bulkEditUseStatus',
+    'bulkEditUseDescription'
+  ].forEach(id => {
+    const checkbox = document.getElementById(id);
+    if (checkbox) checkbox.checked = false;
+  });
+  syncBulkAssetEditFields();
+}
+
+function openBulkAssetEditModal() {
+  if (!currentUser || !currentUser.isAdmin) {
+    showNotification('error', 'Admin privileges required');
+    return;
+  }
+
+  const selectedAssets = getSelectedInventoryAssets();
+  if (!selectedAssets.length) {
+    showNotification('warning', 'Select at least one asset');
+    return;
+  }
+
+  ensureBulkAssetEditModal();
+  ensureDepartmentDatalist();
+
+  document.getElementById('bulkEditAssetSummary').innerHTML = selectedInventoryAssetSummaryHtml(selectedAssets);
+  document.getElementById('bulkEditDateOfPurchase').value = normalizeAssetPurchaseDateValue(commonInventoryAssetValue(selectedAssets, asset => asset.dateOfPurchase || asset.purchaseDate || ''));
+  document.getElementById('bulkEditDepartment').value = commonInventoryAssetValue(selectedAssets, asset => asset.department || 'UN') || '';
+  document.getElementById('bulkEditBrand').value = commonInventoryAssetValue(selectedAssets, asset => asset.brand || '') || '';
+  document.getElementById('bulkEditModel').value = commonInventoryAssetValue(selectedAssets, asset => asset.model || '') || '';
+  document.getElementById('bulkEditDefaultLocation').value = commonInventoryAssetValue(selectedAssets, asset => asset.defaultLocation || 'Store') || '';
+  document.getElementById('bulkEditCurrentLocation').value = commonInventoryAssetValue(selectedAssets, asset => asset.currentLocation || '') || '';
+  document.getElementById('bulkEditDescription').value = commonInventoryAssetValue(selectedAssets, asset => asset.description || '') || '';
+
+  const commonStatus = commonInventoryAssetValue(selectedAssets, getAssetConditionStatus);
+  document.getElementById('bulkEditStatus').value = commonStatus === 'available' ? 'ok' : (commonStatus || 'ok');
+
+  resetBulkAssetEditChecks();
+  openModal('bulkAssetEditModal');
+}
+
+function bulkAssetStatusPayload(statusValue) {
+  const status = String(statusValue || 'ok').trim().toLowerCase();
+  return {
+    isMissing: status === 'missing',
+    isOOC: status === 'ooc',
+    isDegraded: status === 'degraded',
+    isDecommissioned: status === 'decommissioned'
+  };
+}
+
+function collectBulkAssetEditPayload(asset) {
+  const payload = {
+    id: inventoryAssetIdentifier(asset),
+    internalId: inventoryAssetIdentifier(asset),
+    applyTo: 'single'
+  };
+
+  let selectedFieldCount = 0;
+  const useField = (id) => document.getElementById(id)?.checked || false;
+  const readValue = (id) => (document.getElementById(id)?.value || '').trim();
+
+  if (useField('bulkEditUseDateOfPurchase')) {
+    payload.dateOfPurchase = readValue('bulkEditDateOfPurchase');
+    selectedFieldCount += 1;
+  }
+
+  if (useField('bulkEditUseDepartment')) {
+    payload.department = readValue('bulkEditDepartment').toUpperCase();
+    selectedFieldCount += 1;
+  }
+
+  if (useField('bulkEditUseBrand')) {
+    payload.brand = readValue('bulkEditBrand');
+    selectedFieldCount += 1;
+  }
+
+  if (useField('bulkEditUseModel')) {
+    payload.model = readValue('bulkEditModel');
+    selectedFieldCount += 1;
+  }
+
+  if (useField('bulkEditUseDescription')) {
+    payload.description = readValue('bulkEditDescription');
+    selectedFieldCount += 1;
+  }
+
+  if (useField('bulkEditUseDefaultLocation')) {
+    payload.defaultLocation = readValue('bulkEditDefaultLocation');
+    selectedFieldCount += 1;
+  }
+
+  if (useField('bulkEditUseCurrentLocation')) {
+    payload.currentLocation = readValue('bulkEditCurrentLocation');
+    selectedFieldCount += 1;
+  }
+
+  if (useField('bulkEditUseStatus')) {
+    Object.assign(payload, bulkAssetStatusPayload(readValue('bulkEditStatus')));
+    selectedFieldCount += 1;
+  }
+
+  payload.__selectedFieldCount = selectedFieldCount;
+  return payload;
+}
+
+async function saveBulkAssetEditModal() {
+  if (!currentUser || !currentUser.isAdmin) {
+    showNotification('error', 'Admin privileges required');
+    return;
+  }
+
+  const selectedAssets = getSelectedInventoryAssets();
+  if (!selectedAssets.length) {
+    showNotification('warning', 'Select at least one asset');
+    return;
+  }
+
+  const samplePayload = collectBulkAssetEditPayload(selectedAssets[0]);
+  if (!samplePayload.__selectedFieldCount) {
+    showNotification('warning', 'Choose at least one field to update');
+    return;
+  }
+
+  if ('department' in samplePayload && !samplePayload.department) {
+    showNotification('warning', 'Department cannot be empty');
+    return;
+  }
+
+  if ('brand' in samplePayload && !samplePayload.brand) {
+    showNotification('warning', 'Brand cannot be empty');
+    return;
+  }
+
+  if ('model' in samplePayload && !samplePayload.model) {
+    showNotification('warning', 'Model cannot be empty');
+    return;
+  }
+
+  let updated = 0;
+  let eventsUpdated = 0;
+  let containersUpdated = 0;
+  const failed = [];
+
+  for (const asset of selectedAssets) {
+    const assetId = inventoryAssetIdentifier(asset);
+    const payload = collectBulkAssetEditPayload(asset);
+    delete payload.__selectedFieldCount;
+
+    try {
+      const res = await apiCall(`/api/assets/${encodeURIComponent(assetId)}`, 'PUT', payload);
+      updated += 1;
+      eventsUpdated += Number(res.data?.eventsUpdated || 0);
+      containersUpdated += Number(res.data?.containersUpdated || 0);
+    } catch (error) {
+      failed.push({ assetId, message: error.message });
+    }
+  }
+
+  closeModal('bulkAssetEditModal');
+
+  if (updated) {
+    let message = `Updated ${updated} asset${updated === 1 ? '' : 's'}`;
+    if (eventsUpdated) message += `; ${eventsUpdated} event update${eventsUpdated === 1 ? '' : 's'}`;
+    if (containersUpdated) message += `; ${containersUpdated} container update${containersUpdated === 1 ? '' : 's'}`;
+    if (failed.length) message += `; ${failed.length} failed`;
+    showNotification(failed.length ? 'warning' : 'success', message);
+  } else if (failed.length) {
+    showNotification('error', `Failed to update selected assets`);
+  }
+
+  selectedInventoryAssetIds.clear();
+  await loadInventory();
+
+  if (document.getElementById('events-section')?.classList.contains('active')) {
+    await loadAllEvents();
   }
 }
 
@@ -12639,6 +13171,7 @@ function collectAddAssetPayload() {
     brand: addAssetValue('assetBrand'),
     model: addAssetValue('assetModel'),
     description: addAssetValue('assetDescription'),
+    dateOfPurchase: addAssetValue('assetDateOfPurchase'),
     department: addAssetValue('assetDepartment') || 'UN',
     isBulk,
     quantity: addAssetQuantityValue(),
@@ -12943,6 +13476,7 @@ document.addEventListener("DOMContentLoaded", function () {
     'assetBrand',
     'assetModel',
     'assetDescription',
+    'assetDateOfPurchase',
     'assetDepartment',
     'assetQuantity',
     'assetSerials',
@@ -13546,19 +14080,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   const assetSearch = document.getElementById("asset-search");
   if (assetSearch) {
-    assetSearch.addEventListener("input", function (e) {
-      const searchTerm = e.target.value.toLowerCase();
-      const filteredAssets = assets.filter(
-        (asset) =>
-          asset.id.toLowerCase().includes(searchTerm) ||
-          asset.brand.toLowerCase().includes(searchTerm) ||
-          asset.model.toLowerCase().includes(searchTerm) ||
-          (asset.description &&
-            asset.description.toLowerCase().includes(searchTerm))
-      );
-
-      displayInventoryTable(filteredAssets);
-    });
+    assetSearch.addEventListener("input", displayFilteredInventory);
   }
 
   // Maintenance Asset Search functionality  
@@ -18892,6 +19414,7 @@ function getInventorySortValue(asset, sortBy) {
   if (sortBy === 'department') return asset.department || '';
   if (sortBy === 'status') return asset.status || '';
   if (sortBy === 'location') return asset.location || '';
+  if (sortBy === 'dateOfPurchase' || sortBy === 'purchaseDate') return normalizeAssetPurchaseDateValue(asset.dateOfPurchase || asset.purchaseDate || '');
   return asset[sortBy] || '';
 }
 
@@ -18914,7 +19437,7 @@ function getFilteredInventoryData() {
 
   let filteredAssets = sourceAssets.filter((asset) => {
     const deptMeta = getDepartmentMeta(asset.department);
-    const searchableText = `${asset.id || ''} ${asset.internalId || ''} ${asset.bulkId || ''} ${asset.brand || ''} ${asset.model || ''} ${asset.serial || ''} ${asset.description || ''} ${asset.department || ''} ${deptMeta.name || ''}`.toLowerCase();
+    const searchableText = `${asset.id || ''} ${asset.internalId || ''} ${asset.bulkId || ''} ${asset.brand || ''} ${asset.model || ''} ${asset.serial || ''} ${asset.description || ''} ${asset.dateOfPurchase || asset.purchaseDate || ''} ${asset.department || ''} ${deptMeta.name || ''}`.toLowerCase();
     const matchesSearch = !filters.searchTerm || searchableText.includes(filters.searchTerm);
     const matchesDept = !filters.deptFilter || asset.department === filters.deptFilter;
     const matchesStatus = !filters.statusFilter || asset.status === filters.statusFilter;

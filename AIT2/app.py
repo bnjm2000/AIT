@@ -1060,6 +1060,20 @@ def _safe_int(value, default=0):
         return default
 
 
+def _normalise_asset_purchase_date(value):
+    raw = str(value or '').strip()
+    if not raw:
+        return ''
+
+    for fmt in ('%Y-%m-%d', '%Y/%m/%d', '%Y%m%d'):
+        try:
+            return datetime.strptime(raw, fmt).strftime('%Y-%m-%d')
+        except ValueError:
+            continue
+
+    raise ValueError('Date of purchase must be YYYY-MM-DD')
+
+
 def _is_degraded(asset):
     return bool(getattr(asset, 'is_degraded', False))
 
@@ -2176,6 +2190,8 @@ def _bulk_asset_to_available_dict(asset, target_event=None):
         'model': asset.model_number,
         'description': asset.description or '',
         'serial': '',
+        'dateOfPurchase': getattr(asset, 'date_of_purchase', ''),
+        'purchaseDate': getattr(asset, 'date_of_purchase', ''),
         'department': asset.department_code,
         'location': asset.current_location or asset.default_location,
         'status': status,
@@ -2231,6 +2247,8 @@ def _asset_to_available_dict(asset):
         'model': asset.model_number,
         'description': asset.description or '',
         'serial': asset.serial_number,
+        'dateOfPurchase': getattr(asset, 'date_of_purchase', ''),
+        'purchaseDate': getattr(asset, 'date_of_purchase', ''),
         'department': asset.department_code,
         'location': asset.current_location or asset.default_location,
         'status': status,
@@ -2333,6 +2351,8 @@ def get_available_assets_for_event(event_id):
                 'description': getattr(asset, 'description', '') or '',
                 'department': asset.department_code,
                 'serial': (getattr(asset, 'serial_number', None) or getattr(asset, 'serial', None) or ''),
+                'dateOfPurchase': getattr(asset, 'date_of_purchase', ''),
+                'purchaseDate': getattr(asset, 'date_of_purchase', ''),
                 'location': asset.current_location or asset.default_location or '',
                 'status': _asset_status_value(asset),
                 'isMissing': getattr(asset, 'is_missing', False),
@@ -7711,6 +7731,8 @@ def get_assets():
                 'model': asset.model_number,
                 'serial': asset.serial_number,
                 'description': asset.description,
+                'dateOfPurchase': getattr(asset, 'date_of_purchase', ''),
+                'purchaseDate': getattr(asset, 'date_of_purchase', ''),
                 'department': asset.department_code,
                 'departmentName': _department_payload(asset.department_code, departments)['name'],
                 'departmentColor': _department_payload(asset.department_code, departments)['color'],
@@ -8250,6 +8272,9 @@ def create_asset():
     """Create one or more assets."""
     try:
         data = request.get_json() or {}
+        purchase_date = _normalise_asset_purchase_date(
+            data.get('dateOfPurchase', data.get('purchaseDate', ''))
+        )
 
         with _inventory_action_lock:
             plan = _asset_id_plan_for_request(data)
@@ -8275,7 +8300,8 @@ def create_asset():
                     default_location='Store',
                     current_location='',
                     is_bulk=True,
-                    quantity=plan['quantity']
+                    quantity=plan['quantity'],
+                    date_of_purchase=purchase_date
                 )
                 data_manager.inventory[created_asset_ids[0]] = asset
             else:
@@ -8296,7 +8322,8 @@ def create_asset():
                         default_location='Store',
                         current_location='',
                         is_bulk=False,
-                        quantity=1
+                        quantity=1,
+                        date_of_purchase=purchase_date
                     )
                     data_manager.inventory[asset_id] = asset
                     created_asset_ids.append(asset_id)
@@ -8568,6 +8595,11 @@ def update_asset(asset_id):
 
         if 'currentLocation' in data:
             asset.current_location = (data.get('currentLocation') or '').strip()
+
+        if 'dateOfPurchase' in data or 'purchaseDate' in data:
+            asset.date_of_purchase = _normalise_asset_purchase_date(
+                data.get('dateOfPurchase', data.get('purchaseDate', ''))
+            )
 
         if 'isMissing' in data:
             asset.is_missing = bool(data.get('isMissing'))

@@ -17,7 +17,7 @@ MAX_LOG_LINES = 1000
 REQUIRED_DATA_FILES = ('Inventory.csv', 'Logs.csv', 'Users.csv', 'Containers.csv', 'Clients.csv')
 UTF8_ENCODINGS = ('utf-8', 'utf-8-sig')
 INVENTORY_FIELDNAMES = [
-    'AssetID', 'Brand', 'ModelNumber', 'SerialNumber', 'Description',
+    'AssetID', 'Brand', 'ModelNumber', 'SerialNumber', 'Description', 'DateOfPurchase',
     'IsMissing', 'IsOOC', 'IsDegraded', 'IsDisposed', 'IsBulk', 'Quantity',
     'MaintenanceLogs', 'DepartmentCode', 'DefaultLocation', 'CurrentLocation'
 ]
@@ -342,6 +342,7 @@ class DataManager:
                     model_number=row.get('ModelNumber', ''),
                     serial_number=row.get('SerialNumber', ''),
                     description=row.get('Description', ''),
+                    date_of_purchase=row.get('DateOfPurchase', row.get('PurchaseDate', '')),
                     is_missing=_is_csv_true(row.get('IsMissing')),
                     is_ooc=is_ooc,
                     is_degraded=is_degraded,
@@ -391,6 +392,7 @@ class DataManager:
                     'ModelNumber': item.model_number,
                     'SerialNumber': item.serial_number,
                     'Description': item.description,
+                    'DateOfPurchase': getattr(item, 'date_of_purchase', ''),
                     'IsMissing': item.is_missing,
                     'IsOOC': item.is_ooc,
                     'IsDegraded': getattr(item, 'is_degraded', False),

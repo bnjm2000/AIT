@@ -116,6 +116,21 @@ class AssetCreationTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
         self.assertEqual(response.get_json()['assetIds'], ['LAV#01', 'LAV#02'])
 
+    def test_create_asset_saves_date_of_purchase(self):
+        response = self.post_asset({
+            'dateOfPurchase': '2026-06-02',
+        })
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        asset_id = response.get_json()['assetIds'][0]
+        self.assertEqual(self.data_manager.inventory[asset_id].date_of_purchase, '2026-06-02')
+
+        assets_response = self.client.get('/api/assets')
+        self.assertEqual(assets_response.status_code, 200, assets_response.get_data(as_text=True))
+        payload = assets_response.get_json()['data']
+        created_asset = next(item for item in payload if item['internalId'] == asset_id)
+        self.assertEqual(created_asset['dateOfPurchase'], '2026-06-02')
+
 
 if __name__ == '__main__':
     unittest.main()

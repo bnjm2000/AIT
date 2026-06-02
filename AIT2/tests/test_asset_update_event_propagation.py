@@ -203,6 +203,17 @@ class AssetUpdateEventPropagationTests(unittest.TestCase):
         self.assertEqual(event.returned_items, [new_marker])
         self.assertEqual(event.extra_assets, [new_marker])
 
+    def test_asset_update_saves_date_of_purchase(self):
+        response = self.put_asset('A#01', dateOfPurchase='2026/06/02')
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(self.data_manager.inventory['A#01'].date_of_purchase, '2026-06-02')
+
+        assets_response = self.client.get('/api/assets')
+        self.assertEqual(assets_response.status_code, 200, assets_response.get_data(as_text=True))
+        asset_payload = next(item for item in assets_response.get_json()['data'] if item['internalId'] == 'A#01')
+        self.assertEqual(asset_payload['dateOfPurchase'], '2026-06-02')
+
 
 if __name__ == '__main__':
     unittest.main()
