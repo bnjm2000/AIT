@@ -4371,7 +4371,7 @@ function createEventCard(event) {
         <div style="margin: 15px 0;">
             <small style="color: #666;">${event.assetCount || 0} assets assigned</small>
         </div>
-        <div class="event-actions">
+        <div class="event-actions event-card-actions">
             <button class="btn btn-primary" onclick="viewEvent(${event.id})">View</button>
             ${isAdminUser() ? `
               <button class="btn btn-warning" onclick="editEvent(${event.id})">Edit</button>

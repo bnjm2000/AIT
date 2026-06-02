@@ -741,6 +741,20 @@
         flex-wrap: wrap;
       }
 
+      .event-card-actions {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 6px;
+      }
+
+      .event-card-actions .btn {
+        min-height: 32px;
+        padding: 6px 5px;
+        font-size: 11px;
+        line-height: 1.1;
+        white-space: nowrap;
+      }
+
       .model-toggle {
         cursor: pointer !important;
         user-select: none;
@@ -2228,6 +2242,18 @@
           display: flex;
           flex-wrap: wrap;
           gap: 8px;
+        }
+
+        .event-card-actions {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 7px;
+        }
+
+        .event-card-actions .btn {
+          min-height: 36px;
+          padding: 7px 8px;
+          font-size: 12px;
         }
 
         .events-tabs,
