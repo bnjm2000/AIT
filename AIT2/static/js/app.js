@@ -998,7 +998,10 @@ function escapeHtmlAttribute(str) {
     .replace(/>/g, '&gt;');
 }
 
-const BARCODE_SCANNER_SCRIPT_URL = 'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js';
+const BARCODE_SCANNER_SCRIPT_URLS = [
+  '/static/js/vendor/html5-qrcode.min.js',
+  'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js'
+];
 const BARCODE_SCANNER_NATIVE_INTERVAL_MS = 125;
 let barcodeScannerScriptPromise = null;
 let barcodeScannerState = {
@@ -1458,14 +1461,24 @@ function loadHtml5Qrcode() {
   if (window.Html5Qrcode) return Promise.resolve(true);
   if (barcodeScannerScriptPromise) return barcodeScannerScriptPromise;
 
-  barcodeScannerScriptPromise = new Promise(resolve => {
+  const loadScript = scriptUrl => new Promise(resolve => {
     const script = document.createElement('script');
-    script.src = BARCODE_SCANNER_SCRIPT_URL;
+    script.src = scriptUrl;
     script.async = true;
-    script.onload = () => resolve(!!window.Html5Qrcode);
-    script.onerror = () => resolve(false);
+    script.onload = () => resolve({ ok: !!window.Html5Qrcode, script });
+    script.onerror = () => resolve({ ok: false, script });
     document.head.appendChild(script);
   });
+
+  barcodeScannerScriptPromise = (async () => {
+    for (const scriptUrl of BARCODE_SCANNER_SCRIPT_URLS) {
+      const { ok, script } = await loadScript(scriptUrl);
+      if (ok) return true;
+      script.remove();
+    }
+
+    return false;
+  })();
 
   return barcodeScannerScriptPromise;
 }
@@ -1595,6 +1608,60 @@ async function startNativeBarcodeScanner() {
   await startNativeBarcodeDetectionLoop(video);
 }
 
+async function cleanupHtml5QrcodeScanner(scanner) {
+  if (!scanner) return;
+
+  try {
+    await scanner.stop();
+  } catch (e) {
+    // Stop can throw when a start attempt never reached a running state.
+  }
+
+  try {
+    await scanner.clear();
+  } catch (e) {
+    // Clear is best effort.
+  }
+
+  if (barcodeScannerState.html5 === scanner) {
+    barcodeScannerState.html5 = null;
+  }
+}
+
+async function getHtml5QrcodeCameraRequests() {
+  const cameraRequests = [
+    getBarcodeScannerVideoConstraints(),
+    { facingMode: { ideal: 'environment' } },
+    { facingMode: 'environment' },
+    {}
+  ];
+
+  if (typeof window.Html5Qrcode?.getCameras !== 'function') {
+    return cameraRequests;
+  }
+
+  try {
+    const cameras = await window.Html5Qrcode.getCameras();
+    const rearCameras = [];
+    const otherCameras = [];
+
+    (cameras || []).forEach(camera => {
+      if (!camera?.id) return;
+      if (isLikelyRearCameraLabel(camera.label)) {
+        rearCameras.push(camera.id);
+      } else {
+        otherCameras.push(camera.id);
+      }
+    });
+
+    cameraRequests.push(...rearCameras, ...otherCameras);
+  } catch (e) {
+    // Enumerating cameras may fail until permission is granted; constraints above still work.
+  }
+
+  return cameraRequests;
+}
+
 async function startHtml5BarcodeScanner() {
   const readerId = 'barcodeScannerReader';
   const reader = document.getElementById(readerId);
@@ -1604,17 +1671,15 @@ async function startHtml5BarcodeScanner() {
   if (!loaded || !window.Html5Qrcode) return false;
 
   reader.innerHTML = '';
-  const scanner = new Html5Qrcode(readerId, getHtml5QrcodeConfig());
-  barcodeScannerState.html5 = scanner;
-
-  const cameraRequests = [
-    getBarcodeScannerVideoConstraints(),
-    { facingMode: { ideal: 'environment' } },
-    { facingMode: 'environment' }
-  ];
+  const cameraRequests = await getHtml5QrcodeCameraRequests();
   let lastStartError = null;
+  let activeScanner = null;
 
   for (const cameraRequest of cameraRequests) {
+    reader.innerHTML = '';
+    const scanner = new Html5Qrcode(readerId, getHtml5QrcodeConfig());
+    barcodeScannerState.html5 = scanner;
+
     try {
       await scanner.start(
         cameraRequest,
@@ -1623,27 +1688,19 @@ async function startHtml5BarcodeScanner() {
         () => {}
       );
       lastStartError = null;
+      activeScanner = scanner;
       break;
     } catch (error) {
       lastStartError = error;
-      try {
-        await scanner.stop();
-      } catch (e) {
-        // The failed attempt may not have reached a running state.
-      }
+      await cleanupHtml5QrcodeScanner(scanner);
     }
   }
 
   if (lastStartError) {
-    try {
-      await scanner.clear();
-    } catch (e) {
-      // Clear is best effort when start fails.
-    }
-    barcodeScannerState.html5 = null;
     throw lastStartError;
   }
 
+  barcodeScannerState.html5 = activeScanner;
   const video = reader.querySelector('video');
   if (video?.srcObject) {
     await enhanceBarcodeScannerStream(video.srcObject);
@@ -1675,23 +1732,32 @@ async function openBarcodeScanner({ title, instructions, onScan }) {
 
   try {
     const startedWithLibrary = await startHtml5BarcodeScanner();
-    if (!startedWithLibrary) await startNativeBarcodeScanner();
+    if (startedWithLibrary) return;
   } catch (error) {
-    console.warn('Camera scanner unavailable:', error);
+    console.warn('html5-qrcode scanner unavailable:', error);
     await stopBarcodeScannerCamera(false);
-    document.getElementById('barcodeScannerReader').innerHTML = `
-      <div style="padding:20px;text-align:center;line-height:1.45;">
-        Camera scanner could not start.<br>
-        Use Take Photo or enter the code below.
-      </div>
-    `;
-    setBarcodeScannerStatus(
-      window.isSecureContext
-        ? 'Camera access was blocked or unavailable.'
-        : 'Camera access usually requires HTTPS on a phone browser.',
-      'warning'
-    );
   }
+
+  try {
+    await startNativeBarcodeScanner();
+    return;
+  } catch (error) {
+    console.warn('Native camera scanner unavailable:', error);
+  }
+
+  await stopBarcodeScannerCamera(false);
+  document.getElementById('barcodeScannerReader').innerHTML = `
+    <div style="padding:20px;text-align:center;line-height:1.45;">
+      Camera scanner could not start.<br>
+      Use Take Photo or enter the code below.
+    </div>
+  `;
+  setBarcodeScannerStatus(
+    window.isSecureContext
+      ? 'Camera access was blocked or unavailable. Check browser camera permission and try again.'
+      : 'Camera access usually requires HTTPS on a phone browser.',
+    'warning'
+  );
 }
 
 async function closeBarcodeScanner() {
