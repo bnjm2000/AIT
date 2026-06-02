@@ -11,15 +11,37 @@
         box-sizing: border-box;
       }
 
+      :root {
+        --ui-scale: 0.8;
+        --ui-scale-mobile: 0.9;
+        --scaled-vw: calc(100vw / var(--ui-scale));
+        --scaled-vh: calc(100vh / var(--ui-scale));
+        --scaled-dvh: calc(100dvh / var(--ui-scale));
+      }
+
       body {
         font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        min-height: 100vh;
-        min-height: 100dvh;
+        width: var(--scaled-vw);
+        min-height: var(--scaled-vh);
+        min-height: var(--scaled-dvh);
         display: flex;
         align-items: center;
         justify-content: center;
         padding: 16px;
+      }
+
+      @supports (zoom: 1) {
+        body {
+          zoom: var(--ui-scale);
+        }
+      }
+
+      @supports not (zoom: 1) {
+        body {
+          transform: scale(var(--ui-scale));
+          transform-origin: top left;
+        }
       }
 
       .login-container {
@@ -158,6 +180,12 @@
       .demo-info strong {
         display: block;
         margin-bottom: 5px;
+      }
+
+      @media (max-width: 768px) {
+        :root {
+          --ui-scale: var(--ui-scale-mobile);
+        }
       }
 
       @media (max-width: 420px) {

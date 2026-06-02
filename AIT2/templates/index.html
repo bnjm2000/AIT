@@ -1867,6 +1867,11 @@
 
       /* Accessibility and small-screen layout refinements */
       :root {
+        --ui-scale: 0.8;
+        --ui-scale-mobile: 0.9;
+        --scaled-vw: calc(100vw / var(--ui-scale));
+        --scaled-vh: calc(100vh / var(--ui-scale));
+        --scaled-dvh: calc(100dvh / var(--ui-scale));
         --app-gap: clamp(10px, 2vw, 20px);
         --panel-radius: 12px;
         --focus-ring: 0 0 0 3px rgba(79, 70, 229, 0.22);
@@ -1874,6 +1879,25 @@
 
       html {
         min-height: 100%;
+      }
+
+      body {
+        width: var(--scaled-vw);
+        min-height: var(--scaled-vh);
+        min-height: var(--scaled-dvh);
+      }
+
+      @supports (zoom: 1) {
+        body {
+          zoom: var(--ui-scale);
+        }
+      }
+
+      @supports not (zoom: 1) {
+        body {
+          transform: scale(var(--ui-scale));
+          transform-origin: top left;
+        }
       }
 
       button,
@@ -1898,12 +1922,18 @@
 
       .container {
         grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
-        height: 100vh;
-        height: 100dvh;
+        height: var(--scaled-vh);
+        height: var(--scaled-dvh);
         min-width: 0;
         padding: var(--app-gap);
         gap: var(--app-gap);
         overflow: hidden;
+      }
+
+      .modal {
+        width: var(--scaled-vw);
+        height: var(--scaled-vh);
+        height: var(--scaled-dvh);
       }
 
       .header {
@@ -1999,7 +2029,7 @@
       }
 
       .modal-content {
-        max-width: min(1200px, calc(100vw - 32px));
+        max-width: min(1200px, calc(var(--scaled-vw) - 32px));
       }
 
       .modal-actions {
@@ -2016,9 +2046,9 @@
       }
 
       #maintenanceLogModal .modal-content {
-        width: min(1320px, calc(100vw - 32px)) !important;
-        height: min(95vh, calc(100dvh - 32px)) !important;
-        max-height: calc(100dvh - 32px) !important;
+        width: min(1320px, calc(var(--scaled-vw) - 32px)) !important;
+        height: min(calc(var(--scaled-dvh) * 0.95), calc(var(--scaled-dvh) - 32px)) !important;
+        max-height: calc(var(--scaled-dvh) - 32px) !important;
       }
 
       #maintenanceLogModal .asset-event-history-wrap,
@@ -2049,7 +2079,7 @@
       }
 
       .notification {
-        max-width: calc(100vw - 32px);
+        max-width: calc(var(--scaled-vw) - 32px);
         overflow-wrap: anywhere;
       }
 
@@ -2064,16 +2094,20 @@
       }
 
       @media (max-width: 768px) {
+        :root {
+          --ui-scale: var(--ui-scale-mobile);
+        }
+
         body {
-          min-height: 100vh;
-          min-height: 100dvh;
+          min-height: var(--scaled-vh);
+          min-height: var(--scaled-dvh);
         }
 
         .container {
           display: block;
           height: auto;
-          min-height: 100vh;
-          min-height: 100dvh;
+          min-height: var(--scaled-vh);
+          min-height: var(--scaled-dvh);
           overflow: visible;
           padding: 10px;
         }
@@ -2283,7 +2317,7 @@
         .quantity-modal-content {
           width: 100% !important;
           max-width: none !important;
-          max-height: calc(100dvh - 20px) !important;
+          max-height: calc(var(--scaled-dvh) - 20px) !important;
           margin: 0 !important;
           padding: 16px !important;
           border-radius: var(--panel-radius) !important;
@@ -2311,7 +2345,7 @@
 
         #maintenanceLogModal .modal-content {
           height: auto !important;
-          max-height: calc(100dvh - 20px - env(safe-area-inset-bottom)) !important;
+          max-height: calc(var(--scaled-dvh) - 20px - env(safe-area-inset-bottom)) !important;
           overflow-y: auto !important;
           overflow-x: hidden !important;
         }
@@ -2331,7 +2365,7 @@
         }
 
         #maintenanceLogModal .asset-event-history-wrap {
-          max-height: 32dvh !important;
+          max-height: calc(var(--scaled-dvh) * 0.32) !important;
         }
 
         #maintenanceLogModal .maintenance-history-section {
@@ -2340,7 +2374,7 @@
         }
 
         #maintenanceLogModal .maintenance-log-table-wrap {
-          max-height: 42dvh !important;
+          max-height: calc(var(--scaled-dvh) * 0.42) !important;
           min-height: 180px;
         }
 
@@ -2365,7 +2399,7 @@
         }
 
         #editMaintenanceLogModal .modal-content {
-          max-height: calc(100dvh - 20px - env(safe-area-inset-bottom)) !important;
+          max-height: calc(var(--scaled-dvh) - 20px - env(safe-area-inset-bottom)) !important;
           overflow-y: auto !important;
         }
 
