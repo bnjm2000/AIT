@@ -1,7 +1,7 @@
 AssetID,Brand,ModelNumber,SerialNumber,Description,DateOfPurchase,IsMissing,IsOOC,IsDegraded,IsDisposed,IsBulk,Quantity,MaintenanceLogs,DepartmentCode,DefaultLocation,CurrentLocation
 IPAD#01,Apple,iPad,YVTP9HPX47,(10th Generation),,False,False,False,False,False,1,,AX,Store,Store
 IPAD#02,Apple,iPad,JX9KXKKPF4,(10th Generation),,False,False,False,False,False,1,"[{""date"":""2026/04/15"",""user"":""bnjm2000"",""description"":""Updated to iPadOS 26.4.1"",""type"":""Update"",""cost"":"""",""changes"":[],""source"":{}}]",AX,Store,Store
-IPAD#03,Apple,iPad,TFQYL2K0JW,(10th Generation),,False,False,False,False,False,1,"[{""date"":""2026/03/04"",""user"":""bnjm2000"",""description"":""Found without 3.5mm adapter. Replaced (110: Louis Vuitton Spring Summer Trunk Show 2026 @ Japanese Garden)"",""type"":""Fault"",""cost"":"""",""changes"":[],""source"":{}},{""date"":""2026/04/15"",""user"":""bnjm2000"",""description"":""Updated to iPadOS 26.4.1"",""type"":""Update"",""cost"":"""",""changes"":[],""source"":{}}]",AX,Store,Store
+IPAD#03,Apple,iPad,TFQYL2K0JW,(10th Generation),,False,False,False,False,False,1,"[{""date"":""2026/03/04"",""user"":""bnjm2000"",""description"":""Found without 3.5mm adapter. Replaced (110: Louis Vuitton Spring Summer Trunk Show 2026 @ Japanese Garden)"",""type"":""Fault"",""cost"":"""",""changes"":[],""source"":{}},{""date"":""2026/04/15"",""user"":""bnjm2000"",""description"":""Updated to iPadOS 26.4.1"",""type"":""Update"",""cost"":"""",""changes"":[],""source"":{}}]",AX,Store,NSBA Rooftop Opening Ceremony @ Temple
 C451B#01,AKG,C451B,VI0803-107486,Cardioid condenser microphone,,False,False,False,False,False,1,,AX,Store,Store
 C451B#02,AKG,C451B,VI0803-106725,Cardioid condenser microphone,,False,False,False,False,False,1,,AX,Store,Store
 C451B#03,AKG,C451B,VI0803-106979,Cardioid condenser microphone,,False,False,False,False,False,1,,AX,Store,
@@ -171,25 +171,25 @@ C1ProRHS#03,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC007B64,,,False,Fa
 C1ProRHS#04,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC0082CF,,,False,False,False,False,False,1,,AX,Store,Store
 C1ProRHS#05,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC00800E,,,False,False,False,False,False,1,"[{""date"":""2025/12/04"",""user"":""bnjm2000"",""description"":""Headset speaker foam disintegrated, replaced."",""type"":""Repair"",""cost"":"""",""changes"":[],""source"":{}}]",AX,Store,Store
 C1ProRHS#06,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC00786C,,,False,False,False,False,False,1,"[{""date"":""2025/12/04"",""user"":""bnjm2000"",""description"":""Headset speaker foam disintegrated, replaced."",""type"":""Repair"",""cost"":"""",""changes"":[],""source"":{}}]",AX,Store,Store
-C1ProRHS#07,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC008667,,,False,False,False,False,False,1,"[{""date"":""2025/12/04"",""user"":""bnjm2000"",""description"":""Headset speaker foam disintegrated, replaced."",""type"":""Repair"",""cost"":"""",""changes"":[],""source"":{}},{""date"":""2025/11/28"",""user"":""bnjm2000"",""description"":""Mic foam lost (Doris Han's 90th Birthday Celebration @ St Regis)"",""type"":""General"",""cost"":"""",""changes"":[],""source"":{}}]",AX,Store,Store
+C1ProRHS#07,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC008667,,,False,False,False,False,False,1,"[{""date"":""2025/12/04"",""user"":""bnjm2000"",""description"":""Headset speaker foam disintegrated, replaced."",""type"":""Repair"",""cost"":"""",""changes"":[],""source"":{}},{""date"":""2025/11/28"",""user"":""bnjm2000"",""description"":""Mic foam lost (Doris Han's 90th Birthday Celebration @ St Regis)"",""type"":""General"",""cost"":"""",""changes"":[],""source"":{}},{""id"":""8bb9d6895af576505a0fb2b2"",""date"":""2026/06/22"",""user"":""bnjm2000"",""description"":""Headset foam torn, replaced"",""type"":""Repair"",""cost"":"""",""changes"":[],""source"":{}}]",AX,Store,
 C1ProRHS#08,Hollyland,Solidcom C1 Pro Remote Headset,2223220TXC007AB4,,,False,False,False,False,False,1,"[{""date"":""2025/12/04"",""user"":""bnjm2000"",""description"":""Headset speaker foam disintegrated, replaced."",""type"":""Repair"",""cost"":"""",""changes"":[],""source"":{}}]",AX,Store,Store
 C1ProWHS#01,Hollyland,Solidcom C1 Pro Wired Headset for Hub,2223170XX0D0036E,,,False,False,False,False,False,1,,AX,Store,Store
 PCBB#01,Interspace Industries,PCBB3,,PC Balance Box,,False,False,False,False,False,1,,AX,Store,Store
 PCBB#02,Interspace Industries,PCBB3,,PC Balance Box,,False,False,False,False,False,1,,AX,Store,Store
 PCBB#03,Interspace Industries,PCBB3,,PC Balance Box,,False,False,False,False,False,1,,AX,Store,Store
-PCBB#04,Interspace Industries,PCBB3,,PC Balance Box,,False,False,False,False,False,1,,AX,Store,Store
+PCBB#04,Interspace Industries,PCBB3,,PC Balance Box,,False,False,False,False,False,1,,AX,Store,NSBA Rooftop Opening Ceremony @ Temple
 PCBB#05,Interspace Industries,PCBB3,,PC Balance Box,,False,False,False,False,False,1,,AX,Store,Store
 PCBB#06,Interspace Industries,PCBB3,,PC Balance Box,,False,False,False,False,False,1,,AX,Store,Store
 PCBB#07,Interspace Industries,PCBB3,,PC Balance Box,,False,False,False,False,False,1,,AX,Store,Store
 PCBB#08,Interspace Industries,PCBB3,,PC Balance Box,,False,False,False,False,False,1,,AX,Store,Store
 PCBB#09,Interspace Industries,PCBB3,,PC Balance Box,,False,False,False,False,False,1,,AX,Store,Store
-PCBB#10,Interspace Industries,PCBB3,,PC Balance Box,,False,False,False,False,False,1,,AX,Store,Store
+PCBB#10,Interspace Industries,PCBB3,,PC Balance Box,,False,False,False,False,False,1,,AX,Store,NSBA Rooftop Opening Ceremony @ Temple
 PCBB#11,Interspace Industries,PCBB3,,PC Balance Box,,False,False,False,False,False,1,,AX,Store,Store
 PCBB#12,Interspace Industries,PCBB,,PC Balance Box,,False,False,False,False,False,1,,AX,Store,
 PCBB#13,Interspace Industries,PCBB,,PC Balance Box,,False,False,False,False,False,1,,AX,Store,Store
 PCBB#14,Interspace Industries,PCBB,,PC Balance Box,,False,False,False,False,False,1,,AX,Store,Store
-LSP1#01,Dsan,LSP-1,,Laptop Sound Port (Mono),,False,False,False,False,False,1,,AX,Store,Dry Hire: Jian Ying
-LSP1#02,Dsan,LSP-1,,Laptop Sound Port (Mono),,False,False,False,False,False,1,,AX,Store,Dry Hire: Jian Ying
+LSP1#01,Dsan,LSP-1,,Laptop Sound Port (Mono),,False,False,False,False,False,1,,AX,Store,Store
+LSP1#02,Dsan,LSP-1,,Laptop Sound Port (Mono),,False,False,False,False,False,1,,AX,Store,Store
 LSP2#01,Dsan,LSP-2,,Laptop Sound Port (Stereo),,False,False,False,False,False,1,,AX,Store,
 LSP2#02,Dsan,LSP-2,,Laptop Sound Port (Stereo),,False,False,False,False,False,1,,AX,Store,
 K&M ROD #05,K&M,214/06,,Distance Rod,,False,False,False,False,False,1,,AX,Store,
@@ -795,7 +795,7 @@ MG12XU#02,Yamaha,MG12XU,,12-Channel Analog Mixing Console with FX,,False,False,F
 MG10#01,Yamaha,MG10,ECWH01433,10-Channel Analogue Mixer,,False,False,False,False,False,1,,AX,Store,Store
 MG124CX#01,Yamaha,MG124CX,,12-Input Stereo Mixer with Compression and Effects,,False,False,False,False,False,1,,AX,Store,
 MG124CX#02,Yamaha,MG124CX,,12-Input Stereo Mixer with Compression and Effects,,False,False,False,False,False,1,,AX,Store,
-QL1#01,Yamaha,QL1,WTAUM01016,Digital Mixer,,False,False,False,False,False,1,,AX,Store,Store
+QL1#01,Yamaha,QL1,WTAUM01016,Digital Mixer,,False,False,False,False,False,1,,AX,Store,Dry Hire: Avery Events
 QL1#02,Yamaha,QL1,EAXP01044,Digital Mixer,,False,False,False,False,False,1,,AX,Store,Store
 QL5#01,Yamaha,QL5,,Digital Mixer,,False,False,False,False,False,1,,AX,Store,Store
 RO8-D #01,Yamaha,Ro8-d,,8-channel Remote Output Rack,,False,False,False,False,False,1,,AX,Store,Store
@@ -1319,3 +1319,4 @@ SRM150#01,Mackie,SRM150,,"5.52"" compact powered monitor 150W",,False,False,Fals
 SRM150#02,Mackie,SRM150,,"5.52"" compact powered monitor 150W",,False,False,False,False,False,1,,AX,Store,
 181024G#01,HP,1810-24G,,managed gigabit ethernet switch,,False,False,False,False,False,1,,AX,Store,
 181024G#02,HP,1810-24G,,managed gigabit ethernet switch,,False,False,False,False,False,1,,AX,Store,
+LIMITIMER#01,Dsan,Limitimer,19774,Speaker Timer,,False,False,False,False,False,1,,VX,Store,
