@@ -1,2 +1,2 @@
-EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State
-19,SEA Focus Talk @ Tanjong Pagar Distripark,20250124,20250124,[],[],[],Closed
+EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,CustomCollected,Tag,ForceStateOverride,EventLogs,Notes
+19,SEA Focus Talk @ Tanjong Pagar Distripark,20250124,20250124,[],[],[],Added,[],[],[],events,False,"[{""timestamp"": ""2025/01/20"", ""user"": ""bnjm2000"", ""action"": ""Added event 19: SEA Focus Talk @ Tanjong Pagar Distripark.""}]",
