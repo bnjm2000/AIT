@@ -77,6 +77,9 @@ _data_manager_init_lock = threading.RLock()
 _data_reload_lock = threading.RLock()
 _data_snapshot_signature = None
 _background_thread_started = False
+_active_company_code = 'AVPL'
+_company_data_managers = {}
+_company_registry_cache = None
 
 _cache = {
     'assigned_assets': None,
@@ -92,6 +95,492 @@ _inventory_action_lock = threading.RLock()
 _realtime_subscribers = {}
 _realtime_subscribers_lock = threading.RLock()
 _realtime_sequence = 0
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DEFAULT_COMPANY_CODE = 'AVPL'
+DEFAULT_COMPANY_NAME = 'AVEC Vision Private Limited'
+SUPER_ADMIN_USERNAME = 'bnjm2000'
+APP_CONFIG_FOLDER = os.path.join(BASE_DIR, 'app_data')
+COMPANY_REGISTRY_FILE = os.environ.get(
+    'COMPANY_REGISTRY_FILE',
+    os.path.join(APP_CONFIG_FOLDER, 'Companies.json')
+)
+GLOBAL_USERS_FILE = os.environ.get(
+    'GLOBAL_USERS_FILE',
+    os.path.join(APP_CONFIG_FOLDER, 'Users.csv')
+)
+
+
+def _workspace_path(*parts):
+    return os.path.join(BASE_DIR, *parts)
+
+
+def _path_from_config(path):
+    path = str(path or '').strip()
+    if not path:
+        return ''
+    if os.path.isabs(path):
+        return path
+    return os.path.join(BASE_DIR, path)
+
+
+def _path_for_config(path):
+    try:
+        rel = os.path.relpath(os.path.abspath(path), BASE_DIR)
+        if not rel.startswith('..'):
+            return rel.replace('\\', '/')
+    except ValueError:
+        pass
+    return os.path.abspath(path)
+
+
+def _normalise_company_code(value, fallback=''):
+    code = str(value or '').strip().upper()
+    code = re.sub(r'[^A-Z0-9_-]+', '', code)
+    return code or fallback
+
+
+def _company_base_folder_for_code(code):
+    code = _normalise_company_code(code, DEFAULT_COMPANY_CODE)
+    return os.path.join('companies', code)
+
+
+def _new_company_record(code, name, created_by='', requires_branding_setup=False):
+    code = _normalise_company_code(code, DEFAULT_COMPANY_CODE)
+    base_folder = _company_base_folder_for_code(code)
+    return {
+        'code': code,
+        'name': str(name or code).strip() or code,
+        'backendFolder': os.path.join(base_folder, 'backend').replace('\\', '/'),
+        'frontendFolder': os.path.join(base_folder, 'frontend').replace('\\', '/'),
+        'createdAt': datetime.now().isoformat(timespec='seconds'),
+        'createdBy': str(created_by or '').strip(),
+        'brandingSetupRequired': bool(requires_branding_setup),
+    }
+
+
+def _company_record_backend_folder(record):
+    return _path_from_config((record or {}).get('backendFolder'))
+
+
+def _company_record_frontend_folder(record):
+    return _path_from_config((record or {}).get('frontendFolder'))
+
+
+def _fallback_company_code(registry):
+    companies = (registry or {}).get('companies') or {}
+    default_company = _normalise_company_code((registry or {}).get('defaultCompany'))
+    if default_company in companies:
+        return default_company
+    if DEFAULT_COMPANY_CODE in companies:
+        return DEFAULT_COMPANY_CODE
+    return sorted(companies.keys())[0] if companies else DEFAULT_COMPANY_CODE
+
+
+def _standard_company_folder_for_code(code):
+    return os.path.abspath(_path_from_config(_company_base_folder_for_code(code)))
+
+
+def _safe_company_delete_folder(code, record):
+    code = _normalise_company_code(code)
+    company_root = os.path.abspath(os.path.join(BASE_DIR, 'companies'))
+    target_folder = _standard_company_folder_for_code(code)
+
+    if not code:
+        raise ValueError('Company code is required')
+
+    try:
+        if os.path.commonpath([company_root, target_folder]) != company_root:
+            raise ValueError('Company folder is outside the companies folder')
+    except ValueError:
+        raise ValueError('Company folder is outside the companies folder')
+
+    if target_folder == company_root:
+        raise ValueError('Refusing to delete the companies folder')
+
+    for folder in (_company_record_backend_folder(record), _company_record_frontend_folder(record)):
+        if not folder:
+            continue
+        folder = os.path.abspath(folder)
+        try:
+            if os.path.commonpath([target_folder, folder]) != target_folder:
+                raise ValueError('Company assets must be inside the standard company folder before deletion')
+        except ValueError:
+            raise ValueError('Company assets must be inside the standard company folder before deletion')
+
+    return target_folder
+
+
+def _normalise_company_registry(registry):
+    if not isinstance(registry, dict):
+        registry = {}
+
+    companies = registry.get('companies') if isinstance(registry.get('companies'), dict) else {}
+    user_companies = registry.get('userCompanies') if isinstance(registry.get('userCompanies'), dict) else {}
+    raw_super_admins = registry.get('superAdmins')
+
+    default_record = _new_company_record(DEFAULT_COMPANY_CODE, DEFAULT_COMPANY_NAME)
+    existing_default = companies.get(DEFAULT_COMPANY_CODE) if isinstance(companies.get(DEFAULT_COMPANY_CODE), dict) else {}
+    default_record.update({k: v for k, v in existing_default.items() if v not in (None, '')})
+    default_record['code'] = DEFAULT_COMPANY_CODE
+    default_record['name'] = default_record.get('name') or DEFAULT_COMPANY_NAME
+    if str(default_record.get('backendFolder') or '').replace('\\', '/') == 'AVPL/backend':
+        default_record['backendFolder'] = 'companies/AVPL/backend'
+    if str(default_record.get('frontendFolder') or '').replace('\\', '/') == 'AVPL/frontend':
+        default_record['frontendFolder'] = 'companies/AVPL/frontend'
+    default_record['backendFolder'] = default_record.get('backendFolder') or 'companies/AVPL/backend'
+    default_record['frontendFolder'] = default_record.get('frontendFolder') or 'companies/AVPL/frontend'
+    default_record['brandingSetupRequired'] = bool(default_record.get('brandingSetupRequired', False))
+
+    normalised_companies = {}
+    if DEFAULT_COMPANY_CODE in companies or not companies:
+        normalised_companies[DEFAULT_COMPANY_CODE] = default_record
+
+    for raw_code, record in companies.items():
+        code = _normalise_company_code(raw_code)
+        if not code or code == DEFAULT_COMPANY_CODE or not isinstance(record, dict):
+            continue
+        company = _new_company_record(code, record.get('name') or code)
+        company.update({k: v for k, v in record.items() if v not in (None, '')})
+        company['code'] = code
+        company['backendFolder'] = company.get('backendFolder') or os.path.join('companies', code, 'backend').replace('\\', '/')
+        company['frontendFolder'] = company.get('frontendFolder') or os.path.join('companies', code, 'frontend').replace('\\', '/')
+        company['brandingSetupRequired'] = bool(company.get('brandingSetupRequired', False))
+        normalised_companies[code] = company
+
+    if not normalised_companies:
+        normalised_companies[DEFAULT_COMPANY_CODE] = default_record
+
+    normalised_users = {}
+    for username, raw_code in user_companies.items():
+        username = str(username or '').strip()
+        code = _normalise_company_code(raw_code, DEFAULT_COMPANY_CODE)
+        if username and code in normalised_companies:
+            normalised_users[username] = code
+
+    if isinstance(raw_super_admins, list):
+        super_admins = [
+            str(username or '').strip()
+            for username in raw_super_admins
+            if str(username or '').strip()
+        ]
+    else:
+        super_admins = [SUPER_ADMIN_USERNAME]
+
+    if not super_admins:
+        super_admins = [SUPER_ADMIN_USERNAME]
+
+    deduped_super_admins = []
+    seen_super_admins = set()
+    for username in super_admins:
+        key = username.lower()
+        if key in seen_super_admins:
+            continue
+        seen_super_admins.add(key)
+        deduped_super_admins.append(username)
+
+    default_company = _normalise_company_code(registry.get('defaultCompany'))
+    if default_company not in normalised_companies:
+        default_company = DEFAULT_COMPANY_CODE if DEFAULT_COMPANY_CODE in normalised_companies else sorted(normalised_companies.keys())[0]
+
+    if normalised_users.get(SUPER_ADMIN_USERNAME) not in normalised_companies:
+        normalised_users[SUPER_ADMIN_USERNAME] = default_company
+
+    return {
+        'defaultCompany': default_company,
+        'companies': normalised_companies,
+        'userCompanies': normalised_users,
+        'superAdmins': deduped_super_admins,
+        'updatedAt': str(registry.get('updatedAt') or '').strip(),
+    }
+
+
+def _load_company_registry():
+    global _company_registry_cache
+    if _company_registry_cache is not None:
+        return _company_registry_cache
+
+    registry = {}
+    if os.path.exists(COMPANY_REGISTRY_FILE) and os.path.getsize(COMPANY_REGISTRY_FILE) > 0:
+        try:
+            with open(COMPANY_REGISTRY_FILE, 'r', encoding='utf-8') as f:
+                registry = json.load(f)
+        except Exception as e:
+            logger.warning("Failed to read Companies.json, rebuilding default registry: %s", e)
+
+    _company_registry_cache = _normalise_company_registry(registry)
+    return _company_registry_cache
+
+
+def _save_company_registry(registry):
+    global _company_registry_cache
+    registry = _normalise_company_registry(registry)
+    registry['updatedAt'] = datetime.now().isoformat(timespec='seconds')
+    folder = os.path.dirname(COMPANY_REGISTRY_FILE)
+    if folder and not os.path.exists(folder):
+        os.makedirs(folder)
+    with open(COMPANY_REGISTRY_FILE, 'w', encoding='utf-8') as f:
+        json.dump(registry, f, ensure_ascii=False, indent=2)
+    _company_registry_cache = registry
+    return registry
+
+
+def _current_company_code():
+    if has_request_context():
+        code = session.get('company_code')
+        if code:
+            return _normalise_company_code(code, DEFAULT_COMPANY_CODE)
+    return _active_company_code or DEFAULT_COMPANY_CODE
+
+
+def _company_record_for_code(code=None):
+    registry = _load_company_registry()
+    code = _normalise_company_code(code or _current_company_code(), registry.get('defaultCompany', DEFAULT_COMPANY_CODE))
+    return registry['companies'].get(code) or registry['companies'][_fallback_company_code(registry)]
+
+
+def _all_company_records():
+    return _load_company_registry()['companies']
+
+
+def _user_assigned_company_code(username):
+    registry = _load_company_registry()
+    username = str(username or '').strip()
+    return registry.get('userCompanies', {}).get(username) or registry.get('defaultCompany', DEFAULT_COMPANY_CODE)
+
+
+def _assign_user_to_company(username, company_code):
+    registry = _load_company_registry()
+    username = str(username or '').strip()
+    code = _normalise_company_code(company_code, DEFAULT_COMPANY_CODE)
+    if not username:
+        return registry
+    if code not in registry['companies']:
+        raise ValueError('Company not found')
+    registry['userCompanies'][username] = code
+    return _save_company_registry(registry)
+
+
+def _user_is_assigned_to_current_company(username):
+    current_company = _normalise_company_code(_current_company_code(), DEFAULT_COMPANY_CODE)
+    user_company = _normalise_company_code(_user_assigned_company_code(username), DEFAULT_COMPANY_CODE)
+    return user_company == current_company
+
+
+def _current_admin_can_manage_user(username):
+    if _current_user_is_super_admin():
+        return True
+    return _user_is_assigned_to_current_company(username)
+
+
+def _is_super_admin_username(username):
+    username = str(username or '').strip()
+    if not username:
+        return False
+
+    registry = _load_company_registry()
+    super_admins = registry.get('superAdmins', [SUPER_ADMIN_USERNAME])
+    return username.lower() in {
+        str(super_admin or '').strip().lower()
+        for super_admin in super_admins
+        if str(super_admin or '').strip()
+    }
+
+
+def _current_user_is_super_admin():
+    if not has_request_context():
+        return False
+    if session.get('self_user_changes_pending'):
+        return bool(session.get('is_super_admin'))
+    return _is_super_admin_username(session.get('user'))
+
+
+def _set_user_super_admin(username, enabled):
+    registry = _load_company_registry()
+    username = str(username or '').strip()
+    if not username:
+        return registry
+
+    existing = [
+        str(super_admin or '').strip()
+        for super_admin in registry.get('superAdmins', [])
+        if str(super_admin or '').strip()
+    ]
+    existing_lower = {super_admin.lower() for super_admin in existing}
+
+    if enabled:
+        if username.lower() not in existing_lower:
+            existing.append(username)
+    else:
+        existing = [super_admin for super_admin in existing if super_admin.lower() != username.lower()]
+        if not existing:
+            raise ValueError('At least one super admin is required')
+
+    registry['superAdmins'] = existing
+    return _save_company_registry(registry)
+
+
+def _rename_super_admin_reference(old_username, new_username):
+    registry = _load_company_registry()
+    old_key = str(old_username or '').strip().lower()
+    new_username = str(new_username or '').strip()
+    if not old_key or not new_username:
+        return registry
+
+    changed = False
+    updated = []
+    for username in registry.get('superAdmins', []):
+        if str(username or '').strip().lower() == old_key:
+            updated.append(new_username)
+            changed = True
+        else:
+            updated.append(username)
+
+    if changed:
+        registry['superAdmins'] = updated
+        return _save_company_registry(registry)
+
+    return registry
+
+
+def _current_user_effective_is_admin():
+    if not has_request_context():
+        return False
+    if session.get('self_user_changes_pending'):
+        return bool(session.get('is_admin'))
+    user = _current_user_obj()
+    return bool(user and getattr(user, 'is_admin', False))
+
+
+def _current_user_effective_is_active():
+    if not has_request_context():
+        return False
+    if session.get('self_user_changes_pending'):
+        return bool(session.get('is_active', True))
+    user = _current_user_obj()
+    return bool(user and getattr(user, 'is_active', True))
+
+
+def _ensure_company_folders(record):
+    backend_folder = _company_record_backend_folder(record)
+    frontend_folder = _company_record_frontend_folder(record)
+    if backend_folder and not os.path.exists(backend_folder):
+        os.makedirs(backend_folder)
+    if frontend_folder and not os.path.exists(frontend_folder):
+        os.makedirs(frontend_folder)
+
+    logo_path = os.path.join(frontend_folder, 'logo.png') if frontend_folder else ''
+    default_logo_path = os.path.join(BASE_DIR, 'companies', DEFAULT_COMPANY_CODE, 'frontend', 'logo.png')
+    legacy_logo_path = os.path.join(app.static_folder or os.path.join(BASE_DIR, 'static'), 'images', 'logo.png')
+
+    if logo_path and not os.path.exists(logo_path):
+        source = default_logo_path if os.path.exists(default_logo_path) else legacy_logo_path
+        if source and os.path.exists(source):
+            try:
+                shutil.copy2(source, logo_path)
+            except OSError as e:
+                logger.warning("Failed to copy default company logo to %s: %s", logo_path, e)
+
+
+def _ensure_super_admin_users(manager):
+    if not manager:
+        return
+    changed = False
+    registry = _load_company_registry()
+    for username in registry.get('superAdmins', [SUPER_ADMIN_USERNAME]):
+        user = manager.users.get(username)
+        if not user:
+            continue
+        if not getattr(user, 'is_admin', False):
+            user.is_admin = True
+            changed = True
+    if changed:
+        manager.save_users()
+
+
+def _reload_users_for_all_company_managers():
+    for manager in list(_company_data_managers.values()):
+        try:
+            manager.load_users()
+            _ensure_super_admin_users(manager)
+        except Exception as e:
+            logger.warning("Failed to reload users for company manager %s: %s", getattr(manager, 'data_folder', ''), e)
+
+
+def _get_company_data_manager(company_code=None):
+    code = _normalise_company_code(company_code, DEFAULT_COMPANY_CODE)
+    registry = _load_company_registry()
+    if code not in registry['companies']:
+        code = registry.get('defaultCompany', DEFAULT_COMPANY_CODE)
+
+    cached = _company_data_managers.get(code)
+    if cached is not None:
+        return cached
+
+    record = registry['companies'][code]
+    _ensure_company_folders(record)
+
+    manager = DataManager(_company_record_backend_folder(record), users_file=GLOBAL_USERS_FILE)
+    manager.setup_data_folder()
+    manager.check_and_initialize_files()
+    manager.load_all_data()
+    _ensure_super_admin_users(manager)
+    _company_data_managers[code] = manager
+    return manager
+
+
+def _activate_company(company_code=None):
+    global data_manager, _active_company_code
+    code = _normalise_company_code(company_code, DEFAULT_COMPANY_CODE)
+    manager = _get_company_data_manager(code)
+    try:
+        manager.load_all_data()
+        _ensure_super_admin_users(manager)
+    except Exception as e:
+        logger.warning("Failed to reload active company %s: %s", code, e)
+    data_manager = manager
+    _active_company_code = _normalise_company_code(code, DEFAULT_COMPANY_CODE)
+    mark_data_snapshot_current()
+    return manager
+
+
+def _activate_company_for_session():
+    if not has_request_context() or 'user' not in session:
+        return data_manager
+    username = session.get('user')
+    code = session.get('company_code') if _current_user_is_super_admin() else None
+    if not code:
+        code = _user_assigned_company_code(username)
+        session['company_code'] = code
+    if _normalise_company_code(code, DEFAULT_COMPANY_CODE) != _active_company_code:
+        return _activate_company(code)
+    return data_manager
+
+
+def _company_payload(code=None):
+    registry = _load_company_registry()
+    code = _normalise_company_code(code or _current_company_code(), registry.get('defaultCompany', DEFAULT_COMPANY_CODE))
+    record = registry['companies'].get(code) or registry['companies'][_fallback_company_code(registry)]
+    return {
+        'code': record.get('code') or code,
+        'name': record.get('name') or code,
+        'brandingSetupRequired': bool(record.get('brandingSetupRequired', False)),
+        'backendFolder': record.get('backendFolder') or '',
+        'frontendFolder': record.get('frontendFolder') or '',
+    }
+
+
+def _mark_company_branding_setup_complete(company_code=None):
+    registry = _load_company_registry()
+    code = _normalise_company_code(company_code or _current_company_code(), DEFAULT_COMPANY_CODE)
+    record = registry['companies'].get(code)
+    if not record:
+        return registry
+    if record.get('brandingSetupRequired'):
+        record['brandingSetupRequired'] = False
+        registry['companies'][code] = record
+        registry = _save_company_registry(registry)
+    return registry
 
 
 def _truthy_env(name, default=False):
@@ -416,7 +905,10 @@ def _shared_data_signature():
             entries.append((label, -1, -1))
 
     for filename in ('Inventory.csv', 'Logs.csv', 'Users.csv', 'Containers.csv', 'Clients.csv'):
-        add_file(filename, os.path.join(data_folder, filename))
+        if hasattr(data_manager, '_data_path'):
+            add_file(filename, data_manager._data_path(filename))
+        else:
+            add_file(filename, os.path.join(data_folder, filename))
 
     try:
         with os.scandir(events_folder) as event_files:
@@ -634,9 +1126,32 @@ def _pdf_settings_path():
     return os.path.join(folder, 'PdfSettings.json')
 
 
+def _company_frontend_folder(company_code=None):
+    record = _company_record_for_code(company_code)
+    folder = _company_record_frontend_folder(record)
+    if folder and not os.path.exists(folder):
+        os.makedirs(folder)
+    return folder or os.path.join(BASE_DIR, DEFAULT_COMPANY_CODE, 'frontend')
+
+
+def _default_pdf_logo_path(company_code=None):
+    current_logo = os.path.join(_company_frontend_folder(company_code), 'logo.png')
+    if os.path.exists(current_logo):
+        return current_logo
+
+    avec_logo = os.path.join(BASE_DIR, 'companies', DEFAULT_COMPANY_CODE, 'frontend', 'logo.png')
+    if os.path.exists(avec_logo):
+        return avec_logo
+
+    legacy_logo = os.path.join(app.static_folder, 'images', 'logo.png')
+    if os.path.exists(legacy_logo):
+        return legacy_logo
+
+    return ''
+
+
 def _pdf_assets_folder():
-    folder = data_manager.data_folder if data_manager else './data'
-    return os.path.join(folder, 'pdf_assets')
+    return os.path.join(_company_frontend_folder(), 'pdf_assets')
 
 
 def _pdf_logo_path(settings=None):
@@ -703,10 +1218,14 @@ def _pdf_settings_payload(settings=None):
     settings = _normalise_pdf_settings(settings or _load_pdf_settings())
     logo_path = _pdf_logo_path(settings) if settings.get('logoFilename') else ''
     has_custom_logo = bool(logo_path and os.path.exists(logo_path))
-    logo_url = '/static/images/logo.png'
+    default_logo_path = _default_pdf_logo_path()
+    logo_url = '/api/pdf-settings/logo'
 
     if has_custom_logo:
         version = int(os.path.getmtime(logo_path))
+        logo_url = f'/api/pdf-settings/logo?v={version}'
+    elif default_logo_path and os.path.exists(default_logo_path):
+        version = int(os.path.getmtime(default_logo_path))
         logo_url = f'/api/pdf-settings/logo?v={version}'
 
     return {
@@ -2273,8 +2792,9 @@ def require_auth(f):
         username = session.get('user')
         user = data_manager.users.get(username) if data_manager else None
 
-        # If the user was deleted or deactivated after login, force logout
-        if not user or not getattr(user, 'is_active', True):
+        # If the user was deleted or deactivated after login by someone else,
+        # force logout. Self-deactivation waits until the next login.
+        if not user or not _current_user_effective_is_active():
             session.clear()
             if request.path.startswith('/api/'):
                 return jsonify({'error': 'Account inactive'}), 401
@@ -2379,15 +2899,34 @@ def require_admin(f):
         username = session.get('user')
         user = data_manager.users.get(username) if data_manager else None
 
-        if not user or not getattr(user, 'is_active', True):
+        if not user or not _current_user_effective_is_active():
             session.clear()
             return jsonify({'error': 'Account inactive'}), 401
 
-        if not getattr(user, 'is_admin', False):
+        if not _current_user_effective_is_admin():
             return jsonify({'error': 'Admin privileges required'}), 403
 
-        # Keep the session value updated too
-        session['is_admin'] = user.is_admin
+        return f(*args, **kwargs)
+
+    return decorated_function
+
+
+def require_super_admin(f):
+    """Decorator for global company-management actions."""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user' not in session:
+            return jsonify({'error': 'Not authenticated'}), 401
+
+        username = session.get('user')
+        user = data_manager.users.get(username) if data_manager else None
+
+        if not user or not _current_user_effective_is_active():
+            session.clear()
+            return jsonify({'error': 'Account inactive'}), 401
+
+        if not _current_user_is_super_admin():
+            return jsonify({'error': 'Super admin privileges required'}), 403
 
         return f(*args, **kwargs)
 
@@ -2403,8 +2942,7 @@ def _current_user_obj():
 
 
 def _current_user_is_admin():
-    user = _current_user_obj()
-    return bool(user and getattr(user, 'is_admin', False))
+    return _current_user_effective_is_admin()
 
 
 def _parse_maintenance_log_date(log_entry):
@@ -3371,24 +3909,14 @@ def init_data_manager():
             return data_manager
 
         try:
-            # Try to read data folder from config file
-            if os.path.exists('data_folder.txt'):
-                with open('data_folder.txt', 'r') as f:
-                    data_folder = f.read().strip()
-            else:
-                # Default data folder
-                data_folder = './data'
-                if not os.path.exists(data_folder):
-                    os.makedirs(data_folder)
-                with open('data_folder.txt', 'w') as f:
-                    f.write(data_folder)
-
-            data_manager = DataManager(data_folder)
-            data_manager.setup_data_folder()
-            data_manager.check_and_initialize_files()
-            data_manager.load_all_data()
-            mark_data_snapshot_current()
-            logger.info(f"Data manager initialized with folder: {data_folder}")
+            registry = _load_company_registry()
+            company_code = registry.get('defaultCompany', DEFAULT_COMPANY_CODE)
+            data_manager = _activate_company(company_code)
+            logger.info(
+                "Data manager initialized for company %s with folder: %s",
+                _active_company_code,
+                getattr(data_manager, 'data_folder', '')
+            )
             
             # Start the background thread AFTER data_manager is initialized
             background_started = start_background_thread()
@@ -3409,7 +3937,8 @@ def ensure_web_runtime_ready():
     """Lazy init for hosted WSGI imports where __main__ is never executed."""
     if data_manager is None:
         init_data_manager()
-    elif request.endpoint != 'static':
+    if request.endpoint != 'static':
+        _activate_company_for_session()
         refresh_shared_data_if_changed()
 
 # Routes
@@ -3451,7 +3980,16 @@ def login():
 
             if hashed_input == user.password_hash:
                 session['user'] = username
+                if _is_super_admin_username(username) and not getattr(user, 'is_admin', False):
+                    user.is_admin = True
+                    data_manager.save_users()
+                    _reload_users_for_all_company_managers()
                 session['is_admin'] = user.is_admin
+                session['is_super_admin'] = _is_super_admin_username(username)
+                session['is_active'] = getattr(user, 'is_active', True)
+                session.pop('self_user_changes_pending', None)
+                session['company_code'] = _user_assigned_company_code(username)
+                _activate_company_for_session()
 
                 log_action(f"User {username} logged in via web interface")
                 return jsonify({
@@ -3559,8 +4097,12 @@ def get_current_user():
         'success': True,
         'data': {
             'username': user.username,
-            'isAdmin': user.is_admin,
-            'isActive': getattr(user, 'is_active', True)
+            'isAdmin': _current_user_effective_is_admin(),
+            'isSuperAdmin': _current_user_is_super_admin(),
+            'isActive': _current_user_effective_is_active(),
+            'company': _company_payload(_current_company_code()),
+            'assignedCompanyCode': _user_assigned_company_code(user.username),
+            'hasPendingSelfChanges': bool(session.get('self_user_changes_pending')),
         }
     })
 
@@ -3593,6 +4135,7 @@ def change_current_user_password():
         user.password_hash = hash_password(new_password, user.salt)
 
         data_manager.save_users()
+        _reload_users_for_all_company_managers()
         log_action("Changed own password")
 
         return jsonify({'success': True, 'message': 'Password changed successfully'})
@@ -3600,6 +4143,215 @@ def change_current_user_password():
     except Exception as e:
         logger.error(f"Error changing password for current user: {e}")
         return jsonify({'error': 'Failed to change password'}), 500
+
+
+@app.route('/api/companies', methods=['GET'])
+@require_super_admin
+def list_companies():
+    """Super admin: list companies and user assignments."""
+    try:
+        registry = _load_company_registry()
+        companies = []
+        users_by_company = defaultdict(list)
+
+        for username in data_manager.users.keys():
+            code = registry.get('userCompanies', {}).get(username) or registry.get('defaultCompany', DEFAULT_COMPANY_CODE)
+            users_by_company[code].append(username)
+
+        for code, record in sorted(registry['companies'].items(), key=lambda item: item[0]):
+            payload = _company_payload(code)
+            payload['userCount'] = len(users_by_company.get(code, []))
+            payload['users'] = sorted(users_by_company.get(code, []), key=lambda value: value.lower())
+            payload['isActive'] = code == _current_company_code()
+            companies.append(payload)
+
+        return jsonify({'success': True, 'data': companies})
+    except Exception as e:
+        logger.error(f"Error listing companies: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to list companies'}), 500
+
+
+@app.route('/api/companies', methods=['POST'])
+@require_super_admin
+def create_company():
+    """Super admin: create a segregated company folder and optional first admin."""
+    try:
+        data = request.get_json() or {}
+        name = str(data.get('name') or '').strip()
+        raw_code = data.get('code') or name
+        code = _normalise_company_code(raw_code)
+        first_admin_username = str(data.get('firstAdminUsername') or '').strip()
+        first_admin_password = data.get('firstAdminPassword') or ''
+
+        if not code:
+            return jsonify({'error': 'Company code is required'}), 400
+
+        if not name:
+            name = code
+
+        registry = _load_company_registry()
+        if code in registry['companies']:
+            return jsonify({'error': f'Company {code} already exists'}), 409
+
+        if first_admin_username and first_admin_username not in data_manager.users and not first_admin_password:
+            return jsonify({'error': 'First admin user does not exist. Provide a password to create it.'}), 400
+
+        record = _new_company_record(
+            code,
+            name,
+            created_by=session.get('user', ''),
+            requires_branding_setup=True
+        )
+        registry['companies'][code] = record
+        registry = _save_company_registry(registry)
+
+        manager = _get_company_data_manager(code)
+        settings_path = os.path.join(_company_record_backend_folder(record), 'PdfSettings.json')
+        if not os.path.exists(settings_path):
+            with open(settings_path, 'w', encoding='utf-8') as f:
+                json.dump(_pdf_settings_defaults(), f, ensure_ascii=False, indent=2)
+
+        if first_admin_username:
+            user = data_manager.users.get(first_admin_username)
+            if not user:
+                salt = secrets.token_hex(16)
+                user = User(
+                    username=first_admin_username,
+                    password_hash=hash_password(first_admin_password, salt),
+                    salt=salt,
+                    is_admin=True,
+                    is_active=True
+                )
+                data_manager.users[first_admin_username] = user
+
+            user.is_admin = True
+            user.is_active = True
+            data_manager.save_users()
+            _reload_users_for_all_company_managers()
+            _assign_user_to_company(first_admin_username, code)
+
+        mark_realtime_change('company-management', {'companyCode': code})
+        log_action(f"Created company {code} ({name})")
+
+        return jsonify({
+            'success': True,
+            'message': 'Company created successfully',
+            'data': _company_payload(code)
+        })
+    except Exception as e:
+        logger.error(f"Error creating company: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to create company'}), 500
+
+
+@app.route('/api/companies/<path:company_code>', methods=['DELETE'])
+@require_super_admin
+def delete_company(company_code):
+    """Super admin: delete a company and its segregated company assets."""
+    try:
+        code = _normalise_company_code(unquote_plus(company_code))
+        registry = _load_company_registry()
+
+        if not code or code not in registry['companies']:
+            return jsonify({'error': 'Company not found'}), 404
+
+        if len(registry['companies']) <= 1:
+            return jsonify({'error': 'At least one company must remain'}), 400
+
+        if code == _normalise_company_code(_current_company_code(), DEFAULT_COMPANY_CODE):
+            return jsonify({'error': 'Switch to another company before deleting the active company'}), 400
+
+        record = registry['companies'][code]
+        company_folder = _safe_company_delete_folder(code, record)
+        remaining_codes = sorted(company_code for company_code in registry['companies'] if company_code != code)
+        new_default_company = registry.get('defaultCompany')
+        if new_default_company == code or new_default_company not in remaining_codes:
+            new_default_company = remaining_codes[0]
+
+        removed_users = []
+        reassigned_super_admins = []
+        users_changed = False
+        for username, assigned_company in list(registry.get('userCompanies', {}).items()):
+            if _normalise_company_code(assigned_company, DEFAULT_COMPANY_CODE) != code:
+                continue
+
+            if _is_super_admin_username(username):
+                registry['userCompanies'][username] = new_default_company
+                reassigned_super_admins.append(username)
+            else:
+                registry['userCompanies'].pop(username, None)
+                if username in data_manager.users:
+                    data_manager.users.pop(username, None)
+                    removed_users.append(username)
+                    users_changed = True
+
+        _company_data_managers.pop(code, None)
+        if os.path.exists(company_folder):
+            shutil.rmtree(company_folder)
+
+        registry['companies'].pop(code, None)
+        registry['defaultCompany'] = new_default_company
+        registry = _save_company_registry(registry)
+
+        if users_changed:
+            data_manager.save_users()
+            _reload_users_for_all_company_managers()
+
+        mark_realtime_change('company-management', {'companyCode': code, 'deleted': True})
+        log_action(f"Deleted company {code} ({record.get('name') or code})")
+
+        return jsonify({
+            'success': True,
+            'message': 'Company deleted successfully',
+            'data': {
+                'deletedCompanyCode': code,
+                'newDefaultCompany': new_default_company,
+                'removedUsers': sorted(removed_users, key=lambda value: value.lower()),
+                'reassignedSuperAdmins': sorted(reassigned_super_admins, key=lambda value: value.lower()),
+            }
+        })
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        logger.error(f"Error deleting company {company_code}: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to delete company'}), 500
+
+
+@app.route('/api/current-company', methods=['PUT'])
+@require_super_admin
+def switch_current_company():
+    """Super admin: switch the active company for this browser session."""
+    try:
+        data = request.get_json() or {}
+        code = _normalise_company_code(data.get('companyCode') or data.get('code'))
+        registry = _load_company_registry()
+
+        if not code or code not in registry['companies']:
+            return jsonify({'error': 'Company not found'}), 404
+
+        session['company_code'] = code
+        _activate_company(code)
+
+        return jsonify({
+            'success': True,
+            'data': {
+                'company': _company_payload(code)
+            }
+        })
+    except Exception as e:
+        logger.error(f"Error switching company: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to switch company'}), 500
+
+
+@app.route('/api/company/branding-setup-complete', methods=['POST'])
+@require_admin
+def complete_company_branding_setup():
+    """Admin: keep current branding/defaults and dismiss the first-admin prompt."""
+    try:
+        _mark_company_branding_setup_complete()
+        return jsonify({'success': True, 'data': _company_payload(_current_company_code())})
+    except Exception as e:
+        logger.error(f"Error completing company branding setup: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to complete branding setup'}), 500
 
 
 @app.route('/api/pdf-settings', methods=['GET'])
@@ -3632,6 +4384,7 @@ def update_pdf_settings():
         settings['footerText'] = footer_text
         settings['updatedAt'] = datetime.now().isoformat(timespec='seconds')
         saved = _save_pdf_settings(settings)
+        _mark_company_branding_setup_complete()
 
         log_action("Updated PDF footer settings")
 
@@ -3656,11 +4409,15 @@ def get_pdf_logo():
                 max_age=3600
             )
 
-        return send_file(
-            os.path.join(app.static_folder, 'images', 'logo.png'),
-            mimetype='image/png',
-            max_age=3600
-        )
+        default_logo = _default_pdf_logo_path()
+        if default_logo and os.path.exists(default_logo):
+            return send_file(
+                default_logo,
+                mimetype=mimetypes.guess_type(default_logo)[0] or 'image/png',
+                max_age=3600
+            )
+
+        return jsonify({'error': 'Logo not found'}), 404
     except Exception as e:
         logger.error(f"Error serving PDF logo: {e}", exc_info=True)
         return jsonify({'error': 'Failed to load PDF logo'}), 500
@@ -3705,6 +4462,7 @@ def upload_pdf_logo():
         settings['logoMimeType'] = mime_type
         settings['updatedAt'] = datetime.now().isoformat(timespec='seconds')
         saved = _save_pdf_settings(settings)
+        _mark_company_branding_setup_complete()
 
         log_action(f"Updated PDF logo ({settings['logoOriginalName']})")
 
@@ -3959,12 +4717,22 @@ def delete_department(department_code):
 def get_users():
     """Admin: list users"""
     users_data = []
+    can_see_all_companies = _current_user_is_super_admin()
+    current_company_code = _normalise_company_code(_current_company_code(), DEFAULT_COMPANY_CODE)
 
     for user in sorted(data_manager.users.values(), key=lambda u: u.username.lower()):
+        company_code = _user_assigned_company_code(user.username)
+        if not can_see_all_companies and _normalise_company_code(company_code, DEFAULT_COMPANY_CODE) != current_company_code:
+            continue
+
+        company = _company_payload(company_code)
         users_data.append({
             'username': user.username,
             'isAdmin': user.is_admin,
-            'isActive': getattr(user, 'is_active', True)
+            'isSuperAdmin': _is_super_admin_username(user.username),
+            'isActive': getattr(user, 'is_active', True),
+            'companyCode': company.get('code'),
+            'companyName': company.get('name'),
         })
 
     return jsonify({'success': True, 'data': users_data})
@@ -3980,7 +4748,9 @@ def create_user():
         username = (data.get('username') or '').strip()
         password = data.get('password') or ''
         is_admin = bool(data.get('isAdmin', False))
+        is_super_admin = bool(data.get('isSuperAdmin', False))
         is_active = bool(data.get('isActive', True))
+        requested_company = _normalise_company_code(data.get('companyCode') or _current_company_code(), DEFAULT_COMPANY_CODE)
 
         if not username:
             return jsonify({'error': 'Username is required'}), 400
@@ -3991,6 +4761,15 @@ def create_user():
         if username in data_manager.users:
             return jsonify({'error': 'User already exists'}), 409
 
+        if data.get('companyCode') and not _current_user_is_super_admin():
+            return jsonify({'error': 'Only the super admin can assign users to companies'}), 403
+
+        if is_super_admin and not _current_user_is_super_admin():
+            return jsonify({'error': 'Only the super admin can grant super admin access'}), 403
+
+        if requested_company not in _all_company_records():
+            return jsonify({'error': 'Company not found'}), 404
+
         salt = secrets.token_hex(16)
         password_hash = hash_password(password, salt)
 
@@ -3998,11 +4777,15 @@ def create_user():
             username=username,
             password_hash=password_hash,
             salt=salt,
-            is_admin=is_admin,
+            is_admin=is_admin or is_super_admin,
             is_active=is_active
         )
 
         data_manager.save_users()
+        if is_super_admin:
+            _set_user_super_admin(username, True)
+        _reload_users_for_all_company_managers()
+        _assign_user_to_company(username, requested_company)
         log_action(f"Created user {username}")
 
         return jsonify({'success': True, 'message': 'User created successfully'})
@@ -4018,16 +4801,41 @@ def update_user(username):
     """Admin: update username, privilege, and active state"""
     try:
         old_username = unquote_plus(username)
+        was_self_update = old_username == session.get('user')
 
         user = data_manager.users.get(old_username)
         if not user:
             return jsonify({'error': 'User not found'}), 404
+
+        if not _current_admin_can_manage_user(old_username):
+            return jsonify({'error': 'You can only manage users assigned to your company'}), 403
+
+        if (
+            _is_super_admin_username(old_username)
+            and not _current_user_is_super_admin()
+            and old_username != session.get('user')
+        ):
+            return jsonify({'error': 'Only a super admin can change another super admin'}), 403
 
         data = request.get_json() or {}
         username_changed = False
         renamed_from = old_username
         renamed_to = old_username
         rename_counts = None
+        requested_company = None
+        requested_super_admin = None
+
+        if 'companyCode' in data:
+            if not _current_user_is_super_admin():
+                return jsonify({'error': 'Only the super admin can assign users to companies'}), 403
+            requested_company = _normalise_company_code(data.get('companyCode'), DEFAULT_COMPANY_CODE)
+            if requested_company not in _all_company_records():
+                return jsonify({'error': 'Company not found'}), 404
+
+        if 'isSuperAdmin' in data:
+            if not _current_user_is_super_admin():
+                return jsonify({'error': 'Only the super admin can change super admin access'}), 403
+            requested_super_admin = bool(data.get('isSuperAdmin'))
 
         # Rename user
         if 'username' in data:
@@ -4056,24 +4864,46 @@ def update_user(username):
         if 'isAdmin' in data:
             new_is_admin = bool(data.get('isAdmin'))
 
-            # Prevent locking yourself out of admin access
-            if user.username == session.get('user') and not new_is_admin:
-                return jsonify({'error': 'You cannot remove your own admin privilege'}), 400
+            if not new_is_admin and (
+                requested_super_admin is True or
+                (_is_super_admin_username(user.username) and requested_super_admin is not False)
+            ):
+                return jsonify({'error': 'The super admin must remain an admin'}), 400
 
             user.is_admin = new_is_admin
-            session['is_admin'] = user.is_admin if user.username == session.get('user') else session.get('is_admin', False)
 
         # Update active state
         if 'isActive' in data:
             new_is_active = bool(data.get('isActive'))
 
-            # Prevent deactivating yourself
-            if user.username == session.get('user') and not new_is_active:
-                return jsonify({'error': 'You cannot deactivate your own account'}), 400
-
             user.is_active = new_is_active
 
+        if requested_super_admin is True:
+            user.is_admin = True
+
+        if username_changed:
+            registry = _load_company_registry()
+            assigned_company = registry.get('userCompanies', {}).pop(renamed_from, None)
+            if assigned_company:
+                registry['userCompanies'][renamed_to] = assigned_company
+                _save_company_registry(registry)
+            _rename_super_admin_reference(renamed_from, renamed_to)
+
+        if requested_company:
+            _assign_user_to_company(user.username, requested_company)
+
+        try:
+            if requested_super_admin is not None:
+                _set_user_super_admin(user.username, requested_super_admin)
+        except ValueError as e:
+            return jsonify({'error': str(e)}), 400
+
         data_manager.save_users()
+        _reload_users_for_all_company_managers()
+
+        if was_self_update:
+            session['self_user_changes_pending'] = True
+
         if username_changed:
             if rename_counts is None:
                 rename_counts = {}
@@ -4094,7 +4924,10 @@ def update_user(username):
             'data': {
                 'username': user.username,
                 'isAdmin': user.is_admin,
-                'isActive': getattr(user, 'is_active', True)
+                'isSuperAdmin': _is_super_admin_username(user.username),
+                'isActive': getattr(user, 'is_active', True),
+                'companyCode': _user_assigned_company_code(user.username),
+                'selfChangesPending': was_self_update,
             }
         })
 
@@ -4114,6 +4947,12 @@ def reset_user_password(username):
         if not user:
             return jsonify({'error': 'User not found'}), 404
 
+        if not _current_admin_can_manage_user(username):
+            return jsonify({'error': 'You can only manage users assigned to your company'}), 403
+
+        if _is_super_admin_username(username) and not _current_user_is_super_admin():
+            return jsonify({'error': 'Only a super admin can reset another super admin password'}), 403
+
         data = request.get_json() or {}
         new_password = data.get('password') or ''
 
@@ -4124,6 +4963,7 @@ def reset_user_password(username):
         user.password_hash = hash_password(new_password, user.salt)
 
         data_manager.save_users()
+        _reload_users_for_all_company_managers()
         log_action(f"Reset password for user {username}")
 
         return jsonify({'success': True, 'message': 'Password reset successfully'})
@@ -4147,8 +4987,25 @@ def delete_user(username):
         if not user:
             return jsonify({'error': 'User not found'}), 404
 
+        if not _current_admin_can_manage_user(username):
+            return jsonify({'error': 'You can only manage users assigned to your company'}), 403
+
+        if _is_super_admin_username(username) and not _current_user_is_super_admin():
+            return jsonify({'error': 'Only a super admin can delete another super admin'}), 403
+
+        try:
+            if _is_super_admin_username(username):
+                _set_user_super_admin(username, False)
+        except ValueError as e:
+            return jsonify({'error': str(e)}), 400
+
         del data_manager.users[username]
         data_manager.save_users()
+        _reload_users_for_all_company_managers()
+        registry = _load_company_registry()
+        if username in registry.get('userCompanies', {}):
+            registry['userCompanies'].pop(username, None)
+            _save_company_registry(registry)
 
         log_action(f"Deleted user {username}")
 

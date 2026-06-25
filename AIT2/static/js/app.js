@@ -6,6 +6,7 @@ let containers = [];
 let logs = [];
 let stats = {};
 let departments = {};
+let companyOptions = [];
 let departmentsLoaded = false;
 let selectedInventoryAssetIds = new Set();
 let __autoRefreshInFlight = false;
@@ -31,7 +32,7 @@ const REALTIME_CLIENT_ID = (() => {
 const DEFAULT_PDF_FOOTER_TEXT = "AVEC VISION PRIVATE LIMITED\n601 SIMS DRIVE PAN-I COMPLEX #04-10 SINGAPORE 387382 TEL 65.9743.3660 CO REG 202122775G";
 let pdfSettings = {
   footerText: DEFAULT_PDF_FOOTER_TEXT,
-  logoUrl: "/static/images/logo.png",
+  logoUrl: "/api/pdf-settings/logo",
   hasCustomLogo: false,
   logoOriginalName: "",
   updatedAt: ""
@@ -102,6 +103,10 @@ function isAdminUser() {
   return !!(currentUser && currentUser.isAdmin);
 }
 
+function isSuperAdminUser() {
+  return !!(currentUser && currentUser.isSuperAdmin);
+}
+
 function applyPermissionUi() {
   const adminOnlySelectors = [
     ".admin-only",
@@ -112,6 +117,10 @@ function applyPermissionUi() {
     document.querySelectorAll(selector).forEach(el => {
       el.style.display = isAdminUser() ? (el.dataset.adminDisplay || 'block') : 'none';
     });
+  });
+
+  document.querySelectorAll(".super-admin-only, [data-super-admin-only='true']").forEach(el => {
+    el.style.display = isSuperAdminUser() ? (el.dataset.superAdminDisplay || el.dataset.adminDisplay || 'block') : 'none';
   });
 
   // Older hard-coded Add Event buttons do not all have a class, so hide them by onclick.
@@ -2151,7 +2160,11 @@ function setupMobileNavigation() {
 
 function showSection(sectionName) {
   const adminOnlySections = new Set(["logs", "maintenance-report", "users", "pdf-settings"]);
+  const superAdminOnlySections = new Set(["companies"]);
   if (adminOnlySections.has(sectionName) && !isAdminUser()) {
+    return showSection("events");
+  }
+  if (superAdminOnlySections.has(sectionName) && !isSuperAdminUser()) {
     return showSection("events");
   }
 
@@ -2227,6 +2240,9 @@ function showSection(sectionName) {
       break;
     case "pdf-settings":
       loadPdfSettingsSection();
+      break;
+    case "companies":
+      loadCompaniesAdmin();
       break;
     case "change-password":
       loadChangePasswordSection();
@@ -2816,7 +2832,7 @@ async function deleteEventFile(eventId, filename) {
 function normalisePdfSettings(settings = {}) {
   return {
     footerText: typeof settings.footerText === 'string' ? settings.footerText : DEFAULT_PDF_FOOTER_TEXT,
-    logoUrl: settings.logoUrl || "/static/images/logo.png",
+    logoUrl: settings.logoUrl || "/api/pdf-settings/logo",
     hasCustomLogo: !!settings.hasCustomLogo,
     logoOriginalName: settings.logoOriginalName || "",
     updatedAt: settings.updatedAt || ""
@@ -2824,7 +2840,7 @@ function normalisePdfSettings(settings = {}) {
 }
 
 function getPdfLogoUrl() {
-  return (pdfSettings && pdfSettings.logoUrl) || "/static/images/logo.png";
+  return (pdfSettings && pdfSettings.logoUrl) || "/api/pdf-settings/logo";
 }
 
 function getPdfFooterText() {
@@ -3083,6 +3099,404 @@ async function resetPdfSettingsFooter() {
   const textarea = document.getElementById('pdfSettingsFooterText');
   if (textarea) textarea.value = DEFAULT_PDF_FOOTER_TEXT;
   await savePdfSettingsFooter();
+}
+
+
+// ---------------- Company Management ----------------
+async function fetchCompanies(force = false) {
+  if (!force && companyOptions.length) return companyOptions;
+  if (!isSuperAdminUser()) {
+    companyOptions = currentUser?.company ? [currentUser.company] : [];
+    return companyOptions;
+  }
+
+  const res = await apiCall('/api/companies');
+  companyOptions = res.data || [];
+  return companyOptions;
+}
+
+function companyOptionsMarkup(selectedCode = '') {
+  const selected = String(selectedCode || '').toUpperCase();
+  return (companyOptions || []).map(company => `
+    <option value="${escapeHtmlAttr(company.code)}" ${String(company.code).toUpperCase() === selected ? 'selected' : ''}>
+      ${escapeHtml(company.code)} - ${escapeHtml(company.name || company.code)}
+    </option>
+  `).join('');
+}
+
+async function setupCompanyManagementTab() {
+  if (!isSuperAdminUser()) {
+    removeCompanyManagementTab();
+    return;
+  }
+
+  ensureCompanyManagementNavItem();
+  ensureCompanyManagementSection();
+  await fetchCompanies(true);
+  renderCompanySwitchControl();
+}
+
+function removeCompanyManagementTab() {
+  const tab = document.querySelector(`[onclick="showSection('companies')"]`);
+  if (tab) tab.remove();
+
+  const section = document.getElementById('companies-section');
+  if (section) section.remove();
+}
+
+function ensureCompanyManagementNavItem() {
+  if (document.querySelector(`[onclick="showSection('companies')"]`)) return;
+
+  const settingsSection = Array.from(document.querySelectorAll('.nav-section'))
+    .find(section => {
+      const heading = section.querySelector('h3');
+      return heading && heading.textContent.trim() === 'Settings';
+    });
+
+  if (!settingsSection) {
+    console.warn('Could not find Settings section for Companies tab');
+    return;
+  }
+
+  const companiesTab = document.createElement('button');
+  companiesTab.type = 'button';
+  companiesTab.className = 'nav-item super-admin-only';
+  companiesTab.setAttribute('onclick', "showSection('companies')");
+  companiesTab.textContent = 'Companies';
+
+  const logoutButton = settingsSection.querySelector(`[onclick="logout()"]`);
+  if (logoutButton) {
+    settingsSection.insertBefore(companiesTab, logoutButton);
+  } else {
+    settingsSection.appendChild(companiesTab);
+  }
+}
+
+function ensureCompanyManagementSection() {
+  if (document.getElementById('companies-section')) return;
+
+  const firstSection = document.querySelector('.content-section');
+  const sectionParent = firstSection ? firstSection.parentElement : document.body;
+
+  const section = document.createElement('div');
+  section.id = 'companies-section';
+  section.className = 'content-section';
+
+  section.innerHTML = `
+    <div class="content-header">
+      <h2 class="content-title">Companies</h2>
+    </div>
+
+    <div class="form-container" style="margin-bottom:20px;">
+      <h3 style="margin-bottom:15px;">Active Company</h3>
+      <div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap;">
+        <div class="form-group" style="min-width:280px;">
+          <label class="form-label" for="activeCompanySelect">Company</label>
+          <select id="activeCompanySelect" class="form-input"></select>
+        </div>
+        <button type="button" class="btn btn-primary" onclick="switchCompanyAdmin()">Switch</button>
+      </div>
+    </div>
+
+    <div class="form-container" style="margin-bottom:20px;">
+      <h3 style="margin-bottom:15px;">Create Company</h3>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;align-items:end;">
+        <div class="form-group">
+          <label class="form-label" for="newCompanyCode">Code</label>
+          <input id="newCompanyCode" class="form-input" placeholder="e.g. CLIENTCO">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="newCompanyName">Name</label>
+          <input id="newCompanyName" class="form-input" placeholder="Company name">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="newCompanyFirstAdmin">First Admin</label>
+          <input id="newCompanyFirstAdmin" class="form-input" placeholder="Existing or new username">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="newCompanyFirstAdminPassword">Password</label>
+          <input id="newCompanyFirstAdminPassword" type="password" class="form-input" placeholder="Only needed for new user">
+        </div>
+        <button type="button" class="btn btn-success" onclick="createCompanyAdmin()">Create Company</button>
+      </div>
+    </div>
+
+    <div class="form-container">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px;">
+        <h3 style="margin:0;">Existing Companies</h3>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="loadCompaniesAdmin()">Refresh</button>
+      </div>
+      <div id="companies-admin-table-container">
+        <p style="text-align:center;color:#666;padding:30px;">Loading companies...</p>
+      </div>
+    </div>
+  `;
+
+  sectionParent.appendChild(section);
+}
+
+function renderCompanySwitchControl() {
+  const select = document.getElementById('activeCompanySelect');
+  if (!select) return;
+  const activeCode = currentUser?.company?.code || '';
+  select.innerHTML = companyOptionsMarkup(activeCode);
+}
+
+async function loadCompaniesAdmin() {
+  if (!isSuperAdminUser()) {
+    showNotification('error', 'Super admin privileges required');
+    showSection('events');
+    return;
+  }
+
+  ensureCompanyManagementSection();
+  const container = document.getElementById('companies-admin-table-container');
+  if (container) {
+    container.innerHTML = '<p style="text-align:center;color:#666;padding:30px;">Loading companies...</p>';
+  }
+
+  try {
+    const companies = await fetchCompanies(true);
+    renderCompanySwitchControl();
+
+    if (!container) return;
+    if (!companies.length) {
+      container.innerHTML = '<p style="text-align:center;color:#666;padding:30px;">No companies found.</p>';
+      return;
+    }
+
+    container.innerHTML = `
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Code</th>
+            <th>Name</th>
+            <th>Users</th>
+            <th>Backend Folder</th>
+            <th>Frontend Folder</th>
+            <th>Branding</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${companies.map(company => `
+            <tr>
+              <td><strong>${escapeHtml(company.code)}</strong>${company.isActive ? ' <span style="font-size:11px;color:#198754;">active</span>' : ''}</td>
+              <td>${escapeHtml(company.name || '')}</td>
+              <td>${Number(company.userCount || 0)}</td>
+              <td style="font-size:12px;color:#667085;overflow-wrap:anywhere;">${escapeHtml(company.backendFolder || '')}</td>
+              <td style="font-size:12px;color:#667085;overflow-wrap:anywhere;">${escapeHtml(company.frontendFolder || '')}</td>
+              <td>${company.brandingSetupRequired ? 'Pending' : 'Ready'}</td>
+              <td>
+                <button
+                  type="button"
+                  class="btn btn-danger btn-sm"
+                  onclick="deleteCompanyAdmin('${escapeHtmlAttr(company.code)}', ${company.isActive ? 'true' : 'false'}, ${companies.length})"
+                  ${company.isActive || companies.length <= 1 ? 'disabled' : ''}
+                >Delete</button>
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+  } catch (error) {
+    if (container) {
+      container.innerHTML = `<p style="color:red;text-align:center;padding:30px;">Failed to load companies: ${escapeHtml(error.message)}</p>`;
+    }
+  }
+}
+
+async function createCompanyAdmin() {
+  const code = document.getElementById('newCompanyCode')?.value.trim() || '';
+  const name = document.getElementById('newCompanyName')?.value.trim() || '';
+  const firstAdminUsername = document.getElementById('newCompanyFirstAdmin')?.value.trim() || '';
+  const firstAdminPassword = document.getElementById('newCompanyFirstAdminPassword')?.value || '';
+
+  if (!code && !name) {
+    showNotification('warning', 'Company code or name is required');
+    return;
+  }
+
+  try {
+    await apiCall('/api/companies', 'POST', {
+      code,
+      name,
+      firstAdminUsername,
+      firstAdminPassword
+    });
+
+    ['newCompanyCode', 'newCompanyName', 'newCompanyFirstAdmin', 'newCompanyFirstAdminPassword'].forEach(id => {
+      const input = document.getElementById(id);
+      if (input) input.value = '';
+    });
+
+    showNotification('success', 'Company created');
+    await loadCompaniesAdmin();
+    if (document.getElementById('users-section')) {
+      await loadUsersAdmin();
+    }
+  } catch (error) {
+    showNotification('error', `Failed to create company: ${error.message}`);
+  }
+}
+
+async function deleteCompanyAdmin(code, isActive = false, companyCount = 0) {
+  if (!isSuperAdminUser()) {
+    showNotification('error', 'Super admin privileges required');
+    return;
+  }
+
+  if (isActive) {
+    showNotification('warning', 'Switch to another company before deleting this one');
+    return;
+  }
+
+  if (Number(companyCount || 0) <= 1) {
+    showNotification('warning', 'At least one company must remain');
+    return;
+  }
+
+  const company = (companyOptions || []).find(item => String(item.code || '').toUpperCase() === String(code || '').toUpperCase());
+  const name = company?.name || code;
+
+  const confirmed = await showAppConfirm({
+    title: 'Delete Company',
+    message: `Delete ${name || code}? This permanently removes the company folder and all company assets.`,
+    confirmText: 'Delete',
+    cancelText: 'Cancel',
+    variant: 'danger'
+  });
+
+  if (!confirmed) return;
+
+  try {
+    const res = await apiCall(`/api/companies/${encodeURIComponent(code)}`, 'DELETE');
+    const removedUsers = res?.data?.removedUsers || [];
+    const userNote = removedUsers.length ? ` Removed ${removedUsers.length} assigned user account(s).` : '';
+    showNotification('success', `Company deleted.${userNote}`);
+    await loadCompaniesAdmin();
+    if (document.getElementById('users-section')) {
+      await loadUsersAdmin();
+    }
+  } catch (error) {
+    showNotification('error', `Failed to delete company: ${error.message}`);
+  }
+}
+
+async function switchCompanyAdmin() {
+  const code = document.getElementById('activeCompanySelect')?.value || '';
+  if (!code) {
+    showNotification('warning', 'Choose a company first');
+    return;
+  }
+
+  try {
+    await apiCall('/api/current-company', 'PUT', { companyCode: code });
+    showNotification('success', 'Company switched');
+    setTimeout(() => window.location.reload(), 400);
+  } catch (error) {
+    showNotification('error', `Failed to switch company: ${error.message}`);
+  }
+}
+
+function ensureCompanyBrandingPromptModal() {
+  if (document.getElementById('companyBrandingSetupModal')) return;
+
+  const modal = document.createElement('div');
+  modal.id = 'companyBrandingSetupModal';
+  modal.className = 'modal';
+  modal.innerHTML = `
+    <div class="modal-content" style="max-width:720px;">
+      <div class="modal-header">
+        <h3>Company Branding</h3>
+      </div>
+      <div class="modal-body">
+        <p style="margin-bottom:16px;color:#495057;">
+          Set the logo and footer for <strong id="companyBrandingName"></strong>. The AVPL defaults are already filled in.
+        </p>
+        <div style="display:grid;grid-template-columns:minmax(220px,280px) 1fr;gap:18px;align-items:start;">
+          <div class="form-group">
+            <label class="form-label" for="companyBrandingLogoInput">Logo</label>
+            <div style="border:1px solid #e9ecef;border-radius:8px;padding:16px;background:#fff;min-height:110px;display:flex;align-items:center;justify-content:center;margin-bottom:10px;">
+              <img id="companyBrandingLogoPreview" alt="Company Logo" style="max-width:220px;max-height:80px;object-fit:contain;">
+            </div>
+            <input id="companyBrandingLogoInput" class="form-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="companyBrandingFooterText">Footer</label>
+            <textarea id="companyBrandingFooterText" class="form-input" rows="6" maxlength="2000"></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer modal-actions">
+        <button type="button" class="btn btn-secondary" onclick="completeCompanyBrandingSetup(true)">Use Defaults</button>
+        <button type="button" class="btn btn-primary" onclick="completeCompanyBrandingSetup(false)">Save Branding</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+}
+
+async function showCompanyBrandingPromptIfNeeded() {
+  if (!currentUser || !currentUser.isAdmin || !currentUser.company?.brandingSetupRequired) return;
+
+  await loadPdfSettings(true);
+  ensureCompanyBrandingPromptModal();
+
+  const name = document.getElementById('companyBrandingName');
+  const preview = document.getElementById('companyBrandingLogoPreview');
+  const footer = document.getElementById('companyBrandingFooterText');
+  const fileInput = document.getElementById('companyBrandingLogoInput');
+
+  if (name) name.textContent = currentUser.company.name || currentUser.company.code || 'this company';
+  if (preview) preview.src = getPdfLogoUrl();
+  if (footer) footer.value = getPdfFooterText();
+  if (fileInput) fileInput.value = '';
+
+  openModal('companyBrandingSetupModal');
+}
+
+async function completeCompanyBrandingSetup(useDefaults = false) {
+  try {
+    if (useDefaults) {
+      await apiCall('/api/company/branding-setup-complete', 'POST', {});
+    } else {
+      const input = document.getElementById('companyBrandingLogoInput');
+      const file = input && input.files ? input.files[0] : null;
+      const footerText = document.getElementById('companyBrandingFooterText')?.value || DEFAULT_PDF_FOOTER_TEXT;
+
+      if (file) {
+        const formData = new FormData();
+        formData.append('logo', file);
+        const response = await fetch('/api/pdf-settings/logo', {
+          method: 'POST',
+          headers: {
+            "X-Client-Id": REALTIME_CLIENT_ID,
+          },
+          body: formData
+        });
+        const result = await response.json();
+        if (!response.ok) {
+          throw new Error(result.error || 'Failed to upload logo');
+        }
+        pdfSettings = normalisePdfSettings(result.data || {});
+      }
+
+      const res = await apiCall('/api/pdf-settings', 'PUT', { footerText });
+      pdfSettings = normalisePdfSettings(res.data || pdfSettings);
+    }
+
+    const currentUserRes = await apiCall('/api/current-user');
+    currentUser = currentUserRes.data;
+    await loadPdfSettings(true);
+    applyPdfSettingsToApp();
+    closeModal('companyBrandingSetupModal');
+    showNotification('success', 'Company branding saved');
+  } catch (error) {
+    showNotification('error', `Failed to save company branding: ${error.message}`);
+  }
 }
 
 
@@ -3701,7 +4115,7 @@ function ensureUsersSection() {
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
       <div>
         <h2 style="margin:0;">User Management</h2>
-        <p style="margin:5px 0 0;color:#666;">Create users, edit admin privileges, reset passwords, and deactivate accounts.</p>
+        <p style="margin:5px 0 0;color:#666;">Create users, edit admin privileges, reset passwords, deactivate accounts, and assign companies.</p>
       </div>
     </div>
 
@@ -3724,12 +4138,54 @@ function ensureUsersSection() {
           Admin
         </label>
 
+        <label class="super-admin-only" style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">
+          <input id="newUserIsSuperAdmin" type="checkbox">
+          Super
+        </label>
+
         <label style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">
           <input id="newUserIsActive" type="checkbox" checked>
           Active
         </label>
 
+        <div class="form-group super-admin-only" id="newUserCompanyGroup">
+          <label class="form-label" for="newUserCompanyCode">Company</label>
+          <select id="newUserCompanyCode" class="form-input"></select>
+        </div>
+
         <button class="btn btn-success" onclick="createUserAdmin()">Create User</button>
+      </div>
+    </div>
+
+    <div class="card super-admin-only" style="margin-bottom:20px;">
+      <h3 style="margin-bottom:15px;">Create Company</h3>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;align-items:end;">
+        <div class="form-group">
+          <label class="form-label" for="userNewCompanyCode">Code</label>
+          <input id="userNewCompanyCode" class="form-input" placeholder="e.g. CLIENTCO">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="userNewCompanyName">Name</label>
+          <input id="userNewCompanyName" class="form-input" placeholder="Company name">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="userNewCompanyFirstAdmin">First Admin</label>
+          <input id="userNewCompanyFirstAdmin" class="form-input" placeholder="Existing or new username">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="userNewCompanyFirstAdminPassword">Password</label>
+          <input id="userNewCompanyFirstAdminPassword" type="password" class="form-input" placeholder="Only needed for new user">
+        </div>
+        <button class="btn btn-success" onclick="createCompanyFromUsersAdmin()">Create Company</button>
+      </div>
+
+      <div style="display:grid;grid-template-columns:minmax(220px,1fr) auto;gap:12px;align-items:end;margin-top:16px;padding-top:16px;border-top:1px solid #e9ecef;">
+        <div class="form-group">
+          <label class="form-label" for="userDeleteCompanyCode">Delete Company</label>
+          <select id="userDeleteCompanyCode" class="form-input"></select>
+        </div>
+        <button class="btn btn-danger" onclick="deleteCompanyFromUsersAdmin()">Delete Company</button>
       </div>
     </div>
 
@@ -3757,6 +4213,18 @@ async function loadUsersAdmin() {
   container.innerHTML = '<p style="text-align:center;color:#666;padding:30px;">Loading users...</p>';
 
   try {
+    if (isSuperAdminUser()) {
+      await fetchCompanies(true);
+      const newUserCompany = document.getElementById('newUserCompanyCode');
+      if (newUserCompany) {
+        newUserCompany.innerHTML = companyOptionsMarkup(currentUser?.company?.code || '');
+      }
+      const deleteCompany = document.getElementById('userDeleteCompanyCode');
+      if (deleteCompany) {
+        deleteCompany.innerHTML = companyOptionsMarkup('');
+      }
+    }
+
     const res = await apiCall('/api/users');
     const users = res.data || [];
 
@@ -3771,6 +4239,8 @@ async function loadUsersAdmin() {
           <tr>
             <th>Username</th>
             <th>Admin</th>
+            ${isSuperAdminUser() ? '<th>Company</th>' : ''}
+            ${isSuperAdminUser() ? '<th>Super</th>' : ''}
             <th>Active</th>
             <th>Actions</th>
           </tr>
@@ -3782,6 +4252,7 @@ async function loadUsersAdmin() {
       const rowId = `userrow-${index}`;
       const encodedOriginalUsername = encodeURIComponent(user.username);
       const isSelf = currentUser && currentUser.username === user.username;
+      const protectedSuperUser = user.isSuperAdmin && !isSuperAdminUser() && !isSelf;
 
       html += `
         <tr>
@@ -3791,6 +4262,7 @@ async function loadUsersAdmin() {
               id="username-${rowId}"
               class="form-input user-admin-username-input"
               value="${escapeHtmlAttr(user.username)}"
+              ${protectedSuperUser ? 'disabled' : ''}
             >
             ${isSelf ? '<span style="font-size:11px;color:#666;margin-left:6px;">(you)</span>' : ''}
           </td>
@@ -3801,12 +4273,34 @@ async function loadUsersAdmin() {
                 type="checkbox"
                 id="admin-${rowId}"
                 ${user.isAdmin ? 'checked' : ''}
-                ${isSelf ? 'disabled' : ''}
+                ${protectedSuperUser ? 'disabled' : ''}
               >
               <span class="user-admin-switch-slider"></span>
               <span class="user-admin-switch-text">Admin</span>
             </label>
           </td>
+
+          ${isSuperAdminUser() ? `
+            <td>
+              <select id="company-${rowId}" class="form-input">
+                ${companyOptionsMarkup(user.companyCode || currentUser?.company?.code || '')}
+              </select>
+            </td>
+          ` : ''}
+
+          ${isSuperAdminUser() ? `
+            <td>
+              <label class="user-admin-switch">
+                <input
+                  type="checkbox"
+                  id="super-${rowId}"
+                  ${user.isSuperAdmin ? 'checked' : ''}
+                >
+                <span class="user-admin-switch-slider"></span>
+                <span class="user-admin-switch-text">Super</span>
+              </label>
+            </td>
+          ` : ''}
 
           <td>
             <label class="user-admin-switch">
@@ -3814,7 +4308,7 @@ async function loadUsersAdmin() {
                 type="checkbox"
                 id="active-${rowId}"
                 ${user.isActive ? 'checked' : ''}
-                ${isSelf ? 'disabled' : ''}
+                ${protectedSuperUser ? 'disabled' : ''}
               >
               <span class="user-admin-switch-slider"></span>
               <span class="user-admin-switch-text">Active</span>
@@ -3824,7 +4318,7 @@ async function loadUsersAdmin() {
           <td>
             <button class="btn btn-primary btn-sm" onclick="saveUserAdmin('${encodedOriginalUsername}', '${rowId}')">Save</button>
             <button class="btn btn-warning btn-sm" onclick="openResetPasswordModal('${encodedOriginalUsername}')">Reset Password</button>
-            <button class="btn btn-danger btn-sm" onclick="deleteUserAdmin('${encodedOriginalUsername}')" ${isSelf ? 'disabled title="You cannot delete your own account"' : ''}>Delete</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteUserAdmin('${encodedOriginalUsername}')" ${(isSelf || protectedSuperUser) ? 'disabled title="This account cannot be deleted here"' : ''}>Delete</button>
           </td>
         </tr>
       `;
@@ -3846,7 +4340,9 @@ async function createUserAdmin() {
   const username = document.getElementById('newUserUsername')?.value.trim();
   const password = document.getElementById('newUserPassword')?.value;
   const isAdmin = document.getElementById('newUserIsAdmin')?.checked || false;
+  const isSuperAdmin = document.getElementById('newUserIsSuperAdmin')?.checked || false;
   const isActive = document.getElementById('newUserIsActive')?.checked || false;
+  const companyCode = document.getElementById('newUserCompanyCode')?.value || currentUser?.company?.code || '';
 
   if (!username) {
     showNotification('warning', 'Username is required');
@@ -3859,19 +4355,31 @@ async function createUserAdmin() {
   }
 
   try {
-    await apiCall('/api/users', 'POST', {
+    const payload = {
       username,
       password,
-      isAdmin,
+      isAdmin: isAdmin || isSuperAdmin,
+      isSuperAdmin,
       isActive
-    });
+    };
+    if (isSuperAdminUser()) {
+      payload.companyCode = companyCode;
+    }
+
+    await apiCall('/api/users', 'POST', payload);
 
     showNotification('success', `User ${username} created`);
 
     document.getElementById('newUserUsername').value = '';
     document.getElementById('newUserPassword').value = '';
     document.getElementById('newUserIsAdmin').checked = false;
+    if (document.getElementById('newUserIsSuperAdmin')) {
+      document.getElementById('newUserIsSuperAdmin').checked = false;
+    }
     document.getElementById('newUserIsActive').checked = true;
+    if (document.getElementById('newUserCompanyCode')) {
+      document.getElementById('newUserCompanyCode').value = currentUser?.company?.code || '';
+    }
 
     await loadUsersAdmin();
 
@@ -3880,12 +4388,66 @@ async function createUserAdmin() {
   }
 }
 
+async function createCompanyFromUsersAdmin() {
+  const code = document.getElementById('userNewCompanyCode')?.value.trim() || '';
+  const name = document.getElementById('userNewCompanyName')?.value.trim() || '';
+  const firstAdminUsername = document.getElementById('userNewCompanyFirstAdmin')?.value.trim() || '';
+  const firstAdminPassword = document.getElementById('userNewCompanyFirstAdminPassword')?.value || '';
+
+  if (!code && !name) {
+    showNotification('warning', 'Company code or name is required');
+    return;
+  }
+
+  try {
+    await apiCall('/api/companies', 'POST', {
+      code,
+      name,
+      firstAdminUsername,
+      firstAdminPassword
+    });
+
+    ['userNewCompanyCode', 'userNewCompanyName', 'userNewCompanyFirstAdmin', 'userNewCompanyFirstAdminPassword'].forEach(id => {
+      const input = document.getElementById(id);
+      if (input) input.value = '';
+    });
+
+    await fetchCompanies(true);
+    const newUserCompany = document.getElementById('newUserCompanyCode');
+    if (newUserCompany) {
+      newUserCompany.innerHTML = companyOptionsMarkup(currentUser?.company?.code || '');
+    }
+    const deleteCompany = document.getElementById('userDeleteCompanyCode');
+    if (deleteCompany) {
+      deleteCompany.innerHTML = companyOptionsMarkup('');
+    }
+
+    showNotification('success', 'Company created');
+    await loadUsersAdmin();
+  } catch (error) {
+    showNotification('error', `Failed to create company: ${error.message}`);
+  }
+}
+
+async function deleteCompanyFromUsersAdmin() {
+  const code = document.getElementById('userDeleteCompanyCode')?.value || '';
+  if (!code) {
+    showNotification('warning', 'Choose a company first');
+    return;
+  }
+
+  const company = (companyOptions || []).find(item => String(item.code || '').toUpperCase() === String(code).toUpperCase());
+  await deleteCompanyAdmin(code, Boolean(company?.isActive), companyOptions.length);
+}
+
 async function saveUserAdmin(encodedOriginalUsername, rowId) {
   const originalUsername = decodeURIComponent(encodedOriginalUsername);
 
   const newUsername = document.getElementById(`username-${rowId}`)?.value.trim();
   const isAdmin = document.getElementById(`admin-${rowId}`)?.checked || false;
   const isActive = document.getElementById(`active-${rowId}`)?.checked || false;
+  const isSuperAdmin = document.getElementById(`super-${rowId}`)?.checked || false;
+  const companyCode = document.getElementById(`company-${rowId}`)?.value || '';
 
   if (!newUsername) {
     showNotification('warning', 'Username cannot be empty');
@@ -3893,11 +4455,17 @@ async function saveUserAdmin(encodedOriginalUsername, rowId) {
   }
 
   try {
-    await apiCall(`/api/users/${encodeURIComponent(originalUsername)}`, 'PUT', {
+    const payload = {
       username: newUsername,
-      isAdmin,
+      isAdmin: isAdmin || isSuperAdmin,
       isActive
-    });
+    };
+    if (isSuperAdminUser() && companyCode) {
+      payload.companyCode = companyCode;
+      payload.isSuperAdmin = isSuperAdmin;
+    }
+
+    const updateResult = await apiCall(`/api/users/${encodeURIComponent(originalUsername)}`, 'PUT', payload);
 
     // Refresh current-user data in case the logged-in admin renamed themselves
     try {
@@ -3907,7 +4475,13 @@ async function saveUserAdmin(encodedOriginalUsername, rowId) {
       console.warn('Could not refresh current user:', e);
     }
 
-    showNotification('success', `Updated ${newUsername}`);
+    const selfChangesPending = !!(updateResult?.data?.selfChangesPending);
+    showNotification(
+      'success',
+      selfChangesPending
+        ? `Updated ${newUsername}. Your own permission changes apply after you log out and back in.`
+        : `Updated ${newUsername}`
+    );
     await loadUsersAdmin();
 
   } catch (error) {
@@ -18422,6 +18996,9 @@ async function refreshVisibleDataFromRealtime() {
       case "pdf-settings":
         if (typeof loadPdfSettingsSection === "function") await loadPdfSettingsSection();
         break;
+      case "companies":
+        if (typeof loadCompaniesAdmin === "function") await loadCompaniesAdmin();
+        break;
     }
   } catch (error) {
     console.error("Realtime refresh error:", error);
@@ -18548,7 +19125,9 @@ async function initializeApp() {
     await setupChangePasswordTab();
     await setupAdminUserManagementTab();
     await setupPdfSettingsTab();
+    await setupCompanyManagementTab();
     applyPermissionUi();
+    await showCompanyBrandingPromptIfNeeded();
 
     // Load configurable department names/colours for badges and dropdowns.
     try {

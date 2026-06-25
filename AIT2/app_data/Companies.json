@@ -1,0 +1,48 @@
+{
+  "defaultCompany": "AVPL",
+  "companies": {
+    "AVPL": {
+      "code": "AVPL",
+      "name": "AVEC Vision Private Limited",
+      "backendFolder": "companies/AVPL/backend",
+      "frontendFolder": "companies/AVPL/frontend",
+      "createdAt": "2026-06-25T00:00:00",
+      "createdBy": "system",
+      "brandingSetupRequired": false
+    },
+    "AEE": {
+      "code": "AEE",
+      "name": "Avery Events and Exhibitions",
+      "backendFolder": "companies/AEE/backend",
+      "frontendFolder": "companies/AEE/frontend",
+      "createdAt": "2026-06-25T11:49:19",
+      "createdBy": "bnjm2000",
+      "brandingSetupRequired": true
+    },
+    "TSC": {
+      "code": "TSC",
+      "name": "The Show Company",
+      "backendFolder": "companies/TSC/backend",
+      "frontendFolder": "companies/TSC/frontend",
+      "createdAt": "2026-06-25T12:06:47",
+      "createdBy": "bnjm2000",
+      "brandingSetupRequired": true
+    }
+  },
+  "userCompanies": {
+    "bnjm2000": "AVPL",
+    "feezahmnsr": "AVPL",
+    "cterence": "AVPL",
+    "tjacky": "AVPL",
+    "user": "AVPL",
+    "cjamie": "AVPL",
+    "admin": "AVPL",
+    "rrafie": "AVPL",
+    "Adi": "AEE",
+    "tamelia": "TSC"
+  },
+  "superAdmins": [
+    "bnjm2000"
+  ],
+  "updatedAt": "2026-06-25T12:06:47"
+}

@@ -65,9 +65,10 @@ def _replace_generated_username_references(text, old_username, new_username):
 class DataManager:
     """Owns the in-memory data model and its CSV persistence format."""
 
-    def __init__(self, data_folder):
+    def __init__(self, data_folder, users_file=None):
         self.data_folder = data_folder
         self.events_folder = os.path.join(data_folder, 'events')
+        self.users_file = users_file
         self.users = {}
         self.inventory = {}
         self.containers = {}
@@ -79,6 +80,8 @@ class DataManager:
     # ---------------- Path helpers ----------------
 
     def _data_path(self, filename):
+        if filename == 'Users.csv' and self.users_file:
+            return self.users_file
         return os.path.join(self.data_folder, filename)
 
     def _event_filename(self, event):
@@ -133,6 +136,8 @@ class DataManager:
     # ---------------- Application bootstrap ----------------
 
     def setup_data_folder(self):
+        if not os.path.exists(self.data_folder):
+            os.makedirs(self.data_folder)
         if not os.path.exists(self.events_folder):
             os.makedirs(self.events_folder)
 
@@ -140,6 +145,9 @@ class DataManager:
         missing_files = []
         for filename in REQUIRED_DATA_FILES:
             filepath = self._data_path(filename)
+            folder = os.path.dirname(filepath)
+            if folder and not os.path.exists(folder):
+                os.makedirs(folder)
             if not os.path.exists(filepath):
                 missing_files.append(filename)
         if missing_files:
