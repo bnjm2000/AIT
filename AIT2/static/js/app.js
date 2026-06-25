@@ -12589,10 +12589,10 @@ async function editEvent(eventId) {
                 <div class="assets-edit-interface">
                     <!-- Search Bar at Top -->
                     <div style="background: #e8f5e8; border: 2px solid #28a745; border-radius: 8px; padding: 20px; margin-bottom: 30px;">
-                        <h4 style="color: #155724; margin-bottom: 15px; font-size: 18px;">➕ Add Asset Models</h4>
+                        <h4 style="color: #155724; margin-bottom: 15px; font-size: 18px;">➕ Add Asset Models / Containers</h4>
                         <div style="display: flex; gap: 15px; align-items: flex-end;">
                             <div style="flex: 1;">
-                                <input type="text" class="form-input" placeholder="Search available asset models..." 
+                                <input type="text" class="form-input" placeholder="Search available asset models or containers..." 
                                        style="width: 100%; padding: 12px; border: 1px solid #28a745; border-radius: 6px; font-size: 14px;" 
                                        oninput="filterAvailableModels(this.value)">
                             </div>
@@ -12603,7 +12603,7 @@ async function editEvent(eventId) {
                         </div>
                         <div id="available-models-container" style="margin-top: 15px; border: 1px solid #28a745; border-radius: 6px; max-height: 250px; overflow-y: auto; background: white;">
                             <div style="text-align: center; padding: 20px; color: #666; font-size: 14px;">
-                                Type to search for available asset models...
+                                Type to search for available asset models or containers...
                             </div>
                         </div>
                     </div>
@@ -12684,20 +12684,26 @@ async function editEvent(eventId) {
 
 async function loadEditEventAssets(eventId) {
   try {
-    const [eventResponse, availableAssetsResponse, availabilityResponse] = await Promise.all([
+    const [eventResponse, availableAssetsResponse, availabilityResponse, containerCache] = await Promise.all([
       apiCall(`/api/events/${eventId}`),
       apiCall("/api/assets/available"),
       apiCall(`/api/events/${eventId}/availability`),
+      refreshContainersCache(true).catch(error => {
+        console.warn("Container search unavailable:", error);
+        return {};
+      }),
     ]);
 
     const event = eventResponse.data;
-    const availableAssets = availableAssetsResponse.data;
+    const availableAssets = availableAssetsResponse.data || [];
+    const availableContainers = Object.values(containerCache || {});
 
     // Store for functionality
     window.currentEditAvailableAssets = availableAssets;
+    window.currentEditContainers = availableContainers;
     window.currentEditEventId = eventId;
     window.currentEditEvent = event;
-    window.currentEditAvailabilityList = availabilityResponse.data;
+    window.currentEditAvailabilityList = availabilityResponse.data || [];
 
     // Helper function to escape HTML
     const escapeHtml = (str) => {
@@ -12711,16 +12717,16 @@ async function loadEditEventAssets(eventId) {
             <div class="assets-edit-interface">
                 <!-- Search Bar at Top -->
                 <div style="background: #e8f5e8; border: 2px solid #28a745; border-radius: 8px; padding: 20px; margin-bottom: 30px;">
-                    <h4 style="color: #155724; margin: 0 0 15px 0; font-weight: 600;">🔍 Search Available Asset Models</h4>
+                    <h4 style="color: #155724; margin: 0 0 15px 0; font-weight: 600;">🔍 Search Available Asset Models or Containers</h4>
                     <div style="display: flex; align-items: center; gap: 15px;">
-                        <input type="text" class="form-input" placeholder="Search available asset models (min 2 characters)..." 
+                        <input type="text" class="form-input" placeholder="Search available asset models or containers (min 2 characters)..." 
                                style="flex: 1; max-width: 500px; padding: 10px 15px; border: 1px solid #28a745; border-radius: 5px;" 
                                oninput="filterAvailableModels(this.value)">
                         <button type="button" class="btn btn-outline-secondary" onclick="clearModelSearch()" 
                                 style="padding: 10px 15px; white-space: nowrap;">Clear Search</button>
                     </div>
                     <div id="available-models-container" style="margin-top: 15px; border: 1px solid #28a745; border-radius: 5px; background: white; max-height: 300px; overflow-y: auto;">
-                        <div style="text-align: center; padding: 20px; color: #666; font-size: 14px;">Type to search for available asset models...</div>
+                        <div style="text-align: center; padding: 20px; color: #666; font-size: 14px;">Type to search for available asset models or containers...</div>
                     </div>
                 </div>
 
@@ -12834,7 +12840,7 @@ function clearModelSearch() {
   }
   
   if (container) {
-    container.innerHTML = '<div style="text-align: center; padding: 20px; color: #666; font-size: 14px;">Type to search for available asset models...</div>';
+    container.innerHTML = '<div style="text-align: center; padding: 20px; color: #666; font-size: 14px;">Type to search for available asset models or containers...</div>';
   }
 }
 
@@ -13696,9 +13702,263 @@ function updateModelAvailabilityLabel(qtyInputId) {
   label.textContent = modelAvailabilityLabel(available, input.value, physical, overlap);
 }
 
+function addAssetToEditModelGroup(modelGroups, asset, quantity = 1) {
+  if (!asset) return null;
+
+  const department = normalizeDepartmentCode(asset.department || asset.departmentCode || 'UN');
+  const brand = String(asset.brand || '').trim();
+  const model = String(asset.model || '').trim();
+
+  if (!brand || !model) return null;
+
+  const modelKey = `${department}|${brand}|${model}`;
+  if (!modelGroups[modelKey]) {
+    modelGroups[modelKey] = {
+      department,
+      brand,
+      model,
+      description: '',
+      descriptionParts: [],
+      count: 0,
+      assets: []
+    };
+  }
+
+  const description = String(asset.description || '').trim();
+  if (description && !modelGroups[modelKey].descriptionParts.includes(description)) {
+    modelGroups[modelKey].descriptionParts.push(description);
+    modelGroups[modelKey].description = modelGroups[modelKey].descriptionParts.sort().join(' / ');
+  }
+
+  modelGroups[modelKey].count += Math.max(1, parseInt(quantity, 10) || 1);
+  modelGroups[modelKey].assets.push(asset);
+  return modelGroups[modelKey];
+}
+
+function buildEditAvailableAssetLookup(availableAssets = []) {
+  const lookup = new Map();
+
+  (availableAssets || []).forEach(asset => {
+    if (!asset) return;
+    [asset.id, asset.assetId, asset.internalId, asset.bulkId, asset.displayId]
+      .map(value => String(value || '').trim())
+      .filter(Boolean)
+      .forEach(value => {
+        lookup.set(value.toLowerCase(), asset);
+      });
+  });
+
+  return lookup;
+}
+
+function findEditAvailableAsset(assetId, assetLookup) {
+  const key = String(assetId || '').trim().toLowerCase();
+  return key ? assetLookup.get(key) || null : null;
+}
+
+function buildContainerAvailableModelSummary(container, assetLookup) {
+  const modelGroups = {};
+  const missingAssetIds = [];
+  const bulkAssetIds = [];
+
+  (container?.assetIds || []).forEach(assetId => {
+    const cleanAssetId = String(assetId || '').trim();
+    if (!cleanAssetId) return;
+
+    const asset = findEditAvailableAsset(cleanAssetId, assetLookup);
+    if (!asset) {
+      missingAssetIds.push(cleanAssetId);
+      return;
+    }
+
+    if (asset.isBulk) {
+      bulkAssetIds.push(cleanAssetId);
+      return;
+    }
+
+    addAssetToEditModelGroup(modelGroups, asset, 1);
+  });
+
+  const groups = Object.values(modelGroups).sort((a, b) =>
+    compareByDisplayName(modelGroupSortName(a), modelGroupSortName(b))
+  );
+
+  return {
+    groups,
+    missingAssetIds,
+    bulkAssetIds,
+    usableCount: groups.reduce((sum, group) => sum + Number(group.count || 0), 0),
+    skippedCount: missingAssetIds.length + bulkAssetIds.length
+  };
+}
+
+function editContainerSearchText(container, summary) {
+  const groupText = (summary.groups || [])
+    .flatMap(group => [group.department, group.brand, group.model, group.description])
+    .join(' ');
+
+  return [
+    container?.id,
+    ...(container?.assetIds || []),
+    groupText
+  ].join(' ').toLowerCase();
+}
+
+function modelGroupMatchesEditGroup(group, department, brand, model) {
+  return (
+    normalizeDepartmentCode(group?.department || 'UN') === normalizeDepartmentCode(department || 'UN') &&
+    String(group?.brand || '') === String(brand || '') &&
+    String(group?.model || '') === String(model || '')
+  );
+}
+
+function getCurrentEditModelQuantity(eventData, group) {
+  return Object.values(eventData?.modelGroups || {}).reduce((total, modelGroup) => {
+    if (!modelGroupMatchesEditGroup(modelGroup, group.department, group.brand, group.model)) {
+      return total;
+    }
+    return total + Number(modelGroup.requiredQuantity || 0);
+  }, 0);
+}
+
+function getEditModelPhysicalCount(group) {
+  const availabilityEntry = (window.currentEditAvailabilityList || []).find(entry =>
+    modelGroupMatchesEditGroup(entry, group.department, group.brand, group.model)
+  );
+
+  if (availabilityEntry) {
+    return Number(availabilityEntry.physical || 0);
+  }
+
+  return (window.currentEditAvailableAssets || []).reduce((total, asset) => {
+    if (!modelGroupMatchesEditGroup(asset, group.department, group.brand, group.model)) {
+      return total;
+    }
+    return total + (asset.isBulk ? Number(asset.quantity || 1) : 1);
+  }, 0);
+}
+
+async function refreshEditEventAfterModelChange(eventId) {
+  const [eventResponse, availabilityResponse] = await Promise.all([
+    apiCall(`/api/events/${eventId}`),
+    apiCall(`/api/events/${eventId}/availability`)
+  ]);
+
+  window.currentEditEvent = eventResponse.data;
+  window.currentEditAvailabilityList = availabilityResponse.data || [];
+
+  await updateModelRequirementsSection(eventId);
+  await refreshEventOverviewViews();
+
+  const currentSearchTerm =
+    document.querySelector('#edit-assets-tab input[placeholder*="Search available asset models"]')?.value;
+
+  if (currentSearchTerm && currentSearchTerm.length >= 2) {
+    filterAvailableModels(currentSearchTerm);
+  }
+}
+
+async function addContainerContentsToEvent(eventId, containerId) {
+  const cleanContainerId = String(containerId || '').trim();
+  if (!cleanContainerId) {
+    showNotification('error', 'Container ID is required');
+    return;
+  }
+
+  let container = (window.currentEditContainers || []).find(item =>
+    String(item?.id || '') === cleanContainerId
+  );
+
+  if (!container) {
+    container = await getContainerById(cleanContainerId, true);
+    if (container) {
+      const existing = (window.currentEditContainers || []).filter(item =>
+        String(item?.id || '') !== cleanContainerId
+      );
+      window.currentEditContainers = [...existing, container];
+    }
+  }
+
+  if (!container) {
+    showNotification('error', `Container ${cleanContainerId} was not found`);
+    return;
+  }
+
+  const assetLookup = buildEditAvailableAssetLookup(window.currentEditAvailableAssets || []);
+  const summary = buildContainerAvailableModelSummary(container, assetLookup);
+
+  if (!summary.groups.length) {
+    showNotification('warning', `Container ${cleanContainerId} has no available asset contents to add`);
+    return;
+  }
+
+  let eventData = window.currentEditEvent;
+  if (!eventData || Number(eventData.id) !== Number(eventId)) {
+    const eventResponse = await apiCall(`/api/events/${eventId}`);
+    eventData = eventResponse.data;
+    window.currentEditEvent = eventData;
+  }
+
+  const overLimitGroup = summary.groups.find(group => {
+    const physical = getEditModelPhysicalCount(group);
+    const currentlyRequested = getCurrentEditModelQuantity(eventData, group);
+    group.physicalCount = physical;
+    group.currentlyRequested = currentlyRequested;
+    return physical > 0 && currentlyRequested + Number(group.count || 0) > physical;
+  });
+
+  if (overLimitGroup) {
+    showNotification(
+      'error',
+      `Cannot add container ${cleanContainerId}. ${overLimitGroup.brand} ${overLimitGroup.model} would exceed inventory (${overLimitGroup.currentlyRequested} already requested, ${overLimitGroup.count} in container, ${overLimitGroup.physicalCount} total).`
+    );
+    return;
+  }
+
+  const buttons = Array.from(document.querySelectorAll('.add-container-models-btn'))
+    .filter(button => button.getAttribute('data-container-id') === cleanContainerId);
+  buttons.forEach(button => {
+    button.disabled = true;
+    button.textContent = 'Adding...';
+  });
+
+  let addedGroups = 0;
+
+  try {
+    for (const group of summary.groups) {
+      await apiCall(`/api/events/${eventId}/models`, 'POST', {
+        brand: group.brand,
+        model: group.model,
+        department: group.department,
+        description: group.description || '',
+        quantity: Number(group.count || 1),
+      });
+      addedGroups++;
+    }
+
+    const skippedText = summary.skippedCount ? ` (${summary.skippedCount} skipped)` : '';
+    showNotification(
+      'success',
+      `Added container ${cleanContainerId}: ${summary.usableCount} asset${summary.usableCount === 1 ? '' : 's'} across ${summary.groups.length} model${summary.groups.length === 1 ? '' : 's'}${skippedText}`
+    );
+  } catch (error) {
+    showNotification('error', `Failed to add container contents: ${error.message}`);
+  } finally {
+    if (addedGroups > 0) {
+      await refreshEditEventAfterModelChange(eventId);
+    }
+
+    buttons.forEach(button => {
+      button.disabled = false;
+      button.textContent = 'Add Contents';
+    });
+  }
+}
+
 function filterAvailableModels(searchTerm) {
   const container = document.getElementById("available-models-container");
   const availableAssets = window.currentEditAvailableAssets || [];
+  const availableContainers = window.currentEditContainers || [];
   const eventId = window.currentEditEventId;
   const availabilityList = window.currentEditAvailabilityList || [];
 
@@ -13709,32 +13969,18 @@ function filterAvailableModels(searchTerm) {
 
   if (!searchTerm || searchTerm.length < 2) {
     container.innerHTML =
-      '<div style="text-align: center; color: #666; padding: 20px;">Type at least 2 characters to search...</div>';
+      '<div style="text-align: center; color: #666; padding: 20px;">Type at least 2 characters to search asset models or containers...</div>';
     return;
   }
 
-  // Group ALL non-missing/OOC assets by model type (physical pool).
+  // Group the available physical pool by model type.
   const modelGroups = {};
   availableAssets.forEach(asset => {
-    const modelKey = `${asset.department}|${asset.brand}|${asset.model}`;
-    if (!modelGroups[modelKey]) {
-      modelGroups[modelKey] = {
-        department: asset.department,
-        brand: asset.brand,
-        model: asset.model,
-        description: '',
-        descriptionParts: [],
-        count: 0,     // physical count
-        assets: []
-      };
-    }
-    const description = String(asset.description || '').trim();
-    if (description && !modelGroups[modelKey].descriptionParts.includes(description)) {
-      modelGroups[modelKey].descriptionParts.push(description);
-      modelGroups[modelKey].description = modelGroups[modelKey].descriptionParts.sort().join(' / ');
-    }
-    modelGroups[modelKey].count += asset.isBulk ? Number(asset.quantity || 1) : 1;
-    modelGroups[modelKey].assets.push(asset);
+    addAssetToEditModelGroup(
+      modelGroups,
+      asset,
+      asset.isBulk ? Number(asset.quantity || 1) : 1
+    );
   });
 
   // Filter models by search
@@ -13744,8 +13990,16 @@ function filterAvailableModels(searchTerm) {
     return searchableText.includes(searchLower);
   });
 
-  if (filteredModels.length === 0) {
-    container.innerHTML = '<div style="text-align: center; color: #666; padding: 20px;">No matching asset models found.</div>';
+  const assetLookup = buildEditAvailableAssetLookup(availableAssets);
+  const filteredContainers = availableContainers
+    .map(containerItem => {
+      const summary = buildContainerAvailableModelSummary(containerItem, assetLookup);
+      return { container: containerItem, summary };
+    })
+    .filter(item => editContainerSearchText(item.container, item.summary).includes(searchLower));
+
+  if (filteredModels.length === 0 && filteredContainers.length === 0) {
+    container.innerHTML = '<div style="text-align: center; color: #666; padding: 20px;">No matching asset models or containers found.</div>';
     return;
   }
 
@@ -13770,6 +14024,45 @@ function filterAvailableModels(searchTerm) {
   };
 
   let html = '';
+  filteredContainers.slice(0, 10).forEach(item => {
+    const containerItem = item.container;
+    const summary = item.summary;
+    const containerId = String(containerItem?.id || '');
+    const canAdd = summary.groups.length > 0;
+    const modelSummary = summary.groups.length
+      ? summary.groups.slice(0, 4).map(group =>
+          `${group.count}x ${escapeHtml(group.brand)} ${escapeHtml(group.model)}`
+        ).join(', ')
+      : 'No available contents';
+    const remainingModels = Math.max(0, summary.groups.length - 4);
+    const skippedParts = [];
+
+    if (summary.missingAssetIds.length) {
+      skippedParts.push(`${summary.missingAssetIds.length} unavailable`);
+    }
+    if (summary.bulkAssetIds.length) {
+      skippedParts.push(`${summary.bulkAssetIds.length} bulk skipped`);
+    }
+
+    html += `
+      <div style="padding: 12px; border-bottom: 1px solid #f1f1f1; display: flex; justify-content: space-between; align-items: center; gap: 12px;">
+        <div style="flex: 1; min-width: 0;">
+          <div style="font-weight: 600; margin-bottom: 4px;">Container ${escapeHtml(containerId)}</div>
+          <div style="color: #666; font-size: 13px; margin-bottom: 2px;">${modelSummary}${remainingModels ? `, +${remainingModels} more` : ''}</div>
+          <div style="font-size: 12px; color: ${canAdd ? '#28a745' : '#dc3545'};">
+            ${summary.usableCount} addable asset${summary.usableCount === 1 ? '' : 's'}${skippedParts.length ? ` (${skippedParts.join(', ')})` : ''}
+          </div>
+        </div>
+        <button class="btn btn-primary add-container-models-btn" style="padding: 6px 12px; font-size: 12px; white-space: nowrap;"
+                data-event-id="${eventId}"
+                data-container-id="${escapeHtmlAttribute(containerId)}"
+                ${canAdd ? '' : 'disabled'}>
+          Add Contents
+        </button>
+      </div>
+    `;
+  });
+
   filteredModels.slice(0, 20).forEach(model => {
     const qtyInputId = makeQtyInputId(
       model.department,
@@ -14330,6 +14623,16 @@ document.addEventListener("DOMContentLoaded", function () {
           
           if (eventId && brand && model && department) {
               addModelToEvent(eventId, brand, model, department, description);
+          }
+      }
+
+      if (e.target.classList.contains('add-container-models-btn')) {
+          e.preventDefault();
+          const eventId = parseInt(e.target.getAttribute('data-event-id'));
+          const containerId = e.target.getAttribute('data-container-id');
+
+          if (eventId && containerId) {
+              addContainerContentsToEvent(eventId, containerId);
           }
       }
 
