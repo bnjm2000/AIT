@@ -1089,7 +1089,7 @@ DN100#05,Klark Teknik,DN100,,,,False,False,False,False,False,1,,AX,Store,
 DN200#01,Klark Teknik,DN200,,,,False,False,False,False,False,1,,AX,Store,
 DN200#02,Klark Teknik,DN200,,,,False,False,False,False,False,1,,AX,Store,
 DN200#03,Klark Teknik,DN200,,,,False,False,False,False,False,1,,AX,Store,Store
-PULSE2#01,Analogue Way,Pulse 2,,Video Switcher,,False,False,False,False,False,1,,VX,Store,Store
+PULSE2#01,Analogue Way,Pulse 2,,Video Switcher,,False,False,False,False,False,1,,VX,Store,NSBA Rooftop Opening Ceremony @ Temple
 ISOG2#01,Blackmagic Design,Atem Mini Extreme ISO G2,14156847,Video Switcher,2025-11-13,False,False,False,False,False,1,,VX,Store,Store
 40INCH#01,Sharp,,,"40"" TV",,False,False,False,False,False,1,,VX,Store,Store
 40INCH#02,Sharp,,,"40"" TV",,False,False,False,False,False,1,,VX,Store,Store
@@ -1147,7 +1147,7 @@ MASTER4KTX#01,Accsoon,Cineview Master 4K TX,WIT07-0137-BE0F,Wireless SDI/HDMI Tr
 MASTER4KTX#02,Accsoon,Cineview Master 4K TX,WIT07-0938-BE0B,Wireless SDI/HDMI Transmitter,2025-08-12,False,False,False,False,False,1,,VX,Store,
 MASTER4KRX#01,Accsoon,Cineview Master 4K RX,WIT07-0672-BE0F,Wireless SDI/HDMI Receiver,2025-08-12,False,False,False,False,False,1,,VX,Store,Store
 MASTER4KRX#02,Accsoon,Cineview Master 4K RX,WIT07-1438-BE0B,Wireless SDI/HDMI Receiver,2025-08-12,False,False,False,False,False,1,,VX,Store,
-MASTER4KRX#03,Accsoon,Cineview Master 4K RX,WIT07-1377-BE0B,Wireless SDI/HDMI Receiver,2025-08-12,False,False,False,False,False,1,,VX,Store,
+MASTER4KRX#03,Accsoon,Cineview Master 4K RX,WIT07-1377-BE0B,Wireless SDI/HDMI Receiver,2025-08-12,False,False,False,False,False,1,,VX,Store,NSBA Rooftop Opening Ceremony @ Temple
 PERFECTCUE#01,DSAN,PerfectCue Mini,24-24582,Professional Wireless Clicker,,False,False,False,False,False,1,,VX,Store,Store
 CLICKER#01,DSAN,PerfectCue Mini,,Professional Wireless Clicker,,False,False,False,False,False,1,"[{""date"":""2026/01/22"",""user"":""bnjm2000"",""description"":""Discovered that battery was dead (STPI Symposium @ 72-13)"",""type"":""Fault"",""cost"":"""",""changes"":[{""kind"":""ooc"",""action"":""marked""}],""source"":{}},{""date"":""2026/01/27"",""user"":""bnjm2000"",""description"":""Replaced battery. Tested working"",""type"":""Repair"",""cost"":"""",""changes"":[{""kind"":""ooc"",""action"":""cleared""}],""source"":{}}]",VX,Store,Store
 CLICKER#02,DSAN,PerfectCue Mini,,Professional Wireless Clicker,,False,False,False,False,False,1,"[{""id"":""1ac0ced61bc3e5892a4da6b1"",""date"":""2026/01/27"",""user"":""bnjm2000"",""description"":""Replaced battery."",""type"":""Preventative maintenance"",""cost"":"""",""changes"":[],""source"":{}}]",VX,Store,
@@ -1236,10 +1236,10 @@ ROXCYC#21,Silverstar,Roxcyc,MO13042000550010,Batten 1 meter RGBWA,,False,False,F
 ROXCYC#22,Silverstar,Roxcyc,MO13042000550078,Batten 1 meter RGBWA,,False,False,False,False,False,1,,LX,Store,Store
 ROXCYC#23,Silverstar,Roxcyc,MO13042000550082,Batten 1 meter RGBWA,,False,False,False,False,False,1,,LX,Store,Store
 ROXCYC#24,Silverstar,Roxcyc,MO13042000550088,Batten 1 meter RGBWA,,False,False,False,False,False,1,,LX,Store,Store
-LEGION#01,Lenovo,Legion 5 Pro,PF3R22QS,16inch Windows Laptop,,False,False,False,False,False,1,,VX,Store,Store
+LEGION#01,Lenovo,Legion 5 Pro,PF3R22QS,16inch Windows Laptop,,False,False,False,False,False,1,,VX,Store,NSBA Rooftop Opening Ceremony @ Temple
 LEGION#02,Lenovo,Legion 5 Pro,PF3R22RM,16inch Windows Laptop,,False,False,False,False,False,1,,VX,Store,Store
 LEGION#03,Lenovo,Legion 5 Pro,PF4LVD48,16inch Windows Laptop,,False,False,False,False,False,1,,VX,Store,Store
-LEGION#04,Lenovo,Legion 5 Pro,PF4LW7B4,16inch Windows Laptop,,False,False,False,False,False,1,,VX,Store,Store
+LEGION#04,Lenovo,Legion 5 Pro,PF4LW7B4,16inch Windows Laptop,,False,False,False,False,False,1,,VX,Store,NSBA Rooftop Opening Ceremony @ Temple
 MACBOOK#01,Apple,Macbook Pro (A1707),C02WG8EHHTD5,15.4inch Macbook Pro (2017),,False,False,False,False,False,1,,VX,Store,Store
 MACBOOK#02,Apple,Macbook Pro (A2442),M5P2V176XD,14inch Macbook Pro M1 Pro,,False,False,False,False,False,1,,AX,Store,Store
 LUMINODE12,Luminex,Luminode 12,,12 DMX Interface,2025-10-02,False,False,False,False,False,1,,LX,Store,Store
@@ -1301,15 +1301,15 @@ BULK-0026,China,Mini Profile - Daylight,,20W Mini Profile Light c/w Clamps,,Fals
 BULK-0027,Ultimate Support,TS-100B,,Air-powered speaker stand,,False,False,False,False,True,8,,AX,Store,
 BULK-0028,K&M,21338-000-55,,Distance Rod with Hand Crank,,False,False,False,False,True,4,,AX,Store,
 BULK-0029,K&M,21441-000-55,,Adapter sleeve ring lock,,False,False,False,False,True,4,,AX,Store,
-NPF750#01,KingMa,NP-F750,,NP-F Battery 4400mAh 32.6Wh,2026-05-27,False,False,False,False,False,1,,VX,Store,
-NPF750#02,KingMa,NP-F750,,NP-F Battery 4400mAh 32.6Wh,2026-05-27,False,False,False,False,False,1,,VX,Store,
+NPF750#01,KingMa,NP-F750,,NP-F Battery 4400mAh 32.6Wh,2026-05-27,False,False,False,False,False,1,,VX,Store,NSBA Rooftop Opening Ceremony @ Temple
+NPF750#02,KingMa,NP-F750,,NP-F Battery 4400mAh 32.6Wh,2026-05-27,False,False,False,False,False,1,,VX,Store,NSBA Rooftop Opening Ceremony @ Temple
 NPF750#03,KingMa,NP-F750,,NP-F Battery 4400mAh 32.6Wh,2026-05-27,False,False,False,False,False,1,,VX,Store,
 NPF750#04,KingMa,NP-F750,,NP-F Battery 4400mAh 32.6Wh,2026-05-27,False,False,False,False,False,1,,VX,Store,
-NPFCHARGER#01,KingMa,BM058-F550,,NP-F Battery Charger,2026-05-27,False,False,False,False,False,1,,VX,Store,
+NPFCHARGER#01,KingMa,BM058-F550,,NP-F Battery Charger,2026-05-27,False,False,False,False,False,1,,VX,Store,NSBA Rooftop Opening Ceremony @ Temple
 NPFCHARGER#02,KingMa,BM058-F550,,NP-F Battery Charger,2026-05-27,False,False,False,False,False,1,,VX,Store,
-POE#01,Ubiquiti,U-POE+,,PoE+ Injector,,False,False,False,False,False,1,,AX,Store,
-POE#02,Ubiquiti,U-POE+,,PoE+ Injector,,False,False,False,False,False,1,,AX,Store,
-U7OUTDOOR#01,Ubiquiti,U7 Outdoor,(BJ)9C05D6F6A844,All-weather WiFi 7 Access Point,,False,False,False,False,False,1,,AX,Store,
+POE#01,Ubiquiti,U-POE+,,PoE+ Injector,,False,False,False,False,False,1,,AX,Store,Store
+POE#02,Ubiquiti,U-POE+,,PoE+ Injector,,False,False,False,False,False,1,,AX,Store,NSBA Rooftop Opening Ceremony @ Temple
+U7OUTDOOR#01,Ubiquiti,U7 Outdoor,(BJ)9C05D6F6A844,All-weather WiFi 7 Access Point,,False,False,False,False,False,1,,AX,Store,NSBA Rooftop Opening Ceremony @ Temple
 RT2600AC#01,Synology,RT2600ac,2110P3N650301,Wireless Router,,False,False,False,False,False,1,,AX,Store,
 MEGARA300#01,Fenix,Megara 300,150252_1,Lifting Tower,,False,False,False,False,False,1,,AX,Store,
 MEGARA300#02,Fenix,Megara 300,150252_5,Lifting Tower,,False,True,False,False,False,1,"[{""id"":""4728ea7d3cd1903a22a1bce0"",""date"":""2026/05/22"",""user"":""bnjm2000"",""description"":""Handle broken (Dry hire: Avery Events)"",""type"":""Fault"",""cost"":"""",""changes"":[{""kind"":""ooc"",""action"":""marked""}],""source"":{}}]",AX,Store,
