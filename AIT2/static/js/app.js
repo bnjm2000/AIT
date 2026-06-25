@@ -13655,9 +13655,16 @@ async function removeAssetFromEvent(eventId, assetId) {
             await updateModelRequirementsSection(eventId);
             await refreshEventOverviewViews();
             
+            const customAsset = parseCustomAsset(assetId);
+            let removedAssetLabel = customAsset ? customAssetDisplayName(customAsset) : String(assetId || '').trim();
+            if (!customAsset && String(assetId || '').startsWith(CUSTOM_ASSET_PREFIX)) {
+                removedAssetLabel = 'the custom item';
+            }
             await showAppAlert({
-                title: 'Asset Removed',
-                message: `Asset ${assetId} removed successfully`,
+                title: 'Item Removed',
+                message: removedAssetLabel
+                    ? `Removed ${removedAssetLabel} from this event.`
+                    : 'Removed the item from this event.',
                 variant: 'info',
             });
         } else {
