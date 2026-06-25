@@ -460,7 +460,7 @@ function getEventExtraQuantity(event) {
   return Array.isArray(event.extraAssets) ? event.extraAssets.length : 0;
 }
 
-const PREPARE_QUICK_ADD_STORAGE_KEY = 'ait.prepare.quickAddEnabled';
+const PREPARE_QUICK_ADD_STORAGE_KEY = 'aim.prepare.quickAddEnabled';
 
 function getPrepareQuickAddEnabled() {
   try {

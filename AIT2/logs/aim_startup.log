@@ -1,0 +1,42 @@
+========================================
+Starting Avec Inventory Management: Thu, Jun 25, 2026  5:24:03 PM
+INFO:data_manager:All required files are present.
+INFO:__main__:Data manager initialized for company AVPL with folder: C:\Users\AVECp\Documents\AIT\AIT2\companies/AVPL/backend
+INFO:__main__:Background thread started - checking events every 5 minutes
+INFO:__main__:Background thread for event checking started successfully
+INFO:__main__:Background thread: data_manager is ready, starting checks
+INFO:__main__:Background thread started successfully after data_manager initialization
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Starting Avec Inventory Management at https://0.0.0.0:5443
+INFO:__main__:Checking 146 events for state updates (current date: 20260625)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+ * Serving Flask app 'app'
+ * Debug mode: off
+INFO:werkzeug:[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on https://127.0.0.1:5443
+ * Running on https://192.168.0.110:5443
+INFO:werkzeug:[33mPress CTRL+C to quit[0m
+INFO:werkzeug:192.168.0.1 - - [25/Jun/2026 17:24:13] "GET / HTTP/1.1" 200 -
+INFO:werkzeug:192.168.0.1 - - [25/Jun/2026 17:24:13] "GET /static/js/app.js HTTP/1.1" 200 -
+INFO:werkzeug:192.168.0.1 - - [25/Jun/2026 17:24:13] "GET /api/pdf-settings/logo HTTP/1.1" 200 -
+INFO:__main__:Getting stats - Events: 146, Inventory: 1320
+INFO:__main__:Successfully got assigned assets count: 104
+INFO:__main__:Returning stats: {'totalEvents': 146, 'activeEvents': 8, 'totalAssets': 1892, 'deployedAssets': 104, 'missingAssets': 1, 'oocAssets': 5, 'degradedAssets': 4, 'decommissionedAssets': 0, 'disposedAssets': 0}
+INFO:werkzeug:192.168.0.1 - - [25/Jun/2026 17:24:13] "GET /api/stats HTTP/1.1" 200 -
+INFO:werkzeug:192.168.0.1 - - [25/Jun/2026 17:24:13] "GET /api/pdf-settings HTTP/1.1" 200 -
+INFO:werkzeug:192.168.0.1 - - [25/Jun/2026 17:24:13] "GET /api/current-user HTTP/1.1" 200 -
+INFO:werkzeug:192.168.0.1 - - [25/Jun/2026 17:24:14] "GET /api/pdf-settings/logo?v=1750644779 HTTP/1.1" 200 -
+INFO:werkzeug:192.168.0.1 - - [25/Jun/2026 17:24:14] "GET /api/companies HTTP/1.1" 200 -
+INFO:werkzeug:192.168.0.1 - - [25/Jun/2026 17:24:14] "GET /api/departments HTTP/1.1" 200 -
+INFO:werkzeug:192.168.0.1 - - [25/Jun/2026 17:24:14] "GET /api/realtime/stream?clientId=ac4a5e2e-9f31-45b7-b4dd-98dea77ce1e1 HTTP/1.1" 200 -
+INFO:__main__:Getting stats - Events: 146, Inventory: 1320
+INFO:__main__:Successfully got assigned assets count: 104
+INFO:__main__:Returning stats: {'totalEvents': 146, 'activeEvents': 8, 'totalAssets': 1892, 'deployedAssets': 104, 'missingAssets': 1, 'oocAssets': 5, 'degradedAssets': 4, 'decommissionedAssets': 0, 'disposedAssets': 0}
+INFO:werkzeug:192.168.0.1 - - [25/Jun/2026 17:24:14] "GET /api/stats HTTP/1.1" 200 -
+INFO:werkzeug:192.168.0.1 - - [25/Jun/2026 17:24:14] "GET /api/events HTTP/1.1" 200 -
+INFO:__main__:Action logged: User bnjm2000 logged out from web interface
+INFO:werkzeug:192.168.0.1 - - [25/Jun/2026 17:24:17] "[32mGET /logout HTTP/1.1[0m" 302 -
+INFO:__main__:Reloaded shared CSV data after external change
+INFO:werkzeug:192.168.0.1 - - [25/Jun/2026 17:24:17] "GET /login HTTP/1.1" 200 -

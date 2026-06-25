@@ -2,13 +2,13 @@
 
 APP_DIR="/c/Users/AVECp/Documents/AIT/AIT2"
 LOG_DIR="$APP_DIR/logs"
-LOG_FILE="$LOG_DIR/ait_startup.log"
+LOG_FILE="$LOG_DIR/aim_startup.log"
 
 mkdir -p "$LOG_DIR"
 cd "$APP_DIR" || exit 1
 
 echo "========================================" >> "$LOG_FILE"
-echo "Starting AVEC Inventory Tracker: $(date)" >> "$LOG_FILE"
+echo "Starting Avec Inventory Management: $(date)" >> "$LOG_FILE"
 
 # Use virtual environment if it exists
 if [ -f "$APP_DIR/.venv/Scripts/activate" ]; then

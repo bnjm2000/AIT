@@ -1,4 +1,4 @@
-"""Flask application for the AVEC Inventory Tracker."""
+"""Flask application for Avec Inventory Management."""
 
 import csv
 import json
@@ -635,7 +635,7 @@ def _generate_self_signed_certificate(cert_file, key_file):
     private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     subject = issuer = x509.Name([
         x509.NameAttribute(NameOID.COUNTRY_NAME, 'SG'),
-        x509.NameAttribute(NameOID.ORGANIZATION_NAME, 'AVEC Inventory Tracker'),
+        x509.NameAttribute(NameOID.ORGANIZATION_NAME, 'Avec Inventory Management'),
         x509.NameAttribute(NameOID.COMMON_NAME, hosts[0] if hosts else 'localhost'),
     ])
 
@@ -714,7 +714,7 @@ def run_https_app(flask_app):
     flask_app.config['PREFERRED_URL_SCHEME'] = scheme
     flask_app.config['SESSION_COOKIE_SECURE'] = bool(ssl_context)
     flask_app.config.setdefault('SESSION_COOKIE_SAMESITE', 'Lax')
-    logger.info('Starting AVEC Inventory Tracker at %s://%s:%s', scheme, host, port)
+    logger.info('Starting Avec Inventory Management at %s://%s:%s', scheme, host, port)
 
     flask_app.run(
         debug=os.environ.get('FLASK_DEBUG') == '1',
