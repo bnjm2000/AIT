@@ -1037,14 +1037,19 @@ const BARCODE_SCANNER_SCRIPT_URLS = [
   '/static/js/vendor/html5-qrcode.min.js',
   'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js'
 ];
-const BARCODE_SCANNER_NATIVE_INTERVAL_MS = 125;
+const BARCODE_SCANNER_NATIVE_INTERVAL_MS = 80;
+const BARCODE_SCANNER_NATIVE_MIN_FRAME_INTERVAL_MS = 45;
+const BARCODE_SCANNER_NATIVE_VARIANT_INTERVAL_MS = 320;
 let barcodeScannerScriptPromise = null;
 let barcodeScannerState = {
   html5: null,
   stream: null,
   nativeTimer: null,
+  nativeFrameHandle: null,
   nativeVideo: null,
   nativeDetector: null,
+  nativeLastScanAt: 0,
+  nativeLastVariantScanAt: 0,
   onScan: null,
   handling: false,
   statusTimer: null
@@ -1052,7 +1057,6 @@ let barcodeScannerState = {
 
 const HTML5_QRCODE_FORMAT_NAMES = [
   'QR_CODE',
-  'AZTEC',
   'CODE_128',
   'CODE_39',
   'CODE_93',
@@ -1061,13 +1065,9 @@ const HTML5_QRCODE_FORMAT_NAMES = [
   'EAN_13',
   'EAN_8',
   'ITF',
-  'MAXICODE',
   'PDF_417',
-  'RSS_14',
-  'RSS_EXPANDED',
   'UPC_A',
-  'UPC_E',
-  'UPC_EAN_EXTENSION'
+  'UPC_E'
 ];
 
 const NATIVE_BARCODE_FORMATS = [
@@ -1315,18 +1315,64 @@ function scheduleBarcodeScannerHint() {
 function getBarcodeScannerVideoConstraints(overrides = {}) {
   return {
     facingMode: { ideal: 'environment' },
-    width: { ideal: 1920 },
-    height: { ideal: 1080 },
+    width: { ideal: 1920, min: 640 },
+    height: { ideal: 1080, min: 480 },
+    frameRate: { ideal: 30, min: 15 },
+    focusMode: { ideal: 'continuous' },
+    resizeMode: 'crop-and-scale',
     ...overrides
   };
 }
 
 function isLikelyRearCameraLabel(label) {
-  return /back|rear|environment|world|wide/i.test(String(label || ''));
+  const value = String(label || '');
+  return /back|rear|environment|world|wide/i.test(value) && !/front|user|facetime/i.test(value);
+}
+
+function getRearCameraScore(label) {
+  const value = String(label || '').toLowerCase();
+  let score = isLikelyRearCameraLabel(value) ? 100 : 0;
+
+  if (/back|rear|environment|world/.test(value)) score += 20;
+  if (/main|wide/.test(value)) score += 8;
+  if (/ultra|tele|depth|front|user|facetime/.test(value)) score -= 15;
+
+  return score;
+}
+
+function compareBarcodeScannerCameras(a, b) {
+  return getRearCameraScore(b?.label) - getRearCameraScore(a?.label);
 }
 
 function getPrimaryVideoTrack(stream) {
   return stream?.getVideoTracks?.()[0] || null;
+}
+
+function getPreferredBarcodeScannerZoom(capabilities) {
+  const zoom = capabilities?.zoom;
+  if (!zoom || typeof zoom !== 'object') return null;
+
+  const min = Number.isFinite(zoom.min) ? zoom.min : 1;
+  const max = Number.isFinite(zoom.max) ? zoom.max : min;
+  if (max <= min) return null;
+
+  const preferred = Math.min(1.6, max);
+  const clamped = Math.max(min, preferred);
+  if (clamped <= min) return null;
+
+  if (Number.isFinite(zoom.step) && zoom.step > 0) {
+    return min + (Math.round((clamped - min) / zoom.step) * zoom.step);
+  }
+
+  return clamped;
+}
+
+async function applyBarcodeScannerTrackHint(track, constraint) {
+  try {
+    await track.applyConstraints({ advanced: [constraint] });
+  } catch (e) {
+    // Camera controls are inconsistent across mobile browsers.
+  }
 }
 
 async function enhanceBarcodeScannerStream(stream) {
@@ -1340,23 +1386,19 @@ async function enhanceBarcodeScannerStream(stream) {
     return;
   }
 
-  const advanced = [];
   if (Array.isArray(capabilities.focusMode) && capabilities.focusMode.includes('continuous')) {
-    advanced.push({ focusMode: 'continuous' });
+    await applyBarcodeScannerTrackHint(track, { focusMode: 'continuous' });
   }
   if (Array.isArray(capabilities.exposureMode) && capabilities.exposureMode.includes('continuous')) {
-    advanced.push({ exposureMode: 'continuous' });
+    await applyBarcodeScannerTrackHint(track, { exposureMode: 'continuous' });
   }
   if (Array.isArray(capabilities.whiteBalanceMode) && capabilities.whiteBalanceMode.includes('continuous')) {
-    advanced.push({ whiteBalanceMode: 'continuous' });
+    await applyBarcodeScannerTrackHint(track, { whiteBalanceMode: 'continuous' });
   }
 
-  if (advanced.length === 0) return;
-
-  try {
-    await track.applyConstraints({ advanced });
-  } catch (e) {
-    // Camera focus/exposure hints are best effort and vary by browser.
+  const preferredZoom = getPreferredBarcodeScannerZoom(capabilities);
+  if (preferredZoom !== null) {
+    await applyBarcodeScannerTrackHint(track, { zoom: preferredZoom });
   }
 }
 
@@ -1393,11 +1435,9 @@ async function getBarcodeScannerMediaStream() {
   ) {
     try {
       const devices = await navigator.mediaDevices.enumerateDevices();
-      const rearCamera = devices.find(device => (
-        device.kind === 'videoinput' &&
-        device.deviceId &&
-        isLikelyRearCameraLabel(device.label)
-      ));
+      const rearCamera = devices
+        .filter(device => device.kind === 'videoinput' && device.deviceId && isLikelyRearCameraLabel(device.label))
+        .sort(compareBarcodeScannerCameras)[0];
 
       if (rearCamera) {
         const rearStream = await navigator.mediaDevices.getUserMedia({
@@ -1446,13 +1486,13 @@ function getBarcodeScannerQrbox(viewfinderWidth, viewfinderHeight) {
   const height = Number(viewfinderHeight) || 0;
 
   if (!width || !height) {
-    return { width: 320, height: 200 };
+    return { width: 320, height: 220 };
   }
 
-  const scanWidth = Math.min(Math.floor(width * 0.96), 680);
-  const scanHeight = Math.min(Math.floor(height * 0.86), 520);
+  const scanWidth = Math.min(Math.floor(width * 0.96), 720);
+  const scanHeight = Math.min(Math.floor(height * 0.62), 420);
   const minWidth = Math.min(240, width);
-  const minHeight = Math.min(220, height);
+  const minHeight = Math.min(180, height);
 
   return {
     width: Math.min(width, Math.max(minWidth, scanWidth)),
@@ -1462,7 +1502,7 @@ function getBarcodeScannerQrbox(viewfinderWidth, viewfinderHeight) {
 
 function getBarcodeScannerCameraConfig() {
   return {
-    fps: 18,
+    fps: 24,
     qrbox: getBarcodeScannerQrbox,
     disableFlip: true,
     experimentalFeatures: {
@@ -1529,6 +1569,15 @@ async function stopBarcodeScannerCamera(clearReader = true) {
     barcodeScannerState.nativeTimer = null;
   }
 
+  if (
+    barcodeScannerState.nativeFrameHandle !== null &&
+    barcodeScannerState.nativeVideo &&
+    typeof barcodeScannerState.nativeVideo.cancelVideoFrameCallback === 'function'
+  ) {
+    barcodeScannerState.nativeVideo.cancelVideoFrameCallback(barcodeScannerState.nativeFrameHandle);
+  }
+  barcodeScannerState.nativeFrameHandle = null;
+
   barcodeScannerState.nativeDetector = null;
 
   if (barcodeScannerState.html5) {
@@ -1553,6 +1602,8 @@ async function stopBarcodeScannerCamera(clearReader = true) {
   }
 
   barcodeScannerState.nativeVideo = null;
+  barcodeScannerState.nativeLastScanAt = 0;
+  barcodeScannerState.nativeLastVariantScanAt = 0;
 
   if (clearReader) {
     const reader = document.getElementById('barcodeScannerReader');
@@ -1583,6 +1634,119 @@ async function handleBarcodeScanResult(rawValue) {
   }
 }
 
+function enhanceBarcodeScannerCanvas(context, width, height, amount = 1.45) {
+  const imageData = context.getImageData(0, 0, width, height);
+  const data = imageData.data;
+
+  for (let i = 0; i < data.length; i += 4) {
+    const gray = (data[i] * 0.299) + (data[i + 1] * 0.587) + (data[i + 2] * 0.114);
+    const boosted = Math.max(0, Math.min(255, ((gray - 128) * amount) + 128));
+    data[i] = boosted;
+    data[i + 1] = boosted;
+    data[i + 2] = boosted;
+  }
+
+  context.putImageData(imageData, 0, 0);
+}
+
+function getBarcodeScannerLiveCrop(video, mode) {
+  const sourceWidth = video.videoWidth || 0;
+  const sourceHeight = video.videoHeight || 0;
+  if (!sourceWidth || !sourceHeight) return null;
+
+  if (mode === 'strip') {
+    const height = Math.max(Math.round(sourceHeight * 0.34), Math.min(sourceHeight, 360));
+    return {
+      x: 0,
+      y: Math.max(0, Math.floor((sourceHeight - height) / 2)),
+      width: sourceWidth,
+      height: Math.min(sourceHeight, height)
+    };
+  }
+
+  if (mode === 'square') {
+    const side = Math.floor(Math.min(sourceWidth, sourceHeight) * 0.82);
+    return {
+      x: Math.max(0, Math.floor((sourceWidth - side) / 2)),
+      y: Math.max(0, Math.floor((sourceHeight - side) / 2)),
+      width: side,
+      height: side
+    };
+  }
+
+  return { x: 0, y: 0, width: sourceWidth, height: sourceHeight };
+}
+
+function createBarcodeScannerLiveCanvas(video, { mode = 'full', contrast = false } = {}) {
+  const crop = getBarcodeScannerLiveCrop(video, mode);
+  if (!crop) return null;
+
+  const maxSide = 1400;
+  const scale = Math.min(1, maxSide / Math.max(crop.width, crop.height));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(crop.width * scale));
+  canvas.height = Math.max(1, Math.round(crop.height * scale));
+
+  const context = canvas.getContext('2d');
+  context.drawImage(
+    video,
+    crop.x,
+    crop.y,
+    crop.width,
+    crop.height,
+    0,
+    0,
+    canvas.width,
+    canvas.height
+  );
+
+  if (contrast) {
+    enhanceBarcodeScannerCanvas(context, canvas.width, canvas.height, 1.55);
+  }
+
+  return canvas;
+}
+
+async function detectNativeBarcodesInVideo(detector, video) {
+  const codes = await detector.detect(video);
+  if (codes && codes.length > 0) return codes;
+
+  const now = performance.now();
+  if (now - barcodeScannerState.nativeLastVariantScanAt < BARCODE_SCANNER_NATIVE_VARIANT_INTERVAL_MS) {
+    return [];
+  }
+  barcodeScannerState.nativeLastVariantScanAt = now;
+
+  const variants = [
+    { mode: 'strip' },
+    { mode: 'square' },
+    { mode: 'strip', contrast: true },
+    { mode: 'square', contrast: true }
+  ];
+
+  for (const options of variants) {
+    const canvas = createBarcodeScannerLiveCanvas(video, options);
+    if (!canvas) continue;
+
+    const variantCodes = await detector.detect(canvas);
+    if (variantCodes && variantCodes.length > 0) return variantCodes;
+  }
+
+  return [];
+}
+
+function scheduleNativeBarcodeDetection(video, detectLoop) {
+  if (typeof video.requestVideoFrameCallback === 'function') {
+    barcodeScannerState.nativeFrameHandle = video.requestVideoFrameCallback(() => {
+      barcodeScannerState.nativeFrameHandle = null;
+      detectLoop();
+    });
+    return;
+  }
+
+  barcodeScannerState.nativeTimer = setTimeout(detectLoop, BARCODE_SCANNER_NATIVE_INTERVAL_MS);
+}
+
 async function startNativeBarcodeDetectionLoop(video) {
   if (!window.BarcodeDetector || !video) return false;
 
@@ -1593,13 +1757,22 @@ async function startNativeBarcodeDetectionLoop(video) {
   }
 
   barcodeScannerState.nativeVideo = video;
+  barcodeScannerState.nativeLastScanAt = 0;
+  barcodeScannerState.nativeLastVariantScanAt = 0;
 
   const detectLoop = async () => {
     if (barcodeScannerState.nativeVideo !== video || barcodeScannerState.handling) return;
 
+    const now = performance.now();
+    if (now - barcodeScannerState.nativeLastScanAt < BARCODE_SCANNER_NATIVE_MIN_FRAME_INTERVAL_MS) {
+      scheduleNativeBarcodeDetection(video, detectLoop);
+      return;
+    }
+    barcodeScannerState.nativeLastScanAt = now;
+
     try {
       if (video.readyState >= 2) {
-        const codes = await detector.detect(video);
+        const codes = await detectNativeBarcodesInVideo(detector, video);
         if (barcodeScannerState.nativeVideo !== video || barcodeScannerState.handling) return;
         if (codes && codes.length > 0) {
           await handleBarcodeScanResult(codes[0].rawValue || '');
@@ -1611,7 +1784,7 @@ async function startNativeBarcodeDetectionLoop(video) {
     }
 
     if (barcodeScannerState.nativeVideo !== video || barcodeScannerState.handling) return;
-    barcodeScannerState.nativeTimer = setTimeout(detectLoop, BARCODE_SCANNER_NATIVE_INTERVAL_MS);
+    scheduleNativeBarcodeDetection(video, detectLoop);
   };
 
   detectLoop();
@@ -1683,13 +1856,15 @@ async function getHtml5QrcodeCameraRequests() {
     (cameras || []).forEach(camera => {
       if (!camera?.id) return;
       if (isLikelyRearCameraLabel(camera.label)) {
-        rearCameras.push(camera.id);
+        rearCameras.push(camera);
       } else {
-        otherCameras.push(camera.id);
+        otherCameras.push(camera);
       }
     });
 
-    cameraRequests.push(...rearCameras, ...otherCameras);
+    rearCameras.sort(compareBarcodeScannerCameras);
+    otherCameras.sort(compareBarcodeScannerCameras);
+    cameraRequests.push(...rearCameras.map(camera => camera.id), ...otherCameras.map(camera => camera.id));
   } catch (e) {
     // Enumerating cameras may fail until permission is granted; constraints above still work.
   }
@@ -1857,16 +2032,7 @@ function createBarcodeScannerPhotoCanvas(image, { rotation = 0, contrast = false
   context.restore();
 
   if (contrast) {
-    const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-    const data = imageData.data;
-    for (let i = 0; i < data.length; i += 4) {
-      const gray = (data[i] * 0.299) + (data[i + 1] * 0.587) + (data[i + 2] * 0.114);
-      const boosted = Math.max(0, Math.min(255, ((gray - 128) * 1.45) + 128));
-      data[i] = boosted;
-      data[i + 1] = boosted;
-      data[i + 2] = boosted;
-    }
-    context.putImageData(imageData, 0, 0);
+    enhanceBarcodeScannerCanvas(context, canvas.width, canvas.height);
   }
 
   return canvas;
@@ -1901,7 +2067,10 @@ async function detectBarcodeInPhotoWithNativeDetector(file) {
     { contrast: true },
     { rotation: 90 },
     { rotation: 180 },
-    { rotation: 270 }
+    { rotation: 270 },
+    { rotation: 90, contrast: true },
+    { rotation: 180, contrast: true },
+    { rotation: 270, contrast: true }
   ];
 
   for (const options of variantOptions) {
