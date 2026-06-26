@@ -211,6 +211,82 @@ class EventAvailabilityOverlapTests(unittest.TestCase):
         self.assertEqual(response.get_json()['data']['assetId'], marker)
         self.assertIn(marker, target.actually_prepared)
 
+    def test_bulk_ooc_maintenance_log_reduces_available_quantity_until_resolved(self):
+        self.make_event(100)
+        self.login_as()
+
+        response = self.client.post('/api/assets/BULK-0001/maintain', json={
+            'logEntry': 'One unit has a failed connector',
+            'maintenanceDate': '2026-05-20',
+            'logType': 'Fault',
+            'assetStatus': 'ooc',
+        })
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+
+        assets_response = self.client.get('/api/assets')
+        bulk_asset = next(item for item in assets_response.get_json()['data'] if item['bulkId'] == 'BULK-0001')
+        self.assertEqual(bulk_asset['availableQuantity'], 5)
+        self.assertEqual(bulk_asset['preparableQuantity'], 5)
+        self.assertEqual(bulk_asset['bulkOOCQuantity'], 1)
+        self.assertEqual(len(bulk_asset['bulkMaintenanceLogbook']), 1)
+        self.assertFalse(bulk_asset['bulkMaintenanceLogbook'][0]['isResolved'])
+
+        available_response = self.client.get('/api/assets/available-for-event/100')
+        available_bulk = next(item for item in available_response.get_json()['data'] if item['bulkId'] == 'BULK-0001')
+        self.assertEqual(available_bulk['availableQuantity'], 5)
+        self.assertEqual(available_bulk['preparableQuantity'], 5)
+
+        fault = app_module._bulk_maintenance_fault_entries(self.data_manager.inventory['BULK-0001'])[0]
+        response = self.client.post(
+            f"/api/assets/BULK-0001/bulk-maintenance/{fault['id']}/resolve",
+            json={
+                'logEntry': 'Connector replaced and tested',
+                'maintenanceDate': '2026-05-21',
+                'logType': 'Repair',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        assets_response = self.client.get('/api/assets')
+        bulk_asset = next(item for item in assets_response.get_json()['data'] if item['bulkId'] == 'BULK-0001')
+        self.assertEqual(bulk_asset['availableQuantity'], 6)
+        self.assertEqual(bulk_asset['preparableQuantity'], 6)
+        self.assertEqual(bulk_asset['bulkOOCQuantity'], 0)
+        self.assertTrue(bulk_asset['bulkMaintenanceLogbook'][0]['isResolved'])
+
+    def test_degraded_bulk_quantity_can_prepare_with_warning(self):
+        target = self.make_event(
+            100,
+            prepared=['[MODEL]AX|TestBrand|BulkModel|6|Bulk item'],
+        )
+        self.login_as()
+
+        for unit_number in range(1, 7):
+            response = self.client.post('/api/assets/BULK-0001/maintain', json={
+                'logEntry': f'Unit {unit_number} has cosmetic grille damage',
+                'maintenanceDate': '2026-05-20',
+                'logType': 'Fault',
+                'assetStatus': 'degraded',
+            })
+            self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+
+        available_response = self.client.get('/api/assets/available-for-event/100')
+        available_bulk = next(item for item in available_response.get_json()['data'] if item['bulkId'] == 'BULK-0001')
+        self.assertEqual(available_bulk['availableQuantity'], 0)
+        self.assertEqual(available_bulk['preparableQuantity'], 6)
+        self.assertEqual(available_bulk['bulkDegradedQuantity'], 6)
+
+        response = self.client.post(
+            '/api/events/100/assign-specific',
+            json={'assetId': 'BULK-0001'},
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertIn('warning', response.get_json())
+        self.assertIn('Degraded', response.get_json()['warning'])
+        self.assertIn(app_module._bulk_marker('BULK-0001', 6), target.actually_prepared)
+
     def test_inventory_bulk_asset_includes_deployment_breakdown(self):
         returned_marker = app_module._bulk_marker('BULK-0001', 3)
         self.make_event(

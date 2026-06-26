@@ -1737,6 +1737,9 @@ def _asset_status_value(asset, assigned_assets=None):
 
 
 ASSET_CONDITION_STATUSES = ('ooc', 'missing', 'degraded', 'decommissioned')
+BULK_MAINTENANCE_FAULT_SOURCE = 'bulk_maintenance_fault'
+BULK_MAINTENANCE_RESOLUTION_SOURCE = 'bulk_maintenance_resolution'
+BULK_MAINTENANCE_STATUSES = ('ooc', 'degraded')
 
 
 def _asset_condition_status(asset):
@@ -1752,6 +1755,123 @@ def _asset_condition_status(asset):
     if _is_degraded(asset):
         return 'degraded'
     return 'ok'
+
+
+def _bulk_maintenance_log_key(record, index):
+    log_id = str((record or {}).get('id') or '').strip()
+    return log_id or f'index:{index}'
+
+
+def _bulk_maintenance_source_kind(record):
+    source = (record or {}).get('source') or {}
+    return str(source.get('kind') or '').strip()
+
+
+def _bulk_maintenance_fault_entries(asset):
+    """Return paired bulk maintenance fault/resolution entries for one bulk row."""
+    faults = []
+    lookup = {}
+
+    for index, log_entry in enumerate(getattr(asset, 'maintenance_logs', []) or []):
+        record = normalize_maintenance_log(log_entry)
+        source = record.get('source') or {}
+        kind = _bulk_maintenance_source_kind(record)
+
+        if kind == BULK_MAINTENANCE_FAULT_SOURCE:
+            status = str(source.get('bulkStatus') or '').strip().lower()
+            if status not in BULK_MAINTENANCE_STATUSES:
+                continue
+
+            key = _bulk_maintenance_log_key(record, index)
+            log_number = max(1, _safe_int(source.get('bulkLogNumber'), len(faults) + 1))
+            quantity = max(1, _safe_int(source.get('bulkQuantity'), 1))
+            entry = {
+                'key': key,
+                'id': str(record.get('id') or '').strip(),
+                'index': index,
+                'logNumber': log_number,
+                'status': status,
+                'quantity': quantity,
+                'fault': record,
+                'resolution': None,
+                'resolutionIndex': None,
+            }
+            faults.append(entry)
+            lookup[key] = entry
+            if entry['id']:
+                lookup[entry['id']] = entry
+
+        elif kind == BULK_MAINTENANCE_RESOLUTION_SOURCE:
+            target = str(
+                source.get('bulkResolves') or
+                source.get('bulkFaultLogId') or
+                source.get('faultLogId') or
+                ''
+            ).strip()
+            if not target:
+                continue
+            fault = lookup.get(target)
+            if fault:
+                fault['resolution'] = record
+                fault['resolutionIndex'] = index
+
+    return faults
+
+
+def _bulk_maintenance_open_faults(asset):
+    return [
+        entry for entry in _bulk_maintenance_fault_entries(asset)
+        if not entry.get('resolution')
+    ]
+
+
+def _bulk_maintenance_quantity_counts(asset):
+    total = max(1, _safe_int(getattr(asset, 'quantity', 1), 1)) if _is_bulk_asset(asset) else 1
+    raw_counts = {'ooc': 0, 'degraded': 0}
+
+    for entry in _bulk_maintenance_open_faults(asset):
+        status = entry.get('status')
+        if status in raw_counts:
+            raw_counts[status] += max(1, _safe_int(entry.get('quantity'), 1))
+
+    ooc_quantity = min(total, raw_counts['ooc'])
+    degraded_quantity = min(max(total - ooc_quantity, 0), raw_counts['degraded'])
+    return {
+        'ooc': ooc_quantity,
+        'degraded': degraded_quantity,
+        'total': ooc_quantity + degraded_quantity,
+        'rawOOC': raw_counts['ooc'],
+        'rawDegraded': raw_counts['degraded'],
+    }
+
+
+def _next_bulk_maintenance_log_number(asset):
+    existing_numbers = [
+        max(0, _safe_int(entry.get('logNumber'), 0))
+        for entry in _bulk_maintenance_fault_entries(asset)
+    ]
+    return max(existing_numbers, default=0) + 1
+
+
+def _bulk_maintenance_logbook_for_response(asset):
+    rows = []
+    for entry in _bulk_maintenance_fault_entries(asset):
+        rows.append({
+            'key': entry['key'],
+            'id': entry['id'],
+            'logNumber': entry['logNumber'],
+            'status': entry['status'],
+            'quantity': entry['quantity'],
+            'faultIndex': entry['index'],
+            'resolutionIndex': entry.get('resolutionIndex'),
+            'isResolved': bool(entry.get('resolution')),
+            'fault': _maintenance_log_for_response(entry.get('fault')),
+            'resolution': (
+                _maintenance_log_for_response(entry.get('resolution'))
+                if entry.get('resolution') else None
+            ),
+        })
+    return rows
 
 
 def _apply_exclusive_asset_status(asset, target_status):
@@ -2776,12 +2896,12 @@ def _bulk_remaining_for_event_group(event, bulk_asset):
     return max(required - prepared, 0)
 
 
-def _bulk_available_quantity_for_event(bulk_asset, target_event, require_overlap=False):
+def _bulk_available_quantity_for_event(bulk_asset, target_event, require_overlap=False, include_degraded=True):
     if not bulk_asset or not _is_bulk_asset(bulk_asset):
         return 0
 
     total = max(1, _safe_int(getattr(bulk_asset, 'quantity', 1), 1))
-    if getattr(bulk_asset, 'is_missing', False) or _is_disposed(bulk_asset):
+    if getattr(bulk_asset, 'is_missing', False) or getattr(bulk_asset, 'is_ooc', False) or _is_disposed(bulk_asset):
         return 0
 
     busy = 0
@@ -2798,16 +2918,37 @@ def _bulk_available_quantity_for_event(bulk_asset, target_event, require_overlap
         returned_qty = _bulk_quantity_for_asset_in_values(getattr(other, 'returned_items', []) or [], bulk_asset.asset_id)
         busy += max(prepared_qty - returned_qty, 0)
 
-    return max(total - busy, 0)
+    fault_counts = _bulk_maintenance_quantity_counts(bulk_asset)
+    unavailable_faults = fault_counts['ooc']
+    if not include_degraded:
+        unavailable_faults += fault_counts['degraded']
+
+    return max(total - busy - unavailable_faults, 0)
 
 
 def _bulk_asset_to_available_dict(asset, target_event=None):
     status = _asset_status_value(asset)
+    fault_counts = _bulk_maintenance_quantity_counts(asset)
 
-    available_quantity = (
-        _bulk_available_quantity_for_event(asset, target_event)
-        if target_event is not None else max(1, _safe_int(getattr(asset, 'quantity', 1), 1))
-    )
+    if target_event is not None:
+        healthy_available_quantity = _bulk_available_quantity_for_event(
+            asset,
+            target_event,
+            include_degraded=False
+        )
+        preparable_quantity = _bulk_available_quantity_for_event(
+            asset,
+            target_event,
+            include_degraded=True
+        )
+    else:
+        total_quantity = max(1, _safe_int(getattr(asset, 'quantity', 1), 1))
+        if getattr(asset, 'is_missing', False) or getattr(asset, 'is_ooc', False) or _is_disposed(asset):
+            healthy_available_quantity = 0
+            preparable_quantity = 0
+        else:
+            healthy_available_quantity = max(0, total_quantity - fault_counts['ooc'] - fault_counts['degraded'])
+            preparable_quantity = max(0, total_quantity - fault_counts['ooc'])
 
     return {
         'id': asset.asset_id,
@@ -2831,7 +2972,11 @@ def _bulk_asset_to_available_dict(asset, target_event=None):
         'isDisposed': _is_disposed(asset),
         'isBulk': True,
         'quantity': max(1, _safe_int(getattr(asset, 'quantity', 1), 1)),
-        'availableQuantity': available_quantity
+        'availableQuantity': healthy_available_quantity,
+        'preparableQuantity': preparable_quantity,
+        'bulkOOCQuantity': fault_counts['ooc'],
+        'bulkDegradedQuantity': fault_counts['degraded'],
+        'bulkFaultQuantity': fault_counts['total'],
     }
 
 def _parse_model_assignment_key(value):
@@ -6198,6 +6343,8 @@ def get_event_model_availability(event_id):
             return jsonify({'error': 'Event not found'}), 404
 
         physical_by_key = defaultdict(int)
+        maintenance_ooc_by_key = defaultdict(int)
+        maintenance_degraded_by_key = defaultdict(int)
 
         # Physical inventory: exclude Missing and decommissioned, include OOC and Degraded
         for asset in data_manager.inventory.values():
@@ -6209,6 +6356,10 @@ def get_event_model_availability(event_id):
 
             key = _asset_group_key(asset)
             physical_by_key[key] += _asset_inventory_quantity(asset)
+            if _is_bulk_asset(asset):
+                counts = _bulk_maintenance_quantity_counts(asset)
+                maintenance_ooc_by_key[key] += counts['ooc']
+                maintenance_degraded_by_key[key] += counts['degraded']
 
         # Quantity already reserved/requested in this same event.  This includes
         # normal model rows plus any specific prepared bulk/individual assets.
@@ -6242,7 +6393,10 @@ def get_event_model_availability(event_id):
 
             used_here = used_here_by_key.get(key, 0)
             overlap = overlap_by_key.get(key, 0)
-            available = max(physical - used_here - overlap, 0)
+            maintenance_ooc = maintenance_ooc_by_key.get(key, 0)
+            maintenance_degraded = maintenance_degraded_by_key.get(key, 0)
+            available = max(physical - used_here - overlap - maintenance_ooc - maintenance_degraded, 0)
+            preparable = max(physical - used_here - overlap - maintenance_ooc, 0)
 
             result.append({
                 'department': department,
@@ -6253,8 +6407,11 @@ def get_event_model_availability(event_id):
                 'physicalGlobal': physical,
                 'usedInThisEvent': used_here,
                 'overlappingDemand': overlap,
-                'unavailable': used_here + overlap,
+                'unavailable': used_here + overlap + maintenance_ooc + maintenance_degraded,
                 'available': available,
+                'preparable': preparable,
+                'bulkMaintenanceOOC': maintenance_ooc,
+                'bulkMaintenanceDegraded': maintenance_degraded,
                 'adjustedGlobal': available
             })
 
@@ -7396,6 +7553,9 @@ def assign_specific_asset_to_model(event_id):
             if _is_disposed(bulk_asset):
                 return jsonify({'error': 'Bulk asset is decommissioned and cannot be prepared'}), 400
 
+            if getattr(bulk_asset, 'is_ooc', False):
+                return jsonify({'error': 'Bulk asset is out of commission'}), 400
+
             if getattr(bulk_asset, 'is_missing', False):
                 return jsonify({'error': 'Bulk asset is marked as missing'}), 400
 
@@ -7410,7 +7570,16 @@ def assign_specific_asset_to_model(event_id):
             if quantity <= 0:
                 quantity = 1
 
-            available_quantity = _bulk_available_quantity_for_event(bulk_asset, event)
+            healthy_quantity = _bulk_available_quantity_for_event(
+                bulk_asset,
+                event,
+                include_degraded=False
+            )
+            available_quantity = _bulk_available_quantity_for_event(
+                bulk_asset,
+                event,
+                include_degraded=True
+            )
             if available_quantity <= 0:
                 return jsonify({'error': 'No quantity is available for this event date range'}), 400
 
@@ -7437,7 +7606,7 @@ def assign_specific_asset_to_model(event_id):
             data_manager.save_event(event)
             invalidate_cache()
             log_action(f"Prepared {quantity}x bulk asset {bulk_asset.brand} {bulk_asset.model_number} for event {event_id}")
-            return jsonify({
+            response_payload = {
                 'success': True,
                 'message': f'Prepared {quantity}x {bulk_asset.brand} {bulk_asset.model_number}',
                 'data': {
@@ -7446,7 +7615,13 @@ def assign_specific_asset_to_model(event_id):
                     'addedToEvent': add_scanned_assets_to_event,
                     'addedRequirementUnits': added_requirement_units,
                 }
-            })
+            }
+            if quantity > healthy_quantity and _bulk_maintenance_quantity_counts(bulk_asset)['degraded'] > 0:
+                response_payload['warning'] = (
+                    f"{quantity - healthy_quantity}x {bulk_asset.brand} {bulk_asset.model_number} "
+                    "is marked as Degraded. It can be used, but please verify the limitation before show."
+                )
+            return jsonify(response_payload)
 
         # Initialize lists if they don't exist
         if not hasattr(event, 'actually_prepared'):
@@ -8734,7 +8909,7 @@ def get_assets():
         departments = _load_departments()
 
         for asset in data_manager.inventory.values():
-            maintenance_records = [] if _is_bulk_asset(asset) else [
+            maintenance_records = [
                 _maintenance_log_for_response(log)
                 for log in (getattr(asset, 'maintenance_logs', []) or [])
             ]
@@ -8742,16 +8917,29 @@ def get_assets():
             total_quantity = max(1, _safe_int(getattr(asset, 'quantity', 1), 1)) if is_bulk else 1
             bulk_deployments = _bulk_deployments_for_asset(asset.asset_id) if is_bulk else []
             deployed_quantity = sum(item['quantity'] for item in bulk_deployments)
+            bulk_fault_counts = _bulk_maintenance_quantity_counts(asset) if is_bulk else {'ooc': 0, 'degraded': 0, 'total': 0}
             available_quantity = (
-                0 if _is_disposed(asset)
-                else max(0, total_quantity - deployed_quantity) if is_bulk
+                0 if (_is_disposed(asset) or getattr(asset, 'is_missing', False) or getattr(asset, 'is_ooc', False))
+                else max(0, total_quantity - deployed_quantity - bulk_fault_counts['ooc'] - bulk_fault_counts['degraded']) if is_bulk
                 else 1
+            )
+            preparable_quantity = (
+                0 if (_is_disposed(asset) or getattr(asset, 'is_missing', False) or getattr(asset, 'is_ooc', False))
+                else max(0, total_quantity - deployed_quantity - bulk_fault_counts['ooc']) if is_bulk
+                else available_quantity
             )
 
             # Determine current status
             status = _asset_status_value(asset, assigned_assets)
             if is_bulk and status not in ('decommissioned', 'missing', 'ooc'):
-                status = 'deployed' if deployed_quantity > 0 else ('degraded' if _is_degraded(asset) else 'available')
+                if deployed_quantity > 0:
+                    status = 'deployed'
+                elif bulk_fault_counts['ooc'] > 0:
+                    status = 'ooc'
+                elif bulk_fault_counts['degraded'] > 0 or _is_degraded(asset):
+                    status = 'degraded'
+                else:
+                    status = 'available'
 
             assets_data.append({
                 'id': '' if is_bulk else asset.asset_id,
@@ -8787,8 +8975,13 @@ def get_assets():
                 'isBulk': is_bulk,
                 'quantity': total_quantity,
                 'availableQuantity': available_quantity,
+                'preparableQuantity': preparable_quantity,
                 'deployedQuantity': deployed_quantity if is_bulk else 0,
-                'bulkDeployments': bulk_deployments if is_bulk else []
+                'bulkDeployments': bulk_deployments if is_bulk else [],
+                'bulkOOCQuantity': bulk_fault_counts['ooc'] if is_bulk else 0,
+                'bulkDegradedQuantity': bulk_fault_counts['degraded'] if is_bulk else 0,
+                'bulkFaultQuantity': bulk_fault_counts['total'] if is_bulk else 0,
+                'bulkMaintenanceLogbook': _bulk_maintenance_logbook_for_response(asset) if is_bulk else []
             })
 
         return jsonify({'success': True, 'data': assets_data})
@@ -9968,6 +10161,111 @@ def update_asset(asset_id):
         logger.error(f"Error updating asset {asset_id}: {e}", exc_info=True)
         return jsonify({'error': 'Failed to update asset'}), 500
     
+def _maintenance_date_from_request(data, *keys):
+    for key in keys:
+        raw_date = (data or {}).get(key)
+        if not raw_date:
+            continue
+        try:
+            return datetime.strptime(raw_date, '%Y-%m-%d').strftime("%Y/%m/%d")
+        except ValueError:
+            logger.warning(f"Invalid maintenance date format: {raw_date}, using current date")
+            return datetime.now().strftime("%Y/%m/%d")
+    return datetime.now().strftime("%Y/%m/%d")
+
+
+def _bulk_asset_has_fault_capacity(asset):
+    total = max(1, _safe_int(getattr(asset, 'quantity', 1), 1))
+    open_fault_quantity = _bulk_maintenance_quantity_counts(asset)['total']
+    return open_fault_quantity < total
+
+
+def _maintain_bulk_asset(asset_id, asset, data):
+    if getattr(asset, 'is_missing', False) or _is_disposed(asset):
+        return jsonify({'error': 'Bulk asset is missing or decommissioned'}), 400
+
+    log_entry_text = (data.get('logEntry') or '').strip()
+    if not log_entry_text:
+        return jsonify({'error': 'Log entry is required'}), 400
+
+    target_status, requested_status_changes, status_error = _status_changes_for_request(
+        data,
+        current_status=_asset_condition_status(asset)
+    )
+    if status_error:
+        return jsonify({'error': status_error}), 400
+
+    if target_status in ('missing', 'decommissioned'):
+        return jsonify({
+            'error': 'Bulk maintenance logs can only mark one unit OOC or Degraded. Edit the asset status to change the whole bulk item.'
+        }), 400
+
+    if target_status == 'ok':
+        return jsonify({
+            'error': 'Resolve a specific bulk maintenance log from the logbook to restore that unit.'
+        }), 400
+
+    if target_status and target_status not in BULK_MAINTENANCE_STATUSES:
+        return jsonify({'error': 'Invalid bulk maintenance status'}), 400
+
+    new_location = (data.get('newLocation') or '').strip()
+    new_serial = (data.get('newSerial') or '').strip()
+    if new_serial:
+        return jsonify({'error': 'Bulk quantity assets do not have individual serial numbers'}), 400
+
+    repair_cost = str(data.get('cost') or data.get('maintenanceCost') or '').strip()
+    log_type, log_type_error = _maintenance_log_type_for_request(data)
+    if log_type_error:
+        return jsonify({'error': log_type_error}), 400
+
+    if target_status and not _bulk_asset_has_fault_capacity(asset):
+        return jsonify({'error': 'All quantity in this bulk asset already has open maintenance logs'}), 400
+
+    formatted_date = _maintenance_date_from_request(data, 'maintenanceDate')
+    changes = []
+    if new_location:
+        changes.append(make_change('location', value=new_location))
+
+    source = {}
+    if target_status in BULK_MAINTENANCE_STATUSES:
+        source = {
+            'kind': BULK_MAINTENANCE_FAULT_SOURCE,
+            'bulkLogNumber': str(_next_bulk_maintenance_log_number(asset)),
+            'bulkStatus': target_status,
+            'bulkQuantity': '1',
+        }
+
+    entry = make_maintenance_log(
+        formatted_date,
+        session['user'],
+        log_entry_text,
+        [change for change in changes if change],
+        cost=repair_cost,
+        log_type=log_type,
+        source=source
+    )
+
+    try:
+        media_records = _save_maintenance_media_files(entry, _uploaded_maintenance_media_files())
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    if media_records:
+        entry['media'] = media_records
+
+    asset.maintenance_logs.append(entry)
+    apply_maintenance_log_changes(asset, entry)
+
+    data_manager.save_inventory()
+    invalidate_cache()
+
+    if target_status:
+        log_action(f"Logged bulk maintenance {target_status.upper()} unit for asset {asset_id}: {log_entry_text}")
+    else:
+        log_action(f"Maintenance logged for bulk asset {asset_id}: {log_entry_text}")
+
+    return jsonify({'success': True, 'message': 'Maintenance logged successfully'})
+
+
 @app.route('/api/assets/<asset_id>/maintain', methods=['POST'])
 @require_auth
 def maintain_asset(asset_id):
@@ -9989,14 +10287,14 @@ def maintain_asset(asset_id):
             logger.error(f"Asset not found: '{asset_id}'. Available assets: {list(data_manager.inventory.keys())[:10]}")
             return jsonify({'error': 'Asset not found'}), 404
 
-        if _is_bulk_asset(asset):
-            return jsonify({'error': 'Bulk quantity assets do not support maintenance logs'}), 400
-
         data = _maintenance_request_payload()
         logger.info(f"Received data: {data}")
         
         if not data:
             return jsonify({'error': 'No data provided'}), 400
+
+        if _is_bulk_asset(asset):
+            return _maintain_bulk_asset(asset_id, asset, data)
             
         # Safely handle potentially None values
         log_entry_text = data.get('logEntry')
@@ -10106,6 +10404,97 @@ def maintain_asset(asset_id):
         import traceback
         logger.error(f"Traceback: {traceback.format_exc()}")
         return jsonify({'error': f'Failed to log maintenance: {str(e)}'}), 500
+
+
+@app.route('/api/assets/<asset_id>/bulk-maintenance/<fault_log_id>/resolve', methods=['POST'])
+@require_auth
+def resolve_bulk_maintenance_log(asset_id, fault_log_id):
+    """Resolve one open quantity-level maintenance entry for a bulk asset."""
+    try:
+        asset_id = unquote_plus(asset_id)
+        fault_log_id = unquote_plus(fault_log_id).strip()
+
+        asset = data_manager.inventory.get(asset_id)
+        if not asset:
+            return jsonify({'error': 'Asset not found'}), 404
+        if not _is_bulk_asset(asset):
+            return jsonify({'error': 'Asset is not a bulk quantity asset'}), 400
+
+        fault_entry = None
+        for entry in _bulk_maintenance_fault_entries(asset):
+            if entry.get('key') == fault_log_id or entry.get('id') == fault_log_id:
+                fault_entry = entry
+                break
+
+        if not fault_entry:
+            return jsonify({'error': 'Bulk maintenance log not found'}), 404
+        if fault_entry.get('resolution'):
+            return jsonify({'error': 'Bulk maintenance log is already resolved'}), 400
+
+        data = _maintenance_request_payload()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+
+        log_entry_text = (data.get('logEntry') or data.get('description') or '').strip()
+        if not log_entry_text:
+            return jsonify({'error': 'Resolution report is required'}), 400
+
+        new_location = (data.get('newLocation') or '').strip()
+        new_serial = (data.get('newSerial') or '').strip()
+        if new_serial:
+            return jsonify({'error': 'Bulk quantity assets do not have individual serial numbers'}), 400
+
+        repair_cost = str(data.get('cost') or data.get('maintenanceCost') or '').strip()
+        log_type, log_type_error = _maintenance_log_type_for_request(data, default_type='Repair')
+        if log_type_error:
+            return jsonify({'error': log_type_error}), 400
+
+        formatted_date = _maintenance_date_from_request(data, 'maintenanceDate', 'date')
+        changes = []
+        if new_location:
+            changes.append(make_change('location', value=new_location))
+
+        source = {
+            'kind': BULK_MAINTENANCE_RESOLUTION_SOURCE,
+            'bulkResolves': fault_entry.get('key') or fault_entry.get('id') or '',
+            'bulkLogNumber': str(fault_entry.get('logNumber') or ''),
+            'bulkStatus': fault_entry.get('status') or '',
+            'bulkQuantity': str(fault_entry.get('quantity') or 1),
+        }
+        if fault_entry.get('id'):
+            source['bulkFaultLogId'] = fault_entry['id']
+
+        entry = make_maintenance_log(
+            formatted_date,
+            session['user'],
+            log_entry_text,
+            [change for change in changes if change],
+            cost=repair_cost,
+            log_type=log_type,
+            source=source
+        )
+
+        try:
+            media_records = _save_maintenance_media_files(entry, _uploaded_maintenance_media_files())
+        except ValueError as e:
+            return jsonify({'error': str(e)}), 400
+        if media_records:
+            entry['media'] = media_records
+
+        asset.maintenance_logs.append(entry)
+        apply_maintenance_log_changes(asset, entry)
+
+        data_manager.save_inventory()
+        invalidate_cache()
+        log_action(
+            f"Resolved bulk maintenance log #{fault_entry.get('logNumber')} for asset {asset_id}: {log_entry_text}"
+        )
+
+        return jsonify({'success': True, 'message': 'Bulk maintenance log resolved successfully'})
+
+    except Exception as e:
+        logger.error(f"Error resolving bulk maintenance log for {asset_id}: {e}", exc_info=True)
+        return jsonify({'error': f'Failed to resolve bulk maintenance log: {str(e)}'}), 500
 
 @app.route('/api/assets/<asset_id>/event-history', methods=['GET'])
 @require_auth
@@ -10704,14 +11093,37 @@ def get_stats():
             logger.error(f"Error getting assigned assets: {e}")
             deployed_assets = 0
             
-        missing_assets = len(
-            [a for a in data_manager.inventory.values() if a.is_missing and not _is_disposed(a)])
-        ooc_assets = len(
-            [a for a in data_manager.inventory.values() if a.is_ooc and not _is_disposed(a)])
-        degraded_assets = len(
-            [a for a in data_manager.inventory.values() if _is_degraded(a) and not _is_disposed(a)])
-        decommissioned_assets = len(
-            [a for a in data_manager.inventory.values() if _is_disposed(a)])
+        missing_assets = sum(
+            _asset_inventory_quantity(a)
+            for a in data_manager.inventory.values()
+            if getattr(a, 'is_missing', False) and not _is_disposed(a)
+        )
+        ooc_assets = 0
+        degraded_assets = 0
+        decommissioned_assets = sum(
+            _asset_inventory_quantity(a)
+            for a in data_manager.inventory.values()
+            if _is_disposed(a)
+        )
+
+        for asset in data_manager.inventory.values():
+            if not asset or _is_disposed(asset):
+                continue
+            if _is_bulk_asset(asset):
+                counts = _bulk_maintenance_quantity_counts(asset)
+                if getattr(asset, 'is_ooc', False):
+                    ooc_assets += _asset_inventory_quantity(asset)
+                else:
+                    ooc_assets += counts['ooc']
+                if _is_degraded(asset):
+                    degraded_assets += _asset_inventory_quantity(asset)
+                else:
+                    degraded_assets += counts['degraded']
+                continue
+            if getattr(asset, 'is_ooc', False):
+                ooc_assets += 1
+            if _is_degraded(asset):
+                degraded_assets += 1
 
         stats_data = {
             'totalEvents': total_events,

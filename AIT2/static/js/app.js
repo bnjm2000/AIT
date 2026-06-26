@@ -598,6 +598,38 @@ function getAssetIdentifierForApi(asset) {
   return asset?.internalId || asset?.bulkId || asset?.id || '';
 }
 
+function getAssetByApiIdentifier(assetId, assetList = assets) {
+  const normalized = String(assetId || '').trim();
+  if (!normalized || !Array.isArray(assetList)) return null;
+  const lower = normalized.toLowerCase();
+  return assetList.find(asset => {
+    if (!asset) return false;
+    return [
+      getAssetIdentifierForApi(asset),
+      asset.id,
+      asset.internalId,
+      asset.bulkId,
+      asset.displayId
+    ].some(value => String(value || '').trim().toLowerCase() === lower);
+  }) || null;
+}
+
+function assetMaintenanceDisplayId(asset) {
+  if (!asset) return '';
+  if (asset.isBulk) return getAssetIdentifierForApi(asset) || 'Bulk Item';
+  return asset.id || getAssetIdentifierForApi(asset);
+}
+
+function assetMaintenanceDisplayName(asset) {
+  if (!asset) return '';
+  const id = assetMaintenanceDisplayId(asset);
+  const name = [asset.brand, asset.model, asset.description]
+    .map(value => String(value || '').trim())
+    .filter(Boolean)
+    .join(' ');
+  return asset.isBulk ? `${name || 'Bulk Item'} (${id})` : (id || name);
+}
+
 function normalizeAssetPurchaseDateValue(value) {
   const raw = String(value || '').trim();
   if (!raw) return '';
@@ -721,6 +753,27 @@ function getAssetConditionStatus(asset) {
 }
 
 function assetFlagBadgesHtml(asset) {
+  if (asset?.isBulk) {
+    const badges = [];
+    const oocQty = Math.max(0, Number(asset.bulkOOCQuantity || 0) || 0);
+    const degradedQty = Math.max(0, Number(asset.bulkDegradedQuantity || 0) || 0);
+    let hasOOCBadge = false;
+    let hasDegradedBadge = false;
+    if (asset.isMissing || asset.status === 'missing') badges.push(statusBadgeHtml('missing', 'Missing'));
+    if (asset.isOOC || asset.status === 'ooc') {
+      badges.push(statusBadgeHtml('ooc', oocQty ? `${oocQty} OOC` : 'OOC'));
+      hasOOCBadge = true;
+    }
+    if (asset.isDegraded || asset.status === 'degraded') {
+      badges.push(statusBadgeHtml('degraded', degradedQty ? `${degradedQty} Degraded` : 'Degraded'));
+      hasDegradedBadge = true;
+    }
+    if (asset.isDisposed || asset.isDecommissioned || asset.status === 'disposed' || asset.status === 'decommissioned') badges.push(statusBadgeHtml('decommissioned', 'Decommissioned'));
+    if (!hasOOCBadge && oocQty > 0) badges.push(statusBadgeHtml('ooc', `${oocQty} OOC`));
+    if (!hasDegradedBadge && degradedQty > 0) badges.push(statusBadgeHtml('degraded', `${degradedQty} Degraded`));
+    return badges.length ? badges.join(' ') : statusBadgeHtml('available', 'OK');
+  }
+
   const status = getAssetConditionStatus(asset);
   const label = status === 'available'
     ? 'OK'
@@ -2246,7 +2299,7 @@ async function addIdentifierToMaintenanceSelection(identifier) {
   await ensureAssetsLoaded();
 
   const asset = findAssetByIdentifier(normalized, assets);
-  if (asset && !asset.isBulk) {
+  if (asset) {
     selectAssetForMaintenance(getAssetIdentifierForApi(asset));
     const searchEl = document.getElementById('maintenanceAssetSearch');
     if (searchEl) searchEl.value = '';
@@ -6056,9 +6109,9 @@ function displayInventoryTable(assetsToShow) {
         </td>
 
         <td class="inventory-actions-cell">
-          ${asset.isBulk ? '' : `<button class="btn btn-primary btn-sm" onclick="viewMaintenanceLog('${encodedAssetId}')" title="View maintenance log">
+          <button class="btn btn-primary btn-sm" onclick="viewMaintenanceLog('${encodedAssetId}')" title="View maintenance log">
             View Log
-          </button>`}
+          </button>
 
           ${
             isAdmin
@@ -7955,6 +8008,10 @@ function selectAssetForContainer(assetId) {
     showNotification('error', `Asset ${assetId} not found`);
     return;
   }
+  if (asset.isBulk) {
+    showNotification('warning', 'Bulk quantity assets cannot be added to containers');
+    return;
+  }
 
   if (selectedContainerAssets.has(assetId)) {
     showNotification('warning', `Asset ${assetId} is already selected`);
@@ -8325,7 +8382,7 @@ function findMaintenanceReportAsset(value) {
   const raw = String(value || '').trim().toLowerCase();
   if (!raw) return null;
   return maintenanceReportAssetList().find(asset => {
-    const candidates = [asset.id, asset.internalId, asset.displayId, asset.serial];
+    const candidates = [asset.id, asset.internalId, asset.bulkId, asset.displayId, asset.serial];
     return candidates.some(candidate => String(candidate || '').trim().toLowerCase() === raw);
   }) || null;
 }
@@ -8431,7 +8488,7 @@ function addMaintenanceReportAssetFilterValue(value, options = {}) {
 
     const matchingAsset = findMaintenanceReportAsset(token);
     if (matchingAsset) {
-      const assetId = String(matchingAsset.id || matchingAsset.internalId || matchingAsset.displayId || token);
+      const assetId = String(getAssetIdentifierForApi(matchingAsset) || matchingAsset.displayId || token);
       if (maintenanceReportSelectedAssetIds.has(assetId)) {
         alreadySelected++;
       } else {
@@ -12143,6 +12200,8 @@ function displayMaintenanceAssets(assetsToShow) {
     `;
 
   assetsToShow.forEach((asset) => {
+    const assetId = getAssetIdentifierForApi(asset);
+    const displayId = assetMaintenanceDisplayId(asset);
     const maintenanceRecords = getMaintenanceLogRecords(asset);
     const lastMaintenance =
       maintenanceRecords.length > 0
@@ -12151,7 +12210,7 @@ function displayMaintenanceAssets(assetsToShow) {
 
     tableHTML += `
             <tr>
-                <td>${asset.id}</td>
+                <td>${escapeHtml(displayId)}${asset.isBulk ? ' <span class="asset-badge status-available">Bulk Item</span>' : ''}</td>
                 <td>${asset.brand}</td>
                 <td>${asset.model}</td>
                 <td><span class="asset-badge status-${asset.status}">${
@@ -12160,9 +12219,7 @@ function displayMaintenanceAssets(assetsToShow) {
                 <td>${asset.location || "Store"}</td>
                 <td>${lastMaintenance}</td>
                 <td>
-                    <button class="btn btn-primary" onclick="viewMaintenanceLog('${
-                      asset.id
-                    }')">View Log</button>
+                    <button class="btn btn-primary" onclick="viewMaintenanceLog('${escapeJs(assetId)}')">View Log</button>
                 </td>
             </tr>
         `;
@@ -15577,12 +15634,17 @@ document.addEventListener("DOMContentLoaded", function () {
     maintenanceSearch.addEventListener("input", function (e) {
       const searchTerm = e.target.value.toLowerCase();
       const filteredAssets = assets.filter(
-        (asset) =>
-          asset.id.toLowerCase().includes(searchTerm) ||
+        (asset) => {
+          const assetId = getAssetIdentifierForApi(asset).toLowerCase();
+          return (
+          assetId.includes(searchTerm) ||
+          String(asset.id || '').toLowerCase().includes(searchTerm) ||
           asset.brand.toLowerCase().includes(searchTerm) ||
           asset.model.toLowerCase().includes(searchTerm) ||
           (asset.description &&
             asset.description.toLowerCase().includes(searchTerm))
+          );
+        }
       );
 
       displayMaintenanceAssets(filteredAssets);
@@ -15799,8 +15861,9 @@ function searchMaintenanceAssets() {
   
   // Filter assets based on search term
   const filteredAssets = assets.filter(asset => {
-    const searchableText = `${asset.id} ${asset.brand} ${asset.model} ${asset.serial || ''} ${escapeJs(asset.description || '')}`.toLowerCase();
-    return searchableText.includes(searchTerm) && !selectedMaintenanceAssets.has(asset.id);
+    const assetId = getAssetIdentifierForApi(asset);
+    const searchableText = `${asset.id || ''} ${assetId} ${asset.bulkId || ''} ${asset.internalId || ''} ${asset.brand || ''} ${asset.model || ''} ${asset.serial || ''} ${escapeJs(asset.description || '')}`.toLowerCase();
+    return searchableText.includes(searchTerm) && !selectedMaintenanceAssets.has(assetId);
   });
   
   if (filteredAssets.length === 0) {
@@ -15810,16 +15873,21 @@ function searchMaintenanceAssets() {
   
   let html = '';
   filteredAssets.slice(0, 50).forEach(asset => { // Limit to 50 results
+    const assetId = getAssetIdentifierForApi(asset);
+    const displayId = assetMaintenanceDisplayId(asset);
     const statusBadge = getAssetStatusBadge(asset);
     const locationText = asset.location || 'Store';
+    const quantityText = asset.isBulk
+      ? `<span style="color: #666; font-size: 12px; margin-left: 8px;">Qty: ${escapeHtml(String(asset.availableQuantity ?? asset.quantity ?? 1))}/${escapeHtml(String(asset.quantity ?? 1))}</span>`
+      : '';
     
     html += `
       <div style="padding: 12px; border-bottom: 1px solid #f1f1f1; display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: background-color 0.2s;"
            onmouseover="this.style.backgroundColor='#f8f9fa'" 
            onmouseout="this.style.backgroundColor='white'"
-           onclick="selectAssetForMaintenance('${asset.id}')">
+           onclick="selectAssetForMaintenance('${escapeJs(assetId)}')">
         <div style="flex: 1;">
-          <div style="font-weight: 500; margin-bottom: 4px;">${asset.id}</div>
+          <div style="font-weight: 500; margin-bottom: 4px;">${escapeHtml(displayId)}${asset.isBulk ? ' <span class="asset-badge status-available">Bulk Item</span>' : ''}${quantityText}</div>
           <div style="color: #666; font-size: 13px; margin-bottom: 2px;">${asset.brand} ${asset.model}</div>
           <div style="color: #999; font-size: 12px;">${escapeJs(asset.description || '')}</div>
           <div style="margin-top: 4px;">
@@ -15827,7 +15895,7 @@ function searchMaintenanceAssets() {
             <span style="color: #999; font-size: 11px; margin-left: 8px;">📍 ${locationText}</span>
           </div>
         </div>
-        <button class="btn btn-primary" style="padding: 6px 12px; font-size: 12px;" onclick="event.stopPropagation(); selectAssetForMaintenance('${asset.id}')">
+        <button class="btn btn-primary" style="padding: 6px 12px; font-size: 12px;" onclick="event.stopPropagation(); selectAssetForMaintenance('${escapeJs(assetId)}')">
           Select
         </button>
       </div>
@@ -15855,19 +15923,20 @@ function selectAssetForMaintenance(assetId) {
     return;
   }
   
-  const asset = assets.find(a => a.id === assetId);
+  const asset = getAssetByApiIdentifier(assetId);
   if (!asset) {
     showNotification('error', `Asset ${assetId} not found`);
     return;
   }
   
-  selectedMaintenanceAssets.add(assetId);
+  const apiId = getAssetIdentifierForApi(asset);
+  selectedMaintenanceAssets.add(apiId);
   updateSelectedAssetsDisplay();
   
   // Remove from search results
   searchMaintenanceAssets();
   
-  showNotification('success', `Selected ${assetId} for maintenance`);
+  showNotification('success', `Selected ${assetMaintenanceDisplayName(asset)} for maintenance`);
 }
 
 function removeAssetFromMaintenance(assetId) {
@@ -15898,12 +15967,14 @@ function updateSelectedAssetsDisplay() {
   
   let html = '<div style="display: flex; flex-wrap: wrap; gap: 8px;">';
   selectedMaintenanceAssets.forEach(assetId => {
-    const asset = assets ? assets.find(a => a.id === assetId) : null;
+    const asset = getAssetByApiIdentifier(assetId);
     if (asset) {
+      const displayId = assetMaintenanceDisplayId(asset);
+      const quantityText = asset.isBulk ? ` - Qty ${asset.availableQuantity ?? asset.quantity ?? 1}/${asset.quantity ?? 1}` : '';
       html += `
         <div style="background: #e7f3ff; border: 1px solid #b3d9ff; border-radius: 6px; padding: 6px 10px; display: flex; align-items: center; gap: 8px; font-size: 13px;">
-          <span style="font-weight: 500;">${assetId}</span>
-          <span style="color: #666;">- ${asset.brand} ${asset.model}</span>
+          <span style="font-weight: 500;">${escapeHtml(displayId)}</span>
+          <span style="color: #666;">- ${escapeHtml(`${asset.brand || ''} ${asset.model || ''}${quantityText}`.trim())}</span>
           <button onclick="removeAssetFromMaintenance('${assetId}')" style="background: none; border: none; color: #999; cursor: pointer; padding: 0; margin-left: 4px; font-size: 14px;" title="Remove">×</button>
         </div>
       `;
@@ -15979,7 +16050,14 @@ function switchMaintenanceTab(tabName) {
 async function loadOOCAssets() {
   try {
     const response = await apiCall("/api/assets");
-    const oocAndMissingAssets = response.data.filter(asset => asset.isOOC || asset.isMissing || asset.isDegraded || asset.isDisposed || asset.isDecommissioned);
+    const oocAndMissingAssets = response.data.filter(asset =>
+      asset.isOOC ||
+      asset.isMissing ||
+      asset.isDegraded ||
+      asset.isDisposed ||
+      asset.isDecommissioned ||
+      (asset.isBulk && (Number(asset.bulkOOCQuantity || 0) > 0 || Number(asset.bulkDegradedQuantity || 0) > 0))
+    );
     
     displayOOCAssets(oocAndMissingAssets);
     
@@ -16030,24 +16108,28 @@ function displayOOCAssets(oocAssets) {
   `;
 
   oocAssets.forEach(asset => {
-    const isSelected = selectedOOCAssets.has(asset.id);
+    const assetId = getAssetIdentifierForApi(asset);
+    const displayId = assetMaintenanceDisplayId(asset);
+    const isBulkFaultRow = asset.isBulk && (Number(asset.bulkOOCQuantity || 0) > 0 || Number(asset.bulkDegradedQuantity || 0) > 0);
+    const isSelected = selectedOOCAssets.has(assetId);
     const statusHtml = assetFlagBadgesHtml(asset);
     
     tableHTML += `
-      <tr class="ooc-asset-item ${isSelected ? 'selected' : ''}" data-asset-id="${escapeHtmlAttribute(asset.id)}">
+      <tr class="ooc-asset-item ${isSelected ? 'selected' : ''}" data-asset-id="${escapeHtmlAttribute(assetId)}">
         <td>
-          <input type="checkbox" class="ooc-asset-checkbox" 
+          ${isBulkFaultRow ? '' : `<input type="checkbox" class="ooc-asset-checkbox" 
                 ${isSelected ? 'checked' : ''} 
-                onchange="toggleOOCAssetSelection('${escapeJs(asset.id)}')">
+                onchange="toggleOOCAssetSelection('${escapeJs(assetId)}')">`}
         </td>
 
         <td style="font-weight: 500;">
           <a href="#"
             title="View maintenance log"
-            onclick="event.preventDefault(); event.stopPropagation(); viewMaintenanceLog('${escapeJs(asset.id)}');"
+            onclick="event.preventDefault(); event.stopPropagation(); viewMaintenanceLog('${escapeJs(assetId)}');"
             style="color: #667eea; text-decoration: underline; font-weight: 600;">
-            ${asset.id}
+            ${escapeHtml(displayId)}
           </a>
+          ${asset.isBulk ? ' <span class="asset-badge status-available">Bulk Item</span>' : ''}
         </td>
 
         <td>${asset.brand} ${asset.model}</td>
@@ -16057,9 +16139,9 @@ function displayOOCAssets(oocAssets) {
         <td>${asset.location || 'Store'}</td>
         <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis;">${asset.description || '-'}</td>
         <td>
-          <button class="btn btn-success btn-sm" onclick="clearSingleOOC('${escapeJs(asset.id)}')" style="padding: 4px 8px; font-size: 11px;">
+          ${isBulkFaultRow ? `<button class="btn btn-primary btn-sm" onclick="viewMaintenanceLog('${escapeJs(assetId)}')" style="padding: 4px 8px; font-size: 11px;">View Log</button>` : `<button class="btn btn-success btn-sm" onclick="clearSingleOOC('${escapeJs(assetId)}')" style="padding: 4px 8px; font-size: 11px;">
             Clear Status
-          </button>
+          </button>`}
         </td>
       </tr>
     `;
@@ -16207,9 +16289,7 @@ async function viewMaintenanceLog(assetId) {
       assets = assetsResponse.data || [];
     }
 
-    const asset = Array.isArray(assets)
-      ? assets.find(a => String(a.id) === decodedAssetId)
-      : null;
+    const asset = getAssetByApiIdentifier(decodedAssetId);
 
     if (!asset) {
       showNotification('error', `Asset not found: ${decodedAssetId}`);
@@ -16234,8 +16314,243 @@ async function viewMaintenanceLog(assetId) {
   }
 }
 
+function bulkMaintenanceStatusLabel(status) {
+  const clean = String(status || '').toLowerCase();
+  if (clean === 'ooc') return 'OOC';
+  if (clean === 'degraded') return 'Degraded';
+  return clean ? clean.replace(/\b\w/g, c => c.toUpperCase()) : 'Fault';
+}
+
+function bulkMaintenanceReportHtml(report, emptyText = 'Not resolved') {
+  if (!report) {
+    return `<div style="color:#6c757d;font-style:italic;">${escapeHtml(emptyText)}</div>`;
+  }
+
+  return `
+    <div style="display:grid;gap:8px;">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        <span style="font-weight:700;color:#333;">${escapeHtml(report.date || '')}</span>
+        <span style="color:#666;">${escapeHtml(report.user || '')}</span>
+        ${maintenanceLogTypeBadgeHtml(report.type)}
+      </div>
+      <div style="white-space:pre-wrap;line-height:1.4;">${escapeHtml(report.description || '')}</div>
+      <div>${maintenanceMediaLinksHtml(report.media)}</div>
+      ${report.cost ? `<div style="font-size:13px;color:#666;">Cost: ${maintenanceCostDisplayHtml(report.cost)}</div>` : ''}
+    </div>
+  `;
+}
+
+function bulkMaintenanceLogbookRows(asset) {
+  const rows = Array.isArray(asset?.bulkMaintenanceLogbook) ? asset.bulkMaintenanceLogbook : [];
+  return rows.slice().sort((a, b) => Number(a.logNumber || 0) - Number(b.logNumber || 0));
+}
+
+function showBulkMaintenanceLogModal(asset) {
+  const assetId = getAssetIdentifierForApi(asset);
+  const safeAssetId = String(assetId || '').replace(/[^a-zA-Z0-9]/g, '_');
+  const rows = bulkMaintenanceLogbookRows(asset);
+  const totalQty = Math.max(1, Number(asset.quantity || 1) || 1);
+  const healthyQty = Math.max(0, Number(asset.availableQuantity ?? totalQty) || 0);
+  const preparableQty = Math.max(0, Number(asset.preparableQuantity ?? healthyQty) || 0);
+  const oocQty = Math.max(0, Number(asset.bulkOOCQuantity || 0) || 0);
+  const degradedQty = Math.max(0, Number(asset.bulkDegradedQuantity || 0) || 0);
+
+  const rowHtml = rows.length ? rows.map(row => {
+    const status = String(row.status || '').toLowerCase();
+    const statusBadge = statusBadgeHtml(status === 'ooc' ? 'ooc' : 'degraded', bulkMaintenanceStatusLabel(status));
+    const resolveButton = row.isResolved ? '' : `
+      <button type="button" class="btn btn-success btn-sm" onclick="openBulkMaintenanceResolutionModal('${escapeJs(assetId)}', '${escapeJs(row.key || row.id)}', '${escapeJs(String(row.logNumber || ''))}')">
+        Resolve
+      </button>
+    `;
+    return `
+      <tr>
+        <td style="padding:14px;border-bottom:1px solid #e9ecef;vertical-align:top;width:110px;">
+          <div style="font-weight:800;font-size:16px;">#${escapeHtml(String(row.logNumber || ''))}</div>
+          <div style="margin-top:6px;">${statusBadge}</div>
+        </td>
+        <td style="padding:14px;border-bottom:1px solid #e9ecef;vertical-align:top;">
+          ${bulkMaintenanceReportHtml(row.fault, 'No fault report')}
+        </td>
+        <td style="padding:14px;border-bottom:1px solid #e9ecef;vertical-align:top;">
+          ${bulkMaintenanceReportHtml(row.resolution)}
+          ${resolveButton ? `<div style="margin-top:12px;">${resolveButton}</div>` : ''}
+        </td>
+      </tr>
+    `;
+  }).join('') : `
+    <tr>
+      <td colspan="3" style="padding:30px;text-align:center;color:#666;font-style:italic;">
+        No bulk maintenance records found.
+      </td>
+    </tr>
+  `;
+
+  const modalContent = `
+    <div class="modal maintenance-log-modal" id="maintenanceLogModal" style="display:flex;align-items:center;justify-content:center;">
+      <div class="modal-content maintenance-log-content" style="max-width:1120px;width:95%;height:92vh;display:flex;flex-direction:column;overflow:hidden;padding:20px;">
+        <div class="modal-header maintenance-log-header" style="flex-shrink:0;margin-bottom:16px;padding-bottom:14px;border-bottom:2px solid #eee;">
+          <h3 class="modal-title">Bulk Maintenance Log - ${escapeHtml(assetId)}</h3>
+          <button class="close-btn" onclick="closeMaintenanceLogModal()">&times;</button>
+        </div>
+        <div class="modal-body" style="flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden;">
+          <div style="background:#f8f9fa;border:1px solid #e9ecef;border-radius:8px;padding:14px;margin-bottom:16px;">
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;">
+              <div><strong>Bulk ID:</strong> ${escapeHtml(assetId)}<br><strong>Brand:</strong> ${escapeHtml(asset.brand || '')}<br><strong>Model:</strong> ${escapeHtml(asset.model || '')}</div>
+              <div><strong>Description:</strong> ${escapeHtml(asset.description || 'N/A')}<br><strong>Department:</strong> ${escapeHtml(asset.department || '')}<br><strong>Location:</strong> ${escapeHtml(asset.location || 'Store')}</div>
+              <div><strong>Healthy:</strong> ${escapeHtml(String(healthyQty))}/${escapeHtml(String(totalQty))}<br><strong>Preparable:</strong> ${escapeHtml(String(preparableQty))}/${escapeHtml(String(totalQty))}<br><strong>Flags:</strong> ${assetFlagBadgesHtml(asset)}</div>
+            </div>
+            <div style="margin-top:10px;color:#666;font-size:13px;">
+              ${escapeHtml(String(oocQty))} OOC and ${escapeHtml(String(degradedQty))} degraded unit${(oocQty + degradedQty) === 1 ? '' : 's'} currently open.
+            </div>
+          </div>
+          <div style="flex:1;min-height:0;overflow:auto;border:1px solid #e9ecef;border-radius:8px;background:white;">
+            <table style="width:100%;border-collapse:collapse;table-layout:fixed;">
+              <thead style="position:sticky;top:0;background:#f8f9fa;z-index:2;">
+                <tr>
+                  <th style="padding:12px;text-align:left;border-bottom:2px solid #e9ecef;width:110px;">Log No.</th>
+                  <th style="padding:12px;text-align:left;border-bottom:2px solid #e9ecef;">Fault Report</th>
+                  <th style="padding:12px;text-align:left;border-bottom:2px solid #e9ecef;">Resolution Report</th>
+                </tr>
+              </thead>
+              <tbody>${rowHtml}</tbody>
+            </table>
+          </div>
+          <div class="modal-actions maintenance-log-footer" style="margin-top:16px;padding-top:14px;border-top:2px solid #eee;text-align:center;flex-shrink:0;">
+            <button type="button" class="btn btn-primary maintenance-log-footer-add" onclick="addNewLogEntryFromModal('${escapeJs(assetId)}')">
+              Add New Log Entry
+            </button>
+            <button type="button" class="btn btn-secondary" onclick="closeMaintenanceLogModal()">Close</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const existingModal = document.getElementById('maintenanceLogModal');
+  if (existingModal) existingModal.remove();
+  document.body.insertAdjacentHTML('beforeend', modalContent);
+  const modal = document.getElementById('maintenanceLogModal');
+  modal.setAttribute('role', 'dialog');
+  modal.setAttribute('aria-modal', 'true');
+  modal.setAttribute('aria-hidden', 'false');
+  modal.setAttribute('aria-labelledby', `bulkMaintenanceLogTitle_${safeAssetId}`);
+  const titleEl = modal.querySelector('.modal-title');
+  if (titleEl) titleEl.id = `bulkMaintenanceLogTitle_${safeAssetId}`;
+  enhanceModalAccessibility(modal);
+  focusModalStart(modal);
+  modal.addEventListener('click', e => {
+    if (e.target === modal) closeMaintenanceLogModal();
+  });
+}
+
+function openBulkMaintenanceResolutionModal(assetId, faultKey, logNumber) {
+  const today = new Date().toISOString().split('T')[0];
+  const existing = document.getElementById('bulkMaintenanceResolutionModal');
+  if (existing) existing.remove();
+
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="modal" id="bulkMaintenanceResolutionModal" style="display:flex;align-items:center;justify-content:center;z-index:1200;">
+      <div class="modal-content" style="max-width:560px;width:92%;max-height:90vh;overflow-y:auto;">
+        <div class="modal-header">
+          <h3 class="modal-title">Resolve Bulk Log #${escapeHtml(String(logNumber || ''))}</h3>
+          <button class="close-btn" onclick="closeBulkMaintenanceResolutionModal()">&times;</button>
+        </div>
+        <form id="bulkMaintenanceResolutionForm">
+          <div class="form-group">
+            <label class="form-label" for="bulkResolutionDate">Resolution Date</label>
+            <input type="date" class="form-input" id="bulkResolutionDate" value="${escapeHtmlAttr(today)}" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="bulkResolutionDescription">Resolution Report</label>
+            <textarea class="form-input" id="bulkResolutionDescription" rows="4" placeholder="Describe the repair or resolution" required></textarea>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="bulkResolutionCost">Repair Cost</label>
+            <input type="text" class="form-input" id="bulkResolutionCost" placeholder="0.00">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="bulkResolutionMediaFiles">Photos / Videos</label>
+            <input type="file" class="form-input" id="bulkResolutionMediaFiles" multiple accept="image/*,video/*">
+            <div id="bulkResolutionMediaFileList" class="maintenance-media-selection"></div>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="btn btn-secondary" onclick="closeBulkMaintenanceResolutionModal()">Cancel</button>
+            <button type="submit" class="btn btn-success">Resolve</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `);
+
+  document.getElementById('bulkResolutionMediaFiles')?.addEventListener('change', () => {
+    updateMaintenanceMediaSelection('bulkResolutionMediaFiles', 'bulkResolutionMediaFileList');
+  });
+
+  document.getElementById('bulkMaintenanceResolutionForm')?.addEventListener('submit', async event => {
+    event.preventDefault();
+    await submitBulkMaintenanceResolution(assetId, faultKey);
+  });
+
+  const modal = document.getElementById('bulkMaintenanceResolutionModal');
+  enhanceModalAccessibility(modal);
+  focusModalStart(modal);
+  modal.addEventListener('click', e => {
+    if (e.target === modal) closeBulkMaintenanceResolutionModal();
+  });
+}
+
+function closeBulkMaintenanceResolutionModal() {
+  document.getElementById('bulkMaintenanceResolutionModal')?.remove();
+}
+
+async function submitBulkMaintenanceResolution(assetId, faultKey) {
+  const description = document.getElementById('bulkResolutionDescription')?.value.trim() || '';
+  const maintenanceDate = document.getElementById('bulkResolutionDate')?.value || '';
+  const cost = document.getElementById('bulkResolutionCost')?.value.trim() || '';
+
+  if (!description) {
+    showNotification('warning', 'Please enter a resolution report');
+    return;
+  }
+  if (!maintenanceDate) {
+    showNotification('warning', 'Please select a resolution date');
+    return;
+  }
+
+  try {
+    const payload = {
+      logEntry: description,
+      maintenanceDate,
+      logType: 'Repair',
+      cost: cost || null
+    };
+    const requestData = maintenancePayloadToRequestData(payload, 'bulkResolutionMediaFiles');
+    await apiCall(`/api/assets/${encodeURIComponent(assetId)}/bulk-maintenance/${encodeURIComponent(faultKey)}/resolve`, 'POST', requestData);
+
+    closeBulkMaintenanceResolutionModal();
+    showNotification('success', 'Bulk maintenance log resolved');
+
+    const assetsResponse = await apiCall('/api/assets');
+    if (assetsResponse.success) {
+      assets = assetsResponse.data || [];
+      const updatedAsset = getAssetByApiIdentifier(assetId);
+      if (updatedAsset) showBulkMaintenanceLogModal(updatedAsset);
+    }
+    if (document.getElementById('inventory-section')?.classList.contains('active')) loadInventory();
+    if (document.getElementById('maintenance-section')?.classList.contains('active')) loadMaintenanceAssets();
+  } catch (error) {
+    showNotification('error', `Failed to resolve bulk maintenance log: ${error.message}`);
+  }
+}
+
 
 function showMaintenanceLogModal(asset) {
+  if (asset?.isBulk) {
+    showBulkMaintenanceLogModal(asset);
+    return;
+  }
+
   // Debug: Log the asset data to console
   // console.log('Asset maintenance logs:', asset.maintenanceLogs);
   const maintenanceRecords = getMaintenanceLogRecords(asset);
@@ -17613,7 +17928,8 @@ function createBulkPreparationSection(eventId, modelGroup, availableAssets = [],
     const bulkId = getAssetIdentifierForApi(availableBulkSource) || availableBulkSource?.bulkId || assignedBulkSource?.bulkId || '';
     const displayName = `${requiredQty}x ${[modelGroup.brand, modelGroup.model].filter(Boolean).join(' ')}`.trim();
     const description = modelGroup.description || availableBulkSource?.description || assignedBulkSource?.description || '';
-    const availableQuantity = availableBulkSource ? Number(availableBulkSource.availableQuantity ?? availableBulkSource.quantity ?? 0) : 0;
+    const healthyQuantity = availableBulkSource ? Number(availableBulkSource.availableQuantity ?? availableBulkSource.quantity ?? 0) : 0;
+    const preparableQuantity = availableBulkSource ? Number(availableBulkSource.preparableQuantity ?? availableBulkSource.availableQuantity ?? availableBulkSource.quantity ?? 0) : 0;
 
     let actionButtons = '';
     if (assignedAssets && assignedAssets.length > 0) {
@@ -17625,7 +17941,7 @@ function createBulkPreparationSection(eventId, modelGroup, availableAssets = [],
         }).join('');
     }
 
-    if (!isPrepared && bulkId && availableQuantity !== 0) {
+    if (!isPrepared && bulkId && preparableQuantity !== 0) {
         actionButtons += `<button class="btn btn-success btn-sm" onclick="assignSpecificAsset(${eventId}, '${escapeJs(bulkId)}', '${escapeJs(modelGroup.brand || '')}', '${escapeJs(modelGroup.model || '')}')" style="padding:4px 8px; font-size:11px;">Prepare</button>`;
     }
 
@@ -17634,7 +17950,7 @@ function createBulkPreparationSection(eventId, modelGroup, availableAssets = [],
     }
 
     const quantityLine = availableBulkSource
-        ? `<div style="color:#666; font-size:12px; margin-top:2px;">Available Qty: ${escapeHtml(String(availableQuantity))}/${escapeHtml(String(availableBulkSource.quantity ?? requiredQty))}</div>`
+        ? `<div style="color:#666; font-size:12px; margin-top:2px;">Healthy Qty: ${escapeHtml(String(healthyQuantity))}/${escapeHtml(String(availableBulkSource.quantity ?? requiredQty))}${preparableQuantity !== healthyQuantity ? ` | Preparable: ${escapeHtml(String(preparableQuantity))}` : ''}</div>`
         : (assignedBulkSource ? `<div style="color:#666; font-size:12px; margin-top:2px;">Prepared Qty: ${escapeHtml(String(assignedQty))}</div>` : '');
 
     return `
@@ -17713,7 +18029,7 @@ function createModelPreparationSection(eventId, department, brand, model, descri
               const buttonAction = isAlreadyAssigned ? '' : `assignSpecificAsset(${eventId}, '${escapeJs(apiId)}', '${escapeJs(brand)}', '${escapeJs(model)}')`;
               const disabled = isAlreadyAssigned ? 'disabled' : '';
               const availableQtyText = asset.isBulk
-                ? `Available Qty: ${escapeHtml(String(asset.availableQuantity ?? asset.quantity ?? 0))}/${escapeHtml(String(asset.quantity ?? 0))}`
+                ? `Healthy Qty: ${escapeHtml(String(asset.availableQuantity ?? asset.quantity ?? 0))}/${escapeHtml(String(asset.quantity ?? 0))}${Number(asset.preparableQuantity ?? asset.availableQuantity ?? 0) !== Number(asset.availableQuantity ?? 0) ? ` | Preparable: ${escapeHtml(String(asset.preparableQuantity ?? asset.availableQuantity ?? 0))}` : ''}`
                 : `SN: ${escapeHtml(asset.serial || 'N/A')}`;
               const displayId = asset.isBulk ? 'Bulk quantity item' : escapeHtml(asset.id);
             
@@ -21032,6 +21348,12 @@ function inventoryAssetFlagsText(asset) {
   if (asset?.isMissing) flags.push('Missing');
   if (asset?.isOOC) flags.push('OOC');
   if (asset?.isDegraded) flags.push('Degraded');
+  if (asset?.isBulk) {
+    const oocQty = Math.max(0, Number(asset.bulkOOCQuantity || 0) || 0);
+    const degradedQty = Math.max(0, Number(asset.bulkDegradedQuantity || 0) || 0);
+    if (!asset?.isOOC && oocQty > 0) flags.push(`${oocQty} OOC`);
+    if (!asset?.isDegraded && degradedQty > 0) flags.push(`${degradedQty} Degraded`);
+  }
   if (asset?.isDisposed || asset?.isDecommissioned) flags.push('Decommissioned');
   return flags.length ? flags.join(', ') : 'OK';
 }
