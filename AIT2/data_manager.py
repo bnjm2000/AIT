@@ -18,7 +18,7 @@ REQUIRED_DATA_FILES = ('Inventory.csv', 'Logs.csv', 'Users.csv', 'Containers.csv
 UTF8_ENCODINGS = ('utf-8', 'utf-8-sig')
 INVENTORY_FIELDNAMES = [
     'AssetID', 'Brand', 'ModelNumber', 'SerialNumber', 'Description', 'DateOfPurchase',
-    'DateAdded', 'DateModified', 'ChangeHistory',
+    'DateAdded', 'DateModified', 'ChangeHistory', 'Notes',
     'IsMissing', 'IsOOC', 'IsDegraded', 'IsDisposed', 'IsBulk', 'Quantity',
     'MaintenanceLogs', 'DepartmentCode', 'DefaultLocation', 'CurrentLocation'
 ]
@@ -560,7 +560,8 @@ class DataManager:
                     quantity=quantity,
                     date_added=row.get('DateAdded', ''),
                     date_modified=row.get('DateModified', ''),
-                    change_history=load_asset_change_history(row.get('ChangeHistory', ''))
+                    change_history=load_asset_change_history(row.get('ChangeHistory', '')),
+                    notes=row.get('Notes', '')
                 )
 
                 if item.asset_id:
@@ -604,6 +605,7 @@ class DataManager:
                     'DateAdded': getattr(item, 'date_added', ''),
                     'DateModified': getattr(item, 'date_modified', ''),
                     'ChangeHistory': dump_asset_change_history(getattr(item, 'change_history', [])),
+                    'Notes': getattr(item, 'notes', ''),
                     'IsMissing': item.is_missing,
                     'IsOOC': item.is_ooc,
                     'IsDegraded': getattr(item, 'is_degraded', False),

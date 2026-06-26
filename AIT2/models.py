@@ -77,6 +77,7 @@ class InventoryItem:
         date_added='',
         date_modified='',
         change_history=None,
+        notes='',
     ):
         self.asset_id = asset_id
         self.brand = brand
@@ -108,6 +109,7 @@ class InventoryItem:
         self.date_added = date_added or ''
         self.date_modified = date_modified or ''
         self.change_history = change_history if change_history is not None else []
+        self.notes = notes or ''
         self.is_bulk = is_bulk
         try:
             self.quantity = max(1, int(quantity)) if is_bulk else 1

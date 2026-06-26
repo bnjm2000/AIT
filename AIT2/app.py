@@ -1605,6 +1605,7 @@ ASSET_AUDIT_FIELD_LABELS = {
     'current_location': 'Current Location',
     'status': 'Asset Status',
     'quantity': 'Quantity',
+    'notes': 'Notes',
 }
 
 
@@ -1629,6 +1630,7 @@ def _asset_audit_snapshot(asset):
         'current_location': getattr(asset, 'current_location', ''),
         'status': _asset_condition_status(asset),
         'quantity': max(1, _safe_int(getattr(asset, 'quantity', 1), 1)) if _is_bulk_asset(asset) else 1,
+        'notes': getattr(asset, 'notes', ''),
     }
 
 
@@ -9094,6 +9096,7 @@ def get_assets():
                 'dateAdded': getattr(asset, 'date_added', ''),
                 'dateModified': getattr(asset, 'date_modified', ''),
                 'changeHistory': getattr(asset, 'change_history', []),
+                'notes': getattr(asset, 'notes', ''),
                 'department': asset.department_code,
                 'departmentName': _department_payload(asset.department_code, departments)['name'],
                 'departmentColor': _department_payload(asset.department_code, departments)['color'],
@@ -9645,6 +9648,7 @@ def create_asset():
         purchase_date = _normalise_asset_purchase_date(
             data.get('dateOfPurchase', data.get('purchaseDate', ''))
         )
+        notes = str(data.get('notes', '') or '').strip()
 
         with _inventory_action_lock:
             plan = _asset_id_plan_for_request(data)
@@ -9673,7 +9677,8 @@ def create_asset():
                     current_location='',
                     is_bulk=True,
                     quantity=plan['quantity'],
-                    date_of_purchase=purchase_date
+                    date_of_purchase=purchase_date,
+                    notes=notes
                 )
                 _mark_asset_created(asset, timestamp=audit_timestamp, user=audit_user)
                 data_manager.inventory[created_asset_ids[0]] = asset
@@ -9696,7 +9701,8 @@ def create_asset():
                         current_location='',
                         is_bulk=False,
                         quantity=1,
-                        date_of_purchase=purchase_date
+                        date_of_purchase=purchase_date,
+                        notes=notes
                     )
                     _mark_asset_created(asset, timestamp=audit_timestamp, user=audit_user)
                     data_manager.inventory[asset_id] = asset
@@ -10121,6 +10127,9 @@ def update_asset(asset_id):
             asset.date_of_purchase = _normalise_asset_purchase_date(
                 data.get('dateOfPurchase', data.get('purchaseDate', ''))
             )
+
+        if 'notes' in data:
+            asset.notes = str(data.get('notes', '') or '').strip()
 
         if 'isMissing' in data:
             asset.is_missing = bool(data.get('isMissing'))

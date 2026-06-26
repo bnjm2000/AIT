@@ -131,6 +131,26 @@ class AssetCreationTests(unittest.TestCase):
         created_asset = next(item for item in payload if item['internalId'] == asset_id)
         self.assertEqual(created_asset['dateOfPurchase'], '2026-06-02')
 
+    def test_create_asset_saves_notes(self):
+        notes = 'Pack with short IEC cable\nCheck foam insert before hire'
+        response = self.post_asset({
+            'notes': notes,
+        })
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        asset_id = response.get_json()['assetIds'][0]
+        self.assertEqual(self.data_manager.inventory[asset_id].notes, notes)
+
+        reloaded = DataManager(self.tempdir.name)
+        reloaded.load_inventory()
+        self.assertEqual(reloaded.inventory[asset_id].notes, notes)
+
+        assets_response = self.client.get('/api/assets')
+        self.assertEqual(assets_response.status_code, 200, assets_response.get_data(as_text=True))
+        payload = assets_response.get_json()['data']
+        created_asset = next(item for item in payload if item['internalId'] == asset_id)
+        self.assertEqual(created_asset['notes'], notes)
+
     def test_create_asset_sets_audit_metadata(self):
         response = self.post_asset({
             'serials': ['SN-AUDIT'],

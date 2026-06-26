@@ -5820,6 +5820,23 @@ function ensureInventoryTableStyles() {
       white-space: nowrap;
     }
 
+    .inventory-compact-table .asset-id-link {
+      border: 0;
+      background: none;
+      color: #667eea;
+      cursor: pointer;
+      font: inherit;
+      font-weight: 700;
+      padding: 0;
+      text-align: left;
+      text-decoration: underline;
+    }
+
+    .inventory-compact-table .asset-id-link:hover,
+    .inventory-compact-table .asset-id-link:focus {
+      color: #4c63c7;
+    }
+
     .inventory-compact-table .inventory-select-cell {
       width: 38px;
       min-width: 38px;
@@ -6077,6 +6094,98 @@ function clearInventorySelection() {
   displayFilteredInventory();
 }
 
+function openAssetDetailsModal(encodedAssetId) {
+  let assetId = String(encodedAssetId || '');
+  try {
+    assetId = decodeURIComponent(assetId);
+  } catch (error) {
+    // Keep the original value if it was not URI encoded.
+  }
+
+  const asset = getAssetByApiIdentifier(assetId);
+  if (!asset) {
+    showNotification('error', `Asset ${assetId} not found`);
+    return;
+  }
+
+  const modal = document.getElementById('assetDetailsModal');
+  const title = document.getElementById('assetDetailsTitle');
+  const content = document.getElementById('assetDetailsContent');
+  if (!modal || !title || !content) return;
+
+  const apiId = getAssetIdentifierForApi(asset);
+  const encodedApiId = encodeURIComponent(apiId);
+  const displayId = asset.isBulk ? 'Bulk Item' : (asset.id || apiId);
+  const notes = String(asset.notes || '').trim();
+  const quantityText = asset.isBulk
+    ? `${asset.availableQuantity ?? asset.quantity ?? 1}/${asset.quantity ?? 1}`
+    : '1';
+
+  title.textContent = `${asset.isBulk ? 'Bulk Asset' : 'Asset'} Details`;
+  content.innerHTML = `
+    <div class="modal-body">
+      <div style="background:#f8f9fa;border:1px solid #e9ecef;border-radius:8px;padding:16px;margin-bottom:16px;">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px;">
+          <div>
+            <div style="color:#6c757d;font-size:12px;font-weight:700;text-transform:uppercase;margin-bottom:4px;">Asset ID</div>
+            <div style="font-weight:800;font-size:18px;">${escapeHtml(displayId)}</div>
+            ${asset.isBulk ? `<div style="color:#6c757d;font-size:12px;margin-top:4px;">Internal ID: ${escapeHtml(apiId)}</div>` : ''}
+          </div>
+          <div>
+            <div><strong>Brand:</strong> ${escapeHtml(asset.brand || '')}</div>
+            <div><strong>Model:</strong> ${escapeHtml(asset.model || '')}</div>
+            <div><strong>Description:</strong> ${escapeHtml(asset.description || 'N/A')}</div>
+          </div>
+          <div>
+            <div><strong>Serial:</strong> ${escapeHtml(asset.isBulk ? 'N/A' : (asset.serial || 'N/A'))}</div>
+            <div><strong>Quantity:</strong> ${escapeHtml(String(quantityText))}</div>
+            <div><strong>Purchased:</strong> ${escapeHtml(formatAssetPurchaseDate(asset.dateOfPurchase || asset.purchaseDate || ''))}</div>
+          </div>
+          <div>
+            <div><strong>Department:</strong> ${departmentBadgeHtml(asset.department)}</div>
+            <div style="margin-top:4px;"><strong>Status:</strong> ${statusBadgeHtml(asset.status || 'available')}</div>
+            <div style="margin-top:4px;"><strong>Location:</strong> ${escapeHtml(asset.location || 'Store')}</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="border:1px solid #e9ecef;border-radius:8px;padding:16px;margin-bottom:16px;background:#fff;">
+        <h4 style="margin:0 0 10px 0;color:#495057;">Notes</h4>
+        <div style="white-space:pre-wrap;line-height:1.5;color:${notes ? '#212529' : '#6c757d'};">
+          ${notes ? escapeHtml(notes) : '<span style="font-style:italic;">No notes for this asset.</span>'}
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;margin-bottom:16px;">
+        <div style="border:1px solid #e9ecef;border-radius:8px;padding:12px;">
+          <strong>Default Location</strong><br>
+          ${escapeHtml(asset.defaultLocation || 'Store')}
+        </div>
+        <div style="border:1px solid #e9ecef;border-radius:8px;padding:12px;">
+          <strong>Current Location</strong><br>
+          ${escapeHtml(asset.currentLocation || asset.location || 'Store')}
+        </div>
+        <div style="border:1px solid #e9ecef;border-radius:8px;padding:12px;">
+          <strong>Flags</strong><br>
+          ${assetFlagBadgesHtml(asset)}
+        </div>
+      </div>
+
+      <div class="modal-actions" style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;">
+        <button type="button" class="btn btn-primary" onclick="closeModal('assetDetailsModal'); viewMaintenanceLog('${escapeHtmlAttr(encodedApiId)}')">View Log</button>
+        ${
+          isAdminUser()
+            ? `<button type="button" class="btn btn-warning" onclick="closeModal('assetDetailsModal'); openEditAssetModal('${escapeHtmlAttr(encodedApiId)}')">Edit Asset</button>`
+            : ''
+        }
+        <button type="button" class="btn btn-secondary" onclick="closeModal('assetDetailsModal')">Close</button>
+      </div>
+    </div>
+  `;
+
+  openModal('assetDetailsModal');
+}
+
 function displayInventoryTable(assetsToShow) {
   ensureInventoryTableStyles();
 
@@ -6143,7 +6252,11 @@ function displayInventoryTable(assetsToShow) {
     tableHTML += `
       <tr>
         ${selectionCellHtml}
-        <td class="asset-id-cell">${asset.isBulk ? '<span class="asset-badge status-available">Bulk Item</span>' : escapeHtml(asset.id)}</td>
+        <td class="asset-id-cell">
+          <button type="button" class="asset-id-link" onclick="openAssetDetailsModal('${encodedAssetId}')" title="View asset details">
+            ${asset.isBulk ? '<span class="asset-badge status-available">Bulk Item</span>' : escapeHtml(asset.id)}
+          </button>
+        </td>
         <td>${escapeHtml(asset.brand || "")}</td>
         <td>${escapeHtml(asset.model || "")}</td>
 
@@ -6293,6 +6406,11 @@ function ensureAssetEditModal() {
           <textarea id="editAssetDescription" class="form-input" rows="3"></textarea>
         </div>
 
+        <div class="form-group">
+          <label class="form-label">Notes</label>
+          <textarea id="editAssetNotes" class="form-input" rows="4"></textarea>
+        </div>
+
         <div class="form-group" style="margin-top:8px;">
           <label class="form-label" for="editAssetStatus">Asset Status</label>
           <select id="editAssetStatus" class="form-input">
@@ -6377,6 +6495,7 @@ function openEditAssetModal(encodedAssetId) {
   document.getElementById('editAssetSerial').value = asset.serial || '';
   document.getElementById('editAssetDateOfPurchase').value = normalizeAssetPurchaseDateValue(asset.dateOfPurchase || asset.purchaseDate || '');
   document.getElementById('editAssetDescription').value = asset.description || '';
+  document.getElementById('editAssetNotes').value = asset.notes || '';
   document.getElementById('editAssetDepartment').value = asset.department || 'UN';
   document.getElementById('editAssetDefaultLocation').value = asset.defaultLocation || 'Store';
   document.getElementById('editAssetCurrentLocation').value = asset.currentLocation || '';
@@ -6409,6 +6528,7 @@ async function saveAssetEditModal() {
     serial: document.getElementById('editAssetSerial').value.trim(),
     dateOfPurchase: document.getElementById('editAssetDateOfPurchase').value.trim(),
     description: document.getElementById('editAssetDescription').value.trim(),
+    notes: document.getElementById('editAssetNotes').value.trim(),
     department: document.getElementById('editAssetDepartment').value.trim().toUpperCase(),
     defaultLocation: document.getElementById('editAssetDefaultLocation').value.trim(),
     currentLocation: document.getElementById('editAssetCurrentLocation').value.trim(),
@@ -14808,6 +14928,7 @@ function collectAddAssetPayload() {
     brand: addAssetValue('assetBrand'),
     model: addAssetValue('assetModel'),
     description: addAssetValue('assetDescription'),
+    notes: addAssetValue('assetNotes'),
     dateOfPurchase: addAssetValue('assetDateOfPurchase'),
     department: addAssetValue('assetDepartment') || 'UN',
     isBulk,
@@ -16178,13 +16299,12 @@ function bulkMaintenanceStatusLabel(status) {
 
 function bulkMaintenanceStatusOptionsHtml(selectedStatus = 'ooc') {
   const selected = String(selectedStatus || 'ooc').toLowerCase();
-  return [
-    ['ooc', 'OOC'],
-    ['missing', 'Missing'],
-    ['degraded', 'Degraded']
-  ].map(([value, label]) => `
-    <option value="${escapeHtmlAttr(value)}" ${selected === value ? 'selected' : ''}>${escapeHtml(label)}</option>
-  `).join('');
+  return ['ooc', 'missing', 'degraded'].map(value => {
+    const meta = maintenanceStatusMeta(value);
+    return `
+    <option value="${escapeHtmlAttr(value)}" style="color:${meta.color};font-weight:600;" ${selected === value ? 'selected' : ''}>${escapeHtml(meta.label)}</option>
+  `;
+  }).join('');
 }
 
 function bulkMaintenanceFaultCapacity(asset) {
@@ -16251,7 +16371,7 @@ function openBulkMaintenanceFaultModal(assetId) {
           </div>
           <div class="form-group">
             <label class="form-label" for="bulkFaultStatus">Asset Status</label>
-            <select class="form-input" id="bulkFaultStatus" required>
+            <select class="form-input" id="bulkFaultStatus" data-maintenance-status-select="true" onchange="applyMaintenanceStatusSelectStyle(this)" required>
               ${bulkMaintenanceStatusOptionsHtml('ooc')}
             </select>
           </div>
@@ -16274,6 +16394,7 @@ function openBulkMaintenanceFaultModal(assetId) {
   });
 
   const modal = document.getElementById('bulkMaintenanceFaultModal');
+  initialiseMaintenanceStatusSelects(modal);
   enhanceModalAccessibility(modal);
   focusModalStart(modal);
   modal.addEventListener('click', e => {
@@ -16366,7 +16487,7 @@ function openBulkMaintenanceFaultEditModal(assetId, faultKey, logNumber) {
           </div>
           <div class="form-group">
             <label class="form-label" for="bulkFaultEditStatus">Asset Status</label>
-            <select class="form-input" id="bulkFaultEditStatus" required>
+            <select class="form-input" id="bulkFaultEditStatus" data-maintenance-status-select="true" onchange="applyMaintenanceStatusSelectStyle(this)" required>
               ${bulkMaintenanceStatusOptionsHtml(row.status)}
             </select>
           </div>
@@ -16389,6 +16510,7 @@ function openBulkMaintenanceFaultEditModal(assetId, faultKey, logNumber) {
   });
 
   const modal = document.getElementById('bulkMaintenanceFaultEditModal');
+  initialiseMaintenanceStatusSelects(modal);
   enhanceModalAccessibility(modal);
   focusModalStart(modal);
   modal.addEventListener('click', e => {

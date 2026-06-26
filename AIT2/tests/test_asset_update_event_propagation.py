@@ -217,6 +217,26 @@ class AssetUpdateEventPropagationTests(unittest.TestCase):
         asset_payload = next(item for item in assets_response.get_json()['data'] if item['internalId'] == 'A#01')
         self.assertEqual(asset_payload['dateOfPurchase'], '2026-06-02')
 
+    def test_asset_update_saves_notes(self):
+        notes = 'Keep with show kit A\nLens cap is loose'
+        response = self.put_asset('A#01', notes=notes)
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        asset = self.data_manager.inventory['A#01']
+        self.assertEqual(asset.notes, notes)
+
+        reloaded = DataManager(self.tempdir.name)
+        reloaded.load_inventory()
+        self.assertEqual(reloaded.inventory['A#01'].notes, notes)
+
+        changes = {change['field']: change for change in asset.change_history[0]['changes']}
+        self.assertEqual(changes['notes']['new'], notes)
+
+        assets_response = self.client.get('/api/assets')
+        self.assertEqual(assets_response.status_code, 200, assets_response.get_data(as_text=True))
+        asset_payload = next(item for item in assets_response.get_json()['data'] if item['internalId'] == 'A#01')
+        self.assertEqual(asset_payload['notes'], notes)
+
     def test_asset_update_records_manual_change_history(self):
         response = self.put_asset(
             'A#01',
