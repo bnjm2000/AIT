@@ -656,7 +656,54 @@ function formatAssetPurchaseDate(value) {
 }
 
 function isAssetDegraded(asset) {
-  return !!(asset && (asset.isDegraded || asset.status === 'degraded'));
+  if (!asset) return false;
+  if (asset.isBulk) return !!asset.isDegraded;
+  return !!(asset.isDegraded || asset.status === 'degraded');
+}
+
+function maintenanceLogMarksStatus(log, status, action = 'marked') {
+  const record = normalizeMaintenanceLogRecord(log);
+  const targetStatus = String(status || '').trim().toLowerCase();
+  const targetAction = String(action || '').trim().toLowerCase();
+  return (record.changes || []).some(change =>
+    String(change.kind || '').trim().toLowerCase() === targetStatus &&
+    String(change.action || '').trim().toLowerCase() === targetAction
+  );
+}
+
+function cleanDegradedReasonText(value, maxLength = 240) {
+  const reason = String(value || '').replace(/\s+/g, ' ').trim();
+  if (!reason) return '';
+  return reason.length > maxLength ? `${reason.slice(0, maxLength - 1).trim()}...` : reason;
+}
+
+function getAssetDegradedReasons(asset, limit = 3) {
+  if (!asset) return [];
+
+  const directReasons = Array.isArray(asset.degradedReasons)
+    ? asset.degradedReasons.map(reason => cleanDegradedReasonText(reason)).filter(Boolean)
+    : [];
+  if (directReasons.length) return directReasons.slice(0, limit);
+
+  let activeReason = '';
+  getMaintenanceLogRecords(asset).forEach(log => {
+    if (maintenanceLogMarksStatus(log, 'degraded', 'marked')) {
+      activeReason = cleanDegradedReasonText(log.description);
+    }
+    if (maintenanceLogMarksStatus(log, 'degraded', 'cleared')) {
+      activeReason = '';
+    }
+  });
+
+  return activeReason ? [activeReason] : [];
+}
+
+function degradedReasonMessage(reasons) {
+  const cleanReasons = (reasons || []).map(reason => cleanDegradedReasonText(reason)).filter(Boolean);
+  if (!cleanReasons.length) return '';
+  return cleanReasons.length === 1
+    ? `\n\nReason: ${cleanReasons[0]}`
+    : `\n\nReasons:\n${cleanReasons.map(reason => `- ${reason}`).join('\n')}`;
 }
 
 function normalizeAssetAuditDateTime(value) {
@@ -849,16 +896,35 @@ function maintenanceStatusSelectHtml(id, name, selected = 'nochange') {
 
 async function confirmDegradedAssetUse(assetId, assetDetails = null) {
   const identifier = getAssetIdentifierForApi(assetDetails) || assetId;
-  const asset = assetDetails || (Array.isArray(assets)
-    ? assets.find(a => getAssetIdentifierForApi(a) === identifier || a.id === identifier || a.displayId === identifier)
-    : null);
+  const fullAsset = getAssetByApiIdentifier(identifier);
+  const asset = assetDetails
+    ? {
+        ...assetDetails,
+        maintenanceLogRecords: (
+          Array.isArray(assetDetails.maintenanceLogRecords) && assetDetails.maintenanceLogRecords.length
+            ? assetDetails.maintenanceLogRecords
+            : fullAsset?.maintenanceLogRecords
+        ),
+        maintenanceLogs: (
+          Array.isArray(assetDetails.maintenanceLogs) && assetDetails.maintenanceLogs.length
+            ? assetDetails.maintenanceLogs
+            : fullAsset?.maintenanceLogs
+        ),
+        degradedReasons: (
+          Array.isArray(assetDetails.degradedReasons) && assetDetails.degradedReasons.length
+            ? assetDetails.degradedReasons
+            : fullAsset?.degradedReasons
+        ),
+      }
+    : fullAsset;
 
   if (!isAssetDegraded(asset)) return true;
 
   const label = [asset?.brand, asset?.model, asset?.description].filter(Boolean).join(' ');
+  const reasons = getAssetDegradedReasons(asset);
   return showAppConfirm({
     title: 'Degraded Asset',
-    message: `${identifier}${label ? ` (${label})` : ''} is marked as Degraded.\n\nIt can still be used for show, but it may not be fully functional. Continue preparing this asset?`,
+    message: `${identifier}${label ? ` (${label})` : ''} is marked as Degraded.${degradedReasonMessage(reasons)}\n\nIt can still be used for show, but it may not be fully functional. Continue preparing this asset?`,
     confirmText: 'Continue',
     cancelText: 'Cancel',
     variant: 'warning',
@@ -1088,7 +1154,6 @@ function setupSingleAssetClickHandler() {
 
 // Global variables for maintenance functionality
 let selectedMaintenanceAssets = new Set();
-let selectedOOCAssets = new Set();
 
 function removeExistingListeners() {
     // Remove any existing click handlers
@@ -15388,94 +15453,6 @@ document.addEventListener("DOMContentLoaded", function () {
       }
     });
 
-  // Bulk OOC Clear Form
-  const bulkOOCForm = document.getElementById("bulkOOCForm");
-  if (bulkOOCForm) {
-    bulkOOCForm.addEventListener("submit", async function (e) {
-      e.preventDefault();
-
-      if (selectedOOCAssets.size === 0) {
-        showNotification("warning", "Please select at least one asset");
-        return;
-      }
-
-      const logEntry = document.getElementById("bulkOOCLogEntry").value.trim();
-      const maintenanceDate = document.getElementById("bulkOOCMaintenanceDate").value;
-      const newLocation = document.getElementById("bulkOOCNewLocation").value.trim();
-
-      if (!logEntry) {
-        showNotification("warning", "Please enter a maintenance description");
-        return;
-      }
-
-      if (!maintenanceDate) {
-        showNotification("warning", "Please select a maintenance date");
-        return;
-      }
-
-      try {
-        let successCount = 0;
-        let errorCount = 0;
-        const errors = [];
-        
-        // Process each selected asset
-        for (const assetId of selectedOOCAssets) {
-          try {
-            // Get serial number updates if any
-            const serialInput = document.getElementById(`newSerial_${assetId.replace(/[^a-zA-Z0-9]/g, '_')}`);
-            const newSerial = serialInput ? serialInput.value.trim() : '';
-            
-            const maintenanceData = {
-              logEntry,
-              maintenanceDate, // Include the selected date
-              newLocation: newLocation || null,
-              assetStatus: 'ok',
-              newSerial: newSerial || null,
-              cost: document.getElementById('bulkOOCCost')?.value.trim() || null
-            };
-            
-            // Encode the asset ID for the URL
-            const encodedAssetId = encodeURIComponent(assetId);
-            const requestData = maintenancePayloadToRequestData(maintenanceData, "bulkOOCMediaFiles");
-            await apiCall(`/api/assets/${encodedAssetId}/maintain`, "POST", requestData);
-            successCount++;
-          } catch (error) {
-            console.error(`Failed to clear status for ${assetId}:`, error);
-            errorCount++;
-            errors.push(`${assetId}: ${error.message}`);
-          }
-        }
-
-        closeModal("bulkOOCModal");
-        
-        if (successCount > 0) {
-          const locationText = newLocation ? ` and moved to ${newLocation}` : "";
-          showNotification("success", `Cleared asset status for ${successCount} asset${successCount > 1 ? 's' : ''}${locationText}`);
-        }
-        
-        if (errorCount > 0) {
-          showNotification("error", `Failed to clear status for ${errorCount} asset${errorCount > 1 ? 's' : ''}`);
-        }
-
-        // Refresh the OOC list
-        loadOOCAssets();
-        
-        // Clear selections
-        selectedOOCAssets.clear();
-        updateBulkOOCButton();
-
-        // Refresh other views if they're active
-        if (document.getElementById("inventory-section").classList.contains("active")) {
-          loadInventory();
-        }
-
-      } catch (error) {
-        showNotification("error", "Failed to clear status");
-        console.error("Bulk status clear error:", error);
-      }
-    });
-  }
-
   // Maintenance Form
   const maintenanceForm = document.getElementById("maintenanceForm");
   if (maintenanceForm) {
@@ -15613,26 +15590,6 @@ document.addEventListener("DOMContentLoaded", function () {
       updateMaintenanceMediaSelection("maintenanceMediaFiles", "maintenanceMediaFileList");
     });
   }
-  const bulkOOCMediaFiles = document.getElementById("bulkOOCMediaFiles");
-  if (bulkOOCMediaFiles) {
-    bulkOOCMediaFiles.addEventListener("change", () => {
-      updateMaintenanceMediaSelection("bulkOOCMediaFiles", "bulkOOCMediaFileList");
-    });
-  }
-  const singleOOCMediaFiles = document.getElementById("singleOOCMediaFiles");
-  if (singleOOCMediaFiles) {
-    singleOOCMediaFiles.addEventListener("change", () => {
-      updateMaintenanceMediaSelection("singleOOCMediaFiles", "singleOOCMediaFileList");
-    });
-  }
-
-  // Single OOC Clear Form
-  document
-    .getElementById("singleOOCForm")
-    .addEventListener("submit", async function (e) {
-      e.preventDefault();
-      await processSingleOOCClear();
-    });
 
   // Maintenance search functionality
   const maintenanceSearch = document.getElementById("maintenance-search");
@@ -16005,9 +15962,6 @@ function updateSelectedAssetsDisplay() {
   listElement.innerHTML = html;
 }
 
-// Global variable for selected OOC assets
-let selectedOOCAssets = new Set();
-
 function switchMaintenanceTab(tabName) {
   // Remove active class from all tabs
   document.querySelectorAll(".maintenance-tab").forEach((tab) => {
@@ -16100,18 +16054,10 @@ function displayOOCAssets(oocAssets) {
   }
 
   let tableHTML = `
-    <div style="margin-bottom: 15px; display: flex; gap: 10px; align-items: center;">
-      <button id="bulk-clear-ooc-btn" class="btn btn-success" onclick="openBulkOOCModal()" style="display: none;">
-        Clear Status
-      </button>
-    </div>
     <div class="table-responsive">
       <table class="table">
         <thead>
           <tr>
-            <th style="width: 40px;">
-              <input type="checkbox" id="selectAllOOCCheckbox" onchange="toggleSelectAllOOC()">
-            </th>
             <th>Asset ID</th>
             <th>Brand & Model</th>
             <th>Status</th>
@@ -16126,22 +16072,10 @@ function displayOOCAssets(oocAssets) {
   oocAssets.forEach(asset => {
     const assetId = getAssetIdentifierForApi(asset);
     const displayId = assetMaintenanceDisplayId(asset);
-    const isBulkFaultRow = asset.isBulk && (
-      Number(asset.bulkOOCQuantity || 0) > 0 ||
-      Number(asset.bulkMissingQuantity || 0) > 0 ||
-      Number(asset.bulkDegradedQuantity || 0) > 0
-    );
-    const isSelected = selectedOOCAssets.has(assetId);
     const statusHtml = assetFlagBadgesHtml(asset);
     
     tableHTML += `
-      <tr class="ooc-asset-item ${isSelected ? 'selected' : ''}" data-asset-id="${escapeHtmlAttribute(assetId)}">
-        <td>
-          ${isBulkFaultRow ? '' : `<input type="checkbox" class="ooc-asset-checkbox" 
-                ${isSelected ? 'checked' : ''} 
-                onchange="toggleOOCAssetSelection('${escapeJs(assetId)}')">`}
-        </td>
-
+      <tr class="ooc-asset-item" data-asset-id="${escapeHtmlAttribute(assetId)}">
         <td style="font-weight: 500;">
           <a href="#"
             title="View maintenance log"
@@ -16159,9 +16093,9 @@ function displayOOCAssets(oocAssets) {
         <td>${asset.location || 'Store'}</td>
         <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis;">${asset.description || '-'}</td>
         <td>
-          ${isBulkFaultRow ? `<button class="btn btn-primary btn-sm" onclick="viewMaintenanceLog('${escapeJs(assetId)}')" style="padding: 4px 8px; font-size: 11px;">View Log</button>` : `<button class="btn btn-success btn-sm" onclick="clearSingleOOC('${escapeJs(assetId)}')" style="padding: 4px 8px; font-size: 11px;">
-            Clear Status
-          </button>`}
+          <button class="btn btn-primary btn-sm" onclick="openFlaggedAssetLogEntry('${escapeJs(assetId)}')" style="padding: 4px 8px; font-size: 11px;">
+            Add Log
+          </button>
         </td>
       </tr>
     `;
@@ -16174,122 +16108,22 @@ function displayOOCAssets(oocAssets) {
   `;
   
   container.innerHTML = tableHTML;
-  
-  // Update the button state after rendering
-  updateBulkOOCButton();
 }
 
 
-
-
-
-// Update the bulk OOC button state
-
-
-
-
-
-
-
-function clearSingleOOC(assetId) {
-  // Find the asset details
-  const asset = assets ? assets.find(a => a.id === assetId) : null;
+function openFlaggedAssetLogEntry(assetId) {
+  const asset = getAssetByApiIdentifier(assetId);
   if (!asset) {
     showNotification('error', 'Asset not found');
     return;
   }
-  
-  // Set current date as default
-  const today = new Date().toISOString().split('T')[0];
-  document.getElementById('singleOOCMaintenanceDate').value = today;
-  
-  // Populate the modal
-  document.getElementById('singleOOCTitle').textContent = `Clear Status - ${assetId}`;
-  document.getElementById('singleOOCAssetId').value = assetId;
-  document.getElementById('singleOOCLogEntry').value = '';
-  document.getElementById('singleOOCNewLocation').value = 'Store';
-  document.getElementById('singleOOCNewSerial').value = '';
-  const singleCostEl = document.getElementById('singleOOCCost');
-  if (singleCostEl) singleCostEl.value = '';
-  const singleMediaEl = document.getElementById('singleOOCMediaFiles');
-  if (singleMediaEl) singleMediaEl.value = '';
-  updateMaintenanceMediaSelection('singleOOCMediaFiles', 'singleOOCMediaFileList');
-  
-  // Show asset info
-  const assetInfoDiv = document.getElementById('singleOOCAssetInfo');
-  assetInfoDiv.innerHTML = `
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px;">
-      <div><strong>Asset ID:</strong> ${asset.id}</div>
-      <div><strong>Brand:</strong> ${asset.brand}</div>
-      <div><strong>Model:</strong> ${asset.model}</div>
-      <div><strong>Current Location:</strong> ${asset.location || 'Store'}</div>
-      <div><strong>Current Serial:</strong> ${asset.serial || 'None'}</div>
-    </div>
-    ${asset.description ? `<div style="margin-top: 8px;"><strong>Description:</strong> ${escapeJs(asset.description || '')}</div>` : ''}
-  `;
-  
-  // Open the modal
-  openModal('singleOOCModal');
-}
 
-async function processSingleOOCClear() {
-  const assetId = document.getElementById('singleOOCAssetId').value;
-  const logEntry = document.getElementById('singleOOCLogEntry').value.trim();
-  const maintenanceDate = document.getElementById('singleOOCMaintenanceDate').value;
-  const newLocation = document.getElementById('singleOOCNewLocation').value.trim();
-  const newSerial = document.getElementById('singleOOCNewSerial').value.trim();
-  const repairCost = document.getElementById('singleOOCCost')?.value.trim() || '';
-  
-  if (!logEntry) {
-    showNotification("warning", "Please enter a maintenance description");
+  if (asset.isBulk) {
+    openBulkMaintenanceFaultModal(getAssetIdentifierForApi(asset));
     return;
   }
-  
-  if (!maintenanceDate) {
-    showNotification("warning", "Please select a maintenance date");
-    return;
-  }
-  
-  if (!newLocation) {
-    showNotification("warning", "Please enter a location");
-    return;
-  }
-  
-  try {
-    const maintenanceData = {
-      logEntry: logEntry,
-      maintenanceDate: maintenanceDate, // Include the selected date
-      newLocation: newLocation,
-      assetStatus: 'ok',
-      cost: repairCost || null
-    };
-    
-    // Add serial number if provided
-    if (newSerial) {
-      maintenanceData.newSerial = newSerial;
-    }
-    
-    const requestData = maintenancePayloadToRequestData(maintenanceData, 'singleOOCMediaFiles');
-    await apiCall(`/api/assets/${encodeURIComponent(assetId)}/maintain`, "POST", requestData);
-    
-    closeModal('singleOOCModal');
-    
-    let message = `Cleared status for ${assetId} and moved to ${newLocation}`;
-    if (newSerial) {
-      message += ` (Serial updated to: ${newSerial})`;
-    }
-    showNotification("success", message);
-    
-    // Refresh the OOC list
-    loadOOCAssets();
-    
-    // Remove from selection if it was selected
-    selectedOOCAssets.delete(assetId);
-    updateBulkOOCButton();
-    
-  } catch (error) {
-    showNotification("error", `Failed to clear status: ${error.message}`);
-  }
+
+  openMaintenanceModalForAsset(getAssetIdentifierForApi(asset));
 }
 
 async function viewMaintenanceLog(assetId) {
@@ -17203,11 +17037,11 @@ window.viewMaintenanceLog = viewMaintenanceLog;
 window.openMaintenanceModal = openMaintenanceModal;
 window.switchMaintenanceTab = switchMaintenanceTab;
 window.openMaintenanceModalForAsset = openMaintenanceModal;
-window.clearSingleOOC = clearSingleOOC;
 window.addNewLogEntryFromModal = addNewLogEntryFromModal;
 window.returnSpecificAssetNew = returnSpecificAssetNew;
 window.selectAssetForMaintenance = selectAssetForMaintenance;
 window.removeAssetFromMaintenance = removeAssetFromMaintenance;
+window.openFlaggedAssetLogEntry = openFlaggedAssetLogEntry;
 window.openBulkMaintenanceFaultModal = openBulkMaintenanceFaultModal;
 window.closeBulkMaintenanceFaultModal = closeBulkMaintenanceFaultModal;
 window.openBulkMaintenanceFaultEditModal = openBulkMaintenanceFaultEditModal;
@@ -17332,119 +17166,7 @@ function deleteMaintenanceLogFromModal(assetId, logIndex, logId) {
   deleteMaintenanceLog(assetId, logIndex, logId);
 }
 
-// Toggle select all OOC assets
-function toggleSelectAllOOC() {
-  const selectAllCheckbox = document.getElementById('selectAllOOCCheckbox');
-  const isChecked = selectAllCheckbox.checked;
-  
-  // Get all individual asset checkboxes
-  const assetCheckboxes = document.querySelectorAll('.ooc-asset-checkbox');
-  
-  assetCheckboxes.forEach(checkbox => {
-    const assetId = checkbox.getAttribute('data-asset-id') || 
-                   checkbox.closest('[data-asset-id]')?.getAttribute('data-asset-id');
-    
-    if (assetId) {
-      checkbox.checked = isChecked;
-      
-      if (isChecked) {
-        selectedOOCAssets.add(assetId);
-        checkbox.closest('tr')?.classList.add('selected');
-      } else {
-        selectedOOCAssets.delete(assetId);
-        checkbox.closest('tr')?.classList.remove('selected');
-      }
-    }
-  });
-  
-  updateSelectedOOCDisplay();
-  updateBulkOOCButton();
-}
-
-// Toggle individual OOC asset selection
-function toggleOOCAssetSelection(assetId) {
-  const checkbox = document.querySelector(`.ooc-asset-checkbox[onchange*="${assetId}"]`);
-  const row = checkbox?.closest('tr');
-  
-  if (checkbox.checked) {
-    selectedOOCAssets.add(assetId);
-    row?.classList.add('selected');
-  } else {
-    selectedOOCAssets.delete(assetId);
-    row?.classList.remove('selected');
-  }
-  
-  // Update the "select all" checkbox state
-  const selectAllCheckbox = document.getElementById('selectAllOOCCheckbox');
-  const allCheckboxes = document.querySelectorAll('.ooc-asset-checkbox');
-  const checkedCheckboxes = document.querySelectorAll('.ooc-asset-checkbox:checked');
-  
-  if (selectAllCheckbox) {
-    selectAllCheckbox.checked = allCheckboxes.length > 0 && checkedCheckboxes.length === allCheckboxes.length;
-    selectAllCheckbox.indeterminate = checkedCheckboxes.length > 0 && checkedCheckboxes.length < allCheckboxes.length;
-  }
-  
-  updateSelectedOOCDisplay();
-  updateBulkOOCButton();
-}
-
-// Update the selected OOC assets display
-function updateSelectedOOCDisplay() {
-  const countElement = document.getElementById('selectedOOCCount');
-  const containerElement = document.getElementById('selectedOOCAssets');
-  const serialUpdatesContainer = document.getElementById('bulkSerialNumberUpdates');
-  
-  if (countElement) {
-    countElement.textContent = selectedOOCAssets.size;
-  }
-  
-  if (!containerElement) return;
-  
-  let html = '<div style="display: flex; flex-wrap: wrap; gap: 8px;">';
-  let serialHtml = '<div style="display: flex; flex-direction: column; gap: 8px;">';
-  
-  if (selectedOOCAssets.size === 0) {
-    html = '<div style="color: #666; font-style: italic;">No assets selected</div>';
-    serialHtml = '<div style="color: #666; font-style: italic;">No assets selected</div>';
-  }
-  
-  selectedOOCAssets.forEach(assetId => {
-    const asset = assets ? assets.find(a => a.id === assetId) : null;
-    if (asset) {
-      html += `
-        <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px; background: white; border: 1px solid #ddd; border-radius: 4px;">
-          <div>
-            <span style="font-weight: 500;">${assetId}</span>
-            <span style="color: #666; margin-left: 10px;">${asset.brand} ${asset.model}</span>
-          </div>
-          <button onclick="removeFromOOCSelection('${assetId}')" style="background: none; border: none; color: #999; cursor: pointer; font-size: 16px;" title="Remove">×</button>
-        </div>
-      `;
-      
-      serialHtml += `
-        <div style="display: flex; align-items: center; gap: 10px; padding: 8px; background: white; border: 1px solid #ddd; border-radius: 4px;">
-          <div style="flex: 1;">
-            <span style="font-weight: 500; font-size: 12px;">${assetId}</span>
-            <div style="color: #666; font-size: 11px;">Current SN: ${asset.serial || 'None'}</div>
-          </div>
-          <input 
-            type="text" 
-            placeholder="New serial number" 
-            id="newSerial_${assetId.replace(/[^a-zA-Z0-9]/g, '_')}"
-            style="flex: 2; padding: 4px 8px; border: 1px solid #ddd; border-radius: 3px; font-size: 12px;"
-          />
-        </div>
-      `;
-    }
-  });
-  html += '</div>';
-  serialHtml += '</div>';
-  
-  containerElement.innerHTML = html;
-  if (serialUpdatesContainer) {
-    serialUpdatesContainer.innerHTML = serialHtml;
-  }
-}});
+});
 
 function editCustomAssetQuantity(eventId, assetId, assetName, assetType) {
   const custom = parseCustomAsset(assetId) || { name: assetName, quantity: 1, type: assetType };
@@ -17575,93 +17297,13 @@ async function updateCustomAssetQuantity(eventId, oldAssetId, assetName, assetTy
   }
 }
 
-// Remove asset from OOC selection
-function removeFromOOCSelection(assetId) {
-  selectedOOCAssets.delete(assetId);
-  
-  // Uncheck the checkbox
-  const checkbox = document.querySelector(`.ooc-asset-checkbox[onchange*="${assetId}"]`);
-  if (checkbox) {
-    checkbox.checked = false;
-    checkbox.closest('tr')?.classList.remove('selected');
-  }
-  
-  updateSelectedOOCDisplay();
-  updateOOCAssetDisplay();
-  updateBulkOOCButton();
-}
-
-// Update the bulk OOC button state
-function updateBulkOOCButton() {
-  const bulkButton = document.getElementById('bulk-clear-ooc-btn');
-  const countSpan = document.getElementById('selectedOOCCount');
-  
-  if (bulkButton && countSpan) {
-    const count = selectedOOCAssets.size;
-    bulkButton.disabled = count === 0;
-    bulkButton.textContent = `Clear Status (${count} selected)`;
-    
-    if (count === 0) {
-      bulkButton.classList.add('btn-secondary');
-      bulkButton.classList.remove('btn-success');
-    } else {
-      bulkButton.classList.add('btn-success');
-      bulkButton.classList.remove('btn-secondary');
-    }
-  }
-}
-
-// Update OOC asset display
-function updateOOCAssetDisplay() {
-  // This function updates the visual state of the OOC assets list
-  const assetRows = document.querySelectorAll('[data-asset-id]');
-  
-  assetRows.forEach(row => {
-    const assetId = row.getAttribute('data-asset-id');
-    const checkbox = row.querySelector('.ooc-asset-checkbox');
-    
-    if (assetId && checkbox) {
-      if (selectedOOCAssets.has(assetId)) {
-        row.classList.add('selected');
-        checkbox.checked = true;
-      } else {
-        row.classList.remove('selected');
-        checkbox.checked = false;
-      }
-    }
-  });
-}
-
-// Open bulk OOC modal
-function openBulkOOCModal() {
-  if (selectedOOCAssets.size === 0) {
-    showNotification('warning', 'Please select at least one asset to clear status');
-    return;
-  }
-  
-  // Set current date as default
-  const today = new Date().toISOString().split('T')[0];
-  const dateField = document.getElementById('bulkOOCMaintenanceDate');
-  if (dateField) {
-    dateField.value = today;
-  }
-  const bulkMediaEl = document.getElementById('bulkOOCMediaFiles');
-  if (bulkMediaEl) bulkMediaEl.value = '';
-  updateMaintenanceMediaSelection('bulkOOCMediaFiles', 'bulkOOCMediaFileList');
-  
-  // Update the display of selected assets
-  updateSelectedOOCDisplay();
-  
-  openModal('bulkOOCModal');
-}
-
 // Filter OOC assets (for search functionality)
 function filterOOCAssets() {
   const searchInput = document.getElementById('ooc-search');
   if (!searchInput) return;
   
   const searchTerm = searchInput.value.toLowerCase().trim();
-  const assetRows = document.querySelectorAll('#ooc-assets-list tr:not(:first-child)'); // Skip header row
+  const assetRows = document.querySelectorAll('#ooc-assets-list tbody tr');
   
   assetRows.forEach(row => {
     const text = row.textContent.toLowerCase();

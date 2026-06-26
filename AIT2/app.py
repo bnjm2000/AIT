@@ -1888,6 +1888,79 @@ def _bulk_maintenance_logbook_for_response(asset):
     return rows
 
 
+def _maintenance_log_marks_status(record, status, action='marked'):
+    target_status = str(status or '').strip().lower()
+    target_action = str(action or '').strip().lower()
+    for change in normalize_maintenance_log(record).get('changes', []) or []:
+        kind = str(change.get('kind') or '').strip().lower()
+        change_action = str(change.get('action') or '').strip().lower()
+        if kind == target_status and change_action == target_action:
+            return True
+    return False
+
+
+def _clean_warning_reason(value, max_length=240):
+    reason = str(value or '').strip()
+    if not reason:
+        return ''
+    reason = re.sub(r'\s+', ' ', reason)
+    if len(reason) > max_length:
+        return reason[:max_length - 1].rstrip() + '...'
+    return reason
+
+
+def _asset_degraded_reasons(asset, limit=3):
+    if not asset:
+        return []
+
+    active_reason = ''
+    for log_entry in getattr(asset, 'maintenance_logs', []) or []:
+        record = normalize_maintenance_log(log_entry)
+        if _maintenance_log_marks_status(record, 'degraded', 'marked'):
+            active_reason = _clean_warning_reason(record.get('description'))
+        if _maintenance_log_marks_status(record, 'degraded', 'cleared'):
+            active_reason = ''
+
+    return [active_reason] if active_reason else []
+
+
+def _bulk_degraded_reasons(asset, limit=3):
+    reasons = []
+
+    if _is_degraded(asset):
+        reasons.extend(_asset_degraded_reasons(asset, limit=limit))
+
+    for entry in _bulk_maintenance_open_faults(asset):
+        if entry.get('status') != 'degraded':
+            continue
+        reason = _clean_warning_reason((entry.get('fault') or {}).get('description'))
+        if reason:
+            reasons.append(reason)
+        if len(reasons) >= limit:
+            break
+
+    return reasons[:limit]
+
+
+def _warning_reason_text(reasons):
+    clean_reasons = [_clean_warning_reason(reason) for reason in (reasons or [])]
+    clean_reasons = [reason for reason in clean_reasons if reason]
+    if not clean_reasons:
+        return ''
+    if len(clean_reasons) == 1:
+        return f" Reason: {clean_reasons[0]}"
+    return " Reasons: " + "; ".join(clean_reasons)
+
+
+def _degraded_asset_warning(asset, asset_id):
+    reasons = _asset_degraded_reasons(asset)
+    return (
+        f"Asset {asset_id} is marked as Degraded."
+        f"{_warning_reason_text(reasons)} "
+        "It can be used, but please verify the limitation before show."
+    )
+
+
 def _apply_exclusive_asset_status(asset, target_status):
     """Set one condition status on an asset. target_status='ok' clears all."""
     for attr in ('is_ooc', 'is_missing', 'is_degraded', 'is_disposed'):
@@ -2934,6 +3007,8 @@ def _bulk_available_quantity_for_event(bulk_asset, target_event, require_overlap
 
     fault_counts = _bulk_maintenance_quantity_counts(bulk_asset)
     unavailable_faults = fault_counts['ooc'] + fault_counts['missing']
+    if not include_degraded and _is_degraded(bulk_asset):
+        return 0
     if not include_degraded:
         unavailable_faults += fault_counts['degraded']
 
@@ -2962,8 +3037,11 @@ def _bulk_asset_to_available_dict(asset, target_event=None):
             preparable_quantity = 0
         else:
             unavailable_quantity = fault_counts['ooc'] + fault_counts['missing']
-            healthy_available_quantity = max(0, total_quantity - unavailable_quantity - fault_counts['degraded'])
             preparable_quantity = max(0, total_quantity - unavailable_quantity)
+            healthy_available_quantity = (
+                0 if _is_degraded(asset)
+                else max(0, total_quantity - unavailable_quantity - fault_counts['degraded'])
+            )
 
     if status not in ('decommissioned', 'missing', 'ooc'):
         if fault_counts['missing'] > 0:
@@ -3002,6 +3080,8 @@ def _bulk_asset_to_available_dict(asset, target_event=None):
         'bulkMissingQuantity': fault_counts['missing'],
         'bulkDegradedQuantity': fault_counts['degraded'],
         'bulkFaultQuantity': fault_counts['total'],
+        'degradedReasons': _asset_degraded_reasons(asset),
+        'bulkDegradedReasons': _bulk_degraded_reasons(asset),
     }
 
 def _parse_model_assignment_key(value):
@@ -3061,7 +3141,8 @@ def _asset_to_available_dict(asset):
         'isDisposed': _is_disposed(asset),
         'isBulk': False,
         'quantity': 1,
-        'availableQuantity': 1
+        'availableQuantity': 1,
+        'degradedReasons': _asset_degraded_reasons(asset),
     }
 
 def require_auth(f):
@@ -3168,7 +3249,8 @@ def get_available_assets_for_event(event_id):
                 'isDisposed': _is_disposed(asset),
                 'isBulk': False,
                 'quantity': 1,
-                'availableQuantity': 1
+                'availableQuantity': 1,
+                'degradedReasons': _asset_degraded_reasons(asset),
             })
 
         return jsonify({'success': True, 'data': final_list})
@@ -6386,7 +6468,13 @@ def get_event_model_availability(event_id):
                 counts = _bulk_maintenance_quantity_counts(asset)
                 maintenance_ooc_by_key[key] += counts['ooc']
                 maintenance_missing_by_key[key] += counts['missing']
-                maintenance_degraded_by_key[key] += counts['degraded']
+                degraded_quantity = counts['degraded']
+                if _is_degraded(asset):
+                    degraded_quantity = max(
+                        degraded_quantity,
+                        max(_asset_inventory_quantity(asset) - counts['ooc'] - counts['missing'], 0)
+                    )
+                maintenance_degraded_by_key[key] += degraded_quantity
 
         # Quantity already reserved/requested in this same event.  This includes
         # normal model rows plus any specific prepared bulk/individual assets.
@@ -7143,7 +7231,7 @@ def prepare_event_asset(event_id):
         }
         prepared_asset = data_manager.inventory.get(asset_id)
         if prepared_asset and _is_degraded(prepared_asset):
-            response_payload['warning'] = f'Asset {asset_id} is marked as Degraded. It can be used, but please verify the limitation before show.'
+            response_payload['warning'] = _degraded_asset_warning(prepared_asset, asset_id)
         return jsonify(response_payload)
     except Exception as e:
         logger.error(f"Error preparing asset for event {event_id}: {e}")
@@ -7645,12 +7733,18 @@ def assign_specific_asset_to_model(event_id):
                     'isExtra': False,
                     'addedToEvent': add_scanned_assets_to_event,
                     'addedRequirementUnits': added_requirement_units,
+                    'healthyQuantityUsed': min(quantity, healthy_quantity),
+                    'degradedQuantityUsed': max(quantity - healthy_quantity, 0),
                 }
             }
-            if quantity > healthy_quantity and _bulk_maintenance_quantity_counts(bulk_asset)['degraded'] > 0:
+            degraded_quantity_used = max(quantity - healthy_quantity, 0)
+            if degraded_quantity_used > 0:
+                reasons = _bulk_degraded_reasons(bulk_asset, limit=degraded_quantity_used)
                 response_payload['warning'] = (
-                    f"{quantity - healthy_quantity}x {bulk_asset.brand} {bulk_asset.model_number} "
-                    "is marked as Degraded. It can be used, but please verify the limitation before show."
+                    f"There are not enough fully working {bulk_asset.brand} {bulk_asset.model_number} assets for this preparation. "
+                    f"{degraded_quantity_used} degraded unit{'s' if degraded_quantity_used != 1 else ''} will be used."
+                    f"{_warning_reason_text(reasons)} "
+                    "Please verify the limitation before show."
                 )
             return jsonify(response_payload)
 
@@ -7774,7 +7868,7 @@ def assign_specific_asset_to_model(event_id):
         }
         assigned_asset = data_manager.inventory.get(asset_id)
         if assigned_asset and _is_degraded(assigned_asset):
-            response_payload['warning'] = f'Asset {asset_id} is marked as Degraded. It can be used, but please verify the limitation before show.'
+            response_payload['warning'] = _degraded_asset_warning(assigned_asset, asset_id)
         return jsonify(response_payload)
 
     except Exception as e:
@@ -8967,7 +9061,8 @@ def get_assets():
                 else available_quantity
             )
             healthy_quantity = (
-                max(0, preparable_quantity - bulk_fault_counts['degraded'])
+                0 if (is_bulk and _is_degraded(asset))
+                else max(0, preparable_quantity - bulk_fault_counts['degraded'])
                 if is_bulk else available_quantity
             )
 
@@ -9027,6 +9122,8 @@ def get_assets():
                 'bulkMissingQuantity': bulk_fault_counts['missing'] if is_bulk else 0,
                 'bulkDegradedQuantity': bulk_fault_counts['degraded'] if is_bulk else 0,
                 'bulkFaultQuantity': bulk_fault_counts['total'] if is_bulk else 0,
+                'degradedReasons': _asset_degraded_reasons(asset),
+                'bulkDegradedReasons': _bulk_degraded_reasons(asset) if is_bulk else [],
                 'bulkMaintenanceLogbook': _bulk_maintenance_logbook_for_response(asset) if is_bulk else []
             })
 

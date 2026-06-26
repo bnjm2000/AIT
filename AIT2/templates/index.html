@@ -1260,23 +1260,13 @@
         display: block;
       }
 
-      /* OOC asset selection styling */
+      /* Flagged asset list styling */
       .ooc-asset-item {
         transition: all 0.2s ease;
       }
 
       .ooc-asset-item:hover {
         background-color: #f8f9fa !important;
-      }
-
-      .ooc-asset-item.selected {
-        background-color: #e7f3ff !important;
-        border-color: #007bff !important;
-      }
-
-      .ooc-asset-checkbox {
-        transform: scale(1.2);
-        margin-right: 10px;
       }
 
       /* OOC status button */
@@ -3562,16 +3552,8 @@
                       class="search-bar"
                       placeholder="Search flagged assets..."
                       id="ooc-search"
-                      style="flex: 1; margin-right: 15px; margin-bottom: 0;"
+                      style="flex: 1; margin-bottom: 0;"
                     />
-                    <button
-                      class="btn btn-success"
-                      onclick="openBulkOOCModal()"
-                      id="bulk-clear-ooc-btn"
-                      disabled
-                    >
-                      Clear Status
-                    </button>
                   </div>
                   
                   <div id="ooc-assets-list">
@@ -3583,205 +3565,6 @@
           </div>
         </div>
       </div>
-
-    <!-- Bulk OOC Clear Modal -->
-    <div id="bulkOOCModal" class="modal">
-      <div class="modal-content" style="max-width: 800px;">
-        <div class="modal-header">
-          <h3 class="modal-title">Clear Status</h3>
-          <button class="close-btn" onclick="closeModal('bulkOOCModal')">
-            &times;
-          </button>
-        </div>
-        <form id="bulkOOCForm">
-          <!-- Selected OOC Assets Display -->
-          <div class="form-group">
-            <label class="form-label">Selected Assets (<span id="selectedOOCCount">0</span>)</label>
-            <div id="selectedOOCAssets" style="border: 1px solid #e9ecef; border-radius: 8px; padding: 15px; background: #f8f9fa; min-height: 100px; max-height: 200px; overflow-y: auto;">
-              <div style="color: #666; font-style: italic;">No assets selected</div>
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">Maintenance Completed Description</label>
-            <textarea
-              class="form-input"
-              id="bulkOOCLogEntry"
-              rows="3"
-              required
-              placeholder="Describe maintenance/repair work"
-            ></textarea>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label" for="bulkOOCMediaFiles">Photos / Videos (optional)</label>
-            <input
-              type="file"
-              class="form-input"
-              id="bulkOOCMediaFiles"
-              accept="image/*,video/*,.jpg,.jpeg,.png,.mp4,.mov"
-              multiple
-            />
-            <div id="bulkOOCMediaFileList" class="maintenance-media-selection"></div>
-          </div>
-
-          <!-- Maintenance Date -->
-          <div class="form-group">
-            <label class="form-label">Maintenance Date</label>
-            <input
-              type="date"
-              class="form-input"
-              id="bulkOOCMaintenanceDate"
-              required
-            />
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">Update Serial Numbers (optional)</label>
-            <div style="background: #f8f9fa; padding: 12px; border-radius: 6px; border: 1px solid #e9ecef; margin-bottom: 10px;">
-              <div id="bulkSerialNumberUpdates">
-                
-              </div>
-            </div>
-          </div>
-          
-          <div class="form-group">
-            <label class="form-label">New Location (optional)</label>
-            <input
-              type="text"
-              class="form-input"
-              id="bulkOOCNewLocation"
-              placeholder="Leave blank to set to Store"
-            />
-          </div>
-          
-          <div class="modal-actions" style="display: flex; gap: 10px; justify-content: flex-end">
-            <button
-              type="button"
-              class="btn btn-secondary"
-              onclick="closeModal('bulkOOCModal')"
-            >
-              Cancel
-            </button>
-            <button type="submit" class="btn btn-success">
-              Clear OOC Status
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-
-    <!-- Single OOC Clear Modal -->
-    <div id="singleOOCModal" class="modal">
-      <div class="modal-content" style="max-width: 600px;">
-        <div class="modal-header">
-          <h3 class="modal-title" id="singleOOCTitle">Clear Status</h3>
-          <button class="close-btn" onclick="closeModal('singleOOCModal')">
-            &times;
-          </button>
-        </div>
-        <form id="singleOOCForm">
-          <div class="form-group">
-            <label class="form-label">Asset Information</label>
-            <div id="singleOOCAssetInfo" style="background: #f8f9fa; padding: 12px; border-radius: 6px; border: 1px solid #e9ecef;">
-              <!-- Asset info will be populated here -->
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">Maintenance Completed Description</label>
-            <textarea
-              class="form-input"
-              id="singleOOCLogEntry"
-              rows="3"
-              required
-              placeholder="Describe maintenance/repair work"
-            ></textarea>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label" for="singleOOCMediaFiles">Photos / Videos (optional)</label>
-            <input
-              type="file"
-              class="form-input"
-              id="singleOOCMediaFiles"
-              accept="image/*,video/*,.jpg,.jpeg,.png,.mp4,.mov"
-              multiple
-            />
-            <div id="singleOOCMediaFileList" class="maintenance-media-selection"></div>
-          </div>
-
-          <!-- Maintenance Date -->
-          <div class="form-group">
-            <label class="form-label">Maintenance Date</label>
-            <input
-              type="date"
-              class="form-input"
-              id="singleOOCMaintenanceDate"
-              required
-            />
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">Cost (optional)</label>
-            <div style="display:flex;align-items:center;border:2px solid #e9ecef;border-radius:8px;background:white;overflow:hidden;">
-              <span style="padding:12px 0 12px 12px;color:#495057;font-weight:600;">$</span>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                class="form-input"
-                id="singleOOCCost"
-                placeholder="Repair cost, if any"
-                style="border:0;box-shadow:none;"
-              />
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">Update Serial Number (optional)</label>
-            <input
-              type="text"
-              class="form-input"
-              id="singleOOCNewSerial"
-            />
-            <small style="color: #666; font-size: 12px; margin-top: 5px; display: block;">
-              For 1-to-1 exchanges
-            </small>
-          </div>
-          
-          <div class="form-group">
-            <label class="form-label">New Location</label>
-            <input
-              type="text"
-              class="form-input"
-              id="singleOOCNewLocation"
-              value="Store"
-              placeholder="Enter new location for the asset"
-            />
-            <small style="color: #666; font-size: 12px; margin-top: 5px; display: block;">
-              Asset will be moved to this location after clearing OOC status
-            </small>
-          </div>
-          
-          <input type="hidden" id="singleOOCAssetId" />
-          
-          <div class="modal-actions" style="display: flex; gap: 10px; justify-content: flex-end">
-            <button
-              type="button"
-              class="btn btn-secondary"
-              onclick="closeModal('singleOOCModal')"
-            >
-              Cancel
-            </button>
-            <button type="submit" class="btn btn-success">
-              Clear Status
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-
     <!-- Add Event Modal -->
     <div id="addEventModal" class="modal">
       <div class="modal-content">

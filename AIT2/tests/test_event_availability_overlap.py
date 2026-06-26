@@ -329,8 +329,36 @@ class EventAvailabilityOverlapTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
         self.assertIn('warning', response.get_json())
-        self.assertIn('Degraded', response.get_json()['warning'])
+        self.assertIn('not enough fully working', response.get_json()['warning'])
+        self.assertIn('6 degraded units', response.get_json()['warning'])
+        self.assertIn('Unit 1 has cosmetic grille damage', response.get_json()['warning'])
         self.assertIn(app_module._bulk_marker('BULK-0001', 6), target.actually_prepared)
+
+    def test_bulk_prepare_uses_healthy_quantity_first_without_warning(self):
+        target = self.make_event(
+            100,
+            prepared=['[MODEL]AX|TestBrand|BulkModel|4|Bulk item'],
+        )
+        self.login_as()
+
+        for unit_number in range(1, 3):
+            response = self.client.post('/api/assets/BULK-0001/maintain', json={
+                'logEntry': f'Unit {unit_number} has cosmetic grille damage',
+                'maintenanceDate': '2026-05-20',
+                'assetStatus': 'degraded',
+            })
+            self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+
+        response = self.client.post(
+            '/api/events/100/assign-specific',
+            json={'assetId': 'BULK-0001'},
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertNotIn('warning', response.get_json())
+        self.assertEqual(response.get_json()['data']['healthyQuantityUsed'], 4)
+        self.assertEqual(response.get_json()['data']['degradedQuantityUsed'], 0)
+        self.assertIn(app_module._bulk_marker('BULK-0001', 4), target.actually_prepared)
 
     def test_inventory_bulk_asset_includes_deployment_breakdown(self):
         returned_marker = app_module._bulk_marker('BULK-0001', 3)
@@ -387,7 +415,15 @@ class EventAvailabilityOverlapTests(unittest.TestCase):
             100,
             prepared=['[MODEL]AX|TestBrand|RegularModel|1|Regular item'],
         )
-        self.data_manager.inventory['A#01'].is_degraded = True
+        asset = self.data_manager.inventory['A#01']
+        asset.is_degraded = True
+        asset.maintenance_logs.append(app_module.make_maintenance_log(
+            '2026/05/20',
+            'normal',
+            'Intermittent audio dropout on channel A',
+            [app_module.make_change('degraded', action='marked')],
+            log_type='Fault',
+        ))
 
         self.login_as()
         response = self.client.post('/api/events/100/assign-specific', json={'assetId': 'A#01'})
@@ -395,6 +431,7 @@ class EventAvailabilityOverlapTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
         self.assertIn('warning', response.get_json())
         self.assertIn('Degraded', response.get_json()['warning'])
+        self.assertIn('Intermittent audio dropout on channel A', response.get_json()['warning'])
         self.assertIn('A#01', event.actually_prepared)
 
 
