@@ -254,6 +254,50 @@ class EventAvailabilityOverlapTests(unittest.TestCase):
         self.assertEqual(bulk_asset['preparableQuantity'], 6)
         self.assertEqual(bulk_asset['bulkOOCQuantity'], 0)
         self.assertTrue(bulk_asset['bulkMaintenanceLogbook'][0]['isResolved'])
+        self.assertEqual(bulk_asset['bulkMaintenanceLogbook'][0]['resolution']['cost'], '0.00')
+
+    def test_bulk_missing_quantity_creates_individual_logs_and_reduces_available(self):
+        self.make_event(100)
+        self.login_as()
+
+        response = self.client.post('/api/assets/BULK-0001/maintain', json={
+            'affectedQuantity': 3,
+            'logEntry': 'Three units are missing from the return',
+            'maintenanceDate': '2026-05-20',
+            'assetStatus': 'missing',
+        })
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(response.get_json()['data']['createdCount'], 3)
+
+        assets_response = self.client.get('/api/assets')
+        bulk_asset = next(item for item in assets_response.get_json()['data'] if item['bulkId'] == 'BULK-0001')
+        self.assertEqual(bulk_asset['availableQuantity'], 3)
+        self.assertEqual(bulk_asset['preparableQuantity'], 3)
+        self.assertEqual(bulk_asset['healthyQuantity'], 3)
+        self.assertEqual(bulk_asset['bulkMissingQuantity'], 3)
+        self.assertEqual(len(bulk_asset['bulkMaintenanceLogbook']), 3)
+        self.assertEqual([row['logNumber'] for row in bulk_asset['bulkMaintenanceLogbook']], [1, 2, 3])
+
+        self.login_as('admin', True)
+        fault = app_module._bulk_maintenance_fault_entries(self.data_manager.inventory['BULK-0001'])[0]
+        response = self.client.put(
+            f"/api/assets/BULK-0001/bulk-maintenance/{fault['id']}",
+            json={
+                'logEntry': 'Unit found, grille is damaged',
+                'maintenanceDate': '2026-05-21',
+                'assetStatus': 'degraded',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        assets_response = self.client.get('/api/assets')
+        bulk_asset = next(item for item in assets_response.get_json()['data'] if item['bulkId'] == 'BULK-0001')
+        self.assertEqual(bulk_asset['availableQuantity'], 4)
+        self.assertEqual(bulk_asset['preparableQuantity'], 4)
+        self.assertEqual(bulk_asset['healthyQuantity'], 3)
+        self.assertEqual(bulk_asset['bulkMissingQuantity'], 2)
+        self.assertEqual(bulk_asset['bulkDegradedQuantity'], 1)
 
     def test_degraded_bulk_quantity_can_prepare_with_warning(self):
         target = self.make_event(
@@ -273,8 +317,9 @@ class EventAvailabilityOverlapTests(unittest.TestCase):
 
         available_response = self.client.get('/api/assets/available-for-event/100')
         available_bulk = next(item for item in available_response.get_json()['data'] if item['bulkId'] == 'BULK-0001')
-        self.assertEqual(available_bulk['availableQuantity'], 0)
+        self.assertEqual(available_bulk['availableQuantity'], 6)
         self.assertEqual(available_bulk['preparableQuantity'], 6)
+        self.assertEqual(available_bulk['healthyQuantity'], 0)
         self.assertEqual(available_bulk['bulkDegradedQuantity'], 6)
 
         response = self.client.post(

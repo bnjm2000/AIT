@@ -756,10 +756,15 @@ function assetFlagBadgesHtml(asset) {
   if (asset?.isBulk) {
     const badges = [];
     const oocQty = Math.max(0, Number(asset.bulkOOCQuantity || 0) || 0);
+    const missingQty = Math.max(0, Number(asset.bulkMissingQuantity || 0) || 0);
     const degradedQty = Math.max(0, Number(asset.bulkDegradedQuantity || 0) || 0);
     let hasOOCBadge = false;
+    let hasMissingBadge = false;
     let hasDegradedBadge = false;
-    if (asset.isMissing || asset.status === 'missing') badges.push(statusBadgeHtml('missing', 'Missing'));
+    if (asset.isMissing || asset.status === 'missing') {
+      badges.push(statusBadgeHtml('missing', missingQty ? `${missingQty} Missing` : 'Missing'));
+      hasMissingBadge = true;
+    }
     if (asset.isOOC || asset.status === 'ooc') {
       badges.push(statusBadgeHtml('ooc', oocQty ? `${oocQty} OOC` : 'OOC'));
       hasOOCBadge = true;
@@ -770,6 +775,7 @@ function assetFlagBadgesHtml(asset) {
     }
     if (asset.isDisposed || asset.isDecommissioned || asset.status === 'disposed' || asset.status === 'decommissioned') badges.push(statusBadgeHtml('decommissioned', 'Decommissioned'));
     if (!hasOOCBadge && oocQty > 0) badges.push(statusBadgeHtml('ooc', `${oocQty} OOC`));
+    if (!hasMissingBadge && missingQty > 0) badges.push(statusBadgeHtml('missing', `${missingQty} Missing`));
     if (!hasDegradedBadge && degradedQty > 0) badges.push(statusBadgeHtml('degraded', `${degradedQty} Degraded`));
     return badges.length ? badges.join(' ') : statusBadgeHtml('available', 'OK');
   }
@@ -15930,6 +15936,12 @@ function selectAssetForMaintenance(assetId) {
   }
   
   const apiId = getAssetIdentifierForApi(asset);
+  if (asset.isBulk) {
+    closeModal('maintenanceModal');
+    openBulkMaintenanceFaultModal(apiId);
+    return;
+  }
+
   selectedMaintenanceAssets.add(apiId);
   updateSelectedAssetsDisplay();
   
@@ -16056,7 +16068,11 @@ async function loadOOCAssets() {
       asset.isDegraded ||
       asset.isDisposed ||
       asset.isDecommissioned ||
-      (asset.isBulk && (Number(asset.bulkOOCQuantity || 0) > 0 || Number(asset.bulkDegradedQuantity || 0) > 0))
+      (asset.isBulk && (
+        Number(asset.bulkOOCQuantity || 0) > 0 ||
+        Number(asset.bulkMissingQuantity || 0) > 0 ||
+        Number(asset.bulkDegradedQuantity || 0) > 0
+      ))
     );
     
     displayOOCAssets(oocAndMissingAssets);
@@ -16110,7 +16126,11 @@ function displayOOCAssets(oocAssets) {
   oocAssets.forEach(asset => {
     const assetId = getAssetIdentifierForApi(asset);
     const displayId = assetMaintenanceDisplayId(asset);
-    const isBulkFaultRow = asset.isBulk && (Number(asset.bulkOOCQuantity || 0) > 0 || Number(asset.bulkDegradedQuantity || 0) > 0);
+    const isBulkFaultRow = asset.isBulk && (
+      Number(asset.bulkOOCQuantity || 0) > 0 ||
+      Number(asset.bulkMissingQuantity || 0) > 0 ||
+      Number(asset.bulkDegradedQuantity || 0) > 0
+    );
     const isSelected = selectedOOCAssets.has(assetId);
     const statusHtml = assetFlagBadgesHtml(asset);
     
@@ -16317,8 +16337,264 @@ async function viewMaintenanceLog(assetId) {
 function bulkMaintenanceStatusLabel(status) {
   const clean = String(status || '').toLowerCase();
   if (clean === 'ooc') return 'OOC';
+  if (clean === 'missing') return 'Missing';
   if (clean === 'degraded') return 'Degraded';
   return clean ? clean.replace(/\b\w/g, c => c.toUpperCase()) : 'Fault';
+}
+
+function bulkMaintenanceStatusOptionsHtml(selectedStatus = 'ooc') {
+  const selected = String(selectedStatus || 'ooc').toLowerCase();
+  return [
+    ['ooc', 'OOC'],
+    ['missing', 'Missing'],
+    ['degraded', 'Degraded']
+  ].map(([value, label]) => `
+    <option value="${escapeHtmlAttr(value)}" ${selected === value ? 'selected' : ''}>${escapeHtml(label)}</option>
+  `).join('');
+}
+
+function bulkMaintenanceFaultCapacity(asset) {
+  const totalQty = Math.max(1, Number(asset?.quantity || 1) || 1);
+  const openFaultQty = Math.max(0, Number(asset?.bulkFaultQuantity || 0) || 0);
+  return Math.max(totalQty - openFaultQty, 0);
+}
+
+async function refreshBulkMaintenanceScreens(assetId, showLogbook = true) {
+  const assetsResponse = await apiCall('/api/assets');
+  if (assetsResponse.success) {
+    assets = assetsResponse.data || [];
+    const updatedAsset = getAssetByApiIdentifier(assetId);
+    if (showLogbook && updatedAsset) showBulkMaintenanceLogModal(updatedAsset);
+  }
+  if (document.getElementById('inventory-section')?.classList.contains('active')) loadInventory();
+  if (document.getElementById('maintenance-section')?.classList.contains('active')) loadMaintenanceAssets();
+}
+
+function openBulkMaintenanceFaultModal(assetId) {
+  const asset = getAssetByApiIdentifier(assetId);
+  const capacity = bulkMaintenanceFaultCapacity(asset);
+  if (!asset) {
+    showNotification('error', 'Bulk asset not found');
+    return;
+  }
+  if (capacity <= 0) {
+    showNotification('warning', 'All quantity in this bulk asset already has open maintenance logs');
+    return;
+  }
+
+  const today = new Date().toISOString().split('T')[0];
+  const existing = document.getElementById('bulkMaintenanceFaultModal');
+  if (existing) existing.remove();
+
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="modal" id="bulkMaintenanceFaultModal" style="display:flex;align-items:center;justify-content:center;z-index:1200;">
+      <div class="modal-content" style="max-width:620px;width:92%;max-height:90vh;overflow-y:auto;">
+        <div class="modal-header">
+          <h3 class="modal-title">Bulk Maintenance Log - ${escapeHtml(assetMaintenanceDisplayId(asset))}</h3>
+          <button class="close-btn" onclick="closeBulkMaintenanceFaultModal()">&times;</button>
+        </div>
+        <form id="bulkMaintenanceFaultForm">
+          <div style="background:#f8f9fa;border:1px solid #e9ecef;border-radius:8px;padding:12px;margin-bottom:16px;">
+            <div style="font-weight:700;">${escapeHtml([asset.brand, asset.model].filter(Boolean).join(' '))}</div>
+            <div style="color:#666;font-size:13px;">Available for new logs: ${escapeHtml(String(capacity))}/${escapeHtml(String(asset.quantity || 1))}</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="bulkFaultQuantity">Quantity of Affected Assets</label>
+            <input type="number" class="form-input" id="bulkFaultQuantity" min="1" max="${escapeHtmlAttr(String(capacity))}" value="1" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="bulkFaultDescription">Maintenance Log Entry</label>
+            <textarea class="form-input" id="bulkFaultDescription" rows="4" placeholder="Describe the fault or limitation" required></textarea>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="bulkFaultMediaFiles">Photos / Videos</label>
+            <input type="file" class="form-input" id="bulkFaultMediaFiles" multiple accept="image/*,video/*">
+            <div id="bulkFaultMediaFileList" class="maintenance-media-selection"></div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="bulkFaultDate">Maintenance Date</label>
+            <input type="date" class="form-input" id="bulkFaultDate" value="${escapeHtmlAttr(today)}" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="bulkFaultStatus">Asset Status</label>
+            <select class="form-input" id="bulkFaultStatus" required>
+              ${bulkMaintenanceStatusOptionsHtml('ooc')}
+            </select>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="btn btn-secondary" onclick="closeBulkMaintenanceFaultModal()">Cancel</button>
+            <button type="submit" class="btn btn-primary">Save Log</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `);
+
+  document.getElementById('bulkFaultMediaFiles')?.addEventListener('change', () => {
+    updateMaintenanceMediaSelection('bulkFaultMediaFiles', 'bulkFaultMediaFileList');
+  });
+
+  document.getElementById('bulkMaintenanceFaultForm')?.addEventListener('submit', async event => {
+    event.preventDefault();
+    await submitBulkMaintenanceFault(assetId, capacity);
+  });
+
+  const modal = document.getElementById('bulkMaintenanceFaultModal');
+  enhanceModalAccessibility(modal);
+  focusModalStart(modal);
+  modal.addEventListener('click', e => {
+    if (e.target === modal) closeBulkMaintenanceFaultModal();
+  });
+}
+
+function closeBulkMaintenanceFaultModal() {
+  document.getElementById('bulkMaintenanceFaultModal')?.remove();
+}
+
+async function submitBulkMaintenanceFault(assetId, capacity) {
+  const quantity = Number(document.getElementById('bulkFaultQuantity')?.value || 0);
+  const description = document.getElementById('bulkFaultDescription')?.value.trim() || '';
+  const maintenanceDate = document.getElementById('bulkFaultDate')?.value || '';
+  const assetStatus = document.getElementById('bulkFaultStatus')?.value || 'ooc';
+
+  if (!Number.isInteger(quantity) || quantity < 1 || quantity > capacity) {
+    showNotification('warning', `Quantity must be between 1 and ${capacity}`);
+    return;
+  }
+  if (!description) {
+    showNotification('warning', 'Please enter a maintenance log entry');
+    return;
+  }
+  if (!maintenanceDate) {
+    showNotification('warning', 'Please select a maintenance date');
+    return;
+  }
+
+  try {
+    const payload = {
+      affectedQuantity: quantity,
+      logEntry: description,
+      maintenanceDate,
+      assetStatus,
+      logType: 'Fault'
+    };
+    const requestData = maintenancePayloadToRequestData(payload, 'bulkFaultMediaFiles');
+    await apiCall(`/api/assets/${encodeURIComponent(assetId)}/maintain`, 'POST', requestData);
+
+    closeBulkMaintenanceFaultModal();
+    showNotification('success', quantity === 1 ? 'Bulk maintenance log added' : `${quantity} bulk maintenance logs added`);
+    await refreshBulkMaintenanceScreens(assetId, true);
+  } catch (error) {
+    showNotification('error', `Failed to add bulk maintenance log: ${error.message}`);
+  }
+}
+
+function openBulkMaintenanceFaultEditModal(assetId, faultKey, logNumber) {
+  const asset = getAssetByApiIdentifier(assetId);
+  const row = bulkMaintenanceLogbookRows(asset).find(item =>
+    String(item.key || item.id || '') === String(faultKey || '') ||
+    String(item.id || '') === String(faultKey || '')
+  );
+  if (!asset || !row) {
+    showNotification('error', 'Bulk maintenance log not found');
+    return;
+  }
+
+  const report = row.fault || {};
+  const dateForInput = String(report.date || '').replace(/\//g, '-') || new Date().toISOString().split('T')[0];
+  const existing = document.getElementById('bulkMaintenanceFaultEditModal');
+  if (existing) existing.remove();
+
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="modal" id="bulkMaintenanceFaultEditModal" style="display:flex;align-items:center;justify-content:center;z-index:1250;">
+      <div class="modal-content" style="max-width:620px;width:92%;max-height:90vh;overflow-y:auto;">
+        <div class="modal-header">
+          <h3 class="modal-title">Edit Bulk Log #${escapeHtml(String(logNumber || row.logNumber || ''))}</h3>
+          <button class="close-btn" onclick="closeBulkMaintenanceFaultEditModal()">&times;</button>
+        </div>
+        <form id="bulkMaintenanceFaultEditForm">
+          <div style="background:#f8f9fa;border:1px solid #e9ecef;border-radius:8px;padding:12px;margin-bottom:16px;">
+            <div><strong>Quantity:</strong> 1</div>
+            <div><strong>Current Media:</strong> ${maintenanceMediaLinksHtml(report.media)}</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="bulkFaultEditDescription">Maintenance Log Entry</label>
+            <textarea class="form-input" id="bulkFaultEditDescription" rows="4" required>${escapeHtml(report.description || '')}</textarea>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="bulkFaultEditMediaFiles">Add Photos / Videos</label>
+            <input type="file" class="form-input" id="bulkFaultEditMediaFiles" multiple accept="image/*,video/*">
+            <div id="bulkFaultEditMediaFileList" class="maintenance-media-selection"></div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="bulkFaultEditDate">Maintenance Date</label>
+            <input type="date" class="form-input" id="bulkFaultEditDate" value="${escapeHtmlAttr(dateForInput)}" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="bulkFaultEditStatus">Asset Status</label>
+            <select class="form-input" id="bulkFaultEditStatus" required>
+              ${bulkMaintenanceStatusOptionsHtml(row.status)}
+            </select>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="btn btn-secondary" onclick="closeBulkMaintenanceFaultEditModal()">Cancel</button>
+            <button type="submit" class="btn btn-primary">Save Changes</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `);
+
+  document.getElementById('bulkFaultEditMediaFiles')?.addEventListener('change', () => {
+    updateMaintenanceMediaSelection('bulkFaultEditMediaFiles', 'bulkFaultEditMediaFileList');
+  });
+
+  document.getElementById('bulkMaintenanceFaultEditForm')?.addEventListener('submit', async event => {
+    event.preventDefault();
+    await submitBulkMaintenanceFaultEdit(assetId, faultKey);
+  });
+
+  const modal = document.getElementById('bulkMaintenanceFaultEditModal');
+  enhanceModalAccessibility(modal);
+  focusModalStart(modal);
+  modal.addEventListener('click', e => {
+    if (e.target === modal) closeBulkMaintenanceFaultEditModal();
+  });
+}
+
+function closeBulkMaintenanceFaultEditModal() {
+  document.getElementById('bulkMaintenanceFaultEditModal')?.remove();
+}
+
+async function submitBulkMaintenanceFaultEdit(assetId, faultKey) {
+  const description = document.getElementById('bulkFaultEditDescription')?.value.trim() || '';
+  const maintenanceDate = document.getElementById('bulkFaultEditDate')?.value || '';
+  const assetStatus = document.getElementById('bulkFaultEditStatus')?.value || 'ooc';
+
+  if (!description) {
+    showNotification('warning', 'Please enter a maintenance log entry');
+    return;
+  }
+  if (!maintenanceDate) {
+    showNotification('warning', 'Please select a maintenance date');
+    return;
+  }
+
+  try {
+    const payload = {
+      logEntry: description,
+      maintenanceDate,
+      assetStatus
+    };
+    const requestData = maintenancePayloadToRequestData(payload, 'bulkFaultEditMediaFiles');
+    await apiCall(`/api/assets/${encodeURIComponent(assetId)}/bulk-maintenance/${encodeURIComponent(faultKey)}`, 'PUT', requestData);
+
+    closeBulkMaintenanceFaultEditModal();
+    showNotification('success', 'Bulk maintenance fault report updated');
+    await refreshBulkMaintenanceScreens(assetId, true);
+  } catch (error) {
+    showNotification('error', `Failed to update bulk maintenance log: ${error.message}`);
+  }
 }
 
 function bulkMaintenanceReportHtml(report, emptyText = 'Not resolved') {
@@ -16350,14 +16626,16 @@ function showBulkMaintenanceLogModal(asset) {
   const safeAssetId = String(assetId || '').replace(/[^a-zA-Z0-9]/g, '_');
   const rows = bulkMaintenanceLogbookRows(asset);
   const totalQty = Math.max(1, Number(asset.quantity || 1) || 1);
-  const healthyQty = Math.max(0, Number(asset.availableQuantity ?? totalQty) || 0);
-  const preparableQty = Math.max(0, Number(asset.preparableQuantity ?? healthyQty) || 0);
+  const availableQty = Math.max(0, Number(asset.availableQuantity ?? totalQty) || 0);
+  const preparableQty = Math.max(0, Number(asset.preparableQuantity ?? availableQty) || 0);
+  const healthyQty = Math.max(0, Number(asset.healthyQuantity ?? availableQty) || 0);
   const oocQty = Math.max(0, Number(asset.bulkOOCQuantity || 0) || 0);
+  const missingQty = Math.max(0, Number(asset.bulkMissingQuantity || 0) || 0);
   const degradedQty = Math.max(0, Number(asset.bulkDegradedQuantity || 0) || 0);
 
   const rowHtml = rows.length ? rows.map(row => {
     const status = String(row.status || '').toLowerCase();
-    const statusBadge = statusBadgeHtml(status === 'ooc' ? 'ooc' : 'degraded', bulkMaintenanceStatusLabel(status));
+    const statusBadge = statusBadgeHtml(status || 'degraded', bulkMaintenanceStatusLabel(status));
     const resolveButton = row.isResolved ? '' : `
       <button type="button" class="btn btn-success btn-sm" onclick="openBulkMaintenanceResolutionModal('${escapeJs(assetId)}', '${escapeJs(row.key || row.id)}', '${escapeJs(String(row.logNumber || ''))}')">
         Resolve
@@ -16370,7 +16648,16 @@ function showBulkMaintenanceLogModal(asset) {
           <div style="margin-top:6px;">${statusBadge}</div>
         </td>
         <td style="padding:14px;border-bottom:1px solid #e9ecef;vertical-align:top;">
-          ${bulkMaintenanceReportHtml(row.fault, 'No fault report')}
+          <div
+            role="button"
+            tabindex="0"
+            title="Edit fault report"
+            onclick="openBulkMaintenanceFaultEditModal('${escapeJs(assetId)}', '${escapeJs(row.key || row.id)}', '${escapeJs(String(row.logNumber || ''))}')"
+            style="cursor:pointer;border:1px solid transparent;border-radius:8px;padding:8px;margin:-8px;"
+          >
+            ${bulkMaintenanceReportHtml(row.fault, 'No fault report')}
+            <div style="margin-top:8px;color:#667eea;font-size:12px;font-weight:700;">Edit fault report</div>
+          </div>
         </td>
         <td style="padding:14px;border-bottom:1px solid #e9ecef;vertical-align:top;">
           ${bulkMaintenanceReportHtml(row.resolution)}
@@ -16398,10 +16685,10 @@ function showBulkMaintenanceLogModal(asset) {
             <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;">
               <div><strong>Bulk ID:</strong> ${escapeHtml(assetId)}<br><strong>Brand:</strong> ${escapeHtml(asset.brand || '')}<br><strong>Model:</strong> ${escapeHtml(asset.model || '')}</div>
               <div><strong>Description:</strong> ${escapeHtml(asset.description || 'N/A')}<br><strong>Department:</strong> ${escapeHtml(asset.department || '')}<br><strong>Location:</strong> ${escapeHtml(asset.location || 'Store')}</div>
-              <div><strong>Healthy:</strong> ${escapeHtml(String(healthyQty))}/${escapeHtml(String(totalQty))}<br><strong>Preparable:</strong> ${escapeHtml(String(preparableQty))}/${escapeHtml(String(totalQty))}<br><strong>Flags:</strong> ${assetFlagBadgesHtml(asset)}</div>
+              <div><strong>Available:</strong> ${escapeHtml(String(availableQty))}/${escapeHtml(String(totalQty))}<br><strong>Healthy:</strong> ${escapeHtml(String(healthyQty))}/${escapeHtml(String(totalQty))}<br><strong>Preparable:</strong> ${escapeHtml(String(preparableQty))}/${escapeHtml(String(totalQty))}<br><strong>Flags:</strong> ${assetFlagBadgesHtml(asset)}</div>
             </div>
             <div style="margin-top:10px;color:#666;font-size:13px;">
-              ${escapeHtml(String(oocQty))} OOC and ${escapeHtml(String(degradedQty))} degraded unit${(oocQty + degradedQty) === 1 ? '' : 's'} currently open.
+              ${escapeHtml(String(oocQty))} OOC, ${escapeHtml(String(missingQty))} missing, and ${escapeHtml(String(degradedQty))} degraded unit${(oocQty + missingQty + degradedQty) === 1 ? '' : 's'} currently open.
             </div>
           </div>
           <div style="flex:1;min-height:0;overflow:auto;border:1px solid #e9ecef;border-radius:8px;background:white;">
@@ -16466,8 +16753,8 @@ function openBulkMaintenanceResolutionModal(assetId, faultKey, logNumber) {
             <textarea class="form-input" id="bulkResolutionDescription" rows="4" placeholder="Describe the repair or resolution" required></textarea>
           </div>
           <div class="form-group">
-            <label class="form-label" for="bulkResolutionCost">Repair Cost</label>
-            <input type="text" class="form-input" id="bulkResolutionCost" placeholder="0.00">
+            <label class="form-label" for="bulkResolutionCost">Cost</label>
+            <input type="text" class="form-input" id="bulkResolutionCost" value="$0.00" placeholder="$0.00">
           </div>
           <div class="form-group">
             <label class="form-label" for="bulkResolutionMediaFiles">Photos / Videos</label>
@@ -16921,13 +17208,25 @@ window.addNewLogEntryFromModal = addNewLogEntryFromModal;
 window.returnSpecificAssetNew = returnSpecificAssetNew;
 window.selectAssetForMaintenance = selectAssetForMaintenance;
 window.removeAssetFromMaintenance = removeAssetFromMaintenance;
+window.openBulkMaintenanceFaultModal = openBulkMaintenanceFaultModal;
+window.closeBulkMaintenanceFaultModal = closeBulkMaintenanceFaultModal;
+window.openBulkMaintenanceFaultEditModal = openBulkMaintenanceFaultEditModal;
+window.closeBulkMaintenanceFaultEditModal = closeBulkMaintenanceFaultEditModal;
+window.openBulkMaintenanceResolutionModal = openBulkMaintenanceResolutionModal;
+window.closeBulkMaintenanceResolutionModal = closeBulkMaintenanceResolutionModal;
 
 // Helper function to close the maintenance log modal
 
 // Function to handle adding new log entry from the maintenance log modal
 function addNewLogEntryFromModal(assetId) {
+  const asset = getAssetByApiIdentifier(assetId);
   // Close the current maintenance log modal
   closeMaintenanceLogModal();
+
+  if (asset?.isBulk) {
+    openBulkMaintenanceFaultModal(getAssetIdentifierForApi(asset));
+    return;
+  }
   
   // Open the maintenance modal with the asset pre-selected
   openMaintenanceModalForAsset(assetId);
@@ -17928,8 +18227,9 @@ function createBulkPreparationSection(eventId, modelGroup, availableAssets = [],
     const bulkId = getAssetIdentifierForApi(availableBulkSource) || availableBulkSource?.bulkId || assignedBulkSource?.bulkId || '';
     const displayName = `${requiredQty}x ${[modelGroup.brand, modelGroup.model].filter(Boolean).join(' ')}`.trim();
     const description = modelGroup.description || availableBulkSource?.description || assignedBulkSource?.description || '';
-    const healthyQuantity = availableBulkSource ? Number(availableBulkSource.availableQuantity ?? availableBulkSource.quantity ?? 0) : 0;
+    const availableQuantity = availableBulkSource ? Number(availableBulkSource.availableQuantity ?? availableBulkSource.quantity ?? 0) : 0;
     const preparableQuantity = availableBulkSource ? Number(availableBulkSource.preparableQuantity ?? availableBulkSource.availableQuantity ?? availableBulkSource.quantity ?? 0) : 0;
+    const healthyQuantity = availableBulkSource ? Number(availableBulkSource.healthyQuantity ?? availableQuantity) : 0;
 
     let actionButtons = '';
     if (assignedAssets && assignedAssets.length > 0) {
@@ -17950,7 +18250,7 @@ function createBulkPreparationSection(eventId, modelGroup, availableAssets = [],
     }
 
     const quantityLine = availableBulkSource
-        ? `<div style="color:#666; font-size:12px; margin-top:2px;">Healthy Qty: ${escapeHtml(String(healthyQuantity))}/${escapeHtml(String(availableBulkSource.quantity ?? requiredQty))}${preparableQuantity !== healthyQuantity ? ` | Preparable: ${escapeHtml(String(preparableQuantity))}` : ''}</div>`
+        ? `<div style="color:#666; font-size:12px; margin-top:2px;">Available Qty: ${escapeHtml(String(availableQuantity))}/${escapeHtml(String(availableBulkSource.quantity ?? requiredQty))}${healthyQuantity !== availableQuantity ? ` | Healthy: ${escapeHtml(String(healthyQuantity))}` : ''}${preparableQuantity !== availableQuantity ? ` | Preparable: ${escapeHtml(String(preparableQuantity))}` : ''}</div>`
         : (assignedBulkSource ? `<div style="color:#666; font-size:12px; margin-top:2px;">Prepared Qty: ${escapeHtml(String(assignedQty))}</div>` : '');
 
     return `
@@ -18029,7 +18329,7 @@ function createModelPreparationSection(eventId, department, brand, model, descri
               const buttonAction = isAlreadyAssigned ? '' : `assignSpecificAsset(${eventId}, '${escapeJs(apiId)}', '${escapeJs(brand)}', '${escapeJs(model)}')`;
               const disabled = isAlreadyAssigned ? 'disabled' : '';
               const availableQtyText = asset.isBulk
-                ? `Healthy Qty: ${escapeHtml(String(asset.availableQuantity ?? asset.quantity ?? 0))}/${escapeHtml(String(asset.quantity ?? 0))}${Number(asset.preparableQuantity ?? asset.availableQuantity ?? 0) !== Number(asset.availableQuantity ?? 0) ? ` | Preparable: ${escapeHtml(String(asset.preparableQuantity ?? asset.availableQuantity ?? 0))}` : ''}`
+                ? `Available Qty: ${escapeHtml(String(asset.availableQuantity ?? asset.quantity ?? 0))}/${escapeHtml(String(asset.quantity ?? 0))}${Number(asset.healthyQuantity ?? asset.availableQuantity ?? 0) !== Number(asset.availableQuantity ?? 0) ? ` | Healthy: ${escapeHtml(String(asset.healthyQuantity ?? asset.availableQuantity ?? 0))}` : ''}${Number(asset.preparableQuantity ?? asset.availableQuantity ?? 0) !== Number(asset.availableQuantity ?? 0) ? ` | Preparable: ${escapeHtml(String(asset.preparableQuantity ?? asset.availableQuantity ?? 0))}` : ''}`
                 : `SN: ${escapeHtml(asset.serial || 'N/A')}`;
               const displayId = asset.isBulk ? 'Bulk quantity item' : escapeHtml(asset.id);
             
@@ -21350,8 +21650,10 @@ function inventoryAssetFlagsText(asset) {
   if (asset?.isDegraded) flags.push('Degraded');
   if (asset?.isBulk) {
     const oocQty = Math.max(0, Number(asset.bulkOOCQuantity || 0) || 0);
+    const missingQty = Math.max(0, Number(asset.bulkMissingQuantity || 0) || 0);
     const degradedQty = Math.max(0, Number(asset.bulkDegradedQuantity || 0) || 0);
     if (!asset?.isOOC && oocQty > 0) flags.push(`${oocQty} OOC`);
+    if (!asset?.isMissing && missingQty > 0) flags.push(`${missingQty} Missing`);
     if (!asset?.isDegraded && degradedQty > 0) flags.push(`${degradedQty} Degraded`);
   }
   if (asset?.isDisposed || asset?.isDecommissioned) flags.push('Decommissioned');
