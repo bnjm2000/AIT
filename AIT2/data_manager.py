@@ -18,6 +18,7 @@ REQUIRED_DATA_FILES = ('Inventory.csv', 'Logs.csv', 'Users.csv', 'Containers.csv
 UTF8_ENCODINGS = ('utf-8', 'utf-8-sig')
 INVENTORY_FIELDNAMES = [
     'AssetID', 'Brand', 'ModelNumber', 'SerialNumber', 'Description', 'DateOfPurchase',
+    'DateAdded', 'DateModified', 'ChangeHistory',
     'IsMissing', 'IsOOC', 'IsDegraded', 'IsDisposed', 'IsBulk', 'Quantity',
     'MaintenanceLogs', 'DepartmentCode', 'DefaultLocation', 'CurrentLocation'
 ]
@@ -41,6 +42,75 @@ def _parse_bool(value, default=False):
 
 def _is_csv_true(value):
     return value == 'True'
+
+
+def normalize_asset_change_history(history):
+    if not history:
+        return []
+
+    if isinstance(history, dict):
+        history = [history]
+
+    if not isinstance(history, list):
+        return []
+
+    records = []
+    for item in history:
+        if not isinstance(item, dict):
+            continue
+
+        raw_changes = item.get('changes') or []
+        if isinstance(raw_changes, dict):
+            raw_changes = [raw_changes]
+        if not isinstance(raw_changes, list):
+            raw_changes = []
+
+        changes = []
+        for change in raw_changes:
+            if not isinstance(change, dict):
+                continue
+
+            field = str(change.get('field') or '').strip()
+            label = str(change.get('label') or field).strip()
+            if not field and not label:
+                continue
+
+            changes.append({
+                'field': field,
+                'label': label,
+                'old': change.get('old', ''),
+                'new': change.get('new', ''),
+            })
+
+        record = {
+            'date': str(item.get('date') or item.get('timestamp') or '').strip(),
+            'user': str(item.get('user') or '').strip(),
+            'action': str(item.get('action') or 'updated').strip() or 'updated',
+            'changes': changes,
+        }
+
+        if record['date'] or record['user'] or record['changes']:
+            records.append(record)
+
+    return records
+
+
+def load_asset_change_history(value):
+    raw = str(value or '').strip()
+    if not raw:
+        return []
+
+    try:
+        return normalize_asset_change_history(json.loads(raw))
+    except (TypeError, ValueError):
+        return []
+
+
+def dump_asset_change_history(history):
+    records = normalize_asset_change_history(history)
+    if not records:
+        return ''
+    return json.dumps(records, ensure_ascii=False, separators=(',', ':'))
 
 
 def _replace_generated_username_references(text, old_username, new_username):
@@ -343,6 +413,7 @@ class DataManager:
             'eventLogs': 0,
             'events': 0,
             'maintenanceLogs': 0,
+            'assetChangeHistory': 0,
             'assets': 0,
         }
         if not old_username or not new_username or old_username == new_username:
@@ -422,8 +493,17 @@ class DataManager:
                     counts['maintenanceLogs'] += 1
                 updated_logs.append(record)
 
+            updated_history = []
+            for history_record in normalize_asset_change_history(getattr(item, 'change_history', [])):
+                if history_record.get('user', '') == old_username:
+                    history_record['user'] = new_username
+                    item_changed = True
+                    counts['assetChangeHistory'] += 1
+                updated_history.append(history_record)
+
             if item_changed:
                 item.maintenance_logs = updated_logs
+                item.change_history = updated_history
                 inventory_changed = True
                 counts['assets'] += 1
 
@@ -477,7 +557,10 @@ class DataManager:
                     default_location=row.get('DefaultLocation', 'Store'),
                     current_location=row.get('CurrentLocation', ''),
                     is_bulk=is_bulk,
-                    quantity=quantity
+                    quantity=quantity,
+                    date_added=row.get('DateAdded', ''),
+                    date_modified=row.get('DateModified', ''),
+                    change_history=load_asset_change_history(row.get('ChangeHistory', ''))
                 )
 
                 if item.asset_id:
@@ -518,6 +601,9 @@ class DataManager:
                     'SerialNumber': item.serial_number,
                     'Description': item.description,
                     'DateOfPurchase': getattr(item, 'date_of_purchase', ''),
+                    'DateAdded': getattr(item, 'date_added', ''),
+                    'DateModified': getattr(item, 'date_modified', ''),
+                    'ChangeHistory': dump_asset_change_history(getattr(item, 'change_history', [])),
                     'IsMissing': item.is_missing,
                     'IsOOC': item.is_ooc,
                     'IsDegraded': getattr(item, 'is_degraded', False),
@@ -551,8 +637,9 @@ class DataManager:
                 container_id = row[0]
                 asset_ids = row[1].split('|') if len(row) > 1 and row[1] else []
                 asset_ids = [clean_csv_cell(a) for a in asset_ids if clean_csv_cell(a)]
+                serial_number = row[2] if len(row) > 2 else ''
                 if container_id:
-                    self.containers[container_id] = Container(container_id, asset_ids)
+                    self.containers[container_id] = Container(container_id, asset_ids, serial_number)
         finally:
             f.close()
 
@@ -561,7 +648,11 @@ class DataManager:
         with open(filepath, 'w', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
             for container in self.containers.values():
-                writer.writerow([container.container_id, '|'.join(container.asset_ids)])
+                writer.writerow([
+                    container.container_id,
+                    '|'.join(container.asset_ids),
+                    getattr(container, 'serial_number', '')
+                ])
 
     # ---------------- Events ----------------
 

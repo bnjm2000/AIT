@@ -74,6 +74,9 @@ class InventoryItem:
         is_degraded=False,
         is_disposed=False,
         date_of_purchase='',
+        date_added='',
+        date_modified='',
+        change_history=None,
     ):
         self.asset_id = asset_id
         self.brand = brand
@@ -102,6 +105,9 @@ class InventoryItem:
         self.default_location = default_location
         self.current_location = current_location
         self.date_of_purchase = date_of_purchase or ''
+        self.date_added = date_added or ''
+        self.date_modified = date_modified or ''
+        self.change_history = change_history if change_history is not None else []
         self.is_bulk = is_bulk
         try:
             self.quantity = max(1, int(quantity)) if is_bulk else 1
@@ -110,9 +116,10 @@ class InventoryItem:
 
 
 class Container:
-    def __init__(self, container_id, asset_ids):
+    def __init__(self, container_id, asset_ids, serial_number=''):
         self.container_id = container_id
         self.asset_ids = asset_ids
+        self.serial_number = serial_number or ''
 
 
 class Event:

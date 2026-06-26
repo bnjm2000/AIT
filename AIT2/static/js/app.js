@@ -75,10 +75,27 @@ async function refreshContainersCache(force = false) {
   return __containersCache;
 }
 
+function getContainerSerialNumber(container) {
+  return String(container?.serialNumber || container?.serial || '').trim();
+}
+
+function findContainerInCacheByLookup(cache, lookup) {
+  const raw = String(lookup || '').trim();
+  if (!raw || !cache) return null;
+
+  if (cache[raw]) return cache[raw];
+
+  const rawLower = raw.toLowerCase();
+  return Object.values(cache).find(container => {
+    const serial = getContainerSerialNumber(container);
+    return serial && serial.toLowerCase() === rawLower;
+  }) || null;
+}
+
 async function getContainerById(containerId, force = false) {
   if (!containerId) return null;
   const cache = await refreshContainersCache(force);
-  return cache[containerId] || null;
+  return findContainerInCacheByLookup(cache, containerId);
 }
 
 // used to avoid container recursion
@@ -608,6 +625,63 @@ function formatAssetPurchaseDate(value) {
 
 function isAssetDegraded(asset) {
   return !!(asset && (asset.isDegraded || asset.status === 'degraded'));
+}
+
+function normalizeAssetAuditDateTime(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  return raw.replace('T', ' ').replace(/\.\d+$/, '');
+}
+
+function formatAssetAuditDateTime(value) {
+  const normalized = normalizeAssetAuditDateTime(value);
+  const match = normalized.match(/^(\d{4})-(\d{2})-(\d{2})(?:\s+(\d{2}):(\d{2})(?::\d{2})?)?$/);
+  if (!match) return normalized || '-';
+  return `${match[1]}/${match[2]}/${match[3]}`;
+}
+
+function assetAuditValueText(value) {
+  if (value === true) return 'Yes';
+  if (value === false) return 'No';
+  const text = String(value ?? '').trim();
+  return text || 'Blank';
+}
+
+function assetChangeHistoryHtml(asset) {
+  const history = Array.isArray(asset?.changeHistory) ? asset.changeHistory : [];
+  if (!history.length) {
+    return '<div style="color:#666;font-size:13px;">No manual edit history yet.</div>';
+  }
+
+  return history
+    .slice()
+    .reverse()
+    .map(record => {
+      const changes = Array.isArray(record.changes) ? record.changes : [];
+      const changeRows = changes.length
+        ? changes.map(change => `
+            <li style="margin:4px 0;">
+              <strong>${escapeHtml(change.label || change.field || 'Field')}</strong>:
+              ${escapeHtml(assetAuditValueText(change.old))}
+              &rarr;
+              ${escapeHtml(assetAuditValueText(change.new))}
+            </li>
+          `).join('')
+        : '<li style="margin:4px 0;">Updated asset record</li>';
+
+      return `
+        <div style="border-top:1px solid #e9ecef;padding:10px 0;">
+          <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:13px;color:#495057;">
+            <strong>${escapeHtml(record.action === 'created' ? 'Created' : 'Updated')}</strong>
+            <span>${escapeHtml(formatAssetAuditDateTime(record.date))}${record.user ? ` by ${escapeHtml(record.user)}` : ''}</span>
+          </div>
+          <ul style="margin:6px 0 0 18px;padding:0;font-size:13px;color:#495057;">
+            ${changeRows}
+          </ul>
+        </div>
+      `;
+    })
+    .join('');
 }
 
 function isAssetDisposed(asset) {
@@ -2132,7 +2206,7 @@ function submitBarcodeScannerManual() {
 function scanForPrepare(eventId) {
   openBarcodeScanner({
     title: 'Scan To Prepare',
-    instructions: 'Scan an asset ID, barcode, serial number, or container code to prepare it for this event.',
+    instructions: 'Scan an asset ID, barcode, serial number, container ID, or container serial number to prepare it for this event.',
     onScan: async identifier => {
       const input = document.getElementById('universalAssetInput');
       if (input) input.value = identifier;
@@ -2220,7 +2294,7 @@ async function addIdentifierToMaintenanceSelection(identifier) {
 function scanForMaintenance() {
   openBarcodeScanner({
     title: 'Scan For Maintenance',
-    instructions: 'Scan an asset ID, barcode, serial number, or container code to add it to this maintenance log.',
+    instructions: 'Scan an asset ID, barcode, serial number, container ID, or container serial number to add it to this maintenance log.',
     onScan: async identifier => {
       await addIdentifierToMaintenanceSelection(identifier);
     }
@@ -5519,6 +5593,7 @@ function ensureInventoryBulkEditControls() {
     group.innerHTML = `
       <span id="inventory-selected-count" style="color:#495057;font-size:14px;font-weight:700;">0 selected</span>
       <button type="button" id="inventory-bulk-edit-button" class="btn btn-warning" style="padding:8px 16px;font-size:14px;" disabled>Edit Selected</button>
+      <button type="button" id="inventory-bulk-delete-button" class="btn btn-danger" style="padding:8px 16px;font-size:14px;" disabled>Delete Selected</button>
       <button type="button" id="inventory-clear-selection-button" class="btn btn-secondary" style="padding:8px 16px;font-size:14px;" disabled>Clear Selection</button>
     `;
 
@@ -5530,10 +5605,20 @@ function ensureInventoryBulkEditControls() {
     }
 
     document.getElementById('inventory-bulk-edit-button')?.addEventListener('click', openBulkAssetEditModal);
+    document.getElementById('inventory-bulk-delete-button')?.addEventListener('click', openBulkAssetDeleteModal);
     document.getElementById('inventory-clear-selection-button')?.addEventListener('click', clearInventorySelection);
   }
 
   group.style.display = 'flex';
+}
+
+function handleInventorySortChange() {
+  const sortSelect = document.getElementById("sort-select");
+  const sortDesc = document.getElementById("sort-descending");
+  if (sortSelect?.value === 'dateAdded' && sortDesc) {
+    sortDesc.checked = true;
+  }
+  displayFilteredInventory();
 }
 
 function setupInventoryFilters() {
@@ -5561,7 +5646,8 @@ function setupInventoryFilters() {
 
   if (sortSelect) {
     sortSelect.removeEventListener("change", displayFilteredInventory);
-    sortSelect.addEventListener("change", displayFilteredInventory);
+    sortSelect.removeEventListener("change", handleInventorySortChange);
+    sortSelect.addEventListener("change", handleInventorySortChange);
   }
 
   if (sortDesc) {
@@ -5590,7 +5676,7 @@ function ensureInventoryTableStyles() {
     .inventory-compact-table {
       table-layout: auto;
       width: 100%;
-      min-width: 980px;
+      min-width: 1120px;
     }
 
     .inventory-compact-table th,
@@ -5646,6 +5732,12 @@ function ensureInventoryTableStyles() {
     .inventory-compact-table .asset-purchase-date-cell {
       white-space: nowrap;
       color: #495057;
+    }
+
+    .inventory-compact-table .asset-audit-date-cell {
+      white-space: nowrap;
+      color: #495057;
+      font-size: 12px;
     }
 
     .bulk-deployment-details {
@@ -5723,7 +5815,7 @@ function ensureInventoryTableStyles() {
 
     @media (max-width: 768px) {
       .inventory-compact-table {
-        min-width: 900px;
+        min-width: 1040px;
       }
 
       .inventory-actions-cell {
@@ -5808,10 +5900,12 @@ function updateInventorySelectionUi(currentVisibleAssets = null) {
   const selectedCount = selectedInventoryAssetIds.size;
   const countEl = document.getElementById('inventory-selected-count');
   const editButton = document.getElementById('inventory-bulk-edit-button');
+  const deleteButton = document.getElementById('inventory-bulk-delete-button');
   const clearButton = document.getElementById('inventory-clear-selection-button');
 
   if (countEl) countEl.textContent = `${selectedCount} selected`;
   if (editButton) editButton.disabled = selectedCount === 0;
+  if (deleteButton) deleteButton.disabled = selectedCount === 0;
   if (clearButton) clearButton.disabled = selectedCount === 0;
 
   document.querySelectorAll('.inventory-row-select').forEach(input => {
@@ -5890,6 +5984,8 @@ function displayInventoryTable(assetsToShow) {
           <th>Serial</th>
           <th>Qty</th>
           <th>Purchased</th>
+          <th>Added</th>
+          <th>Modified</th>
           <th>Department</th>
           <th>Status</th>
           <th>Location</th>
@@ -5940,6 +6036,10 @@ function displayInventoryTable(assetsToShow) {
         <td class="${asset.isBulk ? 'bulk-quantity-cell' : ''}">${quantityHtml}</td>
 
         <td class="asset-purchase-date-cell">${escapeHtml(formatAssetPurchaseDate(asset.dateOfPurchase || asset.purchaseDate || ''))}</td>
+
+        <td class="asset-audit-date-cell">${escapeHtml(formatAssetAuditDateTime(asset.dateAdded || ''))}</td>
+
+        <td class="asset-audit-date-cell">${escapeHtml(formatAssetAuditDateTime(asset.dateModified || ''))}</td>
 
         <td>
           ${departmentBadgeHtml(asset.department)}
@@ -6082,6 +6182,23 @@ function ensureAssetEditModal() {
             Assets can only have one status at a time.
           </small>
         </div>
+
+        <div style="background:#f8f9fa;border:1px solid #e9ecef;border-radius:8px;padding:12px;margin-top:16px;">
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;">
+            <div class="form-group" style="margin-bottom:0;">
+              <label class="form-label">Date Added</label>
+              <input id="editAssetDateAdded" class="form-input" readonly>
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+              <label class="form-label">Date Modified</label>
+              <input id="editAssetDateModified" class="form-input" readonly>
+            </div>
+          </div>
+          <details style="margin-top:12px;">
+            <summary style="cursor:pointer;font-weight:700;color:#495057;">Change History</summary>
+            <div id="editAssetChangeHistory" style="margin-top:8px;max-height:260px;overflow-y:auto;"></div>
+          </details>
+        </div>
       </div>
 
       <div class="modal-footer modal-actions" style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
@@ -6139,6 +6256,9 @@ function openEditAssetModal(encodedAssetId) {
   document.getElementById('editAssetDepartment').value = asset.department || 'UN';
   document.getElementById('editAssetDefaultLocation').value = asset.defaultLocation || 'Store';
   document.getElementById('editAssetCurrentLocation').value = asset.currentLocation || '';
+  document.getElementById('editAssetDateAdded').value = formatAssetAuditDateTime(asset.dateAdded || '');
+  document.getElementById('editAssetDateModified').value = formatAssetAuditDateTime(asset.dateModified || '');
+  document.getElementById('editAssetChangeHistory').innerHTML = assetChangeHistoryHtml(asset);
   const editStatusEl = document.getElementById('editAssetStatus');
   if (editStatusEl) {
     const conditionStatus = getAssetConditionStatus(asset);
@@ -6690,6 +6810,7 @@ async function confirmDeleteAsset() {
     closeModal('editAssetModal');
 
     let message = `Deleted asset ${assetId}`;
+    if (data.eventsUpdated) message += `; removed from ${data.eventsUpdated} event(s)`;
     if (data.containersUpdated) message += `; removed from ${data.containersUpdated} container(s)`;
     showNotification('success', message);
 
@@ -6705,6 +6826,112 @@ async function confirmDeleteAsset() {
     }
   } catch (error) {
     showNotification('error', `Failed to delete asset: ${error.message}`);
+  }
+}
+
+function ensureBulkAssetDeleteModal() {
+  if (document.getElementById('bulkAssetDeleteModal')) return;
+
+  const modal = document.createElement('div');
+  modal.id = 'bulkAssetDeleteModal';
+  modal.className = 'modal';
+  modal.innerHTML = `
+    <div class="modal-content" style="max-width:520px;">
+      <div class="modal-header">
+        <h3 class="modal-title">Delete Selected Assets</h3>
+        <button class="close-btn" onclick="closeModal('bulkAssetDeleteModal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div style="background:#f8d7da;border:1px solid #f5c2c7;color:#842029;padding:12px;border-radius:8px;margin-bottom:14px;">
+          This permanently deletes the selected assets from inventory and removes them from any tagged events. Enter your admin password to confirm.
+        </div>
+        <div id="bulkDeleteAssetSummary" style="margin-bottom:14px;color:#495057;font-size:14px;"></div>
+        <div class="form-group">
+          <label class="form-label" for="bulkDeleteAssetPassword">Admin Password</label>
+          <input id="bulkDeleteAssetPassword" type="password" class="form-input" autocomplete="current-password">
+        </div>
+      </div>
+      <div class="modal-footer modal-actions" style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
+        <button class="btn btn-secondary" onclick="closeModal('bulkAssetDeleteModal')">Cancel</button>
+        <button class="btn btn-danger" onclick="confirmBulkAssetDelete()">Delete Selected</button>
+      </div>
+    </div>
+  `;
+
+  modal.addEventListener('click', (event) => {
+    if (event.target === modal) closeModal('bulkAssetDeleteModal');
+  });
+
+  document.body.appendChild(modal);
+}
+
+function openBulkAssetDeleteModal() {
+  if (!currentUser || !currentUser.isAdmin) {
+    showNotification('error', 'Admin privileges required');
+    return;
+  }
+
+  const selectedAssets = getSelectedInventoryAssets();
+  if (!selectedAssets.length) {
+    showNotification('warning', 'Select at least one asset');
+    return;
+  }
+
+  ensureBulkAssetDeleteModal();
+  document.getElementById('bulkDeleteAssetSummary').innerHTML = selectedInventoryAssetSummaryHtml(selectedAssets);
+  document.getElementById('bulkDeleteAssetPassword').value = '';
+
+  openModal('bulkAssetDeleteModal');
+  setTimeout(() => document.getElementById('bulkDeleteAssetPassword')?.focus(), 100);
+}
+
+async function confirmBulkAssetDelete() {
+  if (!currentUser || !currentUser.isAdmin) {
+    showNotification('error', 'Admin privileges required');
+    return;
+  }
+
+  const selectedAssets = getSelectedInventoryAssets();
+  const assetIds = selectedAssets.map(inventoryAssetIdentifier).filter(Boolean);
+  const password = document.getElementById('bulkDeleteAssetPassword')?.value || '';
+
+  if (!assetIds.length) {
+    showNotification('warning', 'Select at least one asset');
+    return;
+  }
+
+  if (!password) {
+    showNotification('warning', 'Enter your admin password');
+    return;
+  }
+
+  try {
+    const res = await apiCall('/api/assets/bulk-delete', 'DELETE', { assetIds, password });
+    const data = res.data || {};
+    const deletedCount = Number(data.deletedAssets?.length || 0);
+    const missingCount = Number(data.missingAssetIds?.length || 0);
+
+    closeModal('bulkAssetDeleteModal');
+
+    let message = `Deleted ${deletedCount} selected asset${deletedCount === 1 ? '' : 's'}`;
+    if (data.eventsUpdated) message += `; removed from ${data.eventsUpdated} event(s)`;
+    if (data.containersUpdated) message += `; removed from ${data.containersUpdated} container(s)`;
+    if (missingCount) message += `; ${missingCount} no longer found`;
+    showNotification(missingCount ? 'warning' : 'success', message);
+
+    selectedInventoryAssetIds.clear();
+    await loadInventory();
+    if (document.getElementById('events-section')?.classList.contains('active')) {
+      await loadAllEvents();
+    }
+    if (document.getElementById('prepare-section')?.classList.contains('active')) {
+      await loadPrepareEvents();
+    }
+    if (document.getElementById('containers-section')?.classList.contains('active')) {
+      await loadContainers();
+    }
+  } catch (error) {
+    showNotification('error', `Failed to delete selected assets: ${error.message}`);
   }
 }
 
@@ -6839,6 +7066,14 @@ function ensureContainerUiStyles() {
       font-size: 16px;
       font-weight: 800;
       color: #333;
+      word-break: break-word;
+    }
+
+    .container-serial-text {
+      margin-top: 4px;
+      color: #666;
+      font-size: 12px;
+      font-weight: 600;
       word-break: break-word;
     }
 
@@ -7130,6 +7365,7 @@ function containerMatchesSearch(container, term) {
 
   const searchTextParts = [
     container.id,
+    getContainerSerialNumber(container),
     ...(container.assetIds || [])
   ];
 
@@ -7244,15 +7480,18 @@ function renderContainerCards(containerList) {
       return `<span class="container-meta-pill">${escapeHtml(dept)}: ${deptCounts[dept]}</span>`;
     }).join('');
 
-    const safeId = escapeHtmlAttr(container.id);
     const jsId = String(container.id).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    const serialNumber = getContainerSerialNumber(container);
 
     return `
       <div class="container-card-modern">
         <div class="container-card-top">
+          <div style="min-width:0;">
           <div class="container-id-badge">
             <span>📦</span>
             <span>${escapeHtml(container.id)}</span>
+          </div>
+          ${serialNumber ? `<div class="container-serial-text">SN: ${escapeHtml(serialNumber)}</div>` : ''}
           </div>
           <div class="container-count-pill">${(container.assetIds || []).length} asset(s)</div>
         </div>
@@ -7325,6 +7564,7 @@ function renderContainerAssetsTable(assetIds) {
 function makeContainerEditorHtml(mode, container = null) {
   const isEdit = mode === 'edit';
   const containerId = container ? container.id : '';
+  const serialNumber = getContainerSerialNumber(container);
   const title = isEdit ? `Edit Container: ${escapeHtml(containerId)}` : 'Create New Container';
 
   return `
@@ -7345,6 +7585,16 @@ function makeContainerEditorHtml(mode, container = null) {
           <div style="color:#666;font-size:12px;margin-top:6px;">
             Use a clear name that is easy to scan, like CASE-A01, RF-RACK, or LX-DISTRO-01.
           </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Serial Number <span style="color:#666;font-weight:400;">(optional)</span></label>
+          <input
+            id="${isEdit ? 'editContainerSerialInput' : 'containerSerialInput'}"
+            class="form-input"
+            value="${escapeHtmlAttr(serialNumber)}"
+            placeholder="e.g. SN-CASE-A01"
+          >
         </div>
 
         <div class="container-panel" style="margin-top:14px;">
@@ -7376,7 +7626,7 @@ function makeContainerEditorHtml(mode, container = null) {
         >
 
         <div style="color:#666;font-size:12px;margin:8px 0 12px;">
-          Search by asset ID, brand, model, serial, description, or press Enter on a container ID to add all assets from that container.
+          Search by asset ID, brand, model, serial, description, or press Enter on a container ID/serial number to add all assets from that container.
         </div>
 
         <div
@@ -7572,6 +7822,44 @@ async function ensureAssetsLoadedForContainerSelector(force = false) {
   }
 }
 
+function updateSelectedContainerAssetsDisplay() {
+  const countElement = document.getElementById('selectedContainerAssetsCount');
+  const listElement = document.getElementById('selectedContainerAssetsList');
+  if (!countElement || !listElement) return;
+
+  countElement.textContent = selectedContainerAssets.size;
+
+  if (selectedContainerAssets.size === 0) {
+    listElement.innerHTML = '<span style="color:#666;font-style:italic;">No assets selected</span>';
+    return;
+  }
+
+  let html = '';
+
+  Array.from(selectedContainerAssets).forEach(assetId => {
+    const asset = getAssetFromCache(assetId);
+
+    html += `
+      <div class="selected-container-chip">
+        <div style="min-width:0;">
+          <div class="selected-container-chip-id">${escapeHtml(assetId)}</div>
+          <div class="selected-container-chip-desc">
+            ${
+              asset
+                ? `${escapeHtml(asset.brand || '')} ${escapeHtml(asset.model || '')}${asset.serial ? ` • SN: ${escapeHtml(asset.serial)}` : ''}`
+                : 'Asset not found in inventory'
+            }
+          </div>
+        </div>
+
+        <button onclick="removeAssetFromContainer('${escapeHtmlAttr(assetId)}')" title="Remove">&times;</button>
+      </div>
+    `;
+  });
+
+  listElement.innerHTML = html;
+}
+
 async function initContainerAssetSelector(initialAssetIds = []) {
   const resultsEl = document.getElementById("availableContainerAssets");
   const searchElInitial = document.getElementById("containerAssetSearch");
@@ -7594,7 +7882,7 @@ async function initContainerAssetSelector(initialAssetIds = []) {
 
   if (searchEl) {
     searchEl.disabled = false;
-    searchEl.placeholder = "Search by asset ID / brand / model / serial... (Press Enter for exact ID)";
+    searchEl.placeholder = "Search by asset ID / brand / model / serial... (Press Enter for exact asset or container)";
   }
 
   if (resultsEl) {
@@ -7637,7 +7925,7 @@ function bindContainerAssetSearchHandlers() {
   el.addEventListener("paste", scheduleSearch, { signal });
   el.addEventListener("change", scheduleSearch, { signal });
 
-  // Enter adds an exact asset, serial, or container match.
+  // Enter adds an exact asset, asset serial, container ID, or container serial match.
   el.addEventListener(
     "keydown",
     (e) => {
@@ -7802,7 +8090,7 @@ async function handleContainerAssetSearchKeypress(e) {
     return;
   }
 
-  // container match (lets you type a container ID and add all its assets)
+  // container match (lets you type a container ID/serial and add all its assets)
   try {
     const container = await getContainerById(searchTerm, true);
     if (!container) {
@@ -7847,13 +8135,14 @@ async function createContainer() {
 
 async function saveNewContainer() {
   const id = (document.getElementById("containerIdInput").value || '').trim();
+  const serialNumber = (document.getElementById("containerSerialInput")?.value || '').trim();
   const assetIds = Array.from(selectedContainerAssets);
 
   if (!id) return showNotification('error', 'Container ID is required');
   if (assetIds.length === 0) return showNotification('error', 'Add at least 1 asset ID');
 
   try {
-    await apiCall('/api/containers', 'POST', { id, assetIds });
+    await apiCall('/api/containers', 'POST', { id, serialNumber, assetIds });
     showNotification('success', `Created container ${id}`);
     closeModal("containerCrudModal");
     await refreshContainersCache(true);
@@ -7876,6 +8165,7 @@ async function viewContainer(containerId) {
     const deptPills = Object.keys(deptCounts).sort().map(dept => {
       return `<span class="container-meta-pill">${escapeHtml(dept)}: ${deptCounts[dept]}</span>`;
     }).join('');
+    const serialNumber = getContainerSerialNumber(c);
 
     document.getElementById("containerCrudModalTitle").textContent = `Container: ${c.id}`;
 
@@ -7884,7 +8174,9 @@ async function viewContainer(containerId) {
         <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;">
           <div>
             <div class="container-hero-title">📦 ${escapeHtml(c.id)}</div>
-            <div class="container-hero-subtitle">${(c.assetIds || []).length} asset(s) in this container</div>
+            <div class="container-hero-subtitle">
+              ${(c.assetIds || []).length} asset(s) in this container${serialNumber ? ` • SN: ${escapeHtml(serialNumber)}` : ''}
+            </div>
           </div>
 
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
@@ -7932,13 +8224,14 @@ async function editContainer(containerId) {
 
 async function saveContainerEdit(containerId) {
   const newId = (document.getElementById('editContainerIdInput')?.value || '').trim();
+  const serialNumber = (document.getElementById('editContainerSerialInput')?.value || '').trim();
   const assetIds = Array.from(selectedContainerAssets);
 
   if (!newId) return showNotification('error', 'Container ID is required');
   if (assetIds.length === 0) return showNotification('error', 'Container must include at least 1 asset ID');
 
   try {
-    await apiCall(`/api/containers/${encodeURIComponent(containerId)}`, 'PUT', { newId, assetIds });
+    await apiCall(`/api/containers/${encodeURIComponent(containerId)}`, 'PUT', { newId, serialNumber, assetIds });
     if (newId !== containerId) {
       showNotification('success', `Renamed container ${containerId} → ${newId}`);
     } else {
@@ -8040,7 +8333,10 @@ function findMaintenanceReportAsset(value) {
 function findMaintenanceReportContainer(value) {
   const raw = String(value || '').trim().toLowerCase();
   if (!raw) return null;
-  return maintenanceReportContainerList().find(container => String(container.id || '').trim().toLowerCase() === raw) || null;
+  return maintenanceReportContainerList().find(container => {
+    const candidates = [container.id, getContainerSerialNumber(container)];
+    return candidates.some(candidate => String(candidate || '').trim().toLowerCase() === raw);
+  }) || null;
 }
 
 function maintenanceReportContainerAssetIds(container) {
@@ -8395,13 +8691,25 @@ function populateMaintenanceReportFilters() {
       .map(assetId => `<option value="${escapeHtmlAttr(assetId)}" label="Asset"></option>`);
 
     const containerOptions = maintenanceReportContainerList()
-      .map(container => container.id || '')
-      .filter(Boolean)
-      .sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }))
-      .map(containerId => {
-        const match = findMaintenanceReportContainer(containerId);
-        const count = maintenanceReportContainerAssetIds(match).length;
-        return `<option value="${escapeHtmlAttr(containerId)}" label="Container${count ? ` (${count} assets)` : ''}"></option>`;
+      .sort((a, b) => String(a.id || '').localeCompare(String(b.id || ''), undefined, { numeric: true }))
+      .flatMap(container => {
+        const containerId = container.id || '';
+        if (!containerId) return [];
+
+        const serialNumber = getContainerSerialNumber(container);
+        const count = maintenanceReportContainerAssetIds(container).length;
+        const label = `Container${count ? ` (${count} assets)` : ''}`;
+        const options = [
+          `<option value="${escapeHtmlAttr(containerId)}" label="${escapeHtmlAttr(label)}"></option>`
+        ];
+
+        if (serialNumber) {
+          options.push(
+            `<option value="${escapeHtmlAttr(serialNumber)}" label="${escapeHtmlAttr(label)} - ${escapeHtmlAttr(containerId)}"></option>`
+          );
+        }
+
+        return options;
       });
 
     datalist.innerHTML = [...containerOptions, ...assetOptions].join('');
@@ -13975,6 +14283,7 @@ function editContainerSearchText(container, summary) {
 
   return [
     container?.id,
+    getContainerSerialNumber(container),
     ...(container?.assetIds || []),
     groupText
   ].join(' ').toLowerCase();
@@ -14204,6 +14513,7 @@ function filterAvailableModels(searchTerm) {
     const containerItem = item.container;
     const summary = item.summary;
     const containerId = String(containerItem?.id || '');
+    const containerSerial = getContainerSerialNumber(containerItem);
     const canAdd = summary.groups.length > 0;
     const modelSummary = summary.groups.length
       ? summary.groups.slice(0, 4).map(group =>
@@ -14224,6 +14534,7 @@ function filterAvailableModels(searchTerm) {
       <div style="padding: 12px; border-bottom: 1px solid #f1f1f1; display: flex; justify-content: space-between; align-items: center; gap: 12px;">
         <div style="flex: 1; min-width: 0;">
           <div style="font-weight: 600; margin-bottom: 4px;">Container ${escapeHtml(containerId)}</div>
+          ${containerSerial ? `<div style="color: #666; font-size: 12px; margin-bottom: 2px;">SN: ${escapeHtml(containerSerial)}</div>` : ''}
           <div style="color: #666; font-size: 13px; margin-bottom: 2px;">${modelSummary}${remainingModels ? `, +${remainingModels} more` : ''}</div>
           <div style="font-size: 12px; color: ${canAdd ? '#28a745' : '#dc3545'};">
             ${summary.usableCount} addable asset${summary.usableCount === 1 ? '' : 's'}${skippedParts.length ? ` (${skippedParts.join(', ')})` : ''}
@@ -15465,49 +15776,6 @@ function openMaintenanceModalForAsset(assetId) {
     }
   }, 200);
 }
-
-
-
-
-
-function updateSelectedContainerAssetsDisplay() {
-  const countElement = document.getElementById('selectedContainerAssetsCount');
-  const listElement = document.getElementById('selectedContainerAssetsList');
-  if (!countElement || !listElement) return;
-
-  countElement.textContent = selectedContainerAssets.size;
-
-  if (selectedContainerAssets.size === 0) {
-    listElement.innerHTML = '<span style="color:#666;font-style:italic;">No assets selected</span>';
-    return;
-  }
-
-  let html = '';
-
-  Array.from(selectedContainerAssets).forEach(assetId => {
-    const asset = getAssetFromCache(assetId);
-
-    html += `
-      <div class="selected-container-chip">
-        <div style="min-width:0;">
-          <div class="selected-container-chip-id">${escapeHtml(assetId)}</div>
-          <div class="selected-container-chip-desc">
-            ${
-              asset
-                ? `${escapeHtml(asset.brand || '')} ${escapeHtml(asset.model || '')}${asset.serial ? ` • SN: ${escapeHtml(asset.serial)}` : ''}`
-                : 'Asset not found in inventory'
-            }
-          </div>
-        </div>
-
-        <button onclick="removeAssetFromContainer('${escapeHtmlAttr(assetId)}')" title="Remove">×</button>
-      </div>
-    `;
-  });
-
-  listElement.innerHTML = html;
-}
-
 function searchMaintenanceAssets() {
   const searchEl = document.getElementById('maintenanceAssetSearch');
   const container = document.getElementById('availableMaintenanceAssets');
@@ -20514,9 +20782,10 @@ async function processUniversalContainer(eventId, containerId) {
     return;
   }
 
+  const containerLabel = container.id || containerId;
   const assetIds = (container.assetIds || []).map(a => String(a || '').trim()).filter(Boolean);
   if (!assetIds.length) {
-    if (feedbackDiv) showFeedback(feedbackDiv, 'warning', `Container ${containerId} has no assets`);
+    if (feedbackDiv) showFeedback(feedbackDiv, 'warning', `Container ${containerLabel} has no assets`);
     return;
   }
 
@@ -20524,7 +20793,7 @@ async function processUniversalContainer(eventId, containerId) {
     showFeedback(
       feedbackDiv,
       'info',
-      `Processing container <strong>${escapeHtml(containerId)}</strong> (${assetIds.length} assets)…<br>` +
+      `Processing container <strong>${escapeHtml(containerLabel)}</strong> (${assetIds.length} assets)…<br>` +
       (quickAddEnabled
         ? `Scanned container assets will be added into this event.`
         : `Extra container assets will remain listed as extra assets.`)
@@ -20581,7 +20850,7 @@ async function processUniversalContainer(eventId, containerId) {
 
   const detailsHtml = `
     <div style="margin-top:6px;">
-      <div><strong>Summary</strong> (Container ${escapeHtml(containerId)}):</div>
+      <div><strong>Summary</strong> (Container ${escapeHtml(containerLabel)}):</div>
       <div>✅ Prepared / added to event: <strong>${results.prepared.length}</strong> / ${total}</div>
       <div>➕ Added into event requirements: <strong>${results.addedToEvent.length}</strong></div>
       <div>Extra assets: <strong>${results.extra.length}</strong></div>
@@ -20629,6 +20898,8 @@ function getInventorySortValue(asset, sortBy) {
   if (sortBy === 'status') return asset.status || '';
   if (sortBy === 'location') return asset.location || '';
   if (sortBy === 'dateOfPurchase' || sortBy === 'purchaseDate') return normalizeAssetPurchaseDateValue(asset.dateOfPurchase || asset.purchaseDate || '');
+  if (sortBy === 'dateAdded') return normalizeAssetAuditDateTime(asset.dateAdded || '');
+  if (sortBy === 'dateModified') return normalizeAssetAuditDateTime(asset.dateModified || '');
   return asset[sortBy] || '';
 }
 
@@ -20651,7 +20922,7 @@ function getFilteredInventoryData() {
 
   let filteredAssets = sourceAssets.filter((asset) => {
     const deptMeta = getDepartmentMeta(asset.department);
-    const searchableText = `${asset.id || ''} ${asset.internalId || ''} ${asset.bulkId || ''} ${asset.brand || ''} ${asset.model || ''} ${asset.serial || ''} ${asset.description || ''} ${asset.dateOfPurchase || asset.purchaseDate || ''} ${asset.department || ''} ${deptMeta.name || ''}`.toLowerCase();
+    const searchableText = `${asset.id || ''} ${asset.internalId || ''} ${asset.bulkId || ''} ${asset.brand || ''} ${asset.model || ''} ${asset.serial || ''} ${asset.description || ''} ${asset.dateOfPurchase || asset.purchaseDate || ''} ${asset.dateAdded || ''} ${asset.dateModified || ''} ${asset.department || ''} ${deptMeta.name || ''}`.toLowerCase();
     const matchesSearch = !filters.searchTerm || searchableText.includes(filters.searchTerm);
     const matchesDept = !filters.deptFilter || asset.department === filters.deptFilter;
     const matchesStatus = !filters.statusFilter || asset.status === filters.statusFilter;

@@ -12,6 +12,7 @@ class AssetUpdateEventPropagationTests(unittest.TestCase):
         self.original_data_manager = app_module.data_manager
         self.original_signature = app_module._data_snapshot_signature
         self.original_testing = app_module.app.config.get('TESTING')
+        self.original_active_company_code = app_module._active_company_code
         self.tempdir = tempfile.TemporaryDirectory()
 
         self.data_manager = DataManager(self.tempdir.name)
@@ -39,6 +40,7 @@ class AssetUpdateEventPropagationTests(unittest.TestCase):
         self.data_manager.save_inventory()
 
         app_module.data_manager = self.data_manager
+        app_module._active_company_code = app_module._user_assigned_company_code('admin')
         app_module.invalidate_cache()
         app_module.mark_data_snapshot_current()
         app_module.app.config['TESTING'] = True
@@ -47,6 +49,7 @@ class AssetUpdateEventPropagationTests(unittest.TestCase):
     def tearDown(self):
         app_module.data_manager = self.original_data_manager
         app_module._data_snapshot_signature = self.original_signature
+        app_module._active_company_code = self.original_active_company_code
         app_module.app.config['TESTING'] = self.original_testing
         self.tempdir.cleanup()
 
@@ -213,6 +216,70 @@ class AssetUpdateEventPropagationTests(unittest.TestCase):
         self.assertEqual(assets_response.status_code, 200, assets_response.get_data(as_text=True))
         asset_payload = next(item for item in assets_response.get_json()['data'] if item['internalId'] == 'A#01')
         self.assertEqual(asset_payload['dateOfPurchase'], '2026-06-02')
+
+    def test_asset_update_records_manual_change_history(self):
+        response = self.put_asset(
+            'A#01',
+            model='NewModel',
+            serial='SN-NEW',
+            dateOfPurchase='2026-06-02',
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        asset = self.data_manager.inventory['A#01']
+
+        self.assertRegex(asset.date_modified, r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$')
+        self.assertEqual(len(asset.change_history), 1)
+        self.assertEqual(asset.change_history[0]['action'], 'updated')
+        self.assertEqual(asset.change_history[0]['user'], 'admin')
+
+        changes = {change['field']: change for change in asset.change_history[0]['changes']}
+        self.assertEqual(changes['model']['old'], 'OldModel')
+        self.assertEqual(changes['model']['new'], 'NewModel')
+        self.assertEqual(changes['serial']['old'], 'SN-A#01')
+        self.assertEqual(changes['serial']['new'], 'SN-NEW')
+        self.assertEqual(changes['date_of_purchase']['new'], '2026-06-02')
+
+        assets_response = self.client.get('/api/assets')
+        self.assertEqual(assets_response.status_code, 200, assets_response.get_data(as_text=True))
+        asset_payload = next(item for item in assets_response.get_json()['data'] if item['internalId'] == 'A#01')
+        self.assertEqual(asset_payload['dateModified'], asset.date_modified)
+        self.assertEqual(asset_payload['changeHistory'][0]['changes'][0]['field'], 'model')
+
+    def test_maintenance_serial_and_location_change_do_not_update_manual_modified_date(self):
+        asset = self.data_manager.inventory['A#01']
+        asset.date_modified = '2026-06-01T10:00:00'
+        asset.change_history = [{
+            'date': '2026-06-01T10:00:00',
+            'user': 'admin',
+            'action': 'updated',
+            'changes': [{
+                'field': 'description',
+                'label': 'Description',
+                'old': 'Old',
+                'new': 'Old desc',
+            }],
+        }]
+        self.data_manager.save_inventory()
+        app_module.mark_data_snapshot_current()
+
+        self.login_admin()
+        response = self.client.post(
+            '/api/assets/A%2301/maintain',
+            json={
+                'logEntry': 'Swap during maintenance',
+                'maintenanceDate': '2026-06-05',
+                'newLocation': 'Workshop',
+                'newSerial': 'SN-MAINT',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        asset = self.data_manager.inventory['A#01']
+        self.assertEqual(asset.current_location, 'Workshop')
+        self.assertEqual(asset.serial_number, 'SN-MAINT')
+        self.assertEqual(asset.date_modified, '2026-06-01T10:00:00')
+        self.assertEqual(len(asset.change_history), 1)
 
 
 if __name__ == '__main__':

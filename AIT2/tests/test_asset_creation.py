@@ -131,6 +131,40 @@ class AssetCreationTests(unittest.TestCase):
         created_asset = next(item for item in payload if item['internalId'] == asset_id)
         self.assertEqual(created_asset['dateOfPurchase'], '2026-06-02')
 
+    def test_create_asset_sets_audit_metadata(self):
+        response = self.post_asset({
+            'serials': ['SN-AUDIT'],
+        })
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        asset_id = response.get_json()['assetIds'][0]
+        asset = self.data_manager.inventory[asset_id]
+
+        self.assertRegex(asset.date_added, r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$')
+        self.assertEqual(asset.date_modified, asset.date_added)
+        self.assertEqual(len(asset.change_history), 1)
+        self.assertEqual(asset.change_history[0]['action'], 'created')
+        self.assertEqual(asset.change_history[0]['user'], 'normal')
+
+        changed_fields = {change['field'] for change in asset.change_history[0]['changes']}
+        self.assertIn('asset_id', changed_fields)
+        self.assertIn('brand', changed_fields)
+        self.assertIn('model', changed_fields)
+        self.assertIn('serial', changed_fields)
+
+        reloaded = DataManager(self.tempdir.name)
+        reloaded.load_inventory()
+        self.assertEqual(reloaded.inventory[asset_id].date_added, asset.date_added)
+        self.assertEqual(reloaded.inventory[asset_id].change_history[0]['user'], 'normal')
+
+        assets_response = self.client.get('/api/assets')
+        self.assertEqual(assets_response.status_code, 200, assets_response.get_data(as_text=True))
+        payload = assets_response.get_json()['data']
+        created_asset = next(item for item in payload if item['internalId'] == asset_id)
+        self.assertEqual(created_asset['dateAdded'], asset.date_added)
+        self.assertEqual(created_asset['dateModified'], asset.date_modified)
+        self.assertEqual(created_asset['changeHistory'][0]['action'], 'created')
+
 
 if __name__ == '__main__':
     unittest.main()

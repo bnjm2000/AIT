@@ -44,7 +44,7 @@ class PrepareQuickAddAndAdminDeleteTests(unittest.TestCase):
         app_module._data_snapshot_signature = self.original_signature
         self.tempdir.cleanup()
 
-    def make_asset(self, asset_id, department='AX', is_disposed=False):
+    def make_asset(self, asset_id, department='AX', is_disposed=False, is_bulk=False, quantity=1):
         return InventoryItem(
             asset_id=asset_id,
             brand='TestBrand',
@@ -57,6 +57,8 @@ class PrepareQuickAddAndAdminDeleteTests(unittest.TestCase):
             default_location='Store',
             current_location='',
             is_disposed=is_disposed,
+            is_bulk=is_bulk,
+            quantity=quantity,
         )
 
     def login_as(self, username, is_admin=False):
@@ -277,6 +279,98 @@ class PrepareQuickAddAndAdminDeleteTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
         self.assertNotIn('B#01', self.data_manager.inventory)
         self.assertEqual(self.data_manager.containers['CASE-1'].asset_ids, [])
+
+    def test_asset_delete_removes_asset_from_tagged_event(self):
+        event = self.make_event(
+            event_id=106,
+            prepared=['[MODEL]AX|TestBrand|TestModel|1|Matching item', 'A#01'],
+            actual=['A#01'],
+            extra=['A#01'],
+        )
+        event.returned_items = ['A#01']
+
+        self.login_as('admin', True)
+        response = self.client.delete(
+            f'/api/assets/{quote("A#01", safe="")}',
+            json={'password': 'pw'},
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        body = response.get_json()
+        self.assertEqual(body['data']['eventsUpdated'], 1)
+        self.assertNotIn('A#01', self.data_manager.inventory)
+        self.assertNotIn('A#01', event.prepared_items)
+        self.assertNotIn('A#01', event.actually_prepared)
+        self.assertNotIn('A#01', event.returned_items)
+        self.assertNotIn('A#01', event.extra_assets)
+
+    def test_bulk_asset_delete_requires_password_and_cleans_events_and_containers(self):
+        event = self.make_event(
+            event_id=107,
+            prepared=['A#01', 'B#01'],
+            actual=['A#01', 'B#01'],
+            extra=['B#01'],
+        )
+
+        self.login_as('normal')
+        response = self.client.delete('/api/assets/bulk-delete', json={
+            'assetIds': ['A#01', 'B#01'],
+            'password': 'pw',
+        })
+        self.assertEqual(response.status_code, 403)
+
+        self.login_as('admin', True)
+        response = self.client.delete('/api/assets/bulk-delete', json={'assetIds': ['A#01', 'B#01']})
+        self.assertEqual(response.status_code, 400)
+
+        response = self.client.delete('/api/assets/bulk-delete', json={
+            'assetIds': ['A#01', 'B#01'],
+            'password': 'wrong',
+        })
+        self.assertEqual(response.status_code, 403)
+
+        response = self.client.delete('/api/assets/bulk-delete', json={
+            'assetIds': ['A#01', 'B#01'],
+            'password': 'pw',
+        })
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        body = response.get_json()
+        self.assertEqual(set(body['data']['deletedAssets']), {'A#01', 'B#01'})
+        self.assertEqual(body['data']['eventsUpdated'], 1)
+        self.assertNotIn('A#01', self.data_manager.inventory)
+        self.assertNotIn('B#01', self.data_manager.inventory)
+        self.assertEqual(self.data_manager.containers['CASE-1'].asset_ids, [])
+        self.assertEqual(event.prepared_items, [])
+        self.assertEqual(event.actually_prepared, [])
+        self.assertEqual(event.extra_assets, [])
+
+    def test_bulk_asset_delete_removes_bulk_event_markers(self):
+        self.data_manager.inventory['BULK-0001'] = self.make_asset(
+            'BULK-0001',
+            is_bulk=True,
+            quantity=5,
+        )
+        marker = app_module._bulk_marker('BULK-0001', 2)
+        event = self.make_event(
+            event_id=108,
+            prepared=[],
+            actual=[marker],
+            extra=[marker],
+        )
+        event.returned_items = [marker]
+
+        self.login_as('admin', True)
+        response = self.client.delete('/api/assets/bulk-delete', json={
+            'assetIds': ['BULK-0001'],
+            'password': 'pw',
+        })
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertNotIn('BULK-0001', self.data_manager.inventory)
+        self.assertEqual(event.actually_prepared, [])
+        self.assertEqual(event.returned_items, [])
+        self.assertEqual(event.extra_assets, [])
 
 
 if __name__ == '__main__':

@@ -1,0 +1,1 @@
+{"id": "1782464153385-5-2d3346a9", "topic": "data-changed", "details": {"topics": ["activity-log"], "changes": [{"topic": "activity-log", "details": {"action": "User admin logged in via web interface"}}], "path": "/login", "method": "POST"}, "actor": "admin", "originClientId": "", "timestamp": "2026-06-26T16:55:53"}

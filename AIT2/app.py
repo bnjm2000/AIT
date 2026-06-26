@@ -1593,6 +1593,114 @@ def _normalise_asset_purchase_date(value):
     raise ValueError('Date of purchase must be YYYY-MM-DD')
 
 
+ASSET_AUDIT_FIELD_LABELS = {
+    'asset_id': 'Asset ID',
+    'department': 'Department',
+    'brand': 'Brand',
+    'model': 'Model',
+    'description': 'Description',
+    'serial': 'Serial Number',
+    'date_of_purchase': 'Date of Purchase',
+    'default_location': 'Default Location',
+    'current_location': 'Current Location',
+    'status': 'Asset Status',
+    'quantity': 'Quantity',
+}
+
+
+def _asset_audit_timestamp():
+    return datetime.now().isoformat(timespec='seconds')
+
+
+def _asset_audit_user():
+    return session.get('user', 'system') if has_request_context() else 'system'
+
+
+def _asset_audit_snapshot(asset):
+    return {
+        'asset_id': getattr(asset, 'asset_id', ''),
+        'department': getattr(asset, 'department_code', ''),
+        'brand': getattr(asset, 'brand', ''),
+        'model': getattr(asset, 'model_number', ''),
+        'description': getattr(asset, 'description', ''),
+        'serial': getattr(asset, 'serial_number', ''),
+        'date_of_purchase': getattr(asset, 'date_of_purchase', ''),
+        'default_location': getattr(asset, 'default_location', ''),
+        'current_location': getattr(asset, 'current_location', ''),
+        'status': _asset_condition_status(asset),
+        'quantity': max(1, _safe_int(getattr(asset, 'quantity', 1), 1)) if _is_bulk_asset(asset) else 1,
+    }
+
+
+def _asset_audit_value(value):
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return value
+    if value is None:
+        return ''
+    return str(value)
+
+
+def _asset_audit_changes(before, after, fields=None):
+    fields = fields or ASSET_AUDIT_FIELD_LABELS.keys()
+    changes = []
+
+    for field in fields:
+        old_value = _asset_audit_value(before.get(field, ''))
+        new_value = _asset_audit_value(after.get(field, ''))
+        if old_value == new_value:
+            continue
+
+        changes.append({
+            'field': field,
+            'label': ASSET_AUDIT_FIELD_LABELS.get(field, field),
+            'old': old_value,
+            'new': new_value,
+        })
+
+    return changes
+
+
+def _append_asset_change_history(asset, changes, timestamp=None, user=None, action='updated'):
+    changes = [change for change in (changes or []) if change]
+    if not changes:
+        return False
+
+    timestamp = timestamp or _asset_audit_timestamp()
+    user = user if user is not None else _asset_audit_user()
+    history = list(getattr(asset, 'change_history', []) or [])
+    history.append({
+        'date': timestamp,
+        'user': user,
+        'action': action,
+        'changes': changes,
+    })
+    asset.change_history = history
+    asset.date_modified = timestamp
+    return True
+
+
+def _mark_asset_created(asset, timestamp=None, user=None):
+    timestamp = timestamp or _asset_audit_timestamp()
+    user = user if user is not None else _asset_audit_user()
+    asset.date_added = getattr(asset, 'date_added', '') or timestamp
+    asset.date_modified = getattr(asset, 'date_modified', '') or timestamp
+
+    after = _asset_audit_snapshot(asset)
+    changes = [
+        {
+            'field': field,
+            'label': ASSET_AUDIT_FIELD_LABELS.get(field, field),
+            'old': '',
+            'new': _asset_audit_value(value),
+        }
+        for field, value in after.items()
+        if _asset_audit_value(value) not in ('', 0)
+    ]
+    _append_asset_change_history(asset, changes, timestamp=timestamp, user=user, action='created')
+
+
 def _is_degraded(asset):
     return bool(getattr(asset, 'is_degraded', False))
 
@@ -2711,6 +2819,9 @@ def _bulk_asset_to_available_dict(asset, target_event=None):
         'serial': '',
         'dateOfPurchase': getattr(asset, 'date_of_purchase', ''),
         'purchaseDate': getattr(asset, 'date_of_purchase', ''),
+        'dateAdded': getattr(asset, 'date_added', ''),
+        'dateModified': getattr(asset, 'date_modified', ''),
+        'changeHistory': getattr(asset, 'change_history', []),
         'department': asset.department_code,
         'location': asset.current_location or asset.default_location,
         'status': status,
@@ -2768,6 +2879,9 @@ def _asset_to_available_dict(asset):
         'serial': asset.serial_number,
         'dateOfPurchase': getattr(asset, 'date_of_purchase', ''),
         'purchaseDate': getattr(asset, 'date_of_purchase', ''),
+        'dateAdded': getattr(asset, 'date_added', ''),
+        'dateModified': getattr(asset, 'date_modified', ''),
+        'changeHistory': getattr(asset, 'change_history', []),
         'department': asset.department_code,
         'location': asset.current_location or asset.default_location,
         'status': status,
@@ -2873,6 +2987,9 @@ def get_available_assets_for_event(event_id):
                 'serial': (getattr(asset, 'serial_number', None) or getattr(asset, 'serial', None) or ''),
                 'dateOfPurchase': getattr(asset, 'date_of_purchase', ''),
                 'purchaseDate': getattr(asset, 'date_of_purchase', ''),
+                'dateAdded': getattr(asset, 'date_added', ''),
+                'dateModified': getattr(asset, 'date_modified', ''),
+                'changeHistory': getattr(asset, 'change_history', []),
                 'location': asset.current_location or asset.default_location or '',
                 'status': _asset_status_value(asset),
                 'isMissing': getattr(asset, 'is_missing', False),
@@ -8647,6 +8764,9 @@ def get_assets():
                 'description': asset.description,
                 'dateOfPurchase': getattr(asset, 'date_of_purchase', ''),
                 'purchaseDate': getattr(asset, 'date_of_purchase', ''),
+                'dateAdded': getattr(asset, 'date_added', ''),
+                'dateModified': getattr(asset, 'date_modified', ''),
+                'changeHistory': getattr(asset, 'change_history', []),
                 'department': asset.department_code,
                 'departmentName': _department_payload(asset.department_code, departments)['name'],
                 'departmentColor': _department_payload(asset.department_code, departments)['color'],
@@ -9192,6 +9312,8 @@ def create_asset():
 
         with _inventory_action_lock:
             plan = _asset_id_plan_for_request(data)
+            audit_timestamp = _asset_audit_timestamp()
+            audit_user = _asset_audit_user()
 
             if plan['isBulk']:
                 existing_bulk_numbers = []
@@ -9217,6 +9339,7 @@ def create_asset():
                     quantity=plan['quantity'],
                     date_of_purchase=purchase_date
                 )
+                _mark_asset_created(asset, timestamp=audit_timestamp, user=audit_user)
                 data_manager.inventory[created_asset_ids[0]] = asset
             else:
                 created_asset_ids = []
@@ -9239,6 +9362,7 @@ def create_asset():
                         quantity=1,
                         date_of_purchase=purchase_date
                     )
+                    _mark_asset_created(asset, timestamp=audit_timestamp, user=audit_user)
                     data_manager.inventory[asset_id] = asset
                     created_asset_ids.append(asset_id)
 
@@ -9332,6 +9456,170 @@ def _active_event_usage_for_asset(asset_id):
     return usage
 
 
+def _normalise_asset_ids_for_delete(values):
+    if isinstance(values, str):
+        values = [values]
+
+    asset_ids = []
+    seen = set()
+    for value in values or []:
+        asset_id = str(value or '').strip()
+        if asset_id and asset_id not in seen:
+            asset_ids.append(asset_id)
+            seen.add(asset_id)
+    return asset_ids
+
+
+def _event_ref_targets_deleted_asset(ref, deleted_asset_ids):
+    if ref in deleted_asset_ids:
+        return True
+
+    marker = _parse_bulk_marker(ref)
+    return bool(marker and marker.get('bulkId') in deleted_asset_ids)
+
+
+def _remove_deleted_asset_refs(values, deleted_asset_ids):
+    kept = []
+    removed = []
+
+    for value in values or []:
+        if _event_ref_targets_deleted_asset(value, deleted_asset_ids):
+            removed.append(value)
+        else:
+            kept.append(value)
+
+    return kept, removed
+
+
+def _detach_deleted_assets_from_events(deleted_asset_ids):
+    events_updated = 0
+    event_refs_removed = 0
+    event_details = []
+
+    for event in data_manager.events.values():
+        changed = False
+        refs_removed_for_event = 0
+
+        for attr in ('prepared_items', 'actually_prepared', 'returned_items', 'extra_assets'):
+            current_values = list(getattr(event, attr, []) or [])
+            kept, removed = _remove_deleted_asset_refs(current_values, deleted_asset_ids)
+            if removed:
+                setattr(event, attr, kept)
+                changed = True
+                refs_removed_for_event += len(removed)
+
+        if changed:
+            update_event_state(event)
+            data_manager.save_event(event)
+            events_updated += 1
+            event_refs_removed += refs_removed_for_event
+            event_details.append({
+                'eventId': getattr(event, 'event_id', None),
+                'eventName': getattr(event, 'name', ''),
+                'refsRemoved': refs_removed_for_event,
+            })
+
+    return events_updated, event_refs_removed, event_details
+
+
+def _delete_inventory_assets(asset_ids):
+    result = {
+        'deletedAssets': [],
+        'missingAssetIds': [],
+        'containersUpdated': 0,
+        'containerRefsRemoved': 0,
+        'eventsUpdated': 0,
+        'eventRefsRemoved': 0,
+        'mediaDeleted': 0,
+        'eventDetails': [],
+    }
+
+    delete_asset_ids = []
+    for asset_id in _normalise_asset_ids_for_delete(asset_ids):
+        asset = data_manager.inventory.get(asset_id)
+        if not asset:
+            result['missingAssetIds'].append(asset_id)
+            continue
+
+        for log_entry in getattr(asset, 'maintenance_logs', []) or []:
+            result['mediaDeleted'] += _delete_maintenance_media_files(log_entry)
+
+        delete_asset_ids.append(asset_id)
+
+    if not delete_asset_ids:
+        return result
+
+    deleted_asset_ids = set(delete_asset_ids)
+    (
+        result['eventsUpdated'],
+        result['eventRefsRemoved'],
+        result['eventDetails'],
+    ) = _detach_deleted_assets_from_events(deleted_asset_ids)
+
+    for container in data_manager.containers.values():
+        before = len(container.asset_ids)
+        container.asset_ids = [ref for ref in container.asset_ids if ref not in deleted_asset_ids]
+        removed = before - len(container.asset_ids)
+        if removed:
+            result['containersUpdated'] += 1
+            result['containerRefsRemoved'] += removed
+
+    for asset_id in delete_asset_ids:
+        del data_manager.inventory[asset_id]
+        result['deletedAssets'].append(asset_id)
+
+    data_manager.save_inventory(drop_asset_ids=delete_asset_ids)
+    if result['containersUpdated']:
+        data_manager.save_containers()
+
+    return result
+
+
+@app.route('/api/assets/bulk-delete', methods=['DELETE'])
+@require_admin
+def bulk_delete_assets():
+    """Admin-only selected asset deletion with password reconfirmation."""
+    try:
+        data = request.get_json(silent=True) or {}
+
+        verified, password_error = _verify_current_admin_password(data.get('password'))
+        if not verified:
+            return jsonify({'error': password_error}), 400 if password_error == 'Admin password is required' else 403
+
+        asset_ids = _normalise_asset_ids_for_delete(data.get('assetIds'))
+        if not asset_ids:
+            return jsonify({'error': 'Select at least one asset to delete'}), 400
+
+        with _inventory_action_lock:
+            delete_result = _delete_inventory_assets(asset_ids)
+
+        if not delete_result['deletedAssets']:
+            return jsonify({
+                'error': 'No matching assets found',
+                'data': delete_result,
+            }), 404
+
+        invalidate_cache()
+        log_action(
+            f"Bulk deleted {len(delete_result['deletedAssets'])} assets; "
+            f"eventsUpdated={delete_result['eventsUpdated']}; "
+            f"eventRefsRemoved={delete_result['eventRefsRemoved']}; "
+            f"containersUpdated={delete_result['containersUpdated']}; "
+            f"containerRefsRemoved={delete_result['containerRefsRemoved']}; "
+            f"mediaDeleted={delete_result['mediaDeleted']}"
+        )
+
+        return jsonify({
+            'success': True,
+            'message': f"Deleted {len(delete_result['deletedAssets'])} asset(s)",
+            'data': delete_result,
+        })
+
+    except Exception as e:
+        logger.error(f"Error bulk deleting assets: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to delete selected assets'}), 500
+
+
 @app.route('/api/assets/<path:asset_id>', methods=['DELETE'])
 @require_admin
 def delete_asset(asset_id):
@@ -9345,44 +9633,17 @@ def delete_asset(asset_id):
             return jsonify({'error': password_error}), 400 if password_error == 'Admin password is required' else 403
 
         with _inventory_action_lock:
-            asset = data_manager.inventory.get(decoded_asset_id)
-            if not asset:
+            delete_result = _delete_inventory_assets([decoded_asset_id])
+            if not delete_result['deletedAssets']:
                 return jsonify({'error': 'Asset not found'}), 404
-
-            active_usage = _active_event_usage_for_asset(decoded_asset_id)
-            if active_usage:
-                first = active_usage[0]
-                return jsonify({
-                    'error': (
-                        f"Asset {decoded_asset_id} is still assigned or prepared for "
-                        f"Event {first.get('eventId')}: {first.get('eventName')}. Return or remove it before deleting."
-                    ),
-                    'activeEvents': active_usage,
-                }), 409
-
-            deleted_media_count = 0
-            for log_entry in getattr(asset, 'maintenance_logs', []) or []:
-                deleted_media_count += _delete_maintenance_media_files(log_entry)
-
-            containers_updated = 0
-            container_refs_removed = 0
-            for container in data_manager.containers.values():
-                before = len(container.asset_ids)
-                container.asset_ids = [ref for ref in container.asset_ids if ref != decoded_asset_id]
-                removed = before - len(container.asset_ids)
-                if removed:
-                    containers_updated += 1
-                    container_refs_removed += removed
-
-            del data_manager.inventory[decoded_asset_id]
-            data_manager.save_inventory(drop_asset_ids=[decoded_asset_id])
-            if containers_updated:
-                data_manager.save_containers()
 
         invalidate_cache()
         log_action(
-            f"Deleted asset {decoded_asset_id}; containersUpdated={containers_updated}; "
-            f"containerRefsRemoved={container_refs_removed}; mediaDeleted={deleted_media_count}"
+            f"Deleted asset {decoded_asset_id}; eventsUpdated={delete_result['eventsUpdated']}; "
+            f"eventRefsRemoved={delete_result['eventRefsRemoved']}; "
+            f"containersUpdated={delete_result['containersUpdated']}; "
+            f"containerRefsRemoved={delete_result['containerRefsRemoved']}; "
+            f"mediaDeleted={delete_result['mediaDeleted']}"
         )
 
         return jsonify({
@@ -9390,9 +9651,12 @@ def delete_asset(asset_id):
             'message': 'Asset deleted successfully',
             'data': {
                 'assetId': decoded_asset_id,
-                'containersUpdated': containers_updated,
-                'containerRefsRemoved': container_refs_removed,
-                'mediaDeleted': deleted_media_count,
+                'containersUpdated': delete_result['containersUpdated'],
+                'containerRefsRemoved': delete_result['containerRefsRemoved'],
+                'eventsUpdated': delete_result['eventsUpdated'],
+                'eventRefsRemoved': delete_result['eventRefsRemoved'],
+                'mediaDeleted': delete_result['mediaDeleted'],
+                'eventDetails': delete_result['eventDetails'],
             }
         })
 
@@ -9467,6 +9731,13 @@ def update_asset(asset_id):
             ]
         else:
             target_assets = [asset]
+
+        audit_timestamp = _asset_audit_timestamp()
+        audit_user = _asset_audit_user()
+        audit_before = [
+            (target, _asset_audit_snapshot(target))
+            for target in target_assets
+        ]
 
         # For single-asset model-type edits, remember event references
         # BEFORE changing the inventory object. Assigned/prepared events move
@@ -9649,6 +9920,18 @@ def update_asset(asset_id):
                 data_manager.save_event(event)
                 events_updated += 1
 
+        audit_updates = 0
+        for target, before_snapshot in audit_before:
+            changes = _asset_audit_changes(before_snapshot, _asset_audit_snapshot(target))
+            if _append_asset_change_history(
+                target,
+                changes,
+                timestamp=audit_timestamp,
+                user=audit_user,
+                action='updated'
+            ):
+                audit_updates += 1
+
         data_manager.save_inventory(drop_asset_ids=[old_asset_id] if new_asset_id != old_asset_id else None)
 
         # Auto-register the new/edited department so filters and badges can use it immediately.
@@ -9676,7 +9959,8 @@ def update_asset(asset_id):
                 'eventsUpdated': events_updated,
                 'containersUpdated': containers_updated,
                 'idReferencesChanged': id_references_changed,
-                'modelReferencesChanged': model_references_changed
+                'modelReferencesChanged': model_references_changed,
+                'auditUpdates': audit_updates
             }
         })
 
@@ -10110,6 +10394,69 @@ def search_assets():
         logger.error(f"Error searching assets: {e}")
         return jsonify({'error': 'Failed to search assets'}), 500
 
+def _container_serial_number(container):
+    return str(getattr(container, 'serial_number', '') or '').strip()
+
+
+def _container_response(container):
+    serial_number = _container_serial_number(container)
+    return {
+        'id': container.container_id,
+        'serialNumber': serial_number,
+        'serial': serial_number,
+        'assetIds': container.asset_ids,
+        'assetCount': len(container.asset_ids)
+    }
+
+
+def _request_container_serial(data):
+    data = data or {}
+    for key in ('serialNumber', 'serial_number', 'serial'):
+        if key in data:
+            return str(data.get(key) or '').strip()
+    return ''
+
+
+def _find_container_by_lookup(value):
+    lookup = str(value or '').strip()
+    if not lookup:
+        return None
+
+    container = data_manager.containers.get(lookup)
+    if container:
+        return container
+
+    lookup_lower = lookup.lower()
+    for item in data_manager.containers.values():
+        serial_number = _container_serial_number(item)
+        if serial_number and serial_number.lower() == lookup_lower:
+            return item
+
+    return None
+
+
+def _container_lookup_conflict(value, exclude_container_id=None):
+    lookup = str(value or '').strip()
+    if not lookup:
+        return None
+
+    lookup_lower = lookup.lower()
+    exclude_id = str(exclude_container_id or '')
+
+    for container_id, container in data_manager.containers.items():
+        if str(container_id) == exclude_id:
+            continue
+
+        if str(container_id).strip().lower() == lookup_lower:
+            return f"container ID '{container_id}'"
+
+        serial_number = _container_serial_number(container)
+        if serial_number and serial_number.lower() == lookup_lower:
+            return f"serial number on container '{container_id}'"
+
+    return None
+
+
 @app.route('/api/containers', methods=['GET', 'POST'])
 @require_auth
 def containers_collection():
@@ -10118,16 +10465,13 @@ def containers_collection():
         if request.method == 'GET':
             containers_data = []
             for container in data_manager.containers.values():
-                containers_data.append({
-                    'id': container.container_id,
-                    'assetIds': container.asset_ids,
-                    'assetCount': len(container.asset_ids)
-                })
+                containers_data.append(_container_response(container))
             return jsonify({'success': True, 'data': containers_data})
 
         # POST (create)
         data = request.get_json(silent=True) or {}
         container_id = (data.get('id') or data.get('containerId') or '').strip()
+        serial_number = _request_container_serial(data)
         raw_asset_ids = data.get('assetIds') if 'assetIds' in data else data.get('asset_ids')
 
         if not container_id:
@@ -10135,6 +10479,15 @@ def containers_collection():
 
         if container_id in data_manager.containers:
             return jsonify({'error': f"Container '{container_id}' already exists"}), 409
+
+        id_conflict = _container_lookup_conflict(container_id)
+        if id_conflict:
+            return jsonify({'error': f"Container ID conflicts with existing {id_conflict}"}), 409
+
+        if serial_number:
+            conflict = _container_lookup_conflict(serial_number)
+            if conflict:
+                return jsonify({'error': f"Container serial number conflicts with existing {conflict}"}), 409
 
         # normalize asset IDs (accept list OR newline/comma separated string)
         asset_ids_in = []
@@ -10168,7 +10521,7 @@ def containers_collection():
             more = "" if len(missing) <= 15 else f" (+{len(missing)-15} more)"
             return jsonify({'error': f"Unknown asset IDs in container: {preview}{more}"}), 400
 
-        new_container = Container(container_id, cleaned)
+        new_container = Container(container_id, cleaned, serial_number)
         data_manager.containers[container_id] = new_container
         data_manager.save_containers()
         invalidate_cache()
@@ -10176,7 +10529,7 @@ def containers_collection():
 
         return jsonify({
             'success': True,
-            'data': {'id': new_container.container_id, 'assetIds': new_container.asset_ids, 'assetCount': len(new_container.asset_ids)}
+            'data': _container_response(new_container)
         }), 201
 
     except Exception as e:
@@ -10189,15 +10542,17 @@ def container_resource(container_id):
     """Get one container (GET), update (PUT), delete (DELETE)"""
     try:
         container_id = unquote_plus(container_id).strip()
-        container = data_manager.containers.get(container_id)
+        container = _find_container_by_lookup(container_id)
 
         if not container:
             return jsonify({'error': 'Container not found'}), 404
 
+        container_id = container.container_id
+
         if request.method == 'GET':
             return jsonify({
                 'success': True,
-                'data': {'id': container.container_id, 'assetIds': container.asset_ids, 'assetCount': len(container.asset_ids)}
+                'data': _container_response(container)
             })
 
         if request.method == 'PUT':
@@ -10205,6 +10560,8 @@ def container_resource(container_id):
 
             # optional rename support
             requested_new_id = (data.get('newId') or data.get('new_id') or data.get('id') or '').strip()
+            serial_provided = any(key in data for key in ('serialNumber', 'serial_number', 'serial'))
+            serial_number = _request_container_serial(data) if serial_provided else _container_serial_number(container)
 
             raw_asset_ids = data.get('assetIds') if 'assetIds' in data else data.get('asset_ids')
 
@@ -10242,10 +10599,16 @@ def container_resource(container_id):
 
             old_id = container.container_id
 
+            if serial_number:
+                conflict = _container_lookup_conflict(serial_number, exclude_container_id=container_id)
+                if conflict:
+                    return jsonify({'error': f"Container serial number conflicts with existing {conflict}"}), 409
+
             # rename (if requested)
             if requested_new_id and requested_new_id != container_id:
-                if requested_new_id in data_manager.containers:
-                    return jsonify({'error': f"Container '{requested_new_id}' already exists"}), 409
+                conflict = _container_lookup_conflict(requested_new_id, exclude_container_id=container_id)
+                if conflict:
+                    return jsonify({'error': f"Container ID conflicts with existing {conflict}"}), 409
 
                 # re-key the dict and update object
                 del data_manager.containers[container_id]
@@ -10255,6 +10618,7 @@ def container_resource(container_id):
 
             # update asset list
             container.asset_ids = cleaned
+            container.serial_number = serial_number
             data_manager.save_containers()
             invalidate_cache()
 
@@ -10265,11 +10629,7 @@ def container_resource(container_id):
 
             return jsonify({
                 'success': True,
-                'data': {
-                    'id': container.container_id,
-                    'assetIds': container.asset_ids,
-                    'assetCount': len(container.asset_ids)
-                }
+                'data': _container_response(container)
             })
 
         # DELETE

@@ -1,0 +1,645 @@
+2026/06/25 19:58:07,emily,User emily logged in via web interface
+2026/06/25 19:59:50,emily,Updated PDF logo (photo_2026-06-12_19-05-41.jpg)
+2026/06/25 19:59:51,emily,Updated PDF footer settings
+2026/06/25 20:06:07,emily,Added asset BULK-0001 via web interface
+2026/06/25 20:06:58,emily,Added asset BULK-0002 via web interface
+2026/06/25 20:08:25,emily,Added assets SMARTUPSC1000#01 to SMARTUPSC1000#15 via web interface
+2026/06/25 20:08:46,emily,Deleted asset SMARTUPSC1000#01; containersUpdated=0; containerRefsRemoved=0; mediaDeleted=0
+2026/06/25 20:08:52,emily,Deleted asset SMARTUPSC1000#02; containersUpdated=0; containerRefsRemoved=0; mediaDeleted=0
+2026/06/25 20:08:58,emily,Deleted asset SMARTUPSC1000#03; containersUpdated=0; containerRefsRemoved=0; mediaDeleted=0
+2026/06/25 20:09:03,emily,Deleted asset SMARTUPSC1000#04; containersUpdated=0; containerRefsRemoved=0; mediaDeleted=0
+2026/06/25 20:09:08,emily,Deleted asset SMARTUPSC1000#05; containersUpdated=0; containerRefsRemoved=0; mediaDeleted=0
+2026/06/25 20:09:13,emily,Deleted asset SMARTUPSC1000#06; containersUpdated=0; containerRefsRemoved=0; mediaDeleted=0
+2026/06/25 20:09:19,emily,Deleted asset SMARTUPSC1000#07; containersUpdated=0; containerRefsRemoved=0; mediaDeleted=0
+2026/06/25 20:09:25,emily,Deleted asset SMARTUPSC1000#08; containersUpdated=0; containerRefsRemoved=0; mediaDeleted=0
+2026/06/25 20:09:30,emily,Deleted asset SMARTUPSC1000#09; containersUpdated=0; containerRefsRemoved=0; mediaDeleted=0
+2026/06/25 20:09:35,emily,Deleted asset SMARTUPSC1000#10; containersUpdated=0; containerRefsRemoved=0; mediaDeleted=0
+2026/06/25 20:09:40,emily,Deleted asset SMARTUPSC1000#11; containersUpdated=0; containerRefsRemoved=0; mediaDeleted=0
+2026/06/25 20:09:45,emily,Deleted asset SMARTUPSC1000#12; containersUpdated=0; containerRefsRemoved=0; mediaDeleted=0
+2026/06/25 20:09:51,emily,Deleted asset SMARTUPSC1000#13; containersUpdated=0; containerRefsRemoved=0; mediaDeleted=0
+2026/06/25 20:09:56,emily,Deleted asset SMARTUPSC1000#14; containersUpdated=0; containerRefsRemoved=0; mediaDeleted=0
+2026/06/25 20:10:01,emily,Deleted asset SMARTUPSC1000#15; containersUpdated=0; containerRefsRemoved=0; mediaDeleted=0
+2026/06/25 20:10:19,emily,Added assets C1000#01 to C1000#15 via web interface
+2026/06/25 20:10:50,emily,Added assets SMARTUPSC1500#01 to SMARTUPSC1500#02 via web interface
+2026/06/25 20:11:00,emily,Updated asset SMARTUPSC1500#01 -> C1500#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 20:11:04,emily,Updated asset SMARTUPSC1500#02 -> C1500#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 20:12:22,emily,Added assets SC450RMI1U#01 to SC450RMI1U#08 via web interface
+2026/06/25 20:13:24,emily,Added assets SRT3000RMXLI#01 to SRT3000RMXLI#02 via web interface
+2026/06/25 20:15:13,emily,Added assets APEXDI#01 to APEXDI#15 via web interface
+2026/06/25 20:15:53,emily,Added assets MSX48#01 to MSX48#10 via web interface
+2026/06/25 20:16:42,emily,Added assets BIGBEN#01 to BIGBEN#02 via web interface
+2026/06/25 20:19:07,emily,Added assets MACBOOKPROA2918#01 to MACBOOKPROA2918#02 via web interface
+2026/06/25 20:19:51,emily,Added assets MACPROLATE2013#01 to MACPROLATE2013#02 via web interface
+2026/06/25 20:20:44,emily,Added assets S6L#01 to S6L#02 via web interface
+2026/06/25 20:21:22,emily,Added assets E6L#01 to E6L#02 via web interface
+2026/06/25 20:22:12,emily,Added assets STAGE64#01 to STAGE64#04 via web interface
+2026/06/25 20:23:15,emily,Added assets HDIODSA44#01 to HDIODSA44#04 via web interface
+2026/06/25 20:24:11,emily,Added assets A360#01 to A360#16 via web interface
+2026/06/25 20:24:58,emily,Added assets D800DANTE#01 to D800DANTE#02 via web interface
+2026/06/25 20:25:55,emily,Added asset A16DPRO#01 via web interface
+2026/06/25 20:26:44,emily,Added assets AN16IV2#01 to AN16IV2#02 via web interface
+2026/06/25 20:27:17,emily,Added assets AN16O#01 to AN16O#02 via web interface
+2026/06/25 20:27:39,emily,Added asset AN16SB4#01 via web interface
+2026/06/25 20:29:00,emily,Added assets LINUS10#01 to LINUS10#78 via web interface
+2026/06/25 20:29:52,emily,Added assets LINUS14D#01 to LINUS14D#36 via web interface
+2026/06/25 20:30:36,emily,Added assets LINUS12C#01 to LINUS12C#20 via web interface
+2026/06/25 20:35:57,emily,Added assets LINETMASTER#01 to LINETMASTER#07 via web interface
+2026/06/25 20:36:33,emily,Added assets LINETSWITCH#01 to LINETSWITCH#06 via web interface
+2026/06/25 20:38:28,emily,Added assets AIRAY90#01 to AIRAY90#92 via web interface
+2026/06/25 20:39:01,emily,Added assets AIRAY120#01 to AIRAY120#28 via web interface
+2026/06/25 20:39:54,emily,Added assets CIRAY90#01 to CIRAY90#80 via web interface
+2026/06/25 20:40:16,emily,Added assets CIRAY120#01 to CIRAY120#16 via web interface
+2026/06/25 20:41:03,emily,Added assets VIRAY80#01 to VIRAY80#17 via web interface
+2026/06/25 20:41:28,emily,Added assets VIRAY120#01 to VIRAY120#17 via web interface
+2026/06/25 20:42:15,emily,Added assets NRAY90#01 to NRAY90#36 via web interface
+2026/06/25 20:42:39,emily,Added assets NRAY120#01 to NRAY120#18 via web interface
+2026/06/25 20:43:18,emily,Added asset APS60#01 via web interface
+2026/06/25 20:43:44,emily,Added assets APS90#01 to APS90#11 via web interface
+2026/06/25 20:44:13,emily,Added assets APS120#01 to APS120#06 via web interface
+2026/06/25 20:45:15,emily,Added assets NAPS90#01 to NAPS90#20 via web interface
+2026/06/25 20:46:49,emily,Added assets HOPS8#01 to HOPS8#50 via web interface
+2026/06/25 20:47:43,emily,Added assets G715#01 to G715#36 via web interface
+2026/06/25 20:48:27,emily,Added assets D5#01 to D5#16 via web interface
+2026/06/25 20:49:11,emily,Added assets SCP#01 to SCP#20 via web interface
+2026/06/25 20:49:46,emily,Added assets SCPF#01 to SCPF#32 via web interface
+2026/06/25 20:51:12,emily,Added assets SC2F#01 to SC2F#42 via web interface
+2026/06/25 20:52:07,emily,Added assets NSUB#01 to NSUB#12 via web interface
+2026/06/25 20:52:57,emily,Added assets SCNF#01 to SCNF#18 via web interface
+2026/06/25 20:54:03,emily,Added assets AIRAYFLYBAR#01 to AIRAYFLYBAR#30 via web interface
+2026/06/25 20:54:35,emily,Added assets AIRAYTFLYBAR#01 to AIRAYTFLYBAR#06 via web interface
+2026/06/25 20:54:56,emily,Added assets VIRAYFLYBAR#01 to VIRAYFLYBAR#05 via web interface
+2026/06/25 20:55:09,emily,Added assets NRAYFLYBAR#01 to NRAYFLYBAR#06 via web interface
+2026/06/25 20:55:20,emily,Added assets APSFLYBAR#01 to APSFLYBAR#02 via web interface
+2026/06/25 20:55:51,emily,Added assets FRVNAPS#01 to FRVNAPS#06 via web interface
+2026/06/25 20:56:09,emily,Added assets CUAPS#01 to CUAPS#07 via web interface
+2026/06/25 20:56:27,emily,Added assets CUNAPS#01 to CUNAPS#02 via web interface
+2026/06/25 20:58:50,emily,Added assets CU5DC#01 to CU5DC#14 via web interface
+2026/06/25 20:59:18,emily,Added asset BULK-0003 via web interface
+2026/06/25 20:59:31,emily,Added asset BULK-0004 via web interface
+2026/06/25 21:01:32,emily,Maintenance logged for asset C1000#01: Passed to Zubai
+2026/06/25 21:01:33,emily,Maintenance logged for asset C1000#07: Passed to Zubai
+2026/06/25 21:01:33,emily,Maintenance logged for asset C1000#09: Passed to Zubai
+2026/06/25 21:01:34,emily,Maintenance logged for asset C1000#10: Passed to Zubai
+2026/06/25 21:01:34,emily,Maintenance logged for asset C1000#15: Passed to Zubai
+2026/06/25 21:01:34,emily,Maintenance logged for asset C1500#01: Passed to Zubai
+2026/06/25 21:01:34,emily,Maintenance logged for asset C1500#02: Passed to Zubai
+2026/06/25 21:01:35,emily,Maintenance logged for asset SC450RMI1U#01: Passed to Zubai
+2026/06/25 21:01:35,emily,Maintenance logged for asset SC450RMI1U#02: Passed to Zubai
+2026/06/25 21:01:35,emily,Maintenance logged for asset SC450RMI1U#03: Passed to Zubai
+2026/06/25 21:01:35,emily,Maintenance logged for asset SC450RMI1U#04: Passed to Zubai
+2026/06/25 21:01:36,emily,Maintenance logged for asset SC450RMI1U#05: Passed to Zubai
+2026/06/25 21:01:36,emily,Maintenance logged for asset SC450RMI1U#06: Passed to Zubai
+2026/06/25 21:01:36,emily,Maintenance logged for asset SC450RMI1U#07: Passed to Zubai
+2026/06/25 21:01:36,emily,Maintenance logged for asset SC450RMI1U#08: Passed to Zubai
+2026/06/25 21:02:57,emily,Maintenance logged for asset C1000#12: Passed to Sarip
+2026/06/25 21:04:05,emily,Maintenance logged for asset C1000#02: batt checked OK
+2026/06/25 21:04:05,emily,Maintenance logged for asset C1000#03: batt checked OK
+2026/06/25 21:04:05,emily,Maintenance logged for asset C1000#04: batt checked OK
+2026/06/25 21:04:06,emily,Maintenance logged for asset C1000#02: batt checked OK
+2026/06/25 21:04:06,emily,Maintenance logged for asset C1000#05: batt checked OK
+2026/06/25 21:04:06,emily,Maintenance logged for asset C1000#03: batt checked OK
+2026/06/25 21:04:07,emily,Maintenance logged for asset C1000#14: batt checked OK
+2026/06/25 21:04:07,emily,Maintenance logged for asset C1000#02: batt checked OK
+2026/06/25 21:04:07,emily,Maintenance logged for asset C1000#04: batt checked OK
+2026/06/25 21:04:07,emily,Maintenance logged for asset C1000#03: batt checked OK
+2026/06/25 21:04:08,emily,Maintenance logged for asset C1000#05: batt checked OK
+2026/06/25 21:04:09,emily,Maintenance logged for asset C1000#04: batt checked OK
+2026/06/25 21:04:28,emily,Deleted maintenance log for asset C1000#02: 'batt checked OK' (deleted by emily)
+2026/06/25 21:04:30,emily,Deleted maintenance log for asset C1000#02: 'batt checked OK' (deleted by emily)
+2026/06/25 21:04:35,emily,Deleted maintenance log for asset C1000#03: 'batt checked OK' (deleted by emily)
+2026/06/25 21:04:36,emily,Deleted maintenance log for asset C1000#03: 'batt checked OK' (deleted by emily)
+2026/06/25 21:04:41,emily,Deleted maintenance log for asset C1000#04: 'batt checked OK' (deleted by emily)
+2026/06/25 21:04:42,emily,Deleted maintenance log for asset C1000#04: 'batt checked OK' (deleted by emily)
+2026/06/25 21:04:47,emily,Deleted maintenance log for asset C1000#05: 'batt checked OK' (deleted by emily)
+2026/06/25 21:06:23,emily,Maintenance logged for asset C1000#06: Battery changed
+2026/06/25 21:06:23,emily,Maintenance logged for asset C1000#08: Battery changed
+2026/06/25 21:06:23,emily,Maintenance logged for asset C1000#11: Battery changed
+2026/06/25 21:06:23,emily,Maintenance logged for asset C1000#12: Battery changed
+2026/06/25 21:06:24,emily,Maintenance logged for asset C1000#13: Battery changed
+2026/06/25 21:07:00,emily,Updated asset C1000#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 21:07:05,emily,Updated asset C1000#03; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 21:07:11,emily,Updated asset C1000#04; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 21:07:15,emily,Updated asset C1000#05; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 21:07:36,emily,Updated asset C1000#14; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 21:08:13,emily,Updated asset MSX48#10; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 21:09:30,emily,"Maintenance logged for asset S6L#01: Local IO setan, upper left side crack, left and right side lower crack. right side crack is when rental to SI"
+2026/06/25 21:09:50,emily,"Maintenance logged for asset S6L#02: Upper right side crack, middle left crack"
+2026/06/25 21:09:54,emily,Updated asset S6L#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 21:10:35,emily,Set asset E6L#01 status to Degraded
+2026/06/25 21:10:35,emily,"Maintenance logged for asset E6L#01: front panel crack
+was together with the surface with the local IO setan"
+2026/06/25 21:10:59,emily,Updated asset E6L#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 21:11:09,emily,Updated asset E6L#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 21:11:17,emily,Updated asset E6L#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 21:11:38,emily,Updated asset S6L#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 21:11:48,emily,Updated asset S6L#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 21:11:56,emily,Updated asset S6L#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 21:13:14,emily,Deleted asset A360#12; containersUpdated=0; containerRefsRemoved=0; mediaDeleted=0
+2026/06/25 21:13:18,emily,Updated asset A360#13 -> A360#12; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 21:13:24,emily,Updated asset A360#14 -> A360#13; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 21:13:31,emily,Updated asset A360#15 -> A360#14; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 21:13:38,emily,Updated asset A360#16 -> A360#15; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 21:14:12,emily,Set asset A360#12 status to Degraded
+2026/06/25 21:14:12,emily,Maintenance logged for asset A360#12: Missing knobs
+2026/06/25 21:14:13,emily,Set asset A360#14 status to Degraded
+2026/06/25 21:14:13,emily,Maintenance logged for asset A360#14: Missing knobs
+2026/06/25 21:14:13,emily,Set asset A360#13 status to Degraded
+2026/06/25 21:14:13,emily,Maintenance logged for asset A360#13: Missing knobs
+2026/06/25 21:15:12,emily,Updated asset LINUS10#72; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 21:16:29,emily,Set asset LINUS10#58 status to OOC
+2026/06/25 21:16:29,emily,Maintenance logged for asset LINUS10#58: Cannot power on
+2026/06/25 21:16:30,emily,Set asset LINUS10#60 status to OOC
+2026/06/25 21:16:30,emily,Maintenance logged for asset LINUS10#60: Cannot power on
+2026/06/25 21:16:31,emily,Set asset LINUS10#63 status to OOC
+2026/06/25 21:16:31,emily,Maintenance logged for asset LINUS10#63: Cannot power on
+2026/06/25 21:16:31,emily,Set asset LINUS10#64 status to OOC
+2026/06/25 21:16:31,emily,Maintenance logged for asset LINUS10#64: Cannot power on
+2026/06/25 21:16:31,emily,Set asset LINUS10#65 status to OOC
+2026/06/25 21:16:31,emily,Maintenance logged for asset LINUS10#65: Cannot power on
+2026/06/25 21:16:32,emily,Set asset LINUS10#67 status to OOC
+2026/06/25 21:16:32,emily,Maintenance logged for asset LINUS10#67: Cannot power on
+2026/06/25 21:16:32,emily,Set asset LINUS10#68 status to OOC
+2026/06/25 21:16:32,emily,Maintenance logged for asset LINUS10#68: Cannot power on
+2026/06/25 21:16:32,emily,Set asset LINUS10#70 status to OOC
+2026/06/25 21:16:32,emily,Maintenance logged for asset LINUS10#70: Cannot power on
+2026/06/25 21:17:17,emily,Set asset LINUS10#57 status to OOC
+2026/06/25 21:17:17,emily,Maintenance logged for asset LINUS10#57: Screen buang
+2026/06/25 21:17:17,emily,Set asset LINUS10#59 status to OOC
+2026/06/25 21:17:17,emily,Maintenance logged for asset LINUS10#59: Screen buang
+2026/06/25 21:17:17,emily,Set asset LINUS10#61 status to OOC
+2026/06/25 21:17:17,emily,Maintenance logged for asset LINUS10#61: Screen buang
+2026/06/25 21:17:18,emily,Set asset LINUS10#62 status to OOC
+2026/06/25 21:17:18,emily,Maintenance logged for asset LINUS10#62: Screen buang
+2026/06/25 21:17:50,emily,Set asset LINUS10#71 status to OOC
+2026/06/25 21:17:50,emily,"Maintenance logged for asset LINUS10#71: Cannot power on, then powers on"
+2026/06/25 21:18:13,emily,Set asset LINUS10#66 status to Degraded
+2026/06/25 21:18:13,emily,Maintenance logged for asset LINUS10#66: Linet Input Buang
+2026/06/25 21:18:38,emily,Set asset LINUS10#69 status to OOC
+2026/06/25 21:18:38,emily,Maintenance logged for asset LINUS10#69: Scroll Knob Buang
+2026/06/25 21:19:36,emily,Set asset LINUS10#73 status to OOC
+2026/06/25 21:19:36,emily,Maintenance logged for asset LINUS10#73: Buang for a long time
+2026/06/25 21:19:36,emily,Set asset LINUS10#74 status to OOC
+2026/06/25 21:19:36,emily,Maintenance logged for asset LINUS10#74: Buang for a long time
+2026/06/25 21:19:36,emily,Set asset LINUS10#75 status to OOC
+2026/06/25 21:19:36,emily,Maintenance logged for asset LINUS10#75: Buang for a long time
+2026/06/25 21:19:36,emily,Set asset LINUS10#76 status to OOC
+2026/06/25 21:19:36,emily,Maintenance logged for asset LINUS10#76: Buang for a long time
+2026/06/25 21:19:36,emily,Set asset LINUS10#77 status to OOC
+2026/06/25 21:19:36,emily,Maintenance logged for asset LINUS10#77: Buang for a long time
+2026/06/25 21:20:00,emily,Set asset LINUS10#78 status to OOC
+2026/06/25 21:20:00,emily,Maintenance logged for asset LINUS10#78: Linus 10-C. Belongs to Longhair
+2026/06/25 21:21:42,emily,Set asset LINUS14D#01 status to Degraded
+2026/06/25 21:21:42,emily,Maintenance logged for asset LINUS14D#01: Mute light not working CH3
+2026/06/25 21:21:42,emily,Set asset LINUS14D#03 status to Degraded
+2026/06/25 21:21:42,emily,Maintenance logged for asset LINUS14D#03: Mute light not working CH3
+2026/06/25 21:21:43,emily,Set asset LINUS14D#07 status to Degraded
+2026/06/25 21:21:43,emily,Maintenance logged for asset LINUS14D#07: Mute light not working CH3
+2026/06/25 21:21:43,emily,Set asset LINUS14D#09 status to Degraded
+2026/06/25 21:21:43,emily,Maintenance logged for asset LINUS14D#09: Mute light not working CH3
+2026/06/25 21:21:43,emily,Set asset LINUS14D#23 status to Degraded
+2026/06/25 21:21:43,emily,Maintenance logged for asset LINUS14D#23: Mute light not working CH3
+2026/06/25 21:22:15,emily,Set asset LINUS14D#06 status to Degraded
+2026/06/25 21:22:15,emily,Maintenance logged for asset LINUS14D#06: sensor light not working CH4
+2026/06/25 21:22:54,emily,Set asset LINUS14D#08 status to Degraded
+2026/06/25 21:22:54,emily,"Maintenance logged for asset LINUS14D#08: Mute light not working CH1,2,3"
+2026/06/25 21:23:16,emily,Set asset LINUS14D#10 status to OOC
+2026/06/25 21:23:16,emily,Maintenance logged for asset LINUS14D#10: Signal Light Buang Channel 1 + Amp Ch1&2 Buang
+2026/06/25 21:23:35,emily,Set asset LINUS14D#11 status to OOC
+2026/06/25 21:23:35,emily,"Maintenance logged for asset LINUS14D#11: Amp CH3,4 Buang + Screen Buang"
+2026/06/25 21:24:02,emily,Set asset LINUS14D#12 status to Degraded
+2026/06/25 21:24:02,emily,Maintenance logged for asset LINUS14D#12: Sensor Buang Channel 3
+2026/06/25 21:24:29,emily,Set asset LINUS14D#16 status to Degraded
+2026/06/25 21:24:29,emily,Maintenance logged for asset LINUS14D#16: Mute Light Buang CH 2
+2026/06/25 21:24:57,emily,Updated asset LINUS14D#18; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 21:25:27,emily,Set asset LINUS14D#21 status to Degraded
+2026/06/25 21:25:27,emily,"Maintenance logged for asset LINUS14D#21: Mute Light Buang CH 2,3"
+2026/06/25 21:25:59,emily,Set asset LINUS14D#35 status to OOC
+2026/06/25 21:25:59,emily,Maintenance logged for asset LINUS14D#35: Amp Error-1
+2026/06/25 21:26:57,emily,Updated PDF footer settings
+2026/06/25 21:27:29,emily,Set asset LINUS12C#14 status to OOC
+2026/06/25 21:27:29,emily,Maintenance logged for asset LINUS12C#14: Amp Error 1
+2026/06/25 21:29:10,emily,Set asset AIRAY90#81 status to Decommissioned
+2026/06/25 21:29:10,emily,Maintenance logged for asset AIRAY90#81: SOLD
+2026/06/25 21:29:10,emily,Set asset AIRAY90#82 status to Decommissioned
+2026/06/25 21:29:10,emily,Maintenance logged for asset AIRAY90#82: SOLD
+2026/06/25 21:29:10,emily,Set asset AIRAY90#83 status to Decommissioned
+2026/06/25 21:29:11,emily,Maintenance logged for asset AIRAY90#83: SOLD
+2026/06/25 21:29:11,emily,Set asset AIRAY90#84 status to Decommissioned
+2026/06/25 21:29:11,emily,Maintenance logged for asset AIRAY90#84: SOLD
+2026/06/25 21:29:11,emily,Set asset AIRAY90#85 status to Decommissioned
+2026/06/25 21:29:11,emily,Maintenance logged for asset AIRAY90#85: SOLD
+2026/06/25 21:29:11,emily,Set asset AIRAY90#86 status to Decommissioned
+2026/06/25 21:29:11,emily,Maintenance logged for asset AIRAY90#86: SOLD
+2026/06/25 21:29:12,emily,Set asset AIRAY90#87 status to Decommissioned
+2026/06/25 21:29:12,emily,Maintenance logged for asset AIRAY90#87: SOLD
+2026/06/25 21:29:12,emily,Set asset AIRAY90#88 status to Decommissioned
+2026/06/25 21:29:12,emily,Maintenance logged for asset AIRAY90#88: SOLD
+2026/06/25 21:29:12,emily,Set asset AIRAY90#89 status to Decommissioned
+2026/06/25 21:29:12,emily,Maintenance logged for asset AIRAY90#89: SOLD
+2026/06/25 21:29:12,emily,Set asset AIRAY90#90 status to Decommissioned
+2026/06/25 21:29:12,emily,Maintenance logged for asset AIRAY90#90: SOLD
+2026/06/25 21:29:12,emily,Set asset AIRAY90#91 status to Decommissioned
+2026/06/25 21:29:12,emily,Maintenance logged for asset AIRAY90#91: SOLD
+2026/06/25 21:29:13,emily,Set asset AIRAY90#92 status to Decommissioned
+2026/06/25 21:29:13,emily,Maintenance logged for asset AIRAY90#92: SOLD
+2026/06/25 21:32:44,emily,Set asset CIRAY90#51 status to Degraded
+2026/06/25 21:32:44,emily,Maintenance logged for asset CIRAY90#51: Dropped during Bishan SG60
+2026/06/25 21:32:44,emily,Set asset CIRAY90#52 status to Degraded
+2026/06/25 21:32:44,emily,Maintenance logged for asset CIRAY90#52: Dropped during Bishan SG60
+2026/06/25 21:32:44,emily,Set asset CIRAY90#53 status to Degraded
+2026/06/25 21:32:44,emily,Maintenance logged for asset CIRAY90#53: Dropped during Bishan SG60
+2026/06/25 21:32:44,emily,Set asset CIRAY90#54 status to Degraded
+2026/06/25 21:32:44,emily,Maintenance logged for asset CIRAY90#54: Dropped during Bishan SG60
+2026/06/25 21:32:45,emily,Set asset CIRAY90#55 status to Degraded
+2026/06/25 21:32:45,emily,Maintenance logged for asset CIRAY90#55: Dropped during Bishan SG60
+2026/06/25 21:32:45,emily,Set asset CIRAY90#56 status to Degraded
+2026/06/25 21:32:45,emily,Maintenance logged for asset CIRAY90#56: Dropped during Bishan SG60
+2026/06/25 21:32:45,emily,Set asset CIRAY90#57 status to Degraded
+2026/06/25 21:32:45,emily,Maintenance logged for asset CIRAY90#57: Dropped during Bishan SG60
+2026/06/25 21:32:45,emily,Set asset CIRAY90#58 status to Degraded
+2026/06/25 21:32:45,emily,Maintenance logged for asset CIRAY90#58: Dropped during Bishan SG60
+2026/06/25 21:32:45,emily,Set asset CIRAY90#59 status to Degraded
+2026/06/25 21:32:45,emily,Maintenance logged for asset CIRAY90#59: Dropped during Bishan SG60
+2026/06/25 21:32:46,emily,Set asset CIRAY90#60 status to Degraded
+2026/06/25 21:32:46,emily,Maintenance logged for asset CIRAY90#60: Dropped during Bishan SG60
+2026/06/25 21:32:46,emily,Set asset CIRAY90#61 status to Degraded
+2026/06/25 21:32:46,emily,Maintenance logged for asset CIRAY90#61: Dropped during Bishan SG60
+2026/06/25 21:32:46,emily,Set asset CIRAY90#62 status to Degraded
+2026/06/25 21:32:46,emily,Maintenance logged for asset CIRAY90#62: Dropped during Bishan SG60
+2026/06/25 21:32:46,emily,Set asset CIRAY90#63 status to Degraded
+2026/06/25 21:32:46,emily,Maintenance logged for asset CIRAY90#63: Dropped during Bishan SG60
+2026/06/25 21:32:46,emily,Set asset CIRAY90#64 status to Degraded
+2026/06/25 21:32:46,emily,Maintenance logged for asset CIRAY90#64: Dropped during Bishan SG60
+2026/06/25 21:32:47,emily,Set asset CIRAY90#65 status to Degraded
+2026/06/25 21:32:47,emily,Maintenance logged for asset CIRAY90#65: Dropped during Bishan SG60
+2026/06/25 21:32:47,emily,Set asset CIRAY90#66 status to Degraded
+2026/06/25 21:32:47,emily,Maintenance logged for asset CIRAY90#66: Dropped during Bishan SG60
+2026/06/25 21:32:47,emily,Set asset CIRAY90#67 status to Degraded
+2026/06/25 21:32:47,emily,Maintenance logged for asset CIRAY90#67: Dropped during Bishan SG60
+2026/06/25 21:32:47,emily,Set asset CIRAY90#68 status to Degraded
+2026/06/25 21:32:47,emily,Maintenance logged for asset CIRAY90#68: Dropped during Bishan SG60
+2026/06/25 21:32:48,emily,Set asset CIRAY90#69 status to Degraded
+2026/06/25 21:32:48,emily,Maintenance logged for asset CIRAY90#69: Dropped during Bishan SG60
+2026/06/25 21:32:48,emily,Set asset CIRAY90#70 status to Degraded
+2026/06/25 21:32:48,emily,Maintenance logged for asset CIRAY90#70: Dropped during Bishan SG60
+2026/06/25 21:32:48,emily,Set asset CIRAY90#71 status to Degraded
+2026/06/25 21:32:48,emily,Maintenance logged for asset CIRAY90#71: Dropped during Bishan SG60
+2026/06/25 21:32:48,emily,Set asset CIRAY90#72 status to Degraded
+2026/06/25 21:32:48,emily,Maintenance logged for asset CIRAY90#72: Dropped during Bishan SG60
+2026/06/25 21:32:49,emily,Set asset CIRAY90#73 status to Degraded
+2026/06/25 21:32:49,emily,Maintenance logged for asset CIRAY90#73: Dropped during Bishan SG60
+2026/06/25 21:32:49,emily,Set asset CIRAY90#74 status to Degraded
+2026/06/25 21:32:49,emily,Maintenance logged for asset CIRAY90#74: Dropped during Bishan SG60
+2026/06/25 21:32:49,emily,Set asset CIRAY90#75 status to Degraded
+2026/06/25 21:32:49,emily,Maintenance logged for asset CIRAY90#75: Dropped during Bishan SG60
+2026/06/25 21:32:50,emily,Set asset CIRAY90#76 status to Degraded
+2026/06/25 21:32:50,emily,Maintenance logged for asset CIRAY90#76: Dropped during Bishan SG60
+2026/06/25 21:32:50,emily,Set asset CIRAY90#77 status to Degraded
+2026/06/25 21:32:50,emily,Maintenance logged for asset CIRAY90#77: Dropped during Bishan SG60
+2026/06/25 21:32:50,emily,Set asset CIRAY90#78 status to Degraded
+2026/06/25 21:32:50,emily,Maintenance logged for asset CIRAY90#78: Dropped during Bishan SG60
+2026/06/25 21:32:50,emily,Set asset CIRAY90#79 status to Degraded
+2026/06/25 21:32:50,emily,Maintenance logged for asset CIRAY90#79: Dropped during Bishan SG60
+2026/06/25 21:32:50,emily,Set asset CIRAY90#80 status to Degraded
+2026/06/25 21:32:51,emily,Maintenance logged for asset CIRAY90#80: Dropped during Bishan SG60
+2026/06/25 21:32:51,emily,Set asset CIRAY120#06 status to Degraded
+2026/06/25 21:32:51,emily,Maintenance logged for asset CIRAY120#06: Dropped during Bishan SG60
+2026/06/25 21:32:51,emily,Set asset CIRAY120#07 status to Degraded
+2026/06/25 21:32:51,emily,Maintenance logged for asset CIRAY120#07: Dropped during Bishan SG60
+2026/06/25 21:32:51,emily,Set asset CIRAY120#08 status to Degraded
+2026/06/25 21:32:51,emily,Maintenance logged for asset CIRAY120#08: Dropped during Bishan SG60
+2026/06/25 21:32:52,emily,Set asset CIRAY120#09 status to Degraded
+2026/06/25 21:32:52,emily,Maintenance logged for asset CIRAY120#09: Dropped during Bishan SG60
+2026/06/25 21:32:52,emily,Set asset CIRAY120#10 status to Degraded
+2026/06/25 21:32:52,emily,Maintenance logged for asset CIRAY120#10: Dropped during Bishan SG60
+2026/06/25 21:32:52,emily,Set asset CIRAY120#11 status to Degraded
+2026/06/25 21:32:52,emily,Maintenance logged for asset CIRAY120#11: Dropped during Bishan SG60
+2026/06/25 21:32:52,emily,Set asset CIRAY120#12 status to Degraded
+2026/06/25 21:32:52,emily,Maintenance logged for asset CIRAY120#12: Dropped during Bishan SG60
+2026/06/25 21:32:53,emily,Set asset CIRAY120#13 status to Degraded
+2026/06/25 21:32:53,emily,Maintenance logged for asset CIRAY120#13: Dropped during Bishan SG60
+2026/06/25 21:32:53,emily,Set asset CIRAY120#14 status to Degraded
+2026/06/25 21:32:53,emily,Maintenance logged for asset CIRAY120#14: Dropped during Bishan SG60
+2026/06/25 21:32:53,emily,Set asset CIRAY120#15 status to Degraded
+2026/06/25 21:32:53,emily,Maintenance logged for asset CIRAY120#15: Dropped during Bishan SG60
+2026/06/25 21:32:53,emily,Set asset CIRAY120#16 status to Degraded
+2026/06/25 21:32:54,emily,Maintenance logged for asset CIRAY120#16: Dropped during Bishan SG60
+2026/06/25 21:34:01,emily,Set asset AIRAY90#80 status to Degraded
+2026/06/25 21:34:01,emily,Maintenance logged for asset AIRAY90#80: NL4 Loop Out Buang
+2026/06/25 21:34:51,emily,Set asset AIRAY90#79 status to Degraded
+2026/06/25 21:34:51,emily,Maintenance logged for asset AIRAY90#79: Front right pin comes out too much
+2026/06/25 21:34:52,emily,Set asset AIRAY90#78 status to Degraded
+2026/06/25 21:34:52,emily,Maintenance logged for asset AIRAY90#78: Front right pin comes out too much
+2026/06/25 21:34:54,emily,Set asset AIRAY90#76 status to Degraded
+2026/06/25 21:34:54,emily,Maintenance logged for asset AIRAY90#76: Front right pin comes out too much
+2026/06/25 21:35:50,emily,Set asset AIRAY90#71 status to Degraded
+2026/06/25 21:35:50,emily,Maintenance logged for asset AIRAY90#71: front left pin comes out too much
+2026/06/25 21:35:51,emily,Set asset AIRAY90#74 status to Degraded
+2026/06/25 21:35:51,emily,Maintenance logged for asset AIRAY90#74: front left pin comes out too much
+2026/06/25 21:35:52,emily,Set asset AIRAY90#77 status to Degraded
+2026/06/25 21:35:52,emily,Maintenance logged for asset AIRAY90#77: front left pin comes out too much
+2026/06/25 21:36:15,emily,Set asset AIRAY90#72 status to Degraded
+2026/06/25 21:36:15,emily,Maintenance logged for asset AIRAY90#72: Front right pin totally detached
+2026/06/25 21:36:37,emily,Set asset AIRAY90#75 status to Degraded
+2026/06/25 21:36:37,emily,Maintenance logged for asset AIRAY90#75: Front left pin totally detached
+2026/06/25 21:37:04,emily,Maintenance logged for asset AIRAY90#63: GREEN
+2026/06/25 21:37:04,emily,Maintenance logged for asset AIRAY90#64: GREEN
+2026/06/25 21:37:04,emily,Maintenance logged for asset AIRAY90#65: GREEN
+2026/06/25 21:37:38,emily,Maintenance logged for asset AIRAY90#66: YELLOW
+2026/06/25 21:37:38,emily,Maintenance logged for asset AIRAY90#67: YELLOW
+2026/06/25 21:37:38,emily,Maintenance logged for asset AIRAY90#68: YELLOW
+2026/06/25 21:37:38,emily,Maintenance logged for asset AIRAY90#69: YELLOW
+2026/06/25 21:37:39,emily,Maintenance logged for asset AIRAY90#70: YELLOW
+2026/06/25 21:37:39,emily,Maintenance logged for asset AIRAY90#71: YELLOW
+2026/06/25 21:37:39,emily,Maintenance logged for asset AIRAY90#72: YELLOW
+2026/06/25 21:38:17,emily,Updated asset CIRAY90#75; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 21:38:17,emily,Updated asset CIRAY90#76; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 21:38:18,emily,Updated asset CIRAY90#77; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 21:38:18,emily,Updated asset CIRAY90#78; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 21:38:18,emily,Updated asset CIRAY90#79; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 21:38:18,emily,Updated asset CIRAY90#80; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 21:39:20,emily,Maintenance logged for asset CIRAY90#68: body touch up with silicon
+2026/06/25 21:39:20,emily,Maintenance logged for asset CIRAY90#70: body touch up with silicon
+2026/06/25 21:39:57,emily,Maintenance logged for asset CIRAY90#69: Minor touch up with silicon on the body
+2026/06/25 21:40:17,emily,Maintenance logged for asset CIRAY90#71: Right side handle touch up with silicon
+2026/06/25 21:40:27,emily,Updated maintenance log for asset CIRAY90#68: 'body touch up with silicon' -> 'body touch up with silicon' (edited by emily)
+2026/06/25 21:40:48,emily,Updated maintenance log for asset CIRAY90#70: 'body touch up with silicon' -> 'body touch up with silicon' (edited by emily)
+2026/06/25 21:41:09,emily,Maintenance logged for asset CIRAY90#72: left side handle minor touch up with silicon
+2026/06/25 21:41:24,emily,Maintenance logged for asset CIRAY90#73: Right side handle repair with silicon
+2026/06/25 21:41:41,emily,Maintenance logged for asset CIRAY90#74: right side front lock comes out fully
+2026/06/25 21:42:20,emily,"Maintenance logged for asset CIRAY120#16: right handle dont have, wood covered with silicon"
+2026/06/25 21:44:55,emily,Maintenance logged for asset VIRAY80#01: Tested
+2026/06/25 21:44:55,emily,Maintenance logged for asset VIRAY80#02: Tested
+2026/06/25 21:44:56,emily,Maintenance logged for asset VIRAY80#03: Tested
+2026/06/25 21:44:56,emily,Maintenance logged for asset VIRAY80#04: Tested
+2026/06/25 21:44:57,emily,Maintenance logged for asset VIRAY80#05: Tested
+2026/06/25 21:44:57,emily,Maintenance logged for asset VIRAY80#06: Tested
+2026/06/25 21:44:59,emily,Maintenance logged for asset VIRAY80#07: Tested
+2026/06/25 21:44:59,emily,Maintenance logged for asset VIRAY80#08: Tested
+2026/06/25 21:45:00,emily,Maintenance logged for asset VIRAY80#09: Tested
+2026/06/25 21:45:00,emily,Maintenance logged for asset VIRAY80#10: Tested
+2026/06/25 21:45:00,emily,Maintenance logged for asset VIRAY80#11: Tested
+2026/06/25 21:45:01,emily,Maintenance logged for asset VIRAY80#12: Tested
+2026/06/25 21:45:01,emily,Maintenance logged for asset VIRAY80#13: Tested
+2026/06/25 21:45:01,emily,Maintenance logged for asset VIRAY80#14: Tested
+2026/06/25 21:45:02,emily,Maintenance logged for asset VIRAY80#15: Tested
+2026/06/25 21:45:02,emily,Maintenance logged for asset VIRAY80#16: Tested
+2026/06/25 21:45:02,emily,Maintenance logged for asset VIRAY80#17: Tested
+2026/06/25 21:45:03,emily,Maintenance logged for asset VIRAY120#01: Tested
+2026/06/25 21:45:03,emily,Maintenance logged for asset VIRAY120#02: Tested
+2026/06/25 21:45:03,emily,Maintenance logged for asset VIRAY120#03: Tested
+2026/06/25 21:45:04,emily,Maintenance logged for asset VIRAY120#04: Tested
+2026/06/25 21:45:04,emily,Maintenance logged for asset VIRAY120#05: Tested
+2026/06/25 21:45:04,emily,Maintenance logged for asset VIRAY120#06: Tested
+2026/06/25 21:45:04,emily,Maintenance logged for asset VIRAY120#07: Tested
+2026/06/25 21:45:04,emily,Maintenance logged for asset VIRAY120#08: Tested
+2026/06/25 21:45:05,emily,Maintenance logged for asset VIRAY120#09: Tested
+2026/06/25 21:45:05,emily,Maintenance logged for asset VIRAY120#10: Tested
+2026/06/25 21:45:05,emily,Maintenance logged for asset VIRAY120#11: Tested
+2026/06/25 21:45:06,emily,Maintenance logged for asset VIRAY120#12: Tested
+2026/06/25 21:45:06,emily,Maintenance logged for asset VIRAY120#13: Tested
+2026/06/25 21:45:06,emily,Maintenance logged for asset VIRAY120#14: Tested
+2026/06/25 21:45:06,emily,Maintenance logged for asset VIRAY120#15: Tested
+2026/06/25 21:45:07,emily,Maintenance logged for asset VIRAY120#16: Tested
+2026/06/25 21:45:07,emily,Maintenance logged for asset VIRAY120#17: Tested
+2026/06/25 21:45:55,emily,Maintenance logged for asset VIRAY80#01: Smaarted
+2026/06/25 21:45:55,emily,Maintenance logged for asset VIRAY80#02: Smaarted
+2026/06/25 21:45:55,emily,Maintenance logged for asset VIRAY80#03: Smaarted
+2026/06/25 21:45:55,emily,Maintenance logged for asset VIRAY80#04: Smaarted
+2026/06/25 21:45:56,emily,Maintenance logged for asset VIRAY80#05: Smaarted
+2026/06/25 21:45:56,emily,Maintenance logged for asset VIRAY80#06: Smaarted
+2026/06/25 21:45:56,emily,Maintenance logged for asset VIRAY80#07: Smaarted
+2026/06/25 21:45:57,emily,Maintenance logged for asset VIRAY80#08: Smaarted
+2026/06/25 21:45:57,emily,Maintenance logged for asset VIRAY80#09: Smaarted
+2026/06/25 21:45:57,emily,Maintenance logged for asset VIRAY80#10: Smaarted
+2026/06/25 21:45:57,emily,Maintenance logged for asset VIRAY80#11: Smaarted
+2026/06/25 21:45:58,emily,Maintenance logged for asset VIRAY120#01: Smaarted
+2026/06/25 21:45:58,emily,Maintenance logged for asset VIRAY120#02: Smaarted
+2026/06/25 21:45:58,emily,Maintenance logged for asset VIRAY120#03: Smaarted
+2026/06/25 21:45:58,emily,Maintenance logged for asset VIRAY120#04: Smaarted
+2026/06/25 21:45:59,emily,Maintenance logged for asset VIRAY120#05: Smaarted
+2026/06/25 21:45:59,emily,Maintenance logged for asset VIRAY120#06: Smaarted
+2026/06/25 21:45:59,emily,Maintenance logged for asset VIRAY120#07: Smaarted
+2026/06/25 21:45:59,emily,Maintenance logged for asset VIRAY120#08: Smaarted
+2026/06/25 21:45:59,emily,Maintenance logged for asset VIRAY120#09: Smaarted
+2026/06/25 21:46:00,emily,Maintenance logged for asset VIRAY120#10: Smaarted
+2026/06/25 21:46:00,emily,Maintenance logged for asset VIRAY120#11: Smaarted
+2026/06/25 21:46:00,emily,Maintenance logged for asset VIRAY120#12: Smaarted
+2026/06/25 21:46:01,emily,Maintenance logged for asset VIRAY120#13: Smaarted
+2026/06/25 21:47:23,emily,Set asset VIRAY80#07 status to Degraded
+2026/06/25 21:47:23,emily,Maintenance logged for asset VIRAY80#07: Highs weak
+2026/06/25 21:47:23,emily,Set asset VIRAY80#08 status to Degraded
+2026/06/25 21:47:23,emily,Maintenance logged for asset VIRAY80#08: Highs weak
+2026/06/25 21:47:24,emily,Set asset VIRAY80#09 status to Degraded
+2026/06/25 21:47:24,emily,Maintenance logged for asset VIRAY80#09: Highs weak
+2026/06/25 21:47:24,emily,Set asset VIRAY80#11 status to Degraded
+2026/06/25 21:47:24,emily,Maintenance logged for asset VIRAY80#11: Highs weak
+2026/06/25 21:47:52,emily,Set asset VIRAY80#10 status to Degraded
+2026/06/25 21:47:52,emily,Maintenance logged for asset VIRAY80#10: 5-1 Mids weak
+2026/06/25 21:48:19,emily,Set asset VIRAY80#12 status to Degraded
+2026/06/25 21:48:19,emily,Maintenance logged for asset VIRAY80#12: NL4 loop buang
+2026/06/25 21:49:24,emily,Set asset VIRAY80#13 status to Degraded
+2026/06/25 21:49:24,emily,"Maintenance logged for asset VIRAY80#13: no lows, no highs"
+2026/06/25 21:49:54,emily,Set asset VIRAY80#14 status to Degraded
+2026/06/25 21:49:54,emily,"Maintenance logged for asset VIRAY80#14: no lows, no mids"
+2026/06/25 21:50:22,emily,Set asset VIRAY80#16 status to Degraded
+2026/06/25 21:50:23,emily,Maintenance logged for asset VIRAY80#16: no highs
+2026/06/25 21:50:23,emily,Set asset VIRAY80#17 status to Degraded
+2026/06/25 21:50:23,emily,Maintenance logged for asset VIRAY80#17: no highs
+2026/06/25 21:50:39,emily,Updated asset VIRAY80#15; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 21:51:07,emily,Set asset VIRAY80#15 status to Degraded
+2026/06/25 21:51:08,emily,Maintenance logged for asset VIRAY80#15: no lows
+2026/06/25 21:52:02,emily,Set asset VIRAY120#10 status to Degraded
+2026/06/25 21:52:02,emily,Maintenance logged for asset VIRAY120#10: 3-1 mid no good
+2026/06/25 21:52:21,emily,Set asset VIRAY120#11 status to Degraded
+2026/06/25 21:52:21,emily,Maintenance logged for asset VIRAY120#11: 3-4 Mid no Good
+2026/06/25 21:52:39,emily,Set asset VIRAY120#12 status to Degraded
+2026/06/25 21:52:39,emily,Maintenance logged for asset VIRAY120#12: 4-1 Highs weak
+2026/06/25 21:52:57,emily,Set asset VIRAY120#13 status to Degraded
+2026/06/25 21:52:57,emily,Maintenance logged for asset VIRAY120#13: 4-4 highs weak
+2026/06/25 21:53:21,emily,Set asset VIRAY120#16 status to Degraded
+2026/06/25 21:53:21,emily,"Maintenance logged for asset VIRAY120#16: no mids, no highs"
+2026/06/25 21:53:33,emily,Set asset VIRAY120#17 status to Degraded
+2026/06/25 21:53:33,emily,Maintenance logged for asset VIRAY120#17: missing highs 8k onwards
+2026/06/25 21:53:55,emily,"Maintenance logged for asset VIRAY120#14: looks ok, sounds ok, low mids out of phase???"
+2026/06/25 21:53:56,emily,"Maintenance logged for asset VIRAY120#15: looks ok, sounds ok, low mids out of phase???"
+2026/06/25 21:55:11,emily,Updated asset APS90#11; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 21:55:12,emily,Updated asset NAPS90#09; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 21:55:12,emily,Updated asset NAPS90#10; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 21:59:36,emily,Deleted asset HOPS8#35; containersUpdated=0; containerRefsRemoved=0; mediaDeleted=0
+2026/06/25 21:59:43,emily,Updated asset HOPS8#27; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:00:38,emily,Set asset HOPS8#23 status to Degraded
+2026/06/25 22:00:38,emily,"Maintenance logged for asset HOPS8#23: No Bracket, cannot fly"
+2026/06/25 22:01:05,emily,Set asset HOPS8#24 status to Degraded
+2026/06/25 22:01:05,emily,"Maintenance logged for asset HOPS8#24: No Thread, cannot fly"
+2026/06/25 22:01:05,emily,Set asset HOPS8#25 status to Degraded
+2026/06/25 22:01:05,emily,"Maintenance logged for asset HOPS8#25: No Thread, cannot fly"
+2026/06/25 22:01:50,emily,Updated asset HOPS8#36 -> HOPS8#35; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:01:58,emily,Updated asset HOPS8#50 -> HOPS8#36; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:02:11,emily,Deleted asset HOPS8#49; containersUpdated=0; containerRefsRemoved=0; mediaDeleted=0
+2026/06/25 22:03:23,emily,Updated asset HOPS8#30; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:03:24,emily,Updated asset HOPS8#31; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:03:24,emily,Updated asset HOPS8#32; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:03:24,emily,Updated asset HOPS8#33; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:03:24,emily,Updated asset HOPS8#34; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:06:12,emily,Updated asset HOPS8#36; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:06:18,emily,Updated asset HOPS8#37; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:06:24,emily,Updated asset HOPS8#38; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:06:29,emily,Updated asset HOPS8#39; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:06:34,emily,Updated asset HOPS8#40; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:06:38,emily,Updated asset HOPS8#41; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:06:43,emily,Updated asset HOPS8#42; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:06:48,emily,Updated asset HOPS8#43; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:06:53,emily,Updated asset HOPS8#44; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:06:59,emily,Updated asset HOPS8#44; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:07:12,emily,Updated asset HOPS8#44; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:07:17,emily,Updated asset HOPS8#45; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:09:01,emily,Updated asset HOPS8#28; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:09:06,emily,Updated asset HOPS8#29; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:09:13,emily,Updated asset HOPS8#30; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:09:20,emily,Updated asset HOPS8#31; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:09:25,emily,Updated asset HOPS8#32; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:09:32,emily,Updated asset HOPS8#33; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:09:37,emily,Updated asset HOPS8#34; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:09:44,emily,Updated asset HOPS8#35; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:09:53,emily,Updated asset HOPS8#36; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:09:59,emily,Updated asset HOPS8#37; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:10:07,emily,Updated asset HOPS8#38; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:10:18,emily,Updated asset HOPS8#39; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:10:26,emily,Updated asset HOPS8#40; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:10:35,emily,Updated asset HOPS8#41; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:10:41,emily,Updated asset HOPS8#42; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:10:50,emily,Updated asset HOPS8#43; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:10:58,emily,Updated asset HOPS8#44; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:11:06,emily,Updated asset HOPS8#45; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:11:28,emily,Updated asset HOPS8#30; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:11:28,emily,Updated asset HOPS8#30; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:11:36,emily,Updated asset HOPS8#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:11:37,emily,Updated asset HOPS8#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:11:37,emily,Updated asset HOPS8#03; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:11:37,emily,Updated asset HOPS8#04; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:11:37,emily,Updated asset HOPS8#05; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:11:38,emily,Updated asset HOPS8#06; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:11:38,emily,Updated asset HOPS8#07; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:11:39,emily,Updated asset HOPS8#08; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:11:39,emily,Updated asset HOPS8#09; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:11:39,emily,Updated asset HOPS8#10; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:11:39,emily,Updated asset HOPS8#11; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:11:39,emily,Updated asset HOPS8#12; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:11:40,emily,Updated asset HOPS8#13; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:11:40,emily,Updated asset HOPS8#14; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:11:40,emily,Updated asset HOPS8#15; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:11:40,emily,Updated asset HOPS8#16; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:11:41,emily,Updated asset HOPS8#17; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:11:41,emily,Updated asset HOPS8#18; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:11:41,emily,Updated asset HOPS8#19; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:11:41,emily,Updated asset HOPS8#20; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:11:42,emily,Updated asset HOPS8#21; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:11:42,emily,Updated asset HOPS8#22; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:11:42,emily,Updated asset HOPS8#23; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:11:42,emily,Updated asset HOPS8#24; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:11:42,emily,Updated asset HOPS8#25; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:11:43,emily,Updated asset HOPS8#26; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:11:43,emily,Updated asset HOPS8#27; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:11:43,emily,Updated asset HOPS8#28; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:11:43,emily,Updated asset HOPS8#29; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:11:44,emily,Updated asset HOPS8#30; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:11:44,emily,Updated asset HOPS8#31; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:11:44,emily,Updated asset HOPS8#32; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:11:44,emily,Updated asset HOPS8#33; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:11:45,emily,Updated asset HOPS8#34; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:11:45,emily,Updated asset HOPS8#37; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:11:45,emily,Updated asset HOPS8#38; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:11:45,emily,Updated asset HOPS8#39; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:11:46,emily,Updated asset HOPS8#40; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:11:46,emily,Updated asset HOPS8#41; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:11:46,emily,Updated asset HOPS8#42; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:11:46,emily,Updated asset HOPS8#43; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:11:47,emily,Updated asset HOPS8#44; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:11:47,emily,Updated asset HOPS8#45; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:11:47,emily,Updated asset HOPS8#46; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:11:47,emily,Updated asset HOPS8#47; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:11:47,emily,Updated asset HOPS8#48; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:11:48,emily,Updated asset HOPS8#35; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:11:48,emily,Updated asset HOPS8#36; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:12:12,emily,Updated asset HOPS8#41; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:12:12,emily,Updated asset HOPS8#42; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:12:13,emily,Updated asset HOPS8#43; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:12:13,emily,Updated asset HOPS8#44; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:12:13,emily,Updated asset HOPS8#45; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:12:13,emily,Updated asset HOPS8#46; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:12:13,emily,Updated asset HOPS8#47; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:12:14,emily,Updated asset HOPS8#48; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:12:59,emily,Set asset HOPS8#35 status to Degraded
+2026/06/25 22:12:59,emily,"Maintenance logged for asset HOPS8#35: No Bracket, cannot fly"
+2026/06/25 22:13:00,emily,Set asset HOPS8#36 status to Degraded
+2026/06/25 22:13:00,emily,"Maintenance logged for asset HOPS8#36: No Bracket, cannot fly"
+2026/06/25 22:13:48,emily,Set asset HOPS8#39 status to Degraded
+2026/06/25 22:13:48,emily,Maintenance logged for asset HOPS8#39: No Highs
+2026/06/25 22:13:48,emily,Set asset HOPS8#40 status to Degraded
+2026/06/25 22:13:48,emily,Maintenance logged for asset HOPS8#40: No Highs
+2026/06/25 22:14:03,emily,"Deleted maintenance log for asset HOPS8#23: 'No Bracket, cannot fly' (deleted by emily)"
+2026/06/25 22:14:16,emily,"Deleted maintenance log for asset HOPS8#35: 'No Bracket, cannot fly' (deleted by emily)"
+2026/06/25 22:14:29,emily,"Deleted maintenance log for asset HOPS8#36: 'No Bracket, cannot fly' (deleted by emily)"
+2026/06/25 22:16:37,emily,Updated asset HOPS8#01; applyTo=allSimilar; updatedAssets=48; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:18:19,emily,"Renamed user tamelia -> emily; updated 583 system log(s), 0 event log(s), 228 maintenance record(s)"
+2026/06/25 22:18:20,emily,Created user ct
+2026/06/25 22:21:07,ct,User ct logged in via web interface
+2026/06/25 22:24:32,ct,Added assets D80#01 to D80#63 via web interface
+2026/06/25 22:25:30,ct,Added assets D40#01 to D40#36 via web interface
+2026/06/25 22:25:55,ct,Added assets D80TALLRACK#01 to D80TALLRACK#10 via web interface
+2026/06/25 22:26:16,ct,Added asset D80SHORTRACK#01 via web interface
+2026/06/25 22:27:26,ct,Added asset D40TALLRACK#01 via web interface
+2026/06/25 22:29:57,ct,Added asset DS100#01 via web interface
+2026/06/25 22:29:57,ct,Added asset DS100#02 via web interface
+2026/06/25 22:30:13,ct,Deleted asset DS100#02; containersUpdated=0; containerRefsRemoved=0; mediaDeleted=0
+2026/06/25 22:30:28,ct,Added asset DS10#01 via web interface
+2026/06/25 22:30:39,ct,Deleted asset DS10#01; containersUpdated=0; containerRefsRemoved=0; mediaDeleted=0
+2026/06/25 22:31:00,ct,Added assets DS10#01 to DS10#11 via web interface
+2026/06/25 22:31:28,ct,Added assets DN1#01 to DN1#06 via web interface
+2026/06/25 22:32:11,ct,Added assets LSPANEL2XLKA25#01 to LSPANEL2XLKA25#10 via web interface
+2026/06/25 22:32:39,ct,Added assets MAINSPANEL6X32A#01 to MAINSPANEL6X32A#10 via web interface
+2026/06/25 22:33:06,ct,Added assets 6XD40LSPANEL#01 to 6XD40LSPANEL#06 via web interface
+2026/06/25 22:33:41,ct,Added assets 6XD40MAINSPANEL#01 to 6XD40MAINSPANEL#06 via web interface
+2026/06/25 22:34:13,ct,Added asset MAINSLSPANELC#01 via web interface
+2026/06/25 22:37:09,ct,Added assets ARRAYSIGHTSENDER#01 to ARRAYSIGHTSENDER#16 via web interface
+2026/06/25 22:37:53,ct,Added assets ARRAYSIGHTMETER#01 to ARRAYSIGHTMETER#08 via web interface
+2026/06/25 22:38:11,ct,Updated asset ARRAYSIGHTMETER#08; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:38:18,ct,Updated asset ARRAYSIGHTMETER#08; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:38:48,ct,Added assets GSL8#01 to GSL8#56 via web interface
+2026/06/25 22:39:17,ct,Added assets GSL12#01 to GSL12#12 via web interface
+2026/06/25 22:39:43,ct,Added assets KSL8#01 to KSL8#52 via web interface
+2026/06/25 22:40:00,ct,Added assets KSL12#01 to KSL12#08 via web interface
+2026/06/25 22:42:07,ct,Added assets XSL8#01 to XSL8#16 via web interface
+2026/06/25 22:42:38,ct,Added assets XSL12#01 to XSL12#08 via web interface
+2026/06/25 22:42:52,ct,Added assets V10P#01 to V10P#08 via web interface
+2026/06/25 22:43:07,ct,Added assets M4#01 to M4#12 via web interface
+2026/06/25 22:43:31,ct,Added assets SLSUB#01 to SLSUB#22 via web interface
+2026/06/25 22:43:47,ct,Added assets SLGSUB#01 to SLGSUB#22 via web interface
+2026/06/25 22:44:17,ct,Added assets VSUB#01 to VSUB#08 via web interface
+2026/06/25 22:44:40,ct,Added asset XSLSUB#01 via web interface
+2026/06/25 22:44:56,ct,Deleted asset XSLSUB#01; containersUpdated=0; containerRefsRemoved=0; mediaDeleted=0
+2026/06/25 22:45:22,ct,Added assets XSLSUB#01 to XSLSUB#08 via web interface
+2026/06/25 22:46:08,ct,Added assets GSLFLYINGFRAME#01 to GSLFLYINGFRAME#06 via web interface
+2026/06/25 22:46:27,ct,Added assets KSLFLYINGFRAME#01 to KSLFLYINGFRAME#06 via web interface
+2026/06/25 22:46:44,ct,Added assets XSLFLYINGFRAME#01 to XSLFLYINGFRAME#04 via web interface
+2026/06/25 22:47:30,ct,Added assets GSLCOMPRESSIONKIT#01 to GSLCOMPRESSIONKIT#04 via web interface
+2026/06/25 22:47:44,ct,Added assets KSLCOMPRESSIONKIT#01 to KSLCOMPRESSIONKIT#06 via web interface
+2026/06/25 22:47:57,ct,Added assets SLAIMINGPLATE#01 to SLAIMINGPLATE#05 via web interface
+2026/06/25 22:48:27,ct,Added assets CABLEPICKCHAIN#01 to CABLEPICKCHAIN#06 via web interface
+2026/06/25 22:48:47,ct,Added assets SAFETYCHAIN4T#01 to SAFETYCHAIN4T#16 via web interface
+2026/06/25 22:49:37,ct,Added assets SAFETYCHAIN2T#01 to SAFETYCHAIN2T#04 via web interface
+2026/06/25 22:50:14,ct,Added assets LKA2530M#01 to LKA2530M#22 via web interface
+2026/06/25 22:50:30,ct,Updated asset LKA2530M#22; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 22:50:43,ct,Added assets LKA2550M#01 to LKA2550M#09 via web interface
+2026/06/25 22:50:59,ct,Added assets LKA2540M#01 to LKA2540M#15 via web interface
+2026/06/25 22:52:58,ct,Added asset BULK-0005 via web interface
+2026/06/25 22:54:23,ct,Added asset BULK-0006 via web interface
+2026/06/25 22:54:39,ct,Added asset BULK-0007 via web interface
+2026/06/25 22:54:52,ct,Added asset BULK-0008 via web interface
+2026/06/25 22:55:15,ct,Added asset BULK-0009 via web interface
+2026/06/25 22:55:31,ct,Added asset BULK-0010 via web interface
+2026/06/25 22:55:49,ct,Added asset BULK-0011 via web interface
+2026/06/25 22:56:01,ct,Added asset BULK-0012 via web interface
+2026/06/26 11:51:39,ct,User ct logged in via web interface
+2026/06/26 16:55:53,admin,User admin logged in via web interface

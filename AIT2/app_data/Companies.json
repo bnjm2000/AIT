@@ -26,7 +26,7 @@
       "frontendFolder": "companies/TSC/frontend",
       "createdAt": "2026-06-25T12:06:47",
       "createdBy": "bnjm2000",
-      "brandingSetupRequired": true
+      "brandingSetupRequired": false
     }
   },
   "userCompanies": {
@@ -36,13 +36,14 @@
     "tjacky": "AVPL",
     "user": "AVPL",
     "cjamie": "AVPL",
-    "admin": "AVPL",
+    "admin": "TSC",
     "rrafie": "AVPL",
     "Adi": "AEE",
-    "tamelia": "TSC"
+    "emily": "TSC",
+    "ct": "TSC"
   },
   "superAdmins": [
     "bnjm2000"
   ],
-  "updatedAt": "2026-06-25T12:06:47"
+  "updatedAt": "2026-06-26T16:37:01"
 }
