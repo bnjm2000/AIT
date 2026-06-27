@@ -1509,25 +1509,6 @@ def _asset_id_plan_for_request(data):
         raise ValueError('Asset ID prefix is required')
 
     prefix_entry = usage.get(prefix)
-    if prefix_entry:
-        other_families = [
-            family for family in prefix_entry['families'].keys()
-            if family != family_key
-        ]
-
-        if other_families:
-            examples = []
-            for other_brand, other_model in other_families[:3]:
-                brand_label, model_label = prefix_entry.get('familyLabels', {}).get(
-                    (other_brand, other_model),
-                    (other_brand, other_model)
-                )
-                label = ' '.join(part for part in [brand_label, model_label] if part).strip()
-                examples.append(label or 'another asset type')
-            raise ValueError(
-                f'Asset ID prefix {prefix} is already used by {", ".join(examples)}. Choose a unique prefix.'
-            )
-
     next_number = (prefix_entry or {}).get('maxNumber', 0) + 1
     width = max(2, (prefix_entry or {}).get('width', 2), len(str(next_number + quantity - 1)))
     ids = [f"{prefix}#{number:0{width}d}" for number in range(next_number, next_number + quantity)]
@@ -4314,11 +4295,18 @@ def ensure_web_runtime_ready():
 
 # Routes
 
+def _static_asset_version(filename):
+    try:
+        return int(os.path.getmtime(os.path.join(app.static_folder, filename.replace('/', os.sep))))
+    except OSError:
+        return int(time.time())
+
+
 @app.route('/')
 @require_auth
 def index():
     """Serve the main web interface"""
-    return render_template('index.html')
+    return render_template('index.html', app_js_version=_static_asset_version('js/app.js'))
 
 
 @app.route('/login', methods=['GET', 'POST'])

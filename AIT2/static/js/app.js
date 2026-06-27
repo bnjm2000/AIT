@@ -21582,7 +21582,10 @@ function inventoryPdfPageConfig(showIndividual) {
         heightMm: 210,
         measureWidthMm: 283,
         pageFlowHeightMm: 189,
-        footerReserveMm: -10,
+        minFooterReserveMm: 6,
+        pagePaddingTopMm: 7,
+        footerBottomMm: 7,
+        footerGapMm: 2,
         bodyFontSize: '7.2pt',
         tableFontSize: '6.8pt',
         tablePadding: '4px'
@@ -21593,11 +21596,27 @@ function inventoryPdfPageConfig(showIndividual) {
         heightMm: 297,
         measureWidthMm: 196,
         pageFlowHeightMm: 276,
-        footerReserveMm: 18,
+        minFooterReserveMm: 6,
+        pagePaddingTopMm: 7,
+        footerBottomMm: 7,
+        footerGapMm: 2,
         bodyFontSize: '8.4pt',
         tableFontSize: '8pt',
         tablePadding: '5px'
       };
+}
+
+function inventoryPdfFooterReserveMm(pageConfig, footerHeightPx) {
+  const pxToMm = px => (px * 25.4) / 96;
+  const pageHeightMm = Number(pageConfig.heightMm || 0);
+  const pageFlowHeightMm = Number(pageConfig.pageFlowHeightMm || 0);
+  const topPaddingMm = Number(pageConfig.pagePaddingTopMm ?? 7);
+  const footerBottomMm = Number(pageConfig.footerBottomMm ?? 7);
+  const footerGapMm = Number(pageConfig.footerGapMm ?? 2);
+  const minReserveMm = Math.max(0, Number(pageConfig.minFooterReserveMm ?? 0));
+  const footerHeightMm = Math.max(0, pxToMm(Number(footerHeightPx || 0)));
+  const safeFlowHeightMm = pageHeightMm - topPaddingMm - footerBottomMm - footerHeightMm - footerGapMm;
+  return Math.max(minReserveMm, pageFlowHeightMm - safeFlowHeightMm, 0);
 }
 
 function inventoryPdfColGroup(showIndividual) {
@@ -21618,12 +21637,12 @@ function inventoryPdfColGroup(showIndividual) {
   }
 
   return `
+    <col style="width:16%;">
     <col style="width:17%;">
-    <col style="width:18%;">
-    <col style="width:18%;">
-    <col style="width:28%;">
-    <col style="width:8%;">
-    <col style="width:11%;">
+    <col style="width:17%;">
+    <col style="width:26%;">
+    <col style="width:7%;">
+    <col style="width:17%;">
   `;
 }
 
@@ -21738,8 +21757,10 @@ function buildInventoryPdfPages(filteredAssets, filters, context) {
       #__inventoryMeasureBox .inventory-table { width:100%; border-collapse:collapse; border:2px solid black; table-layout:fixed; margin-bottom:0; }
       #__inventoryMeasureBox .inventory-table th { background:#333; color:white; padding:${pageConfig.tablePadding}; text-align:left; font-size:${pageConfig.tableFontSize}; border:1px solid #333; }
       #__inventoryMeasureBox .inventory-table td { border:1px solid #333; padding:${pageConfig.tablePadding}; font-size:${pageConfig.tableFontSize}; vertical-align:top; line-height:1.25; word-break:break-word; overflow-wrap:anywhere; }
+      #__inventoryMeasureBox .inventory-table td > span { max-width:100%; white-space:normal !important; overflow-wrap:anywhere; }
       #__inventoryMeasureBox .number-cell { text-align:center; white-space:nowrap; }
       #__inventoryMeasureBox .empty-row { text-align:center; color:#666; padding:18px; }
+      #__inventoryMeasureBox .footer-measure { width:100%; text-align:center; font-size:7pt; font-weight:bold; line-height:1.2; overflow-wrap:anywhere; }
     </style>
     <div id="__inventoryBase">
       ${headerHtml}
@@ -21749,19 +21770,34 @@ function buildInventoryPdfPages(filteredAssets, filters, context) {
       ${inventoryPdfColGroup(showIndividual)}
       <tbody id="__inventoryMeasureBody"></tbody>
     </table>
+    <div id="__inventoryFooterMeasure" class="footer-measure">${footerHtml}</div>
   `;
 
-  document.body.appendChild(measureBox);
+  // Keep PDF measurements outside the scaled application body. The app uses
+  // CSS zoom for its UI, while the print window always renders at full scale.
+  const measureRoot = document.documentElement || document.body;
+  measureRoot.appendChild(measureBox);
 
   const measureBody = measureBox.querySelector('#__inventoryMeasureBody');
-  const baseHeight = measureBox.querySelector('#__inventoryBase').getBoundingClientRect().height;
-  const footerReserveMm = Number(pageConfig.footerReserveMm ?? 18);
+  const expectedMeasureWidth = mmToPx(pageConfig.measureWidthMm);
+  const renderedMeasureWidth = measureBox.getBoundingClientRect().width;
+  const measurementScale = renderedMeasureWidth > 0 && expectedMeasureWidth > 0
+    ? renderedMeasureWidth / expectedMeasureWidth
+    : 1;
+  const normaliseMeasuredHeight = height => height / measurementScale;
+  const baseHeight = normaliseMeasuredHeight(
+    measureBox.querySelector('#__inventoryBase').getBoundingClientRect().height
+  );
+  const footerHeight = normaliseMeasuredHeight(
+    measureBox.querySelector('#__inventoryFooterMeasure')?.getBoundingClientRect().height || 0
+  );
+  const footerReserveMm = inventoryPdfFooterReserveMm(pageConfig, footerHeight);
   const rowBudget = Math.max(36, mmToPx(pageConfig.pageFlowHeightMm - footerReserveMm) - baseHeight);
 
   function measureRow(rowHtml) {
     measureBody.innerHTML = rowHtml;
     const row = measureBody.querySelector('tr');
-    return row ? row.getBoundingClientRect().height : 0;
+    return row ? normaliseMeasuredHeight(row.getBoundingClientRect().height) : 0;
   }
 
   rowRecords.forEach(record => {
@@ -21862,9 +21898,10 @@ async function generateInventoryPdf() {
       .inventory-table tr { break-inside: avoid; page-break-inside: avoid; }
       .inventory-table th { background: #333; color: #fff; padding: ${pageConfig.tablePadding}; text-align: left; border: 1px solid #333; font-size: ${pageConfig.tableFontSize}; }
       .inventory-table td { border: 1px solid #333; padding: ${pageConfig.tablePadding}; font-size: ${pageConfig.tableFontSize}; vertical-align: top; line-height: 1.25; word-break: break-word; overflow-wrap: anywhere; }
+      .inventory-table td > span { max-width: 100%; white-space: normal !important; overflow-wrap: anywhere; }
       .number-cell { text-align: center; white-space: nowrap; }
       .empty-row { text-align: center; color: #666; padding: 18px; }
-      .footer { position: absolute; bottom: 7mm; left: 7mm; right: 7mm; text-align: center; font-size: 7pt; font-weight: bold; line-height: 1.2; }
+      .footer { position: absolute; bottom: 7mm; left: 7mm; right: 7mm; text-align: center; font-size: 7pt; font-weight: bold; line-height: 1.2; overflow-wrap: anywhere; }
       .page-number { position: absolute; bottom: 3mm; right: 7mm; font-size: 7pt; }
       @media print {
         body, body * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }

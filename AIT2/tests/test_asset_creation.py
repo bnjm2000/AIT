@@ -92,17 +92,21 @@ class AssetCreationTests(unittest.TestCase):
         self.assertIn('LAP1#01', self.data_manager.inventory)
         self.assertNotIn('P1#02', self.data_manager.inventory)
 
-    def test_custom_prefix_cannot_be_shared_with_different_brand_model(self):
+    def test_custom_prefix_shared_with_different_brand_model_continues_numbering(self):
         self.add_existing_asset('P1#01', 'Behringher', 'P1', 'Wired IEM beltpack')
+        self.add_existing_asset('P1#07', 'Another Brand', 'Another Model', 'Another asset type')
 
         response = self.post_asset({
             'brand': 'L-Acoustics',
             'description': 'Processor',
             'assetIdPrefix': 'P1',
+            'quantity': 2,
         })
 
-        self.assertEqual(response.status_code, 400)
-        self.assertIn('already used', response.get_json()['error'])
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(response.get_json()['assetIds'], ['P1#08', 'P1#09'])
+        self.assertIn('P1#08', self.data_manager.inventory)
+        self.assertIn('P1#09', self.data_manager.inventory)
 
     def test_custom_prefix_is_used_for_new_family(self):
         response = self.post_asset({

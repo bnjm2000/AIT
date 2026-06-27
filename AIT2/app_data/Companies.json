@@ -27,6 +27,15 @@
       "createdAt": "2026-06-25T12:06:47",
       "createdBy": "bnjm2000",
       "brandingSetupRequired": false
+    },
+    "ARP": {
+      "code": "ARP",
+      "name": "Arup - AC",
+      "backendFolder": "companies/ARP/backend",
+      "frontendFolder": "companies/ARP/frontend",
+      "createdAt": "2026-06-26T23:28:58",
+      "createdBy": "bnjm2000",
+      "brandingSetupRequired": true
     }
   },
   "userCompanies": {
@@ -40,10 +49,11 @@
     "rrafie": "AVPL",
     "Adi": "AEE",
     "emily": "TSC",
-    "ct": "TSC"
+    "ct": "TSC",
+    "ac-inventory": "ARP"
   },
   "superAdmins": [
     "bnjm2000"
   ],
-  "updatedAt": "2026-06-26T16:37:01"
+  "updatedAt": "2026-06-26T23:28:58"
 }
