@@ -1262,11 +1262,14 @@
 
       /* Flagged asset list styling */
       .ooc-asset-item {
-        transition: all 0.2s ease;
+        transition: background-color 0.2s ease, box-shadow 0.2s ease;
       }
 
-      .ooc-asset-item:hover {
-        background-color: #f8f9fa !important;
+      .ooc-asset-item:hover,
+      .ooc-asset-item:focus-visible {
+        background-color: #eef2ff !important;
+        box-shadow: inset 4px 0 0 #667eea;
+        outline: none;
       }
 
       /* OOC status button */

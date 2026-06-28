@@ -12485,6 +12485,77 @@ function getMaintenanceLogRecords(asset) {
   return source.map(normalizeMaintenanceLogRecord);
 }
 
+function maintenanceLogDateSortValue(dateValue) {
+  const match = String(dateValue || '').trim().match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+  if (!match) return Number.NEGATIVE_INFINITY;
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const timestamp = Date.UTC(year, month - 1, day);
+  const parsed = new Date(timestamp);
+  if (
+    parsed.getUTCFullYear() !== year ||
+    parsed.getUTCMonth() !== month - 1 ||
+    parsed.getUTCDate() !== day
+  ) {
+    return Number.NEGATIVE_INFINITY;
+  }
+  return timestamp;
+}
+
+function getLastAddedMaintenanceLog(asset) {
+  const records = getMaintenanceLogRecords(asset);
+  return records.length ? records[records.length - 1] : null;
+}
+
+function maintenanceMarkedStatus(log) {
+  const record = normalizeMaintenanceLogRecord(log);
+  const flaggedStatuses = new Set(['ooc', 'missing', 'degraded']);
+
+  for (let index = record.changes.length - 1; index >= 0; index--) {
+    const change = record.changes[index];
+    const kind = String(change.kind || '').trim().toLowerCase();
+    const action = String(change.action || '').trim().toLowerCase();
+    if (action === 'marked' && flaggedStatuses.has(kind)) return kind;
+  }
+
+  const sourceKind = String(record.source?.kind || '').trim().toLowerCase();
+  const bulkStatus = String(record.source?.bulkStatus || '').trim().toLowerCase();
+  if (sourceKind === 'bulk_maintenance_fault' && flaggedStatuses.has(bulkStatus)) {
+    return bulkStatus;
+  }
+
+  return '';
+}
+
+function getLastFlaggedMaintenanceLog(asset) {
+  const records = getMaintenanceLogRecords(asset);
+  for (let index = records.length - 1; index >= 0; index--) {
+    const status = maintenanceMarkedStatus(records[index]);
+    if (status) return { record: records[index], status };
+  }
+  return null;
+}
+
+function sortAssetsByLastAddedMaintenanceLog(assetsToSort) {
+  return [...(assetsToSort || [])].sort((assetA, assetB) => {
+    const dateA = maintenanceLogDateSortValue(getLastAddedMaintenanceLog(assetA)?.date);
+    const dateB = maintenanceLogDateSortValue(getLastAddedMaintenanceLog(assetB)?.date);
+    if (dateA !== dateB) {
+      if (!Number.isFinite(dateA)) return 1;
+      if (!Number.isFinite(dateB)) return -1;
+      return dateB - dateA;
+    }
+
+    return assetMaintenanceDisplayId(assetA).localeCompare(
+      assetMaintenanceDisplayId(assetB),
+      undefined,
+      { numeric: true, sensitivity: 'base' }
+    );
+  });
+}
+
 function getMaintenanceChangeLabels(logOrChanges) {
   const changes = Array.isArray(logOrChanges)
     ? logOrChanges.map(normalizeMaintenanceChange).filter(Boolean)
@@ -12572,14 +12643,10 @@ function displayMaintenanceAssets(assetsToShow) {
             <tbody>
     `;
 
-  assetsToShow.forEach((asset) => {
+  sortAssetsByLastAddedMaintenanceLog(assetsToShow).forEach((asset) => {
     const assetId = getAssetIdentifierForApi(asset);
     const displayId = assetMaintenanceDisplayId(asset);
-    const maintenanceRecords = getMaintenanceLogRecords(asset);
-    const lastMaintenance =
-      maintenanceRecords.length > 0
-        ? maintenanceRecords[maintenanceRecords.length - 1].date
-        : "Never";
+    const lastMaintenance = getLastAddedMaintenanceLog(asset)?.date || "Never";
 
     tableHTML += `
             <tr>
@@ -16417,38 +16484,53 @@ function displayOOCAssets(oocAssets) {
             <th>Brand & Model</th>
             <th>Status</th>
             <th>Location</th>
-            <th>Description</th>
+            <th>Last Maintenance</th>
+            <th>Flagged Reason</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody>
   `;
 
-  oocAssets.forEach(asset => {
+  sortAssetsByLastAddedMaintenanceLog(oocAssets).forEach(asset => {
     const assetId = getAssetIdentifierForApi(asset);
     const displayId = assetMaintenanceDisplayId(asset);
     const statusHtml = assetFlagBadgesHtml(asset);
+    const lastMaintenance = getLastAddedMaintenanceLog(asset);
+    const lastFlagged = getLastFlaggedMaintenanceLog(asset);
+    const lastFlaggedStatus = lastFlagged?.status
+      ? lastFlagged.status.toUpperCase()
+      : '';
     
     tableHTML += `
-      <tr class="ooc-asset-item" data-asset-id="${escapeHtmlAttribute(assetId)}">
-        <td style="font-weight: 500;">
-          <a href="#"
-            title="View maintenance log"
-            onclick="event.preventDefault(); event.stopPropagation(); viewMaintenanceLog('${escapeJs(assetId)}');"
-            style="color: #667eea; text-decoration: underline; font-weight: 600;">
-            ${escapeHtml(displayId)}
-          </a>
+      <tr
+        class="ooc-asset-item"
+        data-asset-id="${escapeHtmlAttribute(assetId)}"
+        role="button"
+        tabindex="0"
+        title="View maintenance log"
+        onclick="viewMaintenanceLog('${escapeJs(assetId)}')"
+        onkeydown="if(event.target === this && (event.key === 'Enter' || event.key === ' ')){event.preventDefault();viewMaintenanceLog('${escapeJs(assetId)}');}"
+        style="cursor:pointer;"
+      >
+        <td style="font-weight:600;">
+          ${escapeHtml(displayId)}
           ${asset.isBulk ? ' <span class="asset-badge status-available">Bulk Item</span>' : ''}
         </td>
 
-        <td>${asset.brand} ${asset.model}</td>
+        <td>${escapeHtml(`${asset.brand || ''} ${asset.model || ''}`.trim())}</td>
         <td>
           ${statusHtml}
         </td>
-        <td>${asset.location || 'Store'}</td>
-        <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis;">${asset.description || '-'}</td>
+        <td>${escapeHtml(asset.location || 'Store')}</td>
+        <td>${escapeHtml(lastMaintenance?.date || 'Never')}</td>
+        <td style="max-width:300px;white-space:normal;overflow-wrap:anywhere;">
+          ${lastFlagged
+            ? `${escapeHtml(lastFlagged.record.description || 'No reason provided')} <span style="color:#666;font-size:11px;">(${escapeHtml(lastFlaggedStatus)})</span>`
+            : '—'}
+        </td>
         <td>
-          <button class="btn btn-primary btn-sm" onclick="openFlaggedAssetLogEntry('${escapeJs(assetId)}')" style="padding: 4px 8px; font-size: 11px;">
+          <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); openFlaggedAssetLogEntry('${escapeJs(assetId)}')" style="padding: 4px 8px; font-size: 11px;">
             Add Log
           </button>
         </td>
