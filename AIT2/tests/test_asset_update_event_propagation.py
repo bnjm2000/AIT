@@ -4,7 +4,7 @@ from urllib.parse import quote
 
 import app as app_module
 from data_manager import DataManager
-from models import Event, InventoryItem, User, hash_password
+from models import Container, Event, InventoryItem, User, hash_password
 
 
 class AssetUpdateEventPropagationTests(unittest.TestCase):
@@ -205,6 +205,60 @@ class AssetUpdateEventPropagationTests(unittest.TestCase):
         self.assertEqual(event.actually_prepared, [new_marker])
         self.assertEqual(event.returned_items, [new_marker])
         self.assertEqual(event.extra_assets, [new_marker])
+
+    def test_bulk_renumber_handles_overlapping_ids_and_updates_references(self):
+        self.data_manager.containers = {
+            'CASE-1': Container('CASE-1', ['A#01', 'A#02']),
+        }
+        self.data_manager.save_containers()
+        app_module.mark_data_snapshot_current()
+        event = self.make_event(
+            450,
+            prepared=['A#01', 'A#02'],
+            actual=['A#02'],
+            returned=['A#01'],
+            extra=['A#02'],
+        )
+        self.login_admin()
+
+        response = self.client.post('/api/assets/bulk-renumber', json={
+            'assetIds': ['A#01', 'A#02'],
+            'startingAssetId': 'A#02',
+        })
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        body = response.get_json()['data']
+        self.assertEqual(body['mapping'], {'A#01': 'A#02', 'A#02': 'A#03'})
+        self.assertNotIn('A#01', self.data_manager.inventory)
+        self.assertEqual(self.data_manager.inventory['A#02'].serial_number, 'SN-A#01')
+        self.assertEqual(self.data_manager.inventory['A#03'].serial_number, 'SN-A#02')
+        self.assertEqual(event.prepared_items, ['A#02', 'A#03'])
+        self.assertEqual(event.actually_prepared, ['A#03'])
+        self.assertEqual(event.returned_items, ['A#02'])
+        self.assertEqual(event.extra_assets, ['A#03'])
+        self.assertEqual(
+            self.data_manager.containers['CASE-1'].asset_ids,
+            ['A#02', 'A#03'],
+        )
+
+        reloaded = DataManager(self.tempdir.name)
+        reloaded.load_inventory()
+        self.assertNotIn('A#01', reloaded.inventory)
+        self.assertIn('A#02', reloaded.inventory)
+        self.assertIn('A#03', reloaded.inventory)
+
+    def test_bulk_renumber_rejects_ids_owned_by_unselected_assets(self):
+        self.login_admin()
+
+        response = self.client.post('/api/assets/bulk-renumber', json={
+            'assetIds': ['A#01', 'A#02'],
+            'startingAssetId': 'BULK-0001',
+        })
+
+        self.assertEqual(response.status_code, 409)
+        self.assertIn('already exists', response.get_json()['error'])
+        self.assertIn('A#01', self.data_manager.inventory)
+        self.assertIn('A#02', self.data_manager.inventory)
 
     def test_asset_update_saves_date_of_purchase(self):
         response = self.put_asset('A#01', dateOfPurchase='2026/06/02')

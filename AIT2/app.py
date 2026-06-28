@@ -3446,6 +3446,32 @@ def _replace_bulk_asset_id_in_list(values, old_asset_id, new_asset_id):
     return changed
 
 
+def _replace_asset_ids_in_list(values, asset_id_mapping):
+    """Replace several asset IDs in one pass so overlapping renames stay safe."""
+    if not isinstance(values, list) or not asset_id_mapping:
+        return 0
+
+    changed = 0
+
+    for index, value in enumerate(values):
+        replacement = asset_id_mapping.get(value)
+        if replacement is not None and replacement != value:
+            values[index] = replacement
+            changed += 1
+            continue
+
+        marker = _parse_bulk_marker(value)
+        if not marker:
+            continue
+
+        replacement = asset_id_mapping.get(marker.get('bulkId'))
+        if replacement is not None and replacement != marker.get('bulkId'):
+            values[index] = _bulk_marker(replacement, marker.get('quantity', 1))
+            changed += 1
+
+    return changed
+
+
 def _parse_model_marker(value):
     if not isinstance(value, str) or not value.startswith('[MODEL]'):
         return None
@@ -9963,6 +9989,163 @@ def bulk_delete_assets():
     except Exception as e:
         logger.error(f"Error bulk deleting assets: {e}", exc_info=True)
         return jsonify({'error': 'Failed to delete selected assets'}), 500
+
+
+@app.route('/api/assets/bulk-renumber', methods=['POST'])
+@require_admin
+def bulk_renumber_assets():
+    """Rename selected assets to an ascending ID sequence in one safe mapping."""
+    try:
+        data = request.get_json(silent=True) or {}
+        asset_ids = _normalise_asset_ids_for_delete(data.get('assetIds'))
+
+        if len(asset_ids) < 2:
+            return jsonify({'error': 'Select at least two assets to enumerate'}), 400
+
+        starting_asset_id = str(data.get('startingAssetId') or '').strip()
+        match = re.match(r'^(.*?)(\d+)$', starting_asset_id)
+        if not match:
+            return jsonify({
+                'error': 'Starting Asset ID must end with a number (for example, MIC#01)'
+            }), 400
+
+        prefix, number_text = match.groups()
+        starting_number = int(number_text)
+        number_width = len(number_text)
+        new_asset_ids = [
+            f'{prefix}{number:0{number_width}d}'
+            for number in range(starting_number, starting_number + len(asset_ids))
+        ]
+
+        with _inventory_action_lock:
+            missing_asset_ids = [
+                asset_id for asset_id in asset_ids
+                if asset_id not in data_manager.inventory
+            ]
+            if missing_asset_ids:
+                return jsonify({
+                    'error': f"Asset not found: {missing_asset_ids[0]}"
+                }), 404
+
+            selected_id_set = set(asset_ids)
+            conflicting_ids = [
+                asset_id for asset_id in new_asset_ids
+                if asset_id in data_manager.inventory and asset_id not in selected_id_set
+            ]
+            if conflicting_ids:
+                return jsonify({
+                    'error': f'Asset ID {conflicting_ids[0]} already exists'
+                }), 409
+
+            asset_id_mapping = dict(zip(asset_ids, new_asset_ids))
+            changed_mapping = {
+                old_id: new_id
+                for old_id, new_id in asset_id_mapping.items()
+                if old_id != new_id
+            }
+
+            if not changed_mapping:
+                return jsonify({
+                    'success': True,
+                    'message': 'Asset IDs already match the requested sequence',
+                    'data': {
+                        'mapping': asset_id_mapping,
+                        'renamedAssets': 0,
+                        'eventsUpdated': 0,
+                        'containersUpdated': 0,
+                        'idReferencesChanged': 0,
+                    },
+                })
+
+            audit_timestamp = _asset_audit_timestamp()
+            audit_user = _asset_audit_user()
+            renamed_assets = [
+                (
+                    data_manager.inventory[old_id],
+                    _asset_audit_snapshot(data_manager.inventory[old_id])
+                )
+                for old_id in asset_ids
+            ]
+
+            renamed_inventory = {}
+            for current_id, item in data_manager.inventory.items():
+                new_id = asset_id_mapping.get(current_id, current_id)
+                item.asset_id = new_id
+                renamed_inventory[new_id] = item
+            data_manager.inventory = renamed_inventory
+
+            containers_updated = 0
+            id_references_changed = 0
+            for container in data_manager.containers.values():
+                changed = _replace_asset_ids_in_list(
+                    container.asset_ids,
+                    changed_mapping
+                )
+                if changed:
+                    containers_updated += 1
+                    id_references_changed += changed
+
+            if containers_updated:
+                data_manager.save_containers()
+
+            events_updated = 0
+            for event in data_manager.events.values():
+                event_changed = 0
+                for attr in (
+                    'prepared_items',
+                    'returned_items',
+                    'actually_prepared',
+                    'extra_assets',
+                ):
+                    event_changed += _replace_asset_ids_in_list(
+                        getattr(event, attr, []),
+                        changed_mapping
+                    )
+
+                if event_changed:
+                    id_references_changed += event_changed
+                    update_event_state(event)
+                    data_manager.save_event(event)
+                    events_updated += 1
+
+            for item, before_snapshot in renamed_assets:
+                _append_asset_change_history(
+                    item,
+                    _asset_audit_changes(
+                        before_snapshot,
+                        _asset_audit_snapshot(item),
+                        fields=('asset_id',),
+                    ),
+                    timestamp=audit_timestamp,
+                    user=audit_user,
+                    action='updated',
+                )
+
+            stale_ids = set(asset_ids) - set(new_asset_ids)
+            data_manager.save_inventory(drop_asset_ids=stale_ids)
+
+        invalidate_cache()
+        log_action(
+            f"Enumerated {len(changed_mapping)} selected asset IDs starting at "
+            f"{starting_asset_id}; eventsUpdated={events_updated}; "
+            f"containersUpdated={containers_updated}"
+        )
+
+        return jsonify({
+            'success': True,
+            'message': f'Renumbered {len(changed_mapping)} asset(s)',
+            'data': {
+                'mapping': asset_id_mapping,
+                'renamedAssets': len(changed_mapping),
+                'eventsUpdated': events_updated,
+                'containersUpdated': containers_updated,
+                'idReferencesChanged': id_references_changed,
+            },
+        })
+
+    except Exception as e:
+        logger.error(f"Error bulk renumbering assets: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to enumerate selected asset IDs'}), 500
 
 
 @app.route('/api/assets/<path:asset_id>', methods=['DELETE'])

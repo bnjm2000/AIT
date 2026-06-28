@@ -6707,6 +6707,17 @@ function ensureBulkAssetEditModal() {
         <div id="bulkEditAssetSummary" style="background:#f8f9fa;border:1px solid #e9ecef;border-radius:8px;padding:12px;margin-bottom:16px;"></div>
 
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;">
+          <div id="bulkEditAssetIdSequenceGroup" class="form-group" style="grid-column:1/-1;display:none;">
+            <label class="form-label">
+              <input type="checkbox" id="bulkEditUseAssetIdSequence" style="margin-right:8px;">
+              Asset ID sequence
+            </label>
+            <input id="bulkEditStartingAssetId" class="form-input" placeholder="Starting Asset ID, e.g. MIC#01" disabled>
+            <div id="bulkEditAssetIdPreview" style="margin-top:6px;color:#6c757d;font-size:13px;">
+              Enter an ID ending in a number. Selected assets will be numbered in the order shown.
+            </div>
+          </div>
+
           <div class="form-group">
             <label class="form-label">
               <input type="checkbox" id="bulkEditUseDateOfPurchase" style="margin-right:8px;">
@@ -6793,6 +6804,7 @@ function ensureBulkAssetEditModal() {
   document.body.appendChild(modal);
 
   [
+    'AssetIdSequence',
     'DateOfPurchase',
     'Department',
     'Brand',
@@ -6804,10 +6816,13 @@ function ensureBulkAssetEditModal() {
   ].forEach(name => {
     document.getElementById(`bulkEditUse${name}`)?.addEventListener('change', syncBulkAssetEditFields);
   });
+
+  document.getElementById('bulkEditStartingAssetId')?.addEventListener('input', updateBulkAssetIdSequencePreview);
 }
 
 function syncBulkAssetEditFields() {
   [
+    ['bulkEditUseAssetIdSequence', 'bulkEditStartingAssetId'],
     ['bulkEditUseDateOfPurchase', 'bulkEditDateOfPurchase'],
     ['bulkEditUseDepartment', 'bulkEditDepartment'],
     ['bulkEditUseBrand', 'bulkEditBrand'],
@@ -6821,10 +6836,12 @@ function syncBulkAssetEditFields() {
     const input = document.getElementById(inputId);
     if (input) input.disabled = !(checkbox && checkbox.checked);
   });
+  updateBulkAssetIdSequencePreview();
 }
 
 function resetBulkAssetEditChecks() {
   [
+    'bulkEditUseAssetIdSequence',
     'bulkEditUseDateOfPurchase',
     'bulkEditUseDepartment',
     'bulkEditUseBrand',
@@ -6838,6 +6855,47 @@ function resetBulkAssetEditChecks() {
     if (checkbox) checkbox.checked = false;
   });
   syncBulkAssetEditFields();
+}
+
+function buildBulkAssetIdSequence(startingAssetId, count) {
+  const value = String(startingAssetId || '').trim();
+  const match = value.match(/^(.*?)(\d+)$/);
+  if (!match) return null;
+
+  const prefix = match[1];
+  const numberText = match[2];
+  const startingNumber = Number.parseInt(numberText, 10);
+  if (!Number.isSafeInteger(startingNumber)) return null;
+
+  return Array.from({ length: count }, (_, index) => (
+    `${prefix}${String(startingNumber + index).padStart(numberText.length, '0')}`
+  ));
+}
+
+function updateBulkAssetIdSequencePreview() {
+  const preview = document.getElementById('bulkEditAssetIdPreview');
+  if (!preview) return;
+
+  const selectedAssets = getSelectedInventoryAssets();
+  const enabled = document.getElementById('bulkEditUseAssetIdSequence')?.checked;
+  const startingAssetId = document.getElementById('bulkEditStartingAssetId')?.value || '';
+  if (!enabled || !startingAssetId.trim()) {
+    preview.style.color = '#6c757d';
+    preview.textContent = 'Enter an ID ending in a number. Selected assets will be numbered in the order shown.';
+    return;
+  }
+
+  const sequence = buildBulkAssetIdSequence(startingAssetId, selectedAssets.length);
+  if (!sequence) {
+    preview.textContent = 'The starting Asset ID must end with a number, such as MIC#01.';
+    preview.style.color = '#dc3545';
+    return;
+  }
+
+  preview.style.color = '#6c757d';
+  preview.textContent = sequence.length > 1
+    ? `IDs will run from ${sequence[0]} to ${sequence[sequence.length - 1]}.`
+    : `Asset ID will be ${sequence[0]}.`;
 }
 
 function openBulkAssetEditModal() {
@@ -6855,6 +6913,9 @@ function openBulkAssetEditModal() {
   ensureBulkAssetEditModal();
   ensureDepartmentDatalist();
 
+  const sequenceGroup = document.getElementById('bulkEditAssetIdSequenceGroup');
+  if (sequenceGroup) sequenceGroup.style.display = selectedAssets.length > 1 ? 'block' : 'none';
+  document.getElementById('bulkEditStartingAssetId').value = '';
   document.getElementById('bulkEditAssetSummary').innerHTML = selectedInventoryAssetSummaryHtml(selectedAssets);
   document.getElementById('bulkEditDateOfPurchase').value = normalizeAssetPurchaseDateValue(commonInventoryAssetValue(selectedAssets, asset => asset.dateOfPurchase || asset.purchaseDate || ''));
   document.getElementById('bulkEditDepartment').value = commonInventoryAssetValue(selectedAssets, asset => asset.department || 'UN') || '';
@@ -6949,8 +7010,22 @@ async function saveBulkAssetEditModal() {
   }
 
   const samplePayload = collectBulkAssetEditPayload(selectedAssets[0]);
-  if (!samplePayload.__selectedFieldCount) {
+  const useAssetIdSequence = (
+    selectedAssets.length > 1
+    && (document.getElementById('bulkEditUseAssetIdSequence')?.checked || false)
+  );
+  const startingAssetId = (document.getElementById('bulkEditStartingAssetId')?.value || '').trim();
+  const assetIdSequence = useAssetIdSequence
+    ? buildBulkAssetIdSequence(startingAssetId, selectedAssets.length)
+    : null;
+
+  if (!samplePayload.__selectedFieldCount && !useAssetIdSequence) {
     showNotification('warning', 'Choose at least one field to update');
+    return;
+  }
+
+  if (useAssetIdSequence && !assetIdSequence) {
+    showNotification('warning', 'Starting Asset ID must end with a number, such as MIC#01');
     return;
   }
 
@@ -6973,19 +7048,40 @@ async function saveBulkAssetEditModal() {
   let eventsUpdated = 0;
   let containersUpdated = 0;
   const failed = [];
+  let assetIdMapping = {};
 
-  for (const asset of selectedAssets) {
-    const assetId = inventoryAssetIdentifier(asset);
-    const payload = collectBulkAssetEditPayload(asset);
-    delete payload.__selectedFieldCount;
-
+  if (useAssetIdSequence) {
     try {
-      const res = await apiCall(`/api/assets/${encodeURIComponent(assetId)}`, 'PUT', payload);
-      updated += 1;
-      eventsUpdated += Number(res.data?.eventsUpdated || 0);
-      containersUpdated += Number(res.data?.containersUpdated || 0);
+      const renumberResult = await apiCall('/api/assets/bulk-renumber', 'POST', {
+        assetIds: selectedAssets.map(inventoryAssetIdentifier),
+        startingAssetId
+      });
+      assetIdMapping = renumberResult.data?.mapping || {};
+      updated = selectedAssets.length;
+      eventsUpdated += Number(renumberResult.data?.eventsUpdated || 0);
+      containersUpdated += Number(renumberResult.data?.containersUpdated || 0);
     } catch (error) {
-      failed.push({ assetId, message: error.message });
+      return;
+    }
+  }
+
+  if (samplePayload.__selectedFieldCount) {
+    for (const asset of selectedAssets) {
+      const originalAssetId = inventoryAssetIdentifier(asset);
+      const assetId = assetIdMapping[originalAssetId] || originalAssetId;
+      const payload = collectBulkAssetEditPayload(asset);
+      payload.id = assetId;
+      payload.internalId = assetId;
+      delete payload.__selectedFieldCount;
+
+      try {
+        const res = await apiCall(`/api/assets/${encodeURIComponent(assetId)}`, 'PUT', payload);
+        if (!useAssetIdSequence) updated += 1;
+        eventsUpdated += Number(res.data?.eventsUpdated || 0);
+        containersUpdated += Number(res.data?.containersUpdated || 0);
+      } catch (error) {
+        failed.push({ assetId, message: error.message });
+      }
     }
   }
 
