@@ -61,3 +61,443 @@
 2026/06/27 11:08:07,admin,Added assets SC4060FM#01 to SC4060FM#03 via web interface
 2026/06/27 11:08:56,admin,Added assets SC4060BM#01 to SC4060BM#06 via web interface
 2026/06/27 11:12:02,admin,Added assets 4099#01 to 4099#05 via web interface
+2026/06/27 11:20:22,admin,Added assets 4099#06 to 4099#11 via web interface
+2026/06/27 11:20:55,admin,Added assets 4099#12 to 4099#36 via web interface
+2026/06/27 11:22:40,admin,Set asset 4099#03 status to Degraded
+2026/06/27 11:22:40,admin,Maintenance logged for asset 4099#03: Cable frayed
+2026/06/27 11:22:40,admin,Set asset 4099#12 status to Degraded
+2026/06/27 11:22:40,admin,Maintenance logged for asset 4099#12: Cable frayed
+2026/06/27 11:22:41,admin,Set asset 4099#13 status to Degraded
+2026/06/27 11:22:41,admin,Maintenance logged for asset 4099#13: Cable frayed
+2026/06/27 11:22:41,admin,Set asset 4099#15 status to Degraded
+2026/06/27 11:22:41,admin,Maintenance logged for asset 4099#15: Cable frayed
+2026/06/27 11:22:41,admin,Set asset 4099#20 status to Degraded
+2026/06/27 11:22:41,admin,Maintenance logged for asset 4099#20: Cable frayed
+2026/06/27 11:22:41,admin,Set asset 4099#21 status to Degraded
+2026/06/27 11:22:41,admin,Maintenance logged for asset 4099#21: Cable frayed
+2026/06/27 11:22:41,admin,Set asset 4099#22 status to Degraded
+2026/06/27 11:22:41,admin,Maintenance logged for asset 4099#22: Cable frayed
+2026/06/27 11:22:41,admin,Set asset 4099#24 status to Degraded
+2026/06/27 11:22:41,admin,Maintenance logged for asset 4099#24: Cable frayed
+2026/06/27 11:22:42,admin,Set asset 4099#25 status to Degraded
+2026/06/27 11:22:42,admin,Maintenance logged for asset 4099#25: Cable frayed
+2026/06/27 11:22:42,admin,Set asset 4099#26 status to Degraded
+2026/06/27 11:22:42,admin,Maintenance logged for asset 4099#26: Cable frayed
+2026/06/27 11:22:42,admin,Set asset 4099#27 status to Degraded
+2026/06/27 11:22:42,admin,Maintenance logged for asset 4099#27: Cable frayed
+2026/06/27 11:22:42,admin,Set asset 4099#31 status to Degraded
+2026/06/27 11:22:42,admin,Maintenance logged for asset 4099#31: Cable frayed
+2026/06/27 11:22:42,admin,Set asset 4099#32 status to Degraded
+2026/06/27 11:22:42,admin,Maintenance logged for asset 4099#32: Cable frayed
+2026/06/27 11:22:42,admin,Set asset 4099#35 status to Degraded
+2026/06/27 11:22:42,admin,Maintenance logged for asset 4099#35: Cable frayed
+2026/06/27 11:23:08,admin,Set asset 4099#29 status to OOC
+2026/06/27 11:23:08,admin,Maintenance logged for asset 4099#29: High end distorted
+2026/06/27 11:23:36,admin,Set asset 4099#30 status to Degraded
+2026/06/27 11:23:36,admin,Maintenance logged for asset 4099#30: Cable very bad but works
+2026/06/27 11:24:05,admin,Set asset 4099#33 status to OOC
+2026/06/27 11:24:05,admin,"Maintenance logged for asset 4099#33: Cable Frayed, Sponge Holder Buang, No Sponge"
+2026/06/27 11:24:26,admin,Set asset 4099#34 status to OOC
+2026/06/27 11:24:26,admin,"Maintenance logged for asset 4099#34: Sponge Holder Buang, No Sponge"
+2026/06/27 11:24:47,admin,Set asset 4099#36 status to OOC
+2026/06/27 11:24:47,admin,"Maintenance logged for asset 4099#36: Cable Frayed, Will Pop When Touched"
+2026/06/27 11:27:33,admin,Updated PDF logo (1920x1080px_The_Show_Company_Logo.webp)
+2026/06/27 11:32:23,admin,Added assets 4066#01 to 4066#04 via web interface
+2026/06/27 11:33:04,admin,Added assets 4066#05 to 4066#06 via web interface
+2026/06/27 11:33:38,admin,Added assets 4088#01 to 4088#02 via web interface
+2026/06/27 11:33:57,admin,Updated asset 4066#01; applyTo=allSimilar; updatedAssets=4; eventsUpdated=0; containersUpdated=0
+2026/06/27 11:34:10,admin,Updated asset 4066#05; applyTo=allSimilar; updatedAssets=2; eventsUpdated=0; containersUpdated=0
+2026/06/27 11:34:32,admin,Added assets 4288#01 to 4288#03 via web interface
+2026/06/27 11:36:31,admin,Added asset BULK-0017 via web interface
+2026/06/27 11:36:52,admin,Added asset BULK-0018 via web interface
+2026/06/27 11:37:08,admin,Added asset BULK-0019 via web interface
+2026/06/27 11:37:26,admin,Added asset BULK-0020 via web interface
+2026/06/27 11:37:49,admin,Logged 5 bulk maintenance OOC units for asset BULK-0020: Buang
+2026/06/27 11:38:25,admin,Added asset BULK-0021 via web interface
+2026/06/27 11:38:50,admin,Added asset BULK-0022 via web interface
+2026/06/27 11:40:16,admin,Added asset BULK-0023 via web interface
+2026/06/27 11:41:09,admin,Added asset BULK-0024 via web interface
+2026/06/27 11:41:41,admin,Added asset BULK-0025 via web interface
+2026/06/27 11:42:01,admin,Logged 1 bulk maintenance OOC unit for asset BULK-0025: buang
+2026/06/27 11:42:32,admin,Added asset BULK-0026 via web interface
+2026/06/27 11:43:35,admin,Added assets LSP2#01 to LSP2#05 via web interface
+2026/06/27 11:45:27,admin,Added assets DELL#01 to DELL#04 via web interface
+2026/06/27 11:45:53,admin,Added assets SD7#01 to SD7#02 via web interface
+2026/06/27 11:46:31,admin,Added assets Q338#01 to Q338#02 via web interface
+2026/06/27 11:46:59,admin,Added assets SDRACK#01 to SDRACK#05 via web interface
+2026/06/27 11:47:54,admin,Updated asset SDRACK#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/27 11:47:58,admin,Updated asset SDRACK#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/27 11:48:06,admin,Updated asset SDRACK#03; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/27 11:48:11,admin,Updated asset SDRACK#04; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/27 11:48:28,admin,Updated asset SDRACK#05; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/27 11:48:59,admin,Added asset SDMINIRACK#01 via web interface
+2026/06/27 11:49:16,admin,Added assets MADIRACK#01 to MADIRACK#02 via web interface
+2026/06/27 11:49:35,admin,Updated asset MADIRACK#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/27 11:49:40,admin,Updated asset MADIRACK#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/27 11:50:08,admin,Added asset DA6#01 via web interface
+2026/06/27 11:50:54,admin,Added assets PLPLUSCE#01 to PLPLUSCE#03 via web interface
+2026/06/27 11:51:29,admin,Added assets MLXE#01 to MLXE#02 via web interface
+2026/06/27 11:52:07,admin,Added asset PL8CE#01 via web interface
+2026/06/27 11:52:38,admin,Added assets 8040B#01 to 8040B#02 via web interface
+2026/06/27 11:53:07,admin,Added assets CM214I#01 to CM214I#04 via web interface
+2026/06/27 11:53:28,admin,Added asset GM5212#01 via web interface
+2026/06/27 11:54:41,admin,Added assets SQUAREONE#01 to SQUAREONE#05 via web interface
+2026/06/27 11:54:54,admin,Bulk deleted 5 assets; eventsUpdated=0; eventRefsRemoved=0; containersUpdated=0; containerRefsRemoved=0; mediaDeleted=0
+2026/06/27 11:55:24,admin,Added assets SQUAREONE#01 to SQUAREONE#05 via web interface
+2026/06/27 11:56:42,admin,Added assets XTADS800#01 to XTADS800#05 via web interface
+2026/06/27 11:58:28,admin,Added assets LM44#01 to LM44#02 via web interface
+2026/06/27 11:59:11,admin,Added asset LM26#01 via web interface
+2026/06/27 11:59:22,admin,Bulk deleted 1 assets; eventsUpdated=0; eventRefsRemoved=0; containersUpdated=0; containerRefsRemoved=0; mediaDeleted=0
+2026/06/27 11:59:40,admin,Added assets LM26#01 to LM26#10 via web interface
+2026/06/27 12:00:15,admin,Set asset LM26#10 status to OOC
+2026/06/27 12:00:15,admin,"Maintenance logged for asset LM26#10: Buang, Dsub Connector bent"
+2026/06/27 12:00:28,admin,Updated asset LM26#10; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/27 12:00:46,admin,Set asset LM26#09 status to OOC
+2026/06/27 12:00:46,admin,Maintenance logged for asset LM26#09: Buang
+2026/06/27 12:01:55,admin,Added assets GEU0822#01 to GEU0822#04 via web interface
+2026/06/27 12:02:40,admin,Added assets MDBUSB#01 to MDBUSB#02 via web interface
+2026/06/27 12:03:17,admin,Added assets SRM150#01 to SRM150#09 via web interface
+2026/06/27 12:04:05,admin,Added assets VLZ3#01 to VLZ3#02 via web interface
+2026/06/27 12:04:47,admin,Added assets VLZ4#01 to VLZ4#03 via web interface
+2026/06/27 12:05:42,admin,Set asset SRM150#02 status to Degraded
+2026/06/27 12:05:42,admin,Maintenance logged for asset SRM150#02: Ch 1 Spoil
+2026/06/27 12:06:29,admin,Set asset SRM150#09 status to OOC
+2026/06/27 12:06:29,admin,Maintenance logged for asset SRM150#09: Buang
+2026/06/27 12:06:59,admin,Set asset VLZ4#02 status to Degraded
+2026/06/27 12:06:59,admin,Maintenance logged for asset VLZ4#02: Channel 4 Minor Cracking
+2026/06/27 14:59:42,admin,User admin logged out from web interface
+2026/06/27 14:59:45,admin,User admin logged in via web interface
+2026/06/27 14:59:55,admin,User admin logged out from web interface
+2026/06/27 15:01:37,admin,User admin logged in via web interface
+2026/06/27 15:04:21,admin,User admin logged out from web interface
+2026/06/27 15:06:41,admin,User admin logged in via web interface
+2026/06/27 15:49:21,admin,User admin logged out from web interface
+2026/06/27 16:05:43,admin,Created container D80TR #01 (8 assets)
+2026/06/27 16:13:11,admin,Created container D80TR #02 (9 assets)
+2026/06/27 16:14:45,admin,Created container D80TR #03 (9 assets)
+2026/06/27 16:17:36,admin,Created container D80TR #04 (8 assets)
+2026/06/27 16:20:16,admin,Created container D80TR #05 (9 assets)
+2026/06/27 16:21:20,admin,Created container D80TR #06 (9 assets)
+2026/06/27 16:22:51,admin,Created container D80TR #07 (9 assets)
+2026/06/27 16:24:06,admin,Created container D80TR #08 (9 assets)
+2026/06/27 16:25:35,admin,Created container D80TR #09 (8 assets)
+2026/06/27 16:26:56,admin,Created container D80TR #10 (8 assets)
+2026/06/27 16:30:04,admin,Created container D80SR #01 (6 assets)
+2026/06/27 16:32:51,admin,Created container D40TR #01 (9 assets)
+2026/06/27 16:35:13,admin,Created container D40TR #02 (9 assets)
+2026/06/27 16:38:53,admin,Created container D40TR #03 (9 assets)
+2026/06/27 16:40:16,admin,Created container D40TR #04 (9 assets)
+2026/06/27 16:42:40,admin,Created container D40TR #05 (9 assets)
+2026/06/27 16:43:40,admin,Created container D40TR #06 (9 assets)
+2026/06/27 16:44:34,admin,Bulk deleted 12 assets; eventsUpdated=0; eventRefsRemoved=0; containersUpdated=1; containerRefsRemoved=1; mediaDeleted=0
+2026/06/27 16:45:46,admin,Updated container D80TR #08 (9 assets)
+2026/06/27 18:18:01,admin,User admin logged in via web interface
+2026/06/28 14:16:53,admin,Added assets DJM900NXS2#01 to DJM900NXS2#03 via web interface
+2026/06/28 14:21:51,admin,User admin logged out from web interface
+2026/06/28 14:24:49,admin,User admin logged in via web interface
+2026/06/28 14:25:47,admin,Added asset DJM900SRT#01 via web interface
+2026/06/28 14:27:02,admin,Added asset DJMS9#01 via web interface
+2026/06/28 14:27:53,admin,Added asset DJM600#01 via web interface
+2026/06/28 14:28:20,admin,Added asset DJM800#01 via web interface
+2026/06/28 14:28:47,admin,Added asset DJMV10#01 via web interface
+2026/06/28 14:29:30,admin,Added assets CDJ20000NXS2#01 to CDJ20000NXS2#03 via web interface
+2026/06/28 14:30:04,admin,Added assets CDJ3000#01 to CDJ3000#06 via web interface
+2026/06/28 14:30:41,admin,Added assets CDJ2000NXS#01 to CDJ2000NXS#02 via web interface
+2026/06/28 14:31:10,admin,Added asset XDJRX2#01 via web interface
+2026/06/28 14:31:30,admin,Updated asset DJM800#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/28 14:32:18,admin,Added assets CDJ1000MK2#01 to CDJ1000MK2#02 via web interface
+2026/06/28 14:32:45,admin,Added asset DDJ400#01 via web interface
+2026/06/28 14:33:18,admin,Added asset DDJSX2#01 via web interface
+2026/06/28 14:33:51,admin,Added asset DDJSX3#01 via web interface
+2026/06/28 14:34:20,admin,Added assets SL1210MK7#01 to SL1210MK7#02 via web interface
+2026/06/28 14:34:50,admin,Added asset RMX1000#01 via web interface
+2026/06/28 14:35:29,admin,Added assets JDIMONO#01 to JDIMONO#22 via web interface
+2026/06/28 14:35:43,admin,Added assets JDISTEREO#01 to JDISTEREO#04 via web interface
+2026/06/28 14:35:59,admin,Added assets PROD2STEREO#01 to PROD2STEREO#02 via web interface
+2026/06/28 14:36:14,admin,Added assets J48MONO#01 to J48MONO#12 via web interface
+2026/06/28 14:36:27,admin,Added assets J48STEREO#01 to J48STEREO#04 via web interface
+2026/06/28 14:36:46,admin,Added assets DM1#01 to DM1#10 via web interface
+2026/06/28 14:37:01,admin,Added asset SW8MKI#01 via web interface
+2026/06/28 14:37:13,admin,Added assets SW8USB#01 to SW8USB#02 via web interface
+2026/06/28 14:37:39,admin,Added asset E901#01 via web interface
+2026/06/28 14:37:46,admin,Added asset E902#01 via web interface
+2026/06/28 14:37:58,admin,Added assets E904#01 to E904#10 via web interface
+2026/06/28 14:38:07,admin,Added asset E906#01 via web interface
+2026/06/28 14:38:50,admin,Added assets MKE600#01 to MKE600#06 via web interface
+2026/06/28 14:39:07,admin,Added assets MD504#01 to MD504#02 via web interface
+2026/06/28 14:39:24,admin,Added assets MD421#01 to MD421#02 via web interface
+2026/06/28 14:39:56,admin,Added assets MKE2GOLD#01 to MKE2GOLD#04 via web interface
+2026/06/28 14:40:10,admin,Added asset E835S#01 via web interface
+2026/06/28 14:40:39,admin,Added assets SR300IEMG3#01 to SR300IEMG3#10 via web interface
+2026/06/28 14:41:00,admin,Added assets EK300IEMG3#01 to EK300IEMG3#10 via web interface
+2026/06/28 14:41:14,admin,Added asset AC3000#01 via web interface
+2026/06/28 14:41:29,admin,Added asset A5000CP#01 via web interface
+2026/06/28 14:42:04,admin,Added asset BETA91#01 via web interface
+2026/06/28 14:42:14,admin,Added assets BETA91A#01 to BETA91A#04 via web interface
+2026/06/28 14:42:26,admin,Added assets BETA52#01 to BETA52#04 via web interface
+2026/06/28 14:42:45,admin,Added assets BETA52A#01 to BETA52A#08 via web interface
+2026/06/28 14:42:58,admin,Added assets BETA98A#01 to BETA98A#03 via web interface
+2026/06/28 14:43:12,admin,Added assets BETA98#01 to BETA98#10 via web interface
+2026/06/28 14:43:51,admin,Added asset BETA98H#01 via web interface
+2026/06/28 14:44:15,admin,Added assets PG58#01 to PG58#05 via web interface
+2026/06/28 14:44:29,admin,Added assets SM57#01 to SM57#10 via web interface
+2026/06/28 14:44:42,admin,Added assets SM58#01 to SM58#09 via web interface
+2026/06/28 14:45:18,admin,Added assets SM58S#01 to SM58S#18 via web interface
+2026/06/28 14:45:33,admin,Added assets SM81#01 to SM81#09 via web interface
+2026/06/28 14:45:45,admin,Added assets KSM32#01 to KSM32#02 via web interface
+2026/06/28 14:46:00,admin,Added asset SM7B#01 via web interface
+2026/06/28 14:46:18,admin,Added assets KSM9#01 to KSM9#02 via web interface
+2026/06/28 14:46:53,admin,Added assets WL51#01 to WL51#16 via web interface
+2026/06/28 14:47:11,admin,Added assets WL185#01 to WL185#46 via web interface
+2026/06/28 14:47:24,admin,Added assets WBH53B#01 to WBH53B#06 via web interface
+2026/06/28 14:49:01,admin,Added assets MX150#01 to MX150#11 via web interface
+2026/06/28 14:49:17,admin,Bulk deleted 11 assets; eventsUpdated=0; eventRefsRemoved=0; containersUpdated=0; containerRefsRemoved=0; mediaDeleted=0
+2026/06/28 14:49:39,admin,Added assets MX150BO#01 to MX150BO#11 via web interface
+2026/06/28 14:50:05,admin,Added assets MX150BC#01 to MX150BC#12 via web interface
+2026/06/28 14:50:38,admin,Added assets AD4Q#01 to AD4Q#08 via web interface
+2026/06/28 14:50:51,admin,Added assets AD1#01 to AD1#24 via web interface
+2026/06/28 14:51:04,admin,Added assets ADX1#01 to ADX1#08 via web interface
+2026/06/28 14:51:23,admin,Added assets AD2#01 to AD2#24 via web interface
+2026/06/28 14:51:38,admin,Added assets ADX2#01 to ADX2#08 via web interface
+2026/06/28 14:52:07,admin,Added assets ULXD4DG51#01 to ULXD4DG51#04 via web interface
+2026/06/28 14:52:37,admin,Added assets ULXD4QG51#01 to ULXD4QG51#04 via web interface
+2026/06/28 14:53:18,admin,Added assets ULXD1G51#01 to ULXD1G51#20 via web interface
+2026/06/28 14:53:30,admin,Updated asset ULXD1G51#18; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/28 14:53:33,admin,Updated asset ULXD1G51#19; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/28 14:54:08,admin,Added assets ULXD2G51#01 to ULXD2G51#20 via web interface
+2026/06/28 14:54:17,admin,Updated asset ULXD1G51#02; applyTo=allSimilar; updatedAssets=20; eventsUpdated=0; containersUpdated=0
+2026/06/28 14:54:50,admin,Added assets ULXD4DL50#01 to ULXD4DL50#06 via web interface
+2026/06/28 14:55:22,admin,Added assets ULXD4QL50#01 to ULXD4QL50#02 via web interface
+2026/06/28 14:55:41,admin,Added assets ULXD1#01 to ULXD1#20 via web interface
+2026/06/28 14:56:26,admin,Bulk deleted 20 assets; eventsUpdated=0; eventRefsRemoved=0; containersUpdated=0; containerRefsRemoved=0; mediaDeleted=0
+2026/06/28 14:56:44,admin,Added asset ULXD1L50#01 via web interface
+2026/06/28 14:58:40,admin,Deleted asset ULXD1L50#01; eventsUpdated=0; eventRefsRemoved=0; containersUpdated=0; containerRefsRemoved=0; mediaDeleted=0
+2026/06/28 14:58:52,admin,Added assets ULXDL50#01 to ULXDL50#20 via web interface
+2026/06/28 14:59:36,admin,Bulk deleted 20 assets; eventsUpdated=0; eventRefsRemoved=0; containersUpdated=0; containerRefsRemoved=0; mediaDeleted=0
+2026/06/28 14:59:49,admin,Added assets ULXD1L50#01 to ULXD1L50#20 via web interface
+2026/06/28 14:59:59,admin,Updated asset ULXD1L50#14; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/28 15:00:03,admin,Updated asset ULXD1L50#18; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/28 15:00:29,admin,Added assets ULXD2L50#01 to ULXD2L50#20 via web interface
+2026/06/28 15:00:56,admin,Added assets UR4D#01 to UR4D#03 via web interface
+2026/06/28 15:01:14,admin,Added assets UR4D#04 to UR4D#12 via web interface
+2026/06/28 15:01:40,admin,Added asset UR4D#13 via web interface
+2026/06/28 15:02:02,admin,Added assets UR1#01 to UR1#19 via web interface
+2026/06/28 15:02:30,admin,Added assets UR2#01 to UR2#29 via web interface
+2026/06/28 15:03:01,admin,Updated asset UR2#14; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/28 15:03:11,admin,Updated asset UR2#13; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/28 15:03:14,admin,Updated asset UR2#11; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/28 15:03:51,admin,Updated asset UR2#10; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/28 15:03:51,admin,Updated asset UR2#10; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/28 15:03:51,admin,Updated asset UR2#10; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/28 15:04:26,admin,Added assets AXT400#01 to AXT400#03 via web interface
+2026/06/28 15:04:41,admin,Added assets AXT400#04 to AXT400#08 via web interface
+2026/06/28 15:04:58,admin,Added assets AXT100#01 to AXT100#12 via web interface
+2026/06/28 15:05:11,admin,Added assets AXT200#01 to AXT200#12 via web interface
+2026/06/28 15:06:02,admin,Added assets RPW184#01 to RPW184#02 via web interface
+2026/06/28 15:06:19,admin,Added assets P9HW#01 to P9HW#06 via web interface
+2026/06/28 15:06:52,admin,Added assets P10TH8Z#01 to P10TH8Z#08 via web interface
+2026/06/28 15:07:18,admin,Added assets P10RH8Z#01 to P10RH8Z#34 via web interface
+2026/06/28 15:07:32,admin,Updated asset P10RH8Z#32; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/28 15:08:28,admin,Added assets P10RP#01 to P10RP#24 via web interface
+2026/06/28 15:08:59,admin,Added assets P10TP8#01 to P10TP8#05 via web interface
+2026/06/28 15:09:28,admin,Added assets P10TP8#06 to P10TP8#09 via web interface
+2026/06/28 15:09:49,admin,Added assets P10RP8#01 to P10RP8#17 via web interface
+2026/06/28 15:10:03,admin,Added asset AXT600#01 via web interface
+2026/06/28 15:10:27,admin,Added assets AXT900#01 to AXT900#06 via web interface
+2026/06/28 15:10:43,admin,Added assets SBRC#01 to SBRC#08 via web interface
+2026/06/28 15:11:08,admin,Added assets SB900#01 to SB900#94 via web interface
+2026/06/28 15:11:33,admin,Updated asset SB900#53; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/28 15:11:37,admin,Updated asset SB900#52; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/28 15:11:45,admin,Updated asset SB900#51; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/28 15:11:52,admin,Updated asset SB900#50; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/28 15:12:11,admin,Added assets SB910#01 to SB910#16 via web interface
+2026/06/28 15:12:27,admin,Added assets SB920#01 to SB920#16 via web interface
+2026/06/28 15:12:51,admin,Added assets UA845#01 to UA845#04 via web interface
+2026/06/28 15:13:07,admin,Added assets UA845UWB#01 to UA845UWB#02 via web interface
+2026/06/28 15:13:20,admin,Added asset AXT630#01 via web interface
+2026/06/28 15:13:32,admin,Added assets PA821#01 to PA821#02 via web interface
+2026/06/28 15:13:48,admin,Added asset AXT620#01 via web interface
+2026/06/28 15:14:06,admin,Added assets HA8091#01 to HA8091#03 via web interface
+2026/06/28 15:14:16,admin,Added asset HA8089#01 via web interface
+2026/06/28 15:14:30,admin,Added assets UA874WB#01 to UA874WB#09 via web interface
+2026/06/28 15:14:42,admin,Added assets UA870WB#01 to UA870WB#04 via web interface
+2026/06/28 15:14:54,admin,Added asset PA805SWB#01 via web interface
+2026/06/28 15:15:11,admin,Added assets UA830#01 to UA830#07 via web interface
+2026/06/28 15:15:22,admin,Added assets AXT610#01 to AXT610#04 via web interface
+2026/06/28 15:16:26,admin,Added asset BULK-0027 via web interface
+2026/06/28 15:17:30,admin,Added assets SE215#01 to SE215#21 via web interface
+2026/06/28 15:18:19,admin,Logged 2 bulk maintenance OOC units for asset BULK-0027: Buang
+2026/06/28 15:18:35,admin,Updated bulk maintenance log #1 for asset BULK-0027: Buang
+2026/06/28 15:18:39,admin,Updated bulk maintenance log #2 for asset BULK-0027: Buang
+2026/06/28 15:19:16,admin,Set asset UA870WB#03 status to OOC
+2026/06/28 15:19:16,admin,"Maintenance logged for asset UA870WB#03: Buang, Screw On part fell off"
+2026/06/28 15:19:17,admin,Set asset UA870WB#04 status to OOC
+2026/06/28 15:19:17,admin,"Maintenance logged for asset UA870WB#04: Buang, Screw On part fell off"
+2026/06/28 15:20:18,admin,Set asset AXT400#04 status to OOC
+2026/06/28 15:20:18,admin,Maintenance logged for asset AXT400#04: cannot power on
+2026/06/28 15:20:19,admin,Set asset AXT400#05 status to OOC
+2026/06/28 15:20:19,admin,Maintenance logged for asset AXT400#05: cannot power on
+2026/06/28 15:20:20,admin,Set asset AXT400#07 status to OOC
+2026/06/28 15:20:20,admin,Maintenance logged for asset AXT400#07: cannot power on
+2026/06/28 15:20:20,admin,Set asset AXT400#06 status to OOC
+2026/06/28 15:20:20,admin,Maintenance logged for asset AXT400#06: cannot power on
+2026/06/28 15:20:41,admin,Updated maintenance log for asset AXT400#04: 'cannot power on' -> 'cannot power on' (also: Marked OOC) (edited by admin)
+2026/06/28 15:20:59,admin,Set asset AXT400#04 status to OOC
+2026/06/28 15:20:59,admin,Maintenance logged for asset AXT400#04: stuck at powering on screen
+2026/06/28 15:21:21,admin,Deleted maintenance log for asset AXT400#06: 'cannot power on' (deleted by admin)
+2026/06/28 15:21:42,admin,Set asset AXT400#06 status to OOC
+2026/06/28 15:21:42,admin,Maintenance logged for asset AXT400#06: cannot power on
+2026/06/28 15:22:01,admin,Updated maintenance log for asset AXT400#06: 'cannot power on' -> 'stuck at powering on screen' (also: Marked OOC) (edited by admin)
+2026/06/28 15:22:26,admin,Deleted maintenance log for asset AXT400#04: 'stuck at powering on screen' (deleted by admin)
+2026/06/28 15:23:03,admin,Set asset AXT400#08 status to OOC
+2026/06/28 15:23:03,admin,Maintenance logged for asset AXT400#08: cannot power on
+2026/06/28 15:24:13,admin,Set asset ULXD2L50#20 status to OOC
+2026/06/28 15:24:13,admin,Maintenance logged for asset ULXD2L50#20: Capsule Buang
+2026/06/28 15:24:14,admin,Set asset ULXD2L50#19 status to OOC
+2026/06/28 15:24:14,admin,Maintenance logged for asset ULXD2L50#19: Capsule Buang
+2026/06/28 15:24:14,admin,Set asset ULXD2L50#18 status to OOC
+2026/06/28 15:24:14,admin,Maintenance logged for asset ULXD2L50#18: Capsule Buang
+2026/06/28 15:24:15,admin,Set asset ULXD2L50#17 status to OOC
+2026/06/28 15:24:15,admin,Maintenance logged for asset ULXD2L50#17: Capsule Buang
+2026/06/28 15:24:15,admin,Set asset ULXD2L50#16 status to OOC
+2026/06/28 15:24:15,admin,Maintenance logged for asset ULXD2L50#16: Capsule Buang
+2026/06/28 15:24:15,admin,Set asset ULXD2L50#15 status to OOC
+2026/06/28 15:24:16,admin,Maintenance logged for asset ULXD2L50#15: Capsule Buang
+2026/06/28 15:24:16,admin,Set asset ULXD2L50#14 status to OOC
+2026/06/28 15:24:16,admin,Maintenance logged for asset ULXD2L50#14: Capsule Buang
+2026/06/28 15:24:16,admin,Set asset ULXD2L50#13 status to OOC
+2026/06/28 15:24:16,admin,Maintenance logged for asset ULXD2L50#13: Capsule Buang
+2026/06/28 15:24:50,admin,Set asset ULXD1L50#18 status to OOC
+2026/06/28 15:24:50,admin,Maintenance logged for asset ULXD1L50#18: Antenna Buang
+2026/06/28 15:24:51,admin,Set asset ULXD1L50#17 status to OOC
+2026/06/28 15:24:51,admin,Maintenance logged for asset ULXD1L50#17: Antenna Buang
+2026/06/28 15:24:51,admin,Set asset ULXD1L50#16 status to OOC
+2026/06/28 15:24:51,admin,Maintenance logged for asset ULXD1L50#16: Antenna Buang
+2026/06/28 15:25:04,admin,Updated asset ULXD1L50#19; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/28 15:25:08,admin,Updated asset ULXD1L50#20; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/28 15:25:22,admin,"Updated maintenance log for asset ULXD1L50#18: 'Antenna Buang' -> 'Antenna Buang, Paint Peeled off' (also: Marked OOC) (edited by admin)"
+2026/06/28 15:27:09,admin,Set asset ULXD2G51#14 status to OOC
+2026/06/28 15:27:09,admin,Maintenance logged for asset ULXD2G51#14: no capsule
+2026/06/28 15:27:10,admin,Set asset ULXD2G51#20 status to OOC
+2026/06/28 15:27:10,admin,Maintenance logged for asset ULXD2G51#20: no capsule
+2026/06/28 15:27:11,admin,Set asset ULXD2G51#19 status to OOC
+2026/06/28 15:27:11,admin,Maintenance logged for asset ULXD2G51#19: no capsule
+2026/06/28 15:27:11,admin,Set asset ULXD2G51#18 status to OOC
+2026/06/28 15:27:11,admin,Maintenance logged for asset ULXD2G51#18: no capsule
+2026/06/28 15:27:12,admin,Set asset ULXD2G51#17 status to OOC
+2026/06/28 15:27:12,admin,Maintenance logged for asset ULXD2G51#17: no capsule
+2026/06/28 15:27:12,admin,Set asset ULXD2G51#16 status to OOC
+2026/06/28 15:27:12,admin,Maintenance logged for asset ULXD2G51#16: no capsule
+2026/06/28 15:27:13,admin,Set asset ULXD2G51#15 status to OOC
+2026/06/28 15:27:13,admin,Maintenance logged for asset ULXD2G51#15: no capsule
+2026/06/28 15:27:32,admin,Set asset ULXD1G51#19 status to OOC
+2026/06/28 15:27:32,admin,Maintenance logged for asset ULXD1G51#19: Antenna broke
+2026/06/28 15:27:37,admin,Updated asset ULXD1G51#20; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/28 15:27:57,admin,Updated asset AD2#24; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/28 15:28:27,admin,Set asset AD1#14 status to Degraded
+2026/06/28 15:28:27,admin,"Maintenance logged for asset AD1#14: No Hook,LOST"
+2026/06/28 15:28:27,admin,Set asset AD1#15 status to Degraded
+2026/06/28 15:28:28,admin,"Maintenance logged for asset AD1#15: No Hook,LOST"
+2026/06/28 15:29:21,admin,Set asset WL185#27 status to OOC
+2026/06/28 15:29:21,admin,Maintenance logged for asset WL185#27: No Pop Filter
+2026/06/28 15:29:22,admin,Set asset WL185#28 status to OOC
+2026/06/28 15:29:22,admin,Maintenance logged for asset WL185#28: No Pop Filter
+2026/06/28 15:29:22,admin,Set asset WL185#29 status to OOC
+2026/06/28 15:29:22,admin,Maintenance logged for asset WL185#29: No Pop Filter
+2026/06/28 15:29:23,admin,Set asset WL185#30 status to OOC
+2026/06/28 15:29:23,admin,Maintenance logged for asset WL185#30: No Pop Filter
+2026/06/28 15:29:24,admin,Set asset WL185#31 status to OOC
+2026/06/28 15:29:24,admin,Maintenance logged for asset WL185#31: No Pop Filter
+2026/06/28 15:29:24,admin,Set asset WL185#32 status to OOC
+2026/06/28 15:29:24,admin,Maintenance logged for asset WL185#32: No Pop Filter
+2026/06/28 15:29:25,admin,Set asset WL185#33 status to OOC
+2026/06/28 15:29:25,admin,Maintenance logged for asset WL185#33: No Pop Filter
+2026/06/28 15:29:25,admin,Set asset WL185#34 status to OOC
+2026/06/28 15:29:25,admin,Maintenance logged for asset WL185#34: No Pop Filter
+2026/06/28 15:29:25,admin,Set asset WL185#35 status to OOC
+2026/06/28 15:29:26,admin,Maintenance logged for asset WL185#35: No Pop Filter
+2026/06/28 15:29:26,admin,Set asset WL185#36 status to OOC
+2026/06/28 15:29:26,admin,Maintenance logged for asset WL185#36: No Pop Filter
+2026/06/28 15:29:26,admin,Set asset WL185#37 status to OOC
+2026/06/28 15:29:26,admin,Maintenance logged for asset WL185#37: No Pop Filter
+2026/06/28 15:29:27,admin,Set asset WL185#38 status to OOC
+2026/06/28 15:29:27,admin,Maintenance logged for asset WL185#38: No Pop Filter
+2026/06/28 15:29:27,admin,Set asset WL185#39 status to OOC
+2026/06/28 15:29:27,admin,Maintenance logged for asset WL185#39: No Pop Filter
+2026/06/28 15:29:27,admin,Set asset WL185#40 status to OOC
+2026/06/28 15:29:27,admin,Maintenance logged for asset WL185#40: No Pop Filter
+2026/06/28 15:29:54,admin,Set asset WL185#41 status to Degraded
+2026/06/28 15:29:54,admin,Maintenance logged for asset WL185#41: Soft
+2026/06/28 15:30:20,admin,Set asset WL185#42 status to OOC
+2026/06/28 15:30:20,admin,Maintenance logged for asset WL185#42: Spoil
+2026/06/28 15:30:20,admin,Set asset WL185#46 status to OOC
+2026/06/28 15:30:20,admin,Maintenance logged for asset WL185#46: Spoil
+2026/06/28 15:30:21,admin,Set asset WL185#45 status to OOC
+2026/06/28 15:30:21,admin,Maintenance logged for asset WL185#45: Spoil
+2026/06/28 15:30:22,admin,Set asset WL185#44 status to OOC
+2026/06/28 15:30:22,admin,Maintenance logged for asset WL185#44: Spoil
+2026/06/28 15:30:22,admin,Set asset WL185#43 status to OOC
+2026/06/28 15:30:22,admin,Maintenance logged for asset WL185#43: Spoil
+2026/06/28 15:31:01,admin,Added assets WL51#17 to WL51#20 via web interface
+2026/06/28 15:31:23,admin,Set asset WL51#18 status to OOC
+2026/06/28 15:31:24,admin,Maintenance logged for asset WL51#18: High noise
+2026/06/28 15:31:32,admin,Updated asset WL51#19; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/28 15:31:38,admin,Updated asset WL51#20; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/28 15:32:17,admin,Set asset SM58S#12 status to Degraded
+2026/06/28 15:32:17,admin,Maintenance logged for asset SM58S#12: Dented
+2026/06/28 15:32:18,admin,Set asset SM58S#18 status to Degraded
+2026/06/28 15:32:18,admin,Maintenance logged for asset SM58S#18: Dented
+2026/06/28 15:32:18,admin,Set asset SM58S#17 status to Degraded
+2026/06/28 15:32:19,admin,Maintenance logged for asset SM58S#17: Dented
+2026/06/28 15:32:19,admin,Set asset SM58S#16 status to Degraded
+2026/06/28 15:32:19,admin,Maintenance logged for asset SM58S#16: Dented
+2026/06/28 15:32:19,admin,Set asset SM58S#15 status to Degraded
+2026/06/28 15:32:19,admin,Maintenance logged for asset SM58S#15: Dented
+2026/06/28 15:32:20,admin,Set asset SM58S#14 status to Degraded
+2026/06/28 15:32:20,admin,Maintenance logged for asset SM58S#14: Dented
+2026/06/28 15:32:20,admin,Set asset SM58S#13 status to Degraded
+2026/06/28 15:32:20,admin,Maintenance logged for asset SM58S#13: Dented
+2026/06/28 15:33:06,admin,Set asset SM58#03 status to Degraded
+2026/06/28 15:33:07,admin,Maintenance logged for asset SM58#03: Dented
+2026/06/28 15:33:07,admin,Set asset SM58#04 status to Degraded
+2026/06/28 15:33:07,admin,Maintenance logged for asset SM58#04: Dented
+2026/06/28 15:33:08,admin,Set asset SM58#05 status to Degraded
+2026/06/28 15:33:08,admin,Maintenance logged for asset SM58#05: Dented
+2026/06/28 15:33:08,admin,Set asset SM58#06 status to Degraded
+2026/06/28 15:33:08,admin,Maintenance logged for asset SM58#06: Dented
+2026/06/28 15:33:09,admin,Set asset SM58#07 status to Degraded
+2026/06/28 15:33:09,admin,Maintenance logged for asset SM58#07: Dented
+2026/06/28 15:33:10,admin,Set asset SM58#08 status to Degraded
+2026/06/28 15:33:10,admin,Maintenance logged for asset SM58#08: Dented
+2026/06/28 15:33:10,admin,Set asset SM58#09 status to Degraded
+2026/06/28 15:33:10,admin,Maintenance logged for asset SM58#09: Dented
+2026/06/28 15:33:59,admin,Set asset BETA98#05 status to Degraded
+2026/06/28 15:33:59,admin,Maintenance logged for asset BETA98#05: Mic need to gain > 50
+2026/06/28 15:34:00,admin,Set asset BETA98#06 status to Degraded
+2026/06/28 15:34:00,admin,Maintenance logged for asset BETA98#06: Mic need to gain > 50
+2026/06/28 15:34:42,admin,Set asset BETA98#08 status to OOC
+2026/06/28 15:34:42,admin,Maintenance logged for asset BETA98#08: Buang
+2026/06/28 15:34:43,admin,Set asset BETA98#07 status to OOC
+2026/06/28 15:34:43,admin,Maintenance logged for asset BETA98#07: Buang
+2026/06/28 15:35:13,admin,Updated asset BETA98#09; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/28 15:35:14,admin,Updated asset BETA98#10; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/28 15:35:21,admin,Updated asset BETA98#09; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/28 15:35:23,admin,Updated asset BETA98#10; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/28 15:35:29,admin,Updated asset BETA98#09; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/28 15:36:05,admin,Added assets BETA58A#01 to BETA58A#08 via web interface
+2026/06/28 15:36:14,admin,Updated asset BETA58A#08; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/28 15:36:39,admin,Set asset BETA58A#07 status to Degraded
+2026/06/28 15:36:40,admin,Maintenance logged for asset BETA58A#07: Rusty
+2026/06/28 15:36:40,admin,Set asset BETA58A#06 status to Degraded
+2026/06/28 15:36:40,admin,Maintenance logged for asset BETA58A#06: Rusty
+2026/06/28 15:38:15,admin,Added assets UR22#01 to UR22#02 via web interface
+2026/06/28 15:38:44,admin,Added asset UR22MKII#01 via web interface
+2026/06/28 15:38:58,admin,Added asset UR44#01 via web interface
+2026/06/28 15:42:37,admin,Updated bulk maintenance log #1 for asset BULK-0006: NL4 head broken
+2026/06/28 15:42:40,admin,Updated bulk maintenance log #2 for asset BULK-0006: NL4 head broken
+2026/06/28 15:42:44,admin,Updated bulk maintenance log #3 for asset BULK-0006: NL4 head broken
+2026/06/28 15:42:51,admin,Updated bulk maintenance log #4 for asset BULK-0006: NL4 head broken
+2026/06/28 15:42:56,admin,Updated bulk maintenance log #5 for asset BULK-0006: NL4 head broken
+2026/06/28 15:43:02,admin,Updated bulk maintenance log #6 for asset BULK-0006: NL4 head broken
+2026/06/28 15:43:09,admin,Updated bulk maintenance log #7 for asset BULK-0006: NL4 head broken
+2026/06/28 15:43:50,admin,User admin logged out from web interface

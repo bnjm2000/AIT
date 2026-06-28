@@ -799,6 +799,23 @@ function getAssetConditionStatus(asset) {
   return 'available';
 }
 
+// Shared by selectors that are initialized both inside and outside the
+// DOMContentLoaded handler.
+function getAssetStatusBadge(asset) {
+  if (!asset) return statusBadgeHtml('available', 'Available');
+
+  const condition = getAssetConditionStatus(asset);
+  if (condition !== 'available') {
+    const label = condition === 'ooc'
+      ? 'OOC'
+      : condition.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    return statusBadgeHtml(condition, label);
+  }
+  if (asset.status === 'deployed') return statusBadgeHtml('deployed', 'Deployed');
+
+  return statusBadgeHtml('available', 'Available');
+}
+
 function assetFlagBadgesHtml(asset) {
   if (asset?.isBulk) {
     const badges = [];
@@ -8211,11 +8228,7 @@ function selectAssetForContainer(assetId) {
 
   selectedContainerAssets.add(assetId);
   updateSelectedContainerAssetsDisplay();
-
-  const searchContainer = document.getElementById('availableContainerAssets');
-  if (searchContainer) {
-    searchContainer.innerHTML = '<div style="padding:20px;text-align:center;color:#666;">Asset added. Search for more assets to add to this container.</div>';
-  }
+  searchContainerAssets();
 
   showNotification('success', `Added ${assetId} to container`);
 }
@@ -8231,6 +8244,26 @@ function clearContainerSelection() {
   selectedContainerAssets.clear();
   updateSelectedContainerAssetsDisplay();
   searchContainerAssets();
+}
+
+function handleContainerAssetSelectionClick(e) {
+  const containerSelectBtn = e.target.closest && e.target.closest('.select-container-btn');
+  if (containerSelectBtn) {
+    e.preventDefault();
+    e.stopPropagation();
+    const assetId = containerSelectBtn.getAttribute('data-asset-id');
+    if (assetId) selectAssetForContainer(assetId);
+    return true;
+  }
+
+  const containerItem = e.target.closest && e.target.closest('.container-asset-item');
+  if (containerItem) {
+    const assetId = containerItem.getAttribute('data-asset-id');
+    if (assetId) selectAssetForContainer(assetId);
+    return true;
+  }
+
+  return false;
 }
 
 function searchContainerAssets() {
@@ -8297,7 +8330,7 @@ function searchContainerAssets() {
           </div>
         </div>
 
-        <button class="btn btn-primary btn-sm select-container-btn" data-asset-id="${escapeHtmlAttr(asset.id)}">
+        <button type="button" class="btn btn-primary btn-sm select-container-btn" data-asset-id="${escapeHtmlAttr(asset.id)}">
           Add
         </button>
       </div>
@@ -15804,24 +15837,8 @@ document.addEventListener("DOMContentLoaded", function () {
               selectAssetForMaintenance(assetId);
           }
       }
-        // Container selector (used in Containers create/edit modal)
-      const containerSelectBtn = e.target.closest && e.target.closest('.select-container-btn');
-      if (containerSelectBtn) {
-        e.preventDefault();
-        e.stopPropagation();
-        const assetId = containerSelectBtn.getAttribute('data-asset-id');
-        if (assetId) {
-          selectAssetForContainer(assetId);
-        }
-      }
-
-      const containerItem = e.target.closest && e.target.closest('.container-asset-item');
-      if (containerItem) {
-        const assetId = containerItem.getAttribute('data-asset-id');
-        if (assetId) {
-          selectAssetForContainer(assetId);
-        }
-      }
+      // Container selector (used in Containers create/edit modal)
+      if (handleContainerAssetSelectionClick(e)) return;
   });
   
   // Edit Quantity Form
@@ -15987,18 +16004,6 @@ function searchMaintenanceAssets() {
   });
   
   container.innerHTML = html;
-}
-
-function getAssetStatusBadge(asset) {
-  if (!asset) return statusBadgeHtml('available', 'Available');
-
-  const condition = getAssetConditionStatus(asset);
-  if (condition !== 'available') {
-    return statusBadgeHtml(condition, condition === 'ooc' ? 'OOC' : condition.replace(/\w/g, c => c.toUpperCase()));
-  }
-  if (asset.status === 'deployed') return statusBadgeHtml('deployed', 'Deployed');
-
-  return statusBadgeHtml('available', 'Available');
 }
 
 function selectAssetForMaintenance(assetId) {

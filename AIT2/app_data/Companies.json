@@ -35,7 +35,7 @@
       "frontendFolder": "companies/ARP/frontend",
       "createdAt": "2026-06-26T23:28:58",
       "createdBy": "bnjm2000",
-      "brandingSetupRequired": true
+      "brandingSetupRequired": false
     }
   },
   "userCompanies": {
@@ -55,5 +55,5 @@
   "superAdmins": [
     "bnjm2000"
   ],
-  "updatedAt": "2026-06-26T23:28:58"
+  "updatedAt": "2026-06-27T17:31:21"
 }
