@@ -3879,7 +3879,7 @@
       <div class="modal-content" style="max-width: 900px;">
         <div class="modal-header">
           <h3 class="modal-title">Log Maintenance</h3>
-          <button class="close-btn" onclick="closeModal('maintenanceModal')">
+          <button type="button" id="maintenanceCloseButton" class="close-btn" onclick="closeModal('maintenanceModal')">
             &times;
           </button>
         </div>
@@ -4026,15 +4026,32 @@
           </div>
 
           <!-- Form Buttons -->
+          <div
+            id="maintenanceSubmitProgress"
+            role="status"
+            aria-live="polite"
+            style="display:none;margin-top:20px;padding:14px;border:1px solid #dbe4ff;border-radius:8px;background:#f7f9ff;"
+          >
+            <div id="maintenanceSubmitProgressText" style="font-weight:600;color:#334155;margin-bottom:9px;">
+              Preparing maintenance log...
+            </div>
+            <div style="height:8px;overflow:hidden;border-radius:999px;background:#e4e9f2;">
+              <div
+                id="maintenanceSubmitProgressBar"
+                style="width:8%;height:100%;border-radius:999px;background:#667eea;transition:width .25s ease;"
+              ></div>
+            </div>
+          </div>
           <div class="modal-actions" style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
             <button
               type="button"
+              id="maintenanceCancelButton"
               class="btn btn-secondary"
               onclick="closeModal('maintenanceModal')"
             >
               Cancel
             </button>
-            <button type="submit" class="btn btn-primary">
+            <button type="submit" id="maintenanceSubmitButton" class="btn btn-primary">
               Log Maintenance
             </button>
           </div>

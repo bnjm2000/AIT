@@ -860,6 +860,14 @@ def with_prepare_action_lock(f):
             return f(*args, **kwargs)
     return locked_function
 
+
+def with_inventory_action_lock(f):
+    @wraps(f)
+    def locked_function(*args, **kwargs):
+        with _inventory_action_lock:
+            return f(*args, **kwargs)
+    return locked_function
+
 from datetime import datetime as _dt
 from flask import request, jsonify
 
@@ -10527,6 +10535,24 @@ def _bulk_asset_fault_capacity_remaining(asset):
     return max(total - open_fault_quantity, 0)
 
 
+def _maintenance_client_request_id(data):
+    for key in ('requestId', 'clientRequestId', 'submissionId'):
+        value = str((data or {}).get(key) or '').strip()
+        if value:
+            return value[:160]
+    return ''
+
+
+def _maintenance_request_was_applied(asset, request_id):
+    if not request_id:
+        return False
+    for log_entry in getattr(asset, 'maintenance_logs', []) or []:
+        source = normalize_maintenance_log(log_entry).get('source') or {}
+        if source.get('clientRequestId') == request_id:
+            return True
+    return False
+
+
 def _maintain_bulk_asset(asset_id, asset, data):
     if getattr(asset, 'is_missing', False) or _is_disposed(asset):
         return jsonify({'error': 'Bulk asset is missing or decommissioned'}), 400
@@ -10534,6 +10560,13 @@ def _maintain_bulk_asset(asset_id, asset, data):
     log_entry_text = (data.get('logEntry') or '').strip()
     if not log_entry_text:
         return jsonify({'error': 'Log entry is required'}), 400
+    request_id = _maintenance_client_request_id(data)
+    if _maintenance_request_was_applied(asset, request_id):
+        return jsonify({
+            'success': True,
+            'duplicate': True,
+            'message': 'This maintenance submission was already saved'
+        })
 
     target_status, requested_status_changes, status_error = _status_changes_for_request(
         data,
@@ -10575,7 +10608,8 @@ def _maintain_bulk_asset(asset_id, asset, data):
             log_entry_text,
             [change for change in changes if change],
             cost=repair_cost,
-            log_type=log_type
+            log_type=log_type,
+            source={'clientRequestId': request_id} if request_id else None
         )
 
         try:
@@ -10627,6 +10661,8 @@ def _maintain_bulk_asset(asset_id, asset, data):
                 'bulkStatus': target_status,
                 'bulkQuantity': '1',
             }
+            if request_id:
+                source['clientRequestId'] = request_id
             entry = make_maintenance_log(
                 formatted_date,
                 session['user'],
@@ -10665,8 +10701,172 @@ def _maintain_bulk_asset(asset_id, asset, data):
     })
 
 
+def _apply_standard_maintenance_request(asset_id, asset, data, uploaded_files=None):
+    """Validate and apply one standard-asset maintenance entry without saving the CSV."""
+    request_id = _maintenance_client_request_id(data)
+    if _maintenance_request_was_applied(asset, request_id):
+        return {
+            'success': True,
+            'duplicate': True,
+            'assetId': asset_id,
+            'message': 'This maintenance submission was already saved'
+        }, 200, False
+
+    log_entry_text = str(data.get('logEntry') or '').strip()
+    if not log_entry_text:
+        return {'error': 'Log entry is required'}, 400, False
+
+    new_location = str(data.get('newLocation') or '').strip() or None
+    new_serial = str(data.get('newSerial') or '').strip() or None
+    target_status, requested_status_changes, status_error = _status_changes_for_request(
+        data,
+        current_status=_asset_condition_status(asset)
+    )
+    if status_error:
+        return {'error': status_error}, 400, False
+
+    transition_error = _validate_status_transition(asset, target_status)
+    if transition_error:
+        return {'error': transition_error}, 400, False
+
+    repair_cost = str(data.get('cost') or data.get('maintenanceCost') or '').strip()
+    log_type, log_type_error = _maintenance_log_type_for_request(data)
+    if log_type_error:
+        return {'error': log_type_error}, 400, False
+
+    status_changes = []
+    if new_location:
+        status_changes.append(make_change('location', value=new_location))
+    if new_serial:
+        status_changes.append(make_change('serial', value=new_serial))
+    status_changes.extend(requested_status_changes)
+
+    entry = make_maintenance_log(
+        _maintenance_date_from_request(data, 'maintenanceDate'),
+        session['user'],
+        log_entry_text,
+        [change for change in status_changes if change],
+        cost=repair_cost,
+        log_type=log_type,
+        source={'clientRequestId': request_id} if request_id else None
+    )
+
+    try:
+        media_records = _save_maintenance_media_files(
+            entry,
+            uploaded_files if uploaded_files is not None else _uploaded_maintenance_media_files()
+        )
+    except ValueError as exc:
+        return {'error': str(exc)}, 400, False
+    if media_records:
+        entry['media'] = media_records
+
+    asset.maintenance_logs.append(entry)
+    apply_maintenance_log_changes(asset, entry)
+    return {
+        'success': True,
+        'assetId': asset_id,
+        'message': 'Maintenance logged successfully',
+        'maintenanceLog': _maintenance_log_for_response(entry)
+    }, 200, True
+
+
+def _maintenance_asset_ids_from_request(data):
+    raw_ids = (data or {}).get('assetIds')
+    if isinstance(raw_ids, list):
+        values = raw_ids
+    else:
+        try:
+            decoded = json.loads(str(raw_ids or '[]'))
+            values = decoded if isinstance(decoded, list) else []
+        except (TypeError, ValueError):
+            values = []
+
+    unique_ids = []
+    seen = set()
+    for value in values:
+        asset_id = unquote_plus(str(value or '')).strip()
+        if asset_id and asset_id not in seen:
+            seen.add(asset_id)
+            unique_ids.append(asset_id)
+    return unique_ids
+
+
+@app.route('/api/assets/maintenance/batch', methods=['POST'])
+@require_auth
+@with_inventory_action_lock
+def maintain_assets_batch():
+    """Add one maintenance entry to several standard assets with a single inventory save."""
+    try:
+        data = _maintenance_request_payload()
+        asset_ids = _maintenance_asset_ids_from_request(data)
+        if not asset_ids:
+            return jsonify({'error': 'Select at least one asset'}), 400
+
+        uploaded_files = _uploaded_maintenance_media_files()
+        successes = []
+        errors = []
+        changed_count = 0
+
+        for requested_id in asset_ids:
+            scanned_asset = _find_inventory_asset_by_identifier(requested_id)
+            asset_id = scanned_asset.asset_id if scanned_asset else requested_id
+            asset = data_manager.inventory.get(asset_id)
+            if not asset:
+                errors.append({'assetId': requested_id, 'error': 'Asset not found'})
+                continue
+            if _is_bulk_asset(asset):
+                errors.append({
+                    'assetId': asset_id,
+                    'error': 'Bulk assets must be logged separately'
+                })
+                continue
+
+            result, status_code, changed = _apply_standard_maintenance_request(
+                asset_id,
+                asset,
+                data,
+                uploaded_files=uploaded_files
+            )
+            if status_code >= 400:
+                errors.append({'assetId': asset_id, 'error': result.get('error', 'Failed to log maintenance')})
+                continue
+            successes.append({
+                'assetId': asset_id,
+                'duplicate': bool(result.get('duplicate'))
+            })
+            if changed:
+                changed_count += 1
+
+        if changed_count:
+            data_manager.save_inventory()
+            invalidate_cache()
+            log_action(
+                f"Maintenance logged for {changed_count} asset"
+                f"{'s' if changed_count != 1 else ''}: {str(data.get('logEntry') or '').strip()}"
+            )
+
+        response = {
+            'success': bool(successes),
+            'successCount': len(successes),
+            'savedCount': changed_count,
+            'duplicateCount': sum(1 for item in successes if item['duplicate']),
+            'errorCount': len(errors),
+            'results': successes,
+            'errors': errors,
+        }
+        if not successes:
+            response['error'] = errors[0]['error'] if errors else 'Failed to log maintenance'
+            return jsonify(response), 400
+        return jsonify(response)
+    except Exception as exc:
+        logger.error("Error logging batch maintenance: %s", exc, exc_info=True)
+        return jsonify({'error': f'Failed to log maintenance: {str(exc)}'}), 500
+
+
 @app.route('/api/assets/<asset_id>/maintain', methods=['POST'])
 @require_auth
+@with_inventory_action_lock
 def maintain_asset(asset_id):
     """Add maintenance log to an asset"""
     try:
@@ -10694,109 +10894,22 @@ def maintain_asset(asset_id):
 
         if _is_bulk_asset(asset):
             return _maintain_bulk_asset(asset_id, asset, data)
-            
-        # Safely handle potentially None values
-        log_entry_text = data.get('logEntry')
-        if log_entry_text is None:
-            return jsonify({'error': 'Log entry is required'}), 400
-        log_entry_text = log_entry_text.strip()
-        
-        new_location = data.get('newLocation')
-        if new_location is not None:
-            new_location = new_location.strip()
-            # Treat empty string as None
-            if not new_location:
-                new_location = None
-        
-        new_serial = data.get('newSerial')
-        if new_serial is not None:
-            new_serial = new_serial.strip()
-            # Treat empty string as None
-            if not new_serial:
-                new_serial = None
-        
-        target_status, requested_status_changes, status_error = _status_changes_for_request(
+
+        result, status_code, changed = _apply_standard_maintenance_request(asset_id, asset, data)
+        if status_code >= 400 or not changed:
+            return jsonify(result), status_code
+
+        data_manager.save_inventory()
+        invalidate_cache()
+        target_status, _, _ = _status_changes_for_request(
             data,
-            current_status=_asset_condition_status(asset)
+            current_status=None
         )
-        if status_error:
-            return jsonify({'error': status_error}), 400
-
-        transition_error = _validate_status_transition(asset, target_status)
-        if transition_error:
-            return jsonify({'error': transition_error}), 400
-
-        repair_cost = str(data.get('cost') or data.get('maintenanceCost') or '').strip()
-        log_type, log_type_error = _maintenance_log_type_for_request(data)
-        if log_type_error:
-            return jsonify({'error': log_type_error}), 400
-
-        if not log_entry_text:
-            return jsonify({'error': 'Log entry is required'}), 400
-
-        # Add maintenance log
-        # Get maintenance date from request or use current date as fallback
-        maintenance_date = data.get('maintenanceDate')
-        if maintenance_date:
-            try:
-                # Parse the date from frontend (YYYY-MM-DD format) and convert to our format (YYYY/MM/DD)
-                parsed_date = datetime.strptime(maintenance_date, '%Y-%m-%d')
-                formatted_date = parsed_date.strftime("%Y/%m/%d")
-            except ValueError:
-                # If date parsing fails, use current date
-                formatted_date = datetime.now().strftime("%Y/%m/%d")
-                logger.warning(f"Invalid maintenance date format: {maintenance_date}, using current date")
-        else:
-            # If no date provided, use current date
-            formatted_date = datetime.now().strftime("%Y/%m/%d")
-
-        # Build structured status changes. These are stored separately from the
-        # human-written note, so the note may contain brackets, commas, pipes,
-        # or any other normal text without affecting status parsing.
-        status_changes = []
-        
-        if new_location:
-            status_changes.append(make_change('location', value=new_location))
-        if new_serial:
-            status_changes.append(make_change('serial', value=new_serial))
-        status_changes.extend(requested_status_changes)
-        
-        status_changes = [change for change in status_changes if change]
-        entry = make_maintenance_log(
-            formatted_date,
-            session['user'],
-            log_entry_text,
-            status_changes,
-            cost=repair_cost,
-            log_type=log_type
-        )
-
-        try:
-            media_records = _save_maintenance_media_files(entry, _uploaded_maintenance_media_files())
-        except ValueError as e:
-            return jsonify({'error': str(e)}), 400
-        if media_records:
-            entry['media'] = media_records
-        
-        asset.maintenance_logs.append(entry)
-
-        # Apply the structured maintenance changes to the live asset.
-        # Status changes are mutually exclusive inside apply_maintenance_log_changes().
-        apply_maintenance_log_changes(asset, entry)
-
         if target_status:
             log_action(f"Set asset {asset_id} status to {_status_action_label(target_status)}")
-
-        # Save changes
-        data_manager.save_inventory()
-
-        # Invalidate cache
-        invalidate_cache()
-
-        log_action(f"Maintenance logged for asset {asset_id}: {log_entry_text}")
-
-        logger.info(f"Successfully logged maintenance for asset {asset_id}")
-        return jsonify({'success': True, 'message': 'Maintenance logged successfully'})
+        log_action(f"Maintenance logged for asset {asset_id}: {str(data.get('logEntry') or '').strip()}")
+        logger.info("Successfully logged maintenance for asset %s", asset_id)
+        return jsonify(result), status_code
         
     except Exception as e:
         logger.error(f"Error maintaining asset {asset_id}: {e}")

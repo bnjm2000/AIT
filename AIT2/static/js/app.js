@@ -15746,6 +15746,7 @@ document.addEventListener("DOMContentLoaded", function () {
   if (maintenanceForm) {
     maintenanceForm.addEventListener("submit", async function (e) {
       e.preventDefault();
+      if (maintenanceForm.dataset.submitting === "true") return;
 
       if (selectedMaintenanceAssets.size === 0) {
         showNotification("warning", "Please select at least one asset");
@@ -15774,37 +15775,104 @@ document.addEventListener("DOMContentLoaded", function () {
         return;
       }
 
+      const submitButton = document.getElementById("maintenanceSubmitButton");
+      const cancelButton = document.getElementById("maintenanceCancelButton");
+      const closeButton = document.getElementById("maintenanceCloseButton");
+      const progressPanel = document.getElementById("maintenanceSubmitProgress");
+      const progressText = document.getElementById("maintenanceSubmitProgressText");
+      const progressBar = document.getElementById("maintenanceSubmitProgressBar");
+      const originalButtonText = submitButton?.textContent || "Log Maintenance";
+      const updateProgress = (message, percent) => {
+        if (progressPanel) progressPanel.style.display = "block";
+        if (progressText) progressText.textContent = message;
+        if (progressBar) progressBar.style.width = `${Math.max(5, Math.min(100, percent))}%`;
+      };
+
+      maintenanceForm.dataset.submitting = "true";
+      maintenanceForm.setAttribute("aria-busy", "true");
+      if (submitButton) {
+        submitButton.disabled = true;
+        submitButton.textContent = "Saving...";
+      }
+      if (cancelButton) cancelButton.disabled = true;
+      if (closeButton) closeButton.disabled = true;
+      updateProgress("Preparing maintenance log...", 8);
+
       try {
         let successCount = 0;
         let errorCount = 0;
         const errors = [];
-        
-        // Process each selected asset
-        for (const assetId of selectedMaintenanceAssets) {
+        const succeededIds = new Set();
+        const selectedAssetIds = Array.from(selectedMaintenanceAssets);
+        const requestId = maintenanceForm.dataset.requestId
+          || globalThis.crypto?.randomUUID?.()
+          || `maintenance-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+        maintenanceForm.dataset.requestId = requestId;
+        const findSelectedAsset = assetId => assets.find(asset => (
+          getAssetIdentifierForApi(asset) === assetId || String(asset.id || "") === assetId
+        ));
+        const standardAssetIds = selectedAssetIds.filter(assetId => !findSelectedAsset(assetId)?.isBulk);
+        const bulkAssetIds = selectedAssetIds.filter(assetId => !!findSelectedAsset(assetId)?.isBulk);
+        const maintenanceData = {
+          logEntry,
+          logType,
+          maintenanceDate,
+          newLocation: newLocation || null,
+          newSerial: newSerial || null,
+          cost: maintenanceCost || null,
+          assetStatus: statusValue,
+          markOOC: statusValue === "ooc",
+          unmarkOOC: statusValue === "ok",
+          markMissing: statusValue === "missing",
+          unmarkMissing: statusValue === "ok",
+          markDegraded: statusValue === "degraded",
+          unmarkDegraded: statusValue === "ok",
+          markDecommissioned: statusValue === "decommissioned",
+          unmarkDecommissioned: statusValue === "ok",
+          requestId
+        };
+
+        // Standard assets are persisted together, avoiding one full inventory rewrite per asset.
+        if (standardAssetIds.length) {
+          updateProgress(
+            `Saving ${standardAssetIds.length} maintenance entr${standardAssetIds.length === 1 ? "y" : "ies"}...`,
+            25
+          );
           try {
-            const maintenanceData = {
-              logEntry: logEntry,
-              logType: logType,
-              maintenanceDate: maintenanceDate,
-              newLocation: newLocation || null,
-              newSerial: newSerial || null,
-              cost: maintenanceCost || null,
-              assetStatus: statusValue,
-              markOOC: statusValue === 'ooc',
-              unmarkOOC: statusValue === 'ok',
-              markMissing: statusValue === 'missing',
-              unmarkMissing: statusValue === 'ok',
-              markDegraded: statusValue === 'degraded',
-              unmarkDegraded: statusValue === 'ok',
-              markDecommissioned: statusValue === 'decommissioned',
-              unmarkDecommissioned: statusValue === 'ok'
+            const batchPayload = {
+              ...maintenanceData,
+              assetIds: JSON.stringify(standardAssetIds)
             };
-            
-            // Encode the asset ID for the URL
+            const requestData = maintenancePayloadToRequestData(batchPayload, "maintenanceMediaFiles");
+            const response = await apiCall("/api/assets/maintenance/batch", "POST", requestData);
+            (response.results || []).forEach(result => {
+              if (result.assetId) succeededIds.add(result.assetId);
+            });
+            successCount += Number(response.successCount || 0);
+            errorCount += Number(response.errorCount || 0);
+            (response.errors || []).forEach(item => errors.push(`${item.assetId}: ${item.error}`));
+          } catch (error) {
+            console.error("Failed to log batch maintenance:", error);
+            errorCount += standardAssetIds.length;
+            standardAssetIds.forEach(assetId => errors.push(`${assetId}: ${error.message}`));
+          }
+        }
+
+        // Bulk records have quantity-specific rules, so they retain their dedicated endpoint.
+        for (let index = 0; index < bulkAssetIds.length; index++) {
+          const assetId = bulkAssetIds[index];
+          const completed = standardAssetIds.length + index;
+          const total = selectedAssetIds.length;
+          updateProgress(
+            `Saving asset ${Math.min(completed + 1, total)} of ${total}...`,
+            25 + Math.round((completed / Math.max(total, 1)) * 55)
+          );
+          try {
             const encodedAssetId = encodeURIComponent(assetId);
             const requestData = maintenancePayloadToRequestData(maintenanceData, "maintenanceMediaFiles");
             await apiCall(`/api/assets/${encodedAssetId}/maintain`, "POST", requestData);
             successCount++;
+            succeededIds.add(assetId);
           } catch (error) {
             console.error(`Failed to log maintenance for ${assetId}:`, error);
             errorCount++;
@@ -15812,19 +15880,17 @@ document.addEventListener("DOMContentLoaded", function () {
           }
         }
 
-        closeModal("maintenanceModal");
-        
         if (successCount > 0) {
           let statusMessage = "";
-          if (statusValue === 'ooc') {
+          if (statusValue === "ooc") {
             statusMessage = " and marked as OOC";
-          } else if (statusValue === 'missing') {
+          } else if (statusValue === "missing") {
             statusMessage = " and marked as Missing";
-          } else if (statusValue === 'degraded') {
+          } else if (statusValue === "degraded") {
             statusMessage = " and marked as Degraded";
-          } else if (statusValue === 'decommissioned') {
+          } else if (statusValue === "decommissioned") {
             statusMessage = " and marked as Decommissioned";
-          } else if (statusValue === 'ok') {
+          } else if (statusValue === "ok") {
             statusMessage = " and marked as OK";
           }
           showNotification("success", `Maintenance logged for ${successCount} asset${successCount > 1 ? 's' : ''}${statusMessage}`);
@@ -15835,39 +15901,57 @@ document.addEventListener("DOMContentLoaded", function () {
           showNotification("error", `Failed to log maintenance for ${errorCount} asset${errorCount > 1 ? 's' : ''}. Check console for details.`);
         }
 
-        // Update assets data without refreshing search results
-        try {
-          const assetsResponse = await apiCall('/api/assets');
-          if (assetsResponse.success) {
-            assets = assetsResponse.data;
+        if (successCount > 0) {
+          updateProgress("Maintenance saved. Refreshing asset data...", 85);
+
+          // Update assets data without refreshing search results.
+          try {
+            const assetsResponse = await apiCall("/api/assets");
+            if (assetsResponse.success) {
+              assets = assetsResponse.data;
+            }
+          } catch (error) {
+            console.error("Failed to refresh assets data:", error);
           }
-        } catch (error) {
-          console.error('Failed to refresh assets data:', error);
+
+          const maintenanceSearchInput = document.getElementById("maintenance-search");
+          const assetSearchInput = document.getElementById("asset-search");
+          const isMaintenanceSearchActive = maintenanceSearchInput && maintenanceSearchInput.value.trim().length > 0;
+          const isAssetSearchActive = assetSearchInput && assetSearchInput.value.trim().length > 0;
+
+          if (document.getElementById("maintenance-section").classList.contains("active") && !isMaintenanceSearchActive) {
+            loadMaintenanceAssets();
+          }
+
+          if (document.getElementById("inventory-section").classList.contains("active") && !isAssetSearchActive) {
+            loadInventory();
+          }
+
+          succeededIds.forEach(assetId => selectedMaintenanceAssets.delete(assetId));
+          updateSelectedAssetsDisplay();
+          updateProgress("Maintenance log complete.", 100);
+
+          if (errorCount === 0) {
+            delete maintenanceForm.dataset.requestId;
+            closeModal("maintenanceModal");
+          }
         }
-
-        // Only refresh views if user is not actively searching
-        const maintenanceSearchInput = document.getElementById("maintenance-search");
-        const assetSearchInput = document.getElementById("asset-search");
-        const isMaintenanceSearchActive = maintenanceSearchInput && maintenanceSearchInput.value.trim().length > 0;
-        const isAssetSearchActive = assetSearchInput && assetSearchInput.value.trim().length > 0;
-
-        // Refresh maintenance view if it's active and no search is active
-        if (document.getElementById("maintenance-section").classList.contains("active") && !isMaintenanceSearchActive) {
-          loadMaintenanceAssets();
-        }
-
-        // Refresh inventory view if it's active and no search is active  
-        if (document.getElementById("inventory-section").classList.contains("active") && !isAssetSearchActive) {
-          loadInventory();
-        }
-
-        // Clear selections
-        selectedMaintenanceAssets.clear();
-        updateSelectedAssetsDisplay();
 
       } catch (error) {
         showNotification("error", "Failed to log maintenance");
         console.error("Maintenance error:", error);
+      } finally {
+        maintenanceForm.dataset.submitting = "false";
+        maintenanceForm.removeAttribute("aria-busy");
+        if (submitButton) {
+          submitButton.disabled = false;
+          submitButton.textContent = originalButtonText;
+        }
+        if (cancelButton) cancelButton.disabled = false;
+        if (closeButton) closeButton.disabled = false;
+        if (!document.getElementById("maintenanceModal")?.classList.contains("active") && progressPanel) {
+          progressPanel.style.display = "none";
+        }
       }
     });
   }
@@ -16013,6 +16097,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
 function openMaintenanceModal() {
   // Check if elements exist before trying to use them
+  const formEl = document.getElementById('maintenanceForm');
   const logEntryEl = document.getElementById('maintenanceLogEntry');
   const newLocationEl = document.getElementById('maintenanceNewLocation');
   const maintenanceDateEl = document.getElementById('maintenanceDate');
@@ -16025,6 +16110,16 @@ function openMaintenanceModal() {
     showNotification('error', 'Maintenance modal not properly loaded');
     return;
   }
+
+  if (formEl) {
+    formEl.dataset.submitting = 'false';
+    delete formEl.dataset.requestId;
+    formEl.removeAttribute('aria-busy');
+  }
+  const submitProgressEl = document.getElementById('maintenanceSubmitProgress');
+  const submitProgressBarEl = document.getElementById('maintenanceSubmitProgressBar');
+  if (submitProgressEl) submitProgressEl.style.display = 'none';
+  if (submitProgressBarEl) submitProgressBarEl.style.width = '8%';
   
   // Clear previous selections
   selectedMaintenanceAssets.clear();
