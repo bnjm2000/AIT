@@ -21161,3 +21161,121 @@ INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:47:17] "GET /api/assets HTTP/1.
 INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:47:21] "GET /api/departments HTTP/1.1" 200 -
 INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:47:21] "GET /api/assets HTTP/1.1" 200 -
 INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:47:21] "GET /api/departments HTTP/1.1" 200 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260628)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+========================================
+Starting Avec Inventory Management: Sun, Jun 28, 2026  9:51:03 PM
+INFO:data_manager:All required files are present.
+INFO:__main__:Data manager initialized for company AVPL with folder: C:\Users\AVECp\Documents\AIT\AIT2\companies/AVPL/backend
+INFO:__main__:Background thread started - checking events every 5 minutes
+INFO:__main__:Background thread for event checking started successfully
+INFO:__main__:Background thread: data_manager is ready, starting checks
+INFO:__main__:Background thread started successfully after data_manager initialization
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260628)
+INFO:__main__:Starting Avec Inventory Management at https://0.0.0.0:5443
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+ * Serving Flask app 'app'
+ * Debug mode: off
+INFO:werkzeug:[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on https://127.0.0.1:5443
+ * Running on https://192.168.0.110:5443
+INFO:werkzeug:[33mPress CTRL+C to quit[0m
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:51:05] "GET /api/realtime/stream?clientId=314d76b0-60a7-4b7c-b190-0770e2c5e272 HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:51:05] "GET / HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:51:05] "GET /static/js/app.js?v=1782654564 HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:51:05] "GET /api/pdf-settings/logo HTTP/1.1" 200 -
+INFO:__main__:Getting stats - Events: 147, Inventory: 1320
+INFO:__main__:Successfully got assigned assets count: 122
+INFO:__main__:Returning stats: {'totalEvents': 147, 'activeEvents': 8, 'totalAssets': 1892, 'deployedAssets': 122, 'missingAssets': 1, 'oocAssets': 7, 'degradedAssets': 4, 'decommissionedAssets': 0, 'disposedAssets': 0}
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:51:06] "GET /api/stats HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:51:06] "GET /api/pdf-settings HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:51:06] "GET /api/current-user HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:51:06] "GET /api/pdf-settings/logo?v=1750644779 HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:51:06] "GET /api/companies HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:51:06] "GET /api/departments HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:51:06] "GET /api/realtime/stream?clientId=314d76b0-60a7-4b7c-b190-0770e2c5e272 HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:51:06] "GET /api/departments HTTP/1.1" 200 -
+INFO:__main__:Getting stats - Events: 147, Inventory: 1320
+INFO:__main__:Successfully got assigned assets count: 122
+INFO:__main__:Returning stats: {'totalEvents': 147, 'activeEvents': 8, 'totalAssets': 1892, 'deployedAssets': 122, 'missingAssets': 1, 'oocAssets': 7, 'degradedAssets': 4, 'decommissionedAssets': 0, 'disposedAssets': 0}
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:51:06] "GET /api/stats HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:51:06] "GET /api/assets HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:51:06] "GET /api/events HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:51:07] "GET /api/departments HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:51:07] "GET /api/departments HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:51:08] "GET /api/assets HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:51:08] "GET /api/departments HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:51:42] "GET /api/assets HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:51:42] "GET /api/assets/PCBB%2314/event-history HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:51:54] "GET /api/assets HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:51:54] "GET /api/assets/PCBB%2301/event-history HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:51:56] "GET /api/assets HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:51:57] "GET /api/assets/PCBB%2302/event-history HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:51:58] "GET /api/assets HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:51:58] "GET /api/assets/PCBB%2303/event-history HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:52:00] "GET /api/assets HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:52:00] "GET /api/assets/PCBB%2314/event-history HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:52:01] "GET /api/assets HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:52:01] "GET /api/assets/PCBB%2313/event-history HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:52:04] "GET /api/assets HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:52:04] "GET /api/assets/PCBB%2312/event-history HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:52:05] "GET /api/assets HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:52:05] "GET /api/assets/PCBB%2311/event-history HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:52:09] "GET /api/assets HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:52:09] "GET /api/assets/PCBB%2310/event-history HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:52:10] "GET /api/assets HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:52:11] "GET /api/assets/PCBB%2309/event-history HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:52:11] "GET /api/assets HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:52:12] "GET /api/assets/PCBB%2308/event-history HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:52:12] "GET /api/assets HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:52:13] "GET /api/assets/PCBB%2307/event-history HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:52:13] "GET /api/assets HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:52:14] "GET /api/assets/PCBB%2306/event-history HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:52:15] "GET /api/assets HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:52:15] "GET /api/assets/PCBB%2305/event-history HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:52:16] "GET /api/assets HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:52:16] "GET /api/assets/PCBB%2304/event-history HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:52:17] "GET /api/assets HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:52:17] "GET /api/assets/PCBB%2303/event-history HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:52:18] "GET /api/assets HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:52:18] "GET /api/assets/PCBB%2302/event-history HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:52:19] "GET /api/assets HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:52:19] "GET /api/assets/PCBB%2301/event-history HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:52:39] "GET /api/assets HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:52:43] "GET /api/departments HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:52:43] "GET /api/assets HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:52:43] "GET /api/departments HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:52:51] "GET /api/events HTTP/1.1" 200 -
+INFO:__main__:Getting stats - Events: 147, Inventory: 1320
+INFO:__main__:Successfully got assigned assets count: 122
+INFO:__main__:Returning stats: {'totalEvents': 147, 'activeEvents': 8, 'totalAssets': 1892, 'deployedAssets': 122, 'missingAssets': 1, 'oocAssets': 7, 'degradedAssets': 4, 'decommissionedAssets': 0, 'disposedAssets': 0}
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:52:55] "GET /api/stats HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:52:55] "GET /api/events HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:52:56] "GET /api/events/146 HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:53:16] "GET /api/departments HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:53:16] "GET /api/assets HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:53:17] "GET /api/departments HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:53:17] "GET /api/events HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:53:18] "GET /api/events HTTP/1.1" 200 -
+INFO:__main__:Getting stats - Events: 147, Inventory: 1320
+INFO:__main__:Successfully got assigned assets count: 122
+INFO:__main__:Returning stats: {'totalEvents': 147, 'activeEvents': 8, 'totalAssets': 1892, 'deployedAssets': 122, 'missingAssets': 1, 'oocAssets': 7, 'degradedAssets': 4, 'decommissionedAssets': 0, 'disposedAssets': 0}
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:53:20] "GET /api/stats HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:53:20] "GET /api/events HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:53:32] "POST /api/events/update-states HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:53:32] "GET /api/transfers/options HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:53:57] "GET /api/transfers/candidates?fromEventId=136&toEventId=143 HTTP/1.1" 200 -
+INFO:__main__:Getting stats - Events: 147, Inventory: 1320
+INFO:__main__:Successfully got assigned assets count: 122
+INFO:__main__:Returning stats: {'totalEvents': 147, 'activeEvents': 8, 'totalAssets': 1892, 'deployedAssets': 122, 'missingAssets': 1, 'oocAssets': 7, 'degradedAssets': 4, 'decommissionedAssets': 0, 'disposedAssets': 0}
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:54:23] "GET /api/stats HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:54:23] "GET /api/events HTTP/1.1" 200 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260628)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check

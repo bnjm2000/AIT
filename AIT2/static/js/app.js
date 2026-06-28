@@ -3996,11 +3996,22 @@ function populateDepartmentSelects() {
 
   const filter = document.getElementById('department-filter');
   if (filter) {
-    const current = filter.value;
-    filter.innerHTML = '<option value="">All Departments</option>' + list.map(dept => (
-      `<option value="${escapeHtmlAttr(dept.code)}">${escapeHtml(dept.code)} - ${escapeHtml(dept.name || dept.code)}</option>`
-    )).join('');
-    filter.value = current && list.some(dept => dept.code === current) ? current : '';
+    const options = document.getElementById('department-filter-options');
+    const existingCheckboxes = Array.from(options?.querySelectorAll('input[type="checkbox"]') || []);
+    const selectedCodes = new Set(existingCheckboxes.filter(input => input.checked).map(input => input.value));
+    const previouslySelectedAll = existingCheckboxes.length === 0 || selectedCodes.size === existingCheckboxes.length;
+    if (options) {
+      options.innerHTML = list.map(dept => {
+        const checked = previouslySelectedAll || selectedCodes.has(dept.code);
+        return `
+          <label>
+            <input type="checkbox" value="${escapeHtmlAttr(dept.code)}"${checked ? ' checked' : ''} />
+            <span>${escapeHtml(dept.code)} - ${escapeHtml(dept.name || dept.code)}</span>
+          </label>
+        `;
+      }).join('');
+      updateInventoryCheckboxFilterSummary('department-filter');
+    }
   }
 
   const assetDeptSelect = document.getElementById('assetDepartment');
@@ -5793,6 +5804,53 @@ function handleInventorySortChange() {
   displayFilteredInventory();
 }
 
+function getInventoryCheckboxFilterValues(filterId) {
+  const checkboxes = Array.from(
+    document.querySelectorAll(`#${filterId} .inventory-checkbox-filter-options input[type="checkbox"]`)
+  );
+  return {
+    values: checkboxes.filter(input => input.checked).map(input => input.value),
+    total: checkboxes.length
+  };
+}
+
+function updateInventoryCheckboxFilterSummary(filterId) {
+  const summary = document.getElementById(`${filterId}-summary`);
+  if (!summary) return;
+
+  const { values, total } = getInventoryCheckboxFilterValues(filterId);
+  const isDepartment = filterId === 'department-filter';
+  const itemName = isDepartment ? 'Departments' : 'Statuses';
+
+  if (total === 0 || values.length === total) {
+    summary.textContent = `All ${itemName}`;
+  } else if (values.length === 0) {
+    summary.textContent = `No ${itemName}`;
+  } else if (values.length === 1) {
+    summary.textContent = isDepartment
+      ? inventoryDepartmentLabel(values[0])
+      : inventoryStatusText(values[0]);
+  } else {
+    summary.textContent = `${values.length} ${itemName}`;
+  }
+}
+
+function handleInventoryCheckboxFilterChange(event) {
+  if (!event.target.matches('.inventory-checkbox-filter-options input[type="checkbox"]')) return;
+  updateInventoryCheckboxFilterSummary(event.currentTarget.id);
+  displayFilteredInventory();
+}
+
+function setInventoryCheckboxFilterSelection(filterId, checked) {
+  document
+    .querySelectorAll(`#${filterId} .inventory-checkbox-filter-options input[type="checkbox"]`)
+    .forEach(input => {
+      input.checked = checked;
+    });
+  updateInventoryCheckboxFilterSummary(filterId);
+  displayFilteredInventory();
+}
+
 function setupInventoryFilters() {
   // Remove existing listeners to prevent duplicates
   const searchInput = document.getElementById("asset-search");
@@ -5807,14 +5865,25 @@ function setupInventoryFilters() {
   }
 
   if (deptFilter) {
-    deptFilter.removeEventListener("change", displayFilteredInventory);
-    deptFilter.addEventListener("change", displayFilteredInventory);
+    deptFilter.removeEventListener("change", handleInventoryCheckboxFilterChange);
+    deptFilter.addEventListener("change", handleInventoryCheckboxFilterChange);
+    updateInventoryCheckboxFilterSummary('department-filter');
   }
 
   if (statusFilter) {
-    statusFilter.removeEventListener("change", displayFilteredInventory);
-    statusFilter.addEventListener("change", displayFilteredInventory);
+    statusFilter.removeEventListener("change", handleInventoryCheckboxFilterChange);
+    statusFilter.addEventListener("change", handleInventoryCheckboxFilterChange);
+    updateInventoryCheckboxFilterSummary('status-filter');
   }
+
+  document.querySelectorAll('.inventory-filter-action').forEach(button => {
+    button.onclick = () => {
+      setInventoryCheckboxFilterSelection(
+        button.dataset.filterId,
+        button.dataset.filterChecked === 'true'
+      );
+    };
+  });
 
   if (sortSelect) {
     sortSelect.removeEventListener("change", displayFilteredInventory);
@@ -5831,8 +5900,14 @@ function setupInventoryFilters() {
 
 function clearFilters() {
   document.getElementById("asset-search").value = "";
-  document.getElementById("department-filter").value = "";
-  document.getElementById("status-filter").value = "";
+  ['department-filter', 'status-filter'].forEach(filterId => {
+    document
+      .querySelectorAll(`#${filterId} .inventory-checkbox-filter-options input[type="checkbox"]`)
+      .forEach(input => {
+        input.checked = true;
+      });
+    updateInventoryCheckboxFilterSummary(filterId);
+  });
   document.getElementById("sort-select").value = "id";
   document.getElementById("sort-descending").checked = false;
   displayFilteredInventory();
@@ -22471,12 +22546,16 @@ function getInventorySortValue(asset, sortBy) {
 
 function getInventoryFilterState() {
   const searchTerm = document.getElementById('asset-search')?.value.toLowerCase() || '';
+  const departmentSelection = getInventoryCheckboxFilterValues('department-filter');
+  const statusSelection = getInventoryCheckboxFilterValues('status-filter');
 
   return {
     searchTerm,
     searchLabel: document.getElementById('asset-search')?.value.trim() || '',
-    deptFilter: document.getElementById('department-filter')?.value || '',
-    statusFilter: document.getElementById('status-filter')?.value || '',
+    deptFilters: departmentSelection.values,
+    departmentFilterTotal: departmentSelection.total,
+    statusFilters: statusSelection.values,
+    statusFilterTotal: statusSelection.total,
     sortBy: document.getElementById('sort-select')?.value || 'id',
     sortDesc: document.getElementById('sort-descending')?.checked || false
   };
@@ -22490,8 +22569,8 @@ function getFilteredInventoryData() {
     const deptMeta = getDepartmentMeta(asset.department);
     const searchableText = `${asset.id || ''} ${asset.internalId || ''} ${asset.bulkId || ''} ${asset.brand || ''} ${asset.model || ''} ${asset.serial || ''} ${asset.description || ''} ${asset.dateOfPurchase || asset.purchaseDate || ''} ${asset.dateAdded || ''} ${asset.dateModified || ''} ${asset.department || ''} ${deptMeta.name || ''}`.toLowerCase();
     const matchesSearch = !filters.searchTerm || searchableText.includes(filters.searchTerm);
-    const matchesDept = !filters.deptFilter || asset.department === filters.deptFilter;
-    const matchesStatus = !filters.statusFilter || asset.status === filters.statusFilter;
+    const matchesDept = filters.departmentFilterTotal === 0 || filters.deptFilters.includes(asset.department);
+    const matchesStatus = filters.statusFilterTotal === 0 || filters.statusFilters.includes(asset.status);
     return matchesSearch && matchesDept && matchesStatus;
   });
 
@@ -22626,8 +22705,18 @@ function inventoryAssetQuantityText(asset) {
 function inventoryFilterSummary(filters, rowCount, totalAssets, showIndividual) {
   const parts = [];
   if (filters.searchLabel) parts.push(`Search: ${filters.searchLabel}`);
-  if (filters.deptFilter) parts.push(`Department: ${inventoryDepartmentLabel(filters.deptFilter)}`);
-  if (filters.statusFilter) parts.push(`Status: ${inventoryStatusText(filters.statusFilter)}`);
+  if (filters.departmentFilterTotal > 0 && filters.deptFilters.length < filters.departmentFilterTotal) {
+    const departmentsText = filters.deptFilters.length
+      ? filters.deptFilters.map(inventoryDepartmentLabel).join(', ')
+      : 'None selected';
+    parts.push(`Departments: ${departmentsText}`);
+  }
+  if (filters.statusFilterTotal > 0 && filters.statusFilters.length < filters.statusFilterTotal) {
+    const statusesText = filters.statusFilters.length
+      ? filters.statusFilters.map(inventoryStatusText).join(', ')
+      : 'None selected';
+    parts.push(`Statuses: ${statusesText}`);
+  }
   if (parts.length === 0) parts.push('Filters: All inventory assets');
 
   const sortLabelMap = {
@@ -22652,7 +22741,8 @@ function groupInventoryAssetsForExport(filteredAssets, filters) {
     const brand = inventoryPlainText(asset.brand, 'Unbranded');
     const model = inventoryPlainText(asset.model, 'Unspecified model');
     const key = JSON.stringify([department, brand, model]);
-    const quantity = inventoryExportQuantity(asset, filters.statusFilter);
+    const statusFilter = filters.statusFilters.length === 1 ? filters.statusFilters[0] : '';
+    const quantity = inventoryExportQuantity(asset, statusFilter);
 
     if (!groups.has(key)) {
       groups.set(key, {

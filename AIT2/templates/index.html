@@ -1260,6 +1260,104 @@
         display: block;
       }
 
+      .inventory-checkbox-filter {
+        position: relative;
+        font-size: 14px;
+      }
+
+      .inventory-checkbox-filter > summary {
+        min-height: 38px;
+        box-sizing: border-box;
+        padding: 8px 34px 8px 12px;
+        border: 1px solid #ced4da;
+        border-radius: 6px;
+        background: #fff;
+        color: #495057;
+        cursor: pointer;
+        list-style: none;
+        position: relative;
+      }
+
+      .inventory-checkbox-filter > summary::-webkit-details-marker {
+        display: none;
+      }
+
+      .inventory-checkbox-filter > summary::after {
+        content: "▾";
+        position: absolute;
+        right: 12px;
+        top: 8px;
+        color: #666;
+      }
+
+      .inventory-checkbox-filter[open] > summary {
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+      }
+
+      .inventory-checkbox-filter-panel {
+        position: absolute;
+        z-index: 30;
+        top: calc(100% + 5px);
+        left: 0;
+        right: 0;
+        min-width: 230px;
+        max-height: 330px;
+        overflow: auto;
+        padding: 10px;
+        border: 1px solid #dfe3e8;
+        border-radius: 8px;
+        background: #fff;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+      }
+
+      .inventory-checkbox-filter-actions {
+        display: flex;
+        gap: 6px;
+        padding-bottom: 8px;
+        margin-bottom: 6px;
+        border-bottom: 1px solid #eee;
+      }
+
+      .inventory-checkbox-filter-actions button {
+        flex: 1;
+        padding: 5px 7px;
+        border: 1px solid #cfd5ff;
+        border-radius: 5px;
+        background: #f3f5ff;
+        color: #4f5fbd;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      .inventory-checkbox-filter-actions button:hover {
+        background: #e7ebff;
+      }
+
+      .inventory-checkbox-filter-options {
+        display: grid;
+        gap: 2px;
+      }
+
+      .inventory-checkbox-filter-options label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 7px 6px;
+        border-radius: 5px;
+        cursor: pointer;
+      }
+
+      .inventory-checkbox-filter-options label:hover {
+        background: #f5f6ff;
+      }
+
+      .inventory-checkbox-filter-options input {
+        margin: 0;
+        accent-color: #667eea;
+      }
+
       /* Flagged asset list styling */
       .ooc-asset-item {
         transition: background-color 0.2s ease, box-shadow 0.2s ease;
@@ -3134,17 +3232,19 @@
                     style="margin-bottom: 5px; font-size: 14px"
                     >Department</label
                   >
-                  <select
-                    class="form-input"
+                  <details
+                    class="inventory-checkbox-filter"
                     id="department-filter"
-                    style="padding: 8px 12px; font-size: 14px"
                   >
-                    <option value="">All Departments</option>
-                    <option value="AX">AX - Audio</option>
-                    <option value="LX">LX - Lighting</option>
-                    <option value="VX">VX - Video</option>
-                    <option value="UN">UN - Unknown</option>
-                  </select>
+                    <summary id="department-filter-summary">All Departments</summary>
+                    <div class="inventory-checkbox-filter-panel">
+                      <div class="inventory-checkbox-filter-actions">
+                        <button type="button" class="inventory-filter-action" data-filter-id="department-filter" data-filter-checked="true">Select All</button>
+                        <button type="button" class="inventory-filter-action" data-filter-id="department-filter" data-filter-checked="false">Deselect All</button>
+                      </div>
+                      <div id="department-filter-options" class="inventory-checkbox-filter-options"></div>
+                    </div>
+                  </details>
                 </div>
                 <div class="form-group" style="margin-bottom: 0">
                   <label
@@ -3152,19 +3252,26 @@
                     style="margin-bottom: 5px; font-size: 14px"
                     >Status</label
                   >
-                  <select
-                    class="form-input"
+                  <details
+                    class="inventory-checkbox-filter"
                     id="status-filter"
-                    style="padding: 8px 12px; font-size: 14px"
                   >
-                    <option value="">All Status</option>
-                    <option value="available">Available</option>
-                    <option value="deployed">Deployed</option>
-                    <option value="missing">Missing</option>
-                    <option value="ooc">Out of Commission</option>
-                    <option value="degraded">Degraded</option>
-                    <option value="decommissioned">Decommissioned</option>
-                  </select>
+                    <summary id="status-filter-summary">All Statuses</summary>
+                    <div class="inventory-checkbox-filter-panel">
+                      <div class="inventory-checkbox-filter-actions">
+                        <button type="button" class="inventory-filter-action" data-filter-id="status-filter" data-filter-checked="true">Select All</button>
+                        <button type="button" class="inventory-filter-action" data-filter-id="status-filter" data-filter-checked="false">Deselect All</button>
+                      </div>
+                      <div class="inventory-checkbox-filter-options">
+                        <label><input type="checkbox" value="available" checked /> Available</label>
+                        <label><input type="checkbox" value="deployed" checked /> Deployed</label>
+                        <label><input type="checkbox" value="missing" checked /> Missing</label>
+                        <label><input type="checkbox" value="ooc" checked /> Out of Commission</label>
+                        <label><input type="checkbox" value="degraded" checked /> Degraded</label>
+                        <label><input type="checkbox" value="decommissioned" checked /> Decommissioned</label>
+                      </div>
+                    </div>
+                  </details>
                 </div>
                 <div class="form-group" style="margin-bottom: 0">
                   <label
