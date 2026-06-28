@@ -18441,6 +18441,655 @@ function createModelPreparationSection(eventId, department, brand, model, descri
     return section;
 }
 
+function packingListQuantity(value) {
+  const quantity = Number(value || 0);
+  return Number.isFinite(quantity) ? Math.max(0, quantity) : 0;
+}
+
+function packingListAssetQuantity(asset) {
+  return Math.max(1, packingListQuantity(asset?.quantity || 1));
+}
+
+function packingListDateRange(event) {
+  if (!event?.startDate) return '-';
+  return event.startDate === event.endDate
+    ? formatDate(event.startDate)
+    : `${formatDate(event.startDate)} - ${formatDate(event.endDate)}`;
+}
+
+function packingListAssetStatus(asset, event) {
+  const id = String(asset?.id || '');
+  if (asset?.status === 'returned' || (event?.returnedItems || []).includes(id)) return 'returned';
+  if (asset?.status === 'prepared' || (event?.actuallyPrepared || []).includes(id)) return 'packed';
+  if (
+    asset?.status === 'collected' ||
+    asset?.isCollected ||
+    (event?.customCollected || []).includes(id)
+  ) return 'collected';
+  return 'pending';
+}
+
+function packingListAssetRecord(asset, event, department = 'UN') {
+  const custom = parseCustomAsset(asset?.id, asset);
+  const quantity = custom
+    ? Math.max(1, Number(custom.quantity || 1))
+    : packingListAssetQuantity(asset);
+  const status = packingListAssetStatus(asset, event);
+
+  return {
+    id: String(asset?.id || ''),
+    label: custom
+      ? customAssetDisplayName(custom, false)
+      : String(asset?.displayId || asset?.bulkId || asset?.id || asset?.name || 'Asset'),
+    serial: custom ? '' : String(asset?.serial || ''),
+    company: custom ? String(custom.company || '') : '',
+    quantity,
+    status,
+    department: normalizeDepartmentCode(custom?.department || department || 'UN'),
+    isBulk: !!asset?.isBulk,
+    isExtra: !!asset?.isExtra
+  };
+}
+
+function packingListRowState(row) {
+  if (row.required > 0 && row.packed >= row.required) return 'packed';
+  if (row.packed > 0) return 'partial';
+  if (row.required > 0 && row.returned >= row.required) return 'returned';
+  if (row.assets.some(asset => asset.status === 'collected')) return 'collected';
+  return 'pending';
+}
+
+function buildPackingListSnapshot(event) {
+  const rows = [];
+  const extras = new Map();
+  const assetsById = new Map();
+
+  Object.entries(event?.assetsByDepartment || {}).forEach(([department, departmentAssets]) => {
+    (departmentAssets || []).forEach(asset => {
+      const record = packingListAssetRecord(asset, event, department);
+      if (record.id) assetsById.set(record.id, record);
+      if (record.isExtra && record.id) extras.set(record.id, record);
+    });
+  });
+
+  const modelGroups = Object.values(event?.modelGroups || {})
+    .filter(group => packingListQuantity(group.requiredQuantity) > 0)
+    .sort((a, b) => {
+      const deptCompare = inventoryDepartmentLabel(a.department).localeCompare(
+        inventoryDepartmentLabel(b.department),
+        undefined,
+        { numeric: true, sensitivity: 'base' }
+      );
+      return deptCompare || modelGroupSortName(a).localeCompare(
+        modelGroupSortName(b),
+        undefined,
+        { numeric: true, sensitivity: 'base' }
+      );
+    });
+
+  modelGroups.forEach(group => {
+    const required = packingListQuantity(group.requiredQuantity);
+    const assignedAssets = (group.assignedAssets || [])
+      .map(asset => packingListAssetRecord(asset, event, group.department))
+      .filter(asset => {
+        if (asset.isExtra) {
+          if (asset.id) extras.set(asset.id, asset);
+          return false;
+        }
+        return true;
+      });
+    const packed = Math.min(
+      required,
+      typeof group.countablePreparedQuantity !== 'undefined'
+        ? packingListQuantity(group.countablePreparedQuantity)
+        : assignedAssets
+            .filter(asset => asset.status === 'packed')
+            .reduce((sum, asset) => sum + asset.quantity, 0)
+    );
+    const returned = Math.min(
+      required,
+      typeof group.countableReturnedQuantity !== 'undefined'
+        ? packingListQuantity(group.countableReturnedQuantity)
+        : assignedAssets
+            .filter(asset => asset.status === 'returned')
+            .reduce((sum, asset) => sum + asset.quantity, 0)
+    );
+    const row = {
+      department: normalizeDepartmentCode(group.department || 'UN'),
+      description: [group.brand, group.model].filter(Boolean).join(' ') || 'Unspecified item',
+      detail: String(group.description || ''),
+      required,
+      packed,
+      returned,
+      pending: Math.max(0, required - packed - returned),
+      assets: assignedAssets
+    };
+    row.state = packingListRowState(row);
+    rows.push(row);
+  });
+
+  const customRows = new Map();
+  (event?.preparedItems || []).forEach(marker => {
+    const custom = parseCustomAsset(marker);
+    if (!custom) return;
+
+    const asset = assetsById.get(marker) || packingListAssetRecord({
+      id: marker,
+      isCustom: true,
+      customType: custom.type,
+      model: custom.name,
+      quantity: custom.quantity,
+      department: custom.department,
+      company: custom.company,
+      status: (event?.returnedItems || []).includes(marker)
+        ? 'returned'
+        : ((event?.actuallyPrepared || []).includes(marker) ? 'prepared' : 'assigned'),
+      isCollected: (event?.customCollected || []).includes(marker),
+      isExtra: (event?.extraAssets || []).includes(marker)
+    }, event, custom.department);
+
+    if (asset.isExtra) {
+      if (asset.id) extras.set(asset.id, asset);
+      return;
+    }
+
+    const key = JSON.stringify([
+      asset.department,
+      custom.type,
+      custom.name,
+      custom.company
+    ]);
+    if (!customRows.has(key)) {
+      customRows.set(key, {
+        department: asset.department,
+        description: custom.name || (custom.type === 'LOAN' ? 'Loan/Rental Item' : 'Misc Item'),
+        detail: [
+          custom.type === 'LOAN' ? 'Loan/Rental' : 'Miscellaneous',
+          custom.company
+        ].filter(Boolean).join(' - '),
+        required: 0,
+        packed: 0,
+        returned: 0,
+        pending: 0,
+        assets: []
+      });
+    }
+
+    const row = customRows.get(key);
+    row.required += asset.quantity;
+    if (asset.status === 'packed') row.packed += asset.quantity;
+    else if (asset.status === 'returned') row.returned += asset.quantity;
+    row.assets.push(asset);
+  });
+
+  customRows.forEach(row => {
+    row.pending = Math.max(0, row.required - row.packed - row.returned);
+    row.state = packingListRowState(row);
+    rows.push(row);
+  });
+
+  // Legacy/direct events have no model requirements. Group their specifically
+  // assigned physical assets by model so the checklist remains compact.
+  if (modelGroups.length === 0) {
+    const directRows = new Map();
+    Object.entries(event?.assetsByDepartment || {}).forEach(([department, departmentAssets]) => {
+      (departmentAssets || []).forEach(asset => {
+        if (parseCustomAsset(asset?.id, asset)) return;
+        const record = packingListAssetRecord(asset, event, department);
+        if (record.isExtra) {
+          if (record.id) extras.set(record.id, record);
+          return;
+        }
+
+        const key = JSON.stringify([
+          record.department,
+          asset?.brand || '',
+          asset?.model || '',
+          asset?.description || asset?.name || ''
+        ]);
+        if (!directRows.has(key)) {
+          directRows.set(key, {
+            department: record.department,
+            description: [asset?.brand, asset?.model].filter(Boolean).join(' ') || record.label,
+            detail: String(asset?.description || ''),
+            required: 0,
+            packed: 0,
+            returned: 0,
+            pending: 0,
+            assets: []
+          });
+        }
+
+        const row = directRows.get(key);
+        row.required += record.quantity;
+        if (record.status === 'packed') row.packed += record.quantity;
+        else if (record.status === 'returned') row.returned += record.quantity;
+        row.assets.push(record);
+      });
+    });
+
+    directRows.forEach(row => {
+      row.pending = Math.max(0, row.required - row.packed - row.returned);
+      row.state = packingListRowState(row);
+      rows.push(row);
+    });
+  }
+
+  // Some extras only appear inside model groups (including orphan 0-required
+  // groups), so collect those after the required rows have been built.
+  Object.values(event?.modelGroups || {}).forEach(group => {
+    (group.assignedAssets || []).forEach(asset => {
+      if (!asset?.isExtra) return;
+      const record = packingListAssetRecord(asset, event, group.department);
+      if (record.id) extras.set(record.id, record);
+    });
+  });
+
+  rows.sort((a, b) => {
+    const deptCompare = inventoryDepartmentLabel(a.department).localeCompare(
+      inventoryDepartmentLabel(b.department),
+      undefined,
+      { numeric: true, sensitivity: 'base' }
+    );
+    return deptCompare || a.description.localeCompare(
+      b.description,
+      undefined,
+      { numeric: true, sensitivity: 'base' }
+    );
+  });
+
+  const required = packingListQuantity(event?.totalAssets);
+  const packed = packingListQuantity(event?.totalPrepared);
+  const returned = packingListQuantity(event?.totalReturned);
+
+  return {
+    rows,
+    extras: Array.from(extras.values()).sort((a, b) => {
+      const deptCompare = inventoryDepartmentLabel(a.department).localeCompare(
+        inventoryDepartmentLabel(b.department),
+        undefined,
+        { numeric: true, sensitivity: 'base' }
+      );
+      return deptCompare || a.label.localeCompare(b.label, undefined, {
+        numeric: true,
+        sensitivity: 'base'
+      });
+    }),
+    totals: {
+      required,
+      packed,
+      pending: Math.max(0, required - packed - returned),
+      returned,
+      extras: packingListQuantity(event?.totalExtraAssets)
+    }
+  };
+}
+
+function packingListStatusBadge(status) {
+  const palette = {
+    packed: ['PACKED', '#dcfce7', '#14532d'],
+    partial: ['PARTIAL', '#fef3c7', '#78350f'],
+    pending: ['PENDING', '#fee2e2', '#7f1d1d'],
+    returned: ['RETURNED', '#e5e7eb', '#374151'],
+    collected: ['COLLECTED', '#dbeafe', '#1e3a8a']
+  };
+  const [label, background, colour] = palette[status] || palette.pending;
+  return pdfInlineBadgeHtml(label, background, colour, {
+    style: 'margin:0;white-space:nowrap;'
+  });
+}
+
+function packingListAssetHtml(asset) {
+  const quantity = asset.quantity > 1 ? ` x${asset.quantity}` : '';
+  const serial = asset.serial ? ` / SN ${asset.serial}` : '';
+  const company = asset.company ? ` / ${asset.company}` : '';
+  return `
+    <div class="asset-line">
+      ${packingListStatusBadge(asset.status)}
+      <span><strong>${escapeHtml(asset.label || 'Asset')}${escapeHtml(quantity)}</strong>${escapeHtml(serial)}${escapeHtml(company)}</span>
+    </div>
+  `;
+}
+
+function packingListTableHead() {
+  return `
+    <colgroup>
+      <col style="width:25%;">
+      <col style="width:35%;">
+      <col style="width:7%;">
+      <col style="width:7%;">
+      <col style="width:7%;">
+      <col style="width:7%;">
+      <col style="width:12%;">
+    </colgroup>
+    <thead>
+      <tr>
+        <th>Item</th>
+        <th>Assigned / Packed Assets</th>
+        <th class="number-cell">Req.</th>
+        <th class="number-cell">Packed</th>
+        <th class="number-cell">Pending</th>
+        <th class="number-cell">Returned</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+  `;
+}
+
+function packingListRowRecords(snapshot) {
+  const records = [];
+  let currentDepartment = null;
+
+  snapshot.rows.forEach(row => {
+    if (row.department !== currentDepartment) {
+      currentDepartment = row.department;
+      records.push({
+        html: `<tr class="department-row"><td colspan="7">${inventoryDepartmentLabel(currentDepartment)}</td></tr>`,
+        keepWithNext: true,
+        height: 0
+      });
+    }
+
+    const pendingNote = row.pending > 0
+      ? `<div class="pending-note">${escapeHtml(String(row.pending))} unit${row.pending === 1 ? '' : 's'} still to pack</div>`
+      : '';
+    records.push({
+      html: `
+        <tr>
+          <td>
+            <strong>${escapeHtml(row.description)}</strong>
+            ${row.detail ? `<div class="muted">${escapeHtml(row.detail)}</div>` : ''}
+          </td>
+          <td>${row.assets.map(packingListAssetHtml).join('') || pendingNote || '<span class="muted">No asset assigned</span>'}</td>
+          <td class="number-cell">${row.required}</td>
+          <td class="number-cell packed-number">${row.packed}</td>
+          <td class="number-cell ${row.pending > 0 ? 'pending-number' : ''}">${row.pending}</td>
+          <td class="number-cell">${row.returned}</td>
+          <td>${packingListStatusBadge(row.state)}</td>
+        </tr>
+      `,
+      height: 0
+    });
+  });
+
+  if (snapshot.extras.length > 0) {
+    records.push({
+      html: `
+        <tr class="extras-row">
+          <td colspan="7">EXTRAS - Not included in required or packed totals</td>
+        </tr>
+      `,
+      keepWithNext: true,
+      height: 0
+    });
+
+    records.push({
+      html: `
+        <tr>
+          <td><strong>Additional assets</strong></td>
+          <td colspan="5">${snapshot.extras.map(packingListAssetHtml).join('')}</td>
+          <td>${packingListStatusBadge(snapshot.extras.some(asset => asset.status === 'packed') ? 'packed' : snapshot.extras[0]?.status)}</td>
+        </tr>
+      `,
+      height: 0
+    });
+  }
+
+  if (records.length === 0) {
+    records.push({
+      html: '<tr><td colspan="7" class="empty-row">No items are assigned to this event.</td></tr>',
+      height: 0
+    });
+  }
+
+  return records;
+}
+
+function buildPackingListPdfPages(event, snapshot, context) {
+  const safe = value => escapeHtml(String(value ?? ''));
+  const logoUrl = escapeHtmlAttr(getPdfLogoUrl());
+  const footerHtml = renderPdfFooterHtml();
+  const headerHtml = `
+    <div class="logo-row"><img src="${logoUrl}" alt="Company Logo"></div>
+    <div class="header">
+      <div class="header-left">
+        EVENT:<br>
+        <span class="event-name">#${safe(event.id)} ${safe(event.name)}</span><br>
+        ${safe(packingListDateRange(event))}<br>
+        Event state: ${safe(event.state || '-')}
+      </div>
+      <div class="header-right">
+        <div class="report-title">PACKING LIST</div>
+        No. : ${safe(context.reportNumber)}<br>
+        Snapshot : ${safe(context.generatedAt)}<br>
+        Generated by : ${safe(context.generatedBy || '-')}
+      </div>
+    </div>
+  `;
+  const totals = snapshot.totals;
+  const completion = totals.required > 0
+    ? Math.min(100, Math.round((totals.packed / totals.required) * 100))
+    : 100;
+  const summaryHtml = `
+    <div class="summary-grid">
+      <div class="summary-card"><span>Required</span><strong>${totals.required}</strong></div>
+      <div class="summary-card packed"><span>Packed now</span><strong>${totals.packed}</strong></div>
+      <div class="summary-card pending"><span>Pending</span><strong>${totals.pending}</strong></div>
+      <div class="summary-card returned"><span>Returned</span><strong>${totals.returned}</strong></div>
+      <div class="summary-card extras"><span>Active extras</span><strong>${totals.extras}</strong></div>
+      <div class="summary-card completion"><span>Packed</span><strong>${completion}%</strong></div>
+    </div>
+    <div class="snapshot-note">
+      Live event snapshot. Packed means currently prepared; returned items are no longer packed.
+      Extras are shown separately and do not count toward the requirement.
+    </div>
+  `;
+  const rowRecords = packingListRowRecords(snapshot);
+  const measureBox = document.createElement('div');
+  measureBox.id = '__packingListMeasureBox';
+  measureBox.style.cssText = `
+    position:absolute;left:-10000px;top:0;visibility:hidden;width:196mm;
+    font-family:'Century Gothic',Arial,sans-serif;font-size:8pt;line-height:1.25;
+    background:white;z-index:-1;
+  `;
+  measureBox.innerHTML = `
+    <style>
+      #__packingListMeasureBox * { box-sizing:border-box; }
+      #__packingListMeasureBox .logo-row { display:flex;justify-content:flex-end;margin-bottom:7px;height:39px; }
+      #__packingListMeasureBox .logo-row img { height:39px;width:auto;object-fit:contain; }
+      #__packingListMeasureBox .header { display:flex;justify-content:space-between;align-items:flex-start;gap:20px;margin-bottom:12px; }
+      #__packingListMeasureBox .header-left,#__packingListMeasureBox .header-right { font-size:8pt;font-weight:bold;line-height:1.35; }
+      #__packingListMeasureBox .header-left { flex:1; }
+      #__packingListMeasureBox .header-right { min-width:190px;text-align:right; }
+      #__packingListMeasureBox .event-name { font-size:10pt; }
+      #__packingListMeasureBox .report-title { font-size:14pt;margin-bottom:4px; }
+      #__packingListMeasureBox .summary-grid { display:grid;grid-template-columns:repeat(6,1fr);gap:5px;margin-bottom:6px; }
+      #__packingListMeasureBox .summary-card { border:1px solid #cbd5e1;padding:6px;text-align:center; }
+      #__packingListMeasureBox .summary-card span { display:block;font-size:6.5pt;text-transform:uppercase; }
+      #__packingListMeasureBox .summary-card strong { display:block;font-size:12pt; }
+      #__packingListMeasureBox .snapshot-note { padding:5px 7px;background:#f8fafc;border:1px solid #cbd5e1;font-size:7pt;margin-bottom:8px; }
+      #__packingListMeasureBox .packing-table { width:100%;border-collapse:collapse;border:2px solid #111;table-layout:fixed; }
+      #__packingListMeasureBox .packing-table th { padding:5px;background:#333;color:#fff;border:1px solid #333;font-size:7pt;text-align:left; }
+      #__packingListMeasureBox .packing-table td { padding:5px;border:1px solid #333;font-size:7.5pt;vertical-align:top;word-break:break-word;overflow-wrap:anywhere; }
+      #__packingListMeasureBox .number-cell { text-align:center; }
+      #__packingListMeasureBox .asset-line { display:flex;align-items:flex-start;gap:4px;margin-bottom:3px; }
+      #__packingListMeasureBox .asset-line:last-child { margin-bottom:0; }
+      #__packingListMeasureBox .muted { color:#64748b;font-size:6.8pt; }
+      #__packingListMeasureBox .department-row td,#__packingListMeasureBox .extras-row td { padding:5px 7px;font-weight:bold;background:#e2e8f0; }
+      #__packingListMeasureBox .footer-measure { width:100%;text-align:center;font-size:7pt;font-weight:bold;line-height:1.2;overflow-wrap:anywhere; }
+    </style>
+    <div id="__packingFirstBase">${headerHtml}${summaryHtml}<table class="packing-table">${packingListTableHead()}</table></div>
+    <div id="__packingNextBase">${headerHtml}<table class="packing-table">${packingListTableHead()}</table></div>
+    <table class="packing-table">${packingListTableHead()}<tbody id="__packingMeasureBody"></tbody></table>
+    <div id="__packingFooterMeasure" class="footer-measure">${footerHtml}</div>
+  `;
+
+  const normaliseMeasuredHeight = mountPdfMeasureBox(measureBox, 196);
+  const measureBody = measureBox.querySelector('#__packingMeasureBody');
+  const firstBaseHeight = normaliseMeasuredHeight(
+    measureBox.querySelector('#__packingFirstBase').getBoundingClientRect().height
+  );
+  const nextBaseHeight = normaliseMeasuredHeight(
+    measureBox.querySelector('#__packingNextBase').getBoundingClientRect().height
+  );
+  const footerHeight = normaliseMeasuredHeight(
+    measureBox.querySelector('#__packingFooterMeasure')?.getBoundingClientRect().height || 0
+  );
+  const footerReserveMm = pdfFooterReserveMm({ pageFlowHeightMm: 276 }, footerHeight);
+  const firstBudget = Math.max(40, pdfMmToPx(276 - footerReserveMm) - firstBaseHeight);
+  const nextBudget = Math.max(40, pdfMmToPx(276 - footerReserveMm) - nextBaseHeight);
+
+  rowRecords.forEach(record => {
+    measureBody.innerHTML = record.html;
+    const row = measureBody.querySelector('tr');
+    record.height = row
+      ? normaliseMeasuredHeight(row.getBoundingClientRect().height)
+      : 0;
+  });
+  measureBox.remove();
+
+  const pages = [];
+  let index = 0;
+  while (index < rowRecords.length) {
+    const budget = pages.length === 0 ? firstBudget : nextBudget;
+    const pageRows = [];
+    let height = 0;
+
+    while (index < rowRecords.length) {
+      const record = rowRecords[index];
+      const nextHeight = record.keepWithNext ? (rowRecords[index + 1]?.height || 0) : 0;
+      if (pageRows.length > 0 && height + record.height + nextHeight > budget) break;
+
+      pageRows.push(record);
+      height += record.height;
+      index += 1;
+
+      if (pageRows.length === 1 && record.height > budget) break;
+    }
+    pages.push(pageRows);
+  }
+
+  const totalPages = pages.length;
+  return pages.map((pageRows, pageIndex) => `
+    <div class="page">
+      ${headerHtml}
+      ${pageIndex === 0 ? summaryHtml : ''}
+      <table class="packing-table">
+        ${packingListTableHead()}
+        <tbody>${pageRows.map(record => record.html).join('')}</tbody>
+      </table>
+      <div class="footer">${footerHtml}</div>
+      <div class="page-number">Page ${pageIndex + 1} of ${totalPages}</div>
+    </div>
+  `).join('');
+}
+
+async function generatePackingList(eventId) {
+  if (!eventId) {
+    showNotification('error', 'No event selected');
+    return;
+  }
+
+  const packingWindow = window.open('', '_blank', 'width=950,height=1000');
+  if (!packingWindow) {
+    showNotification('error', 'Pop-up blocked. Please allow pop-ups to export the packing list PDF.');
+    return;
+  }
+
+  packingWindow.document.write(`<!DOCTYPE html><html><head><title>Preparing Packing List</title></head><body style="font-family:Arial,sans-serif;padding:24px;">Preparing the latest packing list...</body></html>`);
+  packingWindow.document.close();
+
+  try {
+    const [response] = await Promise.all([
+      apiCall(`/api/events/${eventId}`),
+      loadPdfSettings(true)
+    ]);
+    const event = response.data;
+    const snapshot = buildPackingListSnapshot(event);
+    const now = new Date();
+    const context = {
+      reportNumber: `PL-${now.getFullYear()}${String(event.id).padStart(4, '0')}`,
+      generatedAt: now.toLocaleString('en-GB', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      }),
+      generatedBy: currentUser?.username || ''
+    };
+    const pagesHtml = buildPackingListPdfPages(event, snapshot, context);
+    const title = `Packing List - ${escapeHtml(String(event.name || `Event ${event.id}`))}`;
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${title}</title><style>
+      @page { size:A4; margin:0; }
+      * { box-sizing:border-box; }
+      body { margin:0;font-family:'Century Gothic',Arial,sans-serif;color:#111;background:#f0f0f0;font-size:8pt;line-height:1.25; }
+      .page { width:210mm;height:297mm;min-height:297mm;margin:0 auto 12px;padding:7mm 7mm 14mm;background:#fff;position:relative;overflow:hidden;page-break-after:always;break-after:page; }
+      .page:last-child { page-break-after:auto;break-after:auto; }
+      .print-btn { position:fixed;top:20px;right:20px;background:#16a34a;color:#fff;border:0;padding:10px 18px;border-radius:6px;cursor:pointer;z-index:999;font-size:12px; }
+      .logo-row { display:flex;justify-content:flex-end;margin-bottom:7px;height:39px; }
+      .logo-row img { height:39px;width:auto;object-fit:contain; }
+      .header { display:flex;justify-content:space-between;align-items:flex-start;gap:20px;margin-bottom:12px; }
+      .header-left,.header-right { font-size:8pt;font-weight:bold;line-height:1.35; }
+      .header-left { flex:1; }
+      .header-right { min-width:190px;text-align:right; }
+      .event-name { font-size:10pt; }
+      .report-title { font-size:14pt;margin-bottom:4px; }
+      .summary-grid { display:grid;grid-template-columns:repeat(6,1fr);gap:5px;margin-bottom:6px; }
+      .summary-card { border:1px solid #cbd5e1;padding:6px;text-align:center;background:#f8fafc; }
+      .summary-card span { display:block;font-size:6.5pt;text-transform:uppercase;color:#475569; }
+      .summary-card strong { display:block;font-size:12pt; }
+      .summary-card.packed { background:#dcfce7; }
+      .summary-card.pending { background:#fee2e2; }
+      .summary-card.returned { background:#e5e7eb; }
+      .summary-card.extras { background:#fef3c7; }
+      .summary-card.completion { background:#dbeafe; }
+      .snapshot-note { padding:5px 7px;background:#f8fafc;border:1px solid #cbd5e1;font-size:7pt;margin-bottom:8px; }
+      .packing-table { width:100%;border-collapse:collapse;border:2px solid #111;table-layout:fixed; }
+      .packing-table thead { display:table-header-group; }
+      .packing-table tr { break-inside:avoid;page-break-inside:avoid; }
+      .packing-table th { padding:5px;background:#333;color:#fff;border:1px solid #333;font-size:7pt;text-align:left; }
+      .packing-table td { padding:5px;border:1px solid #333;font-size:7.5pt;vertical-align:top;word-break:break-word;overflow-wrap:anywhere; }
+      .number-cell { text-align:center!important;white-space:nowrap; }
+      .packed-number { color:#166534;font-weight:bold; }
+      .pending-number { color:#991b1b;font-weight:bold;background:#fff7f7; }
+      .asset-line { display:flex;align-items:flex-start;gap:4px;margin-bottom:3px; }
+      .asset-line:last-child { margin-bottom:0; }
+      .muted { color:#64748b;font-size:6.8pt; }
+      .pending-note { color:#991b1b;font-weight:bold; }
+      .department-row td { padding:5px 7px;font-weight:bold;background:#e2e8f0;letter-spacing:.03em; }
+      .extras-row td { padding:5px 7px;font-weight:bold;background:#fef3c7;color:#78350f; }
+      .empty-row { text-align:center;color:#64748b;padding:18px!important; }
+      .footer { position:absolute;bottom:7mm;left:7mm;right:7mm;text-align:center;font-size:7pt;font-weight:bold;line-height:1.2;overflow-wrap:anywhere; }
+      .page-number { position:absolute;bottom:3mm;right:7mm;font-size:7pt; }
+      @media print {
+        body,body * { -webkit-print-color-adjust:exact;print-color-adjust:exact; }
+        body { background:#fff; }
+        .page { margin:0;page-break-after:always;break-after:page; }
+        .page:last-child { page-break-after:auto;break-after:auto; }
+        .print-btn { display:none; }
+      }
+    </style></head><body>
+      <button class="print-btn" onclick="window.print()">Print / Save as PDF</button>
+      ${pagesHtml}
+    </body></html>`;
+
+    packingWindow.document.open();
+    packingWindow.document.write(html);
+    packingWindow.document.close();
+    packingWindow.focus();
+    showNotification('success', 'Packing list PDF generated from the latest event state');
+  } catch (error) {
+    console.error('Packing list PDF generation failed:', error);
+    if (!packingWindow.closed) {
+      packingWindow.document.open();
+      packingWindow.document.write(`<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;padding:24px;">Failed to generate packing list: ${escapeHtml(error.message)}</body></html>`);
+      packingWindow.document.close();
+    }
+    showNotification('error', `Failed to generate packing list: ${error.message}`);
+  }
+}
+
 let currentDeliveryOrderEvent = null;
 
 async function openDeliveryOrderTab(eventId) {
