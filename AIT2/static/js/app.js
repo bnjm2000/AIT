@@ -9498,6 +9498,7 @@ async function openPrepareEventModal(eventId) {
         const event = eventResponse.data;
         const availableAssets = availableAssetsResponse.data;
         const quickAddEnabled = getPrepareQuickAddEnabled();
+        window.__currentPrepareEventData = event;
         
         document.getElementById('prepareEventTitle').textContent = `Prepare Assets - Event ${event.id}: ${event.name}`;
         
@@ -9508,15 +9509,15 @@ async function openPrepareEventModal(eventId) {
                     <h4 style="margin-bottom: 10px; color: #495057;">Event Summary</h4>
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; text-align: center;">
                         <div>
-                            <div style="font-size: 20px; font-weight: bold; color: #007bff;">${event.totalAssets}</div>
+                            <div id="prepare-required-count" style="font-size: 20px; font-weight: bold; color: #007bff;">${event.totalAssets}</div>
                             <div style="color: #666; font-size: 12px;">Required</div>
                         </div>
                         <div>
-                            <div style="font-size: 20px; font-weight: bold; color: #28a745;">${event.totalPrepared}</div>
+                            <div id="prepare-prepared-count" style="font-size: 20px; font-weight: bold; color: #28a745;">${event.totalPrepared}</div>
                             <div style="color: #666; font-size: 12px;">Prepared</div>
                         </div>
                         <div>
-                            <div style="font-size: 20px; font-weight: bold; color: #6c757d;">${getEventExtraQuantity(event)}</div>
+                            <div id="prepare-extra-count" style="font-size: 20px; font-weight: bold; color: #6c757d;">${getEventExtraQuantity(event)}</div>
                             <div style="color: #666; font-size: 12px;">Extra</div>
                         </div>
                     </div>
@@ -9628,16 +9629,16 @@ async function openPrepareEventModal(eventId) {
                 const progressColor = totalAssigned >= totalRequired ? '#28a745' : '#ffc107';
 
                 content += `
-                    <div class="dept-section" style="margin-bottom: 20px;">
+                    <div class="dept-section" data-prepare-department="${escapeHtmlAttr(dept)}" style="margin-bottom: 20px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: #f1f3f4; border-radius: 6px; cursor: pointer; margin-bottom: 10px;" onclick="togglePrepareSection('dept-${dept}')">
                             <h5 style="margin: 0; color: #495057; font-size: 14px;">${departmentBadgeHtml(dept, true)} Department</h5>
                             <div style="display: flex; align-items: center; gap: 10px;">
                                 <div style="text-align: right;">
-                                    <div style="font-size: 12px; font-weight: 500; color: ${progressColor};">
+                                    <div class="prepare-dept-progress-text" style="font-size: 12px; font-weight: 500; color: ${progressColor};">
                                         ${totalAssigned}/${totalRequired} prepared
                                     </div>
                                     <div style="background: #e9ecef; border-radius: 8px; height: 3px; width: 100px; overflow: hidden; margin-top: 2px;">
-                                        <div style="background: ${progressColor}; height: 100%; width: ${Math.min(progressPercent, 100)}%; transition: width 0.3s ease;"></div>
+                                        <div class="prepare-dept-progress-bar" style="background: ${progressColor}; height: 100%; width: ${Math.min(progressPercent, 100)}%; transition: width 0.3s ease;"></div>
                                     </div>
                                 </div>
                                 <span class="toggle-icon" style="font-size: 14px; font-weight: bold; color: #666;">▼</span>
@@ -9703,14 +9704,14 @@ async function openPrepareEventModal(eventId) {
             renderedAnyRequirementRows = true;
 
             content += `
-                <div class="dept-section" style="margin-bottom: 20px;">
+                <div class="dept-section" data-prepare-department="${escapeHtmlAttr(dept)}" style="margin-bottom: 20px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: #f1f3f4; border-radius: 6px; cursor: pointer; margin-bottom: 10px;" onclick="togglePrepareSection('dept-${dept}')">
                         <h5 style="margin: 0; color: #495057; font-size: 14px;">${departmentBadgeHtml(dept, true)} Department</h5>
                         <div style="display: flex; align-items: center; gap: 10px;">
                             <div style="text-align: right;">
-                                <div style="font-size: 12px; font-weight: 500; color: ${progressColor};">${totalAssigned}/${totalRequired} prepared</div>
+                                <div class="prepare-dept-progress-text" style="font-size: 12px; font-weight: 500; color: ${progressColor};">${totalAssigned}/${totalRequired} prepared</div>
                                 <div style="background: #e9ecef; border-radius: 8px; height: 3px; width: 100px; overflow: hidden; margin-top: 2px;">
-                                    <div style="background: ${progressColor}; height: 100%; width: ${Math.min(progressPercent, 100)}%; transition: width 0.3s ease;"></div>
+                                    <div class="prepare-dept-progress-bar" style="background: ${progressColor}; height: 100%; width: ${Math.min(progressPercent, 100)}%; transition: width 0.3s ease;"></div>
                                 </div>
                             </div>
                             <span class="toggle-icon" style="font-size: 14px; font-weight: bold; color: #666;">▼</span>
@@ -10372,13 +10373,53 @@ function getCustomAssetsFromEvent(event) {
 }
 
 
+function updateCustomCollectionUi(eventId, encodedAssetId, isCollected) {
+    const root = document.getElementById('prepareEventContent') || document;
+    const matchingButtons = Array.from(root.querySelectorAll('button[onclick]')).filter(button => {
+        const handler = button.getAttribute('onclick') || '';
+        return handler.includes(encodedAssetId) && (
+            handler.includes('collectCustomAsset(') || handler.includes('uncollectCustomAsset(')
+        );
+    });
+    const actionContainers = matchingButtons
+        .map(button => button.parentElement)
+        .filter((container, index, all) => container && all.indexOf(container) === index);
+
+    actionContainers.forEach(container => {
+        container.innerHTML = isCollected
+            ? `
+                <button class="btn btn-success btn-sm asset-action-btn"
+                        data-event-id="${eventId}"
+                        data-asset-id="${escapeHtmlAttr(encodedAssetId)}"
+                        data-action="prepare"
+                        style="padding:4px 8px; font-size:11px;">Prepare</button>
+                <button class="btn btn-secondary btn-sm"
+                        onclick="uncollectCustomAsset(${eventId}, '${escapeJs(encodedAssetId)}')"
+                        style="padding:4px 8px; font-size:11px;">Uncollect</button>
+              `
+            : `<button class="btn btn-primary btn-sm"
+                       onclick="collectCustomAsset(${eventId}, '${escapeJs(encodedAssetId)}')"
+                       style="padding:4px 8px; font-size:11px;">Collect</button>`;
+
+        let row = container.parentElement;
+        while (row && !row.querySelector('div[style*="margin-top: 2px"], div[style*="margin-top:2px"]')) {
+            row = row.parentElement;
+        }
+        const status = row?.querySelector('div[style*="margin-top: 2px"], div[style*="margin-top:2px"]');
+        if (status) {
+            status.textContent = isCollected ? 'Collected' : 'Pending';
+            status.style.color = isCollected ? '#17a2b8' : '#ffc107';
+        }
+    });
+}
+
 async function collectCustomAsset(eventId, encodedAssetId) {
     const assetId = decodeURIComponent(encodedAssetId);
     try {
         await apiCall(`/api/events/${eventId}/custom-assets/collect`, 'POST', { assetId });
         showNotification('success', `${customAssetLabelFromId(assetId)} collected`);
-        await refreshEventOverviewViews();
-        setTimeout(() => openPrepareEventModal(eventId), 250);
+        updateCustomCollectionUi(eventId, encodedAssetId, true);
+        schedulePrepareUiSync(eventId);
     } catch (error) {
         showNotification('error', `Failed to collect item: ${error.message}`);
     }
@@ -10389,8 +10430,8 @@ async function uncollectCustomAsset(eventId, encodedAssetId) {
     try {
         await apiCall(`/api/events/${eventId}/custom-assets/uncollect`, 'POST', { assetId });
         showNotification('success', `${customAssetLabelFromId(assetId)} uncollected`);
-        await refreshEventOverviewViews();
-        setTimeout(() => openPrepareEventModal(eventId), 250);
+        updateCustomCollectionUi(eventId, encodedAssetId, false);
+        schedulePrepareUiSync(eventId);
     } catch (error) {
         showNotification('error', `Failed to uncollect item: ${error.message}`);
     }
@@ -10507,7 +10548,7 @@ async function assignAdditionalAsset(eventId, assetId) {
     console.log('eventId:', eventId, 'assetId:', assetId);
     
     try {
-        await apiCall(`/api/events/${eventId}/assign-specific`, 'POST', { assetId });
+        const response = await apiCall(`/api/events/${eventId}/assign-specific`, 'POST', { assetId });
         showNotification('success', `Assigned ${assetId} as additional asset`);
         
         // Remove from search results
@@ -10521,13 +10562,8 @@ async function assignAdditionalAsset(eventId, assetId) {
             window.currentAdditionalAssets = window.currentAdditionalAssets.filter(a => a.id !== assetId);
         }
         
-        console.log('About to refresh modal with state preservation...');
-        // Refresh modal while preserving UI state
-        setTimeout(() => {
-            preserveModalState(() => openPrepareEventModal(eventId));
-        }, 200);
-
-        await refreshEventOverviewViews();
+        updateAllButtonsForAsset(response?.data?.assetId || assetId, true, { sourceAssetId: assetId });
+        schedulePrepareUiSync(eventId);
         
     } catch (error) {
         console.error('Error in assignAdditionalAsset:', error);
@@ -10553,19 +10589,14 @@ async function prepareAssignedAsset(eventId) {
     console.log('eventId:', eventId, 'assetId:', assetId);
     
     try {
-        await apiCall(`/api/events/${eventId}/prepare`, 'POST', { assetId });
+        const response = await apiCall(`/api/events/${eventId}/prepare`, 'POST', { assetId });
         showNotification('success', `${assetId} marked as prepared`);
         
         // Clear input
         input.value = '';
         
-        console.log('About to refresh modal with state preservation...');
-        // Refresh modal while preserving UI state
-        setTimeout(() => {
-            preserveModalState(() => openPrepareEventModal(eventId));
-        }, 200);
-
-        await refreshEventOverviewViews();
+        updateAllButtonsForAsset(response?.data?.assetId || assetId, true, { sourceAssetId: assetId });
+        schedulePrepareUiSync(eventId);
         
     } catch (error) {
         console.error('Error in prepareAssignedAsset:', error);
@@ -10760,6 +10791,7 @@ async function processUniversalAsset(eventId) {
                 const response = await apiCall(`/api/events/${eventId}/assign-specific`, 'POST', { assetId, ...scanPayload });
                 await showApiWarning(response);
                 const responseIsExtra = !!(response?.data?.isExtra);
+                updateAllButtonsForAsset(response?.data?.assetId || assetId, true, { sourceAssetId: assetId });
                 showFeedback(feedbackDiv, 'success', responseIsExtra ? `✅ ${assetId} prepared as extra asset` : `✅ ${assetId} assigned and prepared`);
                 
                 // Clear input and focus back on it
@@ -10779,6 +10811,7 @@ async function processUniversalAsset(eventId) {
             const response = await apiCall(`/api/events/${eventId}/assign-specific`, 'POST', { assetId, ...scanPayload });
             await showApiWarning(response);
             const responseIsExtra = !!(response?.data?.isExtra);
+            updateAllButtonsForAsset(response?.data?.assetId || assetId, true, { sourceAssetId: assetId });
             showFeedback(feedbackDiv, 'success', responseIsExtra ? `✅ ${assetId} prepared as extra asset` : `✅ ${assetId} added into the event`);
 
             input.value = '';
@@ -10805,7 +10838,7 @@ async function assignAndPrepareAsset(eventId, assetId) {
     const input = document.getElementById('universalAssetInput');
     
     try {
-        await apiCall(`/api/events/${eventId}/assign-specific`, 'POST', { assetId });
+        const response = await apiCall(`/api/events/${eventId}/assign-specific`, 'POST', { assetId });
         
         if (feedbackDiv) {
             showFeedback(feedbackDiv, 'success', `✅ ${assetId} assigned and prepared as extra asset`);
@@ -10819,13 +10852,8 @@ async function assignAndPrepareAsset(eventId, assetId) {
             input.focus();
         }
         
-        console.log('About to refresh modal with state preservation...');
-        // Refresh modal while preserving UI state
-        setTimeout(() => {
-            preserveModalState(() => openPrepareEventModal(eventId));
-        }, 200);
-
-        await refreshEventOverviewViews();
+        updateAllButtonsForAsset(response?.data?.assetId || assetId, true, { sourceAssetId: assetId });
+        schedulePrepareUiSync(eventId);
         
     } catch (error) {
         console.error('Error in assignAndPrepareAsset:', error);
@@ -11120,21 +11148,7 @@ function clearUniversalFeedback() {
 }
 
 function refreshPrepareUiAfterAssetChange(eventId, delay = 250) {
-    setTimeout(() => {
-        if (typeof preserveModalState === 'function') {
-            preserveModalState(() => openPrepareEventModal(eventId));
-        } else {
-            openPrepareEventModal(eventId);
-        }
-
-        if (document.getElementById('prepare-section')?.classList.contains('active')) {
-            loadPrepareEvents();
-        }
-
-        if (document.getElementById('events-section')?.classList.contains('active')) {
-            loadAllEvents();
-        }
-    }, delay);
+    schedulePrepareUiSync(eventId, delay);
 }
 
 function getEventReturnableCount(event) {
@@ -14293,36 +14307,24 @@ async function addAssetToEventSimple(eventId, assetId) {
 async function assignSpecificAsset(eventId, assetId, brand, model) {
     console.log(`=== assignSpecificAsset CALLED ===`);
     console.log('eventId:', eventId, 'assetId:', assetId, 'brand:', brand, 'model:', model);
-    
+    let actionStarted = false;
     try {
         await ensureAssetsLoaded();
         if (!(await confirmDegradedAssetUse(assetId))) return;
+        actionStarted = beginPrepareAssetAction(assetId, 'Preparing...');
+        if (!actionStarted) return;
         const response = await apiCall(`/api/events/${eventId}/assign-specific`, 'POST', { assetId });
         await showApiWarning(response);
-        showNotification('success', `Assigned ${assetId} to event`);
-        
-        console.log('About to refresh modal with state preservation...');
-        // Refresh modal while preserving UI state
-        setTimeout(() => {
-            preserveModalState(() => openPrepareEventModal(eventId));
-        }, 200);
-        
-        // Also refresh other views if they're active
-        setTimeout(() => {
-            if (document.getElementById('prepare-section').classList.contains('active')) {
-                loadPrepareEvents();
-            }
-            if (document.getElementById('dashboard-section').classList.contains('active')) {
-                loadDashboard();
-            }
-            if (document.getElementById('events-section').classList.contains('active')) {
-                loadAllEvents();
-            }
-        }, 700);
-        
+        const preparedAssetId = response?.data?.assetId || assetId;
+        showNotification('success', `Assigned ${preparedAssetId} to event`);
+        updateAllButtonsForAsset(preparedAssetId, true, { sourceAssetId: assetId });
+        schedulePrepareUiSync(eventId);
     } catch (error) {
         console.error('Error in assignSpecificAsset:', error);
         showNotification('error', `Failed to assign asset: ${error.message}`);
+        updateAllButtonsForAsset(assetId, false);
+    } finally {
+        if (actionStarted) endPrepareAssetAction(assetId);
     }
 }
 
@@ -14333,11 +14335,8 @@ async function unassignSpecificAsset(eventId, assetId, brand, model) {
       assetId,
     });
     showNotification("success", `Unassigned ${assetId} from event`);
-
-    // Refresh the preparation modal while keeping the currently-open dropdown open.
-    setTimeout(() => {
-      preserveModalState(() => openPrepareEventModal(eventId));
-    }, 200);
+    updateAllButtonsForAsset(assetId, false);
+    schedulePrepareUiSync(eventId);
   } catch (error) {
     showNotification("error", `Failed to unassign asset: ${error.message}`);
   }
@@ -17999,19 +17998,36 @@ function createBulkPreparationSection(eventId, modelGroup, availableAssets = [],
     const availableQuantity = availableBulkSource ? Number(availableBulkSource.availableQuantity ?? availableBulkSource.quantity ?? 0) : 0;
     const preparableQuantity = availableBulkSource ? Number(availableBulkSource.preparableQuantity ?? availableBulkSource.availableQuantity ?? availableBulkSource.quantity ?? 0) : 0;
     const healthyQuantity = availableBulkSource ? Number(availableBulkSource.healthyQuantity ?? availableQuantity) : 0;
+    const modelKey = `${modelGroup.department || ''}|${modelGroup.brand || ''}|${modelGroup.model || ''}`;
 
     let actionButtons = '';
     if (assignedAssets && assignedAssets.length > 0) {
         actionButtons += (assignedAssets || []).map(asset => {
             const preparedId = typeof asset === 'string' ? asset : asset.id;
             if (!preparedId) return '';
+            const bulkSourceId = (typeof asset !== 'string' && asset.bulkId)
+                ? asset.bulkId
+                : (String(preparedId).match(/^\[BULK\]([^|]+)\|/)?.[1] || '');
             const safePreparedId = escapeHtmlAttr(encodeURIComponent(preparedId));
-            return `<button class="btn btn-warning btn-sm asset-action-btn" data-event-id="${eventId}" data-asset-id="${safePreparedId}" data-action="unprepare" style="padding:4px 8px; font-size:11px;">Unprepare</button>`;
+            return `<button class="btn btn-warning btn-sm asset-action-btn"
+                data-event-id="${eventId}"
+                data-asset-id="${safePreparedId}"
+                data-prepare-source-id="${escapeHtmlAttr(encodeURIComponent(bulkSourceId))}"
+                data-prepare-brand="${escapeHtmlAttr(modelGroup.brand || '')}"
+                data-prepare-model="${escapeHtmlAttr(modelGroup.model || '')}"
+                data-action="unprepare"
+                style="padding:4px 8px; font-size:11px;">Unprepare</button>`;
         }).join('');
     }
 
     if (!isPrepared && bulkId && preparableQuantity !== 0) {
-        actionButtons += `<button class="btn btn-success btn-sm" onclick="assignSpecificAsset(${eventId}, '${escapeJs(bulkId)}', '${escapeJs(modelGroup.brand || '')}', '${escapeJs(modelGroup.model || '')}')" style="padding:4px 8px; font-size:11px;">Prepare</button>`;
+        actionButtons += `<button class="btn btn-success btn-sm"
+            data-event-id="${eventId}"
+            data-prepare-source-id="${escapeHtmlAttr(encodeURIComponent(bulkId))}"
+            data-prepare-brand="${escapeHtmlAttr(modelGroup.brand || '')}"
+            data-prepare-model="${escapeHtmlAttr(modelGroup.model || '')}"
+            onclick="assignSpecificAsset(${eventId}, '${escapeJs(bulkId)}', '${escapeJs(modelGroup.brand || '')}', '${escapeJs(modelGroup.model || '')}')"
+            style="padding:4px 8px; font-size:11px;">Prepare</button>`;
     }
 
     if (!actionButtons) {
@@ -18023,13 +18039,13 @@ function createBulkPreparationSection(eventId, modelGroup, availableAssets = [],
         : (assignedBulkSource ? `<div style="color:#666; font-size:12px; margin-top:2px;">Prepared Qty: ${escapeHtml(String(assignedQty))}</div>` : '');
 
     return `
-        <div class="model-prep-section bulk-prep-flat-section" style="border: 1px solid #e9ecef; border-radius: 8px; padding: 0; margin-bottom: 15px; overflow:hidden;">
+        <div class="model-prep-section bulk-prep-flat-section" data-prepare-model-key="${escapeHtmlAttr(modelKey)}" style="border: 1px solid #e9ecef; border-radius: 8px; padding: 0; margin-bottom: 15px; overflow:hidden;">
             <div style="display:flex; justify-content:space-between; align-items:center; gap:15px; padding:15px; background:#f8f9fa; border-radius:8px;">
                 <div style="min-width:0; flex:1;">
                     <h5 style="margin:0; color:#495057; font-size:14px;">${escapeHtml(displayName)}</h5>
                     ${description ? `<div style="color:#666; font-size:12px; margin-top:2px; overflow-wrap:anywhere;">${escapeHtml(description)}</div>` : ''}
                     ${quantityLine}
-                    <div style="color:${statusColor}; font-size:12px; margin-top:2px; font-weight:500;">${escapeHtml(statusText)}</div>
+                    <div class="prepare-model-progress-text" style="color:${statusColor}; font-size:12px; margin-top:2px; font-weight:500;">${escapeHtml(statusText)}</div>
                 </div>
                 <div style="display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; align-items:center; flex-shrink:0;">
                     ${actionButtons}
@@ -18055,9 +18071,10 @@ function createModelPreparationSection(eventId, department, brand, model, descri
         .replace(/\s+/g, '')
         .replace(/[^a-zA-Z0-9_-]/g, '');
     const modelId = `model-${makeDomSafe(department)}-${makeDomSafe(brand)}-${makeDomSafe(model)}-${makeDomSafe(description)}-${eventId}`;
+    const modelKey = `${department || ''}|${brand || ''}|${model || ''}`;
     
     let section = `
-        <div class="model-prep-section" style="border: 1px solid #e9ecef; border-radius: 8px; padding: 0; margin-bottom: 15px;">
+        <div class="model-prep-section" data-prepare-model-key="${escapeHtmlAttr(modelKey)}" style="border: 1px solid #e9ecef; border-radius: 8px; padding: 0; margin-bottom: 15px;">
             <div style="display: flex; justify-content: space-between; align-items: center; padding: 15px; background: #f8f9fa; border-radius: 8px 8px 0 0; cursor: pointer;" onclick="togglePrepareSection('${modelId}')">
                 <div>
                     <h5 style="margin: 0; color: #495057;">${requiredQty}x ${escapeHtml(brand)} ${escapeHtml(model)}</h5>
@@ -18065,12 +18082,12 @@ function createModelPreparationSection(eventId, department, brand, model, descri
                 </div>
                 <div style="display: flex; align-items: center; gap: 15px;">
                     <div style="text-align: right;">
-                        <div style="font-size: 14px; font-weight: 500; color: ${modelProgressColor};">
+                        <div class="prepare-model-progress-text" style="font-size: 14px; font-weight: 500; color: ${modelProgressColor};">
                             ${assignedCount}/${requiredQty} assigned
                             ${extraAssignedCount > 0 ? ` (+${extraAssignedCount} extra)` : ''}
                         </div>
                         <div style="background: #e9ecef; border-radius: 10px; height: 4px; width: 120px; overflow: hidden; margin-top: 4px;">
-                            <div style="background: ${modelProgressColor}; height: 100%; width: ${Math.min(progressPercent, 100)}%; transition: width 0.3s ease;"></div>
+                            <div class="prepare-model-progress-bar" style="background: ${modelProgressColor}; height: 100%; width: ${Math.min(progressPercent, 100)}%; transition: width 0.3s ease;"></div>
                         </div>
                     </div>
                     <span class="toggle-icon" style="font-size: 16px; font-weight: bold; color: #666;">▼</span>
@@ -18108,7 +18125,13 @@ function createModelPreparationSection(eventId, department, brand, model, descri
                         <div style="font-weight: 500; font-size: 14px;">${displayId}</div>
                         <div style="color: #666; font-size: 12px;">${availableQtyText}</div>
                     </div>
-                    <button class="btn ${buttonClass}" style="padding: 4px 10px; font-size: 11px;" onclick="${buttonAction}" ${disabled}>${buttonText}</button>
+                    <button class="btn ${buttonClass}"
+                            data-event-id="${eventId}"
+                            data-prepare-source-id="${escapeHtmlAttr(encodeURIComponent(apiId))}"
+                            data-prepare-brand="${escapeHtmlAttr(brand)}"
+                            data-prepare-model="${escapeHtmlAttr(model)}"
+                            style="padding: 4px 10px; font-size: 11px;"
+                            onclick="${buttonAction}" ${disabled}>${buttonText}</button>
                 </div>
             `;
         });
@@ -18162,7 +18185,11 @@ function createModelPreparationSection(eventId, department, brand, model, descri
                         </span>
                         <div style="color: ${textColor}; font-size: 13px; margin-top: 3px;">${asset.isBulk ? escapeHtml(assetSerial) : `SN: ${escapeHtml(assetSerial)}`} • ${statusText}</div>
                     </div>
-                    <button class="btn btn-warning" style="padding: 6px 12px; font-size: 12px;" onclick="unprepareSpecificAsset(${eventId}, '${assetId}')">Unprepare</button>
+                    <button class="btn btn-warning asset-action-btn"
+                            data-event-id="${eventId}"
+                            data-asset-id="${escapeHtmlAttr(encodeURIComponent(assetId))}"
+                            data-action="unprepare"
+                            style="padding: 6px 12px; font-size: 12px;">Unprepare</button>
                 </div>
             `;
         });
@@ -21117,43 +21144,225 @@ async function loadReturnEvents() {
   }
 }
 
+window.__preparePendingActions = window.__preparePendingActions || {};
+let __prepareUiSyncTimer = null;
+
+function prepareButtonsForAsset(assetId, includeSource = false) {
+  const encodedAssetId = encodeURIComponent(String(assetId || ''));
+  const root = document.getElementById('prepareEventContent') || document;
+  return Array.from(root.querySelectorAll('[data-asset-id], [data-prepare-source-id]')).filter(button => (
+    button.dataset.assetId === encodedAssetId ||
+    (includeSource && button.dataset.prepareSourceId === encodedAssetId)
+  ));
+}
+
+function beginPrepareAssetAction(assetId, label = 'Working...') {
+  const key = String(assetId || '');
+  if (!key || window.__preparePendingActions[key]) return false;
+  window.__preparePendingActions[key] = true;
+  prepareButtonsForAsset(key, true).forEach(button => {
+    button.disabled = true;
+    button.style.opacity = '0.65';
+    button.dataset.preparePreviousText = button.textContent;
+    button.textContent = label;
+  });
+  return true;
+}
+
+function endPrepareAssetAction(assetId) {
+  delete window.__preparePendingActions[String(assetId || '')];
+}
+
+function updatePrepareRowStatus(button, assetId, isPrepared) {
+  let assetRow = button.parentElement;
+  while (assetRow && !assetRow.querySelector('div[style*="margin-top: 2px"], div[style*="margin-top:2px"]')) {
+    assetRow = assetRow.parentElement;
+  }
+  if (!assetRow) return;
+
+  const statusText = assetRow.querySelector('div[style*="margin-top: 2px"], div[style*="margin-top:2px"]');
+  if (statusText) {
+    statusText.textContent = isPrepared ? 'Prepared' : 'Pending';
+    statusText.style.color = isPrepared ? '#28a745' : '#ffc107';
+  }
+
+  const assetNameSpan = assetRow.querySelector('span');
+  if (assetNameSpan && assetNameSpan.textContent.includes(assetId)) {
+    assetNameSpan.dataset.prepareState = isPrepared ? 'prepared' : 'pending';
+  }
+}
+
+function updateAllButtonsForAsset(assetId, isPrepared, options = {}) {
+  const sourceAssetId = String(options.sourceAssetId || assetId || '');
+  const effectiveAssetId = String(assetId || sourceAssetId);
+  const buttons = prepareButtonsForAsset(effectiveAssetId, true)
+    .concat(sourceAssetId === effectiveAssetId ? [] : prepareButtonsForAsset(sourceAssetId, true))
+    .filter((button, index, all) => all.indexOf(button) === index);
+
+  buttons.forEach(button => {
+    button.disabled = false;
+    button.style.opacity = '1';
+    delete button.dataset.preparePreviousText;
+
+    if (isPrepared) {
+      button.textContent = 'Unprepare';
+      button.classList.remove('btn-success', 'btn-secondary');
+      button.classList.add('btn-warning', 'asset-action-btn');
+      button.dataset.assetId = encodeURIComponent(effectiveAssetId);
+      button.dataset.action = 'unprepare';
+      button.removeAttribute('onclick');
+      button.onclick = null;
+    } else {
+      button.textContent = 'Prepare';
+      button.classList.remove('btn-warning', 'btn-secondary');
+      button.classList.add('btn-success');
+
+      const assignSourceId = button.dataset.prepareSourceId
+        ? decodeURIComponent(button.dataset.prepareSourceId)
+        : '';
+      if (assignSourceId) {
+        const buttonEventId = Number(button.dataset.eventId || window.currentPrepareEventId);
+        const brand = button.dataset.prepareBrand || '';
+        const model = button.dataset.prepareModel || '';
+        button.classList.remove('asset-action-btn');
+        delete button.dataset.action;
+        button.removeAttribute('onclick');
+        button.onclick = () => assignSpecificAsset(buttonEventId, assignSourceId, brand, model);
+      } else {
+        button.classList.add('asset-action-btn');
+        button.dataset.assetId = encodeURIComponent(effectiveAssetId);
+        button.dataset.action = 'prepare';
+        button.removeAttribute('onclick');
+        button.onclick = null;
+      }
+    }
+
+    updatePrepareRowStatus(button, effectiveAssetId, isPrepared);
+  });
+}
+
+function prepareModelProgress(group) {
+  const required = Math.max(0, Number(group?.requiredQuantity || 0));
+  const prepared = Math.max(0, Number(
+    group?.countablePreparedQuantity ??
+    getCountablePreparedQuantity(group || {})
+  ));
+  return { required, prepared };
+}
+
+function applyPrepareCanonicalProgress(event) {
+  if (!event || Number(event.id) !== Number(window.currentPrepareEventId)) return;
+  window.__currentPrepareEventData = event;
+  const root = document.getElementById('prepareEventContent') || document;
+
+  const requiredEl = document.getElementById('prepare-required-count');
+  const preparedEl = document.getElementById('prepare-prepared-count');
+  const extraEl = document.getElementById('prepare-extra-count');
+  if (requiredEl) requiredEl.textContent = String(event.totalAssets ?? 0);
+  if (preparedEl) preparedEl.textContent = String(event.totalPrepared ?? 0);
+  if (extraEl) extraEl.textContent = String(getEventExtraQuantity(event));
+
+  const modelGroups = Object.values(event.modelGroups || {});
+  root.querySelectorAll('[data-prepare-model-key]').forEach(section => {
+    const group = modelGroups.find(item => (
+      `${item.department || ''}|${item.brand || ''}|${item.model || ''}` === section.dataset.prepareModelKey
+    ));
+    if (!group) return;
+    const { required, prepared } = prepareModelProgress(group);
+    const color = prepared >= required && required > 0 ? '#28a745' : '#ffc107';
+    const text = section.querySelector('.prepare-model-progress-text');
+    const bar = section.querySelector('.prepare-model-progress-bar');
+    if (text) {
+      text.textContent = `${prepared}/${required} prepared`;
+      text.style.color = color;
+    }
+    if (bar) {
+      bar.style.width = `${required > 0 ? Math.min(100, Math.round((prepared / required) * 100)) : 0}%`;
+      bar.style.background = color;
+    }
+  });
+
+  const customByDepartment = groupCustomAssetsByDepartment(event);
+  root.querySelectorAll('[data-prepare-department]').forEach(section => {
+    const department = section.dataset.prepareDepartment || '';
+    const modelTotals = modelGroups
+      .filter(group => normalizeDepartmentCode(group.department || 'UN') === department)
+      .reduce((totals, group) => {
+        const progress = prepareModelProgress(group);
+        totals.required += progress.required;
+        totals.prepared += progress.prepared;
+        return totals;
+      }, { required: 0, prepared: 0 });
+    const customAssets = customByDepartment[department] || [];
+    const required = modelTotals.required + getCustomRequiredQuantityForProgress(customAssets);
+    const prepared = modelTotals.prepared + getCustomPreparedQuantityForProgress(customAssets);
+    const color = prepared >= required && required > 0 ? '#28a745' : '#ffc107';
+    const text = section.querySelector('.prepare-dept-progress-text');
+    const bar = section.querySelector('.prepare-dept-progress-bar');
+    if (text) {
+      text.textContent = `${prepared}/${required} prepared`;
+      text.style.color = color;
+    }
+    if (bar) {
+      bar.style.width = `${required > 0 ? Math.min(100, Math.round((prepared / required) * 100)) : 0}%`;
+      bar.style.background = color;
+    }
+  });
+}
+
+function schedulePrepareUiSync(eventId, delay = 600) {
+  clearTimeout(__prepareUiSyncTimer);
+  __prepareUiSyncTimer = setTimeout(async () => {
+    try {
+      const response = await apiCall(`/api/events/${eventId}`);
+      applyPrepareCanonicalProgress(response.data || {});
+      if (document.getElementById('prepare-section')?.classList.contains('active')) {
+        await loadPrepareEvents();
+      }
+    } catch (error) {
+      console.warn('Quiet prepare UI sync failed:', error);
+    }
+  }, delay);
+}
+
 async function prepareSpecificAsset(eventId, assetId) {
+  let actionStarted = false;
   try {
     await ensureAssetsLoaded();
     if (!(await confirmDegradedAssetUse(assetId))) {
       updateAllButtonsForAsset(assetId, false);
       return;
     }
+    actionStarted = beginPrepareAssetAction(assetId, 'Preparing...');
+    if (!actionStarted) return;
     const response = await apiCall(`/api/events/${eventId}/prepare`, 'POST', { assetId });
     await showApiWarning(response);
-    showNotification('success', `${customAssetLabelFromId(assetId)} marked as prepared`);
-    updateAllButtonsForAsset(assetId, true);
-    setTimeout(() => {
-      preserveModalState(() => openPrepareEventModal(eventId));
-      if (document.getElementById('prepare-section')?.classList.contains('active')) loadPrepareEvents();
-      if (document.getElementById('events-section')?.classList.contains('active')) loadAllEvents();
-    }, 250);
+    const preparedAssetId = response?.data?.assetId || assetId;
+    showNotification('success', `${customAssetLabelFromId(preparedAssetId)} marked as prepared`);
+    updateAllButtonsForAsset(preparedAssetId, true, { sourceAssetId: assetId });
+    schedulePrepareUiSync(eventId);
   } catch (error) {
     console.error('Error in prepareSpecificAsset:', error);
     showNotification('error', `Failed to prepare asset: ${error.message}`);
     updateAllButtonsForAsset(assetId, false);
+  } finally {
+    if (actionStarted) endPrepareAssetAction(assetId);
   }
 }
 
 async function unprepareSpecificAsset(eventId, assetId) {
+  if (!beginPrepareAssetAction(assetId, 'Unpreparing...')) return;
   try {
     await apiCall(`/api/events/${eventId}/unprepare`, 'POST', { assetId });
     showNotification('success', `${customAssetLabelFromId(assetId)} unprepared`);
     updateAllButtonsForAsset(assetId, false);
-    setTimeout(() => {
-      preserveModalState(() => openPrepareEventModal(eventId));
-      if (document.getElementById('prepare-section')?.classList.contains('active')) loadPrepareEvents();
-      if (document.getElementById('events-section')?.classList.contains('active')) loadAllEvents();
-    }, 250);
+    schedulePrepareUiSync(eventId);
   } catch (error) {
     console.error('Error in unprepareSpecificAsset:', error);
     showNotification('error', `Failed to unprepare asset: ${error.message}`);
     updateAllButtonsForAsset(assetId, true);
+  } finally {
+    endPrepareAssetAction(assetId);
   }
 }
 
@@ -21211,6 +21420,7 @@ async function processUniversalContainer(eventId, containerId) {
           fromContainer: true,
           source: quickAddEnabled ? 'quick-add-container' : 'container'
         }).then((response) => {
+          updateAllButtonsForAsset(response?.data?.assetId || aid, true, { sourceAssetId: aid });
           if (response?.data?.isExtra) {
             results.extra.push(aid);
           } else {
@@ -21254,11 +21464,7 @@ async function processUniversalContainer(eventId, containerId) {
   `;
 
   if (feedbackDiv) showFeedback(feedbackDiv, failed ? 'warning' : 'success', detailsHtml);
-  setTimeout(() => {
-    preserveModalState(() => openPrepareEventModal(eventId));
-    if (document.getElementById('prepare-section')?.classList.contains('active')) loadPrepareEvents();
-    if (document.getElementById('events-section')?.classList.contains('active')) loadAllEvents();
-  }, 350);
+  schedulePrepareUiSync(eventId, 350);
 }
 
 
@@ -21938,6 +22144,7 @@ async function generateInventoryPdf() {
 
 // Transfer grouping, actions, and grouped PDFs
 window.__transferActionState = window.__transferActionState || {};
+window.__transferPendingActions = window.__transferPendingActions || {};
 
 
 function setTransferActionState(assetId, state) {
@@ -21948,6 +22155,22 @@ function setTransferActionState(assetId, state) {
 
 function resetTransferActionState() {
   window.__transferActionState = {};
+  window.__transferPendingActions = {};
+}
+
+function getTransferPendingAction(assetId) {
+  return window.__transferPendingActions?.[String(assetId || '')] || '';
+}
+
+function beginTransferPendingAction(assetId, action) {
+  if (!assetId || getTransferPendingAction(assetId)) return false;
+  window.__transferPendingActions[String(assetId)] = action;
+  return true;
+}
+
+function endTransferPendingAction(assetId) {
+  if (!assetId) return;
+  delete window.__transferPendingActions[String(assetId)];
 }
 
 function transferAssetTypeKey(item) {
@@ -22022,7 +22245,7 @@ function renderTransferWorkspace() {
 
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;align-items:end;background:white;border:1px solid #edf0f5;border-radius:16px;padding:16px;box-shadow:0 6px 18px rgba(0,0,0,.05);">
         <div class="form-group" style="margin:0;">
-          <label class="form-label">From Event — Ongoing / Last Day / Overdue</label>
+          <label class="form-label">From Event — Ready / Ongoing / Last Day / Returning / Overdue</label>
           <select id="transferSourceSelect" class="form-input" onchange="loadTransferCandidates()"><option value="">Select source event...</option>${sourceOptions}</select>
           <div style="font-size:12px;color:#666;margin-top:6px;">${sourceEvents.length} eligible source event(s)</div>
         </div>
@@ -22172,19 +22395,29 @@ function restoreOpenTransferDropdownIds(ids) {
 
 
 function transferAssetDropdownRows(group) {
-  const transferLimitReached = group.mode === 'common' && group.doneQty >= group.actionQty;
-  const returnLimitReached = group.mode !== 'common' && group.doneQty >= group.actionQty;
+  const transferLimitReached = group.mode === 'common' && (group.doneQty + (group.pendingQty || 0)) >= group.actionQty;
+  const returnLimitReached = group.mode !== 'common' && (group.doneQty + (group.pendingQty || 0)) >= group.actionQty;
 
   return group.items.map(item => {
     const encodedAssetId = encodeURIComponent(item.assetId || '');
     const state = getTransferItemState(item);
+    const pendingAction = getTransferPendingAction(item.assetId);
     const isTransferred = state === 'transferred';
     const isReturnedOffice = state === 'returnedOffice';
 
     let actionHtml = '';
     let statusHtml = '<span class="asset-badge status-available">Ready</span>';
 
-    if (group.mode === 'common') {
+    if (pendingAction) {
+      const pendingLabels = {
+        transfer: 'Transferring...',
+        undoTransfer: 'Undoing...',
+        returnOffice: 'Returning...',
+        undoReturnOffice: 'Undoing...'
+      };
+      statusHtml = `<span class="asset-badge status-deployed">${pendingLabels[pendingAction] || 'Updating...'}</span>`;
+      actionHtml = '<button class="btn btn-secondary btn-sm" disabled>Working...</button>';
+    } else if (group.mode === 'common') {
       if (isTransferred) {
         statusHtml = '<span class="asset-badge status-deployed">Transferred</span>';
         actionHtml = `<button class="btn btn-warning btn-sm" onclick="undoTransferDropdownAsset('${encodedAssetId}')">Undo</button>`;
@@ -22222,24 +22455,71 @@ function transferAssetDropdownRows(group) {
 }
 
 
-async function __aitRefreshTransferAfterAction() {
+function renderTransferCandidatesInPlace() {
   const openDropdowns = getOpenTransferDropdownIds();
-  await loadTransferCandidates({ quiet: true, openDropdowns });
+  renderTransferCandidates(window.__lastTransferData || {});
+  restoreOpenTransferDropdownIds(openDropdowns);
+}
+
+function setTransferCachedItemState(assetId, state) {
+  const data = window.__lastTransferData || {};
+  ['candidates', 'returnToOffice'].forEach(listName => {
+    (data[listName] || []).forEach(item => {
+      if (String(item.assetId || '') === String(assetId || '')) {
+        item.transferState = state || '';
+      }
+    });
+  });
+  setTransferActionState(assetId, state);
+}
+
+function adjustTransferCandidateRequirement(assetId, remainingDelta, preparedDelta) {
+  const data = window.__lastTransferData || {};
+  const sourceItem = (data.candidates || []).find(item => String(item.assetId || '') === String(assetId || ''));
+  if (!sourceItem) return;
+  const key = transferAssetTypeKey(sourceItem);
+
+  (data.candidates || []).forEach(item => {
+    if (transferAssetTypeKey(item) !== key) return;
+    const remaining = Math.max(
+      0,
+      Number(item.targetRemainingBeforeThisAsset ?? item.targetRemaining ?? 0) + remainingDelta
+    );
+    item.targetRemainingBeforeThisAsset = remaining;
+    item.targetRemaining = remaining;
+    item.targetPrepared = Math.max(0, Number(item.targetPrepared || 0) + preparedDelta);
+  });
+}
+
+function updateTransferSummaryAfterMove(direction, responseData = null) {
+  const data = window.__lastTransferData || {};
+  if (responseData?.fromEvent) {
+    data.fromEvent = { ...(data.fromEvent || {}), ...responseData.fromEvent };
+  } else if (data.fromEvent) {
+    data.fromEvent.unreturnedCount = Math.max(0, Number(data.fromEvent.unreturnedCount || 0) - direction);
+  }
+  if (responseData?.toEvent) {
+    data.toEvent = { ...(data.toEvent || {}), ...responseData.toEvent };
+  }
 }
 
 async function transferDropdownAsset(encodedAssetId) {
   const assetId = decodeURIComponent(encodedAssetId);
   const fromEventId = document.getElementById('transferSourceSelect')?.value;
   const toEventId = document.getElementById('transferTargetSelect')?.value;
-  if (!fromEventId || !toEventId || !assetId) return;
+  if (!fromEventId || !toEventId || !assetId || !beginTransferPendingAction(assetId, 'transfer')) return;
+  renderTransferCandidatesInPlace();
   try {
-    await apiCall('/api/transfers/execute', 'POST', { fromEventId: Number(fromEventId), toEventId: Number(toEventId), assetIds: [assetId] });
-    setTransferActionState(assetId, 'transferred');
+    const response = await apiCall('/api/transfers/execute', 'POST', { fromEventId: Number(fromEventId), toEventId: Number(toEventId), assetIds: [assetId] });
+    setTransferCachedItemState(assetId, 'transferred');
+    adjustTransferCandidateRequirement(assetId, -1, 1);
+    updateTransferSummaryAfterMove(1, response.data);
     showNotification('success', `${assetId} transferred`);
-    await __aitRefreshTransferAfterAction();
   } catch (error) {
     showNotification('error', `Failed to transfer ${assetId}: ${error.message}`);
-    await __aitRefreshTransferAfterAction();
+  } finally {
+    endTransferPendingAction(assetId);
+    renderTransferCandidatesInPlace();
   }
 }
 
@@ -22247,45 +22527,55 @@ async function undoTransferDropdownAsset(encodedAssetId) {
   const assetId = decodeURIComponent(encodedAssetId);
   const fromEventId = document.getElementById('transferSourceSelect')?.value;
   const toEventId = document.getElementById('transferTargetSelect')?.value;
-  if (!fromEventId || !toEventId || !assetId) return;
+  if (!fromEventId || !toEventId || !assetId || !beginTransferPendingAction(assetId, 'undoTransfer')) return;
+  renderTransferCandidatesInPlace();
   try {
     await apiCall('/api/transfers/undo', 'POST', { fromEventId: Number(fromEventId), toEventId: Number(toEventId), assetIds: [assetId] });
-    setTransferActionState(assetId, '');
+    setTransferCachedItemState(assetId, '');
+    adjustTransferCandidateRequirement(assetId, 1, -1);
+    updateTransferSummaryAfterMove(-1);
     showNotification('success', `${assetId} transfer undone`);
-    await __aitRefreshTransferAfterAction();
   } catch (error) {
     showNotification('error', `Failed to undo transfer for ${assetId}: ${error.message}`);
-    await __aitRefreshTransferAfterAction();
+  } finally {
+    endTransferPendingAction(assetId);
+    renderTransferCandidatesInPlace();
   }
 }
 
 async function returnOfficeDropdownAsset(encodedAssetId) {
   const assetId = decodeURIComponent(encodedAssetId);
   const fromEventId = document.getElementById('transferSourceSelect')?.value;
-  if (!fromEventId || !assetId) return;
+  if (!fromEventId || !assetId || !beginTransferPendingAction(assetId, 'returnOffice')) return;
+  renderTransferCandidatesInPlace();
   try {
     await apiCall('/api/transfers/return-office', 'POST', { fromEventId: Number(fromEventId), assetIds: [assetId] });
-    setTransferActionState(assetId, 'returnedOffice');
+    setTransferCachedItemState(assetId, 'returnedOffice');
+    updateTransferSummaryAfterMove(1);
     showNotification('success', `${assetId} marked to return to office`);
-    await __aitRefreshTransferAfterAction();
   } catch (error) {
     showNotification('error', `Failed to return ${assetId}: ${error.message}`);
-    await __aitRefreshTransferAfterAction();
+  } finally {
+    endTransferPendingAction(assetId);
+    renderTransferCandidatesInPlace();
   }
 }
 
 async function undoReturnOfficeDropdownAsset(encodedAssetId) {
   const assetId = decodeURIComponent(encodedAssetId);
   const fromEventId = document.getElementById('transferSourceSelect')?.value;
-  if (!fromEventId || !assetId) return;
+  if (!fromEventId || !assetId || !beginTransferPendingAction(assetId, 'undoReturnOffice')) return;
+  renderTransferCandidatesInPlace();
   try {
     await apiCall('/api/transfers/undo-return-office', 'POST', { fromEventId: Number(fromEventId), assetIds: [assetId] });
-    setTransferActionState(assetId, '');
+    setTransferCachedItemState(assetId, '');
+    updateTransferSummaryAfterMove(-1);
     showNotification('success', `${assetId} return-to-office undone`);
-    await __aitRefreshTransferAfterAction();
   } catch (error) {
     showNotification('error', `Failed to undo return for ${assetId}: ${error.message}`);
-    await __aitRefreshTransferAfterAction();
+  } finally {
+    endTransferPendingAction(assetId);
+    renderTransferCandidatesInPlace();
   }
 }
 
@@ -22376,7 +22666,10 @@ async function loadTransferCandidates(options = {}) {
 
 function getTransferListForMode(mode, data = {}) {
   const normalized = transferModeMeta(mode).mode;
-  if (normalized === 'return-office') return data.returnToOffice || transferReturnToOfficeCache || [];
+  if (normalized === 'return-office') {
+    return (data.returnToOffice || transferReturnToOfficeCache || [])
+      .filter(item => getTransferItemState(item) !== 'transferred');
+  }
   if (normalized === 'office-needed') return data.neededFromOffice || transferNeededFromOfficeCache || [];
   return data.candidates || transferCandidateCache || [];
 }
@@ -22423,16 +22716,18 @@ function buildTransferGroups(items, mode) {
 
     if (normalizedMode === 'common') {
       group.doneQty = group.items.filter(item => getTransferItemState(item) === 'transferred').length;
+      group.pendingQty = group.items.filter(item => getTransferPendingAction(item.assetId) === 'transfer').length;
       const currentRemaining = Math.max(0, Number(group.targetRemaining || 0));
       const totalNeededForThisComparison = group.doneQty + currentRemaining;
       group.actionQty = Math.min(group.items.length, Math.max(group.doneQty, totalNeededForThisComparison, group.doneQty ? group.doneQty : 1));
-      group.progressLabel = `${group.doneQty}/${group.actionQty} transferred`;
+      group.progressLabel = `${group.doneQty}/${group.actionQty} transferred${group.pendingQty ? ` (${group.pendingQty} pending)` : ''}`;
       group.helpText = `${group.items.length} source option(s) available${currentRemaining ? `; destination still needs ${currentRemaining}` : ''}.`;
     } else if (normalizedMode === 'return-office') {
       const returnQty = group.returnQuantity > 0 ? group.returnQuantity : group.items.length;
       group.doneQty = group.items.filter(item => getTransferItemState(item) === 'returnedOffice').length;
+      group.pendingQty = group.items.filter(item => getTransferPendingAction(item.assetId) === 'returnOffice').length;
       group.actionQty = Math.min(group.items.length, Math.max(group.doneQty, returnQty));
-      group.progressLabel = `${group.doneQty}/${group.actionQty} marked to return`;
+      group.progressLabel = `${group.doneQty}/${group.actionQty} marked to return${group.pendingQty ? ` (${group.pendingQty} pending)` : ''}`;
       group.helpText = group.reason || (group.targetRemaining > 0
         ? `Destination needs ${group.targetRemaining}; source has ${group.sourceQuantity || group.items.length}; ${group.actionQty} should return to office.`
         : 'Not required by destination event.');

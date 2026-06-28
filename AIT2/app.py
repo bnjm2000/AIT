@@ -89,6 +89,7 @@ _cache = {
 
 # Cross-device actions can otherwise race on the same physical asset.
 _transfer_action_lock = threading.RLock()
+_prepare_action_lock = threading.RLock()
 _inventory_action_lock = threading.RLock()
 
 # Server-sent events notify logged-in browsers when shared CSV data changes.
@@ -848,6 +849,14 @@ def with_transfer_action_lock(f):
     @wraps(f)
     def locked_function(*args, **kwargs):
         with _transfer_action_lock:
+            return f(*args, **kwargs)
+    return locked_function
+
+
+def with_prepare_action_lock(f):
+    @wraps(f)
+    def locked_function(*args, **kwargs):
+        with _prepare_action_lock:
             return f(*args, **kwargs)
     return locked_function
 
@@ -7079,6 +7088,7 @@ def manage_event_models(event_id):
 
 @app.route('/api/events/<int:event_id>/prepare', methods=['POST'])
 @require_auth
+@with_prepare_action_lock
 def prepare_event_asset(event_id):
     """Mark an asset as prepared for an event"""
     try:
@@ -7271,6 +7281,7 @@ def add_custom_asset_to_event(event_id):
 
 @app.route('/api/events/<int:event_id>/custom-assets/collect', methods=['POST'])
 @require_auth
+@with_prepare_action_lock
 def collect_custom_asset(event_id):
     """Mark a loan/rental custom item as collected."""
     try:
@@ -7305,6 +7316,7 @@ def collect_custom_asset(event_id):
 
 @app.route('/api/events/<int:event_id>/custom-assets/uncollect', methods=['POST'])
 @require_auth
+@with_prepare_action_lock
 def uncollect_custom_asset(event_id):
     """Undo collection for a loan/rental custom item. This also unprepares it."""
     try:
@@ -7339,6 +7351,7 @@ def uncollect_custom_asset(event_id):
 
 @app.route('/api/events/<int:event_id>/unprepare', methods=['POST'])
 @require_auth
+@with_prepare_action_lock
 def unprepare_event_asset(event_id):
     """Remove a specific asset completely from the event"""
     try:
@@ -7638,6 +7651,7 @@ def return_department_assets(event_id):
 
 @app.route('/api/events/<int:event_id>/assign-specific', methods=['POST'])
 @require_auth
+@with_prepare_action_lock
 def assign_specific_asset_to_model(event_id):
     """Assign a specific asset to fulfill a model requirement"""
     try:
@@ -8079,7 +8093,7 @@ def remove_asset_from_event_post(event_id):
 
 # ---------------- Transfer Assets helpers and routes ----------------
 
-TRANSFER_SOURCE_STATES = {'ongoing', 'last day', 'overdue', 'ready'}
+TRANSFER_SOURCE_STATES = {'ongoing', 'last day', 'returning', 'overdue', 'ready'}
 TRANSFER_TARGET_STATES = {'planning', 'preparing'}
 
 
@@ -8550,7 +8564,8 @@ def _transfer_one_asset(from_event, to_event, asset_id):
 def get_transfer_options():
     """Return valid source and destination events for the Transfer Assets page."""
     try:
-        # Make sure Ready/Ongoing/Overdue states are current before filtering.
+        # Make sure source event states are current before filtering. Returning
+        # events remain eligible while they still have assets physically out.
         for event in data_manager.events.values():
             old_state = event.state
             update_event_state(event)
@@ -8651,7 +8666,7 @@ def execute_transfer_assets():
             return jsonify({'error': 'Event not found'}), 404
 
         if str(from_event.state or '').strip().lower() not in TRANSFER_SOURCE_STATES:
-            return jsonify({'error': 'Source event must be Ongoing, Last Day, or Overdue'}), 400
+            return jsonify({'error': 'Source event must be Ready, Ongoing, Last Day, Returning, or Overdue'}), 400
         if str(to_event.state or '').strip().lower() not in TRANSFER_TARGET_STATES:
             return jsonify({'error': 'Destination event must be Planning or Preparing'}), 400
 
