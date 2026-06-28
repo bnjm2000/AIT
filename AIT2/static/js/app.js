@@ -3239,6 +3239,37 @@ function renderPdfFooterHtml() {
   return text.split(/\r?\n/).map(line => escapeHtml(line)).join('<br>');
 }
 
+function pdfMmToPx(mm) {
+  return (Number(mm || 0) * 96) / 25.4;
+}
+
+function mountPdfMeasureBox(measureBox, measureWidthMm) {
+  // The application body is displayed with CSS zoom, but print windows render
+  // at full scale. Mount beside the body and normalise any remaining scaling.
+  const measureRoot = document.documentElement || document.body;
+  measureRoot.appendChild(measureBox);
+
+  const expectedWidth = pdfMmToPx(measureWidthMm);
+  const renderedWidth = measureBox.getBoundingClientRect().width;
+  const measurementScale = renderedWidth > 0 && expectedWidth > 0
+    ? renderedWidth / expectedWidth
+    : 1;
+
+  return height => Number(height || 0) / measurementScale;
+}
+
+function pdfFooterReserveMm(pageConfig, footerHeightPx) {
+  const pageHeightMm = Number(pageConfig.pageHeightMm || 297);
+  const pageFlowHeightMm = Number(pageConfig.pageFlowHeightMm || 276);
+  const topPaddingMm = Number(pageConfig.topPaddingMm ?? 7);
+  const footerBottomMm = Number(pageConfig.footerBottomMm ?? 7);
+  const footerGapMm = Number(pageConfig.footerGapMm ?? 2);
+  const minReserveMm = Math.max(0, Number(pageConfig.minReserveMm ?? 6));
+  const footerHeightMm = Math.max(0, Number(footerHeightPx || 0) * 25.4 / 96);
+  const safeFlowHeightMm = pageHeightMm - topPaddingMm - footerBottomMm - footerHeightMm - footerGapMm;
+  return Math.max(minReserveMm, pageFlowHeightMm - safeFlowHeightMm, 0);
+}
+
 function applyPdfSettingsToApp() {
   const logo = document.getElementById('company-logo');
   if (logo) {
@@ -9223,7 +9254,6 @@ function buildMaintenanceReportPdfPages(rows, context) {
   const safe = value => escapeHtml(String(value ?? ''));
   const logoUrl = escapeHtmlAttr(getPdfLogoUrl());
   const footerHtml = renderPdfFooterHtml();
-  const mmToPx = mm => (mm * 96) / 25.4;
 
   const headerHtml = `
     <div class="logo-row"><img src="${logoUrl}" alt="Company Logo"></div>
@@ -9270,9 +9300,11 @@ function buildMaintenanceReportPdfPages(rows, context) {
       #__maintenanceReportMeasureBox .header-left { flex:1; font-size:9pt; font-weight:bold; line-height:1.35; }
       #__maintenanceReportMeasureBox .header-right { text-align:right; font-size:9pt; font-weight:bold; }
       #__maintenanceReportMeasureBox .report-title { font-size:14pt; font-weight:bold; margin-bottom:5px; }
-      #__maintenanceReportMeasureBox .items-table { width:100%; border-collapse:collapse; border:2px solid black; margin-bottom:16px; table-layout:fixed; }
+      #__maintenanceReportMeasureBox .items-table { width:100%; border-collapse:collapse; border:2px solid black; margin-bottom:0; table-layout:fixed; }
       #__maintenanceReportMeasureBox .items-table th { background:#333; color:white; padding:6px; text-align:left; font-size:7.8pt; border:1px solid #333; }
-      #__maintenanceReportMeasureBox .items-table td { border:1px solid #333; padding:5px; font-size:7.6pt; vertical-align:top; line-height:1.25; word-break:break-word; }
+      #__maintenanceReportMeasureBox .items-table td { border:1px solid #333; padding:5px; font-size:7.6pt; vertical-align:top; line-height:1.25; word-break:break-word; overflow-wrap:anywhere; }
+      #__maintenanceReportMeasureBox .items-table td > span { max-width:100%; white-space:normal !important; overflow-wrap:anywhere; }
+      #__maintenanceReportMeasureBox .footer-measure { width:100%; text-align:center; font-size:7pt; font-weight:bold; line-height:1.2; overflow-wrap:anywhere; }
     </style>
     <div id="__maintenanceReportBase">
       ${headerHtml}
@@ -9282,20 +9314,26 @@ function buildMaintenanceReportPdfPages(rows, context) {
       ${maintenanceReportTableHead()}
       <tbody id="__maintenanceReportMeasureBody"></tbody>
     </table>
+    <div id="__maintenanceReportFooterMeasure" class="footer-measure">${footerHtml}</div>
   `;
 
-  document.body.appendChild(measureBox);
+  const normaliseMeasuredHeight = mountPdfMeasureBox(measureBox, 196);
 
   const measureBody = measureBox.querySelector('#__maintenanceReportMeasureBody');
-  const baseHeight = measureBox.querySelector('#__maintenanceReportBase').getBoundingClientRect().height;
+  const baseHeight = normaliseMeasuredHeight(
+    measureBox.querySelector('#__maintenanceReportBase').getBoundingClientRect().height
+  );
+  const footerHeight = normaliseMeasuredHeight(
+    measureBox.querySelector('#__maintenanceReportFooterMeasure')?.getBoundingClientRect().height || 0
+  );
   const pageFlowHeightMm = 276;
-  const footerReserveMm = 18;
-  const rowBudget = Math.max(40, mmToPx(pageFlowHeightMm - footerReserveMm) - baseHeight);
+  const footerReserveMm = pdfFooterReserveMm({ pageFlowHeightMm }, footerHeight);
+  const rowBudget = Math.max(40, pdfMmToPx(pageFlowHeightMm - footerReserveMm) - baseHeight);
 
   function measureRow(rowHtml) {
     measureBody.innerHTML = rowHtml;
     const row = measureBody.querySelector('tr');
-    return row ? row.getBoundingClientRect().height : 0;
+    return row ? normaliseMeasuredHeight(row.getBoundingClientRect().height) : 0;
   }
 
   rowRecords.forEach(record => {
@@ -9383,10 +9421,11 @@ async function generateMaintenanceReportPdf() {
       .header-left { flex:1; font-size:9pt; font-weight:bold; line-height:1.35; }
       .header-right { text-align:right; font-size:9pt; font-weight:bold; }
       .report-title { font-size:14pt; font-weight:bold; margin-bottom:5px; }
-      .items-table { width:100%; border-collapse:collapse; border:2px solid black; margin-bottom:16px; table-layout:fixed; }
+      .items-table { width:100%; border-collapse:collapse; border:2px solid black; margin-bottom:0; table-layout:fixed; }
       .items-table th { background:#333; color:white; padding:6px; text-align:left; font-size:7.8pt; border:1px solid #333; }
-      .items-table td { border:1px solid #333; padding:5px; font-size:7.6pt; vertical-align:top; line-height:1.25; word-break:break-word; }
-      .footer { position:absolute; bottom:7mm; left:7mm; right:7mm; text-align:center; font-size:7pt; font-weight:bold; line-height:1.2; }
+      .items-table td { border:1px solid #333; padding:5px; font-size:7.6pt; vertical-align:top; line-height:1.25; word-break:break-word; overflow-wrap:anywhere; }
+      .items-table td > span { max-width:100%; white-space:normal !important; overflow-wrap:anywhere; }
+      .footer { position:absolute; bottom:7mm; left:7mm; right:7mm; text-align:center; font-size:7pt; font-weight:bold; line-height:1.2; overflow-wrap:anywhere; }
       .page-number { position:absolute; bottom:3mm; right:7mm; font-size:7pt; }
       .print-btn { position:fixed; top:20px; right:20px; background:#667eea; color:white; border:none; padding:10px 18px; border-radius:6px; cursor:pointer; z-index:999; }
       @media print { body, body * { -webkit-print-color-adjust:exact; print-color-adjust:exact; } body { background:white; } .page { margin:0; page-break-after:always; break-after:page; } .page:last-child { page-break-after:auto; break-after:auto; } .print-btn { display:none; } }
@@ -18476,6 +18515,8 @@ function generatePdfDO(data) {
             font-size: 9pt;
             color: black;
             vertical-align: top;
+            word-break: break-word;
+            overflow-wrap: anywhere;
         }
 
         .items-table td:first-child {
@@ -18561,6 +18602,7 @@ function generatePdfDO(data) {
             color: black;
             line-height: 1.2;
             z-index: 100;
+            overflow-wrap: anywhere;
         }
 
         .page-number {
@@ -18658,6 +18700,7 @@ function generatePdfDO(data) {
             color: black;
             line-height: 1.2;
             z-index: 100;
+            overflow-wrap: anywhere;
         }
 
         .page-number {
@@ -18748,22 +18791,11 @@ function generatePagesContent(data, formattedDate) {
     const logoUrl = escapeHtmlAttr(getPdfLogoUrl());
     const footerHtml = renderPdfFooterHtml();
 
-    const mmToPx = (mm) => (mm * 96) / 25.4;
-
     // A4 is 210mm x 297mm.
     // Page padding is 7mm top/left/right and 14mm bottom.
-    // Normal pages reserve only footer/page-number space.
+    // Normal pages reserve the measured footer height.
     // Last page reserves comments + signature + footer space.
     const PAGE_BODY_HEIGHT_MM = 276;
-
-    // Normal pages can be allowed to run closer to the footer.
-    // Increase this to squeeze more rows onto normal pages only.
-    const NORMAL_PAGE_EXTRA_MM = 14;
-
-    // Keep this at 0 because NORMAL_PAGE_EXTRA_MM now controls the squeeze.
-    const NORMAL_RESERVED_MM = 0;
-
-    // Last page still reserves space for comments + signature.
     const LAST_RESERVED_MM = 52;
 
     const FOOTER_HTML = `
@@ -18903,6 +18935,8 @@ function generatePagesContent(data, formattedDate) {
                 font-size: 9pt;
                 color: black;
                 vertical-align: top;
+                word-break: break-word;
+                overflow-wrap: anywhere;
             }
 
             #__doMeasureBox .items-table td:first-child,
@@ -18930,6 +18964,15 @@ function generatePagesContent(data, formattedDate) {
             #__doMeasureBox .quantity-col {
                 text-align: center;
                 width: 80px;
+            }
+
+            #__doMeasureBox .footer-measure {
+                width: 100%;
+                text-align: center;
+                font-family: 'Calibri', sans-serif;
+                font-size: 7pt;
+                line-height: 1.2;
+                overflow-wrap: anywhere;
             }
         </style>
 
@@ -18980,27 +19023,37 @@ function generatePagesContent(data, formattedDate) {
         <table class="do-measure-table">
             <tbody id="__doMeasureBody"></tbody>
         </table>
+
+        <div id="__doFooterMeasure" class="footer-measure">${footerHtml}</div>
     `;
 
-    document.body.appendChild(measureBox);
+    const normaliseMeasuredHeight = mountPdfMeasureBox(measureBox, 196);
 
     const measureBody = measureBox.querySelector('#__doMeasureBody');
-    const baseHeight = measureBox.querySelector('#__doBaseMeasure').getBoundingClientRect().height;
+    const baseHeight = normaliseMeasuredHeight(
+        measureBox.querySelector('#__doBaseMeasure').getBoundingClientRect().height
+    );
+    const footerHeight = normaliseMeasuredHeight(
+        measureBox.querySelector('#__doFooterMeasure')?.getBoundingClientRect().height || 0
+    );
+    const normalReservedMm = pdfFooterReserveMm({
+        pageFlowHeightMm: PAGE_BODY_HEIGHT_MM
+    }, footerHeight);
 
     const normalPageRowBudget = Math.max(
         50,
-        mmToPx(PAGE_BODY_HEIGHT_MM - NORMAL_RESERVED_MM + NORMAL_PAGE_EXTRA_MM) - baseHeight
+        pdfMmToPx(PAGE_BODY_HEIGHT_MM - normalReservedMm) - baseHeight
     );
 
     const lastPageRowBudget = Math.max(
         50,
-        mmToPx(PAGE_BODY_HEIGHT_MM - LAST_RESERVED_MM) - baseHeight
+        pdfMmToPx(PAGE_BODY_HEIGHT_MM - Math.max(LAST_RESERVED_MM, normalReservedMm)) - baseHeight
     );
 
     function measureRow(rowHtml) {
         measureBody.innerHTML = rowHtml;
         const row = measureBody.querySelector('tr');
-        return row ? row.getBoundingClientRect().height : 0;
+        return row ? normaliseMeasuredHeight(row.getBoundingClientRect().height) : 0;
     }
 
     const deptHeights = {};
@@ -21817,19 +21870,6 @@ function inventoryPdfPageConfig(showIndividual) {
       };
 }
 
-function inventoryPdfFooterReserveMm(pageConfig, footerHeightPx) {
-  const pxToMm = px => (px * 25.4) / 96;
-  const pageHeightMm = Number(pageConfig.heightMm || 0);
-  const pageFlowHeightMm = Number(pageConfig.pageFlowHeightMm || 0);
-  const topPaddingMm = Number(pageConfig.pagePaddingTopMm ?? 7);
-  const footerBottomMm = Number(pageConfig.footerBottomMm ?? 7);
-  const footerGapMm = Number(pageConfig.footerGapMm ?? 2);
-  const minReserveMm = Math.max(0, Number(pageConfig.minFooterReserveMm ?? 0));
-  const footerHeightMm = Math.max(0, pxToMm(Number(footerHeightPx || 0)));
-  const safeFlowHeightMm = pageHeightMm - topPaddingMm - footerBottomMm - footerHeightMm - footerGapMm;
-  return Math.max(minReserveMm, pageFlowHeightMm - safeFlowHeightMm, 0);
-}
-
 function inventoryPdfColGroup(showIndividual) {
   if (showIndividual) {
     return `
@@ -21918,7 +21958,6 @@ function buildInventoryPdfPages(filteredAssets, filters, context) {
   const footerHtml = renderPdfFooterHtml();
   const showIndividual = !!context.showIndividual;
   const pageConfig = inventoryPdfPageConfig(showIndividual);
-  const mmToPx = mm => (mm * 96) / 25.4;
 
   const headerHtml = `
     <div class="logo-row"><img src="${logoUrl}" alt="Company Logo"></div>
@@ -21984,26 +22023,24 @@ function buildInventoryPdfPages(filteredAssets, filters, context) {
     <div id="__inventoryFooterMeasure" class="footer-measure">${footerHtml}</div>
   `;
 
-  // Keep PDF measurements outside the scaled application body. The app uses
-  // CSS zoom for its UI, while the print window always renders at full scale.
-  const measureRoot = document.documentElement || document.body;
-  measureRoot.appendChild(measureBox);
+  const normaliseMeasuredHeight = mountPdfMeasureBox(measureBox, pageConfig.measureWidthMm);
 
   const measureBody = measureBox.querySelector('#__inventoryMeasureBody');
-  const expectedMeasureWidth = mmToPx(pageConfig.measureWidthMm);
-  const renderedMeasureWidth = measureBox.getBoundingClientRect().width;
-  const measurementScale = renderedMeasureWidth > 0 && expectedMeasureWidth > 0
-    ? renderedMeasureWidth / expectedMeasureWidth
-    : 1;
-  const normaliseMeasuredHeight = height => height / measurementScale;
   const baseHeight = normaliseMeasuredHeight(
     measureBox.querySelector('#__inventoryBase').getBoundingClientRect().height
   );
   const footerHeight = normaliseMeasuredHeight(
     measureBox.querySelector('#__inventoryFooterMeasure')?.getBoundingClientRect().height || 0
   );
-  const footerReserveMm = inventoryPdfFooterReserveMm(pageConfig, footerHeight);
-  const rowBudget = Math.max(36, mmToPx(pageConfig.pageFlowHeightMm - footerReserveMm) - baseHeight);
+  const footerReserveMm = pdfFooterReserveMm({
+    pageHeightMm: pageConfig.heightMm,
+    pageFlowHeightMm: pageConfig.pageFlowHeightMm,
+    topPaddingMm: pageConfig.pagePaddingTopMm,
+    footerBottomMm: pageConfig.footerBottomMm,
+    footerGapMm: pageConfig.footerGapMm,
+    minReserveMm: pageConfig.minFooterReserveMm
+  }, footerHeight);
+  const rowBudget = Math.max(36, pdfMmToPx(pageConfig.pageFlowHeightMm - footerReserveMm) - baseHeight);
 
   function measureRow(rowHtml) {
     measureBody.innerHTML = rowHtml;
@@ -22104,7 +22141,7 @@ async function generateInventoryPdf() {
       .header-left { flex: 1; font-size: 8.5pt; font-weight: bold; line-height: 1.35; }
       .header-right { text-align: right; font-size: 8.5pt; font-weight: bold; line-height: 1.35; min-width: 180px; }
       .report-title { font-size: 14pt; font-weight: bold; margin-bottom: 5px; }
-      .inventory-table { width: 100%; border-collapse: collapse; border: 2px solid black; table-layout: fixed; margin-bottom: 16px; }
+      .inventory-table { width: 100%; border-collapse: collapse; border: 2px solid black; table-layout: fixed; margin-bottom: 0; }
       .inventory-table thead { display: table-header-group; }
       .inventory-table tr { break-inside: avoid; page-break-inside: avoid; }
       .inventory-table th { background: #333; color: #fff; padding: ${pageConfig.tablePadding}; text-align: left; border: 1px solid #333; font-size: ${pageConfig.tableFontSize}; }
@@ -22894,7 +22931,6 @@ function buildTransferPdfPages(groups, context) {
   const safe = (value) => escapeHtml(String(value ?? ''));
   const logoUrl = escapeHtmlAttr(getPdfLogoUrl());
   const footerHtml = renderPdfFooterHtml();
-  const mmToPx = (mm) => (mm * 96) / 25.4;
 
   const fromDate = context.fromDateRange ? ` | ${safe(context.fromDateRange)}` : '';
   const toDate = context.toDateRange ? ` | ${safe(context.toDateRange)}` : '';
@@ -22958,10 +22994,13 @@ function buildTransferPdfPages(groups, context) {
       #__transferMeasureBox .header-right { text-align:right; font-size:9pt; font-weight:bold; }
       #__transferMeasureBox .transfer-title { font-size:14pt; font-weight:bold; margin-bottom:5px; }
       #__transferMeasureBox .summary-table,
-      #__transferMeasureBox .items-table { width:100%; border-collapse:collapse; border:2px solid black; margin-bottom:16px; table-layout:fixed; }
+      #__transferMeasureBox .items-table { width:100%; border-collapse:collapse; border:2px solid black; table-layout:fixed; }
+      #__transferMeasureBox .summary-table { margin-bottom:16px; }
+      #__transferMeasureBox .items-table { margin-bottom:0; }
       #__transferMeasureBox .summary-table td { border:1px solid #333; padding:7px; font-size:9pt; vertical-align:top; }
       #__transferMeasureBox .items-table th { background:#333; color:white; padding:8px; text-align:left; font-size:8.5pt; border:1px solid #333; }
-      #__transferMeasureBox .items-table td { border:1px solid #333; padding:6px; font-size:8.5pt; vertical-align:top; line-height:1.25; word-break:break-word; }
+      #__transferMeasureBox .items-table td { border:1px solid #333; padding:6px; font-size:8.5pt; vertical-align:top; line-height:1.25; word-break:break-word; overflow-wrap:anywhere; }
+      #__transferMeasureBox .footer-measure { width:100%; text-align:center; font-size:7pt; font-weight:bold; line-height:1.2; overflow-wrap:anywhere; }
     </style>
     <div id="__transferFirstBase">
       ${headerHtml}
@@ -22976,22 +23015,30 @@ function buildTransferPdfPages(groups, context) {
       ${TRANSFER_PDF_COLGROUP}
       <tbody id="__transferMeasureBody"></tbody>
     </table>
+    <div id="__transferFooterMeasure" class="footer-measure">${footerHtml}</div>
   `;
 
-  document.body.appendChild(measureBox);
+  const normaliseMeasuredHeight = mountPdfMeasureBox(measureBox, 196);
 
   const measureBody = measureBox.querySelector('#__transferMeasureBody');
-  const firstBaseHeight = measureBox.querySelector('#__transferFirstBase').getBoundingClientRect().height;
-  const nextBaseHeight = measureBox.querySelector('#__transferNextBase').getBoundingClientRect().height;
+  const firstBaseHeight = normaliseMeasuredHeight(
+    measureBox.querySelector('#__transferFirstBase').getBoundingClientRect().height
+  );
+  const nextBaseHeight = normaliseMeasuredHeight(
+    measureBox.querySelector('#__transferNextBase').getBoundingClientRect().height
+  );
+  const footerHeight = normaliseMeasuredHeight(
+    measureBox.querySelector('#__transferFooterMeasure')?.getBoundingClientRect().height || 0
+  );
   const pageFlowHeightMm = 276;
-  const footerReserveMm = 18;
-  const firstPageBudget = Math.max(40, mmToPx(pageFlowHeightMm - footerReserveMm) - firstBaseHeight);
-  const nextPageBudget = Math.max(40, mmToPx(pageFlowHeightMm - footerReserveMm) - nextBaseHeight);
+  const footerReserveMm = pdfFooterReserveMm({ pageFlowHeightMm }, footerHeight);
+  const firstPageBudget = Math.max(40, pdfMmToPx(pageFlowHeightMm - footerReserveMm) - firstBaseHeight);
+  const nextPageBudget = Math.max(40, pdfMmToPx(pageFlowHeightMm - footerReserveMm) - nextBaseHeight);
 
   function measureRow(rowHtml) {
     measureBody.innerHTML = rowHtml;
     const row = measureBody.querySelector('tr');
-    return row ? row.getBoundingClientRect().height : 0;
+    return row ? normaliseMeasuredHeight(row.getBoundingClientRect().height) : 0;
   }
 
   rowRecords.forEach(record => {
@@ -23099,10 +23146,11 @@ async function generateTransferPdf() {
     .page:last-child { page-break-after: auto; break-after: auto; }
     .logo-row { display:flex; justify-content:flex-end; margin-bottom:7px; height:39px; } .logo-row img { height:39px; width:auto; object-fit:contain; }
     .header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:20px; } .header-left { flex:1; font-size:9pt; font-weight:bold; line-height:1.35; } .header-right { text-align:right; font-size:9pt; font-weight:bold; }
-    .transfer-title { font-size:14pt; font-weight:bold; margin-bottom:5px; } .summary-table, .items-table { width:100%; border-collapse:collapse; border:2px solid black; margin-bottom:16px; table-layout:fixed; }
+    .transfer-title { font-size:14pt; font-weight:bold; margin-bottom:5px; } .summary-table, .items-table { width:100%; border-collapse:collapse; border:2px solid black; table-layout:fixed; }
+    .summary-table { margin-bottom:16px; } .items-table { margin-bottom:0; }
     .summary-table td { border:1px solid #333; padding:7px; font-size:9pt; vertical-align:top; } .items-table th { background:#333; color:white; padding:8px; text-align:left; font-size:8.5pt; border:1px solid #333; }
-    .items-table td { border:1px solid #333; padding:6px; font-size:8.5pt; vertical-align:top; line-height:1.25; word-break:break-word; }
-    .footer { position:absolute; bottom:7mm; left:7mm; right:7mm; text-align:center; font-size:7pt; font-weight:bold; line-height:1.2; }
+    .items-table td { border:1px solid #333; padding:6px; font-size:8.5pt; vertical-align:top; line-height:1.25; word-break:break-word; overflow-wrap:anywhere; }
+    .footer { position:absolute; bottom:7mm; left:7mm; right:7mm; text-align:center; font-size:7pt; font-weight:bold; line-height:1.2; overflow-wrap:anywhere; }
     .page-number { position:absolute; bottom:3mm; right:7mm; font-size:7pt; }
     .print-btn { position:fixed; top:20px; right:20px; background:#667eea; color:white; border:none; padding:10px 18px; border-radius:6px; cursor:pointer; z-index:999; }
     @media print { body { background:white; } .page { margin:0; page-break-after:always; break-after:page; } .page:last-child { page-break-after:auto; break-after:auto; } .print-btn { display:none; } }
