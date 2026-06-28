@@ -304,6 +304,32 @@ class PrepareQuickAddAndAdminDeleteTests(unittest.TestCase):
         self.assertNotIn('A#01', event.returned_items)
         self.assertNotIn('A#01', event.extra_assets)
 
+    def test_event_remove_asset_uses_complete_admin_route(self):
+        event = self.make_event(
+            event_id=107,
+            prepared=['[MODEL]AX|TestBrand|TestModel|1|Matching item'],
+            actual=['A#02'],
+            extra=['A#02'],
+        )
+
+        self.login_as('normal')
+        forbidden = self.client.post(
+            '/api/events/107/remove-asset',
+            json={'assetId': 'A#02'},
+        )
+        self.assertEqual(forbidden.status_code, 403)
+
+        self.login_as('admin', True)
+        response = self.client.post(
+            '/api/events/107/remove-asset',
+            json={'assetId': 'A#02'},
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertNotIn('A#02', event.actually_prepared)
+        self.assertNotIn('A#02', event.extra_assets)
+        self.assertEqual(self.data_manager.inventory['A#02'].current_location, 'Store')
+
     def test_bulk_asset_delete_requires_password_and_cleans_events_and_containers(self):
         event = self.make_event(
             event_id=107,

@@ -11,13 +11,13 @@ import secrets
 import shutil
 import subprocess
 import tempfile
+import threading
+import time
 from collections import defaultdict
 from datetime import datetime, timedelta
 from functools import wraps
 from types import SimpleNamespace
 from urllib.parse import quote, unquote_plus
-import threading
-import time
 
 from flask import (
     Flask,
@@ -51,12 +51,12 @@ from maintenance_logs import (
     status_change_labels,
 )
 from models import (
+    Client,
     Container,
     Event,
     InventoryItem,
     LogEntry,
     User,
-    dates_overlap,
     format_date_output,
     hash_password,
 )
@@ -845,42 +845,36 @@ def publish_marked_realtime_changes(response):
         )
     return response
 
-def with_transfer_action_lock(f):
-    @wraps(f)
-    def locked_function(*args, **kwargs):
-        with _transfer_action_lock:
-            return f(*args, **kwargs)
-    return locked_function
+def _with_action_lock(lock):
+    """Build a route decorator that serializes operations using the given lock."""
+    def decorator(function):
+        @wraps(function)
+        def locked_function(*args, **kwargs):
+            with lock:
+                return function(*args, **kwargs)
+
+        return locked_function
+
+    return decorator
 
 
-def with_prepare_action_lock(f):
-    @wraps(f)
-    def locked_function(*args, **kwargs):
-        with _prepare_action_lock:
-            return f(*args, **kwargs)
-    return locked_function
+with_transfer_action_lock = _with_action_lock(_transfer_action_lock)
+with_prepare_action_lock = _with_action_lock(_prepare_action_lock)
+with_inventory_action_lock = _with_action_lock(_inventory_action_lock)
 
 
-def with_inventory_action_lock(f):
-    @wraps(f)
-    def locked_function(*args, **kwargs):
-        with _inventory_action_lock:
-            return f(*args, **kwargs)
-    return locked_function
-
-from datetime import datetime as _dt
-from flask import request, jsonify
-
-def _parse_any_date(_s):
-    if not _s:
+def _parse_any_date(value):
+    if not value:
         return None
-    s = str(_s).strip()
+
+    value = str(value).strip()
     for fmt in ("%Y%m%d", "%Y/%m/%d", "%Y-%m-%d"):
         try:
-            return _dt.strptime(s, fmt).date()
-        except Exception:
+            return datetime.strptime(value, fmt).date()
+        except ValueError:
             pass
     return None
+
 
 def _ranges_overlap(a_start, a_end, b_start, b_end):
     ad1, ad2 = _parse_any_date(a_start), _parse_any_date(a_end)
@@ -4607,7 +4601,7 @@ def create_company():
         registry['companies'][code] = record
         registry = _save_company_registry(registry)
 
-        manager = _get_company_data_manager(code)
+        _get_company_data_manager(code)
         settings_path = os.path.join(_company_record_backend_folder(record), 'PdfSettings.json')
         if not os.path.exists(settings_path):
             with open(settings_path, 'w', encoding='utf-8') as f:
@@ -6690,8 +6684,6 @@ def delete_maintenance_log(asset_id, log_index):
     try:
         logger.info(f"Received maintenance log delete request for asset: '{asset_id}', log index: {log_index}")
         
-        # URL decode the asset_id in case it has special characters
-        from urllib.parse import unquote
         asset_id = unquote_plus(asset_id)
         
         asset = data_manager.inventory.get(asset_id)
@@ -6918,8 +6910,6 @@ def manage_event_models(event_id):
 
         data = request.get_json()
 
-        # In the POST section of manage_event_models function, around line 620:
-
         if request.method == 'POST':
             # Add model assignment
             brand = data.get('brand', '').strip()
@@ -6928,11 +6918,15 @@ def manage_event_models(event_id):
             provided_description = data.get('description', '').strip()
             quantity = max(1, int(data.get('quantity', 1)))
 
-            logger.info(f"=== ADD MODEL REQUEST ===")
-            logger.info(f"Brand: '{brand}', Model: '{model}', Dept: '{department}'")
-            logger.info(f"Provided description: '{provided_description}'")
-            logger.info(f"Raw data: {data}")  # Add this line to see what's being sent
-            logger.info(f"Quantity: {quantity}")
+            logger.debug(
+                "Add model request: brand=%r, model=%r, department=%r, "
+                "description=%r, quantity=%s",
+                brand,
+                model,
+                department,
+                provided_description,
+                quantity,
+            )
 
             if not brand or not model or not department:
                 return jsonify({'error': 'Brand, model, and department are required'}), 400
@@ -7982,79 +7976,10 @@ def unassign_specific_asset_from_model(event_id):
     
 @app.route('/api/events/<int:event_id>/remove-asset', methods=['POST'])
 @require_admin
-def remove_asset_from_event_body(event_id):
-    """Remove an asset from an event (with asset ID in request body)"""
+def remove_asset_from_event(event_id):
+    """Remove an asset from every assignment list associated with an event."""
     try:
-        data = request.get_json()
-        asset_id = data.get('assetId', '').strip()
-        
-        if not asset_id:
-            return jsonify({'error': 'Asset ID is required'}), 400
-        
-        logger.info(f"Removing asset '{asset_id}' from event {event_id}")
-        
-        event = data_manager.events.get(event_id)
-        if not event:
-            return jsonify({'error': 'Event not found'}), 404
-
-        # Check if asset is in this event
-        if asset_id not in event.prepared_items:
-            return jsonify({'error': 'Asset is not assigned to this event'}), 400
-
-        # LOG THE REMOVAL
-        log_asset_change(event_id, asset_id, "REMOVING", "from prepared_items via POST remove-asset endpoint", "remove_asset_from_event_body")
-
-        # Remove the asset
-        event.prepared_items.remove(asset_id)
-
-        # Also remove from returned items if it was there
-        if asset_id in event.returned_items:
-            event.returned_items.remove(asset_id)
-            log_asset_change(event_id, asset_id, "REMOVING", "from returned_items", "remove_asset_from_event_body")
-
-        # Initialize actually_prepared if it doesn't exist
-        if not hasattr(event, 'actually_prepared'):
-            event.actually_prepared = []
-
-        # Remove from actually_prepared if it was there
-        if asset_id in event.actually_prepared:
-            event.actually_prepared.remove(asset_id)
-            log_asset_change(event_id, asset_id, "REMOVING", "from actually_prepared", "remove_asset_from_event_body")
-
-        # Remove from extra_assets if it exists
-        if hasattr(event, 'extra_assets') and asset_id in event.extra_assets:
-            event.extra_assets.remove(asset_id)
-            log_asset_change(event_id, asset_id, "REMOVING", "from extra_assets", "remove_asset_from_event_body")
-
-        # For regular assets, update location
-        if not _is_custom_ref(asset_id):
-            asset = data_manager.inventory.get(asset_id)
-            if asset:
-                asset.current_location = asset.default_location or ''
-                data_manager.save_inventory()
-
-        # Update event state
-        update_event_state(event)
-
-        # Save changes
-        data_manager.save_event(event)
-
-        # Invalidate cache
-        invalidate_cache()
-
-        log_action(f"Removed asset {asset_id} from event {event_id}")
-
-        return jsonify({'success': True, 'message': f'Asset {asset_id} removed from event'})
-    except Exception as e:
-        logger.error(f"Error removing asset from event {event_id}: {e}")
-        return jsonify({'error': 'Failed to remove asset from event'}), 500
-
-@app.route('/api/events/<int:event_id>/remove-asset', methods=['POST'])
-@require_admin
-def remove_asset_from_event_post(event_id):
-    """Remove an asset from an event - uses POST body to avoid URL encoding issues"""
-    try:
-        data = request.get_json()
+        data = request.get_json(silent=True) or {}
         asset_id = data.get('assetId', '').strip()
         
         if not asset_id:
@@ -9677,7 +9602,7 @@ def get_event_assets(event_id):
 
 
 @app.route('/api/assets', methods=['POST'])
-@require_auth
+@require_admin
 def create_asset():
     """Create one or more assets."""
     try:
@@ -10872,8 +10797,6 @@ def maintain_asset(asset_id):
     try:
         logger.info(f"Received maintenance request for asset: '{asset_id}'")
         
-        # URL decode the asset_id in case it has special characters
-        from urllib.parse import unquote
         asset_id = unquote_plus(asset_id)
         logger.info(f"Decoded asset ID: '{asset_id}'")
 
@@ -11184,8 +11107,6 @@ def update_maintenance_log_enhanced(asset_id, log_index):
     try:
         logger.info(f"Received enhanced maintenance log update request for asset: '{asset_id}', log index: {log_index}")
         
-        # URL decode the asset_id in case it has special characters
-        from urllib.parse import unquote
         asset_id = unquote_plus(asset_id)
         
         asset = data_manager.inventory.get(asset_id)
@@ -11902,7 +11823,6 @@ def remove_custom_asset_from_event(event_id):
 def update_all_event_states():
     """Manually trigger state updates for all events"""
     try:
-        current_date = datetime.now().strftime('%Y%m%d')
         updated_events = []
         
         for event in data_manager.events.values():
@@ -12062,27 +11982,12 @@ def check_and_update_ongoing_events():
         for event in data_manager.events.values():
             old_state = event.state
             
-            # Log event details for debugging overdue detection
-            has_unreturned = len(getattr(event, 'actually_prepared', [])) > len(getattr(event, 'returned_items', []))
-            is_past_end = current_date > event.end_date
-            
-            # (DEBUG)
-            # logger.info(f"Event {event.event_id}: {event.name}")
-            # logger.info(f"  State: {old_state}, End: {event.end_date}, Current: {current_date}")
-            # logger.info(f"  Past end date: {is_past_end}, Has unreturned assets: {has_unreturned}")
-            # logger.info(f"  Actually prepared: {len(getattr(event, 'actually_prepared', []))}, Returned: {len(getattr(event, 'returned_items', []))}")
-            
-            # Always call update_event_state to check for state changes
             update_event_state(event)
             
             if event.state != old_state:
                 data_manager.save_event(event)
                 updated_count += 1
-                ##logger.info(f"  *** STATE CHANGED: {old_state} → {event.state} ***")
 
-                ##DEBUG
-            # else:
-            #     logger.info(f"  No state change (remains {event.state})")
         
         if updated_count > 0:
             invalidate_cache()
@@ -12096,8 +12001,10 @@ def check_and_update_ongoing_events():
         logger.error(f"Traceback: {traceback.format_exc()}")
 
 def _client_to_dict(c):
-    # Handles both model instances and plain dicts defensively
-    get = (lambda k, d='': getattr(c, k, getattr(c, k.replace('postalCode', 'postal_code'), d)))
+    def get(attribute, default=''):
+        snake_case_attribute = attribute.replace('postalCode', 'postal_code')
+        return getattr(c, attribute, getattr(c, snake_case_attribute, default))
+
     return {
         'name': get('name'),
         'company': get('company'),
@@ -12129,7 +12036,6 @@ def clients_collection():
     if not name:
         return jsonify({'success': False, 'message': 'Client name is required'}), 400
 
-    from models import Client
     c = Client(
         name=name,
         company=(data.get('company') or '').strip(),

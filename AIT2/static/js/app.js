@@ -1053,11 +1053,8 @@ function formatDateForInput(dateStr) {
 function setupSingleAssetClickHandler() {
     // Prevent multiple setups
     if (isClickHandlerSetup) {
-        console.log('Click handler already setup, skipping...');
         return;
     }
-    
-    console.log('Setting up SINGLE asset click handler...');
     
     // Remove ALL possible existing listeners
     const oldHandler1 = document._assetClickHandler;
@@ -1088,7 +1085,6 @@ function setupSingleAssetClickHandler() {
             
             // Check if already processing
             if (processingAssets.has(assetKey)) {
-                console.log(`BLOCKED: Asset ${assetId} already being processed`);
                 return false;
             }
             
@@ -1129,7 +1125,6 @@ function setupSingleAssetClickHandler() {
             
             // Check if already processing
             if (processingAssets.has(assetKey)) {
-                console.log(`BLOCKED: Asset ${assetId} removal already being processed`);
                 return false;
             }
             
@@ -1150,7 +1145,6 @@ function setupSingleAssetClickHandler() {
                 // Process removal
                 const cleanup = () => {
                     processingAssets.delete(assetKey);
-                    console.log(`COMPLETED: Asset ${assetId} removal finished`);
                 };
                 
                 removeAssetFromEvent(eventId, assetId).finally(cleanup);
@@ -1166,7 +1160,6 @@ function setupSingleAssetClickHandler() {
     document.addEventListener('click', singleClickHandler, true); // Use capture phase
     
     isClickHandlerSetup = true;
-    console.log('Single click handler setup complete');
 }
 
 // Global variables for maintenance functionality
@@ -1195,7 +1188,6 @@ function setupAssetClickHandler() {
             const assetKey = `${eventId}-${assetId}`;
             
             if (processingAssets.has(assetKey)) {
-                console.log(`Click ignored - asset ${assetId} already being processed`);
                 return;
             }
             
@@ -1207,8 +1199,6 @@ function setupAssetClickHandler() {
                 btn.style.opacity = '0.6';
             });
             
-            console.log('Asset action clicked:', { eventId, assetId, action });
-
             const cleanup = () => {
                 processingAssets.delete(assetKey);
             };
@@ -1328,14 +1318,6 @@ function normalizeScannedIdentifier(rawValue) {
   }
 
   return value;
-}
-
-async function ensureAssetsLoaded(force = false) {
-  if (!force && Array.isArray(assets) && assets.length > 0) return assets;
-
-  const response = await apiCall('/api/assets');
-  assets = response.data || [];
-  return assets;
 }
 
 function findAssetByIdentifier(identifier, assetList = assets) {
@@ -5168,7 +5150,6 @@ async function loadOngoingEvents(preloadedEvents = null) {
             container.appendChild(createEventCard(event));
         });
         
-        console.log(`Loaded ${ongoingEvents.length} ongoing events`);
     } catch (error) {
         console.error('Error loading ongoing events:', error);
         const container = document.getElementById('ongoing-events');
@@ -5217,7 +5198,6 @@ async function loadUpcomingEvents(preloadedEvents = null) {
             container.appendChild(createEventCard(event));
         });
         
-        console.log(`Loaded ${upcomingEvents.length} upcoming events (showing first 6)`);
     } catch (error) {
         console.error('Error loading upcoming events:', error);
         const container = document.getElementById('upcoming-events');
@@ -5397,7 +5377,6 @@ async function forceEventState(eventId, newState) {
         const response = await apiCall(`/api/events/${eventId}/force-state`, 'POST', { state: newState });
         
         showNotification('success', `Event ${eventId} state forced to ${newState}`);
-        console.log(`Event ${eventId} state forced: ${response.oldState} → ${response.newState}`);
         
         // Refresh all relevant views
         setTimeout(() => {
@@ -5432,7 +5411,6 @@ async function removeForcedState(eventId) {
         const response = await apiCall(`/api/events/${eventId}/remove-force-state`, 'POST');
         
         showNotification('success', `Event ${eventId} returned to automatic state management`);
-        console.log(`Event ${eventId} force override removed: ${response.oldState} → ${response.newState}`);
         
         // Refresh all relevant views
         setTimeout(() => {
@@ -5658,9 +5636,6 @@ async function loadInventory() {
 
     const response = await apiCall("/api/assets");
     assets = response.data;
-
-    // Asset counts may have changed, so refresh department metadata once more.
-    await loadDepartments(true);
 
     ensureDepartmentManagerPanel();
     renderDepartmentManager();
@@ -10754,9 +10729,6 @@ function togglePrepareSection(sectionId) {
  * Maintains exact same function signature as before
  */
 async function assignAdditionalAsset(eventId, assetId) {
-    console.log(`=== assignAdditionalAsset CALLED ===`);
-    console.log('eventId:', eventId, 'assetId:', assetId);
-    
     try {
         const response = await apiCall(`/api/events/${eventId}/assign-specific`, 'POST', { assetId });
         showNotification('success', `Assigned ${assetId} as additional asset`);
@@ -10795,9 +10767,6 @@ async function prepareAssignedAsset(eventId) {
         return;
     }
     
-    console.log(`=== prepareAssignedAsset CALLED ===`);
-    console.log('eventId:', eventId, 'assetId:', assetId);
-    
     try {
         const response = await apiCall(`/api/events/${eventId}/prepare`, 'POST', { assetId });
         showNotification('success', `${assetId} marked as prepared`);
@@ -10815,48 +10784,6 @@ async function prepareAssignedAsset(eventId) {
 }
 
 
-function updateAllButtonsForAsset(assetId, isPrepared) {
-    const encodedAssetId = encodeURIComponent(assetId);
-    const buttons = document.querySelectorAll(`[data-asset-id="${encodedAssetId}"]`);
-    
-    console.log(`Updating ${buttons.length} buttons for asset ${assetId}, isPrepared: ${isPrepared}`);
-    
-    buttons.forEach(button => {
-        // Re-enable the button and restore opacity
-        button.disabled = false;
-        button.style.opacity = '1';
-        
-        // Update button appearance and action
-        if (isPrepared) {
-            button.textContent = 'Unprepare';
-            button.className = button.className.replace('btn-success', 'btn-warning');
-            button.dataset.action = 'unprepare';
-        } else {
-            button.textContent = 'Prepare';
-            button.className = button.className.replace('btn-warning', 'btn-success');
-            button.dataset.action = 'prepare';
-        }
-        
-        // Update status icons and text in the same row
-        const assetRow = button.closest('div[style*="display: flex"]');
-        if (assetRow) {
-            // Update status icon in the asset name
-            const assetNameSpan = assetRow.querySelector('span');
-            if (assetNameSpan && assetNameSpan.textContent.includes(assetId)) {
-                const icon = isPrepared ? '✅' : '📋';
-                // Replace any existing icon at the start
-                assetNameSpan.innerHTML = assetNameSpan.innerHTML.replace(/^[✅📋↩️]\s/, `${icon} `);
-            }
-            
-            // Update status text if it exists
-            const statusText = assetRow.querySelector('div[style*="margin-top: 2px"]');
-            if (statusText) {
-                statusText.textContent = isPrepared ? 'Prepared' : 'Pending';
-                statusText.style.color = isPrepared ? '#28a745' : '#ffc107';
-            }
-        }
-    });
-}
 
 
 
@@ -11041,9 +10968,6 @@ async function processUniversalAsset(eventId) {
  * The universal asset input now calls the same endpoint directly.
  */
 async function assignAndPrepareAsset(eventId, assetId) {
-    console.log(`=== assignAndPrepareAsset CALLED ===`);
-    console.log('eventId:', eventId, 'assetId:', assetId);
-    
     const feedbackDiv = document.getElementById('universal-asset-feedback');
     const input = document.getElementById('universalAssetInput');
     
@@ -11487,14 +11411,9 @@ async function openReturnAssetsModal() {
     try {
         const response = await apiCall('/api/events');
         
-        // Debug: Log all events to see their structure
-        console.log('All events from API:', response.data);
-        
         const returnableEvents = response.data.filter(event => {
             return getEventReturnableCount(event) > 0 && event.state !== 'Closed';
         });
-
-        console.log('Filtered returnable events:', returnableEvents);
 
         let content = `
             <div class="return-assets-interface">
@@ -14582,8 +14501,6 @@ async function addAssetToEventSimple(eventId, assetId) {
 }
 
 async function assignSpecificAsset(eventId, assetId, brand, model) {
-    console.log(`=== assignSpecificAsset CALLED ===`);
-    console.log('eventId:', eventId, 'assetId:', assetId, 'brand:', brand, 'model:', model);
     let actionStarted = false;
     try {
         await ensureAssetsLoaded();
@@ -14648,29 +14565,19 @@ function getDepartmentInfo(dept) {
 
 
 async function removeAssetFromEvent(eventId, assetId) {
-    console.log('=== removeAssetFromEvent CALLED ===');
-    console.log('eventId:', eventId, 'assetId:', assetId);
-    
     try {
         let endpoint;
         
         // Use different endpoints for custom vs regular assets
         if (isCustomAssetId(assetId)) {
             endpoint = `/api/events/${eventId}/custom-assets/remove`;
-            console.log('Using custom asset removal endpoint');
         } else {
             endpoint = `/api/events/${eventId}/remove-asset`;
-            console.log('Using regular asset removal endpoint');
         }
-        
-        console.log('Making POST request to:', endpoint);
-        console.log('Request body:', { assetId: assetId });
         
         const response = await apiCall(endpoint, 'POST', { assetId: assetId });
         
         if (response.success) {
-            console.log('Asset removed successfully');
-            
             // Remove matching elements from UI without building an unsafe CSS selector from JSON custom IDs.
             const assetElements = Array.from(document.querySelectorAll('[data-asset-id]')).filter(element => {
                 const raw = element.getAttribute('data-asset-id') || '';
@@ -17185,10 +17092,7 @@ function showMaintenanceLogModal(asset) {
     return;
   }
 
-  // Debug: Log the asset data to console
-  // console.log('Asset maintenance logs:', asset.maintenanceLogs);
   const maintenanceRecords = getMaintenanceLogRecords(asset);
-  // console.log('Total maintenance logs count:', maintenanceRecords.length);
   
   // Start building modal content
   const assetSafeId = asset.id.replace(/[^a-zA-Z0-9]/g, '_');
@@ -17291,8 +17195,6 @@ function showMaintenanceLogModal(asset) {
       const logId = `log_${asset.id.replace(/[^a-zA-Z0-9]/g, '_')}_${log.originalIndex}`;
       const displayNumber = displayIndex + 1;
       
-      console.log(`Processing log ${displayNumber}:`, log);
-      
       // Format status changes for display
       let statusChangesDisplay = '';
       const changes = getMaintenanceChangeLabels(log.changes);
@@ -17389,7 +17291,6 @@ function showMaintenanceLogModal(asset) {
       `;
     });
     
-    //console.log('Finished processing all logs. Total rows added:', reversedData.length);
   } else {
     modalContent += `
       <tr>
@@ -17456,11 +17357,8 @@ function showMaintenanceLogModal(asset) {
   setTimeout(() => {
     if (!isAdminUser()) return;
     const deleteButtons = modal.querySelectorAll('.delete-log-btn');
-    console.log('Found delete buttons:', deleteButtons.length);
     
-    deleteButtons.forEach((button, index) => {
-      console.log(`Setting up delete button ${index}:`, button.dataset);
-      
+    deleteButtons.forEach(button => {
       // Remove any existing click handlers and use a single handler
       button.onclick = function(e) {
         e.preventDefault();
@@ -17470,7 +17368,6 @@ function showMaintenanceLogModal(asset) {
         const logIndex = parseInt(this.dataset.logIndex);
         const logId = this.dataset.logId;
         
-        console.log('Delete button clicked via onclick:', { assetId, logIndex, logId });
         deleteMaintenanceLog(assetId, logIndex, logId);
       };
     });
@@ -17585,9 +17482,6 @@ async function deleteMaintenanceLog(assetId, logIndex, logId) {
     return;
   }
 
-  console.log('Delete button clicked!');
-  console.log('Parameters:', { assetId, logIndex, logId });
-  
   // Show custom confirmation dialog
   const shouldDelete = await showCustomConfirm(
     'Delete Maintenance Log', 
@@ -17595,21 +17489,14 @@ async function deleteMaintenanceLog(assetId, logIndex, logId) {
   );
   
   if (!shouldDelete) {
-    console.log('User cancelled deletion');
     return;
   }
   
-  console.log('User confirmed deletion, proceeding...');
-  
   try {
-    console.log(`Attempting to delete log at index ${logIndex} for asset ${assetId}`);
-    
     const encodedAssetId = encodeURIComponent(assetId);
     const url = `/api/assets/${encodedAssetId}/maintenance-log/${logIndex}`;
-    console.log('API URL:', url);
     
     const response = await apiCall(url, 'DELETE');
-    console.log('API Response:', response);
     
     if (response && response.success) {
       showNotification('success', 'Maintenance log deleted and asset status updated');
@@ -17667,8 +17554,6 @@ function showCustomConfirm(titleOrMessage, maybeMessage, options = {}) {
 }
 
 function deleteMaintenanceLogFromModal(assetId, logIndex, logId) {
-  console.log('Delete Log button clicked from modal:', { assetId, logIndex, logId });
-  
   // Close the edit modal first
   const editModal = document.getElementById('editMaintenanceLogModal');
   if (editModal) {
@@ -17770,8 +17655,6 @@ function handleCustomAssetQuantityBlur() {
 
 async function updateCustomAssetQuantity(eventId, oldAssetId, assetName, assetType, newQuantity) {
   try {
-    console.log(`Updating custom asset quantity: ${oldAssetId} -> quantity ${newQuantity}`);
-    
     // Create the update payload for a dedicated quantity update endpoint
     const updateData = {
       assetId: oldAssetId,
@@ -17780,8 +17663,6 @@ async function updateCustomAssetQuantity(eventId, oldAssetId, assetName, assetTy
     
     // Try a dedicated custom asset quantity update endpoint
     await apiCall(`/api/events/${eventId}/custom-assets/update-quantity`, "PUT", updateData);
-    
-    console.log(`Successfully updated custom asset quantity via dedicated endpoint`);
 
     const quantityText = newQuantity > 1 ? ` (Qty: ${newQuantity})` : '';
     showNotification("success", `Updated "${assetName}"${quantityText} quantity to ${newQuantity}`);
@@ -17793,17 +17674,9 @@ async function updateCustomAssetQuantity(eventId, oldAssetId, assetName, assetTy
   } catch (error) {
     console.error("Error in updateCustomAssetQuantity:", error);
     
-    // Create updateData here for the error logging
-    const updateData = {
-      assetId: oldAssetId,
-      newQuantity: newQuantity
-    };
-    
     // If the dedicated endpoint doesn't exist, show a helpful error
     if (error.message.includes('Not found') || error.message.includes('404')) {
       showNotification("error", "Custom asset quantity update endpoint not available. This feature needs to be implemented on the backend.");
-      console.log("Backend needs endpoint: PUT /api/events/{eventId}/custom-assets/update-quantity");
-      console.log("Expected payload:", updateData);
     } else {
       showNotification("error", `Failed to update custom asset quantity: ${error.message}`);
     }
@@ -18174,8 +18047,6 @@ async function saveEnhancedMaintenanceLog(assetId, logIndex, logId) {
       return;
     }
     
-    console.log('Status value selected:', statusValue);
-
     // Extract the original location from this specific log for comparison
     let originalLogLocation = null;
     let hadLocationChangeOriginally = false;
@@ -18227,8 +18098,6 @@ async function saveEnhancedMaintenanceLog(assetId, logIndex, logId) {
       markDecommissioned: statusValue === 'decommissioned',
       unmarkDecommissioned: statusValue === 'ok'
     };
-    
-    console.log('Sending update data:', updateData);
     
     // Call the enhanced update API
     const requestData = maintenancePayloadToRequestData(updateData, 'editMaintenanceMediaFiles');
@@ -20347,20 +20216,16 @@ function generateExcelDO(data) {
 // Delivery order generation helpers
 async function ensureAssetsLoaded() {
     if (!assets || assets.length === 0) {
-        console.log('Assets not loaded, fetching from API...');
         try {
             const response = await apiCall('/api/assets');
             if (response.success) {
                 assets = response.data;
-                console.log(`Loaded ${assets.length} assets for delivery order`);
             } else {
                 console.error('Failed to load assets:', response);
             }
         } catch (error) {
             console.error('Error loading assets:', error);
         }
-    } else {
-        console.log(`Using ${assets.length} pre-loaded assets`);
     }
 }
 

@@ -21279,3 +21279,98 @@ INFO:__main__:Background thread: Starting scheduled event state check
 INFO:__main__:Checking 147 events for state updates (current date: 20260628)
 INFO:__main__:No events required state updates
 INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:59:36] "GET /api/events/127 HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:59:40] "GET /api/events/127 HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 21:59:40] "GET /api/pdf-settings HTTP/1.1" 200 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260628)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260628)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260628)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260628)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260628)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260628)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260628)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:167.94.146.63 - - [28/Jun/2026 22:32:29] "[32mGET / HTTP/1.1[0m" 302 -
+ERROR:werkzeug:167.94.146.63 - - [28/Jun/2026 22:32:30] code 505, message Invalid HTTP version (2.0)
+INFO:werkzeug:167.94.146.63 - - [28/Jun/2026 22:32:30] "[35m[1mPRI * HTTP/2.0[0m" 505 -
+INFO:werkzeug:167.94.146.63 - - [28/Jun/2026 22:32:32] "GET /login HTTP/1.1" 200 -
+INFO:werkzeug:167.94.146.63 - - [28/Jun/2026 22:32:33] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+INFO:werkzeug:167.94.146.63 - - [28/Jun/2026 22:32:48] "[33mGET /wiki HTTP/1.1[0m" 404 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260628)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260628)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260628)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+========================================
+Starting Avec Inventory Management: Sun, Jun 28, 2026 10:46:29 PM
+INFO:data_manager:All required files are present.
+INFO:__main__:Data manager initialized for company AVPL with folder: C:\Users\AVECp\Documents\AIT\AIT2\companies/AVPL/backend
+INFO:__main__:Background thread started - checking events every 5 minutes
+INFO:__main__:Background thread for event checking started successfully
+INFO:__main__:Background thread: data_manager is ready, starting checks
+INFO:__main__:Background thread started successfully after data_manager initialization
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260628)
+INFO:__main__:Starting Avec Inventory Management at https://0.0.0.0:5443
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+ * Serving Flask app 'app'
+ * Debug mode: off
+INFO:werkzeug:[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on https://127.0.0.1:5443
+ * Running on https://192.168.0.110:5443
+INFO:werkzeug:[33mPress CTRL+C to quit[0m
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 22:46:32] "GET /api/realtime/stream?clientId=314d76b0-60a7-4b7c-b190-0770e2c5e272 HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 22:46:33] "GET / HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 22:46:33] "GET /static/js/app.js?v=1782657559 HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 22:46:33] "GET /api/pdf-settings/logo HTTP/1.1" 200 -
+INFO:__main__:Getting stats - Events: 147, Inventory: 1320
+INFO:__main__:Successfully got assigned assets count: 122
+INFO:__main__:Returning stats: {'totalEvents': 147, 'activeEvents': 8, 'totalAssets': 1892, 'deployedAssets': 122, 'missingAssets': 1, 'oocAssets': 7, 'degradedAssets': 4, 'decommissionedAssets': 0, 'disposedAssets': 0}
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 22:46:34] "GET /api/stats HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 22:46:34] "GET /api/pdf-settings HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 22:46:34] "GET /api/current-user HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 22:46:34] "GET /api/pdf-settings/logo?v=1750644779 HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 22:46:34] "GET /api/companies HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 22:46:34] "GET /api/departments HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 22:46:34] "GET /api/realtime/stream?clientId=314d76b0-60a7-4b7c-b190-0770e2c5e272 HTTP/1.1" 200 -
+INFO:__main__:Getting stats - Events: 147, Inventory: 1320
+INFO:__main__:Successfully got assigned assets count: 122
+INFO:__main__:Returning stats: {'totalEvents': 147, 'activeEvents': 8, 'totalAssets': 1892, 'deployedAssets': 122, 'missingAssets': 1, 'oocAssets': 7, 'degradedAssets': 4, 'decommissionedAssets': 0, 'disposedAssets': 0}
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 22:46:34] "GET /api/stats HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 22:46:34] "GET /api/events HTTP/1.1" 200 -
+INFO:__main__:Getting stats - Events: 147, Inventory: 1320
+INFO:__main__:Successfully got assigned assets count: 122
+INFO:__main__:Returning stats: {'totalEvents': 147, 'activeEvents': 8, 'totalAssets': 1892, 'deployedAssets': 122, 'missingAssets': 1, 'oocAssets': 7, 'degradedAssets': 4, 'decommissionedAssets': 0, 'disposedAssets': 0}
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 22:46:35] "GET /api/stats HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 22:46:36] "GET /api/events HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 22:46:38] "GET /api/departments HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 22:46:38] "GET /api/assets HTTP/1.1" 200 -

@@ -16,6 +16,7 @@ class AssetCreationTests(unittest.TestCase):
         self.data_manager.setup_data_folder()
         self.data_manager.users = {
             'normal': User('normal', hash_password('pw', 'salt'), 'salt', False, True),
+            'admin': User('admin', hash_password('pw', 'adminsalt'), 'adminsalt', True, True),
         }
         self.data_manager.save_users()
         self.data_manager.logs = []
@@ -31,10 +32,10 @@ class AssetCreationTests(unittest.TestCase):
         app_module._data_snapshot_signature = self.original_signature
         self.tempdir.cleanup()
 
-    def login(self):
+    def login(self, username='admin', is_admin=True):
         with self.client.session_transaction() as session:
-            session['user'] = 'normal'
-            session['is_admin'] = False
+            session['user'] = username
+            session['is_admin'] = is_admin
 
     def add_existing_asset(self, asset_id, brand, model, description=''):
         self.data_manager.inventory[asset_id] = InventoryItem(
@@ -61,6 +62,21 @@ class AssetCreationTests(unittest.TestCase):
             'department': 'AX',
             **payload,
         })
+
+    def test_non_admin_cannot_create_asset(self):
+        self.login('normal', False)
+
+        response = self.client.post('/api/assets', json={
+            'brand': 'Behringher',
+            'model': 'P1',
+            'description': 'Wired IEM beltpack',
+            'department': 'AX',
+            'quantity': 1,
+        })
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.get_json()['error'], 'Admin privileges required')
+        self.assertEqual(self.data_manager.inventory, {})
 
     def test_batch_add_existing_brand_model_continues_numbering(self):
         self.add_existing_asset('P1#01', 'Behringher', 'P1', 'Wired IEM beltpack')

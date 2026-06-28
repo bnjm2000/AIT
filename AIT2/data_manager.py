@@ -230,7 +230,7 @@ class DataManager:
         for filename in REQUIRED_DATA_FILES:
             filepath = self._data_path(filename)
             if not os.path.exists(filepath):
-                with open(filepath, 'w', newline='') as f:
+                with open(filepath, 'w', newline=''):
                     pass
         
         users_file = self._data_path('Users.csv')
