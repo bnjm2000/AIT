@@ -21374,3 +21374,1922 @@ INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 22:46:35] "GET /api/stats HTTP/1.1
 INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 22:46:36] "GET /api/events HTTP/1.1" 200 -
 INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 22:46:38] "GET /api/departments HTTP/1.1" 200 -
 INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 22:46:38] "GET /api/assets HTTP/1.1" 200 -
+INFO:werkzeug:88.80.17.243 - - [28/Jun/2026 22:47:51] "[32mGET / HTTP/1.1[0m" 302 -
+INFO:werkzeug:88.80.17.243 - - [28/Jun/2026 22:47:51] "GET /login HTTP/1.1" 200 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260628)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260628)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 22:58:11] "[32mGET / HTTP/1.1[0m" 302 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 22:58:11] "GET /login HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 22:58:11] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+INFO:__main__:Action logged: User bnjm2000 logged in via web interface
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 22:58:16] "POST /login HTTP/1.1" 200 -
+INFO:__main__:Reloaded shared CSV data after external change
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 22:58:16] "GET / HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 22:58:16] "GET /api/pdf-settings/logo HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 22:58:16] "GET /static/js/app.js?v=1782657559 HTTP/1.1" 200 -
+INFO:__main__:Getting stats - Events: 147, Inventory: 1320
+INFO:__main__:Successfully got assigned assets count: 122
+INFO:__main__:Returning stats: {'totalEvents': 147, 'activeEvents': 8, 'totalAssets': 1892, 'deployedAssets': 122, 'missingAssets': 1, 'oocAssets': 7, 'degradedAssets': 4, 'decommissionedAssets': 0, 'disposedAssets': 0}
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 22:58:16] "GET /api/stats HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 22:58:16] "GET /api/pdf-settings HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 22:58:16] "GET /api/current-user HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 22:58:16] "GET /api/pdf-settings/logo?v=1750644779 HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 22:58:16] "GET /api/companies HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 22:58:16] "GET /api/departments HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 22:58:17] "GET /api/realtime/stream?clientId=2a719c16-d620-436c-a3ce-1d1be62f171d HTTP/1.1" 200 -
+INFO:__main__:Getting stats - Events: 147, Inventory: 1320
+INFO:__main__:Successfully got assigned assets count: 122
+INFO:__main__:Returning stats: {'totalEvents': 147, 'activeEvents': 8, 'totalAssets': 1892, 'deployedAssets': 122, 'missingAssets': 1, 'oocAssets': 7, 'degradedAssets': 4, 'decommissionedAssets': 0, 'disposedAssets': 0}
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 22:58:17] "GET /api/stats HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 22:58:17] "GET /api/events HTTP/1.1" 200 -
+INFO:__main__:Getting stats - Events: 147, Inventory: 1320
+INFO:__main__:Successfully got assigned assets count: 122
+INFO:__main__:Returning stats: {'totalEvents': 147, 'activeEvents': 8, 'totalAssets': 1892, 'deployedAssets': 122, 'missingAssets': 1, 'oocAssets': 7, 'degradedAssets': 4, 'decommissionedAssets': 0, 'disposedAssets': 0}
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 22:58:18] "GET /api/stats HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 22:58:18] "GET /api/events HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 22:58:20] "GET /api/logs HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 22:58:39] "GET /api/companies HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 22:58:39] "GET /api/users HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 23:00:13] "GET /api/events HTTP/1.1" 200 -
+INFO:__main__:Getting stats - Events: 147, Inventory: 1320
+INFO:__main__:Successfully got assigned assets count: 122
+INFO:__main__:Returning stats: {'totalEvents': 147, 'activeEvents': 8, 'totalAssets': 1892, 'deployedAssets': 122, 'missingAssets': 1, 'oocAssets': 7, 'degradedAssets': 4, 'decommissionedAssets': 0, 'disposedAssets': 0}
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 23:00:14] "GET /api/stats HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 23:00:14] "GET /api/events HTTP/1.1" 200 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260628)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:66.132.172.130 - - [28/Jun/2026 23:02:00] "[32mGET / HTTP/1.1[0m" 302 -
+ERROR:werkzeug:66.132.172.130 - - [28/Jun/2026 23:02:03] code 505, message Invalid HTTP version (2.0)
+INFO:werkzeug:66.132.172.130 - - [28/Jun/2026 23:02:03] "[35m[1mPRI * HTTP/2.0[0m" 505 -
+INFO:werkzeug:66.132.172.130 - - [28/Jun/2026 23:02:04] "GET /login HTTP/1.1" 200 -
+INFO:werkzeug:66.132.172.130 - - [28/Jun/2026 23:02:06] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+INFO:werkzeug:66.132.172.130 - - [28/Jun/2026 23:03:25] "[33mGET /sitemap.xml HTTP/1.1[0m" 404 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260628)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 23:11:28] "GET /api/events/127 HTTP/1.1" 200 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260628)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 23:11:31] "GET /api/pdf-settings HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 23:11:31] "GET /api/events/127 HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 23:11:31] "GET /api/pdf-settings/logo?v=1750644779 HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [28/Jun/2026 23:11:31] "GET /api/pdf-settings/logo?v=1750644779 HTTP/1.1" 200 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260628)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:50.116.72.42 - - [28/Jun/2026 23:17:58] "[32mGET / HTTP/1.1[0m" 302 -
+ERROR:__main__:Unhandled exception: 405 Method Not Allowed: The method is not allowed for the requested URL.
+INFO:werkzeug:50.116.72.42 - - [28/Jun/2026 23:17:59] "[35m[1mPOST / HTTP/1.1[0m" 500 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260628)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:198.235.24.110 - - [28/Jun/2026 23:25:42] "[32mGET / HTTP/1.1[0m" 302 -
+INFO:werkzeug:198.235.24.110 - - [28/Jun/2026 23:25:43] "GET /login HTTP/1.1" 200 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260628)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260628)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260628)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260628)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260628)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260628)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260628)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:data_manager:Backup created at C:\Users\AVECp\Documents\AIT\AIT2\companies/AVPL/backend\event_backups\backup_136. [20260624] NSBA Rooftop Opening Ceremony @ Temple.csv.
+INFO:data_manager:Backup created at C:\Users\AVECp\Documents\AIT\AIT2\companies/AVPL/backend\event_backups\backup_150. [20260627] Dry Hire_ Avery Events.csv.
+INFO:__main__:Updated 2 events (ongoing/overdue status)
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Reloaded shared CSV data after external change
+INFO:__main__:Getting stats - Events: 147, Inventory: 1320
+INFO:__main__:Successfully got assigned assets count: 122
+INFO:__main__:Returning stats: {'totalEvents': 147, 'activeEvents': 8, 'totalAssets': 1892, 'deployedAssets': 122, 'missingAssets': 1, 'oocAssets': 7, 'degradedAssets': 4, 'decommissionedAssets': 0, 'disposedAssets': 0}
+INFO:werkzeug:39.109.188.100 - - [29/Jun/2026 00:32:51] "GET /api/stats HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [29/Jun/2026 00:32:51] "GET /api/events HTTP/1.1" 200 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:45.205.1.246 - - [29/Jun/2026 01:39:07] "[32mGET / HTTP/1.1[0m" 302 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:185.12.59.118 - - [29/Jun/2026 02:02:37] "[32mGET / HTTP/1.1[0m" 302 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:45.148.10.200 - - [29/Jun/2026 02:59:09] "[32mGET / HTTP/1.1[0m" 302 -
+INFO:werkzeug:45.148.10.200 - - [29/Jun/2026 02:59:14] "[32mGET / HTTP/1.1[0m" 302 -
+INFO:werkzeug:45.148.10.200 - - [29/Jun/2026 02:59:15] "[33mGET /api/.env HTTP/1.1[0m" 404 -
+INFO:werkzeug:45.148.10.200 - - [29/Jun/2026 02:59:15] "[33mGET /app/.env HTTP/1.1[0m" 404 -
+INFO:werkzeug:45.148.10.200 - - [29/Jun/2026 02:59:16] "[33mGET /core/.env HTTP/1.1[0m" 404 -
+INFO:werkzeug:45.198.224.245 - - [29/Jun/2026 02:59:56] "[32mGET / HTTP/1.1[0m" 302 -
+ERROR:__main__:Unhandled exception: 405 Method Not Allowed: The method is not allowed for the requested URL.
+INFO:werkzeug:45.198.224.245 - - [29/Jun/2026 03:00:04] "[35m[1mPROPFIND / HTTP/1.1[0m" 500 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:40.124.175.5 - - [29/Jun/2026 03:28:37] "[32mGET / HTTP/1.1[0m" 302 -
+INFO:werkzeug:40.124.175.5 - - [29/Jun/2026 03:28:38] "GET /login HTTP/1.1" 200 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:104.248.198.249 - - [29/Jun/2026 03:52:11] "[32mGET / HTTP/1.1[0m" 302 -
+INFO:werkzeug:104.248.198.249 - - [29/Jun/2026 03:52:19] "GET /login HTTP/1.1" 200 -
+INFO:werkzeug:104.248.198.249 - - [29/Jun/2026 03:52:21] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+ERROR:__main__:Unhandled exception: 405 Method Not Allowed: The method is not allowed for the requested URL.
+INFO:werkzeug:46.151.178.13 - - [29/Jun/2026 04:28:12] "[35m[1mPROPFIND / HTTP/1.1[0m" 500 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:81.200.28.216 - - [29/Jun/2026 04:42:38] "[33mPOST /cgi-bin/../../../../../../../../../../bin/sh HTTP/1.1[0m" 404 -
+INFO:werkzeug:81.200.28.216 - - [29/Jun/2026 04:42:40] "[33mPOST /cgi-bin/%2e%2e/%2e%2e/%2e%2e/%2e%2e/%2e%2e/%2e%2e/%2e%2e/bin/sh HTTP/1.1[0m" 404 -
+INFO:werkzeug:81.200.28.216 - - [29/Jun/2026 04:42:43] "[33mPOST /hello.world?%ADd+allow_url_include%3d1+%ADd+auto_prepend_file%3dphp://input HTTP/1.1[0m" 404 -
+ERROR:__main__:Unhandled exception: 405 Method Not Allowed: The method is not allowed for the requested URL.
+INFO:werkzeug:81.200.28.216 - - [29/Jun/2026 04:42:46] "[35m[1mPOST /?%ADd+allow_url_include%3d1+%ADd+auto_prepend_file%3dphp://input HTTP/1.1[0m" 500 -
+INFO:werkzeug:81.200.28.216 - - [29/Jun/2026 04:42:49] "[33mGET /vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php HTTP/1.1[0m" 404 -
+INFO:werkzeug:81.200.28.216 - - [29/Jun/2026 04:42:52] "[33mGET /vendor/phpunit/phpunit/Util/PHP/eval-stdin.php HTTP/1.1[0m" 404 -
+INFO:werkzeug:81.200.28.216 - - [29/Jun/2026 04:42:55] "[33mGET /vendor/phpunit/src/Util/PHP/eval-stdin.php HTTP/1.1[0m" 404 -
+INFO:werkzeug:81.200.28.216 - - [29/Jun/2026 04:42:58] "[33mGET /vendor/phpunit/Util/PHP/eval-stdin.php HTTP/1.1[0m" 404 -
+INFO:werkzeug:81.200.28.216 - - [29/Jun/2026 04:43:02] "[33mGET /vendor/phpunit/phpunit/LICENSE/eval-stdin.php HTTP/1.1[0m" 404 -
+INFO:werkzeug:81.200.28.216 - - [29/Jun/2026 04:43:04] "[33mGET /vendor/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php HTTP/1.1[0m" 404 -
+INFO:werkzeug:81.200.28.216 - - [29/Jun/2026 04:43:08] "[33mGET /phpunit/phpunit/src/Util/PHP/eval-stdin.php HTTP/1.1[0m" 404 -
+INFO:werkzeug:81.200.28.216 - - [29/Jun/2026 04:43:10] "[33mGET /phpunit/phpunit/Util/PHP/eval-stdin.php HTTP/1.1[0m" 404 -
+INFO:werkzeug:81.200.28.216 - - [29/Jun/2026 04:43:13] "[33mGET /phpunit/src/Util/PHP/eval-stdin.php HTTP/1.1[0m" 404 -
+INFO:werkzeug:81.200.28.216 - - [29/Jun/2026 04:43:16] "[33mGET /phpunit/Util/PHP/eval-stdin.php HTTP/1.1[0m" 404 -
+INFO:werkzeug:81.200.28.216 - - [29/Jun/2026 04:43:19] "[33mGET /lib/phpunit/phpunit/src/Util/PHP/eval-stdin.php HTTP/1.1[0m" 404 -
+INFO:werkzeug:81.200.28.216 - - [29/Jun/2026 04:43:22] "[33mGET /lib/phpunit/phpunit/Util/PHP/eval-stdin.php HTTP/1.1[0m" 404 -
+INFO:werkzeug:81.200.28.216 - - [29/Jun/2026 04:43:25] "[33mGET /lib/phpunit/src/Util/PHP/eval-stdin.php HTTP/1.1[0m" 404 -
+INFO:werkzeug:81.200.28.216 - - [29/Jun/2026 04:43:28] "[33mGET /lib/phpunit/Util/PHP/eval-stdin.php HTTP/1.1[0m" 404 -
+INFO:werkzeug:81.200.28.216 - - [29/Jun/2026 04:43:31] "[33mGET /lib/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php HTTP/1.1[0m" 404 -
+INFO:werkzeug:81.200.28.216 - - [29/Jun/2026 04:43:34] "[33mGET /laravel/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php HTTP/1.1[0m" 404 -
+INFO:werkzeug:81.200.28.216 - - [29/Jun/2026 04:43:36] "[33mGET /www/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php HTTP/1.1[0m" 404 -
+INFO:werkzeug:81.200.28.216 - - [29/Jun/2026 04:43:39] "[33mGET /ws/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php HTTP/1.1[0m" 404 -
+INFO:werkzeug:81.200.28.216 - - [29/Jun/2026 04:43:42] "[33mGET /yii/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php HTTP/1.1[0m" 404 -
+INFO:werkzeug:81.200.28.216 - - [29/Jun/2026 04:43:45] "[33mGET /zend/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php HTTP/1.1[0m" 404 -
+INFO:werkzeug:81.200.28.216 - - [29/Jun/2026 04:43:47] "[33mGET /ws/ec/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php HTTP/1.1[0m" 404 -
+INFO:werkzeug:81.200.28.216 - - [29/Jun/2026 04:43:51] "[33mGET /V2/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php HTTP/1.1[0m" 404 -
+INFO:werkzeug:81.200.28.216 - - [29/Jun/2026 04:43:53] "[33mGET /tests/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php HTTP/1.1[0m" 404 -
+INFO:werkzeug:81.200.28.216 - - [29/Jun/2026 04:43:56] "[33mGET /test/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php HTTP/1.1[0m" 404 -
+INFO:werkzeug:81.200.28.216 - - [29/Jun/2026 04:43:59] "[33mGET /testing/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php HTTP/1.1[0m" 404 -
+INFO:werkzeug:81.200.28.216 - - [29/Jun/2026 04:44:03] "[33mGET /api/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php HTTP/1.1[0m" 404 -
+INFO:werkzeug:81.200.28.216 - - [29/Jun/2026 04:44:06] "[33mGET /demo/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php HTTP/1.1[0m" 404 -
+INFO:werkzeug:81.200.28.216 - - [29/Jun/2026 04:44:10] "[33mGET /cms/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php HTTP/1.1[0m" 404 -
+INFO:werkzeug:81.200.28.216 - - [29/Jun/2026 04:44:12] "[33mGET /crm/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php HTTP/1.1[0m" 404 -
+INFO:werkzeug:81.200.28.216 - - [29/Jun/2026 04:44:15] "[33mGET /admin/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php HTTP/1.1[0m" 404 -
+INFO:werkzeug:81.200.28.216 - - [29/Jun/2026 04:44:19] "[33mGET /backup/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php HTTP/1.1[0m" 404 -
+INFO:werkzeug:81.200.28.216 - - [29/Jun/2026 04:44:21] "[33mGET /blog/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php HTTP/1.1[0m" 404 -
+INFO:werkzeug:81.200.28.216 - - [29/Jun/2026 04:44:24] "[33mGET /workspace/drupal/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php HTTP/1.1[0m" 404 -
+INFO:werkzeug:81.200.28.216 - - [29/Jun/2026 04:44:27] "[33mGET /panel/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php HTTP/1.1[0m" 404 -
+INFO:werkzeug:81.200.28.216 - - [29/Jun/2026 04:44:30] "[33mGET /public/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php HTTP/1.1[0m" 404 -
+INFO:werkzeug:81.200.28.216 - - [29/Jun/2026 04:44:33] "[33mGET /apps/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php HTTP/1.1[0m" 404 -
+INFO:werkzeug:81.200.28.216 - - [29/Jun/2026 04:44:35] "[33mGET /app/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php HTTP/1.1[0m" 404 -
+INFO:werkzeug:81.200.28.216 - - [29/Jun/2026 04:44:38] "[33mGET /index.php?s=/index/\\think\\app/invokefunction&function=call_user_func_array&vars[0]=md5&vars[1][]=Hello HTTP/1.1[0m" 404 -
+INFO:werkzeug:81.200.28.216 - - [29/Jun/2026 04:44:41] "[33mGET /public/index.php?s=/index/\\think\\app/invokefunction&function=call_user_func_array&vars[0]=md5&vars[1][]=Hello HTTP/1.1[0m" 404 -
+INFO:werkzeug:81.200.28.216 - - [29/Jun/2026 04:44:44] "[33mGET /index.php?lang=../../../../../../../../usr/local/lib/php/pearcmd&+config-create+/&/<?echo(md5("hi"));?>+/tmp/index1.php HTTP/1.1[0m" 404 -
+INFO:werkzeug:81.200.28.216 - - [29/Jun/2026 04:44:47] "[33mGET /index.php?lang=../../../../../../../../tmp/index1 HTTP/1.1[0m" 404 -
+INFO:werkzeug:81.200.28.216 - - [29/Jun/2026 04:44:50] "[33mGET /containers/json HTTP/1.1[0m" 404 -
+INFO:werkzeug:18.97.26.71 - - [29/Jun/2026 04:46:24] "[32mGET / HTTP/1.1[0m" 302 -
+INFO:werkzeug:18.97.26.71 - - [29/Jun/2026 04:46:25] "GET /login HTTP/1.1" 200 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+ERROR:werkzeug:18.97.26.71 - - [29/Jun/2026 04:46:39] SSL error occurred: [SSL: SSLV3_ALERT_HANDSHAKE_FAILURE] sslv3 alert handshake failure (_ssl.c:2648)
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:54.226.174.8 - - [29/Jun/2026 04:57:34] "[32mGET / HTTP/1.1[0m" 302 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:45.194.67.28 - - [29/Jun/2026 06:00:10] "[32mGET / HTTP/1.1[0m" 302 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:160.119.71.133 - - [29/Jun/2026 06:12:09] "[32mGET / HTTP/1.1[0m" 302 -
+ERROR:__main__:Unhandled exception: 405 Method Not Allowed: The method is not allowed for the requested URL.
+INFO:werkzeug:160.119.71.133 - - [29/Jun/2026 06:12:23] "[35m[1mPROPFIND / HTTP/1.1[0m" 500 -
+INFO:werkzeug:20.98.164.209 - - [29/Jun/2026 06:15:56] "[33mGET /version HTTP/1.1[0m" 404 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:20.80.88.167 - - [29/Jun/2026 06:30:57] "[33mGET /actuator/health HTTP/1.1[0m" 404 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:20.168.121.119 - - [29/Jun/2026 06:32:06] "[33mGET /autodiscover/autodiscover.json?@zdi/Powershell HTTP/1.1[0m" 404 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:165.232.122.132 - - [29/Jun/2026 07:01:19] "[32mGET / HTTP/1.0[0m" 302 -
+INFO:werkzeug:165.232.122.132 - - [29/Jun/2026 07:01:20] "[33mPOST /sdk HTTP/1.1[0m" 404 -
+INFO:werkzeug:165.232.122.132 - - [29/Jun/2026 07:01:21] "[33mGET /odinhttpcall1782687679 HTTP/1.1[0m" 404 -
+INFO:werkzeug:165.232.122.132 - - [29/Jun/2026 07:01:22] "[33mGET /evox/about HTTP/1.1[0m" 404 -
+INFO:werkzeug:165.232.122.132 - - [29/Jun/2026 07:01:22] "[33mGET /HNAP1 HTTP/1.1[0m" 404 -
+INFO:werkzeug:165.232.122.132 - - [29/Jun/2026 07:01:23] "[32mGET / HTTP/1.0[0m" 302 -
+INFO:werkzeug:165.232.122.132 - - [29/Jun/2026 07:01:24] "[32mGET / HTTP/1.1[0m" 302 -
+ERROR:__main__:Unhandled exception: 405 Method Not Allowed: The method is not allowed for the requested URL.
+INFO:werkzeug:161.35.23.101 - - [29/Jun/2026 07:01:26] "[35m[1mPOST / HTTP/1.1[0m" 500 -
+INFO:werkzeug:165.245.211.172 - - [29/Jun/2026 07:01:27] "[32mGET / HTTP/1.1[0m" 302 -
+INFO:werkzeug:165.245.211.172 - - [29/Jun/2026 07:01:28] "GET /login HTTP/1.1" 200 -
+INFO:werkzeug:157.245.154.38 - - [29/Jun/2026 07:01:29] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+INFO:werkzeug:142.93.163.177 - - [29/Jun/2026 07:01:30] "[32mGET / HTTP/1.1[0m" 302 -
+INFO:werkzeug:142.93.163.177 - - [29/Jun/2026 07:01:31] "GET /login HTTP/1.1" 200 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:34.153.147.134 - - [29/Jun/2026 07:30:23] "[33mGET /wp-json/gravitysmtp/v1/config HTTP/1.1[0m" 404 -
+INFO:werkzeug:34.153.147.134 - - [29/Jun/2026 07:30:24] "[33mGET /wp-json/gravitysmtp/v1/tests/mock-data?page=gravitysmtp-settings HTTP/1.1[0m" 404 -
+INFO:werkzeug:34.153.147.134 - - [29/Jun/2026 07:30:24] "[33mGET /wp-json/gravitysmtp/v1/settings HTTP/1.1[0m" 404 -
+INFO:werkzeug:34.153.147.134 - - [29/Jun/2026 07:30:24] "[33mGET /wp-json/wp/v2/settings HTTP/1.1[0m" 404 -
+INFO:werkzeug:34.153.147.134 - - [29/Jun/2026 07:30:24] "[33mGET /wp-json/gravitysmtp/v1/tests/mock-data HTTP/1.1[0m" 404 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+ERROR:werkzeug:185.213.175.171 - - [29/Jun/2026 08:36:05] code 400, message Bad request version ('["cpuminer/2.5.1"]}')
+INFO:werkzeug:185.213.175.171 - - [29/Jun/2026 08:36:05] "[31m[1m{"id": 1, "method": "mining.subscribe", "params": ["cpuminer/2.5.1"]}[0m" 400 -
+ERROR:werkzeug:185.213.175.171 - - [29/Jun/2026 08:36:07] code 400, message Bad request version ('"EthereumStratum/1.0.0"]}')
+INFO:werkzeug:185.213.175.171 - - [29/Jun/2026 08:36:07] "[31m[1m{"id": 1, "method": "mining.subscribe", "params": ["MinerName/1.0.0", "EthereumStratum/1.0.0"]}[0m" 400 -
+ERROR:werkzeug:185.213.175.171 - - [29/Jun/2026 08:36:08] code 400, message Bad request syntax ('{"id":1,"method":"eth_submitLogin","worker":"igwrcvap","params":["0xecee2918e6444e8007d2797c345b126ee6fccb2b","x"],"jsonrpc":"2.0"}')
+INFO:werkzeug:185.213.175.171 - - [29/Jun/2026 08:36:08] "[31m[1m{"id":1,"method":"eth_submitLogin","worker":"igwrcvap","params":["0xecee2918e6444e8007d2797c345b126ee6fccb2b","x"],"jsonrpc":"2.0"}[0m" 400 -
+ERROR:werkzeug:185.213.175.171 - - [29/Jun/2026 08:36:10] code 400, message Bad request version ('msvc/2019","algo":["cn/1","cn/2","cn/r","cn/fast","cn/half","cn/xao","cn/rto","cn/rwz","cn/zls","cn/double","cn/ccx","cn-lite/1","cn-heavy/0","cn-heavy/tube","cn-heavy/xhv","cn-pico","cn-pico/tlo","cn/upx2","rx/0","rx/wow","rx/arq","rx/graft","rx/sfx","rx/keva","argon2/chukwa","argon2/chukwav2","argon2/ninja","astrobwt"]}}')
+INFO:werkzeug:185.213.175.171 - - [29/Jun/2026 08:36:10] "[31m[1m{"id":1,"jsonrpc":"2.0","method":"login","params":{"login":"45HUCVwCu3digbLGGsraB7i3Q7H6518yNhGyxDWgScW7BmL3pEaCB1W5usFTVVqjP7jbFoKA9VzQF6DaHTewrz2NMwcjfDJ","pass":"x","agent":"XMRig/6.15.3 (Windows NT 10.0; Win64; x64) libuv/1.42.0 msvc/2019","algo":["cn/1","cn/2","cn/r","cn/fast","cn/half","cn/xao","cn/rto","cn/rwz","cn/zls","cn/double","cn/ccx","cn-lite/1","cn-heavy/0","cn-heavy/tube","cn-heavy/xhv","cn-pico","cn-pico/tlo","cn/upx2","rx/0","rx/wow","rx/arq","rx/graft","rx/sfx","rx/keva","argon2/chukwa","argon2/chukwav2","argon2/ninja","astrobwt"]}}[0m" 400 -
+INFO:werkzeug:185.213.175.171 - - [29/Jun/2026 08:36:12] "[32mGET / HTTP/1.1[0m" 302 -
+INFO:werkzeug:185.213.175.171 - - [29/Jun/2026 08:36:15] "GET /login HTTP/1.1" 200 -
+ERROR:__main__:Unhandled exception: 405 Method Not Allowed: The method is not allowed for the requested URL.
+INFO:werkzeug:185.213.175.171 - - [29/Jun/2026 08:36:17] "[35m[1mPOST / HTTP/1.1[0m" 500 -
+ERROR:__main__:Unhandled exception: 405 Method Not Allowed: The method is not allowed for the requested URL.
+INFO:werkzeug:185.213.175.171 - - [29/Jun/2026 08:36:19] "[35m[1mPOST / HTTP/1.1[0m" 500 -
+INFO:werkzeug:185.213.175.171 - - [29/Jun/2026 08:36:21] "[33mGET /WuEL HTTP/1.1[0m" 404 -
+INFO:werkzeug:185.213.175.171 - - [29/Jun/2026 08:36:23] "[33mGET stager64 HTTP/1.1[0m" 404 -
+INFO:werkzeug:185.213.175.171 - - [29/Jun/2026 08:36:24] "[33mGET /a HTTP/1.1[0m" 404 -
+INFO:werkzeug:185.213.175.171 - - [29/Jun/2026 08:36:26] "[33mGET /download/file.ext HTTP/1.1[0m" 404 -
+INFO:werkzeug:185.213.175.171 - - [29/Jun/2026 08:36:28] "[33mGET /SiteLoader HTTP/1.1[0m" 404 -
+INFO:werkzeug:185.213.175.171 - - [29/Jun/2026 08:36:30] "[33mGET /mPlayer HTTP/1.1[0m" 404 -
+ERROR:__main__:Unhandled exception: 405 Method Not Allowed: The method is not allowed for the requested URL.
+INFO:werkzeug:185.213.175.171 - - [29/Jun/2026 08:36:32] "[35m[1mPOST / HTTP/1.1[0m" 500 -
+INFO:werkzeug:185.213.175.171 - - [29/Jun/2026 08:36:34] "[32mGET / HTTP/1.1[0m" 302 -
+INFO:werkzeug:185.213.175.171 - - [29/Jun/2026 08:36:36] "GET /login HTTP/1.1" 200 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:135.233.112.109 - - [29/Jun/2026 09:37:47] "[33mGET /developmentserver/metadatauploader HTTP/1.1[0m" 404 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:165.22.60.26 - - [29/Jun/2026 10:21:35] "[32mGET / HTTP/1.1[0m" 302 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:87.236.176.214 - - [29/Jun/2026 10:23:42] "[32mGET / HTTP/1.1[0m" 302 -
+INFO:werkzeug:87.236.176.214 - - [29/Jun/2026 10:23:43] "GET /login HTTP/1.1" 200 -
+INFO:werkzeug:45.148.10.200 - - [29/Jun/2026 10:24:21] "[32mGET / HTTP/1.1[0m" 302 -
+INFO:werkzeug:45.148.10.200 - - [29/Jun/2026 10:24:26] "[32mGET / HTTP/1.1[0m" 302 -
+INFO:werkzeug:45.148.10.200 - - [29/Jun/2026 10:24:26] "[33mGET /.env.prod HTTP/1.1[0m" 404 -
+INFO:werkzeug:45.148.10.200 - - [29/Jun/2026 10:24:27] "[33mGET /admin/.env HTTP/1.1[0m" 404 -
+INFO:werkzeug:45.148.10.200 - - [29/Jun/2026 10:24:27] "[33mGET /.git-credentials HTTP/1.1[0m" 404 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:45.194.92.62 - - [29/Jun/2026 10:58:21] "[32mGET / HTTP/1.1[0m" 302 -
+INFO:werkzeug:45.194.92.62 - - [29/Jun/2026 10:58:22] "GET /login HTTP/1.1" 200 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+ERROR:__main__:Unhandled exception: 405 Method Not Allowed: The method is not allowed for the requested URL.
+INFO:werkzeug:46.151.178.13 - - [29/Jun/2026 11:09:51] "[35m[1mPROPFIND / HTTP/1.1[0m" 500 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:156.38.223.194 - - [29/Jun/2026 11:18:55] "[32mGET / HTTP/1.1[0m" 302 -
+INFO:werkzeug:156.38.223.194 - - [29/Jun/2026 11:18:56] "GET /login HTTP/1.1" 200 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:152.32.151.39 - - [29/Jun/2026 11:38:25] "[32mGET / HTTP/1.1[0m" 302 -
+INFO:werkzeug:152.32.151.39 - - [29/Jun/2026 11:38:25] "GET /login HTTP/1.1" 200 -
+INFO:werkzeug:152.32.151.39 - - [29/Jun/2026 11:38:26] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+INFO:werkzeug:152.32.151.39 - - [29/Jun/2026 11:38:27] "[33mGET /robots.txt HTTP/1.1[0m" 404 -
+INFO:werkzeug:152.32.151.39 - - [29/Jun/2026 11:38:28] "[33mGET /sitemap.xml HTTP/1.1[0m" 404 -
+INFO:werkzeug:152.32.151.39 - - [29/Jun/2026 11:38:38] "[33mGET /config.json HTTP/1.1[0m" 404 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:45.205.1.76 - - [29/Jun/2026 12:17:47] "[32mGET / HTTP/1.1[0m" 302 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:151.242.30.224 - - [29/Jun/2026 12:41:31] "[33mGET /api/auth/validate-sso HTTP/1.1[0m" 404 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:47.91.86.90 - - [29/Jun/2026 13:16:36] "[32mGET / HTTP/1.1[0m" 302 -
+INFO:werkzeug:47.91.86.90 - - [29/Jun/2026 13:16:37] "[32mGET / HTTP/1.1[0m" 302 -
+INFO:werkzeug:47.91.86.90 - - [29/Jun/2026 13:16:38] "GET /login HTTP/1.1" 200 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:71.6.232.30 - - [29/Jun/2026 13:44:37] "[32mGET / HTTP/1.1[0m" 302 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:34.39.120.233 - - [29/Jun/2026 14:15:14] "[32mGET / HTTP/1.1[0m" 302 -
+INFO:werkzeug:34.39.120.233 - - [29/Jun/2026 14:15:17] "GET /login HTTP/1.1" 200 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:45.194.92.62 - - [29/Jun/2026 14:26:10] "[32mGET / HTTP/1.1[0m" 302 -
+INFO:werkzeug:45.194.92.62 - - [29/Jun/2026 14:26:12] "GET /login HTTP/1.1" 200 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:152.32.174.171 - - [29/Jun/2026 14:32:20] "[33mPOST /cgi-bin/../../../../../../../../../../bin/sh HTTP/1.1[0m" 404 -
+INFO:werkzeug:152.32.174.171 - - [29/Jun/2026 14:32:24] "[33mPOST /cgi-bin/%2e%2e/%2e%2e/%2e%2e/%2e%2e/%2e%2e/%2e%2e/%2e%2e/bin/sh HTTP/1.1[0m" 404 -
+INFO:werkzeug:152.32.174.171 - - [29/Jun/2026 14:32:24] "[33mPOST /hello.world?%ADd+allow_url_include%3d1+%ADd+auto_prepend_file%3dphp://input HTTP/1.1[0m" 404 -
+ERROR:__main__:Unhandled exception: 405 Method Not Allowed: The method is not allowed for the requested URL.
+INFO:werkzeug:152.32.174.171 - - [29/Jun/2026 14:32:31] "[35m[1mPOST /?%ADd+allow_url_include%3d1+%ADd+auto_prepend_file%3dphp://input HTTP/1.1[0m" 500 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:35.187.97.175 - - [29/Jun/2026 16:09:42] "[32mGET / HTTP/1.1[0m" 302 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:185.189.182.234 - - [29/Jun/2026 16:34:38] "[32mGET / HTTP/1.1[0m" 302 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:136.107.62.20 - - [29/Jun/2026 16:43:59] "OPTIONS / HTTP/1.0" 200 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+ERROR:__main__:Unhandled exception: 405 Method Not Allowed: The method is not allowed for the requested URL.
+INFO:werkzeug:46.151.178.13 - - [29/Jun/2026 16:52:04] "[35m[1mPROPFIND / HTTP/1.1[0m" 500 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:15:58] "GET / HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:15:59] "GET /static/js/app.js?v=1782657559 HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:15:59] "GET /api/pdf-settings/logo HTTP/1.1" 200 -
+INFO:__main__:Getting stats - Events: 147, Inventory: 1320
+INFO:__main__:Successfully got assigned assets count: 122
+INFO:__main__:Returning stats: {'totalEvents': 147, 'activeEvents': 8, 'totalAssets': 1892, 'deployedAssets': 122, 'missingAssets': 1, 'oocAssets': 7, 'degradedAssets': 4, 'decommissionedAssets': 0, 'disposedAssets': 0}
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:15:59] "GET /api/stats HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:15:59] "GET /api/pdf-settings HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:15:59] "GET /api/current-user HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:15:59] "GET /api/pdf-settings/logo?v=1750644779 HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:15:59] "GET /api/companies HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:15:59] "GET /api/departments HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:15:59] "GET /api/realtime/stream?clientId=2a719c16-d620-436c-a3ce-1d1be62f171d HTTP/1.1" 200 -
+INFO:__main__:Getting stats - Events: 147, Inventory: 1320
+INFO:__main__:Successfully got assigned assets count: 122
+INFO:__main__:Returning stats: {'totalEvents': 147, 'activeEvents': 8, 'totalAssets': 1892, 'deployedAssets': 122, 'missingAssets': 1, 'oocAssets': 7, 'degradedAssets': 4, 'decommissionedAssets': 0, 'disposedAssets': 0}
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:16:00] "GET /api/stats HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:16:00] "GET /api/events HTTP/1.1" 200 -
+INFO:__main__:Getting stats - Events: 147, Inventory: 1320
+INFO:__main__:Successfully got assigned assets count: 122
+INFO:__main__:Returning stats: {'totalEvents': 147, 'activeEvents': 8, 'totalAssets': 1892, 'deployedAssets': 122, 'missingAssets': 1, 'oocAssets': 7, 'degradedAssets': 4, 'decommissionedAssets': 0, 'disposedAssets': 0}
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:16:01] "GET /api/stats HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:16:01] "GET /api/events HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:16:03] "GET /api/events HTTP/1.1" 200 -
+INFO:__main__:Getting stats - Events: 147, Inventory: 1320
+INFO:__main__:Successfully got assigned assets count: 122
+INFO:__main__:Returning stats: {'totalEvents': 147, 'activeEvents': 8, 'totalAssets': 1892, 'deployedAssets': 122, 'missingAssets': 1, 'oocAssets': 7, 'degradedAssets': 4, 'decommissionedAssets': 0, 'disposedAssets': 0}
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:16:08] "GET /api/stats HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:16:08] "GET /api/events HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:16:10] "GET /api/events/150 HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:16:10] "GET /api/events/150 HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:16:10] "GET /api/assets/available HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:16:10] "GET /api/events/150/availability HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:16:10] "GET /api/containers HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:16:10] "GET /api/events/150 HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:16:11] "GET /api/events/150 HTTP/1.1" 200 -
+INFO:data_manager:Backup created at C:\Users\AVECp\Documents\AIT\AIT2\companies/AVPL/backend\event_backups\backup_150. [20260627] Dry Hire_ Avery Events.csv.
+INFO:data_manager:Backup created at C:\Users\AVECp\Documents\AIT\AIT2\companies/AVPL/backend\event_backups\backup_150. [20260627] Dry Hire_ Avery Events.csv.
+INFO:__main__:Action logged: User bnjm2000 forced event 150 (Dry Hire: Avery Events) state from Overdue to Preparing
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:16:13] "POST /api/events/150/force-state HTTP/1.1" 200 -
+INFO:__main__:Reloaded shared CSV data after external change
+INFO:__main__:Getting stats - Events: 147, Inventory: 1320
+INFO:__main__:Successfully got assigned assets count: 122
+INFO:__main__:Returning stats: {'totalEvents': 147, 'activeEvents': 8, 'totalAssets': 1892, 'deployedAssets': 122, 'missingAssets': 1, 'oocAssets': 7, 'degradedAssets': 4, 'decommissionedAssets': 0, 'disposedAssets': 0}
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:16:15] "GET /api/stats HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:16:15] "GET /api/events HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:16:15] "GET /api/events HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:16:17] "GET /api/events/150 HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:16:18] "GET /api/assets/available-for-event/150 HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:16:24] "GET /api/assets HTTP/1.1" 200 -
+INFO:__main__:Assigning asset MVSHAZER#01 - Brand: Le Maitre, Model: MVS Hazer, Dept: LX
+INFO:__main__:Asset MVSHAZER#01: fromContainer=False; addToEvent=False; fillsExistingRequirement=True; addedUnits=0
+INFO:__main__:Added MVSHAZER#01 to actually_prepared. List now: ['DAD#01', 'DAD#02', 'SBS#01', 'SEK#01', 'SEK#02', 'SEK#03', 'SEK#04', 'SEK#05', 'SEK#06', 'SEK#07', 'SEK#08', 'SEK#09', '[CUSTOM]{"company":"","department":"AX","name":"DPA Violin Clip","quantity":1,"type":"MISC","uid":"d29df0a78fb2146b","version":2}', '[CUSTOM]{"company":"","department":"AX","name":"DPA Saxaphone Clip","quantity":1,"type":"MISC","uid":"bd89bd221a96281f","version":2}', '4099#05', '4099#06', '4099#16', 'E904#01', 'E904#02', 'E904#05', 'SM58S#01', 'SM58S#02', 'SM58S#03', 'SM58S#04', 'STRIKEM#01', 'STRIKEM#03', 'STRIKEM#04', 'STRIKEM#08', 'RIO3224-D #01', 'MASTER4KTX#02', 'MASTER4KRX#02', 'DAD6010#32', 'DAD6010#35', 'DAD6010#25', 'DAD4099#01', 'DAD4099#02', 'NPFCHARGER#01', 'NPF750#01', 'NPF750#02', 'MVSHAZER#01']
+INFO:data_manager:Backup created at C:\Users\AVECp\Documents\AIT\AIT2\companies/AVPL/backend\event_backups\backup_150. [20260627] Dry Hire_ Avery Events.csv.
+INFO:data_manager:Backup created at C:\Users\AVECp\Documents\AIT\AIT2\companies/AVPL/backend\event_backups\backup_150. [20260627] Dry Hire_ Avery Events.csv.
+INFO:__main__:Action logged: Assigned specific asset MVSHAZER#01 to event 150
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:16:25] "POST /api/events/150/assign-specific HTTP/1.1" 200 -
+INFO:__main__:Reloaded shared CSV data after external change
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:16:26] "GET /api/events/150 HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:16:26] "GET /api/events HTTP/1.1" 200 -
+INFO:__main__:Getting stats - Events: 147, Inventory: 1320
+INFO:__main__:Successfully got assigned assets count: 123
+INFO:__main__:Returning stats: {'totalEvents': 147, 'activeEvents': 8, 'totalAssets': 1892, 'deployedAssets': 123, 'missingAssets': 1, 'oocAssets': 7, 'degradedAssets': 4, 'decommissionedAssets': 0, 'disposedAssets': 0}
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:16:28] "GET /api/stats HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:16:29] "GET /api/events HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:16:30] "GET /api/events/150 HTTP/1.1" 200 -
+INFO:data_manager:Backup created at C:\Users\AVECp\Documents\AIT\AIT2\companies/AVPL/backend\event_backups\backup_150. [20260627] Dry Hire_ Avery Events.csv.
+INFO:data_manager:Backup created at C:\Users\AVECp\Documents\AIT\AIT2\companies/AVPL/backend\event_backups\backup_150. [20260627] Dry Hire_ Avery Events.csv.
+INFO:__main__:Action logged: User bnjm2000 removed forced state override for event 150 (Dry Hire: Avery Events): Preparing -> Overdue
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:16:31] "POST /api/events/150/remove-force-state HTTP/1.1" 200 -
+INFO:__main__:Reloaded shared CSV data after external change
+INFO:__main__:Getting stats - Events: 147, Inventory: 1320
+INFO:__main__:Successfully got assigned assets count: 123
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:16:32] "GET /api/events/150 HTTP/1.1" 200 -
+INFO:__main__:Returning stats: {'totalEvents': 147, 'activeEvents': 8, 'totalAssets': 1892, 'deployedAssets': 123, 'missingAssets': 1, 'oocAssets': 7, 'degradedAssets': 4, 'decommissionedAssets': 0, 'disposedAssets': 0}
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:16:32] "GET /api/stats HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:16:32] "GET /api/events HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:16:50] "GET /api/events/151 HTTP/1.1" 200 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:16:59] "GET /api/events HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:17:03] "GET /api/events HTTP/1.1" 200 -
+INFO:__main__:Getting stats - Events: 147, Inventory: 1320
+INFO:__main__:Successfully got assigned assets count: 123
+INFO:__main__:Returning stats: {'totalEvents': 147, 'activeEvents': 8, 'totalAssets': 1892, 'deployedAssets': 123, 'missingAssets': 1, 'oocAssets': 7, 'degradedAssets': 4, 'decommissionedAssets': 0, 'disposedAssets': 0}
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:17:19] "GET /api/stats HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:17:19] "GET /api/events HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:17:20] "GET /api/events/151 HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:17:24] "GET /api/events/151 HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:17:25] "GET /api/events/151 HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:17:25] "GET /api/assets/available HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:17:25] "GET /api/events/151/availability HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:17:25] "GET /api/containers HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:17:25] "GET /api/events/151 HTTP/1.1" 200 -
+INFO:data_manager:Backup created at C:\Users\AVECp\Documents\AIT\AIT2\companies/AVPL/backend\event_backups\backup_151. [20260723] Macallan x David Carson In The Studio @ Atipico.csv.
+INFO:data_manager:Backup created at C:\Users\AVECp\Documents\AIT\AIT2\companies/AVPL/backend\event_backups\backup_151. [20260723] Macallan x David Carson In The Studio @ Atipico.csv.
+INFO:__main__:Action logged: Removed Global Truss F34 Truss - 3m (Silver) model from event 151
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:17:27] "DELETE /api/events/151/models HTTP/1.1" 200 -
+INFO:__main__:Reloaded shared CSV data after external change
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:17:27] "GET /api/assets/available HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:17:28] "GET /api/events/151 HTTP/1.1" 200 -
+INFO:__main__:Getting stats - Events: 147, Inventory: 1320
+INFO:__main__:Successfully got assigned assets count: 123
+INFO:__main__:Returning stats: {'totalEvents': 147, 'activeEvents': 8, 'totalAssets': 1892, 'deployedAssets': 123, 'missingAssets': 1, 'oocAssets': 7, 'degradedAssets': 4, 'decommissionedAssets': 0, 'disposedAssets': 0}
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:17:28] "GET /api/stats HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:17:28] "GET /api/events HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:17:32] "GET /api/departments HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:17:32] "GET /api/assets HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:17:42] "GET /api/assets HTTP/1.1" 200 -
+INFO:__main__:Getting stats - Events: 147, Inventory: 1320
+INFO:__main__:Successfully got assigned assets count: 123
+INFO:__main__:Returning stats: {'totalEvents': 147, 'activeEvents': 8, 'totalAssets': 1892, 'deployedAssets': 123, 'missingAssets': 1, 'oocAssets': 7, 'degradedAssets': 4, 'decommissionedAssets': 0, 'disposedAssets': 0}
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:17:46] "GET /api/stats HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:17:46] "GET /api/events HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:18:05] "GET / HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:18:05] "[36mGET /static/js/app.js?v=1782657559 HTTP/1.1[0m" 304 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:18:05] "GET /api/pdf-settings/logo HTTP/1.1" 200 -
+INFO:__main__:Getting stats - Events: 147, Inventory: 1320
+INFO:__main__:Successfully got assigned assets count: 123
+INFO:__main__:Returning stats: {'totalEvents': 147, 'activeEvents': 8, 'totalAssets': 1892, 'deployedAssets': 123, 'missingAssets': 1, 'oocAssets': 7, 'degradedAssets': 4, 'decommissionedAssets': 0, 'disposedAssets': 0}
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:18:05] "GET /api/stats HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:18:05] "GET /api/pdf-settings HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:18:06] "GET /api/current-user HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:18:06] "GET /api/companies HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:18:06] "GET /api/departments HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:18:06] "GET /api/realtime/stream?clientId=2a719c16-d620-436c-a3ce-1d1be62f171d HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:18:06] "GET /api/assets HTTP/1.1" 200 -
+INFO:__main__:Getting stats - Events: 147, Inventory: 1320
+INFO:__main__:Successfully got assigned assets count: 123
+INFO:__main__:Returning stats: {'totalEvents': 147, 'activeEvents': 8, 'totalAssets': 1892, 'deployedAssets': 123, 'missingAssets': 1, 'oocAssets': 7, 'degradedAssets': 4, 'decommissionedAssets': 0, 'disposedAssets': 0}
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:18:06] "GET /api/stats HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:18:07] "GET /api/containers HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:18:07] "GET /api/events HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:18:07] "GET /api/departments HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:18:07] "GET /api/assets HTTP/1.1" 200 -
+INFO:__main__:Getting stats - Events: 147, Inventory: 1320
+INFO:__main__:Successfully got assigned assets count: 123
+INFO:__main__:Returning stats: {'totalEvents': 147, 'activeEvents': 8, 'totalAssets': 1892, 'deployedAssets': 123, 'missingAssets': 1, 'oocAssets': 7, 'degradedAssets': 4, 'decommissionedAssets': 0, 'disposedAssets': 0}
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:18:56] "GET /api/stats HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:18:56] "GET /api/events HTTP/1.1" 200 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:45.198.224.245 - - [29/Jun/2026 17:23:50] "[32mGET / HTTP/1.1[0m" 302 -
+INFO:data_manager:All required files are present.
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:25:34] "GET / HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:25:35] "GET /static/js/app.js?v=1782657559 HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:25:35] "GET /api/pdf-settings/logo HTTP/1.1" 200 -
+INFO:__main__:Getting stats - Events: 0, Inventory: 2756
+INFO:__main__:Successfully got assigned assets count: 0
+INFO:__main__:Returning stats: {'totalEvents': 0, 'activeEvents': 0, 'totalAssets': 2996, 'deployedAssets': 0, 'missingAssets': 14, 'oocAssets': 115, 'degradedAssets': 122, 'decommissionedAssets': 0, 'disposedAssets': 0}
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:25:35] "GET /api/stats HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:25:35] "GET /api/pdf-settings HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:25:35] "GET /api/current-user HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:25:35] "GET /api/pdf-settings/logo?v=1782530853 HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:25:36] "GET /api/departments HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:25:36] "GET /api/realtime/stream?clientId=f6fa9738-a130-407f-8161-2d6fa33307f9 HTTP/1.1" 200 -
+INFO:__main__:Getting stats - Events: 0, Inventory: 2756
+INFO:__main__:Successfully got assigned assets count: 0
+INFO:__main__:Returning stats: {'totalEvents': 0, 'activeEvents': 0, 'totalAssets': 2996, 'deployedAssets': 0, 'missingAssets': 14, 'oocAssets': 115, 'degradedAssets': 122, 'decommissionedAssets': 0, 'disposedAssets': 0}
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:25:36] "GET /api/stats HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:25:36] "GET /api/events HTTP/1.1" 200 -
+INFO:__main__:Getting stats - Events: 0, Inventory: 2756
+INFO:__main__:Successfully got assigned assets count: 0
+INFO:__main__:Returning stats: {'totalEvents': 0, 'activeEvents': 0, 'totalAssets': 2996, 'deployedAssets': 0, 'missingAssets': 14, 'oocAssets': 115, 'degradedAssets': 122, 'decommissionedAssets': 0, 'disposedAssets': 0}
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:25:37] "GET /api/stats HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:25:37] "GET /api/events HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:25:38] "GET /api/departments HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:25:39] "GET /api/assets HTTP/1.1" 200 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:64.62.156.122 - - [29/Jun/2026 17:30:46] "[32mGET / HTTP/1.1[0m" 302 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:64.62.156.129 - - [29/Jun/2026 17:40:36] "[32mGET / HTTP/1.1[0m" 302 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:64.62.156.127 - - [29/Jun/2026 17:42:56] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:117.175.51.134 - - [29/Jun/2026 17:50:43] "[33mPOST /cgi-bin/../../../../../../../../../../bin/sh HTTP/1.1[0m" 404 -
+INFO:werkzeug:117.175.51.134 - - [29/Jun/2026 17:50:46] "[33mPOST /cgi-bin/%2e%2e/%2e%2e/%2e%2e/%2e%2e/%2e%2e/%2e%2e/%2e%2e/bin/sh HTTP/1.1[0m" 404 -
+INFO:werkzeug:117.175.51.134 - - [29/Jun/2026 17:50:49] "[33mPOST /hello.world?%ADd+allow_url_include%3d1+%ADd+auto_prepend_file%3dphp://input HTTP/1.1[0m" 404 -
+ERROR:__main__:Unhandled exception: 405 Method Not Allowed: The method is not allowed for the requested URL.
+INFO:werkzeug:117.175.51.134 - - [29/Jun/2026 17:50:51] "[35m[1mPOST /?%ADd+allow_url_include%3d1+%ADd+auto_prepend_file%3dphp://input HTTP/1.1[0m" 500 -
+INFO:werkzeug:117.175.51.134 - - [29/Jun/2026 17:50:54] "[33mGET /vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php HTTP/1.1[0m" 404 -
+INFO:werkzeug:117.175.51.134 - - [29/Jun/2026 17:50:57] "[33mGET /vendor/phpunit/phpunit/Util/PHP/eval-stdin.php HTTP/1.1[0m" 404 -
+INFO:werkzeug:117.175.51.134 - - [29/Jun/2026 17:51:01] "[33mGET /vendor/phpunit/src/Util/PHP/eval-stdin.php HTTP/1.1[0m" 404 -
+INFO:werkzeug:117.175.51.134 - - [29/Jun/2026 17:51:06] "[33mGET /vendor/phpunit/Util/PHP/eval-stdin.php HTTP/1.1[0m" 404 -
+INFO:werkzeug:117.175.51.134 - - [29/Jun/2026 17:51:10] "[33mGET /vendor/phpunit/phpunit/LICENSE/eval-stdin.php HTTP/1.1[0m" 404 -
+INFO:werkzeug:117.175.51.134 - - [29/Jun/2026 17:51:15] "[33mGET /vendor/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php HTTP/1.1[0m" 404 -
+INFO:werkzeug:117.175.51.134 - - [29/Jun/2026 17:51:19] "[33mGET /phpunit/phpunit/src/Util/PHP/eval-stdin.php HTTP/1.1[0m" 404 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:64.62.156.122 - - [29/Jun/2026 17:54:45] "[33mGET /vpn/index.html HTTP/1.1[0m" 404 -
+INFO:werkzeug:64.62.156.126 - - [29/Jun/2026 17:55:12] "[33mGET /vpn/index.html HTTP/1.1[0m" 404 -
+INFO:werkzeug:64.62.156.122 - - [29/Jun/2026 17:55:30] "[33mGET /logon/LogonPoint/index.html HTTP/1.1[0m" 404 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 17:56:43] "GET /api/realtime/stream?clientId=2a719c16-d620-436c-a3ce-1d1be62f171d HTTP/1.1" 200 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:64.62.156.122 - - [29/Jun/2026 17:57:38] "[33mGET /geoserver/web/ HTTP/1.1[0m" 404 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:13:24] "GET / HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:13:24] "GET /api/pdf-settings/logo HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:13:25] "GET /static/js/app.js?v=1782657559 HTTP/1.1" 200 -
+INFO:__main__:Getting stats - Events: 0, Inventory: 2756
+INFO:__main__:Successfully got assigned assets count: 0
+INFO:__main__:Returning stats: {'totalEvents': 0, 'activeEvents': 0, 'totalAssets': 2996, 'deployedAssets': 0, 'missingAssets': 14, 'oocAssets': 115, 'degradedAssets': 122, 'decommissionedAssets': 0, 'disposedAssets': 0}
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:13:28] "GET /api/stats HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:13:29] "GET /api/pdf-settings HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:13:29] "GET /api/current-user HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:13:29] "GET /api/departments HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:13:29] "GET /api/realtime/stream?clientId=a267b582-85e2-49ee-8dd6-d616ae9aa977 HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:13:29] "GET /api/pdf-settings/logo?v=1782530853 HTTP/1.1" 200 -
+INFO:__main__:Getting stats - Events: 0, Inventory: 2756
+INFO:__main__:Successfully got assigned assets count: 0
+INFO:__main__:Returning stats: {'totalEvents': 0, 'activeEvents': 0, 'totalAssets': 2996, 'deployedAssets': 0, 'missingAssets': 14, 'oocAssets': 115, 'degradedAssets': 122, 'decommissionedAssets': 0, 'disposedAssets': 0}
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:13:30] "GET /api/stats HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:13:30] "GET /api/events HTTP/1.1" 200 -
+INFO:__main__:Getting stats - Events: 0, Inventory: 2756
+INFO:__main__:Successfully got assigned assets count: 0
+INFO:__main__:Returning stats: {'totalEvents': 0, 'activeEvents': 0, 'totalAssets': 2996, 'deployedAssets': 0, 'missingAssets': 14, 'oocAssets': 115, 'degradedAssets': 122, 'decommissionedAssets': 0, 'disposedAssets': 0}
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:13:31] "GET /api/stats HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:13:31] "GET /api/events HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:13:45] "GET /api/departments HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:13:45] "GET /api/assets HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:14:30] "GET /api/departments HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:14:31] "GET /api/assets HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:14:32] "GET /api/assets HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:14:34] "GET /api/containers HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:14:44] "GET /api/departments HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:14:45] "GET /api/assets HTTP/1.1" 200 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:24:18] "GET /api/realtime/stream?clientId=2a719c16-d620-436c-a3ce-1d1be62f171d HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:24:25] "GET / HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:24:26] "GET /static/js/app.js?v=1782657559 HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:24:26] "GET /api/pdf-settings/logo HTTP/1.1" 200 -
+INFO:__main__:Getting stats - Events: 147, Inventory: 1320
+INFO:__main__:Successfully got assigned assets count: 123
+INFO:__main__:Returning stats: {'totalEvents': 147, 'activeEvents': 8, 'totalAssets': 1892, 'deployedAssets': 123, 'missingAssets': 1, 'oocAssets': 7, 'degradedAssets': 4, 'decommissionedAssets': 0, 'disposedAssets': 0}
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:24:27] "GET /api/stats HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:24:27] "GET /api/pdf-settings HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:24:27] "GET /api/current-user HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:24:27] "GET /api/pdf-settings/logo?v=1750644779 HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:24:27] "GET /api/companies HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:24:27] "GET /api/departments HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:24:27] "GET /api/realtime/stream?clientId=eceb4143-04a2-40cd-97b5-f2e1c15ff23d HTTP/1.1" 200 -
+INFO:__main__:Getting stats - Events: 147, Inventory: 1320
+INFO:__main__:Successfully got assigned assets count: 123
+INFO:__main__:Returning stats: {'totalEvents': 147, 'activeEvents': 8, 'totalAssets': 1892, 'deployedAssets': 123, 'missingAssets': 1, 'oocAssets': 7, 'degradedAssets': 4, 'decommissionedAssets': 0, 'disposedAssets': 0}
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:24:28] "GET /api/stats HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:24:28] "GET /api/events HTTP/1.1" 200 -
+INFO:__main__:Getting stats - Events: 147, Inventory: 1320
+INFO:__main__:Successfully got assigned assets count: 123
+INFO:__main__:Returning stats: {'totalEvents': 147, 'activeEvents': 8, 'totalAssets': 1892, 'deployedAssets': 123, 'missingAssets': 1, 'oocAssets': 7, 'degradedAssets': 4, 'decommissionedAssets': 0, 'disposedAssets': 0}
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:24:29] "GET /api/stats HTTP/1.1" 200 -
+INFO:__main__:Action logged: User bnjm2000 logged out from web interface
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:24:29] "[32mGET /logout HTTP/1.1[0m" 302 -
+INFO:__main__:Reloaded shared CSV data after external change
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:24:29] "GET /login HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:24:29] "GET /api/events HTTP/1.1" 200 -
+INFO:__main__:Action logged: User admin logged in via web interface
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:24:41] "POST /login HTTP/1.1" 200 -
+INFO:__main__:Reloaded shared CSV data after external change
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:24:41] "GET / HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:24:42] "[36mGET /static/js/app.js?v=1782657559 HTTP/1.1[0m" 304 -
+INFO:__main__:Getting stats - Events: 0, Inventory: 2756
+INFO:__main__:Successfully got assigned assets count: 0
+INFO:__main__:Returning stats: {'totalEvents': 0, 'activeEvents': 0, 'totalAssets': 2996, 'deployedAssets': 0, 'missingAssets': 14, 'oocAssets': 115, 'degradedAssets': 122, 'decommissionedAssets': 0, 'disposedAssets': 0}
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:24:42] "GET /api/stats HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:24:42] "GET /api/pdf-settings HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:24:42] "GET /api/current-user HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:24:42] "GET /api/pdf-settings/logo?v=1782530853 HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:24:42] "GET /api/departments HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:24:42] "GET /api/realtime/stream?clientId=eceb4143-04a2-40cd-97b5-f2e1c15ff23d HTTP/1.1" 200 -
+INFO:__main__:Getting stats - Events: 0, Inventory: 2756
+INFO:__main__:Successfully got assigned assets count: 0
+INFO:__main__:Returning stats: {'totalEvents': 0, 'activeEvents': 0, 'totalAssets': 2996, 'deployedAssets': 0, 'missingAssets': 14, 'oocAssets': 115, 'degradedAssets': 122, 'decommissionedAssets': 0, 'disposedAssets': 0}
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:24:42] "GET /api/stats HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:24:43] "GET /api/events HTTP/1.1" 200 -
+INFO:__main__:Getting stats - Events: 0, Inventory: 2756
+INFO:__main__:Successfully got assigned assets count: 0
+INFO:__main__:Returning stats: {'totalEvents': 0, 'activeEvents': 0, 'totalAssets': 2996, 'deployedAssets': 0, 'missingAssets': 14, 'oocAssets': 115, 'degradedAssets': 122, 'decommissionedAssets': 0, 'disposedAssets': 0}
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:24:44] "GET /api/stats HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:24:44] "GET /api/events HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:24:47] "GET /api/departments HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:24:47] "GET /api/assets HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:25:26] "POST /api/assets/serial-preview HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:25:26] "POST /api/assets/serial-preview HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:25:27] "POST /api/assets/serial-preview HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:26:11] "POST /api/assets/serial-preview HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:26:13] "POST /api/assets/serial-preview HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:26:13] "POST /api/assets/serial-preview HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:26:14] "POST /api/assets/serial-preview HTTP/1.1" 200 -
+INFO:__main__:Action logged: Added assets L2#01 to L2#06 via web interface
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:26:21] "POST /api/assets HTTP/1.1" 200 -
+INFO:__main__:Reloaded shared CSV data after external change
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:26:21] "GET /api/departments HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:26:21] "GET /api/assets HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:26:22] "POST /api/events/update-states HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:26:23] "GET /api/events HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:26:35] "POST /api/assets/serial-preview HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:26:35] "POST /api/assets/serial-preview HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:26:37] "POST /api/assets/serial-preview HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:26:40] "POST /api/assets/serial-preview HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:26:41] "POST /api/assets/serial-preview HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:26:43] "POST /api/assets/serial-preview HTTP/1.1" 200 -
+INFO:__main__:Action logged: Added assets L2D#01 to L2D#04 via web interface
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:26:44] "POST /api/assets HTTP/1.1" 200 -
+INFO:__main__:Reloaded shared CSV data after external change
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:26:44] "GET /api/departments HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:26:44] "GET /api/assets HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:26:45] "POST /api/events/update-states HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:26:45] "GET /api/events HTTP/1.1" 200 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:27:08] "GET /api/assets HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:27:09] "GET /api/assets/L2%2303/event-history HTTP/1.1" 200 -
+INFO:__main__:Action logged: Maintenance logged for 1 asset: Buang
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:27:25] "POST /api/assets/maintenance/batch HTTP/1.1" 200 -
+INFO:__main__:Reloaded shared CSV data after external change
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:27:25] "GET /api/assets HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:27:57] "POST /api/assets/serial-preview HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:27:59] "POST /api/assets/serial-preview HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:28:03] "POST /api/assets/serial-preview HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:28:04] "POST /api/assets/serial-preview HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:28:06] "POST /api/assets/serial-preview HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:28:07] "POST /api/assets/serial-preview HTTP/1.1" 200 -
+INFO:__main__:Action logged: Added assets LA716#01 to LA716#12 via web interface
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:28:07] "POST /api/assets HTTP/1.1" 200 -
+INFO:__main__:Reloaded shared CSV data after external change
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:28:07] "GET /api/departments HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:28:08] "GET /api/assets HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:28:08] "POST /api/events/update-states HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:28:08] "GET /api/events HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:28:18] "POST /api/assets/serial-preview HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:28:19] "POST /api/assets/serial-preview HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:28:19] "POST /api/assets/serial-preview HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:28:20] "POST /api/assets/serial-preview HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:28:21] "POST /api/assets/serial-preview HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:28:22] "POST /api/assets/serial-preview HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:28:22] "POST /api/assets/serial-preview HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:28:27] "POST /api/assets/serial-preview HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:28:30] "POST /api/assets/serial-preview HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:28:46] "POST /api/assets/serial-preview HTTP/1.1" 200 -
+INFO:__main__:Action logged: Added assets LA12X#01 to LA12X#24 via web interface
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:28:48] "POST /api/assets HTTP/1.1" 200 -
+INFO:__main__:Reloaded shared CSV data after external change
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:28:48] "GET /api/departments HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:28:48] "GET /api/assets HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:28:49] "POST /api/events/update-states HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:28:49] "GET /api/events HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:28:55] "GET /api/realtime/stream?clientId=2a719c16-d620-436c-a3ce-1d1be62f171d HTTP/1.1" 200 -
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 18:28:55] "GET /api/realtime/stream?clientId=eceb4143-04a2-40cd-97b5-f2e1c15ff23d HTTP/1.1" 200 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:185.12.59.118 - - [29/Jun/2026 19:06:45] "[32mGET / HTTP/1.1[0m" 302 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:160.119.71.90 - - [29/Jun/2026 19:08:49] "[32mGET / HTTP/1.1[0m" 302 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:39.109.188.100 - - [29/Jun/2026 19:35:14] "GET /api/realtime/stream?clientId=2a719c16-d620-436c-a3ce-1d1be62f171d HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [29/Jun/2026 19:35:14] "GET /api/realtime/stream?clientId=eceb4143-04a2-40cd-97b5-f2e1c15ff23d HTTP/1.1" 200 -
+INFO:__main__:Getting stats - Events: 0, Inventory: 2802
+INFO:__main__:Successfully got assigned assets count: 0
+INFO:__main__:Returning stats: {'totalEvents': 0, 'activeEvents': 0, 'totalAssets': 3042, 'deployedAssets': 0, 'missingAssets': 14, 'oocAssets': 116, 'degradedAssets': 122, 'decommissionedAssets': 0, 'disposedAssets': 0}
+INFO:werkzeug:39.109.188.100 - - [29/Jun/2026 19:36:09] "GET /api/stats HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [29/Jun/2026 19:36:09] "GET /api/events HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [29/Jun/2026 19:36:15] "GET / HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [29/Jun/2026 19:36:16] "GET /static/js/app.js?v=1782657559 HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [29/Jun/2026 19:36:16] "GET /api/pdf-settings/logo HTTP/1.1" 200 -
+INFO:__main__:Getting stats - Events: 0, Inventory: 2802
+INFO:__main__:Successfully got assigned assets count: 0
+INFO:__main__:Returning stats: {'totalEvents': 0, 'activeEvents': 0, 'totalAssets': 3042, 'deployedAssets': 0, 'missingAssets': 14, 'oocAssets': 116, 'degradedAssets': 122, 'decommissionedAssets': 0, 'disposedAssets': 0}
+INFO:werkzeug:39.109.188.100 - - [29/Jun/2026 19:36:17] "GET /api/stats HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [29/Jun/2026 19:36:17] "GET /api/pdf-settings HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [29/Jun/2026 19:36:17] "GET /api/current-user HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [29/Jun/2026 19:36:17] "GET /api/pdf-settings/logo?v=1782530853 HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [29/Jun/2026 19:36:17] "GET /api/departments HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [29/Jun/2026 19:36:17] "GET /api/realtime/stream?clientId=2a719c16-d620-436c-a3ce-1d1be62f171d HTTP/1.1" 200 -
+INFO:__main__:Getting stats - Events: 0, Inventory: 2802
+INFO:__main__:Successfully got assigned assets count: 0
+INFO:__main__:Returning stats: {'totalEvents': 0, 'activeEvents': 0, 'totalAssets': 3042, 'deployedAssets': 0, 'missingAssets': 14, 'oocAssets': 116, 'degradedAssets': 122, 'decommissionedAssets': 0, 'disposedAssets': 0}
+INFO:werkzeug:39.109.188.100 - - [29/Jun/2026 19:36:19] "GET /api/stats HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [29/Jun/2026 19:36:19] "GET /api/events HTTP/1.1" 200 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:45.194.67.29 - - [29/Jun/2026 19:43:27] "[32mGET / HTTP/1.1[0m" 302 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:39.109.188.100 - - [29/Jun/2026 19:48:10] "GET /api/realtime/stream?clientId=eceb4143-04a2-40cd-97b5-f2e1c15ff23d HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [29/Jun/2026 19:48:23] "GET /api/realtime/stream?clientId=2a719c16-d620-436c-a3ce-1d1be62f171d HTTP/1.1" 200 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:209.38.234.169 - - [29/Jun/2026 20:06:39] "[33mGET /.git/config HTTP/1.1[0m" 404 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:185.12.59.118 - - [29/Jun/2026 20:09:21] "[32mGET / HTTP/1.1[0m" 302 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:45.194.67.30 - - [29/Jun/2026 20:14:38] "[32mGET / HTTP/1.1[0m" 302 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:18.218.118.203 - - [29/Jun/2026 20:18:16] "[32mGET / HTTP/1.1[0m" 302 -
+INFO:werkzeug:18.218.118.203 - - [29/Jun/2026 20:18:18] "GET /login HTTP/1.1" 200 -
+INFO:werkzeug:45.148.10.200 - - [29/Jun/2026 20:20:45] "[32mGET / HTTP/1.1[0m" 302 -
+INFO:werkzeug:45.148.10.200 - - [29/Jun/2026 20:20:50] "[32mGET / HTTP/1.1[0m" 302 -
+INFO:werkzeug:45.148.10.200 - - [29/Jun/2026 20:20:51] "[33mGET /.env.prod HTTP/1.1[0m" 404 -
+INFO:werkzeug:45.148.10.200 - - [29/Jun/2026 20:20:51] "[33mGET /.env.old HTTP/1.1[0m" 404 -
+INFO:werkzeug:45.148.10.200 - - [29/Jun/2026 20:20:52] "[33mGET /public/.env HTTP/1.1[0m" 404 -
+INFO:werkzeug:151.243.11.245 - - [29/Jun/2026 20:21:26] "[32mGET / HTTP/1.1[0m" 302 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:66.132.224.80 - - [29/Jun/2026 20:23:05] "[32mGET / HTTP/1.1[0m" 302 -
+ERROR:werkzeug:66.132.224.80 - - [29/Jun/2026 20:23:07] code 505, message Invalid HTTP version (2.0)
+INFO:werkzeug:66.132.224.80 - - [29/Jun/2026 20:23:07] "[35m[1mPRI * HTTP/2.0[0m" 505 -
+INFO:werkzeug:66.132.224.80 - - [29/Jun/2026 20:23:11] "GET /login HTTP/1.1" 200 -
+INFO:werkzeug:66.132.224.80 - - [29/Jun/2026 20:23:13] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+INFO:werkzeug:66.132.224.80 - - [29/Jun/2026 20:24:08] "[33mGET /.well-known/security.txt HTTP/1.1[0m" 404 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:185.12.59.118 - - [29/Jun/2026 20:56:13] "[32mGET / HTTP/1.1[0m" 302 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:44.220.188.147 - - [29/Jun/2026 20:58:59] "[32mGET / HTTP/1.1[0m" 302 -
+INFO:werkzeug:44.220.188.147 - - [29/Jun/2026 20:59:00] "GET /login HTTP/1.1" 200 -
+ERROR:werkzeug:44.220.188.147 - - [29/Jun/2026 20:59:12] SSL error occurred: [SSL: SSLV3_ALERT_HANDSHAKE_FAILURE] sslv3 alert handshake failure (_ssl.c:2648)
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:185.12.59.118 - - [29/Jun/2026 21:03:58] "[32mGET / HTTP/1.1[0m" 302 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:3.131.220.121 - - [29/Jun/2026 21:20:37] "[32mGET / HTTP/1.1[0m" 302 -
+INFO:werkzeug:3.131.220.121 - - [29/Jun/2026 21:20:38] "GET /login HTTP/1.1" 200 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:47.84.100.65 - - [29/Jun/2026 21:26:11] "[32mGET / HTTP/1.1[0m" 302 -
+INFO:werkzeug:47.84.100.65 - - [29/Jun/2026 21:26:11] "[32mGET / HTTP/1.1[0m" 302 -
+INFO:werkzeug:47.84.100.65 - - [29/Jun/2026 21:26:11] "GET /login HTTP/1.1" 200 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:185.12.59.118 - - [29/Jun/2026 21:32:34] "[32mGET / HTTP/1.1[0m" 302 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:39.109.188.100 - - [29/Jun/2026 22:15:59] "GET /api/realtime/stream?clientId=eceb4143-04a2-40cd-97b5-f2e1c15ff23d HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [29/Jun/2026 22:15:59] "GET /api/realtime/stream?clientId=2a719c16-d620-436c-a3ce-1d1be62f171d HTTP/1.1" 200 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:66.132.195.41 - - [29/Jun/2026 22:38:47] "[32mGET / HTTP/1.1[0m" 302 -
+ERROR:werkzeug:66.132.195.41 - - [29/Jun/2026 22:38:48] code 505, message Invalid HTTP version (2.0)
+INFO:werkzeug:66.132.195.41 - - [29/Jun/2026 22:38:48] "[35m[1mPRI * HTTP/2.0[0m" 505 -
+INFO:werkzeug:66.132.195.41 - - [29/Jun/2026 22:38:49] "GET /login HTTP/1.1" 200 -
+INFO:werkzeug:66.132.195.41 - - [29/Jun/2026 22:38:49] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+INFO:werkzeug:66.132.195.41 - - [29/Jun/2026 22:39:01] "[33mGET /sitemap.xml HTTP/1.1[0m" 404 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:185.12.59.118 - - [29/Jun/2026 22:54:23] "[32mGET / HTTP/1.1[0m" 302 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:45.194.92.62 - - [29/Jun/2026 23:11:33] "[32mGET / HTTP/1.1[0m" 302 -
+INFO:werkzeug:45.194.92.62 - - [29/Jun/2026 23:11:34] "GET /login HTTP/1.1" 200 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:129.121.75.86 - - [29/Jun/2026 23:14:10] "[33mGET /.git/config HTTP/1.1[0m" 404 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:127.0.0.1 - - [29/Jun/2026 23:19:40] "GET /login HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [29/Jun/2026 23:19:40] "[32mGET / HTTP/1.1[0m" 302 -
+INFO:werkzeug:127.0.0.1 - - [29/Jun/2026 23:19:40] "GET /login HTTP/1.1" 200 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+INFO:werkzeug:176.65.148.142 - - [29/Jun/2026 23:26:50] "[33mGET /restgui/js/services/resturi.js HTTP/1.1[0m" 404 -
+INFO:__main__:Background thread: Starting scheduled event state check
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Background thread: Completed scheduled event state check
+========================================
+Starting Avec Inventory Management: Mon, Jun 29, 2026 11:36:09 PM
+INFO:data_manager:All required files are present.
+INFO:__main__:Data manager initialized for company AVPL with folder: C:\Users\AVECp\Documents\AIT\AIT2\companies/AVPL/backend
+INFO:__main__:Background thread started - checking events every 5 minutes
+INFO:__main__:Background thread for event checking started successfully
+INFO:__main__:Background thread: data_manager is ready, starting checks
+INFO:__main__:Background thread started successfully after data_manager initialization
+INFO:__main__:Starting Avec Inventory Management at https://0.0.0.0:5443
+ * Tip: There are .env or .flaskenv files present. Do "pip install python-dotenv" to use them.
+ * Serving Flask app 'app'
+INFO:data_manager:All required files are present.
+ * Debug mode: off
+INFO:data_manager:All required files are present.
+INFO:data_manager:All required files are present.
+INFO:__main__:Background thread: checking event states for company AVPL
+INFO:__main__:Checking 147 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:werkzeug:[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on https://127.0.0.1:5443
+ * Running on https://192.168.0.110:5443
+INFO:werkzeug:[33mPress CTRL+C to quit[0m
+INFO:__main__:Reloaded shared CSV data after external change
+INFO:__main__:Background thread: checking event states for company AEE
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Reloaded shared CSV data after external change
+INFO:__main__:Background thread: checking event states for company TSC
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:__main__:Reloaded shared CSV data after external change
+INFO:__main__:Background thread: checking event states for company ARP
+INFO:__main__:Checking 0 events for state updates (current date: 20260629)
+INFO:__main__:No events required state updates
+INFO:werkzeug:118.189.243.188 - - [29/Jun/2026 23:36:10] "GET /api/realtime/stream?clientId=a267b582-85e2-49ee-8dd6-d616ae9aa977 HTTP/1.1" 200 -
+INFO:__main__:Getting stats - Events: 0, Inventory: 2802
+INFO:__main__:Successfully got assigned assets count: 0
+INFO:__main__:Returning stats: {'totalEvents': 0, 'activeEvents': 0, 'totalAssets': 3042, 'deployedAssets': 0, 'missingAssets': 14, 'oocAssets': 116, 'degradedAssets': 122, 'decommissionedAssets': 0, 'disposedAssets': 0}
+INFO:werkzeug:39.109.188.100 - - [29/Jun/2026 23:36:11] "GET /api/stats HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [29/Jun/2026 23:36:11] "GET /api/realtime/stream?clientId=2a719c16-d620-436c-a3ce-1d1be62f171d HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [29/Jun/2026 23:36:11] "GET /api/events HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [29/Jun/2026 23:36:11] "GET /api/realtime/stream?clientId=eceb4143-04a2-40cd-97b5-f2e1c15ff23d HTTP/1.1" 200 -
+INFO:__main__:Getting stats - Events: 0, Inventory: 2802
+INFO:__main__:Successfully got assigned assets count: 0
+INFO:__main__:Returning stats: {'totalEvents': 0, 'activeEvents': 0, 'totalAssets': 3042, 'deployedAssets': 0, 'missingAssets': 14, 'oocAssets': 116, 'degradedAssets': 122, 'decommissionedAssets': 0, 'disposedAssets': 0}
+INFO:werkzeug:39.109.188.100 - - [29/Jun/2026 23:36:11] "GET /api/stats HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [29/Jun/2026 23:36:11] "GET /api/events HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [29/Jun/2026 23:36:12] "GET / HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [29/Jun/2026 23:36:12] "GET /api/pdf-settings/logo HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [29/Jun/2026 23:36:12] "GET /static/js/app.js?v=1782744755 HTTP/1.1" 200 -
+INFO:__main__:Getting stats - Events: 0, Inventory: 2802
+INFO:__main__:Successfully got assigned assets count: 0
+INFO:__main__:Returning stats: {'totalEvents': 0, 'activeEvents': 0, 'totalAssets': 3042, 'deployedAssets': 0, 'missingAssets': 14, 'oocAssets': 116, 'degradedAssets': 122, 'decommissionedAssets': 0, 'disposedAssets': 0}
+INFO:werkzeug:39.109.188.100 - - [29/Jun/2026 23:36:12] "GET /api/stats HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [29/Jun/2026 23:36:12] "GET /api/pdf-settings HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [29/Jun/2026 23:36:12] "GET /api/current-user HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [29/Jun/2026 23:36:12] "GET /api/pdf-settings/logo?v=1782530853 HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [29/Jun/2026 23:36:12] "GET /api/departments HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [29/Jun/2026 23:36:12] "GET /api/realtime/stream?clientId=2a719c16-d620-436c-a3ce-1d1be62f171d HTTP/1.1" 200 -
+INFO:__main__:Getting stats - Events: 0, Inventory: 2802
+INFO:__main__:Successfully got assigned assets count: 0
+INFO:__main__:Returning stats: {'totalEvents': 0, 'activeEvents': 0, 'totalAssets': 3042, 'deployedAssets': 0, 'missingAssets': 14, 'oocAssets': 116, 'degradedAssets': 122, 'decommissionedAssets': 0, 'disposedAssets': 0}
+INFO:werkzeug:39.109.188.100 - - [29/Jun/2026 23:36:13] "GET /api/stats HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [29/Jun/2026 23:36:13] "GET /api/events HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [29/Jun/2026 23:36:14] "GET /api/departments HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [29/Jun/2026 23:36:14] "GET /api/assets HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [29/Jun/2026 23:36:14] "GET /api/departments HTTP/1.1" 200 -
+INFO:werkzeug:39.109.188.100 - - [29/Jun/2026 23:36:14] "GET /api/assets HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [29/Jun/2026 23:36:40] "GET /login HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [29/Jun/2026 23:36:40] "[32mGET / HTTP/1.1[0m" 302 -
+INFO:werkzeug:127.0.0.1 - - [29/Jun/2026 23:36:41] "GET /login HTTP/1.1" 200 -
+========================================
+Starting Avec Inventory Management: Mon, Jun 29, 2026 11:41:36 PM
+ERROR:__main__:Failed to initialize data manager: No module named 'psycopg'
+ERROR:__main__:Failed to start application: No module named 'psycopg'
+Traceback (most recent call last):
+  File "C:\Users\AVECp\Documents\AIT\AIT2\app.py", line 12425, in <module>
+    init_data_manager()
+    ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\AVECp\Documents\AIT\AIT2\app.py", line 4589, in init_data_manager
+    manager = _activate_company(company_code)
+  File "C:\Users\AVECp\Documents\AIT\AIT2\app.py", line 693, in _activate_company
+    manager = _get_company_data_manager(code)
+  File "C:\Users\AVECp\Documents\AIT\AIT2\app.py", line 668, in _get_company_data_manager
+    from postgres_data_manager import PostgresDataManager
+  File "C:\Users\AVECp\Documents\AIT\AIT2\postgres_data_manager.py", line 16, in <module>
+    from psycopg import sql
+ModuleNotFoundError: No module named 'psycopg'
+========================================
+Starting Avec Inventory Management: Mon, Jun 29, 2026 11:41:40 PM
+ERROR:__main__:Failed to initialize data manager: No module named 'psycopg'
+ERROR:__main__:Failed to start application: No module named 'psycopg'
+Traceback (most recent call last):
+  File "C:\Users\AVECp\Documents\AIT\AIT2\app.py", line 12425, in <module>
+    init_data_manager()
+    ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\AVECp\Documents\AIT\AIT2\app.py", line 4589, in init_data_manager
+    manager = _activate_company(company_code)
+  File "C:\Users\AVECp\Documents\AIT\AIT2\app.py", line 693, in _activate_company
+    manager = _get_company_data_manager(code)
+  File "C:\Users\AVECp\Documents\AIT\AIT2\app.py", line 668, in _get_company_data_manager
+    from postgres_data_manager import PostgresDataManager
+  File "C:\Users\AVECp\Documents\AIT\AIT2\postgres_data_manager.py", line 16, in <module>
+    from psycopg import sql
+ModuleNotFoundError: No module named 'psycopg'

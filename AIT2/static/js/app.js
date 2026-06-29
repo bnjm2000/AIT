@@ -18802,6 +18802,64 @@ function packingListTableHead() {
   `;
 }
 
+function packingListModelRowHtml(row, assetHtml, continued = false) {
+  const pendingNote = row.pending > 0
+    ? `<div class="pending-note">${escapeHtml(String(row.pending))} unit${row.pending === 1 ? '' : 's'} still to pack</div>`
+    : '';
+  const itemCell = continued
+    ? `
+      <strong>${escapeHtml(row.description)}</strong>
+      <div class="continued-label">Continued</div>
+    `
+    : `
+      <strong>${escapeHtml(row.description)}</strong>
+      ${row.detail ? `<div class="muted">${escapeHtml(row.detail)}</div>` : ''}
+    `;
+  const assetCell = assetHtml || pendingNote || '<span class="muted">No asset assigned</span>';
+
+  if (continued) {
+    return `
+      <tr class="continuation-row">
+        <td>${itemCell}</td>
+        <td>${assetCell}</td>
+        <td class="number-cell">-</td>
+        <td class="number-cell">-</td>
+        <td class="number-cell">-</td>
+        <td class="number-cell">-</td>
+        <td><span class="continued-label">CONTINUED</span></td>
+      </tr>
+    `;
+  }
+
+  return `
+    <tr>
+      <td>${itemCell}</td>
+      <td>${assetCell}</td>
+      <td class="number-cell">${row.required}</td>
+      <td class="number-cell packed-number">${row.packed}</td>
+      <td class="number-cell ${row.pending > 0 ? 'pending-number' : ''}">${row.pending}</td>
+      <td class="number-cell">${row.returned}</td>
+      <td>${packingListStatusBadge(row.state)}</td>
+    </tr>
+  `;
+}
+
+function packingListExtrasRowHtml(snapshot, assetHtml, continued = false) {
+  const status = snapshot.extras.some(asset => asset.status === 'packed')
+    ? 'packed'
+    : snapshot.extras[0]?.status;
+  return `
+    <tr class="${continued ? 'continuation-row' : ''}">
+      <td>
+        <strong>Additional assets</strong>
+        ${continued ? '<div class="continued-label">Continued</div>' : ''}
+      </td>
+      <td colspan="5">${assetHtml}</td>
+      <td>${continued ? '<span class="continued-label">CONTINUED</span>' : packingListStatusBadge(status)}</td>
+    </tr>
+  `;
+}
+
 function packingListRowRecords(snapshot) {
   const records = [];
   let currentDepartment = null;
@@ -18816,24 +18874,11 @@ function packingListRowRecords(snapshot) {
       });
     }
 
-    const pendingNote = row.pending > 0
-      ? `<div class="pending-note">${escapeHtml(String(row.pending))} unit${row.pending === 1 ? '' : 's'} still to pack</div>`
-      : '';
+    const assetParts = row.assets.map(packingListAssetHtml);
     records.push({
-      html: `
-        <tr>
-          <td>
-            <strong>${escapeHtml(row.description)}</strong>
-            ${row.detail ? `<div class="muted">${escapeHtml(row.detail)}</div>` : ''}
-          </td>
-          <td>${row.assets.map(packingListAssetHtml).join('') || pendingNote || '<span class="muted">No asset assigned</span>'}</td>
-          <td class="number-cell">${row.required}</td>
-          <td class="number-cell packed-number">${row.packed}</td>
-          <td class="number-cell ${row.pending > 0 ? 'pending-number' : ''}">${row.pending}</td>
-          <td class="number-cell">${row.returned}</td>
-          <td>${packingListStatusBadge(row.state)}</td>
-        </tr>
-      `,
+      html: packingListModelRowHtml(row, assetParts.join('')),
+      parts: assetParts,
+      renderChunk: (parts, continued) => packingListModelRowHtml(row, parts.join(''), continued),
       height: 0
     });
   });
@@ -18849,14 +18894,11 @@ function packingListRowRecords(snapshot) {
       height: 0
     });
 
+    const extraParts = snapshot.extras.map(packingListAssetHtml);
     records.push({
-      html: `
-        <tr>
-          <td><strong>Additional assets</strong></td>
-          <td colspan="5">${snapshot.extras.map(packingListAssetHtml).join('')}</td>
-          <td>${packingListStatusBadge(snapshot.extras.some(asset => asset.status === 'packed') ? 'packed' : snapshot.extras[0]?.status)}</td>
-        </tr>
-      `,
+      html: packingListExtrasRowHtml(snapshot, extraParts.join('')),
+      parts: extraParts,
+      renderChunk: (parts, continued) => packingListExtrasRowHtml(snapshot, parts.join(''), continued),
       height: 0
     });
   }
@@ -18941,6 +18983,9 @@ function buildPackingListPdfPages(event, snapshot, context) {
       #__packingListMeasureBox .asset-line { display:flex;align-items:flex-start;gap:4px;margin-bottom:3px; }
       #__packingListMeasureBox .asset-line:last-child { margin-bottom:0; }
       #__packingListMeasureBox .muted { color:#64748b;font-size:6.8pt; }
+      #__packingListMeasureBox .continued-label { color:#64748b;font-size:6.5pt;font-weight:bold;text-transform:uppercase;letter-spacing:.03em; }
+      #__packingListMeasureBox .continuation-row td { background:#f8fafc; }
+      #__packingListMeasureBox .pending-note { color:#991b1b;font-weight:bold; }
       #__packingListMeasureBox .department-row td,#__packingListMeasureBox .extras-row td { padding:5px 7px;font-weight:bold;background:#e2e8f0; }
       #__packingListMeasureBox .footer-measure { width:100%;text-align:center;font-size:7pt;font-weight:bold;line-height:1.2;overflow-wrap:anywhere; }
     </style>
@@ -18965,25 +19010,94 @@ function buildPackingListPdfPages(event, snapshot, context) {
   const firstBudget = Math.max(40, pdfMmToPx(276 - footerReserveMm) - firstBaseHeight);
   const nextBudget = Math.max(40, pdfMmToPx(276 - footerReserveMm) - nextBaseHeight);
 
-  rowRecords.forEach(record => {
-    measureBody.innerHTML = record.html;
+  const measureRecordHtml = html => {
+    measureBody.innerHTML = html;
     const row = measureBody.querySelector('tr');
-    record.height = row
+    return row
       ? normaliseMeasuredHeight(row.getBoundingClientRect().height)
       : 0;
+  };
+
+  rowRecords.forEach(record => {
+    record.height = measureRecordHtml(record.html);
+  });
+
+  // A model can contain dozens of individual asset IDs. A browser cannot split
+  // one table row around a fixed footer, so divide only oversized asset lists
+  // into measured continuation rows before assigning rows to pages.
+  const keepWithNextReserve = rowRecords.reduce(
+    (largest, record) => record.keepWithNext ? Math.max(largest, record.height) : largest,
+    0
+  );
+  const splitBudget = Math.max(
+    40,
+    Math.min(firstBudget, nextBudget) - keepWithNextReserve
+  );
+  const fittedRecords = [];
+
+  rowRecords.forEach(record => {
+    if (!record.renderChunk || record.parts.length < 2 || record.height <= splitBudget) {
+      fittedRecords.push(record);
+      return;
+    }
+
+    let offset = 0;
+    let continued = false;
+    while (offset < record.parts.length) {
+      let low = 1;
+      let high = record.parts.length - offset;
+      let fittingCount = 0;
+      let fittingHtml = '';
+      let fittingHeight = 0;
+
+      while (low <= high) {
+        const count = Math.floor((low + high) / 2);
+        const html = record.renderChunk(
+          record.parts.slice(offset, offset + count),
+          continued
+        );
+        const height = measureRecordHtml(html);
+        if (height <= splitBudget) {
+          fittingCount = count;
+          fittingHtml = html;
+          fittingHeight = height;
+          low = count + 1;
+        } else {
+          high = count - 1;
+        }
+      }
+
+      // One unusually long asset label may itself be taller than the normal
+      // budget. Keep it visible as a single row rather than dropping it.
+      if (fittingCount === 0) {
+        fittingCount = 1;
+        fittingHtml = record.renderChunk(
+          record.parts.slice(offset, offset + 1),
+          continued
+        );
+        fittingHeight = measureRecordHtml(fittingHtml);
+      }
+
+      fittedRecords.push({
+        html: fittingHtml,
+        height: fittingHeight
+      });
+      offset += fittingCount;
+      continued = true;
+    }
   });
   measureBox.remove();
 
   const pages = [];
   let index = 0;
-  while (index < rowRecords.length) {
+  while (index < fittedRecords.length) {
     const budget = pages.length === 0 ? firstBudget : nextBudget;
     const pageRows = [];
     let height = 0;
 
-    while (index < rowRecords.length) {
-      const record = rowRecords[index];
-      const nextHeight = record.keepWithNext ? (rowRecords[index + 1]?.height || 0) : 0;
+    while (index < fittedRecords.length) {
+      const record = fittedRecords[index];
+      const nextHeight = record.keepWithNext ? (fittedRecords[index + 1]?.height || 0) : 0;
       if (pageRows.length > 0 && height + record.height + nextHeight > budget) break;
 
       pageRows.push(record);
@@ -19082,6 +19196,8 @@ async function generatePackingList(eventId) {
       .asset-line { display:flex;align-items:flex-start;gap:4px;margin-bottom:3px; }
       .asset-line:last-child { margin-bottom:0; }
       .muted { color:#64748b;font-size:6.8pt; }
+      .continued-label { color:#64748b;font-size:6.5pt;font-weight:bold;text-transform:uppercase;letter-spacing:.03em; }
+      .continuation-row td { background:#f8fafc; }
       .pending-note { color:#991b1b;font-weight:bold; }
       .department-row td { padding:5px 7px;font-weight:bold;background:#e2e8f0;letter-spacing:.03em; }
       .extras-row td { padding:5px 7px;font-weight:bold;background:#fef3c7;color:#78350f; }

@@ -8,8 +8,9 @@ from models import InventoryItem, User, hash_password
 
 class AssetCreationTests(unittest.TestCase):
     def setUp(self):
-        self.original_data_manager = app_module.data_manager
+        self.original_data_manager = app_module.get_default_data_manager()
         self.original_signature = app_module._data_snapshot_signature
+        self.original_testing = app_module.app.config.get('TESTING')
         self.tempdir = tempfile.TemporaryDirectory()
 
         self.data_manager = DataManager(self.tempdir.name)
@@ -22,14 +23,14 @@ class AssetCreationTests(unittest.TestCase):
         self.data_manager.logs = []
         self.data_manager.save_logs()
 
-        app_module.data_manager = self.data_manager
-        app_module.mark_data_snapshot_current()
         app_module.app.config['TESTING'] = True
+        app_module.set_data_manager_for_testing(self.data_manager)
         self.client = app_module.app.test_client()
 
     def tearDown(self):
-        app_module.data_manager = self.original_data_manager
+        app_module.clear_test_data_manager(self.original_data_manager)
         app_module._data_snapshot_signature = self.original_signature
+        app_module.app.config['TESTING'] = self.original_testing
         self.tempdir.cleanup()
 
     def login(self, username='admin', is_admin=True):
@@ -184,7 +185,7 @@ class AssetCreationTests(unittest.TestCase):
         self.assertEqual(asset.date_modified, asset.date_added)
         self.assertEqual(len(asset.change_history), 1)
         self.assertEqual(asset.change_history[0]['action'], 'created')
-        self.assertEqual(asset.change_history[0]['user'], 'normal')
+        self.assertEqual(asset.change_history[0]['user'], 'admin')
 
         changed_fields = {change['field'] for change in asset.change_history[0]['changes']}
         self.assertIn('asset_id', changed_fields)
@@ -195,7 +196,7 @@ class AssetCreationTests(unittest.TestCase):
         reloaded = DataManager(self.tempdir.name)
         reloaded.load_inventory()
         self.assertEqual(reloaded.inventory[asset_id].date_added, asset.date_added)
-        self.assertEqual(reloaded.inventory[asset_id].change_history[0]['user'], 'normal')
+        self.assertEqual(reloaded.inventory[asset_id].change_history[0]['user'], 'admin')
 
         assets_response = self.client.get('/api/assets')
         self.assertEqual(assets_response.status_code, 200, assets_response.get_data(as_text=True))

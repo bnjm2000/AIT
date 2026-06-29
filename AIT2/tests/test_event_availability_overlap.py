@@ -8,7 +8,7 @@ from models import Event, InventoryItem, User, hash_password
 
 class EventAvailabilityOverlapTests(unittest.TestCase):
     def setUp(self):
-        self.original_data_manager = app_module.data_manager
+        self.original_data_manager = app_module.get_default_data_manager()
         self.original_signature = app_module._data_snapshot_signature
         self.original_testing = app_module.app.config.get('TESTING')
         self.tempdir = tempfile.TemporaryDirectory()
@@ -41,14 +41,13 @@ class EventAvailabilityOverlapTests(unittest.TestCase):
         )
         self.data_manager.save_inventory()
 
-        app_module.data_manager = self.data_manager
-        app_module.invalidate_cache()
-        app_module.mark_data_snapshot_current()
         app_module.app.config['TESTING'] = True
+        app_module.set_data_manager_for_testing(self.data_manager)
+        app_module.invalidate_cache()
         self.client = app_module.app.test_client()
 
     def tearDown(self):
-        app_module.data_manager = self.original_data_manager
+        app_module.clear_test_data_manager(self.original_data_manager)
         app_module._data_snapshot_signature = self.original_signature
         app_module.app.config['TESTING'] = self.original_testing
         self.tempdir.cleanup()
@@ -233,7 +232,10 @@ class EventAvailabilityOverlapTests(unittest.TestCase):
         self.assertFalse(bulk_asset['bulkMaintenanceLogbook'][0]['isResolved'])
 
         available_response = self.client.get('/api/assets/available-for-event/100')
-        available_bulk = next(item for item in available_response.get_json()['data'] if item['bulkId'] == 'BULK-0001')
+        available_bulk = next(
+            item for item in available_response.get_json()['data']
+            if item.get('bulkId') == 'BULK-0001'
+        )
         self.assertEqual(available_bulk['availableQuantity'], 5)
         self.assertEqual(available_bulk['preparableQuantity'], 5)
 
@@ -316,7 +318,10 @@ class EventAvailabilityOverlapTests(unittest.TestCase):
             self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
 
         available_response = self.client.get('/api/assets/available-for-event/100')
-        available_bulk = next(item for item in available_response.get_json()['data'] if item['bulkId'] == 'BULK-0001')
+        available_bulk = next(
+            item for item in available_response.get_json()['data']
+            if item.get('bulkId') == 'BULK-0001'
+        )
         self.assertEqual(available_bulk['availableQuantity'], 6)
         self.assertEqual(available_bulk['preparableQuantity'], 6)
         self.assertEqual(available_bulk['healthyQuantity'], 0)

@@ -9,8 +9,9 @@ from models import Container, Event, InventoryItem, User, hash_password
 
 class PrepareQuickAddAndAdminDeleteTests(unittest.TestCase):
     def setUp(self):
-        self.original_data_manager = app_module.data_manager
+        self.original_data_manager = app_module.get_default_data_manager()
         self.original_signature = app_module._data_snapshot_signature
+        self.original_testing = app_module.app.config.get('TESTING')
         self.tempdir = tempfile.TemporaryDirectory()
 
         self.data_manager = DataManager(self.tempdir.name)
@@ -34,14 +35,14 @@ class PrepareQuickAddAndAdminDeleteTests(unittest.TestCase):
         self.data_manager.save_inventory()
         self.data_manager.save_containers()
 
-        app_module.data_manager = self.data_manager
-        app_module.mark_data_snapshot_current()
         app_module.app.config['TESTING'] = True
+        app_module.set_data_manager_for_testing(self.data_manager)
         self.client = app_module.app.test_client()
 
     def tearDown(self):
-        app_module.data_manager = self.original_data_manager
+        app_module.clear_test_data_manager(self.original_data_manager)
         app_module._data_snapshot_signature = self.original_signature
+        app_module.app.config['TESTING'] = self.original_testing
         self.tempdir.cleanup()
 
     def make_asset(self, asset_id, department='AX', is_disposed=False, is_bulk=False, quantity=1):
@@ -164,6 +165,65 @@ class PrepareQuickAddAndAdminDeleteTests(unittest.TestCase):
         ]
         detail_asset = next(asset for asset in department_assets if asset['id'] == 'A#01')
         self.assertFalse(detail_asset.get('isExtra'))
+
+    def test_removing_prepared_bulk_model_unprepares_deployment(self):
+        self.data_manager.inventory['BULK-0001'] = self.make_asset(
+            'BULK-0001',
+            department='STG',
+            is_bulk=True,
+            quantity=10,
+        )
+        marker = app_module._bulk_marker('BULK-0001', 5)
+        event = self.make_event(
+            event_id=109,
+            prepared=['[MODEL]STG|TestBrand|TestModel|5|Matching item'],
+            actual=[marker],
+            extra=[],
+        )
+
+        self.login_as('admin', True)
+        response = self.client.delete(
+            f'/api/events/{event.event_id}/models',
+            json={
+                'department': 'STG',
+                'brand': 'TestBrand',
+                'model': 'TestModel',
+                'description': 'Matching item',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(response.get_json()['data']['unpreparedQuantity'], 5)
+        self.assertEqual(event.prepared_items, [])
+        self.assertEqual(event.actually_prepared, [])
+        self.assertEqual(app_module._bulk_deployments_for_asset('BULK-0001'), [])
+
+    def test_removing_prepared_model_releases_specific_asset(self):
+        event = self.make_event(
+            event_id=110,
+            prepared=['[MODEL]AX|TestBrand|TestModel|1|Matching item'],
+            actual=['A#01'],
+            extra=[],
+        )
+        event.returned_items = ['A#01']
+        self.data_manager.inventory['A#01'].current_location = event.name
+
+        self.login_as('admin', True)
+        response = self.client.delete(
+            f'/api/events/{event.event_id}/models',
+            json={
+                'department': 'AX',
+                'brand': 'TestBrand',
+                'model': 'TestModel',
+                'description': 'Matching item',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(event.prepared_items, [])
+        self.assertEqual(event.actually_prepared, [])
+        self.assertEqual(event.returned_items, [])
+        self.assertEqual(self.data_manager.inventory['A#01'].current_location, 'Store')
 
     def test_quick_add_false_overrides_container_auto_add(self):
         event = self.make_event(event_id=104)

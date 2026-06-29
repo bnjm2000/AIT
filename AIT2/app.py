@@ -14,6 +14,7 @@ import tempfile
 import threading
 import time
 from collections import defaultdict
+from contextvars import ContextVar
 from datetime import datetime, timedelta
 from functools import wraps
 from types import SimpleNamespace
@@ -35,7 +36,7 @@ from flask import (
 )
 from flask_cors import CORS
 
-from data_manager import DataManager
+from data_manager import ConcurrentDataChangeError, DataManager
 from maintenance_logs import (
     ASSET_CHECK_LOG_TYPE,
     DEFAULT_MAINTENANCE_LOG_TYPE,
@@ -63,6 +64,37 @@ from models import (
 from utils import sanitize_filename
 
 
+def _load_local_env_file():
+    """Load simple KEY=VALUE lines from .env when python-dotenv is unavailable."""
+    env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env')
+    if not os.path.exists(env_path):
+        return
+
+    try:
+        with open(env_path, 'r', encoding='utf-8') as env_file:
+            for raw_line in env_file:
+                line = raw_line.strip()
+                if not line or line.startswith('#') or '=' not in line:
+                    continue
+                key, value = line.split('=', 1)
+                key = key.strip()
+                if not key or key in os.environ:
+                    continue
+                value = value.strip().strip('"').strip("'")
+                os.environ[key] = value
+    except OSError:
+        # Environment variables still work if the local file cannot be read.
+        return
+
+
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv()
+except ImportError:
+    _load_local_env_file()
+
+
 # ---------------- Application setup ----------------
 
 logging.basicConfig(level=logging.INFO)
@@ -72,20 +104,19 @@ app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'AVEC')
 CORS(app)
 
-data_manager = None
+_default_data_manager = None
+_request_data_manager = ContextVar('request_data_manager', default=None)
 _data_manager_init_lock = threading.RLock()
 _data_reload_lock = threading.RLock()
-_data_snapshot_signature = None
+_company_manager_lock = threading.RLock()
+_data_snapshot_signature = None  # Compatibility mirror for the default manager.
+_data_snapshot_signatures = {}
 _background_thread_started = False
 _active_company_code = 'AVPL'
 _company_data_managers = {}
 _company_registry_cache = None
 
-_cache = {
-    'assigned_assets': None,
-    'available_assets': None,
-    'cache_timestamp': None
-}
+_manager_caches = {}
 
 # Cross-device actions can otherwise race on the same physical asset.
 _transfer_action_lock = threading.RLock()
@@ -98,6 +129,8 @@ _realtime_subscribers_lock = threading.RLock()
 _realtime_sequence = 0
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+LIVE_COMPANIES_FOLDER = os.path.abspath(os.path.join(BASE_DIR, 'companies'))
+DATABASE_URL = os.environ.get('DATABASE_URL', '').strip()
 DEFAULT_COMPANY_CODE = 'AVPL'
 DEFAULT_COMPANY_NAME = 'AVEC Vision Private Limited'
 SUPER_ADMIN_USERNAME = 'bnjm2000'
@@ -110,6 +143,112 @@ GLOBAL_USERS_FILE = os.environ.get(
     'GLOBAL_USERS_FILE',
     os.path.join(APP_CONFIG_FOLDER, 'Users.csv')
 )
+
+
+def _current_data_manager_object():
+    """Return the manager bound to this request/task, or the default manager."""
+    manager = _request_data_manager.get()
+    return manager if manager is not None else _default_data_manager
+
+
+class _DataManagerProxy:
+    """Delegate legacy ``data_manager`` access to the current local manager."""
+
+    def __bool__(self):
+        return _current_data_manager_object() is not None
+
+    def __getattr__(self, name):
+        manager = _current_data_manager_object()
+        if manager is None:
+            raise AttributeError(f"Data manager is not initialized; cannot access {name!r}")
+        return getattr(manager, name)
+
+    def __setattr__(self, name, value):
+        manager = _current_data_manager_object()
+        if manager is None:
+            raise AttributeError(f"Data manager is not initialized; cannot set {name!r}")
+        setattr(manager, name, value)
+
+    def __repr__(self):
+        return repr(_current_data_manager_object())
+
+
+data_manager = _DataManagerProxy()
+
+
+def get_default_data_manager():
+    """Return the process default manager used outside request contexts."""
+    return _default_data_manager
+
+
+def _set_default_data_manager(manager, company_code=None):
+    global _default_data_manager, _active_company_code
+    _default_data_manager = manager
+    if company_code:
+        _active_company_code = _normalise_company_code(company_code, DEFAULT_COMPANY_CODE)
+    return manager
+
+
+def set_data_manager_for_testing(manager):
+    """Install an isolated test manager and prevent requests from selecting live data."""
+    if not app.config.get('TESTING'):
+        raise RuntimeError('TESTING must be enabled before installing a test data manager')
+
+    _request_data_manager.set(None)
+    data_folder = os.path.abspath(getattr(manager, 'data_folder', '') or '')
+    live_companies_folder = LIVE_COMPANIES_FOLDER
+    if data_folder:
+        try:
+            if os.path.commonpath([live_companies_folder, data_folder]) == live_companies_folder:
+                raise RuntimeError('Tests may not use a manager inside the live companies folder')
+        except ValueError:
+            pass
+
+    app.config['TEST_DATA_MANAGER'] = manager
+    _set_default_data_manager(manager)
+    mark_data_snapshot_current(manager)
+    return manager
+
+
+def clear_test_data_manager(restore_manager=None):
+    """Remove the test override and optionally restore the previous default manager."""
+    _request_data_manager.set(None)
+    test_manager = app.config.pop('TEST_DATA_MANAGER', None)
+    if test_manager is not None:
+        _manager_caches.pop(id(test_manager), None)
+        _data_snapshot_signatures.pop(id(test_manager), None)
+    _set_default_data_manager(restore_manager)
+
+
+def _app_tests_allow_postgres():
+    """Return whether app-level tests may use the configured PostgreSQL database."""
+    return bool(app.config.get('ALLOW_POSTGRES_IN_TESTS'))
+
+
+def _database_url_for_runtime():
+    """Return the PostgreSQL URL for this runtime, excluding normal app tests."""
+    if app.config.get('TESTING') and not _app_tests_allow_postgres():
+        return ''
+    return DATABASE_URL
+
+
+def _assert_safe_test_company_folder(data_folder):
+    """Prevent app tests from accidentally selecting live company folders."""
+    if not app.config.get('TESTING') or app.config.get('ALLOW_LIVE_COMPANY_DATA_IN_TESTS'):
+        return
+
+    data_folder = os.path.abspath(data_folder or '')
+    if not data_folder:
+        return
+
+    try:
+        if os.path.commonpath([LIVE_COMPANIES_FOLDER, data_folder]) == LIVE_COMPANIES_FOLDER:
+            raise RuntimeError(
+                'Tests may not use a manager inside the live companies folder. '
+                'Install a TEST_DATA_MANAGER or point COMPANY_REGISTRY_FILE at temporary data.'
+            )
+    except ValueError:
+        return
 
 
 def _workspace_path(*parts):
@@ -514,24 +653,42 @@ def _get_company_data_manager(company_code=None):
     if code not in registry['companies']:
         code = registry.get('defaultCompany', DEFAULT_COMPANY_CODE)
 
-    cached = _company_data_managers.get(code)
-    if cached is not None:
-        return cached
+    with _company_manager_lock:
+        cached = _company_data_managers.get(code)
+        if cached is not None:
+            return cached
 
-    record = registry['companies'][code]
-    _ensure_company_folders(record)
+        record = registry['companies'][code]
+        backend_folder = _company_record_backend_folder(record)
+        _assert_safe_test_company_folder(backend_folder)
+        _ensure_company_folders(record)
+        database_url = _database_url_for_runtime()
 
-    manager = DataManager(_company_record_backend_folder(record), users_file=GLOBAL_USERS_FILE)
-    manager.setup_data_folder()
-    manager.check_and_initialize_files()
-    manager.load_all_data()
-    _ensure_super_admin_users(manager)
-    _company_data_managers[code] = manager
-    return manager
+        if database_url:
+            from postgres_data_manager import PostgresDataManager
+
+            logger.info("Using PostgreSQL data manager for company %s", code)
+            manager = PostgresDataManager(
+                database_url,
+                company_code=code,
+                company_name=record.get('name') or code,
+                data_folder=backend_folder,
+                users_file=GLOBAL_USERS_FILE,
+            )
+        else:
+            manager = DataManager(
+                backend_folder,
+                users_file=GLOBAL_USERS_FILE,
+            )
+        manager.setup_data_folder()
+        manager.check_and_initialize_files()
+        manager.load_all_data()
+        _ensure_super_admin_users(manager)
+        _company_data_managers[code] = manager
+        return manager
 
 
 def _activate_company(company_code=None):
-    global data_manager, _active_company_code
     code = _normalise_company_code(company_code, DEFAULT_COMPANY_CODE)
     manager = _get_company_data_manager(code)
     try:
@@ -539,23 +696,34 @@ def _activate_company(company_code=None):
         _ensure_super_admin_users(manager)
     except Exception as e:
         logger.warning("Failed to reload active company %s: %s", code, e)
-    data_manager = manager
-    _active_company_code = _normalise_company_code(code, DEFAULT_COMPANY_CODE)
-    mark_data_snapshot_current()
+    _set_default_data_manager(manager, code)
+    mark_data_snapshot_current(manager)
     return manager
 
 
 def _activate_company_for_session():
+    test_manager = app.config.get('TEST_DATA_MANAGER')
+    if app.config.get('TESTING') and test_manager is not None:
+        return test_manager
+
     if not has_request_context() or 'user' not in session:
-        return data_manager
+        return get_default_data_manager()
+
     username = session.get('user')
     code = session.get('company_code') if _current_user_is_super_admin() else None
     if not code:
         code = _user_assigned_company_code(username)
         session['company_code'] = code
-    if _normalise_company_code(code, DEFAULT_COMPANY_CODE) != _active_company_code:
-        return _activate_company(code)
-    return data_manager
+    return _get_company_data_manager(code)
+
+
+def _bind_request_data_manager(manager):
+    tokens = getattr(g, 'data_manager_tokens', None)
+    if tokens is None:
+        tokens = []
+        g.data_manager_tokens = tokens
+    tokens.append(_request_data_manager.set(manager))
+    return manager
 
 
 def _company_payload(code=None):
@@ -886,24 +1054,46 @@ def _ranges_overlap(a_start, a_end, b_start, b_end):
 def invalidate_cache():
     """Invalidate the asset cache when data changes"""
     reset_cache()
+    # The current process made this change, so its in-memory manager is already
+    # authoritative. Recording the new file signature prevents the next request
+    # from mistaking our own write for an external update and reloading all CSVs.
+    mark_data_snapshot_current()
     mark_realtime_change('inventory-data')
 
 
 def reset_cache():
     """Clear in-process derived data without publishing a realtime event."""
-    global _cache
-    _cache = {'assigned_assets': None,
-              'available_assets': None, 'cache_timestamp': None}
+    manager = _current_data_manager_object()
+    if manager is not None:
+        _manager_caches.pop(id(manager), None)
 
 
-def _shared_data_signature():
+def _current_manager_cache():
+    manager = _current_data_manager_object()
+    if manager is None:
+        return {
+            'assigned_assets': None,
+            'available_assets': None,
+            'cache_timestamp': None,
+        }
+    return _manager_caches.setdefault(id(manager), {
+        'assigned_assets': None,
+        'available_assets': None,
+        'cache_timestamp': None,
+    })
+
+
+def _shared_data_signature(manager=None):
     """Fingerprint CSV-backed files so separate workers can detect fresh data."""
-    if data_manager is None:
+    manager = manager or _current_data_manager_object()
+    if manager is None:
         return None
+    if hasattr(manager, 'shared_data_signature'):
+        return manager.shared_data_signature()
 
     entries = []
-    data_folder = getattr(data_manager, 'data_folder', '') or ''
-    events_folder = getattr(data_manager, 'events_folder', '') or ''
+    data_folder = getattr(manager, 'data_folder', '') or ''
+    events_folder = getattr(manager, 'events_folder', '') or ''
 
     def add_file(label, path):
         try:
@@ -916,8 +1106,8 @@ def _shared_data_signature():
             entries.append((label, -1, -1))
 
     for filename in ('Inventory.csv', 'Logs.csv', 'Users.csv', 'Containers.csv', 'Clients.csv'):
-        if hasattr(data_manager, '_data_path'):
-            add_file(filename, data_manager._data_path(filename))
+        if hasattr(manager, '_data_path'):
+            add_file(filename, manager._data_path(filename))
         else:
             add_file(filename, os.path.join(data_folder, filename))
 
@@ -941,27 +1131,38 @@ def _shared_data_signature():
     return tuple(sorted(entries))
 
 
-def mark_data_snapshot_current():
+def mark_data_snapshot_current(manager=None):
     """Record that this process has loaded the latest CSV-backed data."""
     global _data_snapshot_signature
-    _data_snapshot_signature = _shared_data_signature()
+    manager = manager or _current_data_manager_object()
+    if manager is None:
+        return
+    signature = _shared_data_signature(manager)
+    _data_snapshot_signatures[id(manager)] = signature
+    if manager is get_default_data_manager():
+        _data_snapshot_signature = signature
 
 
 def refresh_shared_data_if_changed(force=False):
     """Reload CSV data when another process or user has changed the files."""
     global _data_snapshot_signature
 
-    if data_manager is None:
+    manager = _current_data_manager_object()
+    if manager is None:
         return False
 
     with _data_reload_lock:
-        current_signature = _shared_data_signature()
-        if not force and _data_snapshot_signature == current_signature:
+        current_signature = _shared_data_signature(manager)
+        previous_signature = _data_snapshot_signatures.get(id(manager))
+        if not force and previous_signature == current_signature:
             return False
 
-        data_manager.load_all_data()
+        manager.load_all_data()
         reset_cache()
-        _data_snapshot_signature = _shared_data_signature()
+        new_signature = _shared_data_signature(manager)
+        _data_snapshot_signatures[id(manager)] = new_signature
+        if manager is get_default_data_manager():
+            _data_snapshot_signature = new_signature
         logger.info("Reloaded shared CSV data after external change")
         return True
 
@@ -1027,6 +1228,11 @@ def _department_record(code, name=None, colour=None, text_colour=None):
 
 
 def _save_departments(departments):
+    manager = _current_data_manager_object()
+    if manager is not None and hasattr(manager, 'save_departments'):
+        manager.save_departments(departments)
+        return
+
     filepath = _departments_csv_path()
     folder = os.path.dirname(filepath)
     if folder and not os.path.exists(folder):
@@ -1054,8 +1260,12 @@ def _load_departments():
     filepath = _departments_csv_path()
     departments = {}
     changed = False
+    manager = _current_data_manager_object()
+    database_backed = manager is not None and hasattr(manager, 'load_departments')
 
-    if os.path.exists(filepath) and os.path.getsize(filepath) > 0:
+    if database_backed:
+        departments = manager.load_departments()
+    elif os.path.exists(filepath) and os.path.getsize(filepath) > 0:
         try:
             with open(filepath, 'r', newline='', encoding='utf-8-sig') as f:
                 reader = csv.DictReader(f)
@@ -1088,7 +1298,7 @@ def _load_departments():
                 departments[code] = _department_record(code)
                 changed = True
 
-    if changed or not os.path.exists(filepath):
+    if changed or (not database_backed and not os.path.exists(filepath)):
         _save_departments(departments)
 
     return departments
@@ -2596,6 +2806,67 @@ def _model_key_from_parts(dept, brand, model, description=''):
     )
 
 
+def _event_physical_ref_group_key(value):
+    """Return the inventory model key represented by an event physical ref."""
+    marker = _parse_bulk_marker(value)
+    asset_id = marker['bulkId'] if marker else value
+    asset = data_manager.inventory.get(asset_id) if data_manager else None
+    if not asset:
+        return None
+    return _asset_group_key(asset)
+
+
+def _unprepare_event_model_group(event, group_key):
+    """Detach all prepared/returned physical refs for one model from an event."""
+    _ensure_event_custom_lists(event)
+
+    prepared_units = 0
+    references_removed = 0
+    inventory_changed = False
+
+    for ref in getattr(event, 'actually_prepared', []) or []:
+        if _event_physical_ref_group_key(ref) != group_key:
+            continue
+        marker = _parse_bulk_marker(ref)
+        prepared_units += marker['quantity'] if marker else 1
+
+    for list_name in ('prepared_items', 'actually_prepared', 'returned_items', 'extra_assets'):
+        values = getattr(event, list_name, []) or []
+        kept = []
+        for ref in values:
+            # Model requirement rows are removed separately, after their physical
+            # assets have been unprepared.
+            if list_name == 'prepared_items' and isinstance(ref, str) and ref.startswith('[MODEL]'):
+                kept.append(ref)
+                continue
+
+            if _event_physical_ref_group_key(ref) != group_key:
+                kept.append(ref)
+                continue
+
+            references_removed += 1
+            marker = _parse_bulk_marker(ref)
+            if marker:
+                continue
+
+            asset = data_manager.inventory.get(ref)
+            if asset and not _is_bulk_asset(asset):
+                default_location = asset.default_location or ''
+                if asset.current_location != default_location:
+                    asset.current_location = default_location
+                    inventory_changed = True
+
+        setattr(event, list_name, kept)
+
+    if inventory_changed:
+        data_manager.save_inventory()
+
+    return {
+        'preparedUnits': prepared_units,
+        'referencesRemoved': references_removed,
+    }
+
+
 def _bulk_quantity_in_values_for_key(values, group_key):
     total = 0
     for value in values or []:
@@ -3375,6 +3646,7 @@ def log_action(action):
             data_manager.save_logs()
             mark_realtime_change('activity-log', {'action': action})
 
+        mark_data_snapshot_current()
         logger.info(f"Action logged: {action}")
     except Exception as e:
         logger.error(f"Failed to log action: {e}")
@@ -3964,30 +4236,30 @@ def validate_event_data(data):
 
 def get_assigned_assets():
     """Get all assets currently assigned to events (with caching)"""
-    global _cache
-
     try:
-        # Add validation checks
-        if data_manager is None:
+        manager = _current_data_manager_object()
+        if manager is None:
             logger.error("get_assigned_assets: data_manager is None")
             return set()
             
-        if not hasattr(data_manager, 'events') or data_manager.events is None:
+        if not hasattr(manager, 'events') or manager.events is None:
             logger.error("get_assigned_assets: data_manager.events is None")
             return set()
 
+        cache = _current_manager_cache()
+
         # Cache for 30 seconds
         now = datetime.now().timestamp()
-        if (_cache['assigned_assets'] is not None and
-            _cache['cache_timestamp'] is not None and
-                now - _cache['cache_timestamp'] < 30):
+        if (cache['assigned_assets'] is not None and
+            cache['cache_timestamp'] is not None and
+                now - cache['cache_timestamp'] < 30):
             logger.debug("get_assigned_assets: returning cached result")
-            return _cache['assigned_assets']
+            return cache['assigned_assets']
 
-        logger.debug(f"get_assigned_assets: processing {len(data_manager.events)} events")
+        logger.debug(f"get_assigned_assets: processing {len(manager.events)} events")
         
         assigned_assets = set()
-        for event in data_manager.events.values():
+        for event in manager.events.values():
             try:
                 assigned_assets.update(_active_physical_asset_refs_for_event(event))
                         
@@ -3997,8 +4269,8 @@ def get_assigned_assets():
 
         logger.debug(f"get_assigned_assets: found {len(assigned_assets)} assigned assets")
         
-        _cache['assigned_assets'] = assigned_assets
-        _cache['cache_timestamp'] = now
+        cache['assigned_assets'] = assigned_assets
+        cache['cache_timestamp'] = now
         return assigned_assets
         
     except Exception as e:
@@ -4158,7 +4430,7 @@ def update_event_state(event):
 
 def refresh_event_states_for_read(events_to_check=None):
     """Keep automatically calculated event states current before read responses."""
-    if data_manager is None:
+    if _current_data_manager_object() is None:
         return []
 
     updated_events = []
@@ -4247,8 +4519,7 @@ def schedule_ongoing_check():
     """Run the ongoing event check in a background thread"""
     logger.info("Background thread started - checking events every 5 minutes")
     
-    # Wait for data_manager to be initialized
-    while data_manager is None:
+    while get_default_data_manager() is None:
         logger.info("Background thread: Waiting for data_manager to be initialized...")
         time.sleep(5)
     
@@ -4256,19 +4527,33 @@ def schedule_ongoing_check():
     
     while True:
         try:
-            if data_manager is not None and hasattr(data_manager, 'events'):
-                logger.info("Background thread: Starting scheduled event state check")
-                check_and_update_ongoing_events()
-                logger.info("Background thread: Completed scheduled event state check")
-            else:
-                logger.warning("Background thread: data_manager.events not available, skipping check")
+            managers = []
+            seen_manager_ids = set()
+            for company_code in _all_company_records():
+                manager = _get_company_data_manager(company_code)
+                if id(manager) in seen_manager_ids:
+                    continue
+                seen_manager_ids.add(id(manager))
+                managers.append((company_code, manager))
+
+            for company_code, manager in managers:
+                token = _request_data_manager.set(manager)
+                try:
+                    refresh_shared_data_if_changed()
+                    logger.info(
+                        "Background thread: checking event states for company %s",
+                        company_code,
+                    )
+                    check_and_update_ongoing_events()
+                finally:
+                    _request_data_manager.reset(token)
             
-            time.sleep(300)  # Check every 5 minutes for testing (change to 3600 for production)
+            time.sleep(300)
         except Exception as e:
             logger.error(f"Background thread error: {e}")
             import traceback
             logger.error(f"Background thread traceback: {traceback.format_exc()}")
-            time.sleep(300)  # Continue running even if there's an error
+            time.sleep(300)
 
 def start_background_thread():
     """Start the background thread for event checking"""
@@ -4289,22 +4574,23 @@ def start_background_thread():
 
 def init_data_manager():
     """Initialize the data manager with the configured data folder"""
-    global data_manager
-    if data_manager is not None:
-        return data_manager
+    manager = get_default_data_manager()
+    if manager is not None:
+        return manager
 
     with _data_manager_init_lock:
-        if data_manager is not None:
-            return data_manager
+        manager = get_default_data_manager()
+        if manager is not None:
+            return manager
 
         try:
             registry = _load_company_registry()
             company_code = registry.get('defaultCompany', DEFAULT_COMPANY_CODE)
-            data_manager = _activate_company(company_code)
+            manager = _activate_company(company_code)
             logger.info(
                 "Data manager initialized for company %s with folder: %s",
                 _active_company_code,
-                getattr(data_manager, 'data_folder', '')
+                getattr(manager, 'data_folder', '')
             )
             
             # Start the background thread AFTER data_manager is initialized
@@ -4318,17 +4604,37 @@ def init_data_manager():
             logger.error(f"Failed to initialize data manager: {e}")
             raise
 
-    return data_manager
+    return manager
 
 
 @app.before_request
 def ensure_web_runtime_ready():
     """Lazy init for hosted WSGI imports where __main__ is never executed."""
-    if data_manager is None:
+    if get_default_data_manager() is None:
         init_data_manager()
     if request.endpoint != 'static':
-        _activate_company_for_session()
+        manager = _activate_company_for_session()
+        _bind_request_data_manager(manager)
+        if (
+            request.method in {'POST', 'PUT', 'PATCH', 'DELETE'}
+            and hasattr(manager, 'acquire_write_request')
+        ):
+            manager.acquire_write_request()
+            locks = getattr(g, 'data_manager_write_locks', None)
+            if locks is None:
+                locks = []
+                g.data_manager_write_locks = locks
+            locks.append(manager)
         refresh_shared_data_if_changed()
+
+
+@app.teardown_request
+def release_request_data_manager(_error=None):
+    """Restore context-local manager bindings after every request."""
+    for manager in reversed(getattr(g, 'data_manager_write_locks', [])):
+        manager.release_write_request()
+    for token in reversed(getattr(g, 'data_manager_tokens', [])):
+        _request_data_manager.reset(token)
 
 # Routes
 
@@ -4680,6 +4986,16 @@ def delete_company(company_code):
                     removed_users.append(username)
                     users_changed = True
 
+        company_manager = _company_data_managers.get(code)
+        database_url = _database_url_for_runtime()
+        if company_manager is None and database_url:
+            company_manager = _get_company_data_manager(code)
+        if (
+            company_manager is not None
+            and hasattr(company_manager, 'delete_company_data')
+            and database_url
+        ):
+            company_manager.delete_company_data()
         _company_data_managers.pop(code, None)
         if os.path.exists(company_folder):
             shutil.rmtree(company_folder)
@@ -4725,7 +5041,9 @@ def switch_current_company():
             return jsonify({'error': 'Company not found'}), 404
 
         session['company_code'] = code
-        _activate_company(code)
+        manager = _get_company_data_manager(code)
+        _bind_request_data_manager(manager)
+        refresh_shared_data_if_changed()
 
         return jsonify({
             'success': True,
@@ -6901,6 +7219,7 @@ def add_asset_to_event(event_id):
 
 @app.route('/api/events/<int:event_id>/models', methods=['POST', 'DELETE'])
 @require_admin
+@with_prepare_action_lock
 def manage_event_models(event_id):
     """Add or remove model assignments to/from events"""
     try:
@@ -7086,16 +7405,15 @@ def manage_event_models(event_id):
             else:
                 items_to_remove = [it for (it, _desc) in candidates]
 
-            # Remove the items
+            # A prepared physical item must be released before its planning row is
+            # removed. Otherwise bulk markers and specific asset IDs remain in
+            # actually_prepared and continue to appear deployed for this show.
+            group_key = _model_key_from_parts(department, brand, model)
+            unprepared = _unprepare_event_model_group(event, group_key)
+
+            # Remove the model requirement only after its physical refs are clear.
             for item in items_to_remove:
                 event.prepared_items.remove(item)
-                if item in event.returned_items:
-                    event.returned_items.remove(item)
-                # Initialize actually_prepared if it doesn't exist
-                if not hasattr(event, 'actually_prepared'):
-                    event.actually_prepared = []
-                if item in event.actually_prepared:
-                    event.actually_prepared.remove(item)
 
             # Update event state
             update_event_state(event)
@@ -7106,9 +7424,19 @@ def manage_event_models(event_id):
             # Invalidate cache
             invalidate_cache()
 
-            log_action(f"Removed {brand} {model} model from event {event_id}")
+            log_action(
+                f"Unprepared {unprepared['preparedUnits']}x and removed "
+                f"{brand} {model} model from event {event_id}"
+            )
 
-            return jsonify({'success': True, 'message': f'Removed {brand} {model} from event'})
+            return jsonify({
+                'success': True,
+                'message': f'Removed {brand} {model} from event',
+                'data': {
+                    'unpreparedQuantity': unprepared['preparedUnits'],
+                    'referencesRemoved': unprepared['referencesRemoved'],
+                },
+            })
 
     except Exception as e:
         logger.error(f"Error managing event models: {e}")
@@ -11602,7 +11930,7 @@ def get_stats():
     """Get dashboard statistics"""
     try:
         # Add validation checks
-        if data_manager is None:
+        if _current_data_manager_object() is None:
             logger.error("Data manager is not initialized")
             return jsonify({'error': 'Data manager not initialized'}), 500
             
@@ -11958,6 +12286,14 @@ def internal_error(error):
     return jsonify({'error': 'Internal server error'}), 500
 
 
+@app.errorhandler(ConcurrentDataChangeError)
+def concurrent_data_change(error):
+    logger.warning("Rejected stale database write: %s", error)
+    return jsonify({
+        'error': 'This data changed in another session. Reload and try again.'
+    }), 409
+
+
 @app.errorhandler(Exception)
 def handle_exception(e):
     logger.error(f"Unhandled exception: {e}")
@@ -11966,7 +12302,7 @@ def handle_exception(e):
 def check_and_update_ongoing_events():
     """Periodically check if ready events should become ongoing or overdue"""
     try:
-        if data_manager is None:
+        if _current_data_manager_object() is None:
             logger.warning("data_manager is None, cannot check events")
             return
             

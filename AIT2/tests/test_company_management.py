@@ -16,7 +16,7 @@ class CompanyManagementTests(unittest.TestCase):
         self.original_company_registry_cache = app_module._company_registry_cache
         self.original_company_data_managers = dict(app_module._company_data_managers)
         self.original_active_company_code = app_module._active_company_code
-        self.original_data_manager = app_module.data_manager
+        self.original_data_manager = app_module.get_default_data_manager()
         self.original_signature = app_module._data_snapshot_signature
         self.original_testing = app_module.app.config.get('TESTING')
 
@@ -67,13 +67,13 @@ class CompanyManagementTests(unittest.TestCase):
         self.data_manager.logs = []
         self.data_manager.save_logs()
 
-        app_module.data_manager = self.data_manager
         app_module._active_company_code = 'AVPL'
-        app_module.mark_data_snapshot_current()
         app_module.app.config['TESTING'] = True
+        app_module.set_data_manager_for_testing(self.data_manager)
         self.client = app_module.app.test_client()
 
     def tearDown(self):
+        app_module.clear_test_data_manager(self.original_data_manager)
         app_module.BASE_DIR = self.original_base_dir
         app_module.APP_CONFIG_FOLDER = self.original_app_config_folder
         app_module.COMPANY_REGISTRY_FILE = self.original_company_registry_file
@@ -82,7 +82,6 @@ class CompanyManagementTests(unittest.TestCase):
         app_module._company_data_managers.clear()
         app_module._company_data_managers.update(self.original_company_data_managers)
         app_module._active_company_code = self.original_active_company_code
-        app_module.data_manager = self.original_data_manager
         app_module._data_snapshot_signature = self.original_signature
         app_module.app.config['TESTING'] = self.original_testing
         self.tempdir.cleanup()

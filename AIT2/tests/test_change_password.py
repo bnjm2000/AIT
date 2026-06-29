@@ -8,7 +8,7 @@ from models import User, hash_password
 
 class ChangePasswordTests(unittest.TestCase):
     def setUp(self):
-        self.original_data_manager = app_module.data_manager
+        self.original_data_manager = app_module.get_default_data_manager()
         self.original_signature = app_module._data_snapshot_signature
         self.original_testing = app_module.app.config.get('TESTING')
         self.tempdir = tempfile.TemporaryDirectory()
@@ -22,13 +22,12 @@ class ChangePasswordTests(unittest.TestCase):
         self.data_manager.logs = []
         self.data_manager.save_logs()
 
-        app_module.data_manager = self.data_manager
-        app_module.mark_data_snapshot_current()
         app_module.app.config['TESTING'] = True
+        app_module.set_data_manager_for_testing(self.data_manager)
         self.client = app_module.app.test_client()
 
     def tearDown(self):
-        app_module.data_manager = self.original_data_manager
+        app_module.clear_test_data_manager(self.original_data_manager)
         app_module._data_snapshot_signature = self.original_signature
         app_module.app.config['TESTING'] = self.original_testing
         self.tempdir.cleanup()

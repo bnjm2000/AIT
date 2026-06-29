@@ -10,7 +10,7 @@ from models import Container, InventoryItem, User, hash_password
 
 class ContainerSerialNumberTests(unittest.TestCase):
     def setUp(self):
-        self.original_data_manager = app_module.data_manager
+        self.original_data_manager = app_module.get_default_data_manager()
         self.original_signature = app_module._data_snapshot_signature
         self.original_testing = app_module.app.config.get('TESTING')
         self.tempdir = tempfile.TemporaryDirectory()
@@ -33,14 +33,13 @@ class ContainerSerialNumberTests(unittest.TestCase):
         self.data_manager.save_inventory()
         self.data_manager.save_containers()
 
-        app_module.data_manager = self.data_manager
-        app_module.invalidate_cache()
-        app_module.mark_data_snapshot_current()
         app_module.app.config['TESTING'] = True
+        app_module.set_data_manager_for_testing(self.data_manager)
+        app_module.invalidate_cache()
         self.client = app_module.app.test_client()
 
     def tearDown(self):
-        app_module.data_manager = self.original_data_manager
+        app_module.clear_test_data_manager(self.original_data_manager)
         app_module._data_snapshot_signature = self.original_signature
         app_module.app.config['TESTING'] = self.original_testing
         self.tempdir.cleanup()

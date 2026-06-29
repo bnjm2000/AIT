@@ -11,8 +11,9 @@ from models import Event, LogEntry, User, hash_password
 
 class EventNotesFilesTests(unittest.TestCase):
     def setUp(self):
-        self.original_data_manager = app_module.data_manager
+        self.original_data_manager = app_module.get_default_data_manager()
         self.original_signature = app_module._data_snapshot_signature
+        self.original_testing = app_module.app.config.get('TESTING')
         self.tempdir = tempfile.TemporaryDirectory()
 
         self.data_manager = DataManager(self.tempdir.name)
@@ -40,14 +41,14 @@ class EventNotesFilesTests(unittest.TestCase):
         self.data_manager.events[1] = event
         self.data_manager.save_event(event)
 
-        app_module.data_manager = self.data_manager
-        app_module.mark_data_snapshot_current()
         app_module.app.config['TESTING'] = True
+        app_module.set_data_manager_for_testing(self.data_manager)
         self.client = app_module.app.test_client()
 
     def tearDown(self):
-        app_module.data_manager = self.original_data_manager
+        app_module.clear_test_data_manager(self.original_data_manager)
         app_module._data_snapshot_signature = self.original_signature
+        app_module.app.config['TESTING'] = self.original_testing
         self.tempdir.cleanup()
 
     def login_as(self, username, is_admin=False):

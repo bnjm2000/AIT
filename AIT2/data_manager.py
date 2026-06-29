@@ -33,6 +33,10 @@ logger = logging.getLogger(__name__)
 EVENT_LOG_EVENT_ID_RE = re.compile(r'\bevent\s+(\d+)\b', re.IGNORECASE)
 
 
+class ConcurrentDataChangeError(RuntimeError):
+    """A stale write was rejected to avoid overwriting newer persisted data."""
+
+
 def _parse_bool(value, default=False):
     """Parse loose CSV boolean values while preserving old admin labels."""
     if value is None:
