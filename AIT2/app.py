@@ -1688,6 +1688,7 @@ def _asset_id_plan_for_request(data):
             'nextNumber': None,
             'ids': [],
             'serials': [],
+            'secondarySerials': [],
             'existingCount': 0,
             'message': ''
         }
@@ -1747,6 +1748,17 @@ def _asset_id_plan_for_request(data):
 
     serials = (serials + [''] * quantity)[:quantity]
 
+    raw_secondary_serials = data.get('secondarySerials')
+    if isinstance(raw_secondary_serials, list):
+        secondary_serials = [str(serial or '').strip() for serial in raw_secondary_serials]
+    else:
+        secondary_serial = str(
+            data.get('secondarySerial', data.get('serial2', '')) or ''
+        ).strip()
+        secondary_serials = [secondary_serial] if secondary_serial else []
+
+    secondary_serials = (secondary_serials + [''] * quantity)[:quantity]
+
     existing_count = 0
     if prefix_entry:
         existing_count = prefix_entry['families'].get(family_key, 0)
@@ -1763,6 +1775,7 @@ def _asset_id_plan_for_request(data):
         'nextNumber': next_number + quantity,
         'ids': ids,
         'serials': serials,
+        'secondarySerials': secondary_serials,
         'existingCount': existing_count,
         'message': f"{prefix} continues from #{next_number:0{width}d}"
     }
@@ -1802,6 +1815,7 @@ ASSET_AUDIT_FIELD_LABELS = {
     'model': 'Model',
     'description': 'Description',
     'serial': 'Serial Number',
+    'secondary_serial': 'Second Serial Number',
     'date_of_purchase': 'Date of Purchase',
     'default_location': 'Default Location',
     'current_location': 'Current Location',
@@ -1827,6 +1841,7 @@ def _asset_audit_snapshot(asset):
         'model': getattr(asset, 'model_number', ''),
         'description': getattr(asset, 'description', ''),
         'serial': getattr(asset, 'serial_number', ''),
+        'secondary_serial': getattr(asset, 'secondary_serial_number', ''),
         'date_of_purchase': getattr(asset, 'date_of_purchase', ''),
         'default_location': getattr(asset, 'default_location', ''),
         'current_location': getattr(asset, 'current_location', ''),
@@ -2428,7 +2443,7 @@ def _verify_current_admin_password(password):
 
 
 def _find_inventory_asset_by_identifier(identifier):
-    """Find an inventory item from a scanned Asset ID or Serial Number."""
+    """Find an inventory item from a scanned Asset ID or either Serial Number."""
     identifier = str(identifier or '').strip()
     if not identifier:
         return None
@@ -2442,9 +2457,13 @@ def _find_inventory_asset_by_identifier(identifier):
             continue
         if str(getattr(asset, 'asset_id', '') or '').strip().lower() == identifier_lower:
             return asset
-        serial = str(getattr(asset, 'serial_number', '') or '').strip()
-        if serial and serial.lower() == identifier_lower:
-            return asset
+        for serial in (
+            getattr(asset, 'serial_number', ''),
+            getattr(asset, 'secondary_serial_number', ''),
+        ):
+            serial = str(serial or '').strip()
+            if serial and serial.lower() == identifier_lower:
+                return asset
 
     return None
 
@@ -3229,6 +3248,7 @@ def _append_orphan_extra_assignments_to_model_groups(model_groups, event):
         model_groups[model_key]['assignedAssets'].append({
             'id': asset_id,
             'serial': asset.serial_number,
+            'serial2': getattr(asset, 'secondary_serial_number', ''),
             'status': 'returned' if asset_id in returned_values else 'prepared',
             'location': asset.current_location,
             'quantity': 1,
@@ -3392,6 +3412,7 @@ def _asset_to_available_dict(asset):
         'model': asset.model_number,
         'description': asset.description or '',
         'serial': asset.serial_number,
+        'serial2': getattr(asset, 'secondary_serial_number', ''),
         'dateOfPurchase': getattr(asset, 'date_of_purchase', ''),
         'purchaseDate': getattr(asset, 'date_of_purchase', ''),
         'dateAdded': getattr(asset, 'date_added', ''),
@@ -3501,6 +3522,7 @@ def get_available_assets_for_event(event_id):
                 'description': getattr(asset, 'description', '') or '',
                 'department': asset.department_code,
                 'serial': (getattr(asset, 'serial_number', None) or getattr(asset, 'serial', None) or ''),
+                'serial2': getattr(asset, 'secondary_serial_number', ''),
                 'dateOfPurchase': getattr(asset, 'date_of_purchase', ''),
                 'purchaseDate': getattr(asset, 'date_of_purchase', ''),
                 'dateAdded': getattr(asset, 'date_added', ''),
@@ -6240,6 +6262,7 @@ def get_events():
                                     model_groups[model_key]['assignedAssets'].append({
                                         'id': specific_asset_id,
                                         'serial': specific_asset.serial_number,
+                                        'serial2': getattr(specific_asset, 'secondary_serial_number', ''),
                                         'status': asset_status,
                                         'location': specific_asset.current_location,
                                         'quantity': 1,
@@ -6410,6 +6433,7 @@ def get_event(event_id):
                         'model': asset.model_number,
                         'description': asset.description,
                         'serial': asset.serial_number,
+                        'serial2': getattr(asset, 'secondary_serial_number', ''),
                         'status': status,
                         'location': asset.current_location,
                         'isMissing': asset.is_missing,
@@ -6458,6 +6482,7 @@ def get_event(event_id):
                         'model': asset.model_number,
                         'description': asset.description,
                         'serial': asset.serial_number,
+                        'serial2': getattr(asset, 'secondary_serial_number', ''),
                         'status': status,
                         'location': asset.current_location,
                         'isMissing': asset.is_missing,
@@ -6542,6 +6567,7 @@ def get_event(event_id):
                                     model_groups[model_key]['assignedAssets'].append({
                                         'id': specific_asset_id,
                                         'serial': specific_asset.serial_number,
+                                        'serial2': getattr(specific_asset, 'secondary_serial_number', ''),
                                         'status': asset_status,
                                         'location': specific_asset.current_location,
                                         'quantity': 1,
@@ -8611,6 +8637,7 @@ def _transfer_asset_payload(asset, state='', from_event=None, to_event=None, rea
         'model': asset.model_number,
         'description': asset.description,
         'serial': asset.serial_number,
+        'serial2': getattr(asset, 'secondary_serial_number', ''),
         'status': _asset_status_value(asset),
         'isDegraded': _is_degraded(asset),
         'isDisposed': _is_disposed(asset),
@@ -8922,6 +8949,7 @@ def _transfer_one_asset(from_event, to_event, asset_id):
         'description': asset.description,
         'department': asset.department_code,
         'serial': asset.serial_number,
+        'serial2': getattr(asset, 'secondary_serial_number', ''),
     }
 
 
@@ -9133,6 +9161,7 @@ def _undo_transfer_one_asset(from_event, to_event, asset_id):
         'description': asset.description,
         'department': asset.department_code,
         'serial': asset.serial_number,
+        'serial2': getattr(asset, 'secondary_serial_number', ''),
     }
 
 
@@ -9166,6 +9195,7 @@ def _return_source_asset_to_office(from_event, asset_id):
         'description': asset.description,
         'department': asset.department_code,
         'serial': asset.serial_number,
+        'serial2': getattr(asset, 'secondary_serial_number', ''),
     }
 
 
@@ -9197,6 +9227,7 @@ def _undo_return_source_asset_to_office(from_event, asset_id):
         'description': asset.description,
         'department': asset.department_code,
         'serial': asset.serial_number,
+        'serial2': getattr(asset, 'secondary_serial_number', ''),
     }
 
 
@@ -9459,6 +9490,7 @@ def get_assets():
                 'brand': asset.brand,
                 'model': asset.model_number,
                 'serial': asset.serial_number,
+                'serial2': getattr(asset, 'secondary_serial_number', ''),
                 'description': asset.description,
                 'dateOfPurchase': getattr(asset, 'date_of_purchase', ''),
                 'purchaseDate': getattr(asset, 'date_of_purchase', ''),
@@ -9602,6 +9634,7 @@ def _asset_check_asset_to_dict(asset, group_key):
         'model': asset.model_number,
         'description': asset.description or '',
         'serial': asset.serial_number or '',
+        'serial2': getattr(asset, 'secondary_serial_number', '') or '',
         'department': asset.department_code,
         'location': location,
         'defaultLocation': getattr(asset, 'default_location', '') or 'Store',
@@ -9996,6 +10029,7 @@ def get_event_assets(event_id):
                 'model': asset.model_number,
                 'description': asset.description,
                 'serial': asset.serial_number,
+                'serial2': getattr(asset, 'secondary_serial_number', ''),
                 'department': asset.department_code,
                 'status': status,
                 'location': asset.current_location,
@@ -10035,6 +10069,7 @@ def create_asset():
                     brand=plan['brand'],
                     model_number=plan['model'],
                     serial_number='',
+                    secondary_serial_number='',
                     description=plan['description'],
                     is_missing=False,
                     is_ooc=False,
@@ -10059,6 +10094,7 @@ def create_asset():
                         brand=plan['brand'],
                         model_number=plan['model'],
                         serial_number=plan['serials'][index],
+                        secondary_serial_number=plan['secondarySerials'][index],
                         description=plan['description'],
                         is_missing=False,
                         is_ooc=False,
@@ -10643,6 +10679,11 @@ def update_asset(asset_id):
         if 'serial' in data:
             asset.serial_number = (data.get('serial') or '').strip()
 
+        if 'serial2' in data or 'secondarySerial' in data:
+            asset.secondary_serial_number = (
+                data.get('serial2', data.get('secondarySerial', '')) or ''
+            ).strip()
+
         if 'defaultLocation' in data:
             asset.default_location = (data.get('defaultLocation') or '').strip()
 
@@ -10674,6 +10715,7 @@ def update_asset(asset_id):
         if _is_bulk_asset(asset) and 'quantity' in data:
             asset.quantity = max(1, _safe_int(data.get('quantity'), getattr(asset, 'quantity', 1)))
             asset.serial_number = ''
+            asset.secondary_serial_number = ''
             asset.maintenance_logs = []
 
         # Rename selected asset ID if needed.
@@ -11694,8 +11736,10 @@ def search_assets():
         assigned_assets = get_assigned_assets()
 
         for asset in data_manager.inventory.values():
-            searchable_text = f"{asset.brand} {asset.model_number} {asset.description} {asset.serial_number}".lower(
-            )
+            searchable_text = (
+                f"{asset.brand} {asset.model_number} {asset.description} "
+                f"{asset.serial_number} {getattr(asset, 'secondary_serial_number', '')}"
+            ).lower()
             if any(keyword in searchable_text for keyword in keywords):
                 # Determine current status
                 status = _asset_status_value(asset, assigned_assets)
@@ -11705,6 +11749,7 @@ def search_assets():
                     'brand': asset.brand,
                     'model': asset.model_number,
                     'serial': asset.serial_number,
+                    'serial2': getattr(asset, 'secondary_serial_number', ''),
                     'description': asset.description,
                     'department': asset.department_code,
                     'status': status,

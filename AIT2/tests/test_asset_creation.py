@@ -172,6 +172,46 @@ class AssetCreationTests(unittest.TestCase):
         created_asset = next(item for item in payload if item['internalId'] == asset_id)
         self.assertEqual(created_asset['notes'], notes)
 
+    def test_create_asset_saves_second_serial_and_resolves_it(self):
+        response = self.post_asset({
+            'serials': ['SN-PRIMARY'],
+            'secondarySerials': ['SN-SECONDARY'],
+        })
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        asset_id = response.get_json()['assetIds'][0]
+        asset = self.data_manager.inventory[asset_id]
+        self.assertEqual(asset.serial_number, 'SN-PRIMARY')
+        self.assertEqual(asset.secondary_serial_number, 'SN-SECONDARY')
+
+        reloaded = DataManager(self.tempdir.name)
+        reloaded.load_inventory()
+        self.assertEqual(
+            reloaded.inventory[asset_id].secondary_serial_number,
+            'SN-SECONDARY',
+        )
+
+        assets_response = self.client.get('/api/assets')
+        asset_payload = next(
+            item for item in assets_response.get_json()['data']
+            if item['internalId'] == asset_id
+        )
+        self.assertEqual(asset_payload['serial2'], 'SN-SECONDARY')
+
+        lookup_response = self.client.post(
+            '/api/asset-check/group',
+            json={'identifier': 'sn-secondary'},
+        )
+        self.assertEqual(
+            lookup_response.status_code,
+            200,
+            lookup_response.get_data(as_text=True),
+        )
+        self.assertEqual(
+            lookup_response.get_json()['data']['scannedAsset']['internalId'],
+            asset_id,
+        )
+
     def test_create_asset_sets_audit_metadata(self):
         response = self.post_asset({
             'serials': ['SN-AUDIT'],

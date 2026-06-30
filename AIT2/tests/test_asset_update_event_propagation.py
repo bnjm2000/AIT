@@ -318,6 +318,24 @@ class AssetUpdateEventPropagationTests(unittest.TestCase):
         self.assertEqual(asset_payload['dateModified'], asset.date_modified)
         self.assertEqual(asset_payload['changeHistory'][0]['changes'][0]['field'], 'model')
 
+    def test_asset_update_saves_and_audits_second_serial(self):
+        response = self.put_asset('A#01', serial2='SN-SECONDARY')
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        asset = self.data_manager.inventory['A#01']
+        self.assertEqual(asset.secondary_serial_number, 'SN-SECONDARY')
+
+        reloaded = DataManager(self.tempdir.name)
+        reloaded.load_inventory()
+        self.assertEqual(
+            reloaded.inventory['A#01'].secondary_serial_number,
+            'SN-SECONDARY',
+        )
+
+        changes = {change['field']: change for change in asset.change_history[0]['changes']}
+        self.assertEqual(changes['secondary_serial']['old'], '')
+        self.assertEqual(changes['secondary_serial']['new'], 'SN-SECONDARY')
+
     def test_maintenance_serial_and_location_change_do_not_update_manual_modified_date(self):
         asset = self.data_manager.inventory['A#01']
         asset.date_modified = '2026-06-01T10:00:00'

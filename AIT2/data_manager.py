@@ -17,7 +17,7 @@ MAX_LOG_LINES = 1000
 REQUIRED_DATA_FILES = ('Inventory.csv', 'Logs.csv', 'Users.csv', 'Containers.csv', 'Clients.csv')
 UTF8_ENCODINGS = ('utf-8', 'utf-8-sig')
 INVENTORY_FIELDNAMES = [
-    'AssetID', 'Brand', 'ModelNumber', 'SerialNumber', 'Description', 'DateOfPurchase',
+    'AssetID', 'Brand', 'ModelNumber', 'SerialNumber', 'SecondarySerialNumber', 'Description', 'DateOfPurchase',
     'DateAdded', 'DateModified', 'ChangeHistory', 'Notes',
     'IsMissing', 'IsOOC', 'IsDegraded', 'IsDisposed', 'IsBulk', 'Quantity',
     'MaintenanceLogs', 'DepartmentCode', 'DefaultLocation', 'CurrentLocation'
@@ -567,6 +567,7 @@ class DataManager:
                     brand=row.get('Brand', ''),
                     model_number=row.get('ModelNumber', ''),
                     serial_number=row.get('SerialNumber', ''),
+                    secondary_serial_number=row.get('SecondarySerialNumber', ''),
                     description=row.get('Description', ''),
                     date_of_purchase=row.get('DateOfPurchase', row.get('PurchaseDate', '')),
                     is_missing=_is_csv_true(row.get('IsMissing')),
@@ -621,6 +622,7 @@ class DataManager:
                     'Brand': item.brand,
                     'ModelNumber': item.model_number,
                     'SerialNumber': item.serial_number,
+                    'SecondarySerialNumber': getattr(item, 'secondary_serial_number', ''),
                     'Description': item.description,
                     'DateOfPurchase': getattr(item, 'date_of_purchase', ''),
                     'DateAdded': getattr(item, 'date_added', ''),

@@ -79,11 +79,13 @@ class InventoryItem:
         date_modified='',
         change_history=None,
         notes='',
+        secondary_serial_number='',
     ):
         self.asset_id = asset_id
         self.brand = brand
         self.model_number = model_number
         self.serial_number = serial_number
+        self.secondary_serial_number = secondary_serial_number or ''
         self.description = description
         self.is_missing = is_missing
         self.is_ooc = is_ooc

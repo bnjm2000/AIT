@@ -1577,8 +1577,10 @@ function findAssetByIdentifier(identifier, assetList = assets) {
 
     if (ids.some(value => value.toLowerCase() === normalized)) return true;
 
-    const serial = String(asset.serial || '').trim();
-    return serial && serial.toLowerCase() === normalized;
+    const serials = [asset.serial, asset.serial2]
+      .map(value => String(value || '').trim())
+      .filter(Boolean);
+    return serials.some(serial => serial.toLowerCase() === normalized);
   }) || null;
 }
 
@@ -6748,7 +6750,8 @@ function openAssetDetailsModal(encodedAssetId) {
             <div><strong>Description:</strong> ${escapeHtml(asset.description || 'N/A')}</div>
           </div>
           <div>
-            <div><strong>Serial:</strong> ${escapeHtml(asset.isBulk ? 'N/A' : (asset.serial || 'N/A'))}</div>
+            <div><strong>Primary serial:</strong> ${escapeHtml(asset.isBulk ? 'N/A' : (asset.serial || 'N/A'))}</div>
+            <div><strong>Second serial:</strong> ${escapeHtml(asset.isBulk ? 'N/A' : (asset.serial2 || 'N/A'))}</div>
             <div><strong>Quantity:</strong> ${escapeHtml(String(quantityText))}</div>
             <div><strong>Purchased:</strong> ${escapeHtml(formatAssetPurchaseDate(asset.dateOfPurchase || asset.purchaseDate || ''))}</div>
           </div>
@@ -6832,7 +6835,7 @@ function inventoryVirtualRowHtml(asset, isAdmin) {
           ? `<span class="asset-description-text">${escapeHtml(description)}</span>`
           : `<span class="asset-description-empty">—</span>`}
       </td>
-      <td>${asset.isBulk ? '—' : escapeHtml(asset.serial || "N/A")}</td>
+      <td>${asset.isBulk ? '—' : ([asset.serial, asset.serial2].filter(Boolean).map(escapeHtml).join('<br>') || "N/A")}</td>
       <td class="${asset.isBulk ? 'bulk-quantity-cell' : ''}">${quantityHtml}</td>
       <td class="asset-purchase-date-cell">${escapeHtml(formatAssetPurchaseDate(asset.dateOfPurchase || asset.purchaseDate || ''))}</td>
       <td class="asset-audit-date-cell">${escapeHtml(formatAssetAuditDateTime(asset.dateAdded || ''))}</td>
@@ -6957,8 +6960,13 @@ function ensureAssetEditModal() {
           </div>
 
           <div class="form-group" id="editAssetSerialGroup">
-            <label class="form-label">Serial</label>
+            <label class="form-label">Primary Serial Number</label>
             <input id="editAssetSerial" class="form-input">
+          </div>
+
+          <div class="form-group" id="editAssetSerial2Group">
+            <label class="form-label">Second Serial Number</label>
+            <input id="editAssetSerial2" class="form-input">
           </div>
 
           <div class="form-group">
@@ -7074,11 +7082,13 @@ function openEditAssetModal(encodedAssetId) {
   document.getElementById('editAssetId').readOnly = !!asset.isBulk;
   document.getElementById('editAssetBulkNote').style.display = asset.isBulk ? 'block' : 'none';
   document.getElementById('editAssetSerialGroup').style.display = asset.isBulk ? 'none' : 'block';
+  document.getElementById('editAssetSerial2Group').style.display = asset.isBulk ? 'none' : 'block';
   document.getElementById('editAssetQuantityGroup').style.display = asset.isBulk ? 'block' : 'none';
   document.getElementById('editAssetQuantity').value = asset.quantity || 1;
   document.getElementById('editAssetBrand').value = asset.brand || '';
   document.getElementById('editAssetModel').value = asset.model || '';
   document.getElementById('editAssetSerial').value = asset.serial || '';
+  document.getElementById('editAssetSerial2').value = asset.serial2 || '';
   document.getElementById('editAssetDateOfPurchase').value = normalizeAssetPurchaseDateValue(asset.dateOfPurchase || asset.purchaseDate || '');
   document.getElementById('editAssetDescription').value = asset.description || '';
   document.getElementById('editAssetNotes').value = asset.notes || '';
@@ -7112,6 +7122,7 @@ async function saveAssetEditModal() {
     brand: document.getElementById('editAssetBrand').value.trim(),
     model: document.getElementById('editAssetModel').value.trim(),
     serial: document.getElementById('editAssetSerial').value.trim(),
+    serial2: document.getElementById('editAssetSerial2').value.trim(),
     dateOfPurchase: document.getElementById('editAssetDateOfPurchase').value.trim(),
     description: document.getElementById('editAssetDescription').value.trim(),
     notes: document.getElementById('editAssetNotes').value.trim(),
@@ -8302,6 +8313,7 @@ function containerMatchesSearch(container, term) {
         asset.brand,
         asset.model,
         asset.serial,
+        asset.serial2,
         asset.description,
         asset.department
       );
@@ -8955,7 +8967,7 @@ function searchContainerAssets() {
 
   const filtered = assets.filter(asset => {
     const searchableText =
-      `${asset.id} ${asset.brand} ${asset.model} ${asset.serial || ''} ${asset.description || ''} ${asset.department || ''}`
+      `${asset.id} ${asset.brand} ${asset.model} ${asset.serial || ''} ${asset.serial2 || ''} ${asset.description || ''} ${asset.department || ''}`
         .toLowerCase();
 
     return searchableText.includes(term) && !selectedContainerAssets.has(asset.id);
@@ -9271,7 +9283,7 @@ function findMaintenanceReportAsset(value) {
   const raw = String(value || '').trim().toLowerCase();
   if (!raw) return null;
   return maintenanceReportAssetList().find(asset => {
-    const candidates = [asset.id, asset.internalId, asset.bulkId, asset.displayId, asset.serial];
+    const candidates = [asset.id, asset.internalId, asset.bulkId, asset.displayId, asset.serial, asset.serial2];
     return candidates.some(candidate => String(candidate || '').trim().toLowerCase() === raw);
   }) || null;
 }
@@ -15711,18 +15723,20 @@ function addAssetQuantityValue() {
   return Math.max(1, Math.min(500, parseInt(addAssetValue('assetQuantity') || '1', 10) || 1));
 }
 
-function addAssetSerialList() {
-  const serialText = addAssetField('assetSerials')?.value || '';
-  return serialText
+function addAssetSerialList(fieldId = 'assetSerials') {
+  const serialText = addAssetField(fieldId)?.value || '';
+  const serials = serialText
     .split(/\r?\n/)
-    .map(value => value.trim())
-    .filter(Boolean);
+    .map(value => value.trim());
+  while (serials.length && !serials[serials.length - 1]) serials.pop();
+  return serials;
 }
 
 function collectAddAssetPayload() {
   const useCustomPrefix = addAssetField('assetUseCustomPrefix')?.checked || false;
   const isBulk = addAssetField('assetIsBulk')?.checked || false;
   const serials = isBulk ? [] : addAssetSerialList();
+  const secondarySerials = isBulk ? [] : addAssetSerialList('assetSecondarySerials');
 
   if (addAssetField('assetSerial')) {
     addAssetField('assetSerial').value = serials[0] || '';
@@ -15737,7 +15751,8 @@ function collectAddAssetPayload() {
     department: addAssetValue('assetDepartment') || 'UN',
     isBulk,
     quantity: addAssetQuantityValue(),
-    serials
+    serials,
+    secondarySerials
   };
 
   if (!isBulk && useCustomPrefix) {
@@ -15924,9 +15939,10 @@ async function updateAddAssetPreview() {
       prefixInput.placeholder = data.prefix ? `Auto: ${data.prefix}` : 'Auto';
     }
 
-    const serialCount = addAssetSerialList().length;
-    const serialText = serialCount
-      ? `<div>${serialCount} serial number(s) entered.</div>`
+    const serialCount = addAssetSerialList().filter(Boolean).length;
+    const secondarySerialCount = addAssetSerialList('assetSecondarySerials').filter(Boolean).length;
+    const serialText = serialCount || secondarySerialCount
+      ? `<div>${serialCount} primary and ${secondarySerialCount} second serial number(s) entered.</div>`
       : '';
 
     renderAddAssetPreview('success', `
@@ -15945,6 +15961,7 @@ function updateAddAssetBulkFields() {
   const serialisedFields = addAssetField('assetSerialisedFields');
   if (serialisedFields) serialisedFields.style.display = isBulk ? 'none' : 'block';
   if (isBulk && addAssetField('assetSerials')) addAssetField('assetSerials').value = '';
+  if (isBulk && addAssetField('assetSecondarySerials')) addAssetField('assetSecondarySerials').value = '';
   scheduleAddAssetPreview();
 }
 
@@ -16042,6 +16059,7 @@ document.addEventListener("DOMContentLoaded", function () {
     'assetDepartment',
     'assetQuantity',
     'assetSerials',
+    'assetSecondarySerials',
     'assetIdPrefix'
   ];
 
@@ -16829,7 +16847,7 @@ function searchMaintenanceAssets() {
   // Filter assets based on search term
   const filteredAssets = assets.filter(asset => {
     const assetId = getAssetIdentifierForApi(asset);
-    const searchableText = `${asset.id || ''} ${assetId} ${asset.bulkId || ''} ${asset.internalId || ''} ${asset.brand || ''} ${asset.model || ''} ${asset.serial || ''} ${escapeJs(asset.description || '')}`.toLowerCase();
+    const searchableText = `${asset.id || ''} ${assetId} ${asset.bulkId || ''} ${asset.internalId || ''} ${asset.brand || ''} ${asset.model || ''} ${asset.serial || ''} ${asset.serial2 || ''} ${escapeJs(asset.description || '')}`.toLowerCase();
     return searchableText.includes(searchTerm) && !selectedMaintenanceAssets.has(assetId);
   });
   
@@ -23145,7 +23163,7 @@ function getFilteredInventoryData() {
 
   let filteredAssets = sourceAssets.filter((asset) => {
     const deptMeta = getDepartmentMeta(asset.department);
-    const searchableText = `${asset.id || ''} ${asset.internalId || ''} ${asset.bulkId || ''} ${asset.brand || ''} ${asset.model || ''} ${asset.serial || ''} ${asset.description || ''} ${asset.dateOfPurchase || asset.purchaseDate || ''} ${asset.dateAdded || ''} ${asset.dateModified || ''} ${asset.department || ''} ${deptMeta.name || ''}`.toLowerCase();
+    const searchableText = `${asset.id || ''} ${asset.internalId || ''} ${asset.bulkId || ''} ${asset.brand || ''} ${asset.model || ''} ${asset.serial || ''} ${asset.serial2 || ''} ${asset.description || ''} ${asset.dateOfPurchase || asset.purchaseDate || ''} ${asset.dateAdded || ''} ${asset.dateModified || ''} ${asset.department || ''} ${deptMeta.name || ''}`.toLowerCase();
     const matchesSearch = !filters.searchTerm || searchableText.includes(filters.searchTerm);
     const matchesDept = filters.departmentFilterTotal === 0 || filters.deptFilters.includes(asset.department);
     const matchesStatus = filters.statusFilterTotal === 0 || filters.statusFilters.includes(asset.status);

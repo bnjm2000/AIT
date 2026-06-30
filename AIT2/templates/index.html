@@ -3794,12 +3794,20 @@
             </div>
 
             <div class="form-group">
-              <label class="form-label">Serial Numbers</label>
+              <label class="form-label">Primary Serial Numbers</label>
               <textarea class="form-input" id="assetSerials" rows="5" placeholder="SN-001&#10;SN-002&#10;SN-003"></textarea>
               <small style="color:#666;font-size:12px;margin-top:6px;display:block;line-height:1.4;">
                 Enter one serial number per line. The first line goes to the first Asset ID, the second line to the second Asset ID, and so on. Leave blank if the assets have no serial numbers.
               </small>
               <input type="hidden" id="assetSerial" />
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Second Serial Numbers <span style="color:#666;font-weight:400;">(optional)</span></label>
+              <textarea class="form-input" id="assetSecondarySerials" rows="5" placeholder="ALT-001&#10;ALT-002&#10;ALT-003"></textarea>
+              <small style="color:#666;font-size:12px;margin-top:6px;display:block;line-height:1.4;">
+                Enter the optional second serial for each Asset ID in the same order.
+              </small>
             </div>
           </div>
 
