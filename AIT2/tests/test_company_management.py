@@ -119,6 +119,27 @@ class CompanyManagementTests(unittest.TestCase):
         self.assertIn('active company', response.get_json()['error'])
         self.assertTrue(os.path.exists(os.path.join(self.tempdir.name, 'companies', 'AVPL')))
 
+    def test_super_admin_can_edit_company_name_without_changing_code_or_folders(self):
+        self.login_super_admin()
+        original_folder = os.path.join(self.tempdir.name, 'companies', 'TSC')
+
+        response = self.client.put('/api/companies/TSC', json={'name': 'TSC Events'})
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(response.get_json()['data']['code'], 'TSC')
+        self.assertEqual(response.get_json()['data']['name'], 'TSC Events')
+        self.assertTrue(os.path.exists(original_folder))
+        registry = app_module._load_company_registry()
+        self.assertEqual(registry['companies']['TSC']['name'], 'TSC Events')
+
+    def test_company_name_cannot_be_blank(self):
+        self.login_super_admin()
+
+        response = self.client.put('/api/companies/TSC', json={'name': '   '})
+
+        self.assertEqual(response.status_code, 400, response.get_data(as_text=True))
+        self.assertEqual(response.get_json()['error'], 'Company name is required')
+
 
 if __name__ == '__main__':
     unittest.main()

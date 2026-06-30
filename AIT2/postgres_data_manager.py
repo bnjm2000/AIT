@@ -253,6 +253,7 @@ class PostgresDataManager(DataManager):
             'salt': user.salt,
             'isAdmin': bool(user.is_admin),
             'isActive': bool(getattr(user, 'is_active', True)),
+            'lastOnline': str(getattr(user, 'last_online', '-') or '-'),
         }
 
     def _inventory_data(self, item):
@@ -357,6 +358,7 @@ class PostgresDataManager(DataManager):
                         salt=data.get('salt', ''),
                         is_admin=bool(data.get('isAdmin', False)),
                         is_active=bool(data.get('isActive', True)),
+                        last_online=data.get('lastOnline', '-'),
                     )
                     users[username] = user
                     snapshots[username] = _fingerprint(self._user_data(user))

@@ -1,3 +1,4 @@
+from datetime import datetime
 import tempfile
 import unittest
 
@@ -17,6 +18,7 @@ class ChangePasswordTests(unittest.TestCase):
         self.data_manager.setup_data_folder()
         self.data_manager.users = {
             'normal': User('normal', hash_password('old-password', 'salt'), 'salt', False, True),
+            'admin': User('admin', hash_password('admin-password', 'admin-salt'), 'admin-salt', True, True),
         }
         self.data_manager.save_users()
         self.data_manager.logs = []
@@ -65,6 +67,44 @@ class ChangePasswordTests(unittest.TestCase):
         user = self.data_manager.users['normal']
         self.assertEqual(hash_password('old-password', user.salt), user.password_hash)
         self.assertEqual(self.data_manager.logs, [])
+
+    def test_successful_login_records_and_persists_last_online(self):
+        self.assertEqual(self.data_manager.users['normal'].last_online, '-')
+
+        response = self.client.post('/login', json={
+            'username': 'normal',
+            'password': 'old-password',
+        })
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        last_online = self.data_manager.users['normal'].last_online
+        self.assertNotEqual(last_online, '-')
+        datetime.fromisoformat(last_online)
+
+        reloaded_manager = DataManager(self.tempdir.name)
+        reloaded_manager.load_users()
+        self.assertEqual(reloaded_manager.users['normal'].last_online, last_online)
+
+    def test_failed_login_leaves_last_online_unchanged(self):
+        response = self.client.post('/login', json={
+            'username': 'normal',
+            'password': 'wrong-password',
+        })
+
+        self.assertEqual(response.status_code, 401, response.get_data(as_text=True))
+        self.assertEqual(self.data_manager.users['normal'].last_online, '-')
+
+    def test_users_api_exposes_default_last_online_value(self):
+        with self.client.session_transaction() as session:
+            session['user'] = 'admin'
+            session['is_admin'] = True
+            session['is_active'] = True
+
+        response = self.client.get('/api/users')
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        users = {user['username']: user for user in response.get_json()['data']}
+        self.assertEqual(users['normal']['lastOnline'], '-')
 
 
 if __name__ == '__main__':

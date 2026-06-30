@@ -3,7 +3,7 @@
   "companies": {
     "AVPL": {
       "code": "AVPL",
-      "name": "AVEC Vision Private Limited",
+      "name": "Avec Vision Private Limited",
       "backendFolder": "companies/AVPL/backend",
       "frontendFolder": "companies/AVPL/frontend",
       "createdAt": "2026-06-25T00:00:00",
@@ -55,5 +55,5 @@
   "superAdmins": [
     "bnjm2000"
   ],
-  "updatedAt": "2026-06-27T17:31:21"
+  "updatedAt": "2026-06-30T17:48:16"
 }

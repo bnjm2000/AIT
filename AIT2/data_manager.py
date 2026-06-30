@@ -374,6 +374,9 @@ class DataManager:
                 #
                 # New format:
                 # username,password_hash,salt,is_admin,is_active
+                #
+                # Current format:
+                # username,password_hash,salt,is_admin,is_active,last_online
                 if len(row) < 4:
                     continue
 
@@ -390,7 +393,20 @@ class DataManager:
                     is_active = True
                     needs_save = True
 
-                self.users[username] = User(username, password_hash, salt, is_admin, is_active)
+                if len(row) >= 6:
+                    last_online = row[5].strip() or '-'
+                else:
+                    last_online = '-'
+                    needs_save = True
+
+                self.users[username] = User(
+                    username,
+                    password_hash,
+                    salt,
+                    is_admin,
+                    is_active,
+                    last_online,
+                )
 
         if needs_save:
             self.save_users()
@@ -405,7 +421,8 @@ class DataManager:
                     user.password_hash,
                     user.salt,
                     user.is_admin,
-                    getattr(user, 'is_active', True)
+                    getattr(user, 'is_active', True),
+                    getattr(user, 'last_online', '-'),
                 ])
 
     def update_username_references(self, old_username, new_username):

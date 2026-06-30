@@ -65,7 +65,14 @@ class PostgresDataManagerTests(unittest.TestCase):
         from postgres_data_manager import PostgresDataManager
 
         self.manager.users = {
-            'admin': User('admin', 'hash', 'salt', True, True),
+            'admin': User(
+                'admin',
+                'hash',
+                'salt',
+                True,
+                True,
+                last_online='2026-06-30T18:00:00+08:00',
+            ),
         }
         self.manager.save_users()
         self.manager.inventory = {
@@ -122,6 +129,10 @@ class PostgresDataManagerTests(unittest.TestCase):
         )
         reloaded.load_all_data()
 
+        self.assertEqual(
+            reloaded.users['admin'].last_online,
+            '2026-06-30T18:00:00+08:00',
+        )
         self.assertEqual(reloaded.inventory['A#01'].serial_number, 'SN-1')
         self.assertEqual(reloaded.containers['CASE-1'].serial_number, 'CASE-SN')
         self.assertEqual(reloaded.events[1].prepared_items, ['A#01'])

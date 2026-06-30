@@ -7,6 +7,8 @@ let logs = [];
 let stats = {};
 let departments = {};
 let companyOptions = [];
+let usersAdminUsers = [];
+let usersAdminSort = { key: 'name', direction: 'asc' };
 let departmentsLoaded = false;
 let selectedInventoryAssetIds = new Set();
 let __autoRefreshInFlight = false;
@@ -3521,6 +3523,169 @@ function companyOptionsMarkup(selectedCode = '') {
   `).join('');
 }
 
+function ensureCompanyActionModals() {
+  if (document.getElementById('createCompanyModal')) return;
+
+  const style = document.createElement('style');
+  style.id = 'company-action-styles';
+  style.textContent = `
+    .company-action-buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .company-action-buttons .btn {
+      min-width: 150px;
+    }
+    .company-action-buttons .company-edit-button,
+    .company-edit-button {
+      background: #fd7e14;
+      color: #fff;
+    }
+    .company-action-buttons .company-edit-button:hover,
+    .company-edit-button:hover {
+      background: #e96b02;
+    }
+    @media (max-width: 640px) {
+      .company-action-buttons .btn {
+        width: 100%;
+      }
+    }
+  `;
+  document.head.appendChild(style);
+
+  const wrapper = document.createElement('div');
+  wrapper.innerHTML = `
+    <div id="createCompanyModal" class="modal">
+      <div class="modal-content" style="max-width:620px;">
+        <div class="modal-header">
+          <h3 class="modal-title">Create Company</h3>
+          <button type="button" class="close-btn" onclick="closeModal('createCompanyModal')" aria-label="Close">&times;</button>
+        </div>
+        <form onsubmit="event.preventDefault(); createCompanyFromUsersAdmin();">
+          <div class="modal-body">
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;">
+              <div class="form-group">
+                <label class="form-label" for="userNewCompanyCode">Code</label>
+                <input id="userNewCompanyCode" class="form-input" placeholder="e.g. CLIENTCO" autocomplete="off">
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="userNewCompanyName">Name</label>
+                <input id="userNewCompanyName" class="form-input" placeholder="Company name" autocomplete="organization">
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="userNewCompanyFirstAdmin">First Admin</label>
+                <input id="userNewCompanyFirstAdmin" class="form-input" placeholder="Existing or new username" autocomplete="off">
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="userNewCompanyFirstAdminPassword">Password</label>
+                <input id="userNewCompanyFirstAdminPassword" type="password" class="form-input" placeholder="Only needed for a new user" autocomplete="new-password">
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer modal-actions">
+            <button type="button" class="btn btn-secondary" onclick="closeModal('createCompanyModal')">Cancel</button>
+            <button type="submit" class="btn btn-success">Create Company</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div id="editCompanyModal" class="modal">
+      <div class="modal-content" style="max-width:520px;">
+        <div class="modal-header">
+          <h3 class="modal-title">Edit Company</h3>
+          <button type="button" class="close-btn" onclick="closeModal('editCompanyModal')" aria-label="Close">&times;</button>
+        </div>
+        <form onsubmit="event.preventDefault(); editCompanyFromUsersAdmin();">
+          <div class="modal-body">
+            <div class="form-group">
+              <label class="form-label" for="userEditCompanyCode">Company</label>
+              <select id="userEditCompanyCode" class="form-input" onchange="populateEditCompanyName()"></select>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="userEditCompanyName">Company Name</label>
+              <input id="userEditCompanyName" class="form-input" placeholder="Company name" autocomplete="organization">
+            </div>
+            <p style="margin:8px 0 0;color:#667085;font-size:13px;">Company codes stay fixed so folders and user assignments remain intact.</p>
+          </div>
+          <div class="modal-footer modal-actions">
+            <button type="button" class="btn btn-secondary" onclick="closeModal('editCompanyModal')">Cancel</button>
+            <button type="submit" class="btn company-edit-button">Save Company</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div id="deleteCompanyModal" class="modal">
+      <div class="modal-content" style="max-width:520px;">
+        <div class="modal-header">
+          <h3 class="modal-title">Delete Company</h3>
+          <button type="button" class="close-btn" onclick="closeModal('deleteCompanyModal')" aria-label="Close">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label" for="userDeleteCompanyCode">Company</label>
+            <select id="userDeleteCompanyCode" class="form-input"></select>
+          </div>
+          <p style="margin:8px 0 0;color:#b42318;font-size:13px;">Deleting a company permanently removes its assets and assigned non-super-admin users.</p>
+        </div>
+        <div class="modal-footer modal-actions">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('deleteCompanyModal')">Cancel</button>
+          <button type="button" class="btn btn-danger" onclick="deleteCompanyFromUsersAdmin()">Delete Company</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  while (wrapper.firstElementChild) {
+    document.body.appendChild(wrapper.firstElementChild);
+  }
+}
+
+function companyActionButtonsMarkup() {
+  return `
+    <div class="company-action-buttons">
+      <button type="button" class="btn btn-success" onclick="openCreateCompanyModal()">Create Company</button>
+      <button type="button" class="btn company-edit-button" onclick="openEditCompanyModal()">Edit Company</button>
+      <button type="button" class="btn btn-danger" onclick="openDeleteCompanyModal()">Delete Company</button>
+    </div>
+  `;
+}
+
+function openCreateCompanyModal() {
+  ensureCompanyActionModals();
+  ['userNewCompanyCode', 'userNewCompanyName', 'userNewCompanyFirstAdmin', 'userNewCompanyFirstAdminPassword'].forEach(id => {
+    const input = document.getElementById(id);
+    if (input) input.value = '';
+  });
+  openModal('createCompanyModal');
+}
+
+function populateEditCompanyName() {
+  const code = document.getElementById('userEditCompanyCode')?.value || '';
+  const company = companyOptions.find(item => String(item.code || '').toUpperCase() === String(code).toUpperCase());
+  const input = document.getElementById('userEditCompanyName');
+  if (input) input.value = company?.name || '';
+}
+
+async function openEditCompanyModal() {
+  ensureCompanyActionModals();
+  await fetchCompanies(true);
+  const select = document.getElementById('userEditCompanyCode');
+  if (select) select.innerHTML = companyOptionsMarkup(currentUser?.company?.code || '');
+  populateEditCompanyName();
+  openModal('editCompanyModal');
+}
+
+async function openDeleteCompanyModal() {
+  ensureCompanyActionModals();
+  await fetchCompanies(true);
+  const select = document.getElementById('userDeleteCompanyCode');
+  if (select) select.innerHTML = companyOptionsMarkup('');
+  openModal('deleteCompanyModal');
+}
+
 async function setupCompanyManagementTab() {
   if (!isSuperAdminUser()) {
     removeCompanyManagementTab();
@@ -3559,7 +3724,7 @@ function ensureCompanyManagementNavItem() {
   companiesTab.type = 'button';
   companiesTab.className = 'nav-item super-admin-only';
   companiesTab.setAttribute('onclick', "showSection('companies')");
-  companiesTab.textContent = 'Companies';
+  companiesTab.innerHTML = '&#127970; Companies';
 
   const logoutButton = settingsSection.querySelector(`[onclick="logout()"]`);
   if (logoutButton) {
@@ -3572,6 +3737,7 @@ function ensureCompanyManagementNavItem() {
 function ensureCompanyManagementSection() {
   if (document.getElementById('companies-section')) return;
 
+  ensureCompanyActionModals();
   const firstSection = document.querySelector('.content-section');
   const sectionParent = firstSection ? firstSection.parentElement : document.body;
 
@@ -3596,26 +3762,8 @@ function ensureCompanyManagementSection() {
     </div>
 
     <div class="form-container" style="margin-bottom:20px;">
-      <h3 style="margin-bottom:15px;">Create Company</h3>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;align-items:end;">
-        <div class="form-group">
-          <label class="form-label" for="newCompanyCode">Code</label>
-          <input id="newCompanyCode" class="form-input" placeholder="e.g. CLIENTCO">
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="newCompanyName">Name</label>
-          <input id="newCompanyName" class="form-input" placeholder="Company name">
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="newCompanyFirstAdmin">First Admin</label>
-          <input id="newCompanyFirstAdmin" class="form-input" placeholder="Existing or new username">
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="newCompanyFirstAdminPassword">Password</label>
-          <input id="newCompanyFirstAdminPassword" type="password" class="form-input" placeholder="Only needed for new user">
-        </div>
-        <button type="button" class="btn btn-success" onclick="createCompanyAdmin()">Create Company</button>
-      </div>
+      <h3 style="margin-bottom:15px;">Company Actions</h3>
+      ${companyActionButtonsMarkup()}
     </div>
 
     <div class="form-container">
@@ -3672,7 +3820,6 @@ async function loadCompaniesAdmin() {
             <th>Backend Folder</th>
             <th>Frontend Folder</th>
             <th>Branding</th>
-            <th>Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -3684,14 +3831,6 @@ async function loadCompaniesAdmin() {
               <td style="font-size:12px;color:#667085;overflow-wrap:anywhere;">${escapeHtml(company.backendFolder || '')}</td>
               <td style="font-size:12px;color:#667085;overflow-wrap:anywhere;">${escapeHtml(company.frontendFolder || '')}</td>
               <td>${company.brandingSetupRequired ? 'Pending' : 'Ready'}</td>
-              <td>
-                <button
-                  type="button"
-                  class="btn btn-danger btn-sm"
-                  onclick="deleteCompanyAdmin('${escapeHtmlAttr(company.code)}', ${company.isActive ? 'true' : 'false'}, ${companies.length})"
-                  ${company.isActive || companies.length <= 1 ? 'disabled' : ''}
-                >Delete</button>
-              </td>
             </tr>
           `).join('')}
         </tbody>
@@ -3704,54 +3843,20 @@ async function loadCompaniesAdmin() {
   }
 }
 
-async function createCompanyAdmin() {
-  const code = document.getElementById('newCompanyCode')?.value.trim() || '';
-  const name = document.getElementById('newCompanyName')?.value.trim() || '';
-  const firstAdminUsername = document.getElementById('newCompanyFirstAdmin')?.value.trim() || '';
-  const firstAdminPassword = document.getElementById('newCompanyFirstAdminPassword')?.value || '';
-
-  if (!code && !name) {
-    showNotification('warning', 'Company code or name is required');
-    return;
-  }
-
-  try {
-    await apiCall('/api/companies', 'POST', {
-      code,
-      name,
-      firstAdminUsername,
-      firstAdminPassword
-    });
-
-    ['newCompanyCode', 'newCompanyName', 'newCompanyFirstAdmin', 'newCompanyFirstAdminPassword'].forEach(id => {
-      const input = document.getElementById(id);
-      if (input) input.value = '';
-    });
-
-    showNotification('success', 'Company created');
-    await loadCompaniesAdmin();
-    if (document.getElementById('users-section')) {
-      await loadUsersAdmin();
-    }
-  } catch (error) {
-    showNotification('error', `Failed to create company: ${error.message}`);
-  }
-}
-
 async function deleteCompanyAdmin(code, isActive = false, companyCount = 0) {
   if (!isSuperAdminUser()) {
     showNotification('error', 'Super admin privileges required');
-    return;
+    return false;
   }
 
   if (isActive) {
     showNotification('warning', 'Switch to another company before deleting this one');
-    return;
+    return false;
   }
 
   if (Number(companyCount || 0) <= 1) {
     showNotification('warning', 'At least one company must remain');
-    return;
+    return false;
   }
 
   const company = (companyOptions || []).find(item => String(item.code || '').toUpperCase() === String(code || '').toUpperCase());
@@ -3765,19 +3870,22 @@ async function deleteCompanyAdmin(code, isActive = false, companyCount = 0) {
     variant: 'danger'
   });
 
-  if (!confirmed) return;
+  if (!confirmed) return false;
 
   try {
     const res = await apiCall(`/api/companies/${encodeURIComponent(code)}`, 'DELETE');
     const removedUsers = res?.data?.removedUsers || [];
     const userNote = removedUsers.length ? ` Removed ${removedUsers.length} assigned user account(s).` : '';
     showNotification('success', `Company deleted.${userNote}`);
+    closeModal('deleteCompanyModal');
     await loadCompaniesAdmin();
     if (document.getElementById('users-section')) {
       await loadUsersAdmin();
     }
+    return true;
   } catch (error) {
     showNotification('error', `Failed to delete company: ${error.message}`);
+    return false;
   }
 }
 
@@ -4565,42 +4673,23 @@ function ensureUsersSection() {
       </div>
     </div>
 
-    <div class="card super-admin-only" style="margin-bottom:20px;">
-      <h3 style="margin-bottom:15px;">Create Company</h3>
-
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;align-items:end;">
-        <div class="form-group">
-          <label class="form-label" for="userNewCompanyCode">Code</label>
-          <input id="userNewCompanyCode" class="form-input" placeholder="e.g. CLIENTCO">
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="userNewCompanyName">Name</label>
-          <input id="userNewCompanyName" class="form-input" placeholder="Company name">
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="userNewCompanyFirstAdmin">First Admin</label>
-          <input id="userNewCompanyFirstAdmin" class="form-input" placeholder="Existing or new username">
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="userNewCompanyFirstAdminPassword">Password</label>
-          <input id="userNewCompanyFirstAdminPassword" type="password" class="form-input" placeholder="Only needed for new user">
-        </div>
-        <button class="btn btn-success" onclick="createCompanyFromUsersAdmin()">Create Company</button>
-      </div>
-
-      <div style="display:grid;grid-template-columns:minmax(220px,1fr) auto;gap:12px;align-items:end;margin-top:16px;padding-top:16px;border-top:1px solid #e9ecef;">
-        <div class="form-group">
-          <label class="form-label" for="userDeleteCompanyCode">Delete Company</label>
-          <select id="userDeleteCompanyCode" class="form-input"></select>
-        </div>
-        <button class="btn btn-danger" onclick="deleteCompanyFromUsersAdmin()">Delete Company</button>
-      </div>
-    </div>
-
     <div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px;">
+      <div class="users-admin-toolbar">
         <h3 style="margin:0;">Existing Users</h3>
-        <button class="btn btn-secondary btn-sm" onclick="loadUsersAdmin()">Refresh</button>
+        <div class="users-admin-toolbar-actions">
+          <label class="users-admin-search">
+            <span class="sr-only">Search users</span>
+            <input
+              id="usersAdminSearch"
+              type="search"
+              class="form-input"
+              placeholder="Search users..."
+              oninput="renderUsersAdminTables()"
+              autocomplete="off"
+            >
+          </label>
+          <button class="btn btn-secondary btn-sm" onclick="loadUsersAdmin()">Refresh</button>
+        </div>
       </div>
 
       <div id="users-admin-table-container">
@@ -4612,12 +4701,180 @@ function ensureUsersSection() {
   sectionParent.appendChild(section);
 }
 
+function setUsersAdminSort(key) {
+  if (!isSuperAdminUser() || !['name', 'company'].includes(key)) return;
+  if (usersAdminSort.key === key) {
+    usersAdminSort.direction = usersAdminSort.direction === 'asc' ? 'desc' : 'asc';
+  } else {
+    usersAdminSort = { key, direction: 'asc' };
+  }
+  renderUsersAdminTables();
+}
+
+function usersAdminSortHeader(label, key) {
+  if (!isSuperAdminUser()) return `<th>${label}</th>`;
+  const active = usersAdminSort.key === key;
+  const arrow = active ? (usersAdminSort.direction === 'asc' ? '&#9650;' : '&#9660;') : '&#8597;';
+  const ariaSort = active ? (usersAdminSort.direction === 'asc' ? 'ascending' : 'descending') : 'none';
+  return `
+    <th aria-sort="${ariaSort}">
+      <button type="button" class="users-admin-sort" onclick="setUsersAdminSort('${key}')">
+        ${label}<span aria-hidden="true">${arrow}</span>
+      </button>
+    </th>
+  `;
+}
+
+function usersAdminTableHeader() {
+  return `
+    <thead>
+      <tr>
+        ${usersAdminSortHeader('Username', 'name')}
+        <th>Admin</th>
+        ${isSuperAdminUser() ? usersAdminSortHeader('Company', 'company') : ''}
+        ${isSuperAdminUser() ? '<th>Super</th>' : ''}
+        <th>Active</th>
+        <th>Last Online</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+  `;
+}
+
+function formatUserLastOnline(value) {
+  const raw = String(value || '-').trim();
+  if (!raw || raw === '-') return '-';
+
+  const timestamp = new Date(raw);
+  if (Number.isNaN(timestamp.getTime())) return escapeHtml(raw);
+
+  try {
+    return escapeHtml(new Intl.DateTimeFormat(undefined, {
+      dateStyle: 'medium',
+      timeStyle: 'short'
+    }).format(timestamp));
+  } catch (error) {
+    return escapeHtml(timestamp.toLocaleString());
+  }
+}
+
+function usersAdminRowMarkup(user, index) {
+  const rowId = `userrow-${index}`;
+  const encodedOriginalUsername = encodeURIComponent(user.username);
+  const isSelf = currentUser && currentUser.username === user.username;
+  const protectedSuperUser = user.isSuperAdmin && !isSuperAdminUser() && !isSelf;
+  const rawLastOnline = String(user.lastOnline || '-');
+  const lastOnlineDisplay = formatUserLastOnline(rawLastOnline);
+
+  return `
+    <tr>
+      <td>
+        <input
+          type="text"
+          id="username-${rowId}"
+          class="form-input user-admin-username-input"
+          value="${escapeHtmlAttr(user.username)}"
+          ${protectedSuperUser ? 'disabled' : ''}
+        >
+        ${isSelf ? '<span style="font-size:11px;color:#666;margin-left:6px;">(you)</span>' : ''}
+      </td>
+      <td>
+        <label class="user-admin-switch">
+          <input type="checkbox" id="admin-${rowId}" ${user.isAdmin ? 'checked' : ''} ${protectedSuperUser ? 'disabled' : ''}>
+          <span class="user-admin-switch-slider"></span>
+          <span class="user-admin-switch-text">Admin</span>
+        </label>
+      </td>
+      ${isSuperAdminUser() ? `
+        <td>
+          <select id="company-${rowId}" class="form-input">
+            ${companyOptionsMarkup(user.companyCode || currentUser?.company?.code || '')}
+          </select>
+        </td>
+      ` : ''}
+      ${isSuperAdminUser() ? `
+        <td>
+          <label class="user-admin-switch">
+            <input type="checkbox" id="super-${rowId}" ${user.isSuperAdmin ? 'checked' : ''}>
+            <span class="user-admin-switch-slider"></span>
+            <span class="user-admin-switch-text">Super</span>
+          </label>
+        </td>
+      ` : ''}
+      <td>
+        <label class="user-admin-switch">
+          <input type="checkbox" id="active-${rowId}" ${user.isActive ? 'checked' : ''} ${protectedSuperUser ? 'disabled' : ''}>
+          <span class="user-admin-switch-slider"></span>
+          <span class="user-admin-switch-text">Active</span>
+        </label>
+      </td>
+      <td class="user-admin-last-online" title="${rawLastOnline === '-' ? '' : escapeHtmlAttr(rawLastOnline)}">
+        ${lastOnlineDisplay}
+      </td>
+      <td class="users-admin-actions">
+        <button class="btn btn-primary btn-sm" onclick="saveUserAdmin('${encodedOriginalUsername}', '${rowId}')">Save</button>
+        <button class="btn btn-warning btn-sm" onclick="openResetPasswordModal('${encodedOriginalUsername}')">Reset Password</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteUserAdmin('${encodedOriginalUsername}')" ${(isSelf || protectedSuperUser) ? 'disabled title="This account cannot be deleted here"' : ''}>Delete</button>
+      </td>
+    </tr>
+  `;
+}
+
+function sortedUsersAdmin(users) {
+  const direction = usersAdminSort.direction === 'desc' ? -1 : 1;
+  return [...users].sort((left, right) => {
+    const leftValue = usersAdminSort.key === 'company'
+      ? (left.companyName || left.companyCode || '')
+      : (left.username || '');
+    const rightValue = usersAdminSort.key === 'company'
+      ? (right.companyName || right.companyCode || '')
+      : (right.username || '');
+    const primary = String(leftValue).localeCompare(String(rightValue), undefined, { sensitivity: 'base', numeric: true });
+    if (primary) return primary * direction;
+    return String(left.username || '').localeCompare(String(right.username || ''), undefined, { sensitivity: 'base', numeric: true });
+  });
+}
+
+function renderUsersAdminTables() {
+  const container = document.getElementById('users-admin-table-container');
+  if (!container) return;
+
+  const search = (document.getElementById('usersAdminSearch')?.value || '').trim().toLocaleLowerCase();
+  const inactiveWasOpen = document.getElementById('inactiveUsersDropdown')?.open || false;
+  const filtered = usersAdminUsers.filter(user => {
+    if (!search) return true;
+    return [user.username, user.companyCode, user.companyName]
+      .some(value => String(value || '').toLocaleLowerCase().includes(search));
+  });
+  const sorted = isSuperAdminUser() ? sortedUsersAdmin(filtered) : filtered;
+  const activeUsers = sorted.filter(user => user.isActive);
+  const inactiveUsers = sorted.filter(user => !user.isActive);
+  const inactiveTotal = usersAdminUsers.filter(user => !user.isActive).length;
+  const inactiveLabel = search && inactiveUsers.length !== inactiveTotal
+    ? `Inactive Users (${inactiveUsers.length} of ${inactiveTotal})`
+    : `Inactive Users (${inactiveTotal})`;
+
+  const activeMarkup = activeUsers.length
+    ? `<div class="users-admin-table-scroll"><table class="table">${usersAdminTableHeader()}<tbody>${activeUsers.map(usersAdminRowMarkup).join('')}</tbody></table></div>`
+    : `<p class="users-admin-empty">${search ? 'No active users match your search.' : 'No active users found.'}</p>`;
+  const inactiveMarkup = inactiveUsers.length
+    ? `<div class="users-admin-table-scroll"><table class="table">${usersAdminTableHeader()}<tbody>${inactiveUsers.map((user, index) => usersAdminRowMarkup(user, activeUsers.length + index)).join('')}</tbody></table></div>`
+    : `<p class="users-admin-empty">${search ? 'No inactive users match your search.' : 'No inactive users.'}</p>`;
+
+  container.innerHTML = `
+    ${activeMarkup}
+    <details id="inactiveUsersDropdown" class="inactive-users-dropdown" ${(inactiveWasOpen || (search && inactiveUsers.length)) ? 'open' : ''}>
+      <summary>${inactiveLabel}</summary>
+      <div class="inactive-users-content">${inactiveMarkup}</div>
+    </details>
+  `;
+}
+
 async function loadUsersAdmin() {
   const container = document.getElementById('users-admin-table-container');
   if (!container) return;
 
   ensureUserAdminStyles();
-
   container.innerHTML = '<p style="text-align:center;color:#666;padding:30px;">Loading users...</p>';
 
   try {
@@ -4627,118 +4884,11 @@ async function loadUsersAdmin() {
       if (newUserCompany) {
         newUserCompany.innerHTML = companyOptionsMarkup(currentUser?.company?.code || '');
       }
-      const deleteCompany = document.getElementById('userDeleteCompanyCode');
-      if (deleteCompany) {
-        deleteCompany.innerHTML = companyOptionsMarkup('');
-      }
     }
 
     const res = await apiCall('/api/users');
-    const users = res.data || [];
-
-    if (users.length === 0) {
-      container.innerHTML = '<p style="text-align:center;color:#666;padding:30px;">No users found.</p>';
-      return;
-    }
-
-    let html = `
-      <table class="table">
-        <thead>
-          <tr>
-            <th>Username</th>
-            <th>Admin</th>
-            ${isSuperAdminUser() ? '<th>Company</th>' : ''}
-            ${isSuperAdminUser() ? '<th>Super</th>' : ''}
-            <th>Active</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-    `;
-
-    users.forEach((user, index) => {
-      const rowId = `userrow-${index}`;
-      const encodedOriginalUsername = encodeURIComponent(user.username);
-      const isSelf = currentUser && currentUser.username === user.username;
-      const protectedSuperUser = user.isSuperAdmin && !isSuperAdminUser() && !isSelf;
-
-      html += `
-        <tr>
-          <td>
-            <input
-              type="text"
-              id="username-${rowId}"
-              class="form-input user-admin-username-input"
-              value="${escapeHtmlAttr(user.username)}"
-              ${protectedSuperUser ? 'disabled' : ''}
-            >
-            ${isSelf ? '<span style="font-size:11px;color:#666;margin-left:6px;">(you)</span>' : ''}
-          </td>
-
-          <td>
-            <label class="user-admin-switch">
-              <input
-                type="checkbox"
-                id="admin-${rowId}"
-                ${user.isAdmin ? 'checked' : ''}
-                ${protectedSuperUser ? 'disabled' : ''}
-              >
-              <span class="user-admin-switch-slider"></span>
-              <span class="user-admin-switch-text">Admin</span>
-            </label>
-          </td>
-
-          ${isSuperAdminUser() ? `
-            <td>
-              <select id="company-${rowId}" class="form-input">
-                ${companyOptionsMarkup(user.companyCode || currentUser?.company?.code || '')}
-              </select>
-            </td>
-          ` : ''}
-
-          ${isSuperAdminUser() ? `
-            <td>
-              <label class="user-admin-switch">
-                <input
-                  type="checkbox"
-                  id="super-${rowId}"
-                  ${user.isSuperAdmin ? 'checked' : ''}
-                >
-                <span class="user-admin-switch-slider"></span>
-                <span class="user-admin-switch-text">Super</span>
-              </label>
-            </td>
-          ` : ''}
-
-          <td>
-            <label class="user-admin-switch">
-              <input
-                type="checkbox"
-                id="active-${rowId}"
-                ${user.isActive ? 'checked' : ''}
-                ${protectedSuperUser ? 'disabled' : ''}
-              >
-              <span class="user-admin-switch-slider"></span>
-              <span class="user-admin-switch-text">Active</span>
-            </label>
-          </td>
-
-          <td>
-            <button class="btn btn-primary btn-sm" onclick="saveUserAdmin('${encodedOriginalUsername}', '${rowId}')">Save</button>
-            <button class="btn btn-warning btn-sm" onclick="openResetPasswordModal('${encodedOriginalUsername}')">Reset Password</button>
-            <button class="btn btn-danger btn-sm" onclick="deleteUserAdmin('${encodedOriginalUsername}')" ${(isSelf || protectedSuperUser) ? 'disabled title="This account cannot be deleted here"' : ''}>Delete</button>
-          </td>
-        </tr>
-      `;
-    });
-
-    html += `
-        </tbody>
-      </table>
-    `;
-
-    container.innerHTML = html;
-
+    usersAdminUsers = res.data || [];
+    renderUsersAdminTables();
   } catch (error) {
     container.innerHTML = `<p style="color:red;text-align:center;padding:30px;">Failed to load users: ${escapeHtml(error.message)}</p>`;
   }
@@ -4820,20 +4970,40 @@ async function createCompanyFromUsersAdmin() {
       if (input) input.value = '';
     });
 
-    await fetchCompanies(true);
-    const newUserCompany = document.getElementById('newUserCompanyCode');
-    if (newUserCompany) {
-      newUserCompany.innerHTML = companyOptionsMarkup(currentUser?.company?.code || '');
-    }
-    const deleteCompany = document.getElementById('userDeleteCompanyCode');
-    if (deleteCompany) {
-      deleteCompany.innerHTML = companyOptionsMarkup('');
-    }
-
+    closeModal('createCompanyModal');
     showNotification('success', 'Company created');
-    await loadUsersAdmin();
+    await loadCompaniesAdmin();
+    if (document.getElementById('users-section')) {
+      await loadUsersAdmin();
+    }
   } catch (error) {
     showNotification('error', `Failed to create company: ${error.message}`);
+  }
+}
+
+async function editCompanyFromUsersAdmin() {
+  const code = document.getElementById('userEditCompanyCode')?.value || '';
+  const name = document.getElementById('userEditCompanyName')?.value.trim() || '';
+
+  if (!code) {
+    showNotification('warning', 'Choose a company first');
+    return;
+  }
+  if (!name) {
+    showNotification('warning', 'Company name is required');
+    return;
+  }
+
+  try {
+    await apiCall(`/api/companies/${encodeURIComponent(code)}`, 'PUT', { name });
+    closeModal('editCompanyModal');
+    showNotification('success', 'Company updated');
+    await loadCompaniesAdmin();
+    if (document.getElementById('users-section')) {
+      await loadUsersAdmin();
+    }
+  } catch (error) {
+    showNotification('error', `Failed to update company: ${error.message}`);
   }
 }
 
@@ -5079,6 +5249,98 @@ function ensureUserAdminStyles() {
     .user-admin-username-input {
       max-width: 220px;
       min-width: 160px;
+    }
+
+    .users-admin-toolbar,
+    .users-admin-toolbar-actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .users-admin-toolbar {
+      margin-bottom: 15px;
+    }
+
+    .users-admin-search {
+      min-width: min(320px, 70vw);
+    }
+
+    .users-admin-sort {
+      appearance: none;
+      border: 0;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+      font-weight: inherit;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 0;
+    }
+
+    .users-admin-sort:hover,
+    .users-admin-sort:focus-visible {
+      color: #485fc7;
+    }
+
+    .users-admin-table-scroll {
+      overflow-x: auto;
+    }
+
+    .users-admin-actions {
+      white-space: nowrap;
+    }
+
+    .user-admin-last-online {
+      white-space: nowrap;
+      color: #475467;
+      font-size: 13px;
+    }
+
+    .users-admin-empty {
+      text-align: center;
+      color: #667085;
+      padding: 30px;
+      margin: 0;
+    }
+
+    .inactive-users-dropdown {
+      margin-top: 20px;
+      border: 1px solid #dfe3e8;
+      border-radius: 8px;
+      overflow: hidden;
+      background: #fafbfc;
+    }
+
+    .inactive-users-dropdown > summary {
+      cursor: pointer;
+      padding: 14px 16px;
+      font-weight: 600;
+      color: #475467;
+      user-select: none;
+    }
+
+    .inactive-users-dropdown[open] > summary {
+      border-bottom: 1px solid #dfe3e8;
+    }
+
+    .inactive-users-content {
+      background: #fff;
+    }
+
+    .inactive-users-content .table {
+      margin-bottom: 0;
+    }
+
+    @media (max-width: 640px) {
+      .users-admin-toolbar-actions,
+      .users-admin-search {
+        width: 100%;
+      }
     }
   `;
 

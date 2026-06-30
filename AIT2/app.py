@@ -4684,7 +4684,9 @@ def login():
                 session['user'] = username
                 if _is_super_admin_username(username) and not getattr(user, 'is_admin', False):
                     user.is_admin = True
-                    data_manager.save_users()
+                user.last_online = datetime.now().astimezone().isoformat(timespec='seconds')
+                data_manager.save_users()
+                if not app.config.get('TESTING'):
                     _reload_users_for_all_company_managers()
                 session['is_admin'] = user.is_admin
                 session['is_super_admin'] = _is_super_admin_username(username)
@@ -4943,6 +4945,41 @@ def create_company():
     except Exception as e:
         logger.error(f"Error creating company: {e}", exc_info=True)
         return jsonify({'error': 'Failed to create company'}), 500
+
+
+@app.route('/api/companies/<path:company_code>', methods=['PUT'])
+@require_super_admin
+def update_company(company_code):
+    """Super admin: update a company's display name."""
+    try:
+        code = _normalise_company_code(unquote_plus(company_code))
+        data = request.get_json() or {}
+        name = str(data.get('name') or '').strip()
+        registry = _load_company_registry()
+
+        if not code or code not in registry['companies']:
+            return jsonify({'error': 'Company not found'}), 404
+
+        if not name:
+            return jsonify({'error': 'Company name is required'}), 400
+
+        record = registry['companies'][code]
+        old_name = record.get('name') or code
+        record['name'] = name
+        registry['companies'][code] = record
+        _save_company_registry(registry)
+
+        mark_realtime_change('company-management', {'companyCode': code, 'updated': True})
+        log_action(f"Updated company {code} name from {old_name} to {name}")
+
+        return jsonify({
+            'success': True,
+            'message': 'Company updated successfully',
+            'data': _company_payload(code)
+        })
+    except Exception as e:
+        logger.error(f"Error updating company {company_code}: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to update company'}), 500
 
 
 @app.route('/api/companies/<path:company_code>', methods=['DELETE'])
@@ -5445,6 +5482,7 @@ def get_users():
             'isAdmin': user.is_admin,
             'isSuperAdmin': _is_super_admin_username(user.username),
             'isActive': getattr(user, 'is_active', True),
+            'lastOnline': getattr(user, 'last_online', '-') or '-',
             'companyCode': company.get('code'),
             'companyName': company.get('name'),
         })
