@@ -11,11 +11,251 @@ let usersAdminUsers = [];
 let usersAdminSort = { key: 'name', direction: 'asc' };
 let departmentsLoaded = false;
 let selectedInventoryAssetIds = new Set();
+let expandedInventoryBulkDeploymentIds = new Set();
+let maintenanceFlaggedAssets = [];
 let __autoRefreshInFlight = false;
 let __realtimeRefreshQueued = false;
 let __realtimeRefreshTimer = null;
 let __realtimeFallbackTimer = null;
 let __realtimeSource = null;
+
+const VIRTUAL_TABLE_OVERSCAN = 8;
+const virtualTableStates = new Map();
+
+function ensureVirtualTableStyles() {
+  if (document.getElementById('virtual-table-styles')) return;
+
+  const style = document.createElement('style');
+  style.id = 'virtual-table-styles';
+  style.textContent = `
+    .virtual-table-scroll {
+      max-height: none;
+      overflow: auto;
+      position: relative;
+      overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .virtual-table-scroll thead th {
+      background: #f8f9fa;
+      position: sticky;
+      top: 0;
+      z-index: 4;
+    }
+
+    .virtual-table-scroll .virtual-table-spacer,
+    .virtual-table-scroll .virtual-table-spacer:hover {
+      background: transparent !important;
+      box-shadow: none !important;
+      pointer-events: none;
+    }
+
+    .virtual-table-scroll .virtual-table-spacer td {
+      border: 0 !important;
+      box-sizing: border-box;
+      padding: 0 !important;
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+function destroyVirtualTable(stateKey) {
+  const previous = virtualTableStates.get(stateKey);
+  if (!previous) return;
+
+  if (previous.resizeObserver) previous.resizeObserver.disconnect();
+  if (previous.animationFrame) cancelAnimationFrame(previous.animationFrame);
+  if (previous.resizeHandler) {
+    window.removeEventListener('resize', previous.resizeHandler);
+  }
+  virtualTableStates.delete(stateKey);
+}
+
+function virtualTableIndexAtOffset(prefixHeights, offset) {
+  let low = 0;
+  let high = Math.max(0, prefixHeights.length - 1);
+
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if (prefixHeights[middle] <= offset) low = middle + 1;
+    else high = middle;
+  }
+
+  return Math.max(0, low - 1);
+}
+
+function renderVirtualTable({
+  stateKey,
+  container,
+  items,
+  columnCount,
+  headerHtml,
+  rowHtml,
+  tableClass = 'table',
+  estimatedRowHeight = 58
+}) {
+  if (!container) return;
+
+  ensureVirtualTableStyles();
+  destroyVirtualTable(stateKey);
+
+  const safeItems = Array.isArray(items) ? items : [];
+  const heights = new Array(safeItems.length).fill(estimatedRowHeight);
+
+  container.innerHTML = `
+    <div class="responsive-table-wrap virtual-table-scroll" data-virtual-table="${escapeHtmlAttr(stateKey)}">
+      <table class="${escapeHtmlAttr(tableClass)}" aria-rowcount="${safeItems.length + 1}">
+        <thead>${headerHtml}</thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  `;
+
+  const scrollContainer = container.querySelector('.virtual-table-scroll');
+  const tableBody = scrollContainer?.querySelector('tbody');
+  if (!scrollContainer || !tableBody) return;
+
+  const state = {
+    animationFrame: null,
+    endIndex: -1,
+    heights,
+    resizeObserver: null,
+    resizeHandler: null,
+    startIndex: -1
+  };
+
+  const fitScrollContainerToViewport = () => {
+    const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+    const containerRect = scrollContainer.getBoundingClientRect();
+    const containerTop = Math.max(0, containerRect.top);
+    const visualScale = scrollContainer.offsetWidth > 0
+      ? Math.max(0.1, containerRect.width / scrollContainer.offsetWidth)
+      : 1;
+    const availableHeight = Math.floor(
+      (viewportHeight - containerTop - 20) / visualScale
+    );
+    const minimumHeight = Math.min(
+      240,
+      Math.max(160, (viewportHeight - 40) / visualScale)
+    );
+    const targetHeight = Math.max(minimumHeight, availableHeight);
+
+    if (Math.abs(scrollContainer.clientHeight - targetHeight) > 1) {
+      scrollContainer.style.height = `${targetHeight}px`;
+    }
+  };
+
+  const scheduleRender = (force = false) => {
+    if (state.animationFrame) cancelAnimationFrame(state.animationFrame);
+    state.animationFrame = requestAnimationFrame(() => {
+      state.animationFrame = null;
+      renderWindow(force);
+    });
+  };
+
+  const measureRenderedRows = () => {
+    let changed = false;
+
+    tableBody.querySelectorAll('tr[data-virtual-index]').forEach(row => {
+      const index = Number(row.dataset.virtualIndex);
+      const measuredHeight = row.getBoundingClientRect().height;
+      if (
+        Number.isInteger(index) &&
+        index >= 0 &&
+        index < state.heights.length &&
+        measuredHeight > 0 &&
+        Math.abs(state.heights[index] - measuredHeight) > 0.5
+      ) {
+        state.heights[index] = measuredHeight;
+        changed = true;
+      }
+    });
+
+    if (changed) scheduleRender(true);
+    return changed;
+  };
+
+  function renderWindow(force = false) {
+    if (!safeItems.length) {
+      tableBody.innerHTML = '';
+      return;
+    }
+
+    const prefixHeights = new Array(state.heights.length + 1);
+    prefixHeights[0] = 0;
+    for (let index = 0; index < state.heights.length; index += 1) {
+      prefixHeights[index + 1] = prefixHeights[index] + state.heights[index];
+    }
+
+    const viewportHeight = Math.max(scrollContainer.clientHeight, 480);
+    const startIndex = Math.max(
+      0,
+      virtualTableIndexAtOffset(prefixHeights, scrollContainer.scrollTop) - VIRTUAL_TABLE_OVERSCAN
+    );
+    const endIndex = Math.min(
+      safeItems.length,
+      virtualTableIndexAtOffset(
+        prefixHeights,
+        scrollContainer.scrollTop + viewportHeight
+      ) + VIRTUAL_TABLE_OVERSCAN + 1
+    );
+
+    if (!force && startIndex === state.startIndex && endIndex === state.endIndex) {
+      return;
+    }
+
+    state.startIndex = startIndex;
+    state.endIndex = endIndex;
+
+    const topHeight = prefixHeights[startIndex];
+    const bottomHeight = prefixHeights[safeItems.length] - prefixHeights[endIndex];
+    const renderedRows = [];
+
+    for (let index = startIndex; index < endIndex; index += 1) {
+      const markup = rowHtml(safeItems[index], index);
+      renderedRows.push(
+        markup.replace(
+          /<tr\b/,
+          `<tr data-virtual-index="${index}" aria-rowindex="${index + 2}"`
+        )
+      );
+    }
+
+    tableBody.innerHTML = `
+      <tr class="virtual-table-spacer" aria-hidden="true">
+        <td colspan="${columnCount}" style="height:${topHeight}px"></td>
+      </tr>
+      ${renderedRows.join('')}
+      <tr class="virtual-table-spacer" aria-hidden="true">
+        <td colspan="${columnCount}" style="height:${bottomHeight}px"></td>
+      </tr>
+    `;
+
+    requestAnimationFrame(measureRenderedRows);
+  }
+
+  scrollContainer.addEventListener('scroll', () => scheduleRender(false), { passive: true });
+  state.resizeHandler = () => {
+    fitScrollContainerToViewport();
+    scheduleRender(true);
+  };
+  window.addEventListener('resize', state.resizeHandler, { passive: true });
+
+  if (typeof ResizeObserver === 'function') {
+    state.resizeObserver = new ResizeObserver(() => {
+      fitScrollContainerToViewport();
+      const rowHeightsChanged = measureRenderedRows();
+      if (!rowHeightsChanged) scheduleRender(false);
+    });
+    state.resizeObserver.observe(scrollContainer);
+    state.resizeObserver.observe(tableBody);
+  }
+
+  virtualTableStates.set(stateKey, state);
+  fitScrollContainerToViewport();
+  renderWindow(true);
+  requestAnimationFrame(() => scheduleRender(true));
+}
 
 const REALTIME_CLIENT_ID = (() => {
   try {
@@ -6336,6 +6576,11 @@ function bulkDeploymentDateText(deployment) {
   return `${startDate} - ${endDate}`;
 }
 
+function setInventoryBulkDeploymentExpanded(encodedAssetId, expanded) {
+  if (expanded) expandedInventoryBulkDeploymentIds.add(encodedAssetId);
+  else expandedInventoryBulkDeploymentIds.delete(encodedAssetId);
+}
+
 function bulkDeploymentDetailsHtml(asset) {
   if (!asset?.isBulk || !Array.isArray(asset.bulkDeployments)) return '';
 
@@ -6352,9 +6597,15 @@ function bulkDeploymentDetailsHtml(asset) {
     0,
     Number(asset.deployedQuantity ?? deployments.reduce((sum, item) => sum + item.quantity, 0)) || 0
   );
+  const encodedAssetId = encodeURIComponent(getAssetIdentifierForApi(asset));
+  const openAttribute = expandedInventoryBulkDeploymentIds.has(encodedAssetId) ? ' open' : '';
 
   return `
-    <details class="bulk-deployment-details">
+    <details
+      class="bulk-deployment-details"
+      ontoggle="setInventoryBulkDeploymentExpanded('${escapeHtmlAttr(encodedAssetId)}', this.open)"
+      ${openAttribute}
+    >
       <summary>${escapeHtml(String(deployedTotal))} deployed</summary>
       <div class="bulk-deployment-menu" role="list">
         ${deployments.map((deployment) => {
@@ -6546,138 +6797,113 @@ function openAssetDetailsModal(encodedAssetId) {
   openModal('assetDetailsModal');
 }
 
+function inventoryVirtualRowHtml(asset, isAdmin) {
+  const encodedAssetId = encodeURIComponent(getAssetIdentifierForApi(asset));
+  const assetIdentifier = inventoryAssetIdentifier(asset);
+  const description = asset.description || "";
+  const quantityHtml = asset.isBulk
+    ? `${escapeHtml(String(asset.availableQuantity ?? asset.quantity ?? 1))}/${escapeHtml(String(asset.quantity ?? 1))}${bulkDeploymentDetailsHtml(asset)}`
+    : '1';
+  const selectionCellHtml = isAdmin
+    ? `<td class="inventory-select-cell">
+         <input
+           type="checkbox"
+           class="inventory-row-select"
+           data-asset-id="${escapeHtmlAttr(assetIdentifier)}"
+           ${selectedInventoryAssetIds.has(assetIdentifier) ? 'checked' : ''}
+           onchange="toggleInventoryAssetSelection(this.dataset.assetId, this.checked)"
+           aria-label="Select ${escapeHtmlAttr(assetIdentifier || 'asset')}"
+         >
+       </td>`
+    : '';
+
+  return `
+    <tr>
+      ${selectionCellHtml}
+      <td class="asset-id-cell">
+        <button type="button" class="asset-id-link" onclick="openAssetDetailsModal('${encodedAssetId}')" title="View asset details">
+          ${asset.isBulk ? '<span class="asset-badge status-available">Bulk Item</span>' : escapeHtml(asset.id)}
+        </button>
+      </td>
+      <td>${escapeHtml(asset.brand || "")}</td>
+      <td>${escapeHtml(asset.model || "")}</td>
+      <td class="asset-description-cell">
+        ${description
+          ? `<span class="asset-description-text">${escapeHtml(description)}</span>`
+          : `<span class="asset-description-empty">—</span>`}
+      </td>
+      <td>${asset.isBulk ? '—' : escapeHtml(asset.serial || "N/A")}</td>
+      <td class="${asset.isBulk ? 'bulk-quantity-cell' : ''}">${quantityHtml}</td>
+      <td class="asset-purchase-date-cell">${escapeHtml(formatAssetPurchaseDate(asset.dateOfPurchase || asset.purchaseDate || ''))}</td>
+      <td class="asset-audit-date-cell">${escapeHtml(formatAssetAuditDateTime(asset.dateAdded || ''))}</td>
+      <td class="asset-audit-date-cell">${escapeHtml(formatAssetAuditDateTime(asset.dateModified || ''))}</td>
+      <td>${departmentBadgeHtml(asset.department)}</td>
+      <td>${statusBadgeHtml(asset.status || 'available')}</td>
+      <td>${escapeHtml(asset.location || "Store")}</td>
+      <td>${assetFlagBadgesHtml(asset)}</td>
+      <td class="inventory-actions-cell">
+        <button class="btn btn-primary btn-sm" onclick="viewMaintenanceLog('${encodedAssetId}')" title="View maintenance log">
+          View Log
+        </button>
+        ${isAdmin
+          ? `<button class="btn btn-warning btn-sm" onclick="openEditAssetModal('${encodedAssetId}')" title="Edit asset attributes">Edit</button>
+             <button class="btn btn-danger btn-sm" onclick="openDeleteAssetModal('${encodedAssetId}')" title="Delete asset">Delete</button>`
+          : ''}
+      </td>
+    </tr>
+  `;
+}
+
 function displayInventoryTable(assetsToShow) {
   ensureInventoryTableStyles();
 
   const container = document.getElementById("inventory-table-container");
+  if (!container) return;
 
   if (assetsToShow.length === 0) {
+    destroyVirtualTable('inventory');
     container.innerHTML =
       '<p style="text-align: center; color: #666; padding: 40px;">No assets found.</p>';
     updateInventorySelectionUi([]);
     return;
   }
 
-  const isAdmin = currentUser && currentUser.isAdmin;
+  const isAdmin = !!(currentUser && currentUser.isAdmin);
   const selectionHeaderHtml = isAdmin
     ? `<th class="inventory-select-cell">
          <input type="checkbox" id="inventory-select-all-current" onchange="toggleInventorySelectAll(this.checked)" title="Select all visible assets" aria-label="Select all visible assets">
        </th>`
     : '';
 
-  let tableHTML = `
-    <table class="table inventory-compact-table">
-      <thead>
-        <tr>
-          ${selectionHeaderHtml}
-          <th>Asset ID</th>
-          <th>Brand</th>
-          <th>Model</th>
-          <th>Description</th>
-          <th>Serial</th>
-          <th>Qty</th>
-          <th>Purchased</th>
-          <th>Added</th>
-          <th>Modified</th>
-          <th>Department</th>
-          <th>Status</th>
-          <th>Location</th>
-          <th>Flags</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-  `;
-
-  assetsToShow.forEach((asset) => {
-    const encodedAssetId = encodeURIComponent(getAssetIdentifierForApi(asset));
-    const assetIdentifier = inventoryAssetIdentifier(asset);
-    const description = asset.description || "";
-    const quantityHtml = asset.isBulk
-      ? `${escapeHtml(String(asset.availableQuantity ?? asset.quantity ?? 1))}/${escapeHtml(String(asset.quantity ?? 1))}${bulkDeploymentDetailsHtml(asset)}`
-      : '1';
-    const selectionCellHtml = isAdmin
-      ? `<td class="inventory-select-cell">
-           <input
-             type="checkbox"
-             class="inventory-row-select"
-             data-asset-id="${escapeHtmlAttr(assetIdentifier)}"
-             ${selectedInventoryAssetIds.has(assetIdentifier) ? 'checked' : ''}
-             onchange="toggleInventoryAssetSelection(this.dataset.assetId, this.checked)"
-             aria-label="Select ${escapeHtmlAttr(assetIdentifier || 'asset')}"
-           >
-         </td>`
-      : '';
-
-    tableHTML += `
+  renderVirtualTable({
+    stateKey: 'inventory',
+    container,
+    items: assetsToShow,
+    columnCount: isAdmin ? 15 : 14,
+    tableClass: 'table inventory-compact-table',
+    estimatedRowHeight: 64,
+    headerHtml: `
       <tr>
-        ${selectionCellHtml}
-        <td class="asset-id-cell">
-          <button type="button" class="asset-id-link" onclick="openAssetDetailsModal('${encodedAssetId}')" title="View asset details">
-            ${asset.isBulk ? '<span class="asset-badge status-available">Bulk Item</span>' : escapeHtml(asset.id)}
-          </button>
-        </td>
-        <td>${escapeHtml(asset.brand || "")}</td>
-        <td>${escapeHtml(asset.model || "")}</td>
-
-        <td class="asset-description-cell">
-          ${
-            description
-              ? `<span class="asset-description-text">${escapeHtml(description)}</span>`
-              : `<span class="asset-description-empty">—</span>`
-          }
-        </td>
-
-        <td>${asset.isBulk ? '—' : escapeHtml(asset.serial || "N/A")}</td>
-
-        <td class="${asset.isBulk ? 'bulk-quantity-cell' : ''}">${quantityHtml}</td>
-
-        <td class="asset-purchase-date-cell">${escapeHtml(formatAssetPurchaseDate(asset.dateOfPurchase || asset.purchaseDate || ''))}</td>
-
-        <td class="asset-audit-date-cell">${escapeHtml(formatAssetAuditDateTime(asset.dateAdded || ''))}</td>
-
-        <td class="asset-audit-date-cell">${escapeHtml(formatAssetAuditDateTime(asset.dateModified || ''))}</td>
-
-        <td>
-          ${departmentBadgeHtml(asset.department)}
-        </td>
-
-        <td>
-          ${statusBadgeHtml(asset.status || 'available')}
-        </td>
-
-        <td>${escapeHtml(asset.location || "Store")}</td>
-
-        <td>
-          ${assetFlagBadgesHtml(asset)}
-        </td>
-
-        <td class="inventory-actions-cell">
-          <button class="btn btn-primary btn-sm" onclick="viewMaintenanceLog('${encodedAssetId}')" title="View maintenance log">
-            View Log
-          </button>
-
-          ${
-            isAdmin
-              ? `<button class="btn btn-warning btn-sm" onclick="openEditAssetModal('${encodedAssetId}')" title="Edit asset attributes">
-                   Edit
-                 </button>
-                 <button class="btn btn-danger btn-sm" onclick="openDeleteAssetModal('${encodedAssetId}')" title="Delete asset">
-                   Delete
-                 </button>`
-              : ''
-          }
-        </td>
+        ${selectionHeaderHtml}
+        <th>Asset ID</th>
+        <th>Brand</th>
+        <th>Model</th>
+        <th>Description</th>
+        <th>Serial</th>
+        <th>Qty</th>
+        <th>Purchased</th>
+        <th>Added</th>
+        <th>Modified</th>
+        <th>Department</th>
+        <th>Status</th>
+        <th>Location</th>
+        <th>Flags</th>
+        <th>Actions</th>
       </tr>
-    `;
+    `,
+    rowHtml: asset => inventoryVirtualRowHtml(asset, isAdmin)
   });
 
-  tableHTML += `
-      </tbody>
-    </table>
-  `;
-
-  container.innerHTML = `<div class="responsive-table-wrap">${tableHTML}</div>`;
   updateInventorySelectionUi(assetsToShow);
 }
 
@@ -12874,55 +13100,57 @@ async function loadMaintenanceAssets() {
   }
 }
 
+function maintenanceVirtualRowHtml(asset) {
+  const assetId = getAssetIdentifierForApi(asset);
+  const displayId = assetMaintenanceDisplayId(asset);
+  const lastMaintenance = getLastAddedMaintenanceLog(asset)?.date || "Never";
+
+  return `
+    <tr>
+      <td>${escapeHtml(displayId)}${asset.isBulk ? ' <span class="asset-badge status-available">Bulk Item</span>' : ''}</td>
+      <td>${escapeHtml(asset.brand || '')}</td>
+      <td>${escapeHtml(asset.model || '')}</td>
+      <td><span class="asset-badge status-${escapeHtmlAttr(asset.status || 'available')}">${escapeHtml(asset.status || 'available')}</span></td>
+      <td>${escapeHtml(asset.location || "Store")}</td>
+      <td>${escapeHtml(lastMaintenance)}</td>
+      <td>
+        <button class="btn btn-primary" onclick="viewMaintenanceLog('${escapeJs(assetId)}')">View Log</button>
+      </td>
+    </tr>
+  `;
+}
+
 function displayMaintenanceAssets(assetsToShow) {
   const container = document.getElementById("maintenance-assets");
+  if (!container) return;
 
   if (assetsToShow.length === 0) {
+    destroyVirtualTable('maintenance-all');
     container.innerHTML =
       '<p style="text-align: center; color: #666; padding: 40px;">No assets found.</p>';
     return;
   }
 
-  let tableHTML = `
-        <table class="table">
-            <thead>
-                <tr>
-                    <th>Asset ID</th>
-                    <th>Brand</th>
-                    <th>Model</th>
-                    <th>Status</th>
-                    <th>Location</th>
-                    <th>Last Maintenance</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-    `;
-
-  sortAssetsByLastAddedMaintenanceLog(assetsToShow).forEach((asset) => {
-    const assetId = getAssetIdentifierForApi(asset);
-    const displayId = assetMaintenanceDisplayId(asset);
-    const lastMaintenance = getLastAddedMaintenanceLog(asset)?.date || "Never";
-
-    tableHTML += `
-            <tr>
-                <td>${escapeHtml(displayId)}${asset.isBulk ? ' <span class="asset-badge status-available">Bulk Item</span>' : ''}</td>
-                <td>${asset.brand}</td>
-                <td>${asset.model}</td>
-                <td><span class="asset-badge status-${asset.status}">${
-      asset.status
-    }</span></td>
-                <td>${asset.location || "Store"}</td>
-                <td>${lastMaintenance}</td>
-                <td>
-                    <button class="btn btn-primary" onclick="viewMaintenanceLog('${escapeJs(assetId)}')">View Log</button>
-                </td>
-            </tr>
-        `;
+  const sortedAssets = sortAssetsByLastAddedMaintenanceLog([...assetsToShow]);
+  renderVirtualTable({
+    stateKey: 'maintenance-all',
+    container,
+    items: sortedAssets,
+    columnCount: 7,
+    estimatedRowHeight: 58,
+    headerHtml: `
+      <tr>
+        <th>Asset ID</th>
+        <th>Brand</th>
+        <th>Model</th>
+        <th>Status</th>
+        <th>Location</th>
+        <th>Last Maintenance</th>
+        <th>Actions</th>
+      </tr>
+    `,
+    rowHtml: maintenanceVirtualRowHtml
   });
-
-  tableHTML += "</tbody></table>";
-  container.innerHTML = tableHTML;
 }
 
 let assetCheckState = {
@@ -16682,7 +16910,7 @@ function switchMaintenanceTab(tabName) {
 async function loadOOCAssets() {
   try {
     const response = await apiCall("/api/assets");
-    const oocAndMissingAssets = response.data.filter(asset =>
+    maintenanceFlaggedAssets = response.data.filter(asset =>
       asset.isOOC ||
       asset.isMissing ||
       asset.isDegraded ||
@@ -16695,7 +16923,7 @@ async function loadOOCAssets() {
       ))
     );
     
-    displayOOCAssets(oocAndMissingAssets);
+    filterOOCAssets();
     
     // Set up search functionality
     const searchInput = document.getElementById("ooc-search");
@@ -16705,90 +16933,88 @@ async function loadOOCAssets() {
     }
     
   } catch (error) {
+    console.error("Error loading flagged assets:", error);
     document.getElementById("ooc-assets-list").innerHTML =
       '<p style="color: red; text-align: center;">Error loading flagged assets</p>';
   }
 }
 
+function flaggedMaintenanceVirtualRowHtml(asset) {
+  const assetId = getAssetIdentifierForApi(asset);
+  const displayId = assetMaintenanceDisplayId(asset);
+  const statusHtml = assetFlagBadgesHtml(asset);
+  const lastMaintenance = getLastAddedMaintenanceLog(asset);
+  const lastFlagged = getLastFlaggedMaintenanceLog(asset);
+  const lastFlaggedStatus = lastFlagged?.status
+    ? lastFlagged.status.toUpperCase()
+    : '';
+
+  return `
+    <tr
+      class="ooc-asset-item"
+      data-asset-id="${escapeHtmlAttr(assetId)}"
+      role="button"
+      tabindex="0"
+      title="View maintenance log"
+      onclick="viewMaintenanceLog('${escapeJs(assetId)}')"
+      onkeydown="if(event.target === this && (event.key === 'Enter' || event.key === ' ')){event.preventDefault();viewMaintenanceLog('${escapeJs(assetId)}');}"
+      style="cursor:pointer;"
+    >
+      <td style="font-weight:600;">
+        ${escapeHtml(displayId)}
+        ${asset.isBulk ? ' <span class="asset-badge status-available">Bulk Item</span>' : ''}
+      </td>
+      <td>${escapeHtml(`${asset.brand || ''} ${asset.model || ''}`.trim())}</td>
+      <td>${statusHtml}</td>
+      <td>${escapeHtml(asset.location || 'Store')}</td>
+      <td>${escapeHtml(lastMaintenance?.date || 'Never')}</td>
+      <td style="max-width:300px;white-space:normal;overflow-wrap:anywhere;">
+        ${lastFlagged
+          ? `${escapeHtml(lastFlagged.record.description || 'No reason provided')} <span style="color:#666;font-size:11px;">(${escapeHtml(lastFlaggedStatus)})</span>`
+          : '—'}
+      </td>
+      <td>
+        <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); openFlaggedAssetLogEntry('${escapeJs(assetId)}')" style="padding: 4px 8px; font-size: 11px;">
+          Add Log
+        </button>
+      </td>
+    </tr>
+  `;
+}
+
 function displayOOCAssets(oocAssets) {
   const container = document.getElementById("ooc-assets-list");
+  if (!container) return;
 
   if (oocAssets.length === 0) {
-    container.innerHTML =
-      '<p style="text-align: center; color: #666; padding: 40px;">No assets are currently marked as OOC, Missing, Degraded, or Decommissioned.</p>';
+    destroyVirtualTable('maintenance-flagged');
+    const hasSearch = !!document.getElementById('ooc-search')?.value.trim();
+    container.innerHTML = hasSearch
+      ? '<p style="text-align: center; color: #666; padding: 40px;">No flagged assets match this search.</p>'
+      : '<p style="text-align: center; color: #666; padding: 40px;">No assets are currently marked as OOC, Missing, Degraded, or Decommissioned.</p>';
     return;
   }
 
-  let tableHTML = `
-    <div class="table-responsive">
-      <table class="table">
-        <thead>
-          <tr>
-            <th>Asset ID</th>
-            <th>Brand & Model</th>
-            <th>Status</th>
-            <th>Location</th>
-            <th>Last Maintenance</th>
-            <th>Flagged Reason</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-  `;
-
-  sortAssetsByLastAddedMaintenanceLog(oocAssets).forEach(asset => {
-    const assetId = getAssetIdentifierForApi(asset);
-    const displayId = assetMaintenanceDisplayId(asset);
-    const statusHtml = assetFlagBadgesHtml(asset);
-    const lastMaintenance = getLastAddedMaintenanceLog(asset);
-    const lastFlagged = getLastFlaggedMaintenanceLog(asset);
-    const lastFlaggedStatus = lastFlagged?.status
-      ? lastFlagged.status.toUpperCase()
-      : '';
-    
-    tableHTML += `
-      <tr
-        class="ooc-asset-item"
-        data-asset-id="${escapeHtmlAttribute(assetId)}"
-        role="button"
-        tabindex="0"
-        title="View maintenance log"
-        onclick="viewMaintenanceLog('${escapeJs(assetId)}')"
-        onkeydown="if(event.target === this && (event.key === 'Enter' || event.key === ' ')){event.preventDefault();viewMaintenanceLog('${escapeJs(assetId)}');}"
-        style="cursor:pointer;"
-      >
-        <td style="font-weight:600;">
-          ${escapeHtml(displayId)}
-          ${asset.isBulk ? ' <span class="asset-badge status-available">Bulk Item</span>' : ''}
-        </td>
-
-        <td>${escapeHtml(`${asset.brand || ''} ${asset.model || ''}`.trim())}</td>
-        <td>
-          ${statusHtml}
-        </td>
-        <td>${escapeHtml(asset.location || 'Store')}</td>
-        <td>${escapeHtml(lastMaintenance?.date || 'Never')}</td>
-        <td style="max-width:300px;white-space:normal;overflow-wrap:anywhere;">
-          ${lastFlagged
-            ? `${escapeHtml(lastFlagged.record.description || 'No reason provided')} <span style="color:#666;font-size:11px;">(${escapeHtml(lastFlaggedStatus)})</span>`
-            : '—'}
-        </td>
-        <td>
-          <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); openFlaggedAssetLogEntry('${escapeJs(assetId)}')" style="padding: 4px 8px; font-size: 11px;">
-            Add Log
-          </button>
-        </td>
+  const sortedAssets = sortAssetsByLastAddedMaintenanceLog([...oocAssets]);
+  renderVirtualTable({
+    stateKey: 'maintenance-flagged',
+    container,
+    items: sortedAssets,
+    columnCount: 7,
+    estimatedRowHeight: 62,
+    headerHtml: `
+      <tr>
+        <th>Asset ID</th>
+        <th>Brand & Model</th>
+        <th>Status</th>
+        <th>Location</th>
+        <th>Last Maintenance</th>
+        <th>Flagged Reason</th>
+        <th>Actions</th>
       </tr>
-    `;
+    `,
+    rowHtml: flaggedMaintenanceVirtualRowHtml
   });
-
-  tableHTML += `
-        </tbody>
-      </table>
-    </div>
-  `;
-  
-  container.innerHTML = tableHTML;
 }
 
 
@@ -17714,6 +17940,7 @@ window.returnSpecificAssetNew = returnSpecificAssetNew;
 window.selectAssetForMaintenance = selectAssetForMaintenance;
 window.removeAssetFromMaintenance = removeAssetFromMaintenance;
 window.openFlaggedAssetLogEntry = openFlaggedAssetLogEntry;
+window.displayOOCAssets = displayOOCAssets;
 window.openBulkMaintenanceFaultModal = openBulkMaintenanceFaultModal;
 window.closeBulkMaintenanceFaultModal = closeBulkMaintenanceFaultModal;
 window.openBulkMaintenanceFaultEditModal = openBulkMaintenanceFaultEditModal;
@@ -17948,19 +18175,29 @@ async function updateCustomAssetQuantity(eventId, oldAssetId, assetName, assetTy
 // Filter OOC assets (for search functionality)
 function filterOOCAssets() {
   const searchInput = document.getElementById('ooc-search');
-  if (!searchInput) return;
-  
-  const searchTerm = searchInput.value.toLowerCase().trim();
-  const assetRows = document.querySelectorAll('#ooc-assets-list tbody tr');
-  
-  assetRows.forEach(row => {
-    const text = row.textContent.toLowerCase();
-    if (text.includes(searchTerm)) {
-      row.style.display = '';
-    } else {
-      row.style.display = 'none';
-    }
+  const searchTerm = searchInput?.value.toLowerCase().trim() || '';
+
+  const filteredAssets = maintenanceFlaggedAssets.filter(asset => {
+    if (!searchTerm) return true;
+
+    const lastMaintenance = getLastAddedMaintenanceLog(asset);
+    const lastFlagged = getLastFlaggedMaintenanceLog(asset);
+    const searchableText = [
+      getAssetIdentifierForApi(asset),
+      assetMaintenanceDisplayId(asset),
+      asset.brand,
+      asset.model,
+      asset.status,
+      asset.location,
+      lastMaintenance?.date,
+      lastFlagged?.status,
+      lastFlagged?.record?.description
+    ].filter(Boolean).join(' ').toLowerCase();
+
+    return searchableText.includes(searchTerm);
   });
+
+  window.displayOOCAssets(filteredAssets);
 }
 
 
