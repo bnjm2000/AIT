@@ -291,6 +291,10 @@ class PostgresDataManager(DataManager):
             'containerId': container.container_id,
             'assetIds': list(container.asset_ids or []),
             'serialNumber': getattr(container, 'serial_number', '') or '',
+            'maintenanceLogs': [
+                normalize_maintenance_log(log)
+                for log in (getattr(container, 'maintenance_logs', []) or [])
+            ],
         }
 
     def _event_data(self, event):
@@ -435,6 +439,7 @@ class PostgresDataManager(DataManager):
                         container_id,
                         list(data.get('assetIds') or []),
                         data.get('serialNumber', ''),
+                        data.get('maintenanceLogs') or [],
                     )
                     containers[container_id] = container
                     snapshots[container_id] = _fingerprint(

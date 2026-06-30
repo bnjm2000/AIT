@@ -121,10 +121,11 @@ class InventoryItem:
 
 
 class Container:
-    def __init__(self, container_id, asset_ids, serial_number=''):
+    def __init__(self, container_id, asset_ids, serial_number='', maintenance_logs=None):
         self.container_id = container_id
         self.asset_ids = asset_ids
         self.serial_number = serial_number or ''
+        self.maintenance_logs = maintenance_logs if maintenance_logs is not None else []
 
 
 class Event:

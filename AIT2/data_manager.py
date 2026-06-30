@@ -434,6 +434,7 @@ class DataManager:
             'eventLogs': 0,
             'events': 0,
             'maintenanceLogs': 0,
+            'containerMaintenanceLogs': 0,
             'assetChangeHistory': 0,
             'assets': 0,
         }
@@ -530,6 +531,24 @@ class DataManager:
 
         if inventory_changed:
             self.save_inventory()
+
+        containers_changed = False
+        for container in self.containers.values():
+            container_changed = False
+            updated_logs = []
+            for log in getattr(container, 'maintenance_logs', []) or []:
+                record = normalize_maintenance_log(log)
+                if record.get('user', '') == old_username:
+                    record['user'] = new_username
+                    container_changed = True
+                    counts['containerMaintenanceLogs'] += 1
+                updated_logs.append(record)
+            if container_changed:
+                container.maintenance_logs = updated_logs
+                containers_changed = True
+
+        if containers_changed:
+            self.save_containers()
 
         return counts
 
@@ -663,8 +682,14 @@ class DataManager:
                 asset_ids = row[1].split('|') if len(row) > 1 and row[1] else []
                 asset_ids = [clean_csv_cell(a) for a in asset_ids if clean_csv_cell(a)]
                 serial_number = row[2] if len(row) > 2 else ''
+                maintenance_logs = load_maintenance_logs(row[3] if len(row) > 3 else '')
                 if container_id:
-                    self.containers[container_id] = Container(container_id, asset_ids, serial_number)
+                    self.containers[container_id] = Container(
+                        container_id,
+                        asset_ids,
+                        serial_number,
+                        maintenance_logs,
+                    )
         finally:
             f.close()
 
@@ -676,7 +701,8 @@ class DataManager:
                 writer.writerow([
                     container.container_id,
                     '|'.join(container.asset_ids),
-                    getattr(container, 'serial_number', '')
+                    getattr(container, 'serial_number', ''),
+                    dump_maintenance_logs(getattr(container, 'maintenance_logs', [])),
                 ])
 
     # ---------------- Events ----------------

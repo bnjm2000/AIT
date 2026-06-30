@@ -406,6 +406,7 @@ function parseMaintenanceLogDateForPermission(dateStr) {
 }
 
 function canCurrentUserModifyMaintenanceLog(log) {
+  if (isContainerMaintenanceLog(log)) return false;
   if (isAdminUser()) return true;
   if (!currentUser || !log) return false;
   if (String(log.user || '') !== String(currentUser.username || '')) return false;
@@ -8420,6 +8421,7 @@ function renderContainerCards(containerList) {
 
     const jsId = String(container.id).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     const serialNumber = getContainerSerialNumber(container);
+    const maintenanceCount = getMaintenanceLogRecords(container).length;
 
     return `
       <div class="container-card-modern">
@@ -8436,6 +8438,7 @@ function renderContainerCards(containerList) {
 
         <div class="container-meta-row">
           ${deptPills || '<span class="container-meta-pill">No assets</span>'}
+          <span class="container-meta-pill">${maintenanceCount} maintenance log${maintenanceCount === 1 ? '' : 's'}</span>
         </div>
 
         <div class="container-preview-list">
@@ -8443,6 +8446,7 @@ function renderContainerCards(containerList) {
         </div>
 
         <div class="container-card-actions">
+          <button class="btn btn-success btn-sm" onclick="openContainerMaintenanceModal('${jsId}')">Log Maintenance</button>
           <button class="btn btn-secondary btn-sm" onclick="viewContainer('${jsId}')">View</button>
           <button class="btn btn-primary btn-sm" onclick="editContainer('${jsId}')">Edit</button>
         </div>
@@ -8497,6 +8501,185 @@ function renderContainerAssetsTable(assetIds) {
       </table>
     </div>
   `;
+}
+
+function renderContainerMaintenanceHistory(container) {
+  const records = getMaintenanceLogRecords(container)
+    .map((log, index) => ({ ...log, originalIndex: index }))
+    .sort((a, b) => maintenanceLogDateSortValue(b.date) - maintenanceLogDateSortValue(a.date));
+
+  if (!records.length) {
+    return `
+      <div class="container-panel white" style="margin-top:16px;">
+        <div class="container-panel-title"><span>Maintenance History</span></div>
+        <div style="padding:18px;text-align:center;color:#666;">No maintenance has been logged through this container yet.</div>
+      </div>
+    `;
+  }
+
+  const rows = records.map(log => `
+    <tr>
+      <td>${escapeHtml(log.date || '')}</td>
+      <td>${escapeHtml(log.user || '')}</td>
+      <td>${maintenanceLogTypeBadgeHtml(log.type)}</td>
+      <td style="min-width:240px;">${escapeHtml(log.description || '')}</td>
+      <td>${maintenanceMediaLinksHtml(log.media)}</td>
+      <td>${maintenanceCostDisplayHtml(log.cost, '<span style="color:#999;">—</span>')}</td>
+    </tr>
+  `).join('');
+
+  return `
+    <div class="container-panel white" style="margin-top:16px;">
+      <div class="container-panel-title">
+        <span>Maintenance History</span>
+        <span class="container-count-pill">${records.length} log${records.length === 1 ? '' : 's'}</span>
+      </div>
+      <div class="container-assets-table-wrap">
+        <table class="container-assets-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>User</th>
+              <th>Type</th>
+              <th>Description</th>
+              <th>Media</th>
+              <th>Cost</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+function closeContainerMaintenanceModal() {
+  document.getElementById('containerMaintenanceModal')?.remove();
+}
+
+async function openContainerMaintenanceModal(containerId) {
+  try {
+    const container = await getContainerById(containerId, true);
+    if (!container) {
+      showNotification('error', `Container ${containerId} not found`);
+      return;
+    }
+
+    closeContainerMaintenanceModal();
+    const now = new Date();
+    const localDate = new Date(now.getTime() - (now.getTimezoneOffset() * 60000))
+      .toISOString()
+      .slice(0, 10);
+
+    document.body.insertAdjacentHTML('beforeend', `
+      <div id="containerMaintenanceModal" class="modal" style="display:flex;align-items:center;justify-content:center;">
+        <div class="modal-content" style="max-width:720px;width:94%;max-height:94vh;overflow:auto;">
+          <div class="modal-header">
+            <h3 class="modal-title">Log Maintenance — ${escapeHtml(container.id)}</h3>
+            <button type="button" class="close-btn" onclick="closeContainerMaintenanceModal()">&times;</button>
+          </div>
+          <form id="containerMaintenanceForm">
+            <div style="padding:12px 14px;margin-bottom:16px;border-radius:10px;background:#eef4ff;color:#294f88;">
+              This entry will be added to this container and all <strong>${(container.assetIds || []).length}</strong>
+              assets currently inside it. Each asset will retain the entry even if it is removed later.
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="containerMaintenanceType">Maintenance Log Type</label>
+              ${maintenanceLogTypeSelectHtml('containerMaintenanceType', DEFAULT_MAINTENANCE_LOG_TYPE)}
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="containerMaintenanceEntry">Maintenance Log Entry</label>
+              <textarea id="containerMaintenanceEntry" class="form-input" rows="5" required placeholder="Describe the maintenance performed on the container and its assets..."></textarea>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="containerMaintenanceMedia">Photos / Videos (optional)</label>
+              <input id="containerMaintenanceMedia" type="file" class="form-input" accept="image/*,video/*,.jpg,.jpeg,.png,.mp4,.mov" multiple>
+              <div id="containerMaintenanceMediaList" class="maintenance-media-selection"></div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;">
+              <div class="form-group">
+                <label class="form-label" for="containerMaintenanceDate">Maintenance Date</label>
+                <input id="containerMaintenanceDate" type="date" class="form-input" value="${localDate}" required>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="containerMaintenanceCost">Cost (optional)</label>
+                <input id="containerMaintenanceCost" type="number" min="0" step="0.01" class="form-input" placeholder="0.00">
+              </div>
+            </div>
+
+            <div class="modal-actions" style="display:flex;justify-content:flex-end;gap:10px;margin-top:18px;">
+              <button type="button" class="btn btn-secondary" onclick="closeContainerMaintenanceModal()">Cancel</button>
+              <button type="submit" class="btn btn-success" id="containerMaintenanceSubmit">Log for Container</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    `);
+
+    const modal = document.getElementById('containerMaintenanceModal');
+    const form = document.getElementById('containerMaintenanceForm');
+    const mediaInput = document.getElementById('containerMaintenanceMedia');
+    mediaInput?.addEventListener('change', () => {
+      updateMaintenanceMediaSelection('containerMaintenanceMedia', 'containerMaintenanceMediaList');
+    });
+    modal?.addEventListener('click', event => {
+      if (event.target === modal) closeContainerMaintenanceModal();
+    });
+    enhanceModalAccessibility(modal);
+    focusModalStart(modal);
+
+    form?.addEventListener('submit', async event => {
+      event.preventDefault();
+      const submitButton = document.getElementById('containerMaintenanceSubmit');
+      const payload = {
+        logEntry: document.getElementById('containerMaintenanceEntry')?.value.trim() || '',
+        logType: document.getElementById('containerMaintenanceType')?.value || DEFAULT_MAINTENANCE_LOG_TYPE,
+        maintenanceDate: document.getElementById('containerMaintenanceDate')?.value || '',
+        cost: document.getElementById('containerMaintenanceCost')?.value.trim() || '',
+        requestId: (globalThis.crypto?.randomUUID?.() || `container-maintenance-${Date.now()}-${Math.random()}`),
+      };
+      if (!payload.logEntry || !payload.maintenanceDate) {
+        showNotification('warning', 'Date and maintenance log entry are required');
+        return;
+      }
+
+      if (submitButton) {
+        submitButton.disabled = true;
+        submitButton.textContent = 'Saving…';
+      }
+
+      try {
+        const requestData = maintenancePayloadToRequestData(payload, 'containerMaintenanceMedia');
+        const response = await apiCall(
+          `/api/containers/${encodeURIComponent(container.id)}/maintain`,
+          'POST',
+          requestData,
+        );
+        showNotification(
+          'success',
+          `Maintenance logged for container ${container.id} and ${response.assetCount || 0} asset(s)`,
+        );
+        closeContainerMaintenanceModal();
+
+        const assetsResponse = await apiCall('/api/assets');
+        if (assetsResponse?.success) assets = assetsResponse.data;
+        await refreshContainersCache(true);
+        await viewContainer(container.id);
+      } catch (error) {
+        showNotification('error', `Failed to log container maintenance: ${error.message}`);
+        if (submitButton) {
+          submitButton.disabled = false;
+          submitButton.textContent = 'Log for Container';
+        }
+      }
+    });
+  } catch (error) {
+    showNotification('error', `Failed to open container maintenance: ${error.message}`);
+  }
 }
 
 function makeContainerEditorHtml(mode, container = null) {
@@ -9138,6 +9321,7 @@ async function viewContainer(containerId) {
           </div>
 
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn btn-success" onclick="openContainerMaintenanceModal('${String(c.id).replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')">Log Maintenance</button>
             <button class="btn btn-primary" onclick="editContainer('${String(c.id).replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')">Edit Container</button>
             <button class="btn btn-secondary" onclick="closeModal('containerCrudModal')">Close</button>
           </div>
@@ -9149,6 +9333,7 @@ async function viewContainer(containerId) {
       </div>
 
       ${renderContainerAssetsTable(c.assetIds || [])}
+      ${renderContainerMaintenanceHistory(c)}
     `;
 
     openModal("containerCrudModal");
@@ -12977,6 +13162,24 @@ function getMaintenanceLogRecords(asset) {
     ? asset.maintenanceLogRecords
     : (Array.isArray(asset?.maintenanceLogs) ? asset.maintenanceLogs : []);
   return source.map(normalizeMaintenanceLogRecord);
+}
+
+function isContainerMaintenanceLog(log) {
+  const record = normalizeMaintenanceLogRecord(log);
+  return String(record.source?.kind || '').trim().toLowerCase() === 'container';
+}
+
+function maintenanceLogOriginBadgeHtml(log) {
+  const record = normalizeMaintenanceLogRecord(log);
+  if (!isContainerMaintenanceLog(record)) return '';
+
+  const containerId = String(record.source?.containerId || '').trim() || 'Container';
+  return `
+    <span
+      style="display:inline-block;margin-top:5px;padding:3px 7px;border-radius:999px;font-size:11px;font-weight:700;white-space:nowrap;background:#e8f1ff;color:#2457a6;border:1px solid #c9dcfb;"
+      title="This maintenance log was created through container ${escapeHtmlAttr(containerId)}"
+    >Container: ${escapeHtml(containerId)}</span>
+  `;
 }
 
 function maintenanceLogDateSortValue(dateValue) {
@@ -17483,6 +17686,9 @@ function showBulkMaintenanceLogModal(asset) {
   const assetId = getAssetIdentifierForApi(asset);
   const safeAssetId = String(assetId || '').replace(/[^a-zA-Z0-9]/g, '_');
   const rows = bulkMaintenanceLogbookRows(asset);
+  const containerRecords = getMaintenanceLogRecords(asset)
+    .filter(isContainerMaintenanceLog)
+    .sort((a, b) => maintenanceLogDateSortValue(b.date) - maintenanceLogDateSortValue(a.date));
   const totalQty = Math.max(1, Number(asset.quantity || 1) || 1);
   const availableQty = Math.max(0, Number(asset.availableQuantity ?? totalQty) || 0);
   const preparableQty = Math.max(0, Number(asset.preparableQuantity ?? availableQty) || 0);
@@ -17530,6 +17736,25 @@ function showBulkMaintenanceLogModal(asset) {
       </td>
     </tr>
   `;
+  const containerHistoryHtml = containerRecords.length ? `
+    <div style="margin-bottom:16px;border:1px solid #c9dcfb;border-radius:8px;background:#f8fbff;overflow:auto;max-height:190px;flex-shrink:0;">
+      <div style="padding:10px 12px;font-weight:800;color:#294f88;border-bottom:1px solid #dce8fb;">
+        Container-origin Maintenance
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <tbody>
+          ${containerRecords.map(log => `
+            <tr>
+              <td style="padding:9px;border-bottom:1px solid #e5edf8;white-space:nowrap;">${escapeHtml(log.date)}</td>
+              <td style="padding:9px;border-bottom:1px solid #e5edf8;">${maintenanceLogOriginBadgeHtml(log)}</td>
+              <td style="padding:9px;border-bottom:1px solid #e5edf8;">${escapeHtml(log.description)}</td>
+              <td style="padding:9px;border-bottom:1px solid #e5edf8;">${maintenanceMediaLinksHtml(log.media)}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  ` : '';
 
   const modalContent = `
     <div class="modal maintenance-log-modal" id="maintenanceLogModal" style="display:flex;align-items:center;justify-content:center;">
@@ -17549,6 +17774,7 @@ function showBulkMaintenanceLogModal(asset) {
               ${escapeHtml(String(oocQty))} OOC, ${escapeHtml(String(missingQty))} missing, and ${escapeHtml(String(degradedQty))} degraded unit${(oocQty + missingQty + degradedQty) === 1 ? '' : 's'} currently open.
             </div>
           </div>
+          ${containerHistoryHtml}
           <div style="flex:1;min-height:0;overflow:auto;border:1px solid #e9ecef;border-radius:8px;background:white;">
             <table style="width:100%;border-collapse:collapse;table-layout:fixed;">
               <thead style="position:sticky;top:0;background:#f8f9fa;z-index:2;">
@@ -17849,10 +18075,11 @@ function showMaintenanceLogModal(asset) {
       }
       
       const canEditThisLog = canCurrentUserModifyMaintenanceLog(log);
-      const canDeleteThisLog = isAdminUser();
+      const containerOrigin = isContainerMaintenanceLog(log);
+      const canDeleteThisLog = isAdminUser() && !containerOrigin;
       const descriptionAttrs = canEditThisLog
         ? `style="display: block; cursor: pointer;" onclick="editMaintenanceLog('${asset.id}', ${log.originalIndex}, '${logId}')" title="Edit this maintenance log"`
-        : `style="display: block; cursor: default;" title="Normal users can only edit their own logs within 7 days"`;
+        : `style="display: block; cursor: default;" title="${containerOrigin ? 'This historical log is managed through its container' : 'Normal users can only edit their own logs within 7 days'}"`;
       const deleteButtonHtml = canDeleteThisLog ? `
             <button 
               type="button"
@@ -17873,7 +18100,10 @@ function showMaintenanceLogModal(asset) {
           <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; vertical-align: top; font-weight: 500; text-align: center;">${displayNumber}</td>
           <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; vertical-align: top; font-size: 13px;">${log.date}</td>
           <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; vertical-align: top; font-size: 13px;">${escapeHtml(log.user)}</td>
-          <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; vertical-align: top; font-size: 13px;">${maintenanceLogTypeBadgeHtml(log.type)}</td>
+          <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; vertical-align: top; font-size: 13px;">
+            ${maintenanceLogTypeBadgeHtml(log.type)}
+            ${maintenanceLogOriginBadgeHtml(log)}
+          </td>
           <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; vertical-align: top;">
             <div id="${logId}_display" ${descriptionAttrs}>
               ${escapeHtml(log.description)}

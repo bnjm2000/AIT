@@ -1958,6 +1958,7 @@ def _asset_status_value(asset, assigned_assets=None):
 ASSET_CONDITION_STATUSES = ('ooc', 'missing', 'degraded', 'decommissioned')
 BULK_MAINTENANCE_FAULT_SOURCE = 'bulk_maintenance_fault'
 BULK_MAINTENANCE_RESOLUTION_SOURCE = 'bulk_maintenance_resolution'
+CONTAINER_MAINTENANCE_SOURCE = 'container'
 BULK_MAINTENANCE_STATUSES = ('ooc', 'missing', 'degraded')
 BULK_MAINTENANCE_UNAVAILABLE_STATUSES = ('ooc', 'missing')
 
@@ -3612,9 +3613,6 @@ def _maintenance_log_permission(asset, log_index, allow_admin=True):
     Normal users may only edit logs they wrote, and only within 7 days of the
     log date. Admins may edit/delete any maintenance log.
     """
-    if allow_admin and _current_user_is_admin():
-        return True, ''
-
     username = session.get('user')
     if not username:
         return False, 'Not authenticated'
@@ -3624,6 +3622,12 @@ def _maintenance_log_permission(asset, log_index, allow_admin=True):
         return False, 'Invalid log index'
 
     original_log = normalize_maintenance_log(logs[log_index])
+    if (original_log.get('source') or {}).get('kind') == CONTAINER_MAINTENANCE_SOURCE:
+        return False, 'Container maintenance logs are managed from the container history'
+
+    if allow_admin and _current_user_is_admin():
+        return True, ''
+
     original_user = original_log.get('user', '').strip()
 
     if original_user != username:
@@ -5681,13 +5685,17 @@ def update_user(username):
         if username_changed:
             if rename_counts is None:
                 rename_counts = {}
+            maintenance_reference_count = (
+                rename_counts.get('maintenanceLogs', 0)
+                + rename_counts.get('containerMaintenanceLogs', 0)
+            )
             log_action(
                 f"Renamed user {renamed_from} -> {renamed_to}; "
                 f"updated {rename_counts.get('systemLogs', 0)} system log(s), "
                 f"{rename_counts.get('eventLogs', 0)} event log(s), "
-                f"{rename_counts.get('maintenanceLogs', 0)} maintenance record(s)"
+                f"{maintenance_reference_count} maintenance record(s)"
             )
-            if rename_counts.get('maintenanceLogs', 0):
+            if maintenance_reference_count:
                 invalidate_cache()
         else:
             log_action(f"Updated user {user.username}")
@@ -6061,6 +6069,10 @@ def _cleanup_empty_maintenance_media_folder(path):
 def _delete_maintenance_media_files(log_entry):
     deleted = 0
     record = normalize_maintenance_log(log_entry)
+    if (record.get('source') or {}).get('kind') == CONTAINER_MAINTENANCE_SOURCE:
+        # Container media can be referenced by the container record and several
+        # propagated asset records. Deleting one asset must not break the rest.
+        return 0
     for media in record.get('media', []) or []:
         target_path = _maintenance_media_abs_path(media)
         if not target_path:
@@ -6169,6 +6181,13 @@ def _find_maintenance_media(media_id):
             for media in record.get('media', []) or []:
                 if str(media.get('id') or '').strip() == media_id:
                     return asset, record, media
+
+    for container in (data_manager.containers.values() if data_manager else []):
+        for log_entry in getattr(container, 'maintenance_logs', []) or []:
+            record = normalize_maintenance_log(log_entry)
+            for media in record.get('media', []) or []:
+                if str(media.get('id') or '').strip() == media_id:
+                    return container, record, media
 
     return None, None, None
 
@@ -7124,6 +7143,10 @@ def delete_maintenance_log(asset_id, log_index):
 
         # Get the log entry that will be deleted for logging purposes
         deleted_log = normalize_maintenance_log(asset.maintenance_logs[log_index])
+        if (deleted_log.get('source') or {}).get('kind') == CONTAINER_MAINTENANCE_SOURCE:
+            return jsonify({
+                'error': 'Container maintenance logs are retained as historical records and cannot be deleted from an individual asset'
+            }), 409
         deleted_description = deleted_log.get('description', '')
         
         # Remove the log entry
@@ -11780,12 +11803,22 @@ def _container_serial_number(container):
 
 def _container_response(container):
     serial_number = _container_serial_number(container)
+    maintenance_records = [
+        _maintenance_log_for_response(log)
+        for log in (getattr(container, 'maintenance_logs', []) or [])
+    ]
     return {
         'id': container.container_id,
         'serialNumber': serial_number,
         'serial': serial_number,
         'assetIds': container.asset_ids,
-        'assetCount': len(container.asset_ids)
+        'assetCount': len(container.asset_ids),
+        'maintenanceLogs': [
+            maintenance_log_to_display_string(log, include_changes=False)
+            for log in maintenance_records
+        ],
+        'maintenanceLogRecords': maintenance_records,
+        'maintenanceLogCount': len(maintenance_records),
     }
 
 
@@ -11915,6 +11948,112 @@ def containers_collection():
     except Exception as e:
         logger.error(f"Error in containers_collection: {e}")
         return jsonify({'error': 'Failed to process containers request'}), 500
+
+@app.route('/api/containers/<path:container_id>/maintain', methods=['POST'])
+@require_auth
+@with_inventory_action_lock
+def maintain_container(container_id):
+    """Create one container history record and copy it to every current asset."""
+    try:
+        lookup = unquote_plus(container_id).strip()
+        container = _find_container_by_lookup(lookup)
+        if not container:
+            return jsonify({'error': 'Container not found'}), 404
+
+        data = _maintenance_request_payload()
+        description = str(data.get('logEntry') or data.get('description') or '').strip()
+        if not description:
+            return jsonify({'error': 'Log entry is required'}), 400
+
+        log_type, log_type_error = _maintenance_log_type_for_request(data)
+        if log_type_error:
+            return jsonify({'error': log_type_error}), 400
+
+        current_assets = []
+        seen_asset_ids = set()
+        for asset_id in getattr(container, 'asset_ids', []) or []:
+            asset_id = str(asset_id or '').strip()
+            if asset_id and asset_id not in seen_asset_ids and asset_id in data_manager.inventory:
+                seen_asset_ids.add(asset_id)
+                current_assets.append(data_manager.inventory[asset_id])
+
+        if not current_assets:
+            return jsonify({'error': 'Container has no current assets to receive this maintenance log'}), 400
+
+        request_id = _maintenance_client_request_id(data)
+        if request_id:
+            for existing_log in getattr(container, 'maintenance_logs', []) or []:
+                existing_source = normalize_maintenance_log(existing_log).get('source') or {}
+                if existing_source.get('clientRequestId') == request_id:
+                    return jsonify({
+                        'success': True,
+                        'duplicate': True,
+                        'savedCount': 0,
+                        'assetCount': len(current_assets),
+                        'message': 'This container maintenance submission was already saved',
+                    })
+
+        log_id = make_maintenance_log_id()
+        source = {
+            'kind': CONTAINER_MAINTENANCE_SOURCE,
+            'containerId': container.container_id,
+            'containerLogId': log_id,
+            'assetCount': len(current_assets),
+        }
+        if request_id:
+            source['clientRequestId'] = request_id
+
+        entry = make_maintenance_log(
+            _maintenance_date_from_request(data, 'maintenanceDate', 'date'),
+            session['user'],
+            description,
+            [],
+            cost=str(data.get('cost') or data.get('maintenanceCost') or '').strip(),
+            log_type=log_type,
+            source=source,
+            log_id=log_id,
+        )
+
+        try:
+            media_records = _save_maintenance_media_files(
+                entry,
+                _uploaded_maintenance_media_files(),
+            )
+        except ValueError as exc:
+            return jsonify({'error': str(exc)}), 400
+        if media_records:
+            entry['media'] = media_records
+
+        container.maintenance_logs.append(normalize_maintenance_log(entry))
+        for asset in current_assets:
+            # Each asset owns a durable copy, so later membership changes do not
+            # alter its historical maintenance record.
+            asset.maintenance_logs.append(normalize_maintenance_log(entry))
+
+        data_manager.save_inventory()
+        data_manager.save_containers()
+        invalidate_cache()
+        log_action(
+            f"Maintenance logged through container {container.container_id} "
+            f"for {len(current_assets)} asset{'s' if len(current_assets) != 1 else ''}: {description}"
+        )
+
+        return jsonify({
+            'success': True,
+            'savedCount': 1,
+            'assetCount': len(current_assets),
+            'containerId': container.container_id,
+            'maintenanceLog': _maintenance_log_for_response(entry),
+        })
+    except Exception as exc:
+        logger.error(
+            "Error logging maintenance for container %s: %s",
+            container_id,
+            exc,
+            exc_info=True,
+        )
+        return jsonify({'error': f'Failed to log container maintenance: {str(exc)}'}), 500
+
 
 @app.route('/api/containers/<path:container_id>', methods=['GET', 'PUT', 'DELETE'])
 @require_auth
