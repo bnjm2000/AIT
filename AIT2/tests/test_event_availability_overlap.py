@@ -130,9 +130,39 @@ class EventAvailabilityOverlapTests(unittest.TestCase):
         self.assertEqual(regular['description'], '')
         self.assertEqual(regular['overlappingDemand'], 4)
         self.assertEqual(regular['available'], 2)
+        self.assertEqual(regular['overlappingEvents'], [{
+            'eventId': 101,
+            'eventName': 'Event 101',
+            'startDate': '2026/05/20',
+            'endDate': '2026/05/20',
+            'quantity': 4,
+        }])
         self.assertEqual(bulk['physical'], 6)
         self.assertEqual(bulk['overlappingDemand'], 4)
         self.assertEqual(bulk['available'], 2)
+        self.assertEqual(bulk['overlappingEvents'][0]['eventId'], 102)
+
+    def test_regular_ooc_asset_stays_in_total_but_is_not_available(self):
+        self.make_event(100)
+        self.data_manager.inventory['A#01'].is_ooc = True
+
+        regular = self.availability_entry(100, 'RegularModel', 'Regular item')
+
+        self.assertEqual(regular['physical'], 6)
+        self.assertEqual(regular['assetOOC'], 1)
+        self.assertEqual(regular['available'], 5)
+        self.assertEqual(regular['unavailable'], 1)
+
+    def test_regular_missing_asset_stays_in_total_but_is_not_available(self):
+        self.make_event(100)
+        self.data_manager.inventory['A#01'].is_missing = True
+
+        regular = self.availability_entry(100, 'RegularModel', 'Regular item')
+
+        self.assertEqual(regular['physical'], 6)
+        self.assertEqual(regular['assetMissing'], 1)
+        self.assertEqual(regular['available'], 5)
+        self.assertEqual(regular['unavailable'], 1)
 
     def test_prepare_dropdown_hides_assets_assigned_to_any_other_event(self):
         self.make_event(100)

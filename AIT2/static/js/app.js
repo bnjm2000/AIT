@@ -15114,19 +15114,92 @@ async function removeAssetFromEvent(eventId, assetId) {
 
 function modelAvailabilityLabel(available, requested, physical, overlap) {
   const availableQty = Math.max(0, Number(available || 0));
-  const requestedQty = Math.max(1, parseInt(requested, 10) || 1);
   const physicalQty = Math.max(0, Number(physical || 0));
-  const overlapQty = Math.max(0, Number(overlap || 0));
 
-  let label = requestedQty > 1
-    ? `${Math.min(availableQty, requestedQty)}/${requestedQty} available`
-    : `${availableQty}/${physicalQty || availableQty} available`;
+  // Availability describes the inventory pool, not the quantity currently
+  // typed into the Add field. Keep values such as 7/9 stable while editing.
+  return `${availableQty}/${physicalQty || availableQty} available`;
+}
 
-  if (overlapQty > 0) {
-    label += ` (${overlapQty} used on overlapping events)`;
+function modelAvailabilityReasonTooltip(available, physical, reasons = {}) {
+  const availableQty = Math.max(0, Number(available || 0));
+  const physicalQty = Math.max(0, Number(physical || 0));
+  if (availableQty >= physicalQty) return '';
+
+  const rows = [];
+  const addReason = (quantity, singular, plural = singular) => {
+    const qty = Math.max(0, Number(quantity || 0));
+    if (qty > 0) rows.push(`${qty} ${qty === 1 ? singular : plural}`);
+    return qty;
+  };
+
+  let explainedQuantity = 0;
+  explainedQuantity += addReason(reasons.assetOOC, 'asset is out of commission', 'assets are out of commission');
+  explainedQuantity += addReason(reasons.assetMissing, 'asset is missing', 'assets are missing');
+  explainedQuantity += addReason(
+    reasons.bulkMaintenanceOOC,
+    'bulk unit is out of commission',
+    'bulk units are out of commission'
+  );
+  explainedQuantity += addReason(
+    reasons.bulkMaintenanceMissing,
+    'bulk unit is missing',
+    'bulk units are missing'
+  );
+  explainedQuantity += addReason(
+    reasons.usedHere,
+    'asset is already requested for this event',
+    'assets are already requested for this event'
+  );
+
+  const overlappingEvents = Array.isArray(reasons.overlapEvents) ? reasons.overlapEvents : [];
+  const overlapQty = Math.max(0, Number(reasons.overlap || 0));
+  if (overlappingEvents.length > 0) {
+    overlappingEvents.forEach(event => {
+      const eventName = String(event?.eventName || `Event ${event?.eventId || ''}`).trim();
+      const startDate = String(event?.startDate || '').trim();
+      const endDate = String(event?.endDate || '').trim();
+      const dateRange = startDate && endDate
+        ? (startDate === endDate ? startDate : `${startDate} - ${endDate}`)
+        : (startDate || endDate);
+      const quantity = Math.max(0, Number(event?.quantity || 0));
+      rows.push(
+        `${quantity} ${quantity === 1 ? 'asset is' : 'assets are'} used by ${eventName}` +
+        `${dateRange ? ` (${dateRange})` : ''}`
+      );
+    });
+    explainedQuantity += overlapQty;
+  } else {
+    explainedQuantity += addReason(
+      overlapQty,
+      'asset is used by an overlapping event',
+      'assets are used by overlapping events'
+    );
   }
 
-  return label;
+  const shortfall = Math.max(physicalQty - availableQty, 0);
+  if (explainedQuantity < shortfall) {
+    addReason(
+      shortfall - explainedQuantity,
+      'asset is unavailable for another reason',
+      'assets are unavailable for another reason'
+    );
+  }
+
+  return `Why ${availableQty}/${physicalQty} are available:\n- ${rows.join('\n- ')}`;
+}
+
+function modelAvailabilityLabelHtml(available, physical, reasonTooltip = '') {
+  const availableQty = Math.max(0, Number(available || 0));
+  const physicalQty = Math.max(0, Number(physical || 0));
+  const totalQty = physicalQty || availableQty;
+  const countText = `${availableQty}/${totalQty}`;
+
+  if (!reasonTooltip || availableQty >= totalQty) {
+    return `${escapeHtml(countText)} available`;
+  }
+
+  return `<span class="availability-count-hint" title="${escapeHtmlAttr(reasonTooltip)}" aria-label="${escapeHtmlAttr(reasonTooltip)}" tabindex="0" style="cursor: help; text-decoration: underline dotted; text-underline-offset: 2px;">${escapeHtml(countText)} available</span>`;
 }
 
 function updateModelAvailabilityLabel(qtyInputId) {
@@ -15136,8 +15209,12 @@ function updateModelAvailabilityLabel(qtyInputId) {
 
   const available = Number(label.dataset.available || 0);
   const physical = Number(label.dataset.physical || 0);
-  const overlap = Number(label.dataset.overlap || 0);
-  label.textContent = modelAvailabilityLabel(available, input.value, physical, overlap);
+  const reasonTooltip = decodeURIComponent(label.dataset.availabilityTooltip || '');
+  label.innerHTML = modelAvailabilityLabelHtml(
+    available,
+    physical,
+    reasonTooltip
+  );
 }
 
 function addAssetToEditModelGroup(modelGroups, asset, quantity = 1) {
@@ -15455,11 +15532,26 @@ function filterAvailableModels(searchTerm) {
         adjusted: (entry.available ?? 0),
         physical: (entry.physical ?? m.count),
         overlap: (entry.overlappingDemand ?? 0),
-        usedHere: (entry.usedInThisEvent ?? 0)
+        overlapEvents: (entry.overlappingEvents ?? []),
+        usedHere: (entry.usedInThisEvent ?? 0),
+        assetOOC: (entry.assetOOC ?? 0),
+        assetMissing: (entry.assetMissing ?? 0),
+        bulkMaintenanceOOC: (entry.bulkMaintenanceOOC ?? 0),
+        bulkMaintenanceMissing: (entry.bulkMaintenanceMissing ?? 0)
       };
     }
 
-    return { adjusted: m.count, physical: m.count, overlap: 0, usedHere: 0 };
+    return {
+      adjusted: m.count,
+      physical: m.count,
+      overlap: 0,
+      overlapEvents: [],
+      usedHere: 0,
+      assetOOC: 0,
+      assetMissing: 0,
+      bulkMaintenanceOOC: 0,
+      bulkMaintenanceMissing: 0
+    };
   };
 
   let html = '';
@@ -15512,17 +15604,23 @@ function filterAvailableModels(searchTerm) {
       model.description || ''
     );
 
-    const { adjusted, physical, overlap } = adjustedAvailFor(model);
+    const availability = adjustedAvailFor(model);
+    const { adjusted, physical } = availability;
     const displayCount = Math.max(0, adjusted);
     const color = adjusted < 1 ? '#dc3545' : '#28a745'; // RED if fewer than 1 remaining
-    const availabilityText = modelAvailabilityLabel(displayCount, 1, physical, overlap);
+    const reasonTooltip = modelAvailabilityReasonTooltip(displayCount, physical, availability);
+    const availabilityText = modelAvailabilityLabelHtml(
+      displayCount,
+      physical,
+      reasonTooltip
+    );
 
     html += `
       <div style="padding: 12px; border-bottom: 1px solid #f1f1f1; display: flex; justify-content: space-between; align-items: center;">
         <div style="flex: 1;">
           <div style="font-weight: 500; margin-bottom: 4px;">${model.brand} ${model.model}</div>
           <div style="color: #666; font-size: 13px; margin-bottom: 2px;">${model.description}</div>
-          <div id="${qtyInputId}-availability" data-available="${displayCount}" data-physical="${physical}" data-overlap="${overlap}" style="font-size: 12px; color: ${color};">${availabilityText}</div>
+          <div id="${qtyInputId}-availability" data-available="${displayCount}" data-physical="${physical}" data-availability-tooltip="${escapeHtmlAttr(encodeURIComponent(reasonTooltip))}" style="font-size: 12px; color: ${color};">${availabilityText}</div>
         </div>
         <div style="display: flex; align-items: center; gap: 10px;">
           <!-- The maximum stays bound to physical availability so adjusted counts below 1 can still be requested. -->

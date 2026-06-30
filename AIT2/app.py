@@ -6821,8 +6821,9 @@ def get_event_model_availability(event_id):
 
     Rules:
     - Group by department + brand + model. Description is display text only.
-    - Exclude Missing and decommissioned assets.
-    - Include OOC and Degraded assets as inventory because they may be fixed/usable by event day.
+    - Exclude decommissioned assets.
+    - Keep OOC and Missing assets in the physical total, but do not count them as available.
+    - Include Degraded assets as available because they can still be prepared with a warning.
     - Subtract current event's requested quantity.
     - Subtract overlapping events' requested quantity.
     - Still return rows with 0 availability so the frontend can show them.
@@ -6833,20 +6834,38 @@ def get_event_model_availability(event_id):
             return jsonify({'error': 'Event not found'}), 404
 
         physical_by_key = defaultdict(int)
+        asset_ooc_by_key = defaultdict(int)
+        asset_missing_by_key = defaultdict(int)
         maintenance_ooc_by_key = defaultdict(int)
         maintenance_missing_by_key = defaultdict(int)
         maintenance_degraded_by_key = defaultdict(int)
 
-        # Physical inventory: exclude Missing and decommissioned, include OOC and Degraded
+        # Physical inventory: exclude decommissioned assets. Missing and OOC
+        # units stay in the denominator so the UI can explain why the available
+        # count is lower than the total.
         for asset in data_manager.inventory.values():
             if not asset:
                 continue
 
-            if getattr(asset, 'is_missing', False) or _is_disposed(asset):
+            if _is_disposed(asset):
                 continue
 
             key = _asset_group_key(asset)
-            physical_by_key[key] += _asset_inventory_quantity(asset)
+            inventory_quantity = _asset_inventory_quantity(asset)
+            physical_by_key[key] += inventory_quantity
+
+            if getattr(asset, 'is_missing', False):
+                asset_missing_by_key[key] += inventory_quantity
+                # A whole-asset Missing flag already makes every bulk unit
+                # unavailable, so do not count its per-unit fault logs twice.
+                continue
+
+            if getattr(asset, 'is_ooc', False):
+                asset_ooc_by_key[key] += inventory_quantity
+                # A whole-asset OOC flag already makes every bulk unit
+                # unavailable, so do not count its per-unit fault logs twice.
+                continue
+
             if _is_bulk_asset(asset):
                 counts = _bulk_maintenance_quantity_counts(asset)
                 maintenance_ooc_by_key[key] += counts['ooc']
@@ -6865,6 +6884,7 @@ def get_event_model_availability(event_id):
 
         # Demand from overlapping events
         overlap_by_key = defaultdict(int)
+        overlap_events_by_key = defaultdict(list)
 
         my_start = getattr(event, 'start_date', '')
         my_end = getattr(event, 'end_date', '')
@@ -6882,7 +6902,16 @@ def get_event_model_availability(event_id):
                 continue
 
             for key, quantity in _event_reserved_quantities_by_key(other).items():
+                if quantity <= 0:
+                    continue
                 overlap_by_key[key] += quantity
+                overlap_events_by_key[key].append({
+                    'eventId': other.event_id,
+                    'eventName': getattr(other, 'name', '') or f'Event {other.event_id}',
+                    'startDate': _format_event_date_for_response(getattr(other, 'start_date', '')),
+                    'endDate': _format_event_date_for_response(getattr(other, 'end_date', '')),
+                    'quantity': quantity,
+                })
 
         result = []
 
@@ -6891,10 +6920,16 @@ def get_event_model_availability(event_id):
 
             used_here = used_here_by_key.get(key, 0)
             overlap = overlap_by_key.get(key, 0)
+            asset_ooc = asset_ooc_by_key.get(key, 0)
+            asset_missing = asset_missing_by_key.get(key, 0)
             maintenance_ooc = maintenance_ooc_by_key.get(key, 0)
             maintenance_missing = maintenance_missing_by_key.get(key, 0)
             maintenance_degraded = maintenance_degraded_by_key.get(key, 0)
-            available = max(physical - used_here - overlap - maintenance_ooc - maintenance_missing, 0)
+            available = max(
+                physical - used_here - overlap - asset_ooc - asset_missing -
+                maintenance_ooc - maintenance_missing,
+                0
+            )
             healthy = max(available - maintenance_degraded, 0)
             preparable = available
 
@@ -6907,10 +6942,16 @@ def get_event_model_availability(event_id):
                 'physicalGlobal': physical,
                 'usedInThisEvent': used_here,
                 'overlappingDemand': overlap,
-                'unavailable': used_here + overlap + maintenance_ooc + maintenance_missing,
+                'overlappingEvents': overlap_events_by_key.get(key, []),
+                'unavailable': (
+                    used_here + overlap + asset_ooc + asset_missing +
+                    maintenance_ooc + maintenance_missing
+                ),
                 'available': available,
                 'healthy': healthy,
                 'preparable': preparable,
+                'assetOOC': asset_ooc,
+                'assetMissing': asset_missing,
                 'bulkMaintenanceOOC': maintenance_ooc,
                 'bulkMaintenanceMissing': maintenance_missing,
                 'bulkMaintenanceDegraded': maintenance_degraded,
