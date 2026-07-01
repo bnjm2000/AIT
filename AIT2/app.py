@@ -683,6 +683,13 @@ def _get_company_data_manager(company_code=None):
         manager.setup_data_folder()
         manager.check_and_initialize_files()
         manager.load_all_data()
+        migrated_locations = manager.migrate_legacy_event_locations()
+        if migrated_locations:
+            logger.info(
+                "Migrated %s legacy event location(s) for company %s",
+                migrated_locations,
+                code,
+            )
         _ensure_super_admin_users(manager)
         _company_data_managers[code] = manager
         return manager
@@ -4240,7 +4247,7 @@ def _update_single_asset_event_model_references(event, old_group, new_group, qua
 
     return changed
 
-def validate_event_data(data):
+def validate_event_data(data, require_location=False):
     """Validate event data"""
     errors = []
 
@@ -4249,6 +4256,13 @@ def validate_event_data(data):
 
     if len(data.get('name', '')) > 100:
         errors.append('Event name must be less than 100 characters')
+
+    location = str(data.get('location') or '').strip()
+    tag = str(data.get('tag') or 'events').strip().lower()
+    if require_location and tag != 'dry hire' and not location:
+        errors.append('Location is required for events')
+    if len(location) > 200:
+        errors.append('Location must be less than 200 characters')
 
     try:
         start_date = datetime.strptime(data['startDate'], '%Y-%m-%d')
@@ -4259,6 +4273,42 @@ def validate_event_data(data):
         errors.append('Invalid date format')
 
     return errors
+
+
+def get_deployed_asset_quantity():
+    """Physical inventory prepared for events and not yet returned.
+
+    Regular assets are de-duplicated across events, bulk markers contribute
+    their prepared quantity, and custom/misc/loan rows are deliberately
+    excluded from this operational statistic.
+    """
+    manager = _current_data_manager_object()
+    if manager is None or not getattr(manager, 'events', None):
+        return 0
+
+    regular_asset_ids = set()
+    bulk_quantity = 0
+
+    for event in manager.events.values():
+        returned = set(getattr(event, 'returned_items', []) or [])
+        seen_bulk_refs = set()
+        for ref in getattr(event, 'actually_prepared', []) or []:
+            if not isinstance(ref, str) or not ref or ref in returned:
+                continue
+            if _is_custom_ref(ref) or ref.startswith('[MODEL]'):
+                continue
+
+            bulk = _parse_bulk_marker(ref)
+            if bulk:
+                if ref not in seen_bulk_refs:
+                    bulk_quantity += max(1, _safe_int(bulk.get('quantity'), 1))
+                    seen_bulk_refs.add(ref)
+                continue
+
+            if ref in getattr(manager, 'inventory', {}):
+                regular_asset_ids.add(ref)
+
+    return len(regular_asset_ids) + bulk_quantity
 
 def get_assigned_assets():
     """Get all assets currently assigned to events (with caching)"""
@@ -6340,6 +6390,7 @@ def get_events():
             events_data.append({
                 'id': event.event_id,
                 'name': event.name,
+                'location': getattr(event, 'location', '') or '',
                 'startDate': format_date_output(event.start_date),
                 'endDate': format_date_output(event.end_date),
                 'state': event.state,  # Keep original state, don't force update
@@ -6699,6 +6750,7 @@ def get_event(event_id):
         event_data = {
             'id': event.event_id,
             'name': event.name,
+            'location': getattr(event, 'location', '') or '',
             'startDate': format_date_output(event.start_date),
             'endDate': format_date_output(event.end_date),    
             'state': event.state,
@@ -7024,7 +7076,7 @@ def create_event():
         data = request.get_json()
 
         # Validate input data
-        errors = validate_event_data(data)
+        errors = validate_event_data(data, require_location=True)
         if errors:
             return jsonify({'success': False, 'errors': errors}), 400
 
@@ -7041,6 +7093,7 @@ def create_event():
         event = Event(
             event_id=event_id,
             name=data['name'].strip(),
+            location=str(data.get('location') or '').strip(),
             start_date=start_date,
             end_date=end_date,
             asset_models=[],
@@ -7087,6 +7140,8 @@ def update_event(event_id):
         old_name = event.name
         if 'name' in data:
             event.name = data['name'].strip()
+        if 'location' in data:
+            event.location = str(data.get('location') or '').strip()
         if 'startDate' in data:
             event.start_date = datetime.strptime(
                 data['startDate'], '%Y-%m-%d').strftime('%Y%m%d')
@@ -12216,11 +12271,10 @@ def get_stats():
         
         # Add error handling for get_assigned_assets
         try:
-            assigned_assets = get_assigned_assets()
-            deployed_assets = len(assigned_assets)
-            logger.info(f"Successfully got assigned assets count: {deployed_assets}")
+            deployed_assets = get_deployed_asset_quantity()
+            logger.info("Successfully got deployed physical asset quantity: %s", deployed_assets)
         except Exception as e:
-            logger.error(f"Error getting assigned assets: {e}")
+            logger.error("Error getting deployed physical asset quantity: %s", e)
             deployed_assets = 0
             
         missing_assets = sum(
@@ -12258,6 +12312,9 @@ def get_stats():
         stats_data = {
             'totalEvents': total_events,
             'activeEvents': active_events,
+            'overdueEvents': len(
+                [e for e in data_manager.events.values() if e.state == 'Overdue']
+            ),
             'totalAssets': total_assets,
             'deployedAssets': deployed_assets,
             'missingAssets': missing_assets,

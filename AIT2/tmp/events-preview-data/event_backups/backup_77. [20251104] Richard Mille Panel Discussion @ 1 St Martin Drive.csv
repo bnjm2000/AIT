@@ -1,0 +1,2 @@
+EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,Tag,ForceStateOverride
+77,Richard Mille Panel Discussion @ 1 St Martin Drive,20251104,20251104,[],"[""[MODEL]AX|Turbosound|IP1000|2|Powered Column Loudspeaker"", ""[MODEL]AX|Yamaha|DM3|1|Digital Mixer"", ""DM3#01""]","[""DM3#01""]",Overdue,[],[],events,False

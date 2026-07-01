@@ -1,0 +1,2 @@
+EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,Tag,ForceStateOverride
+47,Louis Vuitton Event @ Ngee Ann City,20250904,20250905,[],"[""[MODEL]AX|Turbosound|IP1000|5|Powered Column Loudspeaker"", ""[MODEL]AX|MiPro|MR-90|6|Interlink receiver"", ""[MODEL]AX|MiPro|MT-90A|1|Interlink Transmitter"", ""[MODEL]AX|Pioneer|DJM-900NXS2|1|4-channel pro-DJ mixer"", ""[MODEL]AX|Pioneer|CDJ3000|2|Professional DJ multi player (Black)"", ""[MODEL]AX|Yamaha|DXR10|2|Active 10\"" Speaker""]",[],Planning,[],[],events,False

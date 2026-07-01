@@ -23,7 +23,7 @@ INVENTORY_FIELDNAMES = [
     'MaintenanceLogs', 'DepartmentCode', 'DefaultLocation', 'CurrentLocation'
 ]
 EVENT_FIELDNAMES = [
-    'EventID', 'Name', 'StartDate', 'EndDate', 'AssetModels', 'PreparedItems',
+    'EventID', 'Name', 'Location', 'StartDate', 'EndDate', 'AssetModels', 'PreparedItems',
     'ReturnedItems', 'State', 'ActuallyPrepared', 'ExtraAssets', 'CustomCollected',
     'Tag', 'ForceStateOverride', 'EventLogs', 'Notes'
 ]
@@ -779,6 +779,7 @@ class DataManager:
                 event = Event(
                     event_id=event_id,
                     name=name,
+                    location=event_data.get('Location', ''),
                     start_date=start_date,
                     end_date=end_date,
                     asset_models=asset_models,
@@ -822,6 +823,7 @@ class DataManager:
         force_state_override = getattr(event, 'force_state_override', False)
         custom_collected = getattr(event, 'custom_collected', [])
         notes = getattr(event, 'notes', '')
+        location = getattr(event, 'location', '')
         event_logs = self.normalize_event_logs(getattr(event, 'event_logs', []))
         
         if not hasattr(event, 'prepared_items'):
@@ -856,6 +858,7 @@ class DataManager:
             row_data = {
                 'EventID': event.event_id,
                 'Name': event.name,
+                'Location': location,
                 'StartDate': event.start_date,
                 'EndDate': event.end_date,
                 'AssetModels': repr(event.asset_models),
@@ -881,7 +884,18 @@ class DataManager:
             self._move_event_folder(old_filename, filename)
         
         self.event_file_map[event.event_id] = filename
+        event._legacy_location_extracted = False
         logger.debug("Event %s saved successfully to %s", event.event_id, filename)
+
+    def migrate_legacy_event_locations(self):
+        """Persist locations extracted from legacy ``Name @ Location`` values."""
+        migrated = 0
+        for event in list(self.events.values()):
+            if not getattr(event, '_legacy_location_extracted', False):
+                continue
+            self.save_event(event)
+            migrated += 1
+        return migrated
 
     def delete_event_file(self, event_id):
         folder = self.get_event_folder(event_id)

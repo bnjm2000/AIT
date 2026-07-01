@@ -1,0 +1,2 @@
+EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,Tag,ForceStateOverride
+17,Hermes SS25 WRTW RDV Presentation @ Liat Towers,20250115,20250116,"[{'model_description': '[AX] Apple iPad (10th Generation)', 'quantity': 2}, {'model_description': '[AX] Yamaha MG12XU 12-Channel Analog Mixing Console with FX', 'quantity': 1}]","[""IPAD#01"", ""IPAD#03"", ""MG12XU#01""]","[""IPAD#01"", ""IPAD#03"", ""MG12XU#01""]",Closed,[],[],events,True

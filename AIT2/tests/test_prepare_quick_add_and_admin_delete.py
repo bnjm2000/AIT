@@ -166,6 +166,42 @@ class PrepareQuickAddAndAdminDeleteTests(unittest.TestCase):
         detail_asset = next(asset for asset in department_assets if asset['id'] == 'A#01')
         self.assertFalse(detail_asset.get('isExtra'))
 
+    def test_event_progress_totals_include_misc_quantity_with_model_requirements(self):
+        misc_marker = app_module._make_custom_marker(
+            'MISC',
+            'Cable ties',
+            3,
+            'AX',
+            '',
+        )
+        event = self.make_event(
+            event_id=111,
+            prepared=[
+                '[MODEL]AX|TestBrand|TestModel|1|Matching item',
+                misc_marker,
+            ],
+            actual=['A#01', misc_marker],
+            extra=[],
+        )
+        self.login_as('normal')
+
+        response = self.client.get('/api/events')
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        event_summary = next(
+            item for item in response.get_json()['data']
+            if item['id'] == event.event_id
+        )
+        self.assertEqual(event_summary['assetCount'], 4)
+        self.assertEqual(event_summary['preparedCount'], 4)
+
+        response = self.client.get(f'/api/events/{event.event_id}')
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        event_details = response.get_json()['data']
+        self.assertEqual(event_details['totalAssets'], 4)
+        self.assertEqual(event_details['totalPrepared'], 4)
+
     def test_removing_prepared_bulk_model_unprepares_deployment(self):
         self.data_manager.inventory['BULK-0001'] = self.make_asset(
             'BULK-0001',

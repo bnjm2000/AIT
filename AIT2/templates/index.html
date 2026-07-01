@@ -2921,6 +2921,619 @@
         }
       }
 
+      /* Events workflow overview */
+      .events-overview {
+        color: #111827;
+      }
+
+      .events-overview-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        margin-bottom: 18px;
+      }
+
+      .events-overview-header .content-title {
+        margin: 0;
+        white-space: nowrap;
+      }
+
+      .events-overview-controls {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      .events-search-control,
+      .events-control-button,
+      .events-sort-control {
+        min-height: 40px;
+        border: 1px solid #dbe1ea;
+        border-radius: 9px;
+        background: #fff;
+        color: #24324a;
+      }
+
+      .events-search-control {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 0 12px;
+        min-width: 210px;
+      }
+
+      .events-search-control input {
+        width: 100%;
+        min-width: 120px;
+        border: 0;
+        outline: 0;
+        background: transparent;
+        color: inherit;
+        font: inherit;
+      }
+
+      .events-control-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        padding: 0 14px;
+        cursor: pointer;
+        font-weight: 650;
+      }
+
+      .event-type-filter {
+        position: relative;
+      }
+
+      .event-type-filter-menu {
+        position: absolute;
+        top: calc(100% + 7px);
+        right: 0;
+        z-index: 80;
+        display: none;
+        min-width: 155px;
+        padding: 6px;
+        border: 1px solid #dbe1ea;
+        border-radius: 10px;
+        background: #fff;
+        box-shadow: 0 14px 32px rgba(15, 23, 42, 0.16);
+      }
+
+      .event-type-filter-menu.open {
+        display: grid;
+      }
+
+      .event-type-filter-menu button {
+        border: 0;
+        border-radius: 7px;
+        background: transparent;
+        color: #334155;
+        cursor: pointer;
+        padding: 9px 10px;
+        text-align: left;
+      }
+
+      .event-type-filter-menu button:hover,
+      .event-type-filter-menu button[aria-checked="true"] {
+        background: #eef2ff;
+        color: #4338ca;
+        font-weight: 700;
+      }
+
+      .events-sort-control {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding-left: 12px;
+        font-size: 13px;
+        font-weight: 650;
+      }
+
+      .events-sort-control select {
+        min-height: 38px;
+        border: 0;
+        outline: 0;
+        background: transparent;
+        color: #24324a;
+        cursor: pointer;
+        font: inherit;
+        padding: 0 8px 0 2px;
+      }
+
+      .events-add-button {
+        align-items: center;
+        gap: 7px;
+        min-height: 40px;
+        padding: 8px 15px;
+      }
+
+      .events-view-toggle {
+        display: inline-flex;
+        overflow: hidden;
+        border: 1px solid #dbe1ea;
+        border-radius: 9px;
+        background: #fff;
+      }
+
+      .events-view-toggle button {
+        width: 42px;
+        min-height: 40px;
+        border: 0;
+        border-right: 1px solid #e5e7eb;
+        background: #fff;
+        color: #475569;
+        cursor: pointer;
+        font-size: 18px;
+      }
+
+      .events-view-toggle button:last-child {
+        border-right: 0;
+      }
+
+      .events-view-toggle button.active {
+        background: #2563eb;
+        color: #fff;
+      }
+
+      .events-overview-stats {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 14px;
+        margin-bottom: 18px;
+      }
+
+      .events-summary-card {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        min-width: 0;
+        min-height: 106px;
+        padding: 17px;
+        border: 1px solid #e4e8ef;
+        border-radius: 13px;
+        background: #fff;
+        color: inherit;
+        box-shadow: 0 4px 13px rgba(15, 23, 42, 0.055);
+        text-align: left;
+      }
+
+      button.events-summary-card {
+        cursor: pointer;
+        font: inherit;
+      }
+
+      button.events-summary-card:hover {
+        border-color: #fca5a5;
+        transform: translateY(-1px);
+      }
+
+      .events-summary-icon {
+        display: grid;
+        place-items: center;
+        flex: 0 0 54px;
+        height: 54px;
+        border-radius: 50%;
+        font-size: 24px;
+        font-weight: 800;
+      }
+
+      .summary-total .events-summary-icon { background: #f1edff; color: #5b21b6; }
+      .summary-active .events-summary-icon { background: #fff1df; color: #ea580c; }
+      .summary-overdue .events-summary-icon { background: #ffe6e8; color: #dc2626; }
+      .summary-deployed .events-summary-icon { background: #e4f7f8; color: #078b99; }
+
+      .events-summary-number {
+        font-size: 1.8rem;
+        font-weight: 780;
+        line-height: 1;
+      }
+
+      .events-summary-label {
+        margin-top: 5px;
+        font-size: 13px;
+        font-weight: 750;
+      }
+
+      .events-summary-note {
+        margin-top: 4px;
+        color: #64748b;
+        font-size: 11px;
+      }
+
+      .events-state-filters {
+        display: flex;
+        gap: 9px;
+        overflow-x: auto;
+        padding: 1px 1px 9px;
+        margin-bottom: 9px;
+        scrollbar-width: thin;
+      }
+
+      .events-state-filters button {
+        flex: 0 0 auto;
+        min-height: 36px;
+        padding: 7px 14px;
+        border: 1px solid #dfe3ea;
+        border-radius: 9px;
+        background: #fff;
+        color: #334155;
+        cursor: pointer;
+        font-weight: 650;
+      }
+
+      .events-state-filters button.active {
+        border-color: #2563eb;
+        background: #2563eb;
+        color: #fff;
+      }
+
+      .events-state-filters [data-event-state="Added"]:not(.active) { color: #db2777; }
+      .events-state-filters [data-event-state="Planning"]:not(.active) { color: #6d28d9; }
+      .events-state-filters [data-event-state="Preparing"]:not(.active) { color: #0369a1; }
+      .events-state-filters [data-event-state="Ready"]:not(.active) { color: #15803d; }
+      .events-state-filters [data-event-state="Ongoing"]:not(.active) { color: #07818d; }
+      .events-state-filters [data-event-state="Returning"]:not(.active) { color: #ea580c; }
+      .events-state-filters [data-event-state="Overdue"]:not(.active) { color: #dc2626; }
+
+      .events-overview-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 15px;
+        margin-top: 8px;
+      }
+
+      .events-workflow-card {
+        --event-state: #64748b;
+        --event-soft: #f8fafc;
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        min-height: 292px;
+        overflow: visible;
+        border: 1.5px solid color-mix(in srgb, var(--event-state) 68%, white);
+        border-radius: 13px;
+        background: #fff;
+        box-shadow: 0 3px 11px rgba(15, 23, 42, 0.045);
+      }
+
+      .events-workflow-card.state-added { --event-state: #ec407a; --event-soft: #fff0f5; }
+      .events-workflow-card.state-planning { --event-state: #6d28d9; --event-soft: #f3efff; }
+      .events-workflow-card.state-preparing { --event-state: #0877e8; --event-soft: #edf6ff; }
+      .events-workflow-card.state-ready { --event-state: #16a34a; --event-soft: #edf9f0; }
+      .events-workflow-card.state-ongoing,
+      .events-workflow-card.state-last-day { --event-state: #0b97a4; --event-soft: #edfafa; }
+      .events-workflow-card.state-returning { --event-state: #f97316; --event-soft: #fff5ea; }
+      .events-workflow-card.state-overdue { --event-state: #ef3340; --event-soft: #fff0f1; }
+      .events-workflow-card.state-closed { --event-state: #64748b; --event-soft: #f1f5f9; }
+
+      .event-workflow-main {
+        display: flex;
+        flex: 1;
+        flex-direction: column;
+        padding: 15px 15px 10px;
+      }
+
+      .event-workflow-heading,
+      .event-workflow-meta,
+      .event-workflow-progress,
+      .event-workflow-footer {
+        display: flex;
+        align-items: center;
+      }
+
+      .event-workflow-heading {
+        justify-content: space-between;
+        gap: 10px;
+      }
+
+      .event-workflow-kicker {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        min-width: 0;
+        color: #334155;
+        font-size: 11px;
+        font-weight: 750;
+      }
+
+      .event-type-badge,
+      .event-workflow-state {
+        display: inline-flex;
+        align-items: center;
+        border-radius: 6px;
+        padding: 4px 8px;
+        font-size: 10px;
+        font-weight: 750;
+      }
+
+      .event-type-badge {
+        background: #f0edff;
+        color: #5535b8;
+      }
+
+      .event-type-badge.dry-hire {
+        background: #fff1e6;
+        color: #e65f00;
+      }
+
+      .event-workflow-state {
+        flex: 0 0 auto;
+        background: var(--event-soft);
+        color: var(--event-state);
+      }
+
+      .event-workflow-title {
+        margin: 8px 0 5px;
+        color: #111827;
+        font-size: 1.08rem;
+        font-weight: 760;
+        line-height: 1.25;
+        overflow-wrap: anywhere;
+      }
+
+      .event-workflow-meta {
+        flex-wrap: wrap;
+        gap: 7px 14px;
+        min-height: 20px;
+        color: #475569;
+        font-size: 11px;
+      }
+
+      .event-workflow-meta span {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+      }
+
+      .event-workflow-progress {
+        gap: 17px;
+        margin-top: 15px;
+      }
+
+      .event-progress-ring {
+        --progress: 0;
+        position: relative;
+        display: grid;
+        place-items: center;
+        flex: 0 0 70px;
+        height: 70px;
+        border-radius: 50%;
+        background: conic-gradient(var(--event-state) calc(var(--progress) * 1%), #e8edf3 0);
+        color: #111827;
+        font-size: 14px;
+        font-weight: 800;
+      }
+
+      .event-progress-ring::before {
+        position: absolute;
+        width: 52px;
+        height: 52px;
+        border-radius: 50%;
+        background: #fff;
+        content: "";
+      }
+
+      .event-progress-ring span {
+        position: relative;
+        z-index: 1;
+      }
+
+      .event-progress-summary {
+        flex: 0 0 78px;
+      }
+
+      .event-progress-value {
+        font-size: 1rem;
+        font-weight: 780;
+      }
+
+      .event-progress-label {
+        margin-top: 3px;
+        color: #475569;
+        font-size: 11px;
+      }
+
+      .event-department-progress {
+        display: grid;
+        flex: 1;
+        gap: 5px;
+        min-width: 0;
+      }
+
+      .event-department-row {
+        display: grid;
+        grid-template-columns: minmax(48px, 68px) minmax(35px, 1fr) auto;
+        align-items: center;
+        gap: 7px;
+        color: #334155;
+        font-size: 9px;
+      }
+
+      .event-department-track {
+        height: 4px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: #e8edf3;
+      }
+
+      .event-department-track span {
+        display: block;
+        height: 100%;
+        border-radius: inherit;
+        background: var(--event-state);
+      }
+
+      .event-workflow-notice {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 28px;
+        margin-top: auto;
+        padding: 6px 9px;
+        border-radius: 6px;
+        background: var(--event-soft);
+        color: var(--event-state);
+        font-size: 10px;
+        font-weight: 650;
+      }
+
+      .event-workflow-footer {
+        justify-content: space-between;
+        gap: 10px;
+        min-height: 56px;
+        padding: 9px 14px;
+        border-top: 1px solid #e9edf2;
+      }
+
+      .event-next-action {
+        min-width: 0;
+        color: #475569;
+        font-size: 10px;
+      }
+
+      .event-next-action strong {
+        display: block;
+        margin-bottom: 3px;
+        color: #334155;
+        font-size: 9px;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+      }
+
+      .event-card-controls {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        flex: 0 0 auto;
+      }
+
+      .event-primary-action {
+        min-height: 36px;
+        border: 0;
+        border-radius: 7px;
+        background: var(--event-state);
+        color: #fff;
+        cursor: pointer;
+        padding: 8px 13px;
+        font-size: 11px;
+        font-weight: 750;
+        white-space: nowrap;
+      }
+
+      .event-overflow-button {
+        width: 36px;
+        min-height: 36px;
+        border: 1px solid #dce2ea;
+        border-radius: 7px;
+        background: #fff;
+        color: #334155;
+        cursor: pointer;
+        font-size: 16px;
+      }
+
+      .event-card-menu {
+        position: absolute;
+        right: 0;
+        bottom: calc(100% + 7px);
+        z-index: 70;
+        display: none;
+        min-width: 145px;
+        padding: 6px;
+        border: 1px solid #dbe1ea;
+        border-radius: 9px;
+        background: #fff;
+        box-shadow: 0 14px 30px rgba(15, 23, 42, .17);
+      }
+
+      .event-card-menu.open {
+        display: grid;
+      }
+
+      .event-card-menu button {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        border: 0;
+        border-radius: 6px;
+        background: transparent;
+        color: #334155;
+        cursor: pointer;
+        padding: 8px 9px;
+        text-align: left;
+      }
+
+      .event-card-menu button:hover {
+        background: #f1f5f9;
+      }
+
+      .event-card-menu .danger {
+        color: #dc2626;
+      }
+
+      #events-section .event-list-table-wrap,
+      #calendar-container {
+        margin-top: 8px;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        background: #fff;
+        box-shadow: 0 3px 12px rgba(15, 23, 42, .045);
+      }
+
+      #calendar-container {
+        padding: 18px;
+      }
+
+      .event-list-location {
+        color: #64748b;
+        font-size: 11px;
+        margin-top: 3px;
+      }
+
+      @media (max-width: 1250px) {
+        .events-overview-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .events-overview-stats {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+
+      @media (max-width: 820px) {
+        .events-overview-header {
+          align-items: stretch;
+          flex-direction: column;
+        }
+
+        .events-overview-controls {
+          justify-content: flex-start;
+        }
+
+        .events-search-control {
+          flex: 1 1 100%;
+        }
+
+        .events-overview-grid,
+        .events-overview-stats {
+          grid-template-columns: 1fr;
+        }
+
+        .event-workflow-progress {
+          align-items: flex-start;
+          flex-wrap: wrap;
+        }
+
+        .event-department-progress {
+          flex-basis: 100%;
+        }
+      }
+
     </style>
   </head>
   <body>
@@ -3081,6 +3694,126 @@
           </div>
 
     <div id="events-section" class="content-section active">
+      <div class="events-overview">
+        <div class="events-overview-header">
+          <h2 class="content-title">All Events</h2>
+          <div class="events-overview-controls">
+            <label class="events-search-control" for="event-search">
+              <span aria-hidden="true">&#128269;</span>
+              <input type="search" placeholder="Search events..." id="event-search" autocomplete="off" />
+            </label>
+
+            <div class="event-type-filter">
+              <button
+                type="button"
+                class="events-control-button"
+                id="eventTypeFilterButton"
+                aria-haspopup="true"
+                aria-expanded="false"
+                onclick="toggleEventTypeFilterMenu(event)"
+              >
+                <span aria-hidden="true">&#9661;</span>
+                <span id="eventTypeFilterLabel">Filters</span>
+              </button>
+              <div class="event-type-filter-menu" id="eventTypeFilterMenu" role="menu">
+                <button type="button" role="menuitemradio" data-event-type="all" aria-checked="true" onclick="setEventTypeFilter('all')">All Types</button>
+                <button type="button" role="menuitemradio" data-event-type="events" aria-checked="false" onclick="setEventTypeFilter('events')">Events</button>
+                <button type="button" role="menuitemradio" data-event-type="dry hire" aria-checked="false" onclick="setEventTypeFilter('dry hire')">Dry Hire</button>
+              </div>
+            </div>
+
+            <label class="events-sort-control">
+              <span>Sort:</span>
+              <select id="allEventsSortSelect" onchange="renderAllEventsList(events)">
+                <option value="startDate">Start Date</option>
+                <option value="eventId">Event ID</option>
+              </select>
+            </label>
+
+            <button
+              type="button"
+              class="btn btn-primary admin-only events-add-button"
+              data-admin-only="true"
+              data-admin-display="inline-flex"
+              onclick="openModal('addEventModal'); syncAddEventLocationRequirement();"
+            >
+              <span aria-hidden="true">+</span> Add Event
+            </button>
+
+            <div class="events-view-toggle" role="group" aria-label="Event view">
+              <button type="button" data-events-view="card" class="active" title="Grid view" aria-label="Grid view" onclick="setAllEventsOverviewView('card')">&#9638;</button>
+              <button type="button" data-events-view="event-list" title="List view" aria-label="List view" onclick="setAllEventsOverviewView('event-list')">&#9776;</button>
+              <button type="button" data-events-view="calendar" title="Calendar view" aria-label="Calendar view" onclick="setAllEventsOverviewView('calendar')">&#128197;</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="events-overview-stats" aria-label="Event summary">
+          <div class="events-summary-card summary-total">
+            <div class="events-summary-icon" aria-hidden="true">&#128197;</div>
+            <div>
+              <div class="events-summary-number" id="total-events">0</div>
+              <div class="events-summary-label">Total Events</div>
+              <div class="events-summary-note">All time</div>
+            </div>
+          </div>
+          <div class="events-summary-card summary-active">
+            <div class="events-summary-icon" aria-hidden="true">&#9889;</div>
+            <div>
+              <div class="events-summary-number" id="active-events">0</div>
+              <div class="events-summary-label">Active / Upcoming</div>
+              <div class="events-summary-note">Any event not closed</div>
+            </div>
+          </div>
+          <button type="button" class="events-summary-card summary-overdue" onclick="setEventStateFilter('Overdue')">
+            <div class="events-summary-icon" aria-hidden="true">!</div>
+            <div>
+              <div class="events-summary-number" id="overview-overdue-events">0</div>
+              <div class="events-summary-label">Overdue Returns</div>
+              <div class="events-summary-note">Require attention</div>
+            </div>
+          </button>
+          <div class="events-summary-card summary-deployed">
+            <div class="events-summary-icon" aria-hidden="true">&#9635;</div>
+            <div>
+              <div class="events-summary-number" id="deployed-assets">0</div>
+              <div class="events-summary-label">Assets Deployed</div>
+              <div class="events-summary-note">Prepared and not returned</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="events-state-filters" id="eventsStateFilters" aria-label="Filter by event state">
+          <button type="button" class="active" data-event-state="All" onclick="setEventStateFilter('All')">All <span>0</span></button>
+          <button type="button" data-event-state="Added" onclick="setEventStateFilter('Added')">Added <span>0</span></button>
+          <button type="button" data-event-state="Planning" onclick="setEventStateFilter('Planning')">Planning <span>0</span></button>
+          <button type="button" data-event-state="Preparing" onclick="setEventStateFilter('Preparing')">Preparing <span>0</span></button>
+          <button type="button" data-event-state="Ready" onclick="setEventStateFilter('Ready')">Ready <span>0</span></button>
+          <button type="button" data-event-state="Ongoing" onclick="setEventStateFilter('Ongoing')">Ongoing <span>0</span></button>
+          <button type="button" data-event-state="Returning" onclick="setEventStateFilter('Returning')">Returning <span>0</span></button>
+          <button type="button" data-event-state="Overdue" onclick="setEventStateFilter('Overdue')">Overdue <span>0</span></button>
+          <button type="button" data-event-state="Closed" onclick="setEventStateFilter('Closed')">Closed <span>0</span></button>
+        </div>
+
+        <div class="all-events-tab-content">
+          <div id="all-events-list-view" class="all-events-content active">
+            <div class="events-overview-grid" id="all-events">
+              <div class="loading">Loading events...</div>
+            </div>
+          </div>
+          <div id="all-events-table-view" class="all-events-content" style="display: none">
+            <div id="all-events-table-container"></div>
+          </div>
+          <div id="all-events-calendar-view" class="all-events-content" style="display: none">
+            <div id="calendar-container">
+              <div class="loading">Loading calendar...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="events-section-legacy" class="content-section" hidden>
       <div class="content-header">
         <h2 class="content-title">All Events</h2>
         <button
@@ -3093,19 +3826,19 @@
 
       <div class="stats-grid">
         <div class="stat-card">
-          <div class="stat-number" id="total-events">0</div>
+          <div class="stat-number" id="total-events-legacy">0</div>
           <div class="stat-label">Total Events</div>
         </div>
         <div class="stat-card">
-          <div class="stat-number" id="active-events">0</div>
+          <div class="stat-number" id="active-events-legacy">0</div>
           <div class="stat-label">Active Events</div>
         </div>
         <div class="stat-card">
-          <div class="stat-number" id="total-assets">0</div>
+          <div class="stat-number" id="total-assets-legacy">0</div>
           <div class="stat-label">Total Assets</div>
         </div>
         <div class="stat-card">
-          <div class="stat-number" id="deployed-assets">0</div>
+          <div class="stat-number" id="deployed-assets-legacy">0</div>
           <div class="stat-label">Assets Deployed</div>
         </div>
       </div>
@@ -3160,21 +3893,21 @@
 
         <div class="all-events-tab-content">
           <!-- List View Tab -->
-          <div id="all-events-list-view" class="all-events-content active">
+          <div id="all-events-list-view-legacy" class="all-events-content active">
             <input
               type="text"
               class="search-bar"
               placeholder="Search events..."
-              id="event-search"
+              id="event-search-legacy"
             />
-            <div class="events-grid" id="all-events">
+            <div class="events-grid" id="all-events-legacy">
               <div class="loading">Loading events...</div>
             </div>
           </div>
           
           <!-- Calendar View Tab -->
-          <div id="all-events-calendar-view" class="all-events-content" style="display: none">
-            <div id="calendar-container" style="background: white; border-radius: 8px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+          <div id="all-events-calendar-view-legacy" class="all-events-content" style="display: none">
+            <div id="calendar-container-legacy" style="background: white; border-radius: 8px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
               <div class="loading">Loading calendar...</div>
             </div>
           </div>
@@ -3689,6 +4422,22 @@
             <input type="text" class="form-input" id="eventName" required />
           </div>
           <div class="form-group">
+            <label class="form-label" for="eventLocation">
+              Location <span id="eventLocationRequiredMark" aria-hidden="true">*</span>
+            </label>
+            <input
+              type="text"
+              class="form-input"
+              id="eventLocation"
+              maxlength="200"
+              autocomplete="street-address"
+              required
+            />
+            <small id="eventLocationHelp" style="color: #666;">
+              Required for Events; optional for Dry Hire.
+            </small>
+          </div>
+          <div class="form-group">
             <label class="form-label">Start Date</label>
             <input
               type="date"
@@ -3703,7 +4452,7 @@
           </div>
           <div class="form-group">
             <label class="form-label">Event Tag</label>
-            <select class="form-input" id="eventTag" required>
+            <select class="form-input" id="eventTag" required onchange="syncAddEventLocationRequirement()">
               <option value="events">Events</option>
               <option value="dry hire">Dry Hire</option>
             </select>

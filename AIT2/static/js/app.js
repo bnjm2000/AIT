@@ -5742,11 +5742,13 @@ async function loadStatsCards() {
     const activeEventsEl = document.getElementById("active-events");
     const totalAssetsEl = document.getElementById("total-assets");
     const deployedAssetsEl = document.getElementById("deployed-assets");
+    const overdueEventsEl = document.getElementById("overview-overdue-events");
 
     if (totalEventsEl) totalEventsEl.textContent = stats.totalEvents || 0;
     if (activeEventsEl) activeEventsEl.textContent = stats.activeEvents || 0;
     if (totalAssetsEl) totalAssetsEl.textContent = stats.totalAssets || 0;
     if (deployedAssetsEl) deployedAssetsEl.textContent = stats.deployedAssets || 0;
+    if (overdueEventsEl) overdueEventsEl.textContent = stats.overdueEvents || 0;
   } catch (error) {
     console.error("Error loading stats:", error);
   }
@@ -10271,6 +10273,13 @@ async function generateMaintenanceReportPdf() {
 }
 
 
+function getPrepareEventProgressTotals(event) {
+  return {
+    totalRequired: Math.max(0, Number(event?.assetCount || 0)),
+    totalAssigned: Math.max(0, Number(event?.preparedCount || 0))
+  };
+}
+
 function createPrepareEventCard(event) {
   const card = document.createElement("div");
   card.className = `event-card ${getEventStateClass(event.state)}`;
@@ -10288,18 +10297,12 @@ function createPrepareEventCard(event) {
       ? formatDate(event.startDate)
       : `${formatDate(event.startDate)} - ${formatDate(event.endDate)}`;
 
-  // Calculate overall preparation progress from model groups
-  let totalRequired = 0;
-  let totalAssigned = 0;
+  // Use the canonical event totals so miscellaneous/loan items are included.
+  const { totalRequired, totalAssigned } = getPrepareEventProgressTotals(event);
   let modelSummary = "";
 
   if (event.modelGroups && Object.keys(event.modelGroups).length > 0) {
     const models = Object.values(event.modelGroups);
-
-    models.forEach((model) => {
-      totalRequired += model.requiredQuantity;
-      totalAssigned += getCountablePreparedQuantity(model);
-    });
 
     // Show first 2 models as preview
     modelSummary =
@@ -10316,10 +10319,6 @@ function createPrepareEventCard(event) {
       } more</div>`;
     }
     modelSummary += "</div>";
-  } else {
-    // Fall back to using the event's asset counts for events without model groups (like custom assets only)
-    totalRequired = event.assetCount || 0;
-    totalAssigned = event.preparedCount || 0;
   }
 
   const progressPercent =
@@ -10731,9 +10730,12 @@ let currentCalendarDate = new Date();
 async function loadCalendarView() {
   try {
     const response = await apiCall('/api/events');
-    const events = response.data;
-    
-    renderCalendar(events);
+    const calendarEvents = response.data || [];
+    renderCalendar(
+      document.getElementById('events-section')?.classList.contains('active')
+        ? getFilteredEventsForOverview(calendarEvents)
+        : calendarEvents
+    );
   } catch (error) {
     document.getElementById('calendar-container').innerHTML = 
       '<p style="color: red; text-align: center;">Error loading calendar</p>';
@@ -12612,6 +12614,7 @@ async function viewEvent(eventId) {
             <div style="display: grid; grid-template-columns: 1fr auto auto; gap: 20px; align-items: center;">
                 <div>
                     <h3 style="margin: 0 0 8px 0; font-size: 1.4rem;">${escapeHtml(event.name)}</h3>
+                    ${event.location ? `<div style="opacity:0.9;font-size:14px;margin-bottom:5px;">&#9678; ${escapeHtml(event.location)}</div>` : ''}
                     <div style="opacity: 0.9; font-size: 14px;">📅 ${dateRange}</div>
                 </div>
                 <div style="text-align: center;">
@@ -14235,19 +14238,26 @@ async function editEvent(eventId) {
                         <input type="text" class="form-input" id="editEventName" value="${escapeHtml(event.name)}" required>
                     </div>
                     <div class="form-group">
-                        <label class="form-label">Event Tag</label>
-                        <select class="form-input" id="editEventTag" required>
-                            <option value="events" ${(event.tag === 'events' || !event.tag) ? 'selected' : ''}>Events</option>
-                            <option value="dry hire" ${event.tag === 'dry hire' ? 'selected' : ''}>Dry Hire</option>
-                        </select>
+                        <label class="form-label">Location</label>
+                        <input type="text" class="form-input" id="editEventLocation" maxlength="200" value="${escapeHtml(event.location || '')}" placeholder="${event.tag === 'dry hire' ? 'Optional for Dry Hire' : 'Event location'}">
+                        ${!event.location && event.tag !== 'dry hire' ? '<small style="color:#666;">This legacy event has no saved location; it may remain blank.</small>' : ''}
                     </div>
-                    <div class="form-group">
-                        <label class="form-label">Start Date</label>
-                        <input type="date" class="form-input" id="editEventStartDate" value="${formatDateForInput(event.startDate)}" required>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">End Date</label>
-                        <input type="date" class="form-input" id="editEventEndDate" value="${formatDateForInput(event.endDate)}" required>
+                    <div class="event-details-fields-row" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 15px;">
+                        <div class="form-group" style="min-width: 0;">
+                            <label class="form-label">Event Tag</label>
+                            <select class="form-input" id="editEventTag" required>
+                                <option value="events" ${(event.tag === 'events' || !event.tag) ? 'selected' : ''}>Events</option>
+                                <option value="dry hire" ${event.tag === 'dry hire' ? 'selected' : ''}>Dry Hire</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="min-width: 0;">
+                            <label class="form-label">Start Date</label>
+                            <input type="date" class="form-input" id="editEventStartDate" value="${formatDateForInput(event.startDate)}" required>
+                        </div>
+                        <div class="form-group" style="min-width: 0;">
+                            <label class="form-label">End Date</label>
+                            <input type="date" class="form-input" id="editEventEndDate" value="${formatDateForInput(event.endDate)}" required>
+                        </div>
                     </div>
                     <div class="modal-actions" style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
                         <button type="submit" class="btn btn-primary">Update Event</button>
@@ -16203,8 +16213,31 @@ function resetAddAssetForm() {
 }
 
 
+function syncAddEventLocationRequirement() {
+  const tag = document.getElementById("eventTag")?.value || "events";
+  const locationInput = document.getElementById("eventLocation");
+  const requiredMark = document.getElementById("eventLocationRequiredMark");
+  const help = document.getElementById("eventLocationHelp");
+  const required = tag !== "dry hire";
+
+  if (locationInput) {
+    locationInput.required = required;
+    locationInput.placeholder = required
+      ? "Enter the event location"
+      : "Optional for Dry Hire";
+  }
+  if (requiredMark) requiredMark.style.display = required ? "" : "none";
+  if (help) {
+    help.textContent = required
+      ? "Required for Events."
+      : "Optional for Dry Hire.";
+  }
+}
+
+
 // Form handlers
 document.addEventListener("DOMContentLoaded", function () {
+  syncAddEventLocationRequirement();
   // Add Event Form
   document
     .getElementById("addEventForm")
@@ -16218,6 +16251,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
       const eventData = {
         name: document.getElementById("eventName").value,
+        location: document.getElementById("eventLocation").value,
         startDate: document.getElementById("eventStartDate").value,
         endDate: document.getElementById("eventEndDate").value,
         tag: document.getElementById("eventTag").value,
@@ -16243,6 +16277,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
         // Reset form
         document.getElementById("addEventForm").reset();
+        syncAddEventLocationRequirement();
       } catch (error) {
         showNotification("error", "Failed to add event");
       }
@@ -16454,6 +16489,7 @@ document.addEventListener("DOMContentLoaded", function () {
       const eventId = document.getElementById("editEventId").value;
       const eventData = {
         name: document.getElementById("editEventName").value,
+        location: document.getElementById("editEventLocation").value,
         startDate: document.getElementById("editEventStartDate").value,
         endDate: document.getElementById("editEventEndDate").value,
         tag: document.getElementById("editEventTag").value,
@@ -20130,12 +20166,12 @@ async function populateDeliveryOrderForm(event) {
     if (doDateEl) doDateEl.value = new Date().toISOString().split('T')[0];
     if (clientNameEl) clientNameEl.value = event.client_name || event.name || '';
     if (clientCompanyEl) clientCompanyEl.value = event.client_company || '';
-    if (deliveryAddress1El) deliveryAddress1El.value = event.venue || '';
+    if (deliveryAddress1El) deliveryAddress1El.value = event.location || event.venue || '';
     if (deliveryAddress2El) deliveryAddress2El.value = event.venue_address || '';
     if (deliveryAddress3El) deliveryAddress3El.value = event.venue_city || '';
     if (clientPhoneEl) clientPhoneEl.value = event.client_phone || '';
     if (jobTitleEl) jobTitleEl.value = event.name || '';
-    if (jobLocationEl) jobLocationEl.value = event.venue || '';
+    if (jobLocationEl) jobLocationEl.value = event.location || event.venue || '';
     if (additionalCommentsEl) additionalCommentsEl.value = '';
     
     if (document.getElementById('showAssetIds')) document.getElementById('showAssetIds').checked = false;
@@ -22145,6 +22181,7 @@ async function initializeApp() {
 
     if (startDateEl) startDateEl.value = today;
     if (endDateEl) endDateEl.value = today;
+    syncAddEventLocationRequirement();
 
     // Also set defaults for edit form if it exists
     const editStartDateEl = document.getElementById("editEventStartDate");
@@ -22844,6 +22881,423 @@ function switchAllEventsTab(tabName) {
   else loadAllEvents();
 }
 
+let allEventsStateFilter = 'All';
+let allEventsTypeFilter = 'all';
+let eventOverviewDocumentHandlersBound = false;
+
+function overviewDisplayState(event) {
+  return event?.state === 'Last Day' ? 'Ongoing' : (event?.state || 'Added');
+}
+
+function overviewEventType(event) {
+  return String(event?.tag || 'events').toLowerCase() === 'dry hire' ? 'dry hire' : 'events';
+}
+
+function ensureAllEventsViewTabs() {
+  ensureEventListViewStyles();
+  if (eventOverviewDocumentHandlersBound) return;
+  eventOverviewDocumentHandlersBound = true;
+
+  document.addEventListener('click', event => {
+    if (!event.target.closest('.event-card-controls')) {
+      document.querySelectorAll('.event-card-menu.open').forEach(menu => menu.classList.remove('open'));
+    }
+    if (!event.target.closest('.event-type-filter')) {
+      document.getElementById('eventTypeFilterMenu')?.classList.remove('open');
+      document.getElementById('eventTypeFilterButton')?.setAttribute('aria-expanded', 'false');
+    }
+  });
+
+  setAllEventsOverviewView(localStorage.getItem('allEventsOverviewView') || 'card', false);
+}
+
+function getActiveAllEventsTab() {
+  return document.querySelector('.events-view-toggle [data-events-view].active')?.dataset.eventsView
+    || localStorage.getItem('allEventsOverviewView')
+    || 'card';
+}
+
+function setAllEventsOverviewView(view, shouldRender = true) {
+  const validView = ['card', 'event-list', 'calendar'].includes(view) ? view : 'card';
+  localStorage.setItem('allEventsOverviewView', validView);
+
+  document.querySelectorAll('.events-view-toggle [data-events-view]').forEach(button => {
+    const active = button.dataset.eventsView === validView;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-pressed', active ? 'true' : 'false');
+  });
+
+  const idMap = {
+    card: 'all-events-list-view',
+    'event-list': 'all-events-table-view',
+    calendar: 'all-events-calendar-view'
+  };
+  Object.entries(idMap).forEach(([key, id]) => {
+    const content = document.getElementById(id);
+    if (!content) return;
+    const active = key === validView;
+    content.classList.toggle('active', active);
+    content.style.display = active ? 'block' : 'none';
+  });
+
+  if (!shouldRender) return;
+  renderAllEventsList(events);
+}
+
+function switchAllEventsTab(tabName) {
+  setAllEventsOverviewView(tabName === 'list' ? 'card' : tabName);
+}
+
+function toggleEventTypeFilterMenu(event) {
+  event?.stopPropagation();
+  const menu = document.getElementById('eventTypeFilterMenu');
+  const button = document.getElementById('eventTypeFilterButton');
+  if (!menu || !button) return;
+  const open = !menu.classList.contains('open');
+  menu.classList.toggle('open', open);
+  button.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+
+function setEventTypeFilter(type) {
+  allEventsTypeFilter = ['events', 'dry hire'].includes(type) ? type : 'all';
+  const labels = { all: 'Filters', events: 'Events', 'dry hire': 'Dry Hire' };
+  const label = document.getElementById('eventTypeFilterLabel');
+  if (label) label.textContent = labels[allEventsTypeFilter];
+
+  document.querySelectorAll('#eventTypeFilterMenu [data-event-type]').forEach(button => {
+    button.setAttribute('aria-checked', button.dataset.eventType === allEventsTypeFilter ? 'true' : 'false');
+  });
+  document.getElementById('eventTypeFilterMenu')?.classList.remove('open');
+  document.getElementById('eventTypeFilterButton')?.setAttribute('aria-expanded', 'false');
+  updateEventStateFilterCounts(events);
+  renderAllEventsList(events);
+}
+
+function setEventStateFilter(state) {
+  allEventsStateFilter = state || 'All';
+  document.querySelectorAll('#eventsStateFilters [data-event-state]').forEach(button => {
+    button.classList.toggle('active', button.dataset.eventState === allEventsStateFilter);
+  });
+  renderAllEventsList(events);
+}
+
+function updateEventStateFilterCounts(list) {
+  const source = (list || []).filter(event => {
+    if (allEventsTypeFilter === 'all') return true;
+    return overviewEventType(event) === allEventsTypeFilter;
+  });
+  const counts = { All: source.length };
+  source.forEach(event => {
+    const state = overviewDisplayState(event);
+    counts[state] = (counts[state] || 0) + 1;
+  });
+  document.querySelectorAll('#eventsStateFilters [data-event-state]').forEach(button => {
+    const span = button.querySelector('span');
+    if (span) span.textContent = String(counts[button.dataset.eventState] || 0);
+  });
+}
+
+function filterEventsBySearch(list) {
+  const searchTerm = document.getElementById('event-search')?.value.toLowerCase().trim() || '';
+  return (list || []).filter(event => {
+    const tag = overviewEventType(event);
+    if (allEventsTypeFilter !== 'all' && tag !== allEventsTypeFilter) return false;
+    if (allEventsStateFilter !== 'All' && overviewDisplayState(event) !== allEventsStateFilter) return false;
+    if (!searchTerm) return true;
+    return (`${event.id} ${event.name || ''} ${event.location || ''} ${event.state || ''} ${event.tag || ''} ${event.startDate || ''} ${event.endDate || ''}`)
+      .toLowerCase()
+      .includes(searchTerm);
+  });
+}
+
+function getFilteredEventsForOverview(list) {
+  return sortEventsForView(filterEventsBySearch(list || []), 'all');
+}
+
+function eventOverviewProgress(event) {
+  const state = event.state || 'Added';
+  if (['Returning', 'Overdue', 'Closed'].includes(state)) {
+    const done = Math.max(0, Number(event.returnedCount || 0));
+    const total = Math.max(done, Number(event.returnableTotalCount || event.assetCount || 0));
+    return { done, total, label: 'Returned' };
+  }
+  if (state === 'Ongoing' || state === 'Last Day') {
+    const out = Math.max(0, Number(event.returnableCount ?? event.preparedCount ?? 0));
+    const total = Math.max(out, Number(event.assetCount || out));
+    return { done: out, total, label: 'Out' };
+  }
+  if (state === 'Added') {
+    return { done: 0, total: Math.max(0, Number(event.assetCount || 0)), label: 'Items added', added: true };
+  }
+  return {
+    done: Math.max(0, Number(event.preparedCount || 0)),
+    total: Math.max(0, Number(event.assetCount || 0)),
+    label: state === 'Planning' ? 'Planned' : 'Packed'
+  };
+}
+
+function eventDepartmentProgress(event) {
+  const phaseUsesReturns = ['Returning', 'Overdue', 'Closed'].includes(event.state);
+  const phaseUsesOut = ['Ongoing', 'Last Day'].includes(event.state);
+  const totals = new Map();
+
+  Object.values(event.modelGroups || {}).forEach(group => {
+    const code = normalizeDepartmentCode(group.department || 'UN');
+    const current = totals.get(code) || { code, done: 0, total: 0 };
+    const required = Math.max(0, Number(group.requiredQuantity || 0));
+    const prepared = Math.max(0, Number(group.countablePreparedQuantity ?? getCountablePreparedQuantity(group) ?? 0));
+    const returned = Math.max(0, Number(group.countableReturnedQuantity || 0));
+    current.total += required;
+    current.done += phaseUsesReturns ? returned : (phaseUsesOut ? Math.max(prepared - returned, 0) : prepared);
+    totals.set(code, current);
+  });
+
+  if (!totals.size) {
+    const progress = eventOverviewProgress(event);
+    totals.set('UN', { code: 'UN', done: progress.done, total: progress.total });
+  }
+  return [...totals.values()].sort((a, b) => b.total - a.total).slice(0, 4);
+}
+
+function eventOverviewNotice(event, progress) {
+  const remaining = Math.max(progress.total - progress.done, 0);
+  switch (event.state) {
+    case 'Added': return progress.total ? `${progress.total} requirements added` : 'Ready to start planning';
+    case 'Planning': return `${progress.total} asset requirements planned`;
+    case 'Preparing': return `${remaining} item${remaining === 1 ? '' : 's'} left to pack`;
+    case 'Ready': return 'All items ready';
+    case 'Last Day': return 'In progress  ·  Last Day!';
+    case 'Ongoing': {
+      const end = new Date(`${event.endDate}T12:00:00`);
+      const today = new Date();
+      today.setHours(12, 0, 0, 0);
+      const days = Math.max(0, Math.ceil((end - today) / 86400000));
+      return days ? `In progress  ·  Ends in ${days} day${days === 1 ? '' : 's'}` : 'In progress';
+    }
+    case 'Returning': return `${Math.max(0, Number(event.returnableCount || 0))} still out`;
+    case 'Overdue': return 'Overdue return';
+    case 'Closed': return 'All items returned';
+    default: return '';
+  }
+}
+
+function getEventPrimaryAction(event) {
+  if (event.state === 'Added') {
+    return isAdminUser()
+      ? { label: 'Start Planning', onclick: `openEventPlanning(${event.id})` }
+      : { label: 'Start Preparing', onclick: `openPrepareEventModal(${event.id})` };
+  }
+  if (event.state === 'Planning') {
+    return isAdminUser()
+      ? { label: 'Plan', onclick: `openEventPlanning(${event.id})` }
+      : { label: 'Start Preparing', onclick: `openPrepareEventModal(${event.id})` };
+  }
+  if (event.state === 'Preparing') return { label: 'Continue Preparing', onclick: `openPrepareEventModal(${event.id})` };
+  if (event.state === 'Ready') return { label: 'Generate DO', onclick: `openDeliveryOrderTab(${event.id})` };
+  if (['Ongoing', 'Last Day'].includes(event.state)) return { label: 'Start Return', onclick: `openReturnAssetsModalWithEvent(${event.id})` };
+  if (event.state === 'Returning') return { label: 'Continue Return', onclick: `openReturnAssetsModalWithEvent(${event.id})` };
+  if (event.state === 'Overdue') return { label: 'Start Return', onclick: `openReturnAssetsModalWithEvent(${event.id})` };
+  return { label: 'View', onclick: `viewEvent(${event.id})` };
+}
+
+function eventNextActionText(event) {
+  switch (event.state) {
+    case 'Added': return isAdminUser() ? 'Add requirements and manage assets.' : 'Prepare or quick-add event assets.';
+    case 'Planning': return isAdminUser() ? 'Plan resources and requirements.' : 'Prepare or quick-add event assets.';
+    case 'Preparing': return 'Continue packing remaining items.';
+    case 'Ready': return 'Generate delivery order and dispatch.';
+    case 'Ongoing':
+    case 'Last Day': return event.state === 'Last Day' ? 'Prioritise return today.' : 'Monitor event and provide on-site support.';
+    case 'Returning': return 'Continue returning outstanding items.';
+    case 'Overdue': return 'Resolve overdue returns immediately.';
+    case 'Closed': return 'Review completed event details.';
+    default: return 'Review event details.';
+  }
+}
+
+async function openEventPlanning(eventId) {
+  if (!isAdminUser()) {
+    await openPrepareEventModal(eventId);
+    return;
+  }
+  await editEvent(eventId);
+  switchEditTab('assets');
+}
+
+function toggleEventCardMenu(event, eventId, context = 'card') {
+  event?.stopPropagation();
+  const target = document.getElementById(`event-card-menu-${context}-${eventId}`);
+  const shouldOpen = target && !target.classList.contains('open');
+  document.querySelectorAll('.event-card-menu.open').forEach(menu => menu.classList.remove('open'));
+  target?.classList.toggle('open', !!shouldOpen);
+}
+
+function eventCardMenuHtml(event, context = 'card') {
+  return `
+    <div class="event-card-menu" id="event-card-menu-${context}-${event.id}">
+      <button type="button" onclick="viewEvent(${event.id})"><span aria-hidden="true">&#9673;</span> View</button>
+      ${isAdminUser() ? `
+        <button type="button" onclick="openEventPlanning(${event.id})"><span aria-hidden="true">&#9638;</span> Plan</button>
+        <button type="button" onclick="showForceStateModal(${event.id}, '${escapeHtmlAttr(event.state || '')}')"><span aria-hidden="true">&#9889;</span> Force</button>
+        <button type="button" class="danger" onclick="deleteEvent(${event.id})"><span aria-hidden="true">&#128465;</span> Delete</button>
+      ` : ''}
+    </div>
+  `;
+}
+
+function createEventsOverviewCard(event) {
+  const card = document.createElement('article');
+  const displayState = overviewDisplayState(event);
+  card.className = `events-workflow-card ${getEventStateClass(displayState)}`;
+
+  const progress = eventOverviewProgress(event);
+  const percent = progress.total > 0 ? Math.min(100, Math.round((progress.done / progress.total) * 100)) : 0;
+  const action = getEventPrimaryAction(event);
+  const departmentsHtml = eventDepartmentProgress(event).map(row => {
+    const total = Math.max(0, Number(row.total || 0));
+    const done = Math.max(0, Number(row.done || 0));
+    const pct = total ? Math.min(100, Math.round((done / total) * 100)) : 0;
+    const meta = getDepartmentMeta(row.code);
+    const label = meta.name || meta.code || row.code;
+    return `
+      <div class="event-department-row" title="${escapeHtmlAttr(label)}">
+        <span>${escapeHtml(label)}</span>
+        <span class="event-department-track"><span style="width:${pct}%"></span></span>
+        <span>${done}/${total}</span>
+      </div>
+    `;
+  }).join('');
+  const locationHtml = event.location
+    ? `<span><span aria-hidden="true">&#9678;</span>${escapeHtml(event.location)}</span>`
+    : '';
+
+  card.innerHTML = `
+    <div class="event-workflow-main">
+      <div class="event-workflow-heading">
+        <div class="event-workflow-kicker">
+          <span>#${escapeHtml(String(event.id))}</span>
+          <span class="event-type-badge ${overviewEventType(event) === 'dry hire' ? 'dry-hire' : ''}">${overviewEventType(event) === 'dry hire' ? 'Dry Hire' : 'Events'}</span>
+        </div>
+        <span class="event-workflow-state">${escapeHtml(displayState)}</span>
+      </div>
+      <h3 class="event-workflow-title">${escapeHtml(event.name || '')}</h3>
+      <div class="event-workflow-meta">
+        <span><span aria-hidden="true">&#128197;</span>${escapeHtml(eventDateRangeText(event))}</span>
+        ${locationHtml}
+      </div>
+      <div class="event-workflow-progress">
+        <div class="event-progress-ring" style="--progress:${percent}">
+          <span>${progress.added && !progress.total ? '+' : `${percent}%`}</span>
+        </div>
+        <div class="event-progress-summary">
+          <div class="event-progress-value">${progress.done} / ${progress.total}</div>
+          <div class="event-progress-label">${escapeHtml(progress.label)}</div>
+        </div>
+        <div class="event-department-progress">${departmentsHtml}</div>
+      </div>
+      <div class="event-workflow-notice">${escapeHtml(eventOverviewNotice(event, progress))}</div>
+    </div>
+    <div class="event-workflow-footer">
+      <div class="event-next-action">
+        <strong>Next action</strong>
+        ${escapeHtml(eventNextActionText(event))}
+      </div>
+      <div class="event-card-controls">
+        <button type="button" class="event-primary-action" onclick="${action.onclick}">${escapeHtml(action.label)}</button>
+        <button type="button" class="event-overflow-button" aria-label="More actions for ${escapeHtmlAttr(event.name || '')}" onclick="toggleEventCardMenu(event, ${event.id}, 'card')">&#8230;</button>
+        ${eventCardMenuHtml(event, 'card')}
+      </div>
+    </div>
+  `;
+  return card;
+}
+
+function renderAllEventsCards(list) {
+  const container = document.getElementById('all-events');
+  if (!container) return;
+  const sorted = getFilteredEventsForOverview(list || events);
+  container.innerHTML = '';
+  if (!sorted.length) {
+    container.innerHTML = '<p style="text-align:center;color:#666;padding:40px;grid-column:1/-1;">No matching events found.</p>';
+    return;
+  }
+  sorted.forEach(event => container.appendChild(createEventsOverviewCard(event)));
+}
+
+function renderAllEventsTable(list) {
+  const container = document.getElementById('all-events-table-container');
+  if (!container) return;
+  const sorted = getFilteredEventsForOverview(list || events);
+  if (!sorted.length) {
+    container.innerHTML = '<p style="text-align:center;color:#666;padding:40px;">No matching events found.</p>';
+    return;
+  }
+  const rows = sorted.map(event => {
+    const progress = eventOverviewProgress(event);
+    const action = getEventPrimaryAction(event);
+    const location = event.location ? `<div class="event-list-location">${escapeHtml(event.location)}</div>` : '';
+    const displayState = overviewDisplayState(event);
+    return `
+      <tr>
+        <td><strong>${escapeHtml(String(event.id))}</strong></td>
+        <td>${eventTagBadgeHtml(event)}</td>
+        <td class="event-list-title">${escapeHtml(event.name || '')}${location}</td>
+        <td>${escapeHtml(eventDateRangeText(event))}</td>
+        <td><span class="event-state ${getEventStateClass(displayState)}">${escapeHtml(displayState)}</span></td>
+        <td>${renderProgressCell(progress.done, progress.total)}</td>
+        <td>
+          <div class="event-card-controls">
+            <button type="button" class="event-primary-action" style="--event-state:#2563eb" onclick="${action.onclick}">${escapeHtml(action.label)}</button>
+            <button type="button" class="event-overflow-button" onclick="toggleEventCardMenu(event, ${event.id}, 'list')">&#8230;</button>
+            ${eventCardMenuHtml(event, 'list')}
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join('');
+  container.innerHTML = `
+    <div class="event-list-table-wrap">
+      <table class="event-list-table">
+        <thead><tr><th>ID</th><th>Type</th><th>Event</th><th>Date</th><th>State</th><th>Progress</th><th>Next action</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderAllEventsList(eventsToRender = null) {
+  const source = eventsToRender || events;
+  updateEventStateFilterCounts(source);
+  const active = getActiveAllEventsTab();
+  if (active === 'event-list') {
+    renderAllEventsTable(source);
+  } else if (active === 'calendar') {
+    renderCalendar(getFilteredEventsForOverview(source));
+  } else {
+    renderAllEventsCards(source);
+  }
+}
+
+async function loadAllEvents() {
+  try {
+    ensureAllEventsViewTabs();
+    await loadStatsCards();
+    const response = await apiCall('/api/events');
+    events = response.data || [];
+    updateOverdueCounter(countOverdueEvents(events));
+    renderAllEventsList(events);
+  } catch (error) {
+    console.error('Error loading events overview:', error);
+    const active = getActiveAllEventsTab();
+    const target = active === 'event-list'
+      ? document.getElementById('all-events-table-container')
+      : active === 'calendar'
+        ? document.getElementById('calendar-container')
+        : document.getElementById('all-events');
+    if (target) target.innerHTML = '<p style="color:red;text-align:center;padding:30px;">Error loading events</p>';
+  }
+}
+
 function ensureEventPageToolbar(scope) {
   ensureEventListViewStyles();
   const containerId = scope === 'prepare' ? 'prepare-events' : 'return-events';
@@ -22897,17 +23351,7 @@ function renderPrepareEventsTable(list) {
     return;
   }
   const rows = sorted.map(event => {
-    let totalRequired = 0;
-    let totalAssigned = 0;
-    if (event.modelGroups && Object.keys(event.modelGroups).length > 0) {
-      Object.values(event.modelGroups).forEach(model => {
-        totalRequired += Number(model.requiredQuantity || 0);
-        totalAssigned += getPreparedQuantity(model);
-      });
-    } else {
-      totalRequired = Number(event.assetCount || 0);
-      totalAssigned = Number(event.preparedCount || 0);
-    }
+    const { totalRequired, totalAssigned } = getPrepareEventProgressTotals(event);
     return `
       <tr>
         <td><strong>${escapeHtml(String(event.id))}</strong></td>

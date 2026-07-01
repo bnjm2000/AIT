@@ -128,6 +128,21 @@ class Container:
         self.maintenance_logs = maintenance_logs if maintenance_logs is not None else []
 
 
+def split_legacy_event_name_location(name, location=''):
+    """Split the legacy ``Event Name @ Location`` format once, from the right."""
+    clean_name = str(name or '').strip()
+    clean_location = str(location or '').strip()
+    if clean_location or ' @ ' not in clean_name:
+        return clean_name, clean_location, False
+
+    event_name, extracted_location = clean_name.rsplit(' @ ', 1)
+    event_name = event_name.strip()
+    extracted_location = extracted_location.strip()
+    if not event_name or not extracted_location:
+        return clean_name, clean_location, False
+    return event_name, extracted_location, True
+
+
 class Event:
     def __init__(
         self,
@@ -146,9 +161,15 @@ class Event:
         custom_collected=None,
         notes='',
         event_logs=None,
+        location='',
     ):
+        clean_name, clean_location, legacy_location_extracted = (
+            split_legacy_event_name_location(name, location)
+        )
         self.event_id = event_id
-        self.name = name
+        self.name = clean_name
+        self.location = clean_location
+        self._legacy_location_extracted = legacy_location_extracted
         self.start_date = start_date
         self.end_date = end_date
         self.asset_models = asset_models

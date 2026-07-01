@@ -1,0 +1,2 @@
+EventID,Name,StartDate,EndDate,AssetModels,PreparedItems,ReturnedItems,State,ActuallyPrepared,ExtraAssets,CustomCollected,Tag,ForceStateOverride,Notes
+124,Dry Hire: XC Lighting,20260410,20260421,[],"[""[MODEL]AX|Fenix|HERCULES 8|2|Frontal lifting tower array lifter"", ""HERCULES 8#01"", ""HERCULES 8#02""]","[""HERCULES 8#01"", ""HERCULES 8#02""]",Returning,[],[],[],dry hire,False,

@@ -1,0 +1,991 @@
+2026/05/19 14:05:49,bnjm2000,Added asset BULK-0018 via web interface
+2026/05/19 14:06:41,bnjm2000,Added asset BULK-0019 via web interface
+2026/05/19 14:33:25,bnjm2000,Deleted department LOAN (Loan)
+2026/05/19 14:33:33,bnjm2000,Deleted department MISC (Misc)
+2026/05/19 14:33:38,bnjm2000,Deleted department UN (Unknown)
+2026/05/19 14:33:59,bnjm2000,Deleted asset MA2PCWING#01; containersUpdated=0; containerRefsRemoved=0; mediaDeleted=0
+2026/05/19 14:34:05,bnjm2000,Deleted department LOAN (Loan)
+2026/05/19 14:34:58,bnjm2000,User bnjm2000 logged in via web interface
+2026/05/19 14:35:31,bnjm2000,Created user rrafie
+2026/05/19 14:36:16,rrafie,User rrafie logged in via web interface
+2026/05/19 14:56:07,bnjm2000,Asset Check sighted asset 4099#01
+2026/05/19 14:58:07,bnjm2000,Deleted maintenance log for asset 4099#01: 'Asset sighted by bnjm2000 during Asset Check' (deleted by bnjm2000)
+2026/05/19 15:11:07,tjacky,User tjacky logged in via web interface
+2026/05/19 15:12:26,cjamie,User cjamie logged in via web interface
+2026/05/19 15:16:11,bnjm2000,Added asset BULK-0020 via web interface
+2026/05/19 15:20:21,cterence,User cterence logged in via web interface
+2026/05/19 15:20:44,bnjm2000,Updated user cterence
+2026/05/19 15:35:13,cterence,Updated user user
+2026/05/19 15:35:13,cterence,Updated user feezahmnsr
+2026/05/19 15:35:16,cterence,Updated user admin
+2026/05/19 16:37:46,bnjm2000,Added asset BULK-0021 via web interface
+2026/05/19 16:38:23,bnjm2000,Deleted asset AT8668#10; containersUpdated=0; containerRefsRemoved=0; mediaDeleted=0
+2026/05/19 16:38:28,bnjm2000,Deleted asset AT8668#08; containersUpdated=0; containerRefsRemoved=0; mediaDeleted=0
+2026/05/19 16:38:35,bnjm2000,Deleted asset AT8668#09; containersUpdated=0; containerRefsRemoved=0; mediaDeleted=0
+2026/05/19 16:38:48,bnjm2000,Deleted asset AT8668#07; containersUpdated=0; containerRefsRemoved=0; mediaDeleted=0
+2026/05/19 16:38:56,bnjm2000,Deleted asset AT8668#06; containersUpdated=0; containerRefsRemoved=0; mediaDeleted=0
+2026/05/19 16:39:08,bnjm2000,Deleted asset AT8668#05; containersUpdated=0; containerRefsRemoved=0; mediaDeleted=0
+2026/05/19 16:39:14,bnjm2000,Deleted asset AT8668#04; containersUpdated=0; containerRefsRemoved=0; mediaDeleted=0
+2026/05/19 16:39:19,bnjm2000,Deleted asset AT8668#03; containersUpdated=0; containerRefsRemoved=0; mediaDeleted=0
+2026/05/19 16:39:32,bnjm2000,Deleted asset AT8668#02; containersUpdated=0; containerRefsRemoved=0; mediaDeleted=0
+2026/05/19 16:39:38,bnjm2000,Deleted asset AT8668#01; containersUpdated=0; containerRefsRemoved=0; mediaDeleted=0
+2026/05/20 09:29:31,bnjm2000,User bnjm2000 logged in via web interface
+2026/05/20 09:37:29,bnjm2000,User bnjm2000 logged in via web interface
+2026/05/20 10:47:15,cjamie,User cjamie logged in via web interface
+2026/05/20 12:55:35,cjamie,User cjamie logged in via web interface
+2026/05/20 12:55:53,cjamie,User cjamie logged in via web interface
+2026/05/20 13:40:22,cjamie,User cjamie logged in via web interface
+2026/05/21 17:39:08,bnjm2000,Asset Check sighted asset ULXD2#02
+2026/05/22 17:49:13,bnjm2000,User bnjm2000 logged in via web interface
+2026/05/22 18:19:34,bnjm2000,Added asset 63ADB#03 via web interface
+2026/05/22 18:20:05,bnjm2000,Updated asset 63ADB#03; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/05/22 18:26:25,bnjm2000,Added asset 63ADB#03 via web interface
+2026/05/22 18:26:58,bnjm2000,Updated asset 63ADB#03; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/05/22 20:13:54,bnjm2000,User bnjm2000 logged in via web interface
+2026/05/22 21:12:59,bnjm2000,Added asset BULK-0022 via web interface
+2026/05/22 21:13:28,bnjm2000,Updated asset BULK-0020; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/05/22 21:14:14,bnjm2000,Added asset BULK-0023 via web interface
+2026/05/22 21:14:41,bnjm2000,Added asset BULK-0024 via web interface
+2026/05/22 21:14:52,bnjm2000,Updated asset BULK-0024; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/05/22 21:55:36,bnjm2000,User bnjm2000 logged in via web interface
+2026/05/22 23:05:23,bnjm2000,User bnjm2000 logged in via web interface
+2026/05/22 23:10:50,bnjm2000,Added asset SCAFFOLD#01 via web interface
+2026/05/24 04:35:56,rrafie,User rrafie logged in via web interface
+2026/05/24 04:45:25,rrafie,User rrafie logged in via web interface
+2026/05/24 09:37:16,bnjm2000,User bnjm2000 logged in via web interface
+2026/05/24 14:52:35,system,Failed login attempt for username: bnjm2000
+2026/05/24 14:52:41,bnjm2000,User bnjm2000 logged in via web interface
+2026/05/25 13:38:17,bnjm2000,User bnjm2000 logged in via web interface
+2026/05/26 15:42:04,system,Failed login attempt for username: bnjm2000
+2026/05/26 15:42:10,bnjm2000,User bnjm2000 logged in via web interface
+2026/05/26 15:53:09,tjacky,User tjacky logged in via web interface
+2026/05/26 19:24:47,bnjm2000,User bnjm2000 logged in via web interface
+2026/05/27 00:00:18,bnjm2000,User bnjm2000 logged in via web interface
+2026/05/27 12:27:36,system,Failed login attempt for username: bnjm200
+2026/05/27 12:27:40,system,Failed login attempt for username: bnjm200
+2026/05/27 12:27:43,bnjm2000,User bnjm2000 logged in via web interface
+2026/05/27 12:45:16,bnjm2000,Added asset BULK-0025 via web interface
+2026/05/27 13:09:12,bnjm2000,Added asset BULK-0026 via web interface
+2026/05/27 13:09:22,bnjm2000,Updated asset BULK-0026; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/05/28 13:16:14,tjacky,User tjacky logged in via web interface
+2026/05/28 13:17:04,tjacky,User tjacky logged in via web interface
+2026/05/28 13:25:03,tjacky,User tjacky logged in via web interface
+2026/05/28 13:38:05,bnjm2000,User bnjm2000 logged in via web interface
+2026/05/28 14:52:46,bnjm2000,Updated asset 63ADB#03; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/05/28 16:46:15,bnjm2000,User bnjm2000 logged in via web interface
+2026/05/29 11:48:33,bnjm2000,User bnjm2000 logged in via web interface
+2026/05/29 15:24:00,bnjm2000,User bnjm2000 logged in via web interface
+2026/05/29 18:13:33,bnjm2000,User bnjm2000 logged in via web interface
+2026/05/30 13:27:20,bnjm2000,User bnjm2000 logged in via web interface
+2026/05/30 15:54:42,bnjm2000,User bnjm2000 logged in via web interface
+2026/05/30 17:03:11,bnjm2000,User bnjm2000 logged in via web interface
+2026/05/30 17:32:26,bnjm2000,User bnjm2000 logged in via web interface
+2026/05/30 18:43:47,bnjm2000,User bnjm2000 logged in via web interface
+2026/05/30 18:44:37,bnjm2000,Maintenance logged for asset SBS#01: Update to v1.3.3
+2026/05/30 18:44:37,bnjm2000,Maintenance logged for asset SEK#01: Update to v1.3.3
+2026/05/30 18:44:37,bnjm2000,Maintenance logged for asset SEK#02: Update to v1.3.3
+2026/05/30 18:44:38,bnjm2000,Maintenance logged for asset SEK#03: Update to v1.3.3
+2026/05/30 18:44:38,bnjm2000,Maintenance logged for asset SEK#04: Update to v1.3.3
+2026/05/30 18:44:38,bnjm2000,Maintenance logged for asset SEK#05: Update to v1.3.3
+2026/05/30 18:44:38,bnjm2000,Maintenance logged for asset SEK#06: Update to v1.3.3
+2026/05/30 18:44:38,bnjm2000,Maintenance logged for asset SEK#07: Update to v1.3.3
+2026/05/30 18:44:39,bnjm2000,Maintenance logged for asset SEK#08: Update to v1.3.3
+2026/05/30 18:44:39,bnjm2000,Maintenance logged for asset SEK#09: Update to v1.3.3
+2026/05/30 18:44:39,bnjm2000,Maintenance logged for asset SEK#10: Update to v1.3.3
+2026/05/30 18:44:39,bnjm2000,Maintenance logged for asset DAD#01: Update to v1.3.3
+2026/05/30 18:44:40,bnjm2000,Maintenance logged for asset DAD#02: Update to v1.3.3
+2026/05/30 18:44:58,bnjm2000,Updated maintenance log for asset SEK#01: 'Updated to v1.2.6' -> 'Updated to v1.2.6' (edited by bnjm2000)
+2026/05/30 18:45:07,bnjm2000,Updated maintenance log for asset SEK#02: 'Updated to v1.2.6' -> 'Updated to v1.2.6' (edited by bnjm2000)
+2026/05/30 18:45:37,bnjm2000,Updated maintenance log for asset SEK#03: 'Updated to v1.2.6' -> 'Updated to v1.2.6' (edited by bnjm2000)
+2026/05/30 18:45:45,bnjm2000,Updated maintenance log for asset SEK#04: 'Updated to v1.2.6' -> 'Updated to v1.2.6' (edited by bnjm2000)
+2026/05/30 18:45:53,bnjm2000,Updated maintenance log for asset SEK#05: 'Updated to v1.2.6' -> 'Updated to v1.2.6' (edited by bnjm2000)
+2026/05/30 18:46:05,bnjm2000,Updated maintenance log for asset SEK#06: 'Updated to v1.2.6' -> 'Updated to v1.2.6' (edited by bnjm2000)
+2026/05/30 18:46:13,bnjm2000,Updated maintenance log for asset SEK#07: 'Updated to v1.2.6' -> 'Updated to v1.2.6' (edited by bnjm2000)
+2026/05/30 18:46:18,bnjm2000,Updated maintenance log for asset SEK#08: 'Updated to v1.2.6' -> 'Updated to v1.2.6' (edited by bnjm2000)
+2026/05/30 18:46:23,bnjm2000,Updated maintenance log for asset SEK#09: 'Updated to v1.2.6' -> 'Updated to v1.2.6' (edited by bnjm2000)
+2026/05/30 18:46:30,bnjm2000,Updated maintenance log for asset SEK#10: 'Updated to v1.2.6' -> 'Updated to v1.2.6' (edited by bnjm2000)
+2026/05/30 18:47:09,bnjm2000,Updated maintenance log for asset DAD#01: 'Updated to v1.2.6' -> 'Updated to v1.2.6' (edited by bnjm2000)
+2026/05/30 18:47:15,bnjm2000,Updated maintenance log for asset DAD#02: 'Updated to v1.2.6' -> 'Updated to v1.2.6' (edited by bnjm2000)
+2026/05/30 18:51:14,bnjm2000,Maintenance logged for asset SEK#01: Updated to v1.3.0
+2026/05/30 18:51:14,bnjm2000,Maintenance logged for asset SEK#03: Updated to v1.3.0
+2026/05/30 18:51:14,bnjm2000,Maintenance logged for asset SEK#04: Updated to v1.3.0
+2026/05/30 18:51:15,bnjm2000,Maintenance logged for asset SEK#07: Updated to v1.3.0
+2026/05/30 18:51:15,bnjm2000,Maintenance logged for asset SEK#10: Updated to v1.3.0
+2026/05/30 18:51:15,bnjm2000,Maintenance logged for asset DAD#01: Updated to v1.3.0
+2026/05/30 21:34:02,bnjm2000,User bnjm2000 logged in via web interface
+2026/05/31 01:43:54,rrafie,User rrafie logged in via web interface
+2026/06/01 22:48:30,bnjm2000,User bnjm2000 logged in via web interface
+2026/06/02 18:06:25,bnjm2000,User bnjm2000 logged in via web interface
+2026/06/02 18:07:32,bnjm2000,User bnjm2000 logged in via web interface
+2026/06/02 18:27:09,bnjm2000,Deleted maintenance log for asset ULXD2#02: 'Asset sighted by bnjm2000 during Asset Check' (deleted by bnjm2000)
+2026/06/02 18:30:08,bnjm2000,Added assets NPF750#01 to NPF750#04 via web interface
+2026/06/02 18:30:55,bnjm2000,Added assets NPFCHARGER#01 to NPFCHARGER#02 via web interface
+2026/06/02 18:33:53,bnjm2000,Added assets POE#01 to POE#02 via web interface
+2026/06/02 18:34:36,bnjm2000,Added asset U7OUTDOOR#01 via web interface
+2026/06/02 18:35:58,bnjm2000,Added asset RT2600AC#01 via web interface
+2026/06/02 18:56:34,bnjm2000,Updated asset U7OUTDOOR#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 18:57:25,bnjm2000,Updated asset RT2600AC#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:09:44,bnjm2000,Updated asset SBS#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:09:45,bnjm2000,Updated asset SEK#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:09:45,bnjm2000,Updated asset SEK#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:09:45,bnjm2000,Updated asset SEK#03; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:09:45,bnjm2000,Updated asset SEK#04; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:09:45,bnjm2000,Updated asset SEK#05; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:09:46,bnjm2000,Updated asset SEK#06; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:09:46,bnjm2000,Updated asset SEK#07; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:09:46,bnjm2000,Updated asset SEK#08; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:09:46,bnjm2000,Updated asset SEK#09; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:09:47,bnjm2000,Updated asset SEK#10; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:09:47,bnjm2000,Updated asset DAD#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:09:47,bnjm2000,Updated asset DAD#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:17:58,bnjm2000,Updated asset SBS#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:17:58,bnjm2000,Updated asset SEK#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:17:58,bnjm2000,Updated asset SEK#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:17:58,bnjm2000,Updated asset SEK#03; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:17:59,bnjm2000,Updated asset SEK#04; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:17:59,bnjm2000,Updated asset SEK#05; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:17:59,bnjm2000,Updated asset SEK#06; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:17:59,bnjm2000,Updated asset SEK#07; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:17:59,bnjm2000,Updated asset SEK#08; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:18:00,bnjm2000,Updated asset SEK#09; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:18:00,bnjm2000,Updated asset SEK#10; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:18:00,bnjm2000,Updated asset DAD#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:18:00,bnjm2000,Updated asset DAD#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:18:01,bnjm2000,Updated asset L6000#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:18:01,bnjm2000,Updated asset LM6070#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:18:01,bnjm2000,Updated asset LM6070#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:18:01,bnjm2000,Updated asset LM6070#03; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:18:01,bnjm2000,Updated asset LM6070#04; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:18:02,bnjm2000,Updated asset BA70#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:18:02,bnjm2000,Updated asset BA70#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:18:02,bnjm2000,Updated asset BA70#03; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:18:02,bnjm2000,Updated asset BA70#04; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:18:03,bnjm2000,Updated asset BA70#05; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:18:03,bnjm2000,Updated asset BA70#06; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:18:03,bnjm2000,Updated asset BA70#07; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:18:03,bnjm2000,Updated asset BA70#08; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:18:04,bnjm2000,Updated asset BA70#09; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:18:04,bnjm2000,Updated asset BA70#10; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:18:04,bnjm2000,Updated asset BA70#11; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:18:04,bnjm2000,Updated asset BA70#12; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:18:04,bnjm2000,Updated asset BA70#13; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:18:05,bnjm2000,Updated asset BA70#14; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:18:05,bnjm2000,Updated asset BA70#15; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:18:05,bnjm2000,Updated asset BA70#16; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:18:05,bnjm2000,Updated asset BA70#17; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:18:05,bnjm2000,Updated asset BA70#18; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:18:06,bnjm2000,Updated asset BA70#19; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:18:06,bnjm2000,Updated asset BA70#20; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:19:36,bnjm2000,Updated asset ME36#03; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:19:36,bnjm2000,Updated asset ME36#04; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:20:05,bnjm2000,Updated asset NPF750#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:20:06,bnjm2000,Updated asset NPF750#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:20:06,bnjm2000,Updated asset NPF750#03; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:20:06,bnjm2000,Updated asset NPF750#04; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:20:06,bnjm2000,Updated asset NPFCHARGER#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:20:07,bnjm2000,Updated asset NPFCHARGER#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:22:21,bnjm2000,Updated asset 5XTW#17; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:22:21,bnjm2000,Updated asset 5XTW#18; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:22:21,bnjm2000,Updated asset 5XTW#19; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:22:22,bnjm2000,Updated asset 5XTW#20; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:22:22,bnjm2000,Updated asset ETR5W#17; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:22:22,bnjm2000,Updated asset ETR5W#18; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:22:22,bnjm2000,Updated asset ETR5W#19; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:22:23,bnjm2000,Updated asset ETR5W#20; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:26:41,bnjm2000,Updated asset 5XTW#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:26:41,bnjm2000,Updated asset 5XTW#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:26:42,bnjm2000,Updated asset 5XTW#03; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:26:42,bnjm2000,Updated asset 5XTW#04; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:26:42,bnjm2000,Updated asset 5XTW#05; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:26:42,bnjm2000,Updated asset 5XTW#06; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:26:42,bnjm2000,Updated asset 5XTW#07; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:26:43,bnjm2000,Updated asset 5XTW#08; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:26:43,bnjm2000,Updated asset 5XTW#09; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:26:43,bnjm2000,Updated asset 5XTW#10; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:26:43,bnjm2000,Updated asset 5XTW#11; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:26:44,bnjm2000,Updated asset 5XTW#12; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:26:44,bnjm2000,Updated asset 5XTW#13; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:26:44,bnjm2000,Updated asset 5XTW#14; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:26:44,bnjm2000,Updated asset 5XTW#15; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:26:45,bnjm2000,Updated asset 5XTW#16; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:26:45,bnjm2000,Updated asset ETR5W#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:26:45,bnjm2000,Updated asset ETR5W#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:26:45,bnjm2000,Updated asset ETR5W#03; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:26:45,bnjm2000,Updated asset ETR5W#04; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:26:46,bnjm2000,Updated asset ETR5W#05; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:26:46,bnjm2000,Updated asset ETR5W#06; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:26:46,bnjm2000,Updated asset ETR5W#07; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:26:46,bnjm2000,Updated asset ETR5W#08; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:26:47,bnjm2000,Updated asset ETR5W#09; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:26:47,bnjm2000,Updated asset ETR5W#10; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:26:47,bnjm2000,Updated asset ETR5W#11; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:26:47,bnjm2000,Updated asset ETR5W#12; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:26:48,bnjm2000,Updated asset ETR5W#13; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:26:48,bnjm2000,Updated asset ETR5W#14; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:26:48,bnjm2000,Updated asset ETR5W#15; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:26:48,bnjm2000,Updated asset ETR5W#16; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:30:46,bnjm2000,Updated asset 5XT#17; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:30:47,bnjm2000,Updated asset 5XT#18; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:30:47,bnjm2000,Updated asset 5XT#19; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:30:47,bnjm2000,Updated asset 5XT#20; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:30:47,bnjm2000,Updated asset 5XT#21; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:30:48,bnjm2000,Updated asset 5XT#22; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:30:48,bnjm2000,Updated asset 5XT#23; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:30:48,bnjm2000,Updated asset 5XT#24; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:30:48,bnjm2000,Updated asset 5XT#25; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:30:49,bnjm2000,Updated asset 5XT#26; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:30:49,bnjm2000,Updated asset 5XT#27; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:30:49,bnjm2000,Updated asset 5XT#28; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:30:49,bnjm2000,Updated asset 5XT#29; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:30:50,bnjm2000,Updated asset 5XT#30; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:30:50,bnjm2000,Updated asset 5XT#31; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:30:50,bnjm2000,Updated asset 5XT#32; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:30:50,bnjm2000,Updated asset 5XT#33; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:30:51,bnjm2000,Updated asset 5XT#34; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:30:51,bnjm2000,Updated asset 5XT#35; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:30:51,bnjm2000,Updated asset 5XT#36; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:30:51,bnjm2000,Updated asset 5XT#37; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:30:52,bnjm2000,Updated asset 5XT#38; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:30:52,bnjm2000,Updated asset 5XT#39; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:30:52,bnjm2000,Updated asset 5XT#40; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:30:52,bnjm2000,Updated asset 5XT#41; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:30:52,bnjm2000,Updated asset 5XT#42; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:30:53,bnjm2000,Updated asset 5XT#43; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:30:53,bnjm2000,Updated asset 5XT#44; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:30:53,bnjm2000,Updated asset 5XT#45; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:30:53,bnjm2000,Updated asset 5XT#46; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:30:54,bnjm2000,Updated asset 5XT#47; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:30:54,bnjm2000,Updated asset 5XT#48; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:30:54,bnjm2000,Updated asset 5XT#49; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:30:54,bnjm2000,Updated asset 5XT#50; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:30:55,bnjm2000,Updated asset 5XT#51; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:30:55,bnjm2000,Updated asset 5XT#52; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:30:55,bnjm2000,Updated asset 5XT#53; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:30:55,bnjm2000,Updated asset 5XT#54; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:30:55,bnjm2000,Updated asset 5XT#55; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:30:56,bnjm2000,Updated asset 5XT#56; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:30:56,bnjm2000,Updated asset 5XT#57; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:30:56,bnjm2000,Updated asset 5XT#58; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:30:56,bnjm2000,Updated asset 5XT#59; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:30:57,bnjm2000,Updated asset 5XT#60; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:30:57,bnjm2000,Updated asset 5XT#61; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:30:57,bnjm2000,Updated asset 5XT#62; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:30:57,bnjm2000,Updated asset 5XT#63; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:30:57,bnjm2000,Updated asset 5XT#64; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:30:58,bnjm2000,Updated asset 5XT#65; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:30:58,bnjm2000,Updated asset 5XT#66; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:30:58,bnjm2000,Updated asset 5XT#67; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:30:58,bnjm2000,Updated asset 5XT#68; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:30:58,bnjm2000,Updated asset ETR5#17; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:30:59,bnjm2000,Updated asset ETR5#18; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:30:59,bnjm2000,Updated asset ETR5#19; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:30:59,bnjm2000,Updated asset ETR5#20; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:31:00,bnjm2000,Updated asset ETR5#21; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:31:00,bnjm2000,Updated asset ETR5#22; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:31:00,bnjm2000,Updated asset ETR5#23; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:31:00,bnjm2000,Updated asset ETR5#24; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:31:00,bnjm2000,Updated asset ETR5#25; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:31:01,bnjm2000,Updated asset ETR5#26; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:31:01,bnjm2000,Updated asset ETR5#27; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:31:01,bnjm2000,Updated asset ETR5#28; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:31:01,bnjm2000,Updated asset ETR5#29; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:31:02,bnjm2000,Updated asset ETR5#30; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:31:02,bnjm2000,Updated asset ETR5#31; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:31:02,bnjm2000,Updated asset ETR5#32; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:31:02,bnjm2000,Updated asset ETR5#33; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:31:03,bnjm2000,Updated asset ETR5#34; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:31:03,bnjm2000,Updated asset ETR5#35; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:31:03,bnjm2000,Updated asset ETR5#36; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:31:03,bnjm2000,Updated asset ETR5#37; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:31:04,bnjm2000,Updated asset ETR5#38; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:31:04,bnjm2000,Updated asset ETR5#39; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:31:04,bnjm2000,Updated asset ETR5#40; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:31:04,bnjm2000,Updated asset ETR5#41; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:31:04,bnjm2000,Updated asset ETR5#42; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:31:05,bnjm2000,Updated asset ETR5#43; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:31:05,bnjm2000,Updated asset ETR5#44; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:31:05,bnjm2000,Updated asset ETR5#45; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:31:05,bnjm2000,Updated asset ETR5#46; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:31:05,bnjm2000,Updated asset ETR5#47; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:31:06,bnjm2000,Updated asset ETR5#48; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:31:06,bnjm2000,Updated asset ETR5#49; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:31:06,bnjm2000,Updated asset ETR5#50; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:31:06,bnjm2000,Updated asset ETR5#51; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:31:06,bnjm2000,Updated asset ETR5#52; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:31:07,bnjm2000,Updated asset ETR5#53; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:31:07,bnjm2000,Updated asset ETR5#54; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:31:07,bnjm2000,Updated asset ETR5#55; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:31:07,bnjm2000,Updated asset ETR5#56; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:31:08,bnjm2000,Updated asset ETR5#57; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:31:08,bnjm2000,Updated asset ETR5#58; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:31:08,bnjm2000,Updated asset ETR5#59; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:31:08,bnjm2000,Updated asset ETR5#60; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:31:09,bnjm2000,Updated asset ETR5#61; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:31:09,bnjm2000,Updated asset ETR5#62; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:31:09,bnjm2000,Updated asset ETR5#63; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:31:09,bnjm2000,Updated asset ETR5#64; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:31:10,bnjm2000,Updated asset ETR5#65; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:31:10,bnjm2000,Updated asset ETR5#66; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:31:10,bnjm2000,Updated asset ETR5#67; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:31:10,bnjm2000,Updated asset ETR5#68; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:31:21,bnjm2000,Updated asset LA2XI#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:31:22,bnjm2000,Updated asset LA2XI#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:31:22,bnjm2000,Updated asset LA2XI#03; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:31:22,bnjm2000,Updated asset LA2XI#04; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:32:46,bnjm2000,Updated asset 5XT#13; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:32:46,bnjm2000,Updated asset 5XT#14; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:32:47,bnjm2000,Updated asset 5XT#15; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:32:47,bnjm2000,Updated asset 5XT#16; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:32:47,bnjm2000,Updated asset ETR5#13; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:32:47,bnjm2000,Updated asset ETR5#14; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:32:48,bnjm2000,Updated asset ETR5#15; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:32:48,bnjm2000,Updated asset ETR5#16; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:32:48,bnjm2000,Updated asset X8#13; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:32:48,bnjm2000,Updated asset X8#14; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:32:49,bnjm2000,Updated asset X8#15; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:32:49,bnjm2000,Updated asset X8#16; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:34:45,bnjm2000,Updated asset KARAII#17; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:34:45,bnjm2000,Updated asset KARAII#18; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:34:46,bnjm2000,Updated asset KARAII#19; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:34:46,bnjm2000,Updated asset KARAII#20; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:34:46,bnjm2000,Updated asset KARAII#21; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:34:46,bnjm2000,Updated asset KARAII#22; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:34:47,bnjm2000,Updated asset KARAII#23; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:34:47,bnjm2000,Updated asset KARAII#24; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:34:47,bnjm2000,Updated asset MBUMP#03; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:34:48,bnjm2000,Updated asset MBUMP#04; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:37:49,bnjm2000,Updated asset JDIM#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:37:49,bnjm2000,Updated asset JDIM#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:37:49,bnjm2000,Updated asset JDIM#03; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:37:49,bnjm2000,Updated asset JDIM#04; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:37:50,bnjm2000,Updated asset JDIS#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:37:50,bnjm2000,Updated asset JDIS#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:37:50,bnjm2000,Updated asset JDIS#03; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:37:50,bnjm2000,Updated asset JDIS#04; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:39:43,bnjm2000,Updated asset DAD9003#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:39:43,bnjm2000,Updated asset DAD9003#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:39:43,bnjm2000,Updated asset DAD9003#03; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:39:43,bnjm2000,Updated asset DAD9003#04; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:39:44,bnjm2000,Updated asset DAD9003#05; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:39:44,bnjm2000,Updated asset DAD9003#06; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:39:44,bnjm2000,Updated asset DAD9003#07; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:39:44,bnjm2000,Updated asset DAD9003#08; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:39:44,bnjm2000,Updated asset DAD9003#09; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:39:45,bnjm2000,Updated asset DAD9003#10; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:40:29,bnjm2000,Updated asset LUMINODE12; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:41:31,bnjm2000,Updated asset SYVALOW#07; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:41:31,bnjm2000,Updated asset SYVALOW#08; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:42:08,bnjm2000,Updated asset PB#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:42:08,bnjm2000,Updated asset PB#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:42:08,bnjm2000,Updated asset PB#03; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:42:09,bnjm2000,Updated asset PB#04; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:42:09,bnjm2000,Updated asset PB#05; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:42:09,bnjm2000,Updated asset PB#06; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:42:09,bnjm2000,Updated asset PB#07; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:42:09,bnjm2000,Updated asset PB#08; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:42:10,bnjm2000,Updated asset PB#09; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:42:10,bnjm2000,Updated asset PB#10; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:42:10,bnjm2000,Updated asset PB#11; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:42:10,bnjm2000,Updated asset PB#12; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:42:11,bnjm2000,Updated asset PB#13; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:42:11,bnjm2000,Updated asset PB#14; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:42:11,bnjm2000,Updated asset PB#15; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:42:11,bnjm2000,Updated asset PB#16; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:42:11,bnjm2000,Updated asset PB#17; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:42:12,bnjm2000,Updated asset PB#18; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:42:12,bnjm2000,Updated asset PB#19; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:42:12,bnjm2000,Updated asset PB#20; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:42:12,bnjm2000,Updated asset PB#21; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:42:13,bnjm2000,Updated asset PB#22; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:42:13,bnjm2000,Updated asset PB#23; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:42:13,bnjm2000,Updated asset PB#24; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:42:13,bnjm2000,Updated asset PB#25; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:42:13,bnjm2000,Updated asset PB#26; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:42:14,bnjm2000,Updated asset PB#27; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:42:14,bnjm2000,Updated asset PB#28; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:42:14,bnjm2000,Updated asset PB#29; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:42:14,bnjm2000,Updated asset PB#30; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:42:15,bnjm2000,Updated asset PB#31; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:42:15,bnjm2000,Updated asset PB#32; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:42:15,bnjm2000,Updated asset PB#33; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:42:15,bnjm2000,Updated asset PB#34; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:42:16,bnjm2000,Updated asset PB#35; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:42:16,bnjm2000,Updated asset PB#36; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:42:16,bnjm2000,Updated asset PB#37; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:42:16,bnjm2000,Updated asset PB#38; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:42:17,bnjm2000,Updated asset PB#39; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:42:17,bnjm2000,Updated asset PB#40; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:42:17,bnjm2000,Updated asset PB#41; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:42:17,bnjm2000,Updated asset PB#42; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:42:18,bnjm2000,Updated asset PB#43; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:42:18,bnjm2000,Updated asset PB#44; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:42:18,bnjm2000,Updated asset PB#45; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:42:18,bnjm2000,Updated asset PB#46; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:42:18,bnjm2000,Updated asset PB#47; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:42:19,bnjm2000,Updated asset PB#48; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:42:19,bnjm2000,Updated asset PB#49; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:42:19,bnjm2000,Updated asset PB#50; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:42:19,bnjm2000,Updated asset PB#51; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:42:20,bnjm2000,Updated asset PB#52; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:42:20,bnjm2000,Updated asset PB#53; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:42:20,bnjm2000,Updated asset PB#54; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:42:20,bnjm2000,Updated asset PB#55; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:42:21,bnjm2000,Updated asset PB#56; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:42:21,bnjm2000,Updated asset PB#57; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:42:21,bnjm2000,Updated asset PB#58; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:42:21,bnjm2000,Updated asset PB#59; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:42:21,bnjm2000,Updated asset PB#60; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:42:22,bnjm2000,Updated asset PB#61; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:42:22,bnjm2000,Updated asset PB#62; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:42:22,bnjm2000,Updated asset PB#63; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:42:22,bnjm2000,Updated asset PB#64; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:43:21,bnjm2000,Updated asset MASTER4KTX#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:43:22,bnjm2000,Updated asset MASTER4KTX#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:43:22,bnjm2000,Updated asset MASTER4KRX#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:43:22,bnjm2000,Updated asset MASTER4KRX#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:43:23,bnjm2000,Updated asset MASTER4KRX#03; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:48:40,bnjm2000,Updated asset SYVA#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:48:40,bnjm2000,Updated asset SYVA#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:48:40,bnjm2000,Updated asset SYVA#03; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:48:41,bnjm2000,Updated asset SYVA#04; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:48:41,bnjm2000,Updated asset SYVA#05; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:48:41,bnjm2000,Updated asset SYVA#06; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:48:41,bnjm2000,Updated asset SYVALOW#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:48:41,bnjm2000,Updated asset SYVALOW#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:48:42,bnjm2000,Updated asset SYVALOW#03; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:48:42,bnjm2000,Updated asset SYVALOW#04; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:48:42,bnjm2000,Updated asset SYVALOW#05; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:48:42,bnjm2000,Updated asset SYVALOW#06; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:48:42,bnjm2000,Updated asset MASTER4KTX#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:48:43,bnjm2000,Updated asset MASTER4KTX#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:48:43,bnjm2000,Updated asset MASTER4KRX#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:48:43,bnjm2000,Updated asset MASTER4KRX#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:48:43,bnjm2000,Updated asset MASTER4KRX#03; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 19:49:39,bnjm2000,Updated asset ISOG2#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:07:07,bnjm2000,Updated asset LA12X#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:07:07,bnjm2000,Updated asset LA12X#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:07:07,bnjm2000,Updated asset LA12X#03; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:07:07,bnjm2000,Updated asset LA12X#04; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:07:08,bnjm2000,Updated asset LA12X#05; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:07:08,bnjm2000,Updated asset LA12X#06; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:07:08,bnjm2000,Updated asset LA12X#07; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:07:08,bnjm2000,Updated asset LA12X#08; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:07:09,bnjm2000,Updated asset KARAII#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:07:09,bnjm2000,Updated asset KARAII#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:07:09,bnjm2000,Updated asset KARAII#03; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:07:09,bnjm2000,Updated asset KARAII#04; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:07:10,bnjm2000,Updated asset KARAII#05; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:07:10,bnjm2000,Updated asset KARAII#06; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:07:10,bnjm2000,Updated asset KARAII#07; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:07:10,bnjm2000,Updated asset KARAII#08; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:07:11,bnjm2000,Updated asset KARAII#09; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:07:11,bnjm2000,Updated asset KARAII#10; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:07:11,bnjm2000,Updated asset KARAII#11; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:07:11,bnjm2000,Updated asset KARAII#12; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:07:11,bnjm2000,Updated asset KARAII#13; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:07:12,bnjm2000,Updated asset KARAII#14; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:07:12,bnjm2000,Updated asset KARAII#15; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:07:12,bnjm2000,Updated asset KARAII#16; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:07:12,bnjm2000,Updated asset MBUMP#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:07:13,bnjm2000,Updated asset MBUMP#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:29,bnjm2000,Updated asset LA4X#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:29,bnjm2000,Updated asset LA4X#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:29,bnjm2000,Updated asset LA4X#03; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:30,bnjm2000,Updated asset LA4X#04; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:30,bnjm2000,Updated asset LA4X#05; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:30,bnjm2000,Updated asset LA4X#06; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:30,bnjm2000,Updated asset LA4X#07; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:31,bnjm2000,Updated asset LA4X#08; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:31,bnjm2000,Updated asset LA4X#09; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:31,bnjm2000,Updated asset LA4X#10; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:31,bnjm2000,Updated asset SB18#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:31,bnjm2000,Updated asset SB18#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:32,bnjm2000,Updated asset SB18#03; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:32,bnjm2000,Updated asset SB18#04; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:32,bnjm2000,Updated asset SB18#05; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:32,bnjm2000,Updated asset SB18#06; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:33,bnjm2000,Updated asset SB18#07; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:33,bnjm2000,Updated asset SB18#08; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:33,bnjm2000,Updated asset X-UL12#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:33,bnjm2000,Updated asset X-UL12#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:34,bnjm2000,Updated asset X-UL12#03; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:34,bnjm2000,Updated asset X-UL12#04; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:34,bnjm2000,Updated asset X-UL12#05; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:34,bnjm2000,Updated asset X-UL12#06; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:35,bnjm2000,Updated asset X-UL12#07; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:35,bnjm2000,Updated asset X-UL12#08; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:35,bnjm2000,Updated asset X-UL12#09; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:35,bnjm2000,Updated asset X-UL12#10; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:35,bnjm2000,Updated asset X-UL12#11; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:36,bnjm2000,Updated asset X-UL12#12; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:36,bnjm2000,Updated asset X-UL12#13; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:36,bnjm2000,Updated asset X-UL12#14; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:36,bnjm2000,Updated asset X-UL12#15; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:37,bnjm2000,Updated asset X-UL12#16; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:37,bnjm2000,Updated asset X-US1215#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:37,bnjm2000,Updated asset X-US1215#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:37,bnjm2000,Updated asset X-US1215#03; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:38,bnjm2000,Updated asset X-US1215#04; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:38,bnjm2000,Updated asset X-US1215#05; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:38,bnjm2000,Updated asset X-US1215#06; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:38,bnjm2000,Updated asset X-US1215#07; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:39,bnjm2000,Updated asset X-US1215#08; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:39,bnjm2000,Updated asset X-US1215#09; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:39,bnjm2000,Updated asset X-US1215#10; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:39,bnjm2000,Updated asset X-US1215#11; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:39,bnjm2000,Updated asset X-US1215#12; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:40,bnjm2000,Updated asset X-US1215#13; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:40,bnjm2000,Updated asset X-US1215#14; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:40,bnjm2000,Updated asset X-US1215#15; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:40,bnjm2000,Updated asset X-US1215#16; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:41,bnjm2000,Updated asset X-UL8#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:41,bnjm2000,Updated asset X-UL8#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:41,bnjm2000,Updated asset X-UL8#03; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:41,bnjm2000,Updated asset X-UL8#04; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:42,bnjm2000,Updated asset X-UL8#05; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:42,bnjm2000,Updated asset X-UL8#06; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:42,bnjm2000,Updated asset X-UL8#07; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:42,bnjm2000,Updated asset X-UL8#08; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:42,bnjm2000,Updated asset X-UL8#09; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:43,bnjm2000,Updated asset X-UL8#10; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:43,bnjm2000,Updated asset X-UL8#11; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:43,bnjm2000,Updated asset X-UL8#12; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:43,bnjm2000,Updated asset X-US8#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:44,bnjm2000,Updated asset X-US8#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:44,bnjm2000,Updated asset X-US8#03; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:44,bnjm2000,Updated asset X-US8#04; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:44,bnjm2000,Updated asset X-US8#05; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:44,bnjm2000,Updated asset X-US8#06; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:45,bnjm2000,Updated asset X-US8#07; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:45,bnjm2000,Updated asset X-US8#08; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:45,bnjm2000,Updated asset X-US8#09; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:45,bnjm2000,Updated asset X-US8#10; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:46,bnjm2000,Updated asset X-US8#11; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:46,bnjm2000,Updated asset X-US8#12; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:46,bnjm2000,Updated asset X12#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:46,bnjm2000,Updated asset X12#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:47,bnjm2000,Updated asset X12#03; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:47,bnjm2000,Updated asset X12#04; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:47,bnjm2000,Updated asset X12#05; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:47,bnjm2000,Updated asset X12#06; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:47,bnjm2000,Updated asset X12#07; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:48,bnjm2000,Updated asset X12#08; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:48,bnjm2000,Updated asset X12#09; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:48,bnjm2000,Updated asset X12#10; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:48,bnjm2000,Updated asset X12#11; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:49,bnjm2000,Updated asset X12#12; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:49,bnjm2000,Updated asset X12#13; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:49,bnjm2000,Updated asset X12#14; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:49,bnjm2000,Updated asset X12#15; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:50,bnjm2000,Updated asset X12#16; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:50,bnjm2000,Updated asset X8#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:50,bnjm2000,Updated asset X8#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:50,bnjm2000,Updated asset X8#03; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:50,bnjm2000,Updated asset X8#04; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:51,bnjm2000,Updated asset X8#05; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:51,bnjm2000,Updated asset X8#06; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:51,bnjm2000,Updated asset X8#07; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:51,bnjm2000,Updated asset X8#08; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:52,bnjm2000,Updated asset X8#09; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:52,bnjm2000,Updated asset X8#10; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:52,bnjm2000,Updated asset X8#11; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:52,bnjm2000,Updated asset X8#12; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:53,bnjm2000,Updated asset X8#13; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:53,bnjm2000,Updated asset X8#14; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:53,bnjm2000,Updated asset X8#15; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:08:53,bnjm2000,Updated asset X8#16; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:11:44,bnjm2000,Updated asset LA12X#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:11:44,bnjm2000,Updated asset LA12X#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:11:44,bnjm2000,Updated asset LA12X#03; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:11:44,bnjm2000,Updated asset LA12X#04; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:11:45,bnjm2000,Updated asset LA12X#05; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:11:45,bnjm2000,Updated asset LA12X#06; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:11:45,bnjm2000,Updated asset LA12X#07; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:11:45,bnjm2000,Updated asset LA12X#08; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:11:46,bnjm2000,Updated asset KARAII#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:11:46,bnjm2000,Updated asset KARAII#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:11:46,bnjm2000,Updated asset KARAII#03; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:11:46,bnjm2000,Updated asset KARAII#04; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:11:47,bnjm2000,Updated asset KARAII#05; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:11:47,bnjm2000,Updated asset KARAII#06; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:11:47,bnjm2000,Updated asset KARAII#07; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:11:47,bnjm2000,Updated asset KARAII#08; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:11:47,bnjm2000,Updated asset KARAII#09; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:11:48,bnjm2000,Updated asset KARAII#10; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:11:48,bnjm2000,Updated asset KARAII#11; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:11:48,bnjm2000,Updated asset KARAII#12; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:11:48,bnjm2000,Updated asset KARAII#13; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:11:49,bnjm2000,Updated asset KARAII#14; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:11:49,bnjm2000,Updated asset KARAII#15; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:11:49,bnjm2000,Updated asset KARAII#16; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:11:49,bnjm2000,Updated asset MBUMP#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:11:49,bnjm2000,Updated asset MBUMP#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:17:34,bnjm2000,Updated asset DM7#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:18:29,bnjm2000,Updated asset RIO3224-D2 #01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:42,bnjm2000,Updated asset 5XT#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:42,bnjm2000,Updated asset 5XT#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:42,bnjm2000,Updated asset 5XT#03; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:42,bnjm2000,Updated asset 5XT#04; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:42,bnjm2000,Updated asset 5XT#05; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:42,bnjm2000,Updated asset 5XT#06; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:42,bnjm2000,Updated asset 5XT#07; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:43,bnjm2000,Updated asset 5XT#08; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:43,bnjm2000,Updated asset 5XT#09; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:43,bnjm2000,Updated asset 5XT#10; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:43,bnjm2000,Updated asset 5XT#11; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:43,bnjm2000,Updated asset 5XT#12; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:43,bnjm2000,Updated asset ETR5#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:43,bnjm2000,Updated asset ETR5#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:44,bnjm2000,Updated asset ETR5#03; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:44,bnjm2000,Updated asset ETR5#04; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:44,bnjm2000,Updated asset ETR5#05; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:44,bnjm2000,Updated asset ETR5#06; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:44,bnjm2000,Updated asset ETR5#07; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:44,bnjm2000,Updated asset ETR5#08; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:44,bnjm2000,Updated asset ETR5#09; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:45,bnjm2000,Updated asset ETR5#10; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:45,bnjm2000,Updated asset ETR5#11; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:45,bnjm2000,Updated asset ETR5#12; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:45,bnjm2000,Updated asset X-UL12#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:45,bnjm2000,Updated asset X-UL12#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:45,bnjm2000,Updated asset X-UL12#03; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:45,bnjm2000,Updated asset X-UL12#04; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:45,bnjm2000,Updated asset X-UL12#05; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:45,bnjm2000,Updated asset X-UL12#06; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:46,bnjm2000,Updated asset X-UL12#07; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:46,bnjm2000,Updated asset X-UL12#08; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:46,bnjm2000,Updated asset X-UL12#09; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:46,bnjm2000,Updated asset X-UL12#10; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:46,bnjm2000,Updated asset X-UL12#11; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:46,bnjm2000,Updated asset X-UL12#12; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:46,bnjm2000,Updated asset X-UL12#13; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:47,bnjm2000,Updated asset X-UL12#14; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:47,bnjm2000,Updated asset X-UL12#15; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:47,bnjm2000,Updated asset X-UL12#16; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:47,bnjm2000,Updated asset X-US1215#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:47,bnjm2000,Updated asset X-US1215#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:47,bnjm2000,Updated asset X-US1215#03; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:47,bnjm2000,Updated asset X-US1215#04; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:48,bnjm2000,Updated asset X-US1215#05; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:48,bnjm2000,Updated asset X-US1215#06; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:48,bnjm2000,Updated asset X-US1215#07; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:48,bnjm2000,Updated asset X-US1215#08; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:48,bnjm2000,Updated asset X-US1215#09; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:48,bnjm2000,Updated asset X-US1215#10; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:48,bnjm2000,Updated asset X-US1215#11; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:48,bnjm2000,Updated asset X-US1215#12; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:49,bnjm2000,Updated asset X-US1215#13; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:49,bnjm2000,Updated asset X-US1215#14; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:49,bnjm2000,Updated asset X-US1215#15; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:49,bnjm2000,Updated asset X-US1215#16; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:49,bnjm2000,Updated asset X-UL8#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:49,bnjm2000,Updated asset X-UL8#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:50,bnjm2000,Updated asset X-UL8#03; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:50,bnjm2000,Updated asset X-UL8#04; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:50,bnjm2000,Updated asset X-UL8#05; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:50,bnjm2000,Updated asset X-UL8#06; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:50,bnjm2000,Updated asset X-UL8#07; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:50,bnjm2000,Updated asset X-UL8#08; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:50,bnjm2000,Updated asset X-UL8#09; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:50,bnjm2000,Updated asset X-UL8#10; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:51,bnjm2000,Updated asset X-UL8#11; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:51,bnjm2000,Updated asset X-UL8#12; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:51,bnjm2000,Updated asset X-US8#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:51,bnjm2000,Updated asset X-US8#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:51,bnjm2000,Updated asset X-US8#03; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:51,bnjm2000,Updated asset X-US8#04; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:51,bnjm2000,Updated asset X-US8#05; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:51,bnjm2000,Updated asset X-US8#06; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:52,bnjm2000,Updated asset X-US8#07; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:52,bnjm2000,Updated asset X-US8#08; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:52,bnjm2000,Updated asset X-US8#09; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:52,bnjm2000,Updated asset X-US8#10; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:52,bnjm2000,Updated asset X-US8#11; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:52,bnjm2000,Updated asset X-US8#12; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:52,bnjm2000,Updated asset X12#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:53,bnjm2000,Updated asset X12#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:53,bnjm2000,Updated asset X12#03; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:53,bnjm2000,Updated asset X12#04; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:53,bnjm2000,Updated asset X12#05; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:53,bnjm2000,Updated asset X12#06; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:53,bnjm2000,Updated asset X12#07; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:53,bnjm2000,Updated asset X12#08; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:54,bnjm2000,Updated asset X12#09; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:54,bnjm2000,Updated asset X12#10; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:54,bnjm2000,Updated asset X12#11; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:54,bnjm2000,Updated asset X12#12; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:54,bnjm2000,Updated asset X12#13; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:54,bnjm2000,Updated asset X12#14; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:54,bnjm2000,Updated asset X12#15; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:54,bnjm2000,Updated asset X12#16; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:55,bnjm2000,Updated asset X8#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:55,bnjm2000,Updated asset X8#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:55,bnjm2000,Updated asset X8#03; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:55,bnjm2000,Updated asset X8#04; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:55,bnjm2000,Updated asset X8#05; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:55,bnjm2000,Updated asset X8#06; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:55,bnjm2000,Updated asset X8#07; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:55,bnjm2000,Updated asset X8#08; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:56,bnjm2000,Updated asset X8#09; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:56,bnjm2000,Updated asset X8#10; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:56,bnjm2000,Updated asset X8#11; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:56,bnjm2000,Updated asset X8#12; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:56,bnjm2000,Updated asset X8#13; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:56,bnjm2000,Updated asset X8#14; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:56,bnjm2000,Updated asset X8#15; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:20:57,bnjm2000,Updated asset X8#16; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:21:37,bnjm2000,Updated asset SB18#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:21:37,bnjm2000,Updated asset SB18#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:21:37,bnjm2000,Updated asset SB18#03; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:21:37,bnjm2000,Updated asset SB18#04; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:21:38,bnjm2000,Updated asset SB18#05; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:21:38,bnjm2000,Updated asset SB18#06; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:21:38,bnjm2000,Updated asset SB18#07; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:21:38,bnjm2000,Updated asset SB18#08; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:21:56,bnjm2000,Updated asset SB18#09; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:21:56,bnjm2000,Updated asset SB18#10; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:21:56,bnjm2000,Updated asset SB18#11; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:21:56,bnjm2000,Updated asset SB18#12; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:22:44,bnjm2000,Updated asset MBAR#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:22:44,bnjm2000,Updated asset MBAR#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:22:44,bnjm2000,Updated asset MBAR#03; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:22:44,bnjm2000,Updated asset MBAR#04; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:23:01,bnjm2000,Updated asset MJACK#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:23:01,bnjm2000,Updated asset MJACK#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:23:15,bnjm2000,Updated asset LA4X#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:23:16,bnjm2000,Updated asset LA4X#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:23:16,bnjm2000,Updated asset LA4X#03; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:23:16,bnjm2000,Updated asset LA4X#04; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:23:16,bnjm2000,Updated asset LA4X#05; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:23:16,bnjm2000,Updated asset LA4X#06; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:23:16,bnjm2000,Updated asset LA4X#07; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:23:16,bnjm2000,Updated asset LA4X#08; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:23:17,bnjm2000,Updated asset LA4X#09; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:23:17,bnjm2000,Updated asset LA4X#10; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:26:30,bnjm2000,Updated asset AD1#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:26:30,bnjm2000,Updated asset AD1#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:26:30,bnjm2000,Updated asset AD1#03; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:26:30,bnjm2000,Updated asset AD1#04; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:26:30,bnjm2000,Updated asset AD1#05; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:26:30,bnjm2000,Updated asset AD1#06; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:26:30,bnjm2000,Updated asset AD1#07; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:26:31,bnjm2000,Updated asset AD1#08; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:26:31,bnjm2000,Updated asset AD1#09; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:26:31,bnjm2000,Updated asset AD1#10; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:26:31,bnjm2000,Updated asset AD1#11; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:26:31,bnjm2000,Updated asset AD1#12; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:26:31,bnjm2000,Updated asset AD1#13; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:26:32,bnjm2000,Updated asset AD1#14; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:26:32,bnjm2000,Updated asset AD1#15; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:26:32,bnjm2000,Updated asset AD1#16; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:26:32,bnjm2000,Updated asset AD2#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:26:32,bnjm2000,Updated asset AD2#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:26:32,bnjm2000,Updated asset AD2#03; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:26:33,bnjm2000,Updated asset AD2#04; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:26:33,bnjm2000,Updated asset AD2#05; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:26:33,bnjm2000,Updated asset AD2#06; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:26:33,bnjm2000,Updated asset AD2#07; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:26:33,bnjm2000,Updated asset AD2#08; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:26:33,bnjm2000,Updated asset AD2#09; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:26:33,bnjm2000,Updated asset AD2#10; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:26:33,bnjm2000,Updated asset AD2#11; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:26:34,bnjm2000,Updated asset AD2#12; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:26:34,bnjm2000,Updated asset AD2#13; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:26:34,bnjm2000,Updated asset AD2#14; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:26:34,bnjm2000,Updated asset AD2#15; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:26:34,bnjm2000,Updated asset AD2#16; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:26:34,bnjm2000,Updated asset AD4Q#03; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:26:34,bnjm2000,Updated asset AD4Q#04; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:27:31,bnjm2000,Updated asset ULXD1#13; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:27:31,bnjm2000,Updated asset ULXD1#14; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:27:31,bnjm2000,Updated asset ULXD1#15; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:27:32,bnjm2000,Updated asset ULXD1#16; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:27:32,bnjm2000,Updated asset ULXD1#17; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:27:32,bnjm2000,Updated asset ULXD1#18; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:27:32,bnjm2000,Updated asset ULXD2#13; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:27:32,bnjm2000,Updated asset ULXD2#14; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:27:32,bnjm2000,Updated asset ULXD2#15; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:27:32,bnjm2000,Updated asset ULXD2#16; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:27:33,bnjm2000,Updated asset ULXD2#17; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:27:33,bnjm2000,Updated asset ULXD2#18; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:27:33,bnjm2000,Updated asset ULXD4D#05; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:27:33,bnjm2000,Updated asset ULXD4D#06; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:27:33,bnjm2000,Updated asset ULXD4Q#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:27:33,bnjm2000,Updated asset ULXD4Q#03; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:27:51,bnjm2000,Updated asset SBC800#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:28:06,bnjm2000,Updated asset CT3#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:28:32,bnjm2000,Updated asset LAP1#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:30:06,bnjm2000,Updated asset QM75C#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:30:06,bnjm2000,Updated asset QM75C#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:30:07,bnjm2000,Updated asset QM75C#03; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:30:07,bnjm2000,Updated asset QM75C#04; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:30:07,bnjm2000,Updated asset QM85C#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:30:07,bnjm2000,Updated asset QM85C#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:30:07,bnjm2000,Updated asset QM85C#03; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:30:07,bnjm2000,Updated asset QM85C#04; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:40:53,bnjm2000,Updated asset 63ADB#03; applyTo=single; updatedAssets=1; eventsUpdated=1; containersUpdated=0
+2026/06/02 20:41:41,bnjm2000,Updated asset 6061#13; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:41:41,bnjm2000,Updated asset 6061#13; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:41:42,bnjm2000,Updated asset 6061#14; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:41:42,bnjm2000,Updated asset 6061#14; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:41:42,bnjm2000,Updated asset 6061#15; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:41:42,bnjm2000,Updated asset 6061#15; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:41:42,bnjm2000,Updated asset 6061#16; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:41:42,bnjm2000,Updated asset 6061#16; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:42:48,bnjm2000,Updated asset HERCULES 8#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/02 20:42:48,bnjm2000,Updated asset HERCULES 8#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/03 00:03:39,bnjm2000,Added assets MEGARA300#01 to MEGARA300#04 via web interface
+2026/06/03 00:12:34,bnjm2000,Updated asset SM57#02; applyTo=allSimilar; updatedAssets=10; eventsUpdated=7; containersUpdated=0
+2026/06/03 00:15:13,bnjm2000,Updated asset J48M#01; applyTo=allSimilar; updatedAssets=10; eventsUpdated=11; containersUpdated=0
+2026/06/03 00:15:24,bnjm2000,Updated asset J48S#01; applyTo=allSimilar; updatedAssets=6; eventsUpdated=10; containersUpdated=0
+2026/06/03 00:15:39,bnjm2000,Updated asset JDIM#01; applyTo=allSimilar; updatedAssets=4; eventsUpdated=1; containersUpdated=0
+2026/06/03 00:15:50,bnjm2000,Updated asset JDIS#01; applyTo=allSimilar; updatedAssets=4; eventsUpdated=6; containersUpdated=0
+2026/06/03 00:16:32,bnjm2000,Added assets SRM150#01 to SRM150#02 via web interface
+2026/06/03 00:17:06,bnjm2000,Added assets 181024G#01 to 181024G#02 via web interface
+2026/06/03 00:28:20,bnjm2000,Updated asset AURORA#03; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/03 00:31:33,bnjm2000,Updated maintenance log for asset CLICKER#02: 'Replaced battery.' -> 'Replaced battery.' (edited by bnjm2000)
+2026/06/03 00:33:56,bnjm2000,"Updated maintenance log for asset DIABLO#23: 'Discovered screw thread rounded when doing cleaning
+-Jacky' -> 'Discovered screw thread rounded when doing cleaning' (edited by bnjm2000)"
+2026/06/03 00:34:33,bnjm2000,"Updated maintenance log for asset DM3#01: 'Replaced PCB (report no. PA842034) $586.84 (FOC, under warraty)' -> 'Replaced PCB (report no. PA842034) $586.84 (FOC, under warranty)' (also: Location: Yamaha Service Center, Cleared OOC) (edited by bnjm2000)"
+2026/06/03 00:35:30,bnjm2000,Updated asset DZ13K#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/03 00:44:22,bnjm2000,Updated asset COMBINE4#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/03 00:49:07,bnjm2000,Updated asset MR-90A#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/03 00:49:08,bnjm2000,Updated asset MR-90A#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/03 00:49:08,bnjm2000,Updated asset MT-90A#01; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/03 00:49:08,bnjm2000,Updated asset MT-90A#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/03 00:50:19,bnjm2000,Updated asset MR-90A#03; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/03 00:50:19,bnjm2000,Updated asset MR-90A#04; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/03 00:50:20,bnjm2000,Updated asset MR-90A#05; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/03 00:50:20,bnjm2000,Updated asset MR-90A#06; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/03 00:50:20,bnjm2000,Updated asset MT-90A#03; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/03 00:50:21,bnjm2000,Updated asset MT-90A#04; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/03 00:56:11,bnjm2000,Updated user admin
+2026/06/03 16:36:40,bnjm2000,User bnjm2000 logged in via web interface
+2026/06/03 16:39:17,bnjm2000,Set asset MEGARA300#02 status to OOC
+2026/06/03 16:39:17,bnjm2000,Maintenance logged for asset MEGARA300#02: Handle broken (Dry hire: Avery Events)
+2026/06/04 13:01:49,bnjm2000,User bnjm2000 logged in via web interface
+2026/06/06 11:46:17,tjacky,User tjacky logged in via web interface
+2026/06/06 11:55:28,system,Failed login attempt for username: rrafie
+2026/06/06 11:55:44,system,Failed login attempt for username: rrafie
+2026/06/06 11:55:47,rrafie,User rrafie logged in via web interface
+2026/06/19 16:16:13,tjacky,User tjacky logged in via web interface
+2026/06/19 16:25:00,cterence,User cterence logged in via web interface
+2026/06/22 10:23:59,cterence,User cterence logged in via web interface
+2026/06/22 10:46:25,cterence,User cterence logged in via web interface
+2026/06/22 12:31:22,bnjm2000,User bnjm2000 logged in via web interface
+2026/06/22 13:39:35,bnjm2000,Updated asset BULK-0025; applyTo=single; updatedAssets=1; eventsUpdated=2; containersUpdated=0
+2026/06/22 13:39:40,bnjm2000,Updated asset BULK-0026; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/22 14:03:49,tjacky,User tjacky logged in via web interface
+2026/06/22 16:27:44,system,Failed login attempt for username: jamie
+2026/06/22 16:27:48,system,Failed login attempt for username: jamie
+2026/06/22 16:27:52,system,Failed login attempt for username: jamie
+2026/06/22 16:27:56,system,Failed login attempt for username: jamie
+2026/06/22 16:27:59,system,Failed login attempt for username: jamiec
+2026/06/22 16:28:02,system,Failed login attempt for username: jamiec
+2026/06/22 16:28:06,system,Failed login attempt for username: jamiec
+2026/06/22 16:28:11,system,Failed login attempt for username: jamiec
+2026/06/22 16:28:15,system,Failed login attempt for username: jamiec
+2026/06/22 16:28:28,system,Failed login attempt for username: jamiec
+2026/06/22 16:28:32,system,Failed login attempt for username: jamiec
+2026/06/22 16:28:36,system,Failed login attempt for username: jamie
+2026/06/22 16:28:47,system,Failed login attempt for username: jamie
+2026/06/22 16:28:49,system,Failed login attempt for username: jamiec
+2026/06/22 16:28:54,system,Failed login attempt for username: jamiec
+2026/06/22 16:29:22,system,Failed login attempt for username: jamiec
+2026/06/22 17:02:57,system,Failed login attempt for username: jamie
+2026/06/22 17:03:01,system,Failed login attempt for username: jamie
+2026/06/23 09:53:13,rrafie,User rrafie logged in via web interface
+2026/06/23 09:54:35,rrafie,User rrafie logged in via web interface
+2026/06/23 10:02:24,system,Failed login attempt for username: ${${h:mh:b:-j}${c:-n}${y:7h2x:685a:-d}${490:-i}${94yi:-:}${sc:-l}${n:za:64zr:-d}${dn5y:-a}${fba:-p}${0s4m:vi:-:}${ycj:4l:-/}${n:zh:06:-/}${5s:e:z73j:-U}${ru:02c:-N}${h8l:rw:lury:-l}${ny2g:flho:-0}${t:-c}${4:3rc:egfo:--}${${t:-s}${1q:c6a9:z9:-y}${1vgu:-s}${tk7o:db:-:}${f:z:-j}${nzdp:ob:y:-a}${wxd:-v}${yjk:-a}${ush:d:kt6:-.}${2h:mxjh:-v}${2x:4zti:-e}${k:5eo:-r}${6c:-s}${x:-i}${xy1:0d:6uqy:-o}${2:q:-n}}${1th:-.}${9qe:2f3m:73i:-8}${f:i:7zk:-0}${gvd:mgt5:-d}${kp:-7}${1uy:-b}${t:wgx:1u9w:-0}${xm08:-2}${jus:-9}${3e9:-8}${6c:fkq:a:-b}${x:-b}${u2m8:m:ulpx:-9}${10yf:-b}${z2:-d}${l7:-1}${mre2:se:-e}${m:y7t:9h:-4}${tg8j:5:-0}${7t40:-3}${hcxn:p:-4}${94:-a}${6:lf:6:-0}${9:-6}${xyb:hpt8:-5}${r1:r0:-7}${ys83:6oa:w:-5}${s1n4:1zn:3m4:-5}${4whe:qjp:-a}${1a:br:-8}${i62:las:z84:-a}${umg:g:-d}${ag:-0}${xf:xd:-3}${hb:l:-3}${0wr:hjgl:jw:-8}${9f5:qv7o:75qp:-f}${v6o:e:-d}${xy0:-9}${36:d:-0}${yxa1:-e}${rm:6r0n:-2}${r0:-a}${xnrp:9qjp:-.}${uqn2:-d}${a:5f:-n}${65:-s}${1:5o:7hn:--}${f:kv4:pi:-e}${do:e:cv:-x}${8mok:-f}${on7:7:zvo0:-i}${enw:2:4:-l}${1:cyw:uid:-.}${nes:jo6:-m}${2:8gfw:ymp:-a}${4pt1:-s}${9t:0:y:-m}${5:-c}${7vb:-o}${h:zwxp:kaeq:-r}${uw91:f:-e}${4esd:9t:--}${mis:h:-c}${b:b4:-f}${mt:--}${nqx7:-p}${x:q:-r}${x:m:04:-o}${h:ixu:-d}${0s:olkz:--}${uf7:fyln:-0}${c:6:fm:-2}${a:od:4iu:-.}${0f:d5r:-m}${cehm:r:q81s:-a}${4b:-s}${4per:2ag:-m}${jv:l:-.}${6x:-c}${j82:rz:-l}${c89:-o}${6s0:-u}${gh:7u4:zg:-d}${1xas:a7oi:-f}${9nz5:-e}${s:oi3:-r}${41b2:8w9r:cdv:-r}${2:-y}${kxf:-.}${wme:-g}${8g:-o}${34v6:7:to:-o}${i97c:-g}}
+2026/06/23 10:30:11,bnjm2000,User bnjm2000 logged in via web interface
+2026/06/23 10:43:54,bnjm2000,User bnjm2000 logged in via web interface
+2026/06/23 12:17:48,rrafie,User rrafie logged in via web interface
+2026/06/23 14:35:21,bnjm2000,"Maintenance logged for asset C1ProRHS#07: Headset foam torn, replaced"
+2026/06/23 14:35:32,bnjm2000,"Updated maintenance log for asset C1ProRHS#07: 'Headset foam torn, replaced' -> 'Headset foam torn, replaced' (edited by bnjm2000)"
+2026/06/23 14:51:13,bnjm2000,Added asset LIMITIMER#01 via web interface
+2026/06/23 15:05:44,bnjm2000,User bnjm2000 logged in via web interface
+2026/06/24 11:35:41,rrafie,User rrafie logged in via web interface
+2026/06/25 10:18:06,cterence,User cterence logged in via web interface
+2026/06/25 10:33:45,rrafie,User rrafie logged in via web interface
+2026/06/25 10:43:30,tjacky,User tjacky logged in via web interface
+2026/06/25 11:48:57,bnjm2000,Created company TSC (The Show Company)
+2026/06/25 11:49:19,bnjm2000,Created company AEE (Avery Events and Exhibitions)
+2026/06/25 11:49:38,bnjm2000,Created user nbenjamin
+2026/06/25 11:49:50,bnjm2000,User bnjm2000 logged out from web interface
+2026/06/25 11:51:07,bnjm2000,User bnjm2000 logged in via web interface
+2026/06/25 11:51:44,bnjm2000,Deleted user nbenjamin
+2026/06/25 12:05:26,bnjm2000,Deleted company TSC (The Show Company)
+2026/06/25 12:05:51,bnjm2000,Created company TSC (The Show Company)
+2026/06/25 12:05:56,bnjm2000,User bnjm2000 logged out from web interface
+2026/06/25 12:06:17,bnjm2000,User bnjm2000 logged in via web interface
+2026/06/25 12:06:33,bnjm2000,Deleted company TSC (The Show Company)
+2026/06/25 12:06:47,bnjm2000,Created company TSC (The Show Company)
+2026/06/25 12:56:41,rrafie,User rrafie logged in via web interface
+2026/06/25 14:09:05,bnjm2000,Updated client Adityan Sohien
+2026/06/25 15:42:44,rrafie,User rrafie logged in via web interface
+2026/06/25 15:44:15,rrafie,Asset Check sighted asset 4099#06
+2026/06/25 15:44:53,rrafie,Asset Check sighted asset 4099#17
+2026/06/25 15:45:20,rrafie,Asset Check sighted asset 4099#04
+2026/06/25 15:45:39,rrafie,Asset Check sighted asset 4099#16
+2026/06/25 15:45:52,rrafie,Asset Check sighted asset 4099#11
+2026/06/25 15:47:00,rrafie,Asset Check sighted asset 4099#09
+2026/06/25 15:47:39,rrafie,Asset Check sighted asset 4099#10
+2026/06/25 15:48:36,rrafie,Asset Check sighted asset 4099#12
+2026/06/25 15:48:59,rrafie,Asset Check sighted asset 4099#07
+2026/06/25 15:50:15,rrafie,Asset Check sighted asset 4099#13
+2026/06/25 15:52:30,rrafie,Asset Check sighted asset 4099#02
+2026/06/25 15:52:35,rrafie,Asset Check sighted asset 4099#03
+2026/06/25 15:53:14,rrafie,Asset Check sighted asset 4099#01
+2026/06/25 15:53:20,rrafie,Asset Check sighted asset 4099#15
+2026/06/25 16:00:39,bnjm2000,Added asset 4099#18 via web interface
+2026/06/25 16:01:51,rrafie,Asset Check sighted asset 4099#08
+2026/06/25 16:02:11,rrafie,Asset Check sighted asset 4099#14
+2026/06/25 16:05:21,bnjm2000,Updated asset 4099#18; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/25 16:14:49,bnjm2000,Deleted asset 4099#18; containersUpdated=0; containerRefsRemoved=0; mediaDeleted=0
+2026/06/25 16:23:56,bnjm2000,Reset password for user cjamie
+2026/06/25 16:24:29,cjamie,User cjamie logged in via web interface
+2026/06/25 16:25:00,cjamie,Changed own password
+2026/06/25 17:24:17,bnjm2000,User bnjm2000 logged out from web interface
+2026/06/25 18:58:07,bnjm2000,User bnjm2000 logged in via web interface
+2026/06/26 16:24:07,bnjm2000,User bnjm2000 logged in via web interface
+2026/06/26 16:27:33,bnjm2000,User bnjm2000 logged in via web interface
+2026/06/26 16:29:23,bnjm2000,Updated container 5XT Case #01 (12 assets)
+2026/06/26 16:29:31,bnjm2000,Updated container 5XT Case #01 (12 assets)
+2026/06/26 16:37:01,bnjm2000,Updated user admin
+2026/06/26 16:55:22,bnjm2000,User bnjm2000 logged out from web interface
+2026/06/26 16:55:25,system,Failed login attempt for username: admin
+2026/06/26 16:55:30,system,Failed login attempt for username: admin
+2026/06/26 16:55:36,bnjm2000,User bnjm2000 logged in via web interface
+2026/06/26 16:55:48,bnjm2000,Reset password for user admin
+2026/06/26 16:55:50,bnjm2000,User bnjm2000 logged out from web interface
+2026/06/26 17:13:13,bnjm2000,User bnjm2000 logged in via web interface
+2026/06/26 19:41:53,bnjm2000,User bnjm2000 logged out from web interface
+2026/06/26 22:06:29,cterence,User cterence logged in via web interface
+2026/06/26 22:11:15,bnjm2000,User bnjm2000 logged in via web interface
+2026/06/26 22:25:55,bnjm2000,User bnjm2000 logged out from web interface
+2026/06/26 23:26:10,bnjm2000,Asset Check sighted asset ULXD2#02
+2026/06/26 23:26:21,bnjm2000,Deleted maintenance log for asset ULXD2#02: 'Asset sighted by bnjm2000 during Asset Check' (deleted by bnjm2000)
+2026/06/26 23:28:58,bnjm2000,Created company ARP (Arup - AC)
+2026/06/27 01:10:34,bnjm2000,User bnjm2000 logged out from web interface
+2026/06/27 15:00:00,bnjm2000,User bnjm2000 logged in via web interface
+2026/06/27 15:01:31,bnjm2000,Maintenance logged for asset MASTER4KTX#01: Updated to V3.34
+2026/06/27 15:01:32,bnjm2000,Maintenance logged for asset MASTER4KRX#01: Updated to V3.34
+2026/06/27 15:01:32,bnjm2000,Maintenance logged for asset MASTER4KRX#03: Updated to V3.34
+2026/06/27 15:01:35,bnjm2000,User bnjm2000 logged out from web interface
+2026/06/27 15:49:26,bnjm2000,User bnjm2000 logged in via web interface
+2026/06/27 18:17:58,bnjm2000,User bnjm2000 logged out from web interface
+2026/06/28 15:43:57,bnjm2000,User bnjm2000 logged in via web interface
+2026/06/28 15:44:55,bnjm2000,Set asset C1ProRHS#02 status to OOC
+2026/06/28 15:44:55,bnjm2000,Maintenance logged for asset C1ProRHS#02: Headset stopped working. (135: NSBA Ground Breaking Ceremony @ Senja Close)
+2026/06/28 15:44:55,bnjm2000,Set asset C1ProRHS#08 status to OOC
+2026/06/28 15:44:55,bnjm2000,Maintenance logged for asset C1ProRHS#08: Headset stopped working. (135: NSBA Ground Breaking Ceremony @ Senja Close)
+2026/06/28 16:01:50,bnjm2000,Updated asset C1ProRHS#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/28 16:01:54,bnjm2000,Updated asset C1ProRHS#08; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/28 16:02:16,bnjm2000,Updated asset C1ProRHS#08; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/28 16:02:22,bnjm2000,Updated asset C1ProRHS#02; applyTo=single; updatedAssets=1; eventsUpdated=0; containersUpdated=0
+2026/06/28 17:44:59,bnjm2000,User bnjm2000 logged out from web interface
+2026/06/28 19:45:58,bnjm2000,User bnjm2000 logged in via web interface
+2026/06/28 20:51:33,bnjm2000,User bnjm2000 logged out from web interface
+2026/06/28 21:27:32,bnjm2000,User bnjm2000 logged in via web interface
+2026/06/28 22:58:16,bnjm2000,User bnjm2000 logged in via web interface
+2026/06/29 18:24:29,bnjm2000,User bnjm2000 logged out from web interface

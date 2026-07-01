@@ -301,6 +301,7 @@ class PostgresDataManager(DataManager):
         return {
             'eventId': int(event.event_id),
             'name': event.name,
+            'location': getattr(event, 'location', '') or '',
             'startDate': event.start_date,
             'endDate': event.end_date,
             'assetModels': list(event.asset_models or []),
@@ -470,6 +471,7 @@ class PostgresDataManager(DataManager):
                     event = Event(
                         event_id=int(event_id),
                         name=data.get('name', ''),
+                        location=data.get('location', ''),
                         start_date=data.get('startDate', ''),
                         end_date=data.get('endDate', ''),
                         asset_models=data.get('assetModels') or [],
@@ -893,6 +895,7 @@ class PostgresDataManager(DataManager):
         self._event_snapshots[event_id] = fingerprint
         self._event_versions[event_id] = next_version
         self.event_file_map[event_id] = filename
+        event._legacy_location_extracted = False
 
     def backup_event_file(self, event_id):
         event_id = int(event_id)
