@@ -18,6 +18,8 @@ let __realtimeRefreshQueued = false;
 let __realtimeRefreshTimer = null;
 let __realtimeFallbackTimer = null;
 let __realtimeSource = null;
+let __eventAssetRefreshTimer = null;
+const __eventAssetRefreshIds = new Set();
 
 const VIRTUAL_TABLE_OVERSCAN = 8;
 const virtualTableStates = new Map();
@@ -5818,6 +5820,7 @@ function sortEventsStartDateFutureTop(list) {
 function createEventCard(event) {
     const card = document.createElement('div');
     card.className = `event-card ${getEventStateClass(event.state)}`;
+    card.dataset.eventId = String(event.id);
     
     // Helper function to escape HTML
     const escapeHtml = (str) => {
@@ -10283,6 +10286,7 @@ function getPrepareEventProgressTotals(event) {
 function createPrepareEventCard(event) {
   const card = document.createElement("div");
   card.className = `event-card ${getEventStateClass(event.state)}`;
+  card.dataset.eventId = String(event.id);
 
   // Helper function to escape HTML
   const escapeHtml = (str) => {
@@ -12040,6 +12044,7 @@ function isAssetReturnableFromEventDetail(asset, event) {
 function createReturnEventCard(event) {
   const card = document.createElement("div");
   card.className = `event-card ${getEventStateClass(event.state)}`;
+  card.dataset.eventId = String(event.id);
 
   // Helper function to escape HTML
   const escapeHtml = (str) => {
@@ -21953,6 +21958,226 @@ function activeModal(modalId) {
   return !!document.getElementById(modalId)?.classList.contains("active");
 }
 
+function eventAssetChangesFromRealtimePayload(payload) {
+  const changes = payload?.details?.changes;
+  if (!Array.isArray(changes)) return [];
+  return changes
+    .filter(change => change?.topic === 'event-assets')
+    .map(change => change.details || {})
+    .filter(details => Number.isFinite(Number(details.eventId)));
+}
+
+function markPrepareAssetReturned(assetId) {
+  prepareButtonsForAsset(assetId, true).forEach(button => {
+    button.disabled = true;
+    button.style.opacity = '0.65';
+    button.textContent = 'Returned';
+    button.classList.remove('btn-success', 'btn-warning', 'asset-action-btn');
+    button.classList.add('btn-secondary');
+    delete button.dataset.action;
+    button.removeAttribute('onclick');
+    button.onclick = null;
+
+    let assetRow = button.parentElement;
+    while (assetRow && !assetRow.querySelector('div[style*="margin-top: 2px"], div[style*="margin-top:2px"]')) {
+      assetRow = assetRow.parentElement;
+    }
+    const statusText = assetRow?.querySelector(
+      'div[style*="margin-top: 2px"], div[style*="margin-top:2px"]'
+    );
+    if (statusText) {
+      statusText.textContent = 'Returned';
+      statusText.style.color = '#dc3545';
+    }
+  });
+}
+
+function syncPrepareControlsFromEvent(event) {
+  if (
+    !event ||
+    !activeModal('prepareEventModal') ||
+    Number(window.currentPrepareEventId) !== Number(event.id)
+  ) {
+    return;
+  }
+
+  applyPrepareCanonicalProgress(event);
+  const prepared = new Set(event.actuallyPrepared || []);
+  const returned = new Set(event.returnedItems || []);
+  const assetIds = new Set();
+  const root = document.getElementById('prepareEventContent');
+
+  root?.querySelectorAll('[data-asset-id], [data-prepare-source-id]').forEach(button => {
+    const encodedId = button.dataset.assetId || button.dataset.prepareSourceId || '';
+    try {
+      assetIds.add(decodeURIComponent(encodedId));
+    } catch (error) {
+      assetIds.add(encodedId);
+    }
+  });
+
+  assetIds.forEach(assetId => {
+    if (returned.has(assetId)) markPrepareAssetReturned(assetId);
+    else updateAllButtonsForAsset(assetId, prepared.has(assetId));
+  });
+}
+
+async function refreshReturnModalEvent(eventId) {
+  if (!activeModal('returnAssetsModalNew')) return;
+  const selectedEventId = document.getElementById('returnEventSelect')?.value || '';
+  if (Number(selectedEventId) !== Number(eventId)) return;
+
+  const modalScroller = document.querySelector('#returnAssetsModalNew .modal-content');
+  const scrollTop = modalScroller?.scrollTop || 0;
+  const scrollLeft = modalScroller?.scrollLeft || 0;
+  await loadEventAssetsForReturn();
+  if (modalScroller) {
+    modalScroller.scrollTop = scrollTop;
+    modalScroller.scrollLeft = scrollLeft;
+  }
+}
+
+async function refreshViewedEventModal(eventId) {
+  if (
+    !activeModal('eventDetailsModal') ||
+    window.currentEventDetailsMode !== 'view' ||
+    Number(window.currentViewedEventId) !== Number(eventId)
+  ) {
+    return;
+  }
+
+  const modalScroller = document.querySelector('#eventDetailsModal .modal-content');
+  const scrollTop = modalScroller?.scrollTop || 0;
+  const scrollLeft = modalScroller?.scrollLeft || 0;
+  await viewEvent(eventId);
+  if (modalScroller) {
+    modalScroller.scrollTop = scrollTop;
+    modalScroller.scrollLeft = scrollLeft;
+  }
+}
+
+async function updateEventAssetOverview(event) {
+  if (!event) return;
+  const existingIndex = events.findIndex(item => Number(item.id) === Number(event.id));
+  if (existingIndex >= 0) events[existingIndex] = event;
+  else events.push(event);
+
+  if (document.getElementById('dashboard-section')?.classList.contains('active')) {
+    document.querySelectorAll(
+      `#ongoing-events .event-card[data-event-id="${event.id}"], ` +
+      `#upcoming-events .event-card[data-event-id="${event.id}"]`
+    ).forEach(card => card.replaceWith(createEventCard(event)));
+    loadStatsCards();
+  }
+
+  if (document.getElementById('events-section')?.classList.contains('active')) {
+    const activeTab = getActiveAllEventsTab();
+    if (activeTab === 'card') {
+      const existingCard = document.querySelector(
+        `#all-events .events-workflow-card[data-event-id="${event.id}"]`
+      );
+      if (existingCard) existingCard.replaceWith(createEventsOverviewCard(event));
+      else renderAllEventsCards(events);
+    } else if (activeTab === 'list') {
+      renderAllEventsTable(events);
+    } else if (activeTab === 'calendar') {
+      renderCalendar(getFilteredEventsForOverview(events));
+    }
+  }
+
+  if (document.getElementById('prepare-section')?.classList.contains('active')) {
+    if (getEventPageView('prepare') === 'card') {
+      const existingCard = document.querySelector(
+        `#prepare-events .event-card[data-event-id="${event.id}"]`
+      );
+      if (existingCard) existingCard.replaceWith(createPrepareEventCard(event));
+      else await loadPrepareEvents();
+    } else {
+      await loadPrepareEvents();
+    }
+  }
+
+  if (document.getElementById('return-section')?.classList.contains('active')) {
+    if (getEventPageView('return') === 'card') {
+      const existingCard = document.querySelector(
+        `#return-events .event-card[data-event-id="${event.id}"]`
+      );
+      if (getEventReturnableCount(event) > 0 && event.state !== 'Closed') {
+        if (existingCard) existingCard.replaceWith(createReturnEventCard(event));
+        else await loadReturnEvents();
+      } else if (existingCard) {
+        existingCard.remove();
+      }
+    } else {
+      await loadReturnEvents();
+    }
+  }
+}
+
+async function refreshEventAssetsOnly(eventIds) {
+  if (document.hidden) {
+    eventIds.forEach(eventId => __eventAssetRefreshIds.add(Number(eventId)));
+    return;
+  }
+
+  const uniqueIds = Array.from(new Set(eventIds.map(Number).filter(Number.isFinite)));
+  const responses = await Promise.allSettled(
+    uniqueIds.map(eventId => apiCall(`/api/events/${eventId}`))
+  );
+
+  for (let index = 0; index < responses.length; index += 1) {
+    const response = responses[index];
+    if (response.status !== 'fulfilled' || !response.value?.data) continue;
+    const event = response.value.data;
+
+    syncPrepareControlsFromEvent(event);
+    await refreshReturnModalEvent(event.id);
+    await refreshViewedEventModal(event.id);
+    await updateEventAssetOverview(event);
+  }
+}
+
+function hasVisibleEventAssetView(eventIds) {
+  const activeSection = getActiveSectionId();
+  if (['dashboard', 'events', 'prepare', 'return'].includes(activeSection)) return true;
+
+  if (
+    activeModal('prepareEventModal') &&
+    eventIds.some(eventId => Number(eventId) === Number(window.currentPrepareEventId))
+  ) {
+    return true;
+  }
+
+  if (activeModal('returnAssetsModalNew')) {
+    const selectedEventId = document.getElementById('returnEventSelect')?.value || '';
+    if (eventIds.some(eventId => Number(eventId) === Number(selectedEventId))) return true;
+  }
+
+  return (
+    activeModal('eventDetailsModal') &&
+    window.currentEventDetailsMode === 'view' &&
+    eventIds.some(eventId => Number(eventId) === Number(window.currentViewedEventId))
+  );
+}
+
+function queueEventAssetRefresh(eventIds) {
+  eventIds.forEach(eventId => {
+    const numericId = Number(eventId);
+    if (Number.isFinite(numericId)) __eventAssetRefreshIds.add(numericId);
+  });
+
+  clearTimeout(__eventAssetRefreshTimer);
+  __eventAssetRefreshTimer = setTimeout(async () => {
+    const queuedIds = Array.from(__eventAssetRefreshIds);
+    __eventAssetRefreshIds.clear();
+    try {
+      await refreshEventAssetsOnly(queuedIds);
+    } catch (error) {
+      console.error('Event asset live update failed:', error);
+    }
+  }, 250);
+}
+
 async function refreshActiveModalData() {
   const modalRefreshes = [];
 
@@ -22095,6 +22320,16 @@ function connectRealtimeUpdates() {
       if (payload.originClientId && payload.originClientId === REALTIME_CLIENT_ID) {
         return;
       }
+      const eventAssetChanges = eventAssetChangesFromRealtimePayload(payload);
+      if (eventAssetChanges.length) {
+        const eventIds = eventAssetChanges.map(change => change.eventId);
+        if (hasVisibleEventAssetView(eventIds)) {
+          queueEventAssetRefresh(eventIds);
+        } else {
+          queueRealtimeRefresh();
+        }
+        return;
+      }
       queueRealtimeRefresh();
     } catch (error) {
       console.warn("Realtime update parse failed:", error);
@@ -22224,6 +22459,9 @@ document.addEventListener('keydown', function(e) {
 });
 
 document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && __eventAssetRefreshIds.size) {
+    queueEventAssetRefresh(Array.from(__eventAssetRefreshIds));
+  }
   if (!document.hidden && __realtimeRefreshQueued) {
     __realtimeRefreshQueued = false;
     queueRealtimeRefresh();
@@ -23321,6 +23559,7 @@ function createEventsOverviewCard(event) {
   const card = document.createElement('article');
   const displayState = overviewDisplayState(event);
   card.className = `events-workflow-card ${getEventStateClass(displayState)}`;
+  card.dataset.eventId = String(event.id);
 
   const progress = eventOverviewProgress(event);
   const percent = progress.total > 0 ? Math.min(100, Math.round((progress.done / progress.total) * 100)) : 0;
@@ -24825,7 +25064,7 @@ function __aitCapturePrepareOpenState() {
     if (details.id) state.openDetails.push(details.id);
   });
 
-  const modalContent = document.getElementById('prepareEventContent');
+  const modalContent = document.querySelector('#prepareEventModal .modal-content');
   state.scrollTop = modalContent ? modalContent.scrollTop : 0;
 
   const activeTab = document.querySelector('.nav-link.active');
@@ -24851,7 +25090,7 @@ function __aitRestorePrepareOpenState(state) {
     }
   });
 
-  const modalContent = document.getElementById('prepareEventContent');
+  const modalContent = document.querySelector('#prepareEventModal .modal-content');
   if (modalContent) modalContent.scrollTop = state.scrollTop || 0;
 
   if (state.activeTabText) {

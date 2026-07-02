@@ -1004,8 +1004,42 @@ def mark_realtime_change(topic='data-changed', details=None):
     _publish_realtime_update_now(topic, details or {}, '')
 
 
+def _event_asset_realtime_change_for_request():
+    """Describe prepare/return mutations so browsers can refresh one event only."""
+    action_by_endpoint = {
+        'prepare_event_asset': 'prepare',
+        'unprepare_event_asset': 'unprepare',
+        'assign_specific_asset_to_model': 'prepare',
+        'unassign_specific_asset_from_model': 'unprepare',
+        'return_event_asset': 'return',
+        'return_department_assets': 'return-department',
+    }
+    action = action_by_endpoint.get(request.endpoint)
+    event_id = (request.view_args or {}).get('event_id')
+    if not action or event_id is None:
+        return None
+
+    request_data = request.get_json(silent=True) or {}
+    details = {
+        'eventId': int(event_id),
+        'action': action,
+    }
+    if request_data.get('assetId'):
+        details['assetId'] = str(request_data['assetId'])
+    if request_data.get('department'):
+        details['department'] = str(request_data['department'])
+    return details
+
+
 @app.after_request
 def publish_marked_realtime_changes(response):
+    if response.status_code < 400:
+        event_asset_change = _event_asset_realtime_change_for_request()
+        if event_asset_change:
+            changes = getattr(g, 'realtime_changes', [])
+            changes.append({'topic': 'event-assets', 'details': event_asset_change})
+            g.realtime_changes = changes
+
     changes = getattr(g, 'realtime_changes', None)
     if changes and response.status_code < 400:
         topics = sorted({change.get('topic', 'data-changed') for change in changes})
