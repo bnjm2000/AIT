@@ -10343,7 +10343,7 @@ function createPrepareEventCard(event) {
                 <small style="color: #666;">${totalAssigned}/${totalRequired} assets</small>
             </div>
             <div style="background: #e9ecef; border-radius: 10px; height: 6px; overflow: hidden;">
-                <div style="background: #28a745; height: 100%; width: ${progressPercent}%; transition: width 0.3s ease;"></div>
+                <div class="event-card-progress-bar" style="height: 100%; width: ${progressPercent}%; transition: width 0.3s ease;"></div>
             </div>
         </div>
         <div class="event-actions">
@@ -12010,6 +12010,15 @@ function getEventReturnTotalCount(event) {
   return getEventReturnableCount(event) + Number(event?.returnedCount || 0);
 }
 
+function getEventPhysicallyReturnedCount(event) {
+  const total = Number(event?.returnableTotalCount);
+  const outstanding = Number(event?.returnableCount);
+  if (Number.isFinite(total) && total >= 0 && Number.isFinite(outstanding)) {
+    return Math.max(0, Math.min(total, total - Math.max(0, outstanding)));
+  }
+  return Math.max(0, Number(event?.returnedCount || 0));
+}
+
 function isAssetReturnableFromEventDetail(asset, event) {
   if (!asset || !asset.id || asset.status === 'returned') return false;
 
@@ -12045,7 +12054,7 @@ function createReturnEventCard(event) {
       ? formatDate(event.startDate)
       : `${formatDate(event.startDate)} - ${formatDate(event.endDate)}`;
 
-  const returnedCount = Number(event.returnedCount || 0);
+  const returnedCount = getEventPhysicallyReturnedCount(event);
   const totalCount = Math.max(getEventReturnTotalCount(event), returnedCount + getEventReturnableCount(event));
 
   card.innerHTML = `
@@ -12614,7 +12623,7 @@ async function viewEvent(eventId) {
             <div style="display: grid; grid-template-columns: 1fr auto auto; gap: 20px; align-items: center;">
                 <div>
                     <h3 style="margin: 0 0 8px 0; font-size: 1.4rem;">${escapeHtml(event.name)}</h3>
-                    ${event.location ? `<div style="opacity:0.9;font-size:14px;margin-bottom:5px;">&#9678; ${escapeHtml(event.location)}</div>` : ''}
+                    ${event.location ? `<div style="display:flex;align-items:center;gap:5px;opacity:0.9;font-size:14px;margin-bottom:5px;">${eventLocationIconHtml()} ${escapeHtml(event.location)}</div>` : ''}
                     <div style="opacity: 0.9; font-size: 14px;">📅 ${dateRange}</div>
                 </div>
                 <div style="text-align: center;">
@@ -14909,7 +14918,7 @@ function populateEditQuantityModal(eventId, brand, model, department, currentQua
 // Handle blur for edit quantity modal
 
 
-async function updateModelQuantity(eventId, brand, model, department, newQuantity, currentQuantity, description = "") {
+async function updateModelQuantity(eventId, brand, model, department, newQuantity, description = "") {
   try {
     const maxQuantity = parseInt(document.getElementById("editQuantityInput")?.max || "0", 10);
 
@@ -14921,16 +14930,9 @@ async function updateModelQuantity(eventId, brand, model, department, newQuantit
       return;
     }
 
-    // Remove the old model assignment
-    await apiCall(`/api/events/${eventId}/models`, "DELETE", {
-      brand: brand,
-      model: model,
-      department: department,
-      description: description,
-    });
-
-    // Add the new model assignment with updated quantity
-    await apiCall(`/api/events/${eventId}/models`, "POST", {
+    // Update the planning quantity atomically. Prepared assets stay attached,
+    // including when the new requirement is smaller than the prepared amount.
+    await apiCall(`/api/events/${eventId}/models`, "PUT", {
       brand: brand,
       model: model,
       department: department,
@@ -14940,40 +14942,9 @@ async function updateModelQuantity(eventId, brand, model, department, newQuantit
 
     showNotification("success", `Updated ${brand} ${model} quantity to ${newQuantity}`);
 
-    // Update available assets count
-    const quantityDifference = newQuantity - currentQuantity;
-    if (window.currentEditAvailableAssets) {
-      const availableAssets = window.currentEditAvailableAssets;
-      const modelAssets = availableAssets.filter((a) => a.brand === brand && a.model === model);
-
-      if (quantityDifference > 0) {
-        // Quantity increased - remove more assets from available
-        let removedCount = 0;
-        window.currentEditAvailableAssets = window.currentEditAvailableAssets.filter((asset) => {
-          if (asset.brand === brand && asset.model === model && removedCount < quantityDifference) {
-            removedCount++;
-            return false;
-          }
-          return true;
-        });
-      } else if (quantityDifference < 0) {
-        // Quantity decreased - add assets back to available
-        const assetsToAddBack = Math.abs(quantityDifference);
-        for (let i = 0; i < assetsToAddBack && i < modelAssets.length; i++) {
-          window.currentEditAvailableAssets.push(modelAssets[i]);
-        }
-      }
-    }
-
-    // Only update the model requirements section to maintain consistent UI
-    await updateModelRequirementsSection(eventId);
-    await refreshEventOverviewViews();
-
-    // Refresh the search results if there's an active search
-    const currentSearchTerm = document.querySelector('#edit-assets-tab input[placeholder*="Search available asset models"]')?.value;
-    if (currentSearchTerm && currentSearchTerm.length >= 2) {
-      filterAvailableModels(currentSearchTerm);
-    }
+    // Pull the authoritative event and availability state. A planning quantity
+    // change does not itself release or reserve any physical asset.
+    await refreshEditEventAfterModelChange(eventId);
 
   } catch (error) {
     showNotification("error", `Failed to update model quantity: ${error.message}`);
@@ -16982,7 +16953,7 @@ document.addEventListener("DOMContentLoaded", function () {
           const department = document.getElementById("editQuantityDepartment").value;
           const description = document.getElementById("editQuantityDescription").value;
           
-          await updateModelQuantity(eventId, brand, model, department, newQuantity, currentQuantity, description);
+          await updateModelQuantity(eventId, brand, model, department, newQuantity, description);
         }
 
       closeModal("editQuantityModal");
@@ -22670,7 +22641,81 @@ function ensureEventListViewStyles() {
     .event-list-table tr:hover { background: #f8f9fa; }
     .event-list-title { font-weight: 700; color: #333; min-width: 220px; }
     .event-progress-track { background: #e9ecef; border-radius: 999px; height: 6px; width: 120px; overflow: hidden; margin-top: 4px; }
-    .event-progress-bar { background: #28a745; height: 100%; transition: width .2s ease; }
+    .event-progress-bar { background: var(--event-state, #16a34a); height: 100%; transition: width .2s ease; }
+    :is(#prepare-section, #return-section) :is(.event-card, .event-state, .event-list-table tr).state-added {
+      --event-state: #ec407a;
+      --event-soft: #fff0f5;
+    }
+    :is(#prepare-section, #return-section) :is(.event-card, .event-state, .event-list-table tr).state-planning {
+      --event-state: #6d28d9;
+      --event-soft: #f3efff;
+    }
+    :is(#prepare-section, #return-section) :is(.event-card, .event-state, .event-list-table tr).state-preparing {
+      --event-state: #0877e8;
+      --event-soft: #edf6ff;
+    }
+    :is(#prepare-section, #return-section) :is(.event-card, .event-state, .event-list-table tr).state-ready {
+      --event-state: #16a34a;
+      --event-soft: #edf9f0;
+    }
+    :is(#prepare-section, #return-section) :is(.event-card, .event-state, .event-list-table tr).state-ongoing,
+    :is(#prepare-section, #return-section) :is(.event-card, .event-state, .event-list-table tr).state-last-day {
+      --event-state: #0b97a4;
+      --event-soft: #edfafa;
+    }
+    :is(#prepare-section, #return-section) :is(.event-card, .event-state, .event-list-table tr).state-returning {
+      --event-state: #f97316;
+      --event-soft: #fff5ea;
+    }
+    :is(#prepare-section, #return-section) :is(.event-card, .event-state, .event-list-table tr).state-overdue {
+      --event-state: #ef3340;
+      --event-soft: #fff0f1;
+    }
+    :is(#prepare-section, #return-section) :is(.event-card, .event-state, .event-list-table tr).state-closed {
+      --event-state: #64748b;
+      --event-soft: #f1f5f9;
+    }
+    :is(#prepare-section, #return-section) .event-card {
+      border: 1px solid #e5e7eb;
+      border-left: 5px solid var(--event-state, #64748b);
+      background: var(--event-soft, #f1f5f9);
+      color: #111827;
+    }
+    :is(#prepare-section, #return-section) .event-state {
+      background: var(--event-soft, #f1f5f9);
+      color: var(--event-state, #64748b);
+    }
+    :is(#prepare-section, #return-section) .event-card-progress-bar {
+      background: var(--event-state, #16a34a) !important;
+    }
+    .events-workflow-card { container-type: inline-size; }
+    .event-workflow-progress { min-width: 0; gap: 12px; }
+    .event-progress-summary { flex-basis: 68px; min-width: 0; }
+    .event-department-progress { min-width: 0; overflow: hidden; }
+    .event-department-row {
+      grid-template-columns: minmax(0, 52px) minmax(20px, 1fr) max-content;
+      column-gap: 4px;
+      min-width: 0;
+      width: 100%;
+    }
+    .event-department-row > span:first-child {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .event-department-track { width: 100%; min-width: 0; }
+    .event-department-row > span:last-child { white-space: nowrap; }
+    @container (max-width: 360px) {
+      .event-workflow-progress {
+        align-items: flex-start;
+        flex-wrap: wrap;
+        row-gap: 10px;
+      }
+      .event-department-progress {
+        flex: 1 1 100%;
+        width: 100%;
+      }
+    }
   `;
   document.head.appendChild(style);
 }
@@ -22695,17 +22740,76 @@ function sortEventsForView(list, scope = 'all') {
 }
 
 function eventDateRangeText(event) {
-  return event.startDate === event.endDate
-    ? formatDate(event.startDate)
-    : `${formatDate(event.startDate)} - ${formatDate(event.endDate)}`;
+  const start = parseEventOverviewDate(event.startDate);
+  const end = parseEventOverviewDate(event.endDate);
+  if (!start || !end) {
+    return event.startDate === event.endDate
+      ? formatDate(event.startDate)
+      : `${formatDate(event.startDate)} - ${formatDate(event.endDate)}`;
+  }
+
+  const startDay = start.getDate();
+  const endDay = end.getDate();
+  const startYear = start.getFullYear();
+  const endYear = end.getFullYear();
+  const sameDay = startYear === endYear
+    && start.getMonth() === end.getMonth()
+    && startDay === endDay;
+  const sameMonth = startYear === endYear && start.getMonth() === end.getMonth();
+  const shortMonth = date => date.toLocaleDateString('en-GB', { month: 'short' });
+  const longMonth = date => date.toLocaleDateString('en-GB', { month: 'long' });
+
+  if (sameDay) return `${startDay} ${shortMonth(start)} ${startYear}`;
+  if (sameMonth) return `${startDay} - ${endDay} ${shortMonth(end)} ${endYear}`;
+  if (startYear === endYear) {
+    return `${startDay} ${longMonth(start)} - ${endDay} ${longMonth(end)} ${endYear}`;
+  }
+  return `${startDay} ${longMonth(start)} ${startYear} - ${endDay} ${longMonth(end)} ${endYear}`;
+}
+
+function eventLocationIconHtml() {
+  return `
+    <svg class="event-location-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M12 21s7-6.1 7-12a7 7 0 1 0-14 0c0 5.9 7 12 7 12Z"></path>
+      <circle cx="12" cy="9" r="2.3"></circle>
+    </svg>
+  `;
+}
+
+function parseEventOverviewDate(value) {
+  const text = String(value || '').trim();
+  const parts = text.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
+  if (parts) {
+    const parsed = new Date(Number(parts[1]), Number(parts[2]) - 1, Number(parts[3]), 12, 0, 0, 0);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+  const parsed = new Date(text);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
 function eventTagBadgeHtml(event) {
   return `<span style="padding:2px 8px;border-radius:12px;font-size:10px;font-weight:bold;${getTagStyle(event.tag || 'events')}">${getTagDisplay(event.tag || 'events')}</span>`;
 }
 
-function eventStateBadgeHtml(event) {
-  return `<span class="event-state ${getEventStateClass(event.state)}">${escapeHtml(event.state || '')}</span>`;
+function getEventWorkflowPalette(state) {
+  const palettes = {
+    Added: { main: '#ec407a', soft: '#fff0f5' },
+    Planning: { main: '#6d28d9', soft: '#f3efff' },
+    Preparing: { main: '#0877e8', soft: '#edf6ff' },
+    Ready: { main: '#16a34a', soft: '#edf9f0' },
+    Ongoing: { main: '#0b97a4', soft: '#edfafa' },
+    'Last Day': { main: '#0b97a4', soft: '#edfafa' },
+    Returning: { main: '#f97316', soft: '#fff5ea' },
+    Overdue: { main: '#ef3340', soft: '#fff0f1' },
+    Closed: { main: '#64748b', soft: '#f1f5f9' }
+  };
+  return palettes[state] || palettes.Closed;
+}
+
+function eventStateBadgeHtml(event, displayState = null) {
+  const state = displayState || event.state || '';
+  const palette = getEventWorkflowPalette(state);
+  return `<span class="event-state ${getEventStateClass(state)}" style="background:${palette.soft};color:${palette.main};">${escapeHtml(state)}</span>`;
 }
 
 function renderProgressCell(done, total) {
@@ -22981,12 +23085,22 @@ function setEventStateFilter(state) {
   renderAllEventsList(events);
 }
 
+function eventMatchesOverviewStateFilter(event, stateFilter = allEventsStateFilter) {
+  if (!stateFilter || stateFilter === 'All') return true;
+  const displayState = overviewDisplayState(event);
+  if (stateFilter === 'Active') return displayState !== 'Closed';
+  return displayState === stateFilter;
+}
+
 function updateEventStateFilterCounts(list) {
   const source = (list || []).filter(event => {
     if (allEventsTypeFilter === 'all') return true;
     return overviewEventType(event) === allEventsTypeFilter;
   });
-  const counts = { All: source.length };
+  const counts = {
+    All: source.length,
+    Active: source.filter(event => eventMatchesOverviewStateFilter(event, 'Active')).length
+  };
   source.forEach(event => {
     const state = overviewDisplayState(event);
     counts[state] = (counts[state] || 0) + 1;
@@ -23002,7 +23116,7 @@ function filterEventsBySearch(list) {
   return (list || []).filter(event => {
     const tag = overviewEventType(event);
     if (allEventsTypeFilter !== 'all' && tag !== allEventsTypeFilter) return false;
-    if (allEventsStateFilter !== 'All' && overviewDisplayState(event) !== allEventsStateFilter) return false;
+    if (!eventMatchesOverviewStateFilter(event)) return false;
     if (!searchTerm) return true;
     return (`${event.id} ${event.name || ''} ${event.location || ''} ${event.state || ''} ${event.tag || ''} ${event.startDate || ''} ${event.endDate || ''}`)
       .toLowerCase()
@@ -23017,8 +23131,20 @@ function getFilteredEventsForOverview(list) {
 function eventOverviewProgress(event) {
   const state = event.state || 'Added';
   if (['Returning', 'Overdue', 'Closed'].includes(state)) {
+    if (state === 'Closed' && event.forceStateOverride) {
+      const done = Math.max(0, Number(event.returnedCount || 0));
+      const total = Math.max(done, Number(event.returnableTotalCount || event.assetCount || 0));
+      return { done, total, label: 'Returned' };
+    }
+
+    const physicalTotal = Number(event.returnableTotalCount);
+    if (Number.isFinite(physicalTotal) && physicalTotal >= 0) {
+      const total = Math.max(0, physicalTotal);
+      return { done: getEventPhysicallyReturnedCount(event), total, label: 'Returned' };
+    }
+
     const done = Math.max(0, Number(event.returnedCount || 0));
-    const total = Math.max(done, Number(event.returnableTotalCount || event.assetCount || 0));
+    const total = Math.max(done, Number(event.assetCount || 0));
     return { done, total, label: 'Returned' };
   }
   if (state === 'Ongoing' || state === 'Last Day') {
@@ -23068,15 +23194,23 @@ function eventOverviewNotice(event, progress) {
     case 'Ready': return 'All items ready';
     case 'Last Day': return 'In progress  ·  Last Day!';
     case 'Ongoing': {
-      const end = new Date(`${event.endDate}T12:00:00`);
+      const end = parseEventOverviewDate(event.endDate);
+      if (!end) return 'In progress';
       const today = new Date();
       today.setHours(12, 0, 0, 0);
       const days = Math.max(0, Math.ceil((end - today) / 86400000));
-      return days ? `In progress  ·  Ends in ${days} day${days === 1 ? '' : 's'}` : 'In progress';
+      return days
+        ? `In progress  ·  Ends in ${days} day${days === 1 ? '' : 's'}`
+        : 'In progress  ·  Ends today';
     }
     case 'Returning': return `${Math.max(0, Number(event.returnableCount || 0))} still out`;
     case 'Overdue': return 'Overdue return';
-    case 'Closed': return 'All items returned';
+    case 'Closed': {
+      const remaining = Math.max(progress.total - progress.done, 0);
+      return remaining
+        ? `${remaining} item${remaining === 1 ? '' : 's'} not returned`
+        : 'All items returned';
+    }
     default: return '';
   }
 }
@@ -23132,15 +23266,53 @@ function toggleEventCardMenu(event, eventId, context = 'card') {
   target?.classList.toggle('open', !!shouldOpen);
 }
 
+function eventMenuIconHtml(icon) {
+  const paths = {
+    edit: `
+      <path d="M12 20h9"></path>
+      <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path>
+      <path d="m15 5 4 4"></path>
+    `,
+    view: `
+      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"></path>
+      <circle cx="12" cy="12" r="3"></circle>
+    `,
+    plan: `
+      <rect x="5" y="4" width="14" height="17" rx="2"></rect>
+      <path d="M9 4V2h6v2"></path>
+      <path d="m9 13 2 2 4-4"></path>
+    `,
+    force: `
+      <path d="m13 2-9 12h8l-1 8 9-12h-8Z"></path>
+    `,
+    delete: `
+      <path d="M3 6h18"></path>
+      <path d="M8 6V4h8v2"></path>
+      <path d="M19 6l-1 15H6L5 6"></path>
+      <path d="M10 11v5"></path>
+      <path d="M14 11v5"></path>
+    `
+  };
+  return `<svg class="event-card-menu-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${paths[icon] || ''}</svg>`;
+}
+
 function eventCardMenuHtml(event, context = 'card') {
+  const detailsAction = event.state === 'Closed'
+    ? `<button type="button" onclick="viewEvent(${event.id})">${eventMenuIconHtml('view')}<span>View</span></button>`
+    : (isAdminUser()
+      ? `<button type="button" onclick="editEvent(${event.id})">${eventMenuIconHtml('edit')}<span>Edit</span></button>`
+      : '');
+  const adminActions = isAdminUser() ? `
+    <button type="button" onclick="openEventPlanning(${event.id})">${eventMenuIconHtml('plan')}<span>Plan</span></button>
+    <button type="button" onclick="showForceStateModal(${event.id}, '${escapeHtmlAttr(event.state || '')}')">${eventMenuIconHtml('force')}<span>Force</span></button>
+    <button type="button" class="danger" onclick="deleteEvent(${event.id})">${eventMenuIconHtml('delete')}<span>Delete</span></button>
+  ` : '';
+  if (!detailsAction && !adminActions) return '';
+
   return `
     <div class="event-card-menu" id="event-card-menu-${context}-${event.id}">
-      <button type="button" onclick="viewEvent(${event.id})"><span aria-hidden="true">&#9673;</span> View</button>
-      ${isAdminUser() ? `
-        <button type="button" onclick="openEventPlanning(${event.id})"><span aria-hidden="true">&#9638;</span> Plan</button>
-        <button type="button" onclick="showForceStateModal(${event.id}, '${escapeHtmlAttr(event.state || '')}')"><span aria-hidden="true">&#9889;</span> Force</button>
-        <button type="button" class="danger" onclick="deleteEvent(${event.id})"><span aria-hidden="true">&#128465;</span> Delete</button>
-      ` : ''}
+      ${detailsAction}
+      ${adminActions}
     </div>
   `;
 }
@@ -23153,6 +23325,32 @@ function createEventsOverviewCard(event) {
   const progress = eventOverviewProgress(event);
   const percent = progress.total > 0 ? Math.min(100, Math.round((progress.done / progress.total) * 100)) : 0;
   const action = getEventPrimaryAction(event);
+  const menuHtml = eventCardMenuHtml(event, 'card');
+  const progressVisualHtml = progress.added
+    ? `
+      <button
+        type="button"
+        class="event-progress-add-button"
+        aria-label="Manage assets for ${escapeHtmlAttr(event.name || `event ${event.id}`)}"
+        title="Manage assets"
+        onclick="openEventPlanning(${event.id})"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <circle cx="12" cy="12" r="9"></circle>
+          <path d="M12 8v8"></path>
+          <path d="M8 12h8"></path>
+        </svg>
+      </button>
+    `
+    : `
+      <div class="event-progress-ring">
+        <svg viewBox="0 0 72 72" aria-hidden="true" focusable="false">
+          <circle class="event-progress-track-circle" cx="36" cy="36" r="29"></circle>
+          <circle class="event-progress-value-circle" cx="36" cy="36" r="29" pathLength="100" style="stroke-dashoffset:${100 - percent}"></circle>
+        </svg>
+        <span>${percent}%</span>
+      </div>
+    `;
   const departmentsHtml = eventDepartmentProgress(event).map(row => {
     const total = Math.max(0, Number(row.total || 0));
     const done = Math.max(0, Number(row.done || 0));
@@ -23168,7 +23366,7 @@ function createEventsOverviewCard(event) {
     `;
   }).join('');
   const locationHtml = event.location
-    ? `<span><span aria-hidden="true">&#9678;</span>${escapeHtml(event.location)}</span>`
+    ? `<span>${eventLocationIconHtml()}${escapeHtml(event.location)}</span>`
     : '';
 
   card.innerHTML = `
@@ -23186,11 +23384,9 @@ function createEventsOverviewCard(event) {
         ${locationHtml}
       </div>
       <div class="event-workflow-progress">
-        <div class="event-progress-ring" style="--progress:${percent}">
-          <span>${progress.added && !progress.total ? '+' : `${percent}%`}</span>
-        </div>
+        ${progressVisualHtml}
         <div class="event-progress-summary">
-          <div class="event-progress-value">${progress.done} / ${progress.total}</div>
+          <div class="event-progress-value" style="color:#111827;">${progress.done} / ${progress.total}</div>
           <div class="event-progress-label">${escapeHtml(progress.label)}</div>
         </div>
         <div class="event-department-progress">${departmentsHtml}</div>
@@ -23204,8 +23400,8 @@ function createEventsOverviewCard(event) {
       </div>
       <div class="event-card-controls">
         <button type="button" class="event-primary-action" onclick="${action.onclick}">${escapeHtml(action.label)}</button>
-        <button type="button" class="event-overflow-button" aria-label="More actions for ${escapeHtmlAttr(event.name || '')}" onclick="toggleEventCardMenu(event, ${event.id}, 'card')">&#8230;</button>
-        ${eventCardMenuHtml(event, 'card')}
+        ${menuHtml ? `<button type="button" class="event-overflow-button" aria-label="More actions for ${escapeHtmlAttr(event.name || '')}" onclick="toggleEventCardMenu(event, ${event.id}, 'card')">&#8230;</button>` : ''}
+        ${menuHtml}
       </div>
     </div>
   `;
@@ -23243,7 +23439,7 @@ function renderAllEventsTable(list) {
         <td>${eventTagBadgeHtml(event)}</td>
         <td class="event-list-title">${escapeHtml(event.name || '')}${location}</td>
         <td>${escapeHtml(eventDateRangeText(event))}</td>
-        <td><span class="event-state ${getEventStateClass(displayState)}">${escapeHtml(displayState)}</span></td>
+        <td>${eventStateBadgeHtml(event, displayState)}</td>
         <td>${renderProgressCell(progress.done, progress.total)}</td>
         <td>
           <div class="event-card-controls">
@@ -23353,7 +23549,7 @@ function renderPrepareEventsTable(list) {
   const rows = sorted.map(event => {
     const { totalRequired, totalAssigned } = getPrepareEventProgressTotals(event);
     return `
-      <tr>
+      <tr class="${getEventStateClass(event.state)}">
         <td><strong>${escapeHtml(String(event.id))}</strong></td>
         <td>${eventTagBadgeHtml(event)}</td>
         <td class="event-list-title">${escapeHtml(event.name || '')}</td>
@@ -23412,10 +23608,10 @@ function renderReturnEventsTable(list) {
     return;
   }
   const rows = sorted.map(event => {
-    const returnedCount = Number(event.returnedCount || 0);
+    const returnedCount = getEventPhysicallyReturnedCount(event);
     const totalCount = Math.max(getEventReturnTotalCount(event), returnedCount + getEventReturnableCount(event));
     return `
-      <tr>
+      <tr class="${getEventStateClass(event.state)}">
         <td><strong>${escapeHtml(String(event.id))}</strong></td>
         <td>${eventTagBadgeHtml(event)}</td>
         <td class="event-list-title">${escapeHtml(event.name || '')}</td>

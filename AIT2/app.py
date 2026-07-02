@@ -851,8 +851,8 @@ def get_ssl_context():
     """
     Return the Flask ssl_context.
 
-    HTTPS is enabled by default because this app defaults to port 5443. To run
-    plain HTTP for local testing, start with ENABLE_HTTPS=0.
+    HTTPS is enabled by default and uses the standard HTTPS port (443). To run
+    plain HTTP on the standard HTTP port (80), start with ENABLE_HTTPS=0.
 
     Optional production/LAN certificate paths:
       SSL_CERT_FILE=/path/fullchain.pem
@@ -883,9 +883,10 @@ def get_ssl_context():
 
 def run_https_app(flask_app):
     host = os.environ.get('HOST', '0.0.0.0')
-    port = int(os.environ.get('PORT', '5443'))
     ssl_context = get_ssl_context()
     scheme = 'https' if ssl_context else 'http'
+    default_port = '443' if ssl_context else '80'
+    port = int(os.environ.get('PORT', default_port))
 
     flask_app.config['PREFERRED_URL_SCHEME'] = scheme
     flask_app.config['SESSION_COOKIE_SECURE'] = bool(ssl_context)
@@ -7400,11 +7401,11 @@ def add_asset_to_event(event_id):
         return jsonify({'error': 'Failed to add asset to event'}), 500
 
 
-@app.route('/api/events/<int:event_id>/models', methods=['POST', 'DELETE'])
+@app.route('/api/events/<int:event_id>/models', methods=['POST', 'PUT', 'DELETE'])
 @require_admin
 @with_prepare_action_lock
 def manage_event_models(event_id):
-    """Add or remove model assignments to/from events"""
+    """Add, update, or remove model assignments on events."""
     try:
         event = data_manager.events.get(event_id)
         if not event:
@@ -7412,7 +7413,94 @@ def manage_event_models(event_id):
 
         data = request.get_json()
 
-        if request.method == 'POST':
+        if request.method == 'PUT':
+            # Set the planning quantity without touching any prepared, returned,
+            # or extra physical references for this model. In particular, a
+            # reduction may leave more units prepared than are now required;
+            # those units remain deliberately attached to the event.
+            brand = data.get('brand', '').strip()
+            model = data.get('model', '').strip()
+            department = data.get('department', '').strip().upper()
+            provided_description = data.get('description', '').strip()
+            new_quantity = max(1, int(data.get('quantity', 1)))
+
+            if not brand or not model or not department:
+                return jsonify({'error': 'Brand, model, and department are required'}), 400
+
+            group_key = _model_key_from_parts(department, brand, model)
+            inv_count = sum(
+                _asset_inventory_quantity(asset)
+                for asset in data_manager.inventory.values()
+                if asset
+                and not getattr(asset, 'is_missing', False)
+                and not _is_disposed(asset)
+                and _asset_group_key(asset) == group_key
+            )
+
+            if new_quantity > inv_count:
+                return jsonify({
+                    'error': (
+                        f"Quantity exceeds inventory for {brand} {model}: "
+                        f"you have {inv_count} unit(s), requested: {new_quantity}."
+                    )
+                }), 400
+
+            matching_indexes = []
+            existing_quantity = 0
+            display_description = provided_description
+
+            for index, item in enumerate(getattr(event, 'prepared_items', []) or []):
+                marker = _parse_model_marker(item)
+                if not marker:
+                    continue
+                marker_key = _model_key_from_parts(
+                    marker['department'],
+                    marker['brand'],
+                    marker['model'],
+                )
+                if marker_key != group_key:
+                    continue
+                matching_indexes.append(index)
+                existing_quantity += max(0, _safe_int(marker.get('quantity'), 0))
+                if not display_description and marker.get('description'):
+                    display_description = marker['description']
+
+            if not matching_indexes:
+                return jsonify({'error': 'Model assignment not found'}), 404
+
+            updated_marker = _make_model_marker({
+                'department': department,
+                'brand': brand,
+                'model': model,
+                'description': display_description,
+            }, new_quantity)
+            first_index = matching_indexes[0]
+            matching_index_set = set(matching_indexes)
+            event.prepared_items = [
+                updated_marker if index == first_index else item
+                for index, item in enumerate(event.prepared_items)
+                if index not in matching_index_set or index == first_index
+            ]
+
+            update_event_state(event)
+            data_manager.save_event(event)
+            invalidate_cache()
+
+            log_action(
+                f"Updated {brand} {model} model quantity for event {event_id}: "
+                f"{existing_quantity} -> {new_quantity}"
+            )
+
+            return jsonify({
+                'success': True,
+                'message': f'Updated {brand} {model} quantity to {new_quantity}',
+                'data': {
+                    'oldQuantity': existing_quantity,
+                    'newQuantity': new_quantity,
+                },
+            })
+
+        elif request.method == 'POST':
             # Add model assignment
             brand = data.get('brand', '').strip()
             model = data.get('model', '').strip()

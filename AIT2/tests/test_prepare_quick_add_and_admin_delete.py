@@ -261,6 +261,86 @@ class PrepareQuickAddAndAdminDeleteTests(unittest.TestCase):
         self.assertEqual(event.returned_items, [])
         self.assertEqual(self.data_manager.inventory['A#01'].current_location, 'Store')
 
+    def test_reducing_model_quantity_keeps_prepared_specific_assets(self):
+        event = self.make_event(
+            event_id=112,
+            prepared=['[MODEL]AX|TestBrand|TestModel|2|Matching item'],
+            actual=['A#01', 'A#02'],
+            extra=[],
+        )
+
+        self.login_as('admin', True)
+        response = self.client.put(
+            f'/api/events/{event.event_id}/models',
+            json={
+                'department': 'AX',
+                'brand': 'TestBrand',
+                'model': 'TestModel',
+                'description': 'Matching item',
+                'quantity': 1,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(
+            event.prepared_items,
+            ['[MODEL]AX|TestBrand|TestModel|1|Matching item'],
+        )
+        self.assertEqual(event.actually_prepared, ['A#01', 'A#02'])
+        self.assertEqual(event.returned_items, [])
+        self.assertEqual(event.extra_assets, [])
+
+        details_response = self.client.get(f'/api/events/{event.event_id}')
+        self.assertEqual(
+            details_response.status_code,
+            200,
+            details_response.get_data(as_text=True),
+        )
+        model_group = next(
+            iter(details_response.get_json()['data']['modelGroups'].values())
+        )
+        self.assertEqual(model_group['requiredQuantity'], 1)
+        self.assertEqual(model_group['preparedQuantity'], 2)
+        self.assertEqual(model_group['extraPreparedQuantity'], 0)
+
+    def test_reducing_model_quantity_keeps_prepared_bulk_quantity(self):
+        self.data_manager.inventory['BULK-0001'] = self.make_asset(
+            'BULK-0001',
+            department='STG',
+            is_bulk=True,
+            quantity=10,
+        )
+        prepared_marker = app_module._bulk_marker('BULK-0001', 5)
+        event = self.make_event(
+            event_id=113,
+            prepared=['[MODEL]STG|TestBrand|TestModel|5|Matching item'],
+            actual=[prepared_marker],
+            extra=[],
+        )
+
+        self.login_as('admin', True)
+        response = self.client.put(
+            f'/api/events/{event.event_id}/models',
+            json={
+                'department': 'STG',
+                'brand': 'TestBrand',
+                'model': 'TestModel',
+                'description': 'Matching item',
+                'quantity': 3,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(
+            event.prepared_items,
+            ['[MODEL]STG|TestBrand|TestModel|3|Matching item'],
+        )
+        self.assertEqual(event.actually_prepared, [prepared_marker])
+        self.assertEqual(
+            app_module._bulk_deployments_for_asset('BULK-0001')[0]['quantity'],
+            5,
+        )
+
     def test_quick_add_false_overrides_container_auto_add(self):
         event = self.make_event(event_id=104)
 

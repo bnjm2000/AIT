@@ -1971,8 +1971,8 @@
 
       /* Accessibility and small-screen layout refinements */
       :root {
-        --ui-scale: 0.8;
-        --ui-scale-mobile: 0.9;
+        --ui-scale: 1;
+        --ui-scale-mobile: 1;
         --scaled-vw: calc(100vw / var(--ui-scale));
         --scaled-vh: calc(100vh / var(--ui-scale));
         --scaled-dvh: calc(100dvh / var(--ui-scale));
@@ -2025,7 +2025,7 @@
       }
 
       .container {
-        grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
+        grid-template-columns: 240px minmax(0, 1fr);
         height: var(--scaled-vh);
         height: var(--scaled-dvh);
         min-width: 0;
@@ -2189,7 +2189,7 @@
 
       @media (max-width: 900px) {
         .container {
-          grid-template-columns: minmax(200px, 240px) minmax(0, 1fr);
+          grid-template-columns: 220px minmax(0, 1fr);
         }
 
         .content-area {
@@ -2921,6 +2921,73 @@
         }
       }
 
+      /* Compact desktop navigation while keeping the main workspace at 100% scale. */
+      @media (min-width: 769px) {
+        .sidebar {
+          padding: 16px;
+        }
+
+        .sidebar .nav-section {
+          margin-bottom: 24px;
+        }
+
+        .sidebar .nav-section h3 {
+          margin-bottom: 12px;
+          padding-bottom: 4px;
+          font-size: 0.96rem;
+        }
+
+        .sidebar .nav-item {
+          min-height: 32px;
+          gap: 6.4px;
+          margin: 4px 0;
+          padding: 9.6px 12px;
+          border-radius: 6.4px;
+          font-size: 11.2px;
+        }
+
+        .header {
+          min-width: 0;
+          justify-content: space-between;
+          gap: 8px;
+          padding: 16px;
+          overflow: hidden;
+        }
+
+        #company-logo {
+          width: auto;
+          max-width: 88px;
+          height: 24px !important;
+          margin-right: 0 !important;
+          flex: 0 1 auto;
+        }
+
+        .sync-status {
+          min-width: 0;
+          min-height: 25.6px;
+          max-width: 104px;
+          margin-left: auto;
+          gap: 6.4px;
+          padding: 4.8px 8px;
+          font-size: 9.6px;
+          flex: 0 1 auto;
+          overflow: hidden;
+        }
+
+        .sync-status span {
+          width: 6.4px;
+          height: 6.4px;
+          flex: 0 0 6.4px;
+        }
+
+        .sync-status strong {
+          min-width: 0;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+      }
+
       /* Events workflow overview */
       .events-overview {
         color: #111827;
@@ -3171,6 +3238,7 @@
         color: #fff;
       }
 
+      .events-state-filters [data-event-state="Active"]:not(.active) { color: #2563eb; }
       .events-state-filters [data-event-state="Added"]:not(.active) { color: #db2777; }
       .events-state-filters [data-event-state="Planning"]:not(.active) { color: #6d28d9; }
       .events-state-filters [data-event-state="Preparing"]:not(.active) { color: #0369a1; }
@@ -3181,7 +3249,7 @@
 
       .events-overview-grid {
         display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: repeat(4, minmax(0, 1fr));
         gap: 15px;
         margin-top: 8px;
       }
@@ -3189,6 +3257,7 @@
       .events-workflow-card {
         --event-state: #64748b;
         --event-soft: #f8fafc;
+        container-type: inline-size;
         position: relative;
         display: flex;
         flex-direction: column;
@@ -3290,32 +3359,58 @@
         gap: 5px;
       }
 
+      .event-location-icon {
+        width: 14px;
+        height: 14px;
+        flex: 0 0 14px;
+        fill: none;
+        stroke: currentColor;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        stroke-width: 1.9;
+      }
+
       .event-workflow-progress {
-        gap: 17px;
+        min-width: 0;
+        gap: 12px;
         margin-top: 15px;
       }
 
       .event-progress-ring {
-        --progress: 0;
         position: relative;
         display: grid;
         place-items: center;
         flex: 0 0 70px;
         height: 70px;
         border-radius: 50%;
-        background: conic-gradient(var(--event-state) calc(var(--progress) * 1%), #e8edf3 0);
         color: #111827;
         font-size: 14px;
         font-weight: 800;
       }
 
-      .event-progress-ring::before {
+      .event-progress-ring svg {
         position: absolute;
-        width: 52px;
-        height: 52px;
-        border-radius: 50%;
-        background: #fff;
-        content: "";
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        transform: rotate(-90deg);
+      }
+
+      .event-progress-track-circle,
+      .event-progress-value-circle {
+        fill: none;
+        stroke-width: 8;
+      }
+
+      .event-progress-track-circle {
+        stroke: #e8edf3;
+      }
+
+      .event-progress-value-circle {
+        stroke: var(--event-state);
+        stroke-dasharray: 100;
+        stroke-linecap: round;
+        transition: stroke-dashoffset .25s ease;
       }
 
       .event-progress-ring span {
@@ -3323,11 +3418,44 @@
         z-index: 1;
       }
 
+      .event-progress-add-button {
+        display: grid;
+        place-items: center;
+        flex: 0 0 70px;
+        width: 70px;
+        height: 70px;
+        border: 2px solid color-mix(in srgb, var(--event-state) 70%, white);
+        border-radius: 50%;
+        background: var(--event-soft);
+        color: var(--event-state);
+        cursor: pointer;
+        transition: transform .18s ease, box-shadow .18s ease, background .18s ease;
+      }
+
+      .event-progress-add-button:hover,
+      .event-progress-add-button:focus-visible {
+        background: color-mix(in srgb, var(--event-soft) 78%, white);
+        box-shadow: 0 5px 14px color-mix(in srgb, var(--event-state) 22%, transparent);
+        transform: translateY(-2px);
+      }
+
+      .event-progress-add-button svg {
+        width: 38px;
+        height: 38px;
+        fill: none;
+        stroke: currentColor;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        stroke-width: 1.9;
+      }
+
       .event-progress-summary {
-        flex: 0 0 78px;
+        flex: 0 0 68px;
+        min-width: 0;
       }
 
       .event-progress-value {
+        color: #111827;
         font-size: 1rem;
         font-weight: 780;
       }
@@ -3343,18 +3471,29 @@
         flex: 1;
         gap: 5px;
         min-width: 0;
+        overflow: hidden;
       }
 
       .event-department-row {
         display: grid;
-        grid-template-columns: minmax(48px, 68px) minmax(35px, 1fr) auto;
+        grid-template-columns: minmax(0, 52px) minmax(20px, 1fr) max-content;
         align-items: center;
-        gap: 7px;
+        column-gap: 4px;
+        min-width: 0;
+        width: 100%;
         color: #334155;
         font-size: 9px;
       }
 
+      .event-department-row > span:first-child {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
       .event-department-track {
+        width: 100%;
+        min-width: 0;
         height: 4px;
         overflow: hidden;
         border-radius: 999px;
@@ -3366,6 +3505,23 @@
         height: 100%;
         border-radius: inherit;
         background: var(--event-state);
+      }
+
+      .event-department-row > span:last-child {
+        white-space: nowrap;
+      }
+
+      @container (max-width: 360px) {
+        .event-workflow-progress {
+          align-items: flex-start;
+          flex-wrap: wrap;
+          row-gap: 10px;
+        }
+
+        .event-department-progress {
+          flex: 1 1 100%;
+          width: 100%;
+        }
       }
 
       .event-workflow-notice {
@@ -3459,6 +3615,7 @@
         display: flex;
         align-items: center;
         gap: 8px;
+        min-height: 34px;
         border: 0;
         border-radius: 6px;
         background: transparent;
@@ -3466,6 +3623,17 @@
         cursor: pointer;
         padding: 8px 9px;
         text-align: left;
+      }
+
+      .event-card-menu-icon {
+        width: 16px;
+        height: 16px;
+        flex: 0 0 16px;
+        fill: none;
+        stroke: currentColor;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        stroke-width: 1.8;
       }
 
       .event-card-menu button:hover {
@@ -3495,12 +3663,20 @@
         margin-top: 3px;
       }
 
-      @media (max-width: 1250px) {
+      @media (max-width: 1380px) {
         .events-overview-grid {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+      }
+
+      @media (max-width: 1250px) {
+        .events-overview-stats {
           grid-template-columns: repeat(2, minmax(0, 1fr));
         }
+      }
 
-        .events-overview-stats {
+      @media (max-width: 1050px) {
+        .events-overview-grid {
           grid-template-columns: repeat(2, minmax(0, 1fr));
         }
       }
@@ -3531,6 +3707,295 @@
 
         .event-department-progress {
           flex-basis: 100%;
+        }
+      }
+
+      /*
+       * Compact operational workspace
+       *
+       * This deliberately reduces the individual type, spacing and control
+       * measurements instead of zooming or transforming the document. The
+       * Events overview and its Add Event dialog retain their current sizing.
+       */
+      @media (min-width: 769px) {
+        .content-area:has(> .content-section.active:not(#events-section):not(#events-section-legacy)) {
+          padding: 24px;
+          border-radius: 12px;
+        }
+
+        :is(
+          .content-section:not(#events-section):not(#events-section-legacy),
+          .modal:not(#addEventModal)
+        ) {
+          font-size: 12.8px;
+        }
+
+        .content-section:not(#events-section):not(#events-section-legacy) .content-header {
+          gap: 11px;
+          margin-bottom: 24px;
+          padding-bottom: 12px;
+        }
+
+        .content-section:not(#events-section):not(#events-section-legacy) .content-title {
+          font-size: 1.6rem;
+        }
+
+        :is(
+          .content-section:not(#events-section):not(#events-section-legacy),
+          .modal:not(#addEventModal)
+        ) .btn {
+          min-height: 32px;
+          padding: 6px 13px;
+          margin: 3px 2px;
+          border-radius: 6px;
+          font-size: 11.2px;
+        }
+
+        :is(
+          .content-section:not(#events-section):not(#events-section-legacy),
+          .modal:not(#addEventModal)
+        ) :is(.form-input, .form-select, .search-bar, textarea, select) {
+          min-height: 34px;
+          padding: 6px 10px !important;
+          border-radius: 8px !important;
+          font-size: 11.2px !important;
+        }
+
+        :is(
+          .content-section:not(#events-section):not(#events-section-legacy),
+          .modal:not(#addEventModal)
+        ) .form-group {
+          margin-bottom: 12px;
+        }
+
+        :is(
+          .content-section:not(#events-section):not(#events-section-legacy),
+          .modal:not(#addEventModal)
+        ) :is(.form-label, .form-group label) {
+          margin-bottom: 4px !important;
+          font-size: 11.2px !important;
+        }
+
+        .content-section:not(#events-section):not(#events-section-legacy) .search-bar {
+          margin-bottom: 16px;
+        }
+
+        .content-section:not(#events-section):not(#events-section-legacy) .stats-grid {
+          gap: 16px;
+          margin-bottom: 24px;
+        }
+
+        .content-section:not(#events-section):not(#events-section-legacy) .stat-card {
+          padding: 16px;
+          border-radius: 10px;
+        }
+
+        .content-section:not(#events-section):not(#events-section-legacy) .stat-number {
+          margin-bottom: 6px;
+          font-size: 2rem;
+        }
+
+        .content-section:not(#events-section):not(#events-section-legacy) .stat-label {
+          font-size: 11.2px;
+          letter-spacing: .8px;
+        }
+
+        .content-section:not(#events-section):not(#events-section-legacy) .events-grid {
+          gap: 16px;
+          margin-top: 16px;
+        }
+
+        .content-section:not(#events-section):not(#events-section-legacy) .event-card {
+          padding: 16px;
+          border-radius: 10px;
+        }
+
+        .content-section:not(#events-section):not(#events-section-legacy) :is(
+          .inventory-controls,
+          .form-container,
+          .items-preview,
+          .maintenance-log-section
+        ) {
+          padding: 16px !important;
+          margin-bottom: 16px !important;
+        }
+
+        .content-section:not(#events-section):not(#events-section-legacy) :is(
+          .inventory-controls,
+          .form-grid,
+          .section-actions,
+          .maintenance-tabs,
+          .maintenance-report-picker-row
+        ) {
+          gap: 12px !important;
+        }
+
+        .content-section:not(#events-section):not(#events-section-legacy) .maintenance-tabs-container,
+        .content-section:not(#events-section):not(#events-section-legacy) .maintenance-tabs {
+          margin-bottom: 16px !important;
+        }
+
+        .content-section:not(#events-section):not(#events-section-legacy) :is(
+          .maintenance-tab,
+          .events-tab,
+          .all-events-tab
+        ) {
+          padding: 12px 16px !important;
+          font-size: 12.8px !important;
+        }
+
+        :is(
+          .content-section:not(#events-section):not(#events-section-legacy),
+          .modal:not(#addEventModal)
+        ) :is(.table, table) {
+          margin-top: 16px;
+          font-size: 11.2px;
+        }
+
+        :is(
+          .content-section:not(#events-section):not(#events-section-legacy),
+          .modal:not(#addEventModal)
+        ) :is(.table, table) :is(th, td) {
+          padding: 8px 10px !important;
+        }
+
+        .content-section:not(#events-section):not(#events-section-legacy) :is(
+          .inventory-checkbox-filter summary,
+          .inventory-checkbox-filter-panel
+        ) {
+          padding: 7px 10px;
+          font-size: 11.2px;
+        }
+
+        .modal:not(#addEventModal) .modal-content {
+          padding: 16px !important;
+          border-radius: 12px;
+        }
+
+        .modal:not(#addEventModal) .modal-header {
+          top: -16px;
+          gap: 10px;
+          margin-bottom: 16px;
+          padding-bottom: 8px;
+        }
+
+        .modal:not(#addEventModal) :is(
+          .modal-title,
+          .modal-header h2,
+          .modal-header h3
+        ) {
+          font-size: 1.2rem;
+        }
+
+        .modal:not(#addEventModal) .modal-footer {
+          margin-top: 16px;
+          padding-top: 12px;
+        }
+
+        .modal:not(#addEventModal) .modal-actions {
+          gap: 8px !important;
+          margin-top: 16px !important;
+        }
+
+        .modal:not(#addEventModal) :is(.close-btn, .close) {
+          min-width: 30px;
+          min-height: 30px;
+          width: 30px;
+          height: 30px;
+          font-size: 22px;
+        }
+
+        #eventDetailsModal .edit-event-tabs {
+          margin-bottom: 16px !important;
+        }
+
+        #eventDetailsModal .edit-tab {
+          padding: 12px 16px !important;
+          font-size: 12.8px !important;
+        }
+
+        #eventDetailsModal .assets-edit-interface > div {
+          padding: 16px !important;
+          margin-bottom: 24px !important;
+        }
+
+        #eventDetailsModal .assets-edit-interface h4 {
+          margin-bottom: 12px !important;
+          font-size: 14.4px !important;
+        }
+
+        #eventDetailsModal #current-asset-models {
+          min-height: 160px !important;
+        }
+
+        #eventDetailsModal :is(
+          #available-models-container,
+          #current-asset-models
+        ) {
+          font-size: 11.2px;
+        }
+
+        :is(
+          .content-section:not(#events-section):not(#events-section-legacy),
+          .modal:not(#addEventModal)
+        ) [style*="font-size: 18px"] {
+          font-size: 14.4px !important;
+        }
+
+        :is(
+          .content-section:not(#events-section):not(#events-section-legacy),
+          .modal:not(#addEventModal)
+        ) [style*="font-size: 16px"] {
+          font-size: 12.8px !important;
+        }
+
+        :is(
+          .content-section:not(#events-section):not(#events-section-legacy),
+          .modal:not(#addEventModal)
+        ) [style*="font-size: 14px"] {
+          font-size: 11.2px !important;
+        }
+
+        :is(
+          .content-section:not(#events-section):not(#events-section-legacy),
+          .modal:not(#addEventModal)
+        ) [style*="font-size: 12px"] {
+          font-size: 9.6px !important;
+        }
+
+        :is(
+          .content-section:not(#events-section):not(#events-section-legacy),
+          .modal:not(#addEventModal)
+        ) [style*="padding: 20px"] {
+          padding: 16px !important;
+        }
+
+        :is(
+          .content-section:not(#events-section):not(#events-section-legacy),
+          .modal:not(#addEventModal)
+        ) [style*="margin-bottom: 30px"] {
+          margin-bottom: 24px !important;
+        }
+
+        :is(
+          .content-section:not(#events-section):not(#events-section-legacy),
+          .modal:not(#addEventModal)
+        ) [style*="margin-bottom: 20px"] {
+          margin-bottom: 16px !important;
+        }
+
+        :is(
+          .content-section:not(#events-section):not(#events-section-legacy),
+          .modal:not(#addEventModal)
+        ) [style*="gap: 15px"] {
+          gap: 12px !important;
+        }
+
+        :is(
+          .content-section:not(#events-section):not(#events-section-legacy),
+          .modal:not(#addEventModal)
+        ) [style*="gap: 10px"] {
+          gap: 8px !important;
         }
       }
 
@@ -3785,6 +4250,7 @@
 
         <div class="events-state-filters" id="eventsStateFilters" aria-label="Filter by event state">
           <button type="button" class="active" data-event-state="All" onclick="setEventStateFilter('All')">All <span>0</span></button>
+          <button type="button" data-event-state="Active" onclick="setEventStateFilter('Active')">Active <span>0</span></button>
           <button type="button" data-event-state="Added" onclick="setEventStateFilter('Added')">Added <span>0</span></button>
           <button type="button" data-event-state="Planning" onclick="setEventStateFilter('Planning')">Planning <span>0</span></button>
           <button type="button" data-event-state="Preparing" onclick="setEventStateFilter('Preparing')">Preparing <span>0</span></button>
