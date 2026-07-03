@@ -137,6 +137,24 @@ class PlanningTemplateTests(unittest.TestCase):
         )
         self.assertIn('id="plan-page-root"', page)
 
+    def test_event_plan_actions_open_new_workspace(self):
+        script_path = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)),
+            'static',
+            'js',
+            'app.js',
+        )
+        with open(script_path, encoding='utf-8') as script_file:
+            script = script_file.read()
+
+        self.assertIn(
+            "planPageState.eventId = Number(eventId) || null;\n"
+            "  showSection('plan');",
+            script,
+        )
+        self.assertNotIn('Manage Assets', script)
+        self.assertNotIn("switchEditTab('assets')", script)
+
     def test_template_crud_is_company_local(self):
         self.login('admin')
         template = self.create_template()

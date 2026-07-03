@@ -14490,6 +14490,10 @@ async function editEvent(eventId) {
     const response = await apiCall(`/api/events/${eventId}`);
     const event = response.data;
 
+    // The shared modal footer uses this selection for packing lists and DOs.
+    window.currentEventId = event.id;
+    window.currentEventData = event;
+
     document.getElementById(
       "eventDetailsTitle"
     ).textContent = `Edit Event ${event.id}: ${event.name}`;
@@ -14503,20 +14507,6 @@ async function editEvent(eventId) {
     };
 
     let content = `
-            <!-- Edit Event Tabs -->
-            <div class="edit-event-tabs" style="display: flex; border-bottom: 2px solid #e9ecef; margin-bottom: 20px;">
-                <button class="edit-tab active" data-tab="details" onclick="switchEditTab('details')" 
-                        style="flex: 1; padding: 15px 20px; border: none; background: rgba(118, 75, 162, 0.05); font-size: 16px; font-weight: 500; cursor: pointer; border-bottom: 3px solid #764ba2; transition: all 0.3s ease; color: #764ba2;">
-                    📝 Event Details
-                </button>
-                <button class="edit-tab" data-tab="assets" onclick="switchEditTab('assets')"
-                        style="flex: 1; padding: 15px 20px; border: none; background: none; font-size: 16px; font-weight: 500; cursor: pointer; border-bottom: 3px solid transparent; transition: all 0.3s ease;">
-                    📦 Manage Assets
-                </button>
-            </div>
-            
-            <!-- Tab Contents -->
-            <div id="edit-details-tab" class="edit-tab-content">
                 <form id="editEventDetailsForm">
                     <input type="hidden" id="editEventId" value="${event.id}">
                     <div class="form-group">
@@ -14552,247 +14542,15 @@ async function editEvent(eventId) {
                 <div style="margin-top: 24px;">
                     ${renderEventNotesFilesSection(event)}
                 </div>
-            </div>
-            
-            <div id="edit-assets-tab" class="edit-tab-content" style="display: none;">
-                <div role="status" aria-live="polite"
-                     style="text-align: center; padding: 48px 20px; color: #666;">
-                    Loading asset models and containers...
-                </div>
-            </div>
         `;
 
     document.getElementById("eventDetailsContent").innerHTML = content;
-
-    // Load available assets for the assets tab
-    loadEditEventAssets(eventId);
-
-    // Clean up any existing event listeners on the eventDetailsContent
-    const eventDetailsContent = document.getElementById("eventDetailsContent");
-    if (eventDetailsContent.handleModelToggle) {
-      eventDetailsContent.removeEventListener(
-        "click",
-        eventDetailsContent.handleModelToggle
-      );
-    }
-
-    // Set up event delegation for model toggle
-    const handleModelToggle = function (e) {
-      if (e.target.classList.contains("toggle-model-btn")) {
-        e.preventDefault();
-        const modelId = e.target.getAttribute("data-model-id");
-        toggleModelDetailsInEdit(modelId);
-      }
-    };
-
-    // Store the listener reference for cleanup
-    eventDetailsContent.handleModelToggle = handleModelToggle;
-    eventDetailsContent.addEventListener("click", handleModelToggle);
 
     openModal("eventDetailsModal");
   } catch (error) {
     showNotification("error", "Failed to load event details");
   }
 }
-
-// Switch between edit tabs
-
-async function loadEditEventAssets(eventId) {
-  try {
-    const [eventResponse, availableAssetsResponse, availabilityResponse, containerCache] = await Promise.all([
-      apiCall(`/api/events/${eventId}`),
-      apiCall("/api/assets/available"),
-      apiCall(`/api/events/${eventId}/availability`),
-      refreshContainersCache(true).catch(error => {
-        console.warn("Container search unavailable:", error);
-        return {};
-      }),
-    ]);
-
-    const event = eventResponse.data;
-    const availableAssets = availableAssetsResponse.data || [];
-    const availableContainers = Object.values(containerCache || {});
-
-    // Store for functionality
-    window.currentEditAvailableAssets = availableAssets;
-    window.currentEditContainers = availableContainers;
-    window.currentEditEventId = eventId;
-    window.currentEditEvent = event;
-    window.currentEditAvailabilityList = availabilityResponse.data || [];
-
-    // Helper function to escape HTML
-    const escapeHtml = (str) => {
-      if (!str) return '';
-      const div = document.createElement('div');
-      div.textContent = str;
-      return div.innerHTML;
-    };
-
-    let content = `
-            <div class="assets-edit-interface">
-                <!-- Search Bar at Top -->
-                <div style="background: #e8f5e8; border: 2px solid #28a745; border-radius: 8px; padding: 20px; margin-bottom: 30px;">
-                    <h4 style="color: #155724; margin: 0 0 15px 0; font-weight: 600;">🔍 Search Available Asset Models or Containers</h4>
-                    <div style="display: flex; align-items: center; gap: 15px;">
-                        <input type="text" class="form-input" placeholder="Search available asset models or containers (min 2 characters)..." 
-                               style="flex: 1; max-width: 500px; padding: 10px 15px; border: 1px solid #28a745; border-radius: 5px;" 
-                               oninput="filterAvailableModels(this.value)">
-                        <button type="button" class="btn btn-outline-secondary" onclick="clearModelSearch()" 
-                                style="padding: 10px 15px; white-space: nowrap;">Clear Search</button>
-                    </div>
-                    <div id="available-models-container" style="margin-top: 15px; border: 1px solid #28a745; border-radius: 5px; background: white; max-height: 300px; overflow-y: auto;">
-                        <div style="text-align: center; padding: 20px; color: #666; font-size: 14px;">Type to search for available asset models or containers...</div>
-                    </div>
-                </div>
-
-                <!-- Add Custom Assets Section -->
-                <div style="background: #fff3cd; border: 2px solid #ffc107; border-radius: 8px; padding: 20px; margin-bottom: 30px;">
-                    <h4 style="color: #856404; margin: 0 0 15px 0; font-weight: 600;">➕ Add Custom Assets</h4>
-                    <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center; max-width: 100%;">
-                        <input type="text" id="customAssetName" placeholder="Asset Name"
-                               style="flex: 1 1 220px; min-width: 170px; padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
-                        <input type="number" id="customAssetQuantity" placeholder="Qty" min="1" value="1"
-                               style="flex: 0 0 70px; width: 70px; padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
-                        <select id="customAssetType" style="flex: 0 1 140px; min-width: 125px; padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
-                            <option value="MISC">Misc Item</option>
-                            <option value="LOAN">Loan/Rental</option>
-                        </select>
-                        <select id="customAssetDepartment" style="flex: 0 0 82px; width: 82px; padding: 8px 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
-                            ${customDepartmentOptionsHtml('AX')}
-                        </select>
-                        <input type="text" id="customAssetCompany" placeholder="Company (loan/rental only)"
-                               style="flex: 1 1 210px; min-width: 160px; padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
-                        <button type="button" class="btn btn-success" onclick="addCustomAssetToEvent(${eventId})"
-                                style="flex: 0 0 auto; padding: 8px 16px; white-space: nowrap;">
-                            Add Custom Asset
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Current Asset Models -->
-                <div style="margin-bottom: 30px;">
-                    <h4 style="color: #495057; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
-                        <span>📦 Model Requirements</span>
-                        <span class="toggle-icon" style="font-size: 14px; cursor: pointer;" onclick="toggleViewSection('all-models')">▼</span>
-                    </h4>
-                    <div id="all-models" style="display: block;">
-                        <div id="current-asset-models" style="border: 1px solid #e9ecef; border-radius: 8px; min-height: 200px;">
-                            <!-- Content will be populated by updateModelRequirementsSection -->
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-
-    document.getElementById("edit-assets-tab").innerHTML = content;
-
-    // Rebuild model requirements from the latest event payload.
-    // This ensures consistent UI with Edit/Remove buttons
-    await updateModelRequirementsSection(eventId);
-
-  } catch (error) {
-    console.error("Error loading edit event assets:", error);
-    showNotification("error", "Failed to load assets for editing");
-  }
-}
-
-// Add custom asset to event
-async function addCustomAssetToEvent(eventId) {
-  const nameInput = document.getElementById("customAssetName");
-  const quantityInput = document.getElementById("customAssetQuantity");
-  const typeSelect = document.getElementById("customAssetType");
-  const departmentSelect = document.getElementById("customAssetDepartment");
-  const companyInput = document.getElementById("customAssetCompany");
-
-  const name = nameInput.value.trim();
-  const quantity = Math.max(1, parseInt(quantityInput.value, 10) || 1);
-  const type = normalizeCustomType(typeSelect.value);
-  const department = normalizeDepartmentCode(departmentSelect?.value || 'UN');
-  const company = (companyInput?.value || '').trim();
-
-  if (!name) {
-    showNotification("error", "Please enter a custom asset name");
-    return;
-  }
-
-  if (type === 'LOAN' && !company) {
-    showNotification("warning", "Please enter the loan/rental company");
-    companyInput?.focus();
-    return;
-  }
-
-  try {
-    await apiCall(`/api/events/${eventId}/custom-assets`, "POST", {
-      name,
-      quantity,
-      type,
-      department,
-      company
-    });
-
-    const quantityText = quantity > 1 ? ` (${quantity}x)` : '';
-    showNotification("success", `${type === 'LOAN' ? 'Loan/Rental' : 'Misc'} item "${name}"${quantityText} added`);
-
-    nameInput.value = "";
-    quantityInput.value = "1";
-    if (companyInput) companyInput.value = "";
-
-    await updateModelRequirementsSection(eventId);
-    await refreshEventOverviewViews();
-
-  } catch (error) {
-    showNotification("error", `Failed to add custom asset: ${error.message}`);
-  }
-}
-
-// Clear model search
-function clearModelSearch() {
-  const searchInput = document.querySelector('#edit-assets-tab input[placeholder*="Search available asset models"]');
-  const container = document.getElementById("available-models-container");
-  
-  if (searchInput) {
-    searchInput.value = "";
-  }
-  
-  if (container) {
-    container.innerHTML = '<div style="text-align: center; padding: 20px; color: #666; font-size: 14px;">Type to search for available asset models or containers...</div>';
-  }
-}
-
-// Add asset model to event (simplified)
-
-// Switch between edit tabs
-function switchEditTab(tabName) {
-  // Remove active class from all tabs
-  document.querySelectorAll(".edit-tab").forEach((tab) => {
-    tab.classList.remove("active");
-    tab.style.background = "none";
-    tab.style.borderBottomColor = "transparent";
-    tab.style.color = "#666";
-  });
-
-  // Remove active class from all content
-  document.querySelectorAll(".edit-tab-content").forEach((content) => {
-    content.style.display = "none";
-  });
-
-  // Add active class to clicked tab
-  const activeTab = document.querySelector(`[data-tab="${tabName}"]`);
-  if (activeTab) {
-    activeTab.classList.add("active");
-    activeTab.style.background = "rgba(118, 75, 162, 0.05)";
-    activeTab.style.borderBottomColor = "#764ba2";
-    activeTab.style.color = "#764ba2";
-  }
-
-  // Show corresponding content
-  const contentDiv = document.getElementById(`edit-${tabName}-tab`);
-  if (contentDiv) {
-    contentDiv.style.display = "block";
-  }
-}
-
-// Load available assets for editing
 
 async function addModelToEvent(eventId, brand, model, department, description = '') {
   try {
@@ -25759,8 +25517,8 @@ async function openEventPlanning(eventId) {
     await openPrepareEventModal(eventId);
     return;
   }
-  await editEvent(eventId);
-  switchEditTab('assets');
+  planPageState.eventId = Number(eventId) || null;
+  showSection('plan');
 }
 
 function toggleEventCardMenu(event, eventId, context = 'card') {
@@ -25837,8 +25595,8 @@ function createEventsOverviewCard(event) {
       <button
         type="button"
         class="event-progress-add-button"
-        aria-label="Manage assets for ${escapeHtmlAttr(event.name || `event ${event.id}`)}"
-        title="Manage assets"
+        aria-label="Plan assets for ${escapeHtmlAttr(event.name || `event ${event.id}`)}"
+        title="Plan assets"
         onclick="openEventPlanning(${event.id})"
       >
         <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
