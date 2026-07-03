@@ -4,7 +4,7 @@ import unittest
 
 import app as app_module
 from data_manager import DataManager
-from models import Event, split_legacy_event_name_location
+from models import Event, InventoryItem, User, hash_password, split_legacy_event_name_location
 
 
 class EventLocationTests(unittest.TestCase):
@@ -102,6 +102,60 @@ class AssetsDeployedTests(unittest.TestCase):
             self.assertEqual(app_module.get_deployed_asset_quantity(), 4)
         finally:
             app_module._request_data_manager.reset(token)
+
+
+class AssetEventHistoryTests(unittest.TestCase):
+    def setUp(self):
+        self.original_data_manager = app_module.get_default_data_manager()
+        self.original_testing = app_module.app.config.get('TESTING')
+        self.tempdir = tempfile.TemporaryDirectory()
+        self.data_manager = DataManager(self.tempdir.name)
+        self.data_manager.inventory = {
+            'A#01': InventoryItem(
+                asset_id='A#01',
+                brand='Test',
+                model_number='Model',
+                serial_number='SN-1',
+                description='Test asset',
+                is_missing=False,
+                maintenance_logs=[],
+                department_code='AX',
+                default_location='Store',
+            )
+        }
+        self.data_manager.events = {
+            1: Event(
+                1,
+                'Launch',
+                '20260701',
+                '20260702',
+                [],
+                actually_prepared=['A#01'],
+                location='Marina Bay Sands',
+            )
+        }
+        self.data_manager.users = {
+            'user': User('user', hash_password('pw', 'salt'), 'salt', False, True)
+        }
+        app_module.app.config['TESTING'] = True
+        app_module.set_data_manager_for_testing(self.data_manager)
+        self.client = app_module.app.test_client()
+        with self.client.session_transaction() as session:
+            session['user'] = 'user'
+            session['is_admin'] = False
+
+    def tearDown(self):
+        app_module.clear_test_data_manager(self.original_data_manager)
+        app_module.app.config['TESTING'] = self.original_testing
+        self.tempdir.cleanup()
+
+    def test_event_history_includes_location_separately_from_name(self):
+        response = self.client.get('/api/assets/A%2301/event-history')
+
+        self.assertEqual(response.status_code, 200)
+        event = response.get_json()['data'][0]
+        self.assertEqual(event['name'], 'Launch')
+        self.assertEqual(event['location'], 'Marina Bay Sands')
 
 
 if __name__ == '__main__':

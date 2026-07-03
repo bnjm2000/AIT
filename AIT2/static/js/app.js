@@ -2768,14 +2768,151 @@ function setupMobileNavigation() {
   }
 }
 
+function normaliseSidebarLabel(item) {
+  return String(item?.textContent || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+function sectionFromSidebarLabel(item) {
+  const label = normaliseSidebarLabel(item);
+  if (!label) return '';
+
+  const exactLabels = {
+    'dashboard': 'dashboard',
+    'all events': 'events',
+    'events': 'events',
+    'event planning': 'plan',
+    'planning': 'plan',
+    'plan': 'plan',
+    'inventory': 'inventory',
+    'containers': 'containers',
+    'activity log': 'logs',
+    'logs': 'logs',
+    'maintenance report': 'maintenance-report',
+    'prepare events': 'prepare',
+    'prepare assets': 'prepare',
+    'prepare': 'prepare',
+    'return events': 'return',
+    'return assets': 'return',
+    'return': 'return',
+    'transfer assets': 'transfer',
+    'transfer': 'transfer',
+    'maintenance': 'maintenance',
+    'asset check': 'asset-check',
+    'users': 'users',
+    'pdf settings': 'pdf-settings',
+    'companies': 'companies',
+    'change password': 'change-password',
+    'delivery order': 'delivery-order'
+  };
+
+  if (exactLabels[label]) return exactLabels[label];
+
+  // Match the more specific labels before generic words like "events".
+  const containsLabels = [
+    ['change password', 'change-password'],
+    ['pdf settings', 'pdf-settings'],
+    ['maintenance report', 'maintenance-report'],
+    ['asset check', 'asset-check'],
+    ['prepare', 'prepare'],
+    ['return', 'return'],
+    ['transfer', 'transfer'],
+    ['planning', 'plan'],
+    ['inventory', 'inventory'],
+    ['containers', 'containers'],
+    ['companies', 'companies'],
+    ['users', 'users'],
+    ['activity log', 'logs'],
+    ['logs', 'logs'],
+    ['maintenance', 'maintenance'],
+    ['all events', 'events'],
+    ['events', 'events'],
+    ['delivery order', 'delivery-order']
+  ];
+
+  const match = containsLabels.find(([needle]) => label.includes(needle));
+  return match ? match[1] : '';
+}
+
+function sectionFromNavItem(item) {
+  if (!item) return '';
+
+  // Prefer the visible sidebar label first. This protects against bad copied
+  // attributes such as data-section="plan" or onclick="showSection('plan')"
+  // being accidentally placed on every sidebar button.
+  const labelSection = sectionFromSidebarLabel(item);
+  if (labelSection) return labelSection;
+
+  const directSection = item.dataset.section || item.getAttribute('data-section');
+  if (directSection) return directSection;
+
+  const onclick = item.getAttribute('onclick') || '';
+  const match = onclick.match(/showSection\(['"]([^'"]+)['"]\)/);
+  return match ? match[1] : '';
+}
+
+function setupSidebarNavigation(root = document) {
+  const sidebar = root.getElementById ? root.getElementById('appSidebar') : document.getElementById('appSidebar');
+  if (!sidebar) return;
+
+  // Normalise every sidebar button on every call. Dynamic tabs such as Users,
+  // PDF Settings, Companies and Change Password may be inserted after startup.
+  sidebar.querySelectorAll('.nav-item').forEach(item => {
+    const section = sectionFromNavItem(item);
+    if (!section) return;
+
+    item.dataset.section = section;
+
+    // Critical: remove old inline showSection handlers. If the HTML accidentally
+    // copied showSection('plan') onto multiple buttons, leaving onclick in place
+    // will still open the Planning workspace before/after our fixed handler.
+    const onclick = item.getAttribute('onclick') || '';
+    if (/^\s*showSection\(/.test(onclick)) {
+      item.removeAttribute('onclick');
+    }
+
+    if (item.tagName.toLowerCase() === 'button' && !item.hasAttribute('type')) {
+      item.type = 'button';
+    }
+  });
+
+  if (sidebar.dataset.navigationBound === 'true') return;
+  sidebar.dataset.navigationBound = 'true';
+
+  // Use capture phase and stopImmediatePropagation so any stale inline onclick
+  // handlers cannot fire and redirect unrelated sidebar items to Planning.
+  sidebar.addEventListener('click', event => {
+    const item = event.target.closest('.nav-item');
+    if (!item || !sidebar.contains(item)) return;
+
+    const section = sectionFromNavItem(item);
+    if (!section) return;
+
+    item.dataset.section = section;
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation();
+    showSection(section);
+  }, true);
+}
 function showSection(sectionName) {
-  const adminOnlySections = new Set(["logs", "maintenance-report", "users", "pdf-settings"]);
+  const adminOnlySections = new Set(["plan", "logs", "maintenance-report", "users", "pdf-settings"]);
   const superAdminOnlySections = new Set(["companies"]);
   if (adminOnlySections.has(sectionName) && !isAdminUser()) {
     return showSection("events");
   }
   if (superAdminOnlySections.has(sectionName) && !isSuperAdminUser()) {
     return showSection("events");
+  }
+
+  if (
+    sectionName !== 'plan' &&
+    document.getElementById('plan-section')?.classList.contains('active') &&
+    typeof planFlushNotesSave === 'function'
+  ) {
+    planFlushNotesSave();
   }
 
   const targetSection = document.getElementById(sectionName + "-section");
@@ -2787,8 +2924,10 @@ function showSection(sectionName) {
     section.setAttribute("aria-hidden", String(!isActive));
   });
 
+  setupSidebarNavigation();
+
   document.querySelectorAll(".nav-item").forEach((item) => {
-    const isActive = item.getAttribute("onclick") === `showSection('${sectionName}')`;
+    const isActive = sectionFromNavItem(item) === sectionName;
     item.classList.toggle("active", isActive);
     if (isActive) {
       item.setAttribute("aria-current", "page");
@@ -2812,6 +2951,9 @@ function showSection(sectionName) {
       break;
     case "events":
       loadAllEvents();
+      break;
+    case "plan":
+      loadPlanPage();
       break;
     case "inventory":
       loadInventory();
@@ -3197,12 +3339,18 @@ function enhanceModalAccessibility(root = document) {
 }
 
 function enhanceNavigationAccessibility() {
+  setupSidebarNavigation();
+
   document.querySelectorAll(".content-section").forEach(section => {
     section.setAttribute("aria-hidden", String(!section.classList.contains("active")));
   });
 
   document.querySelectorAll(".nav-item").forEach(item => {
-    item.setAttribute("type", "button");
+    if (item.tagName.toLowerCase() === 'button') {
+      item.setAttribute("type", "button");
+    }
+    const section = sectionFromNavItem(item);
+    if (section) item.dataset.section = section;
     if (item.classList.contains("active")) {
       item.setAttribute("aria-current", "page");
     } else {
@@ -3534,7 +3682,7 @@ async function setupPdfSettingsTab() {
 }
 
 function removePdfSettingsTab() {
-  const tab = document.querySelector(`[onclick="showSection('pdf-settings')"]`);
+  const tab = document.querySelector(`[data-section="pdf-settings"], [onclick="showSection('pdf-settings')"]`);
   if (tab) tab.remove();
 
   const section = document.getElementById('pdf-settings-section');
@@ -3542,7 +3690,7 @@ function removePdfSettingsTab() {
 }
 
 function ensurePdfSettingsNavItem() {
-  if (document.querySelector(`[onclick="showSection('pdf-settings')"]`)) return;
+  if (document.querySelector(`[data-section="pdf-settings"], [onclick="showSection('pdf-settings')"]`)) return;
 
   const settingsSection = Array.from(document.querySelectorAll('.nav-section'))
     .find(section => {
@@ -3558,7 +3706,7 @@ function ensurePdfSettingsNavItem() {
   const pdfSettingsTab = document.createElement('button');
   pdfSettingsTab.type = 'button';
   pdfSettingsTab.className = 'nav-item';
-  pdfSettingsTab.setAttribute('onclick', "showSection('pdf-settings')");
+  pdfSettingsTab.dataset.section = 'pdf-settings';
   pdfSettingsTab.textContent = '📄 PDF Settings';
 
   const logoutButton = settingsSection.querySelector(`[onclick="logout()"]`);
@@ -3941,7 +4089,7 @@ async function setupCompanyManagementTab() {
 }
 
 function removeCompanyManagementTab() {
-  const tab = document.querySelector(`[onclick="showSection('companies')"]`);
+  const tab = document.querySelector(`[data-section="companies"], [onclick="showSection('companies')"]`);
   if (tab) tab.remove();
 
   const section = document.getElementById('companies-section');
@@ -3949,7 +4097,7 @@ function removeCompanyManagementTab() {
 }
 
 function ensureCompanyManagementNavItem() {
-  if (document.querySelector(`[onclick="showSection('companies')"]`)) return;
+  if (document.querySelector(`[data-section="companies"], [onclick="showSection('companies')"]`)) return;
 
   const settingsSection = Array.from(document.querySelectorAll('.nav-section'))
     .find(section => {
@@ -3965,7 +4113,7 @@ function ensureCompanyManagementNavItem() {
   const companiesTab = document.createElement('button');
   companiesTab.type = 'button';
   companiesTab.className = 'nav-item super-admin-only';
-  companiesTab.setAttribute('onclick', "showSection('companies')");
+  companiesTab.dataset.section = 'companies';
   companiesTab.innerHTML = '&#127970; Companies';
 
   const logoutButton = settingsSection.querySelector(`[onclick="logout()"]`);
@@ -4675,7 +4823,7 @@ async function setupChangePasswordTab() {
 }
 
 function ensureChangePasswordNavItem() {
-  if (document.querySelector(`[onclick="showSection('change-password')"]`)) return;
+  if (document.querySelector(`[data-section="change-password"], [onclick="showSection('change-password')"]`)) return;
 
   const settingsSection = Array.from(document.querySelectorAll('.nav-section'))
     .find(section => {
@@ -4691,7 +4839,7 @@ function ensureChangePasswordNavItem() {
   const passwordTab = document.createElement('button');
   passwordTab.type = 'button';
   passwordTab.className = 'nav-item';
-  passwordTab.setAttribute('onclick', "showSection('change-password')");
+  passwordTab.dataset.section = 'change-password';
   passwordTab.textContent = '🔐 Change Password';
 
   const logoutButton = settingsSection.querySelector(`[onclick="logout()"]`);
@@ -4831,7 +4979,7 @@ async function setupAdminUserManagementTab() {
 }
 
 function ensureUsersNavItem() {
-  if (document.querySelector(`[onclick="showSection('users')"]`)) return;
+  if (document.querySelector(`[data-section="users"], [onclick="showSection('users')"]`)) return;
 
   const settingsSection = Array.from(document.querySelectorAll('.nav-section'))
     .find(section => {
@@ -4847,7 +4995,7 @@ function ensureUsersNavItem() {
   const usersTab = document.createElement('button');
   usersTab.type = 'button';
   usersTab.className = 'nav-item';
-  usersTab.setAttribute('onclick', "showSection('users')");
+  usersTab.dataset.section = 'users';
   usersTab.innerHTML = `👤 Users`;
 
   const logoutButton = settingsSection.querySelector(`[onclick="logout()"]`);
@@ -5732,6 +5880,18 @@ function updateUpcomingEventsCounter(count) {
     }
 }
 
+function deployedAssetsSummaryIconHtml() {
+  return `
+    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+      <path d="m3 7 9-4 9 4-9 4-9-4Z"></path>
+      <path d="M3 7v10l9 4 4.5-2"></path>
+      <path d="M12 11v10"></path>
+      <path d="M15 14h7"></path>
+      <path d="m19 11 3 3-3 3"></path>
+    </svg>
+  `;
+}
+
 async function loadStatsCards() {
   try {
     const statsResponse = await apiCall("/api/stats");
@@ -5741,8 +5901,11 @@ async function loadStatsCards() {
     const activeEventsEl = document.getElementById("active-events");
     const totalAssetsEl = document.getElementById("total-assets");
     const deployedAssetsEl = document.getElementById("deployed-assets");
+    const deployedAssetsIconEl = document.getElementById("deployed-assets-icon")
+      || document.querySelector(".summary-deployed .events-summary-icon");
     const overdueEventsEl = document.getElementById("overview-overdue-events");
 
+    if (deployedAssetsIconEl) deployedAssetsIconEl.innerHTML = deployedAssetsSummaryIconHtml();
     if (totalEventsEl) totalEventsEl.textContent = stats.totalEvents || 0;
     if (activeEventsEl) activeEventsEl.textContent = stats.activeEvents || 0;
     if (totalAssetsEl) totalAssetsEl.textContent = stats.totalAssets || 0;
@@ -9999,9 +10162,9 @@ function maintenanceReportTableHead() {
       <col style="width:8%;">
       <col style="width:22%;">
       <col style="width:8%;">
+      <col style="width:5%;">
       <col style="width:9%;">
-      <col style="width:9%;">
-      <col style="width:27%;">
+      <col style="width:31%;">
       <col style="width:7%;">
       <col style="width:10%;">
     </colgroup>
@@ -10010,7 +10173,7 @@ function maintenanceReportTableHead() {
         <th>Date</th>
         <th>Asset</th>
         <th class="maintenance-location-pdf">Location</th>
-        <th>Type</th>
+        <th class="maintenance-type-pdf">Type</th>
         <th>User</th>
         <th>Description</th>
         <th>Cost</th>
@@ -10031,7 +10194,7 @@ function maintenanceReportRowHtml(row, rowNumber) {
       <td>${safe(maintenanceReportDateForDisplay(row.log.date))}</td>
       <td><strong>${safe(row.assetId)}</strong><br>${safe(assetText || '-')}</td>
       <td class="maintenance-location-pdf">${safe(row.location || '-')}</td>
-      <td>${maintenanceLogTypePdfBadgeHtml(row.type)}</td>
+      <td class="maintenance-type-pdf">${maintenanceLogTypePdfBadgeHtml(row.type)}</td>
       <td>${safe(row.log.user)}</td>
       <td>${safe(row.log.description)}</td>
       <td class="maintenance-cost-pdf">${maintenanceCostDisplayHtml(row.log.cost)}</td>
@@ -10085,6 +10248,7 @@ function buildMaintenanceReportPdfPages(rows, context) {
   const safe = value => escapeHtml(String(value ?? ''));
   const logoUrl = escapeHtmlAttr(getPdfLogoUrl());
   const footerHtml = renderPdfFooterHtml();
+  const typeLegendHtml = maintenanceReportTypeLegendHtml();
 
   const headerHtml = `
     <div class="logo-row"><img src="${logoUrl}" alt="Company Logo"></div>
@@ -10138,6 +10302,10 @@ function buildMaintenanceReportPdfPages(rows, context) {
       #__maintenanceReportMeasureBox .maintenance-change-pdf { white-space:normal !important; word-break:normal !important; overflow-wrap:normal !important; }
       #__maintenanceReportMeasureBox .maintenance-cost-pdf { white-space:nowrap; word-break:normal; overflow-wrap:normal; }
       #__maintenanceReportMeasureBox .maintenance-location-pdf { padding-left:3px; padding-right:3px; }
+      #__maintenanceReportMeasureBox .maintenance-type-pdf { padding-left:3px; padding-right:3px; text-align:center; }
+      #__maintenanceReportMeasureBox .maintenance-type-legend { display:flex; flex-wrap:wrap; align-items:center; gap:4px 12px; margin-top:5px; font-size:7pt; line-height:1.25; }
+      #__maintenanceReportMeasureBox .maintenance-type-legend-item { display:inline-flex; align-items:center; gap:4px; white-space:nowrap; }
+      #__maintenanceReportMeasureBox #__maintenanceReportLegendMeasure { display:flow-root; }
       #__maintenanceReportMeasureBox .footer-measure { width:100%; text-align:center; font-size:7pt; font-weight:bold; line-height:1.2; overflow-wrap:anywhere; }
     </style>
     <div id="__maintenanceReportBase">
@@ -10148,6 +10316,7 @@ function buildMaintenanceReportPdfPages(rows, context) {
       ${maintenanceReportTableHead()}
       <tbody id="__maintenanceReportMeasureBody"></tbody>
     </table>
+    <div id="__maintenanceReportLegendMeasure">${typeLegendHtml}</div>
     <div id="__maintenanceReportFooterMeasure" class="footer-measure">${footerHtml}</div>
   `;
 
@@ -10160,9 +10329,15 @@ function buildMaintenanceReportPdfPages(rows, context) {
   const footerHeight = normaliseMeasuredHeight(
     measureBox.querySelector('#__maintenanceReportFooterMeasure')?.getBoundingClientRect().height || 0
   );
+  const legendHeight = normaliseMeasuredHeight(
+    measureBox.querySelector('#__maintenanceReportLegendMeasure')?.getBoundingClientRect().height || 0
+  );
   const pageFlowHeightMm = 276;
   const footerReserveMm = pdfFooterReserveMm({ pageFlowHeightMm }, footerHeight);
-  const rowBudget = Math.max(40, pdfMmToPx(pageFlowHeightMm - footerReserveMm) - baseHeight);
+  const rowBudget = Math.max(
+    40,
+    pdfMmToPx(pageFlowHeightMm - footerReserveMm) - baseHeight - legendHeight
+  );
 
   function measureRow(rowHtml) {
     measureBody.innerHTML = rowHtml;
@@ -10201,6 +10376,7 @@ function buildMaintenanceReportPdfPages(rows, context) {
           ${pageRows.map(row => row.html).join('')}
         </tbody>
       </table>
+      ${typeLegendHtml}
       <div class="footer">${footerHtml}</div>
       <div class="page-number">Page ${pageIndex + 1} of ${totalPages}</div>
     </div>
@@ -10262,6 +10438,9 @@ async function generateMaintenanceReportPdf() {
       .items-table .maintenance-change-pdf { white-space:normal !important; word-break:normal !important; overflow-wrap:normal !important; }
       .items-table .maintenance-cost-pdf { white-space:nowrap; word-break:normal; overflow-wrap:normal; }
       .items-table .maintenance-location-pdf { padding-left:3px; padding-right:3px; }
+      .items-table .maintenance-type-pdf { padding-left:3px; padding-right:3px; text-align:center; }
+      .maintenance-type-legend { display:flex; flex-wrap:wrap; align-items:center; gap:4px 12px; margin-top:5px; font-size:7pt; line-height:1.25; }
+      .maintenance-type-legend-item { display:inline-flex; align-items:center; gap:4px; white-space:nowrap; }
       .footer { position:absolute; bottom:7mm; left:7mm; right:7mm; text-align:center; font-size:7pt; font-weight:bold; line-height:1.2; overflow-wrap:anywhere; }
       .page-number { position:absolute; bottom:3mm; right:7mm; font-size:7pt; }
       .print-btn { position:fixed; top:20px; right:20px; background:#667eea; color:white; border:none; padding:10px 18px; border-radius:6px; cursor:pointer; z-index:999; }
@@ -13091,9 +13270,47 @@ function maintenanceLogTypeBadgeHtml(type) {
   return `<span style="display:inline-block;padding:4px 8px;border-radius:999px;font-size:12px;font-weight:700;white-space:nowrap;background:${meta.background};color:${meta.color};">${escapeHtml(meta.label)}</span>`;
 }
 
+function maintenanceReportTypePdfMeta(type) {
+  const normalized = normalizeMaintenanceLogType(type);
+  const palette = {
+    "General": { letter: "G", background: "#e9ecef", color: "#343a40" },
+    "Preventative maintenance": { letter: "P", background: "#d1ecf1", color: "#0c5460" },
+    "Fault": { letter: "F", background: "#ffe5d0", color: "#8a3b12" },
+    "Update": { letter: "U", background: "#e2d9f3", color: "#3d246c" },
+    "Repair": { letter: "R", background: "#f8d7da", color: "#721c24" },
+    "Asset check": { letter: "A", background: "#d4edda", color: "#155724" }
+  };
+  return {
+    normalized,
+    ...(palette[normalized] || palette.General)
+  };
+}
+
 function maintenanceLogTypePdfBadgeHtml(type) {
-  const meta = maintenanceLogTypeMeta(type);
-  return pdfInlineBadgeHtml(meta.label, meta.background, meta.color);
+  const meta = maintenanceReportTypePdfMeta(type);
+  return pdfInlineBadgeHtml(meta.letter, meta.background, meta.color, {
+    title: meta.normalized,
+    style: "min-width:17px;text-align:center;padding:2px 5px;"
+  });
+}
+
+function maintenanceReportTypeLegendHtml() {
+  const items = MAINTENANCE_LOG_TYPES.map(type => {
+    const meta = maintenanceReportTypePdfMeta(type);
+    return `
+      <span class="maintenance-type-legend-item">
+        ${maintenanceLogTypePdfBadgeHtml(type)}
+        <span>${escapeHtml(meta.normalized)}</span>
+      </span>
+    `;
+  }).join('');
+
+  return `
+    <div class="maintenance-type-legend" aria-label="Maintenance type legend">
+      <strong>Type legend:</strong>
+      ${items}
+    </div>
+  `;
 }
 
 function formatMaintenanceCost(value) {
@@ -14333,63 +14550,9 @@ async function editEvent(eventId) {
             </div>
             
             <div id="edit-assets-tab" class="edit-tab-content" style="display: none;">
-                <div class="assets-edit-interface">
-                    <!-- Search Bar at Top -->
-                    <div style="background: #e8f5e8; border: 2px solid #28a745; border-radius: 8px; padding: 20px; margin-bottom: 30px;">
-                        <h4 style="color: #155724; margin-bottom: 15px; font-size: 18px;">➕ Add Asset Models / Containers</h4>
-                        <div style="display: flex; gap: 15px; align-items: flex-end;">
-                            <div style="flex: 1;">
-                                <input type="text" class="form-input" placeholder="Search available asset models or containers..." 
-                                       style="width: 100%; padding: 12px; border: 1px solid #28a745; border-radius: 6px; font-size: 14px;" 
-                                       oninput="filterAvailableModels(this.value)">
-                            </div>
-                            <button type="button" class="btn btn-secondary" onclick="clearModelSearch()" 
-                                    style="padding: 12px 20px; background: #6c757d; border: none; border-radius: 6px; color: white; font-size: 14px;">
-                                Clear
-                            </button>
-                        </div>
-                        <div id="available-models-container" style="margin-top: 15px; border: 1px solid #28a745; border-radius: 6px; max-height: 250px; overflow-y: auto; background: white;">
-                            <div style="text-align: center; padding: 20px; color: #666; font-size: 14px;">
-                                Type to search for available asset models or containers...
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Add Custom Asset Section -->
-                    <div style="margin-bottom: 30px;">
-                        <h4 style="color: #495057; margin-bottom: 15px;">🛠️ Add Custom Assets</h4>
-                        <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center; max-width: 100%; margin-bottom: 15px;">
-                            <input type="text" id="customAssetName" placeholder="Asset name, e.g. XLR Cable - 3m"
-                                   style="flex: 1 1 220px; min-width: 170px; padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
-                            <input type="number" id="customAssetQuantity" placeholder="Qty" min="1" value="1"
-                                   style="flex: 0 0 70px; width: 70px; padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
-                            <select id="customAssetType" style="flex: 0 1 140px; min-width: 125px; padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
-                                <option value="MISC">Misc Item</option>
-                                <option value="LOAN">Loan/Rental</option>
-                            </select>
-                            <select id="customAssetDepartment" style="flex: 0 0 82px; width: 82px; padding: 8px 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
-                                ${customDepartmentOptionsHtml('AX')}
-                            </select>
-                            <input type="text" id="customAssetCompany" placeholder="Company (loan/rental only)"
-                                   style="flex: 1 1 210px; min-width: 160px; padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
-                            <button type="button" class="btn btn-success" onclick="addCustomAssetToEvent(${eventId})"
-                                    style="flex: 0 0 auto; padding: 8px 16px; white-space: nowrap;">
-                                Add Custom Asset
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Current Asset Models -->
-                    <div style="margin-bottom: 30px;">
-                        <h4 style="color: #495057; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
-                            <span>📦 Model Requirements</span>
-                            <span class="toggle-icon" style="font-size: 14px; cursor: pointer;" onclick="toggleViewSection('all-models')">▼</span>
-                        </h4>
-                        <div id="all-models" style="display: block;">
-                            <div id="current-asset-models" style="border: 1px solid #e9ecef; border-radius: 8px; min-height: 200px;">
-                            </div>
-                        </div>
-                    </div>
+                <div role="status" aria-live="polite"
+                     style="text-align: center; padding: 48px 20px; color: #666;">
+                    Loading asset models and containers...
                 </div>
             </div>
         `;
@@ -15571,6 +15734,149 @@ function editContainerSearchText(container, summary) {
   ].join(' ').toLowerCase();
 }
 
+function editContainerFamilyLabel(container) {
+  const containerId = String(container?.id || '').trim();
+  if (!containerId) return '';
+
+  // Keep every real container selectable, but collapse obvious numbered siblings
+  // such as "5XT Case #01", "5XT Case #02", etc. into one search-result family.
+  const familyLabel = containerId
+    .replace(/\s*(?:#|(?:no|number)\.?\s+)\s*[a-z]?\d+(?:[._/-][a-z0-9]+)*\s*$/i, '')
+    .trim();
+
+  return familyLabel || containerId;
+}
+
+function editContainerSummarySignature(summary) {
+  return (summary?.groups || [])
+    .map(group => [
+      normalizeDepartmentCode(group.department || 'UN'),
+      String(group.brand || '').trim().toLowerCase(),
+      String(group.model || '').trim().toLowerCase(),
+      Number(group.count || 0)
+    ].join('|'))
+    .sort()
+    .join('||');
+}
+
+function renderEditContainerSearchResult(item, eventId) {
+  const containerItem = item.container;
+  const summary = item.summary;
+  const containerId = String(containerItem?.id || '');
+  const containerSerial = getContainerSerialNumber(containerItem);
+  const canAdd = summary.groups.length > 0;
+  const modelSummary = summary.groups.length
+    ? summary.groups.slice(0, 4).map(group =>
+        `${group.count}x ${escapeHtml(group.brand)} ${escapeHtml(group.model)}`
+      ).join(', ')
+    : 'No available contents';
+  const remainingModels = Math.max(0, summary.groups.length - 4);
+  const skippedParts = [];
+
+  if (summary.missingAssetIds.length) {
+    skippedParts.push(`${summary.missingAssetIds.length} unavailable`);
+  }
+  if (summary.bulkAssetIds.length) {
+    skippedParts.push(`${summary.bulkAssetIds.length} bulk skipped`);
+  }
+
+  return `
+    <div style="padding: 10px 12px; border-bottom: 1px solid #f1f1f1; display: flex; justify-content: space-between; align-items: center; gap: 12px;">
+      <div style="flex: 1; min-width: 0;">
+        <div style="font-weight: 600; margin-bottom: 3px;">${escapeHtml(containerId)}</div>
+        ${containerSerial ? `<div style="color: #666; font-size: 12px; margin-bottom: 2px;">SN: ${escapeHtml(containerSerial)}</div>` : ''}
+        <div style="color: #666; font-size: 13px; margin-bottom: 2px;">${modelSummary}${remainingModels ? `, +${remainingModels} more` : ''}</div>
+        <div style="font-size: 12px; color: ${canAdd ? '#28a745' : '#dc3545'};">
+          ${summary.usableCount} addable asset${summary.usableCount === 1 ? '' : 's'}${skippedParts.length ? ` (${skippedParts.join(', ')})` : ''}
+        </div>
+      </div>
+      <button class="btn btn-primary add-container-models-btn" style="padding: 6px 12px; font-size: 12px; white-space: nowrap;"
+              data-event-id="${eventId}"
+              data-container-id="${escapeHtmlAttribute(containerId)}"
+              ${canAdd ? '' : 'disabled'}>
+        Add Contents
+      </button>
+    </div>
+  `;
+}
+
+function renderEditContainerSearchSection(filteredContainers, filteredModels, eventId, searchLower) {
+  if (!filteredContainers.length) return '';
+
+  const directContainerMatch = filteredContainers.some(item => {
+    const id = String(item.container?.id || '').trim().toLowerCase();
+    const serial = getContainerSerialNumber(item.container).toLowerCase();
+    return searchLower === id || (serial && searchLower === serial);
+  });
+  const openSection = directContainerMatch || filteredModels.length === 0;
+  const families = new Map();
+
+  filteredContainers.forEach(item => {
+    const familyLabel = editContainerFamilyLabel(item.container);
+    const familyKey = familyLabel.toLowerCase();
+    if (!families.has(familyKey)) {
+      families.set(familyKey, { label: familyLabel, items: [] });
+    }
+    families.get(familyKey).items.push(item);
+  });
+
+  const familyHtml = Array.from(families.values())
+    .sort((a, b) => compareByDisplayName(a.label, b.label))
+    .map(family => {
+      family.items.sort((a, b) =>
+        compareByDisplayName(String(a.container?.id || ''), String(b.container?.id || ''))
+      );
+
+      if (family.items.length === 1) {
+        return renderEditContainerSearchResult(family.items[0], eventId);
+      }
+
+      const usableCounts = family.items.map(item => Number(item.summary.usableCount || 0));
+      const minCount = Math.min(...usableCounts);
+      const maxCount = Math.max(...usableCounts);
+      const quantityText = minCount === maxCount
+        ? `${minCount} addable asset${minCount === 1 ? '' : 's'} each`
+        : `${minCount}\u2013${maxCount} addable assets per case`;
+      const variationCount = new Set(
+        family.items.map(item => editContainerSummarySignature(item.summary))
+      ).size;
+      const variationText = variationCount === 1
+        ? 'same contents'
+        : `${variationCount} content variations`;
+      const openFamily = family.items.some(item =>
+        String(item.container?.id || '').trim().toLowerCase() === searchLower
+      );
+
+      return `
+        <details ${openFamily ? 'open' : ''} style="border-bottom: 1px solid #e9ecef; background: #fbfbfc;">
+          <summary style="padding: 11px 12px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+            <span style="font-weight: 600;">${escapeHtml(family.label)}</span>
+            <span style="color: #666; font-size: 12px; text-align: right;">
+              ${family.items.length} cases &middot; ${quantityText} &middot; ${variationText}
+            </span>
+          </summary>
+          <div style="border-top: 1px solid #e9ecef; background: white;">
+            <div style="padding: 8px 12px; color: #666; font-size: 12px; background: #f8f9fa;">
+              Choose the exact case; its actual contents and quantity are shown below.
+            </div>
+            ${family.items.map(item => renderEditContainerSearchResult(item, eventId)).join('')}
+          </div>
+        </details>
+      `;
+    })
+    .join('');
+
+  return `
+    <details ${openSection ? 'open' : ''} style="border-top: 1px solid #e9ecef;">
+      <summary style="padding: 11px 12px; cursor: pointer; font-weight: 600; color: #495057; background: #f8f9fa;">
+        Containers (${filteredContainers.length})
+        <span style="font-weight: 400; color: #666; font-size: 12px;">&mdash; expand to choose an exact case</span>
+      </summary>
+      ${familyHtml}
+    </details>
+  `;
+}
+
 function modelGroupMatchesEditGroup(group, department, brand, model) {
   return (
     normalizeDepartmentCode(group?.department || 'UN') === normalizeDepartmentCode(department || 'UN') &&
@@ -15806,46 +16112,14 @@ function filterAvailableModels(searchTerm) {
   };
 
   let html = '';
-  filteredContainers.slice(0, 10).forEach(item => {
-    const containerItem = item.container;
-    const summary = item.summary;
-    const containerId = String(containerItem?.id || '');
-    const containerSerial = getContainerSerialNumber(containerItem);
-    const canAdd = summary.groups.length > 0;
-    const modelSummary = summary.groups.length
-      ? summary.groups.slice(0, 4).map(group =>
-          `${group.count}x ${escapeHtml(group.brand)} ${escapeHtml(group.model)}`
-        ).join(', ')
-      : 'No available contents';
-    const remainingModels = Math.max(0, summary.groups.length - 4);
-    const skippedParts = [];
 
-    if (summary.missingAssetIds.length) {
-      skippedParts.push(`${summary.missingAssetIds.length} unavailable`);
-    }
-    if (summary.bulkAssetIds.length) {
-      skippedParts.push(`${summary.bulkAssetIds.length} bulk skipped`);
-    }
-
+  if (filteredModels.length) {
     html += `
-      <div style="padding: 12px; border-bottom: 1px solid #f1f1f1; display: flex; justify-content: space-between; align-items: center; gap: 12px;">
-        <div style="flex: 1; min-width: 0;">
-          <div style="font-weight: 600; margin-bottom: 4px;">Container ${escapeHtml(containerId)}</div>
-          ${containerSerial ? `<div style="color: #666; font-size: 12px; margin-bottom: 2px;">SN: ${escapeHtml(containerSerial)}</div>` : ''}
-          <div style="color: #666; font-size: 13px; margin-bottom: 2px;">${modelSummary}${remainingModels ? `, +${remainingModels} more` : ''}</div>
-          <div style="font-size: 12px; color: ${canAdd ? '#28a745' : '#dc3545'};">
-            ${summary.usableCount} addable asset${summary.usableCount === 1 ? '' : 's'}${skippedParts.length ? ` (${skippedParts.join(', ')})` : ''}
-          </div>
-        </div>
-        <button class="btn btn-primary add-container-models-btn" style="padding: 6px 12px; font-size: 12px; white-space: nowrap;"
-                data-event-id="${eventId}"
-                data-container-id="${escapeHtmlAttribute(containerId)}"
-                ${canAdd ? '' : 'disabled'}>
-          Add Contents
-        </button>
+      <div style="padding: 9px 12px; font-weight: 600; color: #495057; background: #f8f9fa; border-bottom: 1px solid #e9ecef;">
+        Asset models (${filteredModels.length})
       </div>
     `;
-  });
+  }
 
   filteredModels.slice(0, 20).forEach(model => {
     const qtyInputId = makeQtyInputId(
@@ -15893,7 +16167,1623 @@ function filterAvailableModels(searchTerm) {
     `;
   });
 
+  html += renderEditContainerSearchSection(
+    filteredContainers,
+    filteredModels,
+    eventId,
+    searchLower
+  );
+
   container.innerHTML = html;
+}
+
+
+// ---------------- Trial Plan page ----------------
+var planPageState = {
+  events: [],
+  event: null,
+  eventId: null,
+  assets: [],
+  availability: [],
+  containers: [],
+  templates: [],
+  search: '',
+  department: 'ALL',
+  showContainers: true,
+  loading: false,
+  templateDraft: null
+};
+
+var planEventChooserState = {
+  search: '',
+  filter: 'ALL',
+  page: 1,
+  pageSize: 8
+};
+
+var PLAN_EVENT_CHOOSER_FILTERS = [
+  { key: 'ALL', label: 'All' },
+  { key: 'ACTIVE', label: 'Active' },
+  { key: 'PLANNING', label: 'Planning' },
+  { key: 'PREPARING', label: 'Preparing' },
+  { key: 'ONGOING', label: 'Ongoing' },
+  { key: 'RETURNING', label: 'Returning' },
+  { key: 'COMPLETED', label: 'Completed' }
+];
+
+function planEncode(value) {
+  return escapeHtmlAttr(encodeURIComponent(String(value ?? '')));
+}
+
+function planDecode(value) {
+  try {
+    return decodeURIComponent(String(value || ''));
+  } catch (error) {
+    return String(value || '');
+  }
+}
+
+function planCustomAssets(eventData = planPageState.event) {
+  const customAssets = [];
+  const seen = new Set();
+
+  Object.values(eventData?.assetsByDepartment || {}).forEach(assets => {
+    (assets || []).forEach(asset => {
+      const custom = parseCustomAsset(asset.id, asset);
+      if (!custom || seen.has(custom.id)) return;
+      seen.add(custom.id);
+      customAssets.push({ ...custom, status: asset.status || 'assigned' });
+    });
+  });
+
+  return customAssets.sort((a, b) =>
+    compareByDisplayName(customAssetSortName(a), customAssetSortName(b))
+  );
+}
+
+function planModelGroups(eventData = planPageState.event) {
+  return Object.values(eventData?.modelGroups || {}).sort((a, b) => (
+    compareByDisplayName(a.department, b.department) ||
+    compareByDisplayName(modelGroupSortName(a), modelGroupSortName(b))
+  ));
+}
+
+function planEventSnapshot() {
+  return {
+    models: planModelGroups().map(group => ({
+      department: normalizeDepartmentCode(group.department || 'UN'),
+      brand: String(group.brand || ''),
+      model: String(group.model || ''),
+      description: String(group.description || ''),
+      quantity: Math.max(1, Number(group.requiredQuantity || 1))
+    })),
+    customAssets: planCustomAssets().map(custom => ({
+      type: normalizeCustomType(custom.type),
+      name: String(custom.name || ''),
+      quantity: Math.max(1, Number(custom.quantity || 1)),
+      department: normalizeDepartmentCode(custom.department || 'UN'),
+      company: String(custom.company || '')
+    }))
+  };
+}
+
+function planEventHasRequirements() {
+  if (planModelGroups().length || planCustomAssets().length) return true;
+  return (planPageState.event?.preparedItems || []).some(ref =>
+    typeof ref === 'string' && ref.trim()
+  );
+}
+
+function planTotals() {
+  const models = planModelGroups();
+  const customAssets = planCustomAssets();
+  const departmentsInUse = new Set();
+  let totalQuantity = 0;
+
+  models.forEach(group => {
+    totalQuantity += Math.max(0, Number(group.requiredQuantity || 0));
+    departmentsInUse.add(normalizeDepartmentCode(group.department || 'UN'));
+  });
+  customAssets.forEach(custom => {
+    totalQuantity += Math.max(1, Number(custom.quantity || 1));
+    departmentsInUse.add(normalizeDepartmentCode(custom.department || 'UN'));
+  });
+
+  return {
+    lineCount: models.length + customAssets.length,
+    totalQuantity,
+    departmentCount: departmentsInUse.size,
+    templateCount: planPageState.templates.length
+  };
+}
+
+function planEventOptionLabel(event) {
+  return String(event?.name || `Event ${event?.id || ''}`);
+}
+
+function planStateSlug(value) {
+  return String(value || 'added')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-');
+}
+
+function planEventTypeBadgeHtml(event) {
+  const isDryHire = event?.tag === 'dry hire';
+  return `
+    <span class="plan-badge ${isDryHire ? 'plan-badge-type-dry-hire' : 'plan-badge-type-event'}">
+      ${isDryHire ? 'Dry Hire' : 'Event'}
+    </span>
+  `;
+}
+
+function planEventStateBadgeHtml(event) {
+  const state = String(event?.state || 'Added');
+  return `
+    <span class="plan-badge plan-badge-state-${escapeHtmlAttr(planStateSlug(state))}">
+      ${escapeHtml(state)}
+    </span>
+  `;
+}
+
+function planEventChooserFilterKey(event) {
+  const state = planStateSlug(event?.state);
+  if (['added', 'planning'].includes(state)) return 'PLANNING';
+  if (['preparing', 'ready'].includes(state)) return 'PREPARING';
+  if (['ongoing', 'last-day'].includes(state)) return 'ONGOING';
+  if (['returning', 'overdue'].includes(state)) return 'RETURNING';
+  if (['closed', 'completed'].includes(state)) return 'COMPLETED';
+  return 'PLANNING';
+}
+
+function planEventChooserSearchText(event) {
+  return [
+    event?.id,
+    event?.name,
+    event?.client,
+    event?.clientName,
+    event?.client_name,
+    event?.clientCompany,
+    event?.client_company,
+    event?.location,
+    event?.venue,
+    event?.state
+  ].filter(Boolean).join(' ').toLowerCase();
+}
+
+function planEventChooserDateValue(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return Number.POSITIVE_INFINITY;
+  const normalized = /^\d{8}$/.test(raw)
+    ? `${raw.slice(0, 4)}-${raw.slice(4, 6)}-${raw.slice(6, 8)}`
+    : raw.replace(/\//g, '-');
+  const parsed = /^\d{4}-\d{2}-\d{2}$/.test(normalized)
+    ? new Date(`${normalized}T12:00:00`)
+    : new Date(normalized);
+  const valueOf = parsed.valueOf();
+  return Number.isFinite(valueOf) ? valueOf : Number.POSITIVE_INFINITY;
+}
+
+function planEventChooserFormattedDate(value) {
+  const dateValue = planEventChooserDateValue(value);
+  if (!Number.isFinite(dateValue)) return '';
+  return new Date(dateValue).toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric'
+  });
+}
+
+function planCompareEventsByStartDate(a, b) {
+  const aDate = planEventChooserDateValue(a?.startDate);
+  const bDate = planEventChooserDateValue(b?.startDate);
+  const aHasDate = Number.isFinite(aDate);
+  const bHasDate = Number.isFinite(bDate);
+  if (aHasDate && bHasDate && aDate !== bDate) return bDate - aDate;
+  if (aHasDate !== bHasDate) return aHasDate ? -1 : 1;
+  return Number(a?.id || 0) - Number(b?.id || 0);
+}
+
+function planEventChooserDateRange(event) {
+  const start = planEventChooserFormattedDate(event?.startDate);
+  const end = planEventChooserFormattedDate(event?.endDate);
+  if (!start && !end) return 'Date not set';
+  return !end || start === end ? (start || end) : `${start} – ${end}`;
+}
+
+function planEventChooserRelativeDate(event) {
+  const startValue = planEventChooserDateValue(event?.startDate);
+  if (!Number.isFinite(startValue)) return '';
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0, 0);
+  const days = Math.round((startValue - today.valueOf()) / 86400000);
+  if (days === 0) return 'Today';
+  if (days === 1) return 'Tomorrow';
+  if (days === -1) return 'Yesterday';
+  return days > 1 ? `in ${days} days` : `${Math.abs(days)} days ago`;
+}
+
+function planEventChooserSecondaryLabel(event) {
+  return String(
+    event?.client ||
+    event?.clientName ||
+    event?.client_name ||
+    event?.clientCompany ||
+    event?.client_company ||
+    (event?.tag === 'dry hire' ? 'Dry Hire' : 'Event')
+  );
+}
+
+function planEventChooserFilteredEvents() {
+  const search = String(planEventChooserState.search || '').trim().toLowerCase();
+  const filter = planEventChooserState.filter || 'ALL';
+  return (planPageState.events || [])
+    .filter(event => (
+      (
+        filter === 'ALL' ||
+        (filter === 'ACTIVE' && !['closed', 'completed'].includes(planStateSlug(event?.state))) ||
+        planEventChooserFilterKey(event) === filter
+      ) &&
+      (!search || planEventChooserSearchText(event).includes(search))
+    ))
+    .sort(planCompareEventsByStartDate);
+}
+
+function ensurePlanEventChooserModal() {
+  let modal = document.getElementById('planEventChooserModal');
+  if (modal) return modal;
+
+  modal = document.createElement('div');
+  modal.id = 'planEventChooserModal';
+  modal.className = 'modal';
+  modal.setAttribute('aria-hidden', 'true');
+  modal.innerHTML = `
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 class="modal-title">Other Events <span title="Select any event to update its plan">&#9432;</span></h3>
+        <button type="button" class="close-btn" aria-label="Close event picker"
+                onclick="closeModal('planEventChooserModal')">&times;</button>
+      </div>
+      <div class="plan-event-chooser-search">
+        <span aria-hidden="true">&#128269;</span>
+        <input type="search" id="planEventChooserSearch"
+               placeholder="Search events by name, ID, client, or location..."
+               oninput="planEventChooserSearchChanged(this.value)">
+      </div>
+      <div class="plan-event-chooser-filters" id="planEventChooserFilters"></div>
+      <div class="plan-event-chooser-table">
+        <div class="plan-event-chooser-head">
+          <span>Event</span>
+          <span>Dates</span>
+          <span>Location</span>
+          <span>Status</span>
+          <span></span>
+        </div>
+        <div class="plan-event-chooser-results" id="planEventChooserResults"></div>
+      </div>
+      <div class="plan-event-chooser-footer" id="planEventChooserFooter"></div>
+    </div>
+  `;
+  modal.addEventListener('click', event => {
+    if (event.target === modal) closeModal('planEventChooserModal');
+  });
+  document.body.appendChild(modal);
+  return modal;
+}
+
+function renderPlanEventChooser() {
+  const filters = document.getElementById('planEventChooserFilters');
+  const results = document.getElementById('planEventChooserResults');
+  const footer = document.getElementById('planEventChooserFooter');
+  if (!filters || !results || !footer) return;
+
+  const counts = (planPageState.events || []).reduce((summary, event) => {
+    const key = planEventChooserFilterKey(event);
+    summary.ALL += 1;
+    if (!['closed', 'completed'].includes(planStateSlug(event?.state))) {
+      summary.ACTIVE += 1;
+    }
+    summary[key] = (summary[key] || 0) + 1;
+    return summary;
+  }, { ALL: 0, ACTIVE: 0 });
+
+  filters.innerHTML = PLAN_EVENT_CHOOSER_FILTERS.map(filter => `
+    <button type="button"
+            class="plan-event-chooser-filter ${planEventChooserState.filter === filter.key ? 'active' : ''}"
+            onclick="planSetEventChooserFilter('${filter.key}')">
+      ${escapeHtml(filter.label)}
+      <span class="plan-event-chooser-count">${Number(counts[filter.key] || 0)}</span>
+    </button>
+  `).join('');
+
+  const events = planEventChooserFilteredEvents();
+  const pageCount = Math.max(1, Math.ceil(events.length / planEventChooserState.pageSize));
+  planEventChooserState.page = Math.min(Math.max(1, planEventChooserState.page), pageCount);
+  const start = (planEventChooserState.page - 1) * planEventChooserState.pageSize;
+  const visibleEvents = events.slice(start, start + planEventChooserState.pageSize);
+
+  results.innerHTML = visibleEvents.length ? visibleEvents.map(event => `
+    <button type="button"
+            class="plan-event-option ${Number(event.id) === Number(planPageState.eventId) ? 'current' : ''}"
+            onclick="planChooseEvent(${Number(event.id)})">
+      <span class="plan-event-option-name">
+        <span class="plan-event-option-title-line">
+          <strong>#${escapeHtml(String(event.id || ''))} &nbsp; ${escapeHtml(planEventOptionLabel(event))}</strong>
+          ${planEventTypeBadgeHtml(event)}
+        </span>
+        <span>${escapeHtml(planEventChooserSecondaryLabel(event))}</span>
+      </span>
+      <span class="plan-event-option-dates">
+        ${escapeHtml(planEventChooserDateRange(event))}
+        <span>${escapeHtml(planEventChooserRelativeDate(event))}</span>
+      </span>
+      <span class="plan-event-option-location">${escapeHtml(event.location || event.venue || '—')}</span>
+      ${planEventStateBadgeHtml(event)}
+      <span class="plan-event-option-arrow" aria-hidden="true">›</span>
+    </button>
+  `).join('') : '<div class="plan-empty">No events match this search.</div>';
+
+  const firstShown = events.length ? start + 1 : 0;
+  const lastShown = Math.min(start + visibleEvents.length, events.length);
+  const visiblePages = [];
+  for (let page = 1; page <= pageCount; page += 1) {
+    if (pageCount <= 7 || page === 1 || page === pageCount || Math.abs(page - planEventChooserState.page) <= 1) {
+      visiblePages.push(page);
+    }
+  }
+  const pageControls = [];
+  let previousPage = 0;
+  visiblePages.forEach(page => {
+    if (previousPage && page - previousPage > 1) {
+      pageControls.push('<span aria-hidden="true">…</span>');
+    }
+    pageControls.push(`
+      <button type="button"
+              class="plan-event-chooser-page ${page === planEventChooserState.page ? 'active' : ''}"
+              onclick="planSetEventChooserPage(${page})">${page}</button>
+    `);
+    previousPage = page;
+  });
+
+  footer.innerHTML = `
+    <span>Showing ${firstShown} to ${lastShown} of ${events.length} events</span>
+    <div class="plan-event-chooser-pages">
+      <button type="button" class="plan-event-chooser-page"
+              ${planEventChooserState.page <= 1 ? 'disabled' : ''}
+              onclick="planSetEventChooserPage(${planEventChooserState.page - 1})"
+              aria-label="Previous page">‹</button>
+      ${pageControls.join('')}
+      <button type="button" class="plan-event-chooser-page"
+              ${planEventChooserState.page >= pageCount ? 'disabled' : ''}
+              onclick="planSetEventChooserPage(${planEventChooserState.page + 1})"
+              aria-label="Next page">›</button>
+    </div>
+  `;
+}
+
+function planOpenEventChooser() {
+  ensurePlanEventChooserModal();
+  planEventChooserState.search = '';
+  planEventChooserState.filter = 'ALL';
+  planEventChooserState.page = 1;
+  const search = document.getElementById('planEventChooserSearch');
+  if (search) search.value = '';
+  renderPlanEventChooser();
+  openModal('planEventChooserModal');
+}
+
+function planEventChooserSearchChanged(value) {
+  planEventChooserState.search = value;
+  planEventChooserState.page = 1;
+  renderPlanEventChooser();
+}
+
+function planSetEventChooserFilter(filter) {
+  planEventChooserState.filter = filter || 'ALL';
+  planEventChooserState.page = 1;
+  renderPlanEventChooser();
+}
+
+function planSetEventChooserPage(page) {
+  planEventChooserState.page = Math.max(1, Number(page || 1));
+  renderPlanEventChooser();
+}
+
+async function planChooseEvent(eventId) {
+  closeModal('planEventChooserModal');
+  if (Number(eventId) === Number(planPageState.eventId)) return;
+  await selectPlanEvent(eventId);
+}
+
+function planMetricIconSvg(kind) {
+  const icons = {
+    lines: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 7 8-4 8 4-8 4-8-4Z"></path><path d="M4 7v10l8 4 8-4V7"></path><path d="M12 11v10"></path></svg>',
+    quantity: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="7" height="7" rx="1"></rect><rect x="14" y="4" width="7" height="7" rx="1"></rect><rect x="3" y="15" width="7" height="6" rx="1"></rect><rect x="14" y="15" width="7" height="6" rx="1"></rect></svg>',
+    departments: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="2.5"></circle><circle cx="5" cy="18" r="2.5"></circle><circle cx="19" cy="18" r="2.5"></circle><path d="M12 7.5v4M5 15.5v-4h14v4"></path></svg>',
+    templates: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l3 3v15H6z"></path><path d="M14 3v4h4M9 11h6M9 15h6"></path></svg>',
+    calendar: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M7 3v4M17 3v4M3 10h18"></path></svg>'
+  };
+  return icons[kind] || icons.lines;
+}
+
+function planDepartmentLabel(code) {
+  const department = getDepartmentMeta(code);
+  return department.name && department.name !== department.code
+    ? `${department.name} (${department.code})`
+    : department.code;
+}
+
+function planDepartmentColor(code) {
+  return getDepartmentMeta(code).color || '#667085';
+}
+
+function planDepartmentCodeBadgeHtml(code) {
+  const department = getDepartmentMeta(code);
+  const normalizedCode = normalizeDepartmentCode(code || 'UN');
+  return `
+    <span class="plan-dept-code-badge"
+          style="background:${escapeHtmlAttr(department.color || '#e2e3e5')};color:${escapeHtmlAttr(department.textColor || '#344054')};"
+          title="${escapeHtmlAttr(department.name || normalizedCode)}">
+      ${escapeHtml(normalizedCode)}
+    </span>
+  `;
+}
+
+function planDepartmentFilterStyle(code) {
+  const department = getDepartmentMeta(code);
+  const color = department.color || '#e2e3e5';
+  return `background:${escapeHtmlAttr(color)};color:${escapeHtmlAttr(department.textColor || '#344054')};border-color:${escapeHtmlAttr(color)};`;
+}
+
+function planAvailableModelGroups() {
+  const groups = {};
+  (planPageState.assets || []).forEach(asset => {
+    addAssetToEditModelGroup(
+      groups,
+      asset,
+      asset.isBulk ? Number(asset.quantity || 1) : 1
+    );
+  });
+  return Object.values(groups).sort((a, b) => (
+    compareByDisplayName(a.department, b.department) ||
+    compareByDisplayName(modelGroupSortName(a), modelGroupSortName(b))
+  ));
+}
+
+function planAvailabilityFor(group) {
+  const entry = (planPageState.availability || []).find(item =>
+    modelGroupMatchesEditGroup(
+      item,
+      group.department,
+      group.brand,
+      group.model
+    )
+  );
+  return {
+    available: Number(entry?.available ?? group.count ?? 0),
+    physical: Number(entry?.physical ?? group.count ?? 0),
+    overlap: Number(entry?.overlappingDemand || 0),
+    overlapEvents: entry?.overlappingEvents || [],
+    usedHere: Number(entry?.usedInThisEvent || 0),
+    assetOOC: Number(entry?.assetOOC || 0),
+    assetMissing: Number(entry?.assetMissing || 0),
+    bulkMaintenanceOOC: Number(entry?.bulkMaintenanceOOC || 0),
+    bulkMaintenanceMissing: Number(entry?.bulkMaintenanceMissing || 0)
+  };
+}
+
+function renderPlanAvailableResults() {
+  const results = document.getElementById('planAvailableResults');
+  if (!results) return;
+
+  const search = String(planPageState.search || '').trim().toLowerCase();
+  const department = planPageState.department || 'ALL';
+  const models = planAvailableModelGroups().filter(group => {
+    if (
+      department !== 'ALL' &&
+      normalizeDepartmentCode(group.department) !== department
+    ) {
+      return false;
+    }
+    if (!search) return true;
+    return [
+      group.department,
+      group.brand,
+      group.model,
+      group.description
+    ].join(' ').toLowerCase().includes(search);
+  });
+
+  const rows = models.slice(0, 80).map((group, index) => {
+    const availability = planAvailabilityFor(group);
+    const availabilityTooltip = modelAvailabilityReasonTooltip(
+      availability.available,
+      availability.physical,
+      availability
+    );
+    const inputId = `planAddQty${index}`;
+    return `
+      <div class="plan-result-row">
+        <div>
+          <div class="plan-item-title-line">
+            <div class="plan-item-name">${escapeHtml([group.brand, group.model].filter(Boolean).join(' '))}</div>
+            ${planDepartmentCodeBadgeHtml(group.department)}
+          </div>
+          <div class="plan-item-description">${escapeHtml(group.description || 'No description')}</div>
+        </div>
+        <div class="plan-result-side">
+          ${modelAvailabilityLabelHtml(
+            availability.available,
+            availability.physical,
+            availabilityTooltip
+          )}
+        </div>
+        <div class="plan-inline-actions">
+          <input class="plan-search-input" id="${inputId}" type="number" min="1"
+                 max="${Math.max(1, availability.physical)}" value="1"
+                 style="width:56px;min-height:30px;padding:5px 7px;">
+          <button type="button" class="plan-button plan-button-small"
+                  onclick="planAddModel('${planEncode(group.department)}','${planEncode(group.brand)}','${planEncode(group.model)}','${planEncode(group.description || '')}','${inputId}')">
+            + Add
+          </button>
+        </div>
+      </div>
+    `;
+  });
+
+  if (planPageState.showContainers && search.length >= 2) {
+    const assetLookup = buildEditAvailableAssetLookup(planPageState.assets || []);
+    const matching = (planPageState.containers || [])
+      .map(container => ({
+        container,
+        summary: buildContainerAvailableModelSummary(container, assetLookup)
+      }))
+      .filter(item =>
+        editContainerSearchText(item.container, item.summary).includes(search)
+      )
+      .slice(0, 30);
+
+    if (matching.length) {
+      const families = new Map();
+      matching.forEach(item => {
+        const label = editContainerFamilyLabel(item.container);
+        const key = label.toLowerCase();
+        if (!families.has(key)) families.set(key, { label, items: [] });
+        families.get(key).items.push(item);
+      });
+
+      const variants = [];
+      Array.from(families.values())
+        .sort((a, b) => compareByDisplayName(a.label, b.label))
+        .forEach(family => {
+          const familyVariants = new Map();
+          family.items.forEach(item => {
+            const signature = editContainerSummarySignature(item.summary) || 'empty';
+            if (!familyVariants.has(signature)) {
+              familyVariants.set(signature, {
+                label: family.label,
+                items: [],
+                summary: item.summary
+              });
+            }
+            familyVariants.get(signature).items.push(item);
+          });
+          variants.push(...familyVariants.values());
+        });
+
+      rows.push(`
+        <div style="padding:8px 12px;background:#f8f9fc;border-bottom:1px solid #e8ebf2;font-weight:700;font-size:11px;">
+          Matching container types (${variants.length} variation${variants.length === 1 ? '' : 's'} from ${matching.length} case${matching.length === 1 ? '' : 's'})
+        </div>
+      `);
+
+      variants.forEach(variant => {
+        const representativeId = String(variant.items[0]?.container?.id || '');
+        const summaryText = variant.summary.groups
+          .slice(0, 4)
+          .map(group => `${group.count}x ${group.brand} ${group.model}`)
+          .join(', ');
+        const caseIds = variant.items
+          .map(item => String(item.container?.id || ''))
+          .filter(Boolean);
+        const caseCount = variant.items.length;
+        rows.push(`
+          <div class="plan-result-row" title="${escapeHtmlAttr(caseIds.join(', '))}">
+            <div>
+              <div class="plan-item-name">Container: ${escapeHtml(variant.label)}</div>
+              <div class="plan-item-description">${escapeHtml(summaryText || 'No available contents')}</div>
+            </div>
+            <div class="plan-result-side">
+              ${caseCount} case${caseCount === 1 ? '' : 's'} · ${variant.summary.usableCount} item${variant.summary.usableCount === 1 ? '' : 's'} each
+            </div>
+            <button type="button" class="plan-button plan-button-small"
+                    title="Add one set of these container contents"
+                    ${variant.summary.usableCount ? '' : 'disabled'}
+                    onclick="planAddContainerContents('${planEncode(representativeId)}')">
+              Add Contents
+            </button>
+          </div>
+        `);
+      });
+    }
+  }
+
+  if (!rows.length) {
+    results.innerHTML = '<div class="plan-empty">No matching asset models or containers.</div>';
+    return;
+  }
+  results.innerHTML = rows.join('');
+}
+
+function renderPlanAvailableCard() {
+  const groups = planAvailableModelGroups();
+  const departmentCodes = Array.from(new Set(
+    groups.map(group => normalizeDepartmentCode(group.department || 'UN'))
+  )).sort(compareByDisplayName);
+
+  return `
+    <section class="plan-card">
+      <div class="plan-card-header">
+        <div>
+          <h3>Available Asset Models</h3>
+          <p>Add model quantities; specific assets are assigned during Prepare.</p>
+        </div>
+      </div>
+      <div class="plan-search-panel">
+        <div class="plan-search-row">
+          <input type="search" class="plan-search-input" id="planAssetSearch"
+                 value="${escapeHtmlAttr(planPageState.search)}"
+                 placeholder="Search brand, model, description, or container..."
+                 oninput="planPageState.search=this.value;renderPlanAvailableResults();">
+          <label class="plan-toggle">
+            <input type="checkbox" ${planPageState.showContainers ? 'checked' : ''}
+                   onchange="planPageState.showContainers=this.checked;renderPlanAvailableResults();">
+            Show containers
+          </label>
+        </div>
+        <div class="plan-filter-chips">
+          <button type="button" class="plan-chip ${planPageState.department === 'ALL' ? 'active' : ''}"
+                  onclick="planSetDepartmentFilter('ALL')">All</button>
+          ${departmentCodes.map(code => `
+            <button type="button" class="plan-chip plan-chip-department ${planPageState.department === code ? 'active' : ''}"
+                    style="${planDepartmentFilterStyle(code)}"
+                    onclick="planSetDepartmentFilter('${planEncode(code)}')">
+              ${escapeHtml(getDepartmentMeta(code).name || code)}
+            </button>
+          `).join('')}
+        </div>
+      </div>
+      <div class="plan-results" id="planAvailableResults"></div>
+    </section>
+  `;
+}
+
+function planSetDepartmentFilter(encodedDepartment) {
+  planPageState.department = planDecode(encodedDepartment) || 'ALL';
+  const card = document.getElementById('planAvailableCard');
+  if (card) card.innerHTML = renderPlanAvailableCard();
+  renderPlanAvailableResults();
+}
+
+function planRequirementQuantityControl(group) {
+  const quantity = Math.max(1, Number(group.requiredQuantity || 1));
+  const args = [
+    planEncode(group.department),
+    planEncode(group.brand),
+    planEncode(group.model),
+    planEncode(group.description || '')
+  ].map(value => `'${value}'`).join(',');
+  return `
+    <div class="plan-qty-control" aria-label="Required quantity">
+      <button type="button" ${quantity <= 1 ? 'disabled' : ''}
+              onclick="planSetModelQuantity(${args},${quantity - 1})">−</button>
+      <input type="number" min="1" value="${quantity}"
+             onchange="planSetModelQuantity(${args},this.value)">
+      <button type="button" onclick="planSetModelQuantity(${args},${quantity + 1})">+</button>
+    </div>
+  `;
+}
+
+function planCustomQuantityControl(custom) {
+  const quantity = Math.max(1, Number(custom.quantity || 1));
+  return `
+    <div class="plan-qty-control" aria-label="Required quantity">
+      <button type="button" ${quantity <= 1 ? 'disabled' : ''}
+              onclick="planSetCustomQuantity('${planEncode(custom.id)}',${quantity - 1})">−</button>
+      <input type="number" min="1" value="${quantity}"
+             onchange="planSetCustomQuantity('${planEncode(custom.id)}',this.value)">
+      <button type="button"
+              onclick="planSetCustomQuantity('${planEncode(custom.id)}',${quantity + 1})">+</button>
+    </div>
+  `;
+}
+
+function renderPlanRequirementsCard() {
+  const byDepartment = new Map();
+  planModelGroups().forEach(group => {
+    const code = normalizeDepartmentCode(group.department || 'UN');
+    if (!byDepartment.has(code)) byDepartment.set(code, []);
+    byDepartment.get(code).push({ type: 'model', group });
+  });
+  planCustomAssets().forEach(custom => {
+    const code = normalizeDepartmentCode(custom.department || 'UN');
+    if (!byDepartment.has(code)) byDepartment.set(code, []);
+    byDepartment.get(code).push({ type: 'custom', custom });
+  });
+
+  const departmentsHtml = Array.from(byDepartment.entries())
+    .sort(([a], [b]) => compareByDisplayName(a, b))
+    .map(([code, rows]) => {
+      const departmentQuantity = rows.reduce((total, row) => (
+        total + Math.max(
+          1,
+          Number(row.type === 'model'
+            ? row.group.requiredQuantity
+            : row.custom.quantity) || 1
+        )
+      ), 0);
+      const collapseForMobile = window.matchMedia?.('(max-width: 840px)').matches;
+      const rowHtml = rows.map(row => {
+        if (row.type === 'model') {
+          const group = row.group;
+          return `
+            <div class="plan-requirement-row">
+              <div class="plan-item-title-line">
+                <div class="plan-item-name">${escapeHtml([group.brand, group.model].filter(Boolean).join(' '))}</div>
+                ${planDepartmentCodeBadgeHtml(group.department)}
+              </div>
+              <div class="plan-item-description">${escapeHtml(group.description || 'No description')}</div>
+              ${planRequirementQuantityControl(group)}
+              <button type="button" class="plan-button plan-button-danger plan-button-small"
+                      title="Remove requirement"
+                      onclick="planRemoveModel('${planEncode(group.department)}','${planEncode(group.brand)}','${planEncode(group.model)}','${planEncode(group.description || '')}')">
+                &#128465;
+              </button>
+            </div>
+          `;
+        }
+
+        const custom = row.custom;
+        const description = custom.type === 'LOAN'
+          ? (custom.company || 'Loan / rental item')
+          : 'Custom miscellaneous item';
+        return `
+          <div class="plan-requirement-row">
+            <div>
+              <div class="plan-item-title-line">
+                <div class="plan-item-name">Custom ${escapeHtml(custom.name)}</div>
+                ${planDepartmentCodeBadgeHtml(custom.department)}
+              </div>
+              <div class="plan-item-meta">${escapeHtml(custom.type === 'LOAN' ? 'Loan / Rental' : 'Misc')}</div>
+            </div>
+            <div class="plan-item-description">${escapeHtml(description)}</div>
+            ${planCustomQuantityControl(custom)}
+            <button type="button" class="plan-button plan-button-danger plan-button-small"
+                    title="Remove custom asset"
+                    onclick="planRemoveCustomAsset('${planEncode(custom.id)}')">
+              &#128465;
+            </button>
+          </div>
+        `;
+      }).join('');
+
+      return `
+        <details class="plan-department-section" ${collapseForMobile ? '' : 'open'}>
+          <summary class="plan-department-summary">
+            <span>
+              <i class="plan-department-dot" style="--department-color:${escapeHtmlAttr(planDepartmentColor(code))}"></i>
+              ${escapeHtml(planDepartmentLabel(code))} (${rows.length})
+            </span>
+            <span class="plan-department-summary-end">
+              <span class="plan-department-mobile-total">Qty: ${departmentQuantity}</span>
+              <span aria-hidden="true">⌄</span>
+            </span>
+          </summary>
+          <div class="plan-requirement-head">
+            <span>Brand / Model</span>
+            <span>Description</span>
+            <span>Required Qty</span>
+            <span></span>
+          </div>
+          ${rowHtml}
+        </details>
+      `;
+    }).join('');
+
+  return `
+    <section class="plan-card">
+      <div class="plan-card-header">
+        <div>
+          <h3>Planned Requirements</h3>
+          <p>Changes save immediately. Departments appear when their first item is added.</p>
+        </div>
+      </div>
+      <div class="plan-requirements-scroll">
+        ${departmentsHtml || '<div class="plan-empty">No assets planned yet. Add models from the left or apply a template.</div>'}
+      </div>
+    </section>
+  `;
+}
+
+function renderPlanEventDetailsCard() {
+  const event = planPageState.event || {};
+  const notes = String(event.notes || '');
+  const eventDates = event.startDate && event.startDate === event.endDate
+    ? event.startDate
+    : [event.startDate, event.endDate].filter(Boolean).join(' – ');
+  return `
+    <section class="plan-card plan-details-card">
+      <div class="plan-card-header"><h3>Event Details</h3></div>
+      <div class="plan-aside-body">
+        <dl class="plan-detail-list">
+          <div><dt>Name</dt><dd>${escapeHtml(event.name || `Event ${event.id || ''}`)}</dd></div>
+          <div><dt>Location</dt><dd>${escapeHtml(event.location || '—')}</dd></div>
+          <div><dt>Date(s)</dt><dd>${escapeHtml(eventDates || '—')}</dd></div>
+          <div><dt>Status</dt><dd>${planEventStateBadgeHtml(event)}</dd></div>
+          <div><dt>Type</dt><dd>${planEventTypeBadgeHtml(event)}</dd></div>
+          <div class="plan-detail-notes-row">
+            <dt>Notes</dt>
+            <dd>
+              <textarea class="plan-notes-textarea" id="planEventNotes"
+                        maxlength="50000"
+                        placeholder="Add notes or special requirements for this event..."
+                        oninput="planNotesChanged(this)"
+                        onblur="planFlushNotesSave()">${escapeHtml(notes)}</textarea>
+              <span class="plan-notes-footer">
+                <span id="planNotesSaveState">Saved</span>
+                <span id="planNotesCharacterCount">${notes.length}/50000</span>
+              </span>
+            </dd>
+          </div>
+        </dl>
+      </div>
+    </section>
+  `;
+}
+
+function renderPlanTemplatesCard() {
+  const templates = planPageState.templates || [];
+  const rows = templates.map(template => {
+    const quantity = (template.models || []).reduce(
+      (sum, row) => sum + Number(row.quantity || 0),
+      0
+    ) + (template.customAssets || []).reduce(
+      (sum, row) => sum + Number(row.quantity || 0),
+      0
+    );
+    return `
+      <div class="plan-template-row">
+        <div>
+          <strong>${escapeHtml(template.name)}</strong>
+          <span>${template.models.length} models · ${template.customAssets.length} custom · ${quantity} total</span>
+        </div>
+        <button type="button" class="plan-button plan-button-small"
+                onclick="planApplyTemplate('${planEncode(template.id)}')">Apply</button>
+        <button type="button" class="plan-button plan-button-small"
+                title="Edit template"
+                onclick="planOpenTemplateEditor('${planEncode(template.id)}')">&#9998;</button>
+      </div>
+    `;
+  }).join('');
+
+  return `
+    <section class="plan-card" id="planTemplatesCard">
+      <div class="plan-card-header"><h3>Templates</h3></div>
+      <div class="plan-aside-body">
+        <div class="plan-template-actions">
+          <button type="button" class="plan-button plan-button-small"
+                  onclick="planOpenTemplateChooser()">Apply Template</button>
+          <button type="button" class="plan-button plan-button-small"
+                  onclick="planOpenTemplateManager()">Manage Templates</button>
+        </div>
+        <div class="plan-template-list">
+          ${rows || '<div class="plan-item-meta">No templates created yet.</div>'}
+          <button type="button" class="plan-button" onclick="planOpenTemplateEditor()">Save Template</button>
+        </div>
+      </div>
+    </section>
+  `;
+}
+
+function renderPlanCustomItemCard() {
+  return `
+    <section class="plan-card plan-custom-card">
+      <div class="plan-card-header">
+        <h3>Add Custom Item</h3>
+      </div>
+      <div class="plan-aside-body">
+        <form class="plan-custom-form" id="planCustomAssetForm"
+              onsubmit="planSubmitCustomAsset(event)">
+          <input type="hidden" id="planCustomType" value="MISC">
+          <div class="plan-custom-type-toggle" aria-label="Custom item type">
+            <button type="button" id="planCustomTypeMisc" class="active"
+                    aria-pressed="true" onclick="planSetCustomType('MISC')">Misc</button>
+            <button type="button" id="planCustomTypeLoan"
+                    aria-pressed="false" onclick="planSetCustomType('LOAN')">Loan</button>
+          </div>
+          <div class="plan-custom-field-grid">
+            <div class="plan-custom-field">
+              <label for="planCustomName">Item Name</label>
+              <input id="planCustomName" maxlength="160"
+                     placeholder="e.g. Wireless Handheld" required>
+            </div>
+            <div class="plan-custom-field">
+              <label for="planCustomQuantity">Quantity</label>
+              <input id="planCustomQuantity" type="number" min="1" value="1" required>
+            </div>
+          </div>
+          <div class="plan-custom-field-grid plan-custom-field-grid-secondary">
+            <div class="plan-custom-field">
+              <label for="planCustomDepartment">Department</label>
+              <select id="planCustomDepartment" required>
+                ${customDepartmentOptionsHtml('UN')}
+              </select>
+            </div>
+            <div class="plan-custom-field" id="planCustomCompanyGroup">
+              <label for="planCustomCompany">Company / Source</label>
+              <input id="planCustomCompany" maxlength="160"
+                     placeholder="Optional source">
+            </div>
+          </div>
+          <button type="submit" class="plan-button plan-button-primary plan-custom-submit">
+            Add Custom Item
+          </button>
+          <div class="plan-custom-help">
+            <span aria-hidden="true">&#9432;</span>
+            <span>Custom items are not part of core inventory.</span>
+          </div>
+        </form>
+      </div>
+    </section>
+  `;
+}
+
+var planNotesSaveTimer = null;
+var planPendingNotesSave = null;
+
+function planNotesChanged(textarea) {
+  const notes = String(textarea?.value || '');
+  const counter = document.getElementById('planNotesCharacterCount');
+  const state = document.getElementById('planNotesSaveState');
+  if (counter) counter.textContent = `${notes.length}/50000`;
+  if (state) state.textContent = 'Unsaved changes';
+
+  planPendingNotesSave = {
+    eventId: Number(planPageState.eventId),
+    notes
+  };
+  clearTimeout(planNotesSaveTimer);
+  planNotesSaveTimer = setTimeout(() => {
+    planFlushNotesSave();
+  }, 700);
+}
+
+async function planFlushNotesSave() {
+  clearTimeout(planNotesSaveTimer);
+  planNotesSaveTimer = null;
+  const pending = planPendingNotesSave;
+  if (!pending?.eventId) return;
+  planPendingNotesSave = null;
+
+  const state = document.getElementById('planNotesSaveState');
+  if (state) state.textContent = 'Saving…';
+  try {
+    const response = await apiCall(
+      `/api/events/${pending.eventId}/notes`,
+      'PUT',
+      { notes: pending.notes }
+    );
+    if (Number(planPageState.eventId) === Number(pending.eventId)) {
+      planPageState.event.notes = response.data?.notes ?? pending.notes;
+      if (state) state.textContent = 'Saved';
+    }
+  } catch (error) {
+    planPendingNotesSave = pending;
+    if (state) state.textContent = 'Save failed';
+  }
+}
+
+function renderPlanPage() {
+  const root = document.getElementById('plan-page-root');
+  if (!root) return;
+
+  if (!isAdminUser()) {
+    root.innerHTML = '<div class="plan-empty">Admin access is required.</div>';
+    return;
+  }
+  if (!planPageState.event) {
+    root.innerHTML = '<div class="plan-empty">There are no events available to plan.</div>';
+    return;
+  }
+
+  const event = planPageState.event;
+  const totals = planTotals();
+  root.innerHTML = `
+    <div class="plan-page-heading">
+      <h2>Plan Event Assets</h2>
+      <p>Add required asset models and quantities for this event.</p>
+    </div>
+
+    <div class="plan-layout">
+      <div class="plan-primary">
+        <div class="plan-event-bar">
+          <button type="button" class="plan-event-select-wrap"
+                  aria-haspopup="dialog" aria-label="Choose an event to plan"
+                  onclick="planOpenEventChooser()">
+            <div class="plan-event-icon" aria-hidden="true">${planMetricIconSvg('calendar')}</div>
+            <div style="min-width:0;flex:1;">
+              <div class="plan-event-title-row">
+                <span class="plan-event-id">#${escapeHtml(String(event.id || ''))}</span>
+                <span class="plan-event-name">${escapeHtml(planEventOptionLabel(event))}</span>
+              </div>
+              <div class="plan-event-meta">
+                <span>${escapeHtml([event.startDate, event.endDate].filter(Boolean).join(' – '))}</span>
+                ${event.location ? `<span aria-hidden="true">•</span><span>${escapeHtml(event.location)}</span>` : ''}
+                ${planEventTypeBadgeHtml(event)}
+                ${planEventStateBadgeHtml(event)}
+              </div>
+            </div>
+            <span class="plan-event-picker-chevron" aria-hidden="true">⌄</span>
+          </button>
+
+          <div class="plan-metrics">
+            <div class="plan-metric"><div class="plan-metric-icon">${planMetricIconSvg('lines')}</div><div><strong>${totals.lineCount}</strong><span>Asset Lines</span></div></div>
+            <div class="plan-metric"><div class="plan-metric-icon">${planMetricIconSvg('quantity')}</div><div><strong>${totals.totalQuantity}</strong><span>Total Qty Required</span></div></div>
+            <div class="plan-metric"><div class="plan-metric-icon">${planMetricIconSvg('departments')}</div><div><strong>${totals.departmentCount}</strong><span>Active Departments</span></div></div>
+            <div class="plan-metric"><div class="plan-metric-icon">${planMetricIconSvg('templates')}</div><div><strong>${totals.templateCount}</strong><span>Templates Available</span></div></div>
+          </div>
+        </div>
+
+        <div class="plan-workspace">
+          <div id="planAvailableCard">${renderPlanAvailableCard()}</div>
+          <div id="planRequirementsCard">${renderPlanRequirementsCard()}</div>
+        </div>
+
+      </div>
+      <aside class="plan-aside">
+        ${renderPlanEventDetailsCard()}
+        ${renderPlanTemplatesCard()}
+        ${renderPlanCustomItemCard()}
+        <button type="button" class="plan-button plan-button-primary plan-aside-proceed"
+                onclick="planProceedToPrepare()">Proceed to Prepare →</button>
+      </aside>
+      <div class="plan-mobile-actionbar">
+        <button type="button" class="plan-button plan-button-primary" onclick="planProceedToPrepare()">
+          Proceed to Prepare →
+        </button>
+      </div>
+    </div>
+  `;
+  renderPlanAvailableResults();
+}
+
+async function loadPlanPage() {
+  const root = document.getElementById('plan-page-root');
+  if (!root || !isAdminUser() || planPageState.loading) return;
+  planPageState.loading = true;
+  root.innerHTML = '<div class="loading">Loading planning workspace...</div>';
+
+  try {
+    const [eventsResponse, assetsResponse, templatesResponse, containerCache] = await Promise.all([
+      apiCall('/api/events'),
+      apiCall('/api/assets/available'),
+      apiCall('/api/planning-templates'),
+      refreshContainersCache(true)
+    ]);
+    planPageState.events = [...(eventsResponse.data || [])].sort(planCompareEventsByStartDate);
+    planPageState.assets = assetsResponse.data || [];
+    planPageState.templates = templatesResponse.data || [];
+    planPageState.containers = Object.values(containerCache || {});
+
+    const preferredId = planPageState.eventId;
+    const selected = planPageState.events.find(item =>
+      Number(item.id) === Number(preferredId)
+    ) || planPageState.events[0];
+
+    if (selected) {
+      await selectPlanEvent(selected.id, { renderLoading: false });
+    } else {
+      planPageState.event = null;
+      renderPlanPage();
+    }
+  } catch (error) {
+    root.innerHTML = `<div class="plan-empty">Failed to load Plan: ${escapeHtml(error.message || String(error))}</div>`;
+  } finally {
+    planPageState.loading = false;
+  }
+}
+
+async function selectPlanEvent(eventId, options = {}) {
+  await planFlushNotesSave();
+  const id = Number(eventId);
+  if (!id) return;
+  planPageState.eventId = id;
+  const root = document.getElementById('plan-page-root');
+  if (options.renderLoading !== false && root) {
+    root.innerHTML = '<div class="loading">Loading event plan...</div>';
+  }
+
+  try {
+    const [eventResponse, availabilityResponse] = await Promise.all([
+      apiCall(`/api/events/${id}`),
+      apiCall(`/api/events/${id}/availability`)
+    ]);
+    planPageState.event = eventResponse.data;
+    planPageState.availability = availabilityResponse.data || [];
+    renderPlanPage();
+  } catch (error) {
+    if (root) {
+      root.innerHTML = `<div class="plan-empty">Failed to load event: ${escapeHtml(error.message || String(error))}</div>`;
+    }
+  }
+}
+
+async function refreshPlanSelectedEvent(options = {}) {
+  if (!planPageState.eventId) return;
+  const [eventResponse, availabilityResponse, templatesResponse] = await Promise.all([
+    apiCall(`/api/events/${planPageState.eventId}`),
+    apiCall(`/api/events/${planPageState.eventId}/availability`),
+    options.templates ? apiCall('/api/planning-templates') : Promise.resolve(null)
+  ]);
+  planPageState.event = eventResponse.data;
+  planPageState.availability = availabilityResponse.data || [];
+  if (templatesResponse) planPageState.templates = templatesResponse.data || [];
+  renderPlanPage();
+  refreshEventOverviewViews().catch(() => {});
+}
+
+async function planAddModel(encodedDepartment, encodedBrand, encodedModel, encodedDescription, inputId) {
+  const input = document.getElementById(inputId);
+  const quantity = Math.max(1, Number(input?.value || 1));
+  try {
+    await apiCall(`/api/events/${planPageState.eventId}/models`, 'POST', {
+      department: planDecode(encodedDepartment),
+      brand: planDecode(encodedBrand),
+      model: planDecode(encodedModel),
+      description: planDecode(encodedDescription),
+      quantity
+    });
+    showNotification('success', 'Asset requirement added');
+    await refreshPlanSelectedEvent();
+  } catch (error) {}
+}
+
+async function planSetModelQuantity(encodedDepartment, encodedBrand, encodedModel, encodedDescription, quantity) {
+  const nextQuantity = Math.max(1, Number(quantity || 1));
+  try {
+    await apiCall(`/api/events/${planPageState.eventId}/models`, 'PUT', {
+      department: planDecode(encodedDepartment),
+      brand: planDecode(encodedBrand),
+      model: planDecode(encodedModel),
+      description: planDecode(encodedDescription),
+      quantity: nextQuantity
+    });
+    await refreshPlanSelectedEvent();
+  } catch (error) {
+    renderPlanPage();
+  }
+}
+
+async function planRemoveModel(encodedDepartment, encodedBrand, encodedModel, encodedDescription) {
+  const brand = planDecode(encodedBrand);
+  const model = planDecode(encodedModel);
+  const confirmed = await showAppConfirm({
+    title: 'Remove Requirement',
+    message: `Remove ${brand} ${model} from this event? Any specifically prepared units for this model will also be unprepared.`,
+    confirmText: 'Remove',
+    cancelText: 'Cancel',
+    variant: 'danger'
+  });
+  if (!confirmed) return;
+
+  try {
+    await apiCall(`/api/events/${planPageState.eventId}/models`, 'DELETE', {
+      department: planDecode(encodedDepartment),
+      brand,
+      model,
+      description: planDecode(encodedDescription)
+    });
+    await refreshPlanSelectedEvent();
+  } catch (error) {}
+}
+
+async function planAddContainerContents(encodedContainerId) {
+  const containerId = planDecode(encodedContainerId);
+  try {
+    const response = await apiCall(
+      `/api/events/${planPageState.eventId}/container-models`,
+      'POST',
+      { containerId }
+    );
+    const added = response.data || {};
+    showNotification(
+      'success',
+      `Added ${added.assetCount || 0} item(s) from ${containerId} as model requirements`
+    );
+    await refreshPlanSelectedEvent();
+  } catch (error) {}
+}
+
+function planSyncCustomCompanyField() {
+  const isLoan = document.getElementById('planCustomType')?.value === 'LOAN';
+  const input = document.getElementById('planCustomCompany');
+  if (input) {
+    input.required = isLoan;
+    input.placeholder = isLoan ? 'e.g. Borrowed / External' : 'Optional source';
+  }
+}
+
+function planSetCustomType(type) {
+  const normalizedType = normalizeCustomType(type);
+  const input = document.getElementById('planCustomType');
+  const miscButton = document.getElementById('planCustomTypeMisc');
+  const loanButton = document.getElementById('planCustomTypeLoan');
+  if (input) input.value = normalizedType;
+  if (miscButton) {
+    miscButton.classList.toggle('active', normalizedType === 'MISC');
+    miscButton.setAttribute('aria-pressed', normalizedType === 'MISC' ? 'true' : 'false');
+  }
+  if (loanButton) {
+    loanButton.classList.toggle('active', normalizedType === 'LOAN');
+    loanButton.setAttribute('aria-pressed', normalizedType === 'LOAN' ? 'true' : 'false');
+  }
+  planSyncCustomCompanyField();
+}
+
+async function planSubmitCustomAsset(event) {
+  event.preventDefault();
+  const type = normalizeCustomType(document.getElementById('planCustomType')?.value);
+  const company = document.getElementById('planCustomCompany')?.value.trim() || '';
+  if (type === 'LOAN' && !company) {
+    showNotification('warning', 'Please enter the loan or rental company');
+    return;
+  }
+
+  try {
+    await apiCall(`/api/events/${planPageState.eventId}/custom-assets`, 'POST', {
+      name: document.getElementById('planCustomName')?.value.trim(),
+      quantity: Math.max(1, Number(document.getElementById('planCustomQuantity')?.value || 1)),
+      type,
+      department: normalizeDepartmentCode(document.getElementById('planCustomDepartment')?.value || 'UN'),
+      company
+    });
+    showNotification('success', 'Custom asset added');
+    await refreshPlanSelectedEvent();
+  } catch (error) {}
+}
+
+async function planSetCustomQuantity(encodedAssetId, quantity) {
+  try {
+    await apiCall(
+      `/api/events/${planPageState.eventId}/custom-assets/update-quantity`,
+      'PUT',
+      {
+        assetId: planDecode(encodedAssetId),
+        newQuantity: Math.max(1, Number(quantity || 1))
+      }
+    );
+    await refreshPlanSelectedEvent();
+  } catch (error) {
+    renderPlanPage();
+  }
+}
+
+async function planRemoveCustomAsset(encodedAssetId) {
+  const assetId = planDecode(encodedAssetId);
+  const custom = parseCustomAsset(assetId);
+  const confirmed = await showAppConfirm({
+    title: 'Remove Custom Asset',
+    message: `Remove ${custom?.name || 'this custom asset'} from the event?`,
+    confirmText: 'Remove',
+    cancelText: 'Cancel',
+    variant: 'danger'
+  });
+  if (!confirmed) return;
+
+  try {
+    await apiCall(
+      `/api/events/${planPageState.eventId}/custom-assets/remove`,
+      'POST',
+      { assetId }
+    );
+    await refreshPlanSelectedEvent();
+  } catch (error) {}
+}
+
+function planTemplateDraftRows() {
+  const draft = planPageState.templateDraft || { models: [], customAssets: [] };
+  return [
+    ...(draft.models || []).map((row, index) => ({ kind: 'models', index, row })),
+    ...(draft.customAssets || []).map((row, index) => ({ kind: 'customAssets', index, row }))
+  ];
+}
+
+function ensurePlanTemplateEditorModal() {
+  let modal = document.getElementById('planTemplateEditorModal');
+  if (modal) return modal;
+  modal = document.createElement('div');
+  modal.id = 'planTemplateEditorModal';
+  modal.className = 'modal';
+  modal.innerHTML = `
+    <div class="modal-content" style="max-width:720px;">
+      <div class="modal-header">
+        <h3 class="modal-title" id="planTemplateEditorTitle">Save Template</h3>
+        <button type="button" class="close-btn" onclick="closeModal('planTemplateEditorModal')">&times;</button>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="planTemplateName">Template Name</label>
+        <input class="form-input" id="planTemplateName" maxlength="120">
+      </div>
+      <div class="plan-inline-actions">
+        <button type="button" class="plan-button plan-button-small" onclick="planUseCurrentEventForTemplate()">
+          Use Current Event Assets
+        </button>
+        <span class="plan-item-meta">This replaces the template editor list, not the event.</span>
+      </div>
+      <div class="plan-template-editor-list" id="planTemplateEditorRows"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-danger" id="planDeleteTemplateButton" onclick="planDeleteTemplate()">Delete</button>
+        <button type="button" class="btn btn-secondary" onclick="closeModal('planTemplateEditorModal')">Cancel</button>
+        <button type="button" class="btn btn-primary" onclick="planSaveTemplate()">Save Template</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  return modal;
+}
+
+function renderPlanTemplateEditorRows() {
+  const container = document.getElementById('planTemplateEditorRows');
+  if (!container) return;
+  const rows = planTemplateDraftRows();
+  container.innerHTML = rows.length ? rows.map(({ kind, index, row }) => {
+    const isModel = kind === 'models';
+    const title = isModel
+      ? [row.brand, row.model].filter(Boolean).join(' ')
+      : `Custom ${row.name}`;
+    const description = isModel
+      ? (row.description || 'No description')
+      : (row.type === 'LOAN' ? (row.company || 'Loan / rental') : 'Misc item');
+    return `
+      <div class="plan-template-editor-row">
+        <div>
+          <div class="plan-item-name">${escapeHtml(title)}</div>
+          <div class="plan-item-description">${escapeHtml(description)} · ${escapeHtml(planDepartmentLabel(row.department))}</div>
+        </div>
+        <input class="form-input" type="number" min="1" value="${Math.max(1, Number(row.quantity || 1))}"
+               onchange="planUpdateTemplateDraftQuantity('${kind}',${index},this.value)">
+        <button type="button" class="plan-button plan-button-danger plan-button-small"
+                onclick="planRemoveTemplateDraftRow('${kind}',${index})">&#128465;</button>
+      </div>
+    `;
+  }).join('') : '<div class="plan-empty">This template has no assets. Use the current event to populate it.</div>';
+}
+
+function planOpenTemplateEditor(encodedTemplateId = '') {
+  const templateId = planDecode(encodedTemplateId);
+  const existing = (planPageState.templates || []).find(item => item.id === templateId);
+  const snapshot = planEventSnapshot();
+  planPageState.templateDraft = existing
+    ? JSON.parse(JSON.stringify(existing))
+    : {
+        id: '',
+        name: '',
+        models: snapshot.models,
+        customAssets: snapshot.customAssets
+      };
+
+  ensurePlanTemplateEditorModal();
+  document.getElementById('planTemplateEditorTitle').textContent =
+    existing ? 'Edit Template' : 'Save Template';
+  document.getElementById('planTemplateName').value =
+    planPageState.templateDraft.name || '';
+  document.getElementById('planDeleteTemplateButton').style.display =
+    existing ? 'inline-flex' : 'none';
+  renderPlanTemplateEditorRows();
+  openModal('planTemplateEditorModal');
+}
+
+function planUseCurrentEventForTemplate() {
+  if (!planPageState.templateDraft) return;
+  const snapshot = planEventSnapshot();
+  planPageState.templateDraft.models = snapshot.models;
+  planPageState.templateDraft.customAssets = snapshot.customAssets;
+  renderPlanTemplateEditorRows();
+}
+
+function planUpdateTemplateDraftQuantity(kind, index, quantity) {
+  const rows = planPageState.templateDraft?.[kind];
+  if (!rows?.[index]) return;
+  rows[index].quantity = Math.max(1, Number(quantity || 1));
+}
+
+function planRemoveTemplateDraftRow(kind, index) {
+  const rows = planPageState.templateDraft?.[kind];
+  if (!rows) return;
+  rows.splice(index, 1);
+  renderPlanTemplateEditorRows();
+}
+
+async function planSaveTemplate() {
+  const draft = planPageState.templateDraft;
+  if (!draft) return;
+  const name = document.getElementById('planTemplateName')?.value.trim();
+  if (!name) {
+    showNotification('warning', 'Please enter a template name');
+    return;
+  }
+  const payload = {
+    name,
+    models: draft.models || [],
+    customAssets: draft.customAssets || []
+  };
+
+  try {
+    if (draft.id) {
+      await apiCall(`/api/planning-templates/${encodeURIComponent(draft.id)}`, 'PUT', payload);
+    } else {
+      await apiCall('/api/planning-templates', 'POST', payload);
+    }
+    closeModal('planTemplateEditorModal');
+    showNotification('success', 'Template saved');
+    await refreshPlanSelectedEvent({ templates: true });
+  } catch (error) {}
+}
+
+async function planDeleteTemplate() {
+  const draft = planPageState.templateDraft;
+  if (!draft?.id) return;
+  const confirmed = await showAppConfirm({
+    title: 'Delete Template',
+    message: `Delete "${draft.name}" for everyone in this company?`,
+    confirmText: 'Delete',
+    cancelText: 'Cancel',
+    variant: 'danger'
+  });
+  if (!confirmed) return;
+
+  try {
+    await apiCall(`/api/planning-templates/${encodeURIComponent(draft.id)}`, 'DELETE');
+    closeModal('planTemplateEditorModal');
+    showNotification('success', 'Template deleted');
+    await refreshPlanSelectedEvent({ templates: true });
+  } catch (error) {}
+}
+
+var planTemplateModeResolver = null;
+
+function ensurePlanTemplateModeModal() {
+  let modal = document.getElementById('planTemplateModeModal');
+  if (modal) return modal;
+  modal = document.createElement('div');
+  modal.id = 'planTemplateModeModal';
+  modal.className = 'modal';
+  modal.innerHTML = `
+    <div class="modal-content" style="max-width:520px;">
+      <div class="modal-header">
+        <h3 class="modal-title" id="planTemplateChooserTitle">Apply Template</h3>
+        <button type="button" class="close-btn" onclick="planResolveTemplateMode('')">&times;</button>
+      </div>
+      <p id="planTemplateModeMessage"></p>
+      <div style="display:grid;gap:10px;margin:16px 0;">
+        <button type="button" class="plan-button" onclick="planResolveTemplateMode('merge')">
+          <span><strong>Merge</strong><br><small>Add template quantities to the existing plan.</small></span>
+        </button>
+        <button type="button" class="plan-button plan-button-danger" onclick="planResolveTemplateMode('replace')">
+          <span><strong>Replace</strong><br><small>Replace model and custom requirements. Prepared physical assets remain attached.</small></span>
+        </button>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-secondary" onclick="planResolveTemplateMode('')">Cancel</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  return modal;
+}
+
+function planChooseTemplateMode(templateName) {
+  ensurePlanTemplateModeModal();
+  document.getElementById('planTemplateModeMessage').textContent =
+    `"${templateName}" can be merged with or replace the current requirements.`;
+  openModal('planTemplateModeModal');
+  return new Promise(resolve => {
+    planTemplateModeResolver = resolve;
+  });
+}
+
+function planResolveTemplateMode(mode) {
+  closeModal('planTemplateModeModal');
+  if (planTemplateModeResolver) {
+    const resolve = planTemplateModeResolver;
+    planTemplateModeResolver = null;
+    resolve(mode);
+  }
+}
+
+async function planApplyTemplate(encodedTemplateId) {
+  const templateId = planDecode(encodedTemplateId);
+  const template = planPageState.templates.find(item => item.id === templateId);
+  if (!template) return;
+  const mode = planEventHasRequirements()
+    ? await planChooseTemplateMode(template.name)
+    : 'merge';
+  if (!mode) return;
+
+  try {
+    await apiCall(
+      `/api/events/${planPageState.eventId}/apply-planning-template`,
+      'POST',
+      { templateId, mode }
+    );
+    closeModal('planTemplateChooserModal');
+    showNotification('success', `Template ${mode === 'merge' ? 'merged' : 'applied'}`);
+    await refreshPlanSelectedEvent();
+  } catch (error) {}
+}
+
+function ensurePlanTemplateChooserModal() {
+  let modal = document.getElementById('planTemplateChooserModal');
+  if (modal) return modal;
+  modal = document.createElement('div');
+  modal.id = 'planTemplateChooserModal';
+  modal.className = 'modal';
+  modal.innerHTML = `
+    <div class="modal-content" style="max-width:620px;">
+      <div class="modal-header">
+        <h3 class="modal-title">Apply Template</h3>
+        <button type="button" class="close-btn" onclick="closeModal('planTemplateChooserModal')">&times;</button>
+      </div>
+      <div class="plan-template-list" id="planTemplateChooserRows"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('planTemplateChooserModal')">Cancel</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  return modal;
+}
+
+function planOpenTemplateChooser(mode = 'apply') {
+  ensurePlanTemplateChooserModal();
+  const manageMode = mode === 'manage';
+  const title = document.getElementById('planTemplateChooserTitle');
+  if (title) title.textContent = manageMode ? 'Manage Templates' : 'Apply Template';
+  const rows = document.getElementById('planTemplateChooserRows');
+  rows.innerHTML = planPageState.templates.length
+    ? planPageState.templates.map(template => `
+        <div class="plan-template-row">
+          <div>
+            <strong>${escapeHtml(template.name)}</strong>
+            <span>${template.models.length} models · ${template.customAssets.length} custom assets</span>
+          </div>
+          ${manageMode ? '' : `
+            <button type="button" class="plan-button plan-button-small"
+                    onclick="planApplyTemplate('${planEncode(template.id)}')">Apply</button>
+          `}
+          <button type="button" class="plan-button plan-button-small"
+                  onclick="closeModal('planTemplateChooserModal');planOpenTemplateEditor('${planEncode(template.id)}')">
+            ${manageMode ? 'Edit' : '&#9998;'}
+          </button>
+        </div>
+      `).join('')
+    : '<div class="plan-empty">No templates yet. Save one from the current event.</div>';
+  openModal('planTemplateChooserModal');
+}
+
+function planOpenTemplateManager() {
+  planOpenTemplateChooser('manage');
+}
+
+function planScrollToTemplates() {
+  document.getElementById('planTemplatesCard')?.scrollIntoView({
+    behavior: 'smooth',
+    block: 'center'
+  });
+}
+
+function planProceedToPrepare() {
+  showSection('prepare');
 }
 
 // Toggle model details in edit interface
@@ -18481,6 +20371,7 @@ async function loadAssetEventHistory(assetId, containerId) {
           </td>
           <td style="padding: 10px; width: 70px; font-weight: 600;">${ev.id}</td>
           <td style="padding: 10px;">${escapeHtml(ev.name || '')}</td>
+          <td style="padding: 10px;">${escapeHtml(ev.location || '—')}</td>
           <td style="padding: 10px; width: 160px; white-space: nowrap; font-size: 13px;">${escapeHtml(dateRange)}</td>
           <td style="padding: 10px; width: 110px; text-align: center;">${statusBadge}</td>
         </tr>
@@ -18494,6 +20385,7 @@ async function loadAssetEventHistory(assetId, containerId) {
             <th style="padding: 10px; text-align: left; width: 90px; border-bottom: 2px solid #e9ecef;">Type</th>
             <th style="padding: 10px; text-align: left; width: 70px; border-bottom: 2px solid #e9ecef;">ID</th>
             <th style="padding: 10px; text-align: left; border-bottom: 2px solid #e9ecef;">Name</th>
+            <th style="padding: 10px; text-align: left; border-bottom: 2px solid #e9ecef;">Location</th>
             <th style="padding: 10px; text-align: left; width: 160px; border-bottom: 2px solid #e9ecef;">Dates</th>
             <th style="padding: 10px; text-align: center; width: 110px; border-bottom: 2px solid #e9ecef;">Status</th>
           </tr>
@@ -22404,12 +24296,26 @@ async function refreshEventAssetsOnly(eventIds) {
     await refreshReturnModalEvent(event.id);
     await refreshViewedEventModal(event.id);
     await updateEventAssetOverview(event);
+
+    if (
+      document.getElementById('plan-section')?.classList.contains('active') &&
+      Number(planPageState.eventId) === Number(event.id)
+    ) {
+      planPageState.event = event;
+      try {
+        const availabilityResponse = await apiCall(`/api/events/${event.id}/availability`);
+        planPageState.availability = availabilityResponse.data || [];
+      } catch (error) {
+        console.warn('Plan availability live update failed:', error);
+      }
+      renderPlanPage();
+    }
   }
 }
 
 function hasVisibleEventAssetView(eventIds) {
   const activeSection = getActiveSectionId();
-  if (['dashboard', 'events', 'prepare', 'return'].includes(activeSection)) return true;
+  if (['dashboard', 'events', 'plan', 'prepare', 'return'].includes(activeSection)) return true;
 
   if (
     activeModal('prepareEventModal') &&
@@ -22505,6 +24411,9 @@ async function refreshVisibleDataFromRealtime() {
         break;
       case "events":
         await loadAllEvents();
+        break;
+      case "plan":
+        await loadPlanPage();
         break;
       case "prepare":
         await loadPrepareEvents();
@@ -22740,6 +24649,7 @@ document.addEventListener("visibilitychange", () => {
 
 document.addEventListener('DOMContentLoaded', function() {
     setupMobileNavigation();
+    setupSidebarNavigation();
     enhanceNavigationAccessibility();
     enhanceModalAccessibility();
     setupSingleAssetClickHandler();

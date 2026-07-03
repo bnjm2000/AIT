@@ -122,6 +122,7 @@ _manager_caches = {}
 _transfer_action_lock = threading.RLock()
 _prepare_action_lock = threading.RLock()
 _inventory_action_lock = threading.RLock()
+_planning_templates_lock = threading.RLock()
 
 # Server-sent events notify logged-in browsers when shared CSV data changes.
 _realtime_subscribers = {}
@@ -2719,6 +2720,311 @@ def _custom_counts_for_event(event):
         'returned': returned,
         'started': started,
         'collected': collected
+    }
+
+
+PLANNING_TEMPLATES_FILENAME = 'PlanningTemplates.json'
+
+
+def _planning_templates_path():
+    folder = data_manager.data_folder if data_manager else './data'
+    return os.path.join(folder, PLANNING_TEMPLATES_FILENAME)
+
+
+def _normalise_planning_template_model(value):
+    value = value if isinstance(value, dict) else {}
+    department = _normalise_department_code(value.get('department')) or 'UN'
+    brand = str(value.get('brand') or '').strip()
+    model = str(value.get('model') or '').strip()
+    description = str(value.get('description') or '').strip()
+    quantity = max(1, _safe_int(value.get('quantity'), 1))
+    if not brand or not model:
+        return None
+    return {
+        'department': department,
+        'brand': brand,
+        'model': model,
+        'description': description,
+        'quantity': quantity,
+    }
+
+
+def _normalise_planning_template_custom(value):
+    value = value if isinstance(value, dict) else {}
+    asset_type = _normalise_custom_type(value.get('type'))
+    name = str(value.get('name') or '').strip()
+    if not name:
+        return None
+    return {
+        'type': asset_type,
+        'name': name,
+        'quantity': max(1, _safe_int(value.get('quantity'), 1)),
+        'department': _normalise_department_code(value.get('department')) or 'UN',
+        'company': str(value.get('company') or '').strip(),
+    }
+
+
+def _normalise_planning_template(value):
+    value = value if isinstance(value, dict) else {}
+    template_id = re.sub(
+        r'[^a-zA-Z0-9_-]+',
+        '',
+        str(value.get('id') or ''),
+    )[:80] or secrets.token_hex(8)
+    name = str(value.get('name') or '').strip()[:120]
+    models = []
+    custom_assets = []
+
+    for row in value.get('models') or []:
+        normalised = _normalise_planning_template_model(row)
+        if normalised:
+            models.append(normalised)
+
+    for row in value.get('customAssets') or value.get('custom_assets') or []:
+        normalised = _normalise_planning_template_custom(row)
+        if normalised:
+            custom_assets.append(normalised)
+
+    return {
+        'id': template_id,
+        'name': name or 'Untitled Template',
+        'models': models,
+        'customAssets': custom_assets,
+        'createdAt': str(value.get('createdAt') or value.get('created_at') or ''),
+        'updatedAt': str(value.get('updatedAt') or value.get('updated_at') or ''),
+    }
+
+
+def _load_planning_templates():
+    filepath = _planning_templates_path()
+    if not os.path.exists(filepath) or os.path.getsize(filepath) == 0:
+        return []
+
+    try:
+        with open(filepath, 'r', encoding='utf-8') as template_file:
+            payload = json.load(template_file)
+    except Exception as exc:
+        logger.warning("Failed to read %s: %s", PLANNING_TEMPLATES_FILENAME, exc)
+        return []
+
+    rows = payload.get('templates', []) if isinstance(payload, dict) else payload
+    if not isinstance(rows, list):
+        return []
+
+    templates = [_normalise_planning_template(row) for row in rows]
+    templates.sort(key=lambda item: item['name'].lower())
+    return templates
+
+
+def _save_planning_templates(templates):
+    filepath = _planning_templates_path()
+    folder = os.path.dirname(filepath)
+    if folder and not os.path.exists(folder):
+        os.makedirs(folder)
+
+    payload = {
+        'version': 1,
+        'templates': [_normalise_planning_template(row) for row in templates],
+    }
+    tmp_path = f"{filepath}.{secrets.token_hex(6)}.tmp"
+    with open(tmp_path, 'w', encoding='utf-8') as template_file:
+        json.dump(payload, template_file, ensure_ascii=False, indent=2)
+    os.replace(tmp_path, filepath)
+    return payload['templates']
+
+
+def _event_planning_template_contents(event):
+    model_groups = {}
+    custom_groups = {}
+
+    for ref in getattr(event, 'prepared_items', []) or []:
+        marker = _parse_model_marker(ref)
+        if marker:
+            key = _model_key_from_parts(
+                marker['department'],
+                marker['brand'],
+                marker['model'],
+            )
+            if key not in model_groups:
+                model_groups[key] = {
+                    'department': marker['department'],
+                    'brand': marker['brand'],
+                    'model': marker['model'],
+                    'description': marker.get('description') or '',
+                    'quantity': 0,
+                }
+            model_groups[key]['quantity'] += max(1, _safe_int(marker.get('quantity'), 1))
+            if not model_groups[key]['description'] and marker.get('description'):
+                model_groups[key]['description'] = marker['description']
+            continue
+
+        custom = _parse_custom_marker(ref)
+        if not custom:
+            continue
+        key = (
+            custom['type'],
+            custom['name'].strip().lower(),
+            custom['department'],
+            custom.get('company', '').strip().lower(),
+        )
+        if key not in custom_groups:
+            custom_groups[key] = {
+                'type': custom['type'],
+                'name': custom['name'],
+                'quantity': 0,
+                'department': custom['department'],
+                'company': custom.get('company') or '',
+            }
+        custom_groups[key]['quantity'] += max(1, _safe_int(custom.get('quantity'), 1))
+
+    models = sorted(
+        model_groups.values(),
+        key=lambda row: (
+            row['department'],
+            row['brand'].lower(),
+            row['model'].lower(),
+        ),
+    )
+    custom_assets = sorted(
+        custom_groups.values(),
+        key=lambda row: (
+            row['department'],
+            row['name'].lower(),
+            row['type'],
+        ),
+    )
+    return {'models': models, 'customAssets': custom_assets}
+
+
+def _planning_model_inventory_quantity(row):
+    group_key = _model_key_from_parts(
+        row['department'],
+        row['brand'],
+        row['model'],
+    )
+    return sum(
+        _asset_inventory_quantity(asset)
+        for asset in data_manager.inventory.values()
+        if asset
+        and not getattr(asset, 'is_missing', False)
+        and not _is_disposed(asset)
+        and _asset_group_key(asset) == group_key
+    )
+
+
+def _apply_planning_template_to_event(event, template, mode):
+    replace = mode == 'replace'
+    current_models = {}
+
+    if not replace:
+        for ref in getattr(event, 'prepared_items', []) or []:
+            marker = _parse_model_marker(ref)
+            if not marker:
+                continue
+            key = _model_key_from_parts(
+                marker['department'],
+                marker['brand'],
+                marker['model'],
+            )
+            if key not in current_models:
+                current_models[key] = {
+                    'department': marker['department'],
+                    'brand': marker['brand'],
+                    'model': marker['model'],
+                    'description': marker.get('description') or '',
+                    'quantity': 0,
+                }
+            current_models[key]['quantity'] += max(
+                1,
+                _safe_int(marker.get('quantity'), 1),
+            )
+
+    for source_row in template.get('models') or []:
+        row = _normalise_planning_template_model(source_row)
+        if not row:
+            continue
+        key = _model_key_from_parts(
+            row['department'],
+            row['brand'],
+            row['model'],
+        )
+        if key in current_models:
+            current_models[key]['quantity'] += row['quantity']
+            if not current_models[key]['description'] and row['description']:
+                current_models[key]['description'] = row['description']
+        else:
+            current_models[key] = dict(row)
+
+    for row in current_models.values():
+        physical = _planning_model_inventory_quantity(row)
+        if row['quantity'] > physical:
+            raise ValueError(
+                f"{row['brand']} {row['model']} would require "
+                f"{row['quantity']} unit(s), but only {physical} are in inventory"
+            )
+
+    prepared_items = []
+    for ref in getattr(event, 'prepared_items', []) or []:
+        if _parse_model_marker(ref):
+            continue
+        if replace and _parse_custom_marker(ref):
+            continue
+        prepared_items.append(ref)
+
+    for row in sorted(
+        current_models.values(),
+        key=lambda item: (
+            item['department'],
+            item['brand'].lower(),
+            item['model'].lower(),
+        ),
+    ):
+        prepared_items.append(_make_model_marker(row, row['quantity']))
+
+    added_custom_markers = []
+    for source_row in template.get('customAssets') or []:
+        row = _normalise_planning_template_custom(source_row)
+        if not row:
+            continue
+        marker = _make_custom_marker(
+            row['type'],
+            row['name'],
+            row['quantity'],
+            row['department'],
+            row['company'],
+        )
+        prepared_items.append(marker)
+        added_custom_markers.append(marker)
+
+    event.prepared_items = prepared_items
+    _ensure_event_custom_lists(event)
+
+    if replace:
+        event.actually_prepared = [
+            ref for ref in event.actually_prepared
+            if not _parse_custom_marker(ref)
+        ]
+        event.returned_items = [
+            ref for ref in event.returned_items
+            if not _parse_custom_marker(ref)
+        ]
+        event.extra_assets = [
+            ref for ref in event.extra_assets
+            if not _parse_custom_marker(ref)
+        ]
+        event.custom_collected = [
+            ref for ref in event.custom_collected
+            if not _parse_custom_marker(ref)
+        ]
+
+    update_event_state(event)
+    data_manager.save_event(event)
+    invalidate_cache()
+
+    return {
+        'mode': mode,
+        'modelCount': len(current_models),
+        'customAssetCount': len(added_custom_markers),
     }
 
 
@@ -7841,6 +8147,299 @@ def manage_event_models(event_id):
         logger.error(f"Error managing event models: {e}")
         return jsonify({'error': 'Failed to manage event models'}), 500
 
+
+@app.route('/api/planning-templates', methods=['GET', 'POST'])
+@require_admin
+def planning_templates_collection():
+    """List or create company-wide event planning templates."""
+    try:
+        with _planning_templates_lock:
+            templates = _load_planning_templates()
+            if request.method == 'GET':
+                return jsonify({'success': True, 'data': templates})
+
+            data = request.get_json(silent=True) or {}
+            name = str(data.get('name') or '').strip()
+            if not name:
+                return jsonify({'error': 'Template name is required'}), 400
+
+            source = {
+                'id': secrets.token_hex(8),
+                'name': name,
+                'models': data.get('models') or [],
+                'customAssets': data.get('customAssets') or [],
+                'createdAt': datetime.now().isoformat(timespec='seconds'),
+                'updatedAt': datetime.now().isoformat(timespec='seconds'),
+            }
+            template = _normalise_planning_template(source)
+            templates.append(template)
+            templates = _save_planning_templates(templates)
+            template = next(
+                item for item in templates
+                if item['id'] == template['id']
+            )
+
+        log_action(f"Created planning template '{template['name']}'")
+        mark_realtime_change('planning-templates', {'templateId': template['id']})
+        return jsonify({'success': True, 'data': template}), 201
+    except Exception as exc:
+        logger.error("Failed to process planning templates: %s", exc, exc_info=True)
+        return jsonify({'error': 'Failed to process planning templates'}), 500
+
+
+@app.route('/api/planning-templates/<template_id>', methods=['PUT', 'DELETE'])
+@require_admin
+def planning_template_resource(template_id):
+    """Edit or delete one company-wide planning template."""
+    try:
+        clean_id = re.sub(r'[^a-zA-Z0-9_-]+', '', str(template_id or ''))[:80]
+        with _planning_templates_lock:
+            templates = _load_planning_templates()
+            index = next(
+                (
+                    position
+                    for position, item in enumerate(templates)
+                    if item['id'] == clean_id
+                ),
+                None,
+            )
+            if index is None:
+                return jsonify({'error': 'Planning template not found'}), 404
+
+            existing = templates[index]
+            if request.method == 'DELETE':
+                templates.pop(index)
+                _save_planning_templates(templates)
+                deleted_name = existing['name']
+            else:
+                data = request.get_json(silent=True) or {}
+                name = str(data.get('name') or existing['name']).strip()
+                if not name:
+                    return jsonify({'error': 'Template name is required'}), 400
+                updated = _normalise_planning_template({
+                    **existing,
+                    'name': name,
+                    'models': data.get('models', existing['models']),
+                    'customAssets': data.get(
+                        'customAssets',
+                        existing['customAssets'],
+                    ),
+                    'updatedAt': datetime.now().isoformat(timespec='seconds'),
+                })
+                templates[index] = updated
+                templates = _save_planning_templates(templates)
+                updated = next(
+                    item for item in templates
+                    if item['id'] == clean_id
+                )
+
+        if request.method == 'DELETE':
+            log_action(f"Deleted planning template '{deleted_name}'")
+            mark_realtime_change('planning-templates', {'templateId': clean_id})
+            return jsonify({'success': True})
+
+        log_action(f"Updated planning template '{updated['name']}'")
+        mark_realtime_change('planning-templates', {'templateId': clean_id})
+        return jsonify({'success': True, 'data': updated})
+    except Exception as exc:
+        logger.error(
+            "Failed to update planning template %s: %s",
+            template_id,
+            exc,
+            exc_info=True,
+        )
+        return jsonify({'error': 'Failed to update planning template'}), 500
+
+
+@app.route('/api/events/<int:event_id>/apply-planning-template', methods=['POST'])
+@require_admin
+@with_prepare_action_lock
+def apply_planning_template(event_id):
+    """Merge or replace an event's model/custom requirements from a template."""
+    try:
+        event = data_manager.events.get(event_id)
+        if not event:
+            return jsonify({'error': 'Event not found'}), 404
+
+        data = request.get_json(silent=True) or {}
+        template_id = str(data.get('templateId') or '').strip()
+        mode = str(data.get('mode') or 'merge').strip().lower()
+        if mode not in {'merge', 'replace'}:
+            return jsonify({'error': 'Mode must be merge or replace'}), 400
+
+        with _planning_templates_lock:
+            template = next(
+                (
+                    item for item in _load_planning_templates()
+                    if item['id'] == template_id
+                ),
+                None,
+            )
+        if not template:
+            return jsonify({'error': 'Planning template not found'}), 404
+
+        result = _apply_planning_template_to_event(event, template, mode)
+        log_action(
+            f"{mode.title()}d planning template '{template['name']}' "
+            f"for event {event_id}"
+        )
+        mark_realtime_change(
+            'event-assets',
+            {'eventId': event_id, 'action': f'template-{mode}'},
+        )
+        return jsonify({
+            'success': True,
+            'data': result,
+            'message': f"Template '{template['name']}' applied",
+        })
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+    except Exception as exc:
+        logger.error(
+            "Failed to apply planning template to event %s: %s",
+            event_id,
+            exc,
+            exc_info=True,
+        )
+        return jsonify({'error': 'Failed to apply planning template'}), 500
+
+
+@app.route('/api/events/<int:event_id>/container-models', methods=['POST'])
+@require_admin
+@with_prepare_action_lock
+def add_container_models_to_event(event_id):
+    """Add a container's model quantities without assigning its physical IDs."""
+    try:
+        event = data_manager.events.get(event_id)
+        if not event:
+            return jsonify({'error': 'Event not found'}), 404
+
+        data = request.get_json(silent=True) or {}
+        container_id = str(data.get('containerId') or '').strip()
+        container = _find_container_by_lookup(container_id)
+        if not container:
+            return jsonify({'error': 'Container not found'}), 404
+
+        grouped = {}
+        skipped = []
+        for asset_id in getattr(container, 'asset_ids', []) or []:
+            asset = data_manager.inventory.get(asset_id)
+            if (
+                not asset
+                or getattr(asset, 'is_missing', False)
+                or _is_disposed(asset)
+                or _is_bulk_asset(asset)
+            ):
+                skipped.append(asset_id)
+                continue
+
+            key = _asset_group_key(asset)
+            if key not in grouped:
+                grouped[key] = {
+                    'department': asset.department_code,
+                    'brand': asset.brand,
+                    'model': asset.model_number,
+                    'description': asset.description or '',
+                    'quantity': 0,
+                }
+            grouped[key]['quantity'] += 1
+
+        if not grouped:
+            return jsonify({
+                'error': 'Container has no available model contents to add'
+            }), 400
+
+        current = _event_planning_template_contents(event)['models']
+        current_by_key = {
+            _model_key_from_parts(
+                row['department'],
+                row['brand'],
+                row['model'],
+            ): row
+            for row in current
+        }
+        for key, row in grouped.items():
+            final_quantity = (
+                current_by_key.get(key, {}).get('quantity', 0)
+                + row['quantity']
+            )
+            physical = _planning_model_inventory_quantity(row)
+            if final_quantity > physical:
+                return jsonify({
+                    'error': (
+                        f"{row['brand']} {row['model']} would require "
+                        f"{final_quantity} unit(s), but only {physical} "
+                        "are in inventory"
+                    )
+                }), 400
+
+        for row in grouped.values():
+            existing_refs = []
+            existing_quantity = 0
+            key = _model_key_from_parts(
+                row['department'],
+                row['brand'],
+                row['model'],
+            )
+            for ref in list(event.prepared_items):
+                marker = _parse_model_marker(ref)
+                if not marker:
+                    continue
+                marker_key = _model_key_from_parts(
+                    marker['department'],
+                    marker['brand'],
+                    marker['model'],
+                )
+                if marker_key == key:
+                    existing_refs.append(ref)
+                    existing_quantity += max(
+                        1,
+                        _safe_int(marker.get('quantity'), 1),
+                    )
+                    if not row['description'] and marker.get('description'):
+                        row['description'] = marker['description']
+
+            for ref in existing_refs:
+                event.prepared_items.remove(ref)
+            event.prepared_items.append(
+                _make_model_marker(
+                    row,
+                    existing_quantity + row['quantity'],
+                )
+            )
+
+        update_event_state(event)
+        data_manager.save_event(event)
+        invalidate_cache()
+        log_action(
+            f"Added model contents of container {container.container_id} "
+            f"to event {event_id}"
+        )
+        mark_realtime_change(
+            'event-assets',
+            {'eventId': event_id, 'action': 'add-container-models'},
+        )
+        return jsonify({
+            'success': True,
+            'data': {
+                'containerId': container.container_id,
+                'modelCount': len(grouped),
+                'assetCount': sum(
+                    row['quantity'] for row in grouped.values()
+                ),
+                'skippedCount': len(skipped),
+            },
+        })
+    except Exception as exc:
+        logger.error(
+            "Failed to add container models to event %s: %s",
+            event_id,
+            exc,
+            exc_info=True,
+        )
+        return jsonify({'error': 'Failed to add container contents'}), 500
+
+
 @app.route('/api/events/<int:event_id>/prepare', methods=['POST'])
 @require_auth
 @with_prepare_action_lock
@@ -11820,6 +12419,7 @@ def get_asset_event_history(asset_id):
                 history.append({
                     'id': event.event_id,
                     'name': event.name,
+                    'location': getattr(event, 'location', '') or '',
                     'startDate': safe_fmt(raw_start),
                     'endDate': safe_fmt(raw_end),
                     'state': getattr(event, 'state', 'Added'),
