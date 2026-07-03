@@ -24,7 +24,15 @@ from data_manager import (
     normalize_asset_change_history,
 )
 from maintenance_logs import normalize_maintenance_log
-from models import Client, Container, Event, InventoryItem, LogEntry, User
+from models import (
+    Client,
+    Container,
+    Event,
+    InventoryItem,
+    LogEntry,
+    User,
+    normalize_event_state,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -340,6 +348,7 @@ class PostgresDataManager(DataManager):
         self.load_inventory()
         self.load_containers()
         self.load_events()
+        self.migrate_legacy_event_states()
         self.load_logs()
         self.migrate_event_logs_from_system_logs()
         self.load_clients()
@@ -468,6 +477,7 @@ class PostgresDataManager(DataManager):
                     (self.company_code,),
                 )
                 for event_id, source_filename, data, version in cursor.fetchall():
+                    raw_state = data.get('state', 'New')
                     event = Event(
                         event_id=int(event_id),
                         name=data.get('name', ''),
@@ -477,7 +487,7 @@ class PostgresDataManager(DataManager):
                         asset_models=data.get('assetModels') or [],
                         prepared_items=data.get('preparedItems') or [],
                         returned_items=data.get('returnedItems') or [],
-                        state=data.get('state', 'Added'),
+                        state=normalize_event_state(raw_state),
                         actually_prepared=data.get('actuallyPrepared') or [],
                         extra_assets=data.get('extraAssets') or [],
                         custom_collected=data.get('customCollected') or [],
@@ -488,6 +498,7 @@ class PostgresDataManager(DataManager):
                         notes=data.get('notes', ''),
                         event_logs=data.get('eventLogs') or [],
                     )
+                    event._legacy_state_migrated = str(raw_state or '').strip() != event.state
                     events[int(event_id)] = event
                     file_map[int(event_id)] = (
                         source_filename or self._event_filename(event)
@@ -796,6 +807,7 @@ class PostgresDataManager(DataManager):
     # ---------------- Events and logs ----------------
 
     def save_event(self, event):
+        event.state = normalize_event_state(getattr(event, 'state', 'New'))
         event_id = int(event.event_id)
         payload = self._event_data(event)
         fingerprint = _fingerprint(payload)

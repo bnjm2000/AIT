@@ -53,6 +53,13 @@ class EventStateTests(unittest.TestCase):
 
         self.assertEqual(event.state, 'Planning')
 
+    def test_event_without_requirements_is_new(self):
+        event = self.make_event([], [], [])
+
+        app_module.update_event_state(event)
+
+        self.assertEqual(event.state, 'New')
+
     def test_ready_event_on_end_date_is_last_day(self):
         event = self.make_event(['A', 'B'], ['A', 'B'], [])
 

@@ -1,9 +1,10 @@
+import csv
 import os
 import tempfile
 import unittest
 
 import app as app_module
-from data_manager import DataManager
+from data_manager import DataManager, EVENT_FIELDNAMES
 from models import Event, InventoryItem, User, hash_password, split_legacy_event_name_location
 
 
@@ -72,6 +73,32 @@ class EventLocationTests(unittest.TestCase):
 
         self.assertIn('Location is required for events', event_errors)
         self.assertNotIn('Location is required for events', dry_hire_errors)
+
+    def test_legacy_added_state_is_migrated_and_persisted_as_new(self):
+        with tempfile.TemporaryDirectory() as root:
+            manager = DataManager(root)
+            manager.setup_data_folder()
+            manager.check_and_initialize_files()
+            event = Event(1, 'Legacy', '20260701', '20260701', [])
+            manager.events[1] = event
+            manager.save_event(event)
+
+            filepath = os.path.join(manager.events_folder, manager.event_file_map[1])
+            with open(filepath, newline='', encoding='utf-8') as source:
+                row = next(csv.DictReader(source))
+            row['State'] = 'Added'
+            with open(filepath, 'w', newline='', encoding='utf-8') as destination:
+                writer = csv.DictWriter(destination, fieldnames=EVENT_FIELDNAMES)
+                writer.writeheader()
+                writer.writerow(row)
+
+            reloaded = DataManager(root)
+            reloaded.load_all_data()
+
+            self.assertEqual(reloaded.events[1].state, 'New')
+            with open(filepath, newline='', encoding='utf-8') as persisted:
+                persisted_row = next(csv.DictReader(persisted))
+            self.assertEqual(persisted_row['State'], 'New')
 
 
 class AssetsDeployedTests(unittest.TestCase):

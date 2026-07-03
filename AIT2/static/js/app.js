@@ -360,6 +360,11 @@ function getEventStateClass(state) {
     .replace(/\s+/g, '-')}`;
 }
 
+function eventStateDisplayLabel(state) {
+  const value = String(state || 'New');
+  return value === 'Added' ? 'New' : value;
+}
+
 function isAdminUser() {
   return !!(currentUser && currentUser.isAdmin);
 }
@@ -6014,7 +6019,7 @@ function createEventCard(event) {
                     ${getTagDisplay(event.tag || 'events')}
                 </span>
             </div>
-            <div class="event-state ${getEventStateClass(event.state)}">${escapeHtml(event.state)}</div>
+            <div class="event-state ${getEventStateClass(event.state)}">${escapeHtml(eventStateDisplayLabel(event.state))}</div>
         </div>
         <div class="event-title">${escapeHtml(event.name)}</div>
         <div class="event-date">${escapeHtml(dateRange)}</div>
@@ -6132,7 +6137,7 @@ function showForceStateModal(eventId, currentState) {
                             <label for="forceStateSelect">Select New State:</label>
                             <select id="forceStateSelect" class="form-input">
                                 <option value="">Choose a state...</option>
-                                <option value="Added">Added</option>
+                                <option value="New">New</option>
                                 <option value="Planning">Planning</option>
                                 <option value="Preparing">Preparing</option>
                                 <option value="Ready">Ready</option>
@@ -10516,7 +10521,7 @@ function createPrepareEventCard(event) {
                     ${event.tag === 'dry hire' ? 'DRY HIRE' : 'EVENT'}
                 </span>
             </div>
-            <div class="event-state ${getEventStateClass(event.state)}">${escapeHtml(event.state)}</div>
+            <div class="event-state ${getEventStateClass(event.state)}">${escapeHtml(eventStateDisplayLabel(event.state))}</div>
         </div>
         <div class="event-title">${escapeHtml(event.name)}</div>
         <div class="event-date">${escapeHtml(dateRange)}</div>
@@ -12250,7 +12255,7 @@ function createReturnEventCard(event) {
                   ${event.tag === 'dry hire' ? 'DRY HIRE' : 'EVENT'}
               </span>
           </div>
-          <div class="event-state ${getEventStateClass(event.state)}">${escapeHtml(event.state)}</div>
+          <div class="event-state ${getEventStateClass(event.state)}">${escapeHtml(eventStateDisplayLabel(event.state))}</div>
       </div>
       <div class="event-title">${escapeHtml(event.name)}</div>
       <div class="event-date">${escapeHtml(dateRange)}</div>
@@ -12817,7 +12822,7 @@ async function viewEvent(eventId) {
                 </div>
                 <div style="text-align: center;">
                     <span style="background: rgba(255,255,255,0.2); padding: 8px 16px; border-radius: 20px; font-size: 13px; font-weight: 500;">
-                        ${event.state}
+                        ${escapeHtml(eventStateDisplayLabel(event.state))}
                     </span>
                 </div>
             </div>
@@ -13954,7 +13959,7 @@ function populateTransferDropdowns(options) {
     const tagPrefix = event.tag === 'dry hire' ? '[DH]' : '[E]';
     const option = document.createElement("option");
     option.value = event.id;
-    option.textContent = `${tagPrefix} ${event.id}: ${event.name} (${event.state})`;
+    option.textContent = `${tagPrefix} ${event.id}: ${event.name} (${eventStateDisplayLabel(event.state)})`;
     fromSelect.appendChild(option);
   });
 
@@ -13962,7 +13967,7 @@ function populateTransferDropdowns(options) {
     const tagPrefix = event.tag === 'dry hire' ? '[DH]' : '[E]';
     const option = document.createElement("option");
     option.value = event.id;
-    option.textContent = `${tagPrefix} ${event.id}: ${event.name} (${event.state})`;
+    option.textContent = `${tagPrefix} ${event.id}: ${event.name} (${eventStateDisplayLabel(event.state)})`;
     toSelect.appendChild(option);
   });
 }
@@ -16318,17 +16323,17 @@ function planEventTypeBadgeHtml(event) {
 }
 
 function planEventStateBadgeHtml(event) {
-  const state = String(event?.state || 'Added');
+  const state = String(event?.state || 'New');
   return `
     <span class="plan-badge plan-badge-state-${escapeHtmlAttr(planStateSlug(state))}">
-      ${escapeHtml(state)}
+      ${escapeHtml(eventStateDisplayLabel(state))}
     </span>
   `;
 }
 
 function planEventChooserFilterKey(event) {
   const state = planStateSlug(event?.state);
-  if (['added', 'planning'].includes(state)) return 'PLANNING';
+  if (['new', 'added', 'planning'].includes(state)) return 'PLANNING';
   if (['preparing', 'ready'].includes(state)) return 'PREPARING';
   if (['ongoing', 'last-day'].includes(state)) return 'ONGOING';
   if (['returning', 'overdue'].includes(state)) return 'RETURNING';
@@ -16410,7 +16415,7 @@ function planEventChooserSecondaryLabel(event) {
     event?.client_name ||
     event?.clientCompany ||
     event?.client_company ||
-    (event?.tag === 'dry hire' ? 'Dry Hire' : 'Event')
+    ''
   );
 }
 
@@ -16489,7 +16494,7 @@ function renderPlanEventChooser() {
 
   filters.innerHTML = PLAN_EVENT_CHOOSER_FILTERS.map(filter => `
     <button type="button"
-            class="plan-event-chooser-filter ${planEventChooserState.filter === filter.key ? 'active' : ''}"
+            class="plan-event-chooser-filter plan-event-chooser-filter-${filter.key.toLowerCase()} ${planEventChooserState.filter === filter.key ? 'active' : ''}"
             onclick="planSetEventChooserFilter('${filter.key}')">
       ${escapeHtml(filter.label)}
       <span class="plan-event-chooser-count">${Number(counts[filter.key] || 0)}</span>
@@ -16951,7 +16956,7 @@ function renderPlanRequirementsCard() {
           <div class="plan-requirement-row">
             <div>
               <div class="plan-item-title-line">
-                <div class="plan-item-name">Custom ${escapeHtml(custom.name)}</div>
+                <div class="plan-item-name">${escapeHtml(custom.name)}</div>
                 ${planDepartmentCodeBadgeHtml(custom.department)}
               </div>
               <div class="plan-item-meta">${escapeHtml(custom.type === 'LOAN' ? 'Loan / Rental' : 'Misc')}</div>
@@ -17022,7 +17027,6 @@ function renderPlanEventDetailsCard() {
           <div><dt>Status</dt><dd>${planEventStateBadgeHtml(event)}</dd></div>
           <div><dt>Type</dt><dd>${planEventTypeBadgeHtml(event)}</dd></div>
           <div class="plan-detail-notes-row">
-            <dt>Notes</dt>
             <dd>
               <textarea class="plan-notes-textarea" id="planEventNotes"
                         maxlength="50000"
@@ -17540,7 +17544,7 @@ function renderPlanTemplateEditorRows() {
     const isModel = kind === 'models';
     const title = isModel
       ? [row.brand, row.model].filter(Boolean).join(' ')
-      : `Custom ${row.name}`;
+      : row.name;
     const description = isModel
       ? (row.description || 'No description')
       : (row.type === 'LOAN' ? (row.company || 'Loan / rental') : 'Misc item');
@@ -25061,7 +25065,7 @@ function ensureEventListViewStyles() {
     .event-list-title { font-weight: 700; color: #333; min-width: 220px; }
     .event-progress-track { background: #e9ecef; border-radius: 999px; height: 6px; width: 120px; overflow: hidden; margin-top: 4px; }
     .event-progress-bar { background: var(--event-state, #16a34a); height: 100%; transition: width .2s ease; }
-    :is(#prepare-section, #return-section) :is(.event-card, .event-state, .event-list-table tr).state-added {
+    :is(#prepare-section, #return-section) :is(.event-card, .event-state, .event-list-table tr):is(.state-new, .state-added) {
       --event-state: #ec407a;
       --event-soft: #fff0f5;
     }
@@ -25213,7 +25217,7 @@ function eventTagBadgeHtml(event) {
 
 function getEventWorkflowPalette(state) {
   const palettes = {
-    Added: { main: '#ec407a', soft: '#fff0f5' },
+    New: { main: '#ec407a', soft: '#fff0f5' },
     Planning: { main: '#6d28d9', soft: '#f3efff' },
     Preparing: { main: '#0877e8', soft: '#edf6ff' },
     Ready: { main: '#16a34a', soft: '#edf9f0' },
@@ -25229,7 +25233,7 @@ function getEventWorkflowPalette(state) {
 function eventStateBadgeHtml(event, displayState = null) {
   const state = displayState || event.state || '';
   const palette = getEventWorkflowPalette(state);
-  return `<span class="event-state ${getEventStateClass(state)}" style="background:${palette.soft};color:${palette.main};">${escapeHtml(state)}</span>`;
+  return `<span class="event-state ${getEventStateClass(state)}" style="background:${palette.soft};color:${palette.main};">${escapeHtml(eventStateDisplayLabel(state))}</span>`;
 }
 
 function renderProgressCell(done, total) {
@@ -25410,7 +25414,7 @@ let allEventsTypeFilter = 'all';
 let eventOverviewDocumentHandlersBound = false;
 
 function overviewDisplayState(event) {
-  return event?.state === 'Last Day' ? 'Ongoing' : (event?.state || 'Added');
+  return event?.state === 'Last Day' ? 'Ongoing' : eventStateDisplayLabel(event?.state || 'New');
 }
 
 function overviewEventType(event) {
@@ -25549,7 +25553,7 @@ function getFilteredEventsForOverview(list) {
 }
 
 function eventOverviewProgress(event) {
-  const state = event.state || 'Added';
+  const state = event.state || 'New';
   if (['Returning', 'Overdue', 'Closed'].includes(state)) {
     if (state === 'Closed' && event.forceStateOverride) {
       const done = Math.max(0, Number(event.returnedCount || 0));
@@ -25572,7 +25576,7 @@ function eventOverviewProgress(event) {
     const total = Math.max(out, Number(event.assetCount || out));
     return { done: out, total, label: 'Out' };
   }
-  if (state === 'Added') {
+  if (state === 'New') {
     return { done: 0, total: Math.max(0, Number(event.assetCount || 0)), label: 'Items added', added: true };
   }
   return {
@@ -25626,7 +25630,7 @@ function eventDepartmentProgress(event) {
       done = isReturned ? quantity : 0;
     } else if (phaseUsesOut) {
       done = !isReturned && (isPrepared || isCollectedLoan) ? quantity : 0;
-    } else if (event.state !== 'Added') {
+    } else if (event.state !== 'New') {
       done = (isPrepared || isReturned || isCollectedLoan) ? quantity : 0;
     }
 
@@ -25689,7 +25693,7 @@ function eventDepartmentProgress(event) {
 function eventOverviewNotice(event, progress) {
   const remaining = Math.max(progress.total - progress.done, 0);
   switch (event.state) {
-    case 'Added': return progress.total ? `${progress.total} requirements added` : 'Ready to start planning';
+    case 'New': return progress.total ? `${progress.total} requirements added` : 'Ready to start planning';
     case 'Planning': return `${progress.total} asset requirements planned`;
     case 'Preparing': return `${remaining} item${remaining === 1 ? '' : 's'} left to pack`;
     case 'Ready': return 'All items ready';
@@ -25717,7 +25721,7 @@ function eventOverviewNotice(event, progress) {
 }
 
 function getEventPrimaryAction(event) {
-  if (event.state === 'Added') {
+  if (event.state === 'New') {
     return isAdminUser()
       ? { label: 'Start Planning', onclick: `openEventPlanning(${event.id})` }
       : { label: 'Start Preparing', onclick: `openPrepareEventModal(${event.id})` };
@@ -25737,7 +25741,7 @@ function getEventPrimaryAction(event) {
 
 function eventNextActionText(event) {
   switch (event.state) {
-    case 'Added': return isAdminUser() ? 'Add requirements and manage assets.' : 'Prepare or quick-add event assets.';
+    case 'New': return isAdminUser() ? 'Add requirements and manage assets.' : 'Prepare or quick-add event assets.';
     case 'Planning': return isAdminUser() ? 'Plan resources and requirements.' : 'Prepare or quick-add event assets.';
     case 'Preparing': return 'Continue packing remaining items.';
     case 'Ready': return 'Generate delivery order and dispatch.';
@@ -25838,7 +25842,6 @@ function createEventsOverviewCard(event) {
         onclick="openEventPlanning(${event.id})"
       >
         <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-          <circle cx="12" cy="12" r="9"></circle>
           <path d="M12 8v8"></path>
           <path d="M8 12h8"></path>
         </svg>
@@ -25878,7 +25881,7 @@ function createEventsOverviewCard(event) {
           <span>#${escapeHtml(String(event.id))}</span>
           <span class="event-type-badge ${overviewEventType(event) === 'dry hire' ? 'dry-hire' : ''}">${overviewEventType(event) === 'dry hire' ? 'Dry Hire' : 'Events'}</span>
         </div>
-        <span class="event-workflow-state">${escapeHtml(displayState)}</span>
+        <span class="event-workflow-state">${escapeHtml(eventStateDisplayLabel(displayState))}</span>
       </div>
       <h3 class="event-workflow-title">${escapeHtml(event.name || '')}</h3>
       <div class="event-workflow-meta">
@@ -27244,13 +27247,13 @@ function renderTransferWorkspace() {
   const sourceOptions = sourceEvents.map(event => {
     const tagPrefix = event.tag === 'dry hire' ? '[DH]' : '[E]';
     const dateRange = event.startDate === event.endDate ? formatDate(event.startDate) : `${formatDate(event.startDate)} - ${formatDate(event.endDate)}`;
-    return `<option value="${event.id}">${tagPrefix} ${event.id}: ${escapeHtml(event.name)} • ${event.state} • ${event.unreturnedCount || 0} out • ${dateRange}</option>`;
+    return `<option value="${event.id}">${tagPrefix} ${event.id}: ${escapeHtml(event.name)} • ${escapeHtml(eventStateDisplayLabel(event.state))} • ${event.unreturnedCount || 0} out • ${dateRange}</option>`;
   }).join('');
 
   const targetOptions = targetEvents.map(event => {
     const tagPrefix = event.tag === 'dry hire' ? '[DH]' : '[E]';
     const dateRange = event.startDate === event.endDate ? formatDate(event.startDate) : `${formatDate(event.startDate)} - ${formatDate(event.endDate)}`;
-    return `<option value="${event.id}">${tagPrefix} ${event.id}: ${escapeHtml(event.name)} • ${event.state} • ${dateRange}</option>`;
+    return `<option value="${event.id}">${tagPrefix} ${event.id}: ${escapeHtml(event.name)} • ${escapeHtml(eventStateDisplayLabel(event.state))} • ${dateRange}</option>`;
   }).join('');
 
   container.innerHTML = `

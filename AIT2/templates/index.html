@@ -275,6 +275,7 @@
         box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
       }
 
+      .event-card.state-new,
       .event-card.state-added {
         border-left-color: #ff69b4; /* Pink */
       }
@@ -685,6 +686,7 @@
         }
       }
 
+      .state-new,
       .state-added {
         background: #ffe0f0;
         color: #9b0a50;
@@ -3244,7 +3246,7 @@
       }
 
       .events-state-filters [data-event-state="Active"]:not(.active) { color: #2563eb; }
-      .events-state-filters [data-event-state="Added"]:not(.active) { color: #db2777; }
+      .events-state-filters [data-event-state="New"]:not(.active) { color: #db2777; }
       .events-state-filters [data-event-state="Planning"]:not(.active) { color: #6d28d9; }
       .events-state-filters [data-event-state="Preparing"]:not(.active) { color: #0369a1; }
       .events-state-filters [data-event-state="Ready"]:not(.active) { color: #15803d; }
@@ -3275,6 +3277,7 @@
         box-shadow: 0 3px 11px rgba(15, 23, 42, 0.045);
       }
 
+      .events-workflow-card.state-new,
       .events-workflow-card.state-added { --event-state: #ec407a; --event-soft: #fff0f5; }
       .events-workflow-card.state-planning { --event-state: #6d28d9; --event-soft: #f3efff; }
       .events-workflow-card.state-preparing { --event-state: #0877e8; --event-soft: #edf6ff; }
@@ -3426,6 +3429,7 @@
       .event-progress-add-button {
         display: grid;
         place-items: center;
+        box-sizing: border-box;
         flex: 0 0 70px;
         width: 70px;
         height: 70px;
@@ -4084,10 +4088,11 @@
       }
 
       .plan-event-bar {
-        display: flex;
+        display: grid;
+        grid-template-columns: minmax(260px, 0.86fr) minmax(360px, 1.14fr);
         align-items: center;
         justify-content: space-between;
-        gap: 14px;
+        gap: 10px;
         padding: 0;
       }
 
@@ -4185,12 +4190,14 @@
       .plan-badge {
         display: inline-flex;
         align-items: center;
+        justify-content: center;
         min-height: 20px;
         border-radius: 999px;
         padding: 2px 8px;
         font-size: 10px;
         font-weight: 750;
         line-height: 1;
+        text-align: center;
         white-space: nowrap;
       }
 
@@ -4204,6 +4211,7 @@
         color: #1769aa;
       }
 
+      .plan-badge-state-new,
       .plan-badge-state-added {
         background: #ffe0f0;
         color: #9b0a50;
@@ -4720,7 +4728,7 @@
       }
 
       .plan-detail-notes-row .plan-notes-textarea {
-        min-height: 74px;
+        min-height: 88px;
       }
 
       .plan-template-list {
@@ -4767,6 +4775,20 @@
       .plan-custom-form {
         display: grid;
         gap: 8px;
+      }
+
+      .plan-custom-card {
+        border-color: #e8ebf2;
+        background: #fafbfc;
+        box-shadow: none;
+        opacity: 0.78;
+        transition: opacity 0.16s ease, border-color 0.16s ease;
+      }
+
+      .plan-custom-card:hover,
+      .plan-custom-card:focus-within {
+        border-color: #d6dce8;
+        opacity: 1;
       }
 
       .plan-custom-type-toggle {
@@ -4999,6 +5021,41 @@
 
       .plan-event-chooser-filter.active .plan-event-chooser-count {
         background: #dddafe;
+      }
+
+      .plan-event-chooser-filter-all .plan-event-chooser-count {
+        background: #e0e7ff;
+        color: #3730a3;
+      }
+
+      .plan-event-chooser-filter-active .plan-event-chooser-count {
+        background: #dbeafe;
+        color: #1d4ed8;
+      }
+
+      .plan-event-chooser-filter-planning .plan-event-chooser-count {
+        background: #eadcf8;
+        color: #3d176b;
+      }
+
+      .plan-event-chooser-filter-preparing .plan-event-chooser-count {
+        background: #d8ebff;
+        color: #004085;
+      }
+
+      .plan-event-chooser-filter-ongoing .plan-event-chooser-count {
+        background: #bff2f8;
+        color: #176b73;
+      }
+
+      .plan-event-chooser-filter-returning .plan-event-chooser-count {
+        background: #ffead5;
+        color: #b54708;
+      }
+
+      .plan-event-chooser-filter-completed .plan-event-chooser-count {
+        background: #e2e3e5;
+        color: #383d41;
       }
 
       .plan-event-chooser-table {
@@ -5242,7 +5299,7 @@
 
         .plan-event-bar {
           align-items: stretch;
-          flex-direction: column;
+          grid-template-columns: 1fr;
           gap: 10px;
         }
 
@@ -5647,7 +5704,7 @@
         <div class="events-state-filters" id="eventsStateFilters" aria-label="Filter by event state">
           <button type="button" class="active" data-event-state="All" onclick="setEventStateFilter('All')">All <span>0</span></button>
           <button type="button" data-event-state="Active" onclick="setEventStateFilter('Active')">Active <span>0</span></button>
-          <button type="button" data-event-state="Added" onclick="setEventStateFilter('Added')">Added <span>0</span></button>
+          <button type="button" data-event-state="New" onclick="setEventStateFilter('New')">New <span>0</span></button>
           <button type="button" data-event-state="Planning" onclick="setEventStateFilter('Planning')">Planning <span>0</span></button>
           <button type="button" data-event-state="Preparing" onclick="setEventStateFilter('Preparing')">Preparing <span>0</span></button>
           <button type="button" data-event-state="Ready" onclick="setEventStateFilter('Ready')">Ready <span>0</span></button>

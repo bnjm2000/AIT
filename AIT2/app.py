@@ -60,6 +60,7 @@ from models import (
     User,
     format_date_output,
     hash_password,
+    normalize_event_state,
 )
 from utils import sanitize_filename
 
@@ -4817,7 +4818,7 @@ def update_event_state(event):
 
         # 5. No requirements at all.
         elif required_total == 0:
-            event.state = 'Added'
+            event.state = 'New'
 
         # 6. Requirements exist, but nothing has been collected/prepared yet.
         elif started_total == 0:
@@ -4855,10 +4856,11 @@ def refresh_event_states_for_read(events_to_check=None):
         if not event:
             continue
 
-        old_state = getattr(event, 'state', 'Added')
+        old_state = normalize_event_state(getattr(event, 'state', 'New'))
+        event.state = old_state
         update_event_state(event)
 
-        if getattr(event, 'state', 'Added') == old_state:
+        if getattr(event, 'state', 'New') == old_state:
             continue
 
         data_manager.save_event(event)
@@ -7533,7 +7535,7 @@ def create_event():
             end_date=end_date,
             asset_models=[],
             prepared_items=[],
-            state='Added',
+            state='New',
             returned_items=[],
             tag=data.get('tag', 'event')
         )
@@ -12422,7 +12424,7 @@ def get_asset_event_history(asset_id):
                     'location': getattr(event, 'location', '') or '',
                     'startDate': safe_fmt(raw_start),
                     'endDate': safe_fmt(raw_end),
-                    'state': getattr(event, 'state', 'Added'),
+                    'state': normalize_event_state(getattr(event, 'state', 'New')),
                     'tag': getattr(event, 'tag', 'events'),
                     'returned': asset_id in ri_set,
                     '_sortEnd': raw_end,
@@ -13325,7 +13327,7 @@ def force_event_state(event_id):
         new_state = data.get('state')
         
         # Validate state
-        valid_states = ['Added', 'Planning', 'Preparing', 'Ready', 'Ongoing', 'Last Day', 'Returning', 'Closed', 'Overdue']
+        valid_states = ['New', 'Planning', 'Preparing', 'Ready', 'Ongoing', 'Last Day', 'Returning', 'Closed', 'Overdue']
         if new_state not in valid_states:
             return jsonify({'error': f'Invalid state. Must be one of: {valid_states}'}), 400
             
@@ -13338,7 +13340,7 @@ def force_event_state(event_id):
         old_state = event.state
         
         # Force the new state and set override flag
-        event.state = new_state
+        event.state = normalize_event_state(new_state)
         event.force_state_override = True
         
         # Save the event

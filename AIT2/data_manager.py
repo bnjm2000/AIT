@@ -8,7 +8,16 @@ import re
 import shutil
 
 from maintenance_logs import dump_maintenance_logs, load_maintenance_logs, normalize_maintenance_log
-from models import Client, Container, Event, InventoryItem, LogEntry, User, hash_password
+from models import (
+    Client,
+    Container,
+    Event,
+    InventoryItem,
+    LogEntry,
+    User,
+    hash_password,
+    normalize_event_state,
+)
 from utils import clean_csv_cell, open_csv_robust, sanitize_filename
 
 
@@ -253,6 +262,7 @@ class DataManager:
         self.load_inventory()
         self.load_containers()
         self.load_events()
+        self.migrate_legacy_event_states()
         self.load_logs()
         self.migrate_event_logs_from_system_logs()
         self.load_clients()
@@ -772,7 +782,8 @@ class DataManager:
                 if event_data.get('EventLogs'):
                     event_logs = self.normalize_event_logs(self._load_event_json_list(event_data, 'EventLogs', filename))
 
-                state = event_data.get('State', 'Added')
+                raw_state = event_data.get('State', 'New')
+                state = normalize_event_state(raw_state)
                 tag = event_data.get('Tag', 'events')
                 force_state_override = _is_csv_true(event_data.get('ForceStateOverride'))
 
@@ -802,6 +813,7 @@ class DataManager:
                 event.custom_collected = custom_collected
                 event.notes = raw_notes
                 event.event_logs = event_logs
+                event._legacy_state_migrated = str(raw_state or '').strip() != state
 
                 self.events[event_id] = event
                 self.event_file_map[event_id] = filename
@@ -809,6 +821,7 @@ class DataManager:
                 f.close()
 
     def save_event(self, event):
+        event.state = normalize_event_state(getattr(event, 'state', 'New'))
         if hasattr(self, 'event_file_map') and event.event_id in self.event_file_map:
             self.backup_event_file(event.event_id)
         
@@ -894,6 +907,21 @@ class DataManager:
             if not getattr(event, '_legacy_location_extracted', False):
                 continue
             self.save_event(event)
+            migrated += 1
+        return migrated
+
+    def migrate_legacy_event_states(self):
+        """Persist the canonical New state for legacy Added event records."""
+        migrated = 0
+        for event in list(self.events.values()):
+            if not getattr(event, '_legacy_state_migrated', False):
+                continue
+            event.state = 'New'
+            snapshots = getattr(self, '_event_snapshots', None)
+            if isinstance(snapshots, dict):
+                snapshots.pop(int(event.event_id), None)
+            self.save_event(event)
+            event._legacy_state_migrated = False
             migrated += 1
         return migrated
 

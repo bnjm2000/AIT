@@ -143,6 +143,12 @@ def split_legacy_event_name_location(name, location=''):
     return event_name, extracted_location, True
 
 
+def normalize_event_state(state):
+    """Return the canonical persisted event state."""
+    value = str(state or 'New').strip() or 'New'
+    return 'New' if value == 'Added' else value
+
+
 class Event:
     def __init__(
         self,
@@ -152,7 +158,7 @@ class Event:
         end_date,
         asset_models,
         prepared_items=None,
-        state='Added',
+        state='New',
         returned_items=None,
         actually_prepared=None,
         extra_assets=None,
@@ -175,7 +181,7 @@ class Event:
         self.asset_models = asset_models
         self.prepared_items = prepared_items if prepared_items is not None else []
         self.returned_items = returned_items if returned_items is not None else []
-        self.state = state
+        self.state = normalize_event_state(state)
         self.actually_prepared = actually_prepared if actually_prepared is not None else []
         self.extra_assets = extra_assets if extra_assets is not None else []
         # Custom loan/rental items use collected -> prepared -> returned stages.
