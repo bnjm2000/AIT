@@ -1,3 +1,5 @@
+import io
+import os
 import tempfile
 import unittest
 from datetime import datetime
@@ -158,6 +160,62 @@ class ContainerMaintenanceTests(unittest.TestCase):
             reloaded.containers['CASE-1'].maintenance_logs[0]
         )
         self.assertEqual(reloaded_log['source']['containerId'], 'CASE-1')
+
+    def test_admin_media_removal_clears_container_and_all_asset_copies(self):
+        payload = self.payload('container-media-request')
+        payload['media'] = (io.BytesIO(b'container-photo'), 'case photo.png')
+        response = self.client.post(
+            '/api/containers/CASE-1/maintain',
+            data=payload,
+            content_type='multipart/form-data',
+        )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+
+        container_log = normalize_maintenance_log(
+            self.data_manager.containers['CASE-1'].maintenance_logs[0]
+        )
+        media = container_log['media'][0]
+        media_path = os.path.join(self.tempdir.name, media['path'])
+        self.assertTrue(os.path.exists(media_path))
+
+        self.login('admin', True)
+        delete_response = self.client.delete(
+            f"/api/maintenance-media/{media['id']}"
+        )
+
+        self.assertEqual(delete_response.status_code, 200, delete_response.get_data(as_text=True))
+        self.assertEqual(delete_response.get_json()['deletedReferenceCount'], 3)
+        self.assertFalse(os.path.exists(media_path))
+        self.assertEqual(
+            normalize_maintenance_log(
+                self.data_manager.containers['CASE-1'].maintenance_logs[0]
+            )['media'],
+            [],
+        )
+        for asset_id in ('A#01', 'A#02'):
+            self.assertEqual(
+                normalize_maintenance_log(
+                    self.data_manager.inventory[asset_id].maintenance_logs[0]
+                )['media'],
+                [],
+            )
+
+        reloaded = DataManager(self.tempdir.name)
+        reloaded.load_inventory()
+        reloaded.load_containers()
+        self.assertEqual(
+            normalize_maintenance_log(
+                reloaded.containers['CASE-1'].maintenance_logs[0]
+            )['media'],
+            [],
+        )
+        for asset_id in ('A#01', 'A#02'):
+            self.assertEqual(
+                normalize_maintenance_log(
+                    reloaded.inventory[asset_id].maintenance_logs[0]
+                )['media'],
+                [],
+            )
 
 
 if __name__ == '__main__':

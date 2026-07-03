@@ -2361,13 +2361,11 @@ def _request_bool(value, default=False):
 
 
 def _validate_status_transition(asset, target_status, current_status=None):
-    if target_status in ASSET_CONDITION_STATUSES:
-        current = current_status or _asset_condition_status(asset)
-        if current != 'ok' and current != target_status:
-            return (
-                f"Asset is currently {current.upper()}. Mark it as OK first before "
-                f"changing it to {target_status.upper()}."
-            )
+    """Validate a requested condition status.
+
+    Condition statuses are mutually exclusive, and applying a new one clears
+    the previous one. Direct transitions such as OOC to Missing are valid.
+    """
     return None
 
 
@@ -6172,6 +6170,51 @@ def _delete_maintenance_media_files(log_entry):
     return deleted
 
 
+def _remove_maintenance_media_references(media_id):
+    """Remove one media record everywhere it is referenced.
+
+    Container maintenance records are copied into each member asset's history,
+    so deleting by media ID must update both the source container and every
+    durable asset copy.
+    """
+    media_id = str(media_id or '').strip()
+    result = {
+        'media': None,
+        'referenceCount': 0,
+        'inventoryChanged': False,
+        'containersChanged': False,
+    }
+    if not media_id or not data_manager:
+        return result
+
+    owner_groups = (
+        (data_manager.inventory.values(), 'inventoryChanged'),
+        (data_manager.containers.values(), 'containersChanged'),
+    )
+    for owners, changed_key in owner_groups:
+        for owner in owners:
+            logs = getattr(owner, 'maintenance_logs', []) or []
+            for index, log_entry in enumerate(logs):
+                record = normalize_maintenance_log(log_entry)
+                retained_media = []
+                removed_from_log = 0
+                for media in record.get('media', []) or []:
+                    if str(media.get('id') or '').strip() == media_id:
+                        if result['media'] is None:
+                            result['media'] = dict(media)
+                        removed_from_log += 1
+                    else:
+                        retained_media.append(media)
+
+                if removed_from_log:
+                    record['media'] = retained_media
+                    logs[index] = record
+                    result['referenceCount'] += removed_from_log
+                    result[changed_key] = True
+
+    return result
+
+
 def _save_maintenance_media_files(log_entry, uploaded_files):
     incoming_files = [file for file in (uploaded_files or []) if file and file.filename]
     if not incoming_files:
@@ -6299,6 +6342,56 @@ def download_maintenance_media(media_id):
     except Exception as e:
         logger.error(f"Error downloading maintenance media {media_id}: {e}")
         return jsonify({'error': 'Failed to load maintenance media'}), 500
+
+
+@app.route('/api/maintenance-media/<media_id>', methods=['DELETE'])
+@require_auth
+@with_inventory_action_lock
+def delete_maintenance_media(media_id):
+    """Permanently remove one maintenance attachment and all of its references."""
+    try:
+        if not _current_user_is_admin():
+            return jsonify({'error': 'Admin privileges required to remove maintenance media'}), 403
+
+        media_id = unquote_plus(str(media_id or '')).strip()
+        removal = _remove_maintenance_media_references(media_id)
+        media = removal.get('media')
+        if not media:
+            return jsonify({'error': 'Media not found'}), 404
+
+        if removal['inventoryChanged']:
+            data_manager.save_inventory()
+        if removal['containersChanged']:
+            data_manager.save_containers()
+
+        target_path = _maintenance_media_abs_path(media)
+        file_deleted = False
+        if target_path:
+            try:
+                if os.path.isfile(target_path):
+                    os.remove(target_path)
+                    file_deleted = True
+                _cleanup_empty_maintenance_media_folder(target_path)
+            except OSError as exc:
+                logger.error("Failed to permanently delete maintenance media %s: %s", target_path, exc)
+                return jsonify({
+                    'error': 'Media was removed from maintenance logs, but its stored file could not be deleted'
+                }), 500
+
+        invalidate_cache()
+        log_action(
+            f"Removed maintenance media {media.get('name') or media_id} "
+            f"from {removal['referenceCount']} record(s) (deleted by {session['user']})"
+        )
+        return jsonify({
+            'success': True,
+            'message': 'Maintenance media permanently deleted',
+            'deletedReferenceCount': removal['referenceCount'],
+            'fileDeleted': file_deleted,
+        })
+    except Exception as exc:
+        logger.error("Error deleting maintenance media %s: %s", media_id, exc, exc_info=True)
+        return jsonify({'error': f'Failed to delete maintenance media: {str(exc)}'}), 500
 
 
 @app.route('/api/events', methods=['GET'])
@@ -6436,6 +6529,7 @@ def get_events():
                 'extraCount': _event_extra_asset_quantity(event),
                 'assetModels': event.asset_models,
                 'preparedItems': event.prepared_items,
+                'actuallyPrepared': event.actually_prepared,
                 'returnedItems': event.returned_items,
                 'customCollected': getattr(event, 'custom_collected', []),
                 'returnableCount': returnable_counts['returnable'],

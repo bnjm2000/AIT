@@ -1149,9 +1149,6 @@ function maintenanceStatusSelectHtml(id, name, selected = 'nochange') {
       ${option('degraded')}
       ${option('decommissioned')}
     </select>
-    <small style="color:#666;font-size:12px;margin-top:6px;display:block;">
-      Assets can only have one status. To change a non-OK asset to another status, mark it as OK first.
-    </small>
   `;
 }
 
@@ -8635,6 +8632,7 @@ async function openContainerMaintenanceModal(containerId) {
       if (event.target === modal) closeContainerMaintenanceModal();
     });
     enhanceModalAccessibility(modal);
+    initialiseMaintenanceLogTypeSelects(modal);
     focusModalStart(modal);
 
     form?.addEventListener('submit', async event => {
@@ -9999,21 +9997,19 @@ function maintenanceReportTableHead() {
   return `
     <colgroup>
       <col style="width:8%;">
-      <col style="width:11%;">
-      <col style="width:15%;">
-      <col style="width:12%;">
-      <col style="width:9%;">
-      <col style="width:9%;">
       <col style="width:22%;">
-      <col style="width:6%;">
       <col style="width:8%;">
+      <col style="width:9%;">
+      <col style="width:9%;">
+      <col style="width:27%;">
+      <col style="width:7%;">
+      <col style="width:10%;">
     </colgroup>
     <thead>
       <tr>
         <th>Date</th>
-        <th>Asset ID</th>
         <th>Asset</th>
-        <th>Location</th>
+        <th class="maintenance-location-pdf">Location</th>
         <th>Type</th>
         <th>User</th>
         <th>Description</th>
@@ -10033,13 +10029,12 @@ function maintenanceReportRowHtml(row, rowNumber) {
   return `
     <tr>
       <td>${safe(maintenanceReportDateForDisplay(row.log.date))}</td>
-      <td><strong>${safe(row.assetId)}</strong></td>
-      <td>${safe(assetText || '-')}</td>
-      <td>${safe(row.location || '-')}</td>
+      <td><strong>${safe(row.assetId)}</strong><br>${safe(assetText || '-')}</td>
+      <td class="maintenance-location-pdf">${safe(row.location || '-')}</td>
       <td>${maintenanceLogTypePdfBadgeHtml(row.type)}</td>
       <td>${safe(row.log.user)}</td>
       <td>${safe(row.log.description)}</td>
-      <td>${maintenanceCostDisplayHtml(row.log.cost)}</td>
+      <td class="maintenance-cost-pdf">${maintenanceCostDisplayHtml(row.log.cost)}</td>
       <td>${changesText}</td>
     </tr>
   `;
@@ -10110,7 +10105,7 @@ function buildMaintenanceReportPdfPages(rows, context) {
 
   const rowRecords = rows.length
     ? rows.map((row, index) => ({ html: maintenanceReportRowHtml(row, index + 1), height: 0 }))
-    : [{ html: '<tr><td colspan="9" style="text-align:center;color:#666;padding:18px;">No maintenance records match the selected filters.</td></tr>', height: 0 }];
+    : [{ html: '<tr><td colspan="8" style="text-align:center;color:#666;padding:18px;">No maintenance records match the selected filters.</td></tr>', height: 0 }];
 
   const measureBox = document.createElement('div');
   measureBox.id = '__maintenanceReportMeasureBox';
@@ -10140,6 +10135,9 @@ function buildMaintenanceReportPdfPages(rows, context) {
       #__maintenanceReportMeasureBox .items-table th { background:#333; color:white; padding:6px; text-align:left; font-size:7.8pt; border:1px solid #333; }
       #__maintenanceReportMeasureBox .items-table td { border:1px solid #333; padding:5px; font-size:7.6pt; vertical-align:top; line-height:1.25; word-break:break-word; overflow-wrap:anywhere; }
       #__maintenanceReportMeasureBox .items-table td > span { max-width:100%; white-space:normal !important; overflow-wrap:anywhere; }
+      #__maintenanceReportMeasureBox .maintenance-change-pdf { white-space:normal !important; word-break:normal !important; overflow-wrap:normal !important; }
+      #__maintenanceReportMeasureBox .maintenance-cost-pdf { white-space:nowrap; word-break:normal; overflow-wrap:normal; }
+      #__maintenanceReportMeasureBox .maintenance-location-pdf { padding-left:3px; padding-right:3px; }
       #__maintenanceReportMeasureBox .footer-measure { width:100%; text-align:center; font-size:7pt; font-weight:bold; line-height:1.2; overflow-wrap:anywhere; }
     </style>
     <div id="__maintenanceReportBase">
@@ -10261,6 +10259,9 @@ async function generateMaintenanceReportPdf() {
       .items-table th { background:#333; color:white; padding:6px; text-align:left; font-size:7.8pt; border:1px solid #333; }
       .items-table td { border:1px solid #333; padding:5px; font-size:7.6pt; vertical-align:top; line-height:1.25; word-break:break-word; overflow-wrap:anywhere; }
       .items-table td > span { max-width:100%; white-space:normal !important; overflow-wrap:anywhere; }
+      .items-table .maintenance-change-pdf { white-space:normal !important; word-break:normal !important; overflow-wrap:normal !important; }
+      .items-table .maintenance-cost-pdf { white-space:nowrap; word-break:normal; overflow-wrap:normal; }
+      .items-table .maintenance-location-pdf { padding-left:3px; padding-right:3px; }
       .footer { position:absolute; bottom:7mm; left:7mm; right:7mm; text-align:center; font-size:7pt; font-weight:bold; line-height:1.2; overflow-wrap:anywhere; }
       .page-number { position:absolute; bottom:3mm; right:7mm; font-size:7pt; }
       .print-btn { position:fixed; top:20px; right:20px; background:#667eea; color:white; border:none; padding:10px 18px; border-radius:6px; cursor:pointer; z-index:999; }
@@ -13030,7 +13031,7 @@ function normalizeMaintenanceLogType(value, allowAssetCheck = true) {
 function maintenanceLogTypeSelectHtml(id, selectedType = DEFAULT_MAINTENANCE_LOG_TYPE) {
   const selected = normalizeMaintenanceLogType(selectedType, false);
   return `
-    <select id="${escapeHtmlAttr(id)}" class="form-input">
+    <select id="${escapeHtmlAttr(id)}" class="form-input" data-maintenance-log-type-select="true" onchange="applyMaintenanceLogTypeSelectStyle(this)">
       ${USER_MAINTENANCE_LOG_TYPES.map(type => `
         <option value="${escapeHtmlAttr(type)}"${type === selected ? ' selected' : ''}>${escapeHtml(type)}</option>
       `).join('')}
@@ -13050,6 +13051,39 @@ function maintenanceLogTypeMeta(type) {
   };
   const label = normalized === "Preventative maintenance" ? "Preventative" : normalized;
   return { normalized, label, ...(palette[normalized] || palette.General) };
+}
+
+function applyMaintenanceLogTypeSelectStyle(selectEl) {
+  if (!selectEl) return;
+
+  const palette = {
+    "General": "#6c757d",
+    "Preventative maintenance": "#17a2b8",
+    "Fault": "#dc3545",
+    "Update": "#6f42c1",
+    "Repair": "#d39e00",
+    "Asset check": "#28a745"
+  };
+  const selectedType = normalizeMaintenanceLogType(selectEl.value);
+  const selectedColor = palette[selectedType] || palette.General;
+  selectEl.style.color = selectedColor;
+  selectEl.style.fontWeight = '600';
+  selectEl.style.borderColor = selectedColor;
+
+  Array.from(selectEl.options || []).forEach(option => {
+    const optionType = normalizeMaintenanceLogType(option.value);
+    option.style.color = palette[optionType] || palette.General;
+    option.style.fontWeight = '600';
+  });
+}
+
+function initialiseMaintenanceLogTypeSelects(root = document) {
+  root.querySelectorAll('[data-maintenance-log-type-select="true"]').forEach(selectEl => {
+    applyMaintenanceLogTypeSelectStyle(selectEl);
+    if (selectEl.dataset.logTypeColourBound === 'true') return;
+    selectEl.addEventListener('change', () => applyMaintenanceLogTypeSelectStyle(selectEl));
+    selectEl.dataset.logTypeColourBound = 'true';
+  });
 }
 
 function maintenanceLogTypeBadgeHtml(type) {
@@ -13095,12 +13129,15 @@ function normalizeMaintenanceMedia(media) {
     .filter(item => item.id && item.url);
 }
 
-function maintenanceMediaLinksHtml(media, emptyHtml = '<span style="color:#999;">—</span>') {
+function maintenanceMediaLinksHtml(media, emptyHtml = '<span style="color:#999;">—</span>', options = {}) {
   const items = normalizeMaintenanceMedia(media);
   if (!items.length) return emptyHtml;
 
   let imageCount = 0;
   let videoCount = 0;
+  const allowDelete = Boolean(options.allowDelete && isAdminUser());
+  const assetId = String(options.assetId || '');
+  const logIndex = Number.isInteger(options.logIndex) ? options.logIndex : -1;
 
   return `
     <div style="display:flex;flex-wrap:wrap;gap:6px;">
@@ -13110,13 +13147,26 @@ function maintenanceMediaLinksHtml(media, emptyHtml = '<span style="color:#999;"
           : `Photo ${++imageCount}`;
         const title = item.name || label;
         return `
-          <a
-            class="maintenance-media-link"
+          <span style="display:inline-flex;align-items:center;gap:3px;">
+            <a
+              class="maintenance-media-link"
             href="${escapeHtmlAttr(item.url)}"
             target="_blank"
             rel="noopener"
             title="${escapeHtmlAttr(title)}"
+            onclick="event.stopPropagation()"
           >${escapeHtml(label)}</a>
+            ${allowDelete ? `
+              <button
+                type="button"
+                class="maintenance-media-delete-btn"
+                title="Permanently remove ${escapeHtmlAttr(title)}"
+                aria-label="Permanently remove ${escapeHtmlAttr(title)}"
+                onclick="event.preventDefault(); event.stopPropagation(); deleteMaintenanceMedia('${escapeJs(item.id)}', '${escapeJs(assetId)}', ${logIndex})"
+                style="border:0;background:transparent;color:#dc3545;cursor:pointer;font-size:16px;line-height:1;padding:2px 4px;"
+              >&times;</button>
+            ` : ''}
+          </span>
         `;
       }).join('')}
     </div>
@@ -13303,7 +13353,7 @@ function maintenanceChangeColour(label) {
 
 function maintenanceChangePdfHtml(label) {
   const color = maintenanceChangeColour(label);
-  return `<span style="display:block;margin-bottom:2px;color:${color};font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escapeHtml(label)}</span>`;
+  return `<span class="maintenance-change-pdf" style="display:block;margin-bottom:2px;color:${color};font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${escapeHtml(label)}</span>`;
 }
 
 function getMaintenanceChangeValue(log, kind) {
@@ -16970,6 +17020,7 @@ function openMaintenanceModal() {
   const formEl = document.getElementById('maintenanceForm');
   const logEntryEl = document.getElementById('maintenanceLogEntry');
   const newLocationEl = document.getElementById('maintenanceNewLocation');
+  const newSerialEl = document.getElementById('maintenanceNewSerial');
   const maintenanceDateEl = document.getElementById('maintenanceDate');
   const assetSearchEl = document.getElementById('maintenanceAssetSearch');
   const availableAssetsEl = document.getElementById('availableMaintenanceAssets');
@@ -16998,9 +17049,13 @@ function openMaintenanceModal() {
   // Clear form
   logEntryEl.value = '';
   newLocationEl.value = '';
+  if (newSerialEl) newSerialEl.value = '';
   const maintenanceCostEl = document.getElementById('maintenanceCost');
   if (maintenanceCostEl) maintenanceCostEl.value = '';
-  if (logTypeEl) logTypeEl.value = DEFAULT_MAINTENANCE_LOG_TYPE;
+  if (logTypeEl) {
+    logTypeEl.value = DEFAULT_MAINTENANCE_LOG_TYPE;
+    applyMaintenanceLogTypeSelectStyle(logTypeEl);
+  }
   const maintenanceMediaEl = document.getElementById('maintenanceMediaFiles');
   if (maintenanceMediaEl) maintenanceMediaEl.value = '';
   updateMaintenanceMediaSelection('maintenanceMediaFiles', 'maintenanceMediaFileList');
@@ -17077,23 +17132,32 @@ function searchMaintenanceAssets() {
     const displayId = assetMaintenanceDisplayId(asset);
     const statusBadge = getAssetStatusBadge(asset);
     const locationText = asset.location || 'Store';
+    const serialText = asset.serial || 'N/A';
+    const serialDisplay = asset.serial2
+      ? `${serialText} / ${asset.serial2}`
+      : serialText;
     const quantityText = asset.isBulk
       ? `<span style="color: #666; font-size: 12px; margin-left: 8px;">Qty: ${escapeHtml(String(asset.availableQuantity ?? asset.quantity ?? 1))}/${escapeHtml(String(asset.quantity ?? 1))}</span>`
       : '';
     
     html += `
-      <div style="padding: 12px; border-bottom: 1px solid #f1f1f1; display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: background-color 0.2s;"
+      <div style="padding: 8px 10px; border-bottom: 1px solid #f1f1f1; display: flex; gap: 12px; align-items: center; cursor: pointer; transition: background-color 0.2s;"
            onmouseover="this.style.backgroundColor='#f8f9fa'" 
            onmouseout="this.style.backgroundColor='white'"
            onclick="selectAssetForMaintenance('${escapeJs(assetId)}')">
-        <div style="flex: 1;">
-          <div style="font-weight: 500; margin-bottom: 4px;">${escapeHtml(displayId)}${asset.isBulk ? ' <span class="asset-badge status-available">Bulk Item</span>' : ''}${quantityText}</div>
-          <div style="color: #666; font-size: 13px; margin-bottom: 2px;">${asset.brand} ${asset.model}</div>
-          <div style="color: #999; font-size: 12px;">${escapeJs(asset.description || '')}</div>
-          <div style="margin-top: 4px;">
-            ${statusBadge}
-            <span style="color: #999; font-size: 11px; margin-left: 8px;">📍 ${locationText}</span>
+        <div style="flex: 1 1 300px; min-width: 0;">
+          <div style="font-weight: 500; margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(displayId)}${asset.isBulk ? ' <span class="asset-badge status-available">Bulk Item</span>' : ''}${quantityText}</div>
+          <div
+            style="color: #666; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"
+            title="${escapeHtmlAttr(`${asset.brand || ''} ${asset.model || ''}${asset.description ? ` — ${asset.description}` : ''}`.trim())}"
+          >
+            <strong>${escapeHtml(`${asset.brand || ''} ${asset.model || ''}`.trim())}</strong>${asset.description ? ` <span style="color:#999;">— ${escapeHtml(asset.description)}</span>` : ''}
           </div>
+        </div>
+        <div style="flex: 0 1 auto; min-width: 0; display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 5px 10px; font-size: 11px;">
+          <span style="color: #555; white-space: nowrap;" title="Serial number"><strong>S/N:</strong> ${escapeHtml(String(serialDisplay))}</span>
+          ${statusBadge}
+          <span style="color: #777; white-space: nowrap;">📍 ${escapeHtml(locationText)}</span>
         </div>
         <button class="btn btn-primary" style="padding: 6px 12px; font-size: 12px;" onclick="event.stopPropagation(); selectAssetForMaintenance('${escapeJs(assetId)}')">
           Select
@@ -17587,7 +17651,11 @@ function openBulkMaintenanceFaultEditModal(assetId, faultKey, logNumber) {
         <form id="bulkMaintenanceFaultEditForm">
           <div style="background:#f8f9fa;border:1px solid #e9ecef;border-radius:8px;padding:12px;margin-bottom:16px;">
             <div><strong>Quantity:</strong> 1</div>
-            <div><strong>Current Media:</strong> ${maintenanceMediaLinksHtml(report.media)}</div>
+            <div><strong>Current Media:</strong> ${maintenanceMediaLinksHtml(
+              report.media,
+              '<span style="color:#999;">—</span>',
+              { allowDelete: isAdminUser(), assetId }
+            )}</div>
           </div>
           <div class="form-group">
             <label class="form-label" for="bulkFaultEditDescription">Maintenance Log Entry</label>
@@ -17670,7 +17738,7 @@ async function submitBulkMaintenanceFaultEdit(assetId, faultKey) {
   }
 }
 
-function bulkMaintenanceReportHtml(report, emptyText = 'Not resolved') {
+function bulkMaintenanceReportHtml(report, emptyText = 'Not resolved', options = {}) {
   if (!report) {
     return `<div style="color:#6c757d;font-style:italic;">${escapeHtml(emptyText)}</div>`;
   }
@@ -17683,7 +17751,7 @@ function bulkMaintenanceReportHtml(report, emptyText = 'Not resolved') {
         ${maintenanceLogTypeBadgeHtml(report.type)}
       </div>
       <div style="white-space:pre-wrap;line-height:1.4;">${escapeHtml(report.description || '')}</div>
-      <div>${maintenanceMediaLinksHtml(report.media)}</div>
+      <div>${maintenanceMediaLinksHtml(report.media, '<span style="color:#999;">—</span>', options)}</div>
       ${report.cost ? `<div style="font-size:13px;color:#666;">Cost: ${maintenanceCostDisplayHtml(report.cost)}</div>` : ''}
     </div>
   `;
@@ -17731,12 +17799,18 @@ function showBulkMaintenanceLogModal(asset) {
             onclick="openBulkMaintenanceFaultEditModal('${escapeJs(assetId)}', '${escapeJs(row.key || row.id)}', '${escapeJs(String(row.logNumber || ''))}')"
             style="cursor:pointer;border:1px solid transparent;border-radius:8px;padding:8px;margin:-8px;"
           >
-            ${bulkMaintenanceReportHtml(row.fault, 'No fault report')}
+            ${bulkMaintenanceReportHtml(
+              row.fault,
+              'No fault report'
+            )}
             <div style="margin-top:8px;color:#667eea;font-size:12px;font-weight:700;">Edit fault report</div>
           </div>
         </td>
         <td style="padding:14px;border-bottom:1px solid #e9ecef;vertical-align:top;">
-          ${bulkMaintenanceReportHtml(row.resolution)}
+            ${bulkMaintenanceReportHtml(
+              row.resolution,
+              'Not resolved'
+            )}
           ${resolveButton ? `<div style="margin-top:12px;">${resolveButton}</div>` : ''}
         </td>
       </tr>
@@ -17760,7 +17834,10 @@ function showBulkMaintenanceLogModal(asset) {
               <td style="padding:9px;border-bottom:1px solid #e5edf8;white-space:nowrap;">${escapeHtml(log.date)}</td>
               <td style="padding:9px;border-bottom:1px solid #e5edf8;">${maintenanceLogOriginBadgeHtml(log)}</td>
               <td style="padding:9px;border-bottom:1px solid #e5edf8;">${escapeHtml(log.description)}</td>
-              <td style="padding:9px;border-bottom:1px solid #e5edf8;">${maintenanceMediaLinksHtml(log.media)}</td>
+              <td style="padding:9px;border-bottom:1px solid #e5edf8;">${maintenanceMediaLinksHtml(
+                log.media,
+                '<span style="color:#999;">—</span>'
+              )}</td>
             </tr>
           `).join('')}
         </tbody>
@@ -17928,6 +18005,130 @@ async function submitBulkMaintenanceResolution(assetId, faultKey) {
 }
 
 
+function maintenanceMediaGalleryHtml(media) {
+  const items = normalizeMaintenanceMedia(media);
+  if (!items.length) {
+    return '<div style="color:#6c757d;font-style:italic;">No media attached</div>';
+  }
+
+  return `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;">
+      ${items.map(item => {
+        const name = item.name || (item.kind === 'video' ? 'Video' : 'Photo');
+        const preview = item.kind === 'video'
+          ? `
+            <video
+              controls
+              preload="metadata"
+              src="${escapeHtmlAttr(item.url)}"
+              style="display:block;width:100%;max-height:320px;border-radius:8px;background:#111;"
+            ></video>
+          `
+          : `
+            <a href="${escapeHtmlAttr(item.url)}" target="_blank" rel="noopener" title="Open ${escapeHtmlAttr(name)}">
+              <img
+                src="${escapeHtmlAttr(item.url)}"
+                alt="${escapeHtmlAttr(name)}"
+                loading="lazy"
+                style="display:block;width:100%;height:220px;object-fit:contain;border-radius:8px;background:#f8f9fa;"
+              />
+            </a>
+          `;
+        return `
+          <div style="min-width:0;padding:10px;border:1px solid #e1e5ec;border-radius:10px;background:white;">
+            ${preview}
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:8px;">
+              <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:#555;" title="${escapeHtmlAttr(name)}">${escapeHtml(name)}</span>
+              <a class="maintenance-media-link" href="${escapeHtmlAttr(item.url)}" target="_blank" rel="noopener">Open</a>
+            </div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+}
+
+function closeMaintenanceLogDetailModal() {
+  document.getElementById('maintenanceLogDetailModal')?.remove();
+}
+
+function viewMaintenanceLogDetail(assetId, logIndex) {
+  const asset = getAssetByApiIdentifier(assetId);
+  const records = getMaintenanceLogRecords(asset || {});
+  const log = records[logIndex];
+  if (!asset || !log) {
+    showNotification('error', 'Maintenance log not found');
+    return;
+  }
+
+  closeMaintenanceLogDetailModal();
+  const changes = getMaintenanceChangeLabels(log.changes);
+  const canEdit = canCurrentUserModifyMaintenanceLog(log);
+  const safeAssetId = getAssetIdentifierForApi(asset);
+  const logId = `log_${String(safeAssetId).replace(/[^a-zA-Z0-9]/g, '_')}_${logIndex}`;
+
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="modal" id="maintenanceLogDetailModal" style="display:flex;align-items:center;justify-content:center;z-index:1200;">
+      <div class="modal-content" style="max-width:900px;width:94%;max-height:92vh;overflow-y:auto;">
+        <div class="modal-header">
+          <div>
+            <h3 class="modal-title" style="margin-bottom:4px;">Maintenance Log - ${escapeHtml(safeAssetId)}</h3>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;color:#6c757d;font-size:13px;">
+              <span>${escapeHtml(log.date || '')}</span>
+              <span>by ${escapeHtml(log.user || '')}</span>
+              ${maintenanceLogTypeBadgeHtml(log.type)}
+              ${maintenanceLogOriginBadgeHtml(log)}
+            </div>
+          </div>
+          <button type="button" class="close-btn" onclick="closeMaintenanceLogDetailModal()">&times;</button>
+        </div>
+
+        <div class="modal-body">
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:18px;">
+            <div style="padding:12px;border:1px solid #e9ecef;border-radius:8px;background:#f8f9fa;">
+              <div style="font-size:11px;color:#777;text-transform:uppercase;margin-bottom:4px;">Cost</div>
+              <div style="font-weight:600;">${maintenanceCostDisplayHtml(log.cost, '—')}</div>
+            </div>
+            <div style="padding:12px;border:1px solid #e9ecef;border-radius:8px;background:#f8f9fa;">
+              <div style="font-size:11px;color:#777;text-transform:uppercase;margin-bottom:4px;">Changes</div>
+              <div style="font-weight:600;">${changes.length ? changes.map(change => escapeHtml(change)).join('<br>') : 'No changes'}</div>
+            </div>
+          </div>
+
+          <div style="margin-bottom:20px;">
+            <h4 style="margin:0 0 8px;color:#495057;">Maintenance Log Entry</h4>
+            <div style="white-space:pre-wrap;overflow-wrap:anywhere;padding:16px;border:1px solid #e1e5ec;border-radius:10px;background:#fff;line-height:1.55;">${escapeHtml(log.description || '')}</div>
+          </div>
+
+          <div>
+            <h4 style="margin:0 0 10px;color:#495057;">Photos / Videos</h4>
+            ${maintenanceMediaGalleryHtml(log.media)}
+          </div>
+        </div>
+
+        <div class="modal-actions" style="display:flex;justify-content:flex-end;gap:10px;margin-top:20px;">
+          <button type="button" class="btn btn-secondary" onclick="closeMaintenanceLogDetailModal()">Close</button>
+          ${canEdit ? `
+            <button
+              type="button"
+              class="btn btn-primary"
+              onclick="closeMaintenanceLogDetailModal(); editMaintenanceLog('${escapeJs(safeAssetId)}', ${logIndex}, '${escapeJs(logId)}')"
+            >Edit Log</button>
+          ` : ''}
+        </div>
+      </div>
+    </div>
+  `);
+
+  const modal = document.getElementById('maintenanceLogDetailModal');
+  modal?.addEventListener('click', event => {
+    if (event.target === modal) closeMaintenanceLogDetailModal();
+  });
+  enhanceModalAccessibility(modal);
+  focusModalStart(modal);
+}
+
+
 function showMaintenanceLogModal(asset) {
   if (asset?.isBulk) {
     showBulkMaintenanceLogModal(asset);
@@ -17997,7 +18198,7 @@ function showMaintenanceLogModal(asset) {
                     <th style="padding: 12px; font-weight: 600; color: #495057; border-bottom: 2px solid #e9ecef; text-align: left; background: #f8f9fa; width: 150px;">Media</th>
                     <th style="padding: 12px; font-weight: 600; color: #495057; border-bottom: 2px solid #e9ecef; text-align: left; background: #f8f9fa; width: 110px;">Cost</th>
                     <th style="padding: 12px; font-weight: 600; color: #495057; border-bottom: 2px solid #e9ecef; text-align: left; background: #f8f9fa; width: 200px;">Status Changes</th>
-                    <th style="padding: 12px; font-weight: 600; color: #495057; border-bottom: 2px solid #e9ecef; width: 50px; text-align: center; background: #f8f9fa;"></th>
+                    <th style="padding: 12px; font-weight: 600; color: #495057; border-bottom: 2px solid #e9ecef; width: 82px; text-align: center; background: #f8f9fa;"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -18089,18 +18290,28 @@ function showMaintenanceLogModal(asset) {
       const canEditThisLog = canCurrentUserModifyMaintenanceLog(log);
       const containerOrigin = isContainerMaintenanceLog(log);
       const canDeleteThisLog = isAdminUser() && !containerOrigin;
-      const descriptionAttrs = canEditThisLog
-        ? `style="display: block; cursor: pointer;" onclick="editMaintenanceLog('${asset.id}', ${log.originalIndex}, '${logId}')" title="Edit this maintenance log"`
-        : `style="display: block; cursor: default;" title="${containerOrigin ? 'This historical log is managed through its container' : 'Normal users can only edit their own logs within 7 days'}"`;
+      const editButtonHtml = canEditThisLog ? `
+            <button
+              type="button"
+              style="background:none;border:none;color:#4c5fd7;cursor:pointer;font-size:17px;padding:4px;border-radius:3px;line-height:1;width:26px;height:26px;"
+              title="Edit this maintenance log"
+              aria-label="Edit this maintenance log"
+              onclick="event.preventDefault(); event.stopPropagation(); editMaintenanceLog('${escapeJs(asset.id)}', ${log.originalIndex}, '${escapeJs(logId)}')"
+              onmouseover="this.style.backgroundColor='#eef1ff'"
+              onmouseout="this.style.backgroundColor='transparent'"
+            >✎</button>
+      ` : '';
       const deleteButtonHtml = canDeleteThisLog ? `
             <button 
               type="button"
               class="delete-log-btn" 
-              data-asset-id="${asset.id}"
+              data-asset-id="${escapeHtmlAttr(asset.id)}"
               data-log-index="${log.originalIndex}"
-              data-log-id="${logId}"
+              data-log-id="${escapeHtmlAttr(logId)}"
               style="background: none; border: none; color: #dc3545; cursor: pointer; font-size: 16px; padding: 4px; border-radius: 3px; line-height: 1; width: 24px; height: 24px;"
               title="Delete this maintenance log"
+              aria-label="Delete this maintenance log"
+              onclick="event.preventDefault(); event.stopPropagation(); deleteMaintenanceLog('${escapeJs(asset.id)}', ${log.originalIndex}, '${escapeJs(logId)}')"
               onmouseover="this.style.backgroundColor='#ffebee'"
               onmouseout="this.style.backgroundColor='transparent'">
               ×
@@ -18108,7 +18319,16 @@ function showMaintenanceLogModal(asset) {
       ` : '';
 
       modalContent += `
-        <tr style="border-bottom: 1px solid #f1f1f1;">
+        <tr
+          role="button"
+          tabindex="0"
+          title="View maintenance log"
+          style="border-bottom:1px solid #f1f1f1;cursor:pointer;transition:background-color .15s ease;"
+          onclick="viewMaintenanceLogDetail('${escapeJs(asset.id)}', ${log.originalIndex})"
+          onkeydown="if(event.key === 'Enter' || event.key === ' '){ event.preventDefault(); viewMaintenanceLogDetail('${escapeJs(asset.id)}', ${log.originalIndex}); }"
+          onmouseover="this.style.backgroundColor='#f8f9fa'"
+          onmouseout="this.style.backgroundColor='transparent'"
+        >
           <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; vertical-align: top; font-weight: 500; text-align: center;">${displayNumber}</td>
           <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; vertical-align: top; font-size: 13px;">${log.date}</td>
           <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; vertical-align: top; font-size: 13px;">${escapeHtml(log.user)}</td>
@@ -18117,7 +18337,7 @@ function showMaintenanceLogModal(asset) {
             ${maintenanceLogOriginBadgeHtml(log)}
           </td>
           <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; vertical-align: top;">
-            <div id="${logId}_display" ${descriptionAttrs}>
+            <div id="${logId}_display" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;white-space:normal;">
               ${escapeHtml(log.description)}
             </div>
           </td>
@@ -18131,7 +18351,10 @@ function showMaintenanceLogModal(asset) {
             ${statusChangesDisplay}
           </td>
           <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; vertical-align: top; text-align: center;">
-            ${deleteButtonHtml}
+            <div style="display:flex;justify-content:center;align-items:center;gap:2px;">
+              ${editButtonHtml}
+              ${deleteButtonHtml}
+            </div>
           </td>
         </tr>
       `;
@@ -18286,6 +18509,8 @@ async function loadAssetEventHistory(assetId, containerId) {
 
 if (typeof window !== 'undefined') {
   window.showMaintenanceLogModal = showMaintenanceLogModal;
+  window.viewMaintenanceLogDetail = viewMaintenanceLogDetail;
+  window.closeMaintenanceLogDetailModal = closeMaintenanceLogDetailModal;
 }
 
 //WHAT IS LOVE, BABY DONT HURT ME, DONT HURT ME NO MOREEE
@@ -18382,6 +18607,45 @@ async function deleteMaintenanceLog(assetId, logIndex, logId) {
   } catch (error) {
     console.error('Error deleting maintenance log:', error);
     showNotification('error', `Failed to delete maintenance log: ${error.message}`);
+  }
+}
+
+async function deleteMaintenanceMedia(mediaId, assetId = '', logIndex = -1) {
+  if (!isAdminUser()) {
+    showNotification('error', 'Admin privileges required to remove maintenance media');
+    return;
+  }
+
+  const shouldDelete = await showCustomConfirm(
+    'Remove Maintenance Media',
+    'Are you sure you want to permanently delete this photo or video? This action cannot be undone.'
+  );
+  if (!shouldDelete) return;
+
+  try {
+    await apiCall(`/api/maintenance-media/${encodeURIComponent(mediaId)}`, 'DELETE');
+    showNotification('success', 'Maintenance media permanently deleted');
+
+    const assetsResponse = await apiCall('/api/assets');
+    if (assetsResponse?.success) {
+      assets = assetsResponse.data;
+    }
+
+    const updatedAsset = assetId ? getAssetByApiIdentifier(assetId) : null;
+    const editModalWasOpen = Boolean(document.getElementById('editMaintenanceLogModal'));
+    if (updatedAsset?.isBulk) {
+      closeBulkMaintenanceFaultEditModal();
+      closeBulkMaintenanceResolutionModal();
+      if (document.getElementById('maintenanceLogModal')) {
+        showMaintenanceLogModal(updatedAsset);
+      }
+    } else if (updatedAsset && editModalWasOpen && logIndex >= 0) {
+      editMaintenanceLog(getAssetIdentifierForApi(updatedAsset), logIndex, '');
+    } else if (updatedAsset && document.getElementById('maintenanceLogModal')) {
+      showMaintenanceLogModal(updatedAsset);
+    }
+  } catch (error) {
+    showNotification('error', `Failed to remove maintenance media: ${error.message}`);
   }
 }
 
@@ -18623,7 +18887,7 @@ function editMaintenanceLog(assetId, logIndex, logId) {
   // Create the enhanced edit modal
   const modalContent = `
     <div class="modal" id="editMaintenanceLogModal" style="display: flex; align-items: center; justify-content: center; z-index: 1100;">
-      <div class="modal-content maintenance-edit-content" style="max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto;">
+      <div class="modal-content maintenance-edit-content" style="max-width: 900px; width: 94%; max-height: 94vh; overflow-y: auto;">
         <div class="modal-header">
           <h3 class="modal-title">Edit Maintenance Log - ${assetId}</h3>
           <button class="close-btn" onclick="cancelEditMaintenanceLogModal()">&times;</button>
@@ -18650,45 +18914,68 @@ function editMaintenanceLog(assetId, logIndex, logId) {
           </div>
 
           <form id="editMaintenanceLogForm">
-            <!-- Date -->
-            <div class="form-group">
-              <label class="form-label">Maintenance Date</label>
-              <input
-                type="date"
-                class="form-input"
-                id="editMaintenanceDate"
-                value="${dateForInput}"
-                required
-              />
-            </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:12px;align-items:start;margin-bottom:16px;">
+              <div class="form-group" style="margin-bottom:0;">
+                <label class="form-label" for="editMaintenanceLogType">Maintenance Log Type</label>
+                ${
+                  currentLogType === ASSET_CHECK_MAINTENANCE_LOG_TYPE
+                    ? `<input type="text" class="form-input" id="editMaintenanceLogType" value="${escapeHtmlAttr(ASSET_CHECK_MAINTENANCE_LOG_TYPE)}" readonly style="color:#28a745;border-color:#28a745;font-weight:600;" />`
+                    : maintenanceLogTypeSelectHtml('editMaintenanceLogType', currentLogType)
+                }
+              </div>
 
-            <!-- User -->
-            <div class="form-group">
-              <label class="form-label">User</label>
-              <input
-                type="text"
-                class="form-input"
-                id="editMaintenanceUser"
-                value="${escapeHtml(currentUser)}"
-                required
-                ${isAdminUser() ? '' : 'readonly'}
-                placeholder="Enter username"
-              />
-            </div>
+              <div class="form-group" style="margin-bottom:0;">
+                <label class="form-label" for="editMaintenanceAssetStatus">Asset Status</label>
+                ${maintenanceStatusSelectHtml('editMaintenanceAssetStatus', 'editAssetStatus', defaultStatusValue)}
+              </div>
 
-            <!-- Type -->
-            <div class="form-group">
-              <label class="form-label" for="editMaintenanceLogType">Maintenance Log Type</label>
-              ${
-                currentLogType === ASSET_CHECK_MAINTENANCE_LOG_TYPE
-                  ? `<input type="text" class="form-input" id="editMaintenanceLogType" value="${escapeHtmlAttr(ASSET_CHECK_MAINTENANCE_LOG_TYPE)}" readonly />`
-                  : maintenanceLogTypeSelectHtml('editMaintenanceLogType', currentLogType)
-              }
-            </div>
+              <div class="form-group" style="margin-bottom:0;">
+                <label class="form-label" for="editMaintenanceDate">Maintenance Date</label>
+                <input
+                  type="date"
+                  class="form-input"
+                  id="editMaintenanceDate"
+                  value="${dateForInput}"
+                  required
+                />
+              </div>
 
-            <!-- Description -->
+              <div class="form-group" style="margin-bottom:0;">
+                <label class="form-label" for="editMaintenanceCost">Cost (optional)</label>
+                <div style="position:relative;width:100%;min-width:0;">
+                  <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#495057;font-weight:600;pointer-events:none;">$</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    class="form-input maintenance-cost-input"
+                    id="editMaintenanceCost"
+                    placeholder="Repair cost"
+                    value="${escapeHtml(formatMaintenanceCost(logEntry.cost))}"
+                    style="padding-left:38px !important;"
+                  />
+                </div>
+              </div>
+
+              <div class="form-group" style="margin-bottom:0;">
+                <label class="form-label" for="editMaintenanceUser">User</label>
+                <input
+                  type="text"
+                  class="form-input"
+                  id="editMaintenanceUser"
+                  value="${escapeHtml(currentUser)}"
+                  required
+                  ${isAdminUser() ? '' : 'readonly'}
+                  placeholder="Enter username"
+                />
+              </div>
+            </div>
+            <small style="color:#666;font-size:12px;margin:-8px 0 16px;display:block;">
+              Assets can only have one status.
+            </small>
+
             <div class="form-group">
-              <label class="form-label">Maintenance Description</label>
+              <label class="form-label" for="editMaintenanceDescription">Maintenance Log Entry</label>
               <textarea
                 class="form-input"
                 id="editMaintenanceDescription"
@@ -18699,12 +18986,18 @@ function editMaintenanceLog(assetId, logIndex, logId) {
             </div>
 
             <div class="form-group">
-              <label class="form-label">Attached Media</label>
-              ${maintenanceMediaLinksHtml(logEntry.media, '<span style="color:#6c757d;font-size:13px;">No media attached</span>')}
-            </div>
-
-            <div class="form-group">
-              <label class="form-label" for="editMaintenanceMediaFiles">Add Photos / Videos</label>
+              <label class="form-label" for="editMaintenanceMediaFiles">Photos / Videos (optional)</label>
+              <div style="margin-bottom:8px;">
+                ${maintenanceMediaLinksHtml(
+                  logEntry.media,
+                  '<span style="color:#6c757d;font-size:13px;">No media attached</span>',
+                  {
+                    allowDelete: isAdminUser(),
+                    assetId,
+                    logIndex
+                  }
+                )}
+              </div>
               <input
                 type="file"
                 class="form-input"
@@ -18715,52 +19008,28 @@ function editMaintenanceLog(assetId, logIndex, logId) {
               <div id="editMaintenanceMediaFileList" class="maintenance-media-selection"></div>
             </div>
 
-            <!-- Repair Cost -->
-            <div class="form-group">
-              <label class="form-label">Cost (optional)</label>
-              <div style="display:flex;align-items:center;border:2px solid #e9ecef;border-radius:8px;background:white;overflow:hidden;">
-                <span style="padding:12px 0 12px 12px;color:#495057;font-weight:600;">$</span>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-bottom:16px;">
+              <div class="form-group" style="margin-bottom:0;">
+                <label class="form-label" for="editMaintenanceNewLocation">New Location (optional)</label>
                 <input
-                  type="number"
-                  min="0"
-                  step="0.01"
+                  type="text"
                   class="form-input"
-                  id="editMaintenanceCost"
-                  placeholder="Repair cost, if any"
-                  value="${escapeHtml(formatMaintenanceCost(logEntry.cost))}"
-                  style="border:0;box-shadow:none;"
+                  id="editMaintenanceNewLocation"
+                  placeholder="Leave blank to keep ${hasLocationChangeInThisLog ? 'location from this log (' + escapeHtml(logLocationFromThisEntry || 'Store') + ')' : 'no location change'}"
+                  value="${hasLocationChangeInThisLog ? escapeHtml(logLocationFromThisEntry || '') : ''}"
                 />
               </div>
-            </div>
 
-            <!-- New Location -->
-            <div class="form-group">
-              <label class="form-label">Update Location (optional)</label>
-              <input
-                type="text"
-                class="form-input"
-                id="editMaintenanceNewLocation"
-                placeholder="Leave blank to keep ${hasLocationChangeInThisLog ? 'location from this log (' + escapeHtml(logLocationFromThisEntry || 'Store') + ')' : 'no location change'}"
-                value="${hasLocationChangeInThisLog ? escapeHtml(logLocationFromThisEntry || '') : ''}"
-              />
-            </div>
-
-            <!-- New Serial -->
-            <div class="form-group">
-              <label class="form-label">Update Serial Number (optional)</label>
-              <input
-                type="text"
-                class="form-input"
-                id="editMaintenanceNewSerial"
-                placeholder="Leave blank to keep current serial (${escapeHtml(asset.serial || 'N/A')})"
-                value=""
-              />
-            </div>    
-
-            <!-- Asset Status Changes -->
-            <div class="form-group">
-              <label class="form-label" for="editMaintenanceAssetStatus">Asset Status</label>
-              ${maintenanceStatusSelectHtml('editMaintenanceAssetStatus', 'editAssetStatus', defaultStatusValue)}
+              <div class="form-group" style="margin-bottom:0;">
+                <label class="form-label" for="editMaintenanceNewSerial">New Serial Number (optional)</label>
+                <input
+                  type="text"
+                  class="form-input"
+                  id="editMaintenanceNewSerial"
+                  placeholder="Leave blank to keep current serial (${escapeHtml(asset.serial || 'N/A')})"
+                  value=""
+                />
+              </div>
             </div>
 
             <!-- Form Buttons -->
@@ -18810,6 +19079,7 @@ function editMaintenanceLog(assetId, logIndex, logId) {
   enhanceModalAccessibility(modal);
   focusModalStart(modal);
   initialiseMaintenanceStatusSelects(modal);
+  initialiseMaintenanceLogTypeSelects(modal);
   const editMediaInput = document.getElementById('editMaintenanceMediaFiles');
   if (editMediaInput) {
     editMediaInput.addEventListener('change', () => {
@@ -22474,6 +22744,7 @@ document.addEventListener('DOMContentLoaded', function() {
     enhanceModalAccessibility();
     setupSingleAssetClickHandler();
     initialiseMaintenanceStatusSelects();
+    initialiseMaintenanceLogTypeSelects();
 });
 
 // --- Client directory helpers ---
@@ -22927,12 +23198,13 @@ function ensureEventListViewStyles() {
       background: var(--event-state, #16a34a) !important;
     }
     .events-workflow-card { container-type: inline-size; }
-    .event-workflow-progress { min-width: 0; gap: 12px; }
-    .event-progress-summary { flex-basis: 68px; min-width: 0; }
+    .event-workflow-progress { min-width: 0; gap: 8px; }
+    .event-progress-summary { flex-basis: 82px; min-width: 0; }
+    .event-progress-value { font-size: .95rem; white-space: nowrap; }
     .event-department-progress { min-width: 0; overflow: hidden; }
     .event-department-row {
-      grid-template-columns: minmax(0, 52px) minmax(20px, 1fr) max-content;
-      column-gap: 4px;
+      grid-template-columns: minmax(0, 42px) minmax(18px, 1fr) max-content;
+      column-gap: 2px;
       min-width: 0;
       width: 100%;
     }
@@ -23405,22 +23677,103 @@ function eventDepartmentProgress(event) {
   const phaseUsesOut = ['Ongoing', 'Last Day'].includes(event.state);
   const totals = new Map();
 
+  const addProgress = (department, done, total) => {
+    const code = normalizeDepartmentCode(department || 'UN');
+    const current = totals.get(code) || { code, done: 0, total: 0 };
+    current.done += Math.max(0, Number(done || 0));
+    current.total += Math.max(0, Number(total || 0));
+    totals.set(code, current);
+  };
+
   Object.values(event.modelGroups || {}).forEach(group => {
     const code = normalizeDepartmentCode(group.department || 'UN');
-    const current = totals.get(code) || { code, done: 0, total: 0 };
     const required = Math.max(0, Number(group.requiredQuantity || 0));
     const prepared = Math.max(0, Number(group.countablePreparedQuantity ?? getCountablePreparedQuantity(group) ?? 0));
     const returned = Math.max(0, Number(group.countableReturnedQuantity || 0));
-    current.total += required;
-    current.done += phaseUsesReturns ? returned : (phaseUsesOut ? Math.max(prepared - returned, 0) : prepared);
-    totals.set(code, current);
+    addProgress(code, phaseUsesReturns ? returned : (phaseUsesOut ? Math.max(prepared - returned, 0) : prepared), required);
   });
 
-  if (!totals.size) {
-    const progress = eventOverviewProgress(event);
-    totals.set('UN', { code: 'UN', done: progress.done, total: progress.total });
+  const returnedRefs = new Set(event.returnedItems || []);
+  const preparedRefs = new Set([
+    ...(event.actuallyPrepared || []),
+    ...(event.returnableRefs || [])
+  ]);
+  const collectedRefs = new Set(event.customCollected || []);
+  const seenCustomRefs = new Set();
+
+  (event.preparedItems || []).forEach(ref => {
+    const custom = parseCustomAsset(ref);
+    if (!custom || seenCustomRefs.has(ref)) return;
+    seenCustomRefs.add(ref);
+
+    const quantity = Math.max(1, Number(custom.quantity || 1));
+    const isReturned = returnedRefs.has(ref);
+    const isPrepared = preparedRefs.has(ref);
+    const isCollectedLoan = custom.type === 'LOAN' && collectedRefs.has(ref);
+    let done = 0;
+
+    if (phaseUsesReturns) {
+      done = isReturned ? quantity : 0;
+    } else if (phaseUsesOut) {
+      done = !isReturned && (isPrepared || isCollectedLoan) ? quantity : 0;
+    } else if (event.state !== 'Added') {
+      done = (isPrepared || isReturned || isCollectedLoan) ? quantity : 0;
+    }
+
+    addProgress(custom.department || 'UN', done, quantity);
+  });
+
+  const overviewProgress = eventOverviewProgress(event);
+  let accountedTotal = [...totals.values()].reduce((sum, row) => sum + row.total, 0);
+  let remainingTotal = Math.max(overviewProgress.total - accountedTotal, 0);
+
+  // Required totals deliberately exclude manual extras. When the event-level
+  // progress includes those deployed extras, add them back to their department.
+  if (remainingTotal > 0) {
+    Object.values(event.modelGroups || {}).forEach(group => {
+      if (remainingTotal <= 0) return;
+      const assigned = Math.max(0, Number(group.assignedQuantity || 0));
+      const countableAssigned = Math.max(0, Number(group.countableAssignedQuantity || 0));
+      const extraTotal = Math.max(assigned - countableAssigned, 0);
+      if (!extraTotal) return;
+
+      const returned = Math.max(0, Number(group.returnedQuantity || 0));
+      const countableReturned = Math.max(0, Number(group.countableReturnedQuantity || 0));
+      const prepared = Math.max(0, Number(group.preparedQuantity || 0));
+      const countablePrepared = Math.max(0, Number(group.countablePreparedQuantity || 0));
+      const quantity = Math.min(extraTotal, remainingTotal);
+      const extraDone = phaseUsesReturns
+        ? Math.max(returned - countableReturned, 0)
+        : Math.max(prepared - countablePrepared, 0);
+
+      addProgress(group.department || 'UN', Math.min(extraDone, quantity), quantity);
+      remainingTotal -= quantity;
+    });
   }
-  return [...totals.values()].sort((a, b) => b.total - a.total).slice(0, 4);
+
+  if (remainingTotal > 0) {
+    addProgress('UN', 0, remainingTotal);
+  }
+
+  if (!totals.size) {
+    totals.set('UN', { code: 'UN', done: overviewProgress.done, total: overviewProgress.total });
+  }
+
+  const rows = [...totals.values()]
+    .filter(row => row.total > 0)
+    .map(row => ({ ...row, done: Math.min(row.done, row.total) }))
+    .sort((a, b) => b.total - a.total);
+
+  if (rows.length <= 4) return rows;
+
+  const visible = rows.slice(0, 3);
+  const remainder = rows.slice(3).reduce((combined, row) => ({
+    code: 'OTHER',
+    label: 'Other',
+    done: combined.done + row.done,
+    total: combined.total + row.total
+  }), { code: 'OTHER', label: 'Other', done: 0, total: 0 });
+  return [...visible, remainder];
 }
 
 function eventOverviewNotice(event, progress) {
@@ -23595,7 +23948,7 @@ function createEventsOverviewCard(event) {
     const done = Math.max(0, Number(row.done || 0));
     const pct = total ? Math.min(100, Math.round((done / total) * 100)) : 0;
     const meta = getDepartmentMeta(row.code);
-    const label = meta.name || meta.code || row.code;
+    const label = row.label || meta.name || meta.code || row.code;
     return `
       <div class="event-department-row" title="${escapeHtmlAttr(label)}">
         <span>${escapeHtml(label)}</span>

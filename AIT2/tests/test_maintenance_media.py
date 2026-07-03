@@ -58,6 +58,25 @@ class MaintenanceMediaTests(unittest.TestCase):
             session['user'] = username
             session['is_admin'] = is_admin
 
+    def upload_media(self):
+        encoded_asset_id = quote(self.asset_id, safe='')
+        response = self.client.post(
+            f'/api/assets/{encoded_asset_id}/maintain',
+            data={
+                'logEntry': 'Attached diagnostic photo',
+                'maintenanceDate': datetime.now().strftime('%Y-%m-%d'),
+                'logType': 'Repair',
+                'assetStatus': 'nochange',
+                'media': (io.BytesIO(b'png-bytes'), 'diagnostic photo.png'),
+            },
+            content_type='multipart/form-data',
+        )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        log = normalize_maintenance_log(
+            self.data_manager.inventory[self.asset_id].maintenance_logs[0]
+        )
+        return log['media'][0]
+
     def test_maintenance_media_is_preserved_on_edit_and_deleted_with_log(self):
         self.login_as('normal')
         encoded_asset_id = quote(self.asset_id, safe='')
@@ -115,6 +134,42 @@ class MaintenanceMediaTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
         self.assertFalse(os.path.exists(media_path))
         self.assertEqual(self.data_manager.inventory[self.asset_id].maintenance_logs, [])
+
+    def test_only_admin_can_permanently_remove_individual_media(self):
+        self.login_as('normal')
+        media = self.upload_media()
+        media_path = os.path.join(self.tempdir.name, media['path'])
+        media_url = f"/api/maintenance-media/{quote(media['id'], safe='')}"
+
+        forbidden = self.client.delete(media_url)
+
+        self.assertEqual(forbidden.status_code, 403)
+        self.assertTrue(os.path.exists(media_path))
+        retained_log = normalize_maintenance_log(
+            self.data_manager.inventory[self.asset_id].maintenance_logs[0]
+        )
+        self.assertEqual([item['id'] for item in retained_log['media']], [media['id']])
+
+        self.login_as('admin', is_admin=True)
+        deleted = self.client.delete(media_url)
+
+        self.assertEqual(deleted.status_code, 200, deleted.get_data(as_text=True))
+        self.assertEqual(deleted.get_json()['deletedReferenceCount'], 1)
+        self.assertTrue(deleted.get_json()['fileDeleted'])
+        self.assertFalse(os.path.exists(media_path))
+
+        remaining_log = normalize_maintenance_log(
+            self.data_manager.inventory[self.asset_id].maintenance_logs[0]
+        )
+        self.assertEqual(remaining_log['media'], [])
+        self.assertEqual(self.client.get(media_url).status_code, 404)
+
+        reloaded = DataManager(self.tempdir.name)
+        reloaded.load_inventory()
+        persisted_log = normalize_maintenance_log(
+            reloaded.inventory[self.asset_id].maintenance_logs[0]
+        )
+        self.assertEqual(persisted_log['media'], [])
 
 
 if __name__ == '__main__':

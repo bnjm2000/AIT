@@ -91,6 +91,30 @@ class MaintenanceBatchTests(unittest.TestCase):
             source = normalize_maintenance_log(logs[0])['source']
             self.assertEqual(source['clientRequestId'], 'maintenance-test-request-1')
 
+    def test_non_ok_status_can_change_directly_to_another_status(self):
+        asset = self.data_manager.inventory['TEST#01']
+        asset.is_ooc = True
+        self.data_manager.save_inventory()
+        payload = self.payload()
+        payload.update({
+            'assetIds': ['TEST#01'],
+            'assetStatus': 'missing',
+            'requestId': 'direct-status-transition',
+        })
+
+        response = self.client.post('/api/assets/maintenance/batch', json=payload)
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        asset = self.data_manager.inventory['TEST#01']
+        self.assertFalse(asset.is_ooc)
+        self.assertTrue(asset.is_missing)
+        self.assertFalse(asset.is_degraded)
+        log = normalize_maintenance_log(asset.maintenance_logs[-1])
+        self.assertIn(
+            {'kind': 'missing', 'action': 'marked'},
+            log['changes'],
+        )
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -849,6 +849,11 @@
         border-color: #667eea;
       }
 
+      #maintenanceCost.maintenance-cost-input,
+      #editMaintenanceCost.maintenance-cost-input {
+        padding-left: 38px !important;
+      }
+
       .add-asset-grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -3372,7 +3377,7 @@
 
       .event-workflow-progress {
         min-width: 0;
-        gap: 12px;
+        gap: 8px;
         margin-top: 15px;
       }
 
@@ -3450,14 +3455,15 @@
       }
 
       .event-progress-summary {
-        flex: 0 0 68px;
+        flex: 0 0 82px;
         min-width: 0;
       }
 
       .event-progress-value {
         color: #111827;
-        font-size: 1rem;
+        font-size: .95rem;
         font-weight: 780;
+        white-space: nowrap;
       }
 
       .event-progress-label {
@@ -3476,9 +3482,9 @@
 
       .event-department-row {
         display: grid;
-        grid-template-columns: minmax(0, 52px) minmax(20px, 1fr) max-content;
+        grid-template-columns: minmax(0, 42px) minmax(18px, 1fr) max-content;
         align-items: center;
-        column-gap: 4px;
+        column-gap: 2px;
         min-width: 0;
         width: 100%;
         color: #334155;
@@ -5268,21 +5274,64 @@
             </div>
           </div>
 
-          <!-- Maintenance Log Type -->
-          <div class="form-group">
-            <label class="form-label" for="maintenanceLogType">Maintenance Log Type</label>
-            <select class="form-input" id="maintenanceLogType">
-              <option value="General" selected>General</option>
-              <option value="Preventative maintenance">Preventative maintenance</option>
-              <option value="Fault">Fault</option>
-              <option value="Update">Update</option>
-              <option value="Repair">Repair</option>
-            </select>
+          <!-- Maintenance Details -->
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;align-items:start;margin-bottom:16px;">
+            <div class="form-group" style="margin-bottom:0;">
+              <label class="form-label" for="maintenanceLogType">Maintenance Log Type</label>
+              <select class="form-input" id="maintenanceLogType" data-maintenance-log-type-select="true" onchange="applyMaintenanceLogTypeSelectStyle(this)">
+                <option value="General" selected>General</option>
+                <option value="Preventative maintenance">Preventative maintenance</option>
+                <option value="Fault">Fault</option>
+                <option value="Update">Update</option>
+                <option value="Repair">Repair</option>
+              </select>
+            </div>
+
+            <div class="form-group" style="margin-bottom:0;">
+              <label class="form-label" for="maintenanceAssetStatus">Asset Status</label>
+              <select id="maintenanceAssetStatus" name="assetStatus" class="form-input" data-maintenance-status-select="true" onchange="applyMaintenanceStatusSelectStyle(this)">
+                <option value="nochange" selected style="color:#495057;font-weight:400;">No Change</option>
+                <option value="ok" style="color:#28a745;font-weight:600;">OK / Clear Status</option>
+                <option value="ooc" style="color:#dc3545;font-weight:600;">OOC</option>
+                <option value="missing" style="color:#fd7e14;font-weight:600;">Missing</option>
+                <option value="degraded" style="color:#856404;font-weight:600;">Degraded</option>
+                <option value="decommissioned" style="color:#6c757d;font-weight:600;">Decommissioned</option>
+              </select>
+            </div>
+
+            <div class="form-group" style="margin-bottom:0;">
+              <label class="form-label" for="maintenanceDate">Maintenance Date</label>
+              <input
+                type="date"
+                class="form-input"
+                id="maintenanceDate"
+                required
+              />
+            </div>
+
+            <div class="form-group" style="margin-bottom:0;">
+              <label class="form-label" for="maintenanceCost">Cost (optional)</label>
+              <div style="position:relative;width:100%;min-width:0;">
+                <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#495057;font-weight:600;pointer-events:none;">$</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  class="form-input maintenance-cost-input"
+                  id="maintenanceCost"
+                  placeholder="Repair cost"
+                  style="padding-left:38px !important;"
+                />
+              </div>
+            </div>
           </div>
+          <small style="color:#666;font-size:12px;margin:-8px 0 16px;display:block;">
+            Assets can only have one status.
+          </small>
 
           <!-- Maintenance Log Entry -->
           <div class="form-group">
-            <label class="form-label">Maintenance Log Entry</label>
+            <label class="form-label" for="maintenanceLogEntry">Maintenance Log Entry</label>
             <textarea
               class="form-input"
               id="maintenanceLogEntry"
@@ -5305,59 +5354,26 @@
             <div id="maintenanceMediaFileList" class="maintenance-media-selection"></div>
           </div>
 
-          <!-- Maintenance Date -->
-          <div class="form-group">
-            <label class="form-label">Maintenance Date</label>
-            <input
-              type="date"
-              class="form-input"
-              id="maintenanceDate"
-              required
-            />
-          </div>
-
-          <!-- Repair Cost -->
-          <div class="form-group">
-            <label class="form-label">Cost (optional)</label>
-            <div style="display:flex;align-items:center;border:2px solid #e9ecef;border-radius:8px;background:white;overflow:hidden;">
-              <span style="padding:12px 0 12px 12px;color:#495057;font-weight:600;">$</span>
+          <!-- Optional Asset Updates -->
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-bottom:16px;">
+            <div class="form-group" style="margin-bottom:0;">
+              <label class="form-label" for="maintenanceNewLocation">New Location (optional)</label>
               <input
-                type="number"
-                min="0"
-                step="0.01"
+                type="text"
                 class="form-input"
-                id="maintenanceCost"
-                placeholder="Repair cost, if any"
-                style="border:0;box-shadow:none;"
+                id="maintenanceNewLocation"
+                placeholder="Leave blank to keep current location"
               />
             </div>
-          </div>
-
-          <!-- New Location -->
-          <div class="form-group">
-            <label class="form-label">New Location (optional)</label>
-            <input
-              type="text"
-              class="form-input"
-              id="maintenanceNewLocation"
-              placeholder="Leave blank to keep current location"
-            />
-          </div>
-
-          <!-- Asset Status Changes -->
-          <div class="form-group">
-            <label class="form-label" for="maintenanceAssetStatus">Asset Status</label>
-            <select id="maintenanceAssetStatus" name="assetStatus" class="form-input" data-maintenance-status-select="true" onchange="applyMaintenanceStatusSelectStyle(this)">
-              <option value="nochange" selected style="color:#495057;font-weight:400;">No Change</option>
-              <option value="ok" style="color:#28a745;font-weight:600;">OK / Clear Status</option>
-              <option value="ooc" style="color:#dc3545;font-weight:600;">OOC</option>
-              <option value="missing" style="color:#fd7e14;font-weight:600;">Missing</option>
-              <option value="degraded" style="color:#856404;font-weight:600;">Degraded</option>
-              <option value="decommissioned" style="color:#6c757d;font-weight:600;">Decommissioned</option>
-            </select>
-            <small style="color:#666;font-size:12px;margin-top:6px;display:block;">
-              Assets can only have one status. To change a non-OK asset to another status, mark it as OK first.
-            </small>
+            <div class="form-group" style="margin-bottom:0;">
+              <label class="form-label" for="maintenanceNewSerial">New Serial Number (optional)</label>
+              <input
+                type="text"
+                class="form-input"
+                id="maintenanceNewSerial"
+                placeholder="Leave blank to keep current serial number"
+              />
+            </div>
           </div>
 
           <!-- Form Buttons -->
