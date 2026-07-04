@@ -1,0 +1,727 @@
+{
+  "version": 1,
+  "freelancers": [
+    {
+      "id": "freelancer_c8e97465359977f5",
+      "name": "Dean Chua",
+      "phone": "+6597833477",
+      "email": "",
+      "company": "",
+      "notes": "",
+      "active": true,
+      "createdAt": "2026-07-04T16:13:11+08:00",
+      "updatedAt": "2026-07-04T16:13:11+08:00"
+    },
+    {
+      "id": "freelancer_90c5f8bb774d7fef",
+      "name": "Cheng Chun Hua",
+      "phone": "+6588287961",
+      "email": "",
+      "company": "",
+      "notes": "",
+      "active": true,
+      "createdAt": "2026-07-04T16:17:00+08:00",
+      "updatedAt": "2026-07-04T16:17:00+08:00"
+    },
+    {
+      "id": "freelancer_20ab4d7a160649fa",
+      "name": "MUS'AB JOHAN (MJ)",
+      "phone": "+6589490479",
+      "email": "",
+      "company": "",
+      "notes": "",
+      "active": true,
+      "createdAt": "2026-07-04T18:46:37+08:00",
+      "updatedAt": "2026-07-04T18:51:44+08:00"
+    },
+    {
+      "id": "freelancer_81bd3ddbb3de2ffa",
+      "name": "Alden Low",
+      "phone": "+6598578784",
+      "email": "aldenlow94@gmail.com",
+      "company": "",
+      "notes": "",
+      "active": true,
+      "createdAt": "2026-07-04T20:48:41+08:00",
+      "updatedAt": "2026-07-04T20:48:41+08:00"
+    },
+    {
+      "id": "freelancer_6e154ccdb7ce94ea",
+      "name": "Jeryl Yong",
+      "phone": "+6584484933",
+      "email": "jerylyong@gmail.com",
+      "company": "",
+      "notes": "",
+      "active": true,
+      "createdAt": "2026-07-04T20:53:00+08:00",
+      "updatedAt": "2026-07-04T20:53:00+08:00"
+    },
+    {
+      "id": "freelancer_220f532cf2245817",
+      "name": "Jo-Anne Mae Lim Li Ying",
+      "phone": "+6596504237",
+      "email": "",
+      "company": "",
+      "notes": "",
+      "active": true,
+      "createdAt": "2026-07-04T21:06:32+08:00",
+      "updatedAt": "2026-07-04T21:06:32+08:00"
+    },
+    {
+      "id": "freelancer_d7f297a61b56f0f8",
+      "name": "Adityan Sohien",
+      "phone": "+6588266701",
+      "email": "",
+      "company": "Avery Events and Entertainment",
+      "notes": "",
+      "active": true,
+      "createdAt": "2026-07-04T21:14:05+08:00",
+      "updatedAt": "2026-07-04T21:14:05+08:00"
+    }
+  ],
+  "roles": [
+    {
+      "id": "role_a070f91e4342ac6d",
+      "name": "Setup/Teardown crew",
+      "department": "LX",
+      "createdAt": "2026-07-04T16:13:12+08:00"
+    },
+    {
+      "id": "role_67dcdd07da0a38f1",
+      "name": "Setup/Teardown crew",
+      "department": "AX",
+      "createdAt": "2026-07-04T16:17:00+08:00"
+    },
+    {
+      "id": "role_0218c040fa0d4b14",
+      "name": "Teardown Crew",
+      "department": "AX",
+      "createdAt": "2026-07-04T18:46:42+08:00"
+    },
+    {
+      "id": "role_e8e077d22f75b919",
+      "name": "Audio Assistant (A2)",
+      "department": "AX",
+      "createdAt": "2026-07-04T18:51:45+08:00"
+    }
+  ],
+  "assignments": {
+    "132": [
+      {
+        "id": "assignment_7971a2ed18120b95",
+        "freelancerId": "freelancer_c8e97465359977f5",
+        "department": "LX",
+        "roleId": "role_a070f91e4342ac6d",
+        "roleName": "Setup/Teardown crew",
+        "days": 1,
+        "dailyRate": 200.0,
+        "notes": "",
+        "createdAt": "2026-07-04T16:13:12+08:00"
+      },
+      {
+        "id": "assignment_de8ad63e2dae0482",
+        "freelancerId": "freelancer_81bd3ddbb3de2ffa",
+        "department": "LX",
+        "roleId": "",
+        "roleName": "Setup/Teardown Crew",
+        "days": 3,
+        "dailyRate": 180.0,
+        "notes": "",
+        "createdAt": "2026-07-04T20:49:24+08:00"
+      },
+      {
+        "id": "assignment_a302815bfc92c674",
+        "freelancerId": "freelancer_6e154ccdb7ce94ea",
+        "department": "AX",
+        "roleId": "",
+        "roleName": "Setup Crew",
+        "days": 1,
+        "dailyRate": 150.0,
+        "notes": "",
+        "createdAt": "2026-07-04T20:53:12+08:00"
+      },
+      {
+        "id": "assignment_355e56134ac2dd03",
+        "freelancerId": "freelancer_90c5f8bb774d7fef",
+        "department": "AX",
+        "roleId": "",
+        "roleName": "Setup/Teardown Crew",
+        "days": 3,
+        "dailyRate": 200.0,
+        "notes": "",
+        "createdAt": "2026-07-04T20:55:32+08:00"
+      },
+      {
+        "id": "assignment_a6b7cf00aaae5fd1",
+        "freelancerId": "freelancer_90c5f8bb774d7fef",
+        "department": "AX",
+        "roleId": "",
+        "roleName": "Setup Crew",
+        "days": 1,
+        "dailyRate": 180.0,
+        "notes": "",
+        "createdAt": "2026-07-04T20:56:09+08:00"
+      },
+      {
+        "id": "assignment_2f5a50441bf99736",
+        "freelancerId": "freelancer_90c5f8bb774d7fef",
+        "department": "AX",
+        "roleId": "",
+        "roleName": "Standby Crew",
+        "days": 2,
+        "dailyRate": 150.0,
+        "notes": "",
+        "createdAt": "2026-07-04T20:56:15+08:00"
+      }
+    ],
+    "134": [
+      {
+        "id": "assignment_55b2ac1b88292a98",
+        "freelancerId": "freelancer_20ab4d7a160649fa",
+        "department": "AX",
+        "roleId": "role_0218c040fa0d4b14",
+        "roleName": "Teardown Crew",
+        "days": 1,
+        "dailyRate": 180.0,
+        "notes": "",
+        "createdAt": "2026-07-04T18:46:42+08:00"
+      }
+    ],
+    "109": [
+      {
+        "id": "assignment_d5c508526dd9c904",
+        "freelancerId": "freelancer_20ab4d7a160649fa",
+        "department": "AX",
+        "roleId": "role_67dcdd07da0a38f1",
+        "roleName": "Setup/Teardown crew",
+        "days": 2,
+        "dailyRate": 180.0,
+        "notes": "",
+        "createdAt": "2026-07-04T18:47:21+08:00"
+      }
+    ],
+    "131": [
+      {
+        "id": "assignment_3c13395ca92796e6",
+        "freelancerId": "freelancer_20ab4d7a160649fa",
+        "department": "AX",
+        "roleId": "role_e8e077d22f75b919",
+        "roleName": "Audio Assistant (A2)",
+        "days": 1,
+        "dailyRate": 250.0,
+        "notes": "",
+        "createdAt": "2026-07-04T18:51:45+08:00"
+      }
+    ],
+    "141": [
+      {
+        "id": "assignment_fc29043b0e491bd9",
+        "freelancerId": "freelancer_90c5f8bb774d7fef",
+        "department": "AX",
+        "roleId": "",
+        "roleName": "Setup Crew",
+        "days": 1,
+        "dailyRate": 200.0,
+        "notes": "",
+        "createdAt": "2026-07-04T21:05:49+08:00"
+      },
+      {
+        "id": "assignment_dd2d7514897aab99",
+        "freelancerId": "freelancer_220f532cf2245817",
+        "department": "AX",
+        "roleId": "",
+        "roleName": "Audio Assistant (A2)",
+        "days": 1,
+        "dailyRate": 150.0,
+        "notes": "",
+        "createdAt": "2026-07-04T21:06:44+08:00"
+      },
+      {
+        "id": "assignment_d9243e7e004259bf",
+        "freelancerId": "freelancer_d7f297a61b56f0f8",
+        "department": "AX",
+        "roleId": "",
+        "roleName": "Audio Assistant (A2)",
+        "days": 1,
+        "dailyRate": 250.0,
+        "notes": "",
+        "createdAt": "2026-07-04T21:14:19+08:00"
+      }
+    ]
+  },
+  "manualDepartments": {
+    "132": [],
+    "141": []
+  },
+  "hiddenDepartments": {
+    "132": [
+      "ELEC",
+      "VX"
+    ],
+    "141": [
+      "ELEC"
+    ]
+  },
+  "uploadAllowances": {
+    "132": {
+      "freelancer_c8e97465359977f5": {
+        "extraInvoices": 0,
+        "extraClaims": 0,
+        "updatedAt": "2026-07-04T21:20:20+08:00"
+      }
+    }
+  },
+  "transportVendors": [
+    {
+      "id": "vendor_5c6876a0e059921a",
+      "vehicleType": "10ft Lorry",
+      "company": "Avec Vision Pte Ltd",
+      "driver": "",
+      "contactNumber": "",
+      "vehicleNumber": "YQ6652T",
+      "name": "",
+      "createdAt": "2026-07-04T20:58:32+08:00",
+      "updatedAt": "2026-07-04T20:58:32+08:00"
+    }
+  ],
+  "transportLocations": [
+    {
+      "id": "location_458d45cf8df401f2",
+      "name": "Office (601 Sims Drive, Pan-I Complex, Singapore 387382)",
+      "createdAt": "2026-07-04T20:59:30+08:00"
+    },
+    {
+      "id": "location_e999e56b48ffb842",
+      "name": "*SCAPE Loading Bay (2 Orchard Link, Singapore 237978)",
+      "createdAt": "2026-07-04T21:09:01+08:00"
+    }
+  ],
+  "transportBookings": {
+    "141": [
+      {
+        "id": "transport_7b4a930861985a78",
+        "vendorId": "vendor_5c6876a0e059921a",
+        "locationFrom": "Office (601 Sims Drive, Pan-I Complex, Singapore 387382)",
+        "locationTo": "*SCAPE Loading Bay (2 Orchard Link, Singapore 237978)",
+        "twoWay": true,
+        "departDate": "2026-06-01",
+        "departTime": "12:30",
+        "returnDate": "2026-06-01",
+        "returnTime": "19:00",
+        "cost": 0.0,
+        "status": "Pending Review",
+        "vehicleType": "10ft Lorry",
+        "company": "Avec Vision Pte Ltd",
+        "driver": "",
+        "companyDriver": "Avec Vision Pte Ltd",
+        "contactNumber": "",
+        "vehicleNumber": "YQ6652T",
+        "purpose": "Event transport",
+        "loadType": "",
+        "notes": "",
+        "invoice": null,
+        "reviewHistory": [],
+        "createdAt": "2026-07-04T21:00:40+08:00",
+        "updatedAt": "2026-07-04T21:09:10+08:00"
+      }
+    ]
+  },
+  "submissions": {
+    "132": {
+      "freelancer_c8e97465359977f5": {
+        "invoices": [
+          {
+            "id": "sub_ed3cf98ddbc754d0",
+            "originalName": "Dean_invoice10_AVEC.pdf",
+            "storedPath": "workforce_uploads/132/freelancer_c8e97465359977f5/invoice-61518896056c54d8d22ec590.pdf",
+            "size": 186648,
+            "contentType": "application/pdf",
+            "submittedAt": "2026-07-04T16:25:40+08:00",
+            "status": "Paid",
+            "denialReason": "",
+            "reviewHistory": [
+              {
+                "at": "2026-07-04T16:25:40+08:00",
+                "by": "bnjm2000",
+                "from": "",
+                "to": "Pending Review",
+                "action": "Admin upload"
+              },
+              {
+                "at": "2026-07-04T16:26:00+08:00",
+                "by": "bnjm2000",
+                "from": "Pending Review",
+                "to": "Approved",
+                "amount": 200.0
+              },
+              {
+                "at": "2026-07-04T16:32:28+08:00",
+                "by": "bnjm2000",
+                "from": "Approved",
+                "to": "Paid",
+                "amount": 200.0
+              }
+            ],
+            "amount": 200.0,
+            "ocrConfidence": "Low",
+            "ocrSource": "PDF text",
+            "ocrMatchedText": "",
+            "ocrUsed": false,
+            "allocations": [],
+            "reviewedAt": "2026-07-04T16:32:28+08:00",
+            "reviewedBy": "bnjm2000"
+          }
+        ],
+        "claims": []
+      },
+      "freelancer_81bd3ddbb3de2ffa": {
+        "invoices": [
+          {
+            "id": "sub_db5c08d0eab8052d",
+            "originalName": "159.pdf",
+            "storedPath": "workforce_uploads/132/freelancer_81bd3ddbb3de2ffa/invoice-5da8a43e9954de6656ec0cc7.pdf",
+            "size": 55928,
+            "contentType": "application/pdf",
+            "submittedAt": "2026-07-04T20:49:39+08:00",
+            "status": "Paid",
+            "denialReason": "",
+            "reviewHistory": [
+              {
+                "at": "2026-07-04T20:49:39+08:00",
+                "by": "bnjm2000",
+                "from": "",
+                "to": "Pending Review",
+                "action": "Admin upload"
+              },
+              {
+                "at": "2026-07-04T20:49:59+08:00",
+                "by": "bnjm2000",
+                "from": "Pending Review",
+                "to": "Pending Review",
+                "amount": 540.0
+              },
+              {
+                "at": "2026-07-04T20:57:18+08:00",
+                "by": "bnjm2000",
+                "from": "Pending Review",
+                "to": "Approved",
+                "amount": 540.0
+              },
+              {
+                "at": "2026-07-04T20:57:26+08:00",
+                "by": "bnjm2000",
+                "from": "Approved",
+                "to": "Paid",
+                "amount": 540.0
+              }
+            ],
+            "amount": 540.0,
+            "ocrConfidence": "Low",
+            "ocrSource": "PDF text",
+            "ocrMatchedText": "",
+            "ocrUsed": false,
+            "allocations": [],
+            "reviewedAt": "2026-07-04T20:57:26+08:00",
+            "reviewedBy": "bnjm2000",
+            "verifiedAt": "2026-07-04T20:57:18+08:00",
+            "verifiedBy": "bnjm2000"
+          }
+        ],
+        "claims": []
+      },
+      "freelancer_90c5f8bb774d7fef": {
+        "invoices": [
+          {
+            "id": "sub_dcaf66c495277c78",
+            "originalName": "7 CHUN ROLEX INVOICE.xlsx - Invoice.pdf",
+            "storedPath": "workforce_uploads/132/freelancer_90c5f8bb774d7fef/invoice-31c779fabc66bb55761c08e0.pdf",
+            "size": 25324,
+            "contentType": "application/pdf",
+            "submittedAt": "2026-07-04T21:17:59+08:00",
+            "status": "Paid",
+            "denialReason": "",
+            "reviewHistory": [
+              {
+                "at": "2026-07-04T21:17:59+08:00",
+                "by": "bnjm2000",
+                "from": "",
+                "to": "Pending Review",
+                "action": "Admin upload"
+              },
+              {
+                "at": "2026-07-04T21:18:15+08:00",
+                "by": "bnjm2000",
+                "from": "Pending Review",
+                "to": "Approved",
+                "amount": 1080.0
+              },
+              {
+                "at": "2026-07-04T21:18:17+08:00",
+                "by": "bnjm2000",
+                "from": "Approved",
+                "to": "Paid",
+                "amount": 1080.0
+              }
+            ],
+            "amount": 1080.0,
+            "ocrConfidence": "Low",
+            "ocrSource": "PDF text",
+            "ocrMatchedText": "",
+            "ocrUsed": false,
+            "allocations": [],
+            "ocrRetriedAt": "2026-07-04T21:18:01+08:00",
+            "reviewedAt": "2026-07-04T21:18:17+08:00",
+            "reviewedBy": "bnjm2000",
+            "verifiedAt": "2026-07-04T21:18:15+08:00",
+            "verifiedBy": "bnjm2000"
+          }
+        ],
+        "claims": []
+      },
+      "freelancer_6e154ccdb7ce94ea": {
+        "invoices": [
+          {
+            "id": "sub_64ec99db1f76e39d",
+            "originalName": "Invoice 260525-1.pdf",
+            "storedPath": "workforce_uploads/132/freelancer_6e154ccdb7ce94ea/invoice-aa2d0ae3bc43e9536eeae8fe.pdf",
+            "size": 43395,
+            "contentType": "application/pdf",
+            "submittedAt": "2026-07-04T21:18:27+08:00",
+            "status": "Paid",
+            "denialReason": "",
+            "reviewHistory": [
+              {
+                "at": "2026-07-04T21:18:27+08:00",
+                "by": "bnjm2000",
+                "from": "",
+                "to": "Pending Review",
+                "action": "Admin upload"
+              },
+              {
+                "at": "2026-07-04T21:18:53+08:00",
+                "by": "bnjm2000",
+                "from": "Pending Review",
+                "to": "Approved",
+                "amount": 150.0
+              },
+              {
+                "at": "2026-07-04T21:18:55+08:00",
+                "by": "bnjm2000",
+                "from": "Approved",
+                "to": "Paid",
+                "amount": 150.0
+              }
+            ],
+            "amount": 150.0,
+            "ocrConfidence": "Low",
+            "ocrSource": "PDF text",
+            "ocrMatchedText": "",
+            "ocrUsed": false,
+            "allocations": [],
+            "ocrRetriedAt": "2026-07-04T21:18:28+08:00",
+            "reviewedAt": "2026-07-04T21:18:55+08:00",
+            "reviewedBy": "bnjm2000",
+            "verifiedAt": "2026-07-04T21:18:53+08:00",
+            "verifiedBy": "bnjm2000"
+          }
+        ],
+        "claims": []
+      }
+    },
+    "109": {
+      "freelancer_20ab4d7a160649fa": {
+        "invoices": [
+          {
+            "id": "sub_23aadef7c17abfcd",
+            "originalName": "INV-2602-0574 mjvst Invoice AVEC.pdf",
+            "storedPath": "workforce_uploads/109/freelancer_20ab4d7a160649fa/invoice-9a7b024e15eb1c85a0fc5286.pdf",
+            "size": 43150,
+            "contentType": "application/pdf",
+            "submittedAt": "2026-07-04T18:48:23+08:00",
+            "status": "Approved",
+            "denialReason": "",
+            "reviewHistory": [
+              {
+                "at": "2026-07-04T18:48:23+08:00",
+                "by": "bnjm2000",
+                "from": "",
+                "to": "Pending Review",
+                "action": "Admin upload"
+              },
+              {
+                "at": "2026-07-04T18:48:35+08:00",
+                "by": "bnjm2000",
+                "from": "Pending Review",
+                "to": "Approved",
+                "amount": 360.0
+              }
+            ],
+            "amount": 360.0,
+            "ocrConfidence": "Low",
+            "ocrSource": "PDF text",
+            "ocrMatchedText": "",
+            "ocrUsed": false,
+            "allocations": [],
+            "reviewedAt": "2026-07-04T18:48:35+08:00",
+            "reviewedBy": "bnjm2000"
+          }
+        ],
+        "claims": []
+      }
+    },
+    "131": {
+      "freelancer_20ab4d7a160649fa": {
+        "invoices": [
+          {
+            "id": "sub_7a13eff9cd7e633e",
+            "originalName": "INV-2605-0612 mjvst Invoice AVEC.pdf",
+            "storedPath": "workforce_uploads/131/freelancer_20ab4d7a160649fa/invoice-bde881cbf9dbf673b4c096be.pdf",
+            "size": 42922,
+            "contentType": "application/pdf",
+            "submittedAt": "2026-07-04T18:52:53+08:00",
+            "status": "Paid",
+            "denialReason": "",
+            "reviewHistory": [
+              {
+                "at": "2026-07-04T18:52:53+08:00",
+                "by": "bnjm2000",
+                "from": "",
+                "to": "Pending Review",
+                "action": "Admin upload"
+              },
+              {
+                "at": "2026-07-04T18:52:57+08:00",
+                "by": "bnjm2000",
+                "from": "Pending Review",
+                "to": "Approved",
+                "amount": 250.0
+              },
+              {
+                "at": "2026-07-04T18:53:06+08:00",
+                "by": "bnjm2000",
+                "from": "Approved",
+                "to": "Paid",
+                "amount": 250.0
+              }
+            ],
+            "amount": 250.0,
+            "ocrConfidence": "Low",
+            "ocrSource": "PDF text",
+            "ocrMatchedText": "",
+            "ocrUsed": false,
+            "allocations": [],
+            "reviewedAt": "2026-07-04T18:53:06+08:00",
+            "reviewedBy": "bnjm2000"
+          }
+        ],
+        "claims": []
+      }
+    },
+    "141": {
+      "freelancer_220f532cf2245817": {
+        "invoices": [
+          {
+            "id": "sub_05171817b1cb6145",
+            "originalName": "Joanne invoice (w2e) .pdf",
+            "storedPath": "workforce_uploads/141/freelancer_220f532cf2245817/invoice-d477167fbf3e5a62f2ad3db2.pdf",
+            "size": 27313,
+            "contentType": "application/pdf",
+            "submittedAt": "2026-07-04T21:07:08+08:00",
+            "status": "Paid",
+            "denialReason": "",
+            "reviewHistory": [
+              {
+                "at": "2026-07-04T21:07:08+08:00",
+                "by": "bnjm2000",
+                "from": "",
+                "to": "Pending Review",
+                "action": "Admin upload"
+              },
+              {
+                "at": "2026-07-04T21:07:18+08:00",
+                "by": "bnjm2000",
+                "from": "Pending Review",
+                "to": "Approved",
+                "amount": 150.0
+              },
+              {
+                "at": "2026-07-04T21:07:24+08:00",
+                "by": "bnjm2000",
+                "from": "Approved",
+                "to": "Paid",
+                "amount": 150.0
+              }
+            ],
+            "amount": 150.0,
+            "ocrConfidence": "Low",
+            "ocrSource": "PDF text",
+            "ocrMatchedText": "",
+            "ocrUsed": false,
+            "allocations": [],
+            "reviewedAt": "2026-07-04T21:07:24+08:00",
+            "reviewedBy": "bnjm2000",
+            "verifiedAt": "2026-07-04T21:07:18+08:00",
+            "verifiedBy": "bnjm2000"
+          }
+        ],
+        "claims": []
+      },
+      "freelancer_90c5f8bb774d7fef": {
+        "invoices": [
+          {
+            "id": "sub_1765750bb7701d30",
+            "originalName": "6 CHUN wave to earth INVOICE.xlsx - Invoice.pdf",
+            "storedPath": "workforce_uploads/141/freelancer_90c5f8bb774d7fef/invoice-66f0c09b80d35fc0cc98377f.pdf",
+            "size": 24737,
+            "contentType": "application/pdf",
+            "submittedAt": "2026-07-04T21:07:12+08:00",
+            "status": "Paid",
+            "denialReason": "",
+            "reviewHistory": [
+              {
+                "at": "2026-07-04T21:07:12+08:00",
+                "by": "bnjm2000",
+                "from": "",
+                "to": "Pending Review",
+                "action": "Admin upload"
+              },
+              {
+                "at": "2026-07-04T21:07:23+08:00",
+                "by": "bnjm2000",
+                "from": "Pending Review",
+                "to": "Approved",
+                "amount": 150.0
+              },
+              {
+                "at": "2026-07-04T21:07:26+08:00",
+                "by": "bnjm2000",
+                "from": "Approved",
+                "to": "Paid",
+                "amount": 150.0
+              },
+              {
+                "at": "2026-07-04T21:07:32+08:00",
+                "by": "bnjm2000",
+                "from": "Paid",
+                "to": "Paid",
+                "amount": 200.0
+              }
+            ],
+            "amount": 200.0,
+            "ocrConfidence": "Low",
+            "ocrSource": "PDF text",
+            "ocrMatchedText": "",
+            "ocrUsed": false,
+            "allocations": [],
+            "reviewedAt": "2026-07-04T21:07:32+08:00",
+            "reviewedBy": "bnjm2000",
+            "verifiedAt": "2026-07-04T21:07:23+08:00",
+            "verifiedBy": "bnjm2000"
+          }
+        ],
+        "claims": []
+      }
+    }
+  },
+  "updatedAt": "2026-07-04T21:20:20+08:00"
+}

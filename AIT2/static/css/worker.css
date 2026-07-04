@@ -542,6 +542,12 @@ a:focus-visible {
   gap: 15px;
 }
 
+.claim-fields[hidden],
+#otherCategoryField[hidden],
+#claimDepartmentField[hidden] {
+  display: none;
+}
+
 .field-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

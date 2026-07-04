@@ -67,7 +67,7 @@ function renderEvent(company, event) {
     </span>
   `).join('');
   const invoiceButton = event.canUploadInvoice
-    ? `<button class="upload-button" type="button" data-upload-kind="invoice" data-company="${escapeHtml(company.code)}" data-event="${event.id}">Upload invoice</button>`
+    ? `<button class="upload-button" type="button" data-upload-kind="invoice" data-company="${escapeHtml(company.code)}" data-event="${event.id}">Upload invoice (${event.invoiceSlotsRemaining} left)</button>`
     : '';
   const claimButton = event.claimSlotsRemaining > 0
     ? `<button class="upload-button" type="button" data-upload-kind="claim" data-company="${escapeHtml(company.code)}" data-event="${event.id}">Add claim (${event.claimSlotsRemaining} left)</button>`
@@ -86,14 +86,14 @@ function renderEvent(company, event) {
       <div class="submission-panel">
         <div>
           <div class="submission-heading">
-            <strong>Invoice · PDF only</strong>
+            <strong>Invoice · PDF only · ${event.invoiceLimit || 1} slot${Number(event.invoiceLimit || 1) === 1 ? '' : 's'}</strong>
             ${invoiceButton}
           </div>
           ${renderSubmissionRows(event.submissions.invoices)}
         </div>
         <div>
           <div class="submission-heading">
-            <strong>Claims · up to 5</strong>
+            <strong>Claims · up to ${event.claimLimit || 5}</strong>
             ${claimButton}
           </div>
           ${renderSubmissionRows(event.submissions.claims)}

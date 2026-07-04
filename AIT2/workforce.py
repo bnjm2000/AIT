@@ -69,7 +69,11 @@ def empty_workforce() -> dict:
         "freelancers": [],
         "roles": [],
         "assignments": {},
+        "manualDepartments": {},
+        "hiddenDepartments": {},
+        "uploadAllowances": {},
         "transportVendors": [],
+        "transportLocations": [],
         "transportBookings": {},
         "submissions": {},
         "updatedAt": "",
@@ -103,7 +107,11 @@ def normalize_workforce(data) -> dict:
             "freelancers": _list(source.get("freelancers")),
             "roles": _list(source.get("roles")),
             "assignments": _dict(source.get("assignments")),
+            "manualDepartments": _dict(source.get("manualDepartments")),
+            "hiddenDepartments": _dict(source.get("hiddenDepartments")),
+            "uploadAllowances": _dict(source.get("uploadAllowances")),
             "transportVendors": _list(source.get("transportVendors")),
+            "transportLocations": _list(source.get("transportLocations")),
             "transportBookings": _dict(source.get("transportBookings")),
             "submissions": _dict(source.get("submissions")),
             "updatedAt": str(source.get("updatedAt") or ""),
@@ -292,7 +300,21 @@ def _pdf_text(path: str) -> str:
         from pypdf import PdfReader
 
         reader = PdfReader(path)
-        return "\n".join((page.extract_text() or "") for page in reader.pages[:8])
+        text = "\n".join(
+            (page.extract_text() or "") for page in reader.pages[:8]
+        )
+        if text.strip():
+            return text
+    except Exception:
+        pass
+    try:
+        import fitz
+
+        document = fitz.open(path)
+        try:
+            return "\n".join(page.get_text("text") for page in list(document)[:8])
+        finally:
+            document.close()
     except Exception:
         return ""
 
@@ -315,15 +337,62 @@ def _ocr_pdf(path: str) -> str:
         lines = []
         document = fitz.open(path)
         try:
-            for page in list(document)[:4]:
+            for page in list(document)[:6]:
                 pixmap = page.get_pixmap(dpi=180, alpha=False)
                 image = Image.open(io.BytesIO(pixmap.tobytes("png"))).convert("RGB")
                 output = io.BytesIO()
                 image.save(output, format="PNG")
                 result, _elapsed = engine(output.getvalue())
+                tokens = []
                 for item in result or []:
-                    if len(item) >= 2 and str(item[1]).strip():
+                    if len(item) < 2 or not str(item[1]).strip():
+                        continue
+                    try:
+                        points = list(item[0])
+                        xs = [float(point[0]) for point in points]
+                        ys = [float(point[1]) for point in points]
+                        tokens.append({
+                            "text": str(item[1]).strip(),
+                            "x": min(xs),
+                            "y": (min(ys) + max(ys)) / 2,
+                            "height": max(ys) - min(ys),
+                        })
+                    except Exception:
                         lines.append(str(item[1]).strip())
+                tokens.sort(key=lambda token: (token["y"], token["x"]))
+                page_lines = []
+                for token in tokens:
+                    row = next(
+                        (
+                            candidate
+                            for candidate in reversed(page_lines[-4:])
+                            if abs(candidate["y"] - token["y"])
+                            <= max(
+                                8.0,
+                                min(
+                                    candidate["height"],
+                                    token["height"],
+                                ) * 0.65,
+                            )
+                        ),
+                        None,
+                    )
+                    if row is None:
+                        row = {
+                            "y": token["y"],
+                            "height": token["height"],
+                            "tokens": [],
+                        }
+                        page_lines.append(row)
+                    row["tokens"].append(token)
+                    row["y"] = sum(
+                        value["y"] for value in row["tokens"]
+                    ) / len(row["tokens"])
+                for row in sorted(page_lines, key=lambda value: value["y"]):
+                    row["tokens"].sort(key=lambda token: token["x"])
+                    lines.append(
+                        " ".join(token["text"] for token in row["tokens"])
+                    )
         finally:
             document.close()
         return "\n".join(lines)
@@ -332,43 +401,162 @@ def _ocr_pdf(path: str) -> str:
 
 
 _AMOUNT_RE = re.compile(
-    r"(?:(?:SGD|S\$|\$)\s*)?((?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2})",
+    r"(?<![A-Za-z0-9])"
+    r"(?P<currency>SGD|S\$|\$)?\s*"
+    r"(?P<amount>(?:\d{1,3}(?:[,\s]\d{3})+|\d+)(?:[\.,]\d{2})?)"
+    r"(?![A-Za-z0-9])",
     re.IGNORECASE,
 )
+
+
+def _invoice_amount_number(raw_value: str):
+    value = re.sub(r"\s+", "", str(raw_value or ""))
+    if not value:
+        return None
+    if "," in value and "." not in value:
+        parts = value.split(",")
+        if len(parts[-1]) == 2 and len(parts) > 1:
+            value = "".join(parts[:-1]) + "." + parts[-1]
+        else:
+            value = "".join(parts)
+    elif "," in value:
+        value = value.replace(",", "")
+    if value.count(".") > 1:
+        parts = value.split(".")
+        if len(parts[-1]) == 2:
+            value = "".join(parts[:-1]) + "." + parts[-1]
+    return money(value)
 
 
 def _amount_from_text(text: str) -> dict:
     candidates = []
     keyword_scores = (
+        ("total amount due", 125),
+        ("total amount", 118),
         ("total payable", 110),
         ("amount payable", 105),
         ("amount due", 100),
         ("balance due", 98),
         ("grand total", 95),
+        ("total due", 94),
         ("net total", 90),
         ("total incl", 88),
+        ("total including", 88),
         ("invoice total", 86),
         ("total", 65),
     )
-    for line_index, raw_line in enumerate(str(text or "").splitlines()):
-        line = re.sub(r"\s+", " ", raw_line).strip()
+    lines = [
+        re.sub(r"\s+", " ", raw_line).strip()
+        for raw_line in str(text or "").splitlines()
+        if raw_line.strip()
+    ]
+    for line_index, line in enumerate(lines):
         lowered = line.lower()
+        nearby = []
+        for context_index in range(
+            max(0, line_index - 2),
+            min(len(lines), line_index + 3),
+        ):
+            nearby.append((
+                context_index,
+                lines[context_index].lower(),
+            ))
         for match in _AMOUNT_RE.finditer(line):
-            amount = money(match.group(1))
-            if amount is None:
+            raw_amount = match.group("amount")
+            amount = _invoice_amount_number(raw_amount)
+            has_currency = bool(match.group("currency"))
+            has_decimal = bool(re.search(r"[\.,]\d{2}$", raw_amount))
+            if amount is None or amount <= 0:
                 continue
             score = 15
+            positive_distances = []
             for keyword, keyword_score in keyword_scores:
-                if keyword in lowered:
+                keyword_on_line = (
+                    keyword in lowered
+                    and not (
+                        keyword == "total"
+                        and (
+                            "subtotal" in lowered
+                            or "sub-total" in lowered
+                        )
+                    )
+                )
+                if keyword_on_line:
                     score = max(score, keyword_score)
+                    positive_distances.append(0)
+                for context_index, context_line in nearby:
+                    keyword_in_context = (
+                        keyword in context_line
+                        and not (
+                            keyword == "total"
+                            and (
+                                "subtotal" in context_line
+                                or "sub-total" in context_line
+                            )
+                        )
+                    )
+                    if keyword_in_context:
+                        distance = abs(context_index - line_index)
+                        positive_distances.append(distance)
+                        score = max(
+                            score,
+                            keyword_score - (distance * 14),
+                        )
+            negative_distances = [
+                abs(context_index - line_index)
+                for context_index, context_line in nearby
+                if any(
+                    phrase in context_line
+                    for phrase in (
+                        "subtotal",
+                        "sub-total",
+                        "gst",
+                        "tax",
+                        "deposit",
+                        "discount",
+                        "amount paid",
+                        "payment received",
+                    )
+                )
+            ]
+            if (
+                negative_distances
+                and (
+                    not positive_distances
+                    or min(negative_distances) < min(positive_distances)
+                )
+            ):
+                score -= max(
+                    25,
+                    80 - (min(negative_distances) * 20),
+                )
             if "subtotal" in lowered or "sub-total" in lowered:
-                score -= 75
+                score -= 95
             if re.search(r"\b(?:gst|tax)\b", lowered) and "total" not in lowered:
                 score -= 65
-            if "deposit" in lowered:
+            if any(
+                phrase in lowered
+                for phrase in (
+                    "deposit",
+                    "discount",
+                    "amount paid",
+                    "payment received",
+                )
+            ):
                 score -= 45
-            if "sgd" in lowered or "s$" in lowered:
+            if has_currency or "sgd" in lowered or "s$" in lowered:
                 score += 5
+            if has_decimal:
+                score += 3
+            if (
+                not has_decimal
+                and not has_currency
+                and 1900 <= amount <= 2100
+                and "total" not in lowered
+            ):
+                score -= 80
+            if lines:
+                score += int((line_index / len(lines)) * 8)
             candidates.append((score, line_index, amount, line))
 
     if not candidates:
@@ -494,4 +682,3 @@ def build_zip(data_folder: str, records: list[dict]) -> io.BytesIO:
             archive.write(path, candidate)
     output.seek(0)
     return output
-

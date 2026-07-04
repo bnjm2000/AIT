@@ -2798,6 +2798,9 @@ function sectionFromSidebarLabel(item) {
     'event planning': 'plan',
     'planning': 'plan',
     'plan': 'plan',
+    'manpower & transport': 'workforce',
+    'manpower and transport': 'workforce',
+    'manpower': 'workforce',
     'inventory': 'inventory',
     'containers': 'containers',
     'activity log': 'logs',
@@ -2828,6 +2831,9 @@ function sectionFromSidebarLabel(item) {
     ['pdf settings', 'pdf-settings'],
     ['maintenance report', 'maintenance-report'],
     ['asset check', 'asset-check'],
+    ['manpower & transport', 'workforce'],
+    ['manpower and transport', 'workforce'],
+    ['manpower', 'workforce'],
     ['prepare', 'prepare'],
     ['return', 'return'],
     ['transfer', 'transfer'],
@@ -12283,14 +12289,17 @@ function returnPageCompareEvents(a, b) {
   );
 }
 
+function returnPageSelectableEvents() {
+  return [...(returnPageState.events || [])].sort(returnPageCompareEvents);
+}
+
 function returnPageEligibleEvents() {
   const selectedId = Number(returnPageState.eventId);
-  return [...(returnPageState.events || [])]
+  return returnPageSelectableEvents()
     .filter(event => (
       (getEventReturnableCount(event) > 0 && event.state !== 'Closed') ||
       Number(event.id) === selectedId
-    ))
-    .sort(returnPageCompareEvents);
+    ));
 }
 
 function returnPageEventDateText(event) {
@@ -12346,6 +12355,14 @@ function returnPageAssets(event = returnPageState.event) {
     compareByDisplayName(a.department, b.department) ||
     Number(a.isReturned) - Number(b.isReturned) ||
     compareByDisplayName(returnPageAssetTitle(a), returnPageAssetTitle(b))
+  ));
+}
+
+function returnPageHasAssignedAssets(event = returnPageState.event) {
+  return Object.values(event?.assetsByDepartment || {}).some(departmentAssets => (
+    (departmentAssets || []).some(asset => (
+      asset?.id && !String(asset.id).startsWith('[MODEL]')
+    ))
   ));
 }
 
@@ -12455,14 +12472,14 @@ function returnPageUpdatePickerOptions() {
 function returnEventChooserFilteredEvents() {
   const search = String(returnEventChooserState.search || '').trim().toLowerCase();
   const filter = returnEventChooserState.filter || 'ALL';
-  return returnPageEligibleEvents().filter(event => (
+  return returnPageSelectableEvents().filter(event => (
     (
       filter === 'ALL' ||
       (filter === 'ACTIVE' && !['closed', 'completed'].includes(planStateSlug(event?.state))) ||
       planEventChooserFilterKey(event) === filter
     ) &&
     (!search || planEventChooserSearchText(event).includes(search))
-  ));
+  )).sort(planCompareEventsByStartDate);
 }
 
 function ensureReturnEventChooserModal() {
@@ -12513,8 +12530,8 @@ function renderReturnEventChooser() {
   const footer = document.getElementById('returnEventChooserFooter');
   if (!filters || !results || !footer) return;
 
-  const eligibleEvents = returnPageEligibleEvents();
-  const counts = eligibleEvents.reduce((summary, event) => {
+  const selectableEvents = returnPageSelectableEvents();
+  const counts = selectableEvents.reduce((summary, event) => {
     const key = planEventChooserFilterKey(event);
     summary.ALL += 1;
     if (!['closed', 'completed'].includes(planStateSlug(event?.state))) {
@@ -12886,6 +12903,7 @@ function renderReturnPage(options = {}) {
 
   const metrics = returnPageMetrics(event);
   const assetRows = returnPageAssets(event);
+  const hasAssignedAssets = returnPageHasAssignedAssets(event);
   root.innerHTML = `
     <div class="return-page-heading">
       <h2>Return Event Assets</h2>
@@ -12926,11 +12944,12 @@ function renderReturnPage(options = {}) {
           <div class="return-card-header">
             <div>
               <h3>Assets to Return</h3>
-              <p id="returnAssetsHelper">${returnPageState.outstandingOnly
+              ${hasAssignedAssets ? `<p id="returnAssetsHelper">${returnPageState.outstandingOnly
                 ? 'Outstanding items disappear immediately after return.'
-                : 'Showing outstanding and returned assets; use Undo for accidental returns.'}</p>
+                : 'Showing outstanding and returned assets; use Undo for accidental returns.'}</p>` : ''}
             </div>
           </div>
+          ${hasAssignedAssets ? `
           <div class="return-filters">
             <div class="return-search-row">
               <input class="return-search-input"
@@ -12957,6 +12976,11 @@ function renderReturnPage(options = {}) {
             <span>Asset</span><span>Department / Location</span><span>Status</span><span></span>
           </div>
           <div class="return-assets-scroll" id="returnAssetsScroll"></div>
+          ` : `
+          <div class="return-empty" id="returnNoAssignedAssets">
+            No assets have been assigned to this event.
+          </div>
+          `}
         </section>
       </div>
       <aside class="return-aside">
@@ -12966,7 +12990,7 @@ function renderReturnPage(options = {}) {
         <button type="button"
                 class="return-button return-button-primary return-exit-button"
                 onclick="returnPageExit()">
-          ${metrics.remaining === 0 ? 'Close Event' : 'Save and Exit'}
+          ${metrics.total > 0 && metrics.remaining === 0 ? 'Close Event' : 'Save and Exit'}
         </button>
       </aside>
     </div>
@@ -12999,7 +13023,7 @@ async function loadReturnWorkspace(options = {}) {
       returnPageState.events.some(event => Number(event.id) === Number(returnPageState.eventId));
     const selected = keepCurrent
       ? returnPageState.events.find(event => Number(event.id) === Number(returnPageState.eventId))
-      : eligible[0];
+      : (eligible[0] || returnPageSelectableEvents()[0]);
 
     if (!selected) {
       returnPageState.eventId = null;
@@ -13235,7 +13259,7 @@ async function returnPageManualReturn() {
 async function returnPageExit() {
   const eventId = Number(returnPageState.eventId);
   const metrics = returnPageMetrics();
-  if (!eventId || metrics.remaining > 0) {
+  if (!eventId || metrics.total <= 0 || metrics.remaining > 0) {
     showSection('events');
     return;
   }
