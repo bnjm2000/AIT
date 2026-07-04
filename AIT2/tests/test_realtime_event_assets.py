@@ -13,7 +13,9 @@ class EventAssetRealtimeTests(unittest.TestCase):
             ('/api/events/42/unprepare', 'unprepare'),
             ('/api/events/42/assign-specific', 'prepare'),
             ('/api/events/42/return', 'return'),
+            ('/api/events/42/unreturn', 'unreturn'),
             ('/api/events/42/return-department', 'return-department'),
+            ('/api/events/42/close-return', 'close-return'),
         )
 
         for path, expected_action in cases:

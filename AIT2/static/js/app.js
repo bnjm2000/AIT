@@ -2589,11 +2589,15 @@ function scanForPrepare(eventId) {
 
 function scanForReturn() {
   const eventSelect = document.getElementById('returnEventSelect');
-  const eventId = eventSelect?.value || '';
+  const eventPicker = document.getElementById('returnEventPickerButton');
+  const workspaceActive = document.getElementById('return-section')?.classList.contains('active');
+  const eventId = workspaceActive
+    ? returnPageState.eventId
+    : (eventSelect?.value || '');
 
   if (!eventId) {
     showNotification('warning', 'Select an event first');
-    eventSelect?.focus();
+    (eventPicker || eventSelect)?.focus();
     return;
   }
 
@@ -2601,9 +2605,12 @@ function scanForReturn() {
     title: 'Scan To Return',
     instructions: 'Scan an asset QR code, barcode, or serial number to return it from the selected event.',
     onScan: async identifier => {
-      const input = document.getElementById('manualReturnAssetIdNew');
+      const input = workspaceActive
+        ? document.getElementById('returnQuickAssetInput')
+        : document.getElementById('manualReturnAssetIdNew');
       if (input) input.value = identifier;
-      await returnManualAssetNew();
+      if (workspaceActive) await returnPageManualReturn();
+      else await returnManualAssetNew();
     }
   });
 }
@@ -2903,7 +2910,7 @@ function setupSidebarNavigation(root = document) {
   }, true);
 }
 function showSection(sectionName) {
-  const adminOnlySections = new Set(["plan", "logs", "maintenance-report", "users", "pdf-settings"]);
+  const adminOnlySections = new Set(["plan", "workforce", "logs", "maintenance-report", "users", "pdf-settings"]);
   const superAdminOnlySections = new Set(["companies"]);
   if (adminOnlySections.has(sectionName) && !isAdminUser()) {
     return showSection("events");
@@ -2959,6 +2966,9 @@ function showSection(sectionName) {
       break;
     case "plan":
       loadPlanPage();
+      break;
+    case "workforce":
+      if (typeof loadWorkforcePage === "function") loadWorkforcePage();
       break;
     case "inventory":
       loadInventory();
@@ -12223,6 +12233,1023 @@ function isAssetReturnableFromEventDetail(asset, event) {
   }
 
   return asset.status === 'prepared' || actuallyPrepared.has(id);
+}
+
+const returnPageState = {
+  events: [],
+  eventId: null,
+  event: null,
+  outstandingOnly: true,
+  department: 'ALL',
+  search: '',
+  pendingActions: new Set(),
+  requestVersion: 0,
+  loaded: false,
+};
+
+const returnEventChooserState = {
+  search: '',
+  filter: 'ALL',
+  page: 1,
+  pageSize: 8,
+};
+
+function returnPageEncode(value) {
+  return encodeURIComponent(String(value || ''));
+}
+
+function returnPageDecode(value) {
+  try {
+    return decodeURIComponent(String(value || ''));
+  } catch (error) {
+    return String(value || '');
+  }
+}
+
+function returnPageDateValue(value) {
+  const clean = String(value || '').trim().replace(/\//g, '-');
+  const parsed = Date.parse(clean);
+  return Number.isFinite(parsed) ? parsed : Number.MAX_SAFE_INTEGER;
+}
+
+function returnPageCompareEvents(a, b) {
+  const aOverdue = a?.state === 'Overdue' ? 0 : 1;
+  const bOverdue = b?.state === 'Overdue' ? 0 : 1;
+  return (
+    aOverdue - bOverdue ||
+    returnPageDateValue(a?.endDate) - returnPageDateValue(b?.endDate) ||
+    returnPageDateValue(a?.startDate) - returnPageDateValue(b?.startDate) ||
+    Number(b?.id || 0) - Number(a?.id || 0)
+  );
+}
+
+function returnPageEligibleEvents() {
+  const selectedId = Number(returnPageState.eventId);
+  return [...(returnPageState.events || [])]
+    .filter(event => (
+      (getEventReturnableCount(event) > 0 && event.state !== 'Closed') ||
+      Number(event.id) === selectedId
+    ))
+    .sort(returnPageCompareEvents);
+}
+
+function returnPageEventDateText(event) {
+  if (!event) return '';
+  return event.startDate && event.startDate === event.endDate
+    ? event.startDate
+    : [event.startDate, event.endDate].filter(Boolean).join(' – ');
+}
+
+function returnPageEventOptionLabel(event) {
+  const outstanding = getEventReturnableCount(event);
+  const state = eventStateDisplayLabel(event?.state || 'New');
+  return `#${event.id} ${event.name || `Event ${event.id}`} · ${state} · ${outstanding} outstanding`;
+}
+
+function returnPageUpsertEventSummary(event) {
+  if (!event?.id) return;
+  const index = returnPageState.events.findIndex(item => Number(item.id) === Number(event.id));
+  const summary = index >= 0
+    ? { ...returnPageState.events[index], ...event }
+    : { ...event };
+  if (index >= 0) returnPageState.events[index] = summary;
+  else returnPageState.events.push(summary);
+  events = events.map(item => Number(item.id) === Number(event.id) ? { ...item, ...event } : item);
+}
+
+function returnPageAssets(event = returnPageState.event) {
+  if (!event) return [];
+  const returned = new Set(event.returnedItems || []);
+  const rows = new Map();
+
+  Object.entries(event.assetsByDepartment || {}).forEach(([department, departmentAssets]) => {
+    (departmentAssets || []).forEach(asset => {
+      if (!asset?.id || String(asset.id).startsWith('[MODEL]')) return;
+      const custom = parseCustomAsset(asset.id, asset);
+      const isReturned = asset.status === 'returned' || returned.has(asset.id);
+      if (!isReturned && !isAssetReturnableFromEventDetail(asset, event)) return;
+
+      const code = normalizeDepartmentCode(custom?.department || asset.department || department || 'UN');
+      const existing = rows.get(asset.id);
+      const next = {
+        ...asset,
+        department: code,
+        parsedCustom: custom,
+        isReturned,
+        quantity: Math.max(1, Number(asset.quantity || custom?.quantity || 1)),
+      };
+      if (!existing || (next.isReturned && !existing.isReturned)) rows.set(asset.id, next);
+    });
+  });
+
+  return Array.from(rows.values()).sort((a, b) => (
+    compareByDisplayName(a.department, b.department) ||
+    Number(a.isReturned) - Number(b.isReturned) ||
+    compareByDisplayName(returnPageAssetTitle(a), returnPageAssetTitle(b))
+  ));
+}
+
+function returnPageAssetTitle(asset) {
+  const custom = asset?.parsedCustom || parseCustomAsset(asset?.id, asset);
+  if (custom) return customAssetDisplayName(custom);
+  if (asset?.isBulk || String(asset?.id || '').startsWith('[BULK]')) {
+    return `${asset.brand || ''} ${asset.model || ''}`.trim() || 'Bulk Item';
+  }
+  const model = `${asset?.brand || ''} ${asset?.model || ''}`.trim();
+  return [asset?.id || 'Asset', model].filter(Boolean).join(' · ');
+}
+
+function returnPageAssetSubtitle(asset) {
+  const custom = asset?.parsedCustom || parseCustomAsset(asset?.id, asset);
+  if (custom) {
+    return [
+      custom.type === 'LOAN' && custom.company ? `Company: ${custom.company}` : '',
+      `Qty: ${Math.max(1, Number(custom.quantity || asset.quantity || 1))}`,
+    ].filter(Boolean).join(' · ');
+  }
+  if (asset?.isBulk || String(asset?.id || '').startsWith('[BULK]')) {
+    return [
+      asset.description || 'Bulk quantity item',
+      `Qty: ${Math.max(1, Number(asset.quantity || 1))}`,
+    ].join(' · ');
+  }
+  return [
+    asset?.description || '',
+    asset?.serial ? `SN: ${asset.serial}` : '',
+  ].filter(Boolean).join(' · ');
+}
+
+function returnPageMetrics(event = returnPageState.event) {
+  const assetRows = returnPageAssets(event);
+  const remaining = Math.max(0, getEventReturnableCount(event));
+  const total = Math.max(getEventReturnTotalCount(event), remaining);
+  const returned = Math.max(0, total - remaining);
+  return {
+    total,
+    returned,
+    remaining,
+    departments: new Set(assetRows.map(asset => asset.department)).size,
+    percent: total > 0 ? Math.round((returned / total) * 100) : 0,
+  };
+}
+
+function returnPageCaptureViewState() {
+  const scroller = document.getElementById('returnAssetsScroll');
+  const active = document.activeElement;
+  const snapshot = {
+    scrollTop: scroller?.scrollTop || 0,
+    anchorId: '',
+    anchorOffset: 0,
+    focusId: active?.id || '',
+    selectionStart: Number.isFinite(active?.selectionStart) ? active.selectionStart : null,
+    selectionEnd: Number.isFinite(active?.selectionEnd) ? active.selectionEnd : null,
+  };
+  if (!scroller) return snapshot;
+
+  const scrollerRect = scroller.getBoundingClientRect();
+  const rows = Array.from(scroller.querySelectorAll('[data-return-row-id]'));
+  const anchor = rows.find(row => row.getBoundingClientRect().bottom > scrollerRect.top);
+  if (anchor) {
+    snapshot.anchorId = anchor.dataset.returnRowId || '';
+    snapshot.anchorOffset = anchor.getBoundingClientRect().top - scrollerRect.top;
+  }
+  return snapshot;
+}
+
+function returnPageRestoreViewState(snapshot) {
+  if (!snapshot) return;
+  const scroller = document.getElementById('returnAssetsScroll');
+  if (scroller) {
+    scroller.scrollTop = snapshot.scrollTop || 0;
+    if (snapshot.anchorId) {
+      const anchor = Array.from(scroller.querySelectorAll('[data-return-row-id]'))
+        .find(row => row.dataset.returnRowId === snapshot.anchorId);
+      if (anchor) {
+        const scrollerRect = scroller.getBoundingClientRect();
+        const currentOffset = anchor.getBoundingClientRect().top - scrollerRect.top;
+        scroller.scrollTop += currentOffset - snapshot.anchorOffset;
+      }
+    }
+  }
+
+  if (snapshot.focusId) {
+    const target = document.getElementById(snapshot.focusId);
+    if (target) {
+      target.focus({ preventScroll: true });
+      if (
+        snapshot.selectionStart !== null &&
+        typeof target.setSelectionRange === 'function'
+      ) {
+        target.setSelectionRange(snapshot.selectionStart, snapshot.selectionEnd);
+      }
+    }
+  }
+}
+
+function returnPageUpdatePickerOptions() {
+  if (document.getElementById('returnEventChooserModal')?.classList.contains('active')) {
+    renderReturnEventChooser();
+  }
+}
+
+function returnEventChooserFilteredEvents() {
+  const search = String(returnEventChooserState.search || '').trim().toLowerCase();
+  const filter = returnEventChooserState.filter || 'ALL';
+  return returnPageEligibleEvents().filter(event => (
+    (
+      filter === 'ALL' ||
+      (filter === 'ACTIVE' && !['closed', 'completed'].includes(planStateSlug(event?.state))) ||
+      planEventChooserFilterKey(event) === filter
+    ) &&
+    (!search || planEventChooserSearchText(event).includes(search))
+  ));
+}
+
+function ensureReturnEventChooserModal() {
+  let modal = document.getElementById('returnEventChooserModal');
+  if (modal) return modal;
+
+  modal = document.createElement('div');
+  modal.id = 'returnEventChooserModal';
+  modal.className = 'modal';
+  modal.setAttribute('aria-hidden', 'true');
+  modal.innerHTML = `
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 class="modal-title">Other Events <span title="Select an event to receive its returned assets">&#9432;</span></h3>
+        <button type="button" class="close-btn" aria-label="Close event picker"
+                onclick="closeModal('returnEventChooserModal')">&times;</button>
+      </div>
+      <div class="plan-event-chooser-search">
+        <span aria-hidden="true">&#128269;</span>
+        <input type="search" id="returnEventChooserSearch"
+               placeholder="Search events by name, ID, client, or location..."
+               oninput="returnEventChooserSearchChanged(this.value)">
+      </div>
+      <div class="plan-event-chooser-filters" id="returnEventChooserFilters"></div>
+      <div class="plan-event-chooser-table">
+        <div class="plan-event-chooser-head">
+          <span>Event</span>
+          <span>Dates</span>
+          <span>Location</span>
+          <span>Status</span>
+          <span></span>
+        </div>
+        <div class="plan-event-chooser-results" id="returnEventChooserResults"></div>
+      </div>
+      <div class="plan-event-chooser-footer" id="returnEventChooserFooter"></div>
+    </div>
+  `;
+  modal.addEventListener('click', event => {
+    if (event.target === modal) closeModal('returnEventChooserModal');
+  });
+  document.body.appendChild(modal);
+  return modal;
+}
+
+function renderReturnEventChooser() {
+  const filters = document.getElementById('returnEventChooserFilters');
+  const results = document.getElementById('returnEventChooserResults');
+  const footer = document.getElementById('returnEventChooserFooter');
+  if (!filters || !results || !footer) return;
+
+  const eligibleEvents = returnPageEligibleEvents();
+  const counts = eligibleEvents.reduce((summary, event) => {
+    const key = planEventChooserFilterKey(event);
+    summary.ALL += 1;
+    if (!['closed', 'completed'].includes(planStateSlug(event?.state))) {
+      summary.ACTIVE += 1;
+    }
+    summary[key] = (summary[key] || 0) + 1;
+    return summary;
+  }, { ALL: 0, ACTIVE: 0 });
+
+  filters.innerHTML = PLAN_EVENT_CHOOSER_FILTERS.map(filter => `
+    <button type="button"
+            class="plan-event-chooser-filter plan-event-chooser-filter-${filter.key.toLowerCase()} ${returnEventChooserState.filter === filter.key ? 'active' : ''}"
+            onclick="returnSetEventChooserFilter('${filter.key}')">
+      ${escapeHtml(filter.label)}
+      <span class="plan-event-chooser-count">${Number(counts[filter.key] || 0)}</span>
+    </button>
+  `).join('');
+
+  const chooserEvents = returnEventChooserFilteredEvents();
+  const pageCount = Math.max(1, Math.ceil(chooserEvents.length / returnEventChooserState.pageSize));
+  returnEventChooserState.page = Math.min(Math.max(1, returnEventChooserState.page), pageCount);
+  const start = (returnEventChooserState.page - 1) * returnEventChooserState.pageSize;
+  const visibleEvents = chooserEvents.slice(start, start + returnEventChooserState.pageSize);
+
+  results.innerHTML = visibleEvents.length ? visibleEvents.map(event => `
+    <button type="button"
+            class="plan-event-option ${Number(event.id) === Number(returnPageState.eventId) ? 'current' : ''}"
+            onclick="returnChooseEvent(${Number(event.id)})">
+      <span class="plan-event-option-name">
+        <span class="plan-event-option-title-line">
+          <strong>#${escapeHtml(String(event.id || ''))} &nbsp; ${escapeHtml(event.name || `Event ${event.id || ''}`)}</strong>
+          ${planEventTypeBadgeHtml(event)}
+        </span>
+        <span>${escapeHtml(planEventChooserSecondaryLabel(event))}</span>
+      </span>
+      <span class="plan-event-option-dates">
+        ${escapeHtml(planEventChooserDateRange(event))}
+        <span>${escapeHtml(planEventChooserRelativeDate(event))}</span>
+      </span>
+      <span class="plan-event-option-location">${escapeHtml(event.location || event.venue || '—')}</span>
+      ${planEventStateBadgeHtml(event)}
+      <span class="plan-event-option-arrow" aria-hidden="true">›</span>
+    </button>
+  `).join('') : '<div class="plan-empty">No events match this search.</div>';
+
+  const firstShown = chooserEvents.length ? start + 1 : 0;
+  const lastShown = Math.min(start + visibleEvents.length, chooserEvents.length);
+  const visiblePages = [];
+  for (let page = 1; page <= pageCount; page += 1) {
+    if (pageCount <= 7 || page === 1 || page === pageCount || Math.abs(page - returnEventChooserState.page) <= 1) {
+      visiblePages.push(page);
+    }
+  }
+  const pageControls = [];
+  let previousPage = 0;
+  visiblePages.forEach(page => {
+    if (previousPage && page - previousPage > 1) {
+      pageControls.push('<span aria-hidden="true">…</span>');
+    }
+    pageControls.push(`
+      <button type="button"
+              class="plan-event-chooser-page ${page === returnEventChooserState.page ? 'active' : ''}"
+              onclick="returnSetEventChooserPage(${page})">${page}</button>
+    `);
+    previousPage = page;
+  });
+
+  footer.innerHTML = `
+    <span>Showing ${firstShown} to ${lastShown} of ${chooserEvents.length} events</span>
+    <div class="plan-event-chooser-pages">
+      <button type="button" class="plan-event-chooser-page"
+              ${returnEventChooserState.page <= 1 ? 'disabled' : ''}
+              onclick="returnSetEventChooserPage(${returnEventChooserState.page - 1})"
+              aria-label="Previous page">‹</button>
+      ${pageControls.join('')}
+      <button type="button" class="plan-event-chooser-page"
+              ${returnEventChooserState.page >= pageCount ? 'disabled' : ''}
+              onclick="returnSetEventChooserPage(${returnEventChooserState.page + 1})"
+              aria-label="Next page">›</button>
+    </div>
+  `;
+}
+
+function returnOpenEventChooser() {
+  ensureReturnEventChooserModal();
+  returnEventChooserState.search = '';
+  returnEventChooserState.filter = 'ALL';
+  returnEventChooserState.page = 1;
+  const search = document.getElementById('returnEventChooserSearch');
+  if (search) search.value = '';
+  renderReturnEventChooser();
+  openModal('returnEventChooserModal');
+}
+
+function returnEventChooserSearchChanged(value) {
+  returnEventChooserState.search = value;
+  returnEventChooserState.page = 1;
+  renderReturnEventChooser();
+}
+
+function returnSetEventChooserFilter(filter) {
+  returnEventChooserState.filter = filter || 'ALL';
+  returnEventChooserState.page = 1;
+  renderReturnEventChooser();
+}
+
+function returnSetEventChooserPage(page) {
+  returnEventChooserState.page = Math.max(1, Number(page || 1));
+  renderReturnEventChooser();
+}
+
+async function returnChooseEvent(eventId) {
+  closeModal('returnEventChooserModal');
+  if (Number(eventId) === Number(returnPageState.eventId)) return;
+  await returnPageSelectEvent(eventId);
+}
+
+function returnPageDepartmentChipsHtml(assets) {
+  const counts = new Map();
+  assets.forEach(asset => {
+    counts.set(asset.department, (counts.get(asset.department) || 0) + asset.quantity);
+  });
+  const chips = Array.from(counts.entries())
+    .sort((a, b) => compareByDisplayName(planDepartmentLabel(a[0]), planDepartmentLabel(b[0])))
+    .map(([code, quantity]) => `
+      <button type="button"
+              class="return-chip return-chip-department ${returnPageState.department === code ? 'active' : ''}"
+              data-return-department="${escapeHtmlAttr(returnPageEncode(code))}"
+              style="${planDepartmentFilterStyle(code)}"
+              onclick="returnPageSetDepartment('${escapeHtmlAttr(returnPageEncode(code))}')">
+        ${escapeHtml(planDepartmentLabel(code))} · ${quantity}
+      </button>
+    `).join('');
+  const total = assets.reduce((sum, asset) => sum + asset.quantity, 0);
+  return `
+    <button type="button"
+            class="return-chip return-chip-all ${returnPageState.department === 'ALL' ? 'active' : ''}"
+            onclick="returnPageSetDepartment('ALL')">
+      All · ${total}
+    </button>
+    ${chips}
+  `;
+}
+
+function returnPageChipAssets() {
+  const assets = returnPageAssets();
+  return returnPageState.outstandingOnly
+    ? assets.filter(asset => !asset.isReturned)
+    : assets;
+}
+
+function returnPageFilteredAssets() {
+  const query = String(returnPageState.search || '').trim().toLowerCase();
+  return returnPageAssets().filter(asset => {
+    if (returnPageState.outstandingOnly && asset.isReturned) return false;
+    if (returnPageState.department !== 'ALL' && asset.department !== returnPageState.department) return false;
+    if (!query) return true;
+    return [
+      asset.id,
+      asset.brand,
+      asset.model,
+      asset.description,
+      asset.serial,
+      asset.location,
+      asset.department,
+      returnPageAssetTitle(asset),
+      returnPageAssetSubtitle(asset),
+    ].some(value => String(value || '').toLowerCase().includes(query));
+  });
+}
+
+function returnPageAssetRowHtml(asset) {
+  const encodedId = returnPageEncode(asset.id);
+  const pendingKey = `${asset.isReturned ? 'unreturn' : 'return'}:${asset.id}`;
+  const pending = returnPageState.pendingActions.has(pendingKey);
+  return `
+    <div class="return-asset-row ${asset.isReturned ? 'is-returned' : ''}"
+         data-return-row-id="${escapeHtmlAttr(encodedId)}">
+      <div>
+        <div class="return-asset-name">${escapeHtml(returnPageAssetTitle(asset))}</div>
+        <div class="return-asset-subtitle">${escapeHtml(returnPageAssetSubtitle(asset))}</div>
+      </div>
+      <div class="return-asset-department">
+        ${planDepartmentCodeBadgeHtml(asset.department)}
+        <div class="return-asset-location">${escapeHtml(asset.location || (asset.isReturned ? 'Returned to inventory' : '—'))}</div>
+      </div>
+      <div class="return-status ${asset.isReturned ? 'is-returned' : ''}">
+        ${asset.isReturned ? 'Returned' : 'Outstanding'}
+      </div>
+      <button type="button"
+              class="return-button ${asset.isReturned ? '' : 'return-button-primary'} return-row-action"
+              ${pending ? 'disabled' : ''}
+              onclick="${asset.isReturned
+                ? `returnPageUnreturnAsset('${escapeHtmlAttr(encodedId)}', this)`
+                : `returnPageReturnAsset('${escapeHtmlAttr(encodedId)}', this)`}">
+        ${pending ? (asset.isReturned ? 'Restoring…' : 'Returning…') : (asset.isReturned ? 'Undo' : 'Return')}
+      </button>
+    </div>
+  `;
+}
+
+function returnPageRenderFilteredAssets(options = {}) {
+  const scroller = document.getElementById('returnAssetsScroll');
+  if (!scroller) return;
+  const previousScroll = options.resetScroll ? 0 : scroller.scrollTop;
+  const filtered = returnPageFilteredAssets();
+  const groups = new Map();
+  filtered.forEach(asset => {
+    if (!groups.has(asset.department)) groups.set(asset.department, []);
+    groups.get(asset.department).push(asset);
+  });
+
+  const html = Array.from(groups.entries())
+    .sort((a, b) => compareByDisplayName(planDepartmentLabel(a[0]), planDepartmentLabel(b[0])))
+    .map(([department, departmentAssets]) => {
+      const outstanding = departmentAssets
+        .filter(asset => !asset.isReturned)
+        .reduce((sum, asset) => sum + asset.quantity, 0);
+      return `
+        <section class="return-department-section">
+          <div class="return-department-summary">
+            <span class="return-department-name">
+              <i class="return-department-dot"
+                 style="--department-color:${escapeHtmlAttr(planDepartmentColor(department))}"></i>
+              ${escapeHtml(planDepartmentLabel(department))}
+            </span>
+            <span class="return-department-actions">
+              <span>${outstanding} to return</span>
+              ${isAdminUser() && outstanding > 0 ? `
+                <button type="button"
+                        class="return-button return-button-success"
+                        onclick="returnPageReturnDepartment('${escapeHtmlAttr(returnPageEncode(department))}', this)">
+                  Return all
+                </button>
+              ` : ''}
+            </span>
+          </div>
+          ${departmentAssets.map(returnPageAssetRowHtml).join('')}
+        </section>
+      `;
+    }).join('');
+
+  scroller.innerHTML = html || `
+    <div class="return-empty">
+      ${returnPageState.outstandingOnly
+        ? 'No outstanding assets match the selected filters.'
+        : 'No returned or outstanding assets match the selected filters.'}
+    </div>
+  `;
+  scroller.scrollTop = previousScroll;
+
+  document.querySelectorAll('.return-chip').forEach(chip => chip.classList.remove('active'));
+  if (returnPageState.department === 'ALL') {
+    document.querySelector('.return-chip-all')?.classList.add('active');
+  } else {
+    document.querySelectorAll('.return-chip-department').forEach(chip => {
+      const encoded = chip.dataset.returnDepartment || '';
+      chip.classList.toggle('active', returnPageDecode(encoded) === returnPageState.department);
+    });
+  }
+
+  const helper = document.getElementById('returnAssetsHelper');
+  if (helper) {
+    helper.textContent = returnPageState.outstandingOnly
+      ? 'Outstanding items disappear immediately after return.'
+      : 'Showing outstanding and returned assets; use Undo for accidental returns.';
+  }
+}
+
+function returnPageEventDetailsHtml(event) {
+  return `
+    <section class="return-surface">
+      <div class="return-card-header"><h3>Event Details</h3></div>
+      <div class="return-aside-body">
+        <dl class="return-detail-list">
+          <div><dt>Name</dt><dd>${escapeHtml(event.name || `Event ${event.id}`)}</dd></div>
+          <div><dt>Location</dt><dd>${escapeHtml(event.location || '—')}</dd></div>
+          <div><dt>Date(s)</dt><dd>${escapeHtml(returnPageEventDateText(event) || '—')}</dd></div>
+          <div><dt>Status</dt><dd>${planEventStateBadgeHtml(event)}</dd></div>
+          <div><dt>Type</dt><dd>${planEventTypeBadgeHtml(event)}</dd></div>
+        </dl>
+      </div>
+    </section>
+  `;
+}
+
+function returnPageQuickReturnHtml(metrics) {
+  const disabled = metrics.remaining <= 0 ? 'disabled' : '';
+  return `
+    <section class="return-surface">
+      <div class="return-card-header">
+        <div><h3>Quick Return</h3><p>Scan or enter an asset ID.</p></div>
+      </div>
+      <div class="return-aside-body">
+        <label class="return-quick-label" for="returnQuickAssetInput">Asset ID or serial number</label>
+        <div class="return-quick-row">
+          <input class="return-quick-input"
+                 id="returnQuickAssetInput"
+                 autocomplete="off"
+                 placeholder="e.g. AU-1038"
+                 ${disabled}
+                 onkeydown="if(event.key==='Enter'){event.preventDefault();returnPageManualReturn();}">
+          <button type="button"
+                  class="return-button"
+                  title="Scan an asset"
+                  aria-label="Scan an asset"
+                  ${disabled}
+                  onclick="scanForReturn()">⌗</button>
+        </div>
+        <button type="button"
+                class="return-button return-button-primary return-quick-submit"
+                id="returnQuickSubmit"
+                ${disabled}
+                onclick="returnPageManualReturn()">
+          Return Asset
+        </button>
+        <p class="return-help">The field stays focused after each return for fast consecutive scanning.</p>
+      </div>
+    </section>
+  `;
+}
+
+function returnPageProgressHtml(event, metrics) {
+  const overdue = event.state === 'Overdue';
+  return `
+    <section class="return-surface">
+      <div class="return-card-header">
+        <div><h3>Return Progress</h3><p>Event completion at a glance.</p></div>
+      </div>
+      <div class="return-aside-body">
+        <div class="return-progress-number">
+          <strong>${metrics.percent}%</strong>
+          <span>${metrics.returned} of ${metrics.total} returned</span>
+        </div>
+        <div class="return-progress-track" aria-label="${metrics.percent}% returned">
+          <span style="width:${metrics.percent}%"></span>
+        </div>
+        <div class="return-progress-copy">
+          <span>${metrics.remaining} outstanding</span>
+          <span>${metrics.departments} departments</span>
+        </div>
+        ${overdue ? `
+          <div class="return-overdue-note">
+            <strong>Overdue:</strong> Return the remaining assets to clear the overdue status.
+          </div>
+        ` : ''}
+      </div>
+    </section>
+  `;
+}
+
+function renderReturnPage(options = {}) {
+  const root = document.getElementById('return-page-root');
+  if (!root) return;
+  const snapshot = options.snapshot || null;
+  const event = returnPageState.event;
+
+  if (!event) {
+    root.innerHTML = `
+      <div class="return-page-heading">
+        <h2>Return Event Assets</h2>
+        <p>Receive, verify, and return deployed assets to inventory.</p>
+      </div>
+      <div class="return-surface return-empty">No events currently have assets to return.</div>
+    `;
+    returnPageRestoreViewState(snapshot);
+    return;
+  }
+
+  const metrics = returnPageMetrics(event);
+  const assetRows = returnPageAssets(event);
+  root.innerHTML = `
+    <div class="return-page-heading">
+      <h2>Return Event Assets</h2>
+      <p>Receive, verify, and return deployed assets to inventory.</p>
+    </div>
+    <div class="return-layout">
+      <div class="return-primary">
+        <div class="return-event-bar">
+          <button type="button"
+                  class="return-event-select-wrap return-surface"
+                  id="returnEventPickerButton"
+                  aria-haspopup="dialog"
+                  aria-label="Choose an event to return"
+                  onclick="returnOpenEventChooser()">
+            <div class="return-event-icon">${planMetricIconSvg('calendar')}</div>
+            <div class="return-event-copy">
+              <div class="return-event-title">
+                <strong>#${escapeHtml(String(event.id || ''))}</strong>
+                <strong>${escapeHtml(event.name || `Event ${event.id}`)}</strong>
+              </div>
+              <div class="return-event-meta">
+                <span>${escapeHtml(returnPageEventDateText(event))}</span>
+                ${event.location ? `<span aria-hidden="true">•</span><span>${escapeHtml(event.location)}</span>` : ''}
+                ${planEventTypeBadgeHtml(event)}
+                ${planEventStateBadgeHtml(event)}
+              </div>
+            </div>
+            <span class="return-event-chevron" aria-hidden="true">⌄</span>
+          </button>
+          <div class="return-metrics return-surface">
+            <div class="return-metric"><div class="return-metric-icon">${planMetricIconSvg('lines')}</div><div><strong>${metrics.total}</strong><span>Total Assets</span></div></div>
+            <div class="return-metric"><div class="return-metric-icon">${planMetricIconSvg('quantity')}</div><div><strong>${metrics.returned}</strong><span>Returned</span></div></div>
+            <div class="return-metric"><div class="return-metric-icon">${planMetricIconSvg('calendar')}</div><div><strong>${metrics.remaining}</strong><span>Remaining</span></div></div>
+            <div class="return-metric"><div class="return-metric-icon">${planMetricIconSvg('departments')}</div><div><strong>${metrics.departments}</strong><span>Departments</span></div></div>
+          </div>
+        </div>
+        <section class="return-assets-card return-surface">
+          <div class="return-card-header">
+            <div>
+              <h3>Assets to Return</h3>
+              <p id="returnAssetsHelper">${returnPageState.outstandingOnly
+                ? 'Outstanding items disappear immediately after return.'
+                : 'Showing outstanding and returned assets; use Undo for accidental returns.'}</p>
+            </div>
+          </div>
+          <div class="return-filters">
+            <div class="return-search-row">
+              <input class="return-search-input"
+                     id="returnAssetSearch"
+                     value="${escapeHtmlAttr(returnPageState.search)}"
+                     placeholder="Search asset ID, model, serial number…"
+                     oninput="returnPageSearchChanged(this.value)">
+              <label class="return-toggle">
+                <input type="checkbox"
+                       ${returnPageState.outstandingOnly ? 'checked' : ''}
+                       onchange="returnPageToggleOutstanding(this.checked)">
+                Outstanding only
+              </label>
+            </div>
+            <div class="return-filter-chips" id="returnDepartmentChips">
+              ${returnPageDepartmentChipsHtml(
+                returnPageState.outstandingOnly
+                  ? assetRows.filter(asset => !asset.isReturned)
+                  : assetRows
+              )}
+            </div>
+          </div>
+          <div class="return-assets-table-head">
+            <span>Asset</span><span>Department / Location</span><span>Status</span><span></span>
+          </div>
+          <div class="return-assets-scroll" id="returnAssetsScroll"></div>
+        </section>
+      </div>
+      <aside class="return-aside">
+        ${returnPageEventDetailsHtml(event)}
+        ${returnPageQuickReturnHtml(metrics)}
+        ${returnPageProgressHtml(event, metrics)}
+        <button type="button"
+                class="return-button return-button-primary return-exit-button"
+                onclick="returnPageExit()">
+          ${metrics.remaining === 0 ? 'Close Event' : 'Save and Exit'}
+        </button>
+      </aside>
+    </div>
+  `;
+  returnPageRenderFilteredAssets();
+  returnPageRestoreViewState(snapshot);
+}
+
+async function loadReturnWorkspace(options = {}) {
+  const root = document.getElementById('return-page-root');
+  if (!root) return;
+  const snapshot = options.preservePosition === false ? null : returnPageCaptureViewState();
+  const version = ++returnPageState.requestVersion;
+  if (!returnPageState.loaded) {
+    root.innerHTML = '<div class="loading">Loading return workspace...</div>';
+  }
+
+  try {
+    const eventsResponse = await apiCall('/api/events');
+    if (version !== returnPageState.requestVersion) return;
+    returnPageState.events = eventsResponse.data || [];
+    events = returnPageState.events;
+    updateOverdueCounter(countOverdueEvents(returnPageState.events));
+
+    const eligible = returnPageEligibleEvents().filter(event => (
+      getEventReturnableCount(event) > 0 && event.state !== 'Closed'
+    ));
+    const keepCurrent = options.keepSelection !== false &&
+      returnPageState.eventId &&
+      returnPageState.events.some(event => Number(event.id) === Number(returnPageState.eventId));
+    const selected = keepCurrent
+      ? returnPageState.events.find(event => Number(event.id) === Number(returnPageState.eventId))
+      : eligible[0];
+
+    if (!selected) {
+      returnPageState.eventId = null;
+      returnPageState.event = null;
+      returnPageState.loaded = true;
+      renderReturnPage({ snapshot });
+      return;
+    }
+
+    const detailResponse = await apiCall(`/api/events/${selected.id}`);
+    if (version !== returnPageState.requestVersion) return;
+    returnPageState.eventId = Number(selected.id);
+    returnPageState.event = detailResponse.data;
+    returnPageUpsertEventSummary(detailResponse.data);
+    returnPageState.loaded = true;
+    renderReturnPage({ snapshot });
+  } catch (error) {
+    if (version !== returnPageState.requestVersion) return;
+    root.innerHTML = `
+      <div class="return-empty">
+        Failed to load Return: ${escapeHtml(error.message || String(error))}
+        <br><br>
+        <button type="button" class="return-button return-button-primary" onclick="loadReturnEvents()">Retry</button>
+      </div>
+    `;
+  }
+}
+
+async function returnPageSelectEvent(eventId) {
+  const id = Number(eventId);
+  if (!id || id === Number(returnPageState.eventId)) return;
+  const version = ++returnPageState.requestVersion;
+  returnPageState.department = 'ALL';
+  returnPageState.search = '';
+  try {
+    const response = await apiCall(`/api/events/${id}`);
+    if (version !== returnPageState.requestVersion) return;
+    returnPageState.eventId = id;
+    returnPageState.event = response.data;
+    returnPageUpsertEventSummary(response.data);
+    renderReturnPage();
+  } catch (error) {
+    showNotification('error', `Failed to load event: ${error.message}`);
+    returnPageUpdatePickerOptions();
+  }
+}
+
+async function returnPageRefreshSelected(options = {}) {
+  const id = Number(returnPageState.eventId);
+  if (!id) return;
+  const snapshot = returnPageCaptureViewState();
+  if (options.focusId) snapshot.focusId = options.focusId;
+  const version = ++returnPageState.requestVersion;
+  const response = await apiCall(`/api/events/${id}`);
+  if (version !== returnPageState.requestVersion || id !== Number(returnPageState.eventId)) return;
+  returnPageState.event = response.data;
+  returnPageUpsertEventSummary(response.data);
+  updateOverdueCounter(countOverdueEvents(returnPageState.events));
+  renderReturnPage({ snapshot });
+}
+
+function returnPageHandleRealtimeEvent(event) {
+  if (!event?.id) return;
+  returnPageUpsertEventSummary(event);
+  if (!document.getElementById('return-section')?.classList.contains('active')) return;
+  if (Number(event.id) === Number(returnPageState.eventId)) {
+    const snapshot = returnPageCaptureViewState();
+    returnPageState.event = event;
+    renderReturnPage({ snapshot });
+  } else {
+    returnPageUpdatePickerOptions();
+  }
+}
+
+function returnPageSearchChanged(value) {
+  returnPageState.search = String(value || '');
+  returnPageRenderFilteredAssets({ resetScroll: true });
+}
+
+function returnPageToggleOutstanding(checked) {
+  returnPageState.outstandingOnly = !!checked;
+  const chipAssets = returnPageChipAssets();
+  if (
+    returnPageState.department !== 'ALL' &&
+    !chipAssets.some(asset => asset.department === returnPageState.department)
+  ) {
+    returnPageState.department = 'ALL';
+  }
+  const chips = document.getElementById('returnDepartmentChips');
+  if (chips) chips.innerHTML = returnPageDepartmentChipsHtml(chipAssets);
+  returnPageRenderFilteredAssets({ resetScroll: true });
+}
+
+function returnPageSetDepartment(encodedDepartment) {
+  returnPageState.department = encodedDepartment === 'ALL'
+    ? 'ALL'
+    : normalizeDepartmentCode(returnPageDecode(encodedDepartment));
+  returnPageRenderFilteredAssets({ resetScroll: true });
+}
+
+async function returnPageRunAssetAction(action, encodedAssetId, button) {
+  const assetId = returnPageDecode(encodedAssetId);
+  const eventId = Number(returnPageState.eventId);
+  const key = `${action}:${assetId}`;
+  if (!eventId || !assetId || returnPageState.pendingActions.has(key)) return;
+  returnPageState.pendingActions.add(key);
+  if (button) {
+    button.disabled = true;
+    button.textContent = action === 'unreturn' ? 'Restoring…' : 'Returning…';
+  }
+
+  try {
+    const path = action === 'unreturn'
+      ? `/api/events/${eventId}/unreturn`
+      : `/api/events/${eventId}/return`;
+    await apiCall(path, 'POST', { assetId });
+    returnPageState.pendingActions.delete(key);
+    await returnPageRefreshSelected();
+    showNotification('success', action === 'unreturn'
+      ? `${customAssetLabelFromId(assetId)} restored to the event`
+      : `${customAssetLabelFromId(assetId)} returned successfully`);
+  } catch (error) {
+    returnPageState.pendingActions.delete(key);
+    showNotification('error', `${action === 'unreturn' ? 'Undo return' : 'Return'} failed: ${error.message}`);
+    try {
+      await returnPageRefreshSelected();
+    } catch (refreshError) {
+      console.warn('Return workspace reconciliation failed:', refreshError);
+    }
+  } finally {
+    returnPageState.pendingActions.delete(key);
+    if (button?.isConnected) button.disabled = false;
+  }
+}
+
+function returnPageReturnAsset(encodedAssetId, button) {
+  return returnPageRunAssetAction('return', encodedAssetId, button);
+}
+
+function returnPageUnreturnAsset(encodedAssetId, button) {
+  return returnPageRunAssetAction('unreturn', encodedAssetId, button);
+}
+
+async function returnPageReturnDepartment(encodedDepartment, button) {
+  const eventId = Number(returnPageState.eventId);
+  const department = normalizeDepartmentCode(returnPageDecode(encodedDepartment));
+  const key = `department:${department}`;
+  if (!eventId || returnPageState.pendingActions.has(key)) return;
+  returnPageState.pendingActions.add(key);
+  if (button) {
+    button.disabled = true;
+    button.textContent = 'Returning…';
+  }
+  try {
+    const response = await apiCall(
+      `/api/events/${eventId}/return-department`,
+      'POST',
+      { department }
+    );
+    const returned = response.returned || response.data?.returned || [];
+    await returnPageRefreshSelected();
+    showNotification('success', `${returned.length} item(s) returned for ${department}`);
+  } catch (error) {
+    showNotification('error', `Failed to return ${department}: ${error.message}`);
+    try {
+      await returnPageRefreshSelected();
+    } catch (refreshError) {
+      console.warn('Return workspace reconciliation failed:', refreshError);
+    }
+  } finally {
+    returnPageState.pendingActions.delete(key);
+    if (button?.isConnected) button.disabled = false;
+  }
+}
+
+async function returnPageManualReturn() {
+  const eventId = Number(returnPageState.eventId);
+  const input = document.getElementById('returnQuickAssetInput');
+  const submit = document.getElementById('returnQuickSubmit');
+  let assetId = normalizeScannedIdentifier(input?.value || '');
+  if (!eventId) {
+    showNotification('warning', 'Select an event first');
+    return;
+  }
+  if (!assetId) {
+    showNotification('warning', 'Enter an asset ID or serial number');
+    input?.focus();
+    return;
+  }
+
+  try {
+    const inventoryAssets = await ensureAssetsLoaded();
+    assetId = getAssetIdFromIdentifier(assetId, inventoryAssets);
+  } catch (error) {
+    console.warn('Could not resolve scanned return identifier locally:', error);
+  }
+
+  const key = `return:${assetId}`;
+  if (returnPageState.pendingActions.has(key)) return;
+  returnPageState.pendingActions.add(key);
+  if (input) input.disabled = true;
+  if (submit) {
+    submit.disabled = true;
+    submit.textContent = 'Returning…';
+  }
+
+  try {
+    await apiCall(`/api/events/${eventId}/return`, 'POST', { assetId });
+    if (input) input.value = '';
+    await returnPageRefreshSelected({ focusId: 'returnQuickAssetInput' });
+    showNotification('success', `${customAssetLabelFromId(assetId)} returned successfully`);
+  } catch (error) {
+    showNotification('error', `Return failed: ${error.message}`);
+    if (input) {
+      input.disabled = false;
+      input.focus();
+    }
+    try {
+      await returnPageRefreshSelected({ focusId: 'returnQuickAssetInput' });
+    } catch (refreshError) {
+      console.warn('Return workspace reconciliation failed:', refreshError);
+    }
+  } finally {
+    returnPageState.pendingActions.delete(key);
+    const currentInput = document.getElementById('returnQuickAssetInput');
+    if (currentInput && getEventReturnableCount(returnPageState.event) > 0) {
+      currentInput.disabled = false;
+      currentInput.focus({ preventScroll: true });
+    }
+  }
+}
+
+async function returnPageExit() {
+  const eventId = Number(returnPageState.eventId);
+  const metrics = returnPageMetrics();
+  if (!eventId || metrics.remaining > 0) {
+    showSection('events');
+    return;
+  }
+
+  try {
+    await apiCall(`/api/events/${eventId}/close-return`, 'POST', {});
+    showNotification('success', `Event ${eventId} closed`);
+    returnPageState.eventId = null;
+    returnPageState.event = null;
+    returnPageState.loaded = false;
+    await loadReturnWorkspace({ preservePosition: false, keepSelection: false });
+  } catch (error) {
+    showNotification('error', `Failed to close event: ${error.message}`);
+  }
 }
 
 
@@ -24022,19 +25049,7 @@ async function updateEventAssetOverview(event) {
   }
 
   if (document.getElementById('return-section')?.classList.contains('active')) {
-    if (getEventPageView('return') === 'card') {
-      const existingCard = document.querySelector(
-        `#return-events .event-card[data-event-id="${event.id}"]`
-      );
-      if (getEventReturnableCount(event) > 0 && event.state !== 'Closed') {
-        if (existingCard) existingCard.replaceWith(createReturnEventCard(event));
-        else await loadReturnEvents();
-      } else if (existingCard) {
-        existingCard.remove();
-      }
-    } else {
-      await loadReturnEvents();
-    }
+    returnPageHandleRealtimeEvent(event);
   }
 }
 
@@ -24176,6 +25191,9 @@ async function refreshVisibleDataFromRealtime() {
         break;
       case "plan":
         await loadPlanPage();
+        break;
+      case "workforce":
+        if (typeof loadWorkforcePage === "function") await loadWorkforcePage();
         break;
       case "prepare":
         await loadPrepareEvents();
@@ -25545,6 +26563,14 @@ function eventMenuIconHtml(icon) {
       <path d="M9 4V2h6v2"></path>
       <path d="m9 13 2 2 4-4"></path>
     `,
+    workforce: `
+      <circle cx="9" cy="8" r="3"></circle>
+      <path d="M3 20v-2a6 6 0 0 1 12 0v2"></path>
+      <path d="M16 6h5"></path>
+      <path d="M18.5 3.5v5"></path>
+      <path d="M17 13h4"></path>
+      <path d="M19 11v4"></path>
+    `,
     force: `
       <path d="m13 2-9 12h8l-1 8 9-12h-8Z"></path>
     `,
@@ -25567,6 +26593,7 @@ function eventCardMenuHtml(event, context = 'card') {
       : '');
   const adminActions = isAdminUser() ? `
     <button type="button" onclick="openEventPlanning(${event.id})">${eventMenuIconHtml('plan')}<span>Plan</span></button>
+    <button type="button" onclick="openEventWorkforce(${event.id})">${eventMenuIconHtml('workforce')}<span>Manpower &amp; Transport</span></button>
     <button type="button" onclick="showForceStateModal(${event.id}, '${escapeHtmlAttr(event.state || '')}')">${eventMenuIconHtml('force')}<span>Force</span></button>
     <button type="button" class="danger" onclick="deleteEvent(${event.id})">${eventMenuIconHtml('delete')}<span>Delete</span></button>
   ` : '';
@@ -25908,19 +26935,8 @@ function renderReturnEventsCards(list) {
   sorted.forEach(event => container.appendChild(createReturnEventCard(event)));
 }
 
-async function loadReturnEvents() {
-  try {
-    ensureEventPageToolbar('return');
-    updateEventPageToolbarState('return');
-    const response = await apiCall('/api/events');
-    updateOverdueCounter(countOverdueEvents(response.data || []));
-    const returnableEvents = (response.data || []).filter(event => getEventReturnableCount(event) > 0 && event.state !== 'Closed');
-    if (getEventPageView('return') === 'list') renderReturnEventsTable(returnableEvents);
-    else renderReturnEventsCards(returnableEvents);
-  } catch (error) {
-    const container = document.getElementById('return-events');
-    if (container) container.innerHTML = '<p style="color:red;text-align:center;">Error loading events</p>';
-  }
+async function loadReturnEvents(options = {}) {
+  return loadReturnWorkspace(options);
 }
 
 window.__preparePendingActions = window.__preparePendingActions || {};

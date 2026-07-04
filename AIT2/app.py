@@ -35,6 +35,7 @@ from flask import (
     url_for,
 )
 from flask_cors import CORS
+from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
 from data_manager import ConcurrentDataChangeError, DataManager
 from maintenance_logs import (
@@ -63,6 +64,28 @@ from models import (
     normalize_event_state,
 )
 from utils import sanitize_filename
+from workforce import (
+    MAX_UPLOAD_BYTES,
+    VALID_STATUSES,
+    active_claims,
+    active_invoice,
+    build_zip,
+    delete_upload,
+    event_assignments,
+    event_bookings,
+    extract_invoice_amount,
+    find_by_id,
+    load_workforce,
+    money,
+    mutate_workforce,
+    new_id,
+    normalize_phone,
+    now_iso,
+    save_upload,
+    submission_totals,
+    upload_absolute_path,
+    worker_submissions,
+)
 
 
 def _load_local_env_file():
@@ -1014,7 +1037,9 @@ def _event_asset_realtime_change_for_request():
         'assign_specific_asset_to_model': 'prepare',
         'unassign_specific_asset_from_model': 'unprepare',
         'return_event_asset': 'return',
+        'unreturn_event_asset': 'unreturn',
         'return_department_assets': 'return-department',
+        'close_return_event': 'close-return',
     }
     action = action_by_endpoint.get(request.endpoint)
     event_id = (request.view_args or {}).get('event_id')
@@ -3949,6 +3974,1037 @@ def _current_user_is_admin():
     return _current_user_effective_is_admin()
 
 
+# ---------------- Manpower, transport, and worker portal ----------------
+
+WORKER_TOKEN_MAX_AGE = 12 * 60 * 60
+
+
+def _workforce_folder(manager=None):
+    manager = manager or _current_data_manager_object()
+    return os.path.abspath(getattr(manager, 'data_folder', '') or '')
+
+
+def _worker_token_serializer():
+    return URLSafeTimedSerializer(app.secret_key, salt='aim-worker-portal-v1')
+
+
+def _make_worker_token(company_code, freelancer):
+    return _worker_token_serializer().dumps({
+        'companyCode': _normalise_company_code(company_code, DEFAULT_COMPANY_CODE),
+        'freelancerId': str(freelancer.get('id') or ''),
+        'phone': normalize_phone(freelancer.get('phone')),
+    })
+
+
+def _worker_token_data(token):
+    try:
+        payload = _worker_token_serializer().loads(
+            str(token or ''),
+            max_age=WORKER_TOKEN_MAX_AGE,
+        )
+    except SignatureExpired as exc:
+        raise ValueError('Your worker session has expired. Enter your phone number again.') from exc
+    except BadSignature as exc:
+        raise ValueError('Invalid worker session. Enter your phone number again.') from exc
+    if not isinstance(payload, dict):
+        raise ValueError('Invalid worker session')
+    company_code = _normalise_company_code(payload.get('companyCode'))
+    freelancer_id = str(payload.get('freelancerId') or '')
+    phone = normalize_phone(payload.get('phone'))
+    if not company_code or not freelancer_id or not phone:
+        raise ValueError('Invalid worker session')
+    return company_code, freelancer_id, phone
+
+
+def _bind_public_company_manager(company_code):
+    test_manager = app.config.get('TEST_DATA_MANAGER')
+    if app.config.get('TESTING') and test_manager is not None:
+        manager = test_manager
+    else:
+        manager = _get_company_data_manager(company_code)
+    current = _current_data_manager_object()
+    if manager is not current and hasattr(manager, 'acquire_write_request'):
+        manager.acquire_write_request()
+        locks = getattr(g, 'data_manager_write_locks', None)
+        if locks is None:
+            locks = []
+            g.data_manager_write_locks = locks
+        locks.append(manager)
+    _bind_request_data_manager(manager)
+    return manager
+
+
+def _event_date_for_worker(value):
+    try:
+        return format_date_output(value)
+    except Exception:
+        return str(value or '')
+
+
+def _public_submission_rows(rows):
+    result = {'invoices': [], 'claims': []}
+    for kind in ('invoices', 'claims'):
+        for row in rows.get(kind, []) if isinstance(rows, dict) else []:
+            if not isinstance(row, dict):
+                continue
+            result[kind].append({
+                'id': str(row.get('id') or ''),
+                'submittedAt': str(row.get('submittedAt') or ''),
+                'status': str(row.get('status') or 'Pending Review'),
+                'denialReason': (
+                    str(row.get('denialReason') or '')
+                    if row.get('status') == 'Denied'
+                    else ''
+                ),
+            })
+    return result
+
+
+def _worker_company_payload(company_code, manager, freelancer, workforce):
+    freelancer_id = str(freelancer.get('id') or '')
+    assignments_by_event = defaultdict(list)
+    for event_id, rows in (workforce.get('assignments') or {}).items():
+        for assignment in rows if isinstance(rows, list) else []:
+            if (
+                isinstance(assignment, dict)
+                and str(assignment.get('freelancerId') or '') == freelancer_id
+            ):
+                assignments_by_event[str(event_id)].append(assignment)
+
+    events_payload = []
+    today = datetime.now().date()
+    for raw_event_id, assignments in assignments_by_event.items():
+        try:
+            event_id = int(raw_event_id)
+        except (TypeError, ValueError):
+            continue
+        event = manager.events.get(event_id)
+        if not event:
+            continue
+        departments = []
+        assignment_payload = []
+        for assignment in assignments:
+            department = str(assignment.get('department') or 'Unassigned')
+            if department not in departments:
+                departments.append(department)
+            assignment_payload.append({
+                'id': str(assignment.get('id') or ''),
+                'department': department,
+                'role': str(assignment.get('roleName') or 'Freelancer'),
+                'days': int(assignment.get('days') or 0),
+            })
+        try:
+            end_date = datetime.strptime(event.end_date, '%Y%m%d').date()
+            is_past = end_date < today
+        except (TypeError, ValueError):
+            is_past = False
+        rows = worker_submissions(workforce, event_id, freelancer_id)
+        public_rows = _public_submission_rows(rows)
+        events_payload.append({
+            'id': event_id,
+            'name': event.name,
+            'location': getattr(event, 'location', '') or '',
+            'startDate': _event_date_for_worker(event.start_date),
+            'endDate': _event_date_for_worker(event.end_date),
+            'isPast': is_past,
+            'assignments': assignment_payload,
+            'departments': departments,
+            'submissions': public_rows,
+            'canUploadInvoice': active_invoice(rows) is None,
+            'claimSlotsRemaining': max(0, 5 - len(active_claims(rows))),
+        })
+    events_payload.sort(key=lambda row: (row['isPast'], row['startDate'], row['id']))
+    company = _company_payload(company_code)
+    return {
+        'code': company['code'],
+        'name': company['name'],
+        'token': _make_worker_token(company_code, freelancer),
+        'freelancer': {
+            'id': freelancer_id,
+            'name': str(freelancer.get('name') or ''),
+        },
+        'events': events_payload,
+    }
+
+
+def _find_worker_context(token, event_id=None):
+    company_code, freelancer_id, phone = _worker_token_data(token)
+    manager = _bind_public_company_manager(company_code)
+    workforce = load_workforce(_workforce_folder(manager))
+    freelancer = find_by_id(workforce.get('freelancers'), freelancer_id)
+    if (
+        not freelancer
+        or normalize_phone(freelancer.get('phone')) != phone
+        or not freelancer.get('active', True)
+    ):
+        raise ValueError('Worker profile is no longer available')
+    if event_id is not None:
+        assigned = any(
+            str(row.get('freelancerId') or '') == freelancer_id
+            for row in event_assignments(workforce, event_id)
+            if isinstance(row, dict)
+        )
+        if not assigned or int(event_id) not in manager.events:
+            raise ValueError('You are not assigned to this event')
+    return company_code, manager, workforce, freelancer
+
+
+def _department_codes_for_manager(manager):
+    departments = getattr(manager, 'departments', {}) or {}
+    payload = []
+    for code, record in departments.items():
+        if isinstance(record, dict):
+            name = record.get('name') or record.get('Name') or code
+        else:
+            name = getattr(record, 'name', '') or code
+        payload.append({'code': str(code), 'name': str(name)})
+    return sorted(payload, key=lambda row: row['name'].lower())
+
+
+def _admin_file_payload(record, event_id, freelancer_id, kind):
+    payload = dict(record)
+    submission_id = quote(str(record.get('id') or ''))
+    payload['previewUrl'] = f'/api/workforce/submissions/{submission_id}/file'
+    payload['downloadUrl'] = f'/api/workforce/submissions/{submission_id}/file?download=1'
+    payload['kind'] = kind
+    payload['eventId'] = int(event_id)
+    payload['freelancerId'] = str(freelancer_id)
+    return payload
+
+
+def _admin_workforce_payload(event_id, manager=None):
+    manager = manager or _current_data_manager_object()
+    event = manager.events.get(int(event_id))
+    if not event:
+        raise LookupError('Event not found')
+    workforce = load_workforce(_workforce_folder(manager))
+    submissions = {}
+    event_submission_rows = (
+        (workforce.get('submissions') or {}).get(str(event_id), {}) or {}
+    )
+    for freelancer_id, rows in event_submission_rows.items():
+        rows = rows if isinstance(rows, dict) else {}
+        submissions[str(freelancer_id)] = {
+            'invoices': [
+                _admin_file_payload(row, event_id, freelancer_id, 'invoice')
+                for row in rows.get('invoices', [])
+                if isinstance(row, dict)
+            ],
+            'claims': [
+                _admin_file_payload(row, event_id, freelancer_id, 'claim')
+                for row in rows.get('claims', [])
+                if isinstance(row, dict)
+            ],
+        }
+
+    bookings = []
+    for booking in event_bookings(workforce, event_id):
+        if not isinstance(booking, dict):
+            continue
+        row = dict(booking)
+        invoice = row.get('invoice')
+        if isinstance(invoice, dict) and invoice.get('id'):
+            submission_id = quote(str(invoice['id']))
+            invoice = dict(invoice)
+            invoice['previewUrl'] = f'/api/workforce/submissions/{submission_id}/file'
+            invoice['downloadUrl'] = f'/api/workforce/submissions/{submission_id}/file?download=1'
+            row['invoice'] = invoice
+        bookings.append(row)
+
+    return {
+        'company': _company_payload(_current_company_code()),
+        'event': {
+            'id': event.event_id,
+            'name': event.name,
+            'location': getattr(event, 'location', '') or '',
+            'startDate': _event_date_for_worker(event.start_date),
+            'endDate': _event_date_for_worker(event.end_date),
+            'state': event.state,
+        },
+        'freelancers': workforce.get('freelancers', []),
+        'roles': workforce.get('roles', []),
+        'assignments': event_assignments(workforce, event_id),
+        'transportVendors': workforce.get('transportVendors', []),
+        'transportBookings': bookings,
+        'submissions': submissions,
+        'departments': _department_codes_for_manager(manager),
+        'totals': submission_totals(workforce, event_id),
+        'updatedAt': workforce.get('updatedAt', ''),
+    }
+
+
+def _workforce_changed(event_id, action):
+    mark_realtime_change(
+        'workforce',
+        {'eventId': int(event_id), 'action': str(action or 'updated')},
+    )
+
+
+@app.route('/worker')
+def worker_portal():
+    return render_template(
+        'worker.html',
+        worker_js_version=_static_asset_version('js/worker.js'),
+        worker_css_version=_static_asset_version('css/worker.css'),
+    )
+
+
+@app.route('/api/worker/lookup', methods=['POST'])
+def worker_lookup():
+    payload = request.get_json(silent=True) or {}
+    phone = normalize_phone(payload.get('phone'))
+    if len(re.sub(r'\D', '', phone)) < 8:
+        return jsonify({'error': 'Enter a valid phone number'}), 400
+
+    companies = []
+    test_manager = app.config.get('TEST_DATA_MANAGER')
+    if app.config.get('TESTING') and test_manager is not None:
+        company_managers = [(_current_company_code(), test_manager)]
+    else:
+        company_managers = [
+            (company_code, _get_company_data_manager(company_code))
+            for company_code in sorted(_all_company_records())
+        ]
+    for company_code, manager in company_managers:
+        workforce = load_workforce(_workforce_folder(manager))
+        matches = [
+            freelancer
+            for freelancer in workforce.get('freelancers', [])
+            if (
+                isinstance(freelancer, dict)
+                and freelancer.get('active', True)
+                and normalize_phone(freelancer.get('phone')) == phone
+            )
+        ]
+        for freelancer in matches:
+            company_payload = _worker_company_payload(
+                company_code, manager, freelancer, workforce
+            )
+            if company_payload['events']:
+                companies.append(company_payload)
+
+    if not companies:
+        return jsonify({
+            'error': 'No assigned events were found for that phone number.'
+        }), 404
+    return jsonify({'success': True, 'data': {'companies': companies}})
+
+
+@app.route('/api/worker/company', methods=['POST'])
+def worker_company_status():
+    payload = request.get_json(silent=True) or {}
+    try:
+        company_code, manager, workforce, freelancer = _find_worker_context(
+            payload.get('token')
+        )
+        return jsonify({
+            'success': True,
+            'data': _worker_company_payload(
+                company_code, manager, freelancer, workforce
+            ),
+        })
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 401
+
+
+@app.route('/api/worker/submissions', methods=['POST'])
+def worker_upload_submission():
+    token = request.form.get('token', '')
+    try:
+        event_id = int(request.form.get('eventId', '0'))
+    except ValueError:
+        return jsonify({'error': 'Invalid event'}), 400
+    kind = str(request.form.get('kind') or '').strip().lower()
+    acknowledged = str(request.form.get('warningAcknowledged') or '').lower()
+    if acknowledged not in {'1', 'true', 'yes', 'on'}:
+        return jsonify({'error': 'Confirm the upload warning before submitting'}), 400
+    if kind not in {'invoice', 'claim'}:
+        return jsonify({'error': 'Choose invoice or claim'}), 400
+    uploaded_file = request.files.get('file')
+    if not uploaded_file or not uploaded_file.filename:
+        return jsonify({'error': 'Choose a file to upload'}), 400
+
+    saved_record = None
+    try:
+        company_code, manager, _workforce, freelancer = _find_worker_context(
+            token, event_id
+        )
+        data_folder = _workforce_folder(manager)
+        freelancer_id = str(freelancer.get('id') or '')
+
+        claim_amount = None
+        claim_date = ''
+        category = ''
+        description = ''
+        department = ''
+        if kind == 'claim':
+            claim_amount = money(request.form.get('amount'))
+            claim_date = str(request.form.get('claimDate') or '').strip()
+            category = str(request.form.get('category') or '').strip()
+            if category == 'Other':
+                category = str(request.form.get('otherCategory') or '').strip()
+            description = str(request.form.get('description') or '').strip()
+            department = str(request.form.get('department') or '').strip()
+            if claim_amount is None or not claim_date or not category or not description:
+                return jsonify({
+                    'error': 'Amount, claim date, category and description are required'
+                }), 400
+
+        with mutate_workforce(data_folder) as workforce:
+            rows = worker_submissions(
+                workforce, event_id, freelancer_id, create=True
+            )
+            if kind == 'invoice' and active_invoice(rows):
+                return jsonify({
+                    'error': 'An active invoice has already been submitted for this event'
+                }), 409
+            if kind == 'claim' and len(active_claims(rows)) >= 5:
+                return jsonify({
+                    'error': 'You have already submitted five active claims for this event'
+                }), 409
+
+            assigned_departments = []
+            for assignment in event_assignments(workforce, event_id):
+                if (
+                    isinstance(assignment, dict)
+                    and str(assignment.get('freelancerId') or '') == freelancer_id
+                ):
+                    code = str(assignment.get('department') or 'Unassigned')
+                    if code not in assigned_departments:
+                        assigned_departments.append(code)
+            if kind == 'claim':
+                if len(assigned_departments) == 1:
+                    department = assigned_departments[0]
+                if department not in assigned_departments:
+                    return jsonify({
+                        'error': 'Choose one of your assigned departments'
+                    }), 400
+
+            saved_record = save_upload(
+                data_folder,
+                uploaded_file,
+                event_id,
+                freelancer_id,
+                kind,
+            )
+            record = {
+                'id': new_id('sub'),
+                **saved_record,
+                'submittedAt': now_iso(),
+                'status': 'Pending Review',
+                'denialReason': '',
+                'reviewHistory': [],
+            }
+            if kind == 'invoice':
+                absolute_path = upload_absolute_path(
+                    data_folder, record['storedPath']
+                )
+                extraction = extract_invoice_amount(absolute_path)
+                record.update({
+                    'amount': extraction.get('amount'),
+                    'ocrConfidence': extraction.get('confidence', 'Low'),
+                    'ocrSource': extraction.get('source', ''),
+                    'ocrMatchedText': extraction.get('matchedText', ''),
+                    'ocrUsed': bool(extraction.get('ocrUsed')),
+                    'allocations': [],
+                })
+                rows.setdefault('invoices', []).append(record)
+            else:
+                record.update({
+                    'amount': claim_amount,
+                    'claimDate': claim_date,
+                    'category': category,
+                    'description': description,
+                    'department': department,
+                })
+                rows.setdefault('claims', []).append(record)
+
+        log_action(
+            f"Worker {freelancer.get('name')} uploaded {kind} for event {event_id}"
+        )
+        _workforce_changed(event_id, f'{kind}-uploaded')
+        return jsonify({
+            'success': True,
+            'message': f"{kind.title()} submitted for review",
+            'data': _worker_company_payload(
+                company_code,
+                manager,
+                freelancer,
+                load_workforce(data_folder),
+            ),
+        })
+    except ValueError as exc:
+        if saved_record:
+            delete_upload(_workforce_folder(), saved_record)
+        return jsonify({'error': str(exc)}), 400
+    except Exception as exc:
+        logger.error('Worker upload failed: %s', exc, exc_info=True)
+        return jsonify({'error': 'The upload could not be completed'}), 500
+
+
+@app.route('/api/events/<int:event_id>/workforce', methods=['GET'])
+@require_admin
+def get_event_workforce(event_id):
+    try:
+        return jsonify({
+            'success': True,
+            'data': _admin_workforce_payload(event_id),
+        })
+    except LookupError as exc:
+        return jsonify({'error': str(exc)}), 404
+    except Exception as exc:
+        logger.error('Failed to load workforce for event %s: %s', event_id, exc, exc_info=True)
+        return jsonify({'error': 'Failed to load manpower and transport'}), 500
+
+
+@app.route('/api/workforce/freelancers', methods=['POST'])
+@require_admin
+def create_workforce_freelancer():
+    payload = request.get_json(silent=True) or {}
+    name = str(payload.get('name') or '').strip()
+    phone = normalize_phone(payload.get('phone'))
+    if not name:
+        return jsonify({'error': 'Freelancer name is required'}), 400
+    with mutate_workforce(_workforce_folder()) as workforce:
+        if phone and any(
+            normalize_phone(row.get('phone')) == phone
+            for row in workforce.get('freelancers', [])
+            if isinstance(row, dict)
+        ):
+            return jsonify({'error': 'A freelancer with this phone number already exists'}), 409
+        freelancer = {
+            'id': new_id('freelancer'),
+            'name': name,
+            'phone': phone,
+            'email': str(payload.get('email') or '').strip(),
+            'company': str(payload.get('company') or '').strip(),
+            'notes': str(payload.get('notes') or '').strip(),
+            'active': True,
+            'createdAt': now_iso(),
+            'updatedAt': now_iso(),
+        }
+        workforce.setdefault('freelancers', []).append(freelancer)
+    log_action(f"Created freelancer {name}")
+    return jsonify({'success': True, 'data': freelancer})
+
+
+@app.route('/api/workforce/freelancers/<freelancer_id>', methods=['PUT'])
+@require_admin
+def update_workforce_freelancer(freelancer_id):
+    payload = request.get_json(silent=True) or {}
+    with mutate_workforce(_workforce_folder()) as workforce:
+        freelancer = find_by_id(workforce.get('freelancers'), freelancer_id)
+        if not freelancer:
+            return jsonify({'error': 'Freelancer not found'}), 404
+        name = str(payload.get('name', freelancer.get('name')) or '').strip()
+        phone = normalize_phone(payload.get('phone', freelancer.get('phone')))
+        if not name:
+            return jsonify({'error': 'Freelancer name is required'}), 400
+        if phone and any(
+            str(row.get('id')) != str(freelancer_id)
+            and normalize_phone(row.get('phone')) == phone
+            for row in workforce.get('freelancers', [])
+            if isinstance(row, dict)
+        ):
+            return jsonify({'error': 'A freelancer with this phone number already exists'}), 409
+        freelancer.update({
+            'name': name,
+            'phone': phone,
+            'email': str(payload.get('email', freelancer.get('email')) or '').strip(),
+            'company': str(payload.get('company', freelancer.get('company')) or '').strip(),
+            'notes': str(payload.get('notes', freelancer.get('notes')) or '').strip(),
+            'active': bool(payload.get('active', freelancer.get('active', True))),
+            'updatedAt': now_iso(),
+        })
+    log_action(f"Updated freelancer {name}")
+    return jsonify({'success': True, 'data': freelancer})
+
+
+@app.route('/api/workforce/roles', methods=['POST'])
+@require_admin
+def create_workforce_role():
+    payload = request.get_json(silent=True) or {}
+    name = str(payload.get('name') or '').strip()
+    department = str(payload.get('department') or '').strip()
+    if not name:
+        return jsonify({'error': 'Role name is required'}), 400
+    with mutate_workforce(_workforce_folder()) as workforce:
+        existing = next(
+            (
+                row for row in workforce.get('roles', [])
+                if isinstance(row, dict)
+                and str(row.get('name') or '').lower() == name.lower()
+                and str(row.get('department') or '') == department
+            ),
+            None,
+        )
+        if existing:
+            role = existing
+        else:
+            role = {
+                'id': new_id('role'),
+                'name': name,
+                'department': department,
+                'createdAt': now_iso(),
+            }
+            workforce.setdefault('roles', []).append(role)
+    return jsonify({'success': True, 'data': role})
+
+
+@app.route('/api/events/<int:event_id>/workforce/assignments', methods=['POST'])
+@require_admin
+def create_workforce_assignment(event_id):
+    if event_id not in data_manager.events:
+        return jsonify({'error': 'Event not found'}), 404
+    payload = request.get_json(silent=True) or {}
+    freelancer_id = str(payload.get('freelancerId') or '')
+    department = str(payload.get('department') or '').strip()
+    role_id = str(payload.get('roleId') or '').strip()
+    custom_role = str(payload.get('customRole') or '').strip()
+    try:
+        days = int(payload.get('days') or 0)
+    except (TypeError, ValueError):
+        days = 0
+    daily_rate = money(payload.get('dailyRate'))
+    if not freelancer_id or not department or days <= 0 or daily_rate is None:
+        return jsonify({
+            'error': 'Freelancer, department, number of days and daily rate are required'
+        }), 400
+
+    with mutate_workforce(_workforce_folder()) as workforce:
+        freelancer = find_by_id(workforce.get('freelancers'), freelancer_id)
+        if not freelancer:
+            return jsonify({'error': 'Freelancer not found'}), 404
+        role = find_by_id(workforce.get('roles'), role_id) if role_id else None
+        role_name = custom_role or (str(role.get('name')) if role else '')
+        if not role_name:
+            return jsonify({'error': 'Choose or enter a role'}), 400
+        if custom_role and bool(payload.get('saveRole', True)):
+            duplicate = next(
+                (
+                    row for row in workforce.get('roles', [])
+                    if isinstance(row, dict)
+                    and str(row.get('name') or '').lower() == custom_role.lower()
+                    and str(row.get('department') or '') == department
+                ),
+                None,
+            )
+            if duplicate:
+                role_id = str(duplicate.get('id') or '')
+            else:
+                saved_role = {
+                    'id': new_id('role'),
+                    'name': custom_role,
+                    'department': department,
+                    'createdAt': now_iso(),
+                }
+                workforce.setdefault('roles', []).append(saved_role)
+                role_id = saved_role['id']
+        assignment = {
+            'id': new_id('assignment'),
+            'freelancerId': freelancer_id,
+            'department': department,
+            'roleId': role_id,
+            'roleName': role_name,
+            'days': days,
+            'dailyRate': daily_rate,
+            'notes': str(payload.get('notes') or '').strip(),
+            'createdAt': now_iso(),
+        }
+        workforce.setdefault('assignments', {}).setdefault(
+            str(event_id), []
+        ).append(assignment)
+    log_action(
+        f"Assigned freelancer {freelancer.get('name')} to event {event_id} as {role_name}"
+    )
+    _workforce_changed(event_id, 'assignment-created')
+    return jsonify({'success': True, 'data': _admin_workforce_payload(event_id)})
+
+
+@app.route(
+    '/api/events/<int:event_id>/workforce/assignments/<assignment_id>',
+    methods=['DELETE'],
+)
+@require_admin
+def delete_workforce_assignment(event_id, assignment_id):
+    with mutate_workforce(_workforce_folder()) as workforce:
+        rows = event_assignments(workforce, event_id)
+        before = len(rows)
+        rows[:] = [
+            row for row in rows
+            if not isinstance(row, dict) or str(row.get('id')) != str(assignment_id)
+        ]
+        if len(rows) == before:
+            return jsonify({'error': 'Assignment not found'}), 404
+    log_action(f"Removed freelancer assignment from event {event_id}")
+    _workforce_changed(event_id, 'assignment-deleted')
+    return jsonify({'success': True, 'data': _admin_workforce_payload(event_id)})
+
+
+def _transport_payload(raw):
+    payload = raw if isinstance(raw, dict) else {}
+    return {
+        'vehicleType': str(payload.get('vehicleType') or '').strip(),
+        'purpose': str(payload.get('purpose') or '').strip(),
+        'loadType': str(payload.get('loadType') or '').strip(),
+        'companyDriver': str(payload.get('companyDriver') or '').strip(),
+        'contactNumber': normalize_phone(payload.get('contactNumber')),
+        'vehicleNumber': str(payload.get('vehicleNumber') or '').strip(),
+        'locationFrom': str(payload.get('locationFrom') or '').strip(),
+        'locationTo': str(payload.get('locationTo') or '').strip(),
+        'twoWay': bool(payload.get('twoWay')),
+        'departDate': str(payload.get('departDate') or '').strip(),
+        'departTime': str(payload.get('departTime') or '').strip(),
+        'returnDate': str(payload.get('returnDate') or '').strip(),
+        'returnTime': str(payload.get('returnTime') or '').strip(),
+        'notes': str(payload.get('notes') or '').strip(),
+        'cost': money(payload.get('cost'), 0.0) or 0.0,
+        'status': (
+            str(payload.get('status'))
+            if str(payload.get('status')) in VALID_STATUSES
+            else 'Pending Review'
+        ),
+        'vendorId': str(payload.get('vendorId') or '').strip(),
+    }
+
+
+@app.route('/api/events/<int:event_id>/workforce/transport', methods=['POST'])
+@require_admin
+def create_transport_booking(event_id):
+    if event_id not in data_manager.events:
+        return jsonify({'error': 'Event not found'}), 404
+    payload = request.get_json(silent=True) or {}
+    booking_data = _transport_payload(payload)
+    required = (
+        booking_data['vehicleType'],
+        booking_data['purpose'],
+        booking_data['loadType'],
+        booking_data['companyDriver'],
+        booking_data['contactNumber'],
+        booking_data['vehicleNumber'],
+        booking_data['locationFrom'],
+        booking_data['locationTo'],
+        booking_data['departDate'],
+        booking_data['departTime'],
+    )
+    if not all(required):
+        return jsonify({'error': 'Complete all required transport fields'}), 400
+    if booking_data['twoWay'] and (
+        not booking_data['returnDate'] or not booking_data['returnTime']
+    ):
+        return jsonify({'error': 'Return date and time are required'}), 400
+    if booking_data['status'] == 'Paid':
+        return jsonify({'error': 'Create the booking before marking it as paid'}), 400
+
+    with mutate_workforce(_workforce_folder()) as workforce:
+        vendor = find_by_id(
+            workforce.get('transportVendors'), booking_data.get('vendorId')
+        )
+        if bool(payload.get('rememberVendor', True)):
+            if vendor:
+                vendor.update({
+                    'name': booking_data['companyDriver'],
+                    'contactNumber': booking_data['contactNumber'],
+                    'vehicleType': booking_data['vehicleType'],
+                    'vehicleNumber': booking_data['vehicleNumber'],
+                    'updatedAt': now_iso(),
+                })
+            else:
+                vendor = {
+                    'id': new_id('vendor'),
+                    'name': booking_data['companyDriver'],
+                    'contactNumber': booking_data['contactNumber'],
+                    'vehicleType': booking_data['vehicleType'],
+                    'vehicleNumber': booking_data['vehicleNumber'],
+                    'createdAt': now_iso(),
+                    'updatedAt': now_iso(),
+                }
+                workforce.setdefault('transportVendors', []).append(vendor)
+            booking_data['vendorId'] = vendor['id']
+        booking = {
+            'id': new_id('transport'),
+            **booking_data,
+            'invoice': None,
+            'reviewHistory': [],
+            'createdAt': now_iso(),
+            'updatedAt': now_iso(),
+        }
+        workforce.setdefault('transportBookings', {}).setdefault(
+            str(event_id), []
+        ).append(booking)
+    log_action(f"Added transport booking to event {event_id}")
+    _workforce_changed(event_id, 'transport-created')
+    return jsonify({'success': True, 'data': _admin_workforce_payload(event_id)})
+
+
+@app.route(
+    '/api/events/<int:event_id>/workforce/transport/<booking_id>',
+    methods=['PUT'],
+)
+@require_admin
+def update_transport_booking(event_id, booking_id):
+    payload = request.get_json(silent=True) or {}
+    booking_data = _transport_payload(payload)
+    with mutate_workforce(_workforce_folder()) as workforce:
+        booking = find_by_id(event_bookings(workforce, event_id), booking_id)
+        if not booking:
+            return jsonify({'error': 'Transport booking not found'}), 404
+        if (
+            booking_data['status'] == 'Paid'
+            and booking.get('status') not in {'Approved', 'Paid'}
+        ):
+            return jsonify({'error': 'Approve the transport cost before marking it as paid'}), 400
+        invoice = booking.get('invoice')
+        history = booking.get('reviewHistory', [])
+        booking.update(booking_data)
+        booking['invoice'] = invoice
+        booking['reviewHistory'] = history
+        booking['updatedAt'] = now_iso()
+    log_action(f"Updated transport booking for event {event_id}")
+    _workforce_changed(event_id, 'transport-updated')
+    return jsonify({'success': True, 'data': _admin_workforce_payload(event_id)})
+
+
+@app.route(
+    '/api/events/<int:event_id>/workforce/transport/<booking_id>',
+    methods=['DELETE'],
+)
+@require_admin
+def delete_transport_booking(event_id, booking_id):
+    with mutate_workforce(_workforce_folder()) as workforce:
+        rows = event_bookings(workforce, event_id)
+        booking = find_by_id(rows, booking_id)
+        if not booking:
+            return jsonify({'error': 'Transport booking not found'}), 404
+        if isinstance(booking.get('invoice'), dict):
+            delete_upload(_workforce_folder(), booking['invoice'])
+        rows.remove(booking)
+    log_action(f"Deleted transport booking from event {event_id}")
+    _workforce_changed(event_id, 'transport-deleted')
+    return jsonify({'success': True, 'data': _admin_workforce_payload(event_id)})
+
+
+@app.route(
+    '/api/events/<int:event_id>/workforce/transport/<booking_id>/invoice',
+    methods=['POST'],
+)
+@require_admin
+def upload_transport_invoice(event_id, booking_id):
+    uploaded_file = request.files.get('file')
+    if not uploaded_file or not uploaded_file.filename:
+        return jsonify({'error': 'Choose a PDF invoice'}), 400
+    saved = None
+    try:
+        with mutate_workforce(_workforce_folder()) as workforce:
+            booking = find_by_id(event_bookings(workforce, event_id), booking_id)
+            if not booking:
+                return jsonify({'error': 'Transport booking not found'}), 404
+            if isinstance(booking.get('invoice'), dict):
+                delete_upload(_workforce_folder(), booking['invoice'])
+            saved = save_upload(
+                _workforce_folder(),
+                uploaded_file,
+                event_id,
+                f'transport-{booking_id}',
+                'transport',
+            )
+            record = {
+                'id': new_id('transport_invoice'),
+                **saved,
+                'submittedAt': now_iso(),
+            }
+            extraction = extract_invoice_amount(
+                upload_absolute_path(_workforce_folder(), record['storedPath'])
+            )
+            record.update({
+                'amount': extraction.get('amount'),
+                'ocrConfidence': extraction.get('confidence', 'Low'),
+                'ocrSource': extraction.get('source', ''),
+                'ocrMatchedText': extraction.get('matchedText', ''),
+                'ocrUsed': bool(extraction.get('ocrUsed')),
+            })
+            booking['invoice'] = record
+            if not booking.get('cost') and record.get('amount') is not None:
+                booking['cost'] = record['amount']
+            booking['updatedAt'] = now_iso()
+        log_action(f"Uploaded transport invoice for event {event_id}")
+        _workforce_changed(event_id, 'transport-invoice-uploaded')
+        return jsonify({'success': True, 'data': _admin_workforce_payload(event_id)})
+    except ValueError as exc:
+        if saved:
+            delete_upload(_workforce_folder(), saved)
+        return jsonify({'error': str(exc)}), 400
+    except Exception as exc:
+        logger.error('Transport invoice upload failed: %s', exc, exc_info=True)
+        return jsonify({'error': 'Transport invoice upload failed'}), 500
+
+
+def _find_submission_record(workforce, submission_id):
+    for event_id, event_rows in (workforce.get('submissions') or {}).items():
+        if not isinstance(event_rows, dict):
+            continue
+        for freelancer_id, rows in event_rows.items():
+            if not isinstance(rows, dict):
+                continue
+            for kind in ('invoices', 'claims'):
+                for record in rows.get(kind, []) if isinstance(rows.get(kind), list) else []:
+                    if (
+                        isinstance(record, dict)
+                        and str(record.get('id')) == str(submission_id)
+                    ):
+                        return {
+                            'eventId': int(event_id),
+                            'freelancerId': str(freelancer_id),
+                            'kind': kind[:-1],
+                            'record': record,
+                            'container': rows[kind],
+                        }
+    for event_id, bookings in (workforce.get('transportBookings') or {}).items():
+        for booking in bookings if isinstance(bookings, list) else []:
+            invoice = booking.get('invoice') if isinstance(booking, dict) else None
+            if isinstance(invoice, dict) and str(invoice.get('id')) == str(submission_id):
+                return {
+                    'eventId': int(event_id),
+                    'freelancerId': '',
+                    'kind': 'transport',
+                    'record': invoice,
+                    'container': booking,
+                }
+    return None
+
+
+@app.route('/api/workforce/submissions/<submission_id>', methods=['PUT'])
+@require_admin
+def review_workforce_submission(submission_id):
+    payload = request.get_json(silent=True) or {}
+    with mutate_workforce(_workforce_folder()) as workforce:
+        found = _find_submission_record(workforce, submission_id)
+        if not found:
+            return jsonify({'error': 'Submission not found'}), 404
+        record = found['record']
+        status = str(payload.get('status', record.get('status', 'Pending Review')))
+        if status not in VALID_STATUSES:
+            return jsonify({'error': 'Invalid status'}), 400
+        old_status = record.get('status', 'Pending Review')
+        if status == 'Paid' and old_status not in {'Approved', 'Paid'}:
+            return jsonify({'error': 'Approve the submission before marking it as paid'}), 400
+        amount = money(payload.get('amount', record.get('amount')))
+        if amount is None:
+            return jsonify({'error': 'Enter a valid amount'}), 400
+        allocations = payload.get('allocations', record.get('allocations', []))
+        if found['kind'] == 'invoice':
+            if not isinstance(allocations, list):
+                return jsonify({'error': 'Invalid department allocation'}), 400
+            clean_allocations = []
+            allocated_total = 0.0
+            for row in allocations:
+                if not isinstance(row, dict):
+                    continue
+                department = str(row.get('department') or '').strip()
+                allocation_amount = money(row.get('amount'))
+                if not department or allocation_amount is None:
+                    continue
+                allocated_total += allocation_amount
+                clean_allocations.append({
+                    'department': department,
+                    'amount': allocation_amount,
+                })
+            if clean_allocations and abs(allocated_total - amount) > 0.01:
+                return jsonify({
+                    'error': 'Department allocations must equal the invoice amount'
+                }), 400
+            record['allocations'] = clean_allocations
+        if found['kind'] == 'claim' and payload.get('department') is not None:
+            record['department'] = str(payload.get('department') or '').strip()
+        record.update({
+            'amount': amount,
+            'status': status,
+            'denialReason': (
+                str(payload.get('denialReason') or '').strip()
+                if status == 'Denied'
+                else ''
+            ),
+            'reviewedAt': now_iso(),
+            'reviewedBy': session.get('user', ''),
+        })
+        record.setdefault('reviewHistory', []).append({
+            'at': now_iso(),
+            'by': session.get('user', ''),
+            'from': old_status,
+            'to': status,
+            'amount': amount,
+        })
+        event_id = found['eventId']
+    log_action(
+        f"Changed {found['kind']} {submission_id} from {old_status} to {status} for event {event_id}"
+    )
+    _workforce_changed(event_id, 'submission-reviewed')
+    return jsonify({'success': True, 'data': _admin_workforce_payload(event_id)})
+
+
+@app.route('/api/workforce/submissions/<submission_id>', methods=['DELETE'])
+@require_admin
+def delete_workforce_submission(submission_id):
+    with mutate_workforce(_workforce_folder()) as workforce:
+        found = _find_submission_record(workforce, submission_id)
+        if not found:
+            return jsonify({'error': 'Submission not found'}), 404
+        delete_upload(_workforce_folder(), found['record'])
+        if found['kind'] == 'transport':
+            found['container']['invoice'] = None
+        else:
+            found['container'].remove(found['record'])
+        event_id = found['eventId']
+    log_action(f"Deleted {found['kind']} upload from event {event_id}")
+    _workforce_changed(event_id, 'submission-deleted')
+    return jsonify({'success': True, 'data': _admin_workforce_payload(event_id)})
+
+
+@app.route('/api/workforce/submissions/<submission_id>/file', methods=['GET'])
+@require_admin
+def workforce_submission_file(submission_id):
+    workforce = load_workforce(_workforce_folder())
+    found = _find_submission_record(workforce, submission_id)
+    if not found:
+        return jsonify({'error': 'Submission not found'}), 404
+    record = found['record']
+    path = upload_absolute_path(_workforce_folder(), record.get('storedPath'))
+    if not path or not os.path.isfile(path):
+        return jsonify({'error': 'File not found'}), 404
+    return send_file(
+        path,
+        mimetype=record.get('contentType') or None,
+        as_attachment=request.args.get('download') == '1',
+        download_name=record.get('originalName') or os.path.basename(path),
+    )
+
+
+@app.route('/api/events/<int:event_id>/workforce/download/<kind>', methods=['GET'])
+@require_admin
+def download_event_workforce_files(event_id, kind):
+    if kind not in {'invoices', 'claims'}:
+        return jsonify({'error': 'Invalid download type'}), 400
+    workforce = load_workforce(_workforce_folder())
+    records = []
+    event_rows = (workforce.get('submissions') or {}).get(str(event_id), {}) or {}
+    for freelancer_id, rows in event_rows.items():
+        freelancer = find_by_id(workforce.get('freelancers'), freelancer_id) or {}
+        worker_name = sanitize_filename(str(freelancer.get('name') or freelancer_id))
+        for record in rows.get(kind, []) if isinstance(rows, dict) else []:
+            if not isinstance(record, dict):
+                continue
+            copy = dict(record)
+            copy['originalName'] = f"{worker_name} - {record.get('originalName', 'upload')}"
+            records.append(copy)
+    archive = build_zip(_workforce_folder(), records)
+    return send_file(
+        archive,
+        mimetype='application/zip',
+        as_attachment=True,
+        download_name=f"event-{event_id}-{kind}.zip",
+    )
+
+
 def _parse_maintenance_log_date(log_entry):
     """Parse the date at the start of a maintenance log entry."""
     return parse_maintenance_log_date(log_entry)
@@ -5066,7 +6122,12 @@ def _static_asset_version(filename):
 @require_auth
 def index():
     """Serve the main web interface"""
-    return render_template('index.html', app_js_version=_static_asset_version('js/app.js'))
+    return render_template(
+        'index.html',
+        app_js_version=_static_asset_version('js/app.js'),
+        workforce_js_version=_static_asset_version('js/workforce-admin.js'),
+        workforce_css_version=_static_asset_version('css/workforce-admin.css'),
+    )
 
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -6960,9 +8021,16 @@ def get_event(event_id):
                 else:
                     assigned_assets.append(asset_info)
 
-        # Also process any assets that are in actually_prepared but not in prepared_items.
-        # Model-fulfilled assets live here; only explicit extra_assets are extras.
-        for asset_id in event.actually_prepared:
+        # Also process physical model-fulfilled assets that are not represented
+        # directly in prepared_items. Returned regular assets are removed from
+        # actually_prepared, so include returned_items as well; this keeps the
+        # Return workspace history complete and makes accidental returns
+        # reversible without reconstructing asset metadata in the browser.
+        physical_history_refs = list(dict.fromkeys(
+            list(event.actually_prepared or []) +
+            list(event.returned_items or [])
+        ))
+        for asset_id in physical_history_refs:
             # Check if this asset was already processed above
             already_processed = False
             for dept_assets in assets_by_department.values():
@@ -8810,6 +9878,7 @@ def unprepare_event_asset(event_id):
 
 @app.route('/api/events/<int:event_id>/return', methods=['POST'])
 @require_auth
+@with_prepare_action_lock
 def return_event_asset(event_id):
     """Return an asset from an event"""
     try:
@@ -8904,9 +9973,118 @@ def return_event_asset(event_id):
         import traceback
         logger.error(f"Traceback: {traceback.format_exc()}")
         return jsonify({'error': 'Failed to return asset'}), 500
+
+
+@app.route('/api/events/<int:event_id>/unreturn', methods=['POST'])
+@require_auth
+@with_prepare_action_lock
+def unreturn_event_asset(event_id):
+    """Undo an accidental event return and restore the asset's deployed state."""
+    try:
+        event = data_manager.events.get(event_id)
+        if not event:
+            return jsonify({'error': 'Event not found'}), 404
+
+        data = request.get_json() or {}
+        asset_id = str(data.get('assetId') or '').strip()
+        if not asset_id:
+            return jsonify({'error': 'Asset ID is required'}), 400
+
+        scanned_asset = _find_inventory_asset_by_identifier(asset_id)
+        if scanned_asset:
+            asset_id = scanned_asset.asset_id
+
+        _ensure_event_custom_lists(event)
+        if asset_id not in event.returned_items:
+            return jsonify({'error': 'Asset is no longer marked as returned'}), 409
+
+        custom = _parse_custom_marker(asset_id)
+        bulk = _parse_bulk_marker(asset_id)
+
+        if bulk:
+            if asset_id not in event.actually_prepared:
+                event.actually_prepared.append(asset_id)
+        elif not custom:
+            asset = data_manager.inventory.get(asset_id)
+            if not asset:
+                return jsonify({'error': 'Asset not found'}), 404
+
+            busy_event = _find_event_using_asset(asset_id, event)
+            if busy_event:
+                return jsonify({
+                    'error': (
+                        f'Asset is now assigned to event {busy_event.event_id}: '
+                        f'{busy_event.name}'
+                    )
+                }), 409
+
+            block_reason = _asset_prepare_block_reason(asset)
+            if block_reason:
+                return jsonify({'error': block_reason}), 409
+
+            if asset_id not in event.actually_prepared:
+                event.actually_prepared.append(asset_id)
+            asset.current_location = event.name
+            data_manager.save_inventory()
+
+        event.returned_items.remove(asset_id)
+        update_event_state(event)
+        data_manager.save_event(event)
+        invalidate_cache()
+        log_action(f"Undid return of asset {asset_id} for event {event_id}")
+
+        return jsonify({
+            'success': True,
+            'message': f'Asset {asset_id} restored to event',
+            'data': {
+                'assetId': asset_id,
+                'eventId': event_id,
+                'state': event.state,
+            },
+        })
+    except Exception as e:
+        logger.error(
+            f"Error undoing return of asset for event {event_id}: {e}",
+            exc_info=True,
+        )
+        return jsonify({'error': 'Failed to undo asset return'}), 500
+
+
+@app.route('/api/events/<int:event_id>/close-return', methods=['POST'])
+@require_auth
+@with_prepare_action_lock
+def close_return_event(event_id):
+    """Confirm completion of a return after every deployed item is back."""
+    try:
+        event = data_manager.events.get(event_id)
+        if not event:
+            return jsonify({'error': 'Event not found'}), 404
+
+        counts = _event_returnable_counts(event)
+        if counts['returnable'] > 0:
+            return jsonify({
+                'error': f"{counts['returnable']} asset(s) still need to be returned"
+            }), 409
+        if counts['total'] <= 0:
+            return jsonify({'error': 'This event has no returned assets to close'}), 409
+
+        event.state = 'Closed'
+        event.force_state_override = False
+        data_manager.save_event(event)
+        invalidate_cache()
+        log_action(f"Closed event {event_id} after all assets were returned")
+        return jsonify({
+            'success': True,
+            'message': f'Event {event_id} closed',
+            'data': {'eventId': event_id, 'state': event.state},
+        })
+    except Exception as e:
+        logger.error(f"Error closing returned event {event_id}: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to close event'}), 500
     
 @app.route('/api/events/<int:event_id>/return-department', methods=['POST'])
 @require_admin
+@with_prepare_action_lock
 def return_department_assets(event_id):
     """Return all unreturned assets for a given department in this event.
     Includes regular inventory assets from actually_prepared that match the department,

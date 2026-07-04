@@ -129,6 +129,45 @@
         transform: none;
       }
 
+      .worker-entry {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-top: 22px;
+        color: #64748b;
+        font-size: 13px;
+      }
+
+      .worker-entry::before,
+      .worker-entry::after {
+        content: "";
+        height: 1px;
+        flex: 1;
+        background: #dfe3ea;
+      }
+
+      .worker-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        min-height: 48px;
+        margin-top: 14px;
+        border: 2px solid #5b4ee6;
+        border-radius: 10px;
+        background: white;
+        color: #4438ca;
+        text-decoration: none;
+        font-size: 16px;
+        font-weight: 700;
+        transition: background-color .2s ease, color .2s ease, transform .2s ease;
+      }
+
+      .worker-btn:hover {
+        background: #eef2ff;
+        transform: translateY(-1px);
+      }
+
       .error-message {
         background: #f8d7da;
         color: #721c24;
@@ -314,6 +353,9 @@
 
         <div class="loading" id="loading" role="status" aria-live="polite">Signing in...</div>
       </form>
+
+      <div class="worker-entry" aria-hidden="true">or</div>
+      <a class="worker-btn" href="/worker">I am a worker</a>
     </main>
 
     <script>

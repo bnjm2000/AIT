@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#4438ca" />
+    <title>Worker Invoice &amp; Claims - AIT</title>
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='css/worker.css', v=worker_css_version) }}"
+    />
+  </head>
+  <body>
+    <header class="worker-topbar">
+      <a href="/login" class="worker-brand" aria-label="AIT login">
+        <strong>AIT</strong>
+        <span>Worker Invoice &amp; Claims</span>
+      </a>
+      <a href="/login" class="admin-link">Admin sign in</a>
+    </header>
+
+    <main class="worker-shell">
+      <section class="lookup-card" id="lookupView">
+        <div class="lookup-icon" aria-hidden="true">⌕</div>
+        <p class="eyebrow">WORKER PORTAL</p>
+        <h1>Find your assigned events</h1>
+        <p class="lead">
+          Enter the phone number your event administrator has saved for you.
+        </p>
+        <form id="workerLookupForm">
+          <label for="workerPhone">Phone number</label>
+          <input
+            id="workerPhone"
+            name="phone"
+            type="tel"
+            inputmode="tel"
+            autocomplete="tel"
+            placeholder="+65 9123 4567"
+            required
+          />
+          <button class="primary-button" type="submit">Find My Events</button>
+        </form>
+        <p class="privacy-note">
+          Phone-number access only. Use a private device and do not share this page.
+        </p>
+        <div class="form-message" id="lookupMessage" role="alert" aria-live="polite"></div>
+      </section>
+
+      <section class="portal-view" id="portalView" hidden>
+        <div class="portal-heading">
+          <div>
+            <button class="text-button" type="button" id="changePhoneButton">
+              ← Use another phone number
+            </button>
+            <p class="eyebrow">YOUR SUBMISSIONS</p>
+            <h1 id="workerGreeting">Your events</h1>
+            <p class="lead">
+              Submit one invoice and up to five claims for each event.
+            </p>
+          </div>
+          <label class="company-filter">
+            <span>Show events from</span>
+            <select id="companyFilter"></select>
+          </label>
+        </div>
+
+        <div class="portal-alert" id="portalMessage" role="status" aria-live="polite"></div>
+        <div id="companyEvents"></div>
+      </section>
+    </main>
+
+    <div class="worker-modal" id="uploadModal" aria-hidden="true">
+      <div class="worker-modal-backdrop" data-close-upload></div>
+      <section
+        class="worker-modal-card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="uploadModalTitle"
+      >
+        <header>
+          <div>
+            <p class="eyebrow">FINAL SUBMISSION</p>
+            <h2 id="uploadModalTitle">Review before submitting</h2>
+          </div>
+          <button class="icon-button" type="button" data-close-upload aria-label="Close">×</button>
+        </header>
+
+        <div class="upload-warning">
+          <span aria-hidden="true">!</span>
+          <p>
+            After submission, you cannot view, download, edit, or remove these files.
+            Contact an admin if you upload the wrong document.
+          </p>
+        </div>
+
+        <form id="workerUploadForm">
+          <input type="hidden" id="uploadToken" name="token" />
+          <input type="hidden" id="uploadEventId" name="eventId" />
+          <input type="hidden" id="uploadKind" name="kind" />
+
+          <div class="upload-context" id="uploadContext"></div>
+
+          <div class="claim-fields" id="claimFields" hidden>
+            <div class="field-grid">
+              <label>
+                <span>Amount (SGD)</span>
+                <input type="number" id="claimAmount" name="amount" min="0" step="0.01" />
+              </label>
+              <label>
+                <span>Claim date</span>
+                <input type="date" id="claimDate" name="claimDate" />
+              </label>
+              <label>
+                <span>Category</span>
+                <select id="claimCategory" name="category">
+                  <option value="Cab">Cab</option>
+                  <option value="Parking">Parking</option>
+                  <option value="Meal">Meal</option>
+                  <option value="Other">Other</option>
+                </select>
+              </label>
+              <label id="otherCategoryField" hidden>
+                <span>Other category</span>
+                <input type="text" id="otherCategory" name="otherCategory" maxlength="80" />
+              </label>
+              <label id="claimDepartmentField">
+                <span>Department</span>
+                <select id="claimDepartment" name="department"></select>
+              </label>
+            </div>
+            <label>
+              <span>Description</span>
+              <textarea
+                id="claimDescription"
+                name="description"
+                rows="3"
+                maxlength="500"
+                placeholder="What was this expense for?"
+              ></textarea>
+            </label>
+          </div>
+
+          <label class="file-picker">
+            <span id="filePickerLabel">Choose file</span>
+            <small id="filePickerHelp">PDF only · Maximum 10 MB</small>
+            <input type="file" id="workerUploadFile" name="file" required />
+          </label>
+
+          <label class="acknowledgement">
+            <input type="checkbox" id="warningAcknowledged" name="warningAcknowledged" value="true" required />
+            <span>I understand I cannot access these files after submission.</span>
+          </label>
+
+          <div class="form-message" id="uploadMessage" role="alert" aria-live="polite"></div>
+          <footer>
+            <button class="secondary-button" type="button" data-close-upload>Go Back</button>
+            <button class="primary-button" type="submit" id="submitUploadButton">Submit File</button>
+          </footer>
+        </form>
+      </section>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/worker.js', v=worker_js_version) }}"></script>
+  </body>
+</html>
