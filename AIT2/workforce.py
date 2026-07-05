@@ -67,6 +67,7 @@ def empty_workforce() -> dict:
     return {
         "version": 1,
         "freelancers": [],
+        "vendors": [],
         "roles": [],
         "assignments": {},
         "manualDepartments": {},
@@ -105,6 +106,7 @@ def normalize_workforce(data) -> dict:
         {
             "version": 1,
             "freelancers": _list(source.get("freelancers")),
+            "vendors": _list(source.get("vendors")),
             "roles": _list(source.get("roles")),
             "assignments": _dict(source.get("assignments")),
             "manualDepartments": _dict(source.get("manualDepartments")),
@@ -121,6 +123,14 @@ def normalize_workforce(data) -> dict:
         if isinstance(freelancer, dict):
             freelancer["phone"] = normalize_phone(freelancer.get("phone"))
             freelancer.setdefault("active", True)
+    for vendor in normalized["vendors"]:
+        if isinstance(vendor, dict):
+            vendor["memberIds"] = [
+                str(value)
+                for value in _list(vendor.get("memberIds"))
+                if str(value or "").strip()
+            ]
+            vendor.setdefault("active", True)
     return normalized
 
 
@@ -848,7 +858,11 @@ def submission_totals(data: dict, event_id) -> dict:
     for assignment in assignments:
         if not isinstance(assignment, dict):
             continue
-        freelancer_id = str(assignment.get("freelancerId") or "")
+        freelancer_id = str(
+            assignment.get("freelancerId")
+            or assignment.get("vendorId")
+            or ""
+        )
         department = str(assignment.get("department") or "Unassigned")
         assignment_departments.setdefault(freelancer_id, [])
         if department not in assignment_departments[freelancer_id]:
@@ -909,7 +923,10 @@ def submission_totals(data: dict, event_id) -> dict:
     for booking in event_bookings(data, event_id):
         if not isinstance(booking, dict) or booking.get("status") == "Denied":
             continue
-        totals["transport"] += money(booking.get("cost"), 0.0) or 0.0
+        trip_cost = money(booking.get("cost"), 0.0) or 0.0
+        totals["transport"] += trip_cost * (
+            2 if booking.get("twoWay") else 1
+        )
 
     totals["combined"] = totals["invoice"] + totals["claims"]
     for key in ("invoice", "claims", "transport", "combined"):

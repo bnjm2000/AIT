@@ -270,6 +270,10 @@ class WorkforcePortalTests(unittest.TestCase):
 
         portal = self.worker_access()
         self.assertEqual(portal["companies"][0]["freelancer"]["name"], "Jordan Dela Cruz")
+        self.assertIn(
+            "/api/company-branding/AVPL/logo",
+            portal["companies"][0]["logoUrl"],
+        )
         workforce = load_workforce(self.manager.data_folder)
         saved_worker = next(
             row for row in workforce["freelancers"]
@@ -1021,7 +1025,8 @@ class WorkforcePortalTests(unittest.TestCase):
             json={
                 "amount": 42,
                 "status": "Approved",
-                "department": "AU",
+                "claimDate": "2026-07-11",
+                "category": "Transport",
                 "confirmReview": True,
             },
         )
@@ -1029,6 +1034,8 @@ class WorkforcePortalTests(unittest.TestCase):
             "claims"
         ][0]
         verified_at = approved["verifiedAt"]
+        self.assertEqual(approved["claimDate"], "2026-07-11")
+        self.assertEqual(approved["category"], "Transport")
 
         response = self.client.put(
             f"/api/workforce/submissions/{claim['id']}",
@@ -1040,6 +1047,76 @@ class WorkforcePortalTests(unittest.TestCase):
         self.assertEqual(pending["verifiedAt"], verified_at)
         self.assertEqual(pending["amount"], 42)
         self.assertEqual(pending["department"], "AU")
+
+    def test_save_and_close_verifies_invoice_without_approving(self):
+        freelancer_id = self.create_worker_assignment()
+        response = self.client.post(
+            f"/api/events/143/workforce/submissions/{freelancer_id}",
+            data={
+                "kind": "invoice",
+                "amount": "120.00",
+                "file": (io.BytesIO(PDF_BYTES), "save-close.pdf"),
+            },
+            content_type="multipart/form-data",
+        )
+        invoice = response.get_json()["data"]["submissions"][freelancer_id][
+            "invoices"
+        ][0]
+
+        response = self.client.put(
+            f"/api/workforce/submissions/{invoice['id']}",
+            json={
+                "amount": 120,
+                "status": "Pending Review",
+                "allocations": [{"department": "AU", "amount": 120}],
+                "confirmReview": True,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        saved = response.get_json()["data"]["submissions"][freelancer_id][
+            "invoices"
+        ][0]
+        self.assertEqual(saved["status"], "Pending Review")
+        self.assertTrue(saved["verifiedAt"])
+        self.assertEqual(saved["allocations"][0]["amount"], 120)
+
+        response = self.client.put(
+            f"/api/workforce/submissions/{invoice['id']}",
+            json={"status": "Approved", "amount": 999},
+        )
+        self.assertEqual(response.status_code, 200)
+        approved = response.get_json()["data"]["submissions"][freelancer_id][
+            "invoices"
+        ][0]
+        self.assertEqual(approved["status"], "Approved")
+        self.assertEqual(approved["amount"], 120)
+
+    def test_worker_directory_submission_summary(self):
+        freelancer_id = self.create_worker_assignment()
+        payload = self.client.get(
+            "/api/events/143/workforce"
+        ).get_json()["data"]
+        worker = next(
+            row for row in payload["freelancers"]
+            if row["id"] == freelancer_id
+        )
+        self.assertEqual(worker["submissionSummary"]["needsInvoice"], 1)
+
+        response = self.client.post(
+            f"/api/events/143/workforce/submissions/{freelancer_id}",
+            data={
+                "kind": "invoice",
+                "amount": "120.00",
+                "file": (io.BytesIO(PDF_BYTES), "pending.pdf"),
+            },
+            content_type="multipart/form-data",
+        )
+        worker = next(
+            row for row in response.get_json()["data"]["freelancers"]
+            if row["id"] == freelancer_id
+        )
+        self.assertEqual(worker["submissionSummary"]["needsInvoice"], 0)
+        self.assertEqual(worker["submissionSummary"]["needsReview"], 1)
 
     def test_file_type_and_warning_are_enforced(self):
         self.create_worker_assignment()
@@ -1095,7 +1172,7 @@ class WorkforcePortalTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 200)
         payload = response.get_json()["data"]
-        self.assertEqual(payload["totals"]["transport"], 560)
+        self.assertEqual(payload["totals"]["transport"], 1120)
         self.assertEqual(len(payload["transportVendors"]), 1)
         self.assertEqual(
             payload["transportVendors"][0]["vehicleType"],
@@ -1296,6 +1373,166 @@ class WorkforcePortalTests(unittest.TestCase):
             if row["id"] == freelancer_id
         )
         self.assertTrue(freelancer["workerLastLoginAt"])
+
+    def test_vendor_assignments_share_one_invoice_across_departments(self):
+        self.login("admin", True)
+        member_ids = []
+        for name, phone in (
+            ("Morgan Lee", "8222 1100"),
+            ("Sam Tan", "8333 2200"),
+        ):
+            response = self.client.post(
+                "/api/workforce/freelancers",
+                json={"name": name, "phone": phone},
+            )
+            self.assertEqual(response.status_code, 200)
+            member_ids.append(response.get_json()["data"]["id"])
+
+        response = self.client.post(
+            "/api/workforce/vendors",
+            json={
+                "name": "HighCrew Resources",
+                "memberIds": member_ids,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        vendor_id = response.get_json()["data"]["id"]
+
+        response = self.client.post(
+            "/api/events/143/workforce/departments",
+            json={"code": "LI", "name": "Lighting"},
+        )
+        self.assertEqual(response.status_code, 200)
+
+        response = self.client.post(
+            "/api/events/143/workforce/assignments",
+            json={
+                "vendorId": vendor_id,
+                "department": "AU",
+                "providerType": "manpower",
+                "workDates": ["2026-07-10", "2026-07-11"],
+                "pax": 5,
+                "ratePerPax": 200,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        response = self.client.post(
+            "/api/events/143/workforce/assignments",
+            json={
+                "vendorId": vendor_id,
+                "department": "LI",
+                "providerType": "service",
+                "workDates": ["2026-07-12"],
+                "serviceName": "Backline support",
+                "serviceCost": 3000,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()["data"]
+        vendor = next(row for row in payload["vendors"] if row["id"] == vendor_id)
+        self.assertEqual(
+            {row["id"] for row in vendor["members"]},
+            set(member_ids),
+        )
+        vendor_assignments = [
+            row for row in payload["assignments"]
+            if row.get("vendorId") == vendor_id
+        ]
+        self.assertEqual(len(vendor_assignments), 2)
+        self.assertEqual(
+            {row["providerType"] for row in vendor_assignments},
+            {"manpower", "service"},
+        )
+
+        response = self.client.post(
+            f"/api/events/143/workforce/submissions/{vendor_id}",
+            data={
+                "kind": "invoice",
+                "file": (io.BytesIO(PDF_BYTES), "highcrew.pdf"),
+            },
+            content_type="multipart/form-data",
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()["data"]
+        self.assertEqual(
+            len(payload["submissions"][vendor_id]["invoices"]), 1
+        )
+        self.assertEqual(
+            payload["uploadAllowances"][vendor_id]["invoiceLimit"], 1
+        )
+
+        with self.client.session_transaction() as session:
+            session.clear()
+        response = self.client.post(
+            "/api/worker/lookup", json={"phone": "8222 1100"}
+        )
+        self.assertEqual(response.status_code, 200)
+        response = self.client.post(
+            "/api/worker/setup-credentials",
+            json={
+                "phone": "8222 1100",
+                "password": "1234",
+                "confirmation": "1234",
+                "credentialType": "pin",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        portal_event = response.get_json()["data"]["companies"][0]["events"][0]
+        self.assertEqual(portal_event["subjectType"], "vendor")
+        self.assertEqual(portal_event["subjectName"], "HighCrew Resources")
+        self.assertEqual(
+            set(portal_event["departments"]), {"AU", "LI"}
+        )
+        self.assertEqual(
+            len(portal_event["submissions"]["invoices"]), 1
+        )
+        self.assertEqual(portal_event["claimLimit"], 0)
+
+        with self.client.session_transaction() as session:
+            session.clear()
+        response = self.client.post(
+            "/api/worker/lookup", json={"phone": "8333 2200"}
+        )
+        self.assertEqual(response.status_code, 200)
+        response = self.client.post(
+            "/api/worker/setup-credentials",
+            json={
+                "phone": "8333 2200",
+                "password": "5678",
+                "confirmation": "5678",
+                "credentialType": "pin",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        second_member_event = (
+            response.get_json()["data"]["companies"][0]["events"][0]
+        )
+        self.assertEqual(second_member_event["subjectId"], vendor_id)
+        self.assertEqual(
+            second_member_event["submissions"]["invoices"][0]["originalName"],
+            "highcrew.pdf",
+        )
+
+    def test_vendor_assignment_rejects_dates_outside_event(self):
+        self.login("admin", True)
+        response = self.client.post(
+            "/api/workforce/vendors",
+            json={"name": "Month Span Crew"},
+        )
+        vendor_id = response.get_json()["data"]["id"]
+        response = self.client.post(
+            "/api/events/143/workforce/assignments",
+            json={
+                "vendorId": vendor_id,
+                "department": "AU",
+                "providerType": "manpower",
+                "workDates": ["2026-08-01"],
+                "pax": 2,
+                "ratePerPax": 180,
+            },
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("within the event", response.get_json()["error"])
 
 
 if __name__ == "__main__":

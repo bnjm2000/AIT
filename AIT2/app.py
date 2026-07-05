@@ -811,7 +811,24 @@ def _company_payload(code=None):
         'brandingSetupRequired': bool(record.get('brandingSetupRequired', False)),
         'backendFolder': record.get('backendFolder') or '',
         'frontendFolder': record.get('frontendFolder') or '',
+        'logoUrl': f"/api/company-branding/{quote(str(record.get('code') or code))}/logo",
     }
+
+
+@app.route('/api/company-branding/<company_code>/logo', methods=['GET'])
+def company_branding_logo(company_code):
+    registry = _load_company_registry()
+    code = _normalise_company_code(company_code)
+    if code not in registry.get('companies', {}):
+        return jsonify({'error': 'Company not found'}), 404
+    logo_path = os.path.join(_company_frontend_folder(code), 'logo.png')
+    if not os.path.isfile(logo_path):
+        return jsonify({'error': 'Company logo not found'}), 404
+    return send_file(
+        logo_path,
+        mimetype=mimetypes.guess_type(logo_path)[0] or 'image/png',
+        max_age=3600,
+    )
 
 
 def _mark_company_branding_setup_complete(company_code=None):
@@ -4118,6 +4135,25 @@ def _make_worker_token(company_code, freelancer):
     })
 
 
+def _vendor_member_proxy(vendor, member):
+    """Represent a vendor as a submission subject authenticated by a member."""
+    return {
+        'id': str(vendor.get('id') or ''),
+        'name': str(vendor.get('name') or 'Company'),
+        'phone': normalize_phone(member.get('phone')),
+        'email': str(member.get('email') or ''),
+        'active': bool(vendor.get('active', True) and member.get('active', True)),
+        'workerPasswordSalt': member.get('workerPasswordSalt'),
+        'workerPasswordHash': member.get('workerPasswordHash'),
+        'workerCredentialType': member.get('workerCredentialType'),
+        'workerAuthVersion': int(member.get('workerAuthVersion') or 0),
+        'workerCredentialsSetAt': member.get('workerCredentialsSetAt'),
+        'workerLastLoginAt': member.get('workerLastLoginAt'),
+        'loginPersonId': str(member.get('id') or ''),
+        'isVendor': True,
+    }
+
+
 def _worker_secret_is_valid(secret, credential_type):
     value = str(secret or '')
     kind = str(credential_type or 'password').strip().lower()
@@ -4175,13 +4211,31 @@ def _worker_matches_for_phone(phone):
                 and normalize_phone(freelancer.get('phone')) == normalized
             ):
                 freelancer_id = str(freelancer.get('id') or '')
-                has_assignment = any(
+                has_personal_assignment = any(
                     str(row.get('freelancerId') or '') == freelancer_id
                     for rows in (workforce.get('assignments') or {}).values()
                     for row in (rows if isinstance(rows, list) else [])
                     if isinstance(row, dict)
                 )
-                if has_assignment:
+                vendor_ids = {
+                    str(vendor.get('id') or '')
+                    for vendor in workforce.get('vendors', [])
+                    if (
+                        isinstance(vendor, dict)
+                        and vendor.get('active', True)
+                        and freelancer_id in {
+                            str(value) for value in vendor.get('memberIds', [])
+                        }
+                    )
+                }
+                has_vendor_assignment = any(
+                    str(row.get('freelancerId') or row.get('vendorId') or '')
+                    in vendor_ids
+                    for rows in (workforce.get('assignments') or {}).values()
+                    for row in (rows if isinstance(rows, list) else [])
+                    if isinstance(row, dict)
+                )
+                if has_personal_assignment or has_vendor_assignment:
                     matches.append((
                         company_code,
                         manager,
@@ -4193,14 +4247,19 @@ def _worker_matches_for_phone(phone):
 
 def _worker_portal_payload(matches):
     companies = []
+    seen = set()
     for company_code, manager, _workforce, freelancer in matches:
+        match_key = (company_code, str(freelancer.get('id') or ''))
+        if match_key in seen:
+            continue
+        seen.add(match_key)
         workforce = load_workforce(_workforce_folder(manager))
         current = find_by_id(
             workforce.get('freelancers'), freelancer.get('id')
         )
         if not current:
             continue
-        payload = _worker_company_payload(
+        payload = _worker_company_payload_for_member(
             company_code, manager, current, workforce
         )
         if payload['events']:
@@ -4386,8 +4445,12 @@ def _worker_company_payload(company_code, manager, freelancer, workforce):
             assignment_payload.append({
                 'id': str(assignment.get('id') or ''),
                 'department': department,
-                'role': str(assignment.get('roleName') or 'Freelancer'),
+                'role': str(assignment.get('roleName') or 'Worker'),
                 'days': int(assignment.get('days') or 0),
+                'providerType': str(
+                    assignment.get('providerType') or ''
+                ),
+                'pax': int(assignment.get('pax') or 0),
             })
         rows = worker_submissions(workforce, event_id, freelancer_id)
         public_rows = _public_submission_rows(rows, token)
@@ -4423,6 +4486,10 @@ def _worker_company_payload(company_code, manager, freelancer, workforce):
         )
         events_payload.append({
             'id': event_id,
+            'subjectId': freelancer_id,
+            'subjectName': str(freelancer.get('name') or 'Worker'),
+            'subjectType': 'vendor' if freelancer.get('isVendor') else 'worker',
+            'token': token,
             'name': event.name,
             'location': getattr(event, 'location', '') or '',
             'startDate': _event_date_for_worker(event.start_date),
@@ -4442,6 +4509,7 @@ def _worker_company_payload(company_code, manager, freelancer, workforce):
     return {
         'code': company['code'],
         'name': company['name'],
+        'logoUrl': company.get('logoUrl', ''),
         'token': token,
         'freelancer': {
             'id': freelancer_id,
@@ -4456,11 +4524,85 @@ def _worker_company_payload(company_code, manager, freelancer, workforce):
     }
 
 
+def _worker_company_payload_for_member(
+    company_code, manager, member, workforce
+):
+    """Merge a person's private and vendor assignments into one portal company."""
+    payload = _worker_company_payload(
+        company_code, manager, member, workforce
+    )
+    member_id = str(member.get('id') or '')
+    merged_events = list(payload.get('events') or [])
+    for vendor in workforce.get('vendors', []):
+        if (
+            not isinstance(vendor, dict)
+            or not vendor.get('active', True)
+            or member_id not in {
+                str(value) for value in vendor.get('memberIds', [])
+            }
+        ):
+            continue
+        proxy = _vendor_member_proxy(vendor, member)
+        vendor_payload = _worker_company_payload(
+            company_code, manager, proxy, workforce
+        )
+        for event in vendor_payload.get('events', []):
+            event['allowClaims'] = False
+            event['claimLimit'] = 0
+            event['claimSlotsRemaining'] = 0
+            merged_events.append(event)
+    merged_events.sort(
+        key=lambda row: (
+            row.get('isPast', False),
+            row.get('startDate', ''),
+            row.get('id', 0),
+            row.get('subjectName', ''),
+        )
+    )
+    payload['events'] = merged_events
+    return payload
+
+
+def _worker_company_payload_for_context(
+    company_code, manager, subject, workforce
+):
+    member_id = str(
+        subject.get('loginPersonId') or subject.get('id') or ''
+    )
+    member = find_by_id(workforce.get('freelancers'), member_id)
+    if not member:
+        return _worker_company_payload(
+            company_code, manager, subject, workforce
+        )
+    return _worker_company_payload_for_member(
+        company_code, manager, member, workforce
+    )
+
+
 def _find_worker_context(token, event_id=None):
     company_code, freelancer_id, phone, auth_version = _worker_token_data(token)
     manager = _bind_public_company_manager(company_code)
     workforce = load_workforce(_workforce_folder(manager))
     freelancer = find_by_id(workforce.get('freelancers'), freelancer_id)
+    if not freelancer:
+        vendor = find_by_id(workforce.get('vendors'), freelancer_id)
+        member = next(
+            (
+                row for row in workforce.get('freelancers', [])
+                if (
+                    isinstance(row, dict)
+                    and str(row.get('id') or '') in {
+                        str(value) for value in (
+                            vendor.get('memberIds', []) if vendor else []
+                        )
+                    }
+                    and normalize_phone(row.get('phone')) == phone
+                )
+            ),
+            None,
+        )
+        if vendor and member:
+            freelancer = _vendor_member_proxy(vendor, member)
     if (
         not freelancer
         or normalize_phone(freelancer.get('phone')) != phone
@@ -4473,7 +4615,8 @@ def _find_worker_context(token, event_id=None):
         )
     if event_id is not None:
         assigned = any(
-            str(row.get('freelancerId') or '') == freelancer_id
+            str(row.get('freelancerId') or row.get('vendorId') or '')
+            == freelancer_id
             for row in event_assignments(workforce, event_id)
             if isinstance(row, dict)
         )
@@ -4639,6 +4782,86 @@ def _admin_freelancer_payload(freelancer):
     return payload
 
 
+def _freelancer_admin_submission_summary(workforce, freelancer_id):
+    freelancer_id = str(freelancer_id or '')
+    assigned_event_ids = {
+        str(event_id)
+        for event_id, assignments in (workforce.get('assignments') or {}).items()
+        if any(
+            isinstance(row, dict)
+            and str(row.get('freelancerId') or '') == freelancer_id
+            for row in (assignments if isinstance(assignments, list) else [])
+        )
+    }
+    summary = {
+        'needsInvoice': 0,
+        'needsReview': 0,
+        'needsPayment': 0,
+        'needsReceipt': 0,
+    }
+    for event_id in assigned_event_ids:
+        rows = worker_submissions(workforce, event_id, freelancer_id)
+        active_invoices = [
+            row for row in rows.get('invoices', [])
+            if isinstance(row, dict) and row.get('status') != 'Denied'
+        ]
+        if not active_invoices:
+            summary['needsInvoice'] += 1
+        for kind in ('invoices', 'claims'):
+            for row in rows.get(kind, []):
+                if not isinstance(row, dict):
+                    continue
+                status = str(row.get('status') or 'Pending Review')
+                if (
+                    status == 'Pending Review'
+                    and row.get('processingState') != 'Processing'
+                    and row.get('submissionStage') != 'Details Required'
+                ):
+                    summary['needsReview'] += 1
+                elif status == 'Approved':
+                    summary['needsPayment'] += 1
+                elif status == 'Paid' and not row.get('paymentConfirmedAt'):
+                    summary['needsReceipt'] += 1
+    return summary
+
+
+def _admin_freelancer_with_summary(freelancer, workforce):
+    payload = _admin_freelancer_payload(freelancer)
+    payload['submissionSummary'] = _freelancer_admin_submission_summary(
+        workforce, payload.get('id')
+    )
+    return payload
+
+
+def _admin_vendor_payload(vendor, workforce):
+    member_ids = {
+        str(value) for value in (vendor or {}).get('memberIds', [])
+    }
+    members = [
+        _admin_freelancer_payload(row)
+        for row in workforce.get('freelancers', [])
+        if isinstance(row, dict) and str(row.get('id') or '') in member_ids
+    ]
+    return {
+        **(vendor or {}),
+        'memberIds': sorted(member_ids),
+        'members': members,
+        'submissionSummary': _freelancer_admin_submission_summary(
+            workforce, (vendor or {}).get('id')
+        ),
+    }
+
+
+def _workforce_subject(workforce, subject_id):
+    worker = find_by_id(workforce.get('freelancers'), subject_id)
+    if worker:
+        return worker, 'worker'
+    vendor = find_by_id(workforce.get('vendors'), subject_id)
+    if vendor:
+        return vendor, 'vendor'
+    return None, ''
+
+
 def _admin_workforce_payload(event_id, manager=None):
     manager = manager or _current_data_manager_object()
     event = manager.events.get(int(event_id))
@@ -4683,9 +4906,12 @@ def _admin_workforce_payload(event_id, manager=None):
 
     upload_allowances = {}
     freelancer_ids = {
-        str(row.get('freelancerId') or '')
+        str(row.get('freelancerId') or row.get('vendorId') or '')
         for row in event_assignments(workforce, event_id)
-        if isinstance(row, dict) and row.get('freelancerId')
+        if (
+            isinstance(row, dict)
+            and (row.get('freelancerId') or row.get('vendorId'))
+        )
     }
     freelancer_ids.update(str(key) for key in event_submission_rows)
     for freelancer_id in freelancer_ids:
@@ -4707,8 +4933,13 @@ def _admin_workforce_payload(event_id, manager=None):
             'tag': getattr(event, 'tag', 'events'),
         },
         'freelancers': [
-            _admin_freelancer_payload(row)
+            _admin_freelancer_with_summary(row, workforce)
             for row in workforce.get('freelancers', [])
+            if isinstance(row, dict)
+        ],
+        'vendors': [
+            _admin_vendor_payload(row, workforce)
+            for row in workforce.get('vendors', [])
             if isinstance(row, dict)
         ],
         'roles': workforce.get('roles', []),
@@ -4939,7 +5170,7 @@ def worker_company_status():
         )
         return jsonify({
             'success': True,
-            'data': _worker_company_payload(
+            'data': _worker_company_payload_for_context(
                 company_code, manager, freelancer, workforce
             ),
         })
@@ -4988,7 +5219,7 @@ def update_worker_profile():
         )
         if duplicate:
             return jsonify({
-                'error': 'That phone number is already used by another freelancer'
+                'error': 'That phone number is already used by another worker'
             }), 409
 
     for _code, manager, _workforce, freelancer in matches:
@@ -5100,7 +5331,7 @@ def worker_delete_submission(submission_id):
         _workforce_changed(event_id, 'worker-submission-deleted')
         return jsonify({
             'success': True,
-            'data': _worker_company_payload(
+            'data': _worker_company_payload_for_context(
                 company_code,
                 manager,
                 freelancer,
@@ -5137,7 +5368,7 @@ def worker_confirm_payment(submission_id):
         _workforce_changed(event_id, 'worker-payment-confirmed')
         return jsonify({
             'success': True,
-            'data': _worker_company_payload(
+            'data': _worker_company_payload_for_context(
                 company_code,
                 manager,
                 freelancer,
@@ -5299,7 +5530,7 @@ def worker_submission_details(submission_id):
         _workforce_changed(event_id, 'claim-details-completed')
         return jsonify({
             'success': True,
-            'data': _worker_company_payload(
+            'data': _worker_company_payload_for_context(
                 company_code,
                 manager,
                 freelancer,
@@ -5338,6 +5569,10 @@ def worker_upload_submission():
         company_code, manager, _workforce, freelancer = _find_worker_context(
             token, event_id
         )
+        if freelancer.get('isVendor') and kind == 'claim':
+            return jsonify({
+                'error': 'Company assignments only accept an invoice'
+            }), 400
         data_folder = _workforce_folder(manager)
         freelancer_id = str(freelancer.get('id') or '')
 
@@ -5464,7 +5699,7 @@ def worker_upload_submission():
                 f"{len(saved_records)} {kind} file"
                 f"{'s' if len(saved_records) != 1 else ''} uploaded and processing"
             ),
-            'data': _worker_company_payload(
+            'data': _worker_company_payload_for_context(
                 company_code,
                 manager,
                 freelancer,
@@ -5502,14 +5737,14 @@ def create_workforce_freelancer():
     name = str(payload.get('name') or '').strip()
     phone = normalize_phone(payload.get('phone'))
     if not name:
-        return jsonify({'error': 'Freelancer name is required'}), 400
+        return jsonify({'error': 'Worker name is required'}), 400
     with mutate_workforce(_workforce_folder()) as workforce:
         if phone and any(
             normalize_phone(row.get('phone')) == phone
             for row in workforce.get('freelancers', [])
             if isinstance(row, dict)
         ):
-            return jsonify({'error': 'A freelancer with this phone number already exists'}), 409
+            return jsonify({'error': 'A worker with this phone number already exists'}), 409
         freelancer = {
             'id': new_id('freelancer'),
             'name': name,
@@ -5522,7 +5757,7 @@ def create_workforce_freelancer():
             'updatedAt': now_iso(),
         }
         workforce.setdefault('freelancers', []).append(freelancer)
-    log_action(f"Created freelancer {name}")
+    log_action(f"Created worker {name}")
     return jsonify({'success': True, 'data': freelancer})
 
 
@@ -5531,20 +5766,22 @@ def create_workforce_freelancer():
 def update_workforce_freelancer(freelancer_id):
     payload = request.get_json(silent=True) or {}
     with mutate_workforce(_workforce_folder()) as workforce:
-        freelancer = find_by_id(workforce.get('freelancers'), freelancer_id)
+        freelancer = find_by_id(
+            workforce.get('freelancers'), freelancer_id
+        )
         if not freelancer:
-            return jsonify({'error': 'Freelancer not found'}), 404
+            return jsonify({'error': 'Worker not found'}), 404
         name = str(payload.get('name', freelancer.get('name')) or '').strip()
         phone = normalize_phone(payload.get('phone', freelancer.get('phone')))
         if not name:
-            return jsonify({'error': 'Freelancer name is required'}), 400
+            return jsonify({'error': 'Worker name is required'}), 400
         if phone and any(
             str(row.get('id')) != str(freelancer_id)
             and normalize_phone(row.get('phone')) == phone
             for row in workforce.get('freelancers', [])
             if isinstance(row, dict)
         ):
-            return jsonify({'error': 'A freelancer with this phone number already exists'}), 409
+            return jsonify({'error': 'A worker with this phone number already exists'}), 409
         freelancer.update({
             'name': name,
             'phone': phone,
@@ -5554,8 +5791,85 @@ def update_workforce_freelancer(freelancer_id):
             'active': bool(payload.get('active', freelancer.get('active', True))),
             'updatedAt': now_iso(),
         })
-    log_action(f"Updated freelancer {name}")
+    log_action(f"Updated worker {name}")
     return jsonify({'success': True, 'data': freelancer})
+
+
+@app.route('/api/workforce/vendors', methods=['POST'])
+@require_admin
+def create_workforce_vendor():
+    payload = request.get_json(silent=True) or {}
+    name = str(payload.get('name') or '').strip()
+    if not name:
+        return jsonify({'error': 'Company name is required'}), 400
+    with mutate_workforce(_workforce_folder()) as workforce:
+        if any(
+            str(row.get('name') or '').casefold() == name.casefold()
+            for row in workforce.get('vendors', [])
+            if isinstance(row, dict)
+        ):
+            return jsonify({'error': 'A company with this name already exists'}), 409
+        valid_people = {
+            str(row.get('id') or '')
+            for row in workforce.get('freelancers', [])
+            if isinstance(row, dict)
+        }
+        member_ids = sorted({
+            str(value)
+            for value in payload.get('memberIds', [])
+            if str(value) in valid_people
+        })
+        vendor = {
+            'id': new_id('vendor'),
+            'name': name,
+            'memberIds': member_ids,
+            'notes': str(payload.get('notes') or '').strip(),
+            'active': True,
+            'createdAt': now_iso(),
+            'updatedAt': now_iso(),
+        }
+        workforce.setdefault('vendors', []).append(vendor)
+    log_action(f"Created workforce company {name}")
+    return jsonify({'success': True, 'data': vendor})
+
+
+@app.route('/api/workforce/vendors/<vendor_id>', methods=['PUT'])
+@require_admin
+def update_workforce_vendor(vendor_id):
+    payload = request.get_json(silent=True) or {}
+    with mutate_workforce(_workforce_folder()) as workforce:
+        vendor = find_by_id(workforce.get('vendors'), vendor_id)
+        if not vendor:
+            return jsonify({'error': 'Company not found'}), 404
+        name = str(payload.get('name', vendor.get('name')) or '').strip()
+        if not name:
+            return jsonify({'error': 'Company name is required'}), 400
+        if any(
+            str(row.get('id') or '') != str(vendor_id)
+            and str(row.get('name') or '').casefold() == name.casefold()
+            for row in workforce.get('vendors', [])
+            if isinstance(row, dict)
+        ):
+            return jsonify({'error': 'A company with this name already exists'}), 409
+        valid_people = {
+            str(row.get('id') or '')
+            for row in workforce.get('freelancers', [])
+            if isinstance(row, dict)
+        }
+        member_ids = payload.get('memberIds', vendor.get('memberIds', []))
+        vendor.update({
+            'name': name,
+            'memberIds': sorted({
+                str(value)
+                for value in member_ids
+                if str(value) in valid_people
+            }),
+            'notes': str(payload.get('notes', vendor.get('notes')) or '').strip(),
+            'active': bool(payload.get('active', vendor.get('active', True))),
+            'updatedAt': now_iso(),
+        })
+    log_action(f"Updated workforce company {name}")
+    return jsonify({'success': True, 'data': vendor})
 
 
 @app.route(
@@ -5567,7 +5881,7 @@ def workforce_freelancer_history(freelancer_id):
     workforce = load_workforce(_workforce_folder())
     freelancer = find_by_id(workforce.get('freelancers'), freelancer_id)
     if not freelancer:
-        return jsonify({'error': 'Freelancer not found'}), 404
+        return jsonify({'error': 'Worker not found'}), 404
     events = []
     for raw_event_id, assignments in (workforce.get('assignments') or {}).items():
         matching = [
@@ -5639,10 +5953,12 @@ def workforce_freelancer_history(freelancer_id):
         'success': True,
         'data': {
             'company': _company_payload(_current_company_code()),
-            'freelancer': _admin_freelancer_payload(freelancer),
+            'freelancer': _admin_freelancer_with_summary(
+                freelancer, workforce
+            ),
             'freelancers': sorted(
                 [
-                    _admin_freelancer_payload(row)
+                    _admin_freelancer_with_summary(row, workforce)
                     for row in workforce.get('freelancers', [])
                     if isinstance(row, dict)
                 ],
@@ -5663,7 +5979,7 @@ def reset_workforce_freelancer_login(freelancer_id):
     loaded = load_workforce(_workforce_folder(manager))
     freelancer = find_by_id(loaded.get('freelancers'), freelancer_id)
     if not freelancer:
-        return jsonify({'error': 'Freelancer not found'}), 404
+        return jsonify({'error': 'Worker not found'}), 404
     phone = normalize_phone(freelancer.get('phone'))
     if not phone:
         return jsonify({
@@ -5818,7 +6134,7 @@ def delete_event_workforce_department(event_id, department_code):
             if isinstance(row, dict)
         ):
             return jsonify({
-                'error': 'Remove the freelancers in this department first'
+                'error': 'Remove the workers and companies in this department first'
             }), 409
         manual = workforce.setdefault('manualDepartments', {}).setdefault(
             str(event_id), []
@@ -5848,7 +6164,10 @@ def create_workforce_assignment(event_id):
     if event_id not in data_manager.events:
         return jsonify({'error': 'Event not found'}), 404
     payload = request.get_json(silent=True) or {}
-    freelancer_id = str(payload.get('freelancerId') or '')
+    freelancer_id = str(
+        payload.get('freelancerId') or payload.get('vendorId') or ''
+    )
+    requested_vendor = bool(payload.get('vendorId'))
     department = _normalise_department_code(payload.get('department'))
     role_id = str(payload.get('roleId') or '').strip()
     custom_role = str(payload.get('customRole') or '').strip()
@@ -5862,9 +6181,9 @@ def create_workforce_assignment(event_id):
     except (TypeError, ValueError):
         days = 0
     daily_rate = money(payload.get('dailyRate'))
-    if not freelancer_id or not department or days <= 0 or daily_rate is None:
+    if not freelancer_id or not department or days <= 0:
         return jsonify({
-            'error': 'Freelancer, department, number of days and daily rate are required'
+            'error': 'Worker or company, department and working dates are required'
         }), 400
     event = data_manager.events[event_id]
     start_date = _event_date_for_input(event.start_date)
@@ -5886,51 +6205,119 @@ def create_workforce_assignment(event_id):
                 'error': 'Choose an event asset department or add one manually'
             }), 400
         freelancer = find_by_id(workforce.get('freelancers'), freelancer_id)
-        if not freelancer:
-            return jsonify({'error': 'Freelancer not found'}), 404
-        role = find_by_id(workforce.get('roles'), role_id) if role_id else None
-        role_name = custom_role or (str(role.get('name')) if role else '')
-        if not role_name:
-            return jsonify({'error': 'Choose or enter a role'}), 400
-        if custom_role and bool(payload.get('saveRole', True)):
-            duplicate = next(
-                (
-                    row for row in workforce.get('roles', [])
-                    if isinstance(row, dict)
-                    and str(row.get('name') or '').lower() == custom_role.lower()
-                    and str(row.get('department') or '') == department
-                ),
-                None,
-            )
-            if duplicate:
-                role_id = str(duplicate.get('id') or '')
+        vendor = find_by_id(workforce.get('vendors'), freelancer_id)
+        if requested_vendor or vendor:
+            if not vendor:
+                return jsonify({'error': 'Company not found'}), 404
+            provider_type = str(
+                payload.get('providerType') or ''
+            ).strip().lower()
+            if provider_type not in {'manpower', 'service'}:
+                return jsonify({
+                    'error': 'Choose whether the company provides manpower or a service'
+                }), 400
+            assignment = {
+                'id': new_id('assignment'),
+                'freelancerId': freelancer_id,
+                'vendorId': freelancer_id,
+                'subjectType': 'vendor',
+                'department': department,
+                'providerType': provider_type,
+                'days': days,
+                'workDates': sorted(set(work_dates)),
+                'createdAt': now_iso(),
+            }
+            if provider_type == 'manpower':
+                try:
+                    pax = int(payload.get('pax') or 0)
+                except (TypeError, ValueError):
+                    pax = 0
+                rate_per_pax = money(payload.get('ratePerPax'))
+                if pax <= 0 or rate_per_pax is None:
+                    return jsonify({
+                        'error': 'Number of pax and rate per pax are required'
+                    }), 400
+                assignment.update({
+                    'pax': pax,
+                    'ratePerPax': rate_per_pax,
+                    'dailyRate': rate_per_pax,
+                    'roleName': f'{pax} pax manpower',
+                })
             else:
-                saved_role = {
-                    'id': new_id('role'),
-                    'name': custom_role,
-                    'department': department,
-                    'createdAt': now_iso(),
-                }
-                workforce.setdefault('roles', []).append(saved_role)
-                role_id = saved_role['id']
-        assignment = {
-            'id': new_id('assignment'),
-            'freelancerId': freelancer_id,
-            'department': department,
-            'roleId': role_id,
-            'roleName': role_name,
-            'days': days,
-            'workDates': sorted(set(work_dates)),
-            'dailyRate': daily_rate,
-            'notes': str(payload.get('notes') or '').strip(),
-            'createdAt': now_iso(),
-        }
-        workforce.setdefault('assignments', {}).setdefault(
-            str(event_id), []
-        ).append(assignment)
-    log_action(
-        f"Assigned freelancer {freelancer.get('name')} to event {event_id} as {role_name}"
-    )
+                service_name = str(
+                    payload.get('serviceName') or ''
+                ).strip()
+                service_cost = money(payload.get('serviceCost'))
+                if not service_name or service_cost is None:
+                    return jsonify({
+                        'error': 'Service name and cost are required'
+                    }), 400
+                assignment.update({
+                    'serviceName': service_name,
+                    'serviceCost': service_cost,
+                    'dailyRate': service_cost,
+                    'roleName': service_name,
+                })
+            workforce.setdefault('assignments', {}).setdefault(
+                str(event_id), []
+            ).append(assignment)
+            subject_name = vendor.get('name')
+            log_message = (
+                f"Assigned company {subject_name} to event {event_id} "
+                f"as {provider_type}"
+            )
+        else:
+            if not freelancer:
+                return jsonify({'error': 'Worker not found'}), 404
+            if daily_rate is None:
+                return jsonify({'error': 'Daily rate is required'}), 400
+            role = find_by_id(workforce.get('roles'), role_id) if role_id else None
+            role_name = custom_role or (str(role.get('name')) if role else '')
+            if not role_name:
+                return jsonify({'error': 'Choose or enter a role'}), 400
+            if custom_role and bool(payload.get('saveRole', True)):
+                duplicate = next(
+                    (
+                        row for row in workforce.get('roles', [])
+                        if isinstance(row, dict)
+                        and str(row.get('name') or '').lower() == custom_role.lower()
+                        and str(row.get('department') or '') == department
+                    ),
+                    None,
+                )
+                if duplicate:
+                    role_id = str(duplicate.get('id') or '')
+                else:
+                    saved_role = {
+                        'id': new_id('role'),
+                        'name': custom_role,
+                        'department': department,
+                        'createdAt': now_iso(),
+                    }
+                    workforce.setdefault('roles', []).append(saved_role)
+                    role_id = saved_role['id']
+            assignment = {
+                'id': new_id('assignment'),
+                'freelancerId': freelancer_id,
+                'subjectType': 'worker',
+                'department': department,
+                'roleId': role_id,
+                'roleName': role_name,
+                'days': days,
+                'workDates': sorted(set(work_dates)),
+                'dailyRate': daily_rate,
+                'notes': str(payload.get('notes') or '').strip(),
+                'createdAt': now_iso(),
+            }
+            workforce.setdefault('assignments', {}).setdefault(
+                str(event_id), []
+            ).append(assignment)
+            subject_name = freelancer.get('name')
+            log_message = (
+                f"Assigned worker {subject_name} to event {event_id} "
+                f"as {role_name}"
+            )
+    log_action(log_message)
     _workforce_changed(event_id, 'assignment-created')
     return jsonify({'success': True, 'data': _admin_workforce_payload(event_id)})
 
@@ -5954,9 +6341,9 @@ def update_workforce_assignment(event_id, assignment_id):
         days = len(work_dates) or int(payload.get('days') or 0)
     except (TypeError, ValueError):
         days = 0
-    if not department or not role_name or daily_rate is None or days <= 0:
+    if not department or days <= 0:
         return jsonify({
-            'error': 'Department, role, working dates and daily rate are required'
+            'error': 'Department and working dates are required'
         }), 400
     event = data_manager.events.get(event_id)
     if not event:
@@ -5973,15 +6360,73 @@ def update_workforce_assignment(event_id, assignment_id):
         )
         if not assignment:
             return jsonify({'error': 'Assignment not found'}), 404
-        assignment.update({
-            'department': department,
-            'roleName': role_name,
-            'days': days,
-            'workDates': sorted(set(work_dates)),
-            'dailyRate': daily_rate,
-            'updatedAt': now_iso(),
-        })
-    log_action(f"Updated freelancer assignment for event {event_id}")
+        if assignment.get('vendorId') or assignment.get('subjectType') == 'vendor':
+            provider_type = str(
+                payload.get('providerType')
+                or assignment.get('providerType')
+                or ''
+            ).strip().lower()
+            if provider_type not in {'manpower', 'service'}:
+                return jsonify({
+                    'error': 'Choose whether the company provides manpower or a service'
+                }), 400
+            updates = {
+                'department': department,
+                'providerType': provider_type,
+                'days': days,
+                'workDates': sorted(set(work_dates)),
+                'updatedAt': now_iso(),
+            }
+            if provider_type == 'manpower':
+                try:
+                    pax = int(payload.get('pax') or 0)
+                except (TypeError, ValueError):
+                    pax = 0
+                rate_per_pax = money(payload.get('ratePerPax'))
+                if pax <= 0 or rate_per_pax is None:
+                    return jsonify({
+                        'error': 'Number of pax and rate per pax are required'
+                    }), 400
+                updates.update({
+                    'pax': pax,
+                    'ratePerPax': rate_per_pax,
+                    'dailyRate': rate_per_pax,
+                    'roleName': f'{pax} pax manpower',
+                    'serviceName': '',
+                    'serviceCost': None,
+                })
+            else:
+                service_name = str(
+                    payload.get('serviceName') or ''
+                ).strip()
+                service_cost = money(payload.get('serviceCost'))
+                if not service_name or service_cost is None:
+                    return jsonify({
+                        'error': 'Service name and cost are required'
+                    }), 400
+                updates.update({
+                    'serviceName': service_name,
+                    'serviceCost': service_cost,
+                    'dailyRate': service_cost,
+                    'roleName': service_name,
+                    'pax': 0,
+                    'ratePerPax': None,
+                })
+            assignment.update(updates)
+        else:
+            if not role_name or daily_rate is None:
+                return jsonify({
+                    'error': 'Role and daily rate are required'
+                }), 400
+            assignment.update({
+                'department': department,
+                'roleName': role_name,
+                'days': days,
+                'workDates': sorted(set(work_dates)),
+                'dailyRate': daily_rate,
+                'updatedAt': now_iso(),
+            })
+    log_action(f"Updated workforce assignment for event {event_id}")
     _workforce_changed(event_id, 'assignment-updated')
     return jsonify({'success': True, 'data': _admin_workforce_payload(event_id)})
 
@@ -6001,7 +6446,7 @@ def delete_workforce_assignment(event_id, assignment_id):
         ]
         if len(rows) == before:
             return jsonify({'error': 'Assignment not found'}), 404
-    log_action(f"Removed freelancer assignment from event {event_id}")
+    log_action(f"Removed workforce assignment from event {event_id}")
     _workforce_changed(event_id, 'assignment-deleted')
     return jsonify({'success': True, 'data': _admin_workforce_payload(event_id)})
 
@@ -6026,16 +6471,22 @@ def add_workforce_upload_allowance(event_id, freelancer_id):
         return jsonify({'error': 'Upload slot change cannot be zero'}), 400
 
     with mutate_workforce(_workforce_folder()) as workforce:
-        freelancer = find_by_id(workforce.get('freelancers'), freelancer_id)
+        freelancer, subject_type = _workforce_subject(
+            workforce, freelancer_id
+        )
         if not freelancer:
-            return jsonify({'error': 'Freelancer not found'}), 404
+            return jsonify({'error': 'Worker or company not found'}), 404
+        if subject_type == 'vendor' and kind == 'claim':
+            return jsonify({
+                'error': 'Company assignments only accept an invoice'
+            }), 400
         assigned = any(
             str(row.get('freelancerId') or '') == str(freelancer_id)
             for row in event_assignments(workforce, event_id)
             if isinstance(row, dict)
         )
         if not assigned:
-            return jsonify({'error': 'Freelancer is not assigned to this event'}), 400
+            return jsonify({'error': 'Worker or company is not assigned to this event'}), 400
         allowance = workforce.setdefault('uploadAllowances', {}).setdefault(
             str(event_id), {}
         ).setdefault(str(freelancer_id), {
@@ -6088,9 +6539,15 @@ def admin_upload_workforce_submission(event_id, freelancer_id):
         data_folder = _workforce_folder(manager)
         record_ids = []
         with mutate_workforce(data_folder) as workforce:
-            freelancer = find_by_id(workforce.get('freelancers'), freelancer_id)
+            freelancer, subject_type = _workforce_subject(
+                workforce, freelancer_id
+            )
             if not freelancer:
-                return jsonify({'error': 'Freelancer not found'}), 404
+                return jsonify({'error': 'Worker or company not found'}), 404
+            if subject_type == 'vendor' and kind == 'claim':
+                return jsonify({
+                    'error': 'Company assignments only accept an invoice'
+                }), 400
             assignments = [
                 row for row in event_assignments(workforce, event_id)
                 if (
@@ -6099,7 +6556,7 @@ def admin_upload_workforce_submission(event_id, freelancer_id):
                 )
             ]
             if not assignments:
-                return jsonify({'error': 'Freelancer is not assigned to this event'}), 400
+                return jsonify({'error': 'Worker is not assigned to this event'}), 400
             limits = _worker_upload_limits(workforce, event_id, freelancer_id)
             remaining_key = (
                 'invoiceSlotsRemaining'
@@ -6679,9 +7136,7 @@ def review_workforce_submission(submission_id):
             if already_verified
             else money(payload.get('amount', record.get('amount')))
         )
-        if amount is None and (
-            status != 'Denied' or confirming_review
-        ):
+        if amount is None and status != 'Denied':
             return jsonify({'error': 'Enter a valid amount'}), 400
         if amount is None:
             amount = record.get('amount')
@@ -6750,6 +7205,25 @@ def review_workforce_submission(submission_id):
             and payload.get('department') is not None
         ):
             record['department'] = str(payload.get('department') or '').strip()
+        if found['kind'] == 'claim' and not already_verified:
+            claim_date = str(
+                payload.get('claimDate', record.get('claimDate') or '')
+                or ''
+            ).strip()
+            category = str(
+                payload.get('category', record.get('category') or '')
+                or ''
+            ).strip()
+            if confirming_review and status != 'Denied' and (
+                not claim_date or not category
+            ):
+                return jsonify({
+                    'error': 'Claim date and category are required'
+                }), 400
+            if claim_date:
+                record['claimDate'] = claim_date
+            if category:
+                record['category'] = category
         record.update({
             'amount': amount,
             'status': status,
@@ -6836,7 +7310,10 @@ def download_event_workforce_files(event_id, kind):
     records = []
     event_rows = (workforce.get('submissions') or {}).get(str(event_id), {}) or {}
     for freelancer_id, rows in event_rows.items():
-        freelancer = find_by_id(workforce.get('freelancers'), freelancer_id) or {}
+        freelancer, _subject_type = _workforce_subject(
+            workforce, freelancer_id
+        )
+        freelancer = freelancer or {}
         worker_name = sanitize_filename(str(freelancer.get('name') or freelancer_id))
         for record in rows.get(kind, []) if isinstance(rows, dict) else []:
             if not isinstance(record, dict):

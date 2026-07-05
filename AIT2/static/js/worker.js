@@ -24,6 +24,18 @@ function initials(name) {
     .map(part => part[0].toUpperCase()).join('');
 }
 
+function companyLogo(company) {
+  const fallback = escapeHtml(initials(company.name || company.code || 'CO'));
+  if (!company.logoUrl) {
+    return `<span class="company-icon"><b>${fallback}</b></span>`;
+  }
+  return `<span class="company-icon">
+    <img src="${escapeHtml(company.logoUrl)}" alt="${escapeHtml(company.name || 'Company')} logo"
+      onerror="this.hidden=true;this.nextElementSibling.hidden=false">
+    <b hidden>${fallback}</b>
+  </span>`;
+}
+
 function formatDate(value, withTime = false) {
   if (!value) return '—';
   const date = new Date(value);
@@ -115,18 +127,31 @@ function submissionStatusSummary(rows) {
   return 'Submitted';
 }
 
-function submissionActions(company, row) {
+function eventSubmissionStatusSummary(rows) {
+  if (rows.some(row =>
+    row.canConfirmPayment ||
+    (row.adminStatus === 'Paid' && row.status !== 'Payment Confirmed')
+  )) {
+    return 'Awaiting confirmation';
+  }
+  return submissionStatusSummary(rows);
+}
+
+function submissionActions(company, event, row) {
+  const token = event.token || company.token;
   const received = row.canConfirmPayment
-    ? `<button class="received-button" type="button" data-confirm-payment="${escapeHtml(row.id)}" data-company="${escapeHtml(company.code)}">Received</button>`
+    ? `<button class="received-button" type="button" data-confirm-payment="${escapeHtml(row.id)}"
+        data-company="${escapeHtml(company.code)}" data-token="${escapeHtml(token)}">Received</button>`
     : '';
   const remove = row.canEdit
     ? `<button class="delete-upload" type="button" title="Remove and upload again"
-        data-delete-submission="${escapeHtml(row.id)}" data-company="${escapeHtml(company.code)}">🗑</button>`
+        data-delete-submission="${escapeHtml(row.id)}" data-company="${escapeHtml(company.code)}"
+        data-token="${escapeHtml(token)}">🗑</button>`
     : '';
   return received || remove || '<span class="locked-action">—</span>';
 }
 
-function invoiceRows(company, rows) {
+function invoiceRows(company, event, rows) {
   if (!rows.length) return '<div class="empty-submissions">No invoice submitted yet.</div>';
   return `<div class="submission-table invoice-table">
     <div class="submission-head"><span>File Name</span><span>Uploaded On</span><span>Amount (SGD)</span><span>Status</span><span>Action</span></div>
@@ -137,13 +162,13 @@ function invoiceRows(company, rows) {
       <span>${escapeHtml(formatDate(row.submittedAt))}</span>
       <strong>${row.amount == null ? '—' : Number(row.amount).toLocaleString('en-SG', { minimumFractionDigits: 2 })}</strong>
       <span>${submissionStatusBadge(row)}</span>
-      <span>${submissionActions(company, row)}</span>
+      <span>${submissionActions(company, event, row)}</span>
       ${submissionDenialReason(row)}
     </div>`).join('')}
   </div>`;
 }
 
-function claimRows(company, rows) {
+function claimRows(company, event, rows) {
   if (!rows.length) return '<div class="empty-submissions">No claims submitted yet.</div>';
   return `<div class="submission-table claim-table">
     <div class="submission-head"><span>File Name</span><span>Category</span><span>Claim Date</span><span>Uploaded On</span><span>Amount</span><span>Status</span><span>Action</span></div>
@@ -159,7 +184,7 @@ function claimRows(company, rows) {
       <span>${escapeHtml(formatDate(row.submittedAt))}</span>
       <strong>${row.amount == null ? '—' : Number(row.amount).toLocaleString('en-SG', { minimumFractionDigits: 2 })}</strong>
       <span>${submissionStatusBadge(row)}</span>
-      <span>${submissionActions(company, row)}</span>
+      <span>${submissionActions(company, event, row)}</span>
       ${submissionDenialReason(row)}
     </div>`).join('')}
   </div>`;
@@ -171,7 +196,8 @@ function dropZone(company, event, kind) {
     : event.claimSlotsRemaining;
   if (remaining <= 0) return '';
   const accept = kind === 'invoice' ? '.pdf,application/pdf' : '.pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg';
-  return `<label class="event-dropzone" data-drop-kind="${kind}" data-company="${escapeHtml(company.code)}" data-event="${event.id}">
+  return `<label class="event-dropzone" data-drop-kind="${kind}" data-company="${escapeHtml(company.code)}"
+    data-event="${event.id}" data-subject="${escapeHtml(event.subjectId || '')}">
     <input type="file" accept="${accept}" multiple hidden>
     <strong>↥ &nbsp; Drag &amp; drop or choose ${kind === 'invoice' ? 'invoice files' : 'claim files'}</strong>
     <span>${remaining} upload slot${remaining === 1 ? '' : 's'} available</span>
@@ -191,23 +217,31 @@ function renderEvent(company, event, open = false) {
   const claims = event.submissions.claims || [];
   const roles = [...new Set(event.assignments.map(row => row.role))].join(', ');
   const departments = [...new Set(event.assignments.map(row => row.department))].join(', ');
-  return `<details class="event-card" data-event-key="${escapeHtml(company.code)}:${event.id}" ${open ? 'open' : ''}>
+  const invoiceSummary = eventSubmissionStatusSummary(invoices);
+  const claimSummary = eventSubmissionStatusSummary(claims);
+  const eventKey = `${company.code}:${event.id}:${event.subjectId || 'worker'}`;
+  const vendorEvent = event.subjectType === 'vendor';
+  return `<details class="event-card ${vendorEvent ? 'vendor-event' : ''}" data-event-key="${escapeHtml(eventKey)}" ${open ? 'open' : ''}>
     <summary>
       <div class="date-block">${eventDateBlock(event)}</div>
-      <div class="event-name"><strong>${escapeHtml(event.name)}</strong><span>⌖ &nbsp; ${escapeHtml(event.location || 'Location TBC')}</span></div>
-      <div class="summary-cell"><span>Role / Dept</span><strong>${escapeHtml(roles || 'Freelancer')}</strong><small>${escapeHtml(departments)}</small></div>
-      <div class="summary-cell"><span>Invoices</span><strong>${invoices.length} / ${event.invoiceLimit}</strong><em class="status-badge ${statusClass(submissionStatusSummary(invoices))}">${submissionStatusSummary(invoices)}</em></div>
-      <div class="summary-cell"><span>Claims</span><strong>${claims.length} / ${event.claimLimit}</strong><em class="status-badge ${statusClass(submissionStatusSummary(claims))}">${submissionStatusSummary(claims)}</em></div>
+      <div class="event-name"><strong>${escapeHtml(event.name)}</strong>
+        ${vendorEvent ? `<small class="event-subject-label">For ${escapeHtml(event.subjectName)}</small>` : ''}
+        <span>⌖ &nbsp; ${escapeHtml(event.location || 'Location TBC')}</span></div>
+      <div class="summary-cell"><span>Role / Dept</span><strong>${escapeHtml(roles || 'Worker')}</strong><small>${escapeHtml(departments)}</small></div>
+      <div class="summary-cell"><span>Invoices</span><strong>${invoices.length} / ${event.invoiceLimit}</strong><em class="status-badge ${statusClass(invoiceSummary)}">${invoiceSummary}</em></div>
+      ${vendorEvent
+        ? `<div class="summary-cell"><span>Submission</span><strong>Company invoice</strong><small>Shared by all members</small></div>`
+        : `<div class="summary-cell"><span>Claims</span><strong>${claims.length} / ${event.claimLimit}</strong><em class="status-badge ${statusClass(claimSummary)}">${claimSummary}</em></div>`}
       <div class="summary-cell totals"><span>Totals (Submitted)</span><strong>Invoice: &nbsp; ${money(event.invoiceTotal)}</strong><strong>Claims: &nbsp; ${money(event.claimTotal)}</strong></div>
       <span class="event-chevron">⌄</span>
     </summary>
     <div class="event-submissions">
       <section><header><h3>Invoices (${invoices.length} of ${event.invoiceLimit})</h3></header>
-        ${invoiceRows(company, invoices)}${dropZone(company, event, 'invoice')}
+        ${invoiceRows(company, event, invoices)}${dropZone(company, event, 'invoice')}
         <footer><strong>Total Invoice Amount</strong><b>${money(event.invoiceTotal)}</b></footer></section>
-      <section><header><h3>Claims (${claims.length} of ${event.claimLimit})</h3></header>
-        ${claimRows(company, claims)}${dropZone(company, event, 'claim')}
-        <footer><strong>Total Claims Amount</strong><b>${money(event.claimTotal)}</b></footer></section>
+      ${vendorEvent ? '' : `<section><header><h3>Claims (${claims.length} of ${event.claimLimit})</h3></header>
+        ${claimRows(company, event, claims)}${dropZone(company, event, 'claim')}
+        <footer><strong>Total Claims Amount</strong><b>${money(event.claimTotal)}</b></footer></section>`}
     </div>
   </details>`;
 }
@@ -232,10 +266,10 @@ function renderCompanies() {
     if (selectedCompany !== 'all' && selectedCompany !== company.code) return '';
     const events = company.events.filter(event => Boolean(event.isPast) === desiredPast);
     if (!events.length) return '';
-    return `<section class="company-section"><header><span class="company-icon">▥</span>
+    return `<section class="company-section"><header>${companyLogo(company)}
       <h2>${escapeHtml(company.name)}</h2></header>
       ${events.map(event => {
-        const eventKey = `${company.code}:${event.id}`;
+        const eventKey = `${company.code}:${event.id}:${event.subjectId || 'worker'}`;
         const shouldOpen = previousState.hadCards
           ? previousState.openEvents.has(eventKey)
           : false;
@@ -321,9 +355,12 @@ function renderPortal() {
   renderStatistics();
 }
 
-function findContext(companyCode, eventId) {
+function findContext(companyCode, eventId, subjectId = '') {
   const company = workerPortalData.companies.find(row => row.code === companyCode);
-  const event = company?.events.find(row => Number(row.id) === Number(eventId));
+  const event = company?.events.find(row =>
+    Number(row.id) === Number(eventId) &&
+    (!subjectId || String(row.subjectId || '') === String(subjectId))
+  );
   return { company, event };
 }
 
@@ -342,7 +379,7 @@ async function uploadFiles(company, event, kind, files) {
     return;
   }
   const form = new FormData();
-  form.append('token', company.token);
+  form.append('token', event.token || company.token);
   form.append('eventId', event.id);
   form.append('kind', kind);
   form.append('warningAcknowledged', 'true');
@@ -434,16 +471,17 @@ function uploadWithProgress(url, formData, onProgress) {
 function openClaimModal(company, event, row) {
   pendingClaimContext = { company, event, row };
   byId('claimDetailsForm').reset();
-  byId('claimToken').value = company.token;
+  byId('claimToken').value = event.token || company.token;
   byId('claimEventId').value = event.id;
   byId('claimSubmissionId').value = row.id;
   byId('claimContext').textContent = `${company.name} · ${event.name} · ${row.originalName}`;
   byId('claimAmount').value = row.amount == null ? '' : Number(row.amount).toFixed(2);
   byId('claimDate').value = row.claimDate || '';
-  byId('claimCategory').value = ['Cab', 'Parking', 'Meal'].includes(row.category) ? row.category : (row.category ? 'Other' : '');
+  const normalizedCategory = row.category === 'Cab' ? 'Transport' : row.category;
+  byId('claimCategory').value = ['Transport', 'Meal'].includes(normalizedCategory) ? normalizedCategory : (normalizedCategory ? 'Other' : '');
   byId('otherCategoryField').hidden = byId('claimCategory').value !== 'Other';
   byId('otherCategory').required = byId('claimCategory').value === 'Other';
-  byId('otherCategory').value = byId('claimCategory').value === 'Other' ? row.category : '';
+  byId('otherCategory').value = byId('claimCategory').value === 'Other' ? normalizedCategory : '';
   byId('claimNotes').value = row.notes || '';
   byId('claimPreview').innerHTML = String(row.contentType || '').startsWith('image/')
     ? `<img src="${escapeHtml(row.fileUrl)}" alt="Claim preview">`
@@ -463,7 +501,11 @@ function closeClaimModal() {
 
 function handleDroppedFiles(zone, files) {
   if (!files?.length) return;
-  const { company, event } = findContext(zone.dataset.company, zone.dataset.event);
+  const { company, event } = findContext(
+    zone.dataset.company,
+    zone.dataset.event,
+    zone.dataset.subject
+  );
   if (!company || !event) return;
   uploadFiles(company, event, zone.dataset.dropKind, files);
 }
@@ -505,7 +547,7 @@ function bindPortalActions() {
         const response = await fetchJson(`/api/worker/submissions/${encodeURIComponent(button.dataset.deleteSubmission)}`, {
           method: 'DELETE',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token: company.token })
+          body: JSON.stringify({ token: button.dataset.token || company.token })
         });
         replaceCompany(response.data);
         showMessage(byId('portalMessage'), 'Submission removed. You may upload a replacement.', 'success');
@@ -522,7 +564,7 @@ function bindPortalActions() {
         const response = await fetchJson(`/api/worker/submissions/${encodeURIComponent(button.dataset.confirmPayment)}/confirm-payment`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token: company.token })
+          body: JSON.stringify({ token: button.dataset.token || company.token })
         });
         replaceCompany(response.data);
         showMessage(byId('portalMessage'), 'Payment receipt confirmed.', 'success');

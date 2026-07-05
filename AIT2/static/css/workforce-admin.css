@@ -226,6 +226,17 @@
   color: #b91c1c;
 }
 
+.wf-button.approve {
+  border-color: #15803d;
+  background: #16a34a;
+  color: #fff;
+}
+
+.wf-button.approve:hover,
+.wf-button.approve:focus-visible {
+  background: #15803d;
+}
+
 .wf-button:disabled {
   cursor: not-allowed;
   opacity: .55;
@@ -639,6 +650,202 @@
   grid-column: 1 / -1;
   color: var(--wf-muted);
   font-size: 9px;
+}
+
+.wf-directory-phone {
+  display: flex !important;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.wf-worker-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+  margin-top: 7px;
+}
+
+.wf-worker-summary small {
+  width: 100%;
+  margin: 0;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #475569;
+  padding: 3px 6px;
+  font-size: 8px;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.wf-worker-summary small:nth-child(2) { background: #fff7ed; color: #c2410c; }
+.wf-worker-summary small:nth-child(3) { background: #ecfdf3; color: #15803d; }
+.wf-worker-summary small:nth-child(4) { background: #eff6ff; color: #1d4ed8; }
+
+.wf-avatar.vendor {
+  background: #ede9fe;
+  color: #5b21b6;
+}
+
+.wf-vendor .wf-vendor-invoice {
+  grid-column: 3 / 5;
+}
+
+.wf-member-picker {
+  display: grid;
+  max-height: 280px;
+  margin-top: 8px;
+  gap: 6px;
+  overflow: auto;
+}
+
+.wf-member-option {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  border: 1px solid var(--wf-border);
+  border-radius: 9px;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.wf-member-option:has(input:checked) {
+  border-color: #8b7cf6;
+  background: #f7f5ff;
+}
+
+.wf-member-option small {
+  display: block;
+  margin-top: 2px;
+  color: var(--wf-muted);
+}
+
+.wf-provider-choice {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+}
+
+.wf-provider-choice label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--wf-border);
+  border-radius: 9px;
+  padding: 10px;
+  cursor: pointer;
+}
+
+.wf-provider-choice label:has(input:checked) {
+  border-color: #6d5ce8;
+  background: #f4f2ff;
+  color: #4c38c8;
+  font-weight: 800;
+}
+
+.wf-date-calendar {
+  overflow: hidden;
+  border: 1px solid var(--wf-border);
+  border-radius: 11px;
+  background: #fafbff;
+}
+
+.wf-calendar-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid var(--wf-border);
+  padding: 9px 12px;
+  color: var(--wf-muted);
+  font-size: 11px;
+}
+
+.wf-calendar-toolbar > div {
+  display: flex;
+  gap: 10px;
+}
+
+.wf-calendar-months {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-height: 440px;
+  gap: 12px;
+  overflow: auto;
+  padding: 12px;
+}
+
+.wf-calendar-month {
+  border: 1px solid #e5e7ef;
+  border-radius: 10px;
+  background: #fff;
+  padding: 10px;
+}
+
+.wf-calendar-month > header {
+  margin-bottom: 9px;
+  color: #202b44;
+  font-size: 12px;
+  font-weight: 900;
+  text-align: center;
+}
+
+.wf-calendar-weekdays,
+.wf-calendar-days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.wf-calendar-weekdays {
+  margin-bottom: 5px;
+  color: #8a94a7;
+  font-size: 8px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.wf-calendar-day,
+.wf-calendar-blank {
+  display: grid;
+  min-height: 31px;
+  place-items: center;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #a3a9b7;
+  font: inherit;
+  font-size: 10px;
+}
+
+button.wf-calendar-day.event-date {
+  border: 1px solid #d8d3ff;
+  background: #f3f1ff;
+  color: #5140bf;
+  cursor: pointer;
+  font-weight: 800;
+}
+
+button.wf-calendar-day.event-date:hover {
+  border-color: #7664e8;
+}
+
+button.wf-calendar-day.selected {
+  border-color: #5b45df;
+  background: #5b45df;
+  color: #fff;
+  box-shadow: 0 3px 8px rgb(91 69 223 / 20%);
+}
+
+.wf-calendar-day.outside {
+  opacity: .5;
+}
+
+@media (max-width: 1180px) {
+  .wf-worker-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .wf-history-header {
@@ -1342,6 +1549,10 @@
 
   .wf-worker {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .wf-vendor .wf-vendor-invoice {
+    grid-column: 1 / -1;
   }
 
   .wf-worker-invoices,
@@ -2199,6 +2410,10 @@ button.wf-directory-row {
 
   .wf-directory-grid,
   .wf-work-date-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .wf-calendar-months {
     grid-template-columns: 1fr;
   }
 
