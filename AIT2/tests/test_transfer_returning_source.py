@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+from datetime import date, timedelta
 
 import app as app_module
 from data_manager import DataManager
@@ -37,12 +38,14 @@ class ReturningSourceTransferTests(unittest.TestCase):
             )
 
         requirement = '[MODEL]AX|Test Brand|Test Model|2|Test asset'
+        source_date = (date.today() - timedelta(days=1)).strftime('%Y%m%d')
+        destination_date = (date.today() + timedelta(days=2)).strftime('%Y%m%d')
         self.data_manager.events = {
             1: Event(
                 1,
                 'Source Event',
-                '20260628',
-                '20260628',
+                source_date,
+                source_date,
                 [],
                 prepared_items=[requirement],
                 state='Ongoing',
@@ -52,8 +55,8 @@ class ReturningSourceTransferTests(unittest.TestCase):
             2: Event(
                 2,
                 'Destination Event',
-                '20260701',
-                '20260701',
+                destination_date,
+                destination_date,
                 [],
                 prepared_items=[requirement],
                 state='Planning',

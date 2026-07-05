@@ -3,426 +3,114 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Login - Avec Inventory Management</title>
-    <style>
-      * {
-        margin: 0;
-        padding: 0;
-        box-sizing: border-box;
-      }
-
-      :root {
-        --ui-scale: 0.8;
-        --ui-scale-mobile: 0.9;
-        --scaled-vw: calc(100vw / var(--ui-scale));
-        --scaled-vh: calc(100vh / var(--ui-scale));
-        --scaled-dvh: calc(100dvh / var(--ui-scale));
-      }
-
-      body {
-        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        width: var(--scaled-vw);
-        min-height: var(--scaled-vh);
-        min-height: var(--scaled-dvh);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 16px;
-      }
-
-      @supports (zoom: 1) {
-        body {
-          zoom: var(--ui-scale);
-        }
-      }
-
-      @supports not (zoom: 1) {
-        body {
-          transform: scale(var(--ui-scale));
-          transform-origin: top left;
-        }
-      }
-
-      .login-container {
-        background: rgba(255, 255, 255, 0.95);
-        backdrop-filter: blur(10px);
-        border-radius: 20px;
-        padding: clamp(24px, 6vw, 40px);
-        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        width: 100%;
-        max-width: 400px;
-      }
-
-      .login-header {
-        text-align: center;
-        margin-bottom: 30px;
-      }
-
-      .login-title {
-        color: #764ba2;
-        font-size: 2rem;
-        margin-bottom: 10px;
-      }
-
-      .login-subtitle {
-        color: #666;
-        font-size: 1rem;
-      }
-
-      .form-group {
-        margin-bottom: 20px;
-      }
-
-      .form-label {
-        display: block;
-        margin-bottom: 8px;
-        font-weight: 500;
-        color: #333;
-      }
-
-      .form-input {
-        width: 100%;
-        padding: 15px;
-        border: 2px solid #e9ecef;
-        border-radius: 10px;
-        font-size: 16px;
-        transition: all 0.3s ease;
-        background: white;
-      }
-
-      .form-input:focus {
-        outline: none;
-        border-color: #667eea;
-        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-      }
-
-      .login-btn {
-        width: 100%;
-        padding: 15px;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        border: none;
-        border-radius: 10px;
-        font-size: 16px;
-        font-weight: 600;
-        cursor: pointer;
-        transition: all 0.3s ease;
-        margin-top: 10px;
-      }
-
-      .login-btn:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
-      }
-
-      .login-btn:focus-visible,
-      .form-input:focus-visible {
-        outline: 3px solid #4f46e5;
-        outline-offset: 2px;
-      }
-
-      .login-btn:disabled {
-        opacity: 0.6;
-        cursor: not-allowed;
-        transform: none;
-      }
-
-      .worker-entry {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        margin-top: 22px;
-        color: #64748b;
-        font-size: 13px;
-      }
-
-      .worker-entry::before,
-      .worker-entry::after {
-        content: "";
-        height: 1px;
-        flex: 1;
-        background: #dfe3ea;
-      }
-
-      .worker-btn {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 100%;
-        min-height: 48px;
-        margin-top: 14px;
-        border: 2px solid #5b4ee6;
-        border-radius: 10px;
-        background: white;
-        color: #4438ca;
-        text-decoration: none;
-        font-size: 16px;
-        font-weight: 700;
-        transition: background-color .2s ease, color .2s ease, transform .2s ease;
-      }
-
-      .worker-btn:hover {
-        background: #eef2ff;
-        transform: translateY(-1px);
-      }
-
-      .error-message {
-        background: #f8d7da;
-        color: #721c24;
-        padding: 12px;
-        border-radius: 8px;
-        margin-bottom: 20px;
-        font-size: 14px;
-        display: none;
-      }
-
-      .loading {
-        display: none;
-        text-align: center;
-        margin-top: 10px;
-        color: #666;
-      }
-
-      .loading::after {
-        content: "";
-        display: inline-block;
-        width: 16px;
-        height: 16px;
-        border: 2px solid #f3f3f3;
-        border-top: 2px solid #667eea;
-        border-radius: 50%;
-        animation: spin 1s linear infinite;
-        margin-left: 10px;
-      }
-
-      @keyframes spin {
-        0% {
-          transform: rotate(0deg);
-        }
-        100% {
-          transform: rotate(360deg);
-        }
-      }
-
-      .demo-info {
-        background: #d1ecf1;
-        color: #0c5460;
-        padding: 15px;
-        border-radius: 8px;
-        margin-bottom: 20px;
-        font-size: 14px;
-        text-align: center;
-      }
-
-      .demo-info strong {
-        display: block;
-        margin-bottom: 5px;
-      }
-
-      @media (max-width: 768px) {
-        :root {
-          --ui-scale: var(--ui-scale-mobile);
-        }
-      }
-
-      @media (max-width: 420px) {
-        .login-title {
-          font-size: 1.55rem;
-        }
-
-        .login-subtitle {
-          font-size: 0.95rem;
-        }
-      }
-
-
-      /* 2026 login accessibility polish */
-      :root {
-        --brand-main: #5b4ee6;
-        --brand-dark: #4438ca;
-        --focus-ring: 0 0 0 4px rgba(79, 70, 229, 0.22);
-      }
-
-      .login-container {
-        border: 1px solid rgba(255, 255, 255, 0.55);
-      }
-
-      .login-title {
-        line-height: 1.1;
-      }
-
-      .form-input {
-        min-height: 48px;
-        border-color: #cbd5e1;
-      }
-
-      .form-input::placeholder {
-        color: #94a3b8;
-      }
-
-      .form-input[aria-invalid="true"] {
-        border-color: #b91c1c;
-        box-shadow: 0 0 0 3px rgba(185, 28, 28, 0.12);
-      }
-
-      .form-input:focus,
-      .form-input:focus-visible {
-        border-color: var(--brand-main);
-        box-shadow: var(--focus-ring);
-      }
-
-      .login-btn {
-        min-height: 48px;
-      }
-
-      .login-btn:hover:not(:disabled) {
-        transform: translateY(-1px);
-      }
-
-      .error-message {
-        border: 1px solid #f1b0b7;
-        line-height: 1.4;
-      }
-
-      @media (prefers-reduced-motion: reduce) {
-        *,
-        *::before,
-        *::after {
-          animation-duration: 0.01ms !important;
-          animation-iteration-count: 1 !important;
-          transition-duration: 0.01ms !important;
-          scroll-behavior: auto !important;
-        }
-
-        .login-btn:hover {
-          transform: none !important;
-        }
-      }
-
-      @media (forced-colors: active) {
-        .login-container,
-        .form-input,
-        .login-btn,
-        .error-message {
-          border: 1px solid CanvasText;
-        }
-      }
-
-    </style>
+    <meta name="theme-color" content="#4f46e5" />
+    <title>Sign In - AIM</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/login.css', v=login_css_version) }}" />
   </head>
   <body>
-    <main class="login-container" role="main">
-      <div class="login-header">
-        <h1 class="login-title">Avec Inventory Management</h1>
-        <p class="login-subtitle">Please sign in to continue</p>
-      </div>
+    <main class="access-shell">
+      <header class="access-brand">
+        <strong>AIM</strong>
+        <span>AVEC INVENTORY MANAGEMENT</span>
+        <h1>Welcome</h1>
+        <p>Select how you would like to continue.</p>
+      </header>
 
-      <div class="error-message" id="error-message" role="alert" aria-live="assertive"></div>
-
-      <form id="loginForm" aria-describedby="error-message">
-        <div class="form-group">
-          <label class="form-label" for="username">Username</label>
-          <input
-            type="text"
-            class="form-input"
-            id="username"
-            name="username"
-            required
-            autocomplete="username"
-            spellcheck="false"
-            aria-invalid="false"
-          />
+      <section class="access-card">
+        <div class="access-choice-grid" aria-label="Choose sign-in type">
+          <button class="access-choice" id="adminChoice" type="button">
+            <span class="choice-check">✓</span>
+            <span class="choice-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false">
+                <circle cx="10" cy="7" r="3"></circle>
+                <path d="M4 20v-2.2A4.8 4.8 0 0 1 8.8 13h2.4c.7 0 1.4.2 2 .4"></path>
+                <path d="M18 11.5 21 13v3.1c0 2-1.2 3.7-3 4.9-1.8-1.2-3-2.9-3-4.9V13z"></path>
+                <path d="m16.8 16.1.8.8 1.7-1.9"></path>
+              </svg>
+            </span>
+            <strong>Admin sign-in</strong>
+            <small>For event admins and internal users</small>
+            <span class="choice-action">Sign in</span>
+          </button>
+          <button class="access-choice" id="workerChoice" type="button">
+            <span class="choice-check">✓</span>
+            <span class="choice-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false">
+                <path d="M4 14a8 8 0 0 1 16 0"></path>
+                <path d="M8 14V9.5M16 14V9.5"></path>
+                <path d="M3 14h18"></path>
+                <path d="M7 18.5h10"></path>
+                <path d="M9 14v2.5h6V14"></path>
+              </svg>
+            </span>
+            <strong>I am a worker</strong>
+            <small>Access your events and submit invoices &amp; claims</small>
+            <span class="choice-action">Continue</span>
+          </button>
         </div>
 
-        <div class="form-group">
-          <label class="form-label" for="password">Password</label>
-          <input
-            type="password"
-            class="form-input"
-            id="password"
-            name="password"
-            required
-            autocomplete="current-password"
-            aria-invalid="false"
-          />
-        </div>
+        <section class="access-panel" id="workerPanel" hidden>
+          <div class="panel-icon" aria-hidden="true">↓</div>
+          <h2>Worker Invoice &amp; Claims</h2>
+          <p id="workerInstruction">Enter your phone number to find your events.</p>
 
-        <button type="submit" class="login-btn" id="loginBtn">Sign In</button>
+          <form id="workerLookupForm">
+            <label class="phone-field">
+              <span class="country-code">🇸🇬 &nbsp; +65</span>
+              <input id="workerPhone" type="tel" inputmode="tel" autocomplete="tel"
+                     placeholder="9123 4567" required />
+            </label>
+            <button class="access-primary" type="submit" id="findEventsButton">Find My Events</button>
+          </form>
 
-        <div class="loading" id="loading" role="status" aria-live="polite">Signing in...</div>
-      </form>
+          <form id="workerCredentialForm" hidden>
+            <input id="credentialPhone" type="hidden" />
+            <div class="credential-type" id="credentialTypeChoice">
+              <label><input type="radio" name="credentialType" value="pin" checked /> PIN</label>
+              <label><input type="radio" name="credentialType" value="password" /> Password</label>
+            </div>
+            <label class="access-field">
+              <span id="credentialLabel">Create a 4–8 digit PIN</span>
+              <input id="workerCredential" type="password" inputmode="numeric"
+                     autocomplete="new-password" required />
+            </label>
+            <label class="access-field" id="confirmationField">
+              <span>Confirm PIN</span>
+              <input id="workerCredentialConfirmation" type="password"
+                     inputmode="numeric" autocomplete="new-password" />
+            </label>
+            <button class="access-primary" type="submit" id="workerAccessButton">Create PIN &amp; Continue</button>
+            <button class="text-action" type="button" id="changeWorkerPhone">Use another phone number</button>
+          </form>
 
-      <div class="worker-entry" aria-hidden="true">or</div>
-      <a class="worker-btn" href="/worker">I am a worker</a>
+          <p class="privacy-copy">▣ &nbsp; Your worker account and submissions are private.</p>
+          <div class="access-message" id="workerMessage" role="alert" aria-live="polite"></div>
+        </section>
+
+        <section class="access-panel" id="adminPanel" hidden>
+          <div class="panel-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" focusable="false">
+              <circle cx="10" cy="7" r="3"></circle>
+              <path d="M4 20v-2.2A4.8 4.8 0 0 1 8.8 13h2.4c.7 0 1.4.2 2 .4"></path>
+              <path d="M18 11.5 21 13v3.1c0 2-1.2 3.7-3 4.9-1.8-1.2-3-2.9-3-4.9V13z"></path>
+              <path d="m16.8 16.1.8.8 1.7-1.9"></path>
+            </svg>
+          </div>
+          <h2>Admin Sign-in</h2>
+          <p>Sign in to manage events, inventory, manpower and payments.</p>
+          <form id="loginForm">
+            <label class="access-field"><span>Username</span>
+              <input id="username" type="text" autocomplete="username" required />
+            </label>
+            <label class="access-field"><span>Password</span>
+              <input id="password" type="password" autocomplete="current-password" required />
+            </label>
+            <button class="access-primary" type="submit" id="loginBtn">Sign In</button>
+          </form>
+          <div class="access-message" id="adminMessage" role="alert" aria-live="polite"></div>
+        </section>
+      </section>
     </main>
-
-    <script>
-      document
-        .getElementById("loginForm")
-        .addEventListener("submit", async function (e) {
-          e.preventDefault();
-
-          const username = document.getElementById("username").value;
-          const password = document.getElementById("password").value;
-          const loginBtn = document.getElementById("loginBtn");
-          const loading = document.getElementById("loading");
-          const errorMessage = document.getElementById("error-message");
-
-          // Reset error state
-          errorMessage.style.display = "none";
-          document.getElementById("username").setAttribute("aria-invalid", "false");
-          document.getElementById("password").setAttribute("aria-invalid", "false");
-          loginBtn.setAttribute("aria-busy", "true");
-
-          // Show loading state
-          loginBtn.disabled = true;
-          loading.style.display = "block";
-
-          try {
-            const response = await fetch("/login", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({ username, password }),
-            });
-
-            const result = await response.json();
-
-            if (result.success) {
-              // Redirect to main application
-              window.location.href = "/";
-            } else {
-              // Show error message
-              errorMessage.textContent = result.message || "Login failed";
-              errorMessage.style.display = "block";
-              document.getElementById("username").setAttribute("aria-invalid", "true");
-              document.getElementById("password").setAttribute("aria-invalid", "true");
-              document.getElementById("password").focus();
-            }
-          } catch (error) {
-            errorMessage.textContent = "Network error. Please try again.";
-            errorMessage.style.display = "block";
-            document.getElementById("username").setAttribute("aria-invalid", "true");
-            document.getElementById("password").setAttribute("aria-invalid", "true");
-          } finally {
-            // Reset loading state
-            loginBtn.disabled = false;
-            loginBtn.setAttribute("aria-busy", "false");
-            loading.style.display = "none";
-          }
-        });
-
-      // Auto-focus username field
-      document.getElementById("username").focus();
-
-      // Fill demo credentials on page load
-      document.addEventListener("DOMContentLoaded", function () {
-        document.getElementById("username").value = "";
-        document.getElementById("password").value = "";
-      });
-    </script>
+    <script src="{{ url_for('static', filename='js/login.js', v=login_js_version) }}"></script>
   </body>
 </html>

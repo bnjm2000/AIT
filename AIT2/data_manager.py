@@ -1,5 +1,6 @@
 """CSV-backed persistence for users, inventory, events, logs, and clients."""
 
+import ast
 import csv
 import json
 import logging
@@ -765,8 +766,16 @@ class DataManager:
                 asset_models = []
                 if event_data.get('AssetModels'):
                     try:
-                        asset_models = eval(event_data['AssetModels'])
-                    except Exception as e:
+                        try:
+                            asset_models = json.loads(event_data['AssetModels'])
+                        except json.JSONDecodeError:
+                            # Older exports used Python list syntax with single
+                            # quotes. literal_eval supports that format without
+                            # executing arbitrary code.
+                            asset_models = ast.literal_eval(event_data['AssetModels'])
+                        if not isinstance(asset_models, list):
+                            raise ValueError('AssetModels must contain a list')
+                    except (SyntaxError, ValueError, TypeError) as e:
                         logger.error("Error parsing 'AssetModels' in event file %s: %s. Setting to empty list.", filename, e)
                         asset_models = []
 

@@ -15,9 +15,9 @@ if [ -f "$APP_DIR/.venv/Scripts/activate" ]; then
     source "$APP_DIR/.venv/Scripts/activate"
 fi
 
-# Start the Flask app
+# Start the configured WSGI server
 if command -v py >/dev/null 2>&1; then
-    py -3 app.py >> "$LOG_FILE" 2>&1
+    py -3 main.py >> "$LOG_FILE" 2>&1
 else
-    python app.py >> "$LOG_FILE" 2>&1
+    python main.py >> "$LOG_FILE" 2>&1
 fi

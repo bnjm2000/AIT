@@ -340,61 +340,97 @@ def _ocr_pdf(path: str) -> str:
             for page in list(document)[:6]:
                 pixmap = page.get_pixmap(dpi=180, alpha=False)
                 image = Image.open(io.BytesIO(pixmap.tobytes("png"))).convert("RGB")
-                output = io.BytesIO()
-                image.save(output, format="PNG")
-                result, _elapsed = engine(output.getvalue())
-                tokens = []
-                for item in result or []:
-                    if len(item) < 2 or not str(item[1]).strip():
-                        continue
-                    try:
-                        points = list(item[0])
-                        xs = [float(point[0]) for point in points]
-                        ys = [float(point[1]) for point in points]
-                        tokens.append({
-                            "text": str(item[1]).strip(),
-                            "x": min(xs),
-                            "y": (min(ys) + max(ys)) / 2,
-                            "height": max(ys) - min(ys),
-                        })
-                    except Exception:
-                        lines.append(str(item[1]).strip())
-                tokens.sort(key=lambda token: (token["y"], token["x"]))
-                page_lines = []
-                for token in tokens:
-                    row = next(
-                        (
-                            candidate
-                            for candidate in reversed(page_lines[-4:])
-                            if abs(candidate["y"] - token["y"])
-                            <= max(
-                                8.0,
-                                min(
-                                    candidate["height"],
-                                    token["height"],
-                                ) * 0.65,
-                            )
-                        ),
-                        None,
-                    )
-                    if row is None:
-                        row = {
-                            "y": token["y"],
-                            "height": token["height"],
-                            "tokens": [],
-                        }
-                        page_lines.append(row)
-                    row["tokens"].append(token)
-                    row["y"] = sum(
-                        value["y"] for value in row["tokens"]
-                    ) / len(row["tokens"])
-                for row in sorted(page_lines, key=lambda value: value["y"]):
-                    row["tokens"].sort(key=lambda token: token["x"])
-                    lines.append(
-                        " ".join(token["text"] for token in row["tokens"])
-                    )
+                lines.extend(_ocr_image_regions(engine, image))
         finally:
             document.close()
+        return "\n".join(lines)
+    except Exception:
+        return ""
+
+
+def _ocr_result_text(result) -> str:
+    tokens = []
+    fallback = []
+    for item in result or []:
+        if len(item) < 2 or not str(item[1]).strip():
+            continue
+        text = str(item[1]).strip()
+        try:
+            points = list(item[0])
+            xs = [float(point[0]) for point in points]
+            ys = [float(point[1]) for point in points]
+            tokens.append({
+                "text": text,
+                "x": min(xs),
+                "y": (min(ys) + max(ys)) / 2,
+                "height": max(ys) - min(ys),
+            })
+        except Exception:
+            fallback.append(text)
+    if not tokens:
+        return "\n".join(fallback)
+    tokens.sort(key=lambda token: (token["y"], token["x"]))
+    rows = []
+    for token in tokens:
+        row = next(
+            (
+                candidate
+                for candidate in reversed(rows[-5:])
+                if abs(candidate["y"] - token["y"])
+                <= max(
+                    8.0,
+                    min(candidate["height"], token["height"]) * 0.65,
+                )
+            ),
+            None,
+        )
+        if row is None:
+            row = {
+                "y": token["y"],
+                "height": token["height"],
+                "tokens": [],
+            }
+            rows.append(row)
+        row["tokens"].append(token)
+        row["y"] = sum(value["y"] for value in row["tokens"]) / len(
+            row["tokens"]
+        )
+    lines = []
+    for row in sorted(rows, key=lambda value: value["y"]):
+        row["tokens"].sort(key=lambda token: token["x"])
+        lines.append(" ".join(token["text"] for token in row["tokens"]))
+    lines.extend(fallback)
+    return "\n".join(lines)
+
+
+def _ocr_image_regions(engine, image: Image.Image) -> list[str]:
+    regions = [image]
+    width, height = image.size
+    if height > width * 1.35 and height >= 1200:
+        regions.extend([
+            image.crop((0, 0, width, int(height * 0.32))),
+            image.crop((0, int(height * 0.65), width, height)),
+        ])
+    lines = []
+    seen = set()
+    for region in regions:
+        output = io.BytesIO()
+        region.save(output, format="PNG")
+        result, _elapsed = engine(output.getvalue())
+        for line in _ocr_result_text(result).splitlines():
+            normalized = re.sub(r"\s+", " ", line).strip()
+            key = normalized.casefold()
+            if normalized and key not in seen:
+                seen.add(key)
+                lines.append(normalized)
+    return lines
+
+
+def _ocr_image(path: str) -> str:
+    try:
+        engine = _rapid_ocr_engine()
+        with Image.open(path) as image:
+            lines = _ocr_image_regions(engine, image.convert("RGB"))
         return "\n".join(lines)
     except Exception:
         return ""
@@ -451,7 +487,7 @@ def _amount_from_text(text: str) -> dict:
         if raw_line.strip()
     ]
     for line_index, line in enumerate(lines):
-        lowered = line.lower()
+        lowered = re.sub(r"\btota[i1l]\b", "total", line.lower())
         nearby = []
         for context_index in range(
             max(0, line_index - 2),
@@ -459,7 +495,11 @@ def _amount_from_text(text: str) -> dict:
         ):
             nearby.append((
                 context_index,
-                lines[context_index].lower(),
+                re.sub(
+                    r"\btota[i1l]\b",
+                    "total",
+                    lines[context_index].lower(),
+                ),
             ))
         for match in _AMOUNT_RE.finditer(line):
             raw_amount = match.group("amount")
@@ -567,6 +607,175 @@ def _amount_from_text(text: str) -> dict:
     return {"amount": amount, "confidence": confidence, "matchedText": line[:240]}
 
 
+_MONTH_NUMBERS = {
+    "jan": 1,
+    "january": 1,
+    "feb": 2,
+    "february": 2,
+    "mar": 3,
+    "march": 3,
+    "apr": 4,
+    "april": 4,
+    "may": 5,
+    "jun": 6,
+    "june": 6,
+    "jul": 7,
+    "july": 7,
+    "aug": 8,
+    "august": 8,
+    "sep": 9,
+    "sept": 9,
+    "september": 9,
+    "oct": 10,
+    "october": 10,
+    "nov": 11,
+    "november": 11,
+    "dec": 12,
+    "december": 12,
+}
+_MONTH_PATTERN = "|".join(
+    sorted(_MONTH_NUMBERS, key=len, reverse=True)
+)
+_DATE_PATTERNS = (
+    re.compile(
+        r"(?<!\d)(?P<year>20\d{2})\s*[./-]\s*"
+        r"(?P<month>\d{1,2})\s*[./-]\s*(?P<day>\d{1,2})(?!\d)"
+    ),
+    re.compile(
+        r"(?<!\d)(?P<day>\d{1,2})\s*[./-]\s*"
+        r"(?P<month>\d{1,2})\s*[./-]\s*"
+        r"(?P<year>\d{4}|\d{2})(?=$|[^\d]|\d{1,2}:)"
+    ),
+    re.compile(
+        rf"(?<!\w)(?P<day>\d{{1,2}})(?:st|nd|rd|th)?"
+        rf"\s*[-./\s]?\s*(?P<month_name>{_MONTH_PATTERN})"
+        rf"\s*[-,./\s'’]?\s*['’]?"
+        rf"(?P<year>\d{{4}}|\d{{2}})(?=$|[^\d]|\d{{1,2}}:)",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"(?<!\w)(?P<month_name>{_MONTH_PATTERN})"
+        rf"\s*[-./\s]\s*(?P<day>\d{{1,2}})(?:st|nd|rd|th)?"
+        rf"\s*[-,./\s'’]\s*['’]?"
+        rf"(?P<year>\d{{4}}|\d{{2}})(?=$|[^\d]|\d{{1,2}}:)",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"(?<!\d)(?P<day>\d{2})(?P<month>\d{2})"
+        r"(?P<year>20\d{2})(?!\d)"
+    ),
+)
+
+
+def _date_from_text(text: str) -> dict:
+    candidates = []
+    lines = [
+        re.sub(r"\s+", " ", line).strip()
+        for line in str(text or "").splitlines()
+        if line.strip()
+    ]
+    for line_index, line in enumerate(lines):
+        lowered = line.lower()
+        nearby = [
+            (index, lines[index].lower())
+            for index in range(
+                max(0, line_index - 2),
+                min(len(lines), line_index + 3),
+            )
+        ]
+        for pattern in _DATE_PATTERNS:
+            for match in pattern.finditer(line):
+                try:
+                    year = int(match.group("year"))
+                    if year < 100:
+                        year += 2000 if year <= 79 else 1900
+                    month_name = match.groupdict().get("month_name")
+                    month = (
+                        _MONTH_NUMBERS.get(month_name.lower())
+                        if month_name
+                        else int(match.group("month"))
+                    )
+                    value = datetime(
+                        year, int(month), int(match.group("day"))
+                    )
+                except (TypeError, ValueError):
+                    continue
+                if not 1990 <= value.year <= 2100:
+                    continue
+                score = 20
+                positive_distances = []
+                negative_distances = []
+                for context_index, context_line in nearby:
+                    distance = abs(context_index - line_index)
+                    if any(
+                        phrase in context_line
+                        for phrase in (
+                            "transaction date",
+                            "receipt date",
+                            "purchase date",
+                            "date of purchase",
+                        )
+                    ):
+                        positive_distances.append(distance)
+                        score = max(score, 120 - (distance * 18))
+                    elif re.search(r"\bdate\b", context_line):
+                        positive_distances.append(distance)
+                        score = max(score, 85 - (distance * 16))
+                    if any(
+                        phrase in context_line
+                        for phrase in (
+                            "due date",
+                            "expiry",
+                            "expires",
+                            "expiration",
+                            "valid until",
+                        )
+                    ):
+                        negative_distances.append(distance)
+                if (
+                    negative_distances
+                    and (
+                        not positive_distances
+                        or min(negative_distances) <= min(positive_distances)
+                    )
+                ):
+                    score -= max(
+                        80,
+                        120 - (min(negative_distances) * 18),
+                    )
+                candidates.append(
+                    (score, -line_index, value.strftime("%Y-%m-%d"), line)
+                )
+    if not candidates:
+        return {"date": "", "dateMatchedText": ""}
+    candidates.sort(reverse=True)
+    _score, _position, value, line = candidates[0]
+    return {"date": value, "dateMatchedText": line[:240]}
+
+
+def _date_from_filename(filename: str) -> dict:
+    value = str(filename or "")
+    match = re.search(
+        r"(?<!\d)(?P<year>20\d{2})[-_.]?"
+        r"(?P<month>\d{2})[-_.]?(?P<day>\d{2})(?!\d)",
+        value,
+    )
+    if not match:
+        return {"date": "", "dateMatchedText": ""}
+    try:
+        parsed = datetime(
+            int(match.group("year")),
+            int(match.group("month")),
+            int(match.group("day")),
+        )
+    except ValueError:
+        return {"date": "", "dateMatchedText": ""}
+    return {
+        "date": parsed.strftime("%Y-%m-%d"),
+        "dateMatchedText": f"File name: {Path(value).name}",
+    }
+
+
 def extract_invoice_amount(path: str) -> dict:
     text = _pdf_text(path)
     result = _amount_from_text(text)
@@ -581,6 +790,47 @@ def extract_invoice_amount(path: str) -> dict:
         ocr_result["source"] = "Scanned document OCR"
         ocr_result["ocrUsed"] = True
         return ocr_result
+    return result
+
+
+def extract_claim_amount(
+    path: str,
+    content_type: str = "",
+    original_name: str = "",
+) -> dict:
+    extension = Path(path).suffix.lower()
+    if extension == ".pdf" or content_type == "application/pdf":
+        text = _pdf_text(path)
+        result = _amount_from_text(text)
+        result.update(_date_from_text(text))
+        result["source"] = "PDF text"
+        result["ocrUsed"] = False
+        if (
+            result["amount"] is not None
+            and result["confidence"] != "Low"
+            and result["date"]
+        ):
+            return result
+        ocr_text = _ocr_pdf(path)
+        ocr_amount = _amount_from_text(ocr_text)
+        ocr_date = _date_from_text(ocr_text)
+        if ocr_amount["amount"] is not None:
+            result.update(ocr_amount)
+        if ocr_date["date"]:
+            result.update(ocr_date)
+        if ocr_text:
+            result["source"] = "Scanned document OCR"
+            result["ocrUsed"] = True
+        if not result["date"]:
+            result.update(_date_from_filename(original_name))
+        return result
+    ocr_text = _ocr_image(path)
+    result = _amount_from_text(ocr_text)
+    result.update(_date_from_text(ocr_text))
+    if not result["date"]:
+        result.update(_date_from_filename(original_name))
+    result["source"] = "Receipt image OCR"
+    result["ocrUsed"] = True
     return result
 
 
@@ -641,7 +891,14 @@ def submission_totals(data: dict, event_id) -> dict:
                 )
 
         for claim in _list(rows.get("claims")):
-            if not isinstance(claim, dict) or claim.get("status") == "Denied":
+            if (
+                not isinstance(claim, dict)
+                or claim.get("status") == "Denied"
+                or (
+                    "detailsComplete" in claim
+                    and not claim.get("detailsComplete")
+                )
+            ):
                 continue
             amount = money(claim.get("amount"), 0.0) or 0.0
             totals["claims"] += amount

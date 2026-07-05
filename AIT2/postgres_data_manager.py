@@ -503,9 +503,11 @@ class PostgresDataManager(DataManager):
                     file_map[int(event_id)] = (
                         source_filename or self._event_filename(event)
                     )
-                    snapshots[int(event_id)] = _fingerprint(
-                        self._event_data(event)
-                    )
+                    # Keep the fingerprint of what is actually stored. Event()
+                    # normalises legacy names/states while loading; fingerprinting
+                    # the normalised object here would make the migration save
+                    # look like a no-op and repeat on every process start.
+                    snapshots[int(event_id)] = _fingerprint(data)
                     versions[int(event_id)] = int(version)
         self.events = events
         self.event_file_map = file_map

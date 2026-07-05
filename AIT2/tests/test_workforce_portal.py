@@ -8,7 +8,12 @@ from unittest.mock import patch
 import app as app_module
 from data_manager import DataManager
 from models import Event, User, hash_password
-from workforce import _amount_from_text, load_workforce
+from workforce import (
+    _amount_from_text,
+    _date_from_text,
+    _ocr_result_text,
+    load_workforce,
+)
 
 
 PDF_BYTES = b"%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF"
@@ -106,6 +111,38 @@ class WorkforcePortalTests(unittest.TestCase):
         )
         self.assertEqual(result["amount"], 1250.00)
 
+        result = _amount_from_text("TotaI (SGD) INCL.GST 11.85")
+        self.assertEqual(result["amount"], 11.85)
+
+    def test_claim_date_detection_prefers_receipt_date(self):
+        result = _date_from_text(
+            """
+            RECEIPT
+            Receipt Date: 04/07/2026
+            Card expires 08/2029
+            """
+        )
+        self.assertEqual(result["date"], "2026-07-04")
+
+        result = _date_from_text("Transaction Date 5 July 2026")
+        self.assertEqual(result["date"], "2026-07-05")
+
+        result = _date_from_text("DATE\n05 JUL'26 18:42")
+        self.assertEqual(result["date"], "2026-07-05")
+
+        result = _date_from_text("30MAY202612:44")
+        self.assertEqual(result["date"], "2026-05-30")
+
+    def test_receipt_ocr_tokens_are_reassembled_by_line(self):
+        result = _ocr_result_text([
+            ([[10, 10], [40, 10], [40, 20], [10, 20]], "DATE", 0.99),
+            ([[50, 10], [75, 10], [75, 20], [50, 20]], "05", 0.99),
+            ([[80, 10], [95, 10], [95, 20], [80, 20]], "JUL", 0.99),
+            ([[100, 10], [120, 10], [120, 20], [100, 20]], "'26", 0.99),
+        ])
+        self.assertEqual(result, "DATE 05 JUL '26")
+        self.assertEqual(_date_from_text(result)["date"], "2026-07-05")
+
     def test_admin_can_rerun_invoice_ocr_to_prefill_amount(self):
         freelancer_id = self.create_worker_assignment()
         response = self.client.post(
@@ -164,14 +201,38 @@ class WorkforcePortalTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         return freelancer_id
 
-    def worker_token(self):
+    def worker_access(self, password="1234"):
         with self.client.session_transaction() as session:
             session.clear()
         response = self.client.post(
             "/api/worker/lookup", json={"phone": "+65 9123 4567"}
         )
         self.assertEqual(response.status_code, 200)
-        company = response.get_json()["data"]["companies"][0]
+        discovery = response.get_json()["data"]
+        self.assertNotIn("companies", discovery)
+        if discovery["requiresSetup"]:
+            response = self.client.post(
+                "/api/worker/setup-credentials",
+                json={
+                    "phone": "+65 9123 4567",
+                    "password": password,
+                    "confirmation": password,
+                    "credentialType": "pin",
+                },
+            )
+        else:
+            response = self.client.post(
+                "/api/worker/access",
+                json={
+                    "phone": "+65 9123 4567",
+                    "password": password,
+                },
+            )
+        self.assertEqual(response.status_code, 200)
+        return response.get_json()["data"]
+
+    def worker_token(self):
+        company = self.worker_access()["companies"][0]
         self.assertEqual(company["events"][0]["id"], 143)
         return company["token"]
 
@@ -183,6 +244,154 @@ class WorkforcePortalTests(unittest.TestCase):
         self.login("admin", True)
         response = self.client.get("/api/events/143/workforce")
         self.assertEqual(response.status_code, 200)
+
+    def test_worker_first_access_requires_credentials(self):
+        self.create_worker_assignment()
+        with self.client.session_transaction() as session:
+            session.clear()
+
+        discovery = self.client.post(
+            "/api/worker/lookup", json={"phone": "9123 4567"}
+        )
+        self.assertEqual(discovery.status_code, 200)
+        self.assertTrue(discovery.get_json()["data"]["requiresSetup"])
+        self.assertNotIn("companies", discovery.get_json()["data"])
+
+        weak_pin = self.client.post(
+            "/api/worker/setup-credentials",
+            json={
+                "phone": "9123 4567",
+                "password": "12",
+                "confirmation": "12",
+                "credentialType": "pin",
+            },
+        )
+        self.assertEqual(weak_pin.status_code, 400)
+
+        portal = self.worker_access()
+        self.assertEqual(portal["companies"][0]["freelancer"]["name"], "Jordan Dela Cruz")
+        workforce = load_workforce(self.manager.data_folder)
+        saved_worker = next(
+            row for row in workforce["freelancers"]
+            if row["name"] == "Jordan Dela Cruz"
+        )
+        self.assertTrue(saved_worker["workerLastLoginAt"])
+
+        denied = self.client.post(
+            "/api/worker/access",
+            json={"phone": "9123 4567", "password": "9999"},
+        )
+        self.assertEqual(denied.status_code, 401)
+        allowed = self.client.post(
+            "/api/worker/access",
+            json={"phone": "9123 4567", "password": "1234"},
+        )
+        self.assertEqual(allowed.status_code, 200)
+
+    def test_unknown_worker_phone_returns_helpful_message(self):
+        response = self.client.post(
+            "/api/worker/lookup", json={"phone": "9000 0000"}
+        )
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(
+            response.get_json()["error"],
+            (
+                "Phone number not found. If you think this is a mistake, "
+                "please contact the company administrator."
+            ),
+        )
+
+    def test_worker_can_change_phone_and_credentials(self):
+        self.create_worker_assignment()
+        self.worker_access()
+        response = self.client.post(
+            "/api/worker/profile",
+            json={
+                "phone": "9123 4567",
+                "newPhone": "9888 7766",
+                "currentPassword": "1234",
+                "newPassword": "new-worker-password",
+                "confirmation": "new-worker-password",
+                "credentialType": "password",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        worker = response.get_json()["data"]["companies"][0]["freelancer"]
+        self.assertEqual(worker["phone"], "+6598887766")
+        self.assertEqual(worker["credentialType"], "password")
+
+        old_access = self.client.post(
+            "/api/worker/access",
+            json={"phone": "9123 4567", "password": "1234"},
+        )
+        self.assertEqual(old_access.status_code, 401)
+        new_access = self.client.post(
+            "/api/worker/access",
+            json={
+                "phone": "9888 7766",
+                "password": "new-worker-password",
+            },
+        )
+        self.assertEqual(new_access.status_code, 200)
+
+    def test_admin_can_reset_worker_login_and_revoke_existing_session(self):
+        freelancer_id = self.create_worker_assignment()
+        portal = self.worker_access()
+        old_token = portal["companies"][0]["token"]
+
+        self.login("admin", True)
+        admin_payload = self.client.get(
+            "/api/events/143/workforce"
+        ).get_json()["data"]
+        freelancer = next(
+            row for row in admin_payload["freelancers"]
+            if row["id"] == freelancer_id
+        )
+        self.assertTrue(freelancer["workerLoginConfigured"])
+        self.assertNotIn("workerPasswordHash", freelancer)
+        self.assertNotIn("workerPasswordSalt", freelancer)
+
+        response = self.client.post(
+            f"/api/workforce/freelancers/{freelancer_id}/reset-login"
+        )
+        self.assertEqual(response.status_code, 200)
+
+        revoked = self.client.post(
+            "/api/worker/company", json={"token": old_token}
+        )
+        self.assertEqual(revoked.status_code, 401)
+        old_login = self.client.post(
+            "/api/worker/access",
+            json={"phone": "9123 4567", "password": "1234"},
+        )
+        self.assertEqual(old_login.status_code, 401)
+        discovery = self.client.post(
+            "/api/worker/lookup", json={"phone": "9123 4567"}
+        )
+        self.assertTrue(discovery.get_json()["data"]["requiresSetup"])
+
+        new_login = self.client.post(
+            "/api/worker/setup-credentials",
+            json={
+                "phone": "9123 4567",
+                "password": "5678",
+                "confirmation": "5678",
+                "credentialType": "pin",
+            },
+        )
+        self.assertEqual(new_login.status_code, 200)
+
+    def test_calendar_date_alone_does_not_move_worker_event_to_past(self):
+        self.create_worker_assignment()
+        event = self.manager.events[143]
+        event.start_date = "20200101"
+        event.end_date = "20200102"
+        self.manager.save_event(event)
+
+        portal = self.worker_access()
+        worker_event = portal["companies"][0]["events"][0]
+        self.assertFalse(worker_event["paymentComplete"])
+        self.assertFalse(worker_event["isPast"])
 
     def test_event_departments_come_from_assets_and_allow_manual_additions(self):
         self.login("admin", True)
@@ -302,6 +511,96 @@ class WorkforcePortalTests(unittest.TestCase):
             5,
         )
 
+    def test_first_invoice_review_defaults_single_department_allocation(self):
+        freelancer_id = self.create_worker_assignment()
+        response = self.client.post(
+            f"/api/events/143/workforce/submissions/{freelancer_id}",
+            data={
+                "kind": "invoice",
+                "file": (io.BytesIO(PDF_BYTES), "invoice.pdf"),
+            },
+            content_type="multipart/form-data",
+        )
+        invoice = response.get_json()["data"]["submissions"][freelancer_id][
+            "invoices"
+        ][0]
+
+        blocked = self.client.put(
+            f"/api/workforce/submissions/{invoice['id']}",
+            json={"amount": 100, "status": "Paid"},
+        )
+        self.assertEqual(blocked.status_code, 409)
+
+        response = self.client.put(
+            f"/api/workforce/submissions/{invoice['id']}",
+            json={
+                "amount": 100,
+                "status": "Paid",
+                "allocations": [],
+                "confirmReview": True,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        reviewed = response.get_json()["data"]["submissions"][freelancer_id][
+            "invoices"
+        ][0]
+        self.assertEqual(reviewed["status"], "Paid")
+        self.assertEqual(
+            reviewed["allocations"],
+            [{"department": "AU", "amount": 100.0}],
+        )
+
+    def test_first_invoice_review_evenly_splits_multiple_departments(self):
+        freelancer_id = self.create_worker_assignment()
+        response = self.client.post(
+            "/api/events/143/workforce/departments",
+            json={"code": "LI"},
+        )
+        self.assertEqual(response.status_code, 200)
+        response = self.client.post(
+            "/api/events/143/workforce/assignments",
+            json={
+                "freelancerId": freelancer_id,
+                "department": "LI",
+                "customRole": "Lighting Technician",
+                "days": 1,
+                "dailyRate": 250,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        response = self.client.post(
+            f"/api/events/143/workforce/submissions/{freelancer_id}",
+            data={
+                "kind": "invoice",
+                "file": (io.BytesIO(PDF_BYTES), "invoice.pdf"),
+            },
+            content_type="multipart/form-data",
+        )
+        invoice = response.get_json()["data"]["submissions"][freelancer_id][
+            "invoices"
+        ][0]
+
+        response = self.client.put(
+            f"/api/workforce/submissions/{invoice['id']}",
+            json={
+                "amount": 100.01,
+                "status": "Approved",
+                "allocations": [],
+                "confirmReview": True,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        reviewed = response.get_json()["data"]["submissions"][freelancer_id][
+            "invoices"
+        ][0]
+        self.assertEqual(
+            reviewed["allocations"],
+            [
+                {"department": "AU", "amount": 50.01},
+                {"department": "LI", "amount": 50.0},
+            ],
+        )
+
     def test_empty_asset_department_can_be_hidden_and_manually_restored(self):
         self.login("admin", True)
         response = self.client.delete(
@@ -401,6 +700,7 @@ class WorkforcePortalTests(unittest.TestCase):
                 "status": "Denied",
                 "denialReason": "Wrong billing company",
                 "allocations": [{"department": "AU", "amount": 1240}],
+                "confirmReview": True,
             },
         )
         self.assertEqual(response.status_code, 200)
@@ -422,8 +722,135 @@ class WorkforcePortalTests(unittest.TestCase):
         public_event = response.get_json()["data"]["events"][0]
         self.assertFalse(public_event["canUploadInvoice"])
         self.assertEqual(len(public_event["submissions"]["invoices"]), 2)
-        self.assertNotIn("originalName", public_event["submissions"]["invoices"][0])
-        self.assertNotIn("amount", public_event["submissions"]["invoices"][0])
+        submitted = public_event["submissions"]["invoices"][0]
+        self.assertEqual(submitted["originalName"], "invoice.pdf")
+        self.assertTrue(submitted["canEdit"])
+
+    def test_worker_can_view_remove_and_confirm_paid_submissions(self):
+        freelancer_id = self.create_worker_assignment()
+        token = self.worker_token()
+        response = self.client.post(
+            "/api/worker/submissions",
+            data={
+                "token": token,
+                "eventId": "143",
+                "kind": "invoice",
+                "warningAcknowledged": "true",
+                "file": (io.BytesIO(PDF_BYTES), "invoice.pdf"),
+            },
+            content_type="multipart/form-data",
+        )
+        self.assertEqual(response.status_code, 200)
+        submitted = response.get_json()["data"]["events"][0]["submissions"]["invoices"][0]
+
+        file_response = self.client.get(submitted["fileUrl"])
+        self.assertEqual(file_response.status_code, 200)
+        file_response.close()
+        removed = self.client.delete(
+            f"/api/worker/submissions/{submitted['id']}",
+            json={"token": token},
+        )
+        self.assertEqual(removed.status_code, 200)
+        self.assertEqual(
+            removed.get_json()["data"]["events"][0]["invoiceSlotsRemaining"], 1
+        )
+
+        response = self.client.post(
+            "/api/worker/submissions",
+            data={
+                "token": token,
+                "eventId": "143",
+                "kind": "invoice",
+                "warningAcknowledged": "true",
+                "file": (io.BytesIO(PDF_BYTES), "replacement.pdf"),
+            },
+            content_type="multipart/form-data",
+        )
+        invoice_id = response.get_json()["data"]["events"][0]["submissions"]["invoices"][0]["id"]
+        self.login("admin", True)
+        approved = self.client.put(
+            f"/api/workforce/submissions/{invoice_id}",
+            json={
+                "amount": 500,
+                "status": "Approved",
+                "department": "AU",
+                "confirmReview": True,
+            },
+        )
+        self.assertEqual(approved.status_code, 200)
+        paid = self.client.put(
+            f"/api/workforce/submissions/{invoice_id}",
+            json={"amount": 500, "status": "Paid", "department": "AU"},
+        )
+        self.assertEqual(paid.status_code, 200)
+
+        portal = self.worker_access()
+        company = portal["companies"][0]
+        paid_row = company["events"][0]["submissions"]["invoices"][0]
+        self.assertTrue(paid_row["canConfirmPayment"])
+        confirmed = self.client.post(
+            f"/api/worker/submissions/{invoice_id}/confirm-payment",
+            json={"token": company["token"]},
+        )
+        self.assertEqual(confirmed.status_code, 200)
+        event = confirmed.get_json()["data"]["events"][0]
+        self.assertTrue(event["paymentComplete"])
+        self.assertTrue(event["isPast"])
+
+        self.login("admin", True)
+        admin_payload = self.client.get(
+            "/api/events/143/workforce"
+        ).get_json()["data"]
+        admin_invoice = admin_payload["submissions"][freelancer_id]["invoices"][0]
+        self.assertTrue(admin_invoice["paymentConfirmedAt"])
+
+        response = self.client.put(
+            f"/api/workforce/submissions/{invoice_id}",
+            json={
+                "status": "Paid",
+                "clearPaymentConfirmation": True,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        reopened_as_paid = response.get_json()["data"]["submissions"][
+            freelancer_id
+        ]["invoices"][0]
+        self.assertEqual(reopened_as_paid["status"], "Paid")
+        self.assertNotIn("paymentConfirmedAt", reopened_as_paid)
+
+        portal = self.worker_access()
+        company = portal["companies"][0]
+        paid_row = company["events"][0]["submissions"]["invoices"][0]
+        self.assertTrue(paid_row["canConfirmPayment"])
+        response = self.client.post(
+            f"/api/worker/submissions/{invoice_id}/confirm-payment",
+            json={"token": company["token"]},
+        )
+        self.assertEqual(response.status_code, 200)
+
+        self.login("admin", True)
+        response = self.client.put(
+            f"/api/workforce/submissions/{invoice_id}",
+            json={
+                "status": "Denied",
+                "denialReason": "The invoice is addressed to the wrong company",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        reopened = response.get_json()["data"]["submissions"][freelancer_id][
+            "invoices"
+        ][0]
+        self.assertEqual(reopened["status"], "Denied")
+        self.assertNotIn("paymentConfirmedAt", reopened)
+
+        portal = self.worker_access()
+        worker_event = portal["companies"][0]["events"][0]
+        self.assertFalse(worker_event["isPast"])
+        denied = worker_event["submissions"]["invoices"][0]
+        self.assertEqual(
+            denied["denialReason"],
+            "The invoice is addressed to the wrong company",
+        )
 
     def test_claim_validation_totals_and_realtime_notice(self):
         self.create_worker_assignment()
@@ -460,6 +887,117 @@ class WorkforcePortalTests(unittest.TestCase):
             notice = json.load(handle)
         self.assertIn("workforce", notice["details"]["topics"])
 
+    def test_claim_files_can_be_uploaded_together_then_completed(self):
+        freelancer_id = self.create_worker_assignment()
+        token = self.worker_token()
+        detected = {
+            "amount": 12.40,
+            "date": "2026-07-09",
+            "dateMatchedText": "Receipt Date: 09/07/2026",
+            "confidence": "High",
+            "source": "Receipt image OCR",
+            "matchedText": "TOTAL 12.40",
+            "ocrUsed": True,
+        }
+        with patch.object(
+            app_module, "extract_claim_amount", return_value=detected
+        ):
+            response = self.client.post(
+                "/api/worker/submissions",
+                data={
+                    "token": token,
+                    "eventId": "143",
+                    "kind": "claim",
+                    "warningAcknowledged": "true",
+                    "files": [
+                        (io.BytesIO(PNG_BYTES), "cab.png"),
+                        (io.BytesIO(PNG_BYTES), "meal.png"),
+                    ],
+                },
+                content_type="multipart/form-data",
+            )
+        self.assertEqual(response.status_code, 200)
+        event = response.get_json()["data"]["events"][0]
+        claims = event["submissions"]["claims"]
+        self.assertEqual(len(claims), 2)
+        self.assertTrue(all(row["status"] == "Details Required" for row in claims))
+        self.assertTrue(all(row["amount"] == 12.4 for row in claims))
+        self.assertTrue(all(row["claimDate"] == "2026-07-09" for row in claims))
+        self.assertEqual(event["claimTotal"], 0)
+
+        completed = self.client.post(
+            f"/api/worker/submissions/{claims[0]['id']}/details",
+            json={
+                "token": token,
+                "amount": "12.40",
+                "claimDate": "2026-07-10",
+                "category": "Cab",
+                "notes": "Ride to the venue",
+            },
+        )
+        self.assertEqual(completed.status_code, 200)
+        completed_event = completed.get_json()["data"]["events"][0]
+        completed_claim = completed_event["submissions"]["claims"][0]
+        self.assertEqual(completed_claim["status"], "Pending Review")
+        self.assertEqual(completed_claim["notes"], "Ride to the venue")
+        self.assertEqual(completed_event["claimTotal"], 12.4)
+
+        saved = load_workforce(self.tempdir.name)
+        saved_claim = saved["submissions"]["143"][freelancer_id]["claims"][0]
+        self.assertTrue(saved_claim["detailsComplete"])
+
+    def test_admin_can_confirm_payment_for_worker(self):
+        freelancer_id = self.create_worker_assignment()
+        token = self.worker_token()
+        response = self.client.post(
+            "/api/worker/submissions",
+            data={
+                "token": token,
+                "eventId": "143",
+                "kind": "invoice",
+                "warningAcknowledged": "true",
+                "file": (io.BytesIO(PDF_BYTES), "invoice.pdf"),
+            },
+            content_type="multipart/form-data",
+        )
+        invoice_id = response.get_json()["data"]["events"][0][
+            "submissions"
+        ]["invoices"][0]["id"]
+
+        self.login("admin", True)
+        reviewed = self.client.put(
+            f"/api/workforce/submissions/{invoice_id}",
+            json={
+                "amount": 500,
+                "status": "Paid",
+                "confirmReview": True,
+                "allocations": [{"department": "AU", "amount": 500}],
+            },
+        )
+        self.assertEqual(reviewed.status_code, 200)
+        confirmed = self.client.put(
+            f"/api/workforce/submissions/{invoice_id}",
+            json={
+                "status": "Paid",
+                "adminConfirmPayment": True,
+            },
+        )
+        self.assertEqual(confirmed.status_code, 200)
+        row = confirmed.get_json()["data"]["submissions"][freelancer_id][
+            "invoices"
+        ][0]
+        self.assertTrue(row["paymentConfirmedAt"])
+        self.assertEqual(row["paymentConfirmedByAdmin"], "admin")
+        self.assertFalse(row["paymentConfirmedByWorker"])
+
+        portal = self.worker_access()
+        worker_event = portal["companies"][0]["events"][0]
+        self.assertTrue(worker_event["isPast"])
+        self.assertEqual(
+            worker_event["submissions"]["invoices"][0]["status"],
+            "Payment Confirmed",
+        )
+
     def test_first_approval_records_verification_once(self):
         freelancer_id = self.create_worker_assignment()
         response = self.client.post(
@@ -480,7 +1018,12 @@ class WorkforcePortalTests(unittest.TestCase):
         ][0]
         response = self.client.put(
             f"/api/workforce/submissions/{claim['id']}",
-            json={"amount": 42, "status": "Approved", "department": "AU"},
+            json={
+                "amount": 42,
+                "status": "Approved",
+                "department": "AU",
+                "confirmReview": True,
+            },
         )
         approved = response.get_json()["data"]["submissions"][freelancer_id][
             "claims"
@@ -489,12 +1032,14 @@ class WorkforcePortalTests(unittest.TestCase):
 
         response = self.client.put(
             f"/api/workforce/submissions/{claim['id']}",
-            json={"amount": 42, "status": "Pending Review", "department": "AU"},
+            json={"amount": 99, "status": "Pending Review", "department": "LI"},
         )
         pending = response.get_json()["data"]["submissions"][freelancer_id][
             "claims"
         ][0]
         self.assertEqual(pending["verifiedAt"], verified_at)
+        self.assertEqual(pending["amount"], 42)
+        self.assertEqual(pending["department"], "AU")
 
     def test_file_type_and_warning_are_enforced(self):
         self.create_worker_assignment()
@@ -565,6 +1110,192 @@ class WorkforcePortalTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         approved = response.get_json()["data"]["transportBookings"][0]
         self.assertEqual(approved["status"], "Approved")
+
+    def test_saved_transport_locations_keep_venue_and_address(self):
+        self.login("admin", True)
+        response = self.client.post(
+            "/api/workforce/transport-locations",
+            json={
+                "name": "Suntec Convention Centre",
+                "address": "1 Raffles Boulevard, Singapore 039593",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        location = response.get_json()["data"]
+        self.assertEqual(location["name"], "Suntec Convention Centre")
+        self.assertEqual(
+            location["address"], "1 Raffles Boulevard, Singapore 039593"
+        )
+
+    def test_assignment_work_dates_can_be_created_and_edited(self):
+        freelancer_id = self.create_worker_assignment()
+        payload = self.client.get(
+            "/api/events/143/workforce"
+        ).get_json()["data"]
+        assignment = payload["assignments"][0]
+
+        response = self.client.put(
+            f"/api/events/143/workforce/assignments/{assignment['id']}",
+            json={
+                "department": "AU",
+                "customRole": "Lead Audio Engineer",
+                "workDates": ["2026-07-10", "2026-07-12"],
+                "dailyRate": 350,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        updated = response.get_json()["data"]["assignments"][0]
+        self.assertEqual(updated["freelancerId"], freelancer_id)
+        self.assertEqual(updated["days"], 2)
+        self.assertEqual(
+            updated["workDates"], ["2026-07-10", "2026-07-12"]
+        )
+        self.assertEqual(updated["roleName"], "Lead Audio Engineer")
+
+        response = self.client.put(
+            f"/api/events/143/workforce/assignments/{assignment['id']}",
+            json={
+                "department": "AU",
+                "customRole": "Lead Audio Engineer",
+                "workDates": ["2026-07-13"],
+                "dailyRate": 350,
+            },
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_admin_can_upload_multiple_claims_in_one_request(self):
+        freelancer_id = self.create_worker_assignment()
+        extraction = {
+            "amount": 12.50,
+            "date": "2026-07-10",
+            "confidence": "High",
+            "source": "Test OCR",
+            "matchedText": "TOTAL 12.50",
+            "dateMatchedText": "10/07/2026",
+            "ocrUsed": True,
+        }
+        with patch.object(
+            app_module, "extract_claim_amount", return_value=extraction
+        ):
+            response = self.client.post(
+                f"/api/events/143/workforce/submissions/{freelancer_id}",
+                data={
+                    "kind": "claim",
+                    "files": [
+                        (io.BytesIO(PNG_BYTES), "meal.png"),
+                        (io.BytesIO(PNG_BYTES), "parking.png"),
+                    ],
+                },
+                content_type="multipart/form-data",
+            )
+        self.assertEqual(response.status_code, 200)
+        claims = response.get_json()["data"]["submissions"][freelancer_id][
+            "claims"
+        ]
+        self.assertEqual(len(claims), 2)
+        self.assertTrue(all(row["amount"] == 12.50 for row in claims))
+        self.assertTrue(
+            all(row["claimDate"] == "2026-07-10" for row in claims)
+        )
+        self.assertTrue(
+            all(row["submissionStage"] == "Submitted" for row in claims)
+        )
+
+    def test_freelancer_history_includes_event_and_submission_statuses(self):
+        freelancer_id = self.create_worker_assignment()
+        response = self.client.post(
+            f"/api/events/143/workforce/submissions/{freelancer_id}",
+            data={
+                "kind": "invoice",
+                "amount": "450.00",
+                "file": (io.BytesIO(PDF_BYTES), "history-invoice.pdf"),
+            },
+            content_type="multipart/form-data",
+        )
+        self.assertEqual(response.status_code, 200)
+
+        later_event = Event(
+            144,
+            "Later Production",
+            "20260715",
+            "20260716",
+            [],
+            prepared_items=[
+                "[MODEL]AU|Test Brand|Test Console|1|Audio requirement"
+            ],
+            returned_items=[],
+            actually_prepared=[],
+            extra_assets=[],
+            tag="events",
+            location="Later Venue",
+        )
+        self.manager.events[later_event.event_id] = later_event
+        self.manager.save_event(later_event)
+        response = self.client.post(
+            "/api/events/144/workforce/assignments",
+            json={
+                "freelancerId": freelancer_id,
+                "department": "AU",
+                "customRole": "Audio Engineer",
+                "workDates": ["2026-07-15"],
+                "dailyRate": 280,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+
+        response = self.client.get(
+            f"/api/workforce/freelancers/{freelancer_id}/history"
+        )
+        self.assertEqual(response.status_code, 200)
+        history = response.get_json()["data"]
+        self.assertEqual(history["company"]["code"], "AVPL")
+        self.assertEqual(history["freelancer"]["id"], freelancer_id)
+        self.assertEqual(
+            [event["id"] for event in history["events"]], [144, 143]
+        )
+        submitted_event = next(
+            event for event in history["events"] if event["id"] == 143
+        )
+        self.assertEqual(
+            submitted_event["invoices"][0]["status"], "Pending Review"
+        )
+        self.assertIn(
+            "/api/workforce/submissions/",
+            submitted_event["invoices"][0]["previewUrl"],
+        )
+        self.assertEqual(submitted_event["invoiceLimit"], 1)
+        self.assertEqual(submitted_event["claimLimit"], 5)
+        self.assertTrue(history["events"][0]["roles"][0]["id"])
+
+    def test_worker_login_log_is_visible_only_to_super_admins(self):
+        freelancer_id = self.create_worker_assignment()
+        self.worker_access()
+        self.worker_access()
+
+        self.login("admin", True)
+        response = self.client.get("/api/logs")
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(any(
+            "logged in" in row["action"]
+            for row in response.get_json()["data"]
+        ))
+
+        with patch.object(
+            app_module, "_current_user_is_super_admin", return_value=True
+        ):
+            response = self.client.get("/api/logs")
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(any(
+            "Worker Jordan Dela Cruz logged in" == row["action"]
+            for row in response.get_json()["data"]
+        ))
+
+        workforce = load_workforce(self.manager.data_folder)
+        freelancer = next(
+            row for row in workforce["freelancers"]
+            if row["id"] == freelancer_id
+        )
+        self.assertTrue(freelancer["workerLastLoginAt"])
 
 
 if __name__ == "__main__":

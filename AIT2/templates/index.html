@@ -5444,6 +5444,706 @@
         }
       }
 
+      #prepare-new-section {
+        padding: 0;
+        background: #f6f8fc;
+      }
+
+      #prepare-new-section:not(.active) {
+        display: none !important;
+      }
+
+      #prepare-new-section.active {
+        display: block;
+        height: 100%;
+        overflow: hidden;
+      }
+
+      .prepare-new-page {
+        --plan-ink: #10213d;
+        --plan-muted: #667085;
+        --plan-border: #dfe4ee;
+        --plan-indigo: #4338ca;
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        min-height: 0;
+        overflow: hidden;
+        padding: 16px;
+        color: var(--plan-ink);
+      }
+
+      .prepare-new-page *,
+      .prepare-new-page *::before,
+      .prepare-new-page *::after {
+        box-sizing: border-box;
+      }
+
+      .prepare-new-heading {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 10px;
+      }
+
+      .prepare-new-heading h2 {
+        margin: 0 0 4px;
+        font-size: 23px;
+        line-height: 1.2;
+      }
+
+      .prepare-new-heading p {
+        margin: 0;
+        color: var(--plan-muted);
+        font-size: 13px;
+      }
+
+      .prepare-new-top {
+        display: grid;
+        grid-template-columns: minmax(260px, 0.86fr) minmax(560px, 1.8fr);
+        gap: 10px;
+        flex: 0 0 auto;
+      }
+
+      .prepare-new-top .plan-event-select-wrap {
+        min-height: 62px;
+      }
+
+      .prepare-new-metrics {
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        margin: 0;
+      }
+
+      .prepare-new-metrics .plan-metric {
+        padding-right: 9px;
+        padding-left: 9px;
+      }
+
+      .prepare-new-workspace {
+        display: grid;
+        grid-template-columns: minmax(225px, 0.75fr) minmax(430px, 1.55fr) minmax(225px, 0.75fr);
+        gap: 10px;
+        flex: 1;
+        min-height: 0;
+        margin-top: 10px;
+        overflow: hidden;
+      }
+
+      .prepare-new-column {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        min-width: 0;
+        min-height: 0;
+      }
+
+      .prepare-new-card {
+        overflow: hidden;
+        border: 1px solid var(--plan-border);
+        border-radius: 12px;
+        background: #fff;
+        box-shadow: 0 2px 10px rgba(16, 33, 61, 0.045);
+      }
+
+      .prepare-new-card-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        min-height: 42px;
+        padding: 9px 11px;
+        border-bottom: 1px solid #e8ebf2;
+      }
+
+      .prepare-new-card-header h3 {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        margin: 0;
+        font-size: 14px;
+      }
+
+      .prepare-new-card-body {
+        padding: 10px;
+      }
+
+      .prepare-new-scan-card {
+        flex: 0 0 auto;
+      }
+
+      .prepare-new-scan-label {
+        display: block;
+        margin-bottom: 5px;
+        color: #344054;
+        font-size: 10px;
+        font-weight: 750;
+      }
+
+      .prepare-new-scan-input {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 6px;
+      }
+
+      .prepare-new-scan-input input {
+        width: 100%;
+        min-width: 0;
+        min-height: 36px;
+        border: 1px solid #cfd6e5;
+        border-radius: 8px;
+        padding: 7px 9px;
+        color: var(--plan-ink);
+        font: inherit;
+        font-size: 12px;
+      }
+
+      .prepare-new-scan-actions {
+        display: grid;
+        gap: 7px;
+        margin-top: 8px;
+      }
+
+      .prepare-new-scan-actions .plan-button {
+        width: 100%;
+        min-height: 36px;
+      }
+
+      .prepare-new-process {
+        border-color: #169b45;
+        background: #169b45;
+        color: #fff;
+      }
+
+      .prepare-new-process:hover {
+        border-color: #11823a;
+        background: #11823a;
+      }
+
+      .prepare-new-feedback {
+        min-height: 0;
+        margin-top: 7px;
+        font-size: 11px;
+      }
+
+      .prepare-new-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        color: #475467;
+        font-size: 10px;
+        cursor: pointer;
+      }
+
+      .prepare-new-toggle input {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        opacity: 0;
+      }
+
+      .prepare-new-toggle-track {
+        position: relative;
+        width: 34px;
+        height: 19px;
+        border-radius: 999px;
+        background: #cbd5e1;
+        transition: background .18s ease;
+      }
+
+      .prepare-new-toggle-track::after {
+        position: absolute;
+        top: 3px;
+        left: 3px;
+        width: 13px;
+        height: 13px;
+        border-radius: 50%;
+        background: #fff;
+        box-shadow: 0 1px 3px rgba(15, 23, 42, .25);
+        content: "";
+        transition: transform .18s ease;
+      }
+
+      .prepare-new-toggle input:checked + .prepare-new-toggle-track {
+        background: #16a34a;
+      }
+
+      .prepare-new-toggle input:checked + .prepare-new-toggle-track::after {
+        transform: translateX(15px);
+      }
+
+      .prepare-new-toggle input:focus-visible + .prepare-new-toggle-track {
+        outline: 3px solid rgba(22, 163, 74, .2);
+      }
+
+      .prepare-new-custom-list-card,
+      .prepare-new-assignment-card {
+        display: flex;
+        flex: 1;
+        flex-direction: column;
+        min-height: 0;
+      }
+
+      .prepare-new-custom-list,
+      .prepare-new-assignment-scroll {
+        flex: 1;
+        min-height: 0;
+        overflow: auto;
+      }
+
+      .prepare-new-custom-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 8px;
+        align-items: center;
+        padding: 8px 10px;
+        border-bottom: 1px solid #edf0f5;
+      }
+
+      .prepare-new-custom-row:last-child {
+        border-bottom: 0;
+      }
+
+      .prepare-new-custom-row strong {
+        display: block;
+        font-size: 11px;
+        overflow-wrap: anywhere;
+      }
+
+      .prepare-new-custom-row small {
+        display: block;
+        margin-top: 2px;
+        color: var(--plan-muted);
+        font-size: 9px;
+      }
+
+      .prepare-new-status {
+        display: inline-flex;
+        align-items: center;
+        min-height: 19px;
+        border-radius: 999px;
+        padding: 2px 7px;
+        font-size: 9px;
+        font-weight: 750;
+        white-space: nowrap;
+      }
+
+      .prepare-new-status-complete,
+      .prepare-new-status-available {
+        background: #dcfce7;
+        color: #166534;
+      }
+
+      .prepare-new-status-assigned {
+        background: #ede9fe;
+        color: #4338ca;
+      }
+
+      .prepare-new-status-collected {
+        background: #dbeafe;
+        color: #1d4ed8;
+      }
+
+      .prepare-new-status-pending {
+        background: #fff7ed;
+        color: #c2410c;
+      }
+
+      .prepare-new-status-returned {
+        background: #e5e7eb;
+        color: #475467;
+      }
+
+      .prepare-new-department {
+        border-bottom: 1px solid #e8ebf2;
+      }
+
+      .prepare-new-department:last-child {
+        border-bottom: 0;
+      }
+
+      .prepare-new-department > summary {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto auto;
+        gap: 10px;
+        align-items: center;
+        padding: 9px 11px;
+        background: #fafbfc;
+        cursor: pointer;
+        list-style: none;
+      }
+
+      .prepare-new-department > summary::-webkit-details-marker,
+      .prepare-new-model > summary::-webkit-details-marker {
+        display: none;
+      }
+
+      .prepare-new-department-name {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        min-width: 0;
+        font-size: 12px;
+        font-weight: 800;
+      }
+
+      .prepare-new-progress {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        color: var(--plan-muted);
+        font-size: 10px;
+        white-space: nowrap;
+      }
+
+      .prepare-new-progress-track {
+        width: 78px;
+        height: 4px;
+        overflow: hidden;
+        border-radius: 99px;
+        background: #e5e7eb;
+      }
+
+      .prepare-new-progress-track span {
+        display: block;
+        height: 100%;
+        border-radius: inherit;
+        background: var(--plan-indigo);
+      }
+
+      .prepare-new-model {
+        border-top: 1px solid #edf0f5;
+      }
+
+      .prepare-new-model > summary {
+        display: grid;
+        grid-template-columns: minmax(150px, 1.2fr) 58px 62px auto;
+        gap: 8px;
+        align-items: center;
+        padding: 8px 11px;
+        cursor: pointer;
+        list-style: none;
+      }
+
+      .prepare-new-model > summary:hover {
+        background: #fafbff;
+      }
+
+      .prepare-new-model-title strong {
+        display: block;
+        font-size: 11px;
+      }
+
+      .prepare-new-model-title span {
+        display: block;
+        margin-top: 2px;
+        color: var(--plan-muted);
+        font-size: 9px;
+      }
+
+      .prepare-new-model-count {
+        color: #344054;
+        font-size: 10px;
+        text-align: center;
+      }
+
+      .prepare-new-model-count strong {
+        display: block;
+        font-size: 12px;
+      }
+
+      .prepare-new-model-assets {
+        padding: 8px 10px 10px;
+        border-top: 1px solid #edf0f5;
+        background: #fbfcfe;
+      }
+
+      .prepare-new-model-assets-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 7px;
+        color: #344054;
+        font-size: 10px;
+        font-weight: 750;
+      }
+
+      .prepare-new-asset-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 6px;
+      }
+
+      .prepare-new-asset-card {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 5px;
+        align-items: center;
+        min-width: 0;
+        border: 1px solid #dfe4ee;
+        border-radius: 8px;
+        background: #fff;
+        padding: 7px;
+      }
+
+      .prepare-new-asset-card.assigned {
+        border-color: #c4b5fd;
+        background: #faf9ff;
+      }
+
+      .prepare-new-asset-card strong,
+      .prepare-new-asset-card small {
+        display: block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .prepare-new-asset-card strong {
+        font-size: 10px;
+      }
+
+      .prepare-new-asset-card small {
+        margin-top: 2px;
+        color: var(--plan-muted);
+        font-size: 8px;
+      }
+
+      .prepare-new-asset-action {
+        min-height: 25px;
+        padding: 4px 7px;
+        font-size: 9px;
+      }
+
+      .prepare-new-right {
+        overflow: auto;
+      }
+
+      .prepare-new-event-card .plan-detail-list div {
+        grid-template-columns: 48px minmax(0, 1fr);
+      }
+
+      .prepare-new-event-card,
+      .prepare-new-custom-card {
+        flex: 0 0 auto;
+      }
+
+      .prepare-new-event-card .plan-detail-list dd {
+        font-size: 10px;
+      }
+
+      .prepare-new-event-card .plan-notes-textarea {
+        min-height: 74px;
+        resize: vertical;
+      }
+
+      .prepare-new-custom-card {
+        opacity: 0.86;
+      }
+
+      .prepare-new-custom-card:hover,
+      .prepare-new-custom-card:focus-within {
+        opacity: 1;
+      }
+
+      .prepare-new-custom-card .plan-aside-body {
+        padding: 9px 10px;
+      }
+
+      .prepare-new-finish {
+        width: 100%;
+        min-height: 42px;
+        flex: 0 0 auto;
+        margin-top: auto;
+      }
+
+      .prepare-new-finish-outline {
+        border-color: var(--plan-indigo);
+        background: transparent;
+        color: var(--plan-indigo);
+      }
+
+      .prepare-new-empty {
+        padding: 22px 14px;
+        color: var(--plan-muted);
+        font-size: 11px;
+        text-align: center;
+      }
+
+      .prepare-new-mobile-action {
+        display: none;
+      }
+
+      @media (max-width: 1180px) {
+        #prepare-new-section.active {
+          height: auto;
+          overflow: visible;
+        }
+
+        .prepare-new-page {
+          height: auto;
+          min-height: 100%;
+          overflow: visible;
+        }
+
+        .prepare-new-top {
+          grid-template-columns: minmax(260px, 0.86fr) minmax(440px, 1.45fr);
+        }
+
+        .prepare-new-workspace {
+          grid-template-columns: minmax(220px, 0.72fr) minmax(410px, 1.35fr);
+          overflow: visible;
+        }
+
+        .prepare-new-right {
+          display: grid;
+          grid-column: 1 / -1;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          overflow: visible;
+        }
+
+        .prepare-new-right .prepare-new-finish {
+          grid-column: 1 / -1;
+        }
+
+        .prepare-new-custom-list-card,
+        .prepare-new-assignment-card {
+          max-height: 640px;
+        }
+      }
+
+      @media (max-width: 840px) {
+        .prepare-new-page {
+          padding: 14px;
+        }
+
+        .prepare-new-heading h2 {
+          font-size: 21px;
+        }
+
+        .prepare-new-heading > .plan-button {
+          display: none;
+        }
+
+        .prepare-new-top,
+        .prepare-new-workspace,
+        .prepare-new-right {
+          display: grid;
+          grid-template-columns: 1fr;
+        }
+
+        .prepare-new-top .plan-event-select-wrap {
+          min-height: 76px;
+        }
+
+        .prepare-new-metrics {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 8px;
+          padding: 0;
+          border: 0;
+          background: transparent;
+          box-shadow: none;
+        }
+
+        .prepare-new-metrics .plan-metric {
+          min-height: 70px;
+          border: 1px solid var(--plan-border);
+          border-radius: 12px;
+          background: #fff;
+          padding: 10px 12px;
+          box-shadow: 0 2px 10px rgba(16, 33, 61, 0.045);
+        }
+
+        .prepare-new-metrics .plan-metric:last-child {
+          grid-column: 1 / -1;
+        }
+
+        .prepare-new-workspace {
+          margin-top: 12px;
+          overflow: visible;
+        }
+
+        .prepare-new-left,
+        .prepare-new-center,
+        .prepare-new-right {
+          display: contents;
+        }
+
+        .prepare-new-scan-card {
+          order: 1;
+        }
+
+        .prepare-new-assignment-card {
+          order: 2;
+          max-height: none;
+        }
+
+        .prepare-new-custom-list-card {
+          order: 3;
+          max-height: none;
+        }
+
+        .prepare-new-event-card {
+          order: 4;
+        }
+
+        .prepare-new-custom-card {
+          order: 5;
+        }
+
+        .prepare-new-right > .prepare-new-finish {
+          display: none;
+        }
+
+        .prepare-new-assignment-scroll,
+        .prepare-new-custom-list {
+          max-height: none;
+          overflow: visible;
+        }
+
+        .prepare-new-asset-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .prepare-new-mobile-action {
+          position: sticky;
+          bottom: 0;
+          z-index: 20;
+          display: flex;
+          order: 6;
+          margin: 12px -14px -14px;
+          padding: 10px 14px;
+          border-top: 1px solid #dfe4ee;
+          background: rgba(255, 255, 255, 0.96);
+          box-shadow: 0 -5px 18px rgba(16, 33, 61, 0.08);
+          backdrop-filter: blur(10px);
+        }
+
+        .prepare-new-mobile-action .plan-button {
+          width: 100%;
+          min-height: 44px;
+        }
+      }
+
+      @media (max-width: 560px) {
+        .prepare-new-asset-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .prepare-new-model > summary {
+          grid-template-columns: minmax(0, 1fr) 48px auto;
+        }
+
+        .prepare-new-model > summary .prepare-new-model-count:nth-of-type(2) {
+          display: none;
+        }
+
+        .prepare-new-progress-track {
+          display: none;
+        }
+      }
+
       #return-section {
         padding: 0;
         background: #f6f8fc;
@@ -6238,8 +6938,12 @@
               &#128101; Manpower &amp; Transport
             </button>
 
+            <button type="button" class="nav-item" onclick="showSection('prepare-new')">
+              &#9889; Prepare
+            </button>
+
             <button type="button" class="nav-item" onclick="showSection('prepare')">
-              🔧 Prepare Events
+              &#128295; Prepare (Legacy)
             </button>
 
             <button type="button" class="nav-item" onclick="showSection('return')" title="Return Assets - Click to view overdue items">
@@ -6493,9 +7197,21 @@
       </div>
     </div>
 
+    <div id="prepare-new-section" class="content-section">
+      <div id="prepare-new-page-root" class="prepare-new-page">
+        <div class="loading">Loading preparation workspace...</div>
+      </div>
+    </div>
+
     <div id="workforce-section" class="content-section">
       <div id="workforce-page-root" class="workforce-page">
         <div class="loading">Loading manpower and transport...</div>
+      </div>
+    </div>
+
+    <div id="freelancer-workspace-section" class="content-section">
+      <div id="freelancer-workspace-root" class="workforce-page">
+        <div class="loading">Loading freelancer workspace...</div>
       </div>
     </div>
 
@@ -6605,7 +7321,9 @@
             <div class="content-header">
               <h2 class="content-title">Inventory Management</h2>
               <button
-                class="btn btn-primary"
+                class="btn btn-primary admin-only"
+                data-admin-only="true"
+                data-admin-display="inline-block"
                 onclick="openModal('addAssetModal')"
               >
                 Add Asset
@@ -6881,7 +7599,7 @@
           <!-- Prepare Events Section -->
           <div id="prepare-section" class="content-section">
             <div class="content-header">
-              <h2 class="content-title">Prepare Events</h2>
+              <h2 class="content-title">Prepare (Legacy)</h2>
             </div>
 
             <div class="events-grid" id="prepare-events">
@@ -7363,21 +8081,6 @@
       </div>
     </div>
 
-    <!-- Return Assets Modal -->
-    <div id="returnAssetsModalNew" class="modal">
-      <div class="modal-content" style="max-width: 900px">
-        <div class="modal-header">
-          <h2 id="returnAssetsTitle">Return Assets</h2>
-          <button class="close-btn" onclick="closeModal('returnAssetsModalNew')">
-            &times;
-          </button>
-        </div>
-        <div id="returnAssetsContentNew">
-          <!-- Content will be populated by JavaScript -->
-        </div>
-      </div>
-    </div>
-
     <!-- Transfer Asset Modal -->
     <div id="transferModal" class="modal">
       <div class="modal-content">
@@ -7653,50 +8356,6 @@
             <button type="submit" class="btn btn-success">Prepare Asset</button>
           </div>
         </form>
-      </div>
-    </div>
-
-    <!-- Return Asset Modal -->
-    <div id="returnAssetModal" class="modal">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h3 class="modal-title" id="returnAssetTitle">
-            Return Asset from Event
-          </h3>
-          <button class="close-btn" onclick="closeModal('returnAssetModal')">
-            &times;
-          </button>
-        </div>
-        <form id="returnAssetForm">
-          <div class="form-group">
-            <label class="form-label">Asset ID or Serial Number</label>
-            <input type="text" class="form-input" id="returnAssetId" required />
-          </div>
-          <input type="hidden" id="returnEventId" />
-          <div class="modal-actions" style="display: flex; gap: 10px; justify-content: flex-end">
-            <button
-              type="button"
-              class="btn btn-secondary"
-              onclick="closeModal('returnAssetModal')"
-            >
-              Cancel
-            </button>
-            <button type="submit" class="btn btn-warning">Return Asset</button>
-          </div>
-        </form>
-      </div>
-    </div>
-
-    <div id="returnAssetsModal" class="modal">
-      <div class="modal-content" style="max-width: 900px">
-        <div class="modal-header">
-          <h2 id="returnAssetsEventTitle">Return Assets from Event</h2>
-          <button class="close-btn" onclick="closeModal('returnAssetsModal')">
-            &times;
-          </button>
-        </div>
-        <div id="returnAssetsContent">
-        </div>
       </div>
     </div>
 

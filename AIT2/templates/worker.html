@@ -3,159 +3,129 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#4438ca" />
-    <title>Worker Invoice &amp; Claims - AIM</title>
-    <link
-      rel="stylesheet"
-      href="{{ url_for('static', filename='css/worker.css', v=worker_css_version) }}"
-    />
+    <meta name="theme-color" content="#4f46e5" />
+    <title>AIM Worker Portal</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/worker.css', v=worker_css_version) }}" />
   </head>
   <body>
-    <header class="worker-topbar">
-      <a href="/login" class="worker-brand" aria-label="AIM login">
-        <strong>AIM</strong>
-        <span>Worker Invoice &amp; Claims</span>
-      </a>
-      <a href="/login" class="admin-link">Admin sign in</a>
-    </header>
-
-    <main class="worker-shell">
-      <section class="lookup-card" id="lookupView">
-        <div class="lookup-icon" aria-hidden="true">⌕</div>
-        <p class="eyebrow">WORKER PORTAL</p>
-        <h1>Find your assigned events</h1>
-        <p class="lead">
-          Enter the phone number your event administrator has saved for you.
-        </p>
-        <form id="workerLookupForm">
-          <label for="workerPhone">Phone number</label>
-          <input
-            id="workerPhone"
-            name="phone"
-            type="tel"
-            inputmode="tel"
-            autocomplete="tel"
-            placeholder="+65 9123 4567"
-            required
-          />
-          <button class="primary-button" type="submit">Find My Events</button>
-        </form>
-        <p class="privacy-note">
-          Phone-number access only. Use a private device and do not share this page.
-        </p>
-        <div class="form-message" id="lookupMessage" role="alert" aria-live="polite"></div>
-      </section>
-
-      <section class="portal-view" id="portalView" hidden>
-        <div class="portal-heading">
-          <div>
-            <button class="text-button" type="button" id="changePhoneButton">
-              ← Use another phone number
-            </button>
-            <p class="eyebrow">YOUR SUBMISSIONS</p>
-            <h1 id="workerGreeting">Your events</h1>
-            <p class="lead">
-              Submit one invoice and up to five claims for each event.
-            </p>
-          </div>
-          <label class="company-filter">
-            <span>Show events from</span>
-            <select id="companyFilter"></select>
-          </label>
+    <div class="worker-app">
+      <aside class="worker-sidebar">
+        <div class="portal-brand"><strong>AIM</strong><span>WORKER PORTAL</span></div>
+        <div class="worker-identity">
+          <div class="worker-avatar" id="workerAvatar">FW</div>
+          <strong id="workerName">Freelancer</strong>
+          <span id="workerPhone"></span>
+          <em>✓ Verified</em>
         </div>
+        <nav class="worker-nav" aria-label="Worker portal">
+          <button class="active" type="button" data-worker-view="events"><span>▣</span> My Events</button>
+          <button type="button" data-worker-view="statistics"><span>▥</span> Statistics</button>
+          <button type="button" data-worker-view="profile"><span>♙</span> Profile</button>
+          <button type="button" data-worker-view="help"><span>?</span> Help</button>
+        </nav>
+        <section class="sidebar-help">
+          <strong>ⓘ &nbsp; Need help?</strong>
+          <p>Contact your event administrator if a submission needs attention.</p>
+        </section>
+        <button class="worker-signout" id="workerSignout" type="button">Sign out</button>
+      </aside>
 
-        <div class="portal-alert" id="portalMessage" role="status" aria-live="polite"></div>
-        <div id="companyEvents"></div>
-      </section>
-    </main>
-
-    <div class="worker-modal" id="uploadModal" aria-hidden="true">
-      <div class="worker-modal-backdrop" data-close-upload></div>
-      <section
-        class="worker-modal-card"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="uploadModalTitle"
-      >
-        <header>
-          <div>
-            <p class="eyebrow">FINAL SUBMISSION</p>
-            <h2 id="uploadModalTitle">Review before submitting</h2>
-          </div>
-          <button class="icon-button" type="button" data-close-upload aria-label="Close">×</button>
+      <main class="worker-main">
+        <header class="mobile-header">
+          <div class="portal-brand"><strong>AIM</strong><span>WORKER PORTAL</span></div>
+          <button id="mobileMenuButton" type="button" aria-label="Open navigation">☰</button>
         </header>
 
-        <div class="upload-warning">
-          <span aria-hidden="true">!</span>
-          <p>
-            After submission, you cannot view, download, edit, or remove these files.
-            Contact an admin if you upload the wrong document.
-          </p>
-        </div>
-
-        <form id="workerUploadForm">
-          <input type="hidden" id="uploadToken" name="token" />
-          <input type="hidden" id="uploadEventId" name="eventId" />
-          <input type="hidden" id="uploadKind" name="kind" />
-
-          <div class="upload-context" id="uploadContext"></div>
-
-          <div class="claim-fields" id="claimFields" hidden>
-            <div class="field-grid">
-              <label>
-                <span>Amount (SGD)</span>
-                <input type="number" id="claimAmount" name="amount" min="0" step="0.01" />
-              </label>
-              <label>
-                <span>Claim date</span>
-                <input type="date" id="claimDate" name="claimDate" />
-              </label>
-              <label>
-                <span>Category</span>
-                <select id="claimCategory" name="category">
-                  <option value="Cab">Cab</option>
-                  <option value="Parking">Parking</option>
-                  <option value="Meal">Meal</option>
-                  <option value="Other">Other</option>
-                </select>
-              </label>
-              <label id="otherCategoryField" hidden>
-                <span>Other category</span>
-                <input type="text" id="otherCategory" name="otherCategory" maxlength="80" />
-              </label>
-              <label id="claimDepartmentField">
-                <span>Department</span>
-                <select id="claimDepartment" name="department"></select>
-              </label>
-            </div>
-            <label>
-              <span>Description</span>
-              <textarea
-                id="claimDescription"
-                name="description"
-                rows="3"
-                maxlength="500"
-                placeholder="What was this expense for?"
-              ></textarea>
-            </label>
+        <section class="worker-view active" id="eventsView">
+          <header class="view-heading">
+            <div><h1>My Events &amp; Submissions</h1>
+              <p>Upload invoices and claims for your assigned events. Track approval and payment status.</p></div>
+            <label class="company-filter"><span class="sr-only">Filter by company</span><select id="companyFilter"></select></label>
+          </header>
+          <div class="event-tabs">
+            <button class="active" type="button" data-event-tab="active">Active Events <span id="activeEventCount">0</span></button>
+            <button type="button" data-event-tab="past">Past Events <span id="pastEventCount">0</span></button>
           </div>
+          <div class="portal-alert" id="portalMessage" role="status" aria-live="polite"></div>
+          <div id="companyEvents"></div>
+          <section class="workflow-card">
+            <h2>MY WORKFLOW</h2>
+            <div class="workflow-steps">
+              <div class="workflow-step step-upload"><b>↥</b><strong>1. Upload</strong><span>Add invoice and claim files.</span></div>
+              <i>⟶</i>
+              <div class="workflow-step step-submitted"><b>➤</b><strong>2. Submitted</strong><span>Sent for admin review.</span></div>
+              <i>⟶</i>
+              <div class="workflow-step step-review"><b>♙</b><strong>3. Admin Review</strong><span>Approved or denied.</span></div>
+              <i>⟶</i>
+              <div class="workflow-step step-paid"><b>▣</b><strong>4. Paid</strong><span>Admin marks payment paid.</span></div>
+              <i>⟶</i>
+              <div class="workflow-step step-confirm"><b>✓</b><strong>5. Confirm</strong><span>Confirm payment receipt.</span></div>
+              <i>⟶</i>
+              <div class="workflow-step step-past"><b>▤</b><strong>6. Past Events</strong><span>Completed event is archived.</span></div>
+            </div>
+          </section>
+        </section>
 
-          <label class="file-picker">
-            <span id="filePickerLabel">Choose file</span>
-            <small id="filePickerHelp">PDF only · Maximum 10 MB</small>
-            <input type="file" id="workerUploadFile" name="file" required />
-          </label>
+        <section class="worker-view" id="statisticsView">
+          <header class="view-heading"><div><h1>Statistics</h1><p>Your approved and paid earnings over time.</p></div>
+            <div class="statistics-filters">
+              <select id="statisticsPeriod"><option value="month">By month</option><option value="year" selected>By year</option></select>
+              <input id="statisticsMonth" type="month" hidden />
+              <select id="statisticsYear"></select>
+            </div>
+          </header>
+          <div class="statistics-grid" id="statisticsGrid"></div>
+        </section>
 
-          <label class="acknowledgement">
-            <input type="checkbox" id="warningAcknowledged" name="warningAcknowledged" value="true" required />
-            <span>I understand I cannot access these files after submission.</span>
-          </label>
+        <section class="worker-view" id="profileView">
+          <header class="view-heading"><div><h1>Profile</h1><p>Update your phone number or worker portal credentials.</p></div></header>
+          <form class="profile-card" id="workerProfileForm">
+            <div class="profile-grid">
+              <label><span>Phone number</span><input id="profilePhone" type="tel" required /></label>
+              <label><span>Current PIN or password *</span><input id="profileCurrentPassword" type="password" required /></label>
+              <label><span>New PIN or password</span><input id="profileNewPassword" type="password" /></label>
+              <label><span>Confirm new PIN or password</span><input id="profileNewPasswordConfirmation" type="password" /></label>
+              <label><span>Credential type</span><select id="profileCredentialType"><option value="pin">PIN (4–8 digits)</option><option value="password">Password (minimum 8 characters)</option></select></label>
+            </div>
+            <button class="primary-button" type="submit">Save Profile</button>
+            <div class="form-message" id="profileMessage"></div>
+          </form>
+        </section>
 
-          <div class="form-message" id="uploadMessage" role="alert" aria-live="polite"></div>
-          <footer>
-            <button class="secondary-button" type="button" data-close-upload>Go Back</button>
-            <button class="primary-button" type="submit" id="submitUploadButton">Submit File</button>
-          </footer>
+        <section class="worker-view" id="helpView">
+          <header class="view-heading"><div><h1>Help</h1><p>How the worker submission process works.</p></div></header>
+          <div class="help-grid">
+            <article><h2>Uploading</h2><p>Drag a PDF into the invoice area. Claims may be PDF, PNG or JPG and require expense details.</p></article>
+            <article><h2>Editing</h2><p>Submitted or denied files can be removed and uploaded again. Approved and paid records are locked.</p></article>
+            <article><h2>Payment</h2><p>When an admin marks a submission paid, confirm receipt. Fully confirmed events move to Past Events.</p></article>
+            <article><h2>Need assistance?</h2><p>Contact the administrator of the company shown on your event card.</p></article>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div class="worker-modal" id="claimModal" aria-hidden="true">
+      <div class="worker-modal-backdrop" data-close-claim></div>
+      <section class="worker-modal-card" role="dialog" aria-modal="true" aria-labelledby="claimModalTitle">
+        <header><div><p class="eyebrow">NEW CLAIM</p><h2 id="claimModalTitle">Add claim details</h2></div>
+          <button class="icon-button" type="button" data-close-claim>&times;</button></header>
+        <form id="claimDetailsForm">
+          <input id="claimToken" name="token" type="hidden" />
+          <input id="claimEventId" name="eventId" type="hidden" />
+          <input id="claimSubmissionId" type="hidden" />
+          <div class="upload-context" id="claimContext"></div>
+          <p class="claim-preview-guidance">Please ensure the amount, item and date are clearly visible.</p>
+          <div class="claim-preview" id="claimPreview"></div>
+          <div class="field-grid">
+            <label><span>Amount (SGD)</span><input id="claimAmount" name="amount" type="number" min="0" step=".01" required /></label>
+            <label><span>Claim date</span><input id="claimDate" name="claimDate" type="date" required /></label>
+            <label><span>Category</span><select id="claimCategory" name="category" required><option value="" selected disabled>Select category</option><option>Cab</option><option>Parking</option><option>Meal</option><option>Other</option></select></label>
+            <label id="otherCategoryField" hidden><span>Other category</span><input id="otherCategory" name="otherCategory" /></label>
+            <label class="full"><span>Notes (optional)</span><textarea id="claimNotes" name="notes"></textarea></label>
+          </div>
+          <div class="form-message" id="claimMessage"></div>
+          <footer><button class="secondary-button" type="button" data-close-claim>Cancel</button>
+            <button class="primary-button" type="submit">Submit details</button></footer>
         </form>
       </section>
     </div>

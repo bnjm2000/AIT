@@ -1,6 +1,8 @@
 Flask==2.3.3
 Flask-CORS==4.0.0
+Flask-Compress>=1.15,<2
 Werkzeug==2.3.7
+waitress>=3,<4
 cryptography
 Pillow
 psycopg[binary,pool]>=3.2,<4

@@ -178,6 +178,60 @@ class PostgresDataManagerTests(unittest.TestCase):
             second.save_inventory()
         self.assertEqual(second.inventory['A#01'].notes, 'first writer')
 
+    def test_legacy_event_location_migration_is_persisted_once(self):
+        from postgres_data_manager import PostgresDataManager
+        from psycopg.types.json import Jsonb
+
+        event = Event(
+            1,
+            'Launch',
+            '20260701',
+            '20260702',
+            [],
+        )
+        self.manager.events[1] = event
+        self.manager.save_event(event)
+
+        legacy_payload = self.manager._event_data(event)
+        legacy_payload['name'] = 'Launch @ National Gallery'
+        legacy_payload.pop('location', None)
+        with self.manager._connection() as connection:
+            connection.execute(
+                """
+                UPDATE aim_events
+                SET event_name = %s, data = %s, version = version + 1
+                WHERE company_code = %s AND event_id = %s
+                """,
+                (
+                    legacy_payload['name'],
+                    Jsonb(legacy_payload),
+                    self.company_code,
+                    1,
+                ),
+            )
+
+        reloaded = PostgresDataManager(
+            self.dsn,
+            self.company_code,
+            self.tempdir.name,
+            'Integration Test Company',
+        )
+        reloaded.load_all_data()
+        self.assertTrue(reloaded.events[1]._legacy_location_extracted)
+        self.assertEqual(reloaded.migrate_legacy_event_locations(), 1)
+
+        persisted = PostgresDataManager(
+            self.dsn,
+            self.company_code,
+            self.tempdir.name,
+            'Integration Test Company',
+        )
+        persisted.load_all_data()
+        self.assertEqual(persisted.events[1].name, 'Launch')
+        self.assertEqual(persisted.events[1].location, 'National Gallery')
+        self.assertFalse(persisted.events[1]._legacy_location_extracted)
+        self.assertEqual(persisted.migrate_legacy_event_locations(), 0)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -153,6 +153,47 @@ class PlanningTemplateTests(unittest.TestCase):
             script,
         )
         self.assertNotIn('Manage Assets', script)
+
+    def test_prepare_trial_and_legacy_workspaces_are_both_available(self):
+        self.login('admin')
+        response = self.client.get('/')
+        page = response.get_data(as_text=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("showSection('prepare-new')", page)
+        self.assertIn('id="prepare-new-section" class="content-section"', page)
+        self.assertIn('id="prepare-new-page-root"', page)
+        self.assertIn("showSection('prepare')", page)
+        self.assertIn('Prepare (Legacy)', page)
+
+        script_path = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)),
+            'static',
+            'js',
+            'app.js',
+        )
+        with open(script_path, encoding='utf-8') as script_file:
+            script = script_file.read()
+
+        self.assertIn('async function loadPrepareNewPage()', script)
+        self.assertIn('async function prepareNewApplyRealtimeEvent(event)', script)
+        self.assertIn("case \"prepare-new\":", script)
+        self.assertIn("planOpenEventChooser('prepare-new')", script)
+        self.assertIn("'prepare (legacy)': 'prepare'", script)
+        self.assertIn("'prepare': 'prepare-new'", script)
+        self.assertIn('function openPrepareWorkspaceForEvent(eventId)', script)
+        self.assertIn('function openReturnWorkspaceForEvent(eventId)', script)
+        self.assertIn(
+            "returnPageState.eventId = Number(eventId) || null;\n"
+            "  showSection('return');",
+            script,
+        )
+        self.assertNotIn('openReturnAssetsModalWithEvent', script)
+        self.assertNotIn('function renderReturnEventsTable', script)
+        self.assertNotIn('function renderReturnEventsCards', script)
+        self.assertNotIn('id="returnAssetsModalNew"', page)
+        self.assertNotIn('id="returnAssetModal"', page)
+        self.assertNotIn('id="returnAssetsModal"', page)
         self.assertNotIn("switchEditTab('assets')", script)
 
     def test_template_crud_is_company_local(self):
