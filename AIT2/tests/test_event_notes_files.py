@@ -93,6 +93,64 @@ class EventNotesFilesTests(unittest.TestCase):
         self.assertEqual(len(event_logs), 1)
         self.assertEqual(event_logs[0]['action'], 'Prepared asset A#01 for event 1')
 
+    def test_event_activity_is_categorized_and_manpower_is_admin_only(self):
+        event = self.data_manager.events[1]
+        event.event_logs = [
+            {
+                'timestamp': '2026/07/06 09:00:00',
+                'user': 'admin',
+                'action': 'Updated event 1 details: Location: A → B',
+            },
+            {
+                'timestamp': '2026/07/06 09:05:00',
+                'user': 'worker',
+                'action': 'Assigned specific asset A#01 to event 1',
+            },
+            {
+                'timestamp': '2026/07/06 09:10:00',
+                'user': 'worker',
+                'action': 'Returned asset A#01 from event 1',
+            },
+            {
+                'timestamp': '2026/07/06 09:15:00',
+                'user': 'Jordan',
+                'action': 'Worker Jordan uploaded 1 invoice file(s) for event 1',
+            },
+        ]
+        self.data_manager.save_event(event)
+
+        self.login_as('normal')
+        normal_logs = self.client.get('/api/events/1').get_json()['data']['eventLogs']
+        self.assertEqual(
+            [row['category'] for row in normal_logs],
+            ['details', 'prepare', 'return'],
+        )
+
+        self.login_as('admin', is_admin=True)
+        admin_logs = self.client.get('/api/events/1').get_json()['data']['eventLogs']
+        self.assertEqual(
+            [row['category'] for row in admin_logs],
+            ['details', 'prepare', 'return', 'manpower'],
+        )
+
+    def test_event_detail_update_log_lists_changed_fields(self):
+        self.login_as('admin', is_admin=True)
+
+        response = self.client.put('/api/events/1', json={
+            'name': 'Updated Event',
+            'location': 'Hall A',
+            'startDate': '2026-05-17',
+            'endDate': '2026-05-18',
+            'tag': 'events',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        action = self.data_manager.events[1].event_logs[-1]['action']
+        self.assertIn('Updated event 1 details:', action)
+        self.assertIn('Name: Test Event → Updated Event', action)
+        self.assertIn('Location: — → Hall A', action)
+        self.assertIn('End date: 2026/05/17 → 2026/05/18', action)
+
     def test_users_can_upload_files_but_only_admins_can_delete_them(self):
         self.login_as('normal')
 

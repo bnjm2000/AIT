@@ -13,7 +13,7 @@
   --plan-indigo: var(--wf-brand-dark);
   color: var(--wf-ink);
   min-height: 100%;
-  padding: 16px;
+  padding: 4px 16px 16px;
 }
 
 .wf-page-header,
@@ -687,16 +687,18 @@
   color: #5b21b6;
 }
 
-.wf-vendor .wf-vendor-invoice {
-  grid-column: 3 / 5;
-}
-
 .wf-member-picker {
   display: grid;
   max-height: 280px;
   margin-top: 8px;
   gap: 6px;
   overflow: auto;
+}
+
+.wf-member-search-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
 }
 
 .wf-member-option {
@@ -1503,10 +1505,10 @@ button.wf-calendar-day.selected {
 
   .wf-worker {
     grid-template-columns:
-      minmax(160px, .7fr)
-      minmax(220px, .9fr)
-      minmax(280px, 1.05fr)
-      minmax(320px, 1.2fr);
+      minmax(140px, .7fr)
+      minmax(190px, .9fr)
+      minmax(230px, 1.05fr)
+      minmax(250px, 1.2fr);
   }
 }
 
@@ -1549,10 +1551,6 @@ button.wf-calendar-day.selected {
 
   .wf-worker {
     grid-template-columns: 1fr 1fr;
-  }
-
-  .wf-vendor .wf-vendor-invoice {
-    grid-column: 1 / -1;
   }
 
   .wf-worker-invoices,
@@ -1759,27 +1757,36 @@ button.wf-calendar-day.selected {
 .wf-plan-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(210px, .24fr);
+  grid-template-rows: auto auto auto;
   gap: 10px;
   align-items: start;
   min-width: 0;
 }
 
-.wf-plan-primary {
-  min-width: 0;
+.wf-plan-primary,
+.workforce-page .wf-plan-aside {
+  display: contents;
+}
+
+.wf-plan-primary > .plan-event-bar {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.wf-plan-aside > .plan-details-card {
+  grid-column: 2;
+  grid-row: 1;
 }
 
 .wf-manpower-panel {
-  margin-top: 10px;
-}
-
-.workforce-page .wf-plan-aside {
-  display: grid;
-  grid-template-columns: 1fr;
-  height: auto;
-  overflow: visible;
+  grid-column: 1 / -1;
+  grid-row: 2;
+  margin-top: 0;
 }
 
 .wf-plan-aside .wf-transport-panel {
+  grid-column: 1 / -1;
+  grid-row: 3;
   min-width: 0;
   margin-bottom: 0;
 }
@@ -1816,6 +1823,34 @@ button.wf-calendar-day.selected {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 6px;
+}
+
+.wf-plan-aside .wf-transport-panel .wf-panel-header {
+  align-items: center;
+  flex-direction: row;
+  padding: 14px 16px;
+}
+
+.wf-plan-aside .wf-transport-panel .wf-panel-header .wf-button {
+  width: auto;
+}
+
+.wf-plan-aside .wf-transport-panel .wf-transport-list {
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  padding: 14px;
+}
+
+.wf-plan-aside .wf-transport-panel .wf-transport-meta {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.wf-plan-aside .wf-transport-panel .wf-route {
+  grid-column: 1 / -1;
+}
+
+.wf-plan-aside .wf-transport-panel .wf-transport-footer {
+  align-items: center;
+  flex-direction: row;
 }
 
 .wf-plan-primary .plan-metric strong {
@@ -2069,6 +2104,18 @@ button.wf-calendar-day.selected {
   border: 1px solid #fecaca;
   background: #fff7f7;
   color: #991b1b;
+}
+
+@media (max-width: 1340px) and (min-width: 1081px) {
+  .wf-plan-primary .wf-worker {
+    grid-template-columns: minmax(0, .85fr) minmax(0, 1fr);
+  }
+
+  .wf-plan-primary .wf-worker-identity,
+  .wf-plan-primary .wf-worker-roles,
+  .wf-plan-primary .wf-submission-box {
+    min-width: 0;
+  }
 }
 
 .wf-readonly-status {
@@ -2371,10 +2418,27 @@ button.wf-directory-row {
 @media (max-width: 1080px) {
   .wf-plan-layout {
     grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto auto;
   }
 
-  .workforce-page .wf-plan-aside {
-    margin-top: 10px;
+  .wf-plan-primary > .plan-event-bar {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .wf-plan-aside > .plan-details-card {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .wf-manpower-panel {
+    grid-column: 1;
+    grid-row: 3;
+  }
+
+  .wf-plan-aside .wf-transport-panel {
+    grid-column: 1;
+    grid-row: 4;
   }
 }
 
@@ -2414,6 +2478,10 @@ button.wf-directory-row {
   }
 
   .wf-calendar-months {
+    grid-template-columns: 1fr;
+  }
+
+  .wf-member-search-row {
     grid-template-columns: 1fr;
   }
 

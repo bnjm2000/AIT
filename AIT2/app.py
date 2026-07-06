@@ -4547,9 +4547,6 @@ def _worker_company_payload_for_member(
             company_code, manager, proxy, workforce
         )
         for event in vendor_payload.get('events', []):
-            event['allowClaims'] = False
-            event['claimLimit'] = 0
-            event['claimSlotsRemaining'] = 0
             merged_events.append(event)
     merged_events.sort(
         key=lambda row: (
@@ -4956,7 +4953,73 @@ def _admin_workforce_payload(event_id, manager=None):
     }
 
 
+def _workforce_financial_closure_complete(
+    event_id, manager=None, event=None, workforce=None
+):
+    """Return whether every assigned worker/vendor has settled submissions."""
+    manager = manager or _current_data_manager_object()
+    if manager is None:
+        return True
+
+    managed_event = getattr(manager, 'events', {}).get(int(event_id))
+    if managed_event is None or (event is not None and managed_event is not event):
+        return True
+
+    workforce = (
+        workforce
+        if isinstance(workforce, dict)
+        else load_workforce(_workforce_folder(manager))
+    )
+    subject_ids = {
+        str(row.get('freelancerId') or row.get('vendorId') or '')
+        for row in event_assignments(workforce, event_id)
+        if (
+            isinstance(row, dict)
+            and (row.get('freelancerId') or row.get('vendorId'))
+        )
+    }
+    if not subject_ids:
+        return True
+
+    for subject_id in subject_ids:
+        rows = worker_submissions(workforce, event_id, subject_id)
+        invoices = [
+            row
+            for row in rows.get('invoices', [])
+            if isinstance(row, dict) and row.get('status') != 'Denied'
+        ]
+        if not invoices:
+            return False
+
+        payable_rows = invoices + [
+            row
+            for row in rows.get('claims', [])
+            if isinstance(row, dict) and row.get('status') != 'Denied'
+        ]
+        if any(
+            row.get('status') != 'Paid'
+            or not row.get('paymentConfirmedAt')
+            for row in payable_rows
+        ):
+            return False
+    return True
+
+
 def _workforce_changed(event_id, action):
+    manager = _current_data_manager_object()
+    event = getattr(manager, 'events', {}).get(int(event_id)) if manager else None
+    if event:
+        old_state = normalize_event_state(getattr(event, 'state', 'New'))
+        update_event_state(event)
+        if event.state != old_state:
+            manager.save_event(event)
+            invalidate_cache()
+            mark_realtime_change('events', {
+                'eventId': int(event_id),
+                'action': 'state-updated',
+                'oldState': old_state,
+                'newState': event.state,
+            })
     mark_realtime_change(
         'workforce',
         {'eventId': int(event_id), 'action': str(action or 'updated')},
@@ -5365,6 +5428,13 @@ def worker_confirm_payment(submission_id):
             found['record']['paymentConfirmedAt'] = now_iso()
             found['record']['paymentConfirmedByWorker'] = True
             event_id = found['eventId']
+            submission_kind = found['kind']
+        worker_name = freelancer.get('name') or freelancer.get('id') or 'Worker'
+        log_action(
+            f"Worker {worker_name} marked {submission_kind} "
+            f"{submission_id} as received for event {event_id}",
+            user=worker_name,
+        )
         _workforce_changed(event_id, 'worker-payment-confirmed')
         return jsonify({
             'success': True,
@@ -5569,10 +5639,6 @@ def worker_upload_submission():
         company_code, manager, _workforce, freelancer = _find_worker_context(
             token, event_id
         )
-        if freelancer.get('isVendor') and kind == 'claim':
-            return jsonify({
-                'error': 'Company assignments only accept an invoice'
-            }), 400
         data_folder = _workforce_folder(manager)
         freelancer_id = str(freelancer.get('id') or '')
 
@@ -5671,7 +5737,8 @@ def worker_upload_submission():
 
         log_action(
             f"Worker {freelancer.get('name')} uploaded "
-            f"{len(saved_records)} {kind} file(s) for event {event_id}"
+            f"{len(saved_records)} {kind} file(s) for event {event_id}",
+            user=freelancer.get('name') or freelancer_id,
         )
         _workforce_changed(event_id, f'{kind}-uploaded')
         record_ids = [
@@ -5739,26 +5806,92 @@ def create_workforce_freelancer():
     if not name:
         return jsonify({'error': 'Worker name is required'}), 400
     with mutate_workforce(_workforce_folder()) as workforce:
-        if phone and any(
-            normalize_phone(row.get('phone')) == phone
-            for row in workforce.get('freelancers', [])
-            if isinstance(row, dict)
-        ):
+        existing = next(
+            (
+                row for row in workforce.get('freelancers', [])
+                if (
+                    isinstance(row, dict)
+                    and phone
+                    and normalize_phone(row.get('phone')) == phone
+                )
+            ),
+            None,
+        )
+        if existing and not existing.get('personnelOnly'):
             return jsonify({'error': 'A worker with this phone number already exists'}), 409
-        freelancer = {
-            'id': new_id('freelancer'),
-            'name': name,
-            'phone': phone,
-            'email': str(payload.get('email') or '').strip(),
-            'company': str(payload.get('company') or '').strip(),
-            'notes': str(payload.get('notes') or '').strip(),
-            'active': True,
-            'createdAt': now_iso(),
-            'updatedAt': now_iso(),
-        }
-        workforce.setdefault('freelancers', []).append(freelancer)
+        if existing:
+            existing.update({
+                'name': name,
+                'email': str(payload.get('email') or existing.get('email') or '').strip(),
+                'company': str(payload.get('company') or existing.get('company') or '').strip(),
+                'notes': str(payload.get('notes') or existing.get('notes') or '').strip(),
+                'personnelOnly': False,
+                'active': True,
+                'updatedAt': now_iso(),
+            })
+            freelancer = existing
+        else:
+            freelancer = {
+                'id': new_id('freelancer'),
+                'name': name,
+                'phone': phone,
+                'email': str(payload.get('email') or '').strip(),
+                'company': str(payload.get('company') or '').strip(),
+                'notes': str(payload.get('notes') or '').strip(),
+                'active': True,
+                'personnelOnly': False,
+                'createdAt': now_iso(),
+                'updatedAt': now_iso(),
+            }
+            workforce.setdefault('freelancers', []).append(freelancer)
     log_action(f"Created worker {name}")
     return jsonify({'success': True, 'data': freelancer})
+
+
+@app.route('/api/workforce/personnel', methods=['POST'])
+@require_admin
+def create_workforce_personnel():
+    payload = request.get_json(silent=True) or {}
+    name = str(payload.get('name') or '').strip()
+    phone = normalize_phone(payload.get('phone'))
+    if not name or len(re.sub(r'\D', '', phone)) < 8:
+        return jsonify({
+            'error': 'Personnel name and a valid phone number are required'
+        }), 400
+    with mutate_workforce(_workforce_folder()) as workforce:
+        person = next(
+            (
+                row for row in workforce.get('freelancers', [])
+                if (
+                    isinstance(row, dict)
+                    and normalize_phone(row.get('phone')) == phone
+                )
+            ),
+            None,
+        )
+        existing = bool(person)
+        if not person:
+            person = {
+                'id': new_id('freelancer'),
+                'name': name,
+                'phone': phone,
+                'email': str(payload.get('email') or '').strip(),
+                'notes': str(payload.get('notes') or '').strip(),
+                'active': True,
+                'personnelOnly': True,
+                'createdAt': now_iso(),
+                'updatedAt': now_iso(),
+            }
+            workforce.setdefault('freelancers', []).append(person)
+    log_action(
+        f"{'Linked existing person' if existing else 'Added vendor personnel'} "
+        f"{person.get('name')}"
+    )
+    return jsonify({
+        'success': True,
+        'data': _admin_freelancer_payload(person),
+        'existing': existing,
+    })
 
 
 @app.route('/api/workforce/freelancers/<freelancer_id>', methods=['PUT'])
@@ -5801,14 +5934,15 @@ def create_workforce_vendor():
     payload = request.get_json(silent=True) or {}
     name = str(payload.get('name') or '').strip()
     if not name:
-        return jsonify({'error': 'Company name is required'}), 400
-    with mutate_workforce(_workforce_folder()) as workforce:
+        return jsonify({'error': 'Vendor name is required'}), 400
+    data_folder = _workforce_folder()
+    with mutate_workforce(data_folder) as workforce:
         if any(
             str(row.get('name') or '').casefold() == name.casefold()
             for row in workforce.get('vendors', [])
             if isinstance(row, dict)
         ):
-            return jsonify({'error': 'A company with this name already exists'}), 409
+            return jsonify({'error': 'A vendor with this name already exists'}), 409
         valid_people = {
             str(row.get('id') or '')
             for row in workforce.get('freelancers', [])
@@ -5829,28 +5963,38 @@ def create_workforce_vendor():
             'updatedAt': now_iso(),
         }
         workforce.setdefault('vendors', []).append(vendor)
-    log_action(f"Created workforce company {name}")
-    return jsonify({'success': True, 'data': vendor})
+    saved_workforce = load_workforce(data_folder)
+    saved_vendor = find_by_id(saved_workforce.get('vendors'), vendor.get('id'))
+    log_action(f"Created workforce vendor {name}")
+    mark_realtime_change('workforce', {
+        'action': 'vendor-created',
+        'vendorId': vendor.get('id'),
+    })
+    return jsonify({
+        'success': True,
+        'data': _admin_vendor_payload(saved_vendor or vendor, saved_workforce),
+    })
 
 
 @app.route('/api/workforce/vendors/<vendor_id>', methods=['PUT'])
 @require_admin
 def update_workforce_vendor(vendor_id):
     payload = request.get_json(silent=True) or {}
-    with mutate_workforce(_workforce_folder()) as workforce:
+    data_folder = _workforce_folder()
+    with mutate_workforce(data_folder) as workforce:
         vendor = find_by_id(workforce.get('vendors'), vendor_id)
         if not vendor:
-            return jsonify({'error': 'Company not found'}), 404
+            return jsonify({'error': 'Vendor not found'}), 404
         name = str(payload.get('name', vendor.get('name')) or '').strip()
         if not name:
-            return jsonify({'error': 'Company name is required'}), 400
+            return jsonify({'error': 'Vendor name is required'}), 400
         if any(
             str(row.get('id') or '') != str(vendor_id)
             and str(row.get('name') or '').casefold() == name.casefold()
             for row in workforce.get('vendors', [])
             if isinstance(row, dict)
         ):
-            return jsonify({'error': 'A company with this name already exists'}), 409
+            return jsonify({'error': 'A vendor with this name already exists'}), 409
         valid_people = {
             str(row.get('id') or '')
             for row in workforce.get('freelancers', [])
@@ -5868,27 +6012,42 @@ def update_workforce_vendor(vendor_id):
             'active': bool(payload.get('active', vendor.get('active', True))),
             'updatedAt': now_iso(),
         })
-    log_action(f"Updated workforce company {name}")
-    return jsonify({'success': True, 'data': vendor})
+    saved_workforce = load_workforce(data_folder)
+    saved_vendor = find_by_id(saved_workforce.get('vendors'), vendor_id)
+    log_action(f"Updated workforce vendor {name}")
+    mark_realtime_change('workforce', {
+        'action': 'vendor-updated',
+        'vendorId': str(vendor_id),
+    })
+    return jsonify({
+        'success': True,
+        'data': _admin_vendor_payload(saved_vendor or vendor, saved_workforce),
+    })
 
 
 @app.route(
     '/api/workforce/freelancers/<freelancer_id>/history',
     methods=['GET'],
 )
+@app.route(
+    '/api/workforce/subjects/<freelancer_id>/history',
+    methods=['GET'],
+)
 @require_admin
 def workforce_freelancer_history(freelancer_id):
     workforce = load_workforce(_workforce_folder())
-    freelancer = find_by_id(workforce.get('freelancers'), freelancer_id)
+    freelancer, subject_type = _workforce_subject(workforce, freelancer_id)
     if not freelancer:
-        return jsonify({'error': 'Worker not found'}), 404
+        return jsonify({'error': 'Worker or vendor not found'}), 404
     events = []
     for raw_event_id, assignments in (workforce.get('assignments') or {}).items():
         matching = [
             row for row in assignments
             if (
                 isinstance(row, dict)
-                and str(row.get('freelancerId') or '') == str(freelancer_id)
+                and str(
+                    row.get('freelancerId') or row.get('vendorId') or ''
+                ) == str(freelancer_id)
             )
         ] if isinstance(assignments, list) else []
         if not matching:
@@ -5924,10 +6083,23 @@ def workforce_freelancer_history(freelancer_id):
                 {
                     'id': str(row.get('id') or ''),
                     'department': str(row.get('department') or ''),
-                    'role': str(row.get('roleName') or ''),
+                    'role': str(
+                        row.get('serviceName')
+                        or row.get('roleName')
+                        or (
+                            f"{int(row.get('pax') or 0)} pax manpower"
+                            if row.get('providerType') == 'manpower'
+                            else 'Vendor service'
+                        )
+                    ),
                     'days': int(row.get('days') or 0),
                     'dailyRate': row.get('dailyRate'),
                     'workDates': list(row.get('workDates') or []),
+                    'providerType': str(row.get('providerType') or ''),
+                    'pax': int(row.get('pax') or 0),
+                    'ratePerPax': row.get('ratePerPax'),
+                    'serviceName': str(row.get('serviceName') or ''),
+                    'serviceCost': row.get('serviceCost'),
                 }
                 for row in matching
             ],
@@ -5953,13 +6125,39 @@ def workforce_freelancer_history(freelancer_id):
         'success': True,
         'data': {
             'company': _company_payload(_current_company_code()),
-            'freelancer': _admin_freelancer_with_summary(
-                freelancer, workforce
+            'subjectType': subject_type,
+            'subject': (
+                _admin_vendor_payload(freelancer, workforce)
+                if subject_type == 'vendor'
+                else _admin_freelancer_with_summary(freelancer, workforce)
+            ),
+            'freelancer': (
+                _admin_vendor_payload(freelancer, workforce)
+                if subject_type == 'vendor'
+                else _admin_freelancer_with_summary(freelancer, workforce)
             ),
             'freelancers': sorted(
                 [
                     _admin_freelancer_with_summary(row, workforce)
                     for row in workforce.get('freelancers', [])
+                    if isinstance(row, dict)
+                ],
+                key=lambda row: str(row.get('name') or '').casefold(),
+            ),
+            'subjects': sorted(
+                [
+                    {
+                        **_admin_freelancer_with_summary(row, workforce),
+                        'subjectType': 'worker',
+                    }
+                    for row in workforce.get('freelancers', [])
+                    if isinstance(row, dict) and not row.get('personnelOnly')
+                ] + [
+                    {
+                        **_admin_vendor_payload(row, workforce),
+                        'subjectType': 'vendor',
+                    }
+                    for row in workforce.get('vendors', [])
                     if isinstance(row, dict)
                 ],
                 key=lambda row: str(row.get('name') or '').casefold(),
@@ -6183,7 +6381,7 @@ def create_workforce_assignment(event_id):
     daily_rate = money(payload.get('dailyRate'))
     if not freelancer_id or not department or days <= 0:
         return jsonify({
-            'error': 'Worker or company, department and working dates are required'
+            'error': 'Worker or vendor, department and working dates are required'
         }), 400
     event = data_manager.events[event_id]
     start_date = _event_date_for_input(event.start_date)
@@ -6208,13 +6406,13 @@ def create_workforce_assignment(event_id):
         vendor = find_by_id(workforce.get('vendors'), freelancer_id)
         if requested_vendor or vendor:
             if not vendor:
-                return jsonify({'error': 'Company not found'}), 404
+                return jsonify({'error': 'Vendor not found'}), 404
             provider_type = str(
                 payload.get('providerType') or ''
             ).strip().lower()
             if provider_type not in {'manpower', 'service'}:
                 return jsonify({
-                    'error': 'Choose whether the company provides manpower or a service'
+                    'error': 'Choose whether the vendor provides manpower or a service'
                 }), 400
             assignment = {
                 'id': new_id('assignment'),
@@ -6263,7 +6461,7 @@ def create_workforce_assignment(event_id):
             ).append(assignment)
             subject_name = vendor.get('name')
             log_message = (
-                f"Assigned company {subject_name} to event {event_id} "
+                f"Assigned vendor {subject_name} to event {event_id} "
                 f"as {provider_type}"
             )
         else:
@@ -6368,7 +6566,7 @@ def update_workforce_assignment(event_id, assignment_id):
             ).strip().lower()
             if provider_type not in {'manpower', 'service'}:
                 return jsonify({
-                    'error': 'Choose whether the company provides manpower or a service'
+                    'error': 'Choose whether the vendor provides manpower or a service'
                 }), 400
             updates = {
                 'department': department,
@@ -6475,18 +6673,14 @@ def add_workforce_upload_allowance(event_id, freelancer_id):
             workforce, freelancer_id
         )
         if not freelancer:
-            return jsonify({'error': 'Worker or company not found'}), 404
-        if subject_type == 'vendor' and kind == 'claim':
-            return jsonify({
-                'error': 'Company assignments only accept an invoice'
-            }), 400
+            return jsonify({'error': 'Worker or vendor not found'}), 404
         assigned = any(
             str(row.get('freelancerId') or '') == str(freelancer_id)
             for row in event_assignments(workforce, event_id)
             if isinstance(row, dict)
         )
         if not assigned:
-            return jsonify({'error': 'Worker or company is not assigned to this event'}), 400
+            return jsonify({'error': 'Worker or vendor is not assigned to this event'}), 400
         allowance = workforce.setdefault('uploadAllowances', {}).setdefault(
             str(event_id), {}
         ).setdefault(str(freelancer_id), {
@@ -6543,11 +6737,7 @@ def admin_upload_workforce_submission(event_id, freelancer_id):
                 workforce, freelancer_id
             )
             if not freelancer:
-                return jsonify({'error': 'Worker or company not found'}), 404
-            if subject_type == 'vendor' and kind == 'claim':
-                return jsonify({
-                    'error': 'Company assignments only accept an invoice'
-                }), 400
+                return jsonify({'error': 'Worker or vendor not found'}), 404
             assignments = [
                 row for row in event_assignments(workforce, event_id)
                 if (
@@ -7372,12 +7562,82 @@ def _maintenance_log_permission(asset, log_index, allow_admin=True):
 
     return True, ''
 
-def log_action(action):
+def _event_activity_category(action):
+    action_lower = str(action or '').lower()
+    manpower_terms = (
+        'worker',
+        'workforce',
+        'invoice',
+        'claim',
+        'transport',
+        'vendor',
+        'submission',
+        'freelancer',
+    )
+    if any(term in action_lower for term in manpower_terms):
+        return 'manpower'
+
+    if 'return' in action_lower or 'closed event' in action_lower:
+        return 'return'
+
+    prepare_terms = (
+        'prepared',
+        'unprepared',
+        'assigned specific asset',
+        'assigned custom asset',
+        'assigned asset',
+        'unassigned',
+        'collected loan',
+        'uncollected loan',
+        'promoted prepared extra asset',
+        'completely removed asset',
+    )
+    if any(term in action_lower for term in prepare_terms):
+        return 'prepare'
+
+    return 'details'
+
+
+def _event_activity_logs_for_response(event):
+    records = data_manager.normalize_event_logs(
+        getattr(event, 'event_logs', [])
+    )
+    result = []
+    for record in records:
+        category = _event_activity_category(record.get('action'))
+        if category == 'manpower' and not _current_user_is_admin():
+            continue
+        result.append({**record, 'category': category})
+    return result
+
+
+def _user_presence_realtime_details_from_log_action(action):
+    text = str(action or '').strip()
+    match = re.match(
+        r'^User\s+(.+?)\s+(logged in via web interface|logged out from web interface)$',
+        text,
+    )
+    if not match:
+        return None
+
+    status_text = match.group(2)
+    return {
+        'action': text,
+        'username': match.group(1),
+        'status': 'login' if status_text.startswith('logged in') else 'logout',
+    }
+
+
+def log_action(action, user=None):
     """Helper function to log actions."""
     try:
         log_entry = LogEntry(
             timestamp=datetime.now().strftime("%Y/%m/%d %H:%M:%S"),
-            user=session.get('user', 'system'),
+            user=(
+                str(user).strip()
+                if user is not None and str(user).strip()
+                else session.get('user', 'system')
+            ),
             action=action
         )
 
@@ -7398,7 +7658,11 @@ def log_action(action):
         else:
             data_manager.logs.append(log_entry)
             data_manager.save_logs()
-            mark_realtime_change('activity-log', {'action': action})
+            presence_details = _user_presence_realtime_details_from_log_action(action)
+            if presence_details:
+                mark_realtime_change('user-presence', presence_details)
+            else:
+                mark_realtime_change('activity-log', {'action': action})
 
         mark_data_snapshot_current()
         logger.info(f"Action logged: {action}")
@@ -8060,7 +8324,7 @@ def get_assigned_assets():
         logger.error(f"get_assigned_assets traceback: {traceback.format_exc()}")
         return set()  # Return empty set on error
 
-def update_event_state(event):
+def update_event_state(event, workforce=None):
     """Update the state of an event based on model, bulk, regular, and custom preparation."""
     try:
         if getattr(event, 'force_state_override', False):
@@ -8167,7 +8431,13 @@ def update_event_state(event):
 
         # 1. Every returnable asset is back, and required items were fully prepared.
         if all_returnable_assets_returned:
-            event.state = 'Closed'
+            event.state = (
+                'Closed'
+                if _workforce_financial_closure_complete(
+                    event.event_id, event=event, workforce=workforce
+                )
+                else 'Pending Closure'
+            )
 
         # 2. Once any asset has been returned, the event is in the return flow.
         elif returned_any:
@@ -8216,6 +8486,7 @@ def refresh_event_states_for_read(events_to_check=None):
 
     updated_events = []
     source_events = events_to_check if events_to_check is not None else data_manager.events.values()
+    closure_workforce = load_workforce(_workforce_folder())
 
     for event in list(source_events):
         if not event:
@@ -8223,7 +8494,7 @@ def refresh_event_states_for_read(events_to_check=None):
 
         old_state = normalize_event_state(getattr(event, 'state', 'New'))
         event.state = old_state
-        update_event_state(event)
+        update_event_state(event, workforce=closure_workforce)
 
         if getattr(event, 'state', 'New') == old_state:
             continue
@@ -10659,7 +10930,7 @@ def get_event(event_id):
             'notes': getattr(event, 'notes', '') or '',
             'files': _event_files_for_response(event.event_id),
             'canDeleteFiles': _current_user_is_admin(),
-            'eventLogs': data_manager.normalize_event_logs(getattr(event, 'event_logs', []))
+            'eventLogs': _event_activity_logs_for_response(event)
         }
 
         return jsonify({'success': True, 'data': event_data})
@@ -11030,6 +11301,13 @@ def update_event(event_id):
             return jsonify({'success': False, 'errors': errors}), 400
 
         # Update event properties
+        old_details = {
+            'name': event.name,
+            'location': getattr(event, 'location', '') or '',
+            'startDate': format_date_output(event.start_date),
+            'endDate': format_date_output(event.end_date),
+            'tag': getattr(event, 'tag', 'events'),
+        }
         old_name = event.name
         if 'name' in data:
             event.name = data['name'].strip()
@@ -11060,7 +11338,32 @@ def update_event(event_id):
         # Invalidate cache
         invalidate_cache()
 
-        log_action(f"Updated event {event_id}: {event.name} via web interface")
+        new_details = {
+            'name': event.name,
+            'location': getattr(event, 'location', '') or '',
+            'startDate': format_date_output(event.start_date),
+            'endDate': format_date_output(event.end_date),
+            'tag': getattr(event, 'tag', 'events'),
+        }
+        detail_labels = {
+            'name': 'Name',
+            'location': 'Location',
+            'startDate': 'Start date',
+            'endDate': 'End date',
+            'tag': 'Type',
+        }
+        changes = [
+            (
+                f"{detail_labels[key]}: "
+                f"{old_details[key] or '—'} → {new_details[key] or '—'}"
+            )
+            for key in old_details
+            if old_details[key] != new_details[key]
+        ]
+        change_text = '; '.join(changes) if changes else 'No field changes'
+        log_action(
+            f"Updated event {event_id} details: {change_text}"
+        )
 
         return jsonify({'success': True, 'message': 'Event updated successfully'})
     except Exception as e:
@@ -12458,14 +12761,24 @@ def close_return_event(event_id):
         if counts['total'] <= 0:
             return jsonify({'error': 'This event has no returned assets to close'}), 409
 
-        event.state = 'Closed'
         event.force_state_override = False
+        update_event_state(event)
         data_manager.save_event(event)
         invalidate_cache()
-        log_action(f"Closed event {event_id} after all assets were returned")
+        log_action(
+            f"Completed asset return for event {event_id}; "
+            f"state is now {event.state}"
+        )
         return jsonify({
             'success': True,
-            'message': f'Event {event_id} closed',
+            'message': (
+                f'Event {event_id} closed'
+                if event.state == 'Closed'
+                else (
+                    f'Event {event_id} is pending closure until all worker '
+                    'and vendor payments are confirmed received'
+                )
+            ),
             'data': {'eventId': event_id, 'state': event.state},
         })
     except Exception as e:
@@ -12948,10 +13261,6 @@ def remove_asset_from_event(event_id):
 
 # ---------------- Transfer Assets helpers and routes ----------------
 
-TRANSFER_SOURCE_STATES = {'ongoing', 'last day', 'returning', 'overdue', 'ready'}
-TRANSFER_TARGET_STATES = {'planning', 'preparing'}
-
-
 def _ensure_event_lists(event):
     """Make old event files safe to work with."""
     if not hasattr(event, 'prepared_items') or event.prepared_items is None:
@@ -12967,14 +13276,21 @@ def _ensure_event_lists(event):
 def _event_summary_for_transfer(event):
     _ensure_event_lists(event)
     unreturned_count = len(_get_unreturned_real_asset_ids(event))
+    required_count = 0
+    for item in getattr(event, 'prepared_items', []) or []:
+        requirement = _model_marker_to_requirement(item)
+        if requirement:
+            required_count += int(requirement.get('quantity', 0) or 0)
     return {
         'id': event.event_id,
         'name': event.name,
         'startDate': format_date_output(event.start_date),
         'endDate': format_date_output(event.end_date),
+        'location': getattr(event, 'location', '') or '',
         'state': event.state,
         'tag': getattr(event, 'tag', 'events'),
         'unreturnedCount': unreturned_count,
+        'requiredCount': required_count,
         'assetCount': len([x for x in event.prepared_items if isinstance(x, str) and not x.startswith('[MODEL]')])
     }
 
@@ -13080,6 +13396,72 @@ def _target_model_requirements(event):
     return requirements
 
 
+def _destination_requirements_payload(event):
+    """Return destination requirements in a frontend-friendly list."""
+    requirements = []
+    for requirement in _target_model_requirements(event).values():
+        requirements.append({
+            'department': requirement.get('department', ''),
+            'brand': requirement.get('brand', ''),
+            'model': requirement.get('model', ''),
+            'description': requirement.get('description', ''),
+            'required': int(requirement.get('required', 0) or 0),
+            'prepared': int(requirement.get('prepared', 0) or 0),
+            'remaining': int(requirement.get('remaining', 0) or 0),
+        })
+
+    requirements.sort(key=lambda item: (
+        item['department'],
+        item['brand'].casefold(),
+        item['model'].casefold(),
+        item['description'].casefold(),
+    ))
+    return requirements
+
+
+def _transfer_office_candidate_payload(asset):
+    return {
+        'assetId': asset.asset_id,
+        'id': asset.asset_id,
+        'department': asset.department_code,
+        'brand': asset.brand,
+        'model': asset.model_number,
+        'description': asset.description or '',
+        'serial': asset.serial_number,
+        'serial2': getattr(asset, 'secondary_serial_number', ''),
+        'status': _asset_status_value(asset),
+        'currentLocation': asset.current_location or asset.default_location or 'Office',
+        'isDegraded': _is_degraded(asset),
+        'isDisposed': _is_disposed(asset),
+    }
+
+
+def _get_available_office_candidates_for_transfer(to_event, requirement_key):
+    """Return available exact asset IDs that can be prepared for the destination."""
+    _ensure_event_lists(to_event)
+    current_event_refs = _active_physical_asset_refs_for_event(to_event)
+    busy_elsewhere = set()
+
+    for other in data_manager.events.values():
+        if not other or other.event_id == to_event.event_id:
+            continue
+        busy_elsewhere.update(_active_physical_asset_refs_for_event(other))
+
+    candidates = []
+    for asset_id, asset in sorted(data_manager.inventory.items(), key=lambda pair: pair[0]):
+        if not asset or _is_bulk_asset(asset):
+            continue
+        if getattr(asset, 'is_missing', False) or getattr(asset, 'is_ooc', False) or _is_disposed(asset):
+            continue
+        if asset_id in current_event_refs or asset_id in busy_elsewhere:
+            continue
+        if _asset_match_key(asset) != requirement_key:
+            continue
+        candidates.append(_transfer_office_candidate_payload(asset))
+
+    return candidates
+
+
 def _asset_fulfills_event_model_requirement(event, asset):
     requirements = _target_model_requirements(event)
     return _asset_match_key(asset) in requirements
@@ -13154,13 +13536,6 @@ def _get_transfer_candidates(from_event, to_event):
     _ensure_event_lists(from_event)
     _ensure_event_lists(to_event)
 
-    source_state = str(from_event.state or '').strip().lower()
-    target_state = str(to_event.state or '').strip().lower()
-
-    # Keep normal source/target validation for new transfers, but still allow
-    # already-transferred assets to be surfaced for undo in this comparison.
-    allow_new_transfers = source_state in TRANSFER_SOURCE_STATES and target_state in TRANSFER_TARGET_STATES
-
     requirements = _target_model_requirements(to_event)
     remaining_by_key = {key: req['remaining'] for key, req in requirements.items() if req['remaining'] > 0}
 
@@ -13168,7 +13543,7 @@ def _get_transfer_candidates(from_event, to_event):
     seen = set()
 
     # 1) Active source assets that may still be transferred.
-    if allow_new_transfers and remaining_by_key:
+    if remaining_by_key:
         for asset_id in _get_unreturned_real_asset_ids(from_event):
             asset = data_manager.inventory.get(asset_id)
             if not asset:
@@ -13262,6 +13637,7 @@ def _get_transfer_needed_from_office_assets(from_event, to_event):
         if office_quantity <= 0:
             continue
 
+        office_candidates = _get_available_office_candidates_for_transfer(to_event, key)
         needed.append({
             'assetId': '',
             'department': req.get('department', ''),
@@ -13277,6 +13653,8 @@ def _get_transfer_needed_from_office_assets(from_event, to_event):
             'targetRemaining': target_remaining,
             'sourceQuantity': source_available,
             'officeQuantity': office_quantity,
+            'officeCandidateCount': len(office_candidates),
+            'officeCandidates': office_candidates,
             'returnQuantity': 0,
             'reason': (
                 f"Destination still needs {target_remaining}; "
@@ -13429,26 +13807,20 @@ def get_transfer_options():
             if event.state != old_state:
                 data_manager.save_event(event)
 
-        source_events = []
-        target_events = []
+        event_summaries = []
 
         for event in data_manager.events.values():
-            state = str(event.state or '').strip().lower()
             summary = _event_summary_for_transfer(event)
+            event_summaries.append(summary)
 
-            if state in TRANSFER_SOURCE_STATES and summary['unreturnedCount'] > 0:
-                source_events.append(summary)
-            if state in TRANSFER_TARGET_STATES:
-                target_events.append(summary)
-
-        source_events.sort(key=lambda x: (x['state'] != 'Overdue', x['endDate'], x['id']))
-        target_events.sort(key=lambda x: (x['startDate'], x['id']))
+        event_summaries.sort(key=lambda x: (x['startDate'], x['id']))
 
         return jsonify({
             'success': True,
             'data': {
-                'sourceEvents': source_events,
-                'targetEvents': target_events,
+                'events': event_summaries,
+                'sourceEvents': event_summaries,
+                'targetEvents': event_summaries,
             }
         })
     except Exception as e:
@@ -13491,6 +13863,7 @@ def get_transfer_candidates():
                 'neededFromOffice': needed_from_office,
                 'neededFromOfficeCount': len(needed_from_office),
                 'neededFromOfficeQuantity': sum(int(item.get('officeQuantity', 0) or 0) for item in needed_from_office),
+                'destinationRequirements': _destination_requirements_payload(to_event),
             }
         })
     except Exception as e:
@@ -13521,11 +13894,6 @@ def execute_transfer_assets():
 
         if not from_event or not to_event:
             return jsonify({'error': 'Event not found'}), 404
-
-        if str(from_event.state or '').strip().lower() not in TRANSFER_SOURCE_STATES:
-            return jsonify({'error': 'Source event must be Ready, Ongoing, Last Day, Returning, or Overdue'}), 400
-        if str(to_event.state or '').strip().lower() not in TRANSFER_TARGET_STATES:
-            return jsonify({'error': 'Destination event must be Planning or Preparing'}), 400
 
         transferred = []
         skipped = []
@@ -16920,7 +17288,10 @@ def force_event_state(event_id):
         new_state = data.get('state')
         
         # Validate state
-        valid_states = ['New', 'Planning', 'Preparing', 'Ready', 'Ongoing', 'Last Day', 'Returning', 'Closed', 'Overdue']
+        valid_states = [
+            'New', 'Planning', 'Preparing', 'Ready', 'Ongoing', 'Last Day',
+            'Returning', 'Pending Closure', 'Closed', 'Overdue',
+        ]
         if new_state not in valid_states:
             return jsonify({'error': f'Invalid state. Must be one of: {valid_states}'}), 400
             

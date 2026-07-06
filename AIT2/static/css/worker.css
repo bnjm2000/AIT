@@ -137,7 +137,6 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .event-card[open] .event-chevron { transform: rotate(180deg); }
 
 .event-submissions { display: grid; grid-template-columns: minmax(0, .85fr) minmax(0, 1.15fr); gap: 10px; padding: 0 18px 14px; }
-.vendor-event .event-submissions { grid-template-columns: 1fr; }
 .event-submissions > section { min-width: 0; border: 1px solid var(--border); border-radius: 9px; overflow: visible; }
 .event-submissions > section > header { padding: 11px 14px; border-bottom: 1px solid var(--border); }
 .event-submissions h3 { margin: 0; color: #4c28e8; font-size: 13px; }

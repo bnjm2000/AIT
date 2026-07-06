@@ -364,6 +364,7 @@ function getEventStateClass(state) {
 
 function eventStateDisplayLabel(state) {
   const value = String(state || 'New');
+  if (value === 'Pending Closure' && !isAdminUser()) return 'Closed';
   return value === 'Added' ? 'New' : value;
 }
 
@@ -12491,7 +12492,7 @@ function returnEventChooserFilteredEvents() {
   return returnPageSelectableEvents().filter(event => (
     (
       filter === 'ALL' ||
-      (filter === 'ACTIVE' && !['closed', 'completed'].includes(planStateSlug(event?.state))) ||
+      (filter === 'ACTIVE' && !['pending-closure', 'closed', 'completed'].includes(planStateSlug(event?.state))) ||
       planEventChooserFilterKey(event) === filter
     ) &&
     (!search || planEventChooserSearchText(event).includes(search))
@@ -12550,7 +12551,7 @@ function renderReturnEventChooser() {
   const counts = selectableEvents.reduce((summary, event) => {
     const key = planEventChooserFilterKey(event);
     summary.ALL += 1;
-    if (!['closed', 'completed'].includes(planStateSlug(event?.state))) {
+    if (!['pending-closure', 'closed', 'completed'].includes(planStateSlug(event?.state))) {
       summary.ACTIVE += 1;
     }
     summary[key] = (summary[key] || 0) + 1;
@@ -12817,10 +12818,200 @@ function returnPageRenderFilteredAssets(options = {}) {
   }
 }
 
+function eventDetailsActionIconSvg(kind) {
+  const paths = kind === 'edit'
+    ? `
+      <path d="M12 20h9"></path>
+      <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path>
+      <path d="m15 5 4 4"></path>
+    `
+    : `
+      <path d="M6 3h12v4H6z"></path>
+      <path d="M5 5H3v16h18V5h-2"></path>
+      <path d="M8 12h8"></path>
+      <path d="M8 16h6"></path>
+    `;
+  return `
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      ${paths}
+    </svg>
+  `;
+}
+
+function eventDetailsActionsHtml(eventId) {
+  const id = Number(eventId);
+  if (!id) return '';
+  return `
+    <div class="event-detail-card-actions">
+      ${isAdminUser() ? `
+        <button type="button"
+                class="event-detail-icon-button event-detail-icon-edit"
+                title="Edit event details"
+                aria-label="Edit event details"
+                onclick="editEvent(${id})">
+          ${eventDetailsActionIconSvg('edit')}
+        </button>
+      ` : ''}
+      <button type="button"
+              class="event-detail-icon-button event-detail-icon-logs"
+              title="View event activity"
+              aria-label="View event activity"
+              onclick="openEventActivityLog(${id})">
+        ${eventDetailsActionIconSvg('logs')}
+      </button>
+    </div>
+  `;
+}
+
+function eventActivityCategory(log) {
+  const supplied = String(log?.category || '').toLowerCase();
+  if (['details', 'prepare', 'return', 'manpower'].includes(supplied)) {
+    return supplied;
+  }
+
+  const action = String(log?.action || '').toLowerCase();
+  if (['worker', 'workforce', 'invoice', 'claim', 'transport', 'vendor', 'submission', 'freelancer']
+    .some(term => action.includes(term))) {
+    return 'manpower';
+  }
+  if (action.includes('return') || action.includes('closed event')) {
+    return 'return';
+  }
+  if (['prepared', 'unprepared', 'assigned specific asset', 'assigned custom asset', 'assigned asset', 'unassigned', 'collected loan', 'uncollected loan']
+    .some(term => action.includes(term))) {
+    return 'prepare';
+  }
+  return 'details';
+}
+
+function eventActivityCategoryMeta(category) {
+  const categories = {
+    details: { label: 'Event details', icon: '✎' },
+    prepare: { label: 'Preparing', icon: '✓' },
+    return: { label: 'Returning', icon: '↩' },
+    manpower: { label: 'Manpower', icon: '👤' }
+  };
+  return categories[category] || categories.details;
+}
+
+function eventActivityTimestamp(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return 'Time not recorded';
+  const match = raw.match(/^(\d{4})\/(\d{2})\/(\d{2})\s+(.+)$/);
+  return match ? `${match[3]}/${match[2]}/${match[1]} ${match[4]}` : raw;
+}
+
+function ensureEventActivityModal() {
+  let modal = document.getElementById('eventActivityModal');
+  if (modal) return modal;
+
+  modal = document.createElement('div');
+  modal.id = 'eventActivityModal';
+  modal.className = 'modal event-activity-modal';
+  modal.innerHTML = `
+    <div class="modal-content event-activity-modal-content">
+      <div class="modal-header">
+        <div>
+          <h2 id="eventActivityTitle">Event Activity</h2>
+          <p id="eventActivitySubtitle" class="event-activity-subtitle"></p>
+        </div>
+        <button type="button" class="close-btn"
+                aria-label="Close event activity"
+                onclick="closeModal('eventActivityModal')">&times;</button>
+      </div>
+      <div class="event-activity-legend" id="eventActivityLegend"></div>
+      <div class="modal-body event-activity-list" id="eventActivityList"></div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  return modal;
+}
+
+function renderEventActivityLog(event) {
+  const list = document.getElementById('eventActivityList');
+  const legend = document.getElementById('eventActivityLegend');
+  const subtitle = document.getElementById('eventActivitySubtitle');
+  if (!list || !legend || !subtitle) return;
+
+  subtitle.textContent = `#${event.id} · ${event.name || 'Untitled event'}`;
+  const visibleCategories = isAdminUser()
+    ? ['details', 'prepare', 'return', 'manpower']
+    : ['details', 'prepare', 'return'];
+  legend.innerHTML = visibleCategories.map(category => {
+    const meta = eventActivityCategoryMeta(category);
+    return `
+      <span class="event-activity-legend-item event-activity-${category}">
+        <i></i>${escapeHtml(meta.label)}
+      </span>
+    `;
+  }).join('');
+
+  const logs = (event.eventLogs || [])
+    .map(log => ({ ...log, category: eventActivityCategory(log) }))
+    .filter(log => isAdminUser() || log.category !== 'manpower')
+    .sort((a, b) =>
+      String(b.timestamp || b.date || '').localeCompare(
+        String(a.timestamp || a.date || '')
+      )
+    );
+
+  if (!logs.length) {
+    list.innerHTML = `
+      <div class="event-activity-empty">
+        No activity has been recorded for this event yet.
+      </div>
+    `;
+    return;
+  }
+
+  list.innerHTML = logs.map(log => {
+    const meta = eventActivityCategoryMeta(log.category);
+    return `
+      <article class="event-activity-row event-activity-${log.category}">
+        <div class="event-activity-row-icon" aria-hidden="true">${meta.icon}</div>
+        <div class="event-activity-row-content">
+          <div class="event-activity-row-meta">
+            <span class="event-activity-category">${escapeHtml(meta.label)}</span>
+            <span>${escapeHtml(log.user || 'system')}</span>
+            <span aria-hidden="true">·</span>
+            <time>${escapeHtml(eventActivityTimestamp(log.timestamp || log.date))}</time>
+          </div>
+          <p>${escapeHtml(log.action || '')}</p>
+        </div>
+      </article>
+    `;
+  }).join('');
+}
+
+async function openEventActivityLog(eventId) {
+  const modal = ensureEventActivityModal();
+  const list = modal.querySelector('#eventActivityList');
+  const subtitle = modal.querySelector('#eventActivitySubtitle');
+  if (subtitle) subtitle.textContent = `Event #${Number(eventId)}`;
+  if (list) list.innerHTML = '<div class="loading">Loading event activity...</div>';
+  openModal('eventActivityModal');
+
+  try {
+    const response = await apiCall(`/api/events/${Number(eventId)}`);
+    renderEventActivityLog(response.data || {});
+  } catch (error) {
+    if (list) {
+      list.innerHTML = `
+        <div class="event-activity-empty event-activity-error">
+          Failed to load event activity.
+        </div>
+      `;
+    }
+  }
+}
+
 function returnPageEventDetailsHtml(event) {
   return `
     <section class="return-surface">
-      <div class="return-card-header"><h3>Event Details</h3></div>
+      <div class="return-card-header event-detail-card-header">
+        <h3>Event Details</h3>
+        ${eventDetailsActionsHtml(event.id)}
+      </div>
       <div class="return-aside-body">
         <dl class="return-detail-list">
           <div><dt>Name</dt><dd>${escapeHtml(event.name || `Event ${event.id}`)}</dd></div>
@@ -13619,6 +13810,10 @@ async function returnManualAssetNew() {
 
 let transferOptionsCache = null;
 let transferCandidateCache = [];
+let transferPageState = {
+  sourceEventId: null,
+  targetEventId: null
+};
 
 async function loadTransferHistory() {
   const container = document.getElementById("transfer-history");
@@ -13631,9 +13826,18 @@ async function loadTransferHistory() {
     try { await apiCall('/api/events/update-states', 'POST'); } catch (e) { console.warn('State refresh skipped:', e); }
 
     const response = await apiCall('/api/transfers/options');
-    transferOptionsCache = response.data || { sourceEvents: [], targetEvents: [] };
+    transferOptionsCache = response.data || { events: [], sourceEvents: [], targetEvents: [] };
 
-    const overdueCount = (transferOptionsCache.sourceEvents || []).filter(e => e.state === 'Overdue').length;
+    const selectableEvents = transferSelectableEvents();
+    const availableIds = new Set(selectableEvents.map(event => String(event.id || '')));
+    if (transferPageState.sourceEventId && !availableIds.has(String(transferPageState.sourceEventId))) {
+      transferPageState.sourceEventId = null;
+    }
+    if (transferPageState.targetEventId && !availableIds.has(String(transferPageState.targetEventId))) {
+      transferPageState.targetEventId = null;
+    }
+
+    const overdueCount = selectableEvents.filter(e => e.state === 'Overdue').length;
     updateOverdueCounter(overdueCount);
 
     renderTransferWorkspace();
@@ -16981,7 +17185,7 @@ function planEventChooserFilterKey(event) {
   if (['preparing', 'ready'].includes(state)) return 'PREPARING';
   if (['ongoing', 'last-day'].includes(state)) return 'ONGOING';
   if (['returning', 'overdue'].includes(state)) return 'RETURNING';
-  if (['closed', 'completed'].includes(state)) return 'COMPLETED';
+  if (['pending-closure', 'closed', 'completed'].includes(state)) return 'COMPLETED';
   return 'PLANNING';
 }
 
@@ -17064,6 +17268,9 @@ function planEventChooserSecondaryLabel(event) {
 }
 
 function planEventChooserSourceEvents() {
+  if (planEventChooserState.context === 'transfer-source' || planEventChooserState.context === 'transfer-target') {
+    return transferSelectableEvents();
+  }
   if (planEventChooserState.context === 'prepare-new') {
     return prepareNewPageState.events || [];
   }
@@ -17071,6 +17278,12 @@ function planEventChooserSourceEvents() {
 }
 
 function planEventChooserCurrentEventId() {
+  if (planEventChooserState.context === 'transfer-source') {
+    return transferPageState.sourceEventId;
+  }
+  if (planEventChooserState.context === 'transfer-target') {
+    return transferPageState.targetEventId;
+  }
   return planEventChooserState.context === 'prepare-new'
     ? prepareNewPageState.eventId
     : planPageState.eventId;
@@ -17083,7 +17296,7 @@ function planEventChooserFilteredEvents() {
     .filter(event => (
       (
         filter === 'ALL' ||
-        (filter === 'ACTIVE' && !['closed', 'completed'].includes(planStateSlug(event?.state))) ||
+        (filter === 'ACTIVE' && !['pending-closure', 'closed', 'completed'].includes(planStateSlug(event?.state))) ||
         planEventChooserFilterKey(event) === filter
       ) &&
       (!search || planEventChooserSearchText(event).includes(search))
@@ -17142,7 +17355,7 @@ function renderPlanEventChooser() {
   const counts = planEventChooserSourceEvents().reduce((summary, event) => {
     const key = planEventChooserFilterKey(event);
     summary.ALL += 1;
-    if (!['closed', 'completed'].includes(planStateSlug(event?.state))) {
+    if (!['pending-closure', 'closed', 'completed'].includes(planStateSlug(event?.state))) {
       summary.ACTIVE += 1;
     }
     summary[key] = (summary[key] || 0) + 1;
@@ -17224,11 +17437,25 @@ function renderPlanEventChooser() {
 }
 
 function planOpenEventChooser(context = 'plan') {
-  ensurePlanEventChooserModal();
+  const modal = ensurePlanEventChooserModal();
   planEventChooserState.context = context;
   planEventChooserState.search = '';
   planEventChooserState.filter = 'ALL';
   planEventChooserState.page = 1;
+  const title = modal.querySelector('.modal-title');
+  if (title) {
+    const titleText = context === 'transfer-source'
+      ? 'Choose From Event'
+      : context === 'transfer-target'
+        ? 'Choose To Event'
+        : 'Other Events';
+    const titleHelp = context === 'transfer-source'
+      ? 'Select the event assets are moving out from'
+      : context === 'transfer-target'
+        ? 'Select the event assets are moving into'
+        : 'Select any event to update its plan';
+    title.innerHTML = `${titleText} <span title="${escapeHtmlAttr(titleHelp)}">&#9432;</span>`;
+  }
   const search = document.getElementById('planEventChooserSearch');
   if (search) search.value = '';
   renderPlanEventChooser();
@@ -17255,6 +17482,14 @@ function planSetEventChooserPage(page) {
 async function planChooseEvent(eventId) {
   closeModal('planEventChooserModal');
   if (Number(eventId) === Number(planEventChooserCurrentEventId())) return;
+  if (planEventChooserState.context === 'transfer-source') {
+    await transferChooseEvent('source', eventId);
+    return;
+  }
+  if (planEventChooserState.context === 'transfer-target') {
+    await transferChooseEvent('target', eventId);
+    return;
+  }
   if (planEventChooserState.context === 'prepare-new') {
     await selectPrepareNewEvent(eventId);
     return;
@@ -17317,6 +17552,23 @@ function planAvailableModelGroups() {
   ));
 }
 
+function planAvailableModelSearchText(group) {
+  const assetDescriptions = (group?.assets || []).map(asset =>
+    String(asset?.description || '').trim()
+  );
+  return [
+    group?.department,
+    group?.brand,
+    group?.model,
+    group?.description,
+    ...assetDescriptions
+  ]
+    .map(value => String(value || '').trim())
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+}
+
 function planAvailabilityFor(group) {
   const entry = (planPageState.availability || []).find(item =>
     modelGroupMatchesEditGroup(
@@ -17353,12 +17605,7 @@ function renderPlanAvailableResults() {
       return false;
     }
     if (!search) return true;
-    return [
-      group.department,
-      group.brand,
-      group.model,
-      group.description
-    ].join(' ').toLowerCase().includes(search);
+    return planAvailableModelSearchText(group).includes(search);
   });
 
   const rows = models.slice(0, 80).map((group, index) => {
@@ -17680,7 +17927,10 @@ function renderPlanEventDetailsCard() {
     : [event.startDate, event.endDate].filter(Boolean).join(' – ');
   return `
     <section class="plan-card plan-details-card">
-      <div class="plan-card-header"><h3>Event Details</h3></div>
+      <div class="plan-card-header event-detail-card-header">
+        <h3>Event Details</h3>
+        ${eventDetailsActionsHtml(event.id)}
+      </div>
       <div class="plan-aside-body">
         <dl class="plan-detail-list">
           <div><dt>Name</dt><dd>${escapeHtml(event.name || `Event ${event.id || ''}`)}</dd></div>
@@ -18863,7 +19113,10 @@ function renderPrepareNewEventDetails() {
   const event = prepareNewPageState.event || {};
   return `
     <section class="prepare-new-card prepare-new-event-card">
-      <div class="prepare-new-card-header"><h3>&#128203; Event Details</h3></div>
+      <div class="prepare-new-card-header event-detail-card-header">
+        <h3>&#128203; Event Details</h3>
+        ${eventDetailsActionsHtml(event.id)}
+      </div>
       <div class="plan-aside-body">
         <dl class="plan-detail-list">
           <div><dt>Name</dt><dd>${escapeHtml(event.name || '\u2014')}</dd></div>
@@ -19112,7 +19365,7 @@ async function loadPrepareNewPage() {
     const selected = prepareNewPageState.events.find(event =>
       Number(event.id) === Number(prepareNewPageState.eventId)
     ) || prepareNewPageState.events.find(event =>
-      !['closed', 'completed'].includes(planStateSlug(event?.state))
+      !['pending-closure', 'closed', 'completed'].includes(planStateSlug(event?.state))
     ) || prepareNewPageState.events[0];
     if (selected) {
       await selectPrepareNewEvent(selected.id, { renderLoading: false });
@@ -19958,6 +20211,15 @@ document.addEventListener("DOMContentLoaded", function () {
           document.getElementById("prepare-section").classList.contains("active")
         ) {
           loadPrepareEvents();
+        }
+        if (document.getElementById("plan-section")?.classList.contains("active")) {
+          await refreshPlanSelectedEvent();
+        }
+        if (document.getElementById("prepare-new-section")?.classList.contains("active")) {
+          await refreshPrepareNewSelectedEvent({ preserve: true });
+        }
+        if (document.getElementById("return-section")?.classList.contains("active")) {
+          await returnPageRefreshSelected();
         }
       } catch (error) {
         showNotification("error", "Failed to update event");
@@ -25629,6 +25891,25 @@ function eventAssetChangesFromRealtimePayload(payload) {
     .filter(details => Number.isFinite(Number(details.eventId)));
 }
 
+function realtimeTopicsFromPayload(payload) {
+  const topics = payload?.details?.topics;
+  if (Array.isArray(topics)) {
+    return topics.map(topic => String(topic || '').trim()).filter(Boolean);
+  }
+
+  const topic = String(payload?.topic || '').trim();
+  return topic ? [topic] : [];
+}
+
+function shouldRefreshVisibleDataForRealtimePayload(payload) {
+  const topics = realtimeTopicsFromPayload(payload);
+  if (topics.length && topics.every(topic => topic === 'user-presence')) {
+    return getActiveSectionId() === 'logs';
+  }
+
+  return true;
+}
+
 function markPrepareAssetReturned(assetId) {
   prepareButtonsForAsset(assetId, true).forEach(button => {
     button.disabled = true;
@@ -25998,7 +26279,9 @@ function connectRealtimeUpdates() {
         }
         return;
       }
-      queueRealtimeRefresh();
+      if (shouldRefreshVisibleDataForRealtimePayload(payload)) {
+        queueRealtimeRefresh();
+      }
     } catch (error) {
       console.warn("Realtime update parse failed:", error);
       queueRealtimeRefresh();
@@ -26714,6 +26997,7 @@ function getEventWorkflowPalette(state) {
     Ongoing: { main: '#0b97a4', soft: '#edfafa' },
     'Last Day': { main: '#0b97a4', soft: '#edfafa' },
     Returning: { main: '#f97316', soft: '#fff5ea' },
+    'Pending Closure': { main: '#7c3aed', soft: '#f5f3ff' },
     Overdue: { main: '#ef3340', soft: '#fff0f1' },
     Closed: { main: '#64748b', soft: '#f1f5f9' }
   };
@@ -26881,7 +27165,7 @@ function getFilteredEventsForOverview(list) {
 
 function eventOverviewProgress(event) {
   const state = event.state || 'New';
-  if (['Returning', 'Overdue', 'Closed'].includes(state)) {
+  if (['Returning', 'Overdue', 'Pending Closure', 'Closed'].includes(state)) {
     if (state === 'Closed' && event.forceStateOverride) {
       const done = Math.max(0, Number(event.returnedCount || 0));
       const total = Math.max(done, Number(event.returnableTotalCount || event.assetCount || 0));
@@ -26914,7 +27198,7 @@ function eventOverviewProgress(event) {
 }
 
 function eventDepartmentProgress(event) {
-  const phaseUsesReturns = ['Returning', 'Overdue', 'Closed'].includes(event.state);
+  const phaseUsesReturns = ['Returning', 'Overdue', 'Pending Closure', 'Closed'].includes(event.state);
   const phaseUsesOut = ['Ongoing', 'Last Day'].includes(event.state);
   const totals = new Map();
 
@@ -27440,7 +27724,10 @@ async function loadPrepareEvents() {
     updateEventPageToolbarState('prepare');
     const response = await apiCall('/api/events?view=summary');
     updateOverdueCounter(countOverdueEvents(response.data || []));
-    const preparableEvents = (response.data || []).filter(event => event.state !== 'Closed' && event.state !== 'Overdue' && event.assetCount >= 0);
+    const preparableEvents = (response.data || []).filter(event =>
+      !['Pending Closure', 'Closed', 'Overdue'].includes(event.state)
+      && event.assetCount >= 0
+    );
     if (getEventPageView('prepare') === 'list') renderPrepareEventsTable(preparableEvents);
     else renderPrepareEventsCards(preparableEvents);
   } catch (error) {
@@ -28470,6 +28757,11 @@ function setTransferActionState(assetId, state) {
 function resetTransferActionState() {
   window.__transferActionState = {};
   window.__transferPendingActions = {};
+  window.__transferSelections = {
+    transfer: new Set(),
+    returnOffice: new Set(),
+    officePrepare: new Set()
+  };
 }
 
 function getTransferPendingAction(assetId) {
@@ -28490,9 +28782,8 @@ function endTransferPendingAction(assetId) {
 function transferAssetTypeKey(item) {
   return [
     normalizeDepartmentCode(item.department || 'UN'),
-    String(item.brand || '').trim(),
-    String(item.model || '').trim(),
-    String(item.description || '').trim()
+    String(item.brand || '').trim().toLocaleLowerCase(),
+    String(item.model || '').trim().toLocaleLowerCase()
   ].join('|');
 }
 
@@ -28521,14 +28812,13 @@ function transferProgressHtml(done, total) {
 function renderTransferInitialMessage(sourceEvents, targetEvents) {
   if (!sourceEvents.length || !targetEvents.length) {
     return `
-      <div style="text-align:center;padding:34px;color:#666;">
-        <div style="font-size:34px;margin-bottom:8px;">↔️</div>
-        <div style="font-weight:800;color:#333;margin-bottom:4px;">No valid transfer pair yet</div>
+      <div class="transfer-empty">
+        <strong>No valid transfer pair yet</strong>
         <div>${!sourceEvents.length ? 'No source events with unreturned assets are currently eligible. ' : ''}${!targetEvents.length ? 'No Planning/Preparing destination events are currently eligible.' : ''}</div>
       </div>
     `;
   }
-  return '<p style="text-align:center;color:#666;padding:28px;">Choose both events to compare transfer and return-to-office assets.</p>';
+  return '<div class="transfer-empty"><strong>Choose both events</strong><span>Select a source and destination above to compare assets and choose exact Asset IDs.</span></div>';
 }
 
 function renderTransferWorkspace() {
@@ -28540,40 +28830,62 @@ function renderTransferWorkspace() {
 
   const sourceOptions = sourceEvents.map(event => {
     const tagPrefix = event.tag === 'dry hire' ? '[DH]' : '[E]';
-    const dateRange = event.startDate === event.endDate ? formatDate(event.startDate) : `${formatDate(event.startDate)} - ${formatDate(event.endDate)}`;
-    return `<option value="${event.id}">${tagPrefix} ${event.id}: ${escapeHtml(event.name)} • ${escapeHtml(eventStateDisplayLabel(event.state))} • ${event.unreturnedCount || 0} out • ${dateRange}</option>`;
+    return `<option value="${event.id}">${tagPrefix} #${event.id} ${escapeHtml(event.name)} · ${escapeHtml(eventStateDisplayLabel(event.state))} · ${event.unreturnedCount || 0} out</option>`;
   }).join('');
 
   const targetOptions = targetEvents.map(event => {
     const tagPrefix = event.tag === 'dry hire' ? '[DH]' : '[E]';
-    const dateRange = event.startDate === event.endDate ? formatDate(event.startDate) : `${formatDate(event.startDate)} - ${formatDate(event.endDate)}`;
-    return `<option value="${event.id}">${tagPrefix} ${event.id}: ${escapeHtml(event.name)} • ${escapeHtml(eventStateDisplayLabel(event.state))} • ${dateRange}</option>`;
+    return `<option value="${event.id}">${tagPrefix} #${event.id} ${escapeHtml(event.name)} · ${escapeHtml(eventStateDisplayLabel(event.state))}</option>`;
   }).join('');
 
   container.innerHTML = `
-    <div style="display:flex;flex-direction:column;gap:18px;">
-      <div style="background:linear-gradient(135deg,rgba(102,126,234,.10),rgba(118,75,162,.10));border:1px solid rgba(118,75,162,.18);border-radius:16px;padding:18px;">
-        <h3 style="margin:0 0 6px;color:#4b2f65;">Transfer Assets Directly Between Events</h3>
-        <p style="margin:0;color:#666;line-height:1.4;">Select a source and destination event. Asset types are grouped by quantity; expand each dropdown to choose the exact physical asset to transfer or return.</p>
-      </div>
-
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;align-items:end;background:white;border:1px solid #edf0f5;border-radius:16px;padding:16px;box-shadow:0 6px 18px rgba(0,0,0,.05);">
-        <div class="form-group" style="margin:0;">
-          <label class="form-label">From Event — Ready / Ongoing / Last Day / Returning / Overdue</label>
-          <select id="transferSourceSelect" class="form-input" onchange="loadTransferCandidates()"><option value="">Select source event...</option>${sourceOptions}</select>
-          <div style="font-size:12px;color:#666;margin-top:6px;">${sourceEvents.length} eligible source event(s)</div>
+    <div class="transfer-page">
+      <div class="transfer-page-header">
+        <div>
+          <h2>Transfer Assets</h2>
+          <p>Move selected physical assets from one event directly into another event workflow.</p>
         </div>
-        <div class="form-group" style="margin:0;">
-          <label class="form-label">To Event — Planning / Preparing</label>
-          <select id="transferTargetSelect" class="form-input" onchange="loadTransferCandidates()"><option value="">Select destination event...</option>${targetOptions}</select>
-          <div style="font-size:12px;color:#666;margin-top:6px;">${targetEvents.length} eligible destination event(s)</div>
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <button class="btn btn-primary" onclick="loadTransferCandidates()">Compare Events</button>
+        <div class="transfer-page-tools">
+          <button type="button" class="transfer-tool-button" onclick="loadTransferCandidates()">↻ Refresh</button>
+          <button type="button" class="transfer-tool-button" onclick="generateTransferPdf()">▣ Export PDF</button>
         </div>
       </div>
 
-      <div id="transfer-candidates-panel" style="background:white;border:1px solid #edf0f5;border-radius:16px;padding:16px;box-shadow:0 6px 18px rgba(0,0,0,.05);">
+      <div class="transfer-event-bar">
+        <div class="transfer-event-card">
+          <div class="transfer-event-icon" aria-hidden="true">□</div>
+          <div class="transfer-event-copy">
+            <label class="transfer-event-kicker" for="transferSourceSelect">From event</label>
+            <select id="transferSourceSelect" class="transfer-event-select" onchange="loadTransferCandidates()">
+              <option value="">Choose source event…</option>
+              ${sourceOptions}
+            </select>
+          </div>
+          <div class="transfer-event-count">
+            <strong>${sourceEvents.length}</strong>
+            <span>eligible<br>events</span>
+          </div>
+        </div>
+        <div class="transfer-direction" aria-label="Transfer direction">
+          <span>→</span>
+        </div>
+        <div class="transfer-event-card">
+          <div class="transfer-event-icon" aria-hidden="true">◇</div>
+          <div class="transfer-event-copy">
+            <label class="transfer-event-kicker" for="transferTargetSelect">To event</label>
+            <select id="transferTargetSelect" class="transfer-event-select" onchange="loadTransferCandidates()">
+              <option value="">Choose destination event…</option>
+              ${targetOptions}
+            </select>
+          </div>
+          <div class="transfer-event-count">
+            <strong>${targetEvents.length}</strong>
+            <span>planning /<br>preparing</span>
+          </div>
+        </div>
+      </div>
+
+      <div id="transfer-candidates-panel">
         ${renderTransferInitialMessage(sourceEvents, targetEvents)}
       </div>
     </div>
@@ -28590,6 +28902,191 @@ function renderTransferWorkspace() {
 
 
 
+
+function renderTransferInitialMessage() {
+  const selectableEvents = transferSelectableEvents();
+  if (!selectableEvents.length) {
+    return `
+      <div class="transfer-empty">
+        <strong>No events found</strong>
+        <div>Create an event first, then return here to choose From and To events.</div>
+      </div>
+    `;
+  }
+  return '<div class="transfer-empty"><strong>Choose both events</strong><span>Select a source and destination above to compare assets and choose exact Asset IDs.</span></div>';
+}
+
+function transferSelectableEvents() {
+  const options = transferOptionsCache || {};
+  const rawEvents = Array.isArray(options.events) && options.events.length
+    ? options.events
+    : [...(options.sourceEvents || []), ...(options.targetEvents || [])];
+  const byId = new Map();
+  rawEvents.forEach(event => {
+    if (!event?.id) return;
+    byId.set(String(event.id), event);
+  });
+  return Array.from(byId.values()).sort(planCompareEventsByStartDate);
+}
+
+function transferEventById(eventId) {
+  const id = String(eventId || '');
+  if (!id) return null;
+  return transferSelectableEvents().find(event => String(event.id || '') === id) || null;
+}
+
+function transferUpdateCachedEventSummary(summary) {
+  if (!summary?.id || !transferOptionsCache) return;
+  ['events', 'sourceEvents', 'targetEvents'].forEach(listName => {
+    const list = transferOptionsCache[listName];
+    if (!Array.isArray(list)) return;
+    const index = list.findIndex(event => String(event.id || '') === String(summary.id));
+    if (index >= 0) list[index] = { ...list[index], ...summary };
+  });
+}
+
+function transferEventIconSvg(kind) {
+  if (kind === 'to') {
+    return `
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="M4 7.5 12 3l8 4.5v9L12 21l-8-4.5v-9Z"></path>
+        <path d="M12 12v9M4.5 8 12 12l7.5-4"></path>
+        <path d="M9 7h4.5a2.5 2.5 0 0 1 0 5H11"></path>
+        <path d="m12.5 9.5-2 2 2 2"></path>
+      </svg>
+    `;
+  }
+  return `
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M4 7.5 12 3l8 4.5v9L12 21l-8-4.5v-9Z"></path>
+      <path d="M12 12v9M4.5 8 12 12l7.5-4"></path>
+      <path d="M10.5 8H15a2.5 2.5 0 0 1 0 5h-4"></path>
+      <path d="m13 10.5 2 2-2 2"></path>
+    </svg>
+  `;
+}
+
+function transferUiIconSvg(kind) {
+  const paths = {
+    refresh: '<path d="M20 11a8 8 0 1 0-2.3 5.7"></path><path d="M20 4v7h-7"></path>',
+    export: '<path d="M12 3v12"></path><path d="m8 11 4 4 4-4"></path><path d="M5 20h14"></path>',
+    arrow: '<path d="M5 12h14"></path><path d="m14 7 5 5-5 5"></path>',
+    return: '<path d="M9 7 4 12l5 5"></path><path d="M4 12h10a6 6 0 0 1 6 6"></path>',
+    prepare: '<path d="M4 7.5 12 3l8 4.5v9L12 21l-8-4.5v-9Z"></path><path d="M12 12v9M4.5 8 12 12l7.5-4"></path><path d="M12 3v9"></path>',
+  };
+  return `<svg class="transfer-ui-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${paths[kind] || paths.arrow}</svg>`;
+}
+
+function renderTransferEventPickerCard(role, event, selectableCount) {
+  const isSource = role === 'source';
+  const pickerContext = isSource ? 'transfer-source' : 'transfer-target';
+  const kicker = isSource ? 'From event' : 'To event';
+  const placeholder = isSource ? 'Choose source event' : 'Choose destination event';
+  const metricValue = event
+    ? (isSource ? Number(event.unreturnedCount || 0) : Number(event.requiredCount || event.assetCount || 0))
+    : selectableCount;
+  const metricLabel = event
+    ? (isSource ? 'assets currently out' : 'assets required')
+    : 'events available';
+  const dateLabel = event ? transferEventDateLabel(event) : '';
+  const location = event?.location || event?.venue || '';
+
+  return `
+    <button type="button"
+            class="transfer-event-card transfer-event-picker ${event ? '' : 'is-empty'}"
+            aria-haspopup="dialog"
+            onclick="planOpenEventChooser('${pickerContext}')">
+      <div class="transfer-event-icon ${isSource ? 'from' : 'to'}" aria-hidden="true">${transferEventIconSvg(isSource ? 'from' : 'to')}</div>
+      <div class="transfer-event-copy">
+        <span class="transfer-event-kicker">${kicker}</span>
+        ${event ? `
+          <div class="transfer-event-title-row">
+            <span class="transfer-event-id">#${escapeHtml(String(event.id || ''))}</span>
+            <span class="transfer-event-name">${escapeHtml(event.name || `Event ${event.id || ''}`)}</span>
+          </div>
+          <div class="transfer-event-meta">
+            ${dateLabel ? `<span>${escapeHtml(dateLabel)}</span>` : ''}
+            ${location ? `<span aria-hidden="true">•</span><span>${escapeHtml(location)}</span>` : ''}
+            ${planEventTypeBadgeHtml(event)}
+            ${planEventStateBadgeHtml(event)}
+          </div>
+        ` : `
+          <div class="transfer-event-placeholder">${placeholder}</div>
+          <div class="transfer-event-meta">
+            <span>Search by event name, ID, status, client, or location</span>
+          </div>
+        `}
+      </div>
+      <div class="transfer-event-count">
+        <strong>${metricValue}</strong>
+        <span>${escapeHtml(metricLabel)}</span>
+      </div>
+      <span class="transfer-event-chevron" aria-hidden="true">⌄</span>
+    </button>
+  `;
+}
+
+async function transferChooseEvent(role, eventId) {
+  const id = Number(eventId);
+  if (!id) return;
+
+  if (role === 'source') {
+    transferPageState.sourceEventId = id;
+    if (Number(transferPageState.targetEventId) === id) {
+      transferPageState.targetEventId = null;
+      showNotification('info', 'Choose a different To Event for this transfer');
+    }
+  } else {
+    transferPageState.targetEventId = id;
+    if (Number(transferPageState.sourceEventId) === id) {
+      transferPageState.sourceEventId = null;
+      showNotification('info', 'Choose a different From Event for this transfer');
+    }
+  }
+
+  renderTransferWorkspace();
+  if (transferPageState.sourceEventId && transferPageState.targetEventId) {
+    await loadTransferCandidates();
+  }
+}
+
+function renderTransferWorkspace() {
+  const container = document.getElementById('transfer-history');
+  if (!container) return;
+
+  const events = transferSelectableEvents();
+  const selectedSource = transferEventById(transferPageState.sourceEventId);
+  const selectedTarget = transferEventById(transferPageState.targetEventId);
+
+  container.innerHTML = `
+    <div class="transfer-page">
+      <input type="hidden" id="transferSourceSelect" value="${escapeHtmlAttr(selectedSource?.id || '')}">
+      <input type="hidden" id="transferTargetSelect" value="${escapeHtmlAttr(selectedTarget?.id || '')}">
+      <div class="transfer-page-header">
+        <div>
+          <h2>Transfer Assets</h2>
+          <p>Move selected physical assets from one event directly into another event workflow.</p>
+        </div>
+        <div class="transfer-page-tools">
+          <button type="button" class="transfer-tool-button" onclick="loadTransferCandidates()">${transferUiIconSvg('refresh')}<span>Refresh</span></button>
+          <button type="button" class="transfer-tool-button" onclick="generateTransferPdf()">${transferUiIconSvg('export')}<span>Export PDF</span></button>
+        </div>
+      </div>
+
+      <div class="transfer-event-bar">
+        ${renderTransferEventPickerCard('source', selectedSource, events.length)}
+        <div class="transfer-direction" aria-label="Transfer direction">
+          <span>${transferUiIconSvg('arrow')}</span>
+        </div>
+        ${renderTransferEventPickerCard('target', selectedTarget, events.length)}
+      </div>
+
+      <div id="transfer-candidates-panel">
+        ${renderTransferInitialMessage()}
+      </div>
+    </div>
+  `;
+}
 
 // Preserve prepare and transfer panel state during async refreshes.
 function __aitCapturePrepareOpenState() {
@@ -28706,6 +29203,91 @@ function restoreOpenTransferDropdownIds(ids) {
   });
 }
 
+function getTransferSelections(kind) {
+  if (!window.__transferSelections) {
+    window.__transferSelections = {
+      transfer: new Set(),
+      returnOffice: new Set(),
+      officePrepare: new Set()
+    };
+  }
+  if (!window.__transferSelections.officePrepare) {
+    window.__transferSelections.officePrepare = new Set();
+  }
+  if (kind === 'officePrepare') return window.__transferSelections.officePrepare;
+  return kind === 'returnOffice'
+    ? window.__transferSelections.returnOffice
+    : window.__transferSelections.transfer;
+}
+
+function selectedTransferCountForGroup(group, kind) {
+  const selected = getTransferSelections(kind);
+  return transferSelectableItemsForGroup(group, kind)
+    .filter(item => selected.has(String(item.assetId || item.id || ''))).length;
+}
+
+function transferGroupSelectionLimit(group) {
+  return Math.max(0, Number(group.actionQty || 0) - Number(group.doneQty || 0));
+}
+
+function transferSelectableItemsForGroup(group, kind) {
+  if (kind === 'officePrepare') return group.officeCandidates || [];
+  return group.items || [];
+}
+
+function toggleTransferAssetSelection(encodedAssetId, kind, checked) {
+  const assetId = decodeURIComponent(encodedAssetId);
+  const selected = getTransferSelections(kind);
+  if (!checked) {
+    selected.delete(assetId);
+    renderTransferCandidatesInPlace();
+    return;
+  }
+
+  const mode = kind === 'returnOffice'
+    ? 'return-office'
+    : (kind === 'officePrepare' ? 'office-needed' : 'common');
+  const groups = buildTransferGroups(getTransferListForMode(mode, window.__lastTransferData || {}), mode);
+  const group = groups.find(candidate => transferSelectableItemsForGroup(candidate, kind)
+    .some(item => String(item.assetId || item.id || '') === assetId));
+  if (!group) return;
+
+  const selectedInGroup = selectedTransferCountForGroup(group, kind);
+  const limit = transferGroupSelectionLimit(group);
+  if (selectedInGroup >= limit) {
+    showNotification('warning', `Only ${limit} ${transferAssetTypeName(group)} asset(s) are needed for this action`);
+    renderTransferCandidatesInPlace();
+    return;
+  }
+
+  selected.add(assetId);
+  renderTransferCandidatesInPlace();
+}
+
+function toggleTransferGroupSelection(encodedKey, kind) {
+  const key = decodeURIComponent(encodedKey);
+  const mode = kind === 'returnOffice'
+    ? 'return-office'
+    : (kind === 'officePrepare' ? 'office-needed' : 'common');
+  const groups = buildTransferGroups(getTransferListForMode(mode, window.__lastTransferData || {}), mode);
+  const group = groups.find(candidate => candidate.key === key);
+  if (!group) return;
+
+  const selected = getTransferSelections(kind);
+  const selectable = transferSelectableItemsForGroup(group, kind)
+    .filter(item => !getTransferItemState(item) && !getTransferPendingAction(item.assetId || item.id));
+  const currentlySelected = selectable.filter(item => selected.has(String(item.assetId || item.id || '')));
+  const limit = transferGroupSelectionLimit(group);
+
+  if (currentlySelected.length >= Math.min(limit, selectable.length)) {
+    selectable.forEach(item => selected.delete(String(item.assetId || item.id || '')));
+  } else {
+    selectable.forEach(item => selected.delete(String(item.assetId || item.id || '')));
+    selectable.slice(0, limit).forEach(item => selected.add(String(item.assetId || item.id || '')));
+  }
+  renderTransferCandidatesInPlace();
+}
+
 
 
 function transferAssetDropdownRows(group) {
@@ -28809,11 +29391,14 @@ function updateTransferSummaryAfterMove(direction, responseData = null) {
   const data = window.__lastTransferData || {};
   if (responseData?.fromEvent) {
     data.fromEvent = { ...(data.fromEvent || {}), ...responseData.fromEvent };
+    transferUpdateCachedEventSummary(data.fromEvent);
   } else if (data.fromEvent) {
     data.fromEvent.unreturnedCount = Math.max(0, Number(data.fromEvent.unreturnedCount || 0) - direction);
+    transferUpdateCachedEventSummary(data.fromEvent);
   }
   if (responseData?.toEvent) {
     data.toEvent = { ...(data.toEvent || {}), ...responseData.toEvent };
+    transferUpdateCachedEventSummary(data.toEvent);
   }
 }
 
@@ -28893,6 +29478,97 @@ async function undoReturnOfficeDropdownAsset(encodedAssetId) {
   }
 }
 
+async function executeSelectedTransfers() {
+  const assetIds = Array.from(getTransferSelections('transfer'));
+  const fromEventId = document.getElementById('transferSourceSelect')?.value;
+  const toEventId = document.getElementById('transferTargetSelect')?.value;
+  if (!fromEventId || !toEventId || !assetIds.length) return;
+
+  assetIds.forEach(assetId => beginTransferPendingAction(assetId, 'transfer'));
+  renderTransferCandidatesInPlace();
+  try {
+    const response = await apiCall('/api/transfers/execute', 'POST', {
+      fromEventId: Number(fromEventId),
+      toEventId: Number(toEventId),
+      assetIds
+    });
+    getTransferSelections('transfer').clear();
+    const transferred = response.data?.transferred?.length || assetIds.length;
+    const skipped = response.data?.skipped?.length || 0;
+    showNotification(skipped ? 'warning' : 'success', `${transferred} exact asset${transferred === 1 ? '' : 's'} transferred${skipped ? `; ${skipped} skipped` : ''}`);
+    await loadTransferCandidates({ quiet: true });
+  } catch (error) {
+    showNotification('error', `Transfer failed: ${error.message}`);
+  } finally {
+    assetIds.forEach(assetId => endTransferPendingAction(assetId));
+    renderTransferCandidatesInPlace();
+  }
+}
+
+async function executeSelectedReturns() {
+  const assetIds = Array.from(getTransferSelections('returnOffice'));
+  const fromEventId = document.getElementById('transferSourceSelect')?.value;
+  if (!fromEventId || !assetIds.length) return;
+
+  assetIds.forEach(assetId => beginTransferPendingAction(assetId, 'returnOffice'));
+  renderTransferCandidatesInPlace();
+  try {
+    const response = await apiCall('/api/transfers/return-office', 'POST', {
+      fromEventId: Number(fromEventId),
+      assetIds
+    });
+    getTransferSelections('returnOffice').clear();
+    const returned = response.data?.returned?.length || assetIds.length;
+    const skipped = response.data?.skipped?.length || 0;
+    showNotification(skipped ? 'warning' : 'success', `${returned} exact asset${returned === 1 ? '' : 's'} returned to office${skipped ? `; ${skipped} skipped` : ''}`);
+    await loadTransferCandidates({ quiet: true });
+  } catch (error) {
+    showNotification('error', `Return failed: ${error.message}`);
+  } finally {
+    assetIds.forEach(assetId => endTransferPendingAction(assetId));
+    renderTransferCandidatesInPlace();
+  }
+}
+
+async function executeSelectedOfficePrepares() {
+  const assetIds = Array.from(getTransferSelections('officePrepare'));
+  const toEventId = document.getElementById('transferTargetSelect')?.value;
+  if (!toEventId || !assetIds.length) return;
+
+  assetIds.forEach(assetId => beginTransferPendingAction(assetId, 'officePrepare'));
+  renderTransferCandidatesInPlace();
+
+  const prepared = [];
+  const failed = [];
+  try {
+    for (const assetId of assetIds) {
+      try {
+        await apiCall(`/api/events/${toEventId}/prepare`, 'POST', { assetId });
+        prepared.push(assetId);
+      } catch (error) {
+        failed.push({ assetId, error });
+      }
+    }
+
+    getTransferSelections('officePrepare').clear();
+    if (prepared.length) {
+      showNotification(
+        failed.length ? 'warning' : 'success',
+        `${prepared.length} office asset${prepared.length === 1 ? '' : 's'} prepared${failed.length ? `; ${failed.length} failed` : ''}`
+      );
+    } else if (failed.length) {
+      showNotification('error', `No office assets were prepared; ${failed.length} failed`);
+    }
+
+    await loadTransferCandidates({ quiet: true });
+  } catch (error) {
+    showNotification('error', `Prepare from office failed: ${error.message || error}`);
+  } finally {
+    assetIds.forEach(assetId => endTransferPendingAction(assetId));
+    renderTransferCandidatesInPlace();
+  }
+}
+
 // Transfer assets needed from office for the destination event.
 var transferNeededFromOfficeCache = [];
 
@@ -28967,6 +29643,8 @@ async function loadTransferCandidates(options = {}) {
 
   try {
     const response = await apiCall(`/api/transfers/candidates?fromEventId=${encodeURIComponent(fromEventId)}&toEventId=${encodeURIComponent(toEventId)}`);
+    transferUpdateCachedEventSummary(response.data?.fromEvent);
+    transferUpdateCachedEventSummary(response.data?.toEvent);
     transferCandidateCache = response.data?.candidates || [];
     transferReturnToOfficeCache = response.data?.returnToOffice || [];
     transferNeededFromOfficeCache = response.data?.neededFromOffice || [];
@@ -29010,12 +29688,19 @@ function buildTransferGroups(items, mode) {
         returnQuantity: Number(item.returnQuantity || 0),
         officeQuantity: Number(item.officeQuantity || 0),
         sourceQuantity: Number(item.sourceQuantity || 0),
+        officeCandidates: [],
         items: []
       });
     }
 
     const group = map.get(key);
     group.items.push(item);
+    (item.officeCandidates || []).forEach(candidate => {
+      const candidateId = String(candidate?.assetId || candidate?.id || '');
+      if (candidateId && !group.officeCandidates.some(existing => String(existing.assetId || existing.id || '') === candidateId)) {
+        group.officeCandidates.push(candidate);
+      }
+    });
     group.targetRemaining = Math.max(group.targetRemaining || 0, Number(item.targetRemainingBeforeThisAsset || item.targetRemaining || 0));
     group.targetRequired = Math.max(group.targetRequired || 0, Number(item.targetRequired || 0));
     group.targetPrepared = Math.max(group.targetPrepared || 0, Number(item.targetPrepared || 0));
@@ -29048,9 +29733,11 @@ function buildTransferGroups(items, mode) {
     } else {
       const officeQty = group.officeQuantity > 0 ? group.officeQuantity : group.items.length;
       group.doneQty = 0;
+      group.pendingQty = group.officeCandidates.filter(item => getTransferPendingAction(item.assetId || item.id) === 'officePrepare').length;
       group.actionQty = officeQty;
-      group.progressLabel = `${officeQty} needed from office`;
+      group.progressLabel = `${officeQty} needed from office${group.pendingQty ? ` (${group.pendingQty} pending)` : ''}`;
       group.helpText = group.reason || `Destination still needs ${group.targetRemaining}; source can provide ${group.sourceQuantity || 0}; ${officeQty} should be packed from office.`;
+      group.officeCandidates.sort((a, b) => String(a.assetId || a.id || '').localeCompare(String(b.assetId || b.id || ''), undefined, { numeric: true, sensitivity: 'base' }));
     }
 
     return group;
@@ -29084,79 +29771,346 @@ function renderTransferModeButtons(data) {
   `;
 }
 
+function transferEventDateLabel(event) {
+  if (!event?.startDate) return '';
+  return event.startDate === event.endDate
+    ? formatDate(event.startDate)
+    : `${formatDate(event.startDate)} – ${formatDate(event.endDate)}`;
+}
+
+function buildTransferSourceGroups(data) {
+  const map = new Map();
+  const seenIds = new Set();
+  [...(data.candidates || []), ...(data.returnToOffice || [])].forEach(item => {
+    const assetId = String(item.assetId || '');
+    if (!assetId || seenIds.has(assetId)) return;
+    seenIds.add(assetId);
+    const key = transferAssetTypeKey(item);
+    if (!map.has(key)) {
+      map.set(key, {
+        key,
+        department: normalizeDepartmentCode(item.department || 'UN'),
+        brand: item.brand || '',
+        model: item.model || '',
+        description: item.description || '',
+        items: []
+      });
+    }
+    map.get(key).items.push(item);
+  });
+  return Array.from(map.values()).sort((a, b) => (
+    a.department.localeCompare(b.department, undefined, { numeric: true }) ||
+    transferAssetTypeName(a).localeCompare(transferAssetTypeName(b), undefined, { numeric: true, sensitivity: 'base' })
+  ));
+}
+
+function renderTransferSourcePanel(data) {
+  const groups = buildTransferSourceGroups(data);
+  const rows = groups.length ? groups.map(group => `
+    <div class="transfer-source-row">
+      <div class="transfer-model-line">
+        <div>
+          <strong>${escapeHtml(transferAssetTypeName(group))}</strong>
+          <small>${escapeHtml(group.department)} · ${group.items.length} exact Asset ID${group.items.length === 1 ? '' : 's'}</small>
+        </div>
+        <span class="transfer-qty">${group.items.length}</span>
+      </div>
+    </div>
+  `).join('') : '<div class="transfer-empty-section">No source assets found.</div>';
+
+  return `
+    <section class="transfer-panel transfer-panel-source">
+      <div class="transfer-panel-heading">
+        <h3>From Event</h3>
+        <p>#${escapeHtml(data.fromEvent?.id || '')} · ${escapeHtml(data.fromEvent?.name || '')}<br>${escapeHtml(transferEventDateLabel(data.fromEvent))}</p>
+      </div>
+      <div>${rows}</div>
+    </section>
+  `;
+}
+
+function renderTransferAssetSelectionRows(group, kind) {
+  const selected = getTransferSelections(kind);
+  const selectedInGroup = selectedTransferCountForGroup(group, kind);
+  const limit = transferGroupSelectionLimit(group);
+  const encodedKey = encodeURIComponent(group.key);
+  const rowItems = transferSelectableItemsForGroup(group, kind);
+  const allSelectable = rowItems.filter(item => !getTransferItemState(item) && !getTransferPendingAction(item.assetId || item.id));
+  const allSelected = allSelectable.length > 0 && allSelectable.slice(0, limit).every(item => selected.has(String(item.assetId || item.id || '')));
+
+  const rows = rowItems.map(item => {
+    const assetId = String(item.assetId || item.id || '');
+    const encodedAssetId = encodeURIComponent(assetId);
+    const state = getTransferItemState(item);
+    const pendingAction = getTransferPendingAction(assetId);
+    const checked = selected.has(assetId);
+    const disabled = !!state || !!pendingAction || (!checked && selectedInGroup >= limit);
+    let action = '';
+    if (state === 'transferred') {
+      action = `<button type="button" class="transfer-row-action undo" onclick="undoTransferDropdownAsset('${encodedAssetId}')">Undo transfer</button>`;
+    } else if (state === 'returnedOffice') {
+      action = `<button type="button" class="transfer-row-action undo" onclick="undoReturnOfficeDropdownAsset('${encodedAssetId}')">Undo return</button>`;
+    } else if (pendingAction) {
+      action = '<span class="transfer-selection-pill">Updating…</span>';
+    } else {
+      action = `<span class="transfer-selection-pill">${checked ? 'Selected' : 'Ready'}</span>`;
+    }
+
+    return `
+      <label class="transfer-id-row">
+        <input type="checkbox"
+          aria-label="Select Asset ID ${escapeHtml(assetId)}"
+          ${checked ? 'checked' : ''}
+          ${disabled ? 'disabled' : ''}
+          onchange="toggleTransferAssetSelection('${encodedAssetId}', '${kind}', this.checked)">
+        <span>
+          <strong>${escapeHtml(assetId)}</strong>
+          <small>${item.serial ? `Serial: ${escapeHtml(item.serial)}` : 'No serial recorded'}${item.currentLocation ? ` · ${escapeHtml(item.currentLocation)}` : ''}</small>
+        </span>
+        ${action}
+      </label>
+    `;
+  }).join('');
+
+  return `
+    <div class="transfer-id-list">
+      <div class="transfer-id-toolbar">
+        <span>Select the physical Asset IDs (${selectedInGroup}/${limit})</span>
+        ${allSelectable.length ? `<button type="button" onclick="toggleTransferGroupSelection('${encodedKey}', '${kind}')">${allSelected ? 'Clear group' : 'Select required'}</button>` : ''}
+      </div>
+      ${rows || '<div class="transfer-empty-section">No matching office Asset IDs are currently available.</div>'}
+    </div>
+  `;
+}
+
+function renderTransferDecisionGroup(group, kind, index) {
+  const selectedCount = selectedTransferCountForGroup(group, kind);
+  const remainingAction = transferGroupSelectionLimit(group);
+  const detailsId = transferGroupDetailsId(group);
+  const open = 'open';
+  const targetNeed = kind === 'officePrepare'
+    ? Number(group.actionQty || 0)
+    : group.mode === 'return-office'
+      ? Number(group.returnQuantity || group.actionQty || 0)
+      : Math.max(0, Number(group.targetRemaining || 0));
+  const fromQty = kind === 'officePrepare'
+    ? Number(group.officeCandidates?.length || 0)
+    : Number(group.items?.length || 0);
+  const subtitle = kind === 'officePrepare' ? 'choose office Asset IDs' : 'choose exact IDs';
+  return `
+    <details class="transfer-decision-group" id="${detailsId}" ${open}>
+      <summary class="transfer-decision-summary">
+        <span class="transfer-decision-model">
+          <strong>${escapeHtml(transferAssetTypeName(group))}</strong>
+          <small>${escapeHtml(group.department)} · ${subtitle}</small>
+        </span>
+        <span class="transfer-number">${fromQty}</span>
+        <span class="transfer-number">${targetNeed}</span>
+        <span class="transfer-number"><span class="transfer-selection-pill">${selectedCount}/${remainingAction}</span></span>
+        <span class="transfer-choose-label">Choose IDs ▾</span>
+      </summary>
+      ${renderTransferAssetSelectionRows(group, kind)}
+    </details>
+  `;
+}
+
+function renderTransferDecisionSection(title, stepClass, groups, kind, emptyText) {
+  const rows = groups.length
+    ? groups.map((group, index) => renderTransferDecisionGroup(group, kind, index)).join('')
+    : `<div class="transfer-empty-section">${escapeHtml(emptyText)}</div>`;
+  return `
+    <div class="transfer-decision-section">
+      <div class="transfer-decision-title">
+        <span class="transfer-step ${stepClass}">${stepClass === 'office' ? '3' : (stepClass === 'return' ? '2' : '1')}</span>
+        ${escapeHtml(title)}
+      </div>
+      ${groups.length ? `
+        <div class="transfer-decision-head">
+          <span>Asset / Model</span>
+          <span>${kind === 'officePrepare' ? 'In office' : 'From out'}</span>
+          <span>${kind === 'returnOffice' ? 'Return qty' : (kind === 'officePrepare' ? 'Need qty' : 'To needed')}</span>
+          <span>Selected</span>
+          <span>Action</span>
+        </div>` : ''}
+      ${rows}
+    </div>
+  `;
+}
+
+function renderTransferOfficeNeededSection(groups) {
+  const rows = groups.length ? groups.map(group => `
+    <div class="transfer-decision-summary">
+      <span class="transfer-decision-model">
+        <strong>${escapeHtml(transferAssetTypeName(group))}</strong>
+        <small>${escapeHtml(group.department)}</small>
+      </span>
+      <span class="transfer-number">${group.sourceQuantity || 0}</span>
+      <span class="transfer-number">${group.targetRemaining || 0}</span>
+      <span class="transfer-number"><span class="transfer-selection-pill">${group.actionQty}</span></span>
+      <span class="transfer-choose-label">Prepare</span>
+    </div>
+  `).join('') : '<div class="transfer-empty-section">Nothing additional is needed from office.</div>';
+  return `
+    <div class="transfer-decision-section">
+      <div class="transfer-decision-title">
+        <span class="transfer-step office">3</span>
+        Needed From Office
+      </div>
+      ${rows}
+    </div>
+  `;
+}
+
+function renderTransferTargetPanel(data, commonGroups) {
+  const requirements = data.destinationRequirements || [];
+  const selected = getTransferSelections('transfer');
+  const selectedByKey = new Map();
+  commonGroups.forEach(group => {
+    selectedByKey.set(group.key, group.items.filter(item => selected.has(String(item.assetId || ''))).length);
+  });
+
+  const rows = requirements.length ? requirements.map(requirement => {
+    const key = transferAssetTypeKey(requirement);
+    const required = Number(requirement.required || 0);
+    const prepared = Number(requirement.prepared || 0);
+    const newlySelected = Number(selectedByKey.get(key) || 0);
+    const matched = Math.min(required, prepared + newlySelected);
+    const stillNeeded = Math.max(0, required - matched);
+    const pct = required ? Math.round((matched / required) * 100) : 100;
+    return `
+      <div class="transfer-target-row">
+        <div class="transfer-model-line">
+          <div>
+            <strong>${escapeHtml(transferAssetTypeName(requirement))}</strong>
+            <small>${escapeHtml(requirement.department || 'UN')}</small>
+          </div>
+          <span class="transfer-qty">${required}</span>
+        </div>
+        <div class="transfer-match-copy">
+          <span>${matched} matched${newlySelected ? ` (${newlySelected} selected)` : ''}</span>
+          ${stillNeeded ? `<span class="needed">${stillNeeded} still needed</span>` : ''}
+        </div>
+        <div class="transfer-progress ${stillNeeded ? 'warning' : ''}"><span style="width:${pct}%"></span></div>
+      </div>
+    `;
+  }).join('') : '<div class="transfer-empty-section">No model requirements found for this event.</div>';
+
+  return `
+    <section class="transfer-panel transfer-panel-target">
+      <div class="transfer-panel-heading">
+        <h3>To Event</h3>
+        <p>#${escapeHtml(data.toEvent?.id || '')} · ${escapeHtml(data.toEvent?.name || '')}<br>${escapeHtml(transferEventDateLabel(data.toEvent))}</p>
+      </div>
+      <div class="transfer-target-list">${rows}</div>
+    </section>
+  `;
+}
+
+function renderTransferSummarySchematic(data, commonGroups, returnGroups, officeGroups) {
+  const directQty = commonGroups.reduce((sum, group) => sum + Number(group.actionQty || 0), 0);
+  const returnQty = returnGroups.reduce((sum, group) => sum + Number(group.actionQty || 0), 0);
+  const officeQty = officeGroups.reduce((sum, group) => sum + Number(group.actionQty || 0), 0);
+  const sourceOut = Number(data.fromEvent?.unreturnedCount || 0);
+  const destinationRequired = (data.destinationRequirements || [])
+    .reduce((sum, item) => sum + Number(item.required || 0), 0);
+  const destinationMatched = (data.destinationRequirements || [])
+    .reduce((sum, item) => sum + Math.min(Number(item.required || 0), Number(item.prepared || 0)), 0);
+  const destinationNet = Math.max(0, destinationMatched + directQty + officeQty);
+
+  return `
+    <section class="transfer-schematic" aria-label="Transfer summary schematic">
+      <div class="transfer-schematic-heading">
+        <div>
+          <h3>Transfer Summary</h3>
+          <p>Overview of asset movement between events and office inventory.</p>
+        </div>
+      </div>
+      <div class="transfer-schematic-flow">
+        <div class="transfer-schematic-node source">
+          <span>Source Event</span>
+          <strong>#${escapeHtml(data.fromEvent?.id || '')}</strong>
+          <small>${escapeHtml(data.fromEvent?.name || '')}</small>
+          <em>${sourceOut} assets out</em>
+        </div>
+        <div class="transfer-schematic-lanes">
+          <div class="transfer-schematic-lane direct">
+            <i></i>
+            <div><strong>${directQty}</strong><span>Direct Transfer</span><small>to destination</small></div>
+            <b>→</b>
+          </div>
+          <div class="transfer-schematic-lane return">
+            <i></i>
+            <div><strong>${returnQty}</strong><span>Return To Office</span><small>not needed</small></div>
+            <b>→</b>
+          </div>
+          <div class="transfer-schematic-lane office">
+            <i></i>
+            <div><strong>${officeQty}</strong><span>Prepare From Office</span><small>still needed</small></div>
+            <b>→</b>
+          </div>
+        </div>
+        <div class="transfer-schematic-destinations">
+          <div class="transfer-schematic-node destination">
+            <span>Destination Event</span>
+            <strong>#${escapeHtml(data.toEvent?.id || '')}</strong>
+            <small>${escapeHtml(data.toEvent?.name || '')}</small>
+            <em>${Math.min(destinationRequired, destinationNet)} / ${destinationRequired} matched</em>
+          </div>
+          <div class="transfer-schematic-node office">
+            <span>Office Inventory</span>
+            <strong>${returnQty}</strong>
+            <small>asset${returnQty === 1 ? '' : 's'} returning</small>
+          </div>
+        </div>
+      </div>
+    </section>
+  `;
+}
+
 function renderTransferCandidates(data) {
   window.__lastTransferData = data;
   const panel = document.getElementById('transfer-candidates-panel');
   if (!panel) return;
 
-  const fromEvent = data.fromEvent || {};
-  const toEvent = data.toEvent || {};
-  const meta = transferModeMeta(transferPanelMode);
-  const groups = buildTransferGroups(getTransferListForMode(meta.mode, data), meta.mode);
-  const modeButtons = renderTransferModeButtons(data);
-
-  if (!groups.length) {
-    panel.innerHTML = `${modeButtons}<div style="text-align:center;padding:34px;color:#666;"><div style="font-size:32px;margin-bottom:8px;">🔍</div><div style="font-weight:700;color:#333;margin-bottom:4px;">No asset types in this view</div><div>${escapeHtml(meta.emptyText)}</div></div>`;
-    return;
-  }
-
-  const totalQty = groups.reduce((sum, group) => sum + Number(group.actionQty || 0), 0);
-  const totalDone = groups.reduce((sum, group) => sum + Number(group.doneQty || 0), 0);
-  const groupCards = groups.map((group, index) => renderTransferGroupCard(group, index)).join('');
-  const doneText = meta.mode === 'office-needed'
-    ? `${totalQty} item(s) still needed from office`
-    : `${totalDone}/${totalQty} done`;
+  const commonGroups = buildTransferGroups(getTransferListForMode('common', data), 'common');
+  const returnGroups = buildTransferGroups(getTransferListForMode('return-office', data), 'return-office');
+  const officeGroups = buildTransferGroups(getTransferListForMode('office-needed', data), 'office-needed');
+  const transferSelected = getTransferSelections('transfer').size;
+  const returnSelected = getTransferSelections('returnOffice').size;
+  const officePrepareSelected = getTransferSelections('officePrepare').size;
+  const officeNeeded = officeGroups.reduce((sum, group) => sum + Number(group.actionQty || 0), 0);
 
   panel.innerHTML = `
-    ${modeButtons}
-    <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;margin-bottom:14px;">
-      <div>
-        <h3 style="margin:0;color:#764ba2;">${groups.length} asset type(s), ${totalQty} ${escapeHtml(meta.qtyNoun)}</h3>
-        <div style="color:#666;font-size:13px;margin-top:4px;">From <strong>${escapeHtml(fromEvent.name || '')}</strong> → To <strong>${escapeHtml(toEvent.name || '')}</strong></div>
-      </div>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-        <span style="color:#666;font-size:13px;">${escapeHtml(doneText)}</span>
-        <button class="btn btn-primary" onclick="generateTransferPdf()">Export PDF</button>
-      </div>
-    </div>
-    ${groupCards}
-  `;
-}
-
-function renderTransferGroupCard(group, index) {
-  const qtyLabel = group.actionQty;
-  const title = `${qtyLabel}x ${transferAssetTypeName(group)}`;
-  const detailsId = transferGroupDetailsId(group);
-  const badge = departmentBadgeHtml(group.department || 'UN', true);
-  const isOfficeNeeded = group.mode === 'office-needed';
-
-  const progressOrBadge = isOfficeNeeded
-    ? `<span class="asset-badge status-ooc">Needed from Office</span>`
-    : transferProgressHtml(group.doneQty, group.actionQty);
-
-  const dropdownHtml = isOfficeNeeded ? '' : `
-      <details id="${detailsId}">
-        <summary style="cursor:pointer;padding:10px 12px;background:#fafafa;border-top:1px solid #e9ecef;font-weight:700;color:#555;">
-          Choose exact asset(s) (${group.items.length} available; ${group.actionQty} needed)
-        </summary>
-        <div>${transferAssetDropdownRows(group)}</div>
-      </details>`;
-
-  return `
-    <div style="margin-bottom:14px;border:1px solid #e9ecef;border-radius:12px;overflow:hidden;background:#fff;box-shadow:0 3px 10px rgba(0,0,0,.04);">
-      <div style="padding:12px;background:#f1f3f4;">
-        <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;">
-          <div style="min-width:260px;">
-            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;">
-              ${badge}
-              <strong style="font-size:14px;color:#333;">${escapeHtml(title)}</strong>
-            </div>
-            <div style="font-size:12px;color:#666;">${escapeHtml(group.helpText || '')}</div>
-          </div>
-          <div style="min-width:180px;text-align:right;">${progressOrBadge}</div>
+    <div class="transfer-board">
+      ${renderTransferSourcePanel(data)}
+      <section class="transfer-panel">
+        <div class="transfer-panel-heading">
+          <h3>Transfer Decision</h3>
+          <p>All model rows stay open so you can tick the exact physical Asset IDs to move.</p>
         </div>
-      </div>
-      ${dropdownHtml}
+        ${renderTransferDecisionSection('Common / Transferable', '', commonGroups, 'transfer', 'No matching transferable assets.')}
+        ${renderTransferDecisionSection('Return To Office', 'return', returnGroups, 'returnOffice', 'No unused source assets need to return.')}
+        ${renderTransferDecisionSection('Needed From Office', 'office', officeGroups, 'officePrepare', 'Nothing additional is needed from office.')}
+        <div class="transfer-summary-strip">
+          <div class="transfer-summary-card"><strong>${transferSelected}</strong><span>selected for direct transfer</span></div>
+          <div class="transfer-summary-card"><strong>${returnSelected}</strong><span>selected to return to office</span></div>
+          <div class="transfer-summary-card"><strong>${officePrepareSelected}</strong><span>selected to prepare from office</span></div>
+        </div>
+      </section>
+      ${renderTransferTargetPanel(data, commonGroups)}
+    </div>
+    ${renderTransferSummarySchematic(data, commonGroups, returnGroups, officeGroups)}
+    <div class="transfer-action-bar">
+      <button type="button" class="transfer-primary-action" onclick="executeSelectedTransfers()" ${transferSelected ? '' : 'disabled'}>
+        <span>Transfer Selected (${transferSelected})</span>${transferUiIconSvg('arrow')}
+      </button>
+      <button type="button" class="transfer-return-action" onclick="executeSelectedReturns()" ${returnSelected ? '' : 'disabled'}>
+        ${transferUiIconSvg('return')}<span>Return Selected (${returnSelected})</span>
+      </button>
+      <button type="button" class="transfer-office-action" onclick="executeSelectedOfficePrepares()" ${officePrepareSelected ? '' : 'disabled'}>
+        ${transferUiIconSvg('prepare')}<span>Prepare Selected (${officePrepareSelected})</span>
+      </button>
+      <button type="button" class="transfer-export-action" onclick="generateTransferPdf()">${transferUiIconSvg('export')}<span>Export PDF</span></button>
     </div>
   `;
 }
@@ -29376,8 +30330,8 @@ function buildTransferPdfPages(groups, context) {
 async function generateTransferPdf() {
   const fromEventId = document.getElementById('transferSourceSelect')?.value;
   const toEventId = document.getElementById('transferTargetSelect')?.value;
-  const fromEvent = (transferOptionsCache?.sourceEvents || []).find(e => String(e.id) === String(fromEventId)) || {};
-  const toEvent = (transferOptionsCache?.targetEvents || []).find(e => String(e.id) === String(toEventId)) || {};
+  const fromEvent = transferEventById(fromEventId) || {};
+  const toEvent = transferEventById(toEventId) || {};
   const meta = transferModeMeta(transferPanelMode);
 
   if (!fromEventId || !toEventId) {

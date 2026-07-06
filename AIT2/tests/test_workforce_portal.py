@@ -13,6 +13,8 @@ from workforce import (
     _date_from_text,
     _ocr_result_text,
     load_workforce,
+    mutate_workforce,
+    now_iso,
 )
 
 
@@ -397,6 +399,41 @@ class WorkforcePortalTests(unittest.TestCase):
         self.assertFalse(worker_event["paymentComplete"])
         self.assertFalse(worker_event["isPast"])
 
+    def test_returned_event_waits_for_worker_receipt_confirmation(self):
+        freelancer_id = self.create_worker_assignment()
+        event = self.manager.events[143]
+        event.prepared_items = ["A-001"]
+        event.actually_prepared = []
+        event.returned_items = ["A-001"]
+
+        app_module.update_event_state(event)
+        self.assertEqual(event.state, "Pending Closure")
+
+        with mutate_workforce(self.manager.data_folder) as workforce:
+            workforce.setdefault("submissions", {}).setdefault(
+                "143", {}
+            )[freelancer_id] = {
+                "invoices": [{
+                    "id": "invoice-paid",
+                    "status": "Paid",
+                    "paymentConfirmedAt": now_iso(),
+                }],
+                "claims": [],
+            }
+
+        app_module.update_event_state(event)
+        self.assertEqual(event.state, "Closed")
+
+        with mutate_workforce(self.manager.data_folder) as workforce:
+            invoice = workforce["submissions"]["143"][freelancer_id][
+                "invoices"
+            ][0]
+            invoice.pop("paymentConfirmedAt")
+            invoice["status"] = "Approved"
+
+        app_module.update_event_state(event)
+        self.assertEqual(event.state, "Pending Closure")
+
     def test_event_departments_come_from_assets_and_allow_manual_additions(self):
         self.login("admin", True)
         response = self.client.get("/api/events/143/workforce")
@@ -746,6 +783,9 @@ class WorkforcePortalTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 200)
         submitted = response.get_json()["data"]["events"][0]["submissions"]["invoices"][0]
+        upload_log = self.manager.events[143].event_logs[-1]
+        self.assertEqual(upload_log["user"], "Jordan Dela Cruz")
+        self.assertIn("uploaded 1 invoice", upload_log["action"])
 
         file_response = self.client.get(submitted["fileUrl"])
         self.assertEqual(file_response.status_code, 200)
@@ -800,6 +840,10 @@ class WorkforcePortalTests(unittest.TestCase):
         event = confirmed.get_json()["data"]["events"][0]
         self.assertTrue(event["paymentComplete"])
         self.assertTrue(event["isPast"])
+        received_log = self.manager.events[143].event_logs[-1]
+        self.assertEqual(received_log["user"], "Jordan Dela Cruz")
+        self.assertIn("marked invoice", received_log["action"])
+        self.assertIn("as received", received_log["action"])
 
         self.login("admin", True)
         admin_payload = self.client.get(
@@ -1460,6 +1504,23 @@ class WorkforcePortalTests(unittest.TestCase):
         self.assertEqual(
             payload["uploadAllowances"][vendor_id]["invoiceLimit"], 1
         )
+        response = self.client.post(
+            f"/api/events/143/workforce/submissions/{vendor_id}",
+            data={
+                "kind": "claim",
+                "file": (io.BytesIO(PDF_BYTES), "vendor-claim.pdf"),
+            },
+            content_type="multipart/form-data",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            len(
+                response.get_json()["data"]["submissions"][vendor_id][
+                    "claims"
+                ]
+            ),
+            1,
+        )
 
         with self.client.session_transaction() as session:
             session.clear()
@@ -1486,7 +1547,10 @@ class WorkforcePortalTests(unittest.TestCase):
         self.assertEqual(
             len(portal_event["submissions"]["invoices"]), 1
         )
-        self.assertEqual(portal_event["claimLimit"], 0)
+        self.assertEqual(
+            len(portal_event["submissions"]["claims"]), 1
+        )
+        self.assertEqual(portal_event["claimLimit"], 5)
 
         with self.client.session_transaction() as session:
             session.clear()
@@ -1512,6 +1576,132 @@ class WorkforcePortalTests(unittest.TestCase):
             second_member_event["submissions"]["invoices"][0]["originalName"],
             "highcrew.pdf",
         )
+        self.assertEqual(
+            second_member_event["submissions"]["claims"][0]["originalName"],
+            "vendor-claim.pdf",
+        )
+
+    def test_vendor_profile_persists_after_disk_reload(self):
+        self.login("admin", True)
+        response = self.client.post(
+            "/api/workforce/vendors",
+            json={"name": "Durable Backline Vendor"},
+        )
+        self.assertEqual(response.status_code, 200)
+        vendor_id = response.get_json()["data"]["id"]
+
+        saved = load_workforce(self.manager.data_folder)
+        saved_vendor = next(
+            row for row in saved["vendors"]
+            if row["id"] == vendor_id
+        )
+        self.assertEqual(saved_vendor["name"], "Durable Backline Vendor")
+
+        response = self.client.put(
+            f"/api/workforce/vendors/{vendor_id}",
+            json={"name": "Durable Backline Vendor Updated"},
+        )
+        self.assertEqual(response.status_code, 200)
+
+        reloaded = load_workforce(self.manager.data_folder)
+        reloaded_vendor = next(
+            row for row in reloaded["vendors"]
+            if row["id"] == vendor_id
+        )
+        self.assertEqual(
+            reloaded_vendor["name"],
+            "Durable Backline Vendor Updated",
+        )
+
+    def test_vendor_opens_the_same_full_event_history_as_a_worker(self):
+        self.login("admin", True)
+        response = self.client.post(
+            "/api/workforce/vendors",
+            json={"name": "History Backline Vendor"},
+        )
+        self.assertEqual(response.status_code, 200)
+        vendor_id = response.get_json()["data"]["id"]
+
+        response = self.client.post(
+            "/api/events/143/workforce/assignments",
+            json={
+                "vendorId": vendor_id,
+                "department": "AU",
+                "providerType": "service",
+                "workDates": ["2026-07-10"],
+                "serviceName": "Backline support",
+                "serviceCost": 1200,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+
+        response = self.client.get(
+            f"/api/workforce/subjects/{vendor_id}/history"
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()["data"]
+        self.assertEqual(payload["subjectType"], "vendor")
+        self.assertEqual(payload["subject"]["name"], "History Backline Vendor")
+        self.assertEqual(payload["events"][0]["id"], 143)
+        self.assertEqual(
+            payload["events"][0]["roles"][0]["role"],
+            "Backline support",
+        )
+
+    def test_vendor_personnel_can_be_added_without_becoming_a_worker(self):
+        self.login("admin", True)
+        response = self.client.post(
+            "/api/workforce/personnel",
+            json={
+                "name": "Vendor Accounts",
+                "phone": "8444 3300",
+                "email": "accounts@example.test",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        person = response.get_json()["data"]
+        self.assertTrue(person["personnelOnly"])
+
+        response = self.client.post(
+            "/api/workforce/vendors",
+            json={
+                "name": "Backline Vendor",
+                "memberIds": [person["id"]],
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        vendor_id = response.get_json()["data"]["id"]
+        response = self.client.post(
+            "/api/events/143/workforce/assignments",
+            json={
+                "vendorId": vendor_id,
+                "department": "AU",
+                "providerType": "service",
+                "workDates": ["2026-07-10"],
+                "serviceName": "Backline support",
+                "serviceCost": 1500,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+
+        with self.client.session_transaction() as session:
+            session.clear()
+        response = self.client.post(
+            "/api/worker/lookup", json={"phone": "8444 3300"}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.get_json()["data"]["name"], "Vendor Accounts"
+        )
+
+        self.login("admin", True)
+        response = self.client.post(
+            "/api/workforce/freelancers",
+            json={"name": "Vendor Accounts", "phone": "8444 3300"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["data"]["id"], person["id"])
+        self.assertFalse(response.get_json()["data"]["personnelOnly"])
 
     def test_vendor_assignment_rejects_dates_outside_event(self):
         self.login("admin", True)

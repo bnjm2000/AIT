@@ -88,7 +88,13 @@
       "notes": "",
       "active": true,
       "createdAt": "2026-07-04T21:14:05+08:00",
-      "updatedAt": "2026-07-05T02:01:56+08:00"
+      "updatedAt": "2026-07-06T16:06:50+08:00",
+      "workerPasswordSalt": "6740e27b1240876c1ecc1a914dcddbb9",
+      "workerPasswordHash": "e99c1b6ad2bc3ca9e3b3925d7e1871ade46d5ec1156b0d1139e010fb9b9b2787",
+      "workerCredentialType": "pin",
+      "workerCredentialsSetAt": "2026-07-06T16:06:50+08:00",
+      "workerAuthVersion": 1,
+      "workerLastLoginAt": "2026-07-06T16:06:50+08:00"
     },
     {
       "id": "freelancer_b9f4de65232a10c7",
@@ -301,6 +307,70 @@
       "workerCredentialsSetAt": "2026-07-05T19:52:53+08:00",
       "workerAuthVersion": 1,
       "workerLastLoginAt": "2026-07-05T19:52:53+08:00"
+    },
+    {
+      "id": "freelancer_dda007d3c157c08b",
+      "name": "Benjamin Ng",
+      "phone": "+6590405008",
+      "email": "bnjm2000@gmail.com",
+      "company": "",
+      "notes": "",
+      "active": true,
+      "personnelOnly": false,
+      "createdAt": "2026-07-06T14:12:02+08:00",
+      "updatedAt": "2026-07-06T14:17:54+08:00",
+      "workerPasswordSalt": "5d1e16ce7e37747e244edb6b4cf86fb7",
+      "workerPasswordHash": "39c7525f88ebd7ccad525805d8b4e82593b92c88e7de92963e26cbafd2606528",
+      "workerCredentialType": "pin",
+      "workerAuthVersion": 1,
+      "workerCredentialsSetAt": "2026-07-06T14:17:54+08:00",
+      "workerLastLoginAt": "2026-07-06T14:17:54+08:00"
+    },
+    {
+      "id": "freelancer_0ee0a93b778c33b9",
+      "name": "Jacky Teo",
+      "phone": "+6596266073",
+      "email": "",
+      "notes": "",
+      "active": true,
+      "personnelOnly": true,
+      "createdAt": "2026-07-06T19:41:58+08:00",
+      "updatedAt": "2026-07-06T19:41:58+08:00"
+    }
+  ],
+  "vendors": [
+    {
+      "id": "vendor_9722bd3ae4e7ee28",
+      "name": "Avery Events and Exhibitions Pte Ltd",
+      "memberIds": [
+        "freelancer_d7f297a61b56f0f8"
+      ],
+      "notes": "",
+      "active": true,
+      "createdAt": "2026-07-06T19:04:20+08:00",
+      "updatedAt": "2026-07-06T19:04:20+08:00"
+    },
+    {
+      "id": "vendor_6d71892748e68dc0",
+      "name": "Show Production Pte Ltd",
+      "memberIds": [
+        "freelancer_056254ccad945f33"
+      ],
+      "notes": "",
+      "active": true,
+      "createdAt": "2026-07-06T19:04:29+08:00",
+      "updatedAt": "2026-07-06T19:04:29+08:00"
+    },
+    {
+      "id": "vendor_fa75781b645dce61",
+      "name": "IVT Manpower LLP",
+      "memberIds": [
+        "freelancer_0ee0a93b778c33b9"
+      ],
+      "notes": "",
+      "active": true,
+      "createdAt": "2026-07-06T19:42:01+08:00",
+      "updatedAt": "2026-07-06T19:42:01+08:00"
     }
   ],
   "roles": [
@@ -407,6 +477,41 @@
         "dailyRate": 150.0,
         "notes": "",
         "createdAt": "2026-07-05T14:41:31+08:00"
+      },
+      {
+        "id": "assignment_24d9b40f8d95c0c1",
+        "freelancerId": "freelancer_d7f297a61b56f0f8",
+        "subjectType": "worker",
+        "department": "AX",
+        "roleId": "",
+        "roleName": "Setup/Teardown Crew",
+        "days": 3,
+        "workDates": [
+          "2026-05-25",
+          "2026-06-02",
+          "2026-06-04"
+        ],
+        "dailyRate": 250.0,
+        "notes": "",
+        "createdAt": "2026-07-06T15:58:40+08:00"
+      },
+      {
+        "id": "assignment_50c6c69c4354f697",
+        "freelancerId": "vendor_fa75781b645dce61",
+        "vendorId": "vendor_fa75781b645dce61",
+        "subjectType": "vendor",
+        "department": "STG",
+        "providerType": "manpower",
+        "days": 2,
+        "workDates": [
+          "2026-05-24",
+          "2026-06-04"
+        ],
+        "createdAt": "2026-07-06T19:42:11+08:00",
+        "pax": 4,
+        "ratePerPax": 150.0,
+        "dailyRate": 150.0,
+        "roleName": "4 pax manpower"
       }
     ],
     "134": [
@@ -530,6 +635,22 @@
         "dailyRate": 400.0,
         "notes": "",
         "createdAt": "2026-07-05T16:38:05+08:00"
+      },
+      {
+        "id": "assignment_90482764c3dbe340",
+        "freelancerId": "freelancer_d7f297a61b56f0f8",
+        "subjectType": "worker",
+        "department": "AX",
+        "roleId": "",
+        "roleName": "System Technician",
+        "days": 2,
+        "workDates": [
+          "2026-05-29",
+          "2026-05-30"
+        ],
+        "dailyRate": 250.0,
+        "notes": "",
+        "createdAt": "2026-07-06T15:54:15+08:00"
       }
     ],
     "109": [
@@ -710,6 +831,22 @@
         "dailyRate": 0.0,
         "notes": "",
         "createdAt": "2026-07-05T15:29:27+08:00"
+      },
+      {
+        "id": "assignment_ffe3c0848d645979",
+        "freelancerId": "freelancer_d7f297a61b56f0f8",
+        "subjectType": "worker",
+        "department": "AX",
+        "roleId": "",
+        "roleName": "System Technician",
+        "days": 2,
+        "workDates": [
+          "2026-05-22",
+          "2026-05-23"
+        ],
+        "dailyRate": 250.0,
+        "notes": "",
+        "createdAt": "2026-07-06T16:00:13+08:00"
       }
     ],
     "141": [
@@ -793,17 +930,6 @@
         "dailyRate": 180.0,
         "notes": "",
         "createdAt": "2026-07-05T15:37:09+08:00"
-      },
-      {
-        "id": "assignment_fda491e02d974972",
-        "freelancerId": "freelancer_d7f297a61b56f0f8",
-        "department": "AX",
-        "roleId": "",
-        "roleName": "Teardown Crew",
-        "days": 1,
-        "dailyRate": 180.0,
-        "notes": "",
-        "createdAt": "2026-07-05T15:37:17+08:00"
       }
     ],
     "116": [
@@ -817,6 +943,21 @@
         "dailyRate": 400.0,
         "notes": "",
         "createdAt": "2026-07-05T16:36:50+08:00"
+      },
+      {
+        "id": "assignment_2ee730659a1655fb",
+        "freelancerId": "freelancer_ac55ddd12aeae2e0",
+        "subjectType": "worker",
+        "department": "AX",
+        "roleId": "",
+        "roleName": "Teardown Crew",
+        "days": 1,
+        "workDates": [
+          "2026-03-22"
+        ],
+        "dailyRate": 180.0,
+        "notes": "",
+        "createdAt": "2026-07-06T19:10:50+08:00"
       }
     ],
     "127": [
@@ -906,17 +1047,6 @@
         "updatedAt": "2026-07-05T18:58:53+08:00"
       },
       {
-        "id": "assignment_990edce2693d0176",
-        "freelancerId": "freelancer_d7f297a61b56f0f8",
-        "department": "AX",
-        "roleId": "",
-        "roleName": "System Technician",
-        "days": 2,
-        "dailyRate": 0.0,
-        "notes": "",
-        "createdAt": "2026-07-05T16:44:29+08:00"
-      },
-      {
         "id": "assignment_0513a03a2cb76c11",
         "freelancerId": "freelancer_6f42b4ecd10173a7",
         "department": "AX",
@@ -974,6 +1104,60 @@
         "notes": "",
         "createdAt": "2026-07-05T18:57:45+08:00",
         "updatedAt": "2026-07-05T18:58:56+08:00"
+      },
+      {
+        "id": "assignment_22c861236c16ca8f",
+        "freelancerId": "vendor_9722bd3ae4e7ee28",
+        "vendorId": "vendor_9722bd3ae4e7ee28",
+        "subjectType": "vendor",
+        "department": "AX",
+        "providerType": "service",
+        "days": 2,
+        "workDates": [
+          "2026-04-23",
+          "2026-04-24"
+        ],
+        "createdAt": "2026-07-06T19:07:23+08:00",
+        "serviceName": "Provision of Audio Equipment",
+        "serviceCost": 850.0,
+        "dailyRate": 850.0,
+        "roleName": "Provision of Audio Equipment"
+      },
+      {
+        "id": "assignment_1da5cdff6d3fa124",
+        "freelancerId": "vendor_9722bd3ae4e7ee28",
+        "vendorId": "vendor_9722bd3ae4e7ee28",
+        "subjectType": "vendor",
+        "department": "AX",
+        "providerType": "manpower",
+        "days": 1,
+        "workDates": [
+          "2026-04-23"
+        ],
+        "createdAt": "2026-07-06T19:07:48+08:00",
+        "pax": 1,
+        "ratePerPax": 550.0,
+        "dailyRate": 550.0,
+        "roleName": "1 pax manpower"
+      },
+      {
+        "id": "assignment_e5a05292b9b5b2c1",
+        "freelancerId": "vendor_9722bd3ae4e7ee28",
+        "vendorId": "vendor_9722bd3ae4e7ee28",
+        "subjectType": "vendor",
+        "department": "AX",
+        "providerType": "manpower",
+        "days": 3,
+        "workDates": [
+          "2026-04-22",
+          "2026-04-23",
+          "2026-04-24"
+        ],
+        "createdAt": "2026-07-06T19:07:58+08:00",
+        "pax": 1,
+        "ratePerPax": 250.0,
+        "dailyRate": 250.0,
+        "roleName": "1 pax manpower"
       }
     ],
     "90": [
@@ -1012,7 +1196,8 @@
         "notes": "",
         "createdAt": "2026-07-05T17:30:24+08:00"
       }
-    ]
+    ],
+    "143": []
   },
   "manualDepartments": {
     "132": [],
@@ -1736,6 +1921,120 @@
           }
         ],
         "claims": []
+      },
+      "freelancer_d7f297a61b56f0f8": {
+        "invoices": [
+          {
+            "id": "sub_d13491a09a11cfc2",
+            "originalName": "INV_2026_00049 - AVEC ROLEX Manpower Support NEWBAHRU_2505-0406.pdf",
+            "storedPath": "workforce_uploads/132/freelancer_d7f297a61b56f0f8/invoice-d8ba1d104b64364f66334ffb.pdf",
+            "size": 92368,
+            "contentType": "application/pdf",
+            "submittedAt": "2026-07-06T15:58:49+08:00",
+            "status": "Pending Review",
+            "denialReason": "",
+            "processingState": "Complete",
+            "submissionStage": "Submitted",
+            "amount": 750.0,
+            "reviewHistory": [
+              {
+                "at": "2026-07-06T15:58:49+08:00",
+                "by": "bnjm2000",
+                "from": "",
+                "to": "Pending Review",
+                "action": "Admin upload"
+              },
+              {
+                "at": "2026-07-06T19:43:02+08:00",
+                "by": "bnjm2000",
+                "from": "Pending Review",
+                "to": "Approved",
+                "amount": 750.0
+              },
+              {
+                "at": "2026-07-06T19:43:05+08:00",
+                "by": "bnjm2000",
+                "from": "Approved",
+                "to": "Pending Review",
+                "amount": 750.0
+              }
+            ],
+            "allocations": [
+              {
+                "department": "AX",
+                "amount": 750.0
+              }
+            ],
+            "ocrConfidence": "Medium",
+            "ocrSource": "Scanned document OCR",
+            "ocrMatchedText": "Total S$ 750.00",
+            "ocrDateMatchedText": "",
+            "ocrUsed": true,
+            "processedAt": "2026-07-06T15:59:44+08:00",
+            "reviewedAt": "2026-07-06T19:43:05+08:00",
+            "reviewedBy": "bnjm2000",
+            "verifiedAt": "2026-07-06T19:43:02+08:00",
+            "verifiedBy": "bnjm2000"
+          }
+        ],
+        "claims": []
+      },
+      "vendor_fa75781b645dce61": {
+        "invoices": [
+          {
+            "id": "sub_e78688c373a4527e",
+            "originalName": "AVEC Rolex Invoice .pdf",
+            "storedPath": "workforce_uploads/132/vendor_fa75781b645dce61/invoice-41e7a9c203eff144472183e1.pdf",
+            "size": 46476,
+            "contentType": "application/pdf",
+            "submittedAt": "2026-07-06T19:42:35+08:00",
+            "status": "Paid",
+            "denialReason": "",
+            "processingState": "Complete",
+            "submissionStage": "Submitted",
+            "amount": 1200.0,
+            "reviewHistory": [
+              {
+                "at": "2026-07-06T19:42:35+08:00",
+                "by": "bnjm2000",
+                "from": "",
+                "to": "Pending Review",
+                "action": "Admin upload"
+              },
+              {
+                "at": "2026-07-06T19:42:39+08:00",
+                "by": "bnjm2000",
+                "from": "Pending Review",
+                "to": "Approved",
+                "amount": 1200.0
+              },
+              {
+                "at": "2026-07-06T19:42:40+08:00",
+                "by": "bnjm2000",
+                "from": "Approved",
+                "to": "Paid",
+                "amount": 1200.0
+              }
+            ],
+            "allocations": [
+              {
+                "department": "STG",
+                "amount": 1200.0
+              }
+            ],
+            "ocrConfidence": "Medium",
+            "ocrSource": "PDF text",
+            "ocrMatchedText": "TOTAL $1200.00",
+            "ocrDateMatchedText": "",
+            "ocrUsed": false,
+            "processedAt": "2026-07-06T19:42:35+08:00",
+            "reviewedAt": "2026-07-06T19:42:40+08:00",
+            "reviewedBy": "bnjm2000",
+            "verifiedAt": "2026-07-06T19:42:39+08:00",
+            "verifiedBy": "bnjm2000"
+          }
+        ],
+        "claims": []
       }
     },
     "109": {
@@ -2193,6 +2492,40 @@
             "verifiedBy": "bnjm2000"
           }
         ]
+      },
+      "freelancer_d7f297a61b56f0f8": {
+        "invoices": [
+          {
+            "id": "sub_c5b1bad26f7b69f6",
+            "originalName": "INV_2026_00050 - AVEC Wedding Support CAPELLA_22-23_05.pdf",
+            "storedPath": "workforce_uploads/131/freelancer_d7f297a61b56f0f8/invoice-8d06039d461f607a360dad8e.pdf",
+            "size": 92378,
+            "contentType": "application/pdf",
+            "submittedAt": "2026-07-06T16:00:19+08:00",
+            "status": "Pending Review",
+            "denialReason": "",
+            "processingState": "Complete",
+            "submissionStage": "Submitted",
+            "amount": 500.0,
+            "reviewHistory": [
+              {
+                "at": "2026-07-06T16:00:19+08:00",
+                "by": "bnjm2000",
+                "from": "",
+                "to": "Pending Review",
+                "action": "Admin upload"
+              }
+            ],
+            "allocations": [],
+            "ocrConfidence": "Medium",
+            "ocrSource": "Scanned document OCR",
+            "ocrMatchedText": "Total S$ 500.00",
+            "ocrDateMatchedText": "",
+            "ocrUsed": true,
+            "processedAt": "2026-07-06T16:01:13+08:00"
+          }
+        ],
+        "claims": []
       }
     },
     "141": {
@@ -2353,6 +2686,40 @@
           }
         ],
         "claims": []
+      },
+      "freelancer_d7f297a61b56f0f8": {
+        "invoices": [
+          {
+            "id": "sub_2bba2197a457eebb",
+            "originalName": "INV_2026_00052 - AVEC WAVE2EARTH Manpower Support_01_06.pdf",
+            "storedPath": "workforce_uploads/141/freelancer_d7f297a61b56f0f8/invoice-48bb45d27d5f54f3442b4525.pdf",
+            "size": 92364,
+            "contentType": "application/pdf",
+            "submittedAt": "2026-07-06T16:01:49+08:00",
+            "status": "Pending Review",
+            "denialReason": "",
+            "processingState": "Complete",
+            "submissionStage": "Submitted",
+            "amount": 250.0,
+            "reviewHistory": [
+              {
+                "at": "2026-07-06T16:01:49+08:00",
+                "by": "bnjm2000",
+                "from": "",
+                "to": "Pending Review",
+                "action": "Admin upload"
+              }
+            ],
+            "allocations": [],
+            "ocrConfidence": "Medium",
+            "ocrSource": "Scanned document OCR",
+            "ocrMatchedText": "Total S$ 250.00",
+            "ocrDateMatchedText": "",
+            "ocrUsed": true,
+            "processedAt": "2026-07-06T16:02:45+08:00"
+          }
+        ],
+        "claims": []
       }
     },
     "134": {
@@ -2490,6 +2857,40 @@
           }
         ],
         "claims": []
+      },
+      "freelancer_d7f297a61b56f0f8": {
+        "invoices": [
+          {
+            "id": "sub_30bb488a99fc5cd7",
+            "originalName": "INV_2026_00051 - AVEC Wedding Support CAPELLA_29-30_05.pdf",
+            "storedPath": "workforce_uploads/134/freelancer_d7f297a61b56f0f8/invoice-9dfd39a66f617e7d8c085677.pdf",
+            "size": 92456,
+            "contentType": "application/pdf",
+            "submittedAt": "2026-07-06T15:54:24+08:00",
+            "status": "Pending Review",
+            "denialReason": "",
+            "processingState": "Complete",
+            "submissionStage": "Submitted",
+            "amount": 500.0,
+            "reviewHistory": [
+              {
+                "at": "2026-07-06T15:54:24+08:00",
+                "by": "bnjm2000",
+                "from": "",
+                "to": "Pending Review",
+                "action": "Admin upload"
+              }
+            ],
+            "allocations": [],
+            "ocrConfidence": "Medium",
+            "ocrSource": "Scanned document OCR",
+            "ocrMatchedText": "Total S$ 500.00",
+            "ocrDateMatchedText": "",
+            "ocrUsed": true,
+            "processedAt": "2026-07-06T15:55:46+08:00"
+          }
+        ],
+        "claims": []
       }
     },
     "129": {
@@ -2613,6 +3014,63 @@
           }
         ],
         "claims": []
+      },
+      "freelancer_ac55ddd12aeae2e0": {
+        "invoices": [
+          {
+            "id": "sub_d5e7234c288be3d7",
+            "originalName": "Invoice 1055.pdf",
+            "storedPath": "workforce_uploads/116/freelancer_ac55ddd12aeae2e0/invoice-41247d1ecb54ac4399cae785.pdf",
+            "size": 14881,
+            "contentType": "application/pdf",
+            "submittedAt": "2026-07-06T19:11:00+08:00",
+            "status": "Paid",
+            "denialReason": "",
+            "processingState": "Complete",
+            "submissionStage": "Submitted",
+            "amount": 180.0,
+            "reviewHistory": [
+              {
+                "at": "2026-07-06T19:11:00+08:00",
+                "by": "bnjm2000",
+                "from": "",
+                "to": "Pending Review",
+                "action": "Admin upload"
+              },
+              {
+                "at": "2026-07-06T19:11:19+08:00",
+                "by": "bnjm2000",
+                "from": "Pending Review",
+                "to": "Approved",
+                "amount": 180.0
+              },
+              {
+                "at": "2026-07-06T19:11:22+08:00",
+                "by": "bnjm2000",
+                "from": "Approved",
+                "to": "Paid",
+                "amount": 180.0
+              }
+            ],
+            "allocations": [
+              {
+                "department": "AX",
+                "amount": 180.0
+              }
+            ],
+            "ocrConfidence": "High",
+            "ocrSource": "Scanned document OCR",
+            "ocrMatchedText": "Attn:Avec VisionPte Ltd. Balance Due: SGD 180.00",
+            "ocrDateMatchedText": "",
+            "ocrUsed": true,
+            "processedAt": "2026-07-06T19:11:12+08:00",
+            "reviewedAt": "2026-07-06T19:11:22+08:00",
+            "reviewedBy": "bnjm2000",
+            "verifiedAt": "2026-07-06T19:11:19+08:00",
+            "verifiedBy": "bnjm2000"
+          }
+        ],
+        "claims": []
       }
     },
     "127": {
@@ -2720,6 +3178,158 @@
           }
         ],
         "claims": []
+      },
+      "freelancer_d7f297a61b56f0f8": {
+        "invoices": [],
+        "claims": []
+      },
+      "vendor_9722bd3ae4e7ee28": {
+        "invoices": [
+          {
+            "id": "sub_64fab98655be1627",
+            "originalName": "INV_2026_00048 - AVEC Wedding Support CAPELLA_22-24_04.pdf",
+            "storedPath": "workforce_uploads/127/vendor_9722bd3ae4e7ee28/invoice-213109536a36e624dd3420d9.pdf",
+            "size": 95255,
+            "contentType": "application/pdf",
+            "submittedAt": "2026-07-06T19:08:06+08:00",
+            "status": "Pending Review",
+            "denialReason": "",
+            "processingState": "Complete",
+            "submissionStage": "Submitted",
+            "amount": 2150.0,
+            "reviewHistory": [
+              {
+                "at": "2026-07-06T19:08:06+08:00",
+                "by": "bnjm2000",
+                "from": "",
+                "to": "Pending Review",
+                "action": "Admin upload"
+              }
+            ],
+            "allocations": [],
+            "ocrConfidence": "Medium",
+            "ocrSource": "Scanned document OCR",
+            "ocrMatchedText": "Total S$ 2,150.00",
+            "ocrDateMatchedText": "",
+            "ocrUsed": true,
+            "processedAt": "2026-07-06T19:09:54+08:00"
+          }
+        ],
+        "claims": []
+      },
+      "freelancer_ac55ddd12aeae2e0": {
+        "invoices": [
+          {
+            "id": "sub_432df7a5109ab561",
+            "originalName": "Invoice 1057.pdf",
+            "storedPath": "workforce_uploads/127/freelancer_ac55ddd12aeae2e0/invoice-4c7b635fd2a33eed8d15e838.pdf",
+            "size": 14637,
+            "contentType": "application/pdf",
+            "submittedAt": "2026-07-06T19:09:54+08:00",
+            "status": "Paid",
+            "denialReason": "",
+            "processingState": "Complete",
+            "submissionStage": "Submitted",
+            "amount": 180.0,
+            "reviewHistory": [
+              {
+                "at": "2026-07-06T19:09:54+08:00",
+                "by": "bnjm2000",
+                "from": "",
+                "to": "Pending Review",
+                "action": "Admin upload"
+              },
+              {
+                "at": "2026-07-06T19:11:30+08:00",
+                "by": "bnjm2000",
+                "from": "Pending Review",
+                "to": "Approved",
+                "amount": 180.0
+              },
+              {
+                "at": "2026-07-06T19:11:32+08:00",
+                "by": "bnjm2000",
+                "from": "Approved",
+                "to": "Paid",
+                "amount": 180.0
+              }
+            ],
+            "allocations": [
+              {
+                "department": "AX",
+                "amount": 180.0
+              }
+            ],
+            "ocrConfidence": "Medium",
+            "ocrSource": "Scanned document OCR",
+            "ocrMatchedText": "Total: SGD 180.00",
+            "ocrDateMatchedText": "",
+            "ocrUsed": true,
+            "processedAt": "2026-07-06T19:10:09+08:00",
+            "reviewedAt": "2026-07-06T19:11:32+08:00",
+            "reviewedBy": "bnjm2000",
+            "verifiedAt": "2026-07-06T19:11:30+08:00",
+            "verifiedBy": "bnjm2000"
+          }
+        ],
+        "claims": []
+      },
+      "freelancer_909e06aee487a7aa": {
+        "invoices": [
+          {
+            "id": "sub_9de8d5cdb930aa77",
+            "originalName": "Invoice_260370_AVEC (1).pdf",
+            "storedPath": "workforce_uploads/127/freelancer_909e06aee487a7aa/invoice-41c12b1bfb206da5f8af6e8f.pdf",
+            "size": 31600,
+            "contentType": "application/pdf",
+            "submittedAt": "2026-07-06T19:12:22+08:00",
+            "status": "Paid",
+            "denialReason": "",
+            "processingState": "Complete",
+            "submissionStage": "Submitted",
+            "amount": 400.0,
+            "reviewHistory": [
+              {
+                "at": "2026-07-06T19:12:22+08:00",
+                "by": "bnjm2000",
+                "from": "",
+                "to": "Pending Review",
+                "action": "Admin upload"
+              },
+              {
+                "at": "2026-07-06T19:12:26+08:00",
+                "by": "bnjm2000",
+                "from": "Pending Review",
+                "to": "Approved",
+                "amount": 400.0
+              },
+              {
+                "at": "2026-07-06T19:12:27+08:00",
+                "by": "bnjm2000",
+                "from": "Approved",
+                "to": "Paid",
+                "amount": 400.0
+              }
+            ],
+            "allocations": [
+              {
+                "department": "AX",
+                "amount": 400.0
+              }
+            ],
+            "ocrConfidence": "High",
+            "ocrSource": "PDF text",
+            "ocrMatchedText": "Amount Due (SGD): $400.00",
+            "ocrDateMatchedText": "",
+            "ocrUsed": false,
+            "processedAt": "2026-07-06T19:12:22+08:00",
+            "reviewedAt": "2026-07-06T19:12:27+08:00",
+            "reviewedBy": "bnjm2000",
+            "verifiedAt": "2026-07-06T19:12:26+08:00",
+            "verifiedBy": "bnjm2000"
+          }
+        ],
+        "claims": []
       }
     },
     "90": {
@@ -2819,5 +3429,5 @@
       }
     }
   },
-  "updatedAt": "2026-07-05T22:23:01+08:00"
+  "updatedAt": "2026-07-06T19:43:05+08:00"
 }

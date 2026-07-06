@@ -72,6 +72,24 @@ class EventAssetRealtimeTests(unittest.TestCase):
 
             publish.assert_not_called()
 
+    def test_login_logout_logs_are_classified_as_user_presence(self):
+        login_details = app_module._user_presence_realtime_details_from_log_action(
+            'User alice logged in via web interface'
+        )
+        logout_details = app_module._user_presence_realtime_details_from_log_action(
+            'User bob logged out from web interface'
+        )
+
+        self.assertEqual(login_details['username'], 'alice')
+        self.assertEqual(login_details['status'], 'login')
+        self.assertEqual(logout_details['username'], 'bob')
+        self.assertEqual(logout_details['status'], 'logout')
+        self.assertIsNone(
+            app_module._user_presence_realtime_details_from_log_action(
+                'Created user alice'
+            )
+        )
+
 
 if __name__ == '__main__':
     unittest.main()

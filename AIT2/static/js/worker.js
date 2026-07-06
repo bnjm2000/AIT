@@ -229,9 +229,7 @@ function renderEvent(company, event, open = false) {
         <span>⌖ &nbsp; ${escapeHtml(event.location || 'Location TBC')}</span></div>
       <div class="summary-cell"><span>Role / Dept</span><strong>${escapeHtml(roles || 'Worker')}</strong><small>${escapeHtml(departments)}</small></div>
       <div class="summary-cell"><span>Invoices</span><strong>${invoices.length} / ${event.invoiceLimit}</strong><em class="status-badge ${statusClass(invoiceSummary)}">${invoiceSummary}</em></div>
-      ${vendorEvent
-        ? `<div class="summary-cell"><span>Submission</span><strong>Company invoice</strong><small>Shared by all members</small></div>`
-        : `<div class="summary-cell"><span>Claims</span><strong>${claims.length} / ${event.claimLimit}</strong><em class="status-badge ${statusClass(claimSummary)}">${claimSummary}</em></div>`}
+      <div class="summary-cell"><span>Claims</span><strong>${claims.length} / ${event.claimLimit}</strong><em class="status-badge ${statusClass(claimSummary)}">${claimSummary}</em></div>
       <div class="summary-cell totals"><span>Totals (Submitted)</span><strong>Invoice: &nbsp; ${money(event.invoiceTotal)}</strong><strong>Claims: &nbsp; ${money(event.claimTotal)}</strong></div>
       <span class="event-chevron">⌄</span>
     </summary>
@@ -239,9 +237,9 @@ function renderEvent(company, event, open = false) {
       <section><header><h3>Invoices (${invoices.length} of ${event.invoiceLimit})</h3></header>
         ${invoiceRows(company, event, invoices)}${dropZone(company, event, 'invoice')}
         <footer><strong>Total Invoice Amount</strong><b>${money(event.invoiceTotal)}</b></footer></section>
-      ${vendorEvent ? '' : `<section><header><h3>Claims (${claims.length} of ${event.claimLimit})</h3></header>
+      <section><header><h3>Claims (${claims.length} of ${event.claimLimit})</h3></header>
         ${claimRows(company, event, claims)}${dropZone(company, event, 'claim')}
-        <footer><strong>Total Claims Amount</strong><b>${money(event.claimTotal)}</b></footer></section>`}
+        <footer><strong>Total Claims Amount</strong><b>${money(event.claimTotal)}</b></footer></section>
     </div>
   </details>`;
 }

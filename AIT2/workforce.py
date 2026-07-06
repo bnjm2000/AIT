@@ -153,9 +153,18 @@ def save_workforce(data_folder: str, data: dict) -> dict:
     folder = os.path.dirname(path)
     os.makedirs(folder, exist_ok=True)
     temporary = f"{path}.{secrets.token_hex(6)}.tmp"
-    with open(temporary, "w", encoding="utf-8") as handle:
-        json.dump(normalized, handle, ensure_ascii=False, indent=2)
-    os.replace(temporary, path)
+    try:
+        with open(temporary, "w", encoding="utf-8") as handle:
+            json.dump(normalized, handle, ensure_ascii=False, indent=2)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+    except Exception:
+        try:
+            os.remove(temporary)
+        except OSError:
+            pass
+        raise
     return normalized
 
 

@@ -23,7 +23,7 @@ class ReturningSourceTransferTests(unittest.TestCase):
         self.data_manager.logs = []
         self.data_manager.save_logs()
 
-        for asset_id in ('TEST#01', 'TEST#02'):
+        for asset_id in ('TEST#01', 'TEST#02', 'TEST#03'):
             self.data_manager.inventory[asset_id] = InventoryItem(
                 asset_id=asset_id,
                 brand='Test Brand',
@@ -34,7 +34,7 @@ class ReturningSourceTransferTests(unittest.TestCase):
                 maintenance_logs=[],
                 department_code='AX',
                 default_location='Store',
-                current_location='Source Event',
+                current_location='Source Event' if asset_id != 'TEST#03' else 'Store',
             )
 
         requirement = '[MODEL]AX|Test Brand|Test Model|2|Test asset'
@@ -104,6 +104,70 @@ class ReturningSourceTransferTests(unittest.TestCase):
             self.data_manager.events[2].actually_prepared,
             ['TEST#01', 'TEST#02'],
         )
+
+    def test_transfer_options_allow_any_event_on_either_side(self):
+        options = self.client.get('/api/transfers/options')
+        self.assertEqual(options.status_code, 200, options.get_data(as_text=True))
+        data = options.get_json()['data']
+
+        self.assertEqual([event['id'] for event in data['events']], [1, 2])
+        self.assertIn(2, [event['id'] for event in data['sourceEvents']])
+        self.assertIn(1, [event['id'] for event in data['targetEvents']])
+
+    def test_candidates_expose_exact_asset_ids_and_destination_requirements(self):
+        response = self.client.get('/api/transfers/candidates?fromEventId=1&toEventId=2')
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+
+        data = response.get_json()['data']
+        self.assertEqual(
+            [candidate['assetId'] for candidate in data['candidates']],
+            ['TEST#01', 'TEST#02'],
+        )
+        self.assertEqual(data['destinationRequirements'], [{
+            'department': 'AX',
+            'brand': 'Test Brand',
+            'model': 'Test Model',
+            'description': 'Test asset',
+            'required': 2,
+            'prepared': 0,
+            'remaining': 2,
+        }])
+
+    def test_bulk_transfer_moves_only_selected_asset_ids(self):
+        response = self.client.post('/api/transfers/execute', json={
+            'fromEventId': 1,
+            'toEventId': 2,
+            'assetIds': ['TEST#02'],
+        })
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(self.data_manager.events[2].actually_prepared, ['TEST#02'])
+        self.assertIn('TEST#01', self.data_manager.events[1].actually_prepared)
+        self.assertNotIn('TEST#02', self.data_manager.events[1].actually_prepared)
+
+    def test_needed_from_office_exposes_available_asset_ids_for_prepare(self):
+        self.data_manager.events[2].prepared_items = [
+            '[MODEL]AX|Test Brand|Test Model|3|Test asset'
+        ]
+        self.data_manager.save_event(self.data_manager.events[2])
+
+        response = self.client.get('/api/transfers/candidates?fromEventId=1&toEventId=2')
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        needed = response.get_json()['data']['neededFromOffice']
+
+        self.assertEqual(len(needed), 1)
+        self.assertEqual(needed[0]['officeQuantity'], 1)
+        self.assertEqual(
+            [asset['assetId'] for asset in needed[0]['officeCandidates']],
+            ['TEST#03'],
+        )
+
+        prepare = self.client.post('/api/events/2/prepare', json={'assetId': 'TEST#03'})
+        self.assertEqual(prepare.status_code, 200, prepare.get_data(as_text=True))
+        self.assertIn('TEST#03', self.data_manager.events[2].actually_prepared)
+
+        after = self.client.get('/api/transfers/candidates?fromEventId=1&toEventId=2')
+        self.assertEqual(after.status_code, 200, after.get_data(as_text=True))
+        self.assertEqual(after.get_json()['data']['neededFromOffice'], [])
 
 
 if __name__ == '__main__':

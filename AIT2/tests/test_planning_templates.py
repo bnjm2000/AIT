@@ -154,6 +154,44 @@ class PlanningTemplateTests(unittest.TestCase):
         )
         self.assertNotIn('Manage Assets', script)
 
+    def test_plan_asset_search_includes_each_asset_description(self):
+        script_path = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)),
+            'static',
+            'js',
+            'app.js',
+        )
+        with open(script_path, encoding='utf-8') as script_file:
+            script = script_file.read()
+
+        self.assertIn('function planAvailableModelSearchText(group)', script)
+        self.assertIn("String(asset?.description || '').trim()", script)
+        self.assertIn(
+            'planAvailableModelSearchText(group).includes(search)',
+            script,
+        )
+
+    def test_event_detail_actions_are_shared_by_all_workspaces(self):
+        project_root = os.path.dirname(os.path.dirname(__file__))
+        with open(
+            os.path.join(project_root, 'static', 'js', 'app.js'),
+            encoding='utf-8',
+        ) as script_file:
+            script = script_file.read()
+        with open(
+            os.path.join(project_root, 'templates', 'index.html'),
+            encoding='utf-8',
+        ) as template_file:
+            template = template_file.read()
+
+        self.assertEqual(
+            script.count('${eventDetailsActionsHtml(event.id)}'),
+            3,
+        )
+        self.assertIn('async function openEventActivityLog(eventId)', script)
+        for category in ('details', 'prepare', 'return', 'manpower'):
+            self.assertIn(f'.event-activity-{category}', template)
+
     def test_prepare_trial_and_legacy_workspaces_are_both_available(self):
         self.login('admin')
         response = self.client.get('/')
