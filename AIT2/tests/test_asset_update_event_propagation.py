@@ -164,6 +164,71 @@ class AssetUpdateEventPropagationTests(unittest.TestCase):
         self.assertEqual(unassigned.prepared_items, ['[MODEL]AX|TestBrand|NewBulkModel|3|New bulk item'])
         self.assertEqual(response.get_json()['data']['eventsUpdated'], 2)
 
+    def test_all_similar_asset_detail_change_updates_linked_quotation_lines(self):
+        old_key = app_module._finance_catalog_key('AX', 'TestBrand', 'OldModel', 'Old desc')
+        finance_document = {
+            'id': 'quote-asset-rename',
+            'type': 'quotation',
+            'number': 'QT-2026-001-01',
+            'baseSequence': 1,
+            'revision': 1,
+            'status': 'draft',
+            'createdBy': 'admin',
+            'updatedBy': 'admin',
+            'projectName': 'Rename Quote',
+            'title': 'Rename Quote',
+            'lineItems': [{
+                'id': 'line-1',
+                'catalogKey': old_key,
+                'sourceAssetIds': ['A#01', 'A#02'],
+                'brand': 'TestBrand',
+                'model': 'OldModel',
+                'description': 'TestBrand OldModel Old desc',
+                'department': 'Audio Department',
+                'departmentCode': 'AX',
+                'days': 1,
+                'quantity': 2,
+                'uom': 'units',
+                'unitPrice': 100,
+                'discountPercent': 0,
+                'total': 200,
+                'isCustom': False,
+            }],
+            'adjustments': [],
+            'departments': ['Audio Department'],
+        }
+        app_module._save_finance_data({
+            'version': app_module.FINANCE_VERSION,
+            'documents': [finance_document],
+            'priceBook': {
+                f'admin::{old_key}': {
+                    'description': 'TestBrand OldModel Old desc',
+                    'unitPrice': 100,
+                    'department': 'Audio Department',
+                    'uom': 'units',
+                    'owner': 'admin',
+                },
+            },
+        })
+
+        response = self.put_asset(
+            'A#01',
+            model='NewModel',
+            description='New desc',
+            applyTo='allSimilar',
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertTrue(response.get_json()['data']['financeDocumentsUpdated'])
+        stored = app_module._load_finance_data()['documents'][0]
+        line = stored['lineItems'][0]
+        self.assertEqual(line['model'], 'NewModel')
+        self.assertEqual(line['description'], 'TestBrand NewModel New desc')
+        self.assertEqual(line['sourceAssetIds'], ['A#01', 'A#02'])
+        new_key = app_module._finance_catalog_key('AX', 'TestBrand', 'NewModel', 'New desc')
+        self.assertEqual(line['catalogKey'], new_key)
+        self.assertIn(f'admin::{new_key}', app_module._load_finance_data()['priceBook'])
+
     def test_regular_asset_id_change_uses_edited_id_and_updates_event_references(self):
         event = self.make_event(300, prepared=['A#01'], actual=['A#01'], extra=['A#01'])
 

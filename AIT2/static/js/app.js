@@ -4271,14 +4271,18 @@ function ensureCompanyActionModals() {
         <form onsubmit="event.preventDefault(); editCompanyFromUsersAdmin();">
           <div class="modal-body">
             <div class="form-group">
-              <label class="form-label" for="userEditCompanyCode">Company</label>
-              <select id="userEditCompanyCode" class="form-input" onchange="populateEditCompanyName()"></select>
+              <label class="form-label" for="userEditCompanyOriginalCode">Company</label>
+              <select id="userEditCompanyOriginalCode" class="form-input" onchange="populateEditCompanyFields()"></select>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="userEditCompanyCode">Code</label>
+              <input id="userEditCompanyCode" class="form-input" placeholder="Company code" autocomplete="off">
             </div>
             <div class="form-group">
               <label class="form-label" for="userEditCompanyName">Company Name</label>
               <input id="userEditCompanyName" class="form-input" placeholder="Company name" autocomplete="organization">
             </div>
-            <p style="margin:8px 0 0;color:#667085;font-size:13px;">Company codes stay fixed so folders and user assignments remain intact.</p>
+            <p style="margin:8px 0 0;color:#667085;font-size:13px;">Changing the code also updates company folders and user assignments.</p>
           </div>
           <div class="modal-footer modal-actions">
             <button type="button" class="btn btn-secondary" onclick="closeModal('editCompanyModal')">Cancel</button>
@@ -4333,19 +4337,25 @@ function openCreateCompanyModal() {
   openModal('createCompanyModal');
 }
 
-function populateEditCompanyName() {
-  const code = document.getElementById('userEditCompanyCode')?.value || '';
+function populateEditCompanyFields() {
+  const code = document.getElementById('userEditCompanyOriginalCode')?.value || '';
   const company = companyOptions.find(item => String(item.code || '').toUpperCase() === String(code).toUpperCase());
+  const codeInput = document.getElementById('userEditCompanyCode');
   const input = document.getElementById('userEditCompanyName');
+  if (codeInput) codeInput.value = company?.code || '';
   if (input) input.value = company?.name || '';
+}
+
+function populateEditCompanyName() {
+  populateEditCompanyFields();
 }
 
 async function openEditCompanyModal() {
   ensureCompanyActionModals();
   await fetchCompanies(true);
-  const select = document.getElementById('userEditCompanyCode');
+  const select = document.getElementById('userEditCompanyOriginalCode');
   if (select) select.innerHTML = companyOptionsMarkup(currentUser?.company?.code || '');
-  populateEditCompanyName();
+  populateEditCompanyFields();
   openModal('editCompanyModal');
 }
 
@@ -5764,11 +5774,16 @@ async function createCompanyFromUsersAdmin() {
 }
 
 async function editCompanyFromUsersAdmin() {
-  const code = document.getElementById('userEditCompanyCode')?.value || '';
+  const originalCode = document.getElementById('userEditCompanyOriginalCode')?.value || '';
+  const code = document.getElementById('userEditCompanyCode')?.value.trim() || '';
   const name = document.getElementById('userEditCompanyName')?.value.trim() || '';
 
-  if (!code) {
+  if (!originalCode) {
     showNotification('warning', 'Choose a company first');
+    return;
+  }
+  if (!code) {
+    showNotification('warning', 'Company code is required');
     return;
   }
   if (!name) {
@@ -5777,7 +5792,7 @@ async function editCompanyFromUsersAdmin() {
   }
 
   try {
-    await apiCall(`/api/companies/${encodeURIComponent(code)}`, 'PUT', { name });
+    await apiCall(`/api/companies/${encodeURIComponent(originalCode)}`, 'PUT', { code, name });
     closeModal('editCompanyModal');
     showNotification('success', 'Company updated');
     await loadCompaniesAdmin();

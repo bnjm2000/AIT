@@ -1290,3 +1290,84 @@ class PostgresDataManager(DataManager):
                 "DELETE FROM aim_companies WHERE company_code = %s",
                 (self.company_code,),
             )
+
+    def rename_company_data(self, new_company_code, new_company_name=''):
+        old_company_code = self.company_code
+        new_company_code = str(new_company_code or '').strip().upper()
+        new_company_name = str(new_company_name or self.company_name or new_company_code).strip()
+        if not new_company_code:
+            raise ValueError('Company code is required')
+        if new_company_code == old_company_code:
+            self.company_name = new_company_name
+            with self._connection() as connection:
+                connection.execute(
+                    """
+                    UPDATE aim_companies
+                    SET company_name = %s, updated_at = CURRENT_TIMESTAMP
+                    WHERE company_code = %s
+                    """,
+                    (new_company_name, old_company_code),
+                )
+            return
+
+        company_tables = [
+            'aim_company_revisions',
+            'aim_inventory',
+            'aim_containers',
+            'aim_events',
+            'aim_event_history',
+            'aim_system_logs',
+            'aim_clients',
+            'aim_departments',
+            'aim_migration_runs',
+        ]
+        with self._connection() as connection:
+            with connection.transaction():
+                existing = connection.execute(
+                    "SELECT company_code FROM aim_companies WHERE company_code = %s",
+                    (new_company_code,),
+                ).fetchone()
+                if existing:
+                    raise ValueError(f'Company {new_company_code} already exists')
+
+                old_row = connection.execute(
+                    """
+                    SELECT company_name, metadata, created_at
+                    FROM aim_companies
+                    WHERE company_code = %s
+                    FOR UPDATE
+                    """,
+                    (old_company_code,),
+                ).fetchone()
+                if not old_row:
+                    raise ValueError('Company not found')
+
+                connection.execute(
+                    """
+                    INSERT INTO aim_companies
+                        (company_code, company_name, metadata, created_at, updated_at)
+                    VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)
+                    """,
+                    (
+                        new_company_code,
+                        new_company_name,
+                        old_row[1],
+                        old_row[2],
+                    ),
+                )
+
+                for table in company_tables:
+                    connection.execute(
+                        sql.SQL("UPDATE {} SET company_code = %s WHERE company_code = %s")
+                        .format(sql.Identifier(table)),
+                        (new_company_code, old_company_code),
+                    )
+
+                connection.execute(
+                    "DELETE FROM aim_companies WHERE company_code = %s",
+                    (old_company_code,),
+                )
+
+        self.company_code = new_company_code
+        self.company_name = new_company_name
+        self._loaded_revision = None

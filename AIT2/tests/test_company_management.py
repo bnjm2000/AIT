@@ -132,6 +132,57 @@ class CompanyManagementTests(unittest.TestCase):
         registry = app_module._load_company_registry()
         self.assertEqual(registry['companies']['TSC']['name'], 'TSC Events')
 
+    def test_super_admin_can_edit_company_code_without_breaking_references(self):
+        self.login_super_admin()
+        original_folder = os.path.join(self.tempdir.name, 'companies', 'TSC')
+        renamed_folder = os.path.join(self.tempdir.name, 'companies', 'EVT')
+        self.assertTrue(os.path.exists(os.path.join(original_folder, 'backend', 'AssetList.csv')))
+
+        response = self.client.put('/api/companies/TSC', json={
+            'code': 'EVT',
+            'name': 'Events Team',
+        })
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        payload = response.get_json()['data']
+        self.assertEqual(payload['code'], 'EVT')
+        self.assertEqual(payload['previousCode'], 'TSC')
+        self.assertEqual(payload['name'], 'Events Team')
+        self.assertFalse(os.path.exists(original_folder))
+        self.assertTrue(os.path.exists(os.path.join(renamed_folder, 'backend', 'AssetList.csv')))
+
+        registry = app_module._load_company_registry()
+        self.assertNotIn('TSC', registry['companies'])
+        self.assertIn('EVT', registry['companies'])
+        self.assertEqual(registry['companies']['EVT']['name'], 'Events Team')
+        self.assertEqual(registry['userCompanies']['chief'], 'EVT')
+        self.assertEqual(registry['userCompanies']['tech'], 'EVT')
+        self.assertEqual(registry['defaultCompany'], 'AVPL')
+        self.assertNotIn('TSC', app_module._company_data_managers)
+
+    def test_super_admin_can_rename_active_company_reference(self):
+        self.login_super_admin()
+        original_folder = os.path.join(self.tempdir.name, 'companies', 'AVPL')
+        renamed_folder = os.path.join(self.tempdir.name, 'companies', 'AVEC')
+
+        response = self.client.put('/api/companies/AVPL', json={
+            'code': 'AVEC',
+            'name': 'Avec Events',
+        })
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertFalse(os.path.exists(original_folder))
+        self.assertTrue(os.path.exists(renamed_folder))
+        self.assertEqual(app_module._active_company_code, 'AVEC')
+        with self.client.session_transaction() as session:
+            self.assertEqual(session['company_code'], 'AVEC')
+
+        registry = app_module._load_company_registry()
+        self.assertEqual(registry['defaultCompany'], 'AVEC')
+        self.assertEqual(registry['userCompanies']['bnjm2000'], 'AVEC')
+        self.assertIn('AVEC', registry['companies'])
+        self.assertNotIn('AVPL', registry['companies'])
+
     def test_company_name_cannot_be_blank(self):
         self.login_super_admin()
 
@@ -139,6 +190,17 @@ class CompanyManagementTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 400, response.get_data(as_text=True))
         self.assertEqual(response.get_json()['error'], 'Company name is required')
+
+    def test_company_code_cannot_collide(self):
+        self.login_super_admin()
+
+        response = self.client.put('/api/companies/TSC', json={
+            'code': 'AVPL',
+            'name': 'Duplicate',
+        })
+
+        self.assertEqual(response.status_code, 409, response.get_data(as_text=True))
+        self.assertEqual(response.get_json()['error'], 'Company AVPL already exists')
 
 
 if __name__ == '__main__':

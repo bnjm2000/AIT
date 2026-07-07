@@ -1,6 +1,7 @@
 """Flask application for Avec Inventory Management."""
 
 import csv
+import hashlib
 import json
 import logging
 import mimetypes
@@ -428,6 +429,64 @@ def _safe_company_delete_folder(code, record):
     return target_folder
 
 
+def _validate_company_rename_folder(old_code, new_code, record):
+    old_code = _normalise_company_code(old_code)
+    new_code = _normalise_company_code(new_code)
+    if not old_code or not new_code:
+        raise ValueError('Company code is required')
+    if old_code == new_code:
+        return _standard_company_folder_for_code(old_code), _standard_company_folder_for_code(new_code)
+
+    old_folder = _standard_company_folder_for_code(old_code)
+    new_folder = _standard_company_folder_for_code(new_code)
+    company_root = os.path.abspath(os.path.join(BASE_DIR, 'companies'))
+
+    try:
+        if os.path.commonpath([company_root, new_folder]) != company_root:
+            raise ValueError('Company folder is outside the companies folder')
+    except ValueError:
+        raise ValueError('Company folder is outside the companies folder')
+
+    for folder in (_company_record_backend_folder(record), _company_record_frontend_folder(record)):
+        if not folder:
+            continue
+        folder = os.path.abspath(folder)
+        try:
+            if os.path.commonpath([old_folder, folder]) != old_folder:
+                raise ValueError('Company assets must be inside the standard company folder before renaming')
+        except ValueError:
+            raise ValueError('Company assets must be inside the standard company folder before renaming')
+
+    if os.path.exists(new_folder):
+        raise ValueError(f'Company folder for {new_code} already exists')
+
+    return old_folder, new_folder
+
+
+def _safe_company_rename_record(old_code, new_code, record):
+    old_code = _normalise_company_code(old_code)
+    new_code = _normalise_company_code(new_code)
+    if not old_code or not new_code:
+        raise ValueError('Company code is required')
+    if old_code == new_code:
+        updated = dict(record or {})
+        updated['code'] = new_code
+        return updated
+
+    old_folder, new_folder = _validate_company_rename_folder(old_code, new_code, record)
+
+    if os.path.exists(old_folder):
+        os.makedirs(os.path.dirname(new_folder), exist_ok=True)
+        shutil.move(old_folder, new_folder)
+
+    updated = dict(record or {})
+    updated['code'] = new_code
+    updated['backendFolder'] = os.path.join('companies', new_code, 'backend').replace('\\', '/')
+    updated['frontendFolder'] = os.path.join('companies', new_code, 'frontend').replace('\\', '/')
+    _ensure_company_folders(updated)
+    return updated
+
+
 def _normalise_company_registry(registry):
     if not isinstance(registry, dict):
         registry = {}
@@ -543,11 +602,22 @@ def _save_company_registry(registry):
 
 
 def _current_company_code():
+    registry = None
     if has_request_context():
         code = session.get('company_code')
         if code:
-            return _normalise_company_code(code, DEFAULT_COMPANY_CODE)
-    return _active_company_code or DEFAULT_COMPANY_CODE
+            code = _normalise_company_code(code, DEFAULT_COMPANY_CODE)
+            registry = _load_company_registry()
+            if code in registry.get('companies', {}):
+                return code
+            fallback = registry.get('defaultCompany', DEFAULT_COMPANY_CODE)
+            session['company_code'] = fallback
+            return fallback
+    code = _normalise_company_code(_active_company_code, DEFAULT_COMPANY_CODE)
+    registry = registry or _load_company_registry()
+    if code in registry.get('companies', {}):
+        return code
+    return registry.get('defaultCompany', DEFAULT_COMPANY_CODE)
 
 
 def _company_record_for_code(code=None):
@@ -9330,33 +9400,98 @@ def create_company():
 @app.route('/api/companies/<path:company_code>', methods=['PUT'])
 @require_super_admin
 def update_company(company_code):
-    """Owner: update a company's display name."""
+    """Owner: update a company's code and display name without breaking references."""
+    global _active_company_code
     try:
         code = _normalise_company_code(unquote_plus(company_code))
         data = request.get_json() or {}
+        new_code = _normalise_company_code(data.get('code') or data.get('companyCode') or code)
         name = str(data.get('name') or '').strip()
         registry = _load_company_registry()
 
         if not code or code not in registry['companies']:
             return jsonify({'error': 'Company not found'}), 404
 
+        if not new_code:
+            return jsonify({'error': 'Company code is required'}), 400
+
         if not name:
             return jsonify({'error': 'Company name is required'}), 400
 
-        record = registry['companies'][code]
+        if new_code != code and new_code in registry['companies']:
+            return jsonify({'error': f'Company {new_code} already exists'}), 409
+
+        record = dict(registry['companies'][code])
         old_name = record.get('name') or code
+        old_record = dict(record)
+
+        company_manager = _company_data_managers.get(code)
+        database_url = _database_url_for_runtime()
+        if company_manager is None and database_url:
+            company_manager = _get_company_data_manager(code)
+
+        if new_code != code:
+            _validate_company_rename_folder(code, new_code, record)
+
+            if (
+                company_manager is not None
+                and hasattr(company_manager, 'rename_company_data')
+                and database_url
+            ):
+                company_manager.rename_company_data(new_code, name)
+
+            record = _safe_company_rename_record(code, new_code, record)
+            registry['companies'].pop(code, None)
+            registry['companies'][new_code] = record
+
+            if _normalise_company_code(registry.get('defaultCompany'), DEFAULT_COMPANY_CODE) == code:
+                registry['defaultCompany'] = new_code
+
+            for username, assigned_company in list(registry.get('userCompanies', {}).items()):
+                if _normalise_company_code(assigned_company, DEFAULT_COMPANY_CODE) == code:
+                    registry['userCompanies'][username] = new_code
+
+            _company_data_managers.pop(code, None)
+            _company_data_managers.pop(new_code, None)
+
+            if _normalise_company_code(_active_company_code, DEFAULT_COMPANY_CODE) == code:
+                _active_company_code = new_code
+            if session.get('company_code') and _normalise_company_code(session.get('company_code'), DEFAULT_COMPANY_CODE) == code:
+                session['company_code'] = new_code
+        else:
+            record['code'] = code
+            registry['companies'][code] = record
+
         record['name'] = name
-        registry['companies'][code] = record
+        record['updatedAt'] = datetime.now().isoformat(timespec='seconds')
+        registry['companies'][new_code] = record
         _save_company_registry(registry)
 
-        mark_realtime_change('company-management', {'companyCode': code, 'updated': True})
-        log_action(f"Updated company {code} name from {old_name} to {name}")
+        if new_code != code and _normalise_company_code(_current_company_code(), DEFAULT_COMPANY_CODE) == new_code:
+            manager = _activate_company(new_code)
+            _bind_request_data_manager(manager)
+
+        mark_realtime_change(
+            'company-management',
+            {'companyCode': new_code, 'previousCompanyCode': code, 'updated': True}
+        )
+        if new_code == code:
+            log_action(f"Updated company {code} name from {old_name} to {name}")
+        else:
+            log_action(f"Renamed company {code} to {new_code}; name changed from {old_name} to {name}")
 
         return jsonify({
             'success': True,
             'message': 'Company updated successfully',
-            'data': _company_payload(code)
+            'data': {
+                **_company_payload(new_code),
+                'previousCode': code,
+                'previousBackendFolder': old_record.get('backendFolder') or '',
+                'previousFrontendFolder': old_record.get('frontendFolder') or '',
+            }
         })
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
     except Exception as e:
         logger.error(f"Error updating company {company_code}: {e}", exc_info=True)
         return jsonify({'error': 'Failed to update company'}), 500
@@ -15902,6 +16037,11 @@ def update_asset(asset_id):
             ]
         else:
             target_assets = [asset]
+        target_asset_ids_before = [
+            str(getattr(item, 'asset_id', '') or '').strip()
+            for item in target_assets
+            if str(getattr(item, 'asset_id', '') or '').strip()
+        ]
 
         audit_timestamp = _asset_audit_timestamp()
         audit_user = _asset_audit_user()
@@ -16121,6 +16261,15 @@ def update_asset(asset_id):
             departments[dept_code] = _department_record(dept_code)
             _save_departments(departments)
 
+        finance_documents_updated = _finance_sync_inventory_edit(
+            old_asset_id,
+            new_asset_id,
+            old_group,
+            new_group,
+            target_asset_ids=target_asset_ids_before,
+            apply_group_change=(apply_to == 'allSimilar' and group_changed),
+        )
+
         invalidate_cache()
 
         log_action(
@@ -16140,6 +16289,7 @@ def update_asset(asset_id):
                 'containersUpdated': containers_updated,
                 'idReferencesChanged': id_references_changed,
                 'modelReferencesChanged': model_references_changed,
+                'financeDocumentsUpdated': bool(finance_documents_updated),
                 'auditUpdates': audit_updates
             }
         })
@@ -17880,7 +18030,7 @@ def check_and_update_ongoing_events():
 # ---------------- Quotations and invoices ----------------
 
 FINANCE_FILENAME = 'Finance.json'
-FINANCE_VERSION = 2
+FINANCE_VERSION = 4
 FINANCE_QUOTATION_STATUSES = (
     'draft', 'sent', 'accepted', 'declined', 'expired',
     'cancelled', 'invoiced', 'paid',
@@ -17913,6 +18063,13 @@ def _finance_current_username():
     if not has_request_context():
         return _finance_owner_username()
     return str(session.get('user') or '').strip()
+
+
+def _finance_current_user_display_name():
+    username = _finance_current_username()
+    user = data_manager.users.get(username) if username and data_manager else None
+    display_name = str(getattr(user, 'name', '') or '').strip()
+    return display_name or username
 
 
 def _finance_user_can_access(document):
@@ -17958,6 +18115,20 @@ def _finance_department_details(value, code_hint=''):
 
 def _finance_format_number(prefix, year, sequence, revision):
     return f"{prefix}-{year}-{max(1, int(sequence)):03d}-{max(1, int(revision)):02d}"
+
+
+def _finance_active_departments(lines):
+    departments = []
+    for line in lines or []:
+        if not isinstance(line, dict):
+            continue
+        name, _code = _finance_department_details(
+            line.get('department'),
+            line.get('departmentCode'),
+        )
+        if name and name not in departments:
+            departments.append(name)
+    return departments
 
 
 def _finance_parse_number(number, fallback_sequence=1):
@@ -18018,8 +18189,12 @@ def _migrate_finance_data(data):
             ('revision', revision),
             ('projectName', document.get('projectName') or document.get('title') or ''),
             ('revisions', document.get('revisions') or []),
+            ('invoicedAt', document.get('invoicedAt') or ''),
+            ('paidAt', document.get('paidAt') or ''),
+            ('statusChangedAt', document.get('statusChangedAt') or document.get('updatedAt') or ''),
             ('showUnitPrices', bool(document.get('showUnitPrices', False))),
             ('showDepartmentDiscounts', bool(document.get('showDepartmentDiscounts', False))),
+            ('showDepartmentSubtotals', document.get('showDepartmentSubtotals', True) is not False),
             ('totalLocked', bool(document.get('totalLocked', False))),
             ('lockedPreTaxTotal', document.get('lockedPreTaxTotal')),
             ('setupDate', document.get('setupDate') or ''),
@@ -18063,12 +18238,19 @@ def _migrate_finance_data(data):
             if name not in department_names:
                 department_names.append(name)
 
-        configured = list(document.get('departments') or [])
-        for department in [*department_names, *FINANCE_DEFAULT_DEPARTMENTS]:
-            if department not in configured:
-                configured.append(department)
-                changed = True
-        document['departments'] = configured
+        if document.get('departments') != department_names:
+            document['departments'] = department_names
+            changed = True
+        active_departments = set(department_names)
+        cleaned_adjustments = [
+            row for row in document.get('adjustments') or []
+            if not isinstance(row, dict)
+            or row.get('scope') != 'department'
+            or row.get('department') in active_departments
+        ]
+        if cleaned_adjustments != (document.get('adjustments') or []):
+            document['adjustments'] = cleaned_adjustments
+            changed = True
 
     if data.get('version') != FINANCE_VERSION:
         data['version'] = FINANCE_VERSION
@@ -18123,6 +18305,173 @@ def _finance_catalog_key(department='', brand='', model='', description=''):
         str(model or '').strip(),
     ]
     return 'inventory:' + '|'.join(parts).lower()
+
+
+def _finance_display_description(brand='', model='', description=''):
+    return ' '.join(
+        value for value in (
+            str(brand or '').strip(),
+            str(model or '').strip(),
+            str(description or '').strip(),
+        )
+        if value
+    )
+
+
+def _finance_line_matches_inventory_group(line, catalog_key, group, target_asset_ids):
+    if not isinstance(line, dict) or line.get('isCustom'):
+        return False
+    line_ids = {
+        str(asset_id or '').strip().lower()
+        for asset_id in (line.get('sourceAssetIds') or [])
+        if str(asset_id or '').strip()
+    }
+    if target_asset_ids and line_ids.intersection(target_asset_ids):
+        return True
+    if str(line.get('catalogKey') or '').strip().lower() == catalog_key:
+        return True
+    line_department, line_code = _finance_department_details(
+        line.get('department'),
+        line.get('departmentCode'),
+    )
+    group_department, group_code = _finance_department_details(
+        group.get('department'),
+        group.get('department'),
+    )
+    return (
+        _normalise_department_code(line_code or line_department)
+        == _normalise_department_code(group_code or group_department)
+        and str(line.get('brand') or '').strip().lower()
+        == str(group.get('brand') or '').strip().lower()
+        and str(line.get('model') or '').strip().lower()
+        == str(group.get('model') or '').strip().lower()
+    )
+
+
+def _finance_sync_inventory_edit(
+    old_asset_id,
+    new_asset_id,
+    old_group,
+    new_group,
+    target_asset_ids=None,
+    apply_group_change=False,
+):
+    """Keep linked quotation lines aligned with intentional all-similar inventory edits."""
+    id_mapping = {}
+    old_asset_id = str(old_asset_id or '').strip()
+    new_asset_id = str(new_asset_id or '').strip()
+    if old_asset_id and new_asset_id and old_asset_id != new_asset_id:
+        id_mapping[old_asset_id] = new_asset_id
+
+    old_department, old_department_code = _finance_department_details(
+        old_group.get('department'),
+        old_group.get('department'),
+    )
+    new_department, new_department_code = _finance_department_details(
+        new_group.get('department'),
+        new_group.get('department'),
+    )
+    old_catalog_key = _finance_catalog_key(
+        old_department_code,
+        old_group.get('brand'),
+        old_group.get('model'),
+        old_group.get('description'),
+    )
+    new_catalog_key = _finance_catalog_key(
+        new_department_code,
+        new_group.get('brand'),
+        new_group.get('model'),
+        new_group.get('description'),
+    )
+    target_ids = {
+        str(asset_id or '').strip().lower()
+        for asset_id in (target_asset_ids or [])
+        if str(asset_id or '').strip()
+    }
+    target_ids.update(str(value or '').strip().lower() for value in id_mapping.values())
+    if old_asset_id:
+        target_ids.add(old_asset_id.lower())
+
+    changed = False
+    with _finance_lock:
+        finance_data = _load_finance_data()
+        price_book = finance_data.setdefault('priceBook', {})
+
+        if id_mapping:
+            for document in finance_data.get('documents') or []:
+                document_changed = False
+                for line in document.get('lineItems') or []:
+                    source_ids = list(line.get('sourceAssetIds') or [])
+                    replaced = [
+                        id_mapping.get(str(asset_id or '').strip(), str(asset_id or '').strip())
+                        for asset_id in source_ids
+                        if str(asset_id or '').strip()
+                    ]
+                    if replaced != source_ids:
+                        line['sourceAssetIds'] = replaced
+                        document_changed = True
+                if document_changed:
+                    document['updatedAt'] = datetime.now().isoformat(timespec='seconds')
+                    document['updatedBy'] = _finance_current_username()
+                    changed = True
+
+            for price_key, payload in list(price_book.items()):
+                for old_id, replacement_id in id_mapping.items():
+                    if price_key.endswith(f"::asset:{old_id.lower()}"):
+                        prefix = price_key[: -len(f"asset:{old_id.lower()}")]
+                        price_book[f"{prefix}asset:{replacement_id.lower()}"] = payload
+                        changed = True
+
+        if apply_group_change and old_group != new_group:
+            new_description = _finance_display_description(
+                new_group.get('brand'),
+                new_group.get('model'),
+                new_group.get('description'),
+            ) or str(new_group.get('model') or '').strip() or 'Inventory item'
+            for document in finance_data.get('documents') or []:
+                document_changed = False
+                for line in document.get('lineItems') or []:
+                    if not _finance_line_matches_inventory_group(
+                        line,
+                        old_catalog_key,
+                        old_group,
+                        target_ids,
+                    ):
+                        continue
+                    line['catalogKey'] = new_catalog_key
+                    line['department'] = new_department
+                    line['departmentCode'] = new_department_code
+                    line['brand'] = str(new_group.get('brand') or '').strip()
+                    line['model'] = str(new_group.get('model') or '').strip()
+                    line['description'] = new_description
+                    document_changed = True
+                if document_changed:
+                    document['departments'] = _finance_active_departments(document.get('lineItems') or [])
+                    document['updatedAt'] = datetime.now().isoformat(timespec='seconds')
+                    document['updatedBy'] = _finance_current_username()
+                    _recalculate_finance_adjustments(document)
+                    _apply_locked_total_adjustment(document)
+                    document['totals'] = _finance_totals(document)
+                    changed = True
+
+            for price_key, payload in list(price_book.items()):
+                base_key = str(price_key).split('::', 1)[-1]
+                if base_key != old_catalog_key:
+                    continue
+                prefix = price_key[: -len(base_key)]
+                updated_payload = dict(payload or {})
+                updated_payload.update({
+                    'description': new_description,
+                    'department': new_department,
+                    'uom': updated_payload.get('uom') or 'units',
+                    'updatedAt': datetime.now().isoformat(timespec='seconds'),
+                })
+                price_book[f"{prefix}{new_catalog_key}"] = updated_payload
+                changed = True
+
+        if changed:
+            _save_finance_data(finance_data)
+    return changed
 
 
 def _finance_custom_price_key(description):
@@ -18197,21 +18546,49 @@ def _normalise_finance_adjustment(value):
     value = value if isinstance(value, dict) else {}
     scope = 'department' if value.get('scope') == 'department' else 'total'
     department, _department_code = _finance_department_details(value.get('department'))
+    adjustment_id = re.sub(r'[^A-Za-z0-9_-]+', '', str(value.get('id') or ''))[:80] or secrets.token_hex(6)
+    locked_total_adjustment = (
+        bool(value.get('lockedTotalAdjustment'))
+        or adjustment_id.startswith('locked_total_')
+        or _finance_is_generated_total_adjustment(value)
+    )
     return {
-        'id': re.sub(r'[^A-Za-z0-9_-]+', '', str(value.get('id') or ''))[:80] or secrets.token_hex(6),
+        'id': adjustment_id,
         'scope': scope,
         'department': department if scope == 'department' else '',
         'label': str(value.get('label') or 'Discount').strip()[:300] or 'Discount',
         'amount': round(_safe_float(value.get('amount'), 0), 2),
         'percent': round(max(0, _safe_float(value.get('percent'), 0)), 4),
         'kind': 'discount' if str(value.get('kind') or '').lower() == 'discount' or _safe_float(value.get('amount'), 0) < 0 else 'adjustment',
+        'lockedTotalAdjustment': locked_total_adjustment,
     }
+
+
+def _finance_is_locked_adjustment(adjustment):
+    return (
+        bool((adjustment or {}).get('lockedTotalAdjustment'))
+        or str((adjustment or {}).get('id') or '').startswith('locked_total_')
+        or _finance_is_generated_total_adjustment(adjustment)
+    )
+
+
+def _finance_is_generated_total_adjustment(adjustment):
+    if not isinstance(adjustment, dict) or adjustment.get('scope') != 'total':
+        return False
+    label = str(adjustment.get('label') or '').strip().lower()
+    return bool(re.match(r'^\d+(?:\.\d+)?% (?:overall|total) (?:discount|adjustment)$', label))
+
+
+def _finance_locked_adjustment_id(document):
+    return f"locked_total_{document.get('id') or 'current'}"
 
 
 def _recalculate_finance_adjustments(document):
     lines = document.get('lineItems') or []
     adjustments = document.get('adjustments') or []
     for adjustment in adjustments:
+        if _finance_is_locked_adjustment(adjustment):
+            continue
         percent = max(0, _safe_float(adjustment.get('percent'), 0))
         if not percent:
             continue
@@ -18231,6 +18608,56 @@ def _recalculate_finance_adjustments(document):
             )
         sign = -1 if adjustment.get('kind') == 'discount' else 1
         adjustment['amount'] = round(sign * base * percent / 100, 2)
+
+
+def _apply_locked_total_adjustment(document):
+    adjustments = list(document.get('adjustments') or [])
+    unlocked_adjustments = [
+        row for row in adjustments
+        if not _finance_is_locked_adjustment(row)
+    ]
+    if not document.get('totalLocked'):
+        document['adjustments'] = unlocked_adjustments
+        document['lockedPreTaxTotal'] = None
+        return
+
+    subtotal = round(
+        sum(_safe_float(line.get('total'), 0) for line in document.get('lineItems') or []),
+        2,
+    )
+    adjustment_base = round(
+        subtotal + sum(_safe_float(row.get('amount'), 0) for row in unlocked_adjustments),
+        2,
+    )
+    locked_raw = document.get('lockedPreTaxTotal')
+    locked_target = (
+        adjustment_base
+        if locked_raw in (None, '')
+        else round(max(0, _safe_float(locked_raw, adjustment_base)), 2)
+    )
+    document['lockedPreTaxTotal'] = locked_target
+    difference = round(locked_target - adjustment_base, 2)
+    if abs(difference) < 0.005:
+        document['adjustments'] = unlocked_adjustments
+        return
+
+    percent = round((abs(difference) / adjustment_base * 100) if adjustment_base else 0, 4)
+    label_percent = f"{percent:.2f}".rstrip('0').rstrip('.') or '0'
+    locked_adjustment = {
+        'id': _finance_locked_adjustment_id(document),
+        'scope': 'total',
+        'department': '',
+        'label': (
+            f"{label_percent}% total discount"
+            if difference < 0
+            else f"{label_percent}% total adjustment"
+        ),
+        'amount': difference,
+        'percent': percent,
+        'kind': 'discount' if difference < 0 else 'adjustment',
+        'lockedTotalAdjustment': True,
+    }
+    document['adjustments'] = [*unlocked_adjustments, locked_adjustment]
 
 
 def _finance_totals(document):
@@ -18310,21 +18737,28 @@ def _normalise_finance_document(value, document_type='quotation', existing=None)
         if 'title' in value
         else existing.get('projectName') or existing.get('title') or ''
     ).strip()[:500]
-    departments = []
-    for department in (
-        value.get('departments')
-        if 'departments' in value
-        else existing.get('departments') or []
-    ):
-        name, _code = _finance_department_details(department)
-        if name not in departments:
-            departments.append(name)
-    for line in lines:
-        if line['department'] not in departments:
-            departments.append(line['department'])
-    for department in FINANCE_DEFAULT_DEPARTMENTS:
-        if department not in departments:
-            departments.append(department)
+    departments = _finance_active_departments(lines)
+    active_department_names = set(departments)
+    adjustments = [
+        row for row in adjustments
+        if row.get('scope') != 'department' or row.get('department') in active_department_names
+    ]
+    total_locked = bool(value.get('totalLocked') if 'totalLocked' in value else existing.get('totalLocked', False))
+    locked_raw = (
+        value.get('lockedPreTaxTotal')
+        if 'lockedPreTaxTotal' in value
+        else existing.get('lockedPreTaxTotal')
+    )
+    locked_pre_tax_total = (
+        None
+        if not total_locked or locked_raw in (None, '')
+        else round(max(0, _safe_float(locked_raw, 0)), 2)
+    )
+    event_id_source = (
+        value.get('eventId')
+        if 'eventId' in value
+        else existing.get('eventId')
+    )
 
     document = {
         'id': existing.get('id') or re.sub(r'[^A-Za-z0-9_-]+', '', str(value.get('id') or ''))[:80] or secrets.token_hex(12),
@@ -18340,7 +18774,7 @@ def _normalise_finance_document(value, document_type='quotation', existing=None)
         'title': project_name,
         'reference': str(value.get('reference') if 'reference' in value else existing.get('reference') or '').strip()[:300],
         'eventReference': str(value.get('eventReference') if 'eventReference' in value else existing.get('eventReference') or '').strip()[:300],
-        'salesperson': str(value.get('salesperson') if 'salesperson' in value else existing.get('salesperson') or session.get('username', '')).strip()[:160],
+        'salesperson': str(value.get('salesperson') if 'salesperson' in value else existing.get('salesperson') or _finance_current_user_display_name()).strip()[:160],
         'paymentTerms': str(value.get('paymentTerms') if 'paymentTerms' in value else existing.get('paymentTerms') or settings.get('defaultPaymentTerms', '30 Days')).strip()[:300],
         'eventLocation': str(value.get('eventLocation') if 'eventLocation' in value else existing.get('eventLocation') or '').strip()[:600],
         'setupDate': str(value.get('setupDate') if 'setupDate' in value else existing.get('setupDate') or '').strip()[:20],
@@ -18364,21 +18798,18 @@ def _normalise_finance_document(value, document_type='quotation', existing=None)
         'departments': departments,
         'showUnitPrices': bool(value.get('showUnitPrices') if 'showUnitPrices' in value else existing.get('showUnitPrices', False)),
         'showDepartmentDiscounts': bool(value.get('showDepartmentDiscounts') if 'showDepartmentDiscounts' in value else existing.get('showDepartmentDiscounts', False)),
-        'totalLocked': bool(value.get('totalLocked') if 'totalLocked' in value else existing.get('totalLocked', False)),
-        'lockedPreTaxTotal': (
-            round(max(0, _safe_float(
-                value.get('lockedPreTaxTotal')
-                if 'lockedPreTaxTotal' in value
-                else existing.get('lockedPreTaxTotal'),
-                0,
-            )), 2)
-            if bool(value.get('totalLocked') if 'totalLocked' in value else existing.get('totalLocked', False))
-            else None
-        ),
+        'showDepartmentSubtotals': (value.get('showDepartmentSubtotals') if 'showDepartmentSubtotals' in value else existing.get('showDepartmentSubtotals', True)) is not False,
+        'totalLocked': total_locked,
+        'lockedPreTaxTotal': locked_pre_tax_total,
         'revisions': list(existing.get('revisions') or value.get('revisions') or []),
         'sentAt': str(value.get('sentAt') or existing.get('sentAt') or '').strip()[:40],
         'acceptedAt': str(value.get('acceptedAt') or existing.get('acceptedAt') or '').strip()[:40],
-        'eventId': _safe_int(value.get('eventId') or existing.get('eventId'), 0) or None,
+        'invoicedAt': str(value.get('invoicedAt') or existing.get('invoicedAt') or '').strip()[:40],
+        'paidAt': str(value.get('paidAt') or existing.get('paidAt') or '').strip()[:40],
+        'statusChangedAt': str(value.get('statusChangedAt') or existing.get('statusChangedAt') or '').strip()[:40],
+        'eventId': _safe_int(event_id_source, 0) or None,
+        'eventManagedByQuotation': bool(value.get('eventManagedByQuotation') if 'eventManagedByQuotation' in value else existing.get('eventManagedByQuotation', False)),
+        'eventSyncFingerprint': str(value.get('eventSyncFingerprint') if 'eventSyncFingerprint' in value else existing.get('eventSyncFingerprint') or '').strip()[:200],
         'sourceQuotationId': str(value.get('sourceQuotationId') or existing.get('sourceQuotationId') or '').strip()[:80],
         'createdAt': existing.get('createdAt') or now.isoformat(timespec='seconds'),
         'createdBy': existing.get('createdBy') or current_username,
@@ -18393,11 +18824,15 @@ def _normalise_finance_document(value, document_type='quotation', existing=None)
             base_sequence,
             revision,
         )
+        if not document.get('eventId'):
+            document['eventManagedByQuotation'] = False
+            document['eventSyncFingerprint'] = ''
     document['eventDays'] = _finance_date_days(
         document.get('setupDate'),
         document.get('teardownDate'),
     )
     _recalculate_finance_adjustments(document)
+    _apply_locked_total_adjustment(document)
     document['totals'] = _finance_totals(document)
     return document
 
@@ -18430,6 +18865,7 @@ def _finance_revision_payload(document):
     omitted = {
         'revisions', 'totals', 'updatedAt', 'updatedBy', 'status',
         'sentAt', 'acceptedAt', 'eventId',
+        'eventManagedByQuotation', 'eventSyncFingerprint',
     }
     return {
         key: value
@@ -18470,6 +18906,8 @@ def _finance_snapshot_revision(document):
         'revision': revision,
         'number': document.get('number'),
         'sentAt': document.get('sentAt'),
+        'validUntil': document.get('validUntil'),
+        'validityDays': document.get('validityDays'),
         'fingerprint': _finance_revision_fingerprint(document),
         'snapshot': _finance_revision_payload(document),
     }
@@ -18477,6 +18915,20 @@ def _finance_snapshot_revision(document):
         existing.update(snapshot)
     else:
         revisions.append(snapshot)
+
+
+def _finance_reset_to_draft_revision(document):
+    prefix, year, sequence, _revision = _finance_parse_number(document.get('number'))
+    document['revision'] = 1
+    document['number'] = _finance_format_number(prefix, year, sequence, 1)
+    document['status'] = 'draft'
+    document['sentAt'] = ''
+    document['acceptedAt'] = ''
+    document['invoicedAt'] = ''
+    document['paidAt'] = ''
+    document['statusChangedAt'] = datetime.now().isoformat(timespec='seconds')
+    document['revisions'] = []
+    document['validUntil'] = ''
 
 
 def _finance_expire_sent_documents(finance_data):
@@ -18502,12 +18954,6 @@ def _finance_expire_sent_documents(finance_data):
 def _finance_export_error(document):
     if not str(document.get('projectName') or '').strip():
         return 'Project Name is required'
-    totals = document.get('totals') or _finance_totals(document)
-    if document.get('totalLocked') and abs(_safe_float(totals.get('lockDifference'), 0)) > 0.01:
-        return (
-            'Department subtotals must match the locked pre-GST total '
-            'before the quotation can be generated'
-        )
     return ''
 
 
@@ -18529,39 +18975,160 @@ def _finance_event_date_range(document):
     return start, end
 
 
-def _finance_create_event(document):
-    if _safe_int(document.get('eventId'), 0):
-        return _safe_int(document.get('eventId'), 0)
+def _finance_line_is_non_prepare_department(line):
+    name, code = _finance_department_details(
+        (line or {}).get('department'),
+        (line or {}).get('departmentCode'),
+    )
+    clean_name = str(name or '').strip().lower().removesuffix(' department').strip()
+    clean_code = _normalise_department_code(code)
+    return clean_code in {'MANPOWER', 'TRANSPORT', 'TRANSPORTATION'} or clean_name in {
+        'manpower',
+        'transport',
+        'transportation',
+    }
 
-    start_date, end_date = _finance_event_date_range(document)
-    event_id = max(data_manager.events.keys(), default=0) + 1
+
+def _finance_inventory_group_from_line(line):
+    if not isinstance(line, dict) or _finance_line_is_non_prepare_department(line):
+        return None
+
+    for asset_id in line.get('sourceAssetIds') or []:
+        asset = data_manager.inventory.get(str(asset_id or '').strip())
+        if not asset or _is_disposed(asset):
+            continue
+        return {
+            'department': _normalise_department_code(getattr(asset, 'department_code', 'UN')) or 'UN',
+            'brand': str(getattr(asset, 'brand', '') or '').strip(),
+            'model': str(getattr(asset, 'model_number', '') or '').strip(),
+            'description': str(getattr(asset, 'description', '') or '').strip(),
+        }
+
+    if line.get('isCustom'):
+        return None
+
+    brand = str(line.get('brand') or '').strip()
+    model = str(line.get('model') or '').strip()
+    if not brand or not model:
+        return None
+
+    return {
+        'department': _normalise_department_code(line.get('departmentCode')) or 'UN',
+        'brand': brand,
+        'model': model,
+        'description': str(line.get('description') or '').strip(),
+    }
+
+
+def _finance_custom_marker_from_line(line, quantity):
+    if not isinstance(line, dict) or _finance_line_is_non_prepare_department(line):
+        return None
+    if not line.get('isCustom'):
+        return None
+    description = str(line.get('description') or '').strip()
+    if not description:
+        return None
+    department_code = _normalise_department_code(line.get('departmentCode')) or 'UN'
+    line_id = re.sub(r'[^A-Za-z0-9_-]+', '', str(line.get('id') or ''))[:80]
+    uid = f"finance_{line_id}"[:80] if line_id else None
+    return _make_custom_marker('MISC', description, quantity, department_code, uid=uid)
+
+
+def _finance_event_prepared_items(document):
     prepared_items = []
     for line in document.get('lineItems') or []:
         quantity = max(1, _safe_int(round(_safe_float(line.get('quantity'), 1)), 1))
-        brand = str(line.get('brand') or '').strip()
-        model = str(line.get('model') or '').strip()
-        department_code = _normalise_department_code(line.get('departmentCode')) or 'UN'
-        description = str(line.get('description') or '').strip()
-        if brand and model and not line.get('isCustom'):
+        group = _finance_inventory_group_from_line(line)
+        if group:
             _add_or_increment_model_marker(
                 prepared_items,
-                {
-                    'department': department_code,
-                    'brand': brand,
-                    'model': model,
-                    'description': description,
-                },
+                group,
                 quantity,
             )
-        elif description:
-            prepared_items.append(
-                _make_custom_marker(
-                    'MISC',
-                    description,
-                    quantity,
-                    department_code,
-                )
-            )
+            continue
+        custom_marker = _finance_custom_marker_from_line(line, quantity)
+        if custom_marker:
+            prepared_items.append(custom_marker)
+    return prepared_items
+
+
+def _finance_event_asset_fingerprint(event):
+    payload = {
+        'assetModels': getattr(event, 'asset_models', []) or [],
+        'preparedItems': getattr(event, 'prepared_items', []) or [],
+        'actuallyPrepared': getattr(event, 'actually_prepared', []) or [],
+        'returnedItems': getattr(event, 'returned_items', []) or [],
+        'extraAssets': getattr(event, 'extra_assets', []) or [],
+        'customCollected': getattr(event, 'custom_collected', []) or [],
+    }
+    return hashlib.sha256(json.dumps(
+        payload,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(',', ':'),
+    ).encode('utf-8')).hexdigest()
+
+
+def _finance_clear_event_link(document):
+    document['eventId'] = None
+    document['eventManagedByQuotation'] = False
+    document['eventSyncFingerprint'] = ''
+
+
+def _finance_can_adopt_legacy_created_event(document, event):
+    if document.get('eventManagedByQuotation') or document.get('eventSyncFingerprint'):
+        return False
+    expected_note = f"Created from quotation {document.get('number')}"
+    if str(getattr(event, 'notes', '') or '').strip() != expected_note:
+        return False
+    return not any((
+        getattr(event, 'actually_prepared', []) or [],
+        getattr(event, 'returned_items', []) or [],
+        getattr(event, 'extra_assets', []) or [],
+        getattr(event, 'custom_collected', []) or [],
+        getattr(event, 'asset_models', []) or [],
+    ))
+
+
+def _finance_sync_managed_event(document):
+    event_id = _safe_int(document.get('eventId'), 0)
+    if not event_id:
+        _finance_clear_event_link(document)
+        return None
+
+    event = data_manager.events.get(event_id)
+    if not event:
+        _finance_clear_event_link(document)
+        return None
+
+    if not document.get('eventManagedByQuotation'):
+        if not _finance_can_adopt_legacy_created_event(document, event):
+            return event_id
+        document['eventManagedByQuotation'] = True
+        document['eventSyncFingerprint'] = _finance_event_asset_fingerprint(event)
+
+    previous_fingerprint = str(document.get('eventSyncFingerprint') or '').strip()
+    if previous_fingerprint and _finance_event_asset_fingerprint(event) != previous_fingerprint:
+        document['eventManagedByQuotation'] = False
+        document['eventSyncFingerprint'] = ''
+        return event_id
+
+    event.asset_models = []
+    event.prepared_items = _finance_event_prepared_items(document)
+    data_manager.save_event(event)
+    invalidate_cache()
+    document['eventSyncFingerprint'] = _finance_event_asset_fingerprint(event)
+    return event_id
+
+
+def _finance_create_event(document):
+    if _safe_int(document.get('eventId'), 0):
+        document['acceptedAt'] = document.get('acceptedAt') or datetime.now().isoformat(timespec='seconds')
+        return _finance_sync_managed_event(document) or _safe_int(document.get('eventId'), 0)
+
+    start_date, end_date = _finance_event_date_range(document)
+    event_id = max(data_manager.events.keys(), default=0) + 1
+    prepared_items = _finance_event_prepared_items(document)
 
     assigned_users = [
         document.get('createdBy')
@@ -18587,6 +19154,8 @@ def _finance_create_event(document):
     invalidate_cache()
     document['eventId'] = event_id
     document['acceptedAt'] = datetime.now().isoformat(timespec='seconds')
+    document['eventManagedByQuotation'] = True
+    document['eventSyncFingerprint'] = _finance_event_asset_fingerprint(event)
     return event_id
 
 
@@ -18713,8 +19282,16 @@ def _finance_get_update_delete(document_id, document_type):
         request_data = request.get_json() or {}
         updated = _normalise_finance_document(request_data, document_type, existing)
         if document_type == 'quotation':
+            missing_link_cleared = False
             if not str(updated.get('projectName') or '').strip():
                 return jsonify({'error': 'Project Name is required'}), 400
+            if updated.get('eventId') and ('eventId' in request_data or str(request_data.get('status') or '').strip().lower() == 'accepted'):
+                linked_event = data_manager.events.get(_safe_int(updated.get('eventId'), 0))
+                if not linked_event:
+                    _finance_clear_event_link(updated)
+                    missing_link_cleared = True
+                elif not _current_user_can_access_event(linked_event):
+                    return jsonify({'error': 'You are not assigned to this event'}), 403
 
             existing_normalised = _normalise_finance_document(existing, document_type, existing)
             content_changed = (
@@ -18736,9 +19313,12 @@ def _finance_get_update_delete(document_id, document_type):
                 updated['sentAt'] = ''
 
             requested_status = str(request_data.get('status') or '').strip().lower()
-            if requested_status == 'sent' and updated.get('status') == 'sent':
+            if requested_status == 'draft' and updated.get('status') == 'draft':
+                _finance_reset_to_draft_revision(updated)
+            elif requested_status == 'sent' and updated.get('status') == 'sent':
                 sent_at = datetime.now()
                 updated['sentAt'] = sent_at.isoformat(timespec='seconds')
+                updated['statusChangedAt'] = updated['sentAt']
                 updated['validUntil'] = (
                     sent_at + timedelta(days=max(1, _safe_int(updated.get('validityDays'), 30)))
                 ).strftime('%Y-%m-%d')
@@ -18747,7 +19327,34 @@ def _finance_get_update_delete(document_id, document_type):
                 export_error = _finance_export_error(updated)
                 if export_error:
                     return jsonify({'error': export_error}), 400
-                _finance_create_event(updated)
+                updated['acceptedAt'] = (
+                    updated.get('acceptedAt')
+                    if existing_normalised.get('status') == 'accepted' and updated.get('acceptedAt')
+                    else datetime.now().isoformat(timespec='seconds')
+                )
+                updated['statusChangedAt'] = updated['acceptedAt']
+                if not missing_link_cleared:
+                    _finance_create_event(updated)
+            elif requested_status == 'invoiced' and updated.get('status') == 'invoiced':
+                updated['invoicedAt'] = (
+                    updated.get('invoicedAt')
+                    if existing_normalised.get('status') == 'invoiced' and updated.get('invoicedAt')
+                    else datetime.now().isoformat(timespec='seconds')
+                )
+                updated['statusChangedAt'] = updated['invoicedAt']
+            elif requested_status == 'paid' and updated.get('status') == 'paid':
+                updated['paidAt'] = (
+                    updated.get('paidAt')
+                    if existing_normalised.get('status') == 'paid' and updated.get('paidAt')
+                    else datetime.now().isoformat(timespec='seconds')
+                )
+                updated['statusChangedAt'] = updated['paidAt']
+            elif requested_status in FINANCE_QUOTATION_STATUSES:
+                updated['statusChangedAt'] = datetime.now().isoformat(timespec='seconds')
+            elif updated.get('eventId'):
+                _finance_sync_managed_event(updated)
+            if requested_status in {'draft', 'sent'} and updated.get('eventId'):
+                _finance_sync_managed_event(updated)
 
         for index, row in enumerate(finance_data.get('documents') or []):
             if str(row.get('id')) == str(document_id):
@@ -18764,14 +19371,24 @@ def _finance_get_update_delete(document_id, document_type):
 def finance_catalog():
     query = str(request.args.get('query') or '').strip().lower()
     with _finance_lock:
-        price_book = (_load_finance_data().get('priceBook') or {})
+        finance_data = _load_finance_data()
+        price_book = finance_data.get('priceBook') or {}
+        finance_documents = list(finance_data.get('documents') or [])
+
+    department_cache = {}
+
+    def catalog_department(value, code_hint=''):
+        cache_key = (str(value or ''), str(code_hint or ''))
+        if cache_key not in department_cache:
+            department_cache[cache_key] = _finance_department_details(value, code_hint)
+        return department_cache[cache_key]
 
     grouped = {}
     for asset in data_manager.inventory.values():
         if _is_disposed(asset):
             continue
         department_code = _normalise_department_code(getattr(asset, 'department_code', 'UN')) or 'UN'
-        department, department_code = _finance_department_details(
+        department, department_code = catalog_department(
             department_code,
             department_code,
         )
@@ -18779,7 +19396,8 @@ def finance_catalog():
         model = str(getattr(asset, 'model_number', '') or '').strip()
         description = str(getattr(asset, 'description', '') or '').strip()
         display = ' '.join(value for value in (brand, model, description) if value)
-        if query and query not in f"{display} {department} {department_code}".lower():
+        haystack = f"{display} {department} {department_code}".lower()
+        if query and query not in haystack:
             continue
         key = _finance_catalog_key(department_code, brand, model, description)
         if key not in grouped:
@@ -18799,7 +19417,125 @@ def finance_catalog():
         grouped[key]['sourceAssetIds'].append(asset.asset_id)
         grouped[key]['availableQuantity'] += _asset_inventory_quantity(asset)
 
-    for row in grouped.values():
+    for container in getattr(data_manager, 'containers', {}).values():
+        container_id = str(getattr(container, 'container_id', '') or '').strip()
+        if not container_id:
+            continue
+        serial_number = _container_serial_number(container)
+        container_items = {}
+        haystack_parts = [container_id, serial_number]
+        for asset_id in getattr(container, 'asset_ids', []) or []:
+            asset = data_manager.inventory.get(asset_id)
+            if not asset or _is_disposed(asset):
+                continue
+            department_code = _normalise_department_code(getattr(asset, 'department_code', 'UN')) or 'UN'
+            department, department_code = catalog_department(department_code, department_code)
+            brand = str(getattr(asset, 'brand', '') or '').strip()
+            model = str(getattr(asset, 'model_number', '') or '').strip()
+            description = str(getattr(asset, 'description', '') or '').strip()
+            display = _finance_display_description(brand, model, description) or model or description or asset_id
+            key = _finance_catalog_key(department_code, brand, model, description)
+            if key not in container_items:
+                container_items[key] = {
+                    'catalogKey': key,
+                    'description': display or 'Container item',
+                    'department': department,
+                    'departmentCode': department_code,
+                    'brand': brand,
+                    'model': model,
+                    'availableQuantity': 0,
+                    'sourceAssetIds': [],
+                    'unitPrice': 0,
+                    'uom': 'units',
+                    'isCustom': False,
+                    'containerId': container_id,
+                    'containerSerial': serial_number,
+                    'containerQuantity': 0,
+                }
+            container_items[key]['sourceAssetIds'].append(asset_id)
+            quantity = _asset_inventory_quantity(asset)
+            container_items[key]['availableQuantity'] += quantity
+            container_items[key]['containerQuantity'] += quantity
+
+        if not container_items:
+            continue
+        if query and query not in ' '.join(haystack_parts).lower():
+            continue
+        item_rows = sorted(
+            container_items.values(),
+            key=lambda row: (row['department'], row['description'].lower()),
+        )
+        for row in item_rows:
+            remembered = _finance_remembered_price(
+                price_book,
+                row['catalogKey'],
+                row['sourceAssetIds'],
+            )
+            row['unitPrice'] = _safe_float(remembered.get('unitPrice'), 0)
+            row['uom'] = remembered.get('uom') if remembered.get('uom') in ('units', 'pax', 'lot') else 'units'
+        grouped[f"container:{container_id.lower()}"] = {
+            'catalogKey': f"container:{container_id}",
+            'description': f"Container {container_id}",
+            'department': 'Container',
+            'departmentCode': 'CONTAINER',
+            'brand': '',
+            'model': '',
+            'availableQuantity': sum(_safe_float(row.get('containerQuantity'), 0) for row in item_rows),
+            'sourceAssetIds': [],
+            'unitPrice': 0,
+            'uom': 'units',
+            'isCustom': False,
+            'isContainer': True,
+            'containerId': container_id,
+            'containerSerial': serial_number,
+            'containerItems': item_rows,
+        }
+
+    custom_seen = set()
+    for document in finance_documents:
+        if document.get('type') != 'quotation' or not _finance_user_can_access(document):
+            continue
+        for source in document.get('lineItems') or []:
+            if not isinstance(source, dict) or not source.get('isCustom'):
+                continue
+            description = str(source.get('description') or '').strip()
+            if not description:
+                continue
+            department, department_code = catalog_department(
+                source.get('department'),
+                source.get('departmentCode'),
+            )
+            if query and query not in f"{description} {department}".lower():
+                continue
+            custom_key = _finance_custom_price_key(description)
+            if custom_key in custom_seen:
+                continue
+            custom_seen.add(custom_key)
+            grouped[f"custom:{len(custom_seen)}"] = {
+                'catalogKey': '',
+                'description': description,
+                'department': department,
+                'departmentCode': department_code,
+                'brand': '',
+                'model': '',
+                'availableQuantity': None,
+                'sourceAssetIds': [],
+                'unitPrice': _safe_float(source.get('unitPrice'), 0),
+                'uom': source.get('uom') if source.get('uom') in ('units', 'pax', 'lot') else 'units',
+                'isCustom': True,
+            }
+
+    rows = sorted(
+        grouped.values(),
+        key=lambda row: (
+            0 if row.get('isContainer') else 1,
+            row['department'],
+            row['description'].lower(),
+        ),
+    )[:30]
+    for row in rows:
+        if row.get('isCustom') or row.get('isContainer'):
+            continue
         remembered = _finance_remembered_price(
             price_book,
             row['catalogKey'],
@@ -18807,38 +19543,7 @@ def finance_catalog():
         )
         row['unitPrice'] = _safe_float(remembered.get('unitPrice'), 0)
         row['uom'] = remembered.get('uom') if remembered.get('uom') in ('units', 'pax', 'lot') else 'units'
-
-    finance_data = _load_finance_data()
-    custom_seen = set()
-    for document in finance_data.get('documents') or []:
-        if document.get('type') != 'quotation' or not _finance_user_can_access(document):
-            continue
-        for source in document.get('lineItems') or []:
-            line = _normalise_finance_line(source)
-            if not line.get('isCustom') or not line.get('description'):
-                continue
-            if query and query not in f"{line['description']} {line['department']}".lower():
-                continue
-            custom_key = _finance_custom_price_key(line['description'])
-            if custom_key in custom_seen:
-                continue
-            custom_seen.add(custom_key)
-            grouped[f"custom:{len(custom_seen)}"] = {
-                'catalogKey': '',
-                'description': line['description'],
-                'department': line['department'],
-                'departmentCode': line['departmentCode'],
-                'brand': '',
-                'model': '',
-                'availableQuantity': None,
-                'sourceAssetIds': [],
-                'unitPrice': line['unitPrice'],
-                'uom': line['uom'],
-                'isCustom': True,
-            }
-
-    rows = sorted(grouped.values(), key=lambda row: (row['department'], row['description'].lower()))
-    return jsonify({'success': True, 'data': rows[:30]})
+    return jsonify({'success': True, 'data': rows})
 
 
 @app.route('/api/finance/price-suggestion', methods=['GET'])
@@ -18880,7 +19585,8 @@ def finance_departments():
         for document in _load_finance_data().get('documents') or []:
             if document.get('type') != 'quotation' or not _finance_user_can_access(document):
                 continue
-            for value in document.get('departments') or []:
+            for line in document.get('lineItems') or []:
+                value = (line or {}).get('department')
                 name, _code = _finance_department_details(value)
                 if name not in values:
                     values.append(name)
@@ -18981,7 +19687,7 @@ def _finance_pdf_response(document_id, document_type):
     return send_file(
         BytesIO(pdf_bytes),
         mimetype='application/pdf',
-        as_attachment=True,
+        as_attachment=request.args.get('download') == '1',
         download_name=safe_pdf_filename(document.get('number')),
         max_age=0,
     )

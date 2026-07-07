@@ -256,11 +256,12 @@ def build_finance_pdf(document, company, logo_path=''):
         secondary_label, secondary_value = 'Due date', document.get('dueDate')
     else:
         date_label, date_value = 'Quotation date', document.get('quotationDate') or document.get('date')
-        secondary_label, secondary_value = 'Valid until', document.get('validUntil')
+        secondary_label = 'Valid for'
+        secondary_value = f"{document.get('validityDays') or 30} days"
 
     meta_rows = [
         [_paragraph(date_label, label), _paragraph(_date(date_value), body)],
-        [_paragraph(secondary_label, label), _paragraph(_date(secondary_value), body)],
+        [_paragraph(secondary_label, label), _paragraph(_date(secondary_value) if document_type == 'invoice' else secondary_value, body)],
         [_paragraph('Reference', label), _paragraph(document.get('reference'), body)],
         [_paragraph('Salesperson', label), _paragraph(document.get('salesperson'), body)],
         [_paragraph('Payment terms', label), _paragraph(document.get('paymentTerms'), body)],
@@ -328,7 +329,6 @@ def build_finance_pdf(document, company, logo_path=''):
         )
         story.extend([event_panel, Spacer(1, 4 * mm)])
 
-    story.append(_paragraph('LINE ITEMS', section_title))
     departments = []
     for department in document.get('departments') or []:
         department = str(department or '').strip()
@@ -341,10 +341,10 @@ def build_finance_pdf(document, company, logo_path=''):
 
     show_unit_prices = bool(document.get('showUnitPrices'))
     show_department_discounts = bool(document.get('showDepartmentDiscounts'))
+    show_department_subtotals = document.get('showDepartmentSubtotals', True) is not False
     column_widths = [
         8 * mm,
-        43 * mm,
-        28 * mm,
+        67 * mm,
         13 * mm,
         12 * mm,
         14 * mm,
@@ -353,7 +353,12 @@ def build_finance_pdf(document, company, logo_path=''):
         29 * mm,
     ]
 
-    for department in departments:
+    if show_unit_prices or show_department_subtotals:
+        story.append(_paragraph('LINE ITEMS', section_title))
+
+    export_departments = departments if (show_unit_prices or show_department_subtotals) else []
+    pdf_line_number = 1
+    for department in export_departments:
         department_lines = [
             line for line in lines
             if (str(line.get('department') or 'General').strip() or 'General') == department
@@ -368,9 +373,20 @@ def build_finance_pdf(document, company, logo_path=''):
         department_total += sum(float(row.get('amount') or 0) for row in department_adjustments)
         table_rows = [
             [
+                _paragraph(
+                    department,
+                    ParagraphStyle(
+                        f"Department-{len(story)}",
+                        parent=body,
+                        fontName='Helvetica-Bold',
+                        textColor=ink,
+                    ),
+                ),
+                '', '', '', '', '', '', '',
+            ],
+            [
                 _paragraph('#', label),
                 _paragraph('DESCRIPTION', label),
-                _paragraph('DEPARTMENT', label),
                 _paragraph('DAYS', label),
                 _paragraph('QTY', label),
                 _paragraph('UOM', label),
@@ -378,36 +394,26 @@ def build_finance_pdf(document, company, logo_path=''):
                 _paragraph('DISC %', label),
                 _paragraph('TOTAL', label),
             ],
-            [
-                _paragraph(
-                    department,
-                    ParagraphStyle(
-                        f"Department-{len(story)}",
-                        parent=body,
-                        fontName='Helvetica-Bold',
-                    ),
-                ),
-                '', '', '', '', '', '', '', '',
-            ],
         ]
         row_styles = [
-            ('BACKGROUND', (0, 0), (-1, 0), ink),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-            ('BACKGROUND', (0, 1), (-1, 1), panel),
+            ('SPAN', (0, 0), (-1, 0)),
+            ('BACKGROUND', (0, 0), (-1, 0), panel),
+            ('BACKGROUND', (0, 1), (-1, 1), ink),
+            ('TEXTCOLOR', (0, 1), (-1, 1), colors.white),
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
             ('LEFTPADDING', (0, 0), (-1, -1), 3),
             ('RIGHTPADDING', (0, 0), (-1, -1), 3),
             ('TOPPADDING', (0, 0), (-1, 1), 5),
             ('BOTTOMPADDING', (0, 0), (-1, 1), 5),
-            ('GRID', (0, 0), (-1, -1), 0.35, rule),
+            ('BOX', (0, 0), (-1, -1), 0.35, rule),
+            ('INNERGRID', (0, 1), (-1, -1), 0.35, rule),
         ]
 
-        for line_index, line in enumerate(department_lines, start=1):
+        for line in department_lines:
             description = _text(line.get('description'))
             table_rows.append([
-                _paragraph(str(line_index), right),
+                _paragraph(str(pdf_line_number), right),
                 _paragraph(description, body),
-                _paragraph(department, body),
                 _paragraph(f"{float(line.get('days') or 0):g}", right),
                 _paragraph(f"{float(line.get('quantity') or 0):g}", right),
                 _paragraph('unit(s)' if line.get('uom') == 'units' else line.get('uom'), body),
@@ -420,34 +426,36 @@ def build_finance_pdf(document, company, logo_path=''):
                 ),
                 _paragraph(_money(line.get('total'), currency) if show_unit_prices else '', right),
             ])
+            pdf_line_number += 1
 
-        if show_department_discounts:
+        if show_department_discounts and show_department_subtotals:
             for adjustment in department_adjustments:
                 adjustment_index = len(table_rows)
                 table_rows.append([
                     '',
                     _paragraph(adjustment.get('label') or 'Department discount', body),
-                    '', '', '', '', '', '',
+                    '', '', '', '', '',
                     _paragraph(_money(adjustment.get('amount'), currency), right),
                 ])
                 row_styles.extend([
-                    ('SPAN', (1, adjustment_index), (7, adjustment_index)),
+                    ('SPAN', (1, adjustment_index), (6, adjustment_index)),
                     ('TEXTCOLOR', (1, adjustment_index), (-1, adjustment_index), success),
                     ('BACKGROUND', (0, adjustment_index), (-1, adjustment_index), colors.HexColor('#ECFDF5')),
                 ])
 
-        subtotal_index = len(table_rows)
-        table_rows.append([
-            '',
-            _paragraph(f"{department} subtotal", right_bold),
-            '', '', '', '', '', '',
-            _paragraph(_money(department_total, currency), right_bold),
-        ])
-        row_styles.extend([
-            ('SPAN', (1, subtotal_index), (7, subtotal_index)),
-            ('BACKGROUND', (0, subtotal_index), (-1, subtotal_index), panel),
-            ('LINEABOVE', (0, subtotal_index), (-1, subtotal_index), 0.8, ink),
-        ])
+        if show_department_subtotals:
+            subtotal_index = len(table_rows)
+            table_rows.append([
+                '',
+                _paragraph(f"{department} subtotal", right_bold),
+                '', '', '', '', '',
+                _paragraph(_money(department_total, currency), right_bold),
+            ])
+            row_styles.extend([
+                ('SPAN', (1, subtotal_index), (6, subtotal_index)),
+                ('BACKGROUND', (0, subtotal_index), (-1, subtotal_index), panel),
+                ('LINEABOVE', (0, subtotal_index), (-1, subtotal_index), 0.8, ink),
+            ])
 
         items_table = Table(
             table_rows,
@@ -465,9 +473,18 @@ def build_finance_pdf(document, company, logo_path=''):
 
     tax_label = _text(company.get('taxLabel') or 'Tax')
     tax_rate = float(document.get('taxRate') or 0)
-    summary_rows = [
-        [_paragraph('Total before GST', body), _paragraph(_money(totals.get('netSubtotal'), currency), right)],
-    ]
+    summary_rows = []
+    if show_unit_prices or show_department_subtotals:
+        for adjustment in adjustments:
+            if adjustment.get('scope') != 'total':
+                continue
+            summary_rows.append([
+                _paragraph(adjustment.get('label') or 'Total adjustment', body),
+                _paragraph(_money(adjustment.get('amount'), currency), right),
+            ])
+    summary_rows.append(
+        [_paragraph('Total before GST', body), _paragraph(_money(totals.get('netSubtotal'), currency), right)]
+    )
     summary_rows.extend([
         [_paragraph(f"{tax_label} ({tax_rate:g}%)", body), _paragraph(_money(totals.get('tax'), currency), right)],
         [_paragraph('TOTAL', ParagraphStyle('TotalLabel', parent=body, fontName='Helvetica-Bold', fontSize=10.5)),
