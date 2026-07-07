@@ -61,6 +61,7 @@ class AssetCreationTests(unittest.TestCase):
             'model': 'P1',
             'description': 'Wired IEM beltpack',
             'department': 'AX',
+            'quantity': 1,
             **payload,
         })
 
@@ -136,6 +137,21 @@ class AssetCreationTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
         self.assertEqual(response.get_json()['assetIds'], ['LAV#01', 'LAV#02'])
+
+    def test_create_asset_requires_department_and_quantity(self):
+        response = self.post_asset({
+            'department': '',
+        })
+
+        self.assertEqual(response.status_code, 400, response.get_data(as_text=True))
+        self.assertEqual(response.get_json()['error'], 'Department is required')
+
+        response = self.post_asset({
+            'quantity': '',
+        })
+
+        self.assertEqual(response.status_code, 400, response.get_data(as_text=True))
+        self.assertEqual(response.get_json()['error'], 'Quantity is required')
 
     def test_create_asset_saves_date_of_purchase(self):
         response = self.post_asset({

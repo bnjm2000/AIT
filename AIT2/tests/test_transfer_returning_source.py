@@ -51,6 +51,7 @@ class ReturningSourceTransferTests(unittest.TestCase):
                 state='Ongoing',
                 returned_items=[],
                 actually_prepared=['TEST#01', 'TEST#02'],
+                assigned_users=['normal'],
             ),
             2: Event(
                 2,
@@ -62,6 +63,7 @@ class ReturningSourceTransferTests(unittest.TestCase):
                 state='Planning',
                 returned_items=[],
                 actually_prepared=[],
+                assigned_users=['normal'],
             ),
         }
         self.data_manager.save_inventory()

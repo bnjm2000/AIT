@@ -8,6 +8,10 @@
       rel="stylesheet"
       href="{{ url_for('static', filename='css/workforce-admin.css', v=workforce_css_version) }}"
     />
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='css/finance.css', v=app_js_version) }}"
+    />
     <style>
       * {
         margin: 0;
@@ -3250,6 +3254,9 @@
       }
 
       .events-state-filters button {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
         flex: 0 0 auto;
         min-height: 36px;
         padding: 7px 14px;
@@ -3276,6 +3283,152 @@
       .events-state-filters [data-event-state="Returning"]:not(.active) { color: #ea580c; }
       .events-state-filters [data-event-state="Pending Closure"]:not(.active) { color: #7c3aed; }
       .events-state-filters [data-event-state="Overdue"]:not(.active) { color: #dc2626; }
+
+      .event-assignee-picker {
+        margin-top: 16px;
+        padding: 14px;
+        border: 1px solid #dfe3ea;
+        border-radius: 8px;
+        background: #fbfcfe;
+      }
+
+      .event-assignee-heading {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 12px;
+        margin-bottom: 10px;
+      }
+
+      .event-assignee-heading small,
+      .event-assignee-empty {
+        color: #64748b;
+        font-size: 12px;
+      }
+
+      .event-assignee-selected {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        min-height: 30px;
+        margin-bottom: 10px;
+      }
+
+      .event-assignee-chip,
+      .event-assignee-card {
+        display: inline-flex;
+        align-items: center;
+        gap: 9px;
+      }
+
+      .event-assignee-chip {
+        min-height: 30px;
+        padding: 4px 8px;
+        border: 1px solid #cbd5e1;
+        border-radius: 999px;
+        background: #fff;
+        color: #334155;
+        font-size: 13px;
+        font-weight: 650;
+      }
+
+      .event-assignee-chip button {
+        border: 0;
+        background: transparent;
+        color: #64748b;
+        cursor: pointer;
+        font-size: 16px;
+        line-height: 1;
+      }
+
+      .event-assignee-avatar {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 30px;
+        height: 30px;
+        flex: 0 0 30px;
+        border-radius: 50%;
+        background: #e0f2fe;
+        color: #075985;
+        font-size: 12px;
+        font-weight: 800;
+      }
+
+      .event-assignee-results {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+        gap: 8px;
+        margin-top: 10px;
+      }
+
+      .event-assignee-card {
+        width: 100%;
+        min-height: 58px;
+        padding: 9px 10px;
+        border: 1px solid #dfe3ea;
+        border-radius: 8px;
+        background: #fff;
+        color: #1e293b;
+        text-align: left;
+        cursor: pointer;
+      }
+
+      .event-assignee-card.selected {
+        border-color: #2563eb;
+        background: #eff6ff;
+      }
+
+      .event-assignee-copy {
+        min-width: 0;
+        flex: 1;
+      }
+
+      .event-assignee-copy strong,
+      .event-assignee-copy small {
+        display: block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .event-assignee-copy small {
+        color: #64748b;
+        font-size: 12px;
+      }
+
+      .event-assignee-action {
+        color: #2563eb;
+        font-size: 12px;
+        font-weight: 750;
+      }
+
+      .event-assignee-summary {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        min-width: 0;
+        margin-top: 8px;
+        color: #475569;
+        font-size: 12px;
+      }
+
+      .event-assignee-summary span {
+        color: #64748b;
+        font-weight: 700;
+      }
+
+      .event-assignee-summary strong {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: #1f2937;
+      }
+
+      .event-assignee-summary.muted strong {
+        color: #94a3b8;
+      }
 
       .events-overview-grid {
         display: grid;
@@ -8176,7 +8329,7 @@
             <h2 class="content-title">Dashboard</h2>
             <button
               class="btn btn-primary"
-              onclick="openModal('addEventModal')"
+              onclick="openAddEventModal()"
             >
               Add New Event
             </button>
@@ -8287,7 +8440,7 @@
               class="btn btn-primary admin-only events-add-button"
               data-admin-only="true"
               data-admin-display="inline-flex"
-              onclick="openModal('addEventModal'); syncAddEventLocationRequirement();"
+              onclick="openAddEventModal()"
             >
               <span aria-hidden="true">+</span> Add Event
             </button>
@@ -8404,7 +8557,7 @@
         <h2 class="content-title">All Events</h2>
         <button
           class="btn btn-primary"
-          onclick="openModal('addEventModal')"
+          onclick="openAddEventModal()"
         >
           Add Event
         </button>
@@ -9037,6 +9190,24 @@
               <option value="dry hire">Dry Hire</option>
             </select>
           </div>
+          <div class="event-assignee-picker" data-event-assignee-context="add">
+            <div class="event-assignee-heading">
+              <label class="form-label" for="addEventAssigneeSearch">Assigned Users</label>
+              <small>Users only see events assigned to them.</small>
+            </div>
+            <div id="addEventAssigneeSelected" class="event-assignee-selected">
+              <span class="event-assignee-empty">No users assigned</span>
+            </div>
+            <input
+              id="addEventAssigneeSearch"
+              class="form-input event-assignee-search"
+              type="search"
+              placeholder="Search users..."
+              autocomplete="off"
+              oninput="renderEventAssigneePicker('add')"
+            />
+            <div id="addEventAssigneeResults" class="event-assignee-results"></div>
+          </div>
           <div class="modal-actions" style="display: flex; gap: 10px; justify-content: flex-end">
             <button
               type="button"
@@ -9083,7 +9254,7 @@
             </div>
             <div class="form-group">
               <label class="form-label">Quantity to Add</label>
-              <input type="number" class="form-input" id="assetQuantity" min="1" max="500" value="1" />
+              <input type="number" class="form-input" id="assetQuantity" min="1" max="500" value="1" required />
             </div>
             <div class="form-group">
               <label class="form-label">Date of Purchase</label>
@@ -9557,6 +9728,7 @@
       </main>
 
     <script src="{{ url_for('static', filename='js/app.js', v=app_js_version) }}"></script>
+    <script src="{{ url_for('static', filename='js/finance.js', v=app_js_version) }}"></script>
     <script src="{{ url_for('static', filename='js/workforce-admin.js', v=workforce_js_version) }}"></script>
   </body>
 </html>

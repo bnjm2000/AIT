@@ -611,22 +611,6 @@ function renderWorkforcePage() {
       </div>
 
       <aside class="plan-aside wf-plan-aside">
-        <section class="plan-card plan-details-card">
-          <div class="plan-card-header event-detail-card-header">
-            <h3>Event Details</h3>
-            ${eventDetailsActionsHtml(data.event.id)}
-          </div>
-          <div class="plan-aside-body">
-            <dl class="plan-detail-list">
-              <div><dt>Name</dt><dd>${wfEscape(data.event.name || `Event ${data.event.id}`)}</dd></div>
-              <div><dt>Location</dt><dd>${wfEscape(data.event.location || '—')}</dd></div>
-              <div><dt>Date(s)</dt><dd>${wfEscape(eventDates || '—')}</dd></div>
-              <div><dt>Status</dt><dd>${planEventStateBadgeHtml(data.event)}</dd></div>
-              <div><dt>Type</dt><dd>${planEventTypeBadgeHtml(data.event)}</dd></div>
-            </dl>
-          </div>
-        </section>
-
         <section class="plan-card wf-transport-panel">
           <header class="wf-panel-header">
             <div><h3>Transport Details</h3><p>Vehicles booked for this event.</p></div>

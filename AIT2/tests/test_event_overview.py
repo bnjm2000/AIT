@@ -159,6 +159,7 @@ class AssetEventHistoryTests(unittest.TestCase):
                 [],
                 actually_prepared=['A#01'],
                 location='Marina Bay Sands',
+                assigned_users=['user'],
             )
         }
         self.data_manager.users = {
@@ -183,6 +184,203 @@ class AssetEventHistoryTests(unittest.TestCase):
         event = response.get_json()['data'][0]
         self.assertEqual(event['name'], 'Launch')
         self.assertEqual(event['location'], 'Marina Bay Sands')
+
+
+class EventAssignmentAccessTests(unittest.TestCase):
+    def setUp(self):
+        self.original_data_manager = app_module.get_default_data_manager()
+        self.original_testing = app_module.app.config.get('TESTING')
+        self.tempdir = tempfile.TemporaryDirectory()
+
+        self.data_manager = DataManager(self.tempdir.name)
+        self.data_manager.setup_data_folder()
+        self.data_manager.check_and_initialize_files()
+        self.data_manager.users = {
+            'admin': User('admin', hash_password('pw', 'admin-salt'), 'admin-salt', True, True, role='admin'),
+            'manager': User('manager', hash_password('pw', 'manager-salt'), 'manager-salt', True, True, role='manager'),
+            'alice': User('alice', hash_password('pw', 'alice-salt'), 'alice-salt', False, True, name='Alice Tan'),
+            'bob': User('bob', hash_password('pw', 'bob-salt'), 'bob-salt', False, True, name='Bob Lim'),
+        }
+        self.data_manager.inventory = {
+            'A#01': InventoryItem(
+                'A#01',
+                'TestBrand',
+                'TestModel',
+                'SN-A01',
+                'Test asset',
+                False,
+                [],
+                'AX',
+                'Store',
+                'Assigned',
+            ),
+            'BULK-01': InventoryItem(
+                'BULK-01',
+                'TestBrand',
+                'BulkModel',
+                'SN-B01',
+                'Bulk asset',
+                False,
+                [],
+                'AX',
+                'Store',
+                'Assigned',
+                is_bulk=True,
+                quantity=5,
+            ),
+        }
+        self.data_manager.events = {
+            1: Event(
+                1,
+                'Assigned',
+                '20260701',
+                '20260701',
+                [],
+                actually_prepared=['A#01', app_module._bulk_marker('BULK-01', 1)],
+                assigned_users=['alice'],
+            ),
+            2: Event(
+                2,
+                'Unassigned',
+                '20260702',
+                '20260702',
+                [],
+                actually_prepared=['A#01', app_module._bulk_marker('BULK-01', 2)],
+            ),
+        }
+        self.data_manager.save_users()
+        self.data_manager.save_inventory()
+        for event in self.data_manager.events.values():
+            self.data_manager.save_event(event)
+
+        app_module.app.config['TESTING'] = True
+        app_module.set_data_manager_for_testing(self.data_manager)
+        self.client = app_module.app.test_client()
+
+    def tearDown(self):
+        app_module.clear_test_data_manager(self.original_data_manager)
+        app_module.app.config['TESTING'] = self.original_testing
+        self.tempdir.cleanup()
+
+    def login(self, username):
+        user = self.data_manager.users[username]
+        with self.client.session_transaction() as session:
+            session['user'] = username
+            session['is_admin'] = bool(user.is_admin)
+            session['is_active'] = True
+
+    def test_admin_and_manager_see_all_events(self):
+        self.login('admin')
+        response = self.client.get('/api/events?view=summary')
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual({event['id'] for event in response.get_json()['data']}, {1, 2})
+
+        self.login('manager')
+        response = self.client.get('/api/events?view=summary')
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual({event['id'] for event in response.get_json()['data']}, {1, 2})
+
+    def test_user_only_sees_and_modifies_assigned_events(self):
+        self.login('alice')
+
+        response = self.client.get('/api/events?view=summary')
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        payload = response.get_json()['data']
+        self.assertEqual([event['id'] for event in payload], [1])
+        self.assertEqual(payload[0]['assignedUsernames'], ['alice'])
+        self.assertEqual(payload[0]['assignedUsers'][0]['name'], 'Alice Tan')
+
+        assigned_detail = self.client.get('/api/events/1')
+        self.assertEqual(assigned_detail.status_code, 200, assigned_detail.get_data(as_text=True))
+
+        blocked_detail = self.client.get('/api/events/2')
+        self.assertEqual(blocked_detail.status_code, 403, blocked_detail.get_data(as_text=True))
+
+        notes_response = self.client.put('/api/events/1/notes', json={'notes': 'Packed by Alice'})
+        self.assertEqual(notes_response.status_code, 200, notes_response.get_data(as_text=True))
+        self.assertEqual(self.data_manager.events[1].notes, 'Packed by Alice')
+
+        blocked_notes = self.client.put('/api/events/2/notes', json={'notes': 'No access'})
+        self.assertEqual(blocked_notes.status_code, 403, blocked_notes.get_data(as_text=True))
+        self.assertEqual(self.data_manager.events[2].notes, '')
+
+    def test_user_transfer_helpers_only_include_assigned_events(self):
+        self.login('alice')
+
+        response = self.client.get('/api/transfers/options')
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        payload = response.get_json()['data']
+        self.assertEqual([event['id'] for event in payload['events']], [1])
+        self.assertEqual([event['id'] for event in payload['sourceEvents']], [1])
+        self.assertEqual([event['id'] for event in payload['targetEvents']], [1])
+
+        blocked = self.client.get('/api/transfers/candidates?fromEventId=1&toEventId=2')
+        self.assertEqual(blocked.status_code, 403, blocked.get_data(as_text=True))
+
+    def test_user_asset_event_history_only_includes_assigned_events(self):
+        self.login('alice')
+
+        response = self.client.get('/api/assets/A%2301/event-history')
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual([event['id'] for event in response.get_json()['data']], [1])
+
+        response = self.client.get('/api/assets')
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        bulk = next(item for item in response.get_json()['data'] if item.get('bulkId') == 'BULK-01')
+        self.assertEqual([row['eventId'] for row in bulk['bulkDeployments']], [1])
+
+    def test_user_dashboard_stats_only_count_assigned_events(self):
+        self.login('alice')
+
+        response = self.client.get('/api/stats')
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        stats = response.get_json()['data']
+        self.assertEqual(stats['totalEvents'], 1)
+        self.assertEqual(stats['deployedAssets'], 2)
+
+    def test_user_availability_counts_hidden_overlap_without_event_details(self):
+        self.data_manager.events[2].start_date = '20260701'
+        self.data_manager.events[2].end_date = '20260701'
+        self.data_manager.events[2].prepared_items = [
+            '[MODEL]AX|TestBrand|TestModel|1|Test asset'
+        ]
+        self.login('alice')
+
+        response = self.client.get('/api/events/1/availability')
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        row = next(item for item in response.get_json()['data'] if item['model'] == 'TestModel')
+        self.assertEqual(row['overlappingDemand'], 1)
+        self.assertEqual(row['overlappingEvents'], [])
+
+    def test_event_create_and_update_persist_assigned_users(self):
+        self.login('admin')
+
+        response = self.client.post('/api/events', json={
+            'name': 'New assigned event',
+            'location': 'Expo',
+            'startDate': '2026-07-03',
+            'endDate': '2026-07-03',
+            'tag': 'events',
+            'assignedUsers': ['alice', 'bob'],
+        })
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        event_id = response.get_json()['eventId']
+        self.assertEqual(self.data_manager.events[event_id].assigned_users, ['alice', 'bob'])
+
+        response = self.client.put(f'/api/events/{event_id}', json={
+            'name': 'New assigned event',
+            'location': 'Expo',
+            'startDate': '2026-07-03',
+            'endDate': '2026-07-03',
+            'tag': 'events',
+            'assignedUsers': ['bob'],
+        })
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(self.data_manager.events[event_id].assigned_users, ['bob'])
+
+        reloaded = DataManager(self.tempdir.name)
+        reloaded.load_events()
+        self.assertEqual(reloaded.events[event_id].assigned_users, ['bob'])
 
 
 if __name__ == '__main__':

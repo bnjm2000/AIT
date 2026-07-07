@@ -2,6 +2,23 @@ import hashlib
 import datetime
 
 
+USER_ROLES = ('owner', 'admin', 'manager', 'user')
+ADMIN_USER_ROLES = {'owner', 'admin', 'manager'}
+
+
+def normalize_user_role(role, is_admin=False):
+    value = str(role or '').strip().lower().replace('-', '_').replace(' ', '_')
+    if value in ('super', 'superadmin', 'super_admin'):
+        return 'owner'
+    if value in USER_ROLES:
+        return value
+    return 'admin' if is_admin else 'user'
+
+
+def user_role_is_adminish(role):
+    return normalize_user_role(role) in ADMIN_USER_ROLES
+
+
 # Date formats used by form input/display and CSV storage.
 DATE_FORMAT = "%Y/%m/%d"
 STORAGE_DATE_FORMAT = "%Y%m%d"
@@ -36,17 +53,43 @@ def dates_overlap(start1, end1, start2, end2):
 
 
 class User:
-    def __init__(self, username, password_hash, salt, is_admin, is_active=True, last_online='-'):
+    def __init__(
+        self,
+        username,
+        password_hash,
+        salt,
+        is_admin,
+        is_active=True,
+        last_online='-',
+        role=None,
+        has_sales_access=False,
+        name='',
+    ):
         self.username = username
+        self.name = str(name or '').strip()
         self.password_hash = password_hash
         self.salt = salt
-        self.is_admin = is_admin
+        self.role = normalize_user_role(role, is_admin)
+        self.is_admin = self.role in ADMIN_USER_ROLES
         self.is_active = is_active
         self.last_online = str(last_online or '-').strip() or '-'
+        self.has_sales_access = bool(has_sales_access)
 
 
 class Client:
-    def __init__(self, name, company='', address1='', address2='', address3='', postal_code='', phone=''):
+    def __init__(
+        self,
+        name,
+        company='',
+        address1='',
+        address2='',
+        address3='',
+        postal_code='',
+        phone='',
+        contact_person='',
+        email='',
+        tax_number='',
+    ):
         self.name = name
         self.company = company
         self.address1 = address1
@@ -54,6 +97,9 @@ class Client:
         self.address3 = address3
         self.postal_code = postal_code
         self.phone = phone
+        self.contact_person = contact_person
+        self.email = email
+        self.tax_number = tax_number
 
 
 class InventoryItem:
@@ -168,6 +214,7 @@ class Event:
         notes='',
         event_logs=None,
         location='',
+        assigned_users=None,
     ):
         clean_name, clean_location, legacy_location_extracted = (
             split_legacy_event_name_location(name, location)
@@ -190,6 +237,7 @@ class Event:
         self.force_state_override = force_state_override
         self.notes = notes or ''
         self.event_logs = event_logs if event_logs is not None else []
+        self.assigned_users = list(assigned_users or [])
 
 
 class LogEntry:

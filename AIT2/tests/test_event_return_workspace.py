@@ -81,6 +81,7 @@ class EventReturnWorkspaceTests(unittest.TestCase):
             actually_prepared=actually_prepared or [],
             returned_items=returned_items or [],
             state='Closed' if returned_items else 'Overdue',
+            assigned_users=['operator'],
         )
         self.data_manager.events[event_id] = event
         self.data_manager.save_event(event)

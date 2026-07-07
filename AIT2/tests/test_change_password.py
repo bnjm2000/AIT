@@ -19,6 +19,14 @@ class ChangePasswordTests(unittest.TestCase):
         self.data_manager.users = {
             'normal': User('normal', hash_password('old-password', 'salt'), 'salt', False, True),
             'admin': User('admin', hash_password('admin-password', 'admin-salt'), 'admin-salt', True, True),
+            'manager': User(
+                'manager',
+                hash_password('manager-password', 'manager-salt'),
+                'manager-salt',
+                True,
+                True,
+                role='manager',
+            ),
         }
         self.data_manager.save_users()
         self.data_manager.logs = []
@@ -105,6 +113,62 @@ class ChangePasswordTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
         users = {user['username']: user for user in response.get_json()['data']}
         self.assertEqual(users['normal']['lastOnline'], '-')
+        self.assertEqual(users['normal']['name'], '')
+        self.assertEqual(users['admin']['role'], 'admin')
+        self.assertEqual(users['manager']['role'], 'manager')
+
+    def test_admin_can_update_user_name(self):
+        with self.client.session_transaction() as session:
+            session['user'] = 'admin'
+            session['is_admin'] = True
+            session['is_active'] = True
+
+        response = self.client.put('/api/users/normal', json={
+            'username': 'normal',
+            'name': 'Normal User',
+            'isActive': True,
+        })
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(self.data_manager.users['normal'].name, 'Normal User')
+
+        reloaded_manager = DataManager(self.tempdir.name)
+        reloaded_manager.load_users()
+        self.assertEqual(reloaded_manager.users['normal'].name, 'Normal User')
+
+        response = self.client.get('/api/users')
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        users = {user['username']: user for user in response.get_json()['data']}
+        self.assertEqual(users['normal']['name'], 'Normal User')
+
+    def test_admin_can_change_roles_but_manager_cannot(self):
+        with self.client.session_transaction() as session:
+            session['user'] = 'admin'
+            session['is_admin'] = True
+            session['is_active'] = True
+
+        response = self.client.put('/api/users/normal', json={
+            'role': 'manager',
+            'hasSalesAccess': True,
+        })
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(self.data_manager.users['normal'].role, 'manager')
+        self.assertTrue(self.data_manager.users['normal'].has_sales_access)
+
+        with self.client.session_transaction() as session:
+            session['user'] = 'manager'
+            session['is_admin'] = True
+            session['is_active'] = True
+
+        response = self.client.put('/api/users/normal', json={
+            'role': 'admin',
+            'hasSalesAccess': False,
+        })
+
+        self.assertEqual(response.status_code, 403, response.get_data(as_text=True))
+        self.assertEqual(self.data_manager.users['normal'].role, 'manager')
+        self.assertTrue(self.data_manager.users['normal'].has_sales_access)
 
 
 if __name__ == '__main__':

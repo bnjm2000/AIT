@@ -31,6 +31,7 @@ from models import (
     InventoryItem,
     LogEntry,
     User,
+    normalize_user_role,
     normalize_event_state,
 )
 
@@ -257,11 +258,17 @@ class PostgresDataManager(DataManager):
     def _user_data(self, user):
         return {
             'username': user.username,
+            'name': str(getattr(user, 'name', '') or ''),
             'passwordHash': user.password_hash,
             'salt': user.salt,
             'isAdmin': bool(user.is_admin),
             'isActive': bool(getattr(user, 'is_active', True)),
             'lastOnline': str(getattr(user, 'last_online', '-') or '-'),
+            'role': normalize_user_role(
+                getattr(user, 'role', None),
+                getattr(user, 'is_admin', False),
+            ),
+            'hasSalesAccess': bool(getattr(user, 'has_sales_access', False)),
         }
 
     def _inventory_data(self, item):
@@ -327,17 +334,21 @@ class PostgresDataManager(DataManager):
             'eventLogs': self.normalize_event_logs(
                 getattr(event, 'event_logs', [])
             ),
+            'assignedUsers': list(getattr(event, 'assigned_users', []) or []),
         }
 
     def _client_data(self, client):
         return {
             'name': client.name,
             'company': client.company,
+            'contactPerson': getattr(client, 'contact_person', ''),
+            'email': getattr(client, 'email', ''),
+            'phone': client.phone,
+            'taxNumber': getattr(client, 'tax_number', ''),
             'address1': client.address1,
             'address2': client.address2,
             'address3': client.address3,
             'postalCode': client.postal_code,
-            'phone': client.phone,
         }
 
     # ---------------- Loading ----------------
@@ -374,6 +385,9 @@ class PostgresDataManager(DataManager):
                         is_admin=bool(data.get('isAdmin', False)),
                         is_active=bool(data.get('isActive', True)),
                         last_online=data.get('lastOnline', '-'),
+                        role=data.get('role'),
+                        has_sales_access=bool(data.get('hasSalesAccess', False)),
+                        name=data.get('name', ''),
                     )
                     users[username] = user
                     snapshots[username] = _fingerprint(self._user_data(user))
@@ -497,6 +511,7 @@ class PostgresDataManager(DataManager):
                         ),
                         notes=data.get('notes', ''),
                         event_logs=data.get('eventLogs') or [],
+                        assigned_users=data.get('assignedUsers') or [],
                     )
                     event._legacy_state_migrated = str(raw_state or '').strip() != event.state
                     events[int(event_id)] = event
@@ -555,11 +570,14 @@ class PostgresDataManager(DataManager):
                     client = Client(
                         name=client_name,
                         company=data.get('company', ''),
+                        contact_person=data.get('contactPerson', ''),
+                        email=data.get('email', ''),
+                        phone=data.get('phone', ''),
+                        tax_number=data.get('taxNumber', ''),
                         address1=data.get('address1', ''),
                         address2=data.get('address2', ''),
                         address3=data.get('address3', ''),
                         postal_code=data.get('postalCode', ''),
-                        phone=data.get('phone', ''),
                     )
                     clients[client_name] = client
                     snapshots[client_name] = _fingerprint(

@@ -1,0 +1,1253 @@
+{
+  "version": 1,
+  "documents": [
+    {
+      "id": "c85f31d125430efa2ba36ca2",
+      "type": "quotation",
+      "number": "QT-2026-0001",
+      "status": "draft",
+      "client": {
+        "name": "Adityan Sohien",
+        "company": "Avery Events and Exhibitions",
+        "contactPerson": "",
+        "email": "",
+        "phone": "+65 9652 3212",
+        "taxNumber": "",
+        "address1": "2 Venture Dr, #14-02",
+        "address2": "Vision Exchange",
+        "address3": "",
+        "postalCode": "Singapore 608526"
+      },
+      "quotationDate": "2026-07-06",
+      "validUntil": "2026-07-20",
+      "title": "NTU Fest 2026",
+      "reference": "",
+      "eventReference": "",
+      "salesperson": "",
+      "paymentTerms": "30 Days",
+      "eventDate": "",
+      "eventLocation": "",
+      "setupTiming": "",
+      "eventTiming": "",
+      "currency": "SGD",
+      "taxRate": 9.0,
+      "notes": "",
+      "terms": "1.  Validity: 14 days\n2.  Work shall only commence upon receiving the certified copy of our quotation.  \n3.  Upon confirmation, a 50% non-refundable down payment is required, and the remaining balance must be paid upon\n      completion of the setup.\n4.  All items are rented for indoor usage only (unless otherwise stated).\n5.  Confirmation of rental is on a first-come, first-served basis.\n6.  T/T to: OCBC Bank Limited, 65 Chulia Street, #01 - 00, OCBC Centre, Singapore 049513.\n     Account Number (S$): 601 - 546195 - 001, Swift Code: OCBCSGSG, Account Name: Avec Vision Pte Ltd.\n7.  The hirer is responsible for according to due diligence and cares for equipment.  In agreement, they will undertake liability for\n\"     the loss or damage of the equipment rented.\t\"\n8.  Cancellation charge:  100% of the total amount if cancellation occurs after the completion of the setup.\n9.  Any additional services or equipment not mentioned in this quotation will be charged accordingly.\n\nWe hope the above quotation is acceptable to you and will be looking forward to your early confirmation.   Please feel free to\ncontact the undersigned should you require any further information.",
+      "lineItems": [
+        {
+          "id": "line_1783346905734_1e38135cb7f1e8",
+          "catalogKey": "ax|l-acoustics|karaii|long throw concert sound loudspeaker",
+          "description": "L-Acoustics KARA II Long Throw Concert Sound Loudspeaker",
+          "department": "AX",
+          "days": 1.0,
+          "quantity": 12.0,
+          "uom": "pcs",
+          "unitPrice": 350.0,
+          "discountPercent": 0,
+          "total": 4200.0
+        },
+        {
+          "id": "line_1783346968213_e43e632480b368",
+          "catalogKey": "ax|yamaha|ql5|digital mixer",
+          "description": "Yamaha QL5 Digital Mixer",
+          "department": "AX",
+          "days": 1.0,
+          "quantity": 1.0,
+          "uom": "pcs",
+          "unitPrice": 650.0,
+          "discountPercent": 0,
+          "total": 650.0
+        },
+        {
+          "id": "line_1783346986431_aaa899c984525",
+          "catalogKey": "ax|l-acoustics|sb18|high power compact subwoofer: 1 x 18\"",
+          "description": "L-Acoustics SB18 High power compact subwoofer: 1 x 18\"",
+          "department": "AX",
+          "days": 1.0,
+          "quantity": 8.0,
+          "uom": "pcs",
+          "unitPrice": 250.0,
+          "discountPercent": 0,
+          "total": 2000.0
+        },
+        {
+          "id": "line_1783347020197_b36cb0d1498098",
+          "catalogKey": "ax|l-acoustics|x12|12\" passive coaxial enclosure",
+          "description": "L-Acoustics X12 12\" passive coaxial enclosure",
+          "department": "AX",
+          "days": 1.0,
+          "quantity": 12.0,
+          "uom": "pcs",
+          "unitPrice": 170.0,
+          "discountPercent": 0,
+          "total": 2040.0
+        },
+        {
+          "id": "line_1783347053292_5d9d3a3dbf5c28",
+          "catalogKey": "ax|l-acoustics|la4x|amplified controller",
+          "description": "L-Acoustics LA4X Amplified controller",
+          "department": "AX",
+          "days": 1.0,
+          "quantity": 5.0,
+          "uom": "pcs",
+          "unitPrice": 350.0,
+          "discountPercent": 0,
+          "total": 1750.0
+        },
+        {
+          "id": "line_1783347056192_6dcacc66545bf8",
+          "catalogKey": "ax|l-acoustics|la12x|amplified controller",
+          "description": "L-Acoustics LA12X Amplified controller",
+          "department": "AX",
+          "days": 1.0,
+          "quantity": 2.0,
+          "uom": "pcs",
+          "unitPrice": 650.0,
+          "discountPercent": 0,
+          "total": 1300.0
+        },
+        {
+          "id": "line_1783347096484_d6f92471350bc",
+          "catalogKey": "ax|shure|ulxd4q [g52]|quad channel receiver",
+          "description": "Shure ULXD4Q [G52] Quad Channel Receiver",
+          "department": "AX",
+          "days": 1.0,
+          "quantity": 2.0,
+          "uom": "pcs",
+          "unitPrice": 400.0,
+          "discountPercent": 0,
+          "total": 800.0
+        },
+        {
+          "id": "line_1783347112575_c2c0912cf2d53",
+          "catalogKey": "ax|shure|ulxd2 [g52]|handheld microphone",
+          "description": "Shure ULXD2 [G52] Handheld Microphone",
+          "department": "AX",
+          "days": 1.0,
+          "quantity": 8.0,
+          "uom": "pcs",
+          "unitPrice": 50.0,
+          "discountPercent": 0,
+          "total": 400.0
+        },
+        {
+          "id": "line_1783347134934_99005e428dbae8",
+          "catalogKey": "ax|yamaha|rio1608-d2|high performance i/o rack",
+          "description": "Yamaha Rio1608-d2 High Performance I/O Rack",
+          "department": "AX",
+          "days": 1.0,
+          "quantity": 1.0,
+          "uom": "pcs",
+          "unitPrice": 250.0,
+          "discountPercent": 0,
+          "total": 250.0
+        },
+        {
+          "id": "line_1783347148158_0d2f2429acc29",
+          "catalogKey": "ax|shure|sm58s|cardioid dynamic w/ switch",
+          "description": "Shure SM58S cardioid dynamic w/ switch",
+          "department": "AX",
+          "days": 1.0,
+          "quantity": 2.0,
+          "uom": "pcs",
+          "unitPrice": 20.0,
+          "discountPercent": 0,
+          "total": 40.0
+        },
+        {
+          "id": "line_1783347167408_bd19dfa6263908",
+          "catalogKey": "ax|shure|beta 91a|boundary condenser microphone",
+          "description": "Shure Beta 91A Boundary condenser microphone",
+          "department": "AX",
+          "days": 1.0,
+          "quantity": 1.0,
+          "uom": "pcs",
+          "unitPrice": 50.0,
+          "discountPercent": 0,
+          "total": 50.0
+        },
+        {
+          "id": "line_1783347177816_1efb1f222199",
+          "catalogKey": "ax|shure|beta 52a|kick drum mic",
+          "description": "Shure Beta 52A Kick drum mic",
+          "department": "AX",
+          "days": 1.0,
+          "quantity": 1.0,
+          "uom": "pcs",
+          "unitPrice": 20.0,
+          "discountPercent": 0,
+          "total": 20.0
+        },
+        {
+          "id": "line_1783347187787_b63e18db371518",
+          "catalogKey": "ax|akg|c451b|cardioid condenser microphone",
+          "description": "AKG C451B Cardioid condenser microphone",
+          "department": "AX",
+          "days": 1.0,
+          "quantity": 1.0,
+          "uom": "pcs",
+          "unitPrice": 50.0,
+          "discountPercent": 0,
+          "total": 50.0
+        },
+        {
+          "id": "line_1783347208720_5627eb824d9b78",
+          "catalogKey": "ax|sennheiser|e904|dynamic cardioid instrument microphone",
+          "description": "Sennheiser E904 Dynamic cardioid instrument microphone",
+          "department": "AX",
+          "days": 1.0,
+          "quantity": 3.0,
+          "uom": "pcs",
+          "unitPrice": 30.0,
+          "discountPercent": 0,
+          "total": 90.0
+        },
+        {
+          "id": "line_1783348920578_7857a781092058",
+          "catalogKey": "ax|radial engineering|j48 mono|phantom powered active direct injection box",
+          "description": "Radial Engineering J48 Mono Phantom Powered Active Direct Injection Box",
+          "department": "AX",
+          "days": 1.0,
+          "quantity": 2.0,
+          "uom": "pcs",
+          "unitPrice": 60.0,
+          "discountPercent": 0,
+          "total": 120.0
+        },
+        {
+          "id": "line_1783348926084_49db0866298ef",
+          "catalogKey": "ax|radial engineering|j48 stereo|phantom powered active direct injection box",
+          "description": "Radial Engineering J48 Stereo Phantom Powered Active Direct Injection Box",
+          "department": "AX",
+          "days": 1.0,
+          "quantity": 2.0,
+          "uom": "pcs",
+          "unitPrice": 30.0,
+          "discountPercent": 0,
+          "total": 60.0
+        },
+        {
+          "id": "line_1783348958171_7bdac3c34db198",
+          "catalogKey": "ax|mackie|srm150|5.52\" compact powered monitor 150w",
+          "description": "Mackie SRM150 5.52\" compact powered monitor 150W",
+          "department": "AX",
+          "days": 1.0,
+          "quantity": 1.0,
+          "uom": "pcs",
+          "unitPrice": 80.0,
+          "discountPercent": 0,
+          "total": 80.0
+        },
+        {
+          "id": "line_1783348960529_e8448ce36166f8",
+          "catalogKey": "ax|hp|1810-24g|managed gigabit ethernet switch",
+          "description": "HP 1810-24G managed gigabit ethernet switch",
+          "department": "AX",
+          "days": 1.0,
+          "quantity": 1.0,
+          "uom": "pcs",
+          "unitPrice": 50.0,
+          "discountPercent": 0,
+          "total": 50.0
+        }
+      ],
+      "adjustments": [],
+      "sourceQuotationId": "",
+      "createdAt": "2026-07-06T22:07:59",
+      "createdBy": "",
+      "updatedAt": "2026-07-07T00:25:55",
+      "updatedBy": "",
+      "totals": {
+        "subtotal": 13950.0,
+        "adjustments": 0,
+        "discount": 0,
+        "netSubtotal": 13950.0,
+        "tax": 1255.5,
+        "total": 15205.5
+      }
+    },
+    {
+      "id": "ae45f7d8fccd3d4bab347f19",
+      "type": "quotation",
+      "number": "QT-2026-0002",
+      "status": "draft",
+      "client": {
+        "name": "MJ",
+        "company": "",
+        "contactPerson": "",
+        "email": "",
+        "phone": "+65 8949 0479",
+        "taxNumber": "",
+        "address1": "",
+        "address2": "",
+        "address3": "",
+        "postalCode": ""
+      },
+      "quotationDate": "2026-07-07",
+      "validUntil": "2026-08-06",
+      "title": "SMU Event",
+      "reference": "",
+      "eventReference": "",
+      "salesperson": "",
+      "paymentTerms": "30 Days",
+      "eventDate": "",
+      "eventLocation": "",
+      "setupTiming": "",
+      "eventTiming": "",
+      "currency": "SGD",
+      "taxRate": 9.0,
+      "notes": "",
+      "terms": "This quotation is valid until the validity date shown above.\nA 50% deposit is required to confirm the booking, with the balance payable before the event date.\nPrices are in Singapore Dollars unless otherwise stated.",
+      "lineItems": [
+        {
+          "id": "line_1783357412388_cefbcccd50d1c",
+          "catalogKey": "ax|yamaha|cl5|digital mixer",
+          "description": "Yamaha CL5 Digital Mixer",
+          "department": "AX",
+          "days": 1.5,
+          "quantity": 1.0,
+          "uom": "pcs",
+          "unitPrice": 1200.0,
+          "discountPercent": 0,
+          "total": 1800.0
+        },
+        {
+          "id": "line_1783357469809_bf4f34cf571ca8",
+          "catalogKey": "ax|l-acoustics|x12|12\" passive coaxial enclosure",
+          "description": "L-Acoustics X12 12\" passive coaxial enclosure",
+          "department": "AX",
+          "days": 1.5,
+          "quantity": 4.0,
+          "uom": "pcs",
+          "unitPrice": 170.0,
+          "discountPercent": 0,
+          "total": 1020.0
+        },
+        {
+          "id": "line_1783357487930_01e7dddf16fae8",
+          "catalogKey": "ax|l-acoustics|sb18|high power compact subwoofer: 1 x 18\"",
+          "description": "L-Acoustics SB18 High power compact subwoofer: 1 x 18\"",
+          "department": "AX",
+          "days": 1.5,
+          "quantity": 2.0,
+          "uom": "pcs",
+          "unitPrice": 250.0,
+          "discountPercent": 0,
+          "total": 750.0
+        },
+        {
+          "id": "line_1783357503657_3365e41689ab18",
+          "catalogKey": "ax|l-acoustics|la4x|amplified controller",
+          "description": "L-Acoustics LA4X Amplified controller",
+          "department": "AX",
+          "days": 1.5,
+          "quantity": 2.0,
+          "uom": "pcs",
+          "unitPrice": 350.0,
+          "discountPercent": 0,
+          "total": 1050.0
+        },
+        {
+          "id": "line_1783357579245_759d3bdf812fe",
+          "catalogKey": "ax|shure|ulxd4d [l50]|dual channel receiver",
+          "description": "Shure ULXD4D [L50] Dual Channel Receiver",
+          "department": "AX",
+          "days": 1.5,
+          "quantity": 1.0,
+          "uom": "pcs",
+          "unitPrice": 200.0,
+          "discountPercent": 0,
+          "total": 300.0
+        },
+        {
+          "id": "line_1783357583624_942aa6302928",
+          "catalogKey": "ax|shure|ulxd4q [l50]|quad channel receiver",
+          "description": "Shure ULXD4Q [L50] Quad Channel Receiver",
+          "department": "AX",
+          "days": 1.5,
+          "quantity": 1.0,
+          "uom": "pcs",
+          "unitPrice": 400.0,
+          "discountPercent": 0,
+          "total": 600.0
+        },
+        {
+          "id": "line_1783357586683_3e8a1a4009c23",
+          "catalogKey": "ax|shure|ulxd2 [l50]|handheld microphone",
+          "description": "Shure ULXD2 [L50] Handheld Microphone",
+          "department": "AX",
+          "days": 1.5,
+          "quantity": 6.0,
+          "uom": "pcs",
+          "unitPrice": 50.0,
+          "discountPercent": 0,
+          "total": 450.0
+        },
+        {
+          "id": "line_1783357623607_66007f893e8788",
+          "catalogKey": "ax|sennheiser|dad(uhf)|spectera bidirectional digital antenna",
+          "description": "Sennheiser DAD(UHF) Spectera Bidirectional digital antenna",
+          "department": "AX",
+          "days": 1.5,
+          "quantity": 2.0,
+          "uom": "pcs",
+          "unitPrice": 150.0,
+          "discountPercent": 0,
+          "total": 450.0
+        },
+        {
+          "id": "line_1783357634941_e1d80f833cadf8",
+          "catalogKey": "ax|sennheiser|sek(uhf)|spectera bidirectional bodypack",
+          "description": "Sennheiser SEK(UHF) Spectera Bidirectional bodypack",
+          "department": "AX",
+          "days": 1.5,
+          "quantity": 8.0,
+          "uom": "pcs",
+          "unitPrice": 150.0,
+          "discountPercent": 0,
+          "total": 1800.0
+        },
+        {
+          "id": "line_1783357637361_4e99dde17b8938",
+          "catalogKey": "ax|sennheiser|spectera base station|1ru spectera base station",
+          "description": "Sennheiser Spectera Base Station 1RU Spectera Base Station",
+          "department": "AX",
+          "days": 1.5,
+          "quantity": 1.0,
+          "uom": "pcs",
+          "unitPrice": 400.0,
+          "discountPercent": 0,
+          "total": 600.0
+        },
+        {
+          "id": "line_1783357691182_f206c700add24",
+          "catalogKey": "ax|yamaha|rio3224-d2|high performance i/o rack",
+          "description": "Yamaha Rio3224-d2 High Performance I/O Rack",
+          "department": "AX",
+          "days": 1.5,
+          "quantity": 1.0,
+          "uom": "pcs",
+          "unitPrice": 450.0,
+          "discountPercent": 0,
+          "total": 675.0
+        },
+        {
+          "id": "line_1783357695462_d93d2a6f3f6348",
+          "catalogKey": "ax|yamaha|rio1608-d2|high performance i/o rack",
+          "description": "Yamaha Rio1608-d2 High Performance I/O Rack",
+          "department": "AX",
+          "days": 1.5,
+          "quantity": 1.0,
+          "uom": "pcs",
+          "unitPrice": 250.0,
+          "discountPercent": 0,
+          "total": 375.0
+        },
+        {
+          "id": "line_1783357707978_61eb84b599a4e",
+          "catalogKey": "ax|shure|sm58s|cardioid dynamic w/ switch",
+          "description": "Shure SM58S cardioid dynamic w/ switch",
+          "department": "AX",
+          "days": 1.5,
+          "quantity": 2.0,
+          "uom": "pcs",
+          "unitPrice": 20.0,
+          "discountPercent": 0,
+          "total": 60.0
+        },
+        {
+          "id": "line_1783357729031_44f2148f8afbc8",
+          "catalogKey": "ax|shure|beta 91a|boundary condenser microphone",
+          "description": "Shure Beta 91A Boundary condenser microphone",
+          "department": "AX",
+          "days": 1.5,
+          "quantity": 1.0,
+          "uom": "pcs",
+          "unitPrice": 50.0,
+          "discountPercent": 0,
+          "total": 75.0
+        },
+        {
+          "id": "line_1783357731670_9839058d9aaeb",
+          "catalogKey": "ax|audix|d6|professional dynamic instrument microphone",
+          "description": "Audix D6 Professional Dynamic Instrument Microphone",
+          "department": "AX",
+          "days": 1.5,
+          "quantity": 1.0,
+          "uom": "pcs",
+          "unitPrice": 30.0,
+          "discountPercent": 0,
+          "total": 45.0
+        },
+        {
+          "id": "line_1783357750804_7154ddecec0178",
+          "catalogKey": "ax|shure|sm57|cardioid dynamic instrument mic",
+          "description": "Shure SM57 cardioid dynamic instrument mic",
+          "department": "AX",
+          "days": 1.5,
+          "quantity": 3.0,
+          "uom": "pcs",
+          "unitPrice": 20.0,
+          "discountPercent": 0,
+          "total": 90.0
+        },
+        {
+          "id": "line_1783357764913_bf3b9bbc3da248",
+          "catalogKey": "ax|akg|c451b|cardioid condenser microphone",
+          "description": "AKG C451B Cardioid condenser microphone",
+          "department": "AX",
+          "days": 1.5,
+          "quantity": 6.0,
+          "uom": "pcs",
+          "unitPrice": 50.0,
+          "discountPercent": 0,
+          "total": 450.0
+        },
+        {
+          "id": "line_1783357781897_48447df734bdc",
+          "catalogKey": "ax|sennheiser|e904|dynamic cardioid instrument microphone",
+          "description": "Sennheiser E904 Dynamic cardioid instrument microphone",
+          "department": "AX",
+          "days": 1.5,
+          "quantity": 3.0,
+          "uom": "pcs",
+          "unitPrice": 30.0,
+          "discountPercent": 0,
+          "total": 135.0
+        },
+        {
+          "id": "line_1783357867672_4818a0a2e00de",
+          "catalogKey": "ax|radial engineering|j48 stereo|phantom powered active direct injection box",
+          "description": "Radial Engineering J48 Stereo Phantom Powered Active Direct Injection Box",
+          "department": "AX",
+          "days": 1.5,
+          "quantity": 5.0,
+          "uom": "pcs",
+          "unitPrice": 30.0,
+          "discountPercent": 0,
+          "total": 225.0
+        },
+        {
+          "id": "line_1783357870177_86157ef499b798",
+          "catalogKey": "ax|radial engineering|j48 mono|phantom powered active direct injection box",
+          "description": "Radial Engineering J48 Mono Phantom Powered Active Direct Injection Box",
+          "department": "AX",
+          "days": 1.5,
+          "quantity": 5.0,
+          "uom": "pcs",
+          "unitPrice": 60.0,
+          "discountPercent": 0,
+          "total": 450.0
+        },
+        {
+          "id": "line_1783357914289_8b874d5d149408",
+          "catalogKey": "ax|mackie|srm150|5.52\" compact powered monitor 150w",
+          "description": "Mackie SRM150 5.52\" compact powered monitor 150W",
+          "department": "AX",
+          "days": 1.5,
+          "quantity": 1.0,
+          "uom": "pcs",
+          "unitPrice": 80.0,
+          "discountPercent": 0,
+          "total": 120.0
+        },
+        {
+          "id": "line_1783357928531_e27c25b60e9908",
+          "catalogKey": "ax|hp|1810-24g|managed gigabit ethernet switch",
+          "description": "HP 1810-24G managed gigabit ethernet switch",
+          "department": "AX",
+          "days": 1.5,
+          "quantity": 2.0,
+          "uom": "pcs",
+          "unitPrice": 50.0,
+          "discountPercent": 0,
+          "total": 150.0
+        },
+        {
+          "id": "line_1783357959649_f92e44447db32",
+          "catalogKey": "lx|grandma3|compact xt|console",
+          "description": "GrandMA3 Compact XT Console",
+          "department": "LX",
+          "days": 1.5,
+          "quantity": 1.0,
+          "uom": "pcs",
+          "unitPrice": 850.0,
+          "discountPercent": 0,
+          "total": 1275.0
+        },
+        {
+          "id": "line_1783357969291_c6c320602618f",
+          "catalogKey": "lx|dts|nickwash 600|self-contained compact high-output led moving head projector",
+          "description": "DTS NickWash 600 self-contained compact high-output LED moving head projector",
+          "department": "LX",
+          "days": 1.5,
+          "quantity": 4.0,
+          "uom": "pcs",
+          "unitPrice": 80.0,
+          "discountPercent": 0,
+          "total": 480.0
+        },
+        {
+          "id": "line_1783357978055_3b65371ba2fc5",
+          "catalogKey": "lx|ayrton|diablo (w.dmx)|profile led",
+          "description": "Ayrton Diablo (W.DMX) Profile LED",
+          "department": "LX",
+          "days": 1.5,
+          "quantity": 6.0,
+          "uom": "pcs",
+          "unitPrice": 250.0,
+          "discountPercent": 0,
+          "total": 2250.0
+        },
+        {
+          "id": "line_1783357982234_afc6a48e486ef8",
+          "catalogKey": "lx|robe|robin ledbeam 350 wash|wash led",
+          "description": "Robe Robin LEDBeam 350 Wash Wash LED",
+          "department": "LX",
+          "days": 1.5,
+          "quantity": 2.0,
+          "uom": "pcs",
+          "unitPrice": 180.0,
+          "discountPercent": 0,
+          "total": 540.0
+        },
+        {
+          "id": "line_1783358061570_8ef02c95ddb13",
+          "catalogKey": "lx|silverstar|roxcyc|batten 1 meter rgbwa",
+          "description": "Silverstar Roxcyc Batten 1 meter RGBWA",
+          "department": "LX",
+          "days": 1.5,
+          "quantity": 4.0,
+          "uom": "pcs",
+          "unitPrice": 80.0,
+          "discountPercent": 0,
+          "total": 480.0
+        },
+        {
+          "id": "line_1783358070258_3ed62db3e7242",
+          "catalogKey": "lx|le maitre|mvs hazer|hazer machine",
+          "description": "Le Maitre MVS Hazer Hazer machine",
+          "department": "LX",
+          "days": 1.5,
+          "quantity": 1.0,
+          "uom": "pcs",
+          "unitPrice": 150.0,
+          "discountPercent": 0,
+          "total": 225.0
+        },
+        {
+          "id": "line_1783358098283_8205fd54bf69b8",
+          "catalogKey": "",
+          "description": "Mobile 85 wind-up tripod stand c/w T-barrel",
+          "department": "LX",
+          "days": 1.5,
+          "quantity": 2.0,
+          "uom": "pcs",
+          "unitPrice": 80.0,
+          "discountPercent": 0,
+          "total": 240.0
+        },
+        {
+          "id": "line_1783358125599_11aa5e5b22e8d",
+          "catalogKey": "stg|global truss|f34 truss - 2m (silver)|2m truss (silver)",
+          "description": "Global Truss F34 Truss - 2m (Silver) 2m truss (silver)",
+          "department": "STG",
+          "days": 1.5,
+          "quantity": 2.0,
+          "uom": "pcs",
+          "unitPrice": 80.0,
+          "discountPercent": 0,
+          "total": 240.0
+        },
+        {
+          "id": "line_1783358136447_b08421c1bef02",
+          "catalogKey": "stg|global truss|f34 truss - 1.5m (silver)|1.5m truss (silver)",
+          "description": "Global Truss F34 Truss - 1.5m (Silver) 1.5m truss (silver)",
+          "department": "STG",
+          "days": 1.5,
+          "quantity": 2.0,
+          "uom": "pcs",
+          "unitPrice": 60.0,
+          "discountPercent": 0,
+          "total": 180.0
+        },
+        {
+          "id": "line_1783358179524_fec110c03037e",
+          "catalogKey": "stg|custom|605mm base plate|605x605mm heavy-duty base plate",
+          "description": "Custom 605mm Base plate 605x605mm heavy-duty base plate",
+          "department": "STG",
+          "days": 1.5,
+          "quantity": 4.0,
+          "uom": "pcs",
+          "unitPrice": 40.0,
+          "discountPercent": 0,
+          "total": 240.0
+        },
+        {
+          "id": "line_1783358192735_99f3a9558d326",
+          "catalogKey": "stg|custom|308mm|light-duty top plate",
+          "description": "Custom 308mm light-duty top plate",
+          "department": "STG",
+          "days": 1.5,
+          "quantity": 4.0,
+          "uom": "pcs",
+          "unitPrice": 20.0,
+          "discountPercent": 0,
+          "total": 120.0
+        }
+      ],
+      "adjustments": [
+        {
+          "id": "adjustment_1783358236709_ab3ec9e0174738",
+          "scope": "total",
+          "department": "",
+          "label": "23.29% overall discount",
+          "amount": -4178.53,
+          "percent": 23.2917,
+          "kind": "discount"
+        }
+      ],
+      "sourceQuotationId": "",
+      "createdAt": "2026-07-07T00:25:43",
+      "createdBy": "",
+      "updatedAt": "2026-07-07T01:30:51",
+      "updatedBy": "",
+      "totals": {
+        "subtotal": 17940.0,
+        "adjustments": -4178.53,
+        "discount": 4178.53,
+        "netSubtotal": 13761.47,
+        "tax": 1238.53,
+        "total": 15000.0
+      }
+    },
+    {
+      "id": "aa80a3fa611325083f00e7f4",
+      "type": "quotation",
+      "number": "QT-2026-0003",
+      "status": "draft",
+      "client": {
+        "name": "MJ",
+        "company": "",
+        "contactPerson": "",
+        "email": "",
+        "phone": "+65 8949 0479",
+        "taxNumber": "",
+        "address1": "",
+        "address2": "",
+        "address3": "",
+        "postalCode": ""
+      },
+      "quotationDate": "2026-07-07",
+      "validUntil": "2026-08-06",
+      "title": "",
+      "reference": "",
+      "eventReference": "",
+      "salesperson": "",
+      "paymentTerms": "30 Days",
+      "eventDate": "",
+      "eventLocation": "",
+      "setupTiming": "",
+      "eventTiming": "",
+      "currency": "SGD",
+      "taxRate": 9.0,
+      "notes": "",
+      "terms": "1.  Validity: 14 days\n2.  Work shall only commence upon receiving the certified copy of our quotation.  \n3.  Upon confirmation, a 50% non-refundable down payment is required, and the remaining balance must be paid upon\n      completion of the setup.\n4.  All items are rented for indoor usage only (unless otherwise stated).\n5.  Confirmation of rental is on a first-come, first-served basis.\n6.  T/T to: OCBC Bank Limited, 65 Chulia Street, #01 - 00, OCBC Centre, Singapore 049513.\n     Account Number (S$): 601 - 546195 - 001, Swift Code: OCBCSGSG, Account Name: Avec Vision Pte Ltd.\n7.  The hirer is responsible for according to due diligence and cares for equipment.  In agreement, they will undertake liability for\n\"     the loss or damage of the equipment rented.\t\"\n8.  Cancellation charge:  100% of the total amount if cancellation occurs after the completion of the setup.\n9.  Any additional services or equipment not mentioned in this quotation will be charged accordingly.\n\nWe hope the above quotation is acceptable to you and will be looking forward to your early confirmation.   Please feel free to\ncontact the undersigned should you require any further information.",
+      "lineItems": [
+        {
+          "id": "line_1783359272542_a8cd90f1592dc8",
+          "catalogKey": "ax|yamaha|ql1|digital mixer",
+          "description": "Yamaha QL1 Digital Mixer",
+          "department": "AX",
+          "days": 1.0,
+          "quantity": 1.0,
+          "uom": "pcs",
+          "unitPrice": 400.0,
+          "discountPercent": 0,
+          "total": 400.0
+        },
+        {
+          "id": "line_1783359287067_2f182f53505948",
+          "catalogKey": "ax|l-acoustics|x12|12\" passive coaxial enclosure",
+          "description": "L-Acoustics X12 12\" passive coaxial enclosure",
+          "department": "AX",
+          "days": 1.0,
+          "quantity": 2.0,
+          "uom": "pcs",
+          "unitPrice": 170.0,
+          "discountPercent": 0,
+          "total": 340.0
+        },
+        {
+          "id": "line_1783359290271_8690c9ff745eb",
+          "catalogKey": "ax|l-acoustics|sb18|high power compact subwoofer: 1 x 18\"",
+          "description": "L-Acoustics SB18 High power compact subwoofer: 1 x 18\"",
+          "department": "AX",
+          "days": 1.0,
+          "quantity": 2.0,
+          "uom": "pcs",
+          "unitPrice": 250.0,
+          "discountPercent": 0,
+          "total": 500.0
+        },
+        {
+          "id": "line_1783359303483_38a46e45a80e98",
+          "catalogKey": "ax|l-acoustics|la4x|amplified controller",
+          "description": "L-Acoustics LA4X Amplified controller",
+          "department": "AX",
+          "days": 1.0,
+          "quantity": 1.0,
+          "uom": "pcs",
+          "unitPrice": 350.0,
+          "discountPercent": 0,
+          "total": 350.0
+        },
+        {
+          "id": "line_1783359314824_02ab52a0cff26",
+          "catalogKey": "ax|shure|ulxd4d [g52]|dual channel receiver",
+          "description": "Shure ULXD4D [G52] Dual Channel Receiver",
+          "department": "AX",
+          "days": 1.0,
+          "quantity": 2.0,
+          "uom": "pcs",
+          "unitPrice": 200.0,
+          "discountPercent": 0,
+          "total": 400.0
+        },
+        {
+          "id": "line_1783359320749_f9fab1a0a82b18",
+          "catalogKey": "ax|shure|ulxd2 [g52]|handheld microphone",
+          "description": "Shure ULXD2 [G52] Handheld Microphone",
+          "department": "AX",
+          "days": 1.0,
+          "quantity": 2.0,
+          "uom": "pcs",
+          "unitPrice": 50.0,
+          "discountPercent": 0,
+          "total": 100.0
+        },
+        {
+          "id": "line_1783359335187_ff2ef611bcea8",
+          "catalogKey": "ax|radial engineering|j48 mono|phantom powered active direct injection box",
+          "description": "Radial Engineering J48 Mono Phantom Powered Active Direct Injection Box",
+          "department": "AX",
+          "days": 1.0,
+          "quantity": 1.0,
+          "uom": "pcs",
+          "unitPrice": 60.0,
+          "discountPercent": 0,
+          "total": 60.0
+        },
+        {
+          "id": "line_1783359338111_eaf5fc347b86a",
+          "catalogKey": "ax|radial engineering|j48 stereo|phantom powered active direct injection box",
+          "description": "Radial Engineering J48 Stereo Phantom Powered Active Direct Injection Box",
+          "department": "AX",
+          "days": 1.0,
+          "quantity": 3.0,
+          "uom": "pcs",
+          "unitPrice": 30.0,
+          "discountPercent": 0,
+          "total": 90.0
+        },
+        {
+          "id": "line_1783359361962_0c8c1e3a8dfc08",
+          "catalogKey": "lx|grandma3|compact xt|console",
+          "description": "GrandMA3 Compact XT Console",
+          "department": "LX",
+          "days": 1.0,
+          "quantity": 1.0,
+          "uom": "pcs",
+          "unitPrice": 850.0,
+          "discountPercent": 0,
+          "total": 850.0
+        },
+        {
+          "id": "line_1783359524398_4c36afd33f066",
+          "catalogKey": "lx|dts|nickwash 600|self-contained compact high-output led moving head projector",
+          "description": "DTS NickWash 600 self-contained compact high-output LED moving head projector",
+          "department": "LX",
+          "days": 1.0,
+          "quantity": 2.0,
+          "uom": "pcs",
+          "unitPrice": 80.0,
+          "discountPercent": 0,
+          "total": 160.0
+        },
+        {
+          "id": "line_1783359528643_e04a65bdc01498",
+          "catalogKey": "lx|ayrton|diablo (w.dmx)|profile led",
+          "description": "Ayrton Diablo (W.DMX) Profile LED",
+          "department": "LX",
+          "days": 1.0,
+          "quantity": 2.0,
+          "uom": "pcs",
+          "unitPrice": 250.0,
+          "discountPercent": 0,
+          "total": 500.0
+        },
+        {
+          "id": "line_1783359533194_379a5f3b0d5a98",
+          "catalogKey": "lx|robe|robin ledbeam 350 wash|wash led",
+          "description": "Robe Robin LEDBeam 350 Wash Wash LED",
+          "department": "LX",
+          "days": 1.0,
+          "quantity": 2.0,
+          "uom": "pcs",
+          "unitPrice": 180.0,
+          "discountPercent": 0,
+          "total": 360.0
+        },
+        {
+          "id": "line_1783359552728_899e627d1d77",
+          "catalogKey": "lx|silverstar|roxcyc|batten 1 meter rgbwa",
+          "description": "Silverstar Roxcyc Batten 1 meter RGBWA",
+          "department": "LX",
+          "days": 1.0,
+          "quantity": 4.0,
+          "uom": "pcs",
+          "unitPrice": 80.0,
+          "discountPercent": 0,
+          "total": 320.0
+        },
+        {
+          "id": "line_1783359558407_b11fb6bdc870f",
+          "catalogKey": "lx|le maitre|mvs hazer|hazer machine",
+          "description": "Le Maitre MVS Hazer Hazer machine",
+          "department": "LX",
+          "days": 1.0,
+          "quantity": 1.0,
+          "uom": "pcs",
+          "unitPrice": 150.0,
+          "discountPercent": 0,
+          "total": 150.0
+        },
+        {
+          "id": "line_1783359573361_3f05b7ecf73178",
+          "catalogKey": "",
+          "description": "Mobile 85 wind-up tripod stand c/w T-barrel",
+          "department": "LX",
+          "days": 1.0,
+          "quantity": 1.0,
+          "uom": "pcs",
+          "unitPrice": 80.0,
+          "discountPercent": 0,
+          "total": 80.0
+        }
+      ],
+      "adjustments": [
+        {
+          "id": "adjustment_1783359760280_8e2f65ff54c3c",
+          "scope": "total",
+          "department": "",
+          "label": "10.25% overall adjustment",
+          "amount": 477.61,
+          "percent": 10.2491,
+          "kind": "adjustment"
+        }
+      ],
+      "sourceQuotationId": "",
+      "createdAt": "2026-07-07T01:33:57",
+      "createdBy": "",
+      "updatedAt": "2026-07-07T01:42:52",
+      "updatedBy": "",
+      "totals": {
+        "subtotal": 4660.0,
+        "adjustments": 477.61,
+        "discount": 0,
+        "netSubtotal": 5137.61,
+        "tax": 462.38,
+        "total": 5599.99
+      }
+    }
+  ],
+  "priceBook": {
+    "ax|l-acoustics|karaii|long throw concert sound loudspeaker": {
+      "description": "L-Acoustics KARA II Long Throw Concert Sound Loudspeaker",
+      "unitPrice": 350.0,
+      "department": "AX",
+      "uom": "pcs",
+      "updatedAt": "2026-07-07T00:25:55"
+    },
+    "ax|yamaha|ql5|digital mixer": {
+      "description": "Yamaha QL5 Digital Mixer",
+      "unitPrice": 650.0,
+      "department": "AX",
+      "uom": "pcs",
+      "updatedAt": "2026-07-07T00:25:55"
+    },
+    "ax|l-acoustics|sb18|high power compact subwoofer: 1 x 18\"": {
+      "description": "L-Acoustics SB18 High power compact subwoofer: 1 x 18\"",
+      "unitPrice": 250.0,
+      "department": "AX",
+      "uom": "pcs",
+      "updatedAt": "2026-07-07T01:42:52"
+    },
+    "ax|l-acoustics|x12|12\" passive coaxial enclosure": {
+      "description": "L-Acoustics X12 12\" passive coaxial enclosure",
+      "unitPrice": 170.0,
+      "department": "AX",
+      "uom": "pcs",
+      "updatedAt": "2026-07-07T01:42:52"
+    },
+    "ax|l-acoustics|la4x|amplified controller": {
+      "description": "L-Acoustics LA4X Amplified controller",
+      "unitPrice": 350.0,
+      "department": "AX",
+      "uom": "pcs",
+      "updatedAt": "2026-07-07T01:42:52"
+    },
+    "ax|l-acoustics|la12x|amplified controller": {
+      "description": "L-Acoustics LA12X Amplified controller",
+      "unitPrice": 650.0,
+      "department": "AX",
+      "uom": "pcs",
+      "updatedAt": "2026-07-07T00:25:55"
+    },
+    "ax|shure|ulxd4q [g52]|quad channel receiver": {
+      "description": "Shure ULXD4Q [G52] Quad Channel Receiver",
+      "unitPrice": 400.0,
+      "department": "AX",
+      "uom": "pcs",
+      "updatedAt": "2026-07-07T00:25:55"
+    },
+    "ax|shure|ulxd2 [g52]|handheld microphone": {
+      "description": "Shure ULXD2 [G52] Handheld Microphone",
+      "unitPrice": 50.0,
+      "department": "AX",
+      "uom": "pcs",
+      "updatedAt": "2026-07-07T01:42:52"
+    },
+    "ax|yamaha|rio1608-d2|high performance i/o rack": {
+      "description": "Yamaha Rio1608-d2 High Performance I/O Rack",
+      "unitPrice": 250.0,
+      "department": "AX",
+      "uom": "pcs",
+      "updatedAt": "2026-07-07T01:30:51"
+    },
+    "ax|shure|sm58s|cardioid dynamic w/ switch": {
+      "description": "Shure SM58S cardioid dynamic w/ switch",
+      "unitPrice": 20.0,
+      "department": "AX",
+      "uom": "pcs",
+      "updatedAt": "2026-07-07T01:30:51"
+    },
+    "ax|shure|beta 91a|boundary condenser microphone": {
+      "description": "Shure Beta 91A Boundary condenser microphone",
+      "unitPrice": 50.0,
+      "department": "AX",
+      "uom": "pcs",
+      "updatedAt": "2026-07-07T01:30:51"
+    },
+    "ax|shure|beta 52a|kick drum mic": {
+      "description": "Shure Beta 52A Kick drum mic",
+      "unitPrice": 20.0,
+      "department": "AX",
+      "uom": "pcs",
+      "updatedAt": "2026-07-07T00:25:55"
+    },
+    "ax|akg|c451b|cardioid condenser microphone": {
+      "description": "AKG C451B Cardioid condenser microphone",
+      "unitPrice": 50.0,
+      "department": "AX",
+      "uom": "pcs",
+      "updatedAt": "2026-07-07T01:30:51"
+    },
+    "ax|sennheiser|e904|dynamic cardioid instrument microphone": {
+      "description": "Sennheiser E904 Dynamic cardioid instrument microphone",
+      "unitPrice": 30.0,
+      "department": "AX",
+      "uom": "pcs",
+      "updatedAt": "2026-07-07T01:30:51"
+    },
+    "ax|radial engineering|j48 mono|phantom powered active direct injection box": {
+      "description": "Radial Engineering J48 Mono Phantom Powered Active Direct Injection Box",
+      "unitPrice": 60.0,
+      "department": "AX",
+      "uom": "pcs",
+      "updatedAt": "2026-07-07T01:42:52"
+    },
+    "ax|radial engineering|j48 stereo|phantom powered active direct injection box": {
+      "description": "Radial Engineering J48 Stereo Phantom Powered Active Direct Injection Box",
+      "unitPrice": 30.0,
+      "department": "AX",
+      "uom": "pcs",
+      "updatedAt": "2026-07-07T01:42:52"
+    },
+    "ax|mackie|srm150|5.52\" compact powered monitor 150w": {
+      "description": "Mackie SRM150 5.52\" compact powered monitor 150W",
+      "unitPrice": 80.0,
+      "department": "AX",
+      "uom": "pcs",
+      "updatedAt": "2026-07-07T01:30:51"
+    },
+    "ax|hp|1810-24g|managed gigabit ethernet switch": {
+      "description": "HP 1810-24G managed gigabit ethernet switch",
+      "unitPrice": 50.0,
+      "department": "AX",
+      "uom": "pcs",
+      "updatedAt": "2026-07-07T01:30:51"
+    },
+    "ax|yamaha|cl5|digital mixer": {
+      "description": "Yamaha CL5 Digital Mixer",
+      "unitPrice": 1200.0,
+      "department": "AX",
+      "uom": "pcs",
+      "updatedAt": "2026-07-07T01:30:51"
+    },
+    "ax|shure|ulxd4d [g52]|dual channel receiver": {
+      "description": "Shure ULXD4D [G52] Dual Channel Receiver",
+      "unitPrice": 200.0,
+      "department": "AX",
+      "uom": "pcs",
+      "updatedAt": "2026-07-07T01:42:52"
+    },
+    "ax|shure|ulxd4d [l50]|dual channel receiver": {
+      "description": "Shure ULXD4D [L50] Dual Channel Receiver",
+      "unitPrice": 200.0,
+      "department": "AX",
+      "uom": "pcs",
+      "updatedAt": "2026-07-07T01:30:51"
+    },
+    "ax|shure|ulxd4q [l50]|quad channel receiver": {
+      "description": "Shure ULXD4Q [L50] Quad Channel Receiver",
+      "unitPrice": 400.0,
+      "department": "AX",
+      "uom": "pcs",
+      "updatedAt": "2026-07-07T01:30:51"
+    },
+    "ax|shure|ulxd2 [l50]|handheld microphone": {
+      "description": "Shure ULXD2 [L50] Handheld Microphone",
+      "unitPrice": 50.0,
+      "department": "AX",
+      "uom": "pcs",
+      "updatedAt": "2026-07-07T01:30:51"
+    },
+    "ax|sennheiser|dad(uhf)|spectera bidirectional digital antenna": {
+      "description": "Sennheiser DAD(UHF) Spectera Bidirectional digital antenna",
+      "unitPrice": 150.0,
+      "department": "AX",
+      "uom": "pcs",
+      "updatedAt": "2026-07-07T01:30:51"
+    },
+    "ax|sennheiser|sek(uhf)|spectera bidirectional bodypack": {
+      "description": "Sennheiser SEK(UHF) Spectera Bidirectional bodypack",
+      "unitPrice": 150.0,
+      "department": "AX",
+      "uom": "pcs",
+      "updatedAt": "2026-07-07T01:30:51"
+    },
+    "ax|sennheiser|spectera base station|1ru spectera base station": {
+      "description": "Sennheiser Spectera Base Station 1RU Spectera Base Station",
+      "unitPrice": 400.0,
+      "department": "AX",
+      "uom": "pcs",
+      "updatedAt": "2026-07-07T01:30:51"
+    },
+    "ax|yamaha|rio3224-d2|high performance i/o rack": {
+      "description": "Yamaha Rio3224-d2 High Performance I/O Rack",
+      "unitPrice": 450.0,
+      "department": "AX",
+      "uom": "pcs",
+      "updatedAt": "2026-07-07T01:30:51"
+    },
+    "ax|audix|d6|professional dynamic instrument microphone": {
+      "description": "Audix D6 Professional Dynamic Instrument Microphone",
+      "unitPrice": 30.0,
+      "department": "AX",
+      "uom": "pcs",
+      "updatedAt": "2026-07-07T01:30:51"
+    },
+    "ax|shure|sm57|cardioid dynamic instrument mic": {
+      "description": "Shure SM57 cardioid dynamic instrument mic",
+      "unitPrice": 20.0,
+      "department": "AX",
+      "uom": "pcs",
+      "updatedAt": "2026-07-07T01:30:51"
+    },
+    "lx|grandma3|compact xt|console": {
+      "description": "GrandMA3 Compact XT Console",
+      "unitPrice": 850.0,
+      "department": "LX",
+      "uom": "pcs",
+      "updatedAt": "2026-07-07T01:42:52"
+    },
+    "lx|dts|nickwash 600|self-contained compact high-output led moving head projector": {
+      "description": "DTS NickWash 600 self-contained compact high-output LED moving head projector",
+      "unitPrice": 80.0,
+      "department": "LX",
+      "uom": "pcs",
+      "updatedAt": "2026-07-07T01:42:52"
+    },
+    "lx|ayrton|diablo (w.dmx)|profile led": {
+      "description": "Ayrton Diablo (W.DMX) Profile LED",
+      "unitPrice": 250.0,
+      "department": "LX",
+      "uom": "pcs",
+      "updatedAt": "2026-07-07T01:42:52"
+    },
+    "lx|robe|robin ledbeam 350 wash|wash led": {
+      "description": "Robe Robin LEDBeam 350 Wash Wash LED",
+      "unitPrice": 180.0,
+      "department": "LX",
+      "uom": "pcs",
+      "updatedAt": "2026-07-07T01:42:52"
+    },
+    "lx|silverstar|roxcyc|batten 1 meter rgbwa": {
+      "description": "Silverstar Roxcyc Batten 1 meter RGBWA",
+      "unitPrice": 80.0,
+      "department": "LX",
+      "uom": "pcs",
+      "updatedAt": "2026-07-07T01:42:52"
+    },
+    "lx|le maitre|mvs hazer|hazer machine": {
+      "description": "Le Maitre MVS Hazer Hazer machine",
+      "unitPrice": 150.0,
+      "department": "LX",
+      "uom": "pcs",
+      "updatedAt": "2026-07-07T01:42:52"
+    },
+    "custom:mobile 85 wind-up tripod stand c/w t-barrel": {
+      "description": "Mobile 85 wind-up tripod stand c/w T-barrel",
+      "unitPrice": 80.0,
+      "department": "LX",
+      "uom": "pcs",
+      "updatedAt": "2026-07-07T01:42:52"
+    },
+    "stg|global truss|f34 truss - 2m (silver)|2m truss (silver)": {
+      "description": "Global Truss F34 Truss - 2m (Silver) 2m truss (silver)",
+      "unitPrice": 80.0,
+      "department": "STG",
+      "uom": "pcs",
+      "updatedAt": "2026-07-07T01:30:51"
+    },
+    "stg|global truss|f34 truss - 1.5m (silver)|1.5m truss (silver)": {
+      "description": "Global Truss F34 Truss - 1.5m (Silver) 1.5m truss (silver)",
+      "unitPrice": 60.0,
+      "department": "STG",
+      "uom": "pcs",
+      "updatedAt": "2026-07-07T01:30:51"
+    },
+    "stg|custom|605mm base plate|605x605mm heavy-duty base plate": {
+      "description": "Custom 605mm Base plate 605x605mm heavy-duty base plate",
+      "unitPrice": 40.0,
+      "department": "STG",
+      "uom": "pcs",
+      "updatedAt": "2026-07-07T01:30:51"
+    },
+    "stg|custom|308mm|light-duty top plate": {
+      "description": "Custom 308mm light-duty top plate",
+      "unitPrice": 20.0,
+      "department": "STG",
+      "uom": "pcs",
+      "updatedAt": "2026-07-07T01:30:51"
+    },
+    "ax|yamaha|ql1|digital mixer": {
+      "description": "Yamaha QL1 Digital Mixer",
+      "unitPrice": 400.0,
+      "department": "AX",
+      "uom": "pcs",
+      "updatedAt": "2026-07-07T01:42:52"
+    }
+  }
+}

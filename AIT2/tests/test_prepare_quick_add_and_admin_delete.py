@@ -78,6 +78,7 @@ class PrepareQuickAddAndAdminDeleteTests(unittest.TestCase):
             returned_items=[],
             actually_prepared=actual if actual is not None else ['A#01'],
             extra_assets=extra if extra is not None else [],
+            assigned_users=['normal'],
         )
         self.data_manager.events[event_id] = event
         return event

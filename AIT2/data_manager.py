@@ -17,6 +17,7 @@ from models import (
     LogEntry,
     User,
     hash_password,
+    normalize_user_role,
     normalize_event_state,
 )
 from utils import clean_csv_cell, open_csv_robust, sanitize_filename
@@ -35,9 +36,12 @@ INVENTORY_FIELDNAMES = [
 EVENT_FIELDNAMES = [
     'EventID', 'Name', 'Location', 'StartDate', 'EndDate', 'AssetModels', 'PreparedItems',
     'ReturnedItems', 'State', 'ActuallyPrepared', 'ExtraAssets', 'CustomCollected',
-    'Tag', 'ForceStateOverride', 'EventLogs', 'Notes'
+    'Tag', 'ForceStateOverride', 'EventLogs', 'Notes', 'AssignedUsers'
 ]
-CLIENT_FIELDNAMES = ['Name', 'Company', 'Address1', 'Address2', 'Address3', 'PostalCode', 'Phone']
+CLIENT_FIELDNAMES = [
+    'Name', 'Company', 'ContactPerson', 'Email', 'Phone', 'TaxNumber',
+    'Address1', 'Address2', 'Address3', 'PostalCode',
+]
 
 logger = logging.getLogger(__name__)
 EVENT_LOG_EVENT_ID_RE = re.compile(r'\bevent\s+(\d+)\b', re.IGNORECASE)
@@ -386,8 +390,14 @@ class DataManager:
                 # New format:
                 # username,password_hash,salt,is_admin,is_active
                 #
-                # Current format:
+                # Previous format:
                 # username,password_hash,salt,is_admin,is_active,last_online
+                #
+                # Previous format:
+                # username,password_hash,salt,is_admin,is_active,last_online,role,has_sales_access
+                #
+                # Current format:
+                # username,password_hash,salt,is_admin,is_active,last_online,role,has_sales_access,name
                 if len(row) < 4:
                     continue
 
@@ -410,6 +420,24 @@ class DataManager:
                     last_online = '-'
                     needs_save = True
 
+                if len(row) >= 7:
+                    role = normalize_user_role(row[6], is_admin)
+                else:
+                    role = normalize_user_role(None, is_admin)
+                    needs_save = True
+
+                if len(row) >= 8:
+                    has_sales_access = _parse_bool(row[7], False)
+                else:
+                    has_sales_access = False
+                    needs_save = True
+
+                if len(row) >= 9:
+                    name = row[8].strip()
+                else:
+                    name = ''
+                    needs_save = True
+
                 self.users[username] = User(
                     username,
                     password_hash,
@@ -417,6 +445,9 @@ class DataManager:
                     is_admin,
                     is_active,
                     last_online,
+                    role,
+                    has_sales_access,
+                    name,
                 )
 
         if needs_save:
@@ -434,6 +465,12 @@ class DataManager:
                     user.is_admin,
                     getattr(user, 'is_active', True),
                     getattr(user, 'last_online', '-'),
+                    normalize_user_role(
+                        getattr(user, 'role', None),
+                        getattr(user, 'is_admin', False),
+                    ),
+                    bool(getattr(user, 'has_sales_access', False)),
+                    getattr(user, 'name', ''),
                 ])
 
     def update_username_references(self, old_username, new_username):
@@ -474,6 +511,18 @@ class DataManager:
 
         for event in self.events.values():
             event_changed = False
+            assigned_users = []
+            assigned_users_changed = False
+            for username in getattr(event, 'assigned_users', []) or []:
+                if username == old_username:
+                    assigned_users.append(new_username)
+                    assigned_users_changed = True
+                else:
+                    assigned_users.append(username)
+            if assigned_users_changed:
+                event.assigned_users = assigned_users
+                event_changed = True
+
             updated_logs = []
             for record in self.normalize_event_logs(getattr(event, 'event_logs', [])):
                 changed = False
@@ -790,6 +839,7 @@ class DataManager:
                 event_logs = []
                 if event_data.get('EventLogs'):
                     event_logs = self.normalize_event_logs(self._load_event_json_list(event_data, 'EventLogs', filename))
+                assigned_users = self._load_event_json_list(event_data, 'AssignedUsers', filename)
 
                 raw_state = event_data.get('State', 'New')
                 state = normalize_event_state(raw_state)
@@ -812,7 +862,8 @@ class DataManager:
                     force_state_override=force_state_override,
                     custom_collected=custom_collected,
                     notes=raw_notes,
-                    event_logs=event_logs
+                    event_logs=event_logs,
+                    assigned_users=assigned_users
                 )
 
                 event.actually_prepared = actually_prepared
@@ -822,6 +873,7 @@ class DataManager:
                 event.custom_collected = custom_collected
                 event.notes = raw_notes
                 event.event_logs = event_logs
+                event.assigned_users = assigned_users
                 event._legacy_state_migrated = str(raw_state or '').strip() != state
 
                 self.events[event_id] = event
@@ -847,6 +899,7 @@ class DataManager:
         notes = getattr(event, 'notes', '')
         location = getattr(event, 'location', '')
         event_logs = self.normalize_event_logs(getattr(event, 'event_logs', []))
+        assigned_users = list(getattr(event, 'assigned_users', []) or [])
         
         if not hasattr(event, 'prepared_items'):
             logger.error("Event %s missing prepared_items - NOT SAVING to prevent data loss!", event.event_id)
@@ -867,6 +920,7 @@ class DataManager:
             extra_assets_json = json.dumps(extra_assets)
             custom_collected_json = json.dumps(custom_collected)
             event_logs_json = json.dumps(event_logs)
+            assigned_users_json = json.dumps(assigned_users)
         except (TypeError, ValueError) as e:
             logger.error("Cannot serialize event %s data to JSON: %s", event.event_id, e)
             logger.error("prepared_items: %s", event.prepared_items)
@@ -893,7 +947,8 @@ class DataManager:
                 'Tag': tag,
                 'ForceStateOverride': str(force_state_override),
                 'EventLogs': event_logs_json,
-                'Notes': notes
+                'Notes': notes,
+                'AssignedUsers': assigned_users_json
             }
             
             logger.debug("Row data being written: %s", row_data)
@@ -1013,11 +1068,14 @@ class DataManager:
                 c = Client(
                     name=row.get('Name', '').strip(),
                     company=row.get('Company', '').strip(),
+                    contact_person=row.get('ContactPerson', '').strip(),
+                    email=row.get('Email', '').strip(),
+                    phone=row.get('Phone', '').strip(),
+                    tax_number=row.get('TaxNumber', '').strip(),
                     address1=row.get('Address1', '').strip(),
                     address2=row.get('Address2', '').strip(),
                     address3=row.get('Address3', '').strip(),
                     postal_code=row.get('PostalCode', '').strip(),
-                    phone=row.get('Phone', '').strip(),
                 )
                 if c.name:
                     self.clients[c.name] = c
@@ -1031,9 +1089,12 @@ class DataManager:
                 writer.writerow({
                     'Name': c.name,
                     'Company': c.company,
+                    'ContactPerson': getattr(c, 'contact_person', ''),
+                    'Email': getattr(c, 'email', ''),
+                    'Phone': c.phone,
+                    'TaxNumber': getattr(c, 'tax_number', ''),
                     'Address1': c.address1,
                     'Address2': c.address2,
                     'Address3': c.address3,
                     'PostalCode': c.postal_code,
-                    'Phone': c.phone,
                 })

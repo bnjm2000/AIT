@@ -37,6 +37,7 @@ class EventNotesFilesTests(unittest.TestCase):
             actually_prepared=[],
             extra_assets=[],
             tag='events',
+            assigned_users=['normal'],
         )
         self.data_manager.events[1] = event
         self.data_manager.save_event(event)

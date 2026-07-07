@@ -66,7 +66,9 @@ from models import (
     User,
     format_date_output,
     hash_password,
+    normalize_user_role,
     normalize_event_state,
+    user_role_is_adminish,
 )
 from utils import sanitize_filename
 from workforce import (
@@ -190,6 +192,7 @@ _transfer_action_lock = threading.RLock()
 _prepare_action_lock = threading.RLock()
 _inventory_action_lock = threading.RLock()
 _planning_templates_lock = threading.RLock()
+_finance_lock = threading.RLock()
 
 # Server-sent events notify logged-in browsers when shared CSV data changes.
 _realtime_subscribers = {}
@@ -213,6 +216,12 @@ DATABASE_URL = os.environ.get('DATABASE_URL', '').strip()
 DEFAULT_COMPANY_CODE = 'AVPL'
 DEFAULT_COMPANY_NAME = 'AVEC Vision Private Limited'
 SUPER_ADMIN_USERNAME = 'bnjm2000'
+ROLE_LABELS = {
+    'owner': 'Owner',
+    'admin': 'Admin',
+    'manager': 'Manager',
+    'user': 'User',
+}
 APP_CONFIG_FOLDER = os.path.join(BASE_DIR, 'app_data')
 COMPANY_REGISTRY_FILE = os.environ.get(
     'COMPANY_REGISTRY_FILE',
@@ -581,6 +590,10 @@ def _current_admin_can_manage_user(username):
     return _user_is_assigned_to_current_company(username)
 
 
+def _role_label(role):
+    return ROLE_LABELS.get(normalize_user_role(role), 'User')
+
+
 def _is_super_admin_username(username):
     username = str(username or '').strip()
     if not username:
@@ -595,12 +608,126 @@ def _is_super_admin_username(username):
     }
 
 
+def _is_owner_username(username):
+    return _is_super_admin_username(username)
+
+
 def _current_user_is_super_admin():
     if not has_request_context():
         return False
     if session.get('self_user_changes_pending'):
         return bool(session.get('is_super_admin'))
     return _is_super_admin_username(session.get('user'))
+
+
+def _current_user_is_owner():
+    return _current_user_is_super_admin()
+
+
+def _effective_user_role(user_or_username=None):
+    if hasattr(user_or_username, 'username'):
+        user = user_or_username
+        username = user.username
+    else:
+        username = str(user_or_username or '').strip()
+        user = data_manager.users.get(username) if username and data_manager else None
+
+    if _is_owner_username(username):
+        return 'owner'
+
+    if user:
+        role = normalize_user_role(
+            getattr(user, 'role', None),
+            getattr(user, 'is_admin', False),
+        )
+        return 'admin' if role == 'owner' else role
+
+    return 'user'
+
+
+def _user_has_sales_access(user_or_username=None):
+    if hasattr(user_or_username, 'username'):
+        user = user_or_username
+        username = user.username
+    else:
+        username = str(user_or_username or '').strip()
+        user = data_manager.users.get(username) if username and data_manager else None
+
+    if _is_owner_username(username):
+        return True
+
+    return bool(user and getattr(user, 'has_sales_access', False))
+
+
+def _current_user_can_manage_roles():
+    if not has_request_context():
+        return False
+    if session.get('self_user_changes_pending'):
+        return normalize_user_role(session.get('role'), session.get('is_admin')) in {'owner', 'admin'}
+    return _effective_user_role(session.get('user')) in {'owner', 'admin'}
+
+
+def _current_user_has_sales_access():
+    if not has_request_context():
+        return False
+    if session.get('self_user_changes_pending'):
+        return bool(session.get('is_super_admin') or session.get('has_sales_access'))
+    return _user_has_sales_access(session.get('user'))
+
+
+def _sync_user_role_flags(user):
+    role = normalize_user_role(
+        getattr(user, 'role', None),
+        getattr(user, 'is_admin', False),
+    )
+    if role == 'owner' and not _is_owner_username(getattr(user, 'username', '')):
+        role = 'admin'
+    user.role = role
+    user.is_admin = user_role_is_adminish(role)
+    return user
+
+
+def _requested_role_from_payload(data, fallback=None):
+    if 'role' in data:
+        return normalize_user_role(data.get('role'), False)
+
+    owner_value = data.get('isOwner') if 'isOwner' in data else data.get('isSuperAdmin')
+    if owner_value is not None:
+        if bool(owner_value):
+            return 'owner'
+        if 'isAdmin' in data:
+            return 'admin' if bool(data.get('isAdmin')) else 'user'
+        return normalize_user_role(fallback or 'admin', True)
+
+    if 'isAdmin' in data:
+        return 'admin' if bool(data.get('isAdmin')) else 'user'
+
+    return None
+
+
+def _user_payload(user):
+    role = _effective_user_role(user)
+    company = _company_payload(_user_assigned_company_code(user.username))
+    has_sales_access = _user_has_sales_access(user)
+    return {
+        'username': user.username,
+        'name': getattr(user, 'name', '') or '',
+        'role': role,
+        'roleLabel': _role_label(role),
+        'isAdmin': user_role_is_adminish(role),
+        'isManager': role == 'manager',
+        'isOwner': role == 'owner',
+        'isSuperAdmin': role == 'owner',
+        'canManageRoles': role in {'owner', 'admin'},
+        'hasSalesAccess': has_sales_access,
+        'isSales': has_sales_access,
+        'isActive': getattr(user, 'is_active', True),
+        'lastOnline': getattr(user, 'last_online', '-') or '-',
+        'companyCode': company.get('code'),
+        'companyName': company.get('name'),
+        'company': company,
+        'assignedCompanyCode': company.get('code'),
+    }
 
 
 def _set_user_super_admin(username, enabled):
@@ -622,7 +749,7 @@ def _set_user_super_admin(username, enabled):
     else:
         existing = [super_admin for super_admin in existing if super_admin.lower() != username.lower()]
         if not existing:
-            raise ValueError('At least one super admin is required')
+            raise ValueError('At least one owner is required')
 
     registry['superAdmins'] = existing
     return _save_company_registry(registry)
@@ -657,7 +784,7 @@ def _current_user_effective_is_admin():
     if session.get('self_user_changes_pending'):
         return bool(session.get('is_admin'))
     user = _current_user_obj()
-    return bool(user and getattr(user, 'is_admin', False))
+    return bool(user and user_role_is_adminish(_effective_user_role(user)))
 
 
 def _current_user_effective_is_active():
@@ -667,6 +794,107 @@ def _current_user_effective_is_active():
         return bool(session.get('is_active', True))
     user = _current_user_obj()
     return bool(user and getattr(user, 'is_active', True))
+
+
+def _normalise_event_assigned_users(values, require_known=False):
+    if values is None:
+        return []
+    if isinstance(values, str):
+        raw = values.strip()
+        if not raw:
+            values = []
+        else:
+            try:
+                parsed = json.loads(raw)
+                values = parsed if isinstance(parsed, list) else [raw]
+            except (TypeError, ValueError, json.JSONDecodeError):
+                values = [part.strip() for part in raw.split(',')]
+    if not isinstance(values, (list, tuple, set)):
+        values = [values]
+
+    known_by_lower = {
+        str(username or '').strip().lower(): str(username or '').strip()
+        for username in (data_manager.users.keys() if data_manager else [])
+        if str(username or '').strip()
+    }
+    assigned = []
+    seen = set()
+    for value in values:
+        if isinstance(value, dict):
+            raw_username = str(value.get('username') or '').strip()
+        else:
+            raw_username = str(value or '').strip()
+        if not raw_username:
+            continue
+        canonical = known_by_lower.get(raw_username.lower(), raw_username)
+        if require_known and canonical.lower() not in known_by_lower:
+            raise ValueError(f'Assigned user not found: {raw_username}')
+        if require_known and not _current_admin_can_manage_user(canonical):
+            raise ValueError(f'You can only assign users from your company: {canonical}')
+        key = canonical.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        assigned.append(canonical)
+    return assigned
+
+
+def _event_assigned_usernames(event):
+    return _normalise_event_assigned_users(getattr(event, 'assigned_users', []) or [])
+
+
+def _event_assignee_payloads(event):
+    rows = []
+    for username in _event_assigned_usernames(event):
+        user = data_manager.users.get(username) if data_manager else None
+        role = _effective_user_role(user or username)
+        rows.append({
+            'username': username,
+            'name': getattr(user, 'name', '') if user else '',
+            'role': role,
+            'roleLabel': _role_label(role),
+            'isActive': bool(getattr(user, 'is_active', True)) if user else False,
+        })
+    return rows
+
+
+def _current_user_can_access_event(event):
+    if _current_user_effective_is_admin():
+        return True
+    username = str(session.get('user') or '').strip().lower()
+    if not username:
+        return False
+    return username in {
+        str(assigned or '').strip().lower()
+        for assigned in _event_assigned_usernames(event)
+        if str(assigned or '').strip()
+    }
+
+
+def _event_access_denied_response():
+    return jsonify({'error': 'You are not assigned to this event'}), 403
+
+
+def require_event_access(f):
+    """Require admin/manager access or assignment to the route's event_id."""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        event_id = kwargs.get('event_id')
+        if event_id is None and args:
+            event_id = args[0]
+        try:
+            event_id = int(event_id)
+        except (TypeError, ValueError):
+            return jsonify({'error': 'Event not found'}), 404
+
+        event = data_manager.events.get(event_id) if data_manager else None
+        if not event:
+            return jsonify({'error': 'Event not found'}), 404
+        if not _current_user_can_access_event(event):
+            return _event_access_denied_response()
+        return f(*args, **kwargs)
+
+    return decorated_function
 
 
 def _ensure_company_folders(record):
@@ -699,7 +927,8 @@ def _ensure_super_admin_users(manager):
         user = manager.users.get(username)
         if not user:
             continue
-        if not getattr(user, 'is_admin', False):
+        if not getattr(user, 'is_admin', False) or normalize_user_role(getattr(user, 'role', None), True) != 'owner':
+            user.role = 'owner'
             user.is_admin = True
             changed = True
     if changed:
@@ -1527,6 +1756,11 @@ DEFAULT_PDF_FOOTER_TEXT = (
     "AVEC VISION PRIVATE LIMITED\n"
     "601 SIMS DRIVE PAN-I COMPLEX #04-10 SINGAPORE 387382 TEL 65.9743.3660 CO REG 202122775G"
 )
+DEFAULT_FINANCE_TERMS = (
+    "This quotation is valid until the validity date shown above.\n"
+    "A 50% deposit is required to confirm the booking, with the balance payable before the event date.\n"
+    "Prices are in Singapore Dollars unless otherwise stated."
+)
 
 ALLOWED_PDF_LOGO_MIMES = {
     'image/png': '.png',
@@ -1550,6 +1784,24 @@ def _pdf_settings_defaults():
         'logoFilename': '',
         'logoOriginalName': '',
         'logoMimeType': '',
+        'companyName': DEFAULT_COMPANY_NAME,
+        'registrationNumber': '202122775G',
+        'billingAddress': '601 Sims Drive, PAN-I Complex #04-10, Singapore 387382',
+        'phone': '+65 9743 3660',
+        'email': '',
+        'website': '',
+        'bankName': '',
+        'bankAccountName': '',
+        'bankAccountNumber': '',
+        'paynowUen': '',
+        'currency': 'SGD',
+        'taxLabel': 'GST',
+        'taxRate': 9,
+        'quotationPrefix': 'QT',
+        'invoicePrefix': 'INV',
+        'defaultPaymentTerms': '30 Days',
+        'defaultValidityDays': 30,
+        'defaultTerms': DEFAULT_FINANCE_TERMS,
         'updatedAt': '',
     }
 
@@ -1607,6 +1859,18 @@ def _normalise_pdf_settings(settings):
     merged['logoFilename'] = os.path.basename(str(merged.get('logoFilename') or '').strip())
     merged['logoOriginalName'] = str(merged.get('logoOriginalName') or '').strip()
     merged['logoMimeType'] = str(merged.get('logoMimeType') or '').strip()
+    for key in (
+        'companyName', 'registrationNumber', 'billingAddress', 'phone', 'email',
+        'website', 'bankName', 'bankAccountName', 'bankAccountNumber',
+        'paynowUen', 'currency', 'taxLabel', 'quotationPrefix',
+        'invoicePrefix', 'defaultPaymentTerms', 'defaultTerms',
+    ):
+        merged[key] = str(merged.get(key) or '').strip()
+    merged['currency'] = merged['currency'].upper()[:6] or 'SGD'
+    merged['quotationPrefix'] = re.sub(r'[^A-Z0-9_-]+', '', merged['quotationPrefix'].upper())[:12] or 'QT'
+    merged['invoicePrefix'] = re.sub(r'[^A-Z0-9_-]+', '', merged['invoicePrefix'].upper())[:12] or 'INV'
+    merged['taxRate'] = max(0, min(100, _safe_float(merged.get('taxRate'), 0)))
+    merged['defaultValidityDays'] = max(1, min(365, _safe_int(merged.get('defaultValidityDays'), 30)))
     merged['updatedAt'] = str(merged.get('updatedAt') or '').strip()
 
     logo_path = _pdf_logo_path(merged) if merged['logoFilename'] else ''
@@ -1666,6 +1930,24 @@ def _pdf_settings_payload(settings=None):
         'logoUrl': logo_url,
         'hasCustomLogo': has_custom_logo,
         'logoOriginalName': settings.get('logoOriginalName', ''),
+        'companyName': settings.get('companyName', DEFAULT_COMPANY_NAME),
+        'registrationNumber': settings.get('registrationNumber', ''),
+        'billingAddress': settings.get('billingAddress', ''),
+        'phone': settings.get('phone', ''),
+        'email': settings.get('email', ''),
+        'website': settings.get('website', ''),
+        'bankName': settings.get('bankName', ''),
+        'bankAccountName': settings.get('bankAccountName', ''),
+        'bankAccountNumber': settings.get('bankAccountNumber', ''),
+        'paynowUen': settings.get('paynowUen', ''),
+        'currency': settings.get('currency', 'SGD'),
+        'taxLabel': settings.get('taxLabel', 'GST'),
+        'taxRate': settings.get('taxRate', 0),
+        'quotationPrefix': settings.get('quotationPrefix', 'QT'),
+        'invoicePrefix': settings.get('invoicePrefix', 'INV'),
+        'defaultPaymentTerms': settings.get('defaultPaymentTerms', '30 Days'),
+        'defaultValidityDays': settings.get('defaultValidityDays', 30),
+        'defaultTerms': settings.get('defaultTerms', DEFAULT_FINANCE_TERMS),
         'updatedAt': settings.get('updatedAt', ''),
     }
 
@@ -1877,8 +2159,9 @@ def _asset_id_plan_for_request(data):
     brand = str(data.get('brand', '') or '').strip()
     model_number = str(data.get('model', '') or '').strip()
     description = str(data.get('description', '') or '').strip()
-    department = _normalise_department_code(data.get('department', 'UN')) or 'UN'
+    department = _normalise_department_code(data.get('department'))
     is_bulk = _request_bool(data.get('isBulk'), default=False)
+    quantity = _safe_int(data.get('quantity'), 0)
 
     if not brand:
         raise ValueError('Brand is required')
@@ -1886,8 +2169,15 @@ def _asset_id_plan_for_request(data):
     if not model_number:
         raise ValueError('Model number is required')
 
+    if not department:
+        raise ValueError('Department is required')
+
+    if quantity <= 0:
+        raise ValueError('Quantity is required')
+
+    quantity = min(quantity, 500)
+
     if is_bulk:
-        quantity = max(1, _safe_int(data.get('quantity', 1), 1))
         return {
             'isBulk': True,
             'brand': brand,
@@ -1905,8 +2195,6 @@ def _asset_id_plan_for_request(data):
             'message': ''
         }
 
-    quantity = max(1, _safe_int(data.get('quantity', 1), 1))
-    quantity = min(quantity, 500)
     family_key = _asset_family_key_from_values(brand, model_number)
     usage = _prefix_usage_summary()
     custom_prefix = _normalise_asset_id_prefix(data.get('assetIdPrefix'))
@@ -2002,6 +2290,13 @@ def _is_bulk_asset(asset):
 def _safe_int(value, default=0):
     try:
         return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _safe_float(value, default=0.0):
+    try:
+        return float(value)
     except (TypeError, ValueError):
         return default
 
@@ -2641,7 +2936,7 @@ def _verify_current_admin_password(password):
     username = session.get('user')
     user = data_manager.users.get(username) if data_manager else None
 
-    if not user or not getattr(user, 'is_admin', False):
+    if not user or not user_role_is_adminish(_effective_user_role(user)):
         return False, 'Admin privileges required'
 
     if not password:
@@ -3443,6 +3738,8 @@ def _bulk_deployments_for_asset(bulk_id):
         return deployments
 
     for event in data_manager.events.values():
+        if has_request_context() and not _current_user_can_access_event(event):
+            continue
         prepared_qty = _bulk_quantity_for_asset_in_values(
             getattr(event, 'actually_prepared', []) or [],
             bulk_id
@@ -3967,6 +4264,7 @@ def require_auth(f):
 
 @app.route('/api/assets/available-for-event/<int:event_id>', methods=['GET'])
 @require_auth
+@require_event_access
 def get_available_assets_for_event(event_id):
     """
     Return event-aware assets for the prepare dropdown.
@@ -4091,8 +4389,30 @@ def require_super_admin(f):
             session.clear()
             return jsonify({'error': 'Account inactive'}), 401
 
-        if not _current_user_is_super_admin():
-            return jsonify({'error': 'Super admin privileges required'}), 403
+        if not _current_user_is_owner():
+            return jsonify({'error': 'Owner privileges required'}), 403
+
+        return f(*args, **kwargs)
+
+    return decorated_function
+
+
+def require_sales(f):
+    """Decorator for finance-only actions."""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user' not in session:
+            return jsonify({'error': 'Not authenticated'}), 401
+
+        username = session.get('user')
+        user = data_manager.users.get(username) if data_manager else None
+
+        if not user or not _current_user_effective_is_active():
+            session.clear()
+            return jsonify({'error': 'Account inactive'}), 401
+
+        if not _current_user_has_sales_access():
+            return jsonify({'error': 'Sales access required'}), 403
 
         return f(*args, **kwargs)
 
@@ -4114,7 +4434,8 @@ def _current_user_is_admin():
 # ---------------- Manpower, transport, and worker portal ----------------
 
 WORKER_TOKEN_MAX_AGE = 12 * 60 * 60
-SUPER_ADMIN_LOG_PREFIX = '[SUPER ADMIN ONLY] '
+SUPER_ADMIN_LOG_PREFIX = '[OWNER ONLY] '
+OWNER_ONLY_LOG_PREFIXES = (SUPER_ADMIN_LOG_PREFIX, '[SUPER ADMIN ONLY] ')
 
 
 def _workforce_folder(manager=None):
@@ -8244,7 +8565,7 @@ def validate_event_data(data, require_location=False):
     return errors
 
 
-def get_deployed_asset_quantity():
+def get_deployed_asset_quantity(events_to_check=None):
     """Physical inventory prepared for events and not yet returned.
 
     Regular assets are de-duplicated across events, bulk markers contribute
@@ -8258,7 +8579,8 @@ def get_deployed_asset_quantity():
     regular_asset_ids = set()
     bulk_quantity = 0
 
-    for event in manager.events.values():
+    source_events = events_to_check if events_to_check is not None else manager.events.values()
+    for event in source_events:
         returned = set(getattr(event, 'returned_items', []) or [])
         seen_bulk_refs = set()
         for ref in getattr(event, 'actually_prepared', []) or []:
@@ -8724,12 +9046,16 @@ def login():
                 session['user'] = username
                 if _is_super_admin_username(username) and not getattr(user, 'is_admin', False):
                     user.is_admin = True
+                _sync_user_role_flags(user)
                 user.last_online = datetime.now().astimezone().isoformat(timespec='seconds')
                 data_manager.save_users()
                 if not app.config.get('TESTING'):
                     _reload_users_for_all_company_managers()
-                session['is_admin'] = user.is_admin
-                session['is_super_admin'] = _is_super_admin_username(username)
+                effective_role = _effective_user_role(user)
+                session['role'] = effective_role
+                session['is_admin'] = user_role_is_adminish(effective_role)
+                session['is_super_admin'] = effective_role == 'owner'
+                session['has_sales_access'] = _user_has_sales_access(user)
                 session['is_active'] = getattr(user, 'is_active', True)
                 session.pop('self_user_changes_pending', None)
                 session['company_code'] = _user_assigned_company_code(username)
@@ -8844,18 +9170,23 @@ def get_current_user():
     if not user:
         return jsonify({'error': 'User not found'}), 404
 
-    return jsonify({
-        'success': True,
-        'data': {
-            'username': user.username,
-            'isAdmin': _current_user_effective_is_admin(),
-            'isSuperAdmin': _current_user_is_super_admin(),
-            'isActive': _current_user_effective_is_active(),
-            'company': _company_payload(_current_company_code()),
-            'assignedCompanyCode': _user_assigned_company_code(user.username),
-            'hasPendingSelfChanges': bool(session.get('self_user_changes_pending')),
-        }
+    payload = _user_payload(user)
+    payload.update({
+        'role': session.get('role', payload['role']) if session.get('self_user_changes_pending') else payload['role'],
+        'isAdmin': _current_user_effective_is_admin(),
+        'isOwner': _current_user_is_owner(),
+        'isSuperAdmin': _current_user_is_owner(),
+        'hasSalesAccess': _current_user_has_sales_access(),
+        'isSales': _current_user_has_sales_access(),
+        'isActive': _current_user_effective_is_active(),
+        'company': _company_payload(_current_company_code()),
+        'assignedCompanyCode': _user_assigned_company_code(user.username),
+        'canManageRoles': _current_user_can_manage_roles(),
+        'hasPendingSelfChanges': bool(session.get('self_user_changes_pending')),
     })
+    payload['roleLabel'] = _role_label(payload['role'])
+
+    return jsonify({'success': True, 'data': payload})
 
 
 @app.route('/api/current-user/password', methods=['PUT'])
@@ -8899,7 +9230,7 @@ def change_current_user_password():
 @app.route('/api/companies', methods=['GET'])
 @require_super_admin
 def list_companies():
-    """Super admin: list companies and user assignments."""
+    """Owner: list companies and user assignments."""
     try:
         registry = _load_company_registry()
         companies = []
@@ -8925,7 +9256,7 @@ def list_companies():
 @app.route('/api/companies', methods=['POST'])
 @require_super_admin
 def create_company():
-    """Super admin: create a segregated company folder and optional first admin."""
+    """Owner: create a segregated company folder and optional first admin."""
     try:
         data = request.get_json() or {}
         name = str(data.get('name') or '').strip()
@@ -8971,11 +9302,13 @@ def create_company():
                     password_hash=hash_password(first_admin_password, salt),
                     salt=salt,
                     is_admin=True,
-                    is_active=True
+                    is_active=True,
+                    role='admin',
                 )
                 data_manager.users[first_admin_username] = user
 
             user.is_admin = True
+            user.role = 'admin'
             user.is_active = True
             data_manager.save_users()
             _reload_users_for_all_company_managers()
@@ -8997,7 +9330,7 @@ def create_company():
 @app.route('/api/companies/<path:company_code>', methods=['PUT'])
 @require_super_admin
 def update_company(company_code):
-    """Super admin: update a company's display name."""
+    """Owner: update a company's display name."""
     try:
         code = _normalise_company_code(unquote_plus(company_code))
         data = request.get_json() or {}
@@ -9032,7 +9365,7 @@ def update_company(company_code):
 @app.route('/api/companies/<path:company_code>', methods=['DELETE'])
 @require_super_admin
 def delete_company(company_code):
-    """Super admin: delete a company and its segregated company assets."""
+    """Owner: delete a company and its segregated company assets."""
     try:
         code = _normalise_company_code(unquote_plus(company_code))
         registry = _load_company_registry()
@@ -9054,15 +9387,15 @@ def delete_company(company_code):
             new_default_company = remaining_codes[0]
 
         removed_users = []
-        reassigned_super_admins = []
+        reassigned_owners = []
         users_changed = False
         for username, assigned_company in list(registry.get('userCompanies', {}).items()):
             if _normalise_company_code(assigned_company, DEFAULT_COMPANY_CODE) != code:
                 continue
 
-            if _is_super_admin_username(username):
+            if _is_owner_username(username):
                 registry['userCompanies'][username] = new_default_company
-                reassigned_super_admins.append(username)
+                reassigned_owners.append(username)
             else:
                 registry['userCompanies'].pop(username, None)
                 if username in data_manager.users:
@@ -9102,7 +9435,8 @@ def delete_company(company_code):
                 'deletedCompanyCode': code,
                 'newDefaultCompany': new_default_company,
                 'removedUsers': sorted(removed_users, key=lambda value: value.lower()),
-                'reassignedSuperAdmins': sorted(reassigned_super_admins, key=lambda value: value.lower()),
+                'reassignedOwners': sorted(reassigned_owners, key=lambda value: value.lower()),
+                'reassignedSuperAdmins': sorted(reassigned_owners, key=lambda value: value.lower()),
             }
         })
     except ValueError as e:
@@ -9115,7 +9449,7 @@ def delete_company(company_code):
 @app.route('/api/current-company', methods=['PUT'])
 @require_super_admin
 def switch_current_company():
-    """Super admin: switch the active company for this browser session."""
+    """Owner: switch the active company for this browser session."""
     try:
         data = request.get_json() or {}
         code = _normalise_company_code(data.get('companyCode') or data.get('code'))
@@ -9166,25 +9500,36 @@ def get_pdf_settings():
 @app.route('/api/pdf-settings', methods=['PUT'])
 @require_admin
 def update_pdf_settings():
-    """Update configurable PDF footer text."""
+    """Update company identity, billing, tax, logo-footer and finance defaults."""
     try:
         data = request.get_json() or {}
-        footer_text = data.get('footerText')
-
-        if footer_text is None:
-            return jsonify({'error': 'Footer text is required'}), 400
-
-        footer_text = str(footer_text)
-        if len(footer_text) > 2000:
-            return jsonify({'error': 'Footer text is too long'}), 400
-
         settings = _load_pdf_settings()
-        settings['footerText'] = footer_text
+        text_fields = (
+            'footerText', 'companyName', 'registrationNumber', 'billingAddress',
+            'phone', 'email', 'website', 'bankName', 'bankAccountName',
+            'bankAccountNumber', 'paynowUen', 'currency', 'taxLabel',
+            'quotationPrefix', 'invoicePrefix', 'defaultPaymentTerms',
+            'defaultTerms',
+        )
+        for key in text_fields:
+            if key not in data:
+                continue
+            value = str(data.get(key) or '')
+            max_length = 5000 if key == 'defaultTerms' else 2000
+            if len(value) > max_length:
+                return jsonify({'error': f'{key} is too long'}), 400
+            settings[key] = value
+
+        if 'taxRate' in data:
+            settings['taxRate'] = _safe_float(data.get('taxRate'), 0)
+        if 'defaultValidityDays' in data:
+            settings['defaultValidityDays'] = _safe_int(data.get('defaultValidityDays'), 30)
+
         settings['updatedAt'] = datetime.now().isoformat(timespec='seconds')
         saved = _save_pdf_settings(settings)
         _mark_company_branding_setup_complete()
 
-        log_action("Updated PDF footer settings")
+        log_action("Updated company details")
 
         return jsonify({'success': True, 'data': _pdf_settings_payload(saved)})
     except Exception as e:
@@ -9523,16 +9868,10 @@ def get_users():
         if not can_see_all_companies and _normalise_company_code(company_code, DEFAULT_COMPANY_CODE) != current_company_code:
             continue
 
-        company = _company_payload(company_code)
-        users_data.append({
-            'username': user.username,
-            'isAdmin': user.is_admin,
-            'isSuperAdmin': _is_super_admin_username(user.username),
-            'isActive': getattr(user, 'is_active', True),
-            'lastOnline': getattr(user, 'last_online', '-') or '-',
-            'companyCode': company.get('code'),
-            'companyName': company.get('name'),
-        })
+        payload = _user_payload(user)
+        payload['companyCode'] = company_code
+        payload['companyName'] = _company_payload(company_code).get('name')
+        users_data.append(payload)
 
     return jsonify({'success': True, 'data': users_data})
 
@@ -9545,11 +9884,14 @@ def create_user():
         data = request.get_json() or {}
 
         username = (data.get('username') or '').strip()
+        name = (data.get('name') or '').strip()
         password = data.get('password') or ''
-        is_admin = bool(data.get('isAdmin', False))
-        is_super_admin = bool(data.get('isSuperAdmin', False))
         is_active = bool(data.get('isActive', True))
         requested_company = _normalise_company_code(data.get('companyCode') or _current_company_code(), DEFAULT_COMPANY_CODE)
+        role_fields = {'role', 'isAdmin', 'isOwner', 'isSuperAdmin', 'hasSalesAccess', 'isSales'}
+        role_payload_present = any(field in data for field in role_fields)
+        requested_role = _requested_role_from_payload(data) if role_payload_present else 'user'
+        has_sales_access = bool(data.get('hasSalesAccess', data.get('isSales', False)))
 
         if not username:
             return jsonify({'error': 'Username is required'}), 400
@@ -9560,11 +9902,14 @@ def create_user():
         if username in data_manager.users:
             return jsonify({'error': 'User already exists'}), 409
 
-        if data.get('companyCode') and not _current_user_is_super_admin():
-            return jsonify({'error': 'Only the super admin can assign users to companies'}), 403
+        if role_payload_present and not _current_user_can_manage_roles():
+            return jsonify({'error': 'Only owners and admins can change role permissions'}), 403
 
-        if is_super_admin and not _current_user_is_super_admin():
-            return jsonify({'error': 'Only the super admin can grant super admin access'}), 403
+        if data.get('companyCode') and not _current_user_is_owner():
+            return jsonify({'error': 'Only the owner can assign users to companies'}), 403
+
+        if requested_role == 'owner' and not _current_user_is_owner():
+            return jsonify({'error': 'Only the owner can grant owner access'}), 403
 
         if requested_company not in _all_company_records():
             return jsonify({'error': 'Company not found'}), 404
@@ -9576,12 +9921,15 @@ def create_user():
             username=username,
             password_hash=password_hash,
             salt=salt,
-            is_admin=is_admin or is_super_admin,
-            is_active=is_active
+            is_admin=user_role_is_adminish(requested_role),
+            is_active=is_active,
+            role=requested_role,
+            has_sales_access=has_sales_access,
+            name=name,
         )
 
         data_manager.save_users()
-        if is_super_admin:
+        if requested_role == 'owner':
             _set_user_super_admin(username, True)
         _reload_users_for_all_company_managers()
         _assign_user_to_company(username, requested_company)
@@ -9609,12 +9957,9 @@ def update_user(username):
         if not _current_admin_can_manage_user(old_username):
             return jsonify({'error': 'You can only manage users assigned to your company'}), 403
 
-        if (
-            _is_super_admin_username(old_username)
-            and not _current_user_is_super_admin()
-            and old_username != session.get('user')
-        ):
-            return jsonify({'error': 'Only a super admin can change another super admin'}), 403
+        target_role = _effective_user_role(user)
+        if target_role == 'owner' and not _current_user_is_owner():
+            return jsonify({'error': 'Only the owner can change another owner'}), 403
 
         data = request.get_json() or {}
         username_changed = False
@@ -9622,19 +9967,30 @@ def update_user(username):
         renamed_to = old_username
         rename_counts = None
         requested_company = None
-        requested_super_admin = None
+        requested_role = None
+        requested_sales_access = None
+        role_fields = {'role', 'isAdmin', 'isOwner', 'isSuperAdmin', 'hasSalesAccess', 'isSales'}
+        role_payload_present = any(field in data for field in role_fields)
+
+        if role_payload_present and not _current_user_can_manage_roles():
+            return jsonify({'error': 'Only owners and admins can change role permissions'}), 403
 
         if 'companyCode' in data:
-            if not _current_user_is_super_admin():
-                return jsonify({'error': 'Only the super admin can assign users to companies'}), 403
+            if not _current_user_is_owner():
+                return jsonify({'error': 'Only the owner can assign users to companies'}), 403
             requested_company = _normalise_company_code(data.get('companyCode'), DEFAULT_COMPANY_CODE)
             if requested_company not in _all_company_records():
                 return jsonify({'error': 'Company not found'}), 404
 
-        if 'isSuperAdmin' in data:
-            if not _current_user_is_super_admin():
-                return jsonify({'error': 'Only the super admin can change super admin access'}), 403
-            requested_super_admin = bool(data.get('isSuperAdmin'))
+        if role_payload_present:
+            requested_role = _requested_role_from_payload(data, target_role)
+            if requested_role == 'owner' and not _current_user_is_owner():
+                return jsonify({'error': 'Only the owner can grant owner access'}), 403
+            if 'hasSalesAccess' in data or 'isSales' in data:
+                requested_sales_access = bool(data.get('hasSalesAccess', data.get('isSales', False)))
+
+        if 'name' in data:
+            user.name = (data.get('name') or '').strip()
 
         # Rename user
         if 'username' in data:
@@ -9659,26 +10015,18 @@ def update_user(username):
 
                 rename_counts = data_manager.update_username_references(old_username, new_username)
 
-        # Update admin privilege
-        if 'isAdmin' in data:
-            new_is_admin = bool(data.get('isAdmin'))
+        if requested_role:
+            user.role = requested_role
+            user.is_admin = user_role_is_adminish(requested_role)
 
-            if not new_is_admin and (
-                requested_super_admin is True or
-                (_is_super_admin_username(user.username) and requested_super_admin is not False)
-            ):
-                return jsonify({'error': 'The super admin must remain an admin'}), 400
-
-            user.is_admin = new_is_admin
+        if requested_sales_access is not None:
+            user.has_sales_access = requested_sales_access
 
         # Update active state
         if 'isActive' in data:
             new_is_active = bool(data.get('isActive'))
 
             user.is_active = new_is_active
-
-        if requested_super_admin is True:
-            user.is_admin = True
 
         if username_changed:
             registry = _load_company_registry()
@@ -9692,11 +10040,15 @@ def update_user(username):
             _assign_user_to_company(user.username, requested_company)
 
         try:
-            if requested_super_admin is not None:
-                _set_user_super_admin(user.username, requested_super_admin)
+            if requested_role == 'owner':
+                user.is_admin = True
+                _set_user_super_admin(user.username, True)
+            elif requested_role and target_role == 'owner':
+                _set_user_super_admin(user.username, False)
         except ValueError as e:
             return jsonify({'error': str(e)}), 400
 
+        _sync_user_role_flags(user)
         data_manager.save_users()
         _reload_users_for_all_company_managers()
 
@@ -9726,8 +10078,14 @@ def update_user(username):
             'message': 'User updated successfully',
             'data': {
                 'username': user.username,
-                'isAdmin': user.is_admin,
-                'isSuperAdmin': _is_super_admin_username(user.username),
+                'role': _effective_user_role(user),
+                'roleLabel': _role_label(_effective_user_role(user)),
+                'isAdmin': user_role_is_adminish(_effective_user_role(user)),
+                'isOwner': _effective_user_role(user) == 'owner',
+                'isSuperAdmin': _effective_user_role(user) == 'owner',
+                'canManageRoles': _effective_user_role(user) in {'owner', 'admin'},
+                'hasSalesAccess': _user_has_sales_access(user),
+                'isSales': _user_has_sales_access(user),
                 'isActive': getattr(user, 'is_active', True),
                 'companyCode': _user_assigned_company_code(user.username),
                 'selfChangesPending': was_self_update,
@@ -9753,8 +10111,8 @@ def reset_user_password(username):
         if not _current_admin_can_manage_user(username):
             return jsonify({'error': 'You can only manage users assigned to your company'}), 403
 
-        if _is_super_admin_username(username) and not _current_user_is_super_admin():
-            return jsonify({'error': 'Only a super admin can reset another super admin password'}), 403
+        if _is_owner_username(username) and not _current_user_is_owner():
+            return jsonify({'error': 'Only the owner can reset another owner password'}), 403
 
         data = request.get_json() or {}
         new_password = data.get('password') or ''
@@ -9793,11 +10151,11 @@ def delete_user(username):
         if not _current_admin_can_manage_user(username):
             return jsonify({'error': 'You can only manage users assigned to your company'}), 403
 
-        if _is_super_admin_username(username) and not _current_user_is_super_admin():
-            return jsonify({'error': 'Only a super admin can delete another super admin'}), 403
+        if _is_owner_username(username) and not _current_user_is_owner():
+            return jsonify({'error': 'Only the owner can delete another owner'}), 403
 
         try:
-            if _is_super_admin_username(username):
+            if _is_owner_username(username):
                 _set_user_super_admin(username, False)
         except ValueError as e:
             return jsonify({'error': str(e)}), 400
@@ -10374,11 +10732,15 @@ def delete_maintenance_media(media_id):
 def get_events():
     """Get all events"""
     try:
-        refresh_event_states_for_read()
+        visible_events = [
+            event for event in data_manager.events.values()
+            if _current_user_can_access_event(event)
+        ]
+        refresh_event_states_for_read(visible_events)
         summary_view = request.args.get('view', '').strip().lower() == 'summary'
 
         events_data = []
-        for event in data_manager.events.values():
+        for event in visible_events:
             # Initialize actually_prepared if missing
             if not hasattr(event, 'actually_prepared'):
                 event.actually_prepared = []
@@ -10508,7 +10870,9 @@ def get_events():
                 'hasModelAssignments': has_model_assignments,  # Flag to know which logic to use
                 'forceStateOverride': getattr(event, 'force_state_override', False),
                 'hasNotes': bool((getattr(event, 'notes', '') or '').strip()),
-                'fileCount': len(_event_files_for_response(event.event_id))
+                'fileCount': len(_event_files_for_response(event.event_id)),
+                'assignedUsernames': _event_assigned_usernames(event),
+                'assignedUsers': _event_assignee_payloads(event),
             }
             if not summary_view:
                 event_payload.update({
@@ -10569,12 +10933,15 @@ def get_events():
 
 @app.route('/api/events/<int:event_id>', methods=['GET'])
 @require_auth
+@require_event_access
 def get_event(event_id):
     """Get a specific event with detailed asset information"""
     try:
         event = data_manager.events.get(event_id)
         if not event:
             return jsonify({'error': 'Event not found'}), 404
+        if not _current_user_can_access_event(event):
+            return _event_access_denied_response()
 
         refresh_event_states_for_read([event])
 
@@ -10930,7 +11297,9 @@ def get_event(event_id):
             'notes': getattr(event, 'notes', '') or '',
             'files': _event_files_for_response(event.event_id),
             'canDeleteFiles': _current_user_is_admin(),
-            'eventLogs': _event_activity_logs_for_response(event)
+            'eventLogs': _event_activity_logs_for_response(event),
+            'assignedUsernames': _event_assigned_usernames(event),
+            'assignedUsers': _event_assignee_payloads(event),
         }
 
         return jsonify({'success': True, 'data': event_data})
@@ -10942,6 +11311,7 @@ def get_event(event_id):
 
 @app.route('/api/events/<int:event_id>/notes', methods=['PUT'])
 @require_auth
+@require_event_access
 def update_event_notes(event_id):
     """Update the plaintext notes attached to an event."""
     try:
@@ -10969,6 +11339,7 @@ def update_event_notes(event_id):
 
 @app.route('/api/events/<int:event_id>/files', methods=['POST'])
 @require_auth
+@require_event_access
 def upload_event_files(event_id):
     """Upload one or more files into the event-specific folder."""
     try:
@@ -11026,6 +11397,7 @@ def upload_event_files(event_id):
 
 @app.route('/api/events/<int:event_id>/files/<path:filename>', methods=['GET'])
 @require_auth
+@require_event_access
 def download_event_file(event_id, filename):
     """Download a file attached to an event."""
     try:
@@ -11076,6 +11448,7 @@ def delete_event_file_upload(event_id, filename):
 
 @app.route('/api/events/<int:event_id>/availability', methods=['GET'])
 @require_auth
+@require_event_access
 def get_event_model_availability(event_id):
     """
     Compute model availability for an event.
@@ -11166,13 +11539,14 @@ def get_event_model_availability(event_id):
                 if quantity <= 0:
                     continue
                 overlap_by_key[key] += quantity
-                overlap_events_by_key[key].append({
-                    'eventId': other.event_id,
-                    'eventName': getattr(other, 'name', '') or f'Event {other.event_id}',
-                    'startDate': _format_event_date_for_response(getattr(other, 'start_date', '')),
-                    'endDate': _format_event_date_for_response(getattr(other, 'end_date', '')),
-                    'quantity': quantity,
-                })
+                if _current_user_can_access_event(other):
+                    overlap_events_by_key[key].append({
+                        'eventId': other.event_id,
+                        'eventName': getattr(other, 'name', '') or f'Event {other.event_id}',
+                        'startDate': _format_event_date_for_response(getattr(other, 'start_date', '')),
+                        'endDate': _format_event_date_for_response(getattr(other, 'end_date', '')),
+                        'quantity': quantity,
+                    })
 
         result = []
 
@@ -11252,6 +11626,10 @@ def create_event():
             data['startDate'], '%Y-%m-%d').strftime('%Y%m%d')
         end_date = datetime.strptime(
             data['endDate'], '%Y-%m-%d').strftime('%Y%m%d')
+        assigned_users = _normalise_event_assigned_users(
+            data.get('assignedUsers', data.get('assignedUsernames', [])),
+            require_known=True,
+        )
 
         # Create new event
         event = Event(
@@ -11264,7 +11642,8 @@ def create_event():
             prepared_items=[],
             state='New',
             returned_items=[],
-            tag=data.get('tag', 'event')
+            tag=data.get('tag', 'event'),
+            assigned_users=assigned_users,
         )
         event.actually_prepared = []
 
@@ -11279,6 +11658,8 @@ def create_event():
             f"Created event {event_id}: {data['name']} via web interface")
 
         return jsonify({'success': True, 'message': 'Event created successfully', 'eventId': event_id})
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
     except Exception as e:
         logger.error(f"Error creating event: {e}")
         return jsonify({'error': 'Failed to create event'}), 500
@@ -11307,6 +11688,7 @@ def update_event(event_id):
             'startDate': format_date_output(event.start_date),
             'endDate': format_date_output(event.end_date),
             'tag': getattr(event, 'tag', 'events'),
+            'assignedUsers': ', '.join(_event_assigned_usernames(event)),
         }
         old_name = event.name
         if 'name' in data:
@@ -11321,6 +11703,11 @@ def update_event(event_id):
                 data['endDate'], '%Y-%m-%d').strftime('%Y%m%d')
         if 'tag' in data:
             event.tag = data['tag']
+        if 'assignedUsers' in data or 'assignedUsernames' in data:
+            event.assigned_users = _normalise_event_assigned_users(
+                data.get('assignedUsers', data.get('assignedUsernames', [])),
+                require_known=True,
+            )
 
         # Update asset locations if event name changed
         if old_name != event.name:
@@ -11344,6 +11731,7 @@ def update_event(event_id):
             'startDate': format_date_output(event.start_date),
             'endDate': format_date_output(event.end_date),
             'tag': getattr(event, 'tag', 'events'),
+            'assignedUsers': ', '.join(_event_assigned_usernames(event)),
         }
         detail_labels = {
             'name': 'Name',
@@ -11351,6 +11739,7 @@ def update_event(event_id):
             'startDate': 'Start date',
             'endDate': 'End date',
             'tag': 'Type',
+            'assignedUsers': 'Assigned users',
         }
         changes = [
             (
@@ -11366,6 +11755,8 @@ def update_event(event_id):
         )
 
         return jsonify({'success': True, 'message': 'Event updated successfully'})
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
     except Exception as e:
         logger.error(f"Error updating event: {e}")
         return jsonify({'error': 'Failed to update event'}), 500
@@ -12205,6 +12596,7 @@ def add_container_models_to_event(event_id):
 
 @app.route('/api/events/<int:event_id>/prepare', methods=['POST'])
 @require_auth
+@require_event_access
 @with_prepare_action_lock
 def prepare_event_asset(event_id):
     """Mark an asset as prepared for an event"""
@@ -12398,6 +12790,7 @@ def add_custom_asset_to_event(event_id):
 
 @app.route('/api/events/<int:event_id>/custom-assets/collect', methods=['POST'])
 @require_auth
+@require_event_access
 @with_prepare_action_lock
 def collect_custom_asset(event_id):
     """Mark a loan/rental custom item as collected."""
@@ -12433,6 +12826,7 @@ def collect_custom_asset(event_id):
 
 @app.route('/api/events/<int:event_id>/custom-assets/uncollect', methods=['POST'])
 @require_auth
+@require_event_access
 @with_prepare_action_lock
 def uncollect_custom_asset(event_id):
     """Undo collection for a loan/rental custom item. This also unprepares it."""
@@ -12468,6 +12862,7 @@ def uncollect_custom_asset(event_id):
 
 @app.route('/api/events/<int:event_id>/unprepare', methods=['POST'])
 @require_auth
+@require_event_access
 @with_prepare_action_lock
 def unprepare_event_asset(event_id):
     """Remove a specific asset completely from the event"""
@@ -12571,6 +12966,7 @@ def unprepare_event_asset(event_id):
 
 @app.route('/api/events/<int:event_id>/return', methods=['POST'])
 @require_auth
+@require_event_access
 @with_prepare_action_lock
 def return_event_asset(event_id):
     """Return an asset from an event"""
@@ -12670,6 +13066,7 @@ def return_event_asset(event_id):
 
 @app.route('/api/events/<int:event_id>/unreturn', methods=['POST'])
 @require_auth
+@require_event_access
 @with_prepare_action_lock
 def unreturn_event_asset(event_id):
     """Undo an accidental event return and restore the asset's deployed state."""
@@ -12745,6 +13142,7 @@ def unreturn_event_asset(event_id):
 
 @app.route('/api/events/<int:event_id>/close-return', methods=['POST'])
 @require_auth
+@require_event_access
 @with_prepare_action_lock
 def close_return_event(event_id):
     """Confirm completion of a return after every deployed item is back."""
@@ -12888,6 +13286,7 @@ def return_department_assets(event_id):
 
 @app.route('/api/events/<int:event_id>/assign-specific', methods=['POST'])
 @require_auth
+@require_event_access
 @with_prepare_action_lock
 def assign_specific_asset_to_model(event_id):
     """Assign a specific asset to fulfill a model requirement"""
@@ -13118,6 +13517,7 @@ def assign_specific_asset_to_model(event_id):
 
 @app.route('/api/events/<int:event_id>/unassign-specific', methods=['POST'])
 @require_auth
+@require_event_access
 def unassign_specific_asset_from_model(event_id):
     """Unassign a specific asset from a model requirement"""
     try:
@@ -13802,6 +14202,8 @@ def get_transfer_options():
         # Make sure source event states are current before filtering. Returning
         # events remain eligible while they still have assets physically out.
         for event in data_manager.events.values():
+            if not _current_user_can_access_event(event):
+                continue
             old_state = event.state
             update_event_state(event)
             if event.state != old_state:
@@ -13810,6 +14212,8 @@ def get_transfer_options():
         event_summaries = []
 
         for event in data_manager.events.values():
+            if not _current_user_can_access_event(event):
+                continue
             summary = _event_summary_for_transfer(event)
             event_summaries.append(summary)
 
@@ -13846,6 +14250,8 @@ def get_transfer_candidates():
 
         if not from_event or not to_event:
             return jsonify({'error': 'Event not found'}), 404
+        if not _current_user_can_access_event(from_event) or not _current_user_can_access_event(to_event):
+            return _event_access_denied_response()
 
         candidates = _get_transfer_candidates(from_event, to_event)
         return_to_office = _get_transfer_return_to_office_assets(from_event, to_event)
@@ -13894,6 +14300,8 @@ def execute_transfer_assets():
 
         if not from_event or not to_event:
             return jsonify({'error': 'Event not found'}), 404
+        if not _current_user_can_access_event(from_event) or not _current_user_can_access_event(to_event):
+            return _event_access_denied_response()
 
         transferred = []
         skipped = []
@@ -14082,6 +14490,8 @@ def undo_transfer_assets():
         to_event = data_manager.events.get(int(to_event_id))
         if not from_event or not to_event:
             return jsonify({'error': 'Event not found'}), 404
+        if not _current_user_can_access_event(from_event) or not _current_user_can_access_event(to_event):
+            return _event_access_denied_response()
 
         undone = []
         skipped = []
@@ -14133,6 +14543,8 @@ def return_transfer_assets_to_office():
         from_event = data_manager.events.get(int(from_event_id))
         if not from_event:
             return jsonify({'error': 'Source event not found'}), 404
+        if not _current_user_can_access_event(from_event):
+            return _event_access_denied_response()
 
         returned = []
         skipped = []
@@ -14182,6 +14594,8 @@ def undo_return_transfer_assets_to_office():
         from_event = data_manager.events.get(int(from_event_id))
         if not from_event:
             return jsonify({'error': 'Source event not found'}), 404
+        if not _current_user_can_access_event(from_event):
+            return _event_access_denied_response()
 
         restored = []
         skipped = []
@@ -14215,6 +14629,7 @@ def undo_return_transfer_assets_to_office():
 
 @app.route('/api/events/<int:event_id>/transfer', methods=['POST'])
 @require_auth
+@require_event_access
 @with_transfer_action_lock
 def transfer_asset_between_events(event_id):
     """Transfer one asset from one event to another. Kept for the existing manual modal."""
@@ -14231,6 +14646,8 @@ def transfer_asset_between_events(event_id):
 
         if not from_event or not to_event:
             return jsonify({'error': 'Event not found'}), 404
+        if not _current_user_can_access_event(from_event):
+            return _event_access_denied_response()
 
         transferred = _transfer_one_asset(from_event, to_event, asset_id)
 
@@ -14864,6 +15281,8 @@ def get_available_assets():
         return jsonify({'error': 'Failed to retrieve available assets'}), 500
 
 @app.route('/api/events/<int:event_id>/assets', methods=['GET'])
+@require_auth
+@require_event_access
 def get_event_assets(event_id):
     """Get all assets assigned to an event with their details"""
     if 'user' not in session:
@@ -16356,6 +16775,8 @@ def get_asset_event_history(asset_id):
         history = []
 
         for event in data_manager.events.values():
+            if not _current_user_can_access_event(event):
+                continue
             # Ensure lists exist (backward compatibility)
             ap = getattr(event, 'actually_prepared', []) or []
             ri = getattr(event, 'returned_items', []) or []
@@ -16978,7 +17399,7 @@ def container_resource(container_id):
             })
 
         # DELETE
-        if not session.get('is_admin', False):
+        if not _current_user_is_admin():
             return jsonify({'error': 'Admin privileges required'}), 403
 
         del data_manager.containers[container_id]
@@ -16998,17 +17419,21 @@ def get_logs():
     """Get system activity logs."""
     try:
         logs_data = []
-        super_admin = _current_user_is_super_admin()
+        owner = _current_user_is_owner()
         for log in data_manager.logs:
             action = str(log.action or '')
-            if action.startswith(SUPER_ADMIN_LOG_PREFIX) and not super_admin:
+            owner_prefix = next(
+                (prefix for prefix in OWNER_ONLY_LOG_PREFIXES if action.startswith(prefix)),
+                '',
+            )
+            if owner_prefix and not owner:
                 continue
             logs_data.append({
                 'timestamp': log.timestamp,
                 'user': log.user,
                 'action': (
-                    action[len(SUPER_ADMIN_LOG_PREFIX):]
-                    if action.startswith(SUPER_ADMIN_LOG_PREFIX)
+                    action[len(owner_prefix):]
+                    if owner_prefix
                     else action
                 )
             })
@@ -17039,18 +17464,22 @@ def get_stats():
             logger.error("Data manager inventory not initialized")
             return jsonify({'error': 'Inventory data not available'}), 500
 
-        refresh_event_states_for_read()
+        visible_events = [
+            event for event in data_manager.events.values()
+            if _current_user_can_access_event(event)
+        ]
+        refresh_event_states_for_read(visible_events)
 
-        logger.info(f"Getting stats - Events: {len(data_manager.events)}, Inventory: {len(data_manager.inventory)}")
+        logger.info(f"Getting stats - Events: {len(visible_events)}, Inventory: {len(data_manager.inventory)}")
         
-        total_events = len(data_manager.events)
+        total_events = len(visible_events)
         active_events = len(
-            [e for e in data_manager.events.values() if e.state not in ['Closed']])
+            [e for e in visible_events if e.state not in ['Closed']])
         total_assets = sum(_asset_inventory_quantity(a) for a in data_manager.inventory.values())
         
         # Add error handling for get_assigned_assets
         try:
-            deployed_assets = get_deployed_asset_quantity()
+            deployed_assets = get_deployed_asset_quantity(visible_events)
             logger.info("Successfully got deployed physical asset quantity: %s", deployed_assets)
         except Exception as e:
             logger.error("Error getting deployed physical asset quantity: %s", e)
@@ -17092,7 +17521,7 @@ def get_stats():
             'totalEvents': total_events,
             'activeEvents': active_events,
             'overdueEvents': len(
-                [e for e in data_manager.events.values() if e.state == 'Overdue']
+                [e for e in visible_events if e.state == 'Overdue']
             ),
             'totalAssets': total_assets,
             'deployedAssets': deployed_assets,
@@ -17253,6 +17682,8 @@ def update_all_event_states():
         updated_events = []
         
         for event in data_manager.events.values():
+            if not _current_user_can_access_event(event):
+                continue
             old_state = event.state
             update_event_state(event)
             
@@ -17446,6 +17877,1128 @@ def check_and_update_ongoing_events():
         import traceback
         logger.error(f"Traceback: {traceback.format_exc()}")
 
+# ---------------- Quotations and invoices ----------------
+
+FINANCE_FILENAME = 'Finance.json'
+FINANCE_VERSION = 2
+FINANCE_QUOTATION_STATUSES = (
+    'draft', 'sent', 'accepted', 'declined', 'expired',
+    'cancelled', 'invoiced', 'paid',
+)
+FINANCE_DEFAULT_DEPARTMENTS = ('Manpower', 'Transportation')
+
+
+def _finance_path():
+    folder = data_manager.data_folder if data_manager else './data'
+    return os.path.join(folder, FINANCE_FILENAME)
+
+
+def _finance_defaults():
+    return {
+        'version': FINANCE_VERSION,
+        'documents': [],
+        'priceBook': {},
+    }
+
+
+def _finance_owner_username():
+    registry = _load_company_registry()
+    for username in registry.get('superAdmins', [SUPER_ADMIN_USERNAME]):
+        if str(username or '').strip():
+            return str(username).strip()
+    return SUPER_ADMIN_USERNAME
+
+
+def _finance_current_username():
+    if not has_request_context():
+        return _finance_owner_username()
+    return str(session.get('user') or '').strip()
+
+
+def _finance_user_can_access(document):
+    if _current_user_is_owner():
+        return True
+    return str((document or {}).get('createdBy') or '').strip().lower() == _finance_current_username().lower()
+
+
+def _finance_department_details(value, code_hint=''):
+    raw = re.sub(r'\s+', ' ', str(value or '').strip())
+    departments = _load_departments()
+    hinted_code = _normalise_department_code(code_hint)
+    raw_code = _normalise_department_code(raw)
+    match = None
+    if hinted_code in departments:
+        match = departments[hinted_code]
+    elif raw_code in departments and raw.upper() == raw_code:
+        match = departments[raw_code]
+    else:
+        lowered = raw.lower().removesuffix(' department').strip()
+        match = next(
+            (
+                row for row in departments.values()
+                if str(row.get('name') or '').strip().lower() == lowered
+            ),
+            None,
+        )
+
+    if match:
+        name = str(match.get('name') or match.get('code') or '').strip()
+        if name and not name.lower().endswith('department'):
+            name = f"{name} Department"
+        return name or 'Unknown Department', match.get('code') or 'UN'
+
+    if not raw:
+        return 'Unknown Department', 'UN'
+    if raw.lower() == 'manpower':
+        return 'Manpower', 'MANPOWER'
+    if raw.lower() in {'transport', 'transportation'}:
+        return 'Transportation', 'TRANSPORTATION'
+    return raw, hinted_code or raw_code or 'UN'
+
+
+def _finance_format_number(prefix, year, sequence, revision):
+    return f"{prefix}-{year}-{max(1, int(sequence)):03d}-{max(1, int(revision)):02d}"
+
+
+def _finance_parse_number(number, fallback_sequence=1):
+    value = str(number or '').strip().upper()
+    match = re.match(r'^([A-Z0-9_-]+)-(\d{4})-(\d+)(?:-(\d{2}))?$', value)
+    if not match:
+        return 'QT', datetime.now().year, fallback_sequence, 1
+    return (
+        match.group(1),
+        _safe_int(match.group(2), datetime.now().year),
+        max(1, _safe_int(match.group(3), fallback_sequence)),
+        max(1, _safe_int(match.group(4), 1)),
+    )
+
+
+def _finance_date_days(start_value, end_value):
+    try:
+        start = datetime.strptime(str(start_value or ''), '%Y-%m-%d')
+        end = datetime.strptime(str(end_value or ''), '%Y-%m-%d')
+    except ValueError:
+        return 1
+    return max(1, (end.date() - start.date()).days + 1)
+
+
+def _migrate_finance_data(data):
+    changed = _safe_int(data.get('version'), 1) < FINANCE_VERSION
+    owner = _finance_owner_username()
+    settings = _load_pdf_settings()
+    quote_prefix = str(settings.get('quotationPrefix') or 'QT').upper()
+    documents = data.get('documents') or []
+
+    for index, document in enumerate(documents, start=1):
+        if not isinstance(document, dict):
+            continue
+        if not str(document.get('createdBy') or '').strip():
+            document['createdBy'] = owner
+            changed = True
+        if document.get('type') != 'quotation':
+            continue
+
+        parsed_prefix, year, sequence, revision = _finance_parse_number(
+            document.get('number'),
+            index,
+        )
+        sequence = max(1, _safe_int(document.get('baseSequence'), sequence))
+        revision = max(1, _safe_int(document.get('revision'), revision))
+        number = _finance_format_number(
+            quote_prefix or parsed_prefix,
+            year,
+            sequence,
+            revision,
+        )
+        if document.get('number') != number:
+            document['number'] = number
+            changed = True
+        for key, value in (
+            ('baseSequence', sequence),
+            ('revision', revision),
+            ('projectName', document.get('projectName') or document.get('title') or ''),
+            ('revisions', document.get('revisions') or []),
+            ('showUnitPrices', bool(document.get('showUnitPrices', False))),
+            ('showDepartmentDiscounts', bool(document.get('showDepartmentDiscounts', False))),
+            ('totalLocked', bool(document.get('totalLocked', False))),
+            ('lockedPreTaxTotal', document.get('lockedPreTaxTotal')),
+            ('setupDate', document.get('setupDate') or ''),
+            ('setupTime', document.get('setupTime') or ''),
+            ('rehearsalDate', document.get('rehearsalDate') or ''),
+            ('rehearsalTime', document.get('rehearsalTime') or ''),
+            ('showDate', document.get('showDate') or document.get('eventDate') or ''),
+            ('showTime', document.get('showTime') or ''),
+            ('teardownDate', document.get('teardownDate') or ''),
+            ('teardownTime', document.get('teardownTime') or ''),
+        ):
+            if key not in document:
+                document[key] = value
+                changed = True
+
+        quote_date = document.get('quotationDate')
+        valid_until = document.get('validUntil')
+        validity_days = _finance_date_days(quote_date, valid_until) - 1
+        if 'validityDays' not in document:
+            document['validityDays'] = max(
+                1,
+                validity_days or _safe_int(settings.get('defaultValidityDays'), 30),
+            )
+            changed = True
+
+        department_names = []
+        for line in document.get('lineItems') or []:
+            if not isinstance(line, dict):
+                continue
+            name, code = _finance_department_details(
+                line.get('department'),
+                line.get('departmentCode'),
+            )
+            if line.get('department') != name or line.get('departmentCode') != code:
+                line['department'] = name
+                line['departmentCode'] = code
+                changed = True
+            if line.get('uom') == 'pcs':
+                line['uom'] = 'units'
+                changed = True
+            if name not in department_names:
+                department_names.append(name)
+
+        configured = list(document.get('departments') or [])
+        for department in [*department_names, *FINANCE_DEFAULT_DEPARTMENTS]:
+            if department not in configured:
+                configured.append(department)
+                changed = True
+        document['departments'] = configured
+
+    if data.get('version') != FINANCE_VERSION:
+        data['version'] = FINANCE_VERSION
+        changed = True
+    return changed
+
+
+def _load_finance_data():
+    filepath = _finance_path()
+    if not os.path.exists(filepath) or os.path.getsize(filepath) == 0:
+        return _finance_defaults()
+    try:
+        with open(filepath, 'r', encoding='utf-8') as finance_file:
+            loaded = json.load(finance_file)
+    except Exception as exc:
+        logger.warning("Failed to read %s: %s", FINANCE_FILENAME, exc)
+        return _finance_defaults()
+
+    data = _finance_defaults()
+    if isinstance(loaded, dict):
+        if isinstance(loaded.get('documents'), list):
+            data['documents'] = loaded['documents']
+        if isinstance(loaded.get('priceBook'), dict):
+            data['priceBook'] = loaded['priceBook']
+        data['version'] = loaded.get('version', 1)
+    if _migrate_finance_data(data):
+        _save_finance_data(data)
+    return data
+
+
+def _save_finance_data(data):
+    filepath = _finance_path()
+    folder = os.path.dirname(filepath)
+    if folder and not os.path.exists(folder):
+        os.makedirs(folder)
+    payload = {
+        'version': FINANCE_VERSION,
+        'documents': data.get('documents') or [],
+        'priceBook': data.get('priceBook') or {},
+    }
+    temp_path = f"{filepath}.{secrets.token_hex(6)}.tmp"
+    with open(temp_path, 'w', encoding='utf-8') as finance_file:
+        json.dump(payload, finance_file, ensure_ascii=False, indent=2)
+    os.replace(temp_path, filepath)
+    return payload
+
+
+def _finance_catalog_key(department='', brand='', model='', description=''):
+    parts = [
+        _normalise_department_code(department) or 'UN',
+        str(brand or '').strip(),
+        str(model or '').strip(),
+    ]
+    return 'inventory:' + '|'.join(parts).lower()
+
+
+def _finance_custom_price_key(description):
+    compact = re.sub(r'\s+', ' ', str(description or '').strip().lower())
+    return f"custom:{compact}"
+
+
+def _normalise_finance_client(value):
+    value = value if isinstance(value, dict) else {}
+    return {
+        'name': str(value.get('name') or '').strip()[:160],
+        'company': str(value.get('company') or '').strip()[:200],
+        'contactPerson': str(value.get('contactPerson') or '').strip()[:160],
+        'email': str(value.get('email') or '').strip()[:200],
+        'phone': str(value.get('phone') or '').strip()[:80],
+        'taxNumber': str(value.get('taxNumber') or '').strip()[:100],
+        'address1': str(value.get('address1') or '').strip()[:240],
+        'address2': str(value.get('address2') or '').strip()[:240],
+        'address3': str(value.get('address3') or '').strip()[:240],
+        'postalCode': str(value.get('postalCode') or '').strip()[:40],
+    }
+
+
+def _normalise_finance_line(value):
+    value = value if isinstance(value, dict) else {}
+    quantity = max(0, _safe_float(value.get('quantity'), 1))
+    days = max(0, _safe_float(value.get('days'), 1))
+    unit_price = max(0, _safe_float(value.get('unitPrice'), 0))
+    discount = max(0, min(100, _safe_float(value.get('discountPercent'), 0)))
+    gross = quantity * days * unit_price
+    total = gross * (1 - discount / 100)
+    department, department_code = _finance_department_details(
+        value.get('department'),
+        value.get('departmentCode'),
+    )
+    raw_uom = str(value.get('uom') or '').strip().lower()
+    if raw_uom in {'pax', 'person', 'people'}:
+        uom = 'pax'
+    elif raw_uom in {'lot', 'lots'}:
+        uom = 'lot'
+    else:
+        uom = 'units'
+    source_asset_ids = [
+        str(asset_id).strip()
+        for asset_id in (value.get('sourceAssetIds') or [])
+        if str(asset_id or '').strip()
+    ]
+    catalog_key = str(value.get('catalogKey') or '').strip()[:500]
+    legacy_parts = catalog_key.split('|')
+    brand = str(value.get('brand') or (legacy_parts[1] if len(legacy_parts) > 2 else '')).strip()
+    model = str(value.get('model') or (legacy_parts[2] if len(legacy_parts) > 2 else '')).strip()
+    return {
+        'id': re.sub(r'[^A-Za-z0-9_-]+', '', str(value.get('id') or ''))[:80] or secrets.token_hex(6),
+        'catalogKey': catalog_key,
+        'sourceAssetIds': source_asset_ids,
+        'brand': brand[:240],
+        'model': model[:240],
+        'description': str(value.get('description') or '').strip()[:1000],
+        'department': department[:200],
+        'departmentCode': department_code,
+        'days': round(days, 4),
+        'quantity': round(quantity, 4),
+        'uom': uom,
+        'unitPrice': round(unit_price, 2),
+        'discountPercent': round(discount, 4),
+        'total': round(total, 2),
+        'isCustom': bool(value.get('isCustom') or not catalog_key),
+    }
+
+
+def _normalise_finance_adjustment(value):
+    value = value if isinstance(value, dict) else {}
+    scope = 'department' if value.get('scope') == 'department' else 'total'
+    department, _department_code = _finance_department_details(value.get('department'))
+    return {
+        'id': re.sub(r'[^A-Za-z0-9_-]+', '', str(value.get('id') or ''))[:80] or secrets.token_hex(6),
+        'scope': scope,
+        'department': department if scope == 'department' else '',
+        'label': str(value.get('label') or 'Discount').strip()[:300] or 'Discount',
+        'amount': round(_safe_float(value.get('amount'), 0), 2),
+        'percent': round(max(0, _safe_float(value.get('percent'), 0)), 4),
+        'kind': 'discount' if str(value.get('kind') or '').lower() == 'discount' or _safe_float(value.get('amount'), 0) < 0 else 'adjustment',
+    }
+
+
+def _recalculate_finance_adjustments(document):
+    lines = document.get('lineItems') or []
+    adjustments = document.get('adjustments') or []
+    for adjustment in adjustments:
+        percent = max(0, _safe_float(adjustment.get('percent'), 0))
+        if not percent:
+            continue
+        if adjustment.get('scope') == 'department':
+            department = adjustment.get('department')
+            base = sum(
+                _safe_float(line.get('total'), 0)
+                for line in lines
+                if line.get('department') == department
+            )
+        else:
+            base = sum(_safe_float(line.get('total'), 0) for line in lines)
+            base += sum(
+                _safe_float(row.get('amount'), 0)
+                for row in adjustments
+                if row.get('scope') == 'department'
+            )
+        sign = -1 if adjustment.get('kind') == 'discount' else 1
+        adjustment['amount'] = round(sign * base * percent / 100, 2)
+
+
+def _finance_totals(document):
+    subtotal = round(sum(_safe_float(line.get('total'), 0) for line in document.get('lineItems') or []), 2)
+    adjustment_total = round(sum(_safe_float(row.get('amount'), 0) for row in document.get('adjustments') or []), 2)
+    net_subtotal = round(subtotal + adjustment_total, 2)
+    tax_rate = max(0, min(100, _safe_float(document.get('taxRate'), 0)))
+    tax = round(max(0, net_subtotal) * tax_rate / 100, 2)
+    total_locked = bool(document.get('totalLocked'))
+    locked_value = (
+        round(max(0, _safe_float(document.get('lockedPreTaxTotal'), net_subtotal)), 2)
+        if total_locked else None
+    )
+    return {
+        'subtotal': subtotal,
+        'adjustments': adjustment_total,
+        'discount': round(sum(abs(min(0, _safe_float(row.get('amount'), 0))) for row in document.get('adjustments') or []), 2),
+        'netSubtotal': net_subtotal,
+        'calculatedPreTax': net_subtotal,
+        'lockedPreTax': locked_value,
+        'lockDifference': round(net_subtotal - locked_value, 2) if locked_value is not None else 0,
+        'tax': tax,
+        'total': round(net_subtotal + tax, 2),
+    }
+
+
+def _normalise_finance_document(value, document_type='quotation', existing=None):
+    value = value if isinstance(value, dict) else {}
+    existing = existing if isinstance(existing, dict) else {}
+    is_read_normalisation = value is existing and bool(existing)
+    settings = _load_pdf_settings()
+    now = datetime.now()
+    today = now.strftime('%Y-%m-%d')
+    validity_days = max(1, _safe_int(settings.get('defaultValidityDays'), 30))
+    valid_until = (now + timedelta(days=validity_days)).strftime('%Y-%m-%d')
+    allowed_statuses = (
+        set(FINANCE_QUOTATION_STATUSES)
+        if document_type == 'quotation'
+        else {'draft', 'sent', 'paid', 'overdue', 'void'}
+    )
+    status = str(value.get('status') or existing.get('status') or 'draft').strip().lower()
+    if status not in allowed_statuses:
+        status = 'draft'
+
+    lines = [
+        _normalise_finance_line(row)
+        for row in (value.get('lineItems') if 'lineItems' in value else existing.get('lineItems') or [])
+        if isinstance(row, dict)
+    ]
+    adjustments = [
+        _normalise_finance_adjustment(row)
+        for row in (value.get('adjustments') if 'adjustments' in value else existing.get('adjustments') or [])
+        if isinstance(row, dict)
+    ]
+    date_key = 'quotationDate' if document_type == 'quotation' else 'invoiceDate'
+    secondary_date_key = 'validUntil' if document_type == 'quotation' else 'dueDate'
+    current_username = _finance_current_username()
+    prefix, number_year, parsed_sequence, parsed_revision = _finance_parse_number(
+        existing.get('number') or value.get('number'),
+        1,
+    )
+    base_sequence = max(
+        1,
+        _safe_int(
+            existing.get('baseSequence', value.get('baseSequence')),
+            parsed_sequence,
+        ),
+    )
+    revision = max(
+        1,
+        _safe_int(existing.get('revision', value.get('revision')), parsed_revision),
+    )
+    project_name = str(
+        value.get('projectName')
+        if 'projectName' in value
+        else value.get('title')
+        if 'title' in value
+        else existing.get('projectName') or existing.get('title') or ''
+    ).strip()[:500]
+    departments = []
+    for department in (
+        value.get('departments')
+        if 'departments' in value
+        else existing.get('departments') or []
+    ):
+        name, _code = _finance_department_details(department)
+        if name not in departments:
+            departments.append(name)
+    for line in lines:
+        if line['department'] not in departments:
+            departments.append(line['department'])
+    for department in FINANCE_DEFAULT_DEPARTMENTS:
+        if department not in departments:
+            departments.append(department)
+
+    document = {
+        'id': existing.get('id') or re.sub(r'[^A-Za-z0-9_-]+', '', str(value.get('id') or ''))[:80] or secrets.token_hex(12),
+        'type': document_type,
+        'number': existing.get('number') or str(value.get('number') or '').strip()[:80],
+        'baseSequence': base_sequence,
+        'revision': revision,
+        'status': status,
+        'client': _normalise_finance_client(value.get('client') if 'client' in value else existing.get('client')),
+        date_key: str(value.get(date_key) or existing.get(date_key) or today).strip()[:20],
+        secondary_date_key: str(value.get(secondary_date_key) or existing.get(secondary_date_key) or valid_until).strip()[:20],
+        'projectName': project_name,
+        'title': project_name,
+        'reference': str(value.get('reference') if 'reference' in value else existing.get('reference') or '').strip()[:300],
+        'eventReference': str(value.get('eventReference') if 'eventReference' in value else existing.get('eventReference') or '').strip()[:300],
+        'salesperson': str(value.get('salesperson') if 'salesperson' in value else existing.get('salesperson') or session.get('username', '')).strip()[:160],
+        'paymentTerms': str(value.get('paymentTerms') if 'paymentTerms' in value else existing.get('paymentTerms') or settings.get('defaultPaymentTerms', '30 Days')).strip()[:300],
+        'eventLocation': str(value.get('eventLocation') if 'eventLocation' in value else existing.get('eventLocation') or '').strip()[:600],
+        'setupDate': str(value.get('setupDate') if 'setupDate' in value else existing.get('setupDate') or '').strip()[:20],
+        'setupTime': str(value.get('setupTime') if 'setupTime' in value else existing.get('setupTime') or '').strip()[:20],
+        'rehearsalDate': str(value.get('rehearsalDate') if 'rehearsalDate' in value else existing.get('rehearsalDate') or '').strip()[:20],
+        'rehearsalTime': str(value.get('rehearsalTime') if 'rehearsalTime' in value else existing.get('rehearsalTime') or '').strip()[:20],
+        'showDate': str(value.get('showDate') if 'showDate' in value else existing.get('showDate') or existing.get('eventDate') or '').strip()[:20],
+        'showTime': str(value.get('showTime') if 'showTime' in value else existing.get('showTime') or '').strip()[:20],
+        'teardownDate': str(value.get('teardownDate') if 'teardownDate' in value else existing.get('teardownDate') or '').strip()[:20],
+        'teardownTime': str(value.get('teardownTime') if 'teardownTime' in value else existing.get('teardownTime') or '').strip()[:20],
+        'validityDays': max(1, min(365, _safe_int(
+            value.get('validityDays') if 'validityDays' in value else existing.get('validityDays'),
+            validity_days,
+        ))),
+        'currency': str(value.get('currency') if 'currency' in value else existing.get('currency') or settings.get('currency', 'SGD')).strip().upper()[:6] or 'SGD',
+        'taxRate': round(max(0, min(100, _safe_float(value.get('taxRate') if 'taxRate' in value else existing.get('taxRate', settings.get('taxRate', 0)), 0))), 4),
+        'notes': str(value.get('notes') if 'notes' in value else existing.get('notes') or '').strip()[:5000],
+        'terms': str(value.get('terms') if 'terms' in value else existing.get('terms') or settings.get('defaultTerms', DEFAULT_FINANCE_TERMS)).strip()[:10000],
+        'lineItems': lines,
+        'adjustments': adjustments,
+        'departments': departments,
+        'showUnitPrices': bool(value.get('showUnitPrices') if 'showUnitPrices' in value else existing.get('showUnitPrices', False)),
+        'showDepartmentDiscounts': bool(value.get('showDepartmentDiscounts') if 'showDepartmentDiscounts' in value else existing.get('showDepartmentDiscounts', False)),
+        'totalLocked': bool(value.get('totalLocked') if 'totalLocked' in value else existing.get('totalLocked', False)),
+        'lockedPreTaxTotal': (
+            round(max(0, _safe_float(
+                value.get('lockedPreTaxTotal')
+                if 'lockedPreTaxTotal' in value
+                else existing.get('lockedPreTaxTotal'),
+                0,
+            )), 2)
+            if bool(value.get('totalLocked') if 'totalLocked' in value else existing.get('totalLocked', False))
+            else None
+        ),
+        'revisions': list(existing.get('revisions') or value.get('revisions') or []),
+        'sentAt': str(value.get('sentAt') or existing.get('sentAt') or '').strip()[:40],
+        'acceptedAt': str(value.get('acceptedAt') or existing.get('acceptedAt') or '').strip()[:40],
+        'eventId': _safe_int(value.get('eventId') or existing.get('eventId'), 0) or None,
+        'sourceQuotationId': str(value.get('sourceQuotationId') or existing.get('sourceQuotationId') or '').strip()[:80],
+        'createdAt': existing.get('createdAt') or now.isoformat(timespec='seconds'),
+        'createdBy': existing.get('createdBy') or current_username,
+        'updatedAt': existing.get('updatedAt') if is_read_normalisation else now.isoformat(timespec='seconds'),
+        'updatedBy': existing.get('updatedBy', '') if is_read_normalisation else current_username,
+    }
+    if document_type == 'quotation':
+        quote_prefix = str(settings.get('quotationPrefix') or prefix or 'QT').upper()
+        document['number'] = _finance_format_number(
+            quote_prefix,
+            number_year or now.year,
+            base_sequence,
+            revision,
+        )
+    document['eventDays'] = _finance_date_days(
+        document.get('setupDate'),
+        document.get('teardownDate'),
+    )
+    _recalculate_finance_adjustments(document)
+    document['totals'] = _finance_totals(document)
+    return document
+
+
+def _next_finance_number(documents, document_type):
+    settings = _load_pdf_settings()
+    prefix = settings.get('quotationPrefix' if document_type == 'quotation' else 'invoicePrefix')
+    prefix = str(prefix or ('QT' if document_type == 'quotation' else 'INV')).upper()
+    year = datetime.now().year
+    if document_type == 'quotation':
+        sequence = max(
+            [
+                _safe_int(row.get('baseSequence'), _finance_parse_number(row.get('number'))[2])
+                for row in documents
+                if row.get('type') == 'quotation'
+            ],
+            default=0,
+        ) + 1
+        return _finance_format_number(prefix, year, sequence, 1)
+    pattern = re.compile(rf'^{re.escape(prefix)}-{year}-(\d+)$', re.IGNORECASE)
+    values = []
+    for row in documents:
+        match = pattern.match(str(row.get('number') or ''))
+        if match:
+            values.append(_safe_int(match.group(1), 0))
+    return f"{prefix}-{year}-{max(values, default=0) + 1:04d}"
+
+
+def _finance_revision_payload(document):
+    omitted = {
+        'revisions', 'totals', 'updatedAt', 'updatedBy', 'status',
+        'sentAt', 'acceptedAt', 'eventId',
+    }
+    return {
+        key: value
+        for key, value in document.items()
+        if key not in omitted
+    }
+
+
+def _finance_revision_fingerprint(document):
+    return json.dumps(
+        _finance_revision_payload(document),
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(',', ':'),
+    )
+
+
+def _finance_revision_is_snapshotted(document):
+    revision = _safe_int(document.get('revision'), 1)
+    return any(
+        _safe_int(row.get('revision'), 0) == revision
+        for row in document.get('revisions') or []
+        if isinstance(row, dict)
+    )
+
+
+def _finance_snapshot_revision(document):
+    revision = _safe_int(document.get('revision'), 1)
+    revisions = document.setdefault('revisions', [])
+    existing = next(
+        (
+            row for row in revisions
+            if isinstance(row, dict) and _safe_int(row.get('revision'), 0) == revision
+        ),
+        None,
+    )
+    snapshot = {
+        'revision': revision,
+        'number': document.get('number'),
+        'sentAt': document.get('sentAt'),
+        'fingerprint': _finance_revision_fingerprint(document),
+        'snapshot': _finance_revision_payload(document),
+    }
+    if existing:
+        existing.update(snapshot)
+    else:
+        revisions.append(snapshot)
+
+
+def _finance_expire_sent_documents(finance_data):
+    today = datetime.now().date()
+    changed = False
+    for document in finance_data.get('documents') or []:
+        if document.get('type') != 'quotation' or document.get('status') != 'sent':
+            continue
+        try:
+            valid_until = datetime.strptime(
+                str(document.get('validUntil') or ''),
+                '%Y-%m-%d',
+            ).date()
+        except ValueError:
+            continue
+        if valid_until < today:
+            document['status'] = 'expired'
+            document['updatedAt'] = datetime.now().isoformat(timespec='seconds')
+            changed = True
+    return changed
+
+
+def _finance_export_error(document):
+    if not str(document.get('projectName') or '').strip():
+        return 'Project Name is required'
+    totals = document.get('totals') or _finance_totals(document)
+    if document.get('totalLocked') and abs(_safe_float(totals.get('lockDifference'), 0)) > 0.01:
+        return (
+            'Department subtotals must match the locked pre-GST total '
+            'before the quotation can be generated'
+        )
+    return ''
+
+
+def _finance_event_date_range(document):
+    candidates = [
+        document.get('setupDate'),
+        document.get('rehearsalDate'),
+        document.get('showDate'),
+        document.get('teardownDate'),
+    ]
+    candidates = [value for value in candidates if value]
+    if not candidates:
+        fallback = document.get('quotationDate') or datetime.now().strftime('%Y-%m-%d')
+        return fallback, fallback
+    start = document.get('setupDate') or candidates[0]
+    end = document.get('teardownDate') or candidates[-1]
+    if end < start:
+        end = start
+    return start, end
+
+
+def _finance_create_event(document):
+    if _safe_int(document.get('eventId'), 0):
+        return _safe_int(document.get('eventId'), 0)
+
+    start_date, end_date = _finance_event_date_range(document)
+    event_id = max(data_manager.events.keys(), default=0) + 1
+    prepared_items = []
+    for line in document.get('lineItems') or []:
+        quantity = max(1, _safe_int(round(_safe_float(line.get('quantity'), 1)), 1))
+        brand = str(line.get('brand') or '').strip()
+        model = str(line.get('model') or '').strip()
+        department_code = _normalise_department_code(line.get('departmentCode')) or 'UN'
+        description = str(line.get('description') or '').strip()
+        if brand and model and not line.get('isCustom'):
+            _add_or_increment_model_marker(
+                prepared_items,
+                {
+                    'department': department_code,
+                    'brand': brand,
+                    'model': model,
+                    'description': description,
+                },
+                quantity,
+            )
+        elif description:
+            prepared_items.append(
+                _make_custom_marker(
+                    'MISC',
+                    description,
+                    quantity,
+                    department_code,
+                )
+            )
+
+    assigned_users = [
+        document.get('createdBy')
+    ] if document.get('createdBy') in data_manager.users else []
+    event = Event(
+        event_id=event_id,
+        name=document.get('projectName') or document.get('number'),
+        location=document.get('eventLocation') or '',
+        start_date=datetime.strptime(start_date, '%Y-%m-%d').strftime('%Y%m%d'),
+        end_date=datetime.strptime(end_date, '%Y-%m-%d').strftime('%Y%m%d'),
+        asset_models=[],
+        prepared_items=prepared_items,
+        returned_items=[],
+        actually_prepared=[],
+        extra_assets=[],
+        state='New',
+        tag='event',
+        assigned_users=assigned_users,
+        notes=f"Created from quotation {document.get('number')}",
+    )
+    data_manager.events[event_id] = event
+    data_manager.save_event(event)
+    invalidate_cache()
+    document['eventId'] = event_id
+    document['acceptedAt'] = datetime.now().isoformat(timespec='seconds')
+    return event_id
+
+
+def _remember_finance_prices(finance_data, document):
+    price_book = finance_data.setdefault('priceBook', {})
+    owner = str(document.get('createdBy') or _finance_current_username()).strip().lower()
+    for line in document.get('lineItems') or []:
+        description = str(line.get('description') or '').strip()
+        unit_price = _safe_float(line.get('unitPrice'), 0)
+        if not description or unit_price <= 0 or line.get('isCustom'):
+            continue
+        key = str(line.get('catalogKey') or '').strip() or _finance_custom_price_key(description)
+        payload = {
+            'description': description,
+            'unitPrice': round(unit_price, 2),
+            'department': line.get('department') or 'UN',
+            'uom': line.get('uom') or 'units',
+            'owner': owner,
+            'updatedAt': document.get('updatedAt'),
+        }
+        price_book[f"{owner}::{key}"] = payload
+        for asset_id in line.get('sourceAssetIds') or []:
+            price_book[f"{owner}::asset:{str(asset_id).lower()}"] = payload
+
+
+def _finance_remembered_price(price_book, catalog_key, asset_ids):
+    username = _finance_current_username().lower()
+    owner_prefixes = (
+        [username]
+        if not _current_user_is_owner()
+        else [username, _finance_owner_username().lower()]
+    )
+    for owner in owner_prefixes:
+        for asset_id in asset_ids:
+            remembered = price_book.get(f"{owner}::asset:{str(asset_id).lower()}")
+            if remembered:
+                return remembered
+        remembered = price_book.get(f"{owner}::{catalog_key}")
+        if remembered:
+            return remembered
+    remembered = price_book.get(catalog_key)
+    if remembered:
+        return remembered
+    legacy_prefix = str(catalog_key or '').removeprefix('inventory:') + '|'
+    for key, value in reversed(list(price_book.items())):
+        base_key = str(key).split('::', 1)[-1]
+        if base_key.startswith(legacy_prefix):
+            return value
+    return {}
+
+
+def _finance_find_document(data, document_id, document_type):
+    return next(
+        (
+            row for row in data.get('documents') or []
+            if str(row.get('id')) == str(document_id) and row.get('type') == document_type
+        ),
+        None,
+    )
+
+
+def _finance_list_or_create(document_type):
+    with _finance_lock:
+        finance_data = _load_finance_data()
+        if _finance_expire_sent_documents(finance_data):
+            _save_finance_data(finance_data)
+        if request.method == 'GET':
+            query = str(request.args.get('query') or '').strip().lower()
+            rows = [
+                _normalise_finance_document(row, document_type, row)
+                for row in finance_data.get('documents') or []
+                if row.get('type') == document_type and _finance_user_can_access(row)
+            ]
+            if query:
+                rows = [
+                    row for row in rows
+                    if query in ' '.join((
+                        row.get('number', ''),
+                        row.get('title', ''),
+                        row.get('reference', ''),
+                        (row.get('client') or {}).get('name', ''),
+                        (row.get('client') or {}).get('company', ''),
+                    )).lower()
+                ]
+            rows.sort(key=lambda row: (row.get('updatedAt', ''), row.get('number', '')), reverse=True)
+            return jsonify({'success': True, 'data': rows})
+
+        document = _normalise_finance_document(request.get_json() or {}, document_type)
+        document['number'] = _next_finance_number(finance_data.get('documents') or [], document_type)
+        if document_type == 'quotation':
+            _prefix, year, sequence, revision = _finance_parse_number(document['number'])
+            document['baseSequence'] = sequence
+            document['revision'] = revision
+            document['number'] = _finance_format_number(
+                str(_load_pdf_settings().get('quotationPrefix') or 'QT').upper(),
+                year,
+                sequence,
+                revision,
+            )
+        _remember_finance_prices(finance_data, document)
+        finance_data.setdefault('documents', []).append(document)
+        _save_finance_data(finance_data)
+        log_action(f"Created {document_type} {document['number']}")
+        return jsonify({'success': True, 'data': document}), 201
+
+
+def _finance_get_update_delete(document_id, document_type):
+    with _finance_lock:
+        finance_data = _load_finance_data()
+        existing = _finance_find_document(finance_data, document_id, document_type)
+        if not existing or not _finance_user_can_access(existing):
+            return jsonify({'error': f'{document_type.title()} not found'}), 404
+        if request.method == 'GET':
+            return jsonify({'success': True, 'data': _normalise_finance_document(existing, document_type, existing)})
+        if request.method == 'DELETE':
+            finance_data['documents'] = [
+                row for row in finance_data.get('documents') or []
+                if str(row.get('id')) != str(document_id)
+            ]
+            _save_finance_data(finance_data)
+            log_action(f"Deleted {document_type} {existing.get('number', document_id)}")
+            return jsonify({'success': True})
+
+        request_data = request.get_json() or {}
+        updated = _normalise_finance_document(request_data, document_type, existing)
+        if document_type == 'quotation':
+            if not str(updated.get('projectName') or '').strip():
+                return jsonify({'error': 'Project Name is required'}), 400
+
+            existing_normalised = _normalise_finance_document(existing, document_type, existing)
+            content_changed = (
+                _finance_revision_fingerprint(updated)
+                != _finance_revision_fingerprint(existing_normalised)
+            )
+            if content_changed and _finance_revision_is_snapshotted(existing_normalised):
+                updated['revision'] = _safe_int(existing_normalised.get('revision'), 1) + 1
+                prefix, year, sequence, _revision = _finance_parse_number(
+                    existing_normalised.get('number')
+                )
+                updated['number'] = _finance_format_number(
+                    prefix,
+                    year,
+                    sequence,
+                    updated['revision'],
+                )
+                updated['status'] = 'draft'
+                updated['sentAt'] = ''
+
+            requested_status = str(request_data.get('status') or '').strip().lower()
+            if requested_status == 'sent' and updated.get('status') == 'sent':
+                sent_at = datetime.now()
+                updated['sentAt'] = sent_at.isoformat(timespec='seconds')
+                updated['validUntil'] = (
+                    sent_at + timedelta(days=max(1, _safe_int(updated.get('validityDays'), 30)))
+                ).strftime('%Y-%m-%d')
+                _finance_snapshot_revision(updated)
+            elif requested_status == 'accepted' and updated.get('status') == 'accepted':
+                export_error = _finance_export_error(updated)
+                if export_error:
+                    return jsonify({'error': export_error}), 400
+                _finance_create_event(updated)
+
+        for index, row in enumerate(finance_data.get('documents') or []):
+            if str(row.get('id')) == str(document_id):
+                finance_data['documents'][index] = updated
+                break
+        _remember_finance_prices(finance_data, updated)
+        _save_finance_data(finance_data)
+        log_action(f"Updated {document_type} {updated['number']}")
+        return jsonify({'success': True, 'data': updated})
+
+
+@app.route('/api/finance/catalog', methods=['GET'])
+@require_sales
+def finance_catalog():
+    query = str(request.args.get('query') or '').strip().lower()
+    with _finance_lock:
+        price_book = (_load_finance_data().get('priceBook') or {})
+
+    grouped = {}
+    for asset in data_manager.inventory.values():
+        if _is_disposed(asset):
+            continue
+        department_code = _normalise_department_code(getattr(asset, 'department_code', 'UN')) or 'UN'
+        department, department_code = _finance_department_details(
+            department_code,
+            department_code,
+        )
+        brand = str(getattr(asset, 'brand', '') or '').strip()
+        model = str(getattr(asset, 'model_number', '') or '').strip()
+        description = str(getattr(asset, 'description', '') or '').strip()
+        display = ' '.join(value for value in (brand, model, description) if value)
+        if query and query not in f"{display} {department} {department_code}".lower():
+            continue
+        key = _finance_catalog_key(department_code, brand, model, description)
+        if key not in grouped:
+            grouped[key] = {
+                'catalogKey': key,
+                'description': display or model or description or 'Inventory item',
+                'department': department,
+                'departmentCode': department_code,
+                'brand': brand,
+                'model': model,
+                'availableQuantity': 0,
+                'sourceAssetIds': [],
+                'unitPrice': 0,
+                'uom': 'units',
+                'isCustom': False,
+            }
+        grouped[key]['sourceAssetIds'].append(asset.asset_id)
+        grouped[key]['availableQuantity'] += _asset_inventory_quantity(asset)
+
+    for row in grouped.values():
+        remembered = _finance_remembered_price(
+            price_book,
+            row['catalogKey'],
+            row['sourceAssetIds'],
+        )
+        row['unitPrice'] = _safe_float(remembered.get('unitPrice'), 0)
+        row['uom'] = remembered.get('uom') if remembered.get('uom') in ('units', 'pax', 'lot') else 'units'
+
+    finance_data = _load_finance_data()
+    custom_seen = set()
+    for document in finance_data.get('documents') or []:
+        if document.get('type') != 'quotation' or not _finance_user_can_access(document):
+            continue
+        for source in document.get('lineItems') or []:
+            line = _normalise_finance_line(source)
+            if not line.get('isCustom') or not line.get('description'):
+                continue
+            if query and query not in f"{line['description']} {line['department']}".lower():
+                continue
+            custom_key = _finance_custom_price_key(line['description'])
+            if custom_key in custom_seen:
+                continue
+            custom_seen.add(custom_key)
+            grouped[f"custom:{len(custom_seen)}"] = {
+                'catalogKey': '',
+                'description': line['description'],
+                'department': line['department'],
+                'departmentCode': line['departmentCode'],
+                'brand': '',
+                'model': '',
+                'availableQuantity': None,
+                'sourceAssetIds': [],
+                'unitPrice': line['unitPrice'],
+                'uom': line['uom'],
+                'isCustom': True,
+            }
+
+    rows = sorted(grouped.values(), key=lambda row: (row['department'], row['description'].lower()))
+    return jsonify({'success': True, 'data': rows[:30]})
+
+
+@app.route('/api/finance/price-suggestion', methods=['GET'])
+@require_sales
+def finance_price_suggestion():
+    description = str(request.args.get('description') or '').strip()
+    remembered = {}
+    with _finance_lock:
+        finance_data = _load_finance_data()
+        for document in reversed(finance_data.get('documents') or []):
+            if document.get('type') != 'quotation' or not _finance_user_can_access(document):
+                continue
+            remembered = next(
+                (
+                    _normalise_finance_line(row)
+                    for row in reversed(document.get('lineItems') or [])
+                    if str(row.get('description') or '').strip().lower() == description.lower()
+                ),
+                {},
+            )
+            if remembered:
+                break
+    return jsonify({'success': True, 'data': remembered or {}})
+
+
+@app.route('/api/finance/departments', methods=['GET'])
+@require_sales
+def finance_departments():
+    query = str(request.args.get('query') or '').strip().lower()
+    values = []
+    for row in _load_departments().values():
+        name, _code = _finance_department_details(row.get('name'), row.get('code'))
+        if name not in values:
+            values.append(name)
+    for value in FINANCE_DEFAULT_DEPARTMENTS:
+        if value not in values:
+            values.append(value)
+    with _finance_lock:
+        for document in _load_finance_data().get('documents') or []:
+            if document.get('type') != 'quotation' or not _finance_user_can_access(document):
+                continue
+            for value in document.get('departments') or []:
+                name, _code = _finance_department_details(value)
+                if name not in values:
+                    values.append(name)
+    if query:
+        values = [value for value in values if query in value.lower()]
+    return jsonify({'success': True, 'data': values[:30]})
+
+
+@app.route('/api/quotations', methods=['GET', 'POST'])
+@require_sales
+def quotations_collection():
+    return _finance_list_or_create('quotation')
+
+
+@app.route('/api/quotations/<document_id>', methods=['GET', 'PUT', 'DELETE'])
+@require_sales
+def quotation_item(document_id):
+    return _finance_get_update_delete(document_id, 'quotation')
+
+
+@app.route('/api/invoices', methods=['GET', 'POST'])
+@require_sales
+def invoices_collection():
+    return _finance_list_or_create('invoice')
+
+
+@app.route('/api/invoices/<document_id>', methods=['GET', 'PUT', 'DELETE'])
+@require_sales
+def invoice_item(document_id):
+    return _finance_get_update_delete(document_id, 'invoice')
+
+
+@app.route('/api/quotations/<document_id>/convert-to-invoice', methods=['POST'])
+@require_sales
+def convert_quotation_to_invoice(document_id):
+    with _finance_lock:
+        finance_data = _load_finance_data()
+        quotation = _finance_find_document(finance_data, document_id, 'quotation')
+        if not quotation or not _finance_user_can_access(quotation):
+            return jsonify({'error': 'Quotation not found'}), 404
+        existing_invoice = next(
+            (
+                row for row in finance_data.get('documents') or []
+                if row.get('type') == 'invoice' and row.get('sourceQuotationId') == document_id
+            ),
+            None,
+        )
+        if existing_invoice:
+            return jsonify({'success': True, 'data': _normalise_finance_document(existing_invoice, 'invoice', existing_invoice)})
+
+        source = dict(quotation)
+        source.pop('id', None)
+        source.pop('number', None)
+        source['sourceQuotationId'] = document_id
+        source['status'] = 'draft'
+        source['invoiceDate'] = datetime.now().strftime('%Y-%m-%d')
+        source['dueDate'] = (datetime.now() + timedelta(days=30)).strftime('%Y-%m-%d')
+        invoice = _normalise_finance_document(source, 'invoice')
+        invoice['number'] = _next_finance_number(finance_data.get('documents') or [], 'invoice')
+        finance_data.setdefault('documents', []).append(invoice)
+
+        for index, row in enumerate(finance_data.get('documents') or []):
+            if str(row.get('id')) == str(document_id):
+                updated_quote = _normalise_finance_document({'status': 'accepted'}, 'quotation', quotation)
+                finance_data['documents'][index] = updated_quote
+                break
+
+        _save_finance_data(finance_data)
+        log_action(f"Converted quotation {quotation.get('number')} to invoice {invoice['number']}")
+        return jsonify({'success': True, 'data': invoice}), 201
+
+
+def _finance_pdf_response(document_id, document_type):
+    with _finance_lock:
+        finance_data = _load_finance_data()
+        stored = _finance_find_document(finance_data, document_id, document_type)
+        if not stored or not _finance_user_can_access(stored):
+            return jsonify({'error': f'{document_type.title()} not found'}), 404
+        document = _normalise_finance_document(stored, document_type, stored)
+        export_error = _finance_export_error(document)
+        if export_error:
+            return jsonify({'error': export_error}), 400
+
+    try:
+        from io import BytesIO
+        from quotation_pdf import build_finance_pdf, safe_pdf_filename
+
+        settings = _normalise_pdf_settings(_load_pdf_settings())
+        logo_path = _pdf_logo_path(settings) or _default_pdf_logo_path()
+        pdf_bytes = build_finance_pdf(document, settings, logo_path)
+    except ImportError:
+        logger.error("ReportLab is required for finance PDF export", exc_info=True)
+        return jsonify({'error': 'PDF export dependency is not installed'}), 503
+    except Exception as exc:
+        logger.error("Failed to render finance PDF: %s", exc, exc_info=True)
+        return jsonify({'error': 'Failed to generate PDF'}), 500
+
+    return send_file(
+        BytesIO(pdf_bytes),
+        mimetype='application/pdf',
+        as_attachment=True,
+        download_name=safe_pdf_filename(document.get('number')),
+        max_age=0,
+    )
+
+
+@app.route('/api/quotations/<document_id>/pdf', methods=['GET'])
+@require_sales
+def quotation_pdf(document_id):
+    return _finance_pdf_response(document_id, 'quotation')
+
+
+@app.route('/api/invoices/<document_id>/pdf', methods=['GET'])
+@require_sales
+def invoice_pdf(document_id):
+    return _finance_pdf_response(document_id, 'invoice')
+
+
 def _client_to_dict(c):
     def get(attribute, default=''):
         snake_case_attribute = attribute.replace('postalCode', 'postal_code')
@@ -17454,6 +19007,9 @@ def _client_to_dict(c):
     return {
         'name': get('name'),
         'company': get('company'),
+        'contactPerson': getattr(c, 'contact_person', ''),
+        'email': getattr(c, 'email', ''),
+        'taxNumber': getattr(c, 'tax_number', ''),
         'address1': get('address1'),
         'address2': get('address2'),
         'address3': get('address3'),
@@ -17485,6 +19041,9 @@ def clients_collection():
     c = Client(
         name=name,
         company=(data.get('company') or '').strip(),
+        contact_person=(data.get('contactPerson') or '').strip(),
+        email=(data.get('email') or '').strip(),
+        tax_number=(data.get('taxNumber') or '').strip(),
         address1=(data.get('address1') or '').strip(),
         address2=(data.get('address2') or '').strip(),
         address3=(data.get('address3') or '').strip(),
@@ -17511,6 +19070,9 @@ def client_item(name):
             return jsonify({'success': False, 'message': 'Not found'}), 404
         data = request.get_json(force=True) or {}
         c.company = (data.get('company') or c.company).strip()
+        c.contact_person = (data.get('contactPerson') or getattr(c, 'contact_person', '')).strip()
+        c.email = (data.get('email') or getattr(c, 'email', '')).strip()
+        c.tax_number = (data.get('taxNumber') or getattr(c, 'tax_number', '')).strip()
         c.address1 = (data.get('address1') or c.address1).strip()
         c.address2 = (data.get('address2') or c.address2).strip()
         c.address3 = (data.get('address3') or c.address3).strip()
@@ -17523,7 +19085,7 @@ def client_item(name):
     # DELETE (admin)
     if not c:
         return jsonify({'success': False, 'message': 'Not found'}), 404
-    if not session.get('is_admin', False):
+    if not _current_user_is_admin():
         return jsonify({'error': 'Admin privileges required'}), 403
     del data_manager.clients[key]
     data_manager.save_clients()

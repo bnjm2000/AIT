@@ -98,6 +98,7 @@ class EventAvailabilityOverlapTests(unittest.TestCase):
             actually_prepared=actual if actual is not None else [],
             extra_assets=[],
             tag='events',
+            assigned_users=['normal'],
         )
         self.data_manager.events[event_id] = event
         return event

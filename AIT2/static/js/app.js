@@ -9,6 +9,9 @@ let departments = {};
 let companyOptions = [];
 let usersAdminUsers = [];
 let usersAdminSort = { key: 'name', direction: 'asc' };
+let eventAssigneeUsers = [];
+let addEventAssignedUsers = new Set();
+let editEventAssignedUsers = new Set();
 let departmentsLoaded = false;
 let selectedInventoryAssetIds = new Set();
 let expandedInventoryBulkDeploymentIds = new Set();
@@ -372,8 +375,132 @@ function isAdminUser() {
   return !!(currentUser && currentUser.isAdmin);
 }
 
+function currentUserRole() {
+  return String(currentUser?.role || (currentUser?.isOwner || currentUser?.isSuperAdmin ? 'owner' : currentUser?.isAdmin ? 'admin' : 'user')).toLowerCase();
+}
+
+function isOwnerUser() {
+  return !!(currentUser && (currentUser.isOwner || currentUser.isSuperAdmin || currentUserRole() === 'owner'));
+}
+
 function isSuperAdminUser() {
-  return !!(currentUser && currentUser.isSuperAdmin);
+  return isOwnerUser();
+}
+
+function canCurrentUserManageRoles() {
+  return !!(currentUser && (currentUser.canManageRoles || ['owner', 'admin'].includes(currentUserRole())));
+}
+
+function currentUserHasSalesAccess() {
+  return !!(currentUser && (isOwnerUser() || currentUser.hasSalesAccess || currentUser.isSales));
+}
+
+function userRoleLabel(role = currentUserRole()) {
+  const value = String(role || 'user').toLowerCase();
+  return ({
+    owner: 'Owner',
+    admin: 'Admin',
+    manager: 'Manager',
+    user: 'User'
+  })[value] || 'User';
+}
+
+function userInitials(username) {
+  const parts = String(username || 'User').trim().split(/\s+/).filter(Boolean);
+  const source = parts.length > 1 ? parts.slice(0, 2) : [parts[0] || 'U'];
+  return source.map(part => part[0] || '').join('').toUpperCase().slice(0, 2) || 'U';
+}
+
+function roleBadgeMarkup(role, extraClass = '') {
+  const safeRole = ['owner', 'admin', 'manager', 'user'].includes(String(role || '').toLowerCase())
+    ? String(role || '').toLowerCase()
+    : 'user';
+  return `<span class="user-role-badge user-role-badge-${safeRole} ${extraClass}">${escapeHtml(userRoleLabel(safeRole))}</span>`;
+}
+
+function ensureSidebarUserMenuStyles() {
+  if (document.getElementById('sidebar-user-menu-styles')) return;
+  const style = document.createElement('style');
+  style.id = 'sidebar-user-menu-styles';
+  style.textContent = `
+    .sidebar-user-menu {
+      display: grid;
+      grid-template-columns: 38px minmax(0, 1fr);
+      gap: 10px;
+      align-items: center;
+      margin: 4px 0 12px;
+      padding: 10px;
+      border: 1px solid rgba(255,255,255,0.16);
+      border-radius: 8px;
+      background: rgba(255,255,255,0.08);
+      color: #fff;
+    }
+
+    .sidebar-user-avatar {
+      width: 38px;
+      height: 38px;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      background: rgba(255,255,255,0.18);
+      font-weight: 800;
+      letter-spacing: 0;
+    }
+
+    .sidebar-user-main {
+      min-width: 0;
+    }
+
+    .sidebar-user-name {
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-weight: 750;
+      line-height: 1.2;
+    }
+
+    .sidebar-user-meta {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-top: 5px;
+      font-size: 11px;
+      color: rgba(255,255,255,0.78);
+    }
+
+    .user-role-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 22px;
+      padding: 3px 8px;
+      border: 1px solid #d0d5dd;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 750;
+      line-height: 1;
+      white-space: nowrap;
+      background: #f8fafc;
+      color: #344054;
+    }
+
+    .user-role-badge-owner { background: #fff7ed; color: #9a3412; border-color: #fed7aa; }
+    .user-role-badge-admin { background: #eef4ff; color: #3538cd; border-color: #c7d7fe; }
+    .user-role-badge-manager { background: #ecfdf3; color: #027a48; border-color: #abefc6; }
+    .user-role-badge-user { background: #f8fafc; color: #475467; border-color: #d0d5dd; }
+    .user-role-badge-sales { background: #fdf2fa; color: #c11574; border-color: #fcceee; }
+  `;
+  document.head.appendChild(style);
+}
+
+function refreshSidebarUserMenu() {
+  const settingsSection = Array.from(document.querySelectorAll('.nav-section'))
+    .find(section => section.querySelector('h3')?.textContent.trim() === 'Settings');
+  if (!settingsSection) return;
+
+  settingsSection.querySelector('[data-sidebar-user-menu="true"]')?.remove();
 }
 
 function applyPermissionUi() {
@@ -388,14 +515,19 @@ function applyPermissionUi() {
     });
   });
 
-  document.querySelectorAll(".super-admin-only, [data-super-admin-only='true']").forEach(el => {
-    el.style.display = isSuperAdminUser() ? (el.dataset.superAdminDisplay || el.dataset.adminDisplay || 'block') : 'none';
+  document.querySelectorAll(".owner-only, [data-owner-only='true'], .super-admin-only, [data-super-admin-only='true']").forEach(el => {
+    el.style.display = isOwnerUser() ? (el.dataset.ownerDisplay || el.dataset.superAdminDisplay || el.dataset.adminDisplay || 'block') : 'none';
+  });
+
+  document.querySelectorAll(".sales-only, [data-sales-only='true']").forEach(el => {
+    el.style.display = currentUserHasSalesAccess() ? (el.dataset.salesDisplay || 'block') : 'none';
   });
 
   // Older hard-coded create buttons do not all have a class, so hide them by onclick.
   document.querySelectorAll('button').forEach(button => {
     if (
       button.getAttribute('onclick') === "openModal('addEventModal')" ||
+      button.getAttribute('onclick') === "openAddEventModal()" ||
       button.getAttribute('onclick') === "openModal('addAssetModal')"
     ) {
       button.style.display = isAdminUser()
@@ -2819,6 +2951,8 @@ function sectionFromSidebarLabel(item) {
     'maintenance': 'maintenance',
     'asset check': 'asset-check',
     'users': 'users',
+    'quotations': 'quotations',
+    'company details': 'pdf-settings',
     'pdf settings': 'pdf-settings',
     'companies': 'companies',
     'change password': 'change-password',
@@ -2830,6 +2964,8 @@ function sectionFromSidebarLabel(item) {
   // Match the more specific labels before generic words like "events".
   const containsLabels = [
     ['change password', 'change-password'],
+    ['quotations', 'quotations'],
+    ['company details', 'pdf-settings'],
     ['pdf settings', 'pdf-settings'],
     ['maintenance report', 'maintenance-report'],
     ['asset check', 'asset-check'],
@@ -2920,11 +3056,15 @@ function setupSidebarNavigation(root = document) {
 }
 function showSection(sectionName) {
   const adminOnlySections = new Set(["plan", "workforce", "freelancer-workspace", "logs", "maintenance-report", "users", "pdf-settings"]);
-  const superAdminOnlySections = new Set(["companies"]);
+  const ownerOnlySections = new Set(["companies"]);
+  const salesOnlySections = new Set(["quotations"]);
   if (adminOnlySections.has(sectionName) && !isAdminUser()) {
     return showSection("events");
   }
-  if (superAdminOnlySections.has(sectionName) && !isSuperAdminUser()) {
+  if (ownerOnlySections.has(sectionName) && !isOwnerUser()) {
+    return showSection("events");
+  }
+  if (salesOnlySections.has(sectionName) && !currentUserHasSalesAccess()) {
     return showSection("events");
   }
 
@@ -2945,6 +3085,9 @@ function showSection(sectionName) {
 
   const targetSection = document.getElementById(sectionName + "-section");
   if (!targetSection) return;
+
+  const contentArea = targetSection.closest('.content-area');
+  if (contentArea) contentArea.scrollTop = 0;
 
   document.querySelectorAll(".content-section").forEach((section) => {
     const isActive = section === targetSection;
@@ -3030,6 +3173,9 @@ function showSection(sectionName) {
       break;
     case "pdf-settings":
       loadPdfSettingsSection();
+      break;
+    case "quotations":
+      if (typeof loadQuotations === "function") loadQuotations();
       break;
     case "companies":
       loadCompaniesAdmin();
@@ -3631,6 +3777,24 @@ function normalisePdfSettings(settings = {}) {
     logoUrl: settings.logoUrl || "/api/pdf-settings/logo",
     hasCustomLogo: !!settings.hasCustomLogo,
     logoOriginalName: settings.logoOriginalName || "",
+    companyName: settings.companyName || "",
+    registrationNumber: settings.registrationNumber || "",
+    billingAddress: settings.billingAddress || "",
+    phone: settings.phone || "",
+    email: settings.email || "",
+    website: settings.website || "",
+    bankName: settings.bankName || "",
+    bankAccountName: settings.bankAccountName || "",
+    bankAccountNumber: settings.bankAccountNumber || "",
+    paynowUen: settings.paynowUen || "",
+    currency: settings.currency || "SGD",
+    taxLabel: settings.taxLabel || "GST",
+    taxRate: Number(settings.taxRate || 0),
+    quotationPrefix: settings.quotationPrefix || "QT",
+    invoicePrefix: settings.invoicePrefix || "INV",
+    defaultPaymentTerms: settings.defaultPaymentTerms || "30 Days",
+    defaultValidityDays: Number(settings.defaultValidityDays || 30),
+    defaultTerms: settings.defaultTerms || "",
     updatedAt: settings.updatedAt || ""
   };
 }
@@ -3737,7 +3901,7 @@ function ensurePdfSettingsNavItem() {
     });
 
   if (!settingsSection) {
-    console.warn('Could not find Settings section for PDF Settings tab');
+    console.warn('Could not find Settings section for Company Details tab');
     return;
   }
 
@@ -3745,7 +3909,7 @@ function ensurePdfSettingsNavItem() {
   pdfSettingsTab.type = 'button';
   pdfSettingsTab.className = 'nav-item';
   pdfSettingsTab.dataset.section = 'pdf-settings';
-  pdfSettingsTab.textContent = '📄 PDF Settings';
+  pdfSettingsTab.textContent = '🏢 Company Details';
 
   const logoutButton = settingsSection.querySelector(`[onclick="logout()"]`);
 
@@ -3768,31 +3932,62 @@ function ensurePdfSettingsSection() {
 
   section.innerHTML = `
     <div class="content-header">
-      <h2 class="content-title">PDF Settings</h2>
+      <div>
+        <h2 class="content-title">Company Details</h2>
+        <p style="color:#64748b;margin-top:6px;">Branding and billing details used on quotations, invoices and other PDFs.</p>
+      </div>
     </div>
 
-    <div class="form-container">
-      <div style="display:grid;grid-template-columns:minmax(240px,320px) minmax(280px,1fr);gap:24px;align-items:start;">
-        <div class="form-group">
-          <label class="form-label" for="pdfSettingsLogoInput">Logo</label>
-          <div style="border:1px solid #e9ecef;border-radius:8px;padding:18px;background:#fff;min-height:130px;display:flex;align-items:center;justify-content:center;margin-bottom:12px;">
-            <img id="pdfSettingsLogoPreview" alt="PDF Logo" style="max-width:240px;max-height:90px;object-fit:contain;">
+    <div class="form-container company-details-form">
+      <div style="display:grid;grid-template-columns:minmax(240px,320px) minmax(360px,1fr);gap:24px;align-items:start;">
+        <section class="company-details-card">
+          <h3>Company logo</h3>
+          <div class="company-logo-dropzone">
+            <img id="pdfSettingsLogoPreview" alt="Company logo">
           </div>
           <input id="pdfSettingsLogoInput" class="form-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif">
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
             <button type="button" class="btn btn-primary" onclick="uploadPdfSettingsLogo()">Upload Logo</button>
-            <button type="button" class="btn btn-secondary" onclick="resetPdfSettingsLogo()">Reset Logo</button>
+            <button type="button" class="btn btn-secondary" onclick="resetPdfSettingsLogo()">Reset</button>
           </div>
-          <div id="pdfSettingsLogoName" style="font-size:12px;color:#666;margin-top:8px;"></div>
-        </div>
+          <div id="pdfSettingsLogoName" style="font-size:12px;color:#64748b;margin-top:8px;"></div>
+        </section>
 
-        <div class="form-group">
-          <label class="form-label" for="pdfSettingsFooterText">Footer</label>
-          <textarea id="pdfSettingsFooterText" class="form-input" rows="5" maxlength="2000"></textarea>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
-            <button type="button" class="btn btn-primary" onclick="savePdfSettingsFooter()">Save Footer</button>
-            <button type="button" class="btn btn-secondary" onclick="resetPdfSettingsFooter()">Reset Footer</button>
-          </div>
+        <div style="display:grid;gap:18px;">
+          <section class="company-details-card">
+            <h3>Business identity</h3>
+            <div class="company-details-grid">
+              <label class="form-group"><span class="form-label">Company name</span><input id="companyDetailsName" class="form-input"></label>
+              <label class="form-group"><span class="form-label">UEN / registration no.</span><input id="companyDetailsRegistration" class="form-input"></label>
+              <label class="form-group company-details-wide"><span class="form-label">Billing address</span><textarea id="companyDetailsAddress" class="form-input" rows="3"></textarea></label>
+              <label class="form-group"><span class="form-label">Phone</span><input id="companyDetailsPhone" class="form-input"></label>
+              <label class="form-group"><span class="form-label">Email</span><input id="companyDetailsEmail" class="form-input" type="email"></label>
+              <label class="form-group company-details-wide"><span class="form-label">Website</span><input id="companyDetailsWebsite" class="form-input"></label>
+            </div>
+          </section>
+
+          <section class="company-details-card">
+            <h3>Billing &amp; document defaults</h3>
+            <div class="company-details-grid">
+              <label class="form-group"><span class="form-label">Bank</span><input id="companyDetailsBank" class="form-input"></label>
+              <label class="form-group"><span class="form-label">Account name</span><input id="companyDetailsAccountName" class="form-input"></label>
+              <label class="form-group"><span class="form-label">Account number</span><input id="companyDetailsAccountNumber" class="form-input"></label>
+              <label class="form-group"><span class="form-label">PayNow UEN</span><input id="companyDetailsPaynow" class="form-input"></label>
+              <label class="form-group"><span class="form-label">Currency</span><input id="companyDetailsCurrency" class="form-input" maxlength="6"></label>
+              <label class="form-group"><span class="form-label">Tax label</span><input id="companyDetailsTaxLabel" class="form-input"></label>
+              <label class="form-group"><span class="form-label">Tax rate (%)</span><input id="companyDetailsTaxRate" class="form-input" type="number" min="0" max="100" step="0.01"></label>
+              <label class="form-group"><span class="form-label">Default validity (days)</span><input id="companyDetailsValidity" class="form-input" type="number" min="1" max="365"></label>
+              <label class="form-group"><span class="form-label">Quotation prefix</span><input id="companyDetailsQuotePrefix" class="form-input"></label>
+              <label class="form-group"><span class="form-label">Invoice prefix</span><input id="companyDetailsInvoicePrefix" class="form-input"></label>
+              <label class="form-group company-details-wide"><span class="form-label">Default payment terms</span><input id="companyDetailsPaymentTerms" class="form-input"></label>
+              <label class="form-group company-details-wide"><span class="form-label">Default terms &amp; conditions</span><textarea id="companyDetailsTerms" class="form-input" rows="6"></textarea></label>
+              <label class="form-group company-details-wide"><span class="form-label">PDF footer</span><textarea id="pdfSettingsFooterText" class="form-input" rows="4" maxlength="2000"></textarea></label>
+            </div>
+            <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:14px;">
+              <button type="button" class="btn btn-secondary" onclick="resetPdfSettingsFooter()">Reset Footer</button>
+              <button type="button" class="btn btn-primary" onclick="saveCompanyDetails()">Save Company Details</button>
+            </div>
+          </section>
         </div>
       </div>
     </div>
@@ -3819,6 +4014,31 @@ function renderPdfSettingsForm() {
   if (footerText && footerText.value !== getPdfFooterText()) {
     footerText.value = getPdfFooterText();
   }
+
+  const values = {
+    companyDetailsName: pdfSettings.companyName,
+    companyDetailsRegistration: pdfSettings.registrationNumber,
+    companyDetailsAddress: pdfSettings.billingAddress,
+    companyDetailsPhone: pdfSettings.phone,
+    companyDetailsEmail: pdfSettings.email,
+    companyDetailsWebsite: pdfSettings.website,
+    companyDetailsBank: pdfSettings.bankName,
+    companyDetailsAccountName: pdfSettings.bankAccountName,
+    companyDetailsAccountNumber: pdfSettings.bankAccountNumber,
+    companyDetailsPaynow: pdfSettings.paynowUen,
+    companyDetailsCurrency: pdfSettings.currency,
+    companyDetailsTaxLabel: pdfSettings.taxLabel,
+    companyDetailsTaxRate: pdfSettings.taxRate,
+    companyDetailsValidity: pdfSettings.defaultValidityDays,
+    companyDetailsQuotePrefix: pdfSettings.quotationPrefix,
+    companyDetailsInvoicePrefix: pdfSettings.invoicePrefix,
+    companyDetailsPaymentTerms: pdfSettings.defaultPaymentTerms,
+    companyDetailsTerms: pdfSettings.defaultTerms
+  };
+  Object.entries(values).forEach(([id, value]) => {
+    const field = document.getElementById(id);
+    if (field && field.value !== String(value ?? '')) field.value = value ?? '';
+  });
 }
 
 async function loadPdfSettingsSection() {
@@ -3903,29 +4123,52 @@ async function resetPdfSettingsLogo() {
   }
 }
 
-async function savePdfSettingsFooter() {
+async function saveCompanyDetails() {
   if (!isAdminUser()) {
     showNotification('error', 'Admin privileges required');
     return;
   }
 
-  const textarea = document.getElementById('pdfSettingsFooterText');
-  const footerText = textarea ? textarea.value : '';
+  const value = id => document.getElementById(id)?.value || '';
+  const payload = {
+    footerText: value('pdfSettingsFooterText'),
+    companyName: value('companyDetailsName'),
+    registrationNumber: value('companyDetailsRegistration'),
+    billingAddress: value('companyDetailsAddress'),
+    phone: value('companyDetailsPhone'),
+    email: value('companyDetailsEmail'),
+    website: value('companyDetailsWebsite'),
+    bankName: value('companyDetailsBank'),
+    bankAccountName: value('companyDetailsAccountName'),
+    bankAccountNumber: value('companyDetailsAccountNumber'),
+    paynowUen: value('companyDetailsPaynow'),
+    currency: value('companyDetailsCurrency'),
+    taxLabel: value('companyDetailsTaxLabel'),
+    taxRate: Number(value('companyDetailsTaxRate') || 0),
+    quotationPrefix: value('companyDetailsQuotePrefix'),
+    invoicePrefix: value('companyDetailsInvoicePrefix'),
+    defaultPaymentTerms: value('companyDetailsPaymentTerms'),
+    defaultValidityDays: Number(value('companyDetailsValidity') || 30),
+    defaultTerms: value('companyDetailsTerms')
+  };
 
   try {
-    const res = await apiCall('/api/pdf-settings', 'PUT', { footerText });
+    const res = await apiCall('/api/pdf-settings', 'PUT', payload);
     pdfSettings = normalisePdfSettings(res.data || {});
     renderPdfSettingsForm();
-    showNotification('success', 'PDF footer saved');
+    showNotification('success', 'Company details saved');
   } catch (error) {
-    showNotification('error', 'Failed to save PDF footer');
+    showNotification('error', error.message || 'Failed to save company details');
   }
+}
+
+async function savePdfSettingsFooter() {
+  return saveCompanyDetails();
 }
 
 async function resetPdfSettingsFooter() {
   const textarea = document.getElementById('pdfSettingsFooterText');
   if (textarea) textarea.value = DEFAULT_PDF_FOOTER_TEXT;
-  await savePdfSettingsFooter();
 }
 
 
@@ -4056,7 +4299,7 @@ function ensureCompanyActionModals() {
             <label class="form-label" for="userDeleteCompanyCode">Company</label>
             <select id="userDeleteCompanyCode" class="form-input"></select>
           </div>
-          <p style="margin:8px 0 0;color:#b42318;font-size:13px;">Deleting a company permanently removes its assets and assigned non-super-admin users.</p>
+          <p style="margin:8px 0 0;color:#b42318;font-size:13px;">Deleting a company permanently removes its assets and assigned non-owner users.</p>
         </div>
         <div class="modal-footer modal-actions">
           <button type="button" class="btn btn-secondary" onclick="closeModal('deleteCompanyModal')">Cancel</button>
@@ -4150,7 +4393,7 @@ function ensureCompanyManagementNavItem() {
 
   const companiesTab = document.createElement('button');
   companiesTab.type = 'button';
-  companiesTab.className = 'nav-item super-admin-only';
+  companiesTab.className = 'nav-item owner-only';
   companiesTab.dataset.section = 'companies';
   companiesTab.innerHTML = '&#127970; Companies';
 
@@ -4217,7 +4460,7 @@ function renderCompanySwitchControl() {
 
 async function loadCompaniesAdmin() {
   if (!isSuperAdminUser()) {
-    showNotification('error', 'Super admin privileges required');
+    showNotification('error', 'Owner privileges required');
     showSection('events');
     return;
   }
@@ -4273,7 +4516,7 @@ async function loadCompaniesAdmin() {
 
 async function deleteCompanyAdmin(code, isActive = false, companyCount = 0) {
   if (!isSuperAdminUser()) {
-    showNotification('error', 'Super admin privileges required');
+    showNotification('error', 'Owner privileges required');
     return false;
   }
 
@@ -4856,6 +5099,7 @@ async function setupChangePasswordTab() {
     currentUser = res.data;
   }
 
+  refreshSidebarUserMenu();
   ensureChangePasswordNavItem();
   ensureChangePasswordSection();
 }
@@ -5045,6 +5289,31 @@ function ensureUsersNavItem() {
   }
 }
 
+function userRoleOptionsMarkup(selectedRole = 'user') {
+  const selected = String(selectedRole || 'user').toLowerCase();
+  const roles = isOwnerUser()
+    ? ['owner', 'admin', 'manager', 'user']
+    : ['admin', 'manager', 'user'];
+  return roles.map(role => `
+    <option value="${role}" ${role === selected ? 'selected' : ''}>${escapeHtml(userRoleLabel(role))}</option>
+  `).join('');
+}
+
+function userRoleSummaryMarkup() {
+  return ['owner', 'admin', 'manager', 'user'].map(role => `
+    <span class="user-role-chip user-role-chip-${role}">
+      <strong>${escapeHtml(userRoleLabel(role))}</strong>
+    </span>
+  `).join('<span class="user-role-arrow" aria-hidden="true">/</span>')
+    + '<span class="user-role-chip user-role-chip-sales"><strong>Sales</strong></span>';
+}
+
+function userActiveBadgeMarkup(user) {
+  return user.isActive
+    ? '<span class="user-status-badge user-status-active">Active</span>'
+    : '<span class="user-status-badge user-status-inactive">Inactive</span>';
+}
+
 function ensureUsersSection() {
   if (document.getElementById('users-section')) return;
 
@@ -5056,77 +5325,134 @@ function ensureUsersSection() {
   section.className = 'content-section';
 
   section.innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
-      <div>
-        <h2 style="margin:0;">User Management</h2>
-        <p style="margin:5px 0 0;color:#666;">Create users, edit admin privileges, reset passwords, deactivate accounts, and assign companies.</p>
-      </div>
-    </div>
-
-    <div class="card" style="margin-bottom:20px;">
-      <h3 style="margin-bottom:15px;">Create New User</h3>
-
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;align-items:end;">
-        <div class="form-group">
-          <label class="form-label">Username</label>
-          <input id="newUserUsername" class="form-input" placeholder="Username">
+    <div class="users-admin-shell">
+      <div class="users-admin-hero">
+        <div>
+          <p class="users-admin-kicker">Settings</p>
+          <h2>User Management</h2>
+          <div class="user-role-ladder" aria-label="Role hierarchy">${userRoleSummaryMarkup()}</div>
         </div>
-
-        <div class="form-group">
-          <label class="form-label">Password</label>
-          <input id="newUserPassword" type="password" class="form-input" placeholder="Password">
-        </div>
-
-        <label style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">
-          <input id="newUserIsAdmin" type="checkbox">
-          Admin
-        </label>
-
-        <label class="super-admin-only" style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">
-          <input id="newUserIsSuperAdmin" type="checkbox">
-          Super
-        </label>
-
-        <label style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">
-          <input id="newUserIsActive" type="checkbox" checked>
-          Active
-        </label>
-
-        <div class="form-group super-admin-only" id="newUserCompanyGroup">
-          <label class="form-label" for="newUserCompanyCode">Company</label>
-          <select id="newUserCompanyCode" class="form-input"></select>
-        </div>
-
-        <button class="btn btn-success" onclick="createUserAdmin()">Create User</button>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="users-admin-toolbar">
-        <h3 style="margin:0;">Existing Users</h3>
-        <div class="users-admin-toolbar-actions">
-          <label class="users-admin-search">
-            <span class="sr-only">Search users</span>
-            <input
-              id="usersAdminSearch"
-              type="search"
-              class="form-input"
-              placeholder="Search users..."
-              oninput="renderUsersAdminTables()"
-              autocomplete="off"
-            >
-          </label>
-          <button class="btn btn-secondary btn-sm" onclick="loadUsersAdmin()">Refresh</button>
+        <div class="users-admin-current">
+          <span class="users-admin-current-label">Signed in</span>
+          <strong>${escapeHtml(currentUser?.username || '')}</strong>
+          <div class="users-admin-current-meta">
+            ${roleBadgeMarkup(currentUserRole())}
+            ${currentUserHasSalesAccess() ? '<span class="user-role-badge user-role-badge-sales">Sales</span>' : ''}
+          </div>
         </div>
       </div>
 
-      <div id="users-admin-table-container">
-        <p style="text-align:center;color:#666;padding:30px;">Loading users...</p>
-      </div>
+      <section class="users-admin-panel users-admin-list-panel" aria-labelledby="existingUsersHeading">
+        <div class="users-admin-toolbar">
+          <div>
+            <h3 id="existingUsersHeading">Existing Users</h3>
+            <p id="usersAdminSummary" class="users-admin-summary"></p>
+          </div>
+          <div class="users-admin-toolbar-actions">
+            <label class="users-admin-search">
+              <span class="sr-only">Search users</span>
+              <input
+                id="usersAdminSearch"
+                type="search"
+                class="form-input"
+                placeholder="Search users..."
+                oninput="renderUsersAdminTables()"
+                autocomplete="off"
+              >
+            </label>
+            <button class="btn btn-success btn-sm" onclick="openCreateUserModal()">Create User</button>
+            <button class="btn btn-secondary btn-sm" onclick="loadUsersAdmin()">Refresh</button>
+          </div>
+        </div>
+
+        <div id="users-admin-table-container">
+          <p class="users-admin-empty">Loading users...</p>
+        </div>
+      </section>
     </div>
   `;
 
   sectionParent.appendChild(section);
+  ensureCreateUserModal();
+  applyPermissionUi();
+}
+
+function ensureCreateUserModal() {
+  if (document.getElementById('createUserModal')) return;
+
+  const modal = document.createElement('div');
+  modal.id = 'createUserModal';
+  modal.className = 'modal';
+  modal.innerHTML = `
+    <div class="modal-content users-admin-create-modal">
+      <div class="modal-header">
+        <h3 class="modal-title">Create User</h3>
+        <button class="close-btn" onclick="closeModal('createUserModal')">&times;</button>
+      </div>
+
+      <form onsubmit="event.preventDefault(); createUserAdmin();">
+        <div class="users-admin-create-grid">
+          <div class="form-group">
+            <label class="form-label" for="newUserName">Name</label>
+            <input id="newUserName" class="form-input" placeholder="Full name" autocomplete="name">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="newUserUsername">Username</label>
+            <input id="newUserUsername" class="form-input" placeholder="Username" autocomplete="off">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="newUserPassword">Password</label>
+            <input id="newUserPassword" type="password" class="form-input" placeholder="Password" autocomplete="new-password">
+          </div>
+
+          ${canCurrentUserManageRoles() ? `
+            <div class="form-group">
+              <label class="form-label" for="newUserRole">Role</label>
+              <select id="newUserRole" class="form-input">${userRoleOptionsMarkup('user')}</select>
+            </div>
+
+            <label class="user-admin-switch user-admin-switch-stacked">
+              <input id="newUserHasSalesAccess" type="checkbox">
+              <span class="user-admin-switch-slider"></span>
+              <span class="user-admin-switch-text">Sales</span>
+            </label>
+          ` : ''}
+
+          <label class="user-admin-switch user-admin-switch-stacked">
+            <input id="newUserIsActive" type="checkbox" checked>
+            <span class="user-admin-switch-slider"></span>
+            <span class="user-admin-switch-text">Active</span>
+          </label>
+
+          <div class="form-group owner-only" id="newUserCompanyGroup" data-owner-display="block">
+            <label class="form-label" for="newUserCompanyCode">Company</label>
+            <select id="newUserCompanyCode" class="form-input"></select>
+          </div>
+        </div>
+
+        <div class="modal-actions users-admin-create-actions">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('createUserModal')">Cancel</button>
+          <button type="submit" class="btn btn-success">Create User</button>
+        </div>
+      </form>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+}
+
+function openCreateUserModal() {
+  ensureCreateUserModal();
+  const companySelect = document.getElementById('newUserCompanyCode');
+  if (companySelect) {
+    companySelect.innerHTML = companyOptionsMarkup(currentUser?.company?.code || '');
+  }
+  openModal('createUserModal');
+  setTimeout(() => {
+    document.getElementById('newUserName')?.focus();
+  }, 100);
 }
 
 function setUsersAdminSort(key) {
@@ -5157,10 +5483,11 @@ function usersAdminTableHeader() {
   return `
     <thead>
       <tr>
-        ${usersAdminSortHeader('Username', 'name')}
-        <th>Admin</th>
+        ${usersAdminSortHeader('Name', 'name')}
+        <th>Username</th>
+        <th>Role</th>
+        <th>Sales</th>
         ${isSuperAdminUser() ? usersAdminSortHeader('Company', 'company') : ''}
-        ${isSuperAdminUser() ? '<th>Super</th>' : ''}
         <th>Active</th>
         <th>Last Online</th>
         <th>Actions</th>
@@ -5190,48 +5517,61 @@ function usersAdminRowMarkup(user, index) {
   const rowId = `userrow-${index}`;
   const encodedOriginalUsername = encodeURIComponent(user.username);
   const isSelf = currentUser && currentUser.username === user.username;
-  const protectedSuperUser = user.isSuperAdmin && !isSuperAdminUser() && !isSelf;
+  const role = String(user.role || (user.isOwner || user.isSuperAdmin ? 'owner' : user.isAdmin ? 'admin' : 'user')).toLowerCase();
+  const protectedOwner = role === 'owner' && !isOwnerUser();
+  const canEditRole = canCurrentUserManageRoles() && !protectedOwner;
+  const canEditUser = !protectedOwner;
   const rawLastOnline = String(user.lastOnline || '-');
   const lastOnlineDisplay = formatUserLastOnline(rawLastOnline);
+  const displayName = String(user.name || '').trim();
 
   return `
     <tr>
       <td>
         <input
           type="text"
+          id="name-${rowId}"
+          class="form-input user-admin-name-input"
+          value="${escapeHtmlAttr(displayName)}"
+          placeholder="Name"
+          ${canEditUser ? '' : 'disabled'}
+        >
+      </td>
+      <td>
+        <input
+          type="text"
           id="username-${rowId}"
           class="form-input user-admin-username-input"
           value="${escapeHtmlAttr(user.username)}"
-          ${protectedSuperUser ? 'disabled' : ''}
+          ${canEditUser ? '' : 'disabled'}
         >
         ${isSelf ? '<span style="font-size:11px;color:#666;margin-left:6px;">(you)</span>' : ''}
+        <div class="users-admin-inline-meta">${userActiveBadgeMarkup(user)}</div>
       </td>
       <td>
-        <label class="user-admin-switch">
-          <input type="checkbox" id="admin-${rowId}" ${user.isAdmin ? 'checked' : ''} ${protectedSuperUser ? 'disabled' : ''}>
+        ${canEditRole ? `
+          <select id="role-${rowId}" class="form-input user-admin-role-select">
+            ${userRoleOptionsMarkup(role)}
+          </select>
+        ` : roleBadgeMarkup(role)}
+      </td>
+      <td>
+        <label class="user-admin-switch user-admin-switch-compact">
+          <input type="checkbox" id="sales-${rowId}" ${user.hasSalesAccess || user.isSales ? 'checked' : ''} ${canEditRole ? '' : 'disabled'}>
           <span class="user-admin-switch-slider"></span>
-          <span class="user-admin-switch-text">Admin</span>
+          <span class="user-admin-switch-text">Sales</span>
         </label>
       </td>
       ${isSuperAdminUser() ? `
         <td>
-          <select id="company-${rowId}" class="form-input">
+          <select id="company-${rowId}" class="form-input" ${canEditUser ? '' : 'disabled'}>
             ${companyOptionsMarkup(user.companyCode || currentUser?.company?.code || '')}
           </select>
         </td>
       ` : ''}
-      ${isSuperAdminUser() ? `
-        <td>
-          <label class="user-admin-switch">
-            <input type="checkbox" id="super-${rowId}" ${user.isSuperAdmin ? 'checked' : ''}>
-            <span class="user-admin-switch-slider"></span>
-            <span class="user-admin-switch-text">Super</span>
-          </label>
-        </td>
-      ` : ''}
       <td>
-        <label class="user-admin-switch">
-          <input type="checkbox" id="active-${rowId}" ${user.isActive ? 'checked' : ''} ${protectedSuperUser ? 'disabled' : ''}>
+        <label class="user-admin-switch user-admin-switch-compact">
+          <input type="checkbox" id="active-${rowId}" ${user.isActive ? 'checked' : ''} ${canEditUser ? '' : 'disabled'}>
           <span class="user-admin-switch-slider"></span>
           <span class="user-admin-switch-text">Active</span>
         </label>
@@ -5240,9 +5580,9 @@ function usersAdminRowMarkup(user, index) {
         ${lastOnlineDisplay}
       </td>
       <td class="users-admin-actions">
-        <button class="btn btn-primary btn-sm" onclick="saveUserAdmin('${encodedOriginalUsername}', '${rowId}')">Save</button>
-        <button class="btn btn-warning btn-sm" onclick="openResetPasswordModal('${encodedOriginalUsername}')">Reset Password</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteUserAdmin('${encodedOriginalUsername}')" ${(isSelf || protectedSuperUser) ? 'disabled title="This account cannot be deleted here"' : ''}>Delete</button>
+        <button class="btn btn-primary btn-sm" onclick="saveUserAdmin('${encodedOriginalUsername}', '${rowId}')" ${canEditUser ? '' : 'disabled'}>Save</button>
+        <button class="btn btn-warning btn-sm" onclick="openResetPasswordModal('${encodedOriginalUsername}')" ${canEditUser ? '' : 'disabled'}>Reset Password</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteUserAdmin('${encodedOriginalUsername}')" ${(isSelf || !canEditUser) ? 'disabled title="This account cannot be deleted here"' : ''}>Delete</button>
       </td>
     </tr>
   `;
@@ -5253,10 +5593,10 @@ function sortedUsersAdmin(users) {
   return [...users].sort((left, right) => {
     const leftValue = usersAdminSort.key === 'company'
       ? (left.companyName || left.companyCode || '')
-      : (left.username || '');
+      : (left.name || left.username || '');
     const rightValue = usersAdminSort.key === 'company'
       ? (right.companyName || right.companyCode || '')
-      : (right.username || '');
+      : (right.name || right.username || '');
     const primary = String(leftValue).localeCompare(String(rightValue), undefined, { sensitivity: 'base', numeric: true });
     if (primary) return primary * direction;
     return String(left.username || '').localeCompare(String(right.username || ''), undefined, { sensitivity: 'base', numeric: true });
@@ -5271,7 +5611,7 @@ function renderUsersAdminTables() {
   const inactiveWasOpen = document.getElementById('inactiveUsersDropdown')?.open || false;
   const filtered = usersAdminUsers.filter(user => {
     if (!search) return true;
-    return [user.username, user.companyCode, user.companyName]
+    return [user.name, user.username, user.companyCode, user.companyName, user.role, user.roleLabel, user.hasSalesAccess ? 'sales' : '']
       .some(value => String(value || '').toLocaleLowerCase().includes(search));
   });
   const sorted = isSuperAdminUser() ? sortedUsersAdmin(filtered) : filtered;
@@ -5281,6 +5621,12 @@ function renderUsersAdminTables() {
   const inactiveLabel = search && inactiveUsers.length !== inactiveTotal
     ? `Inactive Users (${inactiveUsers.length} of ${inactiveTotal})`
     : `Inactive Users (${inactiveTotal})`;
+  const summary = document.getElementById('usersAdminSummary');
+  if (summary) {
+    const activeTotal = usersAdminUsers.filter(user => user.isActive).length;
+    const salesTotal = usersAdminUsers.filter(user => user.hasSalesAccess || user.isSales).length;
+    summary.textContent = `${activeTotal} active / ${inactiveTotal} inactive / ${salesTotal} sales`;
+  }
 
   const activeMarkup = activeUsers.length
     ? `<div class="users-admin-table-scroll"><table class="table">${usersAdminTableHeader()}<tbody>${activeUsers.map(usersAdminRowMarkup).join('')}</tbody></table></div>`
@@ -5323,10 +5669,11 @@ async function loadUsersAdmin() {
 }
 
 async function createUserAdmin() {
+  const name = document.getElementById('newUserName')?.value.trim() || '';
   const username = document.getElementById('newUserUsername')?.value.trim();
   const password = document.getElementById('newUserPassword')?.value;
-  const isAdmin = document.getElementById('newUserIsAdmin')?.checked || false;
-  const isSuperAdmin = document.getElementById('newUserIsSuperAdmin')?.checked || false;
+  const role = document.getElementById('newUserRole')?.value || 'user';
+  const hasSalesAccess = document.getElementById('newUserHasSalesAccess')?.checked || false;
   const isActive = document.getElementById('newUserIsActive')?.checked || false;
   const companyCode = document.getElementById('newUserCompanyCode')?.value || currentUser?.company?.code || '';
 
@@ -5342,12 +5689,15 @@ async function createUserAdmin() {
 
   try {
     const payload = {
+      name,
       username,
       password,
-      isAdmin: isAdmin || isSuperAdmin,
-      isSuperAdmin,
       isActive
     };
+    if (canCurrentUserManageRoles()) {
+      payload.role = role;
+      payload.hasSalesAccess = hasSalesAccess;
+    }
     if (isSuperAdminUser()) {
       payload.companyCode = companyCode;
     }
@@ -5356,16 +5706,20 @@ async function createUserAdmin() {
 
     showNotification('success', `User ${username} created`);
 
+    document.getElementById('newUserName').value = '';
     document.getElementById('newUserUsername').value = '';
     document.getElementById('newUserPassword').value = '';
-    document.getElementById('newUserIsAdmin').checked = false;
-    if (document.getElementById('newUserIsSuperAdmin')) {
-      document.getElementById('newUserIsSuperAdmin').checked = false;
+    if (document.getElementById('newUserRole')) {
+      document.getElementById('newUserRole').value = 'user';
+    }
+    if (document.getElementById('newUserHasSalesAccess')) {
+      document.getElementById('newUserHasSalesAccess').checked = false;
     }
     document.getElementById('newUserIsActive').checked = true;
     if (document.getElementById('newUserCompanyCode')) {
       document.getElementById('newUserCompanyCode').value = currentUser?.company?.code || '';
     }
+    closeModal('createUserModal');
 
     await loadUsersAdmin();
 
@@ -5449,10 +5803,11 @@ async function deleteCompanyFromUsersAdmin() {
 async function saveUserAdmin(encodedOriginalUsername, rowId) {
   const originalUsername = decodeURIComponent(encodedOriginalUsername);
 
+  const name = document.getElementById(`name-${rowId}`)?.value.trim() || '';
   const newUsername = document.getElementById(`username-${rowId}`)?.value.trim();
-  const isAdmin = document.getElementById(`admin-${rowId}`)?.checked || false;
+  const role = document.getElementById(`role-${rowId}`)?.value || '';
+  const hasSalesAccess = document.getElementById(`sales-${rowId}`)?.checked || false;
   const isActive = document.getElementById(`active-${rowId}`)?.checked || false;
-  const isSuperAdmin = document.getElementById(`super-${rowId}`)?.checked || false;
   const companyCode = document.getElementById(`company-${rowId}`)?.value || '';
 
   if (!newUsername) {
@@ -5462,13 +5817,16 @@ async function saveUserAdmin(encodedOriginalUsername, rowId) {
 
   try {
     const payload = {
+      name,
       username: newUsername,
-      isAdmin: isAdmin || isSuperAdmin,
       isActive
     };
+    if (canCurrentUserManageRoles() && role) {
+      payload.role = role;
+      payload.hasSalesAccess = hasSalesAccess;
+    }
     if (isSuperAdminUser() && companyCode) {
       payload.companyCode = companyCode;
-      payload.isSuperAdmin = isSuperAdmin;
     }
 
     const updateResult = await apiCall(`/api/users/${encodeURIComponent(originalUsername)}`, 'PUT', payload);
@@ -5477,6 +5835,7 @@ async function saveUserAdmin(encodedOriginalUsername, rowId) {
     try {
       const currentUserRes = await apiCall('/api/current-user');
       currentUser = currentUserRes.data;
+      refreshSidebarUserMenu();
     } catch (e) {
       console.warn('Could not refresh current user:', e);
     }
@@ -5618,12 +5977,165 @@ function ensureUserAdminStyles() {
   const style = document.createElement('style');
   style.id = 'user-admin-switch-styles';
   style.textContent = `
+    .users-admin-shell {
+      display: grid;
+      gap: 18px;
+    }
+
+    .users-admin-hero {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 18px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid #e4e7ec;
+    }
+
+    .users-admin-kicker {
+      margin: 0 0 6px;
+      color: #667085;
+      font-size: 12px;
+      font-weight: 750;
+      text-transform: uppercase;
+      letter-spacing: 0;
+    }
+
+    .users-admin-hero h2,
+    .users-admin-panel h3 {
+      margin: 0;
+      color: #101828;
+    }
+
+    .users-admin-current {
+      min-width: min(260px, 100%);
+      padding: 12px;
+      border: 1px solid #d0d5dd;
+      border-radius: 8px;
+      background: #fff;
+    }
+
+    .users-admin-current-label,
+    .users-admin-summary,
+    .users-admin-inline-meta {
+      color: #667085;
+      font-size: 12px;
+    }
+
+    .users-admin-current strong {
+      display: block;
+      margin-top: 3px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: #101828;
+    }
+
+    .users-admin-current-meta,
+    .user-role-ladder {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .user-role-chip {
+      display: inline-flex;
+      align-items: center;
+      min-height: 26px;
+      padding: 4px 9px;
+      border: 1px solid #d0d5dd;
+      border-radius: 999px;
+      background: #fff;
+      color: #344054;
+      font-size: 12px;
+    }
+
+    .user-role-arrow {
+      color: #98a2b3;
+      font-weight: 700;
+    }
+
+    .user-role-chip-owner { border-color: #fed7aa; background: #fff7ed; color: #9a3412; }
+    .user-role-chip-admin { border-color: #c7d7fe; background: #eef4ff; color: #3538cd; }
+    .user-role-chip-manager { border-color: #abefc6; background: #ecfdf3; color: #027a48; }
+    .user-role-chip-sales { border-color: #fcceee; background: #fdf2fa; color: #c11574; }
+
+    .users-admin-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 18px;
+      align-items: start;
+    }
+
+    .users-admin-panel {
+      border: 1px solid #d0d5dd;
+      border-radius: 8px;
+      background: #fff;
+      padding: 16px;
+    }
+
+    .users-admin-list-panel {
+      min-width: 0;
+    }
+
+    .users-admin-create-modal {
+      max-width: 640px;
+    }
+
+    .users-admin-create-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 14px;
+    }
+
+    .users-admin-create-actions {
+      margin-top: 14px;
+      display: flex;
+      justify-content: flex-end;
+    }
+
+    .user-admin-role-select {
+      min-width: 136px;
+    }
+
+    .user-status-badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 20px;
+      padding: 2px 7px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .user-status-active {
+      color: #027a48;
+      background: #ecfdf3;
+    }
+
+    .user-status-inactive {
+      color: #667085;
+      background: #f2f4f7;
+    }
+
     .user-admin-switch {
       display: inline-flex;
       align-items: center;
       gap: 8px;
       cursor: pointer;
       user-select: none;
+    }
+
+    .user-admin-switch-stacked {
+      align-self: end;
+      min-height: 44px;
+      padding-bottom: 8px;
+    }
+
+    .user-admin-switch-compact {
+      white-space: nowrap;
     }
 
     .user-admin-switch input {
@@ -5674,6 +6186,7 @@ function ensureUserAdminStyles() {
       color: #333;
     }
 
+    .user-admin-name-input,
     .user-admin-username-input {
       max-width: 220px;
       min-width: 160px;
@@ -5717,6 +6230,11 @@ function ensureUserAdminStyles() {
 
     .users-admin-table-scroll {
       overflow-x: auto;
+    }
+
+    .users-admin-table-scroll .table th,
+    .users-admin-table-scroll .table td {
+      vertical-align: middle;
     }
 
     .users-admin-actions {
@@ -5765,9 +6283,22 @@ function ensureUserAdminStyles() {
     }
 
     @media (max-width: 640px) {
+      .users-admin-hero,
       .users-admin-toolbar-actions,
       .users-admin-search {
         width: 100%;
+      }
+
+      .users-admin-hero {
+        flex-direction: column;
+      }
+
+      .users-admin-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .users-admin-create-grid {
+        grid-template-columns: 1fr;
       }
     }
   `;
@@ -15582,6 +16113,7 @@ async function editEvent(eventId) {
     // The shared modal footer uses this selection for packing lists and DOs.
     window.currentEventId = event.id;
     window.currentEventData = event;
+    await ensureEventAssigneeUsers();
 
     document.getElementById(
       "eventDetailsTitle"
@@ -15624,6 +16156,7 @@ async function editEvent(eventId) {
                             <input type="date" class="form-input" id="editEventEndDate" value="${formatDateForInput(event.endDate)}" required>
                         </div>
                     </div>
+                    ${eventAssigneePickerMarkup('edit', event.assignedUsernames || (event.assignedUsers || []).map(user => user.username))}
                     <div class="modal-actions" style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
                         <button type="submit" class="btn btn-primary">Update Event</button>
                     </div>
@@ -15634,6 +16167,7 @@ async function editEvent(eventId) {
         `;
 
     document.getElementById("eventDetailsContent").innerHTML = content;
+    renderEventAssigneePicker('edit');
 
     openModal("eventDetailsModal");
   } catch (error) {
@@ -19626,7 +20160,11 @@ function addAssetValue(id) {
 }
 
 function addAssetQuantityValue() {
-  return Math.max(1, Math.min(500, parseInt(addAssetValue('assetQuantity') || '1', 10) || 1));
+  const rawValue = addAssetValue('assetQuantity');
+  if (!rawValue) return 0;
+  const quantity = parseInt(rawValue, 10);
+  if (!Number.isFinite(quantity) || quantity < 1) return 0;
+  return Math.min(500, quantity);
 }
 
 function addAssetSerialList(fieldId = 'assetSerials') {
@@ -19654,7 +20192,7 @@ function collectAddAssetPayload() {
     description: addAssetValue('assetDescription'),
     notes: addAssetValue('assetNotes'),
     dateOfPurchase: addAssetValue('assetDateOfPurchase'),
-    department: addAssetValue('assetDepartment') || 'UN',
+    department: addAssetValue('assetDepartment'),
     isBulk,
     quantity: addAssetQuantityValue(),
     serials,
@@ -19927,6 +20465,149 @@ function syncAddEventLocationRequirement() {
   }
 }
 
+function eventAssigneeState(context) {
+  return context === 'edit' ? editEventAssignedUsers : addEventAssignedUsers;
+}
+
+function eventAssigneePrefix(context) {
+  return context === 'edit' ? 'editEvent' : 'addEvent';
+}
+
+function eventAssigneeDisplayName(user) {
+  return String(user?.name || user?.username || '').trim();
+}
+
+function eventAssigneeSearchText(user) {
+  return [
+    user?.name,
+    user?.username,
+    user?.roleLabel,
+    user?.companyName,
+    user?.companyCode
+  ].map(value => String(value || '').toLowerCase()).join(' ');
+}
+
+async function ensureEventAssigneeUsers(force = false) {
+  if (!force && eventAssigneeUsers.length) return eventAssigneeUsers;
+  const response = await apiCall('/api/users');
+  eventAssigneeUsers = (response.data || [])
+    .slice()
+    .sort((left, right) => (
+      eventAssigneeDisplayName(left).localeCompare(eventAssigneeDisplayName(right), undefined, { sensitivity: 'base' }) ||
+      String(left.username || '').localeCompare(String(right.username || ''), undefined, { sensitivity: 'base' })
+    ));
+  return eventAssigneeUsers;
+}
+
+function eventAssigneePickerMarkup(context, assigned = []) {
+  const prefix = eventAssigneePrefix(context);
+  const state = eventAssigneeState(context);
+  state.clear();
+  (assigned || []).forEach(username => {
+    const clean = String(username || '').trim();
+    if (clean) state.add(clean);
+  });
+  return `
+    <div class="event-assignee-picker" data-event-assignee-context="${context}">
+      <div class="event-assignee-heading">
+        <label class="form-label" for="${prefix}AssigneeSearch">Assigned Users</label>
+        <small>Users only see events assigned to them.</small>
+      </div>
+      <div id="${prefix}AssigneeSelected" class="event-assignee-selected"></div>
+      <input
+        id="${prefix}AssigneeSearch"
+        class="form-input event-assignee-search"
+        type="search"
+        placeholder="Search users..."
+        autocomplete="off"
+        oninput="renderEventAssigneePicker('${context}')"
+      >
+      <div id="${prefix}AssigneeResults" class="event-assignee-results"></div>
+    </div>
+  `;
+}
+
+function renderEventAssigneePicker(context) {
+  const prefix = eventAssigneePrefix(context);
+  const selected = eventAssigneeState(context);
+  const selectedContainer = document.getElementById(`${prefix}AssigneeSelected`);
+  const resultsContainer = document.getElementById(`${prefix}AssigneeResults`);
+  if (!selectedContainer || !resultsContainer) return;
+
+  const usersByName = new Map(eventAssigneeUsers.map(user => [String(user.username || '').toLowerCase(), user]));
+  selectedContainer.innerHTML = Array.from(selected).map(username => {
+    const user = usersByName.get(String(username).toLowerCase()) || { username };
+    const label = eventAssigneeDisplayName(user) || username;
+    return `
+      <span class="event-assignee-chip">
+        <span class="event-assignee-avatar">${escapeHtml(userInitials(label))}</span>
+        <span>${escapeHtml(label)}</span>
+        <button type="button" aria-label="Remove ${escapeHtmlAttr(label)}" onclick="removeEventAssignee('${context}','${escapeJs(username)}')">&times;</button>
+      </span>
+    `;
+  }).join('') || '<span class="event-assignee-empty">No users assigned</span>';
+
+  const query = (document.getElementById(`${prefix}AssigneeSearch`)?.value || '').trim().toLowerCase();
+  if (!eventAssigneeUsers.length) {
+    resultsContainer.innerHTML = '<div class="event-assignee-empty">Loading users...</div>';
+    return;
+  }
+
+  const rows = eventAssigneeUsers
+    .filter(user => !query || eventAssigneeSearchText(user).includes(query))
+    .slice(0, 24);
+  resultsContainer.innerHTML = rows.map(user => {
+    const username = String(user.username || '');
+    const label = eventAssigneeDisplayName(user) || username;
+    const checked = selected.has(username);
+    return `
+      <button type="button" class="event-assignee-card ${checked ? 'selected' : ''}" onclick="toggleEventAssignee('${context}','${escapeJs(username)}')">
+        <span class="event-assignee-avatar">${escapeHtml(userInitials(label))}</span>
+        <span class="event-assignee-copy">
+          <strong>${escapeHtml(label)}</strong>
+          <small>${escapeHtml(username)}${user.roleLabel ? ` · ${escapeHtml(user.roleLabel)}` : ''}</small>
+        </span>
+        <span class="event-assignee-action">${checked ? 'Selected' : 'Select'}</span>
+      </button>
+    `;
+  }).join('') || '<div class="event-assignee-empty">No matching users.</div>';
+}
+
+function toggleEventAssignee(context, username) {
+  const state = eventAssigneeState(context);
+  const clean = String(username || '').trim();
+  if (!clean) return;
+  if (state.has(clean)) state.delete(clean);
+  else state.add(clean);
+  renderEventAssigneePicker(context);
+}
+
+function removeEventAssignee(context, username) {
+  eventAssigneeState(context).delete(String(username || '').trim());
+  renderEventAssigneePicker(context);
+}
+
+async function openAddEventModal() {
+  addEventAssignedUsers = new Set();
+  syncAddEventLocationRequirement();
+  openModal('addEventModal');
+  renderEventAssigneePicker('add');
+  try {
+    await ensureEventAssigneeUsers();
+    renderEventAssigneePicker('add');
+  } catch (error) {
+    const results = document.getElementById('addEventAssigneeResults');
+    if (results) results.innerHTML = `<div class="event-assignee-empty">Unable to load users: ${escapeHtml(error.message)}</div>`;
+  }
+}
+
+function resetAddEventAssignees() {
+  addEventAssignedUsers = new Set();
+  const search = document.getElementById('addEventAssigneeSearch');
+  if (search) search.value = '';
+  renderEventAssigneePicker('add');
+}
+
 
 // Form handlers
 document.addEventListener("DOMContentLoaded", function () {
@@ -19948,6 +20629,7 @@ document.addEventListener("DOMContentLoaded", function () {
         startDate: document.getElementById("eventStartDate").value,
         endDate: document.getElementById("eventEndDate").value,
         tag: document.getElementById("eventTag").value,
+        assignedUsers: Array.from(addEventAssignedUsers),
       };
 
       try {
@@ -19971,6 +20653,7 @@ document.addEventListener("DOMContentLoaded", function () {
         // Reset form
         document.getElementById("addEventForm").reset();
         syncAddEventLocationRequirement();
+        resetAddEventAssignees();
       } catch (error) {
         showNotification("error", "Failed to add event");
       }
@@ -20038,6 +20721,30 @@ document.addEventListener("DOMContentLoaded", function () {
       e.preventDefault();
 
       const assetData = collectAddAssetPayload();
+
+      if (!assetData.brand) {
+        showNotification('warning', 'Brand is required');
+        addAssetField('assetBrand')?.focus();
+        return;
+      }
+
+      if (!assetData.model) {
+        showNotification('warning', 'Model is required');
+        addAssetField('assetModel')?.focus();
+        return;
+      }
+
+      if (!assetData.department) {
+        showNotification('warning', 'Department is required');
+        addAssetField('assetDepartment')?.focus();
+        return;
+      }
+
+      if (!assetData.quantity) {
+        showNotification('warning', 'Quantity is required');
+        addAssetField('assetQuantity')?.focus();
+        return;
+      }
 
       if (!assetData.isBulk && addAssetField('assetUseCustomPrefix')?.checked && !assetData.assetIdPrefix) {
         showNotification('warning', 'Custom Asset ID prefix is empty');
@@ -20186,6 +20893,7 @@ document.addEventListener("DOMContentLoaded", function () {
         startDate: document.getElementById("editEventStartDate").value,
         endDate: document.getElementById("editEventEndDate").value,
         tag: document.getElementById("editEventTag").value,
+        assignedUsers: Array.from(editEventAssignedUsers),
       };
 
       try {
@@ -26321,7 +27029,7 @@ document.addEventListener("keydown", function (e) {
   // Ctrl+N for new event
   if (e.ctrlKey && e.key === "n") {
     e.preventDefault();
-    openModal("addEventModal");
+    openAddEventModal();
   }
 
   // Ctrl+Shift+N for new asset
@@ -26360,6 +27068,9 @@ async function initializeApp() {
     await setupAdminUserManagementTab();
     await setupPdfSettingsTab();
     await setupCompanyManagementTab();
+    if (typeof setupFinanceNavigation === "function") {
+      await setupFinanceNavigation();
+    }
     applyPermissionUi();
     await showCompanyBrandingPromptIfNeeded();
 
@@ -27365,6 +28076,24 @@ function eventNextActionText(event) {
   }
 }
 
+function eventAssigneeSummaryHtml(event) {
+  const rows = Array.isArray(event.assignedUsers) ? event.assignedUsers : [];
+  if (!rows.length) {
+    return '<div class="event-assignee-summary muted"><span>Assigned</span><strong>Unassigned</strong></div>';
+  }
+  const visible = rows.slice(0, 3);
+  const names = visible
+    .map(user => eventAssigneeDisplayName(user) || user.username)
+    .filter(Boolean);
+  const more = rows.length > visible.length ? ` +${rows.length - visible.length}` : '';
+  return `
+    <div class="event-assignee-summary">
+      <span>Assigned</span>
+      <strong>${escapeHtml(names.join(', ') + more)}</strong>
+    </div>
+  `;
+}
+
 async function openEventPlanning(eventId) {
   if (!isAdminUser()) {
     openPrepareWorkspaceForEvent(eventId);
@@ -27503,6 +28232,7 @@ function createEventsOverviewCard(event) {
   const locationHtml = event.location
     ? `<span>${eventLocationIconHtml()}${escapeHtml(event.location)}</span>`
     : '';
+  const assigneeSummary = eventAssigneeSummaryHtml(event);
 
   card.innerHTML = `
     <div class="event-workflow-main">
@@ -27518,6 +28248,7 @@ function createEventsOverviewCard(event) {
         <span><span aria-hidden="true">&#128197;</span>${escapeHtml(eventDateRangeText(event))}</span>
         ${locationHtml}
       </div>
+      ${assigneeSummary}
       <div class="event-workflow-progress">
         ${progressVisualHtml}
         <div class="event-progress-summary">
@@ -27567,12 +28298,13 @@ function renderAllEventsTable(list) {
     const progress = eventOverviewProgress(event);
     const action = getEventPrimaryAction(event);
     const location = event.location ? `<div class="event-list-location">${escapeHtml(event.location)}</div>` : '';
+    const assigneeSummary = eventAssigneeSummaryHtml(event);
     const displayState = overviewDisplayState(event);
     return `
       <tr>
         <td><strong>${escapeHtml(String(event.id))}</strong></td>
         <td>${eventTagBadgeHtml(event)}</td>
-        <td class="event-list-title">${escapeHtml(event.name || '')}${location}</td>
+        <td class="event-list-title">${escapeHtml(event.name || '')}${location}${assigneeSummary}</td>
         <td>${escapeHtml(eventDateRangeText(event))}</td>
         <td>${eventStateBadgeHtml(event, displayState)}</td>
         <td>${renderProgressCell(progress.done, progress.total)}</td>
