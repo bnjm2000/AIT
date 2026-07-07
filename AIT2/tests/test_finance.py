@@ -417,6 +417,35 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertEqual(audio_child['unitPrice'], 444)
         self.assertEqual(audio_child['containerQuantity'], 1)
 
+    def test_line_total_discount_can_raise_or_lower_total(self):
+        quotation = self.create_quote('Editable Line Total')
+        quotation['lineItems'] = [{
+            'id': 'line-1',
+            'catalogKey': '',
+            'description': 'Audio package',
+            'department': 'Audio Department',
+            'departmentCode': 'AX',
+            'days': 2,
+            'quantity': 3,
+            'uom': 'units',
+            'unitPrice': 100,
+            'discountPercent': 50,
+            'isCustom': True,
+        }]
+        discounted = self.client.put(
+            f"/api/quotations/{quotation['id']}",
+            json=quotation,
+        ).get_json()['data']
+        self.assertEqual(discounted['lineItems'][0]['total'], 300)
+
+        discounted['lineItems'][0]['discountPercent'] = -25
+        raised = self.client.put(
+            f"/api/quotations/{quotation['id']}",
+            json=discounted,
+        ).get_json()['data']
+        self.assertEqual(raised['lineItems'][0]['discountPercent'], -25)
+        self.assertEqual(raised['lineItems'][0]['total'], 750)
+
     def test_locked_pre_gst_total_applies_total_discount_and_exports(self):
         quotation = self.create_quote('Locked Total')
         quotation['lineItems'] = [{
@@ -447,6 +476,18 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertTrue(exported.headers.get('Content-Disposition', '').lower().startswith('inline'))
         downloaded = self.client.get(f"/api/quotations/{quotation['id']}/pdf?download=1")
         self.assertTrue(downloaded.headers.get('Content-Disposition', '').lower().startswith('attachment'))
+        saved['taxRate'] = 0
+        zero_tax = self.client.put(
+            f"/api/quotations/{quotation['id']}",
+            json=saved,
+        ).get_json()['data']
+        zero_tax_pdf = self.client.get(f"/api/quotations/{quotation['id']}/pdf").data
+        zero_tax_text = '\n'.join(page.extract_text() or '' for page in PdfReader(io.BytesIO(zero_tax_pdf)).pages)
+        self.assertNotIn('Total before GST', zero_tax_text)
+        self.assertNotIn('GST (0%)', zero_tax_text)
+        self.assertIn('TOTAL', zero_tax_text)
+        self.assertIn('$900.00', zero_tax_text)
+        saved = zero_tax
 
         saved['totalLocked'] = False
         unlocked = self.client.put(
@@ -611,6 +652,13 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertIn('finance-pre-tax-input', source)
         self.assertIn('financecurrencynumber(value)', source)
         self.assertIn('financemoney(document.totallocked ? totals.lockedpretax : totals.netsubtotal)', source)
+        self.assertIn('financesetlinetotal', source)
+        self.assertIn('finance-line-total-input', source)
+        self.assertIn('financesettaxrate', source)
+        self.assertIn('financesettaxamount', source)
+        self.assertIn('finance-tax-rate-input', source)
+        self.assertIn('finance-tax-amount-input', source)
+        self.assertIn('min=\"-9999\"', source)
         self.assertIn('window.open(pdfurl', source)
         self.assertNotIn('window.location.href = pdfurl', source)
         self.assertNotIn('link.download', source)
@@ -638,6 +686,8 @@ class FinanceFeatureTests(unittest.TestCase):
         with open(pdf_path, encoding='utf-8') as pdf_file:
             pdf_source = pdf_file.read().lower()
         self.assertIn('pdf_line_number', pdf_source)
+        self.assertIn('financetableheaderlabel', pdf_source)
+        self.assertIn("description', table_header_label", pdf_source)
         self.assertNotIn('enumerate(department_lines, start=1)', pdf_source)
 
 

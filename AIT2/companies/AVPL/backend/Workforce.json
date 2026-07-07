@@ -212,7 +212,13 @@
       "notes": "",
       "active": true,
       "createdAt": "2026-07-05T15:23:18+08:00",
-      "updatedAt": "2026-07-05T15:23:18+08:00"
+      "updatedAt": "2026-07-07T22:46:14+08:00",
+      "workerPasswordSalt": "25793ce6faf8bfd49e395df566056e8d",
+      "workerPasswordHash": "7684ee4e1f3d42861059edca2d9e1113905597deea51b6d857c0a8ca8a28ccae",
+      "workerCredentialType": "pin",
+      "workerCredentialsSetAt": "2026-07-07T22:46:14+08:00",
+      "workerAuthVersion": 1,
+      "workerLastLoginAt": "2026-07-07T22:46:14+08:00"
     },
     {
       "id": "freelancer_24efaba56af6d61b",
@@ -2240,7 +2246,7 @@
             "size": 55991,
             "contentType": "application/pdf",
             "submittedAt": "2026-07-05T15:24:00+08:00",
-            "status": "Pending Review",
+            "status": "Paid",
             "denialReason": "",
             "reviewHistory": [
               {
@@ -2256,6 +2262,13 @@
                 "from": "Pending Review",
                 "to": "Pending Review",
                 "amount": 450.0
+              },
+              {
+                "at": "2026-07-07T22:46:45+08:00",
+                "by": "bnjm2000",
+                "from": "Pending Review",
+                "to": "Paid",
+                "amount": 450.0
               }
             ],
             "amount": 450.0,
@@ -2269,7 +2282,7 @@
                 "amount": 450.0
               }
             ],
-            "reviewedAt": "2026-07-05T15:24:04+08:00",
+            "reviewedAt": "2026-07-07T22:46:45+08:00",
             "reviewedBy": "bnjm2000",
             "verifiedAt": "2026-07-05T15:24:04+08:00",
             "verifiedBy": "bnjm2000"
@@ -3429,5 +3442,5 @@
       }
     }
   },
-  "updatedAt": "2026-07-06T19:43:05+08:00"
+  "updatedAt": "2026-07-07T22:46:45+08:00"
 }

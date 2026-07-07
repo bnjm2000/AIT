@@ -1,4 +1,4 @@
-"""Flask application for Avec Inventory Management."""
+"""Flask application for Showbase."""
 
 import csv
 import hashlib
@@ -182,7 +182,7 @@ _company_manager_lock = threading.RLock()
 _data_snapshot_signature = None  # Compatibility mirror for the default manager.
 _data_snapshot_signatures = {}
 _background_thread_started = False
-_active_company_code = 'AVPL'
+_active_company_code = ''
 _company_data_managers = {}
 _company_registry_cache = None
 
@@ -214,8 +214,10 @@ MAINTENANCE_VIDEO_MAX_BYTES = int(
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 LIVE_COMPANIES_FOLDER = os.path.abspath(os.path.join(BASE_DIR, 'companies'))
 DATABASE_URL = os.environ.get('DATABASE_URL', '').strip()
-DEFAULT_COMPANY_CODE = 'AVPL'
-DEFAULT_COMPANY_NAME = 'AVEC Vision Private Limited'
+APP_NAME = 'Showbase'
+DEFAULT_COMPANY_CODE = 'SHOWBASE'
+DEFAULT_COMPANY_NAME = 'Showbase Workspace'
+LEGACY_DEFAULT_COMPANY_CODE = 'AVPL'
 SUPER_ADMIN_USERNAME = 'bnjm2000'
 ROLE_LABELS = {
     'owner': 'Owner',
@@ -500,12 +502,14 @@ def _normalise_company_registry(registry):
     default_record.update({k: v for k, v in existing_default.items() if v not in (None, '')})
     default_record['code'] = DEFAULT_COMPANY_CODE
     default_record['name'] = default_record.get('name') or DEFAULT_COMPANY_NAME
-    if str(default_record.get('backendFolder') or '').replace('\\', '/') == 'AVPL/backend':
-        default_record['backendFolder'] = 'companies/AVPL/backend'
-    if str(default_record.get('frontendFolder') or '').replace('\\', '/') == 'AVPL/frontend':
-        default_record['frontendFolder'] = 'companies/AVPL/frontend'
-    default_record['backendFolder'] = default_record.get('backendFolder') or 'companies/AVPL/backend'
-    default_record['frontendFolder'] = default_record.get('frontendFolder') or 'companies/AVPL/frontend'
+    legacy_backend = f'{LEGACY_DEFAULT_COMPANY_CODE}/backend'
+    legacy_frontend = f'{LEGACY_DEFAULT_COMPANY_CODE}/frontend'
+    if str(default_record.get('backendFolder') or '').replace('\\', '/') == legacy_backend:
+        default_record['backendFolder'] = f'companies/{LEGACY_DEFAULT_COMPANY_CODE}/backend'
+    if str(default_record.get('frontendFolder') or '').replace('\\', '/') == legacy_frontend:
+        default_record['frontendFolder'] = f'companies/{LEGACY_DEFAULT_COMPANY_CODE}/frontend'
+    default_record['backendFolder'] = default_record.get('backendFolder') or os.path.join('companies', DEFAULT_COMPANY_CODE, 'backend').replace('\\', '/')
+    default_record['frontendFolder'] = default_record.get('frontendFolder') or os.path.join('companies', DEFAULT_COMPANY_CODE, 'frontend').replace('\\', '/')
     default_record['brandingSetupRequired'] = bool(default_record.get('brandingSetupRequired', False))
 
     normalised_companies = {}
@@ -975,18 +979,6 @@ def _ensure_company_folders(record):
     if frontend_folder and not os.path.exists(frontend_folder):
         os.makedirs(frontend_folder)
 
-    logo_path = os.path.join(frontend_folder, 'logo.png') if frontend_folder else ''
-    default_logo_path = os.path.join(BASE_DIR, 'companies', DEFAULT_COMPANY_CODE, 'frontend', 'logo.png')
-    legacy_logo_path = os.path.join(app.static_folder or os.path.join(BASE_DIR, 'static'), 'images', 'logo.png')
-
-    if logo_path and not os.path.exists(logo_path):
-        source = default_logo_path if os.path.exists(default_logo_path) else legacy_logo_path
-        if source and os.path.exists(source):
-            try:
-                shutil.copy2(source, logo_path)
-            except OSError as e:
-                logger.warning("Failed to copy default company logo to %s: %s", logo_path, e)
-
 
 def _ensure_super_admin_users(manager):
     if not manager:
@@ -1114,6 +1106,31 @@ def _company_payload(code=None):
     }
 
 
+def _same_file_hash(left_path, right_path):
+    try:
+        if not left_path or not right_path:
+            return False
+        if os.path.abspath(left_path) == os.path.abspath(right_path):
+            return False
+        if not os.path.isfile(left_path) or not os.path.isfile(right_path):
+            return False
+        with open(left_path, 'rb') as left_file, open(right_path, 'rb') as right_file:
+            return hashlib.sha256(left_file.read()).digest() == hashlib.sha256(right_file.read()).digest()
+    except OSError:
+        return False
+
+
+def _is_inherited_default_company_logo(code, logo_path):
+    code = _normalise_company_code(code)
+    if not code or code in {DEFAULT_COMPANY_CODE, LEGACY_DEFAULT_COMPANY_CODE}:
+        return False
+    default_logo_paths = [
+        os.path.join(BASE_DIR, 'companies', DEFAULT_COMPANY_CODE, 'frontend', 'logo.png'),
+        os.path.join(BASE_DIR, 'companies', LEGACY_DEFAULT_COMPANY_CODE, 'frontend', 'logo.png'),
+    ]
+    return any(_same_file_hash(logo_path, default_logo_path) for default_logo_path in default_logo_paths)
+
+
 @app.route('/api/company-branding/<company_code>/logo', methods=['GET'])
 def company_branding_logo(company_code):
     registry = _load_company_registry()
@@ -1121,7 +1138,10 @@ def company_branding_logo(company_code):
     if code not in registry.get('companies', {}):
         return jsonify({'error': 'Company not found'}), 404
     logo_path = os.path.join(_company_frontend_folder(code), 'logo.png')
-    if not os.path.isfile(logo_path):
+    if not os.path.isfile(logo_path) or _is_inherited_default_company_logo(code, logo_path):
+        settings = _load_pdf_settings(code)
+        logo_path = _pdf_logo_path(settings, code) if settings.get('logoFilename') else ''
+    if not logo_path or not os.path.isfile(logo_path):
         return jsonify({'error': 'Company logo not found'}), 404
     return send_file(
         logo_path,
@@ -1195,7 +1215,7 @@ def _generate_self_signed_certificate(cert_file, key_file):
     private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     subject = issuer = x509.Name([
         x509.NameAttribute(NameOID.COUNTRY_NAME, 'SG'),
-        x509.NameAttribute(NameOID.ORGANIZATION_NAME, 'Avec Inventory Management'),
+        x509.NameAttribute(NameOID.ORGANIZATION_NAME, APP_NAME),
         x509.NameAttribute(NameOID.COMMON_NAME, hosts[0] if hosts else 'localhost'),
     ])
 
@@ -1256,8 +1276,8 @@ def get_ssl_context():
         return (cert_file, key_file)
 
     cert_dir = os.environ.get('CERT_DIR') or os.path.join(os.path.dirname(os.path.abspath(__file__)), 'certs')
-    cert_file = os.path.join(cert_dir, 'avec_inventory_selfsigned.crt')
-    key_file = os.path.join(cert_dir, 'avec_inventory_selfsigned.key')
+    cert_file = os.path.join(cert_dir, 'showbase_selfsigned.crt')
+    key_file = os.path.join(cert_dir, 'showbase_selfsigned.key')
 
     if not os.path.exists(cert_file) or not os.path.exists(key_file):
         _generate_self_signed_certificate(cert_file, key_file)
@@ -1275,7 +1295,7 @@ def run_https_app(flask_app):
     flask_app.config['PREFERRED_URL_SCHEME'] = scheme
     flask_app.config['SESSION_COOKIE_SECURE'] = bool(ssl_context)
     flask_app.config.setdefault('SESSION_COOKIE_SAMESITE', 'Lax')
-    logger.info('Starting Avec Inventory Management at %s://%s:%s', scheme, host, port)
+    logger.info('Starting %s at %s://%s:%s', APP_NAME, scheme, host, port)
 
     backend = os.environ.get('SERVER_BACKEND', 'auto').strip().lower()
     if backend == 'auto':
@@ -1822,10 +1842,7 @@ def _department_payload(code, departments=None):
 
 
 # ---------------- PDF branding settings helpers ----------------
-DEFAULT_PDF_FOOTER_TEXT = (
-    "AVEC VISION PRIVATE LIMITED\n"
-    "601 SIMS DRIVE PAN-I COMPLEX #04-10 SINGAPORE 387382 TEL 65.9743.3660 CO REG 202122775G"
-)
+DEFAULT_PDF_FOOTER_TEXT = ''
 DEFAULT_FINANCE_TERMS = (
     "This quotation is valid until the validity date shown above.\n"
     "A 50% deposit is required to confirm the booking, with the balance payable before the event date.\n"
@@ -1854,10 +1871,10 @@ def _pdf_settings_defaults():
         'logoFilename': '',
         'logoOriginalName': '',
         'logoMimeType': '',
-        'companyName': DEFAULT_COMPANY_NAME,
-        'registrationNumber': '202122775G',
-        'billingAddress': '601 Sims Drive, PAN-I Complex #04-10, Singapore 387382',
-        'phone': '+65 9743 3660',
+        'companyName': '',
+        'registrationNumber': '',
+        'billingAddress': '',
+        'phone': '',
         'email': '',
         'website': '',
         'bankName': '',
@@ -1876,8 +1893,12 @@ def _pdf_settings_defaults():
     }
 
 
-def _pdf_settings_path():
-    folder = data_manager.data_folder if data_manager else './data'
+def _pdf_settings_path(company_code=None):
+    if company_code:
+        record = _company_record_for_code(company_code)
+        folder = _company_record_backend_folder(record)
+    else:
+        folder = data_manager.data_folder if data_manager else './data'
     return os.path.join(folder, 'PdfSettings.json')
 
 
@@ -1886,38 +1907,26 @@ def _company_frontend_folder(company_code=None):
     folder = _company_record_frontend_folder(record)
     if folder and not os.path.exists(folder):
         os.makedirs(folder)
-    return folder or os.path.join(BASE_DIR, DEFAULT_COMPANY_CODE, 'frontend')
+    return folder or os.path.join(BASE_DIR, 'companies', DEFAULT_COMPANY_CODE, 'frontend')
 
 
 def _default_pdf_logo_path(company_code=None):
-    current_logo = os.path.join(_company_frontend_folder(company_code), 'logo.png')
-    if os.path.exists(current_logo):
-        return current_logo
-
-    avec_logo = os.path.join(BASE_DIR, 'companies', DEFAULT_COMPANY_CODE, 'frontend', 'logo.png')
-    if os.path.exists(avec_logo):
-        return avec_logo
-
-    legacy_logo = os.path.join(app.static_folder, 'images', 'logo.png')
-    if os.path.exists(legacy_logo):
-        return legacy_logo
-
     return ''
 
 
-def _pdf_assets_folder():
-    return os.path.join(_company_frontend_folder(), 'pdf_assets')
+def _pdf_assets_folder(company_code=None):
+    return os.path.join(_company_frontend_folder(company_code), 'pdf_assets')
 
 
-def _pdf_logo_path(settings=None):
-    settings = settings or _load_pdf_settings()
+def _pdf_logo_path(settings=None, company_code=None):
+    settings = settings or _load_pdf_settings(company_code)
     logo_filename = str(settings.get('logoFilename') or '').strip()
     if not logo_filename:
         return ''
-    return os.path.join(_pdf_assets_folder(), os.path.basename(logo_filename))
+    return os.path.join(_pdf_assets_folder(company_code), os.path.basename(logo_filename))
 
 
-def _normalise_pdf_settings(settings):
+def _normalise_pdf_settings(settings, company_code=None):
     defaults = _pdf_settings_defaults()
     merged = defaults.copy()
     if isinstance(settings, dict):
@@ -1943,7 +1952,7 @@ def _normalise_pdf_settings(settings):
     merged['defaultValidityDays'] = max(1, min(365, _safe_int(merged.get('defaultValidityDays'), 30)))
     merged['updatedAt'] = str(merged.get('updatedAt') or '').strip()
 
-    logo_path = _pdf_logo_path(merged) if merged['logoFilename'] else ''
+    logo_path = _pdf_logo_path(merged, company_code) if merged['logoFilename'] else ''
     if logo_path and not os.path.exists(logo_path):
         merged['logoFilename'] = ''
         merged['logoOriginalName'] = ''
@@ -1952,8 +1961,8 @@ def _normalise_pdf_settings(settings):
     return merged
 
 
-def _load_pdf_settings():
-    filepath = _pdf_settings_path()
+def _load_pdf_settings(company_code=None):
+    filepath = _pdf_settings_path(company_code)
     settings = _pdf_settings_defaults()
 
     if os.path.exists(filepath) and os.path.getsize(filepath) > 0:
@@ -1965,7 +1974,7 @@ def _load_pdf_settings():
         except Exception as e:
             logger.warning(f"Failed to read PdfSettings.json, using defaults: {e}")
 
-    return _normalise_pdf_settings(settings)
+    return _normalise_pdf_settings(settings, company_code)
 
 
 def _save_pdf_settings(settings):
@@ -1985,14 +1994,10 @@ def _pdf_settings_payload(settings=None):
     settings = _normalise_pdf_settings(settings or _load_pdf_settings())
     logo_path = _pdf_logo_path(settings) if settings.get('logoFilename') else ''
     has_custom_logo = bool(logo_path and os.path.exists(logo_path))
-    default_logo_path = _default_pdf_logo_path()
-    logo_url = '/api/pdf-settings/logo'
+    logo_url = ''
 
     if has_custom_logo:
         version = int(os.path.getmtime(logo_path))
-        logo_url = f'/api/pdf-settings/logo?v={version}'
-    elif default_logo_path and os.path.exists(default_logo_path):
-        version = int(os.path.getmtime(default_logo_path))
         logo_url = f'/api/pdf-settings/logo?v={version}'
 
     return {
@@ -4514,7 +4519,7 @@ def _workforce_folder(manager=None):
 
 
 def _worker_token_serializer():
-    return URLSafeTimedSerializer(app.secret_key, salt='aim-worker-portal-v1')
+    return URLSafeTimedSerializer(app.secret_key, salt='showbase-worker-portal-v1')
 
 
 def _make_worker_token(company_code, freelancer):
@@ -9675,7 +9680,7 @@ def update_pdf_settings():
 @app.route('/api/pdf-settings/logo', methods=['GET'])
 @require_auth
 def get_pdf_logo():
-    """Serve the configured PDF logo, falling back to the bundled logo."""
+    """Serve the configured PDF logo when one has been uploaded."""
     try:
         settings = _load_pdf_settings()
         logo_path = _pdf_logo_path(settings)
@@ -9684,14 +9689,6 @@ def get_pdf_logo():
             return send_file(
                 logo_path,
                 mimetype=settings.get('logoMimeType') or None,
-                max_age=3600
-            )
-
-        default_logo = _default_pdf_logo_path()
-        if default_logo and os.path.exists(default_logo):
-            return send_file(
-                default_logo,
-                mimetype=mimetypes.guess_type(default_logo)[0] or 'image/png',
                 max_age=3600
             )
 
@@ -9753,7 +9750,7 @@ def upload_pdf_logo():
 @app.route('/api/pdf-settings/logo', methods=['DELETE'])
 @require_admin
 def reset_pdf_logo():
-    """Reset PDFs to the bundled logo."""
+    """Remove the custom logo used by generated PDFs."""
     try:
         _remove_custom_pdf_logos()
         settings = _load_pdf_settings()
@@ -9763,7 +9760,7 @@ def reset_pdf_logo():
         settings['updatedAt'] = datetime.now().isoformat(timespec='seconds')
         saved = _save_pdf_settings(settings)
 
-        log_action("Reset PDF logo")
+        log_action("Removed PDF logo")
 
         return jsonify({'success': True, 'data': _pdf_settings_payload(saved)})
     except Exception as e:
@@ -18500,7 +18497,7 @@ def _normalise_finance_line(value):
     quantity = max(0, _safe_float(value.get('quantity'), 1))
     days = max(0, _safe_float(value.get('days'), 1))
     unit_price = max(0, _safe_float(value.get('unitPrice'), 0))
-    discount = max(0, min(100, _safe_float(value.get('discountPercent'), 0)))
+    discount = max(-9999, min(100, _safe_float(value.get('discountPercent'), 0)))
     gross = quantity * days * unit_price
     total = gross * (1 - discount / 100)
     department, department_code = _finance_department_details(
@@ -19675,7 +19672,7 @@ def _finance_pdf_response(document_id, document_type):
         from quotation_pdf import build_finance_pdf, safe_pdf_filename
 
         settings = _normalise_pdf_settings(_load_pdf_settings())
-        logo_path = _pdf_logo_path(settings) or _default_pdf_logo_path()
+        logo_path = _pdf_logo_path(settings)
         pdf_bytes = build_finance_pdf(document, settings, logo_path)
     except ImportError:
         logger.error("ReportLab is required for finance PDF export", exc_info=True)

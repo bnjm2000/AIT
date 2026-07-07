@@ -3,23 +3,27 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#4f46e5" />
-    <title>Sign In - AIM</title>
+    <meta name="theme-color" content="#0f766e" />
+    <title>Sign In - Showbase</title>
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/showbase-icon.svg') }}" />
     <link rel="stylesheet" href="{{ url_for('static', filename='css/login.css', v=login_css_version) }}" />
   </head>
   <body>
     <main class="access-shell">
       <header class="access-brand">
-        <strong>AIM</strong>
-        <span>AVEC INVENTORY MANAGEMENT</span>
-        <h1>Welcome</h1>
-        <p>Select how you would like to continue.</p>
+        <img src="{{ url_for('static', filename='images/showbase-logo-light.svg') }}" alt="Showbase" />
+        <span>EVENT OPERATIONS WORKSPACE</span>
+        <h1>Welcome back</h1>
+        <p>Choose your workspace and continue securely.</p>
       </header>
 
       <section class="access-card">
+        <div class="access-card-accent" aria-hidden="true"></div>
         <div class="access-choice-grid" aria-label="Choose sign-in type">
           <button class="access-choice" id="adminChoice" type="button">
-            <span class="choice-check">✓</span>
+            <span class="choice-check" aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false"><path d="m5 12 4 4 10-10"></path></svg>
+            </span>
             <span class="choice-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" focusable="false">
                 <circle cx="10" cy="7" r="3"></circle>
@@ -33,7 +37,9 @@
             <span class="choice-action">Sign in</span>
           </button>
           <button class="access-choice" id="workerChoice" type="button">
-            <span class="choice-check">✓</span>
+            <span class="choice-check" aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false"><path d="m5 12 4 4 10-10"></path></svg>
+            </span>
             <span class="choice-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" focusable="false">
                 <path d="M4 14a8 8 0 0 1 16 0"></path>
@@ -44,19 +50,25 @@
               </svg>
             </span>
             <strong>I am a worker</strong>
-            <small>Access your events and submit invoices &amp; claims</small>
+            <small>Access your events and submit invoices and claims</small>
             <span class="choice-action">Continue</span>
           </button>
         </div>
 
         <section class="access-panel" id="workerPanel" hidden>
-          <div class="panel-icon" aria-hidden="true">↓</div>
+          <div class="panel-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" focusable="false">
+              <path d="M12 3v12"></path>
+              <path d="m7 10 5 5 5-5"></path>
+              <path d="M5 21h14"></path>
+            </svg>
+          </div>
           <h2>Worker Invoice &amp; Claims</h2>
           <p id="workerInstruction">Enter your phone number to find your events.</p>
 
           <form id="workerLookupForm">
             <label class="phone-field">
-              <span class="country-code">🇸🇬 &nbsp; +65</span>
+              <span class="country-code">SG +65</span>
               <input id="workerPhone" type="tel" inputmode="tel" autocomplete="tel"
                      placeholder="9123 4567" required />
             </label>
@@ -70,7 +82,7 @@
               <label><input type="radio" name="credentialType" value="password" /> Password</label>
             </div>
             <label class="access-field">
-              <span id="credentialLabel">Create a 4–8 digit PIN</span>
+              <span id="credentialLabel">Create a 4-8 digit PIN</span>
               <input id="workerCredential" type="password" inputmode="numeric"
                      autocomplete="new-password" required />
             </label>
@@ -83,7 +95,7 @@
             <button class="text-action" type="button" id="changeWorkerPhone">Use another phone number</button>
           </form>
 
-          <p class="privacy-copy">▣ &nbsp; Your worker account and submissions are private.</p>
+          <p class="privacy-copy">Your worker account and submissions are private.</p>
           <div class="access-message" id="workerMessage" role="alert" aria-live="polite"></div>
         </section>
 

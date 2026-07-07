@@ -28,6 +28,12 @@
   object-fit: contain;
 }
 
+.company-logo-dropzone span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .company-details-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -758,6 +764,33 @@
 
 .finance-pre-tax-input input {
   min-width: 118px;
+  font-weight: 750;
+}
+
+.finance-tax-row {
+  align-items: center;
+}
+
+.finance-tax-row > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.finance-tax-rate-input {
+  width: 66px;
+  padding: 5px 6px;
+  border: 1px solid var(--finance-border);
+  border-radius: 7px;
+  color: var(--finance-ink);
+  background: #fff;
+  text-align: right;
+  font: inherit;
+  font-weight: 700;
+}
+
+.finance-tax-amount-input input,
+.finance-line-total-input input {
   font-weight: 750;
 }
 

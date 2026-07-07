@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Copy and verify AIM CSV data in PostgreSQL without switching the live app."""
+"""Copy and verify Showbase CSV data in PostgreSQL without switching the live app."""
 
 import argparse
 import csv
@@ -162,7 +162,7 @@ def migrate_company(dsn, code, record, users_file, apply_changes):
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Copy AIM CSV data to PostgreSQL and verify row counts.'
+        description='Copy Showbase CSV data to PostgreSQL and verify row counts.'
     )
     parser.add_argument(
         '--database-url',

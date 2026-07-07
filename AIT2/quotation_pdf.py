@@ -115,6 +115,11 @@ def build_finance_pdf(document, company, logo_path=''):
         textColor=muted,
         spaceAfter=2,
     )
+    table_header_label = ParagraphStyle(
+        'FinanceTableHeaderLabel',
+        parent=label,
+        textColor=colors.HexColor('#F8FAFC'),
+    )
     title_style = ParagraphStyle(
         'FinanceTitle',
         parent=body,
@@ -385,14 +390,14 @@ def build_finance_pdf(document, company, logo_path=''):
                 '', '', '', '', '', '', '',
             ],
             [
-                _paragraph('#', label),
-                _paragraph('DESCRIPTION', label),
-                _paragraph('DAYS', label),
-                _paragraph('QTY', label),
-                _paragraph('UOM', label),
-                _paragraph('UNIT PRICE', label),
-                _paragraph('DISC %', label),
-                _paragraph('TOTAL', label),
+                _paragraph('#', table_header_label),
+                _paragraph('DESCRIPTION', table_header_label),
+                _paragraph('DAYS', table_header_label),
+                _paragraph('QTY', table_header_label),
+                _paragraph('UOM', table_header_label),
+                _paragraph('UNIT PRICE', table_header_label),
+                _paragraph('DISC %', table_header_label),
+                _paragraph('TOTAL', table_header_label),
             ],
         ]
         row_styles = [
@@ -482,14 +487,20 @@ def build_finance_pdf(document, company, logo_path=''):
                 _paragraph(adjustment.get('label') or 'Total adjustment', body),
                 _paragraph(_money(adjustment.get('amount'), currency), right),
             ])
-    summary_rows.append(
-        [_paragraph('Total before GST', body), _paragraph(_money(totals.get('netSubtotal'), currency), right)]
-    )
-    summary_rows.extend([
-        [_paragraph(f"{tax_label} ({tax_rate:g}%)", body), _paragraph(_money(totals.get('tax'), currency), right)],
-        [_paragraph('TOTAL', ParagraphStyle('TotalLabel', parent=body, fontName='Helvetica-Bold', fontSize=10.5)),
-         _paragraph(_money(totals.get('total'), currency), ParagraphStyle('TotalAmount', parent=right_bold, fontSize=11, textColor=accent))],
-    ])
+    if tax_rate > 0:
+        summary_rows.append(
+            [_paragraph('Total before GST', body), _paragraph(_money(totals.get('netSubtotal'), currency), right)]
+        )
+        summary_rows.extend([
+            [_paragraph(f"{tax_label} ({tax_rate:g}%)", body), _paragraph(_money(totals.get('tax'), currency), right)],
+            [_paragraph('TOTAL', ParagraphStyle('TotalLabel', parent=body, fontName='Helvetica-Bold', fontSize=10.5)),
+             _paragraph(_money(totals.get('total'), currency), ParagraphStyle('TotalAmount', parent=right_bold, fontSize=11, textColor=accent))],
+        ])
+    else:
+        summary_rows.append([
+            _paragraph('TOTAL', ParagraphStyle('TotalLabelNoTax', parent=body, fontName='Helvetica-Bold', fontSize=10.5)),
+            _paragraph(_money(totals.get('netSubtotal'), currency), ParagraphStyle('TotalAmountNoTax', parent=right_bold, fontSize=11, textColor=accent)),
+        ])
     summary = Table(
         summary_rows,
         colWidths=[56 * mm, 40 * mm],

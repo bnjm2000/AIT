@@ -1,12 +1,12 @@
-# AIM User Manual
+# Showbase User Manual
 
 Last updated: July 6, 2026
 
-This manual covers the three main ways people use AIM: admins, normal internal users, and workers. The screenshots are representative captures of the current app layout and role flows.
+This manual covers the three main ways people use Showbase: admins, normal internal users, and workers. The screenshots are representative captures of the current app layout and role flows.
 
 ## Sign In
 
-Open AIM and choose the correct access type.
+Open Showbase and choose the correct access type.
 
 ![Sign-in screen](screenshots/login.png)
 

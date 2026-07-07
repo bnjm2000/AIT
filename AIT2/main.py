@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Web-only server entry point for Avec Inventory Management."""
+"""Web-only server entry point for Showbase."""
 
 from app import app, init_data_manager, run_https_app
 

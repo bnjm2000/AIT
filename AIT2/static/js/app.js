@@ -266,26 +266,27 @@ function renderVirtualTable({
 
 const REALTIME_CLIENT_ID = (() => {
   try {
-    const existing = sessionStorage.getItem("avecRealtimeClientId");
+    const existing = sessionStorage.getItem("showbaseRealtimeClientId");
     if (existing) return existing;
     const id = (crypto && crypto.randomUUID)
       ? crypto.randomUUID()
       : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-    sessionStorage.setItem("avecRealtimeClientId", id);
+    sessionStorage.setItem("showbaseRealtimeClientId", id);
     return id;
   } catch (error) {
     return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   }
 })();
 
-const DEFAULT_PDF_FOOTER_TEXT = "AVEC VISION PRIVATE LIMITED\n601 SIMS DRIVE PAN-I COMPLEX #04-10 SINGAPORE 387382 TEL 65.9743.3660 CO REG 202122775G";
+const DEFAULT_PDF_FOOTER_TEXT = "";
 let pdfSettings = {
   footerText: DEFAULT_PDF_FOOTER_TEXT,
-  logoUrl: "/api/pdf-settings/logo",
+  logoUrl: "",
   hasCustomLogo: false,
   logoOriginalName: "",
   updatedAt: ""
 };
+let pdfSettingsLoaded = false;
 
 const DEFAULT_MAINTENANCE_LOG_TYPE = "General";
 const ASSET_CHECK_MAINTENANCE_LOG_TYPE = "Asset check";
@@ -867,7 +868,7 @@ function getEventExtraQuantity(event) {
   return Array.isArray(event.extraAssets) ? event.extraAssets.length : 0;
 }
 
-const PREPARE_QUICK_ADD_STORAGE_KEY = 'aim.prepare.quickAddEnabled';
+const PREPARE_QUICK_ADD_STORAGE_KEY = 'showbase.prepare.quickAddEnabled';
 
 function getPrepareQuickAddEnabled() {
   try {
@@ -3774,7 +3775,7 @@ async function deleteEventFile(eventId, filename) {
 function normalisePdfSettings(settings = {}) {
   return {
     footerText: typeof settings.footerText === 'string' ? settings.footerText : DEFAULT_PDF_FOOTER_TEXT,
-    logoUrl: settings.logoUrl || "/api/pdf-settings/logo",
+    logoUrl: settings.logoUrl || "",
     hasCustomLogo: !!settings.hasCustomLogo,
     logoOriginalName: settings.logoOriginalName || "",
     companyName: settings.companyName || "",
@@ -3800,7 +3801,7 @@ function normalisePdfSettings(settings = {}) {
 }
 
 function getPdfLogoUrl() {
-  return (pdfSettings && pdfSettings.logoUrl) || "/api/pdf-settings/logo";
+  return (pdfSettings && pdfSettings.logoUrl) || "";
 }
 
 function getPdfFooterText() {
@@ -3813,6 +3814,12 @@ function renderPdfFooterHtml() {
   const text = getPdfFooterText();
   if (!text) return '';
   return text.split(/\r?\n/).map(line => escapeHtml(line)).join('<br>');
+}
+
+function renderPdfLogoRowHtml(className = 'logo-row') {
+  const logoUrl = getPdfLogoUrl();
+  if (!logoUrl) return '';
+  return `<div class="${escapeHtmlAttr(className)}"><img src="${escapeHtmlAttr(logoUrl)}" alt="Company Logo"></div>`;
 }
 
 function pdfMmToPx(mm) {
@@ -3849,13 +3856,19 @@ function pdfFooterReserveMm(pageConfig, footerHeightPx) {
 function applyPdfSettingsToApp() {
   const logo = document.getElementById('company-logo');
   if (logo) {
-    logo.src = getPdfLogoUrl();
-    logo.style.display = '';
+    const logoUrl = getPdfLogoUrl();
+    if (logoUrl) {
+      logo.src = logoUrl;
+      logo.style.display = '';
+    } else {
+      logo.removeAttribute('src');
+      logo.style.display = 'none';
+    }
   }
 }
 
 async function loadPdfSettings(force = false) {
-  if (!force && pdfSettings && pdfSettings.logoUrl) {
+  if (!force && pdfSettingsLoaded) {
     return pdfSettings;
   }
 
@@ -3866,6 +3879,7 @@ async function loadPdfSettings(force = false) {
     console.warn('PDF settings not loaded:', error);
     pdfSettings = normalisePdfSettings(pdfSettings);
   }
+  pdfSettingsLoaded = true;
 
   applyPdfSettingsToApp();
   renderPdfSettingsForm();
@@ -3944,11 +3958,12 @@ function ensurePdfSettingsSection() {
           <h3>Company logo</h3>
           <div class="company-logo-dropzone">
             <img id="pdfSettingsLogoPreview" alt="Company logo">
+            <span id="pdfSettingsLogoPlaceholder">No logo uploaded</span>
           </div>
           <input id="pdfSettingsLogoInput" class="form-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif">
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
             <button type="button" class="btn btn-primary" onclick="uploadPdfSettingsLogo()">Upload Logo</button>
-            <button type="button" class="btn btn-secondary" onclick="resetPdfSettingsLogo()">Reset</button>
+            <button type="button" class="btn btn-secondary" onclick="resetPdfSettingsLogo()">Remove Logo</button>
           </div>
           <div id="pdfSettingsLogoName" style="font-size:12px;color:#64748b;margin-top:8px;"></div>
         </section>
@@ -3984,7 +3999,7 @@ function ensurePdfSettingsSection() {
               <label class="form-group company-details-wide"><span class="form-label">PDF footer</span><textarea id="pdfSettingsFooterText" class="form-input" rows="4" maxlength="2000"></textarea></label>
             </div>
             <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:14px;">
-              <button type="button" class="btn btn-secondary" onclick="resetPdfSettingsFooter()">Reset Footer</button>
+              <button type="button" class="btn btn-secondary" onclick="resetPdfSettingsFooter()">Clear Footer</button>
               <button type="button" class="btn btn-primary" onclick="saveCompanyDetails()">Save Company Details</button>
             </div>
           </section>
@@ -3998,17 +4013,29 @@ function ensurePdfSettingsSection() {
 
 function renderPdfSettingsForm() {
   const logoPreview = document.getElementById('pdfSettingsLogoPreview');
+  const logoPlaceholder = document.getElementById('pdfSettingsLogoPlaceholder');
   const logoName = document.getElementById('pdfSettingsLogoName');
   const footerText = document.getElementById('pdfSettingsFooterText');
 
   if (logoPreview) {
-    logoPreview.src = getPdfLogoUrl();
+    const logoUrl = getPdfLogoUrl();
+    if (logoUrl) {
+      logoPreview.src = logoUrl;
+      logoPreview.hidden = false;
+    } else {
+      logoPreview.removeAttribute('src');
+      logoPreview.hidden = true;
+    }
+  }
+
+  if (logoPlaceholder) {
+    logoPlaceholder.hidden = !!getPdfLogoUrl();
   }
 
   if (logoName) {
     logoName.textContent = pdfSettings.hasCustomLogo && pdfSettings.logoOriginalName
       ? pdfSettings.logoOriginalName
-      : 'Default logo';
+      : 'No logo uploaded';
   }
 
   if (footerText && footerText.value !== getPdfFooterText()) {
@@ -4110,16 +4137,16 @@ async function resetPdfSettingsLogo() {
     const result = await response.json();
 
     if (!response.ok) {
-      throw new Error(result.error || 'Failed to reset logo');
+      throw new Error(result.error || 'Failed to remove logo');
     }
 
     pdfSettings = normalisePdfSettings(result.data || {});
     applyPdfSettingsToApp();
     renderPdfSettingsForm();
-    showNotification('success', 'PDF logo reset');
+    showNotification('success', 'PDF logo removed');
   } catch (error) {
-    console.error('PDF logo reset failed:', error);
-    showNotification('error', error.message || 'Failed to reset logo');
+    console.error('PDF logo removal failed:', error);
+    showNotification('error', error.message || 'Failed to remove logo');
   }
 }
 
@@ -4599,13 +4626,14 @@ function ensureCompanyBrandingPromptModal() {
       </div>
       <div class="modal-body">
         <p style="margin-bottom:16px;color:#495057;">
-          Set the logo and footer for <strong id="companyBrandingName"></strong>. The AVPL defaults are already filled in.
+          Add a logo and footer for <strong id="companyBrandingName"></strong>, or leave them blank for now.
         </p>
         <div style="display:grid;grid-template-columns:minmax(220px,280px) 1fr;gap:18px;align-items:start;">
           <div class="form-group">
             <label class="form-label" for="companyBrandingLogoInput">Logo</label>
             <div style="border:1px solid #e9ecef;border-radius:8px;padding:16px;background:#fff;min-height:110px;display:flex;align-items:center;justify-content:center;margin-bottom:10px;">
               <img id="companyBrandingLogoPreview" alt="Company Logo" style="max-width:220px;max-height:80px;object-fit:contain;">
+              <span id="companyBrandingLogoPlaceholder" style="color:#64748b;font-size:12px;font-weight:700;">No logo uploaded</span>
             </div>
             <input id="companyBrandingLogoInput" class="form-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif">
           </div>
@@ -4616,7 +4644,7 @@ function ensureCompanyBrandingPromptModal() {
         </div>
       </div>
       <div class="modal-footer modal-actions">
-        <button type="button" class="btn btn-secondary" onclick="completeCompanyBrandingSetup(true)">Use Defaults</button>
+        <button type="button" class="btn btn-secondary" onclick="completeCompanyBrandingSetup(true)">Skip for Now</button>
         <button type="button" class="btn btn-primary" onclick="completeCompanyBrandingSetup(false)">Save Branding</button>
       </div>
     </div>
@@ -4633,11 +4661,22 @@ async function showCompanyBrandingPromptIfNeeded() {
 
   const name = document.getElementById('companyBrandingName');
   const preview = document.getElementById('companyBrandingLogoPreview');
+  const placeholder = document.getElementById('companyBrandingLogoPlaceholder');
   const footer = document.getElementById('companyBrandingFooterText');
   const fileInput = document.getElementById('companyBrandingLogoInput');
+  const logoUrl = getPdfLogoUrl();
 
   if (name) name.textContent = currentUser.company.name || currentUser.company.code || 'this company';
-  if (preview) preview.src = getPdfLogoUrl();
+  if (preview) {
+    if (logoUrl) {
+      preview.src = logoUrl;
+      preview.hidden = false;
+    } else {
+      preview.removeAttribute('src');
+      preview.hidden = true;
+    }
+  }
+  if (placeholder) placeholder.hidden = !!logoUrl;
   if (footer) footer.value = getPdfFooterText();
   if (fileInput) fileInput.value = '';
 
@@ -10830,12 +10869,12 @@ function maintenanceReportFilterSummary(rows) {
 
 function buildMaintenanceReportPdfPages(rows, context) {
   const safe = value => escapeHtml(String(value ?? ''));
-  const logoUrl = escapeHtmlAttr(getPdfLogoUrl());
+  const logoRowHtml = renderPdfLogoRowHtml();
   const footerHtml = renderPdfFooterHtml();
   const typeLegendHtml = maintenanceReportTypeLegendHtml();
 
   const headerHtml = `
-    <div class="logo-row"><img src="${logoUrl}" alt="Company Logo"></div>
+    ${logoRowHtml}
     <div class="header">
       <div class="header-left">
         GENERATED BY:<br>
@@ -24414,10 +24453,10 @@ function packingListRowRecords(snapshot) {
 
 function buildPackingListPdfPages(event, snapshot, context) {
   const safe = value => escapeHtml(String(value ?? ''));
-  const logoUrl = escapeHtmlAttr(getPdfLogoUrl());
+  const logoRowHtml = renderPdfLogoRowHtml();
   const footerHtml = renderPdfFooterHtml();
   const headerHtml = `
-    <div class="logo-row"><img src="${logoUrl}" alt="Company Logo"></div>
+    ${logoRowHtml}
     <div class="header">
       <div class="header-left">
         EVENT:<br>
@@ -24923,9 +24962,17 @@ function generatePdfDO(data) {
             margin-bottom: 2px;
         }
         
-        .logo {
-            height: 60px;
+        .do-logo-row {
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 7px;
+            height: 39px;
+        }
+
+        .do-logo-row img {
+            height: 39px;
             width: auto;
+            object-fit: contain;
         }
         
         .delivery-order-title {
@@ -25269,7 +25316,7 @@ function generatePdfDO(data) {
 
 function generatePagesContent(data, formattedDate) {
     const departments = groupItemsByDepartment(data.event);
-    const logoUrl = escapeHtmlAttr(getPdfLogoUrl());
+    const logoRowHtml = renderPdfLogoRowHtml('do-logo-row');
     const footerHtml = renderPdfFooterHtml();
 
     // A4 is 210mm x 297mm.
@@ -25346,6 +25393,12 @@ function generatePagesContent(data, formattedDate) {
                 justify-content: flex-end;
                 margin-bottom: 7px;
                 height: 39px;
+            }
+
+            #__doMeasureBox .do-logo-row img {
+                height: 39px;
+                width: auto;
+                object-fit: contain;
             }
 
             #__doMeasureBox .header {
@@ -25458,7 +25511,7 @@ function generatePagesContent(data, formattedDate) {
         </style>
 
         <div id="__doBaseMeasure">
-            <div class="do-logo-row"></div>
+            ${logoRowHtml}
 
             <div class="header">
                 <div class="header-left">
@@ -25664,9 +25717,7 @@ function generatePagesContent(data, formattedDate) {
 
         pagesHtml += `
             <div class="page">
-                <div style="display:flex;justify-content:flex-end;margin-bottom:7px;">
-                    <img src="${logoUrl}" alt="Company Logo" style="height:39px;width:auto;object-fit:contain">
-                </div>
+                ${logoRowHtml}
 
                 <div class="header">
                     <div class="header-left">
@@ -25804,9 +25855,15 @@ function generateExcelDO(data) {
     excelData.push([`Other Comments: ${data.additionalComments || ''}`, 'Received in good order & condition']);
     excelData.push([]);
     excelData.push(["Company's Stamp & Signature"]);
-    excelData.push([]);
-    excelData.push(['AVEC VISION PRIVATE LIMITED']);
-    excelData.push(['25 KAKI BUKIT ROAD 4 #07-55 SYNERGY@KB SINGAPORE 417800 TEL 65.6747.5201 CO REG 202122775G']);
+    const companyFooterLines = [
+        pdfSettings.companyName,
+        pdfSettings.billingAddress,
+        [pdfSettings.phone, pdfSettings.email, pdfSettings.website].filter(Boolean).join(' | ')
+    ].filter(Boolean);
+    if (companyFooterLines.length) {
+        excelData.push([]);
+        companyFooterLines.forEach(line => excelData.push([line]));
+    }
     
     // Create workbook
     const wb = XLSX.utils.book_new();
@@ -29265,13 +29322,13 @@ function inventoryPdfTableHtml(filteredAssets, filters, showIndividual) {
 
 function buildInventoryPdfPages(filteredAssets, filters, context) {
   const safe = value => escapeHtml(String(value ?? ''));
-  const logoUrl = escapeHtmlAttr(getPdfLogoUrl());
+  const logoRowHtml = renderPdfLogoRowHtml();
   const footerHtml = renderPdfFooterHtml();
   const showIndividual = !!context.showIndividual;
   const pageConfig = inventoryPdfPageConfig(showIndividual);
 
   const headerHtml = `
-    <div class="logo-row"><img src="${logoUrl}" alt="Company Logo"></div>
+    ${logoRowHtml}
     <div class="header">
       <div class="header-left">
         GENERATED BY:<br>
@@ -30907,14 +30964,14 @@ function transferPdfRowHtml(group, rowNumber) {
 
 function buildTransferPdfPages(groups, context) {
   const safe = (value) => escapeHtml(String(value ?? ''));
-  const logoUrl = escapeHtmlAttr(getPdfLogoUrl());
+  const logoRowHtml = renderPdfLogoRowHtml();
   const footerHtml = renderPdfFooterHtml();
 
   const fromDate = context.fromDateRange ? ` | ${safe(context.fromDateRange)}` : '';
   const toDate = context.toDateRange ? ` | ${safe(context.toDateRange)}` : '';
 
   const headerHtml = `
-    <div class="logo-row"><img src="${logoUrl}" alt="Company Logo"></div>
+    ${logoRowHtml}
     <div class="header">
       <div class="header-left">
         FROM EVENT:<br>

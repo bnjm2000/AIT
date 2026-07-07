@@ -54,7 +54,7 @@ def _pool_for(dsn):
                 max_size=max(2, int(os.environ.get('DATABASE_POOL_SIZE', '10'))),
                 timeout=10,
                 open=True,
-                name='aim-postgresql',
+                name='showbase-postgresql',
             )
             _POOLS[dsn] = pool
         return pool

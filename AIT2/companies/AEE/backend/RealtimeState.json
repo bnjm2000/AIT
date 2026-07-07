@@ -1,1 +1,1 @@
-{"id": "1783353740956-44-1506338f", "topic": "inventory-data", "details": {}, "actor": "system", "originClientId": "", "timestamp": "2026-07-07T00:02:20"}
+{"id": "1783435243681-67-9f939b30", "topic": "data-changed", "details": {"topics": ["workforce"], "changes": [{"topic": "workforce", "details": {"eventId": 1, "action": "worker-submission-deleted"}}], "path": "/api/worker/submissions/sub_05a613b2cfee2cbf", "method": "DELETE"}, "actor": "system", "originClientId": "", "timestamp": "2026-07-07T22:40:43"}

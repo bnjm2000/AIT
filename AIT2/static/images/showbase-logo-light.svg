@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 226 56" role="img" aria-labelledby="title">
+  <title id="title">Showbase</title>
+  <defs>
+    <linearGradient id="iconBg" x1="6" y1="2" x2="49" y2="53" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#10223a"/>
+      <stop offset="1" stop-color="#0f766e"/>
+    </linearGradient>
+    <linearGradient id="iconMark" x1="14" y1="11" x2="42" y2="44" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#67e8f9"/>
+      <stop offset=".55" stop-color="#5eead4"/>
+      <stop offset="1" stop-color="#f59e0b"/>
+    </linearGradient>
+  </defs>
+  <rect x="1" y="3" width="50" height="50" rx="12" fill="url(#iconBg)"/>
+  <path fill="url(#iconMark)" d="M16.2 16h25.4l-5.7 6.5H20.6c-1.7 0-2.6 2-1.5 3.2L34.6 43h-11L12.2 29.6C7.5 24 11.4 16 16.2 16Z"/>
+  <path fill="#f8fafc" d="M16.1 40h23.5c1.8 0 2.6-2.1 1.4-3.3L25.4 19.3h11l11.5 13.1C53 38.4 48.8 47 40.1 47H10.5l5.6-7Z" opacity=".93"/>
+  <text x="66" y="37" fill="#f8fafc" font-family="Segoe UI, Arial, sans-serif" font-size="28" font-weight="800" letter-spacing="0">Showbase</text>
+  <text x="68" y="49" fill="#b7f3ed" font-family="Segoe UI, Arial, sans-serif" font-size="9" font-weight="700" letter-spacing="2.3">EVENT OPERATIONS</text>
+</svg>

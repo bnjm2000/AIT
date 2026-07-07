@@ -14,13 +14,42 @@ async function loginFetch(url, options = {}) {
   return payload;
 }
 
+function focusAccessControl(control) {
+  if (!control) return;
+  try {
+    control.focus({ preventScroll: true });
+  } catch (error) {
+    control.focus();
+  }
+}
+
+function revealAccessPanel(panel, control) {
+  const compactView = window.matchMedia('(max-width: 820px)').matches;
+  if (!compactView) {
+    focusAccessControl(control);
+    return;
+  }
+
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  requestAnimationFrame(() => {
+    panel.scrollIntoView({
+      block: 'start',
+      inline: 'nearest',
+      behavior: reduceMotion ? 'auto' : 'smooth'
+    });
+    window.setTimeout(() => focusAccessControl(control), reduceMotion ? 0 : 180);
+  });
+}
+
 function selectAccessType(type) {
   const worker = type === 'worker';
+  const panel = loginById(worker ? 'workerPanel' : 'adminPanel');
+  const control = loginById(worker ? 'workerPhone' : 'username');
   loginById('workerChoice').classList.toggle('active', worker);
   loginById('adminChoice').classList.toggle('active', !worker);
   loginById('workerPanel').hidden = !worker;
   loginById('adminPanel').hidden = worker;
-  (worker ? loginById('workerPhone') : loginById('username')).focus();
+  revealAccessPanel(panel, control);
 }
 
 function resetWorkerLookup() {
@@ -45,7 +74,7 @@ function configureCredentialForm(discovery) {
     ? `Welcome, ${discovery.name}. Secure your worker account to continue.`
     : `Welcome back, ${discovery.name}. Enter your PIN or password.`;
   loginById('credentialLabel').textContent = discovery.requiresSetup
-    ? 'Create a 4–8 digit PIN'
+    ? 'Create a 4-8 digit PIN'
     : 'PIN or password';
   loginById('workerCredential').inputMode = discovery.requiresSetup ? 'numeric' : 'text';
   loginById('workerAccessButton').textContent = discovery.requiresSetup
@@ -55,7 +84,7 @@ function configureCredentialForm(discovery) {
 }
 
 function enterWorkerPortal(data) {
-  sessionStorage.setItem('aimWorkerPortal', JSON.stringify(data));
+  sessionStorage.setItem('showbaseWorkerPortal', JSON.stringify(data));
   window.location.href = '/worker';
 }
 
@@ -85,7 +114,7 @@ loginById('workerLookupForm').addEventListener('submit', async event => {
 loginById('credentialTypeChoice').addEventListener('change', () => {
   const type = document.querySelector('[name="credentialType"]:checked').value;
   const pin = type === 'pin';
-  loginById('credentialLabel').textContent = pin ? 'Create a 4–8 digit PIN' : 'Create a password (minimum 8 characters)';
+  loginById('credentialLabel').textContent = pin ? 'Create a 4-8 digit PIN' : 'Create a password (minimum 8 characters)';
   loginById('confirmationField').querySelector('span').textContent = pin ? 'Confirm PIN' : 'Confirm password';
   loginById('workerCredential').inputMode = pin ? 'numeric' : 'text';
   loginById('workerCredentialConfirmation').inputMode = pin ? 'numeric' : 'text';

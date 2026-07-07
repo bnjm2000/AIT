@@ -3,28 +3,32 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#4f46e5" />
-    <title>AIM Worker Portal</title>
+    <meta name="theme-color" content="#0f766e" />
+    <title>Showbase Worker Portal</title>
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='images/showbase-icon.svg') }}" />
     <link rel="stylesheet" href="{{ url_for('static', filename='css/worker.css', v=worker_css_version) }}" />
   </head>
   <body>
     <div class="worker-app">
       <aside class="worker-sidebar">
-        <div class="portal-brand"><strong>AIM</strong><span>WORKER PORTAL</span></div>
+        <div class="portal-brand">
+          <img src="{{ url_for('static', filename='images/showbase-logo.svg') }}" alt="Showbase" />
+          <span>WORKER PORTAL</span>
+        </div>
         <div class="worker-identity">
           <div class="worker-avatar" id="workerAvatar">FW</div>
           <strong id="workerName">Worker</strong>
           <span id="workerPhone"></span>
-          <em>✓ Verified</em>
+          <em>Verified</em>
         </div>
         <nav class="worker-nav" aria-label="Worker portal">
-          <button class="active" type="button" data-worker-view="events"><span>▣</span> My Events</button>
-          <button type="button" data-worker-view="statistics"><span>▥</span> Statistics</button>
-          <button type="button" data-worker-view="profile"><span>♙</span> Profile</button>
+          <button class="active" type="button" data-worker-view="events"><span>EV</span> My Events</button>
+          <button type="button" data-worker-view="statistics"><span>ST</span> Statistics</button>
+          <button type="button" data-worker-view="profile"><span>PR</span> Profile</button>
           <button type="button" data-worker-view="help"><span>?</span> Help</button>
         </nav>
         <section class="sidebar-help">
-          <strong>ⓘ &nbsp; Need help?</strong>
+          <strong>Need help?</strong>
           <p>Contact your event administrator if a submission needs attention.</p>
         </section>
         <button class="worker-signout" id="workerSignout" type="button">Sign out</button>
@@ -32,14 +36,17 @@
 
       <main class="worker-main">
         <header class="mobile-header">
-          <div class="portal-brand"><strong>AIM</strong><span>WORKER PORTAL</span></div>
-          <button id="mobileMenuButton" type="button" aria-label="Open navigation">☰</button>
+          <div class="portal-brand">
+            <img src="{{ url_for('static', filename='images/showbase-logo.svg') }}" alt="Showbase" />
+            <span>WORKER PORTAL</span>
+          </div>
+          <button id="mobileMenuButton" type="button" aria-label="Open navigation">Menu</button>
         </header>
 
         <section class="worker-view active" id="eventsView">
           <header class="view-heading">
             <div><h1>My Events &amp; Submissions</h1>
-              <p>Upload invoices and claims for your assigned events. Track approval and payment status.</p></div>
+              <p>Upload invoices and claims for assigned events. Track approval and payment status.</p></div>
             <label class="company-filter"><span class="sr-only">Filter by company</span><select id="companyFilter"></select></label>
           </header>
           <div class="event-tabs">
@@ -49,19 +56,19 @@
           <div class="portal-alert" id="portalMessage" role="status" aria-live="polite"></div>
           <div id="companyEvents"></div>
           <section class="workflow-card">
-            <h2>MY WORKFLOW</h2>
+            <h2>My Workflow</h2>
             <div class="workflow-steps">
-              <div class="workflow-step step-upload"><b>↥</b><strong>1. Upload</strong><span>Add invoice and claim files.</span></div>
-              <i>⟶</i>
-              <div class="workflow-step step-submitted"><b>➤</b><strong>2. Submitted</strong><span>Sent for admin review.</span></div>
-              <i>⟶</i>
-              <div class="workflow-step step-review"><b>♙</b><strong>3. Admin Review</strong><span>Approved or denied.</span></div>
-              <i>⟶</i>
-              <div class="workflow-step step-paid"><b>▣</b><strong>4. Paid</strong><span>Admin marks payment paid.</span></div>
-              <i>⟶</i>
-              <div class="workflow-step step-confirm"><b>✓</b><strong>5. Confirm</strong><span>Confirm payment receipt.</span></div>
-              <i>⟶</i>
-              <div class="workflow-step step-past"><b>▤</b><strong>6. Past Events</strong><span>Completed event is archived.</span></div>
+              <div class="workflow-step step-upload"><b>01</b><strong>Upload</strong><span>Add invoice and claim files.</span></div>
+              <i></i>
+              <div class="workflow-step step-submitted"><b>02</b><strong>Submitted</strong><span>Sent for admin review.</span></div>
+              <i></i>
+              <div class="workflow-step step-review"><b>03</b><strong>Admin Review</strong><span>Approved or denied.</span></div>
+              <i></i>
+              <div class="workflow-step step-paid"><b>04</b><strong>Paid</strong><span>Admin marks payment paid.</span></div>
+              <i></i>
+              <div class="workflow-step step-confirm"><b>05</b><strong>Confirm</strong><span>Confirm payment receipt.</span></div>
+              <i></i>
+              <div class="workflow-step step-past"><b>06</b><strong>Past Events</strong><span>Completed event is archived.</span></div>
             </div>
           </section>
         </section>
@@ -85,7 +92,7 @@
               <label><span>Current PIN or password *</span><input id="profileCurrentPassword" type="password" required /></label>
               <label><span>New PIN or password</span><input id="profileNewPassword" type="password" /></label>
               <label><span>Confirm new PIN or password</span><input id="profileNewPasswordConfirmation" type="password" /></label>
-              <label><span>Credential type</span><select id="profileCredentialType"><option value="pin">PIN (4–8 digits)</option><option value="password">Password (minimum 8 characters)</option></select></label>
+              <label><span>Credential type</span><select id="profileCredentialType"><option value="pin">PIN (4-8 digits)</option><option value="password">Password (minimum 8 characters)</option></select></label>
             </div>
             <button class="primary-button" type="submit">Save Profile</button>
             <div class="form-message" id="profileMessage"></div>

@@ -63,6 +63,10 @@ function financeCurrencyNumber(value, fallback = 0) {
   return financeNumber(cleaned, fallback);
 }
 
+function financePercent(value, fallback = 0) {
+  return Math.max(-9999, Math.min(100, financeNumber(value, fallback)));
+}
+
 function financeLineTotal(line) {
   const gross = financeNumber(line.quantity, 1) * financeNumber(line.days, 1) * financeNumber(line.unitPrice);
   return Math.round(gross * (1 - financeNumber(line.discountPercent) / 100) * 100) / 100;
@@ -850,8 +854,8 @@ function financeRenderLineGroups() {
           <td><input class="finance-line-input" type="number" min="0" step="0.25" value="${financeEscapeAttr(line.quantity)}" aria-label="Quantity" onchange="financeLineChange(${index},'quantity',this.value)"></td>
           <td>${financeUomControl(line, index)}</td>
           <td><div class="finance-money-input"><span>$</span><input class="finance-line-input" type="number" min="0" step="0.01" value="${financeEscapeAttr(line.unitPrice)}" aria-label="Unit price" onchange="financeLineChange(${index},'unitPrice',this.value)"></div></td>
-          <td><input class="finance-line-input" type="number" min="0" max="100" step="0.1" value="${financeEscapeAttr(line.discountPercent || 0)}" aria-label="Discount percentage" onchange="financeLineChange(${index},'discountPercent',this.value)"></td>
-          <td style="text-align:right;font-weight:700;">${financeEscape(financeMoney(financeLineTotal(line)))}</td>
+          <td><input class="finance-line-input" type="number" min="-9999" max="100" step="0.1" value="${financeEscapeAttr(line.discountPercent || 0)}" aria-label="Discount percentage" onchange="financeLineChange(${index},'discountPercent',this.value)"></td>
+          <td><div class="finance-money-input finance-line-total-input"><span>$</span><input class="finance-line-input" type="number" min="0" step="0.01" value="${financeEscapeAttr(financeLineTotal(line).toFixed(2))}" aria-label="Line total" onchange="financeSetLineTotal(${index},this.value)"></div></td>
           <td><button type="button" class="finance-delete-line" title="Delete line" onclick="financeDeleteLine(${index})">×</button></td>
         </tr>
       `;
@@ -1119,7 +1123,13 @@ function financeRenderEditor() {
               <button type="button" class="finance-lock-button ${document.totalLocked ? 'locked' : ''}" title="${document.totalLocked ? 'Unlock pre-GST total' : 'Lock pre-GST total'}" onclick="financeToggleTotalLock()"> ${document.totalLocked ? '🔒' : '🔓'} </button>
             </div>
           </div>
-          <div class="finance-summary-row"><span>${financeEscape(pdfSettings?.taxLabel || 'GST')} (${financeNumber(document.taxRate)}%)</span><strong>${financeEscape(financeMoney(totals.tax))}</strong></div>
+          <div class="finance-summary-row finance-tax-row">
+            <span>
+              ${financeEscape(pdfSettings?.taxLabel || 'GST')}
+              <input class="finance-tax-rate-input" type="number" min="0" max="100" step="0.01" value="${financeEscapeAttr(financeNumber(document.taxRate).toFixed(2).replace(/\.?0+$/, ''))}" aria-label="GST percentage" onchange="financeSetTaxRate(this.value)">%
+            </span>
+            <div class="finance-money-input finance-tax-amount-input"><span>$</span><input type="number" min="0" step="0.01" value="${financeEscapeAttr(totals.tax.toFixed(2))}" aria-label="GST amount" onchange="financeSetTaxAmount(this.value)"></div>
+          </div>
           <div class="finance-summary-row finance-summary-total"><span>Total</span><strong>${financeEscape(financeMoney(totals.total))}</strong></div>
         </section>
         <section class="finance-card finance-section">
@@ -1162,9 +1172,29 @@ function financeBackToList() {
 function financeFieldChange(field, value) {
   if (!financeState.current) return;
   financeState.current[field] = ['taxRate', 'validityDays'].includes(field) ? financeNumber(value) : value;
+  if (field === 'taxRate') financeState.current.taxRate = Math.max(0, Math.min(100, financeNumber(value, 0)));
   if (field === 'validityDays') financeState.current.validityDays = Math.max(1, Math.min(365, financeNumber(value, 30)));
   if (field === 'projectName') financeState.current.title = value;
   financeQueueSave();
+}
+
+function financeSetTaxRate(value) {
+  if (!financeState.current) return;
+  financeState.current.taxRate = Math.max(0, Math.min(100, financeNumber(value, 0)));
+  financeQueueSave();
+  financeRenderEditor();
+}
+
+function financeSetTaxAmount(value) {
+  if (!financeState.current) return;
+  const amount = Math.max(0, financeCurrencyNumber(value));
+  const totals = financeTotals();
+  const base = Math.max(0, financeNumber(totals.netSubtotal, 0));
+  financeState.current.taxRate = base > 0
+    ? Math.round(Math.max(0, Math.min(100, amount / base * 100)) * 10000) / 10000
+    : 0;
+  financeQueueSave();
+  financeRenderEditor();
 }
 
 function financeScheduleChange(field, value) {
@@ -1189,7 +1219,30 @@ function financeLineChange(index, field, value) {
   const line = financeState.current?.lineItems?.[index];
   if (!line) return;
   line[field] = ['days', 'quantity', 'unitPrice', 'discountPercent'].includes(field) ? financeNumber(value) : value;
+  if (field === 'discountPercent') line.discountPercent = financePercent(value);
   if (field === 'department') line.departmentCode = '';
+  line.total = financeLineTotal(line);
+  financeSyncDocumentDepartments();
+  financeQueueSave();
+  financeRenderEditor();
+}
+
+function financeSetLineTotal(index, value) {
+  const line = financeState.current?.lineItems?.[index];
+  if (!line) return;
+  const target = Math.max(0, financeCurrencyNumber(value));
+  const quantity = financeNumber(line.quantity, 0);
+  const days = financeNumber(line.days, 0);
+  const unitPrice = financeNumber(line.unitPrice, 0);
+  const gross = quantity * days * unitPrice;
+  if (gross > 0) {
+    line.discountPercent = Math.round(financePercent((1 - target / gross) * 100) * 10000) / 10000;
+  } else if (quantity > 0 && days > 0) {
+    line.unitPrice = Math.round((target / quantity / days) * 100) / 100;
+    line.discountPercent = 0;
+  } else {
+    line.discountPercent = 0;
+  }
   line.total = financeLineTotal(line);
   financeSyncDocumentDepartments();
   financeQueueSave();

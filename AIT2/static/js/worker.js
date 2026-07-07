@@ -37,7 +37,7 @@ function companyLogo(company) {
 }
 
 function formatDate(value, withTime = false) {
-  if (!value) return '—';
+  if (!value) return '-';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return String(value);
   return date.toLocaleString('en-SG', {
@@ -98,7 +98,7 @@ async function fetchJson(url, options = {}) {
 }
 
 function savePortalSession() {
-  sessionStorage.setItem('aimWorkerPortal', JSON.stringify(workerPortalData));
+  sessionStorage.setItem('showbaseWorkerPortal', JSON.stringify(workerPortalData));
 }
 
 function replaceCompany(company) {
@@ -146,9 +146,9 @@ function submissionActions(company, event, row) {
   const remove = row.canEdit
     ? `<button class="delete-upload" type="button" title="Remove and upload again"
         data-delete-submission="${escapeHtml(row.id)}" data-company="${escapeHtml(company.code)}"
-        data-token="${escapeHtml(token)}">🗑</button>`
+        data-token="${escapeHtml(token)}">Remove</button>`
     : '';
-  return received || remove || '<span class="locked-action">—</span>';
+  return received || remove || '<span class="locked-action">-</span>';
 }
 
 function invoiceRows(company, event, rows) {
@@ -157,10 +157,10 @@ function invoiceRows(company, event, rows) {
     <div class="submission-head"><span>File Name</span><span>Uploaded On</span><span>Amount (SGD)</span><span>Status</span><span>Action</span></div>
     ${rows.map(row => `<div class="submission-line">
       ${row.clientOnly
-        ? `<span class="uploading-file-name">▣ ${escapeHtml(row.originalName || 'Invoice PDF')}</span>`
-        : `<a href="${escapeHtml(row.fileUrl)}" target="_blank">▣ ${escapeHtml(row.originalName || 'Invoice PDF')}</a>`}
+        ? `<span class="uploading-file-name">${escapeHtml(row.originalName || 'Invoice PDF')}</span>`
+        : `<a href="${escapeHtml(row.fileUrl)}" target="_blank">${escapeHtml(row.originalName || 'Invoice PDF')}</a>`}
       <span>${escapeHtml(formatDate(row.submittedAt))}</span>
-      <strong>${row.amount == null ? '—' : Number(row.amount).toLocaleString('en-SG', { minimumFractionDigits: 2 })}</strong>
+      <strong>${row.amount == null ? '-' : Number(row.amount).toLocaleString('en-SG', { minimumFractionDigits: 2 })}</strong>
       <span>${submissionStatusBadge(row)}</span>
       <span>${submissionActions(company, event, row)}</span>
       ${submissionDenialReason(row)}
@@ -175,14 +175,14 @@ function claimRows(company, event, rows) {
     ${rows.map(row => `<div class="submission-line ${row.needsDetails ? 'claim-details-required' : ''}"
       ${row.needsDetails ? `data-claim-details="${escapeHtml(row.id)}" data-company="${escapeHtml(company.code)}"` : ''}>
       ${row.clientOnly
-        ? `<span class="uploading-file-name">▣ ${escapeHtml(row.originalName || 'Claim file')}</span>`
+        ? `<span class="uploading-file-name">${escapeHtml(row.originalName || 'Claim file')}</span>`
         : row.needsDetails
-        ? `<button class="claim-detail-link" type="button">▣ ${escapeHtml(row.originalName || 'Claim file')}</button>`
-        : `<a href="${escapeHtml(row.fileUrl)}" target="_blank">▣ ${escapeHtml(row.originalName || 'Claim file')}</a>`}
-      <span>${escapeHtml(row.category || '—')}</span>
-      <span>${escapeHtml(row.claimDate ? formatDate(row.claimDate) : '—')}</span>
+        ? `<button class="claim-detail-link" type="button">${escapeHtml(row.originalName || 'Claim file')}</button>`
+        : `<a href="${escapeHtml(row.fileUrl)}" target="_blank">${escapeHtml(row.originalName || 'Claim file')}</a>`}
+      <span>${escapeHtml(row.category || '-')}</span>
+      <span>${escapeHtml(row.claimDate ? formatDate(row.claimDate) : '-')}</span>
       <span>${escapeHtml(formatDate(row.submittedAt))}</span>
-      <strong>${row.amount == null ? '—' : Number(row.amount).toLocaleString('en-SG', { minimumFractionDigits: 2 })}</strong>
+      <strong>${row.amount == null ? '-' : Number(row.amount).toLocaleString('en-SG', { minimumFractionDigits: 2 })}</strong>
       <span>${submissionStatusBadge(row)}</span>
       <span>${submissionActions(company, event, row)}</span>
       ${submissionDenialReason(row)}
@@ -199,7 +199,7 @@ function dropZone(company, event, kind) {
   return `<label class="event-dropzone" data-drop-kind="${kind}" data-company="${escapeHtml(company.code)}"
     data-event="${event.id}" data-subject="${escapeHtml(event.subjectId || '')}">
     <input type="file" accept="${accept}" multiple hidden>
-    <strong>↥ &nbsp; Drag &amp; drop or choose ${kind === 'invoice' ? 'invoice files' : 'claim files'}</strong>
+    <strong>Drag &amp; drop or choose ${kind === 'invoice' ? 'invoice files' : 'claim files'}</strong>
     <span>${remaining} upload slot${remaining === 1 ? '' : 's'} available</span>
   </label>`;
 }
@@ -226,12 +226,12 @@ function renderEvent(company, event, open = false) {
       <div class="date-block">${eventDateBlock(event)}</div>
       <div class="event-name"><strong>${escapeHtml(event.name)}</strong>
         ${vendorEvent ? `<small class="event-subject-label">For ${escapeHtml(event.subjectName)}</small>` : ''}
-        <span>⌖ &nbsp; ${escapeHtml(event.location || 'Location TBC')}</span></div>
+        <span>Location: ${escapeHtml(event.location || 'TBC')}</span></div>
       <div class="summary-cell"><span>Role / Dept</span><strong>${escapeHtml(roles || 'Worker')}</strong><small>${escapeHtml(departments)}</small></div>
       <div class="summary-cell"><span>Invoices</span><strong>${invoices.length} / ${event.invoiceLimit}</strong><em class="status-badge ${statusClass(invoiceSummary)}">${invoiceSummary}</em></div>
       <div class="summary-cell"><span>Claims</span><strong>${claims.length} / ${event.claimLimit}</strong><em class="status-badge ${statusClass(claimSummary)}">${claimSummary}</em></div>
       <div class="summary-cell totals"><span>Totals (Submitted)</span><strong>Invoice: &nbsp; ${money(event.invoiceTotal)}</strong><strong>Claims: &nbsp; ${money(event.claimTotal)}</strong></div>
-      <span class="event-chevron">⌄</span>
+      <span class="event-chevron">v</span>
     </summary>
     <div class="event-submissions">
       <section><header><h3>Invoices (${invoices.length} of ${event.invoiceLimit})</h3></header>
@@ -325,7 +325,7 @@ function renderStatistics() {
 function renderPortal() {
   const companies = workerPortalData.companies || [];
   if (!companies.length) {
-    sessionStorage.removeItem('aimWorkerPortal');
+    sessionStorage.removeItem('showbaseWorkerPortal');
     window.location.href = '/login?worker=1';
     return;
   }
@@ -472,7 +472,7 @@ function openClaimModal(company, event, row) {
   byId('claimToken').value = event.token || company.token;
   byId('claimEventId').value = event.id;
   byId('claimSubmissionId').value = row.id;
-  byId('claimContext').textContent = `${company.name} · ${event.name} · ${row.originalName}`;
+  byId('claimContext').textContent = `${company.name} - ${event.name} - ${row.originalName}`;
   byId('claimAmount').value = row.amount == null ? '' : Number(row.amount).toFixed(2);
   byId('claimDate').value = row.claimDate || '';
   const normalizedCategory = row.category === 'Cab' ? 'Transport' : row.category;
@@ -598,7 +598,7 @@ async function refreshCompany(company) {
     return response.data;
   } catch (error) {
     if (error.status === 401) {
-      sessionStorage.removeItem('aimWorkerPortal');
+      sessionStorage.removeItem('showbaseWorkerPortal');
       window.location.replace('/login');
     }
     return company;
@@ -649,7 +649,7 @@ byId('statisticsMonth').addEventListener('change', renderStatistics);
 byId('statisticsYear').addEventListener('change', renderStatistics);
 byId('mobileMenuButton').addEventListener('click', () => document.body.classList.toggle('mobile-nav-open'));
 byId('workerSignout').addEventListener('click', () => {
-  sessionStorage.removeItem('aimWorkerPortal');
+  sessionStorage.removeItem('showbaseWorkerPortal');
   window.location.href = '/login';
 });
 document.querySelectorAll('[data-close-claim]').forEach(button => button.addEventListener('click', closeClaimModal));
@@ -720,7 +720,8 @@ byId('workerProfileForm').addEventListener('submit', async event => {
 });
 
 try {
-  workerPortalData = JSON.parse(sessionStorage.getItem('aimWorkerPortal') || '{"companies":[]}');
+  const storedPortal = sessionStorage.getItem('showbaseWorkerPortal');
+  workerPortalData = JSON.parse(storedPortal || '{"companies":[]}');
 } catch (_error) {
   workerPortalData = { companies: [] };
 }

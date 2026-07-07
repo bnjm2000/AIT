@@ -474,7 +474,7 @@
       "title": "SMU Event",
       "reference": "",
       "eventReference": "",
-      "salesperson": "",
+      "salesperson": "Benjamin Ng",
       "paymentTerms": "30 Days",
       "eventLocation": "",
       "setupDate": "",
@@ -504,7 +504,7 @@
           "quantity": 1.0,
           "uom": "units",
           "unitPrice": 1200.0,
-          "discountPercent": 0,
+          "discountPercent": 0.0,
           "total": 1800.0,
           "isCustom": false
         },
@@ -521,7 +521,7 @@
           "quantity": 4.0,
           "uom": "units",
           "unitPrice": 170.0,
-          "discountPercent": 0,
+          "discountPercent": 0.0,
           "total": 1020.0,
           "isCustom": false
         },
@@ -538,7 +538,7 @@
           "quantity": 2.0,
           "uom": "units",
           "unitPrice": 250.0,
-          "discountPercent": 0,
+          "discountPercent": 0.0,
           "total": 750.0,
           "isCustom": false
         },
@@ -555,7 +555,7 @@
           "quantity": 2.0,
           "uom": "units",
           "unitPrice": 350.0,
-          "discountPercent": 0,
+          "discountPercent": 0.0,
           "total": 1050.0,
           "isCustom": false
         },
@@ -572,7 +572,7 @@
           "quantity": 1.0,
           "uom": "units",
           "unitPrice": 200.0,
-          "discountPercent": 0,
+          "discountPercent": 0.0,
           "total": 300.0,
           "isCustom": false
         },
@@ -589,7 +589,7 @@
           "quantity": 1.0,
           "uom": "units",
           "unitPrice": 400.0,
-          "discountPercent": 0,
+          "discountPercent": 0.0,
           "total": 600.0,
           "isCustom": false
         },
@@ -606,7 +606,7 @@
           "quantity": 6.0,
           "uom": "units",
           "unitPrice": 50.0,
-          "discountPercent": 0,
+          "discountPercent": 0.0,
           "total": 450.0,
           "isCustom": false
         },
@@ -623,7 +623,7 @@
           "quantity": 2.0,
           "uom": "units",
           "unitPrice": 150.0,
-          "discountPercent": 0,
+          "discountPercent": 0.0,
           "total": 450.0,
           "isCustom": false
         },
@@ -640,7 +640,7 @@
           "quantity": 8.0,
           "uom": "units",
           "unitPrice": 150.0,
-          "discountPercent": 0,
+          "discountPercent": 0.0,
           "total": 1800.0,
           "isCustom": false
         },
@@ -657,7 +657,7 @@
           "quantity": 1.0,
           "uom": "units",
           "unitPrice": 400.0,
-          "discountPercent": 0,
+          "discountPercent": 0.0,
           "total": 600.0,
           "isCustom": false
         },
@@ -674,7 +674,7 @@
           "quantity": 1.0,
           "uom": "units",
           "unitPrice": 450.0,
-          "discountPercent": 0,
+          "discountPercent": 0.0,
           "total": 675.0,
           "isCustom": false
         },
@@ -691,7 +691,7 @@
           "quantity": 1.0,
           "uom": "units",
           "unitPrice": 250.0,
-          "discountPercent": 0,
+          "discountPercent": 0.0,
           "total": 375.0,
           "isCustom": false
         },
@@ -708,7 +708,7 @@
           "quantity": 2.0,
           "uom": "units",
           "unitPrice": 20.0,
-          "discountPercent": 0,
+          "discountPercent": 0.0,
           "total": 60.0,
           "isCustom": false
         },
@@ -725,7 +725,7 @@
           "quantity": 1.0,
           "uom": "units",
           "unitPrice": 50.0,
-          "discountPercent": 0,
+          "discountPercent": 0.0,
           "total": 75.0,
           "isCustom": false
         },
@@ -742,7 +742,7 @@
           "quantity": 1.0,
           "uom": "units",
           "unitPrice": 30.0,
-          "discountPercent": 0,
+          "discountPercent": 0.0,
           "total": 45.0,
           "isCustom": false
         },
@@ -759,7 +759,7 @@
           "quantity": 3.0,
           "uom": "units",
           "unitPrice": 20.0,
-          "discountPercent": 0,
+          "discountPercent": 0.0,
           "total": 90.0,
           "isCustom": false
         },
@@ -776,7 +776,7 @@
           "quantity": 6.0,
           "uom": "units",
           "unitPrice": 50.0,
-          "discountPercent": 0,
+          "discountPercent": 0.0,
           "total": 450.0,
           "isCustom": false
         },
@@ -793,7 +793,7 @@
           "quantity": 3.0,
           "uom": "units",
           "unitPrice": 30.0,
-          "discountPercent": 0,
+          "discountPercent": 0.0,
           "total": 135.0,
           "isCustom": false
         },
@@ -810,7 +810,7 @@
           "quantity": 5.0,
           "uom": "units",
           "unitPrice": 30.0,
-          "discountPercent": 0,
+          "discountPercent": 0.0,
           "total": 225.0,
           "isCustom": false
         },
@@ -827,7 +827,7 @@
           "quantity": 5.0,
           "uom": "units",
           "unitPrice": 60.0,
-          "discountPercent": 0,
+          "discountPercent": 0.0,
           "total": 450.0,
           "isCustom": false
         },
@@ -844,7 +844,7 @@
           "quantity": 1.0,
           "uom": "units",
           "unitPrice": 80.0,
-          "discountPercent": 0,
+          "discountPercent": 0.0,
           "total": 120.0,
           "isCustom": false
         },
@@ -861,7 +861,7 @@
           "quantity": 2.0,
           "uom": "units",
           "unitPrice": 50.0,
-          "discountPercent": 0,
+          "discountPercent": 0.0,
           "total": 150.0,
           "isCustom": false
         },
@@ -878,7 +878,7 @@
           "quantity": 1.0,
           "uom": "units",
           "unitPrice": 850.0,
-          "discountPercent": 0,
+          "discountPercent": 0.0,
           "total": 1275.0,
           "isCustom": false
         },
@@ -895,7 +895,7 @@
           "quantity": 4.0,
           "uom": "units",
           "unitPrice": 80.0,
-          "discountPercent": 0,
+          "discountPercent": 0.0,
           "total": 480.0,
           "isCustom": false
         },
@@ -912,7 +912,7 @@
           "quantity": 6.0,
           "uom": "units",
           "unitPrice": 250.0,
-          "discountPercent": 0,
+          "discountPercent": 0.0,
           "total": 2250.0,
           "isCustom": false
         },
@@ -929,7 +929,7 @@
           "quantity": 2.0,
           "uom": "units",
           "unitPrice": 180.0,
-          "discountPercent": 0,
+          "discountPercent": 0.0,
           "total": 540.0,
           "isCustom": false
         },
@@ -946,7 +946,7 @@
           "quantity": 4.0,
           "uom": "units",
           "unitPrice": 80.0,
-          "discountPercent": 0,
+          "discountPercent": 0.0,
           "total": 480.0,
           "isCustom": false
         },
@@ -963,7 +963,7 @@
           "quantity": 1.0,
           "uom": "units",
           "unitPrice": 150.0,
-          "discountPercent": 0,
+          "discountPercent": 0.0,
           "total": 225.0,
           "isCustom": false
         },
@@ -980,7 +980,7 @@
           "quantity": 2.0,
           "uom": "units",
           "unitPrice": 80.0,
-          "discountPercent": 0,
+          "discountPercent": 0.0,
           "total": 240.0,
           "isCustom": true
         },
@@ -997,7 +997,7 @@
           "quantity": 2.0,
           "uom": "units",
           "unitPrice": 80.0,
-          "discountPercent": 0,
+          "discountPercent": 0.0,
           "total": 240.0,
           "isCustom": false
         },
@@ -1014,7 +1014,7 @@
           "quantity": 2.0,
           "uom": "units",
           "unitPrice": 60.0,
-          "discountPercent": 0,
+          "discountPercent": 0.0,
           "total": 180.0,
           "isCustom": false
         },
@@ -1031,7 +1031,7 @@
           "quantity": 4.0,
           "uom": "units",
           "unitPrice": 40.0,
-          "discountPercent": 0,
+          "discountPercent": 0.0,
           "total": 240.0,
           "isCustom": false
         },
@@ -1048,7 +1048,7 @@
           "quantity": 4.0,
           "uom": "units",
           "unitPrice": 20.0,
-          "discountPercent": 0,
+          "discountPercent": 0.0,
           "total": 120.0,
           "isCustom": false
         },
@@ -1065,7 +1065,7 @@
           "quantity": 4.0,
           "uom": "units",
           "unitPrice": 200.0,
-          "discountPercent": 0,
+          "discountPercent": 0.0,
           "total": 1600.0,
           "isCustom": true
         },
@@ -1082,7 +1082,7 @@
           "quantity": 1.0,
           "uom": "units",
           "unitPrice": 200.0,
-          "discountPercent": 0,
+          "discountPercent": 0.0,
           "total": 400.0,
           "isCustom": true
         }
@@ -1116,14 +1116,14 @@
       "acceptedAt": "",
       "invoicedAt": "",
       "paidAt": "",
-      "statusChangedAt": "2026-07-07T16:51:39",
+      "statusChangedAt": "2026-07-07T19:08:56",
       "eventId": null,
       "eventManagedByQuotation": false,
       "eventSyncFingerprint": "",
       "sourceQuotationId": "",
       "createdAt": "2026-07-07T00:25:43",
       "createdBy": "bnjm2000",
-      "updatedAt": "2026-07-07T16:51:39",
+      "updatedAt": "2026-07-07T19:08:56",
       "updatedBy": "bnjm2000",
       "eventDays": 1,
       "totals": {
@@ -1477,57 +1477,66 @@
           "quantity": 2.0,
           "uom": "units",
           "unitPrice": 600.0,
-          "discountPercent": 0,
-          "total": 1200.0,
+          "discountPercent": 96.6667,
+          "total": 40.0,
+          "isCustom": false
+        },
+        {
+          "id": "line_1783435767949_6f0ac2cc00c488",
+          "catalogKey": "inventory:stg|global truss|f34 corner block (silver)",
+          "sourceAssetIds": [
+            "BULK-0007"
+          ],
+          "brand": "Global Truss",
+          "model": "F34 Corner Block (Silver)",
+          "description": "Global Truss F34 Corner Block (Silver) Corner Block (silver)",
+          "department": "Staging Department",
+          "departmentCode": "STG",
+          "days": 1.0,
+          "quantity": 4.0,
+          "uom": "units",
+          "unitPrice": 40.0,
+          "discountPercent": 93.75,
+          "total": 10.0,
           "isCustom": false
         }
       ],
-      "adjustments": [
-        {
-          "id": "locked_total_3afb6ff7bcb593c079c3823a",
-          "scope": "total",
-          "department": "",
-          "label": "25% total discount",
-          "amount": -300.0,
-          "percent": 25.0,
-          "kind": "discount",
-          "lockedTotalAdjustment": true
-        }
-      ],
+      "adjustments": [],
       "departments": [
-        "Video Department"
+        "Video Department",
+        "Staging Department"
       ],
       "showUnitPrices": false,
-      "showDepartmentDiscounts": false,
+      "showDepartmentDiscounts": true,
       "showDepartmentSubtotals": true,
-      "totalLocked": true,
-      "lockedPreTaxTotal": 900.0,
+      "totalLocked": false,
+      "lockedPreTaxTotal": null,
       "revisions": [],
       "sentAt": "",
       "acceptedAt": "",
+      "invoicedAt": "",
+      "paidAt": "",
+      "statusChangedAt": "2026-07-07T22:53:57",
       "eventId": 154,
       "eventManagedByQuotation": false,
       "eventSyncFingerprint": "",
       "sourceQuotationId": "",
       "createdAt": "2026-07-07T15:30:32",
       "createdBy": "bnjm2000",
-      "updatedAt": "2026-07-07T15:59:24",
+      "updatedAt": "2026-07-07T22:53:57",
       "updatedBy": "bnjm2000",
       "eventDays": 1,
       "totals": {
-        "subtotal": 1200.0,
-        "adjustments": -300.0,
-        "discount": 300.0,
-        "netSubtotal": 900.0,
-        "calculatedPreTax": 900.0,
-        "lockedPreTax": 900.0,
-        "lockDifference": 0.0,
-        "tax": 81.0,
-        "total": 981.0
-      },
-      "invoicedAt": "",
-      "paidAt": "",
-      "statusChangedAt": "2026-07-07T15:59:24"
+        "subtotal": 50.0,
+        "adjustments": 0,
+        "discount": 0,
+        "netSubtotal": 50.0,
+        "calculatedPreTax": 50.0,
+        "lockedPreTax": null,
+        "lockDifference": 0,
+        "tax": 4.5,
+        "total": 54.5
+      }
     }
   ],
   "priceBook": {
@@ -1824,7 +1833,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T16:51:39"
+      "updatedAt": "2026-07-07T19:08:56"
     },
     "bnjm2000::ax|l-acoustics|x12|12\" passive coaxial enclosure": {
       "description": "L-Acoustics X12 12\" passive coaxial enclosure",
@@ -1832,7 +1841,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T16:51:39"
+      "updatedAt": "2026-07-07T19:08:56"
     },
     "bnjm2000::ax|l-acoustics|sb18|high power compact subwoofer: 1 x 18\"": {
       "description": "L-Acoustics SB18 High power compact subwoofer: 1 x 18\"",
@@ -1840,7 +1849,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T16:51:39"
+      "updatedAt": "2026-07-07T19:08:56"
     },
     "bnjm2000::ax|l-acoustics|la4x|amplified controller": {
       "description": "L-Acoustics LA4X Amplified controller",
@@ -1848,7 +1857,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T16:51:39"
+      "updatedAt": "2026-07-07T19:08:56"
     },
     "bnjm2000::ax|shure|ulxd4d [l50]|dual channel receiver": {
       "description": "Shure ULXD4D [L50] Dual Channel Receiver",
@@ -1856,7 +1865,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T16:51:39"
+      "updatedAt": "2026-07-07T19:08:56"
     },
     "bnjm2000::ax|shure|ulxd4q [l50]|quad channel receiver": {
       "description": "Shure ULXD4Q [L50] Quad Channel Receiver",
@@ -1864,7 +1873,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T16:51:39"
+      "updatedAt": "2026-07-07T19:08:56"
     },
     "bnjm2000::ax|shure|ulxd2 [l50]|handheld microphone": {
       "description": "Shure ULXD2 [L50] Handheld Microphone",
@@ -1872,7 +1881,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T16:51:39"
+      "updatedAt": "2026-07-07T19:08:56"
     },
     "bnjm2000::ax|sennheiser|dad(uhf)|spectera bidirectional digital antenna": {
       "description": "Sennheiser DAD(UHF) Spectera Bidirectional digital antenna",
@@ -1880,7 +1889,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T16:51:39"
+      "updatedAt": "2026-07-07T19:08:56"
     },
     "bnjm2000::ax|sennheiser|sek(uhf)|spectera bidirectional bodypack": {
       "description": "Sennheiser SEK(UHF) Spectera Bidirectional bodypack",
@@ -1888,7 +1897,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T16:51:39"
+      "updatedAt": "2026-07-07T19:08:56"
     },
     "bnjm2000::ax|sennheiser|spectera base station|1ru spectera base station": {
       "description": "Sennheiser Spectera Base Station 1RU Spectera Base Station",
@@ -1896,7 +1905,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T16:51:39"
+      "updatedAt": "2026-07-07T19:08:56"
     },
     "bnjm2000::ax|yamaha|rio3224-d2|high performance i/o rack": {
       "description": "Yamaha Rio3224-d2 High Performance I/O Rack",
@@ -1904,7 +1913,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T16:51:39"
+      "updatedAt": "2026-07-07T19:08:56"
     },
     "bnjm2000::ax|yamaha|rio1608-d2|high performance i/o rack": {
       "description": "Yamaha Rio1608-d2 High Performance I/O Rack",
@@ -1912,7 +1921,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T16:51:39"
+      "updatedAt": "2026-07-07T19:08:56"
     },
     "bnjm2000::ax|shure|sm58s|cardioid dynamic w/ switch": {
       "description": "Shure SM58S cardioid dynamic w/ switch",
@@ -1920,7 +1929,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T16:51:39"
+      "updatedAt": "2026-07-07T19:08:56"
     },
     "bnjm2000::ax|shure|beta 91a|boundary condenser microphone": {
       "description": "Shure Beta 91A Boundary condenser microphone",
@@ -1928,7 +1937,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T16:51:39"
+      "updatedAt": "2026-07-07T19:08:56"
     },
     "bnjm2000::ax|audix|d6|professional dynamic instrument microphone": {
       "description": "Audix D6 Professional Dynamic Instrument Microphone",
@@ -1936,7 +1945,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T16:51:39"
+      "updatedAt": "2026-07-07T19:08:56"
     },
     "bnjm2000::ax|shure|sm57|cardioid dynamic instrument mic": {
       "description": "Shure SM57 cardioid dynamic instrument mic",
@@ -1944,7 +1953,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T16:51:39"
+      "updatedAt": "2026-07-07T19:08:56"
     },
     "bnjm2000::ax|akg|c451b|cardioid condenser microphone": {
       "description": "AKG C451B Cardioid condenser microphone",
@@ -1952,7 +1961,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T16:51:39"
+      "updatedAt": "2026-07-07T19:08:56"
     },
     "bnjm2000::ax|sennheiser|e904|dynamic cardioid instrument microphone": {
       "description": "Sennheiser E904 Dynamic cardioid instrument microphone",
@@ -1960,7 +1969,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T16:51:39"
+      "updatedAt": "2026-07-07T19:08:56"
     },
     "bnjm2000::ax|radial engineering|j48 stereo|phantom powered active direct injection box": {
       "description": "Radial Engineering J48 Stereo Phantom Powered Active Direct Injection Box",
@@ -1968,7 +1977,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T16:51:39"
+      "updatedAt": "2026-07-07T19:08:56"
     },
     "bnjm2000::ax|radial engineering|j48 mono|phantom powered active direct injection box": {
       "description": "Radial Engineering J48 Mono Phantom Powered Active Direct Injection Box",
@@ -1976,7 +1985,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T16:51:39"
+      "updatedAt": "2026-07-07T19:08:56"
     },
     "bnjm2000::ax|mackie|srm150|5.52\" compact powered monitor 150w": {
       "description": "Mackie SRM150 5.52\" compact powered monitor 150W",
@@ -1984,7 +1993,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T16:51:39"
+      "updatedAt": "2026-07-07T19:08:56"
     },
     "bnjm2000::ax|hp|1810-24g|managed gigabit ethernet switch": {
       "description": "HP 1810-24G managed gigabit ethernet switch",
@@ -1992,7 +2001,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T16:51:39"
+      "updatedAt": "2026-07-07T19:08:56"
     },
     "bnjm2000::lx|grandma3|compact xt|console": {
       "description": "GrandMA3 Compact XT Console",
@@ -2000,7 +2009,7 @@
       "department": "Lighting Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T16:51:39"
+      "updatedAt": "2026-07-07T19:08:56"
     },
     "bnjm2000::lx|dts|nickwash 600|self-contained compact high-output led moving head projector": {
       "description": "DTS NickWash 600 self-contained compact high-output LED moving head projector",
@@ -2008,7 +2017,7 @@
       "department": "Lighting Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T16:51:39"
+      "updatedAt": "2026-07-07T19:08:56"
     },
     "bnjm2000::lx|ayrton|diablo (w.dmx)|profile led": {
       "description": "Ayrton Diablo (W.DMX) Profile LED",
@@ -2016,7 +2025,7 @@
       "department": "Lighting Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T16:51:39"
+      "updatedAt": "2026-07-07T19:08:56"
     },
     "bnjm2000::lx|robe|robin ledbeam 350 wash|wash led": {
       "description": "Robe Robin LEDBeam 350 Wash Wash LED",
@@ -2024,7 +2033,7 @@
       "department": "Lighting Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T16:51:39"
+      "updatedAt": "2026-07-07T19:08:56"
     },
     "bnjm2000::lx|silverstar|roxcyc|batten 1 meter rgbwa": {
       "description": "Silverstar Roxcyc Batten 1 meter RGBWA",
@@ -2032,7 +2041,7 @@
       "department": "Lighting Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T16:51:39"
+      "updatedAt": "2026-07-07T19:08:56"
     },
     "bnjm2000::lx|le maitre|mvs hazer|hazer machine": {
       "description": "Le Maitre MVS Hazer Hazer machine",
@@ -2040,7 +2049,7 @@
       "department": "Lighting Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T16:51:39"
+      "updatedAt": "2026-07-07T19:08:56"
     },
     "bnjm2000::stg|global truss|f34 truss - 2m (silver)|2m truss (silver)": {
       "description": "Global Truss F34 Truss - 2m (Silver) 2m truss (silver)",
@@ -2048,7 +2057,7 @@
       "department": "Staging Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T16:51:39"
+      "updatedAt": "2026-07-07T19:08:56"
     },
     "bnjm2000::stg|global truss|f34 truss - 1.5m (silver)|1.5m truss (silver)": {
       "description": "Global Truss F34 Truss - 1.5m (Silver) 1.5m truss (silver)",
@@ -2056,7 +2065,7 @@
       "department": "Staging Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T16:51:39"
+      "updatedAt": "2026-07-07T19:08:56"
     },
     "bnjm2000::stg|custom|605mm base plate|605x605mm heavy-duty base plate": {
       "description": "Custom 605mm Base plate 605x605mm heavy-duty base plate",
@@ -2064,7 +2073,7 @@
       "department": "Staging Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T16:51:39"
+      "updatedAt": "2026-07-07T19:08:56"
     },
     "bnjm2000::stg|custom|308mm|light-duty top plate": {
       "description": "Custom 308mm light-duty top plate",
@@ -2072,7 +2081,7 @@
       "department": "Staging Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T16:51:39"
+      "updatedAt": "2026-07-07T19:08:56"
     },
     "bnjm2000::inventory:ax|l-acoustics|kara ii": {
       "description": "L-Acoustics KARA II Long Throw Concert Sound Loudspeaker",
@@ -2464,7 +2473,7 @@
       "department": "Video Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T15:59:24"
+      "updatedAt": "2026-07-07T22:53:57"
     },
     "bnjm2000::asset:qm75c#01": {
       "description": "Samsung LH75QMCEBGCXXS 75\" Crystal UHD Signage",
@@ -2472,7 +2481,7 @@
       "department": "Video Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T15:59:24"
+      "updatedAt": "2026-07-07T22:53:57"
     },
     "bnjm2000::asset:qm75c#02": {
       "description": "Samsung LH75QMCEBGCXXS 75\" Crystal UHD Signage",
@@ -2480,7 +2489,7 @@
       "department": "Video Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T15:59:24"
+      "updatedAt": "2026-07-07T22:53:57"
     },
     "bnjm2000::asset:qm75c#03": {
       "description": "Samsung LH75QMCEBGCXXS 75\" Crystal UHD Signage",
@@ -2488,7 +2497,7 @@
       "department": "Video Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T15:59:24"
+      "updatedAt": "2026-07-07T22:53:57"
     },
     "bnjm2000::asset:qm75c#04": {
       "description": "Samsung LH75QMCEBGCXXS 75\" Crystal UHD Signage",
@@ -2496,7 +2505,23 @@
       "department": "Video Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T15:59:24"
+      "updatedAt": "2026-07-07T22:53:57"
+    },
+    "bnjm2000::inventory:stg|global truss|f34 corner block (silver)": {
+      "description": "Global Truss F34 Corner Block (Silver) Corner Block (silver)",
+      "unitPrice": 40.0,
+      "department": "Staging Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-07T22:53:57"
+    },
+    "bnjm2000::asset:bulk-0007": {
+      "description": "Global Truss F34 Corner Block (Silver) Corner Block (silver)",
+      "unitPrice": 40.0,
+      "department": "Staging Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-07T22:53:57"
     }
   }
 }

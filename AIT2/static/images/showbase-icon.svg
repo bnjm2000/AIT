@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title id="title">Showbase icon</title>
+  <defs>
+    <linearGradient id="bg" x1="8" y1="4" x2="58" y2="60" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#10223a"/>
+      <stop offset="1" stop-color="#0f766e"/>
+    </linearGradient>
+    <linearGradient id="mark" x1="16" y1="13" x2="49" y2="51" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#67e8f9"/>
+      <stop offset=".55" stop-color="#5eead4"/>
+      <stop offset="1" stop-color="#f59e0b"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#bg)"/>
+  <path fill="url(#mark)" d="M19 17h31l-7 8H24.5c-2 0-3.1 2.4-1.8 3.9l18.9 21.6H28.4L14.7 34.9C8.7 27.8 13.7 17 19 17Z"/>
+  <path fill="#f8fafc" d="M18 47h28.5c2.1 0 3.1-2.5 1.7-4L29.3 21.5h13.2l13.8 15.6C62.5 44.2 57.5 55 47 55H11l7-8Z" opacity=".93"/>
+</svg>
