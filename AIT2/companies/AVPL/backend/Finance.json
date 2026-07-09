@@ -1,5 +1,5 @@
 {
-  "version": 4,
+  "version": 5,
   "documents": [
     {
       "id": "c85f31d125430efa2ba36ca2",
@@ -20,7 +20,7 @@
         "address3": "",
         "postalCode": "Singapore 608526"
       },
-      "quotationDate": "2026-07-07",
+      "quotationDate": "2026-07-09",
       "validUntil": "",
       "projectName": "NTU Fest 2026",
       "title": "NTU Fest 2026",
@@ -28,7 +28,7 @@
       "eventReference": "",
       "salesperson": "",
       "paymentTerms": "30 Days",
-      "eventLocation": "",
+      "eventLocation": "NTU",
       "setupDate": "",
       "setupTime": "",
       "rehearsalDate": "",
@@ -44,23 +44,6 @@
       "terms": "1.  Validity: 14 days\n2.  Work shall only commence upon receiving the certified copy of our quotation.  \n3.  Upon confirmation, a 50% non-refundable down payment is required, and the remaining balance must be paid upon\n      completion of the setup.\n4.  All items are rented for indoor usage only (unless otherwise stated).\n5.  Confirmation of rental is on a first-come, first-served basis.\n6.  T/T to: OCBC Bank Limited, 65 Chulia Street, #01 - 00, OCBC Centre, Singapore 049513.\n     Account Number (S$): 601 - 546195 - 001, Swift Code: OCBCSGSG, Account Name: Avec Vision Pte Ltd.\n7.  The hirer is responsible for according to due diligence and cares for equipment.  In agreement, they will undertake liability for\n\"     the loss or damage of the equipment rented.\t\"\n8.  Cancellation charge:  100% of the total amount if cancellation occurs after the completion of the setup.\n9.  Any additional services or equipment not mentioned in this quotation will be charged accordingly.\n\nWe hope the above quotation is acceptable to you and will be looking forward to your early confirmation.   Please feel free to\ncontact the undersigned should you require any further information.",
       "lineItems": [
         {
-          "id": "line_1783346905734_1e38135cb7f1e8",
-          "catalogKey": "ax|l-acoustics|karaii|long throw concert sound loudspeaker",
-          "sourceAssetIds": [],
-          "brand": "l-acoustics",
-          "model": "karaii",
-          "description": "L-Acoustics KARA II Long Throw Concert Sound Loudspeaker",
-          "department": "Audio Department",
-          "departmentCode": "AX",
-          "days": 1.0,
-          "quantity": 12.0,
-          "uom": "units",
-          "unitPrice": 350.0,
-          "discountPercent": 0,
-          "total": 4200.0,
-          "isCustom": false
-        },
-        {
           "id": "line_1783346968213_e43e632480b368",
           "catalogKey": "ax|yamaha|ql5|digital mixer",
           "sourceAssetIds": [],
@@ -73,8 +56,25 @@
           "quantity": 1.0,
           "uom": "units",
           "unitPrice": 650.0,
-          "discountPercent": 0,
+          "discountPercent": 0.0,
           "total": 650.0,
+          "isCustom": false
+        },
+        {
+          "id": "line_1783346905734_1e38135cb7f1e8",
+          "catalogKey": "ax|l-acoustics|karaii|long throw concert sound loudspeaker",
+          "sourceAssetIds": [],
+          "brand": "l-acoustics",
+          "model": "karaii",
+          "description": "L-Acoustics KARA II Long Throw Concert Sound Loudspeaker",
+          "department": "Audio Department",
+          "departmentCode": "AX",
+          "days": 1.0,
+          "quantity": 12.0,
+          "uom": "units",
+          "unitPrice": 350.0,
+          "discountPercent": 0.0,
+          "total": 4200.0,
           "isCustom": false
         },
         {
@@ -90,7 +90,7 @@
           "quantity": 8.0,
           "uom": "units",
           "unitPrice": 250.0,
-          "discountPercent": 0,
+          "discountPercent": 0.0,
           "total": 2000.0,
           "isCustom": false
         },
@@ -107,7 +107,7 @@
           "quantity": 12.0,
           "uom": "units",
           "unitPrice": 170.0,
-          "discountPercent": 0,
+          "discountPercent": 0.0,
           "total": 2040.0,
           "isCustom": false
         },
@@ -124,7 +124,7 @@
           "quantity": 5.0,
           "uom": "units",
           "unitPrice": 350.0,
-          "discountPercent": 0,
+          "discountPercent": 0.0,
           "total": 1750.0,
           "isCustom": false
         },
@@ -141,7 +141,7 @@
           "quantity": 2.0,
           "uom": "units",
           "unitPrice": 650.0,
-          "discountPercent": 0,
+          "discountPercent": 0.0,
           "total": 1300.0,
           "isCustom": false
         },
@@ -158,7 +158,7 @@
           "quantity": 2.0,
           "uom": "units",
           "unitPrice": 400.0,
-          "discountPercent": 0,
+          "discountPercent": 0.0,
           "total": 800.0,
           "isCustom": false
         },
@@ -175,7 +175,7 @@
           "quantity": 8.0,
           "uom": "units",
           "unitPrice": 50.0,
-          "discountPercent": 0,
+          "discountPercent": 0.0,
           "total": 400.0,
           "isCustom": false
         },
@@ -192,7 +192,7 @@
           "quantity": 1.0,
           "uom": "units",
           "unitPrice": 250.0,
-          "discountPercent": 0,
+          "discountPercent": 0.0,
           "total": 250.0,
           "isCustom": false
         },
@@ -209,7 +209,7 @@
           "quantity": 2.0,
           "uom": "units",
           "unitPrice": 20.0,
-          "discountPercent": 0,
+          "discountPercent": 0.0,
           "total": 40.0,
           "isCustom": false
         },
@@ -226,7 +226,7 @@
           "quantity": 1.0,
           "uom": "units",
           "unitPrice": 50.0,
-          "discountPercent": 0,
+          "discountPercent": 0.0,
           "total": 50.0,
           "isCustom": false
         },
@@ -236,14 +236,14 @@
           "sourceAssetIds": [],
           "brand": "shure",
           "model": "beta 52a",
-          "description": "Shure Beta 52A Kick drum mic",
+          "description": "Shure Beta 52A Kick drum microphone",
           "department": "Audio Department",
           "departmentCode": "AX",
           "days": 1.0,
           "quantity": 1.0,
           "uom": "units",
           "unitPrice": 20.0,
-          "discountPercent": 0,
+          "discountPercent": 0.0,
           "total": 20.0,
           "isCustom": false
         },
@@ -260,7 +260,7 @@
           "quantity": 1.0,
           "uom": "units",
           "unitPrice": 50.0,
-          "discountPercent": 0,
+          "discountPercent": 0.0,
           "total": 50.0,
           "isCustom": false
         },
@@ -277,7 +277,7 @@
           "quantity": 3.0,
           "uom": "units",
           "unitPrice": 30.0,
-          "discountPercent": 0,
+          "discountPercent": 0.0,
           "total": 90.0,
           "isCustom": false
         },
@@ -294,7 +294,7 @@
           "quantity": 2.0,
           "uom": "units",
           "unitPrice": 60.0,
-          "discountPercent": 0,
+          "discountPercent": 0.0,
           "total": 120.0,
           "isCustom": false
         },
@@ -311,7 +311,7 @@
           "quantity": 2.0,
           "uom": "units",
           "unitPrice": 30.0,
-          "discountPercent": 0,
+          "discountPercent": 0.0,
           "total": 60.0,
           "isCustom": false
         },
@@ -328,7 +328,7 @@
           "quantity": 1.0,
           "uom": "units",
           "unitPrice": 80.0,
-          "discountPercent": 0,
+          "discountPercent": 0.0,
           "total": 80.0,
           "isCustom": false
         },
@@ -345,7 +345,7 @@
           "quantity": 1.0,
           "uom": "units",
           "unitPrice": 50.0,
-          "discountPercent": 0,
+          "discountPercent": 0.0,
           "total": 50.0,
           "isCustom": false
         },
@@ -362,7 +362,7 @@
           "quantity": 1.0,
           "uom": "units",
           "unitPrice": 400.0,
-          "discountPercent": 0,
+          "discountPercent": 0.0,
           "total": 1200.0,
           "isCustom": true
         },
@@ -379,7 +379,7 @@
           "quantity": 1.0,
           "uom": "units",
           "unitPrice": 250.0,
-          "discountPercent": 0,
+          "discountPercent": 0.0,
           "total": 750.0,
           "isCustom": true
         },
@@ -396,8 +396,25 @@
           "quantity": 6.0,
           "uom": "pax",
           "unitPrice": 200.0,
-          "discountPercent": 0,
+          "discountPercent": 0.0,
           "total": 3600.0,
+          "isCustom": true
+        },
+        {
+          "id": "line_1783526324940_c89a3290ff5d68",
+          "catalogKey": "",
+          "sourceAssetIds": [],
+          "brand": "",
+          "model": "",
+          "description": "24' delivery truck c/w driver",
+          "department": "Transportation",
+          "departmentCode": "TRANSPORTATION",
+          "days": 2.0,
+          "quantity": 1.0,
+          "uom": "units",
+          "unitPrice": 200.0,
+          "discountPercent": 0.0,
+          "total": 400.0,
           "isCustom": true
         }
       ],
@@ -406,16 +423,17 @@
           "id": "locked_total_c85f31d125430efa2ba36ca2",
           "scope": "total",
           "department": "",
-          "label": "13.08% total discount",
-          "amount": -2550.0,
-          "percent": 13.0769,
+          "label": "14.82% total discount",
+          "amount": -2950.0,
+          "percent": 14.8241,
           "kind": "discount",
           "lockedTotalAdjustment": true
         }
       ],
       "departments": [
         "Audio Department",
-        "Manpower"
+        "Manpower",
+        "Transportation"
       ],
       "showUnitPrices": false,
       "showDepartmentDiscounts": false,
@@ -425,29 +443,29 @@
       "revisions": [],
       "sentAt": "",
       "acceptedAt": "",
+      "invoicedAt": "",
+      "paidAt": "",
+      "statusChangedAt": "2026-07-09T00:04:43",
       "eventId": null,
       "eventManagedByQuotation": false,
       "eventSyncFingerprint": "",
       "sourceQuotationId": "",
       "createdAt": "2026-07-06T22:07:59",
       "createdBy": "bnjm2000",
-      "updatedAt": "2026-07-07T15:23:10",
+      "updatedAt": "2026-07-09T00:04:43",
       "updatedBy": "bnjm2000",
       "eventDays": 1,
       "totals": {
-        "subtotal": 19500.0,
-        "adjustments": -2550.0,
-        "discount": 2550.0,
+        "subtotal": 19900.0,
+        "adjustments": -2950.0,
+        "discount": 2950.0,
         "netSubtotal": 16950.0,
         "calculatedPreTax": 16950.0,
         "lockedPreTax": 16950.0,
         "lockDifference": 0.0,
         "tax": 1525.5,
         "total": 18475.5
-      },
-      "invoicedAt": "",
-      "paidAt": "",
-      "statusChangedAt": "2026-07-07T15:23:10"
+      }
     },
     {
       "id": "ae45f7d8fccd3d4bab347f19",
@@ -468,7 +486,7 @@
         "address3": "",
         "postalCode": ""
       },
-      "quotationDate": "2026-07-07",
+      "quotationDate": "2026-07-09",
       "validUntil": "",
       "projectName": "SMU Event",
       "title": "SMU Event",
@@ -696,23 +714,6 @@
           "isCustom": false
         },
         {
-          "id": "line_1783357707978_61eb84b599a4e",
-          "catalogKey": "ax|shure|sm58s|cardioid dynamic w/ switch",
-          "sourceAssetIds": [],
-          "brand": "shure",
-          "model": "sm58s",
-          "description": "Shure SM58S cardioid dynamic w/ switch",
-          "department": "Audio Department",
-          "departmentCode": "AX",
-          "days": 1.5,
-          "quantity": 2.0,
-          "uom": "units",
-          "unitPrice": 20.0,
-          "discountPercent": 0.0,
-          "total": 60.0,
-          "isCustom": false
-        },
-        {
           "id": "line_1783357729031_44f2148f8afbc8",
           "catalogKey": "ax|shure|beta 91a|boundary condenser microphone",
           "sourceAssetIds": [],
@@ -781,6 +782,23 @@
           "isCustom": false
         },
         {
+          "id": "line_1783357707978_61eb84b599a4e",
+          "catalogKey": "ax|shure|sm58s|cardioid dynamic w/ switch",
+          "sourceAssetIds": [],
+          "brand": "shure",
+          "model": "sm58s",
+          "description": "Shure SM58S cardioid dynamic w/ switch",
+          "department": "Audio Department",
+          "departmentCode": "AX",
+          "days": 1.5,
+          "quantity": 2.0,
+          "uom": "units",
+          "unitPrice": 20.0,
+          "discountPercent": 0.0,
+          "total": 60.0,
+          "isCustom": false
+        },
+        {
           "id": "line_1783357781897_48447df734bdc",
           "catalogKey": "ax|sennheiser|e904|dynamic cardioid instrument microphone",
           "sourceAssetIds": [],
@@ -841,11 +859,11 @@
           "department": "Audio Department",
           "departmentCode": "AX",
           "days": 1.5,
-          "quantity": 1.0,
+          "quantity": 2.0,
           "uom": "units",
           "unitPrice": 80.0,
           "discountPercent": 0.0,
-          "total": 120.0,
+          "total": 240.0,
           "isCustom": false
         },
         {
@@ -901,11 +919,11 @@
         },
         {
           "id": "line_1783357978055_3b65371ba2fc5",
-          "catalogKey": "lx|ayrton|diablo (w.dmx)|profile led",
+          "catalogKey": "inventory:lx|ayrton|diablo (w.dmx)",
           "sourceAssetIds": [],
-          "brand": "ayrton",
-          "model": "diablo (w.dmx)",
-          "description": "Ayrton Diablo (W.DMX) Profile LED",
+          "brand": "Ayrton",
+          "model": "Diablo (W.DMX)",
+          "description": "Ayrton Diablo (W.DMX) Profile LED - moving head",
           "department": "Lighting Department",
           "departmentCode": "LX",
           "days": 1.5,
@@ -918,11 +936,11 @@
         },
         {
           "id": "line_1783357982234_afc6a48e486ef8",
-          "catalogKey": "lx|robe|robin ledbeam 350 wash|wash led",
+          "catalogKey": "inventory:lx|robe|robin ledbeam 350 wash",
           "sourceAssetIds": [],
-          "brand": "robe",
-          "model": "robin ledbeam 350 wash",
-          "description": "Robe Robin LEDBeam 350 Wash Wash LED",
+          "brand": "Robe",
+          "model": "Robin LEDBeam 350 Wash",
+          "description": "Robe Robin LEDBeam 350 Wash Wash LED - moving head",
           "department": "Lighting Department",
           "departmentCode": "LX",
           "days": 1.5,
@@ -1092,9 +1110,9 @@
           "id": "locked_total_ae45f7d8fccd3d4bab347f19",
           "scope": "total",
           "department": "",
-          "label": "24.77% total discount",
-          "amount": -4940.0,
-          "percent": 24.7743,
+          "label": "25.22% total discount",
+          "amount": -5060.0,
+          "percent": 25.2243,
           "kind": "discount",
           "lockedTotalAdjustment": true
         }
@@ -1116,20 +1134,20 @@
       "acceptedAt": "",
       "invoicedAt": "",
       "paidAt": "",
-      "statusChangedAt": "2026-07-07T19:08:56",
+      "statusChangedAt": "2026-07-09T00:34:57",
       "eventId": null,
       "eventManagedByQuotation": false,
       "eventSyncFingerprint": "",
       "sourceQuotationId": "",
       "createdAt": "2026-07-07T00:25:43",
       "createdBy": "bnjm2000",
-      "updatedAt": "2026-07-07T19:08:56",
+      "updatedAt": "2026-07-09T00:34:56",
       "updatedBy": "bnjm2000",
       "eventDays": 1,
       "totals": {
-        "subtotal": 19940.0,
-        "adjustments": -4940.0,
-        "discount": 4940.0,
+        "subtotal": 20060.0,
+        "adjustments": -5060.0,
+        "discount": 5060.0,
         "netSubtotal": 15000.0,
         "calculatedPreTax": 15000.0,
         "lockedPreTax": 15000.0,
@@ -1436,7 +1454,7 @@
         "address3": "",
         "postalCode": "Singapore 608526"
       },
-      "quotationDate": "2026-07-07",
+      "quotationDate": "2026-07-09",
       "validUntil": "",
       "projectName": "Dry Hire of 75\" TV",
       "title": "Dry Hire of 75\" TV",
@@ -1474,34 +1492,62 @@
           "department": "Video Department",
           "departmentCode": "VX",
           "days": 1.0,
-          "quantity": 2.0,
+          "quantity": 1.0,
           "uom": "units",
           "unitPrice": 600.0,
-          "discountPercent": 96.6667,
-          "total": 40.0,
+          "discountPercent": 0.0,
+          "total": 600.0,
           "isCustom": false
         },
         {
-          "id": "line_1783435767949_6f0ac2cc00c488",
+          "id": "87f73c0197d8",
           "catalogKey": "inventory:stg|global truss|f34 corner block (silver)",
-          "sourceAssetIds": [
-            "BULK-0007"
-          ],
+          "sourceAssetIds": [],
           "brand": "Global Truss",
           "model": "F34 Corner Block (Silver)",
-          "description": "Global Truss F34 Corner Block (Silver) Corner Block (silver)",
+          "description": "Corner Block (silver)",
           "department": "Staging Department",
           "departmentCode": "STG",
-          "days": 1.0,
-          "quantity": 4.0,
+          "days": 2.0,
+          "quantity": 5.0,
           "uom": "units",
-          "unitPrice": 40.0,
-          "discountPercent": 93.75,
-          "total": 10.0,
+          "unitPrice": 0,
+          "discountPercent": 0.0,
+          "total": 0.0,
+          "isCustom": false
+        },
+        {
+          "id": "line_1783565923768_edfb1e0f899838",
+          "catalogKey": "inventory:vx|samsung|ua75ru7100kxxs",
+          "sourceAssetIds": [
+            "75INCH#01"
+          ],
+          "brand": "Samsung",
+          "model": "UA75RU7100KXXS",
+          "description": "Samsung UA75RU7100KXXS 75\" Smart TV",
+          "department": "Video Department",
+          "departmentCode": "VX",
+          "days": 1.0,
+          "quantity": 1.0,
+          "uom": "units",
+          "unitPrice": 450.0,
+          "discountPercent": 0.0,
+          "total": 450.0,
           "isCustom": false
         }
       ],
-      "adjustments": [],
+      "adjustments": [
+        {
+          "id": "adjustment_1783565935155_92071e2b7c44a",
+          "scope": "department",
+          "department": "Video Department",
+          "label": "42.86% department discount",
+          "amount": -450.0,
+          "percent": 42.8571,
+          "kind": "discount",
+          "lockedTotalAdjustment": false
+        }
+      ],
       "departments": [
         "Video Department",
         "Staging Department"
@@ -1516,26 +1562,500 @@
       "acceptedAt": "",
       "invoicedAt": "",
       "paidAt": "",
-      "statusChangedAt": "2026-07-07T22:53:57",
+      "statusChangedAt": "2026-07-09T14:48:44",
       "eventId": 154,
       "eventManagedByQuotation": false,
       "eventSyncFingerprint": "",
       "sourceQuotationId": "",
       "createdAt": "2026-07-07T15:30:32",
       "createdBy": "bnjm2000",
-      "updatedAt": "2026-07-07T22:53:57",
+      "updatedAt": "2026-07-09T14:48:44",
       "updatedBy": "bnjm2000",
       "eventDays": 1,
       "totals": {
-        "subtotal": 50.0,
-        "adjustments": 0,
-        "discount": 0,
-        "netSubtotal": 50.0,
-        "calculatedPreTax": 50.0,
+        "subtotal": 1050.0,
+        "adjustments": -450.0,
+        "discount": 450.0,
+        "netSubtotal": 600.0,
+        "calculatedPreTax": 600.0,
         "lockedPreTax": null,
         "lockDifference": 0,
-        "tax": 4.5,
-        "total": 54.5
+        "tax": 54.0,
+        "total": 654.0
+      }
+    },
+    {
+      "id": "a5c676c64268acbc07325ba5",
+      "type": "quotation",
+      "number": "QT-2026-005-01",
+      "baseSequence": 5,
+      "revision": 1,
+      "status": "draft",
+      "client": {
+        "name": "Stephanie",
+        "company": "iPossible Pte Ltd",
+        "contactPerson": "",
+        "email": "",
+        "phone": "",
+        "taxNumber": "",
+        "address1": "",
+        "address2": "",
+        "address3": "",
+        "postalCode": ""
+      },
+      "quotationDate": "2026-07-08",
+      "validUntil": "",
+      "projectName": "Loewe",
+      "title": "Loewe",
+      "reference": "",
+      "eventReference": "",
+      "salesperson": "Benjamin Ng",
+      "paymentTerms": "30 Days",
+      "eventLocation": "Ion Orchard",
+      "setupDate": "2026-08-27",
+      "setupTime": "07:00",
+      "rehearsalDate": "",
+      "rehearsalTime": "",
+      "showDate": "2026-08-27",
+      "showTime": "15:00",
+      "teardownDate": "2026-08-29",
+      "teardownTime": "22:00",
+      "validityDays": 30,
+      "currency": "SGD",
+      "taxRate": 9.0,
+      "notes": "",
+      "terms": "1.  Validity: 14 days\n2.  Work shall only commence upon receiving the certified copy of our quotation.  \n3.  Upon confirmation, a 50% non-refundable down payment is required, and the remaining balance must be paid upon\n      completion of the setup.\n4.  All items are rented for indoor usage only (unless otherwise stated).\n5.  Confirmation of rental is on a first-come, first-served basis.\n6.  T/T to: OCBC Bank Limited, 65 Chulia Street, #01 - 00, OCBC Centre, Singapore 049513.\n     Account Number (S$): 601 - 546195 - 001, Swift Code: OCBCSGSG, Account Name: Avec Vision Pte Ltd.\n7.  The hirer is responsible for according to due diligence and cares for equipment.  In agreement, they will undertake liability for\n\"     the loss or damage of the equipment rented.\t\"\n8.  Cancellation charge:  100% of the total amount if cancellation occurs after the completion of the setup.\n9.  Any additional services or equipment not mentioned in this quotation will be charged accordingly.\n\nWe hope the above quotation is acceptable to you and will be looking forward to your early confirmation.   Please feel free to\ncontact the undersigned should you require any further information.",
+      "lineItems": [
+        {
+          "id": "line_1783502886704_05d061c9ef4648",
+          "catalogKey": "inventory:ax|turbosound|ip1000",
+          "sourceAssetIds": [
+            "IP1000#01",
+            "IP1000#02",
+            "IP1000#03",
+            "IP1000#04",
+            "IP1000#05",
+            "IP1000#06",
+            "IP1000#07",
+            "IP1000#08"
+          ],
+          "brand": "Turbosound",
+          "model": "IP1000",
+          "description": "Turbosound IP1000 Powered Column Loudspeaker",
+          "department": "Unknown Department",
+          "departmentCode": "UN",
+          "days": 2.0,
+          "quantity": 3.0,
+          "uom": "units",
+          "unitPrice": 180.0,
+          "discountPercent": 0.0,
+          "total": 1080.0,
+          "isCustom": false
+        },
+        {
+          "id": "line_1783502893675_5c99f47b802e",
+          "catalogKey": "inventory:ax|mipro|mt-90a",
+          "sourceAssetIds": [
+            "MT-90A#01",
+            "MT-90A#02",
+            "MT-90A#03",
+            "MT-90A#04"
+          ],
+          "brand": "MiPro",
+          "model": "MT-90A",
+          "description": "MiPro MT-90A Interlink Transmitter",
+          "department": "Audio Department",
+          "departmentCode": "AX",
+          "days": 2.0,
+          "quantity": 1.0,
+          "uom": "units",
+          "unitPrice": 80.0,
+          "discountPercent": 0.0,
+          "total": 160.0,
+          "isCustom": false
+        },
+        {
+          "id": "line_1783502897059_019039568c88f",
+          "catalogKey": "inventory:ax|mipro|mr-90",
+          "sourceAssetIds": [
+            "MR-90A#01",
+            "MR-90A#02",
+            "MR-90A#03",
+            "MR-90A#04",
+            "MR-90A#05",
+            "MR-90A#06"
+          ],
+          "brand": "MiPro",
+          "model": "MR-90",
+          "description": "MiPro MR-90 Interlink receiver",
+          "department": "Audio Department",
+          "departmentCode": "AX",
+          "days": 2.0,
+          "quantity": 3.0,
+          "uom": "units",
+          "unitPrice": 50.0,
+          "discountPercent": 0.0,
+          "total": 300.0,
+          "isCustom": false
+        },
+        {
+          "id": "line_1783502906611_0fdf9d322e2658",
+          "catalogKey": "inventory:ax|shure|ulxd1 [l50]",
+          "sourceAssetIds": [
+            "ULXD1#01",
+            "ULXD1#02",
+            "ULXD1#03",
+            "ULXD1#04",
+            "ULXD1#05",
+            "ULXD1#06",
+            "ULXD1#07",
+            "ULXD1#08",
+            "ULXD1#09",
+            "ULXD1#10",
+            "ULXD1#11",
+            "ULXD1#12",
+            "ULXD1#19"
+          ],
+          "brand": "Shure",
+          "model": "ULXD1 [L50]",
+          "description": "Shure ULXD1 [L50] Beltpack",
+          "department": "Audio Department",
+          "departmentCode": "AX",
+          "days": 2.0,
+          "quantity": 1.0,
+          "uom": "units",
+          "unitPrice": 50.0,
+          "discountPercent": 0.0,
+          "total": 100.0,
+          "isCustom": false
+        },
+        {
+          "id": "line_1783502911508_c7c1944c9c317",
+          "catalogKey": "inventory:ax|shure|ulxd4d [l50]",
+          "sourceAssetIds": [
+            "ULXD4D#01",
+            "ULXD4D#02",
+            "ULXD4D#03",
+            "ULXD4D#04"
+          ],
+          "brand": "Shure",
+          "model": "ULXD4D [L50]",
+          "description": "Shure ULXD4D [L50] Dual Channel Receiver",
+          "department": "Audio Department",
+          "departmentCode": "AX",
+          "days": 2.0,
+          "quantity": 1.0,
+          "uom": "units",
+          "unitPrice": 200.0,
+          "discountPercent": 0.0,
+          "total": 400.0,
+          "isCustom": false
+        },
+        {
+          "id": "line_1783502925375_0e226a327c6d7",
+          "catalogKey": "inventory:ax|shure|ha-8091",
+          "sourceAssetIds": [
+            "HA8091#01"
+          ],
+          "brand": "Shure",
+          "model": "HA-8091",
+          "description": "Shure HA-8091 Passive Domed Helical Antenna",
+          "department": "Audio Department",
+          "departmentCode": "AX",
+          "days": 2.0,
+          "quantity": 1.0,
+          "uom": "units",
+          "unitPrice": 0,
+          "discountPercent": 0.0,
+          "total": 0.0,
+          "isCustom": false
+        },
+        {
+          "id": "line_1783503078431_82faa13dfb828",
+          "catalogKey": "inventory:ax|shure|ua845",
+          "sourceAssetIds": [
+            "UA845#01"
+          ],
+          "brand": "Shure",
+          "model": "UA845",
+          "description": "Shure UA845 UHF Antenna Distribution System",
+          "department": "Audio Department",
+          "departmentCode": "AX",
+          "days": 2.0,
+          "quantity": 1.0,
+          "uom": "units",
+          "unitPrice": 160.0,
+          "discountPercent": 0.0,
+          "total": 320.0,
+          "isCustom": false
+        },
+        {
+          "id": "line_1783502947052_5ed015911d36d",
+          "catalogKey": "inventory:ax|shure|ua874wb",
+          "sourceAssetIds": [
+            "UA874WB#01",
+            "UA874WB#02",
+            "UA874WB#03",
+            "UA874WB#04",
+            "UA874WB#05",
+            "UA874WB#06"
+          ],
+          "brand": "Shure",
+          "model": "UA874WB",
+          "description": "Shure UA874WB Directional Antenna",
+          "department": "Audio Department",
+          "departmentCode": "AX",
+          "days": 2.0,
+          "quantity": 2.0,
+          "uom": "units",
+          "unitPrice": 0,
+          "discountPercent": 0.0,
+          "total": 0.0,
+          "isCustom": false
+        },
+        {
+          "id": "line_1783502964731_82c88a174995f8",
+          "catalogKey": "inventory:ax|dpa|4488 (beige)",
+          "sourceAssetIds": [
+            "4488#01",
+            "4488#02",
+            "4488#03",
+            "4488#04",
+            "4488#05",
+            "4488#06",
+            "4488#07",
+            "4488#08",
+            "4488#09",
+            "4488#10",
+            "4488#11",
+            "4488#12"
+          ],
+          "brand": "DPA",
+          "model": "4488 (beige)",
+          "description": "DPA 4488 (beige) Directional Headset",
+          "department": "Audio Department",
+          "departmentCode": "AX",
+          "days": 2.0,
+          "quantity": 1.0,
+          "uom": "units",
+          "unitPrice": 30.0,
+          "discountPercent": 0.0,
+          "total": 60.0,
+          "isCustom": false
+        },
+        {
+          "id": "line_1783503192119_6bfa39166081",
+          "catalogKey": "",
+          "sourceAssetIds": [],
+          "brand": "",
+          "model": "",
+          "description": "Audio Operator (A1)",
+          "department": "Manpower",
+          "departmentCode": "MANPOWER",
+          "days": 3.0,
+          "quantity": 1.0,
+          "uom": "units",
+          "unitPrice": 300.0,
+          "discountPercent": 0.0,
+          "total": 900.0,
+          "isCustom": true
+        },
+        {
+          "id": "line_1783503224407_6231e75bf98c3",
+          "catalogKey": "",
+          "sourceAssetIds": [],
+          "brand": "",
+          "model": "",
+          "description": "AV Technician for setup/teardown",
+          "department": "Manpower",
+          "departmentCode": "MANPOWER",
+          "days": 2.0,
+          "quantity": 2.0,
+          "uom": "units",
+          "unitPrice": 200.0,
+          "discountPercent": 0.0,
+          "total": 800.0,
+          "isCustom": true
+        }
+      ],
+      "adjustments": [
+        {
+          "id": "adjustment_1783503113052_73c51324ba08",
+          "scope": "department",
+          "department": "Audio Department",
+          "label": "25% department discount",
+          "amount": -335.0,
+          "percent": 25.0,
+          "kind": "discount",
+          "lockedTotalAdjustment": false
+        }
+      ],
+      "departments": [
+        "Unknown Department",
+        "Audio Department",
+        "Manpower"
+      ],
+      "showUnitPrices": false,
+      "showDepartmentDiscounts": false,
+      "showDepartmentSubtotals": true,
+      "totalLocked": false,
+      "lockedPreTaxTotal": null,
+      "revisions": [],
+      "sentAt": "",
+      "acceptedAt": "",
+      "invoicedAt": "",
+      "paidAt": "",
+      "statusChangedAt": "2026-07-08T19:59:39",
+      "eventId": null,
+      "eventManagedByQuotation": false,
+      "eventSyncFingerprint": "",
+      "sourceQuotationId": "",
+      "createdAt": "2026-07-08T17:27:58",
+      "createdBy": "bnjm2000",
+      "updatedAt": "2026-07-08T19:59:39",
+      "updatedBy": "bnjm2000",
+      "eventDays": 3,
+      "totals": {
+        "subtotal": 4120.0,
+        "adjustments": -335.0,
+        "discount": 335.0,
+        "netSubtotal": 3785.0,
+        "calculatedPreTax": 3785.0,
+        "lockedPreTax": null,
+        "lockDifference": 0,
+        "tax": 340.65,
+        "total": 4125.65
+      }
+    },
+    {
+      "id": "d07c45ae1bdf1848f4c9e45d",
+      "type": "quotation",
+      "number": "QT-2026-006-01",
+      "baseSequence": 6,
+      "revision": 1,
+      "status": "accepted",
+      "client": {
+        "name": "Adityan Sohien",
+        "company": "Avery Events and Exhibitions",
+        "contactPerson": "",
+        "email": "",
+        "phone": "+65 9652 3212",
+        "taxNumber": "",
+        "address1": "2 Venture Dr, #14-02",
+        "address2": "Vision Exchange",
+        "address3": "",
+        "postalCode": "Singapore 608526"
+      },
+      "quotationDate": "2026-07-09",
+      "validUntil": "2026-08-08",
+      "projectName": "Dry Hire of DXR12",
+      "title": "Dry Hire of DXR12",
+      "reference": "",
+      "eventReference": "",
+      "salesperson": "Benjamin Ng",
+      "paymentTerms": "30 Days",
+      "eventLocation": "Paya Lebar Camp",
+      "setupDate": "2026-04-29",
+      "setupTime": "",
+      "rehearsalDate": "",
+      "rehearsalTime": "",
+      "showDate": "",
+      "showTime": "",
+      "teardownDate": "2026-08-18",
+      "teardownTime": "",
+      "validityDays": 14,
+      "currency": "SGD",
+      "taxRate": 9.0,
+      "notes": "",
+      "terms": "1.  Validity: 14 days\n2.  Work shall only commence upon receiving the certified copy of our quotation.  \n3.  Upon confirmation, a 50% non-refundable down payment is required, and the remaining balance must be paid upon\n      completion of the setup.\n4.  All items are rented for indoor usage only (unless otherwise stated).\n5.  Confirmation of rental is on a first-come, first-served basis.\n6.  T/T to: OCBC Bank Limited, 65 Chulia Street, #01 - 00, OCBC Centre, Singapore 049513.\n     Account Number (S$): 601 - 546195 - 001, Swift Code: OCBCSGSG, Account Name: Avec Vision Pte Ltd.\n7.  The hirer is responsible for according to due diligence and cares for equipment.  In agreement, they will undertake liability for\n\"     the loss or damage of the equipment rented.\t\"\n8.  Cancellation charge:  100% of the total amount if cancellation occurs after the completion of the setup.\n9.  Any additional services or equipment not mentioned in this quotation will be charged accordingly.\n\nWe hope the above quotation is acceptable to you and will be looking forward to your early confirmation.   Please feel free to\ncontact the undersigned should you require any further information.",
+      "lineItems": [
+        {
+          "id": "line_1783526912874_02a03fee06eaa",
+          "catalogKey": "inventory:ax|yamaha|dxr12",
+          "sourceAssetIds": [
+            "DXR12#01",
+            "DXR12#02",
+            "DXR12#03",
+            "DXR12#04",
+            "DXR12#05",
+            "DXR12#06"
+          ],
+          "brand": "Yamaha",
+          "model": "DXR12",
+          "description": "Yamaha DXR12 Active 12\" Speaker",
+          "department": "Audio Department",
+          "departmentCode": "AX",
+          "days": 112.0,
+          "quantity": 6.0,
+          "uom": "units",
+          "unitPrice": 80.0,
+          "discountPercent": 0.0,
+          "total": 53760.0,
+          "isCustom": false
+        },
+        {
+          "id": "9609b8b31dfb",
+          "catalogKey": "",
+          "sourceAssetIds": [],
+          "brand": "",
+          "model": "",
+          "description": "Speaker stand",
+          "department": "Audio Department",
+          "departmentCode": "AX",
+          "days": 112.0,
+          "quantity": 8.0,
+          "uom": "units",
+          "unitPrice": 0,
+          "discountPercent": 0.0,
+          "total": 0.0,
+          "isCustom": true
+        }
+      ],
+      "adjustments": [
+        {
+          "id": "locked_total_d07c45ae1bdf1848f4c9e45d",
+          "scope": "total",
+          "department": "",
+          "label": "94.79% total discount",
+          "amount": -50960.0,
+          "percent": 94.7917,
+          "kind": "discount",
+          "lockedTotalAdjustment": true
+        }
+      ],
+      "departments": [
+        "Audio Department"
+      ],
+      "showUnitPrices": true,
+      "showDepartmentDiscounts": true,
+      "showDepartmentSubtotals": true,
+      "totalLocked": true,
+      "lockedPreTaxTotal": 2800.0,
+      "revisions": [],
+      "sentAt": "",
+      "acceptedAt": "2026-07-09T00:11:42",
+      "invoicedAt": "",
+      "paidAt": "",
+      "statusChangedAt": "2026-07-09T00:11:42",
+      "eventId": 130,
+      "eventManagedByQuotation": false,
+      "eventSyncFingerprint": "",
+      "sourceQuotationId": "",
+      "createdAt": "2026-07-08T19:59:41",
+      "createdBy": "bnjm2000",
+      "updatedAt": "2026-07-09T00:13:16",
+      "updatedBy": "bnjm2000",
+      "eventDays": 112,
+      "totals": {
+        "subtotal": 53760.0,
+        "adjustments": -50960.0,
+        "discount": 50960.0,
+        "netSubtotal": 2800.0,
+        "calculatedPreTax": 2800.0,
+        "lockedPreTax": 2800.0,
+        "lockDifference": 0.0,
+        "tax": 252.0,
+        "total": 3052.0
       }
     }
   ],
@@ -1833,7 +2353,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T19:08:56"
+      "updatedAt": "2026-07-09T00:34:56"
     },
     "bnjm2000::ax|l-acoustics|x12|12\" passive coaxial enclosure": {
       "description": "L-Acoustics X12 12\" passive coaxial enclosure",
@@ -1841,7 +2361,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T19:08:56"
+      "updatedAt": "2026-07-09T00:34:56"
     },
     "bnjm2000::ax|l-acoustics|sb18|high power compact subwoofer: 1 x 18\"": {
       "description": "L-Acoustics SB18 High power compact subwoofer: 1 x 18\"",
@@ -1849,7 +2369,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T19:08:56"
+      "updatedAt": "2026-07-09T00:34:56"
     },
     "bnjm2000::ax|l-acoustics|la4x|amplified controller": {
       "description": "L-Acoustics LA4X Amplified controller",
@@ -1857,7 +2377,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T19:08:56"
+      "updatedAt": "2026-07-09T00:34:56"
     },
     "bnjm2000::ax|shure|ulxd4d [l50]|dual channel receiver": {
       "description": "Shure ULXD4D [L50] Dual Channel Receiver",
@@ -1865,7 +2385,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T19:08:56"
+      "updatedAt": "2026-07-09T00:34:56"
     },
     "bnjm2000::ax|shure|ulxd4q [l50]|quad channel receiver": {
       "description": "Shure ULXD4Q [L50] Quad Channel Receiver",
@@ -1873,7 +2393,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T19:08:56"
+      "updatedAt": "2026-07-09T00:34:56"
     },
     "bnjm2000::ax|shure|ulxd2 [l50]|handheld microphone": {
       "description": "Shure ULXD2 [L50] Handheld Microphone",
@@ -1881,7 +2401,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T19:08:56"
+      "updatedAt": "2026-07-09T00:34:56"
     },
     "bnjm2000::ax|sennheiser|dad(uhf)|spectera bidirectional digital antenna": {
       "description": "Sennheiser DAD(UHF) Spectera Bidirectional digital antenna",
@@ -1889,7 +2409,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T19:08:56"
+      "updatedAt": "2026-07-09T00:34:56"
     },
     "bnjm2000::ax|sennheiser|sek(uhf)|spectera bidirectional bodypack": {
       "description": "Sennheiser SEK(UHF) Spectera Bidirectional bodypack",
@@ -1897,7 +2417,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T19:08:56"
+      "updatedAt": "2026-07-09T00:34:56"
     },
     "bnjm2000::ax|sennheiser|spectera base station|1ru spectera base station": {
       "description": "Sennheiser Spectera Base Station 1RU Spectera Base Station",
@@ -1905,7 +2425,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T19:08:56"
+      "updatedAt": "2026-07-09T00:34:56"
     },
     "bnjm2000::ax|yamaha|rio3224-d2|high performance i/o rack": {
       "description": "Yamaha Rio3224-d2 High Performance I/O Rack",
@@ -1913,7 +2433,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T19:08:56"
+      "updatedAt": "2026-07-09T00:34:56"
     },
     "bnjm2000::ax|yamaha|rio1608-d2|high performance i/o rack": {
       "description": "Yamaha Rio1608-d2 High Performance I/O Rack",
@@ -1921,7 +2441,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T19:08:56"
+      "updatedAt": "2026-07-09T00:34:56"
     },
     "bnjm2000::ax|shure|sm58s|cardioid dynamic w/ switch": {
       "description": "Shure SM58S cardioid dynamic w/ switch",
@@ -1929,7 +2449,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T19:08:56"
+      "updatedAt": "2026-07-09T00:34:56"
     },
     "bnjm2000::ax|shure|beta 91a|boundary condenser microphone": {
       "description": "Shure Beta 91A Boundary condenser microphone",
@@ -1937,7 +2457,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T19:08:56"
+      "updatedAt": "2026-07-09T00:34:56"
     },
     "bnjm2000::ax|audix|d6|professional dynamic instrument microphone": {
       "description": "Audix D6 Professional Dynamic Instrument Microphone",
@@ -1945,7 +2465,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T19:08:56"
+      "updatedAt": "2026-07-09T00:34:56"
     },
     "bnjm2000::ax|shure|sm57|cardioid dynamic instrument mic": {
       "description": "Shure SM57 cardioid dynamic instrument mic",
@@ -1953,7 +2473,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T19:08:56"
+      "updatedAt": "2026-07-09T00:34:56"
     },
     "bnjm2000::ax|akg|c451b|cardioid condenser microphone": {
       "description": "AKG C451B Cardioid condenser microphone",
@@ -1961,7 +2481,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T19:08:56"
+      "updatedAt": "2026-07-09T00:34:56"
     },
     "bnjm2000::ax|sennheiser|e904|dynamic cardioid instrument microphone": {
       "description": "Sennheiser E904 Dynamic cardioid instrument microphone",
@@ -1969,7 +2489,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T19:08:56"
+      "updatedAt": "2026-07-09T00:34:56"
     },
     "bnjm2000::ax|radial engineering|j48 stereo|phantom powered active direct injection box": {
       "description": "Radial Engineering J48 Stereo Phantom Powered Active Direct Injection Box",
@@ -1977,7 +2497,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T19:08:56"
+      "updatedAt": "2026-07-09T00:34:56"
     },
     "bnjm2000::ax|radial engineering|j48 mono|phantom powered active direct injection box": {
       "description": "Radial Engineering J48 Mono Phantom Powered Active Direct Injection Box",
@@ -1985,7 +2505,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T19:08:56"
+      "updatedAt": "2026-07-09T00:34:56"
     },
     "bnjm2000::ax|mackie|srm150|5.52\" compact powered monitor 150w": {
       "description": "Mackie SRM150 5.52\" compact powered monitor 150W",
@@ -1993,7 +2513,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T19:08:56"
+      "updatedAt": "2026-07-09T00:34:56"
     },
     "bnjm2000::ax|hp|1810-24g|managed gigabit ethernet switch": {
       "description": "HP 1810-24G managed gigabit ethernet switch",
@@ -2001,7 +2521,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T19:08:56"
+      "updatedAt": "2026-07-09T00:34:56"
     },
     "bnjm2000::lx|grandma3|compact xt|console": {
       "description": "GrandMA3 Compact XT Console",
@@ -2009,7 +2529,7 @@
       "department": "Lighting Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T19:08:56"
+      "updatedAt": "2026-07-09T00:34:56"
     },
     "bnjm2000::lx|dts|nickwash 600|self-contained compact high-output led moving head projector": {
       "description": "DTS NickWash 600 self-contained compact high-output LED moving head projector",
@@ -2017,7 +2537,7 @@
       "department": "Lighting Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T19:08:56"
+      "updatedAt": "2026-07-09T00:34:56"
     },
     "bnjm2000::lx|ayrton|diablo (w.dmx)|profile led": {
       "description": "Ayrton Diablo (W.DMX) Profile LED",
@@ -2025,7 +2545,7 @@
       "department": "Lighting Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T19:08:56"
+      "updatedAt": "2026-07-08T00:23:46"
     },
     "bnjm2000::lx|robe|robin ledbeam 350 wash|wash led": {
       "description": "Robe Robin LEDBeam 350 Wash Wash LED",
@@ -2033,7 +2553,7 @@
       "department": "Lighting Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T19:08:56"
+      "updatedAt": "2026-07-08T00:23:46"
     },
     "bnjm2000::lx|silverstar|roxcyc|batten 1 meter rgbwa": {
       "description": "Silverstar Roxcyc Batten 1 meter RGBWA",
@@ -2041,7 +2561,7 @@
       "department": "Lighting Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T19:08:56"
+      "updatedAt": "2026-07-09T00:34:56"
     },
     "bnjm2000::lx|le maitre|mvs hazer|hazer machine": {
       "description": "Le Maitre MVS Hazer Hazer machine",
@@ -2049,7 +2569,7 @@
       "department": "Lighting Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T19:08:56"
+      "updatedAt": "2026-07-09T00:34:56"
     },
     "bnjm2000::stg|global truss|f34 truss - 2m (silver)|2m truss (silver)": {
       "description": "Global Truss F34 Truss - 2m (Silver) 2m truss (silver)",
@@ -2057,7 +2577,7 @@
       "department": "Staging Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T19:08:56"
+      "updatedAt": "2026-07-09T00:34:56"
     },
     "bnjm2000::stg|global truss|f34 truss - 1.5m (silver)|1.5m truss (silver)": {
       "description": "Global Truss F34 Truss - 1.5m (Silver) 1.5m truss (silver)",
@@ -2065,7 +2585,7 @@
       "department": "Staging Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T19:08:56"
+      "updatedAt": "2026-07-09T00:34:56"
     },
     "bnjm2000::stg|custom|605mm base plate|605x605mm heavy-duty base plate": {
       "description": "Custom 605mm Base plate 605x605mm heavy-duty base plate",
@@ -2073,7 +2593,7 @@
       "department": "Staging Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T19:08:56"
+      "updatedAt": "2026-07-09T00:34:56"
     },
     "bnjm2000::stg|custom|308mm|light-duty top plate": {
       "description": "Custom 308mm light-duty top plate",
@@ -2081,7 +2601,7 @@
       "department": "Staging Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T19:08:56"
+      "updatedAt": "2026-07-09T00:34:56"
     },
     "bnjm2000::inventory:ax|l-acoustics|kara ii": {
       "description": "L-Acoustics KARA II Long Throw Concert Sound Loudspeaker",
@@ -2425,7 +2945,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T15:23:10"
+      "updatedAt": "2026-07-09T00:04:43"
     },
     "bnjm2000::ax|yamaha|ql5|digital mixer": {
       "description": "Yamaha QL5 Digital Mixer",
@@ -2433,7 +2953,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T15:23:10"
+      "updatedAt": "2026-07-09T00:04:43"
     },
     "bnjm2000::ax|l-acoustics|la12x|amplified controller": {
       "description": "L-Acoustics LA12X Amplified controller",
@@ -2441,7 +2961,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T15:23:10"
+      "updatedAt": "2026-07-09T00:04:43"
     },
     "bnjm2000::ax|shure|ulxd4q [g52]|quad channel receiver": {
       "description": "Shure ULXD4Q [G52] Quad Channel Receiver",
@@ -2449,7 +2969,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T15:23:10"
+      "updatedAt": "2026-07-09T00:04:43"
     },
     "bnjm2000::ax|shure|ulxd2 [g52]|handheld microphone": {
       "description": "Shure ULXD2 [G52] Handheld Microphone",
@@ -2457,15 +2977,15 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T15:23:10"
+      "updatedAt": "2026-07-09T00:04:43"
     },
     "bnjm2000::ax|shure|beta 52a|kick drum mic": {
-      "description": "Shure Beta 52A Kick drum mic",
+      "description": "Shure Beta 52A Kick drum microphone",
       "unitPrice": 20.0,
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T15:23:10"
+      "updatedAt": "2026-07-09T00:04:43"
     },
     "bnjm2000::inventory:vx|samsung|lh75qmcebgcxxs": {
       "description": "Samsung LH75QMCEBGCXXS 75\" Crystal UHD Signage",
@@ -2473,7 +2993,7 @@
       "department": "Video Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T22:53:57"
+      "updatedAt": "2026-07-09T14:48:44"
     },
     "bnjm2000::asset:qm75c#01": {
       "description": "Samsung LH75QMCEBGCXXS 75\" Crystal UHD Signage",
@@ -2481,7 +3001,7 @@
       "department": "Video Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T22:53:57"
+      "updatedAt": "2026-07-09T14:48:44"
     },
     "bnjm2000::asset:qm75c#02": {
       "description": "Samsung LH75QMCEBGCXXS 75\" Crystal UHD Signage",
@@ -2489,7 +3009,7 @@
       "department": "Video Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T22:53:57"
+      "updatedAt": "2026-07-09T14:48:44"
     },
     "bnjm2000::asset:qm75c#03": {
       "description": "Samsung LH75QMCEBGCXXS 75\" Crystal UHD Signage",
@@ -2497,7 +3017,7 @@
       "department": "Video Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T22:53:57"
+      "updatedAt": "2026-07-09T14:48:44"
     },
     "bnjm2000::asset:qm75c#04": {
       "description": "Samsung LH75QMCEBGCXXS 75\" Crystal UHD Signage",
@@ -2505,7 +3025,7 @@
       "department": "Video Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T22:53:57"
+      "updatedAt": "2026-07-09T14:48:44"
     },
     "bnjm2000::inventory:stg|global truss|f34 corner block (silver)": {
       "description": "Global Truss F34 Corner Block (Silver) Corner Block (silver)",
@@ -2513,7 +3033,7 @@
       "department": "Staging Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T22:53:57"
+      "updatedAt": "2026-07-08T00:11:58"
     },
     "bnjm2000::asset:bulk-0007": {
       "description": "Global Truss F34 Corner Block (Silver) Corner Block (silver)",
@@ -2521,7 +3041,850 @@
       "department": "Staging Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-07T22:53:57"
+      "updatedAt": "2026-07-08T00:11:58"
+    },
+    "bnjm2000::inventory:ax|turbosound|ip1000": {
+      "description": "Turbosound IP1000 Powered Column Loudspeaker",
+      "unitPrice": 180.0,
+      "department": "Unknown Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-08T19:59:39"
+    },
+    "bnjm2000::asset:ip1000#01": {
+      "description": "Turbosound IP1000 Powered Column Loudspeaker",
+      "unitPrice": 180.0,
+      "department": "Unknown Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-08T19:59:39"
+    },
+    "bnjm2000::asset:ip1000#02": {
+      "description": "Turbosound IP1000 Powered Column Loudspeaker",
+      "unitPrice": 180.0,
+      "department": "Unknown Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-08T19:59:39"
+    },
+    "bnjm2000::asset:ip1000#03": {
+      "description": "Turbosound IP1000 Powered Column Loudspeaker",
+      "unitPrice": 180.0,
+      "department": "Unknown Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-08T19:59:39"
+    },
+    "bnjm2000::asset:ip1000#04": {
+      "description": "Turbosound IP1000 Powered Column Loudspeaker",
+      "unitPrice": 180.0,
+      "department": "Unknown Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-08T19:59:39"
+    },
+    "bnjm2000::asset:ip1000#05": {
+      "description": "Turbosound IP1000 Powered Column Loudspeaker",
+      "unitPrice": 180.0,
+      "department": "Unknown Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-08T19:59:39"
+    },
+    "bnjm2000::asset:ip1000#06": {
+      "description": "Turbosound IP1000 Powered Column Loudspeaker",
+      "unitPrice": 180.0,
+      "department": "Unknown Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-08T19:59:39"
+    },
+    "bnjm2000::asset:ip1000#07": {
+      "description": "Turbosound IP1000 Powered Column Loudspeaker",
+      "unitPrice": 180.0,
+      "department": "Unknown Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-08T19:59:39"
+    },
+    "bnjm2000::asset:ip1000#08": {
+      "description": "Turbosound IP1000 Powered Column Loudspeaker",
+      "unitPrice": 180.0,
+      "department": "Unknown Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-08T19:59:39"
+    },
+    "bnjm2000::inventory:ax|mipro|mt-90a": {
+      "description": "MiPro MT-90A Interlink Transmitter",
+      "unitPrice": 80.0,
+      "department": "Audio Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-08T19:59:39"
+    },
+    "bnjm2000::asset:mt-90a#01": {
+      "description": "MiPro MT-90A Interlink Transmitter",
+      "unitPrice": 80.0,
+      "department": "Audio Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-08T19:59:39"
+    },
+    "bnjm2000::asset:mt-90a#02": {
+      "description": "MiPro MT-90A Interlink Transmitter",
+      "unitPrice": 80.0,
+      "department": "Audio Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-08T19:59:39"
+    },
+    "bnjm2000::asset:mt-90a#03": {
+      "description": "MiPro MT-90A Interlink Transmitter",
+      "unitPrice": 80.0,
+      "department": "Audio Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-08T19:59:39"
+    },
+    "bnjm2000::asset:mt-90a#04": {
+      "description": "MiPro MT-90A Interlink Transmitter",
+      "unitPrice": 80.0,
+      "department": "Audio Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-08T19:59:39"
+    },
+    "bnjm2000::inventory:ax|mipro|mr-90": {
+      "description": "MiPro MR-90 Interlink receiver",
+      "unitPrice": 50.0,
+      "department": "Audio Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-08T19:59:39"
+    },
+    "bnjm2000::asset:mr-90a#01": {
+      "description": "MiPro MR-90 Interlink receiver",
+      "unitPrice": 50.0,
+      "department": "Audio Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-08T19:59:39"
+    },
+    "bnjm2000::asset:mr-90a#02": {
+      "description": "MiPro MR-90 Interlink receiver",
+      "unitPrice": 50.0,
+      "department": "Audio Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-08T19:59:39"
+    },
+    "bnjm2000::asset:mr-90a#03": {
+      "description": "MiPro MR-90 Interlink receiver",
+      "unitPrice": 50.0,
+      "department": "Audio Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-08T19:59:39"
+    },
+    "bnjm2000::asset:mr-90a#04": {
+      "description": "MiPro MR-90 Interlink receiver",
+      "unitPrice": 50.0,
+      "department": "Audio Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-08T19:59:39"
+    },
+    "bnjm2000::asset:mr-90a#05": {
+      "description": "MiPro MR-90 Interlink receiver",
+      "unitPrice": 50.0,
+      "department": "Audio Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-08T19:59:39"
+    },
+    "bnjm2000::asset:mr-90a#06": {
+      "description": "MiPro MR-90 Interlink receiver",
+      "unitPrice": 50.0,
+      "department": "Audio Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-08T19:59:39"
+    },
+    "bnjm2000::inventory:ax|shure|ulxd1 [l50]": {
+      "description": "Shure ULXD1 [L50] Beltpack",
+      "unitPrice": 50.0,
+      "department": "Audio Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-08T19:59:39"
+    },
+    "bnjm2000::asset:ulxd1#01": {
+      "description": "Shure ULXD1 [L50] Beltpack",
+      "unitPrice": 50.0,
+      "department": "Audio Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-08T19:59:39"
+    },
+    "bnjm2000::asset:ulxd1#02": {
+      "description": "Shure ULXD1 [L50] Beltpack",
+      "unitPrice": 50.0,
+      "department": "Audio Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-08T19:59:39"
+    },
+    "bnjm2000::asset:ulxd1#03": {
+      "description": "Shure ULXD1 [L50] Beltpack",
+      "unitPrice": 50.0,
+      "department": "Audio Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-08T19:59:39"
+    },
+    "bnjm2000::asset:ulxd1#04": {
+      "description": "Shure ULXD1 [L50] Beltpack",
+      "unitPrice": 50.0,
+      "department": "Audio Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-08T19:59:39"
+    },
+    "bnjm2000::asset:ulxd1#05": {
+      "description": "Shure ULXD1 [L50] Beltpack",
+      "unitPrice": 50.0,
+      "department": "Audio Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-08T19:59:39"
+    },
+    "bnjm2000::asset:ulxd1#06": {
+      "description": "Shure ULXD1 [L50] Beltpack",
+      "unitPrice": 50.0,
+      "department": "Audio Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-08T19:59:39"
+    },
+    "bnjm2000::asset:ulxd1#07": {
+      "description": "Shure ULXD1 [L50] Beltpack",
+      "unitPrice": 50.0,
+      "department": "Audio Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-08T19:59:39"
+    },
+    "bnjm2000::asset:ulxd1#08": {
+      "description": "Shure ULXD1 [L50] Beltpack",
+      "unitPrice": 50.0,
+      "department": "Audio Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-08T19:59:39"
+    },
+    "bnjm2000::asset:ulxd1#09": {
+      "description": "Shure ULXD1 [L50] Beltpack",
+      "unitPrice": 50.0,
+      "department": "Audio Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-08T19:59:39"
+    },
+    "bnjm2000::asset:ulxd1#10": {
+      "description": "Shure ULXD1 [L50] Beltpack",
+      "unitPrice": 50.0,
+      "department": "Audio Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-08T19:59:39"
+    },
+    "bnjm2000::asset:ulxd1#11": {
+      "description": "Shure ULXD1 [L50] Beltpack",
+      "unitPrice": 50.0,
+      "department": "Audio Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-08T19:59:39"
+    },
+    "bnjm2000::asset:ulxd1#12": {
+      "description": "Shure ULXD1 [L50] Beltpack",
+      "unitPrice": 50.0,
+      "department": "Audio Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-08T19:59:39"
+    },
+    "bnjm2000::asset:ulxd1#19": {
+      "description": "Shure ULXD1 [L50] Beltpack",
+      "unitPrice": 50.0,
+      "department": "Audio Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-08T19:59:39"
+    },
+    "bnjm2000::inventory:ax|shure|ulxd4d [l50]": {
+      "description": "Shure ULXD4D [L50] Dual Channel Receiver",
+      "unitPrice": 200.0,
+      "department": "Audio Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-08T19:59:39"
+    },
+    "bnjm2000::asset:ulxd4d#01": {
+      "description": "Shure ULXD4D [L50] Dual Channel Receiver",
+      "unitPrice": 200.0,
+      "department": "Audio Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-08T19:59:39"
+    },
+    "bnjm2000::asset:ulxd4d#02": {
+      "description": "Shure ULXD4D [L50] Dual Channel Receiver",
+      "unitPrice": 200.0,
+      "department": "Audio Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-08T19:59:39"
+    },
+    "bnjm2000::asset:ulxd4d#03": {
+      "description": "Shure ULXD4D [L50] Dual Channel Receiver",
+      "unitPrice": 200.0,
+      "department": "Audio Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-08T19:59:39"
+    },
+    "bnjm2000::asset:ulxd4d#04": {
+      "description": "Shure ULXD4D [L50] Dual Channel Receiver",
+      "unitPrice": 200.0,
+      "department": "Audio Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-08T19:59:39"
+    },
+    "bnjm2000::inventory:ax|shure|ua845": {
+      "description": "Shure UA845 UHF Antenna Distribution System",
+      "unitPrice": 160.0,
+      "department": "Audio Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-08T19:59:39"
+    },
+    "bnjm2000::asset:ua845#01": {
+      "description": "Shure UA845 UHF Antenna Distribution System",
+      "unitPrice": 160.0,
+      "department": "Audio Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-08T19:59:39"
+    },
+    "bnjm2000::inventory:ax|dpa|4488 (beige)": {
+      "description": "DPA 4488 (beige) Directional Headset",
+      "unitPrice": 30.0,
+      "department": "Audio Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-08T19:59:39"
+    },
+    "bnjm2000::asset:4488#01": {
+      "description": "DPA 4488 (beige) Directional Headset",
+      "unitPrice": 30.0,
+      "department": "Audio Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-08T19:59:39"
+    },
+    "bnjm2000::asset:4488#02": {
+      "description": "DPA 4488 (beige) Directional Headset",
+      "unitPrice": 30.0,
+      "department": "Audio Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-08T19:59:39"
+    },
+    "bnjm2000::asset:4488#03": {
+      "description": "DPA 4488 (beige) Directional Headset",
+      "unitPrice": 30.0,
+      "department": "Audio Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-08T19:59:39"
+    },
+    "bnjm2000::asset:4488#04": {
+      "description": "DPA 4488 (beige) Directional Headset",
+      "unitPrice": 30.0,
+      "department": "Audio Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-08T19:59:39"
+    },
+    "bnjm2000::asset:4488#05": {
+      "description": "DPA 4488 (beige) Directional Headset",
+      "unitPrice": 30.0,
+      "department": "Audio Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-08T19:59:39"
+    },
+    "bnjm2000::asset:4488#06": {
+      "description": "DPA 4488 (beige) Directional Headset",
+      "unitPrice": 30.0,
+      "department": "Audio Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-08T19:59:39"
+    },
+    "bnjm2000::asset:4488#07": {
+      "description": "DPA 4488 (beige) Directional Headset",
+      "unitPrice": 30.0,
+      "department": "Audio Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-08T19:59:39"
+    },
+    "bnjm2000::asset:4488#08": {
+      "description": "DPA 4488 (beige) Directional Headset",
+      "unitPrice": 30.0,
+      "department": "Audio Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-08T19:59:39"
+    },
+    "bnjm2000::asset:4488#09": {
+      "description": "DPA 4488 (beige) Directional Headset",
+      "unitPrice": 30.0,
+      "department": "Audio Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-08T19:59:39"
+    },
+    "bnjm2000::asset:4488#10": {
+      "description": "DPA 4488 (beige) Directional Headset",
+      "unitPrice": 30.0,
+      "department": "Audio Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-08T19:59:39"
+    },
+    "bnjm2000::asset:4488#11": {
+      "description": "DPA 4488 (beige) Directional Headset",
+      "unitPrice": 30.0,
+      "department": "Audio Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-08T19:59:39"
+    },
+    "bnjm2000::asset:4488#12": {
+      "description": "DPA 4488 (beige) Directional Headset",
+      "unitPrice": 30.0,
+      "department": "Audio Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-08T19:59:39"
+    },
+    "bnjm2000::inventory:ax|shure|ha-8091": {
+      "description": "Shure HA-8091 Passive Domed Helical Antenna",
+      "unitPrice": 500.0,
+      "department": "Audio Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-08T17:35:12"
+    },
+    "bnjm2000::asset:ha8091#01": {
+      "description": "Shure HA-8091 Passive Domed Helical Antenna",
+      "unitPrice": 500.0,
+      "department": "Audio Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-08T17:35:12"
+    },
+    "bnjm2000::inventory:lx|ayrton|diablo (w.dmx)": {
+      "description": "Ayrton Diablo (W.DMX) Profile LED - moving head",
+      "unitPrice": 250.0,
+      "department": "Lighting Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-09T00:34:56"
+    },
+    "bnjm2000::asset:diablo#01": {
+      "description": "Ayrton Diablo (W.DMX) Profile LED - moving head",
+      "unitPrice": 250.0,
+      "department": "Lighting Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-09T00:08:12"
+    },
+    "bnjm2000::asset:diablo#02": {
+      "description": "Ayrton Diablo (W.DMX) Profile LED - moving head",
+      "unitPrice": 250.0,
+      "department": "Lighting Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-09T00:08:12"
+    },
+    "bnjm2000::asset:diablo#03": {
+      "description": "Ayrton Diablo (W.DMX) Profile LED - moving head",
+      "unitPrice": 250.0,
+      "department": "Lighting Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-09T00:08:12"
+    },
+    "bnjm2000::asset:diablo#04": {
+      "description": "Ayrton Diablo (W.DMX) Profile LED - moving head",
+      "unitPrice": 250.0,
+      "department": "Lighting Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-09T00:08:12"
+    },
+    "bnjm2000::asset:diablo#05": {
+      "description": "Ayrton Diablo (W.DMX) Profile LED - moving head",
+      "unitPrice": 250.0,
+      "department": "Lighting Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-09T00:08:12"
+    },
+    "bnjm2000::asset:diablo#06": {
+      "description": "Ayrton Diablo (W.DMX) Profile LED - moving head",
+      "unitPrice": 250.0,
+      "department": "Lighting Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-09T00:08:12"
+    },
+    "bnjm2000::asset:diablo#07": {
+      "description": "Ayrton Diablo (W.DMX) Profile LED - moving head",
+      "unitPrice": 250.0,
+      "department": "Lighting Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-09T00:08:12"
+    },
+    "bnjm2000::asset:diablo#08": {
+      "description": "Ayrton Diablo (W.DMX) Profile LED - moving head",
+      "unitPrice": 250.0,
+      "department": "Lighting Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-09T00:08:12"
+    },
+    "bnjm2000::asset:diablo#09": {
+      "description": "Ayrton Diablo (W.DMX) Profile LED - moving head",
+      "unitPrice": 250.0,
+      "department": "Lighting Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-09T00:08:12"
+    },
+    "bnjm2000::asset:diablo#10": {
+      "description": "Ayrton Diablo (W.DMX) Profile LED - moving head",
+      "unitPrice": 250.0,
+      "department": "Lighting Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-09T00:08:12"
+    },
+    "bnjm2000::asset:diablo#11": {
+      "description": "Ayrton Diablo (W.DMX) Profile LED - moving head",
+      "unitPrice": 250.0,
+      "department": "Lighting Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-09T00:08:12"
+    },
+    "bnjm2000::asset:diablo#12": {
+      "description": "Ayrton Diablo (W.DMX) Profile LED - moving head",
+      "unitPrice": 250.0,
+      "department": "Lighting Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-09T00:08:12"
+    },
+    "bnjm2000::inventory:lx|robe|esprite": {
+      "description": "Robe ESPRITE Profile LED - moving head",
+      "unitPrice": 350.0,
+      "department": "Lighting Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-09T00:08:12"
+    },
+    "bnjm2000::asset:esprite#01": {
+      "description": "Robe ESPRITE Profile LED - moving head",
+      "unitPrice": 350.0,
+      "department": "Lighting Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-09T00:08:12"
+    },
+    "bnjm2000::asset:esprite#02": {
+      "description": "Robe ESPRITE Profile LED - moving head",
+      "unitPrice": 350.0,
+      "department": "Lighting Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-09T00:08:12"
+    },
+    "bnjm2000::asset:esprite#03": {
+      "description": "Robe ESPRITE Profile LED - moving head",
+      "unitPrice": 350.0,
+      "department": "Lighting Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-09T00:08:12"
+    },
+    "bnjm2000::asset:esprite#04": {
+      "description": "Robe ESPRITE Profile LED - moving head",
+      "unitPrice": 350.0,
+      "department": "Lighting Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-09T00:08:12"
+    },
+    "bnjm2000::asset:esprite#05": {
+      "description": "Robe ESPRITE Profile LED - moving head",
+      "unitPrice": 350.0,
+      "department": "Lighting Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-09T00:08:12"
+    },
+    "bnjm2000::asset:esprite#06": {
+      "description": "Robe ESPRITE Profile LED - moving head",
+      "unitPrice": 350.0,
+      "department": "Lighting Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-09T00:08:12"
+    },
+    "bnjm2000::asset:esprite#07": {
+      "description": "Robe ESPRITE Profile LED - moving head",
+      "unitPrice": 350.0,
+      "department": "Lighting Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-09T00:08:12"
+    },
+    "bnjm2000::asset:esprite#08": {
+      "description": "Robe ESPRITE Profile LED - moving head",
+      "unitPrice": 350.0,
+      "department": "Lighting Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-09T00:08:12"
+    },
+    "bnjm2000::asset:esprite#09": {
+      "description": "Robe ESPRITE Profile LED - moving head",
+      "unitPrice": 350.0,
+      "department": "Lighting Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-09T00:08:12"
+    },
+    "bnjm2000::asset:esprite#10": {
+      "description": "Robe ESPRITE Profile LED - moving head",
+      "unitPrice": 350.0,
+      "department": "Lighting Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-09T00:08:12"
+    },
+    "bnjm2000::asset:esprite#11": {
+      "description": "Robe ESPRITE Profile LED - moving head",
+      "unitPrice": 350.0,
+      "department": "Lighting Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-09T00:08:12"
+    },
+    "bnjm2000::asset:esprite#12": {
+      "description": "Robe ESPRITE Profile LED - moving head",
+      "unitPrice": 350.0,
+      "department": "Lighting Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-09T00:08:12"
+    },
+    "bnjm2000::asset:esprite#13": {
+      "description": "Robe ESPRITE Profile LED - moving head",
+      "unitPrice": 350.0,
+      "department": "Lighting Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-09T00:08:12"
+    },
+    "bnjm2000::asset:esprite#14": {
+      "description": "Robe ESPRITE Profile LED - moving head",
+      "unitPrice": 350.0,
+      "department": "Lighting Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-09T00:08:12"
+    },
+    "bnjm2000::asset:esprite#15": {
+      "description": "Robe ESPRITE Profile LED - moving head",
+      "unitPrice": 350.0,
+      "department": "Lighting Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-09T00:08:12"
+    },
+    "bnjm2000::asset:esprite#16": {
+      "description": "Robe ESPRITE Profile LED - moving head",
+      "unitPrice": 350.0,
+      "department": "Lighting Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-09T00:08:12"
+    },
+    "bnjm2000::asset:esprite#17": {
+      "description": "Robe ESPRITE Profile LED - moving head",
+      "unitPrice": 350.0,
+      "department": "Lighting Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-09T00:08:12"
+    },
+    "bnjm2000::asset:esprite#18": {
+      "description": "Robe ESPRITE Profile LED - moving head",
+      "unitPrice": 350.0,
+      "department": "Lighting Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-09T00:08:12"
+    },
+    "bnjm2000::asset:esprite#19": {
+      "description": "Robe ESPRITE Profile LED - moving head",
+      "unitPrice": 350.0,
+      "department": "Lighting Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-09T00:08:12"
+    },
+    "bnjm2000::asset:esprite#20": {
+      "description": "Robe ESPRITE Profile LED - moving head",
+      "unitPrice": 350.0,
+      "department": "Lighting Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-09T00:08:12"
+    },
+    "bnjm2000::asset:esprite#21": {
+      "description": "Robe ESPRITE Profile LED - moving head",
+      "unitPrice": 350.0,
+      "department": "Lighting Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-09T00:08:12"
+    },
+    "bnjm2000::asset:esprite#22": {
+      "description": "Robe ESPRITE Profile LED - moving head",
+      "unitPrice": 350.0,
+      "department": "Lighting Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-09T00:08:12"
+    },
+    "bnjm2000::asset:esprite#23": {
+      "description": "Robe ESPRITE Profile LED - moving head",
+      "unitPrice": 350.0,
+      "department": "Lighting Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-09T00:08:12"
+    },
+    "bnjm2000::asset:esprite#24": {
+      "description": "Robe ESPRITE Profile LED - moving head",
+      "unitPrice": 350.0,
+      "department": "Lighting Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-09T00:08:12"
+    },
+    "bnjm2000::inventory:ax|yamaha|dxr12": {
+      "description": "Yamaha DXR12 Active 12\" Speaker",
+      "unitPrice": 80.0,
+      "department": "Audio Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-09T00:13:16"
+    },
+    "bnjm2000::asset:dxr12#01": {
+      "description": "Yamaha DXR12 Active 12\" Speaker",
+      "unitPrice": 80.0,
+      "department": "Audio Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-09T00:13:16"
+    },
+    "bnjm2000::asset:dxr12#02": {
+      "description": "Yamaha DXR12 Active 12\" Speaker",
+      "unitPrice": 80.0,
+      "department": "Audio Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-09T00:13:16"
+    },
+    "bnjm2000::asset:dxr12#03": {
+      "description": "Yamaha DXR12 Active 12\" Speaker",
+      "unitPrice": 80.0,
+      "department": "Audio Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-09T00:13:16"
+    },
+    "bnjm2000::asset:dxr12#04": {
+      "description": "Yamaha DXR12 Active 12\" Speaker",
+      "unitPrice": 80.0,
+      "department": "Audio Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-09T00:13:16"
+    },
+    "bnjm2000::asset:dxr12#05": {
+      "description": "Yamaha DXR12 Active 12\" Speaker",
+      "unitPrice": 80.0,
+      "department": "Audio Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-09T00:13:16"
+    },
+    "bnjm2000::asset:dxr12#06": {
+      "description": "Yamaha DXR12 Active 12\" Speaker",
+      "unitPrice": 80.0,
+      "department": "Audio Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-09T00:13:16"
+    },
+    "bnjm2000::inventory:lx|robe|robin ledbeam 350 wash": {
+      "description": "Robe Robin LEDBeam 350 Wash Wash LED - moving head",
+      "unitPrice": 180.0,
+      "department": "Lighting Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-09T00:34:56"
+    },
+    "bnjm2000::inventory:vx|samsung|ua75ru7100kxxs": {
+      "description": "Samsung UA75RU7100KXXS 75\" Smart TV",
+      "unitPrice": 450.0,
+      "department": "Video Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-09T14:48:44"
+    },
+    "bnjm2000::asset:75inch#01": {
+      "description": "Samsung UA75RU7100KXXS 75\" Smart TV",
+      "unitPrice": 450.0,
+      "department": "Video Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-09T14:48:44"
     }
+  },
+  "profitLoss": {
+    "expenses": {}
   }
 }

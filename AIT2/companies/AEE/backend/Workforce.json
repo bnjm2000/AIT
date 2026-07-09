@@ -3,7 +3,7 @@
   "freelancers": [
     {
       "id": "freelancer_e1528307d9de9a47",
-      "name": "ben",
+      "name": "Benjamin Ng",
       "phone": "+6590405008",
       "email": "",
       "company": "",
@@ -11,62 +11,27 @@
       "active": true,
       "personnelOnly": false,
       "createdAt": "2026-07-06T14:04:51+08:00",
-      "updatedAt": "2026-07-07T22:40:11+08:00",
+      "updatedAt": "2026-07-08T21:54:08+08:00",
       "workerPasswordSalt": "5d1e16ce7e37747e244edb6b4cf86fb7",
       "workerPasswordHash": "39c7525f88ebd7ccad525805d8b4e82593b92c88e7de92963e26cbafd2606528",
       "workerCredentialType": "pin",
       "workerCredentialsSetAt": "2026-07-06T14:05:48+08:00",
       "workerAuthVersion": 1,
-      "workerLastLoginAt": "2026-07-07T22:40:11+08:00"
+      "workerLastLoginAt": "2026-07-08T21:52:10+08:00"
     }
   ],
   "vendors": [],
   "roles": [],
   "assignments": {
-    "1": [
-      {
-        "id": "assignment_f5efbba99d2425ea",
-        "freelancerId": "freelancer_e1528307d9de9a47",
-        "subjectType": "worker",
-        "department": "UN",
-        "roleId": "",
-        "roleName": "eadfs",
-        "days": 1,
-        "workDates": [
-          "2026-07-06"
-        ],
-        "dailyRate": 213.0,
-        "notes": "",
-        "createdAt": "2026-07-06T14:05:13+08:00"
-      },
-      {
-        "id": "assignment_484fe025da9f2fd9",
-        "freelancerId": "freelancer_e1528307d9de9a47",
-        "subjectType": "worker",
-        "department": "LX",
-        "roleId": "",
-        "roleName": "q23",
-        "days": 1,
-        "workDates": [
-          "2026-07-06"
-        ],
-        "dailyRate": 234.0,
-        "notes": "",
-        "createdAt": "2026-07-06T14:09:25+08:00"
-      }
-    ]
+    "1": []
   },
   "manualDepartments": {
-    "1": [
-      {
-        "code": "LX",
-        "name": "Lighting",
-        "createdAt": "2026-07-06T14:09:11+08:00"
-      }
-    ]
+    "1": []
   },
   "hiddenDepartments": {
-    "1": []
+    "1": [
+      "LX"
+    ]
   },
   "uploadAllowances": {},
   "transportVendors": [],
@@ -80,5 +45,5 @@
       }
     }
   },
-  "updatedAt": "2026-07-07T22:40:43+08:00"
+  "updatedAt": "2026-07-08T21:54:08+08:00"
 }

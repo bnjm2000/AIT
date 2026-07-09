@@ -18027,7 +18027,7 @@ def check_and_update_ongoing_events():
 # ---------------- Quotations and invoices ----------------
 
 FINANCE_FILENAME = 'Finance.json'
-FINANCE_VERSION = 4
+FINANCE_VERSION = 5
 FINANCE_QUOTATION_STATUSES = (
     'draft', 'sent', 'accepted', 'declined', 'expired',
     'cancelled', 'invoiced', 'paid',
@@ -18045,6 +18045,9 @@ def _finance_defaults():
         'version': FINANCE_VERSION,
         'documents': [],
         'priceBook': {},
+        'profitLoss': {
+            'expenses': {},
+        },
     }
 
 
@@ -18156,6 +18159,14 @@ def _migrate_finance_data(data):
     settings = _load_pdf_settings()
     quote_prefix = str(settings.get('quotationPrefix') or 'QT').upper()
     documents = data.get('documents') or []
+
+    profit_loss = data.get('profitLoss')
+    if not isinstance(profit_loss, dict):
+        data['profitLoss'] = {'expenses': {}}
+        changed = True
+    elif not isinstance(profit_loss.get('expenses'), dict):
+        profit_loss['expenses'] = {}
+        changed = True
 
     for index, document in enumerate(documents, start=1):
         if not isinstance(document, dict):
@@ -18272,6 +18283,8 @@ def _load_finance_data():
             data['documents'] = loaded['documents']
         if isinstance(loaded.get('priceBook'), dict):
             data['priceBook'] = loaded['priceBook']
+        if isinstance(loaded.get('profitLoss'), dict):
+            data['profitLoss'] = loaded['profitLoss']
         data['version'] = loaded.get('version', 1)
     if _migrate_finance_data(data):
         _save_finance_data(data)
@@ -18287,6 +18300,7 @@ def _save_finance_data(data):
         'version': FINANCE_VERSION,
         'documents': data.get('documents') or [],
         'priceBook': data.get('priceBook') or {},
+        'profitLoss': data.get('profitLoss') if isinstance(data.get('profitLoss'), dict) else {'expenses': {}},
     }
     temp_path = f"{filepath}.{secrets.token_hex(6)}.tmp"
     with open(temp_path, 'w', encoding='utf-8') as finance_file:
@@ -19214,6 +19228,722 @@ def _finance_find_document(data, document_id, document_type):
     )
 
 
+def _finance_profit_loss_store(data):
+    store = data.get('profitLoss')
+    if not isinstance(store, dict):
+        store = {'expenses': {}}
+        data['profitLoss'] = store
+    if not isinstance(store.get('expenses'), dict):
+        store['expenses'] = {}
+    return store
+
+
+def _finance_profit_loss_event_expenses(data, event_id, create=False):
+    expenses = _finance_profit_loss_store(data).setdefault('expenses', {})
+    key = str(int(event_id))
+    if create:
+        return expenses.setdefault(key, [])
+    return expenses.get(key, []) if isinstance(expenses.get(key), list) else []
+
+
+def _finance_normalise_iso_date(value):
+    raw = str(value or '').strip()
+    if not raw:
+        return ''
+    for fmt in ('%Y-%m-%d', '%Y/%m/%d', '%d/%m/%Y', '%d-%m-%Y', '%Y%m%d'):
+        try:
+            return datetime.strptime(raw[:10] if fmt == '%Y-%m-%d' else raw, fmt).strftime('%Y-%m-%d')
+        except ValueError:
+            continue
+    try:
+        return datetime.fromisoformat(raw[:10]).strftime('%Y-%m-%d')
+    except ValueError:
+        return ''
+
+
+def _normalise_profit_loss_expense(value, event_id):
+    value = value if isinstance(value, dict) else {}
+    attachment = value.get('attachment') if isinstance(value.get('attachment'), dict) else None
+    amount = money(value.get('amount'), 0.0)
+    return {
+        'id': re.sub(r'[^A-Za-z0-9_-]+', '', str(value.get('id') or ''))[:80] or new_id('expense'),
+        'eventId': int(event_id),
+        'description': str(value.get('description') or 'Other expense').strip()[:300] or 'Other expense',
+        'category': str(value.get('category') or 'Miscellaneous').strip()[:120] or 'Miscellaneous',
+        'vendor': str(value.get('vendor') or value.get('payee') or '').strip()[:180],
+        'amount': round(amount if amount is not None else 0.0, 2),
+        'expenseDate': _finance_normalise_iso_date(value.get('expenseDate') or value.get('date')),
+        'notes': str(value.get('notes') or '').strip()[:1000],
+        'attachment': attachment,
+        'extraction': value.get('extraction') if isinstance(value.get('extraction'), dict) else {},
+        'createdAt': str(value.get('createdAt') or now_iso()),
+        'createdBy': str(value.get('createdBy') or _finance_current_username()).strip(),
+        'updatedAt': str(value.get('updatedAt') or now_iso()),
+        'updatedBy': str(value.get('updatedBy') or _finance_current_username()).strip(),
+    }
+
+
+def _profit_loss_expense_payload(expense):
+    row = dict(expense or {})
+    attachment = row.get('attachment') if isinstance(row.get('attachment'), dict) else None
+    if attachment:
+        expense_id = quote(str(row.get('id') or ''))
+        row['attachment'] = {
+            **attachment,
+            'previewUrl': f'/api/finance/profit-loss/expenses/{expense_id}/file',
+            'downloadUrl': f'/api/finance/profit-loss/expenses/{expense_id}/file?download=1',
+        }
+    return row
+
+
+def _finance_event_brief(event):
+    return {
+        'id': int(getattr(event, 'event_id', 0) or 0),
+        'name': str(getattr(event, 'name', '') or ''),
+        'location': str(getattr(event, 'location', '') or ''),
+        'startDate': format_date_output(getattr(event, 'start_date', '') or ''),
+        'endDate': format_date_output(getattr(event, 'end_date', '') or ''),
+        'startDateValue': _event_date_for_input(getattr(event, 'start_date', '') or ''),
+        'endDateValue': _event_date_for_input(getattr(event, 'end_date', '') or ''),
+        'state': str(getattr(event, 'state', '') or ''),
+        'tag': str(getattr(event, 'tag', '') or 'event'),
+    }
+
+
+def _finance_quotations_for_event(finance_data, event_id, accessible_only=True):
+    rows = []
+    for document in finance_data.get('documents') or []:
+        if document.get('type') != 'quotation':
+            continue
+        if _safe_int(document.get('eventId'), 0) != int(event_id):
+            continue
+        if accessible_only and not _finance_user_can_access(document):
+            continue
+        rows.append(_normalise_finance_document(document, 'quotation', document))
+    rows.sort(key=lambda row: (row.get('updatedAt', ''), row.get('number', '')), reverse=True)
+    return rows
+
+
+def _finance_profit_loss_assignment_estimate(assignment):
+    if not isinstance(assignment, dict):
+        return 0.0
+    days = max(1, _safe_int(assignment.get('days'), 1))
+    provider_type = str(assignment.get('providerType') or '').strip().lower()
+    if provider_type == 'service':
+        return round(money(assignment.get('serviceCost'), 0.0) or 0.0, 2)
+    if provider_type == 'manpower':
+        pax = max(1, _safe_int(assignment.get('pax'), 1))
+        rate = money(assignment.get('ratePerPax'), money(assignment.get('dailyRate'), 0.0)) or 0.0
+        return round(pax * rate * days, 2)
+    rate = money(assignment.get('dailyRate'), 0.0) or 0.0
+    return round(rate * days, 2)
+
+
+def _finance_profit_loss_workforce_costs(event_id):
+    workforce = load_workforce(_workforce_folder())
+    totals = submission_totals(workforce, event_id)
+    assignment_estimate = round(
+        sum(_finance_profit_loss_assignment_estimate(row) for row in event_assignments(workforce, event_id)),
+        2,
+    )
+    invoice_total = round(_safe_float(totals.get('invoice'), 0), 2)
+    return {
+        'manpowerCost': invoice_total if invoice_total > 0 else assignment_estimate,
+        'manpowerInvoiceCost': invoice_total,
+        'manpowerEstimatedCost': assignment_estimate,
+        'workerClaimsCost': round(_safe_float(totals.get('claims'), 0), 2),
+        'transportCost': round(_safe_float(totals.get('transport'), 0), 2),
+        'rawTotals': totals,
+    }
+
+
+def _finance_profit_loss_payload(event, finance_data):
+    event_id = int(event.event_id)
+    quotations = _finance_quotations_for_event(finance_data, event_id, accessible_only=True)
+    quotation = quotations[0] if quotations else None
+    revenue = round(_safe_float((quotation or {}).get('totals', {}).get('netSubtotal'), 0), 2)
+    expenses = [
+        _normalise_profit_loss_expense(row, event_id)
+        for row in _finance_profit_loss_event_expenses(finance_data, event_id)
+        if isinstance(row, dict)
+    ]
+    manual_other_expenses = round(sum(_safe_float(row.get('amount'), 0) for row in expenses), 2)
+    workforce_costs = _finance_profit_loss_workforce_costs(event_id)
+    other_expenses = round(workforce_costs['workerClaimsCost'] + manual_other_expenses, 2)
+    direct_costs = round(workforce_costs['manpowerCost'] + workforce_costs['transportCost'], 2)
+    before_commission = round(revenue - direct_costs - other_expenses, 2)
+    commission_rate = 10
+    commission = round(max(0, before_commission) * commission_rate / 100, 2)
+    net_profit = round(before_commission - commission, 2)
+    profit_margin = round((net_profit / revenue * 100) if revenue else 0, 2)
+    breakdown = {
+        'manpower': workforce_costs['manpowerCost'],
+        'transport': workforce_costs['transportCost'],
+        'workerClaims': workforce_costs['workerClaimsCost'],
+        'manualOtherExpenses': manual_other_expenses,
+        'commission': commission,
+    }
+    return {
+        'event': _finance_event_brief(event),
+        'quotation': ({
+            'id': quotation.get('id'),
+            'number': quotation.get('number'),
+            'projectName': quotation.get('projectName'),
+            'client': quotation.get('client') or {},
+            'totals': quotation.get('totals') or {},
+        } if quotation else None),
+        'quotations': [
+            {
+                'id': row.get('id'),
+                'number': row.get('number'),
+                'projectName': row.get('projectName'),
+            }
+            for row in quotations
+        ],
+        'summary': {
+            'revenue': revenue,
+            'directCosts': direct_costs,
+            'manpowerCost': workforce_costs['manpowerCost'],
+            'manpowerInvoiceCost': workforce_costs['manpowerInvoiceCost'],
+            'manpowerEstimatedCost': workforce_costs['manpowerEstimatedCost'],
+            'transportCost': workforce_costs['transportCost'],
+            'workerClaimsCost': workforce_costs['workerClaimsCost'],
+            'manualOtherExpenses': manual_other_expenses,
+            'otherExpenses': other_expenses,
+            'beforeCommission': before_commission,
+            'commissionRate': commission_rate,
+            'commission': commission,
+            'netProfit': net_profit,
+            'profitMargin': profit_margin,
+        },
+        'breakdown': breakdown,
+        'expenses': [_profit_loss_expense_payload(row) for row in expenses],
+        'activity': _event_activity_logs_for_response(event)[-8:][::-1],
+    }
+
+
+def _finance_compare_identity_key(identity):
+    clean = {
+        key: (
+            _normalise_department_code(value)
+            if key == 'department'
+            else re.sub(r'\s+', ' ', str(value or '').strip()).casefold()
+        )
+        for key, value in (identity or {}).items()
+        if key in {'kind', 'department', 'brand', 'model', 'name', 'type', 'company'}
+    }
+    return hashlib.sha1(
+        json.dumps(clean, sort_keys=True, separators=(',', ':')).encode('utf-8')
+    ).hexdigest()[:18]
+
+
+def _finance_compare_model_identity(department='', brand='', model=''):
+    return {
+        'kind': 'model',
+        'department': _normalise_department_code(department) or 'UN',
+        'brand': str(brand or '').strip(),
+        'model': str(model or '').strip(),
+    }
+
+
+def _finance_compare_custom_identity(asset_type='MISC', name='', department='UN', company=''):
+    return {
+        'kind': 'custom',
+        'type': _normalise_custom_type(asset_type),
+        'name': str(name or '').strip(),
+        'department': _normalise_department_code(department) or 'UN',
+        'company': str(company or '').strip(),
+    }
+
+
+def _finance_compare_department_name(code):
+    code = _normalise_department_code(code) or 'UN'
+    row = _load_departments().get(code)
+    return str((row or {}).get('name') or code)
+
+
+def _finance_compare_add_item(items, identity, quantity, details=None, line_id=None, ref=None):
+    quantity = max(0, _safe_int(round(_safe_float(quantity, 0)), 0))
+    if quantity <= 0:
+        return
+    key = _finance_compare_identity_key(identity)
+    row = items.setdefault(key, {
+        'key': key,
+        'identity': dict(identity),
+        'quantity': 0,
+        'lineIds': [],
+        'refs': [],
+        'title': '',
+        'subtitle': '',
+        'department': '',
+        'departmentCode': identity.get('department') or 'UN',
+        'uom': 'units',
+        'description': '',
+    })
+    row['quantity'] += quantity
+    if line_id and line_id not in row['lineIds']:
+        row['lineIds'].append(str(line_id))
+    if ref and ref not in row['refs']:
+        row['refs'].append(str(ref))
+    for field, value in (details or {}).items():
+        if value not in (None, '') and not row.get(field):
+            row[field] = value
+
+
+def _finance_compare_item_from_line(line):
+    if not isinstance(line, dict) or _finance_line_is_non_prepare_department(line):
+        return None
+    quantity = max(0, _safe_int(round(_safe_float(line.get('quantity'), 0)), 0))
+    if quantity <= 0:
+        return None
+    group = _finance_inventory_group_from_line(line)
+    if group:
+        identity = _finance_compare_model_identity(
+            group.get('department'),
+            group.get('brand'),
+            group.get('model'),
+        )
+        title = _finance_display_description(
+            group.get('brand'),
+            group.get('model'),
+            group.get('description'),
+        ) or str(line.get('description') or '').strip()
+        details = {
+            'title': title,
+            'subtitle': str(group.get('description') or '').strip(),
+            'department': _finance_compare_department_name(group.get('department')),
+            'departmentCode': group.get('department') or 'UN',
+            'uom': str(line.get('uom') or 'units'),
+            'description': str(group.get('description') or line.get('description') or '').strip(),
+        }
+        return identity, quantity, details
+    description = str(line.get('description') or '').strip()
+    if not description:
+        return None
+    department = _normalise_department_code(line.get('departmentCode')) or 'UN'
+    identity = _finance_compare_custom_identity('MISC', description, department)
+    return identity, quantity, {
+        'title': description,
+        'subtitle': 'Custom item',
+        'department': _finance_compare_department_name(department),
+        'departmentCode': department,
+        'uom': str(line.get('uom') or 'units'),
+        'description': description,
+    }
+
+
+def _finance_compare_quote_items(document):
+    items = {}
+    for line in (document or {}).get('lineItems') or []:
+        parsed = _finance_compare_item_from_line(line)
+        if not parsed:
+            continue
+        identity, quantity, details = parsed
+        _finance_compare_add_item(
+            items,
+            identity,
+            quantity,
+            details,
+            line_id=(line or {}).get('id'),
+        )
+    return items
+
+
+def _finance_compare_item_from_event_ref(ref):
+    marker = _parse_model_marker(ref)
+    if marker:
+        identity = _finance_compare_model_identity(
+            marker.get('department'),
+            marker.get('brand'),
+            marker.get('model'),
+        )
+        description = str(marker.get('description') or '').strip()
+        return identity, max(1, _safe_int(marker.get('quantity'), 1)), {
+            'title': _finance_display_description(marker.get('brand'), marker.get('model'), description),
+            'subtitle': description,
+            'department': _finance_compare_department_name(marker.get('department')),
+            'departmentCode': marker.get('department') or 'UN',
+            'uom': 'units',
+            'description': description,
+        }
+    custom = _parse_custom_marker(ref)
+    if custom:
+        identity = _finance_compare_custom_identity(
+            custom.get('type'),
+            custom.get('name'),
+            custom.get('department'),
+            custom.get('company'),
+        )
+        return identity, max(1, _safe_int(custom.get('quantity'), 1)), {
+            'title': str(custom.get('name') or '').strip(),
+            'subtitle': str(custom.get('company') or custom.get('type') or 'Custom item'),
+            'department': _finance_compare_department_name(custom.get('department')),
+            'departmentCode': custom.get('department') or 'UN',
+            'uom': 'units',
+            'description': str(custom.get('name') or '').strip(),
+        }
+    bulk = _parse_bulk_marker(ref)
+    if bulk:
+        asset = data_manager.inventory.get(bulk.get('bulkId')) if data_manager else None
+        quantity = max(1, _safe_int(bulk.get('quantity'), 1))
+    else:
+        asset = data_manager.inventory.get(str(ref or '')) if data_manager else None
+        quantity = 1
+    if not asset:
+        return None
+    group = _asset_group_from_item(asset)
+    identity = _finance_compare_model_identity(
+        group.get('department'),
+        group.get('brand'),
+        group.get('model'),
+    )
+    return identity, quantity, {
+        'title': _finance_display_description(group.get('brand'), group.get('model'), group.get('description')),
+        'subtitle': str(group.get('description') or '').strip(),
+        'department': _finance_compare_department_name(group.get('department')),
+        'departmentCode': group.get('department') or 'UN',
+        'uom': 'units',
+        'description': str(group.get('description') or '').strip(),
+    }
+
+
+def _finance_compare_event_items(event):
+    items = {}
+    seen_refs = set()
+    for ref in getattr(event, 'prepared_items', []) or []:
+        parsed = _finance_compare_item_from_event_ref(ref)
+        if not parsed:
+            continue
+        identity, quantity, details = parsed
+        _finance_compare_add_item(items, identity, quantity, details, ref=ref)
+        seen_refs.add(str(ref))
+    for ref in getattr(event, 'extra_assets', []) or []:
+        if str(ref) in seen_refs:
+            continue
+        parsed = _finance_compare_item_from_event_ref(ref)
+        if not parsed:
+            continue
+        identity, quantity, details = parsed
+        _finance_compare_add_item(items, identity, quantity, details, ref=ref)
+    return items
+
+
+def _finance_compare_display_item(item):
+    if not item:
+        return {
+            'key': '',
+            'title': 'Not included',
+            'subtitle': '',
+            'department': '',
+            'departmentCode': '',
+            'quantity': 0,
+            'uom': '',
+            'identity': {},
+            'lineIds': [],
+            'refs': [],
+        }
+    return {
+        'key': item.get('key') or _finance_compare_identity_key(item.get('identity') or {}),
+        'title': item.get('title') or item.get('description') or 'Untitled item',
+        'subtitle': item.get('subtitle') or '',
+        'department': item.get('department') or _finance_compare_department_name(item.get('departmentCode')),
+        'departmentCode': item.get('departmentCode') or (item.get('identity') or {}).get('department') or 'UN',
+        'quantity': max(0, _safe_int(item.get('quantity'), 0)),
+        'uom': item.get('uom') or 'units',
+        'identity': item.get('identity') or {},
+        'lineIds': item.get('lineIds') or [],
+        'refs': item.get('refs') or [],
+        'description': item.get('description') or '',
+    }
+
+
+def _finance_compare_rows(event, quotation):
+    quote_items = _finance_compare_quote_items(quotation)
+    event_items = _finance_compare_event_items(event)
+    rows = []
+    counts = {
+        'matched': 0,
+        'missingInEvent': 0,
+        'extraInEvent': 0,
+        'qtyMismatch': 0,
+    }
+    for key in sorted(set(quote_items) | set(event_items), key=lambda value: (
+        (quote_items.get(value) or event_items.get(value) or {}).get('departmentCode', ''),
+        (quote_items.get(value) or event_items.get(value) or {}).get('title', ''),
+    )):
+        quote_item = _finance_compare_display_item(quote_items.get(key))
+        event_item = _finance_compare_display_item(event_items.get(key))
+        quote_qty = quote_item.get('quantity') or 0
+        event_qty = event_item.get('quantity') or 0
+        if quote_qty and event_qty and quote_qty == event_qty:
+            status = 'matched'
+            counts['matched'] += 1
+        elif quote_qty and not event_qty:
+            status = 'missing_in_event'
+            counts['missingInEvent'] += 1
+        elif event_qty and not quote_qty:
+            status = 'extra_in_event'
+            counts['extraInEvent'] += 1
+        else:
+            status = 'qty_mismatch'
+            counts['qtyMismatch'] += 1
+        rows.append({
+            'key': key,
+            'status': status,
+            'quotationItem': quote_item,
+            'eventItem': event_item,
+            'quantityDelta': event_qty - quote_qty,
+        })
+    return rows, counts, quote_items, event_items
+
+
+def _finance_compare_can_read_quotation(document, event_id):
+    if not document or document.get('type') != 'quotation':
+        return False
+    if _safe_int(document.get('eventId'), 0) != int(event_id):
+        return False
+    return _current_user_effective_is_admin() or _finance_user_can_access(document)
+
+
+def _finance_compare_quotations_for_event(finance_data, event_id):
+    rows = []
+    for document in finance_data.get('documents') or []:
+        if _finance_compare_can_read_quotation(document, event_id):
+            normalised = _normalise_finance_document(document, 'quotation', document)
+            rows.append({
+                'id': normalised.get('id'),
+                'number': normalised.get('number'),
+                'projectName': normalised.get('projectName'),
+                'client': normalised.get('client') or {},
+                'updatedAt': normalised.get('updatedAt'),
+            })
+    rows.sort(key=lambda row: (row.get('updatedAt', ''), row.get('number', '')), reverse=True)
+    return rows
+
+
+def _finance_compare_payload(event, finance_data, quotation_id=''):
+    quotation = None
+    if quotation_id:
+        candidate = _finance_find_document(finance_data, quotation_id, 'quotation')
+        if candidate and _finance_compare_can_read_quotation(candidate, event.event_id):
+            quotation = _normalise_finance_document(candidate, 'quotation', candidate)
+    if quotation is None:
+        candidates = [
+            row for row in finance_data.get('documents') or []
+            if _finance_compare_can_read_quotation(row, event.event_id)
+        ]
+        candidates.sort(key=lambda row: (row.get('updatedAt', ''), row.get('number', '')), reverse=True)
+        if candidates:
+            quotation = _normalise_finance_document(candidates[0], 'quotation', candidates[0])
+    rows, counts, quote_items, event_items = _finance_compare_rows(event, quotation or {})
+    return {
+        'event': _finance_event_brief(event),
+        'quotation': ({
+            'id': quotation.get('id'),
+            'number': quotation.get('number'),
+            'projectName': quotation.get('projectName'),
+            'client': quotation.get('client') or {},
+        } if quotation else None),
+        'quotations': _finance_compare_quotations_for_event(finance_data, event.event_id),
+        'rows': rows,
+        'counts': {
+            **counts,
+            'quotationItems': len(quote_items),
+            'eventItems': len(event_items),
+        },
+        'permissions': {
+            'canEditEvent': _current_user_effective_is_admin(),
+            'canEditQuotation': bool(quotation and _current_user_has_sales_access() and _finance_user_can_access(quotation)),
+        },
+    }
+
+
+def _finance_compare_row_for_action(event, document, row_key):
+    rows, _counts, _quote_items, _event_items = _finance_compare_rows(event, document or {})
+    return next((row for row in rows if row.get('key') == row_key), None)
+
+
+def _finance_compare_ref_matches_identity(ref, identity):
+    parsed = _finance_compare_item_from_event_ref(ref)
+    if not parsed:
+        return False
+    ref_identity, _quantity, _details = parsed
+    return _finance_compare_identity_key(ref_identity) == _finance_compare_identity_key(identity)
+
+
+def _finance_compare_set_event_quantity(event, identity, target_quantity, display_item=None):
+    target_quantity = max(0, _safe_int(round(_safe_float(target_quantity, 0)), 0))
+    _ensure_event_custom_lists(event)
+    kind = (identity or {}).get('kind')
+    if kind == 'custom':
+        matching_refs = {
+            ref for ref in list(event.prepared_items or [])
+            if _finance_compare_ref_matches_identity(ref, identity)
+        }
+        event.prepared_items = [
+            ref for ref in event.prepared_items
+            if ref not in matching_refs
+        ]
+        event.actually_prepared = [
+            ref for ref in event.actually_prepared
+            if ref not in matching_refs
+        ]
+        event.returned_items = [
+            ref for ref in event.returned_items
+            if ref not in matching_refs
+        ]
+        event.extra_assets = [
+            ref for ref in event.extra_assets
+            if ref not in matching_refs
+        ]
+        event.custom_collected = [
+            ref for ref in event.custom_collected
+            if ref not in matching_refs
+        ]
+        if target_quantity > 0:
+            event.prepared_items.append(_make_custom_marker(
+                identity.get('type') or 'MISC',
+                identity.get('name') or (display_item or {}).get('title') or 'Custom item',
+                target_quantity,
+                identity.get('department') or 'UN',
+                identity.get('company') or '',
+            ))
+        return
+
+    matching_physical_refs = set()
+    for ref in list(event.prepared_items or []):
+        if _finance_compare_ref_matches_identity(ref, identity):
+            matching_physical_refs.add(ref)
+    for ref in list(event.extra_assets or []):
+        if _finance_compare_ref_matches_identity(ref, identity):
+            matching_physical_refs.add(ref)
+    event.prepared_items = [
+        ref for ref in event.prepared_items
+        if ref not in matching_physical_refs
+    ]
+    if target_quantity > 0:
+        group = {
+            'department': identity.get('department') or 'UN',
+            'brand': identity.get('brand') or '',
+            'model': identity.get('model') or '',
+            'description': (display_item or {}).get('description') or (display_item or {}).get('subtitle') or '',
+        }
+        event.prepared_items.append(_make_model_marker(group, target_quantity))
+    if target_quantity == 0:
+        event.actually_prepared = [
+            ref for ref in event.actually_prepared
+            if ref not in matching_physical_refs
+        ]
+        event.returned_items = [
+            ref for ref in event.returned_items
+            if ref not in matching_physical_refs
+        ]
+        event.extra_assets = [
+            ref for ref in event.extra_assets
+            if ref not in matching_physical_refs
+        ]
+
+
+def _finance_compare_add_to_event(event, row):
+    quote_item = row.get('quotationItem') or {}
+    event_item = row.get('eventItem') or {}
+    quote_qty = max(0, _safe_int(quote_item.get('quantity'), 0))
+    event_qty = max(0, _safe_int(event_item.get('quantity'), 0))
+    if quote_qty <= event_qty:
+        raise ValueError('This item is already covered in the event')
+    identity = quote_item.get('identity') or {}
+    if not identity:
+        raise ValueError('Quotation item cannot be added to the event')
+    if identity.get('kind') == 'custom':
+        event.prepared_items.append(_make_custom_marker(
+            identity.get('type') or 'MISC',
+            identity.get('name') or quote_item.get('title') or 'Custom item',
+            quote_qty - event_qty,
+            identity.get('department') or quote_item.get('departmentCode') or 'UN',
+            identity.get('company') or '',
+        ))
+    else:
+        _add_or_increment_model_marker(event.prepared_items, {
+            'department': identity.get('department') or quote_item.get('departmentCode') or 'UN',
+            'brand': identity.get('brand') or '',
+            'model': identity.get('model') or '',
+            'description': quote_item.get('description') or quote_item.get('subtitle') or '',
+        }, quote_qty - event_qty)
+
+
+def _finance_compare_line_from_event_item(event_item, quantity, event):
+    identity = event_item.get('identity') or {}
+    department_name, department_code = _finance_department_details(
+        event_item.get('departmentCode') or identity.get('department') or 'UN',
+        event_item.get('departmentCode') or identity.get('department') or 'UN',
+    )
+    days = _finance_date_days(
+        _event_date_for_input(getattr(event, 'start_date', '')),
+        _event_date_for_input(getattr(event, 'end_date', '')),
+    )
+    description = event_item.get('description') or event_item.get('title') or 'Event item'
+    if identity.get('kind') == 'custom':
+        return _normalise_finance_line({
+            'id': secrets.token_hex(6),
+            'catalogKey': '',
+            'description': description,
+            'department': department_name,
+            'departmentCode': department_code,
+            'days': days,
+            'quantity': quantity,
+            'uom': event_item.get('uom') or 'units',
+            'unitPrice': 0,
+            'discountPercent': 0,
+            'isCustom': True,
+        })
+    brand = identity.get('brand') or ''
+    model = identity.get('model') or ''
+    return _normalise_finance_line({
+        'id': secrets.token_hex(6),
+        'catalogKey': _finance_catalog_key(department_code, brand, model, description),
+        'sourceAssetIds': [],
+        'brand': brand,
+        'model': model,
+        'description': description,
+        'department': department_name,
+        'departmentCode': department_code,
+        'days': days,
+        'quantity': quantity,
+        'uom': 'units',
+        'unitPrice': 0,
+        'discountPercent': 0,
+        'isCustom': False,
+    })
+
+
+def _finance_compare_add_to_quotation(finance_data, quotation, event, row):
+    event_item = row.get('eventItem') or {}
+    quote_item = row.get('quotationItem') or {}
+    event_qty = max(0, _safe_int(event_item.get('quantity'), 0))
+    quote_qty = max(0, _safe_int(quote_item.get('quantity'), 0))
+    delta = event_qty - quote_qty
+    if delta <= 0:
+        raise ValueError('The quotation already covers this item')
+    line_ids = quote_item.get('lineIds') or []
+    if line_ids:
+        target_line_id = str(line_ids[0])
+        for line in quotation.get('lineItems') or []:
+            if str(line.get('id')) == target_line_id:
+                line['quantity'] = round(_safe_float(line.get('quantity'), 0) + delta, 4)
+                break
+    else:
+        quotation.setdefault('lineItems', []).append(
+            _finance_compare_line_from_event_item(event_item, delta, event)
+        )
+    updated = _normalise_finance_document(quotation, 'quotation', quotation)
+    _remember_finance_prices(finance_data, updated)
+    for index, document in enumerate(finance_data.get('documents') or []):
+        if str(document.get('id')) == str(updated.get('id')):
+            finance_data['documents'][index] = updated
+            return updated
+    raise LookupError('Quotation not found')
+
+
 def _finance_list_or_create(document_type):
     with _finance_lock:
         finance_data = _load_finance_data()
@@ -19564,6 +20294,302 @@ def finance_price_suggestion():
             if remembered:
                 break
     return jsonify({'success': True, 'data': remembered or {}})
+
+
+@app.route('/api/finance/profit-loss/<int:event_id>', methods=['GET'])
+@require_sales
+def finance_profit_loss_event(event_id):
+    event = data_manager.events.get(event_id)
+    if not event:
+        return jsonify({'error': 'Event not found'}), 404
+    if not _current_user_can_access_event(event):
+        return _event_access_denied_response()
+    with _finance_lock:
+        finance_data = _load_finance_data()
+        payload = _finance_profit_loss_payload(event, finance_data)
+    return jsonify({'success': True, 'data': payload})
+
+
+@app.route('/api/finance/profit-loss/<int:event_id>/expenses', methods=['POST'])
+@require_sales
+def finance_profit_loss_add_expense(event_id):
+    event = data_manager.events.get(event_id)
+    if not event:
+        return jsonify({'error': 'Event not found'}), 404
+    if not _current_user_can_access_event(event):
+        return _event_access_denied_response()
+
+    is_multipart = request.content_type and request.content_type.startswith('multipart/form-data')
+    payload = request.form.to_dict() if is_multipart else (request.get_json(silent=True) or {})
+    uploaded_file = request.files.get('file') if is_multipart else None
+    attachment = None
+    extraction = {}
+    amount = payload.get('amount')
+    expense_date = payload.get('expenseDate') or payload.get('date')
+
+    if uploaded_file and getattr(uploaded_file, 'filename', ''):
+        try:
+            attachment = save_upload(
+                _workforce_folder(),
+                uploaded_file,
+                event_id,
+                'profit-loss',
+                'claim',
+            )
+            absolute_path = upload_absolute_path(_workforce_folder(), attachment.get('storedPath'))
+            extraction = extract_claim_amount(
+                absolute_path,
+                attachment.get('contentType', ''),
+                attachment.get('originalName', ''),
+            ) if absolute_path else {}
+            if amount in (None, '') and extraction.get('amount') is not None:
+                amount = extraction.get('amount')
+            if not expense_date and extraction.get('date'):
+                expense_date = extraction.get('date')
+        except ValueError as exc:
+            return jsonify({'error': str(exc)}), 400
+        except Exception as exc:
+            logger.error('Profit and Loss upload failed: %s', exc, exc_info=True)
+            if attachment:
+                delete_upload(_workforce_folder(), attachment)
+            return jsonify({'error': 'The upload could not be completed'}), 500
+
+    expense = _normalise_profit_loss_expense({
+        **payload,
+        'amount': amount,
+        'expenseDate': expense_date,
+        'description': (
+            payload.get('description')
+            or (attachment or {}).get('originalName')
+            or 'Other expense'
+        ),
+        'attachment': attachment,
+        'extraction': extraction,
+    }, event_id)
+    if expense['amount'] <= 0:
+        if attachment:
+            delete_upload(_workforce_folder(), attachment)
+        return jsonify({'error': 'Expense amount is required'}), 400
+
+    with _finance_lock:
+        finance_data = _load_finance_data()
+        _finance_profit_loss_event_expenses(finance_data, event_id, create=True).append(expense)
+        _save_finance_data(finance_data)
+        payload = _finance_profit_loss_payload(event, finance_data)
+    log_action(f"Added Profit and Loss expense {expense['description']} to event {event_id}")
+    mark_realtime_change('finance', {'eventId': event_id, 'action': 'profit-loss-expense-added'})
+    return jsonify({'success': True, 'data': payload, 'expense': _profit_loss_expense_payload(expense)}), 201
+
+
+@app.route('/api/finance/profit-loss/<int:event_id>/expenses/<expense_id>', methods=['PUT', 'DELETE'])
+@require_sales
+def finance_profit_loss_update_expense(event_id, expense_id):
+    event = data_manager.events.get(event_id)
+    if not event:
+        return jsonify({'error': 'Event not found'}), 404
+    if not _current_user_can_access_event(event):
+        return _event_access_denied_response()
+
+    with _finance_lock:
+        finance_data = _load_finance_data()
+        expenses = _finance_profit_loss_event_expenses(finance_data, event_id, create=True)
+        existing = next((row for row in expenses if str(row.get('id')) == str(expense_id)), None)
+        if not existing:
+            return jsonify({'error': 'Expense not found'}), 404
+        if request.method == 'DELETE':
+            if isinstance(existing.get('attachment'), dict):
+                delete_upload(_workforce_folder(), existing['attachment'])
+            expenses[:] = [row for row in expenses if str(row.get('id')) != str(expense_id)]
+            _save_finance_data(finance_data)
+            payload = _finance_profit_loss_payload(event, finance_data)
+            log_action(f"Deleted Profit and Loss expense from event {event_id}")
+            mark_realtime_change('finance', {'eventId': event_id, 'action': 'profit-loss-expense-deleted'})
+            return jsonify({'success': True, 'data': payload})
+
+        incoming = request.get_json(silent=True) or {}
+        updated = _normalise_profit_loss_expense({
+            **existing,
+            **incoming,
+            'id': existing.get('id'),
+            'eventId': event_id,
+            'attachment': existing.get('attachment'),
+            'createdAt': existing.get('createdAt'),
+            'createdBy': existing.get('createdBy'),
+            'updatedAt': now_iso(),
+            'updatedBy': _finance_current_username(),
+        }, event_id)
+        for index, row in enumerate(expenses):
+            if str(row.get('id')) == str(expense_id):
+                expenses[index] = updated
+                break
+        _save_finance_data(finance_data)
+        payload = _finance_profit_loss_payload(event, finance_data)
+    log_action(f"Updated Profit and Loss expense for event {event_id}")
+    mark_realtime_change('finance', {'eventId': event_id, 'action': 'profit-loss-expense-updated'})
+    return jsonify({'success': True, 'data': payload, 'expense': _profit_loss_expense_payload(updated)})
+
+
+@app.route('/api/finance/profit-loss/expenses/<expense_id>/file', methods=['GET'])
+@require_sales
+def finance_profit_loss_expense_file(expense_id):
+    found = None
+    found_event_id = None
+    with _finance_lock:
+        finance_data = _load_finance_data()
+        expenses = _finance_profit_loss_store(finance_data).get('expenses') or {}
+        for event_key, rows in expenses.items():
+            if not isinstance(rows, list):
+                continue
+            for row in rows:
+                if isinstance(row, dict) and str(row.get('id')) == str(expense_id):
+                    found = row
+                    found_event_id = _safe_int(event_key, 0)
+                    break
+            if found:
+                break
+    if not found or not found_event_id:
+        return jsonify({'error': 'File not found'}), 404
+    event = data_manager.events.get(found_event_id)
+    if not event:
+        return jsonify({'error': 'Event not found'}), 404
+    if not _current_user_can_access_event(event):
+        return _event_access_denied_response()
+    attachment = found.get('attachment') if isinstance(found.get('attachment'), dict) else None
+    absolute_path = upload_absolute_path(_workforce_folder(), (attachment or {}).get('storedPath'))
+    if not attachment or not absolute_path or not os.path.isfile(absolute_path):
+        return jsonify({'error': 'File not found'}), 404
+    return send_file(
+        absolute_path,
+        mimetype=attachment.get('contentType') or 'application/octet-stream',
+        as_attachment=request.args.get('download') == '1',
+        download_name=attachment.get('originalName') or 'expense-upload',
+        max_age=0,
+    )
+
+
+@app.route('/api/finance/compare', methods=['GET'])
+@require_admin
+def finance_compare_view():
+    event_id = request.args.get('eventId', type=int)
+    quotation_id = str(request.args.get('quotationId') or '').strip()
+    if not event_id:
+        return jsonify({'error': 'Event is required'}), 400
+    event = data_manager.events.get(event_id)
+    if not event:
+        return jsonify({'error': 'Event not found'}), 404
+    if not _current_user_can_access_event(event):
+        return _event_access_denied_response()
+    with _finance_lock:
+        finance_data = _load_finance_data()
+        payload = _finance_compare_payload(event, finance_data, quotation_id)
+    return jsonify({'success': True, 'data': payload})
+
+
+@app.route('/api/finance/compare/<int:event_id>/add-to-event', methods=['POST'])
+@require_admin
+@with_prepare_action_lock
+def finance_compare_add_to_event(event_id):
+    event = data_manager.events.get(event_id)
+    if not event:
+        return jsonify({'error': 'Event not found'}), 404
+    if not _current_user_can_access_event(event):
+        return _event_access_denied_response()
+    payload = request.get_json(silent=True) or {}
+    quotation_id = str(payload.get('quotationId') or '').strip()
+    row_key = str(payload.get('key') or '').strip()
+    with _finance_lock:
+        finance_data = _load_finance_data()
+        quotation = _finance_find_document(finance_data, quotation_id, 'quotation')
+        if not quotation or not _finance_compare_can_read_quotation(quotation, event_id):
+            return jsonify({'error': 'Quotation not found'}), 404
+        normalised = _normalise_finance_document(quotation, 'quotation', quotation)
+        row = _finance_compare_row_for_action(event, normalised, row_key)
+        if not row:
+            return jsonify({'error': 'Comparison row not found'}), 404
+        try:
+            _finance_compare_add_to_event(event, row)
+        except ValueError as exc:
+            return jsonify({'error': str(exc)}), 400
+        update_event_state(event)
+        data_manager.save_event(event)
+        invalidate_cache()
+        refreshed = _finance_compare_payload(event, finance_data, quotation_id)
+    log_action(f"Added quotation item to event {event_id} from compare")
+    mark_realtime_change('event-assets', {'eventId': event_id, 'action': 'compare-add-to-event'})
+    return jsonify({'success': True, 'data': refreshed})
+
+
+@app.route('/api/finance/compare/<int:event_id>/remove-extra', methods=['POST'])
+@require_admin
+@with_prepare_action_lock
+def finance_compare_remove_extra(event_id):
+    event = data_manager.events.get(event_id)
+    if not event:
+        return jsonify({'error': 'Event not found'}), 404
+    if not _current_user_can_access_event(event):
+        return _event_access_denied_response()
+    payload = request.get_json(silent=True) or {}
+    quotation_id = str(payload.get('quotationId') or '').strip()
+    row_key = str(payload.get('key') or '').strip()
+    with _finance_lock:
+        finance_data = _load_finance_data()
+        quotation = _finance_find_document(finance_data, quotation_id, 'quotation') if quotation_id else None
+        if quotation_id and (not quotation or not _finance_compare_can_read_quotation(quotation, event_id)):
+            return jsonify({'error': 'Quotation not found'}), 404
+        normalised = _normalise_finance_document(quotation, 'quotation', quotation) if quotation else {}
+        row = _finance_compare_row_for_action(event, normalised, row_key)
+        if not row:
+            return jsonify({'error': 'Comparison row not found'}), 404
+        event_item = row.get('eventItem') or {}
+        quote_item = row.get('quotationItem') or {}
+        event_qty = max(0, _safe_int(event_item.get('quantity'), 0))
+        quote_qty = max(0, _safe_int(quote_item.get('quantity'), 0))
+        if event_qty <= quote_qty:
+            return jsonify({'error': 'There is no extra event quantity to remove'}), 400
+        identity = event_item.get('identity') or quote_item.get('identity') or {}
+        _finance_compare_set_event_quantity(event, identity, quote_qty, quote_item if quote_qty else event_item)
+        update_event_state(event)
+        data_manager.save_event(event)
+        invalidate_cache()
+        refreshed = _finance_compare_payload(event, finance_data, quotation_id)
+    log_action(f"Removed extra event item from event {event_id} via compare")
+    mark_realtime_change('event-assets', {'eventId': event_id, 'action': 'compare-remove-extra'})
+    return jsonify({'success': True, 'data': refreshed})
+
+
+@app.route('/api/finance/compare/<int:event_id>/add-to-quotation', methods=['POST'])
+@require_admin
+def finance_compare_add_to_quotation(event_id):
+    if not _current_user_has_sales_access():
+        return jsonify({'error': 'Sales access required'}), 403
+    event = data_manager.events.get(event_id)
+    if not event:
+        return jsonify({'error': 'Event not found'}), 404
+    if not _current_user_can_access_event(event):
+        return _event_access_denied_response()
+    payload = request.get_json(silent=True) or {}
+    quotation_id = str(payload.get('quotationId') or '').strip()
+    row_key = str(payload.get('key') or '').strip()
+    with _finance_lock:
+        finance_data = _load_finance_data()
+        quotation = _finance_find_document(finance_data, quotation_id, 'quotation')
+        if not quotation or not _finance_compare_can_read_quotation(quotation, event_id):
+            return jsonify({'error': 'Quotation not found'}), 404
+        if not _finance_user_can_access(quotation):
+            return jsonify({'error': 'Quotation access required'}), 403
+        normalised = _normalise_finance_document(quotation, 'quotation', quotation)
+        row = _finance_compare_row_for_action(event, normalised, row_key)
+        if not row:
+            return jsonify({'error': 'Comparison row not found'}), 404
+        try:
+            updated = _finance_compare_add_to_quotation(finance_data, normalised, event, row)
+        except ValueError as exc:
+            return jsonify({'error': str(exc)}), 400
+        _save_finance_data(finance_data)
+        refreshed = _finance_compare_payload(event, finance_data, updated.get('id'))
+    log_action(f"Added event item to quotation {updated.get('number')} from compare for event {event_id}")
+    mark_realtime_change('finance', {'eventId': event_id, 'quotationId': updated.get('id'), 'action': 'compare-add-to-quotation'})
+    return jsonify({'success': True, 'data': refreshed, 'quotation': updated})
 
 
 @app.route('/api/finance/departments', methods=['GET'])

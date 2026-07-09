@@ -3,6 +3,7 @@ import os
 import tempfile
 import unittest
 from datetime import datetime, timedelta
+from unittest.mock import patch
 
 from pypdf import PdfReader
 
@@ -25,6 +26,7 @@ class FinanceFeatureTests(unittest.TestCase):
             'alice': self.make_user('alice', 'user', True, name='Alice Lim'),
             'bob': self.make_user('bob', 'user', True),
             'no-sales': self.make_user('no-sales', 'user', False),
+            'manager-no-sales': self.make_user('manager-no-sales', 'manager', False),
         }
         self.data_manager.save_users()
         self.data_manager.logs = []
@@ -632,10 +634,136 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertEqual(response.status_code, 403)
         self.assertIn('Sales access required', response.get_json()['error'])
 
+    def test_profit_loss_expense_upload_extracts_amount_and_date(self):
+        event = Event(
+            event_id=131,
+            name='Wedding of Patricia & Edgar',
+            location='Capella Singapore',
+            start_date='20260530',
+            end_date='20260530',
+            asset_models=[],
+            prepared_items=[],
+            returned_items=[],
+            actually_prepared=[],
+            extra_assets=[],
+            assigned_users=['alice'],
+        )
+        self.data_manager.events[131] = event
+        quotation = self.create_quote('Wedding of Patricia & Edgar')
+        quotation['eventId'] = 131
+        quotation['lineItems'] = [{
+            'id': 'audio-package',
+            'catalogKey': '',
+            'description': 'Audio package',
+            'department': 'Audio Department',
+            'departmentCode': 'AX',
+            'days': 1,
+            'quantity': 1,
+            'uom': 'lot',
+            'unitPrice': 1000,
+            'discountPercent': 0,
+            'isCustom': True,
+        }]
+        self.client.put(f"/api/quotations/{quotation['id']}", json=quotation)
+
+        png_bytes = b'\x89PNG\r\n\x1a\nreceipt text is mocked'
+        with patch.object(app_module, 'extract_claim_amount', return_value={
+            'amount': 123.45,
+            'date': '2026-05-29',
+            'confidence': 'high',
+            'source': 'test',
+        }):
+            response = self.client.post(
+                '/api/finance/profit-loss/131/expenses',
+                data={
+                    'description': 'Crew meal',
+                    'category': 'Meal Claims',
+                    'vendor': 'Yummy Catering',
+                    'file': (io.BytesIO(png_bytes), 'crew-meal.png'),
+                },
+                content_type='multipart/form-data',
+            )
+        self.assertEqual(response.status_code, 201, response.get_data(as_text=True))
+        payload = response.get_json()['data']
+        self.assertEqual(payload['summary']['revenue'], 1000)
+        self.assertEqual(payload['summary']['manualOtherExpenses'], 123.45)
+        expense = payload['expenses'][0]
+        self.assertEqual(expense['amount'], 123.45)
+        self.assertEqual(expense['expenseDate'], '2026-05-29')
+        self.assertIn('/api/finance/profit-loss/expenses/', expense['attachment']['previewUrl'])
+        file_response = self.client.get(expense['attachment']['previewUrl'])
+        self.assertEqual(file_response.status_code, 200)
+
+    def test_compare_manager_can_sync_event_but_not_quotation_without_sales(self):
+        event = Event(
+            event_id=200,
+            name='Comparison Event',
+            location='Studio A',
+            start_date='20260721',
+            end_date='20260721',
+            asset_models=[],
+            prepared_items=[
+                '[MODEL]AX|L-Acoustics|SB18 III|1|Subwoofer',
+                '[MODEL]LX|Robe|Spiider|1|LED wash fixture',
+            ],
+            returned_items=[],
+            actually_prepared=[],
+            extra_assets=[],
+            assigned_users=['alice', 'manager-no-sales'],
+        )
+        self.data_manager.events[200] = event
+        quotation = self.create_quote('Comparison Event')
+        catalog = self.client.get('/api/finance/catalog?query=SB18').get_json()['data'][0]
+        quotation['eventId'] = 200
+        quotation['lineItems'] = [{
+            **catalog,
+            'id': 'quoted-sub',
+            'days': 1,
+            'quantity': 2,
+            'uom': 'units',
+            'unitPrice': 100,
+            'discountPercent': 0,
+        }]
+        saved_quote = self.client.put(
+            f"/api/quotations/{quotation['id']}",
+            json=quotation,
+        ).get_json()['data']
+
+        self.login('manager-no-sales')
+        response = self.client.get('/api/finance/compare?eventId=200')
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        data = response.get_json()['data']
+        self.assertFalse(data['permissions']['canEditQuotation'])
+        mismatch = next(row for row in data['rows'] if row['status'] == 'qty_mismatch')
+        extra = next(row for row in data['rows'] if row['status'] == 'extra_in_event')
+
+        added = self.client.post(
+            '/api/finance/compare/200/add-to-event',
+            json={'quotationId': saved_quote['id'], 'key': mismatch['key']},
+        )
+        self.assertEqual(added.status_code, 200, added.get_data(as_text=True))
+        self.assertIn('[MODEL]AX|L-Acoustics|SB18 III|2|Subwoofer', event.prepared_items)
+
+        blocked = self.client.post(
+            '/api/finance/compare/200/add-to-quotation',
+            json={'quotationId': saved_quote['id'], 'key': extra['key']},
+        )
+        self.assertEqual(blocked.status_code, 403)
+
+        removed = self.client.post(
+            '/api/finance/compare/200/remove-extra',
+            json={'quotationId': saved_quote['id'], 'key': extra['key']},
+        )
+        self.assertEqual(removed.status_code, 200, removed.get_data(as_text=True))
+        self.assertFalse(any('Spiider' in item for item in event.prepared_items))
+
     def test_quotation_ui_has_no_native_selects(self):
         path = os.path.join(os.path.dirname(app_module.__file__), 'static', 'js', 'finance.js')
         with open(path, encoding='utf-8') as source_file:
             source = source_file.read().lower()
+        css_path = os.path.join(os.path.dirname(app_module.__file__), 'static', 'css', 'finance.css')
+        with open(css_path, encoding='utf-8') as css_file:
+            css_source = css_file.read().lower()
         self.assertNotIn('<select', source)
         self.assertNotIn('set all days', source)
         self.assertIn('apply to all lines', source)
@@ -659,6 +787,13 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertIn('finance-tax-rate-input', source)
         self.assertIn('finance-tax-amount-input', source)
         self.assertIn('min=\"-9999\"', source)
+        self.assertIn('<col style=\"width:38%\"><col style=\"width:76px\"', source)
+        self.assertIn("aria-label=\"days\" onchange", source)
+        self.assertIn("step=\"0.5\" value=\"${financeescapeattr(line.days)}\"", source)
+        self.assertIn("step=\"1\" value=\"${financeescapeattr(line.quantity)}\"", source)
+        self.assertIn('height: 24px;', css_source)
+        self.assertIn('.finance-lines-table .finance-money-input', css_source)
+        self.assertIn('padding: 1px 2px;', css_source)
         self.assertIn('window.open(pdfurl', source)
         self.assertNotIn('window.location.href = pdfurl', source)
         self.assertNotIn('link.download', source)
@@ -668,6 +803,10 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertIn('financeunpairevent', source)
         self.assertIn('financeclientpickermodal', source)
         self.assertIn('financeeventpickermodal', source)
+        self.assertIn('profit &amp; loss', source)
+        self.assertIn('financeopencomparepage', source)
+        self.assertIn('/api/finance/profit-loss/', source)
+        self.assertIn('/api/finance/compare', source)
         self.assertIn('financeopenclientpicker', source)
         self.assertIn('financeopeneventpicker', source)
         self.assertIn('will not create another event', source)
@@ -681,7 +820,8 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertIn('iscontainer', source)
         self.assertIn('containeritems', source)
         self.assertIn('financedropdepartment', source)
-        self.assertIn('finance-department-drag-handle', source)
+        self.assertIn('finance-department-drag-handle\" draggable=\"true', source)
+        self.assertIn("closest('.finance-department-row')", source)
         pdf_path = os.path.join(os.path.dirname(app_module.__file__), 'quotation_pdf.py')
         with open(pdf_path, encoding='utf-8') as pdf_file:
             pdf_source = pdf_file.read().lower()

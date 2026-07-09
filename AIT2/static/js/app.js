@@ -2953,6 +2953,8 @@ function sectionFromSidebarLabel(item) {
     'asset check': 'asset-check',
     'users': 'users',
     'quotations': 'quotations',
+    'profit & loss': 'profit-loss',
+    'profit and loss': 'profit-loss',
     'company details': 'pdf-settings',
     'pdf settings': 'pdf-settings',
     'companies': 'companies',
@@ -2965,6 +2967,8 @@ function sectionFromSidebarLabel(item) {
   // Match the more specific labels before generic words like "events".
   const containsLabels = [
     ['change password', 'change-password'],
+    ['profit & loss', 'profit-loss'],
+    ['profit and loss', 'profit-loss'],
     ['quotations', 'quotations'],
     ['company details', 'pdf-settings'],
     ['pdf settings', 'pdf-settings'],
@@ -3056,9 +3060,9 @@ function setupSidebarNavigation(root = document) {
   }, true);
 }
 function showSection(sectionName) {
-  const adminOnlySections = new Set(["plan", "workforce", "freelancer-workspace", "logs", "maintenance-report", "users", "pdf-settings"]);
+  const adminOnlySections = new Set(["plan", "compare", "workforce", "freelancer-workspace", "logs", "maintenance-report", "users", "pdf-settings"]);
   const ownerOnlySections = new Set(["companies"]);
-  const salesOnlySections = new Set(["quotations"]);
+  const salesOnlySections = new Set(["quotations", "profit-loss"]);
   if (adminOnlySections.has(sectionName) && !isAdminUser()) {
     return showSection("events");
   }
@@ -3177,6 +3181,12 @@ function showSection(sectionName) {
       break;
     case "quotations":
       if (typeof loadQuotations === "function") loadQuotations();
+      break;
+    case "profit-loss":
+      if (typeof loadProfitLoss === "function") loadProfitLoss();
+      break;
+    case "compare":
+      if (typeof loadComparePage === "function") loadComparePage();
       break;
     case "companies":
       loadCompaniesAdmin();
@@ -17825,6 +17835,10 @@ function planCompareEventsByStartDate(a, b) {
   return Number(a?.id || 0) - Number(b?.id || 0);
 }
 
+function planCompareEventsByEventIdDesc(a, b) {
+  return Number(b?.id || 0) - Number(a?.id || 0);
+}
+
 function planEventChooserDateRange(event) {
   const start = planEventChooserFormattedDate(event?.startDate);
   const end = planEventChooserFormattedDate(event?.endDate);
@@ -17862,6 +17876,12 @@ function planEventChooserSourceEvents() {
   if (planEventChooserState.context === 'prepare-new') {
     return prepareNewPageState.events || [];
   }
+  if (planEventChooserState.context === 'profit-loss' && typeof profitLossEventChooserEvents === 'function') {
+    return profitLossEventChooserEvents();
+  }
+  if (planEventChooserState.context === 'compare' && typeof compareEventChooserEvents === 'function') {
+    return compareEventChooserEvents();
+  }
   return planPageState.events || [];
 }
 
@@ -17871,6 +17891,12 @@ function planEventChooserCurrentEventId() {
   }
   if (planEventChooserState.context === 'transfer-target') {
     return transferPageState.targetEventId;
+  }
+  if (planEventChooserState.context === 'profit-loss' && typeof profitLossCurrentEventId === 'function') {
+    return profitLossCurrentEventId();
+  }
+  if (planEventChooserState.context === 'compare' && typeof compareCurrentEventId === 'function') {
+    return compareCurrentEventId();
   }
   return planEventChooserState.context === 'prepare-new'
     ? prepareNewPageState.eventId
@@ -17889,7 +17915,9 @@ function planEventChooserFilteredEvents() {
       ) &&
       (!search || planEventChooserSearchText(event).includes(search))
     ))
-    .sort(planCompareEventsByStartDate);
+    .sort(planEventChooserState.context === 'profit-loss'
+      ? planCompareEventsByEventIdDesc
+      : planCompareEventsByStartDate);
 }
 
 function ensurePlanEventChooserModal() {
@@ -18036,12 +18064,20 @@ function planOpenEventChooser(context = 'plan') {
       ? 'Choose From Event'
       : context === 'transfer-target'
         ? 'Choose To Event'
-        : 'Other Events';
+        : context === 'profit-loss'
+          ? 'Choose Profit & Loss Event'
+          : context === 'compare'
+            ? 'Choose Event to Compare'
+            : 'Other Events';
     const titleHelp = context === 'transfer-source'
       ? 'Select the event assets are moving out from'
       : context === 'transfer-target'
         ? 'Select the event assets are moving into'
-        : 'Select any event to update its plan';
+        : context === 'profit-loss'
+          ? 'Select an event to review revenue, costs, and net profit'
+          : context === 'compare'
+            ? 'Select an event to compare against its quotation'
+            : 'Select any event to update its plan';
     title.innerHTML = `${titleText} <span title="${escapeHtmlAttr(titleHelp)}">&#9432;</span>`;
   }
   const search = document.getElementById('planEventChooserSearch');
@@ -18080,6 +18116,14 @@ async function planChooseEvent(eventId) {
   }
   if (planEventChooserState.context === 'prepare-new') {
     await selectPrepareNewEvent(eventId);
+    return;
+  }
+  if (planEventChooserState.context === 'profit-loss' && typeof selectProfitLossEvent === 'function') {
+    await selectProfitLossEvent(eventId);
+    return;
+  }
+  if (planEventChooserState.context === 'compare' && typeof selectCompareEvent === 'function') {
+    await selectCompareEvent(eventId);
     return;
   }
   await selectPlanEvent(eventId);
@@ -18734,7 +18778,11 @@ function renderPlanPage() {
             <div class="plan-metric"><div class="plan-metric-icon">${planMetricIconSvg('lines')}</div><div><strong>${totals.lineCount}</strong><span>Asset Lines</span></div></div>
             <div class="plan-metric"><div class="plan-metric-icon">${planMetricIconSvg('quantity')}</div><div><strong>${totals.totalQuantity}</strong><span>Total Qty Required</span></div></div>
             <div class="plan-metric"><div class="plan-metric-icon">${planMetricIconSvg('departments')}</div><div><strong>${totals.departmentCount}</strong><span>Active Departments</span></div></div>
-            <div class="plan-metric"><div class="plan-metric-icon">${planMetricIconSvg('templates')}</div><div><strong>${totals.templateCount}</strong><span>Templates Available</span></div></div>
+            <button type="button" class="plan-metric plan-compare-launch"
+                    onclick="typeof openCompareForEvent === 'function' && openCompareForEvent(${Number(event.id) || 0})">
+              <div class="plan-metric-icon">${planMetricIconSvg('templates')}</div>
+              <div><strong>Compare</strong><span>To Quotation</span></div>
+            </button>
           </div>
         </div>
 
@@ -26621,9 +26669,12 @@ function setRealtimeStatus(state) {
   const status = document.getElementById("realtime-status");
   if (!status) return;
   status.dataset.state = state;
+  const labelText = state === "connected" ? "Live" : "Reconnecting";
+  status.title = `Realtime: ${labelText}`;
+  status.setAttribute("aria-label", `Realtime: ${labelText}`);
   const label = status.querySelector("[data-sync-label]");
   if (label) {
-    label.textContent = state === "connected" ? "Live" : "Reconnecting";
+    label.textContent = labelText;
   }
 }
 
@@ -26844,12 +26895,26 @@ async function refreshEventAssetsOnly(eventIds) {
       }
       renderPlanPage();
     }
+
+    if (
+      document.getElementById('compare-section')?.classList.contains('active') &&
+      typeof refreshCompareForRealtime === 'function'
+    ) {
+      await refreshCompareForRealtime(event.id);
+    }
+
+    if (
+      document.getElementById('profit-loss-section')?.classList.contains('active') &&
+      typeof refreshProfitLossForRealtime === 'function'
+    ) {
+      await refreshProfitLossForRealtime(event.id);
+    }
   }
 }
 
 function hasVisibleEventAssetView(eventIds) {
   const activeSection = getActiveSectionId();
-  if (['dashboard', 'events', 'plan', 'prepare-new', 'prepare', 'return'].includes(activeSection)) return true;
+  if (['dashboard', 'events', 'plan', 'profit-loss', 'compare', 'prepare-new', 'prepare', 'return'].includes(activeSection)) return true;
 
   if (
     activeModal('prepareEventModal') &&

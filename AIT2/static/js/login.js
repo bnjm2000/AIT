@@ -71,8 +71,8 @@ function configureCredentialForm(discovery) {
   loginById('confirmationField').hidden = !discovery.requiresSetup;
   loginById('workerCredentialConfirmation').required = discovery.requiresSetup;
   loginById('workerInstruction').textContent = discovery.requiresSetup
-    ? `Welcome, ${discovery.name}. Secure your worker account to continue.`
-    : `Welcome back, ${discovery.name}. Enter your PIN or password.`;
+    ? 'Secure your worker account to continue.'
+    : 'Enter your PIN or password to continue.';
   loginById('credentialLabel').textContent = discovery.requiresSetup
     ? 'Create a 4-8 digit PIN'
     : 'PIN or password';

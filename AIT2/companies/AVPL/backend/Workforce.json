@@ -10,13 +10,10 @@
       "notes": "",
       "active": true,
       "createdAt": "2026-07-04T16:13:11+08:00",
-      "updatedAt": "2026-07-05T22:23:01+08:00",
-      "workerAuthVersion": 8,
+      "updatedAt": "2026-07-09T13:11:33+08:00",
+      "workerAuthVersion": 9,
       "workerLastLoginAt": "2026-07-05T22:23:01+08:00",
-      "workerPasswordSalt": "b4369297d02a5b41373d16a3132602fd",
-      "workerPasswordHash": "46f05c45119ecb26cda4362b6afcde57b0576614a1c2896fca32a146892095a1",
-      "workerCredentialType": "pin",
-      "workerCredentialsSetAt": "2026-07-05T22:23:01+08:00"
+      "workerLoginResetAt": "2026-07-09T13:11:33+08:00"
     },
     {
       "id": "freelancer_90c5f8bb774d7fef",
@@ -66,7 +63,13 @@
       "notes": "",
       "active": true,
       "createdAt": "2026-07-04T20:53:00+08:00",
-      "updatedAt": "2026-07-04T20:53:00+08:00"
+      "updatedAt": "2026-07-09T20:48:18+08:00",
+      "workerPasswordSalt": "b8616fa7f425c64d8e3c20711d9189f8",
+      "workerPasswordHash": "f67081ae7bb0d65141e7998a930992555c642a2ce141108c5242962a90910495",
+      "workerCredentialType": "pin",
+      "workerCredentialsSetAt": "2026-07-09T20:46:43+08:00",
+      "workerAuthVersion": 1,
+      "workerLastLoginAt": "2026-07-09T20:48:18+08:00"
     },
     {
       "id": "freelancer_220f532cf2245817",
@@ -77,7 +80,13 @@
       "notes": "",
       "active": true,
       "createdAt": "2026-07-04T21:06:32+08:00",
-      "updatedAt": "2026-07-04T21:06:32+08:00"
+      "updatedAt": "2026-07-09T17:42:00+08:00",
+      "workerPasswordSalt": "3d03814ac1d944d74421744677070a27",
+      "workerPasswordHash": "b7c176dbd6d74f0c499268e0dfec0596e9ffacb2ad5be2ed0c4355f354d89c6b",
+      "workerCredentialType": "password",
+      "workerCredentialsSetAt": "2026-07-09T17:30:56+08:00",
+      "workerAuthVersion": 1,
+      "workerLastLoginAt": "2026-07-09T17:42:00+08:00"
     },
     {
       "id": "freelancer_d7f297a61b56f0f8",
@@ -166,9 +175,13 @@
       "notes": "",
       "active": true,
       "createdAt": "2026-07-05T14:59:44+08:00",
-      "updatedAt": "2026-07-05T16:32:56+08:00",
-      "workerAuthVersion": 2,
-      "workerLoginResetAt": "2026-07-05T16:32:56+08:00"
+      "updatedAt": "2026-07-09T14:02:02+08:00",
+      "workerAuthVersion": 3,
+      "workerPasswordSalt": "9b88d3e34297ad2bfed9f2846c0dcd9f",
+      "workerPasswordHash": "3ddaf990d7f084366ddbddf7d6185db25164a1b5e0868209874de4807b2cc093",
+      "workerCredentialType": "password",
+      "workerCredentialsSetAt": "2026-07-09T12:01:20+08:00",
+      "workerLastLoginAt": "2026-07-09T14:02:02+08:00"
     },
     {
       "id": "freelancer_2bca6912274f9fa5",
@@ -201,7 +214,13 @@
       "notes": "",
       "active": true,
       "createdAt": "2026-07-05T15:21:12+08:00",
-      "updatedAt": "2026-07-05T15:21:12+08:00"
+      "updatedAt": "2026-07-09T12:06:27+08:00",
+      "workerPasswordSalt": "346875fed5fd796135eb63fd7b1d8d78",
+      "workerPasswordHash": "88e8e2f97797b929960ff1a1e594cc786c22c6e85c17836c3ce01eca53f79e38",
+      "workerCredentialType": "pin",
+      "workerCredentialsSetAt": "2026-07-09T12:06:27+08:00",
+      "workerAuthVersion": 1,
+      "workerLastLoginAt": "2026-07-09T12:06:27+08:00"
     },
     {
       "id": "freelancer_acdc84b3efd7c649",
@@ -342,6 +361,24 @@
       "personnelOnly": true,
       "createdAt": "2026-07-06T19:41:58+08:00",
       "updatedAt": "2026-07-06T19:41:58+08:00"
+    },
+    {
+      "id": "freelancer_7cc44ded5feff624",
+      "name": "Adela Teo",
+      "phone": "+6592347595",
+      "email": "",
+      "company": "",
+      "notes": "",
+      "active": true,
+      "personnelOnly": false,
+      "createdAt": "2026-07-09T13:36:09+08:00",
+      "updatedAt": "2026-07-09T15:30:34+08:00",
+      "workerPasswordSalt": "ba99cbb9d1016e9eff7d3c2aba98c2f8",
+      "workerPasswordHash": "38d5086154d1219bb7c0d53e4aba2eb448a07618d05bf20e351b8249ea44f3ce",
+      "workerCredentialType": "pin",
+      "workerCredentialsSetAt": "2026-07-09T14:26:12+08:00",
+      "workerAuthVersion": 1,
+      "workerLastLoginAt": "2026-07-09T15:30:34+08:00"
     }
   ],
   "vendors": [
@@ -1203,7 +1240,73 @@
         "createdAt": "2026-07-05T17:30:24+08:00"
       }
     ],
-    "143": []
+    "143": [],
+    "112": [
+      {
+        "id": "assignment_0173c4dc5b19d1f8",
+        "freelancerId": "freelancer_af17dbdcf360da19",
+        "subjectType": "worker",
+        "department": "AX",
+        "roleId": "",
+        "roleName": "Audio Assistant (A2)",
+        "days": 1,
+        "workDates": [
+          "2026-03-13"
+        ],
+        "dailyRate": 250.0,
+        "notes": "",
+        "createdAt": "2026-07-09T11:56:15+08:00"
+      },
+      {
+        "id": "assignment_1502abf14d30615e",
+        "freelancerId": "freelancer_af17dbdcf360da19",
+        "subjectType": "worker",
+        "department": "AX",
+        "roleId": "",
+        "roleName": "Audio Assistant (A2)",
+        "days": 1,
+        "workDates": [
+          "2026-03-12"
+        ],
+        "dailyRate": 100.0,
+        "notes": "",
+        "createdAt": "2026-07-09T11:56:22+08:00"
+      }
+    ],
+    "117": [
+      {
+        "id": "assignment_e6d93ab41e78514a",
+        "freelancerId": "freelancer_20ab4d7a160649fa",
+        "subjectType": "worker",
+        "department": "AX",
+        "roleId": "",
+        "roleName": "Audio Assistant (A2)",
+        "days": 1,
+        "workDates": [
+          "2026-03-27"
+        ],
+        "dailyRate": 250.0,
+        "notes": "",
+        "createdAt": "2026-07-09T13:00:59+08:00"
+      }
+    ],
+    "1": [
+      {
+        "id": "assignment_98204dfe0a0d8bbe",
+        "freelancerId": "freelancer_7cc44ded5feff624",
+        "subjectType": "worker",
+        "department": "AX",
+        "roleId": "",
+        "roleName": "Audio Operator (A1)",
+        "days": 1,
+        "workDates": [
+          "2024-11-14"
+        ],
+        "dailyRate": 300.0,
+        "notes": "",
+        "createdAt": "2026-07-09T13:36:38+08:00"
+      }
+    ]
   },
   "manualDepartments": {
     "132": [],
@@ -1340,6 +1443,18 @@
       "id": "location_d65b9f62ad3e0b8e",
       "name": "New Bahru (46 Kim Yam Road New Bahru (School Block), Singapore 239351)",
       "createdAt": "2026-07-05T17:44:46+08:00"
+    },
+    {
+      "id": "location_a7c389976b6a8aa5",
+      "name": "Office",
+      "address": "601 Sims Drive, Pan-I Complex, Singapore 387382",
+      "createdAt": "2026-07-09T13:21:56+08:00"
+    },
+    {
+      "id": "location_4a5698679e5ec64a",
+      "name": "Capella Loading Bay",
+      "address": "1 The Knolls, Sentosa Island, Singapore 098297",
+      "createdAt": "2026-07-09T13:21:56+08:00"
     }
   ],
   "transportBookings": {
@@ -1382,7 +1497,7 @@
         "departTime": "23:59",
         "returnDate": "2026-05-24",
         "returnTime": "03:00",
-        "cost": 0.0,
+        "cost": 100.0,
         "status": "Pending Review",
         "vehicleType": "14ft Lorry",
         "company": "",
@@ -1396,7 +1511,7 @@
         "invoice": null,
         "reviewHistory": [],
         "createdAt": "2026-07-05T17:40:55+08:00",
-        "updatedAt": "2026-07-05T17:40:55+08:00"
+        "updatedAt": "2026-07-09T13:21:56+08:00"
       }
     ],
     "118": [
@@ -1464,7 +1579,7 @@
         "departTime": "04:15",
         "returnDate": "2026-06-04",
         "returnTime": "12:00",
-        "cost": 0.0,
+        "cost": 180.0,
         "status": "Pending Review",
         "vehicleType": "24ft Lorry",
         "company": "",
@@ -1478,7 +1593,7 @@
         "invoice": null,
         "reviewHistory": [],
         "createdAt": "2026-07-05T17:44:46+08:00",
-        "updatedAt": "2026-07-05T17:44:46+08:00"
+        "updatedAt": "2026-07-09T13:22:20+08:00"
       },
       {
         "id": "transport_6884086009b5ff43",
@@ -1559,54 +1674,59 @@
       "freelancer_81bd3ddbb3de2ffa": {
         "invoices": [
           {
-            "id": "sub_db5c08d0eab8052d",
+            "id": "sub_acada6f6e8325854",
             "originalName": "159.pdf",
-            "storedPath": "workforce_uploads/132/freelancer_81bd3ddbb3de2ffa/invoice-5da8a43e9954de6656ec0cc7.pdf",
-            "size": 55928,
+            "storedPath": "workforce_uploads/132/freelancer_81bd3ddbb3de2ffa/invoice-d1a6f913298b86bedc68cf25.pdf",
+            "size": 56214,
             "contentType": "application/pdf",
-            "submittedAt": "2026-07-04T20:49:39+08:00",
+            "submittedAt": "2026-07-09T13:15:14+08:00",
             "status": "Paid",
             "denialReason": "",
+            "processingState": "Complete",
+            "submissionStage": "Submitted",
+            "amount": 720.0,
             "reviewHistory": [
               {
-                "at": "2026-07-04T20:49:39+08:00",
+                "at": "2026-07-09T13:15:14+08:00",
                 "by": "bnjm2000",
                 "from": "",
                 "to": "Pending Review",
                 "action": "Admin upload"
               },
               {
-                "at": "2026-07-04T20:49:59+08:00",
-                "by": "bnjm2000",
-                "from": "Pending Review",
-                "to": "Pending Review",
-                "amount": 540.0
-              },
-              {
-                "at": "2026-07-04T20:57:18+08:00",
+                "at": "2026-07-09T13:18:03+08:00",
                 "by": "bnjm2000",
                 "from": "Pending Review",
                 "to": "Approved",
-                "amount": 540.0
+                "amount": 720.0
               },
               {
-                "at": "2026-07-04T20:57:26+08:00",
+                "at": "2026-07-09T13:21:36+08:00",
                 "by": "bnjm2000",
                 "from": "Approved",
                 "to": "Paid",
-                "amount": 540.0
+                "amount": 720.0
               }
             ],
-            "amount": 540.0,
-            "ocrConfidence": "Low",
+            "allocations": [
+              {
+                "department": "LX",
+                "amount": 720.0
+              }
+            ],
+            "ocrConfidence": "High",
             "ocrSource": "PDF text",
-            "ocrMatchedText": "",
+            "ocrMatchedText": "Balance Due SGD720.00",
+            "ocrDateMatchedText": "",
             "ocrUsed": false,
-            "allocations": [],
-            "reviewedAt": "2026-07-04T20:57:26+08:00",
+            "processedAt": "2026-07-09T13:15:15+08:00",
+            "reviewedAt": "2026-07-09T13:21:36+08:00",
             "reviewedBy": "bnjm2000",
-            "verifiedAt": "2026-07-04T20:57:18+08:00",
-            "verifiedBy": "bnjm2000"
+            "verifiedAt": "2026-07-09T13:18:03+08:00",
+            "verifiedBy": "bnjm2000",
+            "paymentConfirmedAt": "2026-07-09T13:21:36+08:00",
+            "paymentConfirmedByAdmin": "bnjm2000",
+            "paymentConfirmedByWorker": false
           }
         ],
         "claims": []
@@ -1636,6 +1756,27 @@
                 "from": "Pending Review",
                 "to": "Paid",
                 "amount": 1080.0
+              },
+              {
+                "at": "2026-07-08T19:39:19+08:00",
+                "by": "bnjm2000",
+                "from": "Paid",
+                "to": "Pending Review",
+                "amount": 1080.0
+              },
+              {
+                "at": "2026-07-08T19:39:26+08:00",
+                "by": "bnjm2000",
+                "from": "Pending Review",
+                "to": "Approved",
+                "amount": 1080.0
+              },
+              {
+                "at": "2026-07-08T19:39:31+08:00",
+                "by": "bnjm2000",
+                "from": "Approved",
+                "to": "Paid",
+                "amount": 1080.0
               }
             ],
             "amount": 1080.0,
@@ -1652,12 +1793,13 @@
             "ocrMatchedText": "240526 - 250526, 040626 3 $200.00 $600.00",
             "ocrUsed": false,
             "processedAt": "2026-07-05T12:18:59+08:00",
-            "reviewedAt": "2026-07-05T12:19:20+08:00",
+            "reviewedAt": "2026-07-08T19:39:31+08:00",
             "reviewedBy": "bnjm2000",
             "verifiedAt": "2026-07-05T12:19:18+08:00",
             "verifiedBy": "bnjm2000",
-            "paymentConfirmedAt": "2026-07-05T21:08:39+08:00",
-            "paymentConfirmedByWorker": true
+            "paymentConfirmedAt": "2026-07-08T19:39:31+08:00",
+            "paymentConfirmedByAdmin": "bnjm2000",
+            "paymentConfirmedByWorker": false
           }
         ],
         "claims": [
@@ -1937,7 +2079,7 @@
             "size": 92368,
             "contentType": "application/pdf",
             "submittedAt": "2026-07-06T15:58:49+08:00",
-            "status": "Pending Review",
+            "status": "Approved",
             "denialReason": "",
             "processingState": "Complete",
             "submissionStage": "Submitted",
@@ -1963,6 +2105,13 @@
                 "from": "Approved",
                 "to": "Pending Review",
                 "amount": 750.0
+              },
+              {
+                "at": "2026-07-09T12:04:13+08:00",
+                "by": "bnjm2000",
+                "from": "Pending Review",
+                "to": "Approved",
+                "amount": 750.0
               }
             ],
             "allocations": [
@@ -1977,7 +2126,7 @@
             "ocrDateMatchedText": "",
             "ocrUsed": true,
             "processedAt": "2026-07-06T15:59:44+08:00",
-            "reviewedAt": "2026-07-06T19:43:05+08:00",
+            "reviewedAt": "2026-07-09T12:04:13+08:00",
             "reviewedBy": "bnjm2000",
             "verifiedAt": "2026-07-06T19:43:02+08:00",
             "verifiedBy": "bnjm2000"
@@ -2076,6 +2225,13 @@
                 "from": "Approved",
                 "to": "Paid",
                 "amount": 360.0
+              },
+              {
+                "at": "2026-07-09T14:45:37+08:00",
+                "by": "bnjm2000",
+                "from": "Paid",
+                "to": "Paid",
+                "amount": 360.0
               }
             ],
             "amount": 360.0,
@@ -2089,13 +2245,79 @@
                 "amount": 360.0
               }
             ],
-            "reviewedAt": "2026-07-05T16:35:44+08:00",
+            "reviewedAt": "2026-07-09T14:45:37+08:00",
             "reviewedBy": "bnjm2000",
             "verifiedAt": "2026-07-05T16:35:44+08:00",
-            "verifiedBy": "bnjm2000"
+            "verifiedBy": "bnjm2000",
+            "paymentConfirmedAt": "2026-07-09T14:45:37+08:00",
+            "paymentConfirmedByAdmin": "bnjm2000",
+            "paymentConfirmedByWorker": false
           }
         ],
-        "claims": []
+        "claims": [
+          {
+            "id": "sub_c3fd5dd7f5fced13",
+            "originalName": "22.3.26 Home to Office MJ 9699.pdf",
+            "storedPath": "workforce_uploads/109/freelancer_20ab4d7a160649fa/claim-e8bf9baa98805a1efec0eb23.pdf",
+            "size": 518842,
+            "contentType": "application/pdf",
+            "submittedAt": "2026-07-09T13:03:03+08:00",
+            "status": "Paid",
+            "denialReason": "",
+            "processingState": "Complete",
+            "submissionStage": "Submitted",
+            "amount": 23.95,
+            "reviewHistory": [
+              {
+                "at": "2026-07-09T13:03:03+08:00",
+                "by": "bnjm2000",
+                "from": "",
+                "to": "Pending Review",
+                "action": "Admin upload"
+              },
+              {
+                "at": "2026-07-09T13:04:38+08:00",
+                "by": "bnjm2000",
+                "from": "Pending Review",
+                "to": "Approved",
+                "amount": 23.95
+              },
+              {
+                "at": "2026-07-09T13:04:42+08:00",
+                "by": "bnjm2000",
+                "from": "Approved",
+                "to": "Paid",
+                "amount": 23.95
+              },
+              {
+                "at": "2026-07-09T14:45:39+08:00",
+                "by": "bnjm2000",
+                "from": "Paid",
+                "to": "Paid",
+                "amount": 23.95
+              }
+            ],
+            "claimDate": "2026-03-22",
+            "category": "Transport",
+            "description": "",
+            "notes": "",
+            "department": "AX",
+            "detailsComplete": true,
+            "ocrConfidence": "Low",
+            "ocrSource": "Scanned document OCR",
+            "ocrMatchedText": "GIVE $5, GET $5",
+            "ocrDateMatchedText": "Sunday,22 March 2026|02:02 +0800",
+            "ocrUsed": true,
+            "processedAt": "2026-07-09T13:04:21+08:00",
+            "reviewedAt": "2026-07-09T14:45:39+08:00",
+            "reviewedBy": "bnjm2000",
+            "verifiedAt": "2026-07-09T13:04:38+08:00",
+            "verifiedBy": "bnjm2000",
+            "paymentConfirmedAt": "2026-07-09T14:45:39+08:00",
+            "paymentConfirmedByAdmin": "bnjm2000",
+            "paymentConfirmedByWorker": false
+          }
+        ]
       },
       "freelancer_22720e05743a5c3f": {
         "invoices": [
@@ -2223,6 +2445,20 @@
                 "from": "Approved",
                 "to": "Paid",
                 "amount": 250.0
+              },
+              {
+                "at": "2026-07-09T14:45:50+08:00",
+                "by": "bnjm2000",
+                "from": "Paid",
+                "to": "Approved",
+                "amount": 250.0
+              },
+              {
+                "at": "2026-07-09T14:45:54+08:00",
+                "by": "bnjm2000",
+                "from": "Approved",
+                "to": "Paid",
+                "amount": 250.0
               }
             ],
             "amount": 250.0,
@@ -2230,12 +2466,85 @@
             "ocrSource": "PDF text",
             "ocrMatchedText": "",
             "ocrUsed": false,
-            "allocations": [],
-            "reviewedAt": "2026-07-04T18:53:06+08:00",
-            "reviewedBy": "bnjm2000"
+            "allocations": [
+              {
+                "department": "AX",
+                "amount": 250.0
+              }
+            ],
+            "reviewedAt": "2026-07-09T14:45:54+08:00",
+            "reviewedBy": "bnjm2000",
+            "verifiedAt": "2026-07-09T14:45:50+08:00",
+            "verifiedBy": "bnjm2000",
+            "paymentConfirmedAt": "2026-07-09T14:45:54+08:00",
+            "paymentConfirmedByAdmin": "bnjm2000",
+            "paymentConfirmedByWorker": false
           }
         ],
-        "claims": []
+        "claims": [
+          {
+            "id": "sub_7212f771d932c74d",
+            "originalName": "30.5 AVEC Office to Home a457.pdf",
+            "storedPath": "workforce_uploads/131/freelancer_20ab4d7a160649fa/claim-15b1a3f964ba8d12540a1cb9.pdf",
+            "size": 141655,
+            "contentType": "application/pdf",
+            "submittedAt": "2026-07-09T12:58:54+08:00",
+            "status": "Paid",
+            "denialReason": "",
+            "processingState": "Complete",
+            "submissionStage": "Submitted",
+            "amount": 28.76,
+            "reviewHistory": [
+              {
+                "at": "2026-07-09T12:58:54+08:00",
+                "by": "bnjm2000",
+                "from": "",
+                "to": "Pending Review",
+                "action": "Admin upload"
+              },
+              {
+                "at": "2026-07-09T13:05:08+08:00",
+                "by": "bnjm2000",
+                "from": "Pending Review",
+                "to": "Approved",
+                "amount": 28.76
+              },
+              {
+                "at": "2026-07-09T13:05:33+08:00",
+                "by": "bnjm2000",
+                "from": "Approved",
+                "to": "Paid",
+                "amount": 28.76
+              },
+              {
+                "at": "2026-07-09T14:45:57+08:00",
+                "by": "bnjm2000",
+                "from": "Paid",
+                "to": "Paid",
+                "amount": 28.76
+              }
+            ],
+            "claimDate": "2026-05-31",
+            "category": "Transport",
+            "description": "",
+            "notes": "",
+            "department": "AX",
+            "detailsComplete": true,
+            "ocrConfidence": "Medium",
+            "ocrSource": "PDF text",
+            "ocrMatchedText": "28.76 SGD",
+            "ocrDateMatchedText": "Pick-up Date and Time 31-05-2026 02:00 ~ 02:27",
+            "ocrUsed": false,
+            "processedAt": "2026-07-09T12:58:54+08:00",
+            "reviewedAt": "2026-07-09T14:45:57+08:00",
+            "reviewedBy": "bnjm2000",
+            "verifiedAt": "2026-07-09T13:05:08+08:00",
+            "verifiedBy": "bnjm2000",
+            "paymentConfirmedAt": "2026-07-09T14:45:57+08:00",
+            "paymentConfirmedByAdmin": "bnjm2000",
+            "paymentConfirmedByWorker": false
+          }
+        ]
       },
       "freelancer_acdc84b3efd7c649": {
         "invoices": [
@@ -2376,10 +2685,81 @@
             "reviewedAt": "2026-07-05T15:40:01+08:00",
             "reviewedBy": "bnjm2000",
             "verifiedAt": "2026-07-05T15:40:01+08:00",
-            "verifiedBy": "bnjm2000"
+            "verifiedBy": "bnjm2000",
+            "paymentConfirmedAt": "2026-07-09T12:07:39+08:00",
+            "paymentConfirmedByWorker": true
           }
         ],
-        "claims": []
+        "claims": [
+          {
+            "id": "sub_f549f126d9cd2877",
+            "originalName": "WhatsApp Image 2026-05-25 at 10.58.15 PM.jpeg",
+            "storedPath": "workforce_uploads/131/freelancer_af17dbdcf360da19/claim-7b75b5d7c351a6c72f22b1fb.jpeg",
+            "size": 119159,
+            "contentType": "image/jpeg",
+            "submittedAt": "2026-07-09T11:54:14+08:00",
+            "status": "Paid",
+            "denialReason": "",
+            "processingState": "Complete",
+            "submissionStage": "Submitted",
+            "amount": 19.6,
+            "reviewHistory": [
+              {
+                "at": "2026-07-09T11:54:14+08:00",
+                "by": "bnjm2000",
+                "from": "",
+                "to": "Pending Review",
+                "action": "Admin upload"
+              },
+              {
+                "at": "2026-07-09T11:56:59+08:00",
+                "by": "bnjm2000",
+                "from": "Pending Review",
+                "to": "Approved",
+                "amount": 19.6
+              },
+              {
+                "at": "2026-07-09T11:57:05+08:00",
+                "by": "bnjm2000",
+                "from": "Approved",
+                "to": "Paid",
+                "amount": 19.6
+              },
+              {
+                "at": "2026-07-09T11:57:06+08:00",
+                "by": "bnjm2000",
+                "from": "Paid",
+                "to": "Approved",
+                "amount": 19.6
+              },
+              {
+                "at": "2026-07-09T12:03:07+08:00",
+                "by": "bnjm2000",
+                "from": "Approved",
+                "to": "Paid",
+                "amount": 19.6
+              }
+            ],
+            "claimDate": "2026-05-24",
+            "category": "Transport",
+            "description": "",
+            "notes": "",
+            "department": "AX",
+            "detailsComplete": true,
+            "ocrConfidence": "Medium",
+            "ocrSource": "Receipt image OCR",
+            "ocrMatchedText": "Total S$19.60>",
+            "ocrDateMatchedText": "24May2026,12:30AM",
+            "ocrUsed": true,
+            "processedAt": "2026-07-09T11:54:52+08:00",
+            "reviewedAt": "2026-07-09T12:03:07+08:00",
+            "reviewedBy": "bnjm2000",
+            "verifiedAt": "2026-07-09T11:56:59+08:00",
+            "verifiedBy": "bnjm2000",
+            "paymentConfirmedAt": "2026-07-09T12:07:49+08:00",
+            "paymentConfirmedByWorker": true
+          }
+        ]
       },
       "freelancer_811bbf2c1c7ffa00": {
         "invoices": [
@@ -2419,7 +2799,9 @@
             "reviewedAt": "2026-07-05T15:42:11+08:00",
             "reviewedBy": "bnjm2000",
             "verifiedAt": "2026-07-05T15:42:11+08:00",
-            "verifiedBy": "bnjm2000"
+            "verifiedBy": "bnjm2000",
+            "paymentConfirmedAt": "2026-07-09T12:02:26+08:00",
+            "paymentConfirmedByWorker": true
           }
         ],
         "claims": []
@@ -2476,7 +2858,7 @@
             "size": 272221,
             "contentType": "application/pdf",
             "submittedAt": "2026-07-05T15:47:07+08:00",
-            "status": "Approved",
+            "status": "Paid",
             "denialReason": "",
             "reviewHistory": [
               {
@@ -2492,6 +2874,13 @@
                 "from": "Pending Review",
                 "to": "Approved",
                 "amount": 17.6
+              },
+              {
+                "at": "2026-07-09T14:20:41+08:00",
+                "by": "bnjm2000",
+                "from": "Approved",
+                "to": "Paid",
+                "amount": 17.6
               }
             ],
             "amount": 17.6,
@@ -2499,7 +2888,7 @@
             "category": "Cab",
             "description": "NIL",
             "department": "AX",
-            "reviewedAt": "2026-07-05T15:47:16+08:00",
+            "reviewedAt": "2026-07-09T14:20:41+08:00",
             "reviewedBy": "bnjm2000",
             "verifiedAt": "2026-07-05T15:47:16+08:00",
             "verifiedBy": "bnjm2000"
@@ -2515,7 +2904,7 @@
             "size": 92378,
             "contentType": "application/pdf",
             "submittedAt": "2026-07-06T16:00:19+08:00",
-            "status": "Pending Review",
+            "status": "Approved",
             "denialReason": "",
             "processingState": "Complete",
             "submissionStage": "Submitted",
@@ -2527,15 +2916,91 @@
                 "from": "",
                 "to": "Pending Review",
                 "action": "Admin upload"
+              },
+              {
+                "at": "2026-07-09T11:49:17+08:00",
+                "by": "bnjm2000",
+                "from": "Pending Review",
+                "to": "Approved",
+                "amount": 500.0
               }
             ],
-            "allocations": [],
+            "allocations": [
+              {
+                "department": "AX",
+                "amount": 500.0
+              }
+            ],
             "ocrConfidence": "Medium",
             "ocrSource": "Scanned document OCR",
             "ocrMatchedText": "Total S$ 500.00",
             "ocrDateMatchedText": "",
             "ocrUsed": true,
-            "processedAt": "2026-07-06T16:01:13+08:00"
+            "processedAt": "2026-07-06T16:01:13+08:00",
+            "reviewedAt": "2026-07-09T11:49:17+08:00",
+            "reviewedBy": "bnjm2000",
+            "verifiedAt": "2026-07-09T11:49:17+08:00",
+            "verifiedBy": "bnjm2000"
+          }
+        ],
+        "claims": []
+      },
+      "freelancer_81bd3ddbb3de2ffa": {
+        "invoices": [
+          {
+            "id": "sub_1ca12145f0a99206",
+            "originalName": "158.pdf",
+            "storedPath": "workforce_uploads/131/freelancer_81bd3ddbb3de2ffa/invoice-4701039894e3267b281fa276.pdf",
+            "size": 56484,
+            "contentType": "application/pdf",
+            "submittedAt": "2026-07-09T13:15:02+08:00",
+            "status": "Paid",
+            "denialReason": "",
+            "processingState": "Complete",
+            "submissionStage": "Submitted",
+            "amount": 360.0,
+            "reviewHistory": [
+              {
+                "at": "2026-07-09T13:15:02+08:00",
+                "by": "bnjm2000",
+                "from": "",
+                "to": "Pending Review",
+                "action": "Admin upload"
+              },
+              {
+                "at": "2026-07-09T13:17:51+08:00",
+                "by": "bnjm2000",
+                "from": "Pending Review",
+                "to": "Approved",
+                "amount": 360.0
+              },
+              {
+                "at": "2026-07-09T13:21:39+08:00",
+                "by": "bnjm2000",
+                "from": "Approved",
+                "to": "Paid",
+                "amount": 360.0
+              }
+            ],
+            "allocations": [
+              {
+                "department": "LX",
+                "amount": 360.0
+              }
+            ],
+            "ocrConfidence": "High",
+            "ocrSource": "PDF text",
+            "ocrMatchedText": "Balance Due SGD360.00",
+            "ocrDateMatchedText": "",
+            "ocrUsed": false,
+            "processedAt": "2026-07-09T13:15:02+08:00",
+            "reviewedAt": "2026-07-09T13:21:39+08:00",
+            "reviewedBy": "bnjm2000",
+            "verifiedAt": "2026-07-09T13:17:51+08:00",
+            "verifiedBy": "bnjm2000",
+            "paymentConfirmedAt": "2026-07-09T13:21:39+08:00",
+            "paymentConfirmedByAdmin": "bnjm2000",
+            "paymentConfirmedByWorker": false
           }
         ],
         "claims": []
@@ -2656,7 +3121,7 @@
             "size": 156409,
             "contentType": "application/pdf",
             "submittedAt": "2026-07-05T14:48:39+08:00",
-            "status": "Approved",
+            "status": "Paid",
             "denialReason": "",
             "reviewHistory": [
               {
@@ -2679,6 +3144,13 @@
                 "from": "Paid",
                 "to": "Approved",
                 "amount": 1940.2
+              },
+              {
+                "at": "2026-07-09T11:48:30+08:00",
+                "by": "bnjm2000",
+                "from": "Approved",
+                "to": "Paid",
+                "amount": 1940.2
               }
             ],
             "amount": 1940.2,
@@ -2692,7 +3164,7 @@
                 "amount": 1940.2
               }
             ],
-            "reviewedAt": "2026-07-05T14:48:56+08:00",
+            "reviewedAt": "2026-07-09T11:48:30+08:00",
             "reviewedBy": "bnjm2000",
             "verifiedAt": "2026-07-05T14:48:53+08:00",
             "verifiedBy": "bnjm2000"
@@ -2709,7 +3181,7 @@
             "size": 92364,
             "contentType": "application/pdf",
             "submittedAt": "2026-07-06T16:01:49+08:00",
-            "status": "Pending Review",
+            "status": "Approved",
             "denialReason": "",
             "processingState": "Complete",
             "submissionStage": "Submitted",
@@ -2721,15 +3193,45 @@
                 "from": "",
                 "to": "Pending Review",
                 "action": "Admin upload"
+              },
+              {
+                "at": "2026-07-09T11:48:26+08:00",
+                "by": "bnjm2000",
+                "from": "Pending Review",
+                "to": "Approved",
+                "amount": 250.0
+              },
+              {
+                "at": "2026-07-09T11:48:28+08:00",
+                "by": "bnjm2000",
+                "from": "Approved",
+                "to": "Paid",
+                "amount": 250.0
+              },
+              {
+                "at": "2026-07-09T12:04:07+08:00",
+                "by": "bnjm2000",
+                "from": "Paid",
+                "to": "Approved",
+                "amount": 250.0
               }
             ],
-            "allocations": [],
+            "allocations": [
+              {
+                "department": "AX",
+                "amount": 250.0
+              }
+            ],
             "ocrConfidence": "Medium",
             "ocrSource": "Scanned document OCR",
             "ocrMatchedText": "Total S$ 250.00",
             "ocrDateMatchedText": "",
             "ocrUsed": true,
-            "processedAt": "2026-07-06T16:02:45+08:00"
+            "processedAt": "2026-07-06T16:02:45+08:00",
+            "reviewedAt": "2026-07-09T12:04:07+08:00",
+            "reviewedBy": "bnjm2000",
+            "verifiedAt": "2026-07-09T11:48:26+08:00",
+            "verifiedBy": "bnjm2000"
           }
         ],
         "claims": []
@@ -2854,19 +3356,45 @@
             "size": 83724,
             "contentType": "application/pdf",
             "submittedAt": "2026-07-05T15:42:27+08:00",
-            "status": "Pending Review",
+            "status": "Paid",
             "denialReason": "",
-            "reviewHistory": [],
+            "reviewHistory": [
+              {
+                "at": "2026-07-09T11:58:57+08:00",
+                "by": "bnjm2000",
+                "from": "Pending Review",
+                "to": "Approved",
+                "amount": 150.0
+              },
+              {
+                "at": "2026-07-09T11:59:00+08:00",
+                "by": "bnjm2000",
+                "from": "Approved",
+                "to": "Paid",
+                "amount": 150.0
+              }
+            ],
             "amount": 150.0,
             "processingState": "Complete",
             "submissionStage": "Submitted",
-            "allocations": [],
+            "allocations": [
+              {
+                "department": "LX",
+                "amount": 150.0
+              }
+            ],
             "ocrConfidence": "High",
             "ocrSource": "PDF text",
             "ocrMatchedText": "Heng Jia Jun 420 Serangoon Central #06-410 Singapore 550420 +65 9763 3314 INVOICE Invoice #: 13 Date Submitted: 31/5/2026 Bill To: Terence Chew Avec Vision Pte Ltd 601 Sims Drive , #04-10, PAN-I Complex Singapore 387382 Description of Work ",
             "ocrDateMatchedText": "",
             "ocrUsed": false,
-            "processedAt": "2026-07-05T15:42:28+08:00"
+            "processedAt": "2026-07-05T15:42:28+08:00",
+            "reviewedAt": "2026-07-09T11:59:00+08:00",
+            "reviewedBy": "bnjm2000",
+            "verifiedAt": "2026-07-09T11:58:57+08:00",
+            "verifiedBy": "bnjm2000",
+            "paymentConfirmedAt": "2026-07-09T12:02:34+08:00",
+            "paymentConfirmedByWorker": true
           }
         ],
         "claims": []
@@ -2880,7 +3408,7 @@
             "size": 92456,
             "contentType": "application/pdf",
             "submittedAt": "2026-07-06T15:54:24+08:00",
-            "status": "Pending Review",
+            "status": "Approved",
             "denialReason": "",
             "processingState": "Complete",
             "submissionStage": "Submitted",
@@ -2892,17 +3420,231 @@
                 "from": "",
                 "to": "Pending Review",
                 "action": "Admin upload"
+              },
+              {
+                "at": "2026-07-09T12:04:10+08:00",
+                "by": "bnjm2000",
+                "from": "Pending Review",
+                "to": "Approved",
+                "amount": 500.0
               }
             ],
-            "allocations": [],
+            "allocations": [
+              {
+                "department": "AX",
+                "amount": 500.0
+              }
+            ],
             "ocrConfidence": "Medium",
             "ocrSource": "Scanned document OCR",
             "ocrMatchedText": "Total S$ 500.00",
             "ocrDateMatchedText": "",
             "ocrUsed": true,
-            "processedAt": "2026-07-06T15:55:46+08:00"
+            "processedAt": "2026-07-06T15:55:46+08:00",
+            "reviewedAt": "2026-07-09T12:04:10+08:00",
+            "reviewedBy": "bnjm2000",
+            "verifiedAt": "2026-07-09T12:04:10+08:00",
+            "verifiedBy": "bnjm2000"
           }
         ],
+        "claims": []
+      },
+      "freelancer_20ab4d7a160649fa": {
+        "invoices": [
+          {
+            "id": "sub_379daf3f9e6f3573",
+            "originalName": "INV-2605-0614 mjvst Invoice AVEC.pdf",
+            "storedPath": "workforce_uploads/134/freelancer_20ab4d7a160649fa/invoice-2c8aad5f0ed390193b0924a9.pdf",
+            "size": 43518,
+            "contentType": "application/pdf",
+            "submittedAt": "2026-07-09T13:00:01+08:00",
+            "status": "Paid",
+            "denialReason": "",
+            "processingState": "Complete",
+            "submissionStage": "Submitted",
+            "amount": 180.0,
+            "reviewHistory": [
+              {
+                "at": "2026-07-09T13:00:01+08:00",
+                "by": "bnjm2000",
+                "from": "",
+                "to": "Pending Review",
+                "action": "Admin upload"
+              },
+              {
+                "at": "2026-07-09T13:05:19+08:00",
+                "by": "bnjm2000",
+                "from": "Pending Review",
+                "to": "Approved",
+                "amount": 180.0
+              },
+              {
+                "at": "2026-07-09T13:05:37+08:00",
+                "by": "bnjm2000",
+                "from": "Approved",
+                "to": "Paid",
+                "amount": 180.0
+              },
+              {
+                "at": "2026-07-09T13:06:24+08:00",
+                "by": "bnjm2000",
+                "from": "Paid",
+                "to": "Approved",
+                "amount": 180.0
+              },
+              {
+                "at": "2026-07-09T13:06:25+08:00",
+                "by": "bnjm2000",
+                "from": "Approved",
+                "to": "Paid",
+                "amount": 180.0
+              },
+              {
+                "at": "2026-07-09T14:46:01+08:00",
+                "by": "bnjm2000",
+                "from": "Paid",
+                "to": "Paid",
+                "amount": 180.0
+              }
+            ],
+            "allocations": [
+              {
+                "department": "AX",
+                "amount": 180.0
+              }
+            ],
+            "ocrConfidence": "Medium",
+            "ocrSource": "PDF text",
+            "ocrMatchedText": "TOTAL 180.00$",
+            "ocrDateMatchedText": "",
+            "ocrUsed": false,
+            "processedAt": "2026-07-09T13:00:01+08:00",
+            "reviewedAt": "2026-07-09T14:46:01+08:00",
+            "reviewedBy": "bnjm2000",
+            "verifiedAt": "2026-07-09T13:05:19+08:00",
+            "verifiedBy": "bnjm2000",
+            "paymentConfirmedAt": "2026-07-09T14:46:01+08:00",
+            "paymentConfirmedByAdmin": "bnjm2000",
+            "paymentConfirmedByWorker": false
+          }
+        ],
+        "claims": [
+          {
+            "id": "sub_6d87d9619db7d8f4",
+            "originalName": "30.5 AVEC Office to Home a457.pdf",
+            "storedPath": "workforce_uploads/134/freelancer_20ab4d7a160649fa/claim-a1e17230d489f33f48a501df.pdf",
+            "size": 141655,
+            "contentType": "application/pdf",
+            "submittedAt": "2026-07-09T13:00:15+08:00",
+            "status": "Paid",
+            "denialReason": "",
+            "processingState": "Complete",
+            "submissionStage": "Submitted",
+            "amount": 28.76,
+            "reviewHistory": [
+              {
+                "at": "2026-07-09T13:00:15+08:00",
+                "by": "bnjm2000",
+                "from": "",
+                "to": "Pending Review",
+                "action": "Admin upload"
+              },
+              {
+                "at": "2026-07-09T13:05:25+08:00",
+                "by": "bnjm2000",
+                "from": "Pending Review",
+                "to": "Approved",
+                "amount": 28.76
+              },
+              {
+                "at": "2026-07-09T13:05:35+08:00",
+                "by": "bnjm2000",
+                "from": "Approved",
+                "to": "Paid",
+                "amount": 28.76
+              },
+              {
+                "at": "2026-07-09T14:45:59+08:00",
+                "by": "bnjm2000",
+                "from": "Paid",
+                "to": "Paid",
+                "amount": 28.76
+              }
+            ],
+            "claimDate": "2026-05-31",
+            "category": "Transport",
+            "description": "",
+            "notes": "",
+            "department": "AX",
+            "detailsComplete": true,
+            "ocrConfidence": "Medium",
+            "ocrSource": "PDF text",
+            "ocrMatchedText": "28.76 SGD",
+            "ocrDateMatchedText": "Pick-up Date and Time 31-05-2026 02:00 ~ 02:27",
+            "ocrUsed": false,
+            "processedAt": "2026-07-09T13:00:15+08:00",
+            "reviewedAt": "2026-07-09T14:45:59+08:00",
+            "reviewedBy": "bnjm2000",
+            "verifiedAt": "2026-07-09T13:05:25+08:00",
+            "verifiedBy": "bnjm2000",
+            "paymentConfirmedAt": "2026-07-09T14:45:59+08:00",
+            "paymentConfirmedByAdmin": "bnjm2000",
+            "paymentConfirmedByWorker": false
+          }
+        ]
+      },
+      "freelancer_81bd3ddbb3de2ffa": {
+        "invoices": [
+          {
+            "id": "sub_c71452a918b57260",
+            "originalName": "163.pdf",
+            "storedPath": "workforce_uploads/134/freelancer_81bd3ddbb3de2ffa/invoice-a4f53231c7b0a860f4b81f5f.pdf",
+            "size": 55948,
+            "contentType": "application/pdf",
+            "submittedAt": "2026-07-09T13:15:37+08:00",
+            "status": "Approved",
+            "denialReason": "",
+            "processingState": "Complete",
+            "submissionStage": "Submitted",
+            "amount": 180.0,
+            "reviewHistory": [
+              {
+                "at": "2026-07-09T13:15:37+08:00",
+                "by": "bnjm2000",
+                "from": "",
+                "to": "Pending Review",
+                "action": "Admin upload"
+              },
+              {
+                "at": "2026-07-09T13:18:08+08:00",
+                "by": "bnjm2000",
+                "from": "Pending Review",
+                "to": "Approved",
+                "amount": 180.0
+              }
+            ],
+            "allocations": [
+              {
+                "department": "LX",
+                "amount": 180.0
+              }
+            ],
+            "ocrConfidence": "High",
+            "ocrSource": "PDF text",
+            "ocrMatchedText": "Balance Due SGD180.00",
+            "ocrDateMatchedText": "",
+            "ocrUsed": false,
+            "processedAt": "2026-07-09T13:15:37+08:00",
+            "reviewedAt": "2026-07-09T13:18:08+08:00",
+            "reviewedBy": "bnjm2000",
+            "verifiedAt": "2026-07-09T13:18:08+08:00",
+            "verifiedBy": "bnjm2000"
+          }
+        ],
+        "claims": []
+      },
+      "freelancer_6f42b4ecd10173a7": {
+        "invoices": [],
         "claims": []
       }
     },
@@ -2963,19 +3705,95 @@
             "size": 82074,
             "contentType": "application/pdf",
             "submittedAt": "2026-07-05T15:42:24+08:00",
-            "status": "Pending Review",
+            "status": "Paid",
             "denialReason": "",
-            "reviewHistory": [],
+            "reviewHistory": [
+              {
+                "at": "2026-07-09T11:59:06+08:00",
+                "by": "bnjm2000",
+                "from": "Pending Review",
+                "to": "Approved",
+                "amount": 150.0
+              },
+              {
+                "at": "2026-07-09T11:59:08+08:00",
+                "by": "bnjm2000",
+                "from": "Approved",
+                "to": "Paid",
+                "amount": 150.0
+              }
+            ],
             "amount": 150.0,
             "processingState": "Complete",
             "submissionStage": "Submitted",
-            "allocations": [],
+            "allocations": [
+              {
+                "department": "AX",
+                "amount": 150.0
+              }
+            ],
             "ocrConfidence": "High",
             "ocrSource": "PDF text",
             "ocrMatchedText": "Heng Jia Jun 420 Serangoon Central #06-410 Singapore 550420 +65 9763 3314 INVOICE Invoice #: 12 Date Submitted: 31/5/2026 Bill To: Terence Chew Avec Vision Pte Ltd 601 Sims Drive , #04-10, PAN-I Complex Singapore 387382 Description of Work ",
             "ocrDateMatchedText": "",
             "ocrUsed": false,
-            "processedAt": "2026-07-05T15:42:24+08:00"
+            "processedAt": "2026-07-05T15:42:24+08:00",
+            "reviewedAt": "2026-07-09T11:59:08+08:00",
+            "reviewedBy": "bnjm2000",
+            "verifiedAt": "2026-07-09T11:59:06+08:00",
+            "verifiedBy": "bnjm2000",
+            "paymentConfirmedAt": "2026-07-09T12:02:32+08:00",
+            "paymentConfirmedByWorker": true
+          }
+        ],
+        "claims": []
+      },
+      "freelancer_81bd3ddbb3de2ffa": {
+        "invoices": [
+          {
+            "id": "sub_2041c2cd3492c329",
+            "originalName": "164.pdf",
+            "storedPath": "workforce_uploads/142/freelancer_81bd3ddbb3de2ffa/invoice-b963d88f28642c458cf0de88.pdf",
+            "size": 55903,
+            "contentType": "application/pdf",
+            "submittedAt": "2026-07-09T13:16:07+08:00",
+            "status": "Approved",
+            "denialReason": "",
+            "processingState": "Complete",
+            "submissionStage": "Submitted",
+            "amount": 180.0,
+            "reviewHistory": [
+              {
+                "at": "2026-07-09T13:16:07+08:00",
+                "by": "bnjm2000",
+                "from": "",
+                "to": "Pending Review",
+                "action": "Admin upload"
+              },
+              {
+                "at": "2026-07-09T13:18:05+08:00",
+                "by": "bnjm2000",
+                "from": "Pending Review",
+                "to": "Approved",
+                "amount": 180.0
+              }
+            ],
+            "allocations": [
+              {
+                "department": "AX",
+                "amount": 180.0
+              }
+            ],
+            "ocrConfidence": "High",
+            "ocrSource": "PDF text",
+            "ocrMatchedText": "Balance Due SGD180.00",
+            "ocrDateMatchedText": "",
+            "ocrUsed": false,
+            "processedAt": "2026-07-09T13:16:07+08:00",
+            "reviewedAt": "2026-07-09T13:18:05+08:00",
+            "reviewedBy": "bnjm2000",
+            "verifiedAt": "2026-07-09T13:18:05+08:00",
+            "verifiedBy": "bnjm2000"
           }
         ],
         "claims": []
@@ -3343,6 +4161,66 @@
           }
         ],
         "claims": []
+      },
+      "freelancer_81bd3ddbb3de2ffa": {
+        "invoices": [
+          {
+            "id": "sub_932627cff121b766",
+            "originalName": "142.pdf",
+            "storedPath": "workforce_uploads/127/freelancer_81bd3ddbb3de2ffa/invoice-c50a3f754e53ea9dfd363335.pdf",
+            "size": 55765,
+            "contentType": "application/pdf",
+            "submittedAt": "2026-07-09T13:16:49+08:00",
+            "status": "Paid",
+            "denialReason": "",
+            "processingState": "Complete",
+            "submissionStage": "Submitted",
+            "amount": 180.0,
+            "reviewHistory": [
+              {
+                "at": "2026-07-09T13:16:49+08:00",
+                "by": "bnjm2000",
+                "from": "",
+                "to": "Pending Review",
+                "action": "Admin upload"
+              },
+              {
+                "at": "2026-07-09T13:17:38+08:00",
+                "by": "bnjm2000",
+                "from": "Pending Review",
+                "to": "Approved",
+                "amount": 180.0
+              },
+              {
+                "at": "2026-07-09T13:21:33+08:00",
+                "by": "bnjm2000",
+                "from": "Approved",
+                "to": "Paid",
+                "amount": 180.0
+              }
+            ],
+            "allocations": [
+              {
+                "department": "LX",
+                "amount": 180.0
+              }
+            ],
+            "ocrConfidence": "High",
+            "ocrSource": "PDF text",
+            "ocrMatchedText": "Balance Due SGD180.00",
+            "ocrDateMatchedText": "",
+            "ocrUsed": false,
+            "processedAt": "2026-07-09T13:16:49+08:00",
+            "reviewedAt": "2026-07-09T13:21:33+08:00",
+            "reviewedBy": "bnjm2000",
+            "verifiedAt": "2026-07-09T13:17:38+08:00",
+            "verifiedBy": "bnjm2000",
+            "paymentConfirmedAt": "2026-07-09T13:21:33+08:00",
+            "paymentConfirmedByAdmin": "bnjm2000",
+            "paymentConfirmedByWorker": false
+          }
+        ],
+        "claims": []
       }
     },
     "90": {
@@ -3440,7 +4318,273 @@
         ],
         "claims": []
       }
+    },
+    "112": {
+      "freelancer_af17dbdcf360da19": {
+        "invoices": [
+          {
+            "id": "sub_3e5cac72ff4463a3",
+            "originalName": "Invoice for Avec (12-13th March).pdf",
+            "storedPath": "workforce_uploads/112/freelancer_af17dbdcf360da19/invoice-c919273e1e8dabf31a3a10b0.pdf",
+            "size": 104060,
+            "contentType": "application/pdf",
+            "submittedAt": "2026-07-09T11:56:29+08:00",
+            "status": "Paid",
+            "denialReason": "",
+            "processingState": "Complete",
+            "submissionStage": "Submitted",
+            "amount": 350.0,
+            "reviewHistory": [
+              {
+                "at": "2026-07-09T11:56:29+08:00",
+                "by": "bnjm2000",
+                "from": "",
+                "to": "Pending Review",
+                "action": "Admin upload"
+              },
+              {
+                "at": "2026-07-09T11:56:35+08:00",
+                "by": "bnjm2000",
+                "from": "Pending Review",
+                "to": "Approved",
+                "amount": 350.0
+              },
+              {
+                "at": "2026-07-09T11:56:37+08:00",
+                "by": "bnjm2000",
+                "from": "Approved",
+                "to": "Paid",
+                "amount": 350.0
+              },
+              {
+                "at": "2026-07-09T11:56:38+08:00",
+                "by": "bnjm2000",
+                "from": "Paid",
+                "to": "Paid",
+                "amount": 350.0
+              },
+              {
+                "at": "2026-07-09T11:56:39+08:00",
+                "by": "bnjm2000",
+                "from": "Paid",
+                "to": "Paid",
+                "amount": 350.0
+              }
+            ],
+            "allocations": [
+              {
+                "department": "AX",
+                "amount": 350.0
+              }
+            ],
+            "ocrConfidence": "Medium",
+            "ocrSource": "PDF text",
+            "ocrMatchedText": "12th March 2026A2 - Intervowen @ SCCC $100.00",
+            "ocrDateMatchedText": "",
+            "ocrUsed": false,
+            "processedAt": "2026-07-09T11:56:29+08:00",
+            "reviewedAt": "2026-07-09T11:56:39+08:00",
+            "reviewedBy": "bnjm2000",
+            "verifiedAt": "2026-07-09T11:56:35+08:00",
+            "verifiedBy": "bnjm2000",
+            "paymentConfirmedAt": "2026-07-09T12:07:36+08:00",
+            "paymentConfirmedByWorker": true
+          }
+        ],
+        "claims": []
+      }
+    },
+    "117": {
+      "freelancer_20ab4d7a160649fa": {
+        "invoices": [
+          {
+            "id": "sub_c0dcd084912286db",
+            "originalName": "INV-2603-0588 mjvst Invoice AVEC.pdf",
+            "storedPath": "workforce_uploads/117/freelancer_20ab4d7a160649fa/invoice-68b14c40a6552386af0d18a0.pdf",
+            "size": 41708,
+            "contentType": "application/pdf",
+            "submittedAt": "2026-07-09T13:01:10+08:00",
+            "status": "Paid",
+            "denialReason": "",
+            "processingState": "Complete",
+            "submissionStage": "Submitted",
+            "amount": 250.0,
+            "reviewHistory": [
+              {
+                "at": "2026-07-09T13:01:10+08:00",
+                "by": "bnjm2000",
+                "from": "",
+                "to": "Pending Review",
+                "action": "Admin upload"
+              },
+              {
+                "at": "2026-07-09T13:04:46+08:00",
+                "by": "bnjm2000",
+                "from": "Pending Review",
+                "to": "Approved",
+                "amount": 250.0
+              },
+              {
+                "at": "2026-07-09T13:05:29+08:00",
+                "by": "bnjm2000",
+                "from": "Approved",
+                "to": "Paid",
+                "amount": 250.0
+              },
+              {
+                "at": "2026-07-09T14:45:42+08:00",
+                "by": "bnjm2000",
+                "from": "Paid",
+                "to": "Paid",
+                "amount": 250.0
+              }
+            ],
+            "allocations": [
+              {
+                "department": "AX",
+                "amount": 250.0
+              }
+            ],
+            "ocrConfidence": "Medium",
+            "ocrSource": "PDF text",
+            "ocrMatchedText": "TOTAL 250.00$",
+            "ocrDateMatchedText": "",
+            "ocrUsed": false,
+            "processedAt": "2026-07-09T13:01:10+08:00",
+            "reviewedAt": "2026-07-09T14:45:42+08:00",
+            "reviewedBy": "bnjm2000",
+            "verifiedAt": "2026-07-09T13:04:46+08:00",
+            "verifiedBy": "bnjm2000",
+            "paymentConfirmedAt": "2026-07-09T14:45:42+08:00",
+            "paymentConfirmedByAdmin": "bnjm2000",
+            "paymentConfirmedByWorker": false
+          }
+        ],
+        "claims": [
+          {
+            "id": "sub_b1937b61126e10b4",
+            "originalName": "27.3 DREAMS to Home MJ.pdf",
+            "storedPath": "workforce_uploads/117/freelancer_20ab4d7a160649fa/claim-463e4262ce8240348e11695b.pdf",
+            "size": 239625,
+            "contentType": "application/pdf",
+            "submittedAt": "2026-07-09T13:01:34+08:00",
+            "status": "Paid",
+            "denialReason": "",
+            "processingState": "Complete",
+            "submissionStage": "Submitted",
+            "amount": 25.9,
+            "reviewHistory": [
+              {
+                "at": "2026-07-09T13:01:34+08:00",
+                "by": "bnjm2000",
+                "from": "",
+                "to": "Pending Review",
+                "action": "Admin upload"
+              },
+              {
+                "at": "2026-07-09T13:04:54+08:00",
+                "by": "bnjm2000",
+                "from": "Pending Review",
+                "to": "Approved",
+                "amount": 25.9
+              },
+              {
+                "at": "2026-07-09T13:05:31+08:00",
+                "by": "bnjm2000",
+                "from": "Approved",
+                "to": "Paid",
+                "amount": 25.9
+              },
+              {
+                "at": "2026-07-09T14:45:44+08:00",
+                "by": "bnjm2000",
+                "from": "Paid",
+                "to": "Paid",
+                "amount": 25.9
+              }
+            ],
+            "claimDate": "2026-03-27",
+            "category": "Transport",
+            "description": "",
+            "notes": "",
+            "department": "AX",
+            "detailsComplete": true,
+            "ocrConfidence": "Medium",
+            "ocrSource": "PDF text",
+            "ocrMatchedText": "Total Paid SGD 25.90",
+            "ocrDateMatchedText": "Grab <no-reply@grab.com> Fri, Mar 27, 2026 at 11:21 PM",
+            "ocrUsed": false,
+            "processedAt": "2026-07-09T13:01:34+08:00",
+            "reviewedAt": "2026-07-09T14:45:44+08:00",
+            "reviewedBy": "bnjm2000",
+            "verifiedAt": "2026-07-09T13:04:54+08:00",
+            "verifiedBy": "bnjm2000",
+            "paymentConfirmedAt": "2026-07-09T14:45:44+08:00",
+            "paymentConfirmedByAdmin": "bnjm2000",
+            "paymentConfirmedByWorker": false
+          }
+        ]
+      }
+    },
+    "1": {
+      "freelancer_7cc44ded5feff624": {
+        "invoices": [
+          {
+            "id": "sub_93434628ccd26e56",
+            "originalName": "Invoice 20215001_AVEC Vision.pdf",
+            "storedPath": "workforce_uploads/1/freelancer_7cc44ded5feff624/invoice-d7c6b0a6661edd989df9c9d4.pdf",
+            "size": 115534,
+            "contentType": "application/pdf",
+            "submittedAt": "2026-07-09T13:36:45+08:00",
+            "status": "Paid",
+            "denialReason": "",
+            "processingState": "Complete",
+            "submissionStage": "Submitted",
+            "amount": 300.0,
+            "reviewHistory": [
+              {
+                "at": "2026-07-09T13:36:45+08:00",
+                "by": "bnjm2000",
+                "from": "",
+                "to": "Pending Review",
+                "action": "Admin upload"
+              },
+              {
+                "at": "2026-07-09T13:37:02+08:00",
+                "by": "bnjm2000",
+                "from": "Pending Review",
+                "to": "Approved",
+                "amount": 300.0
+              },
+              {
+                "at": "2026-07-09T13:37:04+08:00",
+                "by": "bnjm2000",
+                "from": "Approved",
+                "to": "Paid",
+                "amount": 300.0
+              }
+            ],
+            "allocations": [
+              {
+                "department": "AX",
+                "amount": 300.0
+              }
+            ],
+            "ocrConfidence": "Medium",
+            "ocrSource": "PDF text",
+            "ocrMatchedText": "TOTAL $ 650.00",
+            "ocrDateMatchedText": "",
+            "ocrUsed": false,
+            "processedAt": "2026-07-09T13:36:45+08:00",
+            "reviewedAt": "2026-07-09T13:37:04+08:00",
+            "reviewedBy": "bnjm2000",
+            "verifiedAt": "2026-07-09T13:37:02+08:00",
+            "verifiedBy": "bnjm2000"
+          }
+        ],
+        "claims": []
+      }
     }
   },
-  "updatedAt": "2026-07-07T22:46:45+08:00"
+  "updatedAt": "2026-07-09T20:48:18+08:00"
 }

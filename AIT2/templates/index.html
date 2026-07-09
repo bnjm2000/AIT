@@ -22,7 +22,9 @@
 
       body {
         font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background:
+          radial-gradient(circle at top left, rgba(20, 184, 166, 0.22), transparent 32%),
+          linear-gradient(135deg, #0b2435 0%, #0f4f5d 48%, #eef8f6 100%);
         min-height: 100vh;
         color: #333;
       }
@@ -35,7 +37,9 @@
           "sidebar-header main-content"
           "sidebar main-content";
         height: 100vh;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background:
+          radial-gradient(circle at top left, rgba(20, 184, 166, 0.22), transparent 32%),
+          linear-gradient(135deg, #0b2435 0%, #0f4f5d 48%, #eef8f6 100%);
         padding: 20px;
         gap: 20px;
         font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
@@ -124,30 +128,38 @@
         margin-left: auto;
         display: inline-flex;
         align-items: center;
-        gap: 8px;
-        padding: 6px 10px;
-        border: 1px solid #d7dde8;
+        justify-content: center;
+        width: 18px;
+        height: 18px;
+        flex: 0 0 18px;
+        gap: 0;
+        padding: 0;
+        border: 0;
         border-radius: 999px;
-        background: #fff;
+        background: transparent;
         color: #334155;
-        font-size: 12px;
+        font-size: 0;
         font-weight: 600;
         line-height: 1;
       }
 
       .sync-status span {
-        width: 8px;
-        height: 8px;
+        width: 10px;
+        height: 10px;
+        flex: 0 0 10px;
         border-radius: 999px;
         background: #94a3b8;
+        box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.18);
       }
 
       .sync-status[data-state="connected"] span {
         background: #16a34a;
+        box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.18);
       }
 
       .sync-status[data-state="reconnecting"] span {
         background: #f59e0b;
+        box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.2);
       }
 
       .nav-section {
@@ -2026,7 +2038,7 @@
         --scaled-dvh: calc(100dvh / var(--ui-scale));
         --app-gap: clamp(10px, 2vw, 20px);
         --panel-radius: 12px;
-        --focus-ring: 0 0 0 3px rgba(79, 70, 229, 0.22);
+        --focus-ring: 0 0 0 3px rgba(14, 165, 233, 0.22);
       }
 
       html {
@@ -2067,7 +2079,7 @@
       .nav-item:focus-visible,
       .close-btn:focus-visible,
       .close:focus-visible {
-        outline: 3px solid #4f46e5;
+        outline: 3px solid #0ea5e9;
         outline-offset: 2px;
         box-shadow: var(--focus-ring);
       }
@@ -2623,12 +2635,18 @@
       :root {
         --surface: rgba(255, 255, 255, 0.96);
         --surface-solid: #ffffff;
-        --surface-muted: #f8fafc;
-        --border-soft: #e2e8f0;
-        --text-main: #1f2937;
+        --surface-muted: #f3f8f8;
+        --border-soft: #d8e7e5;
+        --text-main: #12243a;
         --text-muted: #64748b;
-        --brand-main: #5b4ee6;
-        --brand-dark: #4438ca;
+        --brand-main: #0f766e;
+        --brand-dark: #0f4f5d;
+        --brand-soft: #e6fffb;
+        --brand-sky: #0ea5e9;
+        --app-background:
+          radial-gradient(circle at 8% 0%, rgba(45, 212, 191, 0.24), transparent 31%),
+          radial-gradient(circle at 96% 14%, rgba(14, 165, 233, 0.16), transparent 30%),
+          linear-gradient(135deg, #0b2435 0%, #0f4f5d 47%, #eef8f6 100%);
         --danger-main: #b91c1c;
         --warning-main: #b45309;
         --success-main: #15803d;
@@ -2668,8 +2686,13 @@
       }
 
       body {
+        background: var(--app-background);
         color: var(--text-main);
         line-height: 1.45;
+      }
+
+      .container {
+        background: var(--app-background);
       }
 
       .header,
@@ -2684,6 +2707,13 @@
       .sidebar,
       .content-area {
         scrollbar-gutter: stable;
+      }
+
+      .sidebar {
+        background: rgba(255, 255, 255, 0.94);
+        border-color: rgba(216, 231, 229, 0.92);
+        border-radius: 14px;
+        box-shadow: 0 24px 55px rgba(8, 47, 73, 0.16);
       }
 
       .sidebar::-webkit-scrollbar,
@@ -2711,35 +2741,86 @@
       }
 
       .nav-section h3 {
-        color: #5b21b6;
-        letter-spacing: 0.02em;
+        margin-bottom: 10px;
+        border-bottom: 0;
+        color: #0f4f5d;
+        font-size: 0.78rem;
+        font-weight: 850;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
       }
 
       .nav-item {
         display: flex;
         align-items: center;
-        gap: 8px;
+        gap: 10px;
         border: 1px solid transparent;
-        font-weight: 600;
+        background: transparent;
+        color: #334155;
+        font-weight: 750;
       }
 
       .nav-item:hover,
       .nav-item:focus-visible {
-        background: #eef2ff;
-        color: #312e81;
-        border-color: #c7d2fe;
+        background: #e6fffb;
+        color: #0f4f5d;
+        border-color: #99f6e4;
         transform: translateX(3px);
       }
 
       .nav-item.active,
       .nav-item[aria-current="page"] {
-        background: var(--brand-main);
+        background: linear-gradient(135deg, var(--brand-dark), var(--brand-main));
         color: #fff;
-        box-shadow: 0 8px 18px rgba(79, 70, 229, 0.22);
+        box-shadow: 0 12px 24px rgba(15, 118, 110, 0.2);
+      }
+
+      .nav-item[data-label] {
+        font-size: 0;
+      }
+
+      .nav-item[data-label]::before {
+        content: attr(data-mark);
+        display: grid;
+        width: 27px;
+        height: 27px;
+        flex: 0 0 27px;
+        place-items: center;
+        border-radius: 8px;
+        background: #eef8f6;
+        color: #0f766e;
+        font-size: 10px;
+        font-weight: 900;
+        letter-spacing: 0.03em;
+      }
+
+      .nav-item[data-label]::after {
+        content: attr(data-label);
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 13px;
+      }
+
+      .nav-item[data-label].active::before,
+      .nav-item[data-label][aria-current="page"]::before {
+        background: rgba(255, 255, 255, 0.18);
+        color: #ccfbf1;
+      }
+
+      .nav-item[onclick="logout()"]:not([data-label]) {
+        display: none;
+      }
+
+      #overdue-counter {
+        font-size: 11px !important;
+        margin-left: auto !important;
       }
 
       .sync-status {
-        min-height: 32px;
+        min-width: 18px;
+        min-height: 18px;
       }
 
       .content-title {
@@ -2949,7 +3030,7 @@
 
       @media (max-width: 768px) {
         .sync-status {
-          max-width: 145px;
+          max-width: 18px;
           overflow: hidden;
         }
 
@@ -2994,6 +3075,22 @@
           font-size: 11.2px;
         }
 
+        .sidebar .nav-item[data-label] {
+          font-size: 0;
+        }
+
+        .sidebar .nav-item[data-label]::before {
+          width: 24px;
+          height: 24px;
+          flex-basis: 24px;
+          border-radius: 7px;
+          font-size: 9px;
+        }
+
+        .sidebar .nav-item[data-label]::after {
+          font-size: 11.2px;
+        }
+
         .header {
           min-width: 0;
           justify-content: space-between;
@@ -3012,20 +3109,22 @@
 
         .sync-status {
           min-width: 0;
-          min-height: 25.6px;
-          max-width: 104px;
+          min-height: 16px;
+          max-width: 16px;
+          width: 16px;
+          height: 16px;
           margin-left: auto;
-          gap: 6.4px;
-          padding: 4.8px 8px;
+          gap: 0;
+          padding: 0;
           font-size: 9.6px;
-          flex: 0 1 auto;
+          flex: 0 0 16px;
           overflow: hidden;
         }
 
         .sync-status span {
-          width: 6.4px;
-          height: 6.4px;
-          flex: 0 0 6.4px;
+          width: 9px;
+          height: 9px;
+          flex: 0 0 9px;
         }
 
         .sync-status strong {
@@ -8251,9 +8350,9 @@
         <a class="app-brand-lockup" href="#events-section" aria-label="Showbase home" onclick="showSection('events')">
           <img src="{{ url_for('static', filename='images/showbase-logo.svg') }}" alt="Showbase" />
         </a>
-        <div class="sync-status" id="realtime-status" data-state="reconnecting" title="Realtime connection status" role="status" aria-live="polite">
+        <div class="sync-status" id="realtime-status" data-state="reconnecting" title="Realtime: Reconnecting" role="status" aria-live="polite" aria-label="Realtime: Reconnecting">
           <span aria-hidden="true"></span>
-          <strong data-sync-label>Reconnecting</strong>
+          <strong class="sr-only" data-sync-label>Reconnecting</strong>
         </div>
         <button
           type="button"
@@ -8272,63 +8371,64 @@
           <div class="nav-section">
             <h3>Events</h3>
 
-            <button type="button" class="nav-item active" onclick="showSection('events')">
+            <button type="button" class="nav-item active" data-mark="EV" data-label="All Events" onclick="showSection('events')">
               📅 All Events
             </button>
 
-            <button type="button" class="nav-item admin-only" data-admin-only="true" data-admin-display="flex" onclick="showSection('plan')">
+            <button type="button" class="nav-item admin-only" data-admin-only="true" data-admin-display="flex" data-mark="PL" data-label="Plan" onclick="showSection('plan')">
               &#128203; Plan
             </button>
 
-            <button type="button" class="nav-item admin-only" data-admin-only="true" data-admin-display="flex" onclick="showSection('workforce')">
+            <button type="button" class="nav-item admin-only" data-admin-only="true" data-admin-display="flex" data-mark="MT" data-label="Manpower &amp; Transport" onclick="showSection('workforce')">
               &#128101; Manpower &amp; Transport
             </button>
 
-            <button type="button" class="nav-item" onclick="showSection('prepare-new')">
+            <button type="button" class="nav-item" data-mark="PR" data-label="Prepare" onclick="showSection('prepare-new')">
               &#9889; Prepare
             </button>
 
-            <button type="button" class="nav-item" onclick="showSection('prepare')">
+            <button type="button" class="nav-item" data-mark="LG" data-label="Prepare (Legacy)" onclick="showSection('prepare')">
               &#128295; Prepare (Legacy)
             </button>
 
-            <button type="button" class="nav-item" onclick="showSection('return')" title="Return Assets - Click to view overdue items">
+            <button type="button" class="nav-item" data-mark="RT" data-label="Return Assets" onclick="showSection('return')" title="Return Assets - Click to view overdue items">
               ↩️ Return Assets <span id="overdue-counter" style="background: #dc3545; color: white; border-radius: 50%; padding: 2px 8px; font-size: 12px; margin-left: 8px; display: none;" title="Overdue events requiring asset returns">0</span>
             </button>
 
-            <button type="button" class="nav-item" onclick="showSection('transfer')">
+            <button type="button" class="nav-item" data-mark="TR" data-label="Transfer Assets" onclick="showSection('transfer')">
               &#8644; Transfer Assets
             </button>
           </div>
 
           <div class="nav-section">
             <h3>Inventory</h3>
-            <button type="button" class="nav-item" onclick="showSection('inventory')">
+            <button type="button" class="nav-item" data-mark="IN" data-label="View Inventory" onclick="showSection('inventory')">
               📦 View Inventory
             </button>
-            <button type="button" class="nav-item" onclick="showSection('containers')">
+            <button type="button" class="nav-item" data-mark="CT" data-label="Containers" onclick="showSection('containers')">
               📋 Containers
             </button>
-            <button type="button" class="nav-item" onclick="showSection('maintenance')">
+            <button type="button" class="nav-item" data-mark="MN" data-label="Maintenance" onclick="showSection('maintenance')">
               🔧 Maintenance
             </button>
-            <button type="button" class="nav-item" onclick="showSection('asset-check')">
+            <button type="button" class="nav-item" data-mark="AC" data-label="Asset Check" onclick="showSection('asset-check')">
               ✅ Asset Check
             </button>
           </div>
 
           <div class="nav-section admin-only" data-admin-only="true" data-admin-display="block">
             <h3>Reports</h3>
-            <button type="button" class="nav-item" onclick="showSection('maintenance-report')">
+            <button type="button" class="nav-item" data-mark="MR" data-label="Maintenance Report" onclick="showSection('maintenance-report')">
               📄 Maintenance Report
             </button>
-            <button type="button" class="nav-item" onclick="showSection('logs')">
+            <button type="button" class="nav-item" data-mark="SL" data-label="System Logs" onclick="showSection('logs')">
               📝 System Logs
             </button>
           </div>
 
           <div class="nav-section">
             <h3>Settings</h3>
+            <button type="button" class="nav-item" data-mark="LO" data-label="Logout" onclick="logout()">Logout</button>
             <button type="button" class="nav-item" onclick="logout()">🚪 Logout</button>
           </div>
         </nav>

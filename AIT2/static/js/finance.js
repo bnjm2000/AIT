@@ -28,6 +28,24 @@ const financeState = {
   snapshotMode: false
 };
 
+const profitLossState = {
+  events: [],
+  eventId: null,
+  data: null,
+  loading: false,
+  expenseMode: 'manual'
+};
+
+const compareState = {
+  events: [],
+  eventId: null,
+  quotationId: '',
+  data: null,
+  search: '',
+  filter: 'all',
+  loading: false
+};
+
 function financeMeta() {
   return { singular: 'Quotation', plural: 'Quotations', endpoint: '/api/quotations', section: 'quotations' };
 }
@@ -368,15 +386,23 @@ function financeSnapshotControl(document) {
 function ensureFinanceSections() {
   const firstSection = document.querySelector('.content-section');
   const parent = firstSection?.parentElement || document.body;
-  if (document.getElementById('quotations-section')) return;
-  const section = document.createElement('div');
-  section.id = 'quotations-section';
-  section.className = 'content-section';
-  section.innerHTML = '<div id="quotations-page-root" class="finance-page"><div class="loading">Loading...</div></div>';
-  parent.appendChild(section);
+  const sections = [
+    ['quotations-section', '<div id="quotations-page-root" class="finance-page"><div class="loading">Loading...</div></div>'],
+    ['profit-loss-section', '<div id="profit-loss-page-root" class="finance-page profit-loss-page"><div class="loading">Loading...</div></div>'],
+    ['compare-section', '<div id="compare-page-root" class="finance-page compare-page"><div class="loading">Loading...</div></div>']
+  ];
+  sections.forEach(([id, html]) => {
+    if (document.getElementById(id)) return;
+    const section = document.createElement('div');
+    section.id = id;
+    section.className = 'content-section';
+    section.innerHTML = html;
+    parent.appendChild(section);
+  });
 }
 
 function setupFinanceNavigation() {
+  ensureFinanceSections();
   const canUseFinance = typeof currentUserHasSalesAccess === 'function'
     ? currentUserHasSalesAccess()
     : !!(window.currentUser && (window.currentUser.hasSalesAccess || window.currentUser.isSales || window.currentUser.isOwner || window.currentUser.isSuperAdmin));
@@ -388,12 +414,15 @@ function setupFinanceNavigation() {
     return;
   }
   if (existing) return;
-  ensureFinanceSections();
   const section = document.createElement('div');
   section.className = 'nav-section sales-only';
   section.dataset.salesDisplay = 'block';
   section.dataset.financeNavigation = 'true';
-  section.innerHTML = '<h3>Finance</h3><button type="button" class="nav-item" data-section="quotations">▤ Quotations</button>';
+  section.innerHTML = `
+    <h3>Finance</h3>
+    <button type="button" class="nav-item" data-section="quotations">▤ Quotations</button>
+    <button type="button" class="nav-item" data-section="profit-loss">◉ Profit &amp; Loss</button>
+  `;
   const reports = Array.from(sidebar.querySelectorAll('.nav-section')).find(row => row.querySelector('h3')?.textContent.trim() === 'Reports');
   const settings = Array.from(sidebar.querySelectorAll('.nav-section')).find(row => row.querySelector('h3')?.textContent.trim() === 'Settings');
   sidebar.insertBefore(section, reports || settings || null);
@@ -402,6 +431,14 @@ function setupFinanceNavigation() {
 
 function financeRoot() {
   return document.getElementById('quotations-page-root');
+}
+
+function profitLossRoot() {
+  return document.getElementById('profit-loss-page-root');
+}
+
+function compareRoot() {
+  return document.getElementById('compare-page-root');
 }
 
 async function loadQuotations() {
@@ -723,6 +760,20 @@ function financeUnpairEvent() {
   financeRenderEditor();
 }
 
+async function financeOpenComparePage() {
+  const document = financeState.current;
+  if (!document?.eventId) return;
+  try {
+    await financeSaveCurrent(false);
+  } catch (error) {
+    showNotification('error', error.message || 'Save the quotation before comparing');
+    return;
+  }
+  if (typeof openCompareForEvent === 'function') {
+    openCompareForEvent(document.eventId, document.id);
+  }
+}
+
 function financeDepartmentSuggestions(query) {
   const clean = String(query || '').trim().toLowerCase();
   const values = [...new Set([
@@ -850,8 +901,8 @@ function financeRenderLineGroups() {
               <div class="finance-inline-suggestions" id="${departmentResultsId}"></div>
             </div>
           </td>
-          <td><input class="finance-line-input" type="number" min="0" step="0.25" value="${financeEscapeAttr(line.days)}" aria-label="Days" onchange="financeLineChange(${index},'days',this.value)"></td>
-          <td><input class="finance-line-input" type="number" min="0" step="0.25" value="${financeEscapeAttr(line.quantity)}" aria-label="Quantity" onchange="financeLineChange(${index},'quantity',this.value)"></td>
+          <td><input class="finance-line-input" type="number" min="0" step="0.5" value="${financeEscapeAttr(line.days)}" aria-label="Days" onchange="financeLineChange(${index},'days',this.value)"></td>
+          <td><input class="finance-line-input" type="number" min="0" step="1" value="${financeEscapeAttr(line.quantity)}" aria-label="Quantity" onchange="financeLineChange(${index},'quantity',this.value)"></td>
           <td>${financeUomControl(line, index)}</td>
           <td><div class="finance-money-input"><span>$</span><input class="finance-line-input" type="number" min="0" step="0.01" value="${financeEscapeAttr(line.unitPrice)}" aria-label="Unit price" onchange="financeLineChange(${index},'unitPrice',this.value)"></div></td>
           <td><input class="finance-line-input" type="number" min="-9999" max="100" step="0.1" value="${financeEscapeAttr(line.discountPercent || 0)}" aria-label="Discount percentage" onchange="financeLineChange(${index},'discountPercent',this.value)"></td>
@@ -861,14 +912,13 @@ function financeRenderLineGroups() {
       `;
     }).join('');
     return `
-      <tr class="finance-department-row ${collapsed ? 'is-collapsed' : ''}" draggable="true"
-        ondragstart="financeDragDepartmentStart(event,'${financeEscapeAttr(encoded)}')"
+      <tr class="finance-department-row ${collapsed ? 'is-collapsed' : ''}"
         ondragover="financeDragDepartmentOver(event,'${financeEscapeAttr(encoded)}')"
         ondragleave="financeDragDepartmentLeave(event)"
         ondrop="financeDropDepartment(event,'${financeEscapeAttr(encoded)}')"
         ondragend="financeDragDepartmentEnd()">
         <td colspan="10">
-          <span class="finance-department-drag-handle" title="Drag department">&#9776;</span>
+          <span class="finance-department-drag-handle" draggable="true" title="Drag department" ondragstart="financeDragDepartmentStart(event,'${financeEscapeAttr(encoded)}')" ondragend="financeDragDepartmentEnd()">&#9776;</span>
           <button type="button" class="finance-collapse-button" onclick="financeToggleDepartmentCollapse('${financeEscapeAttr(encoded)}')">${collapsed ? '+' : '-'}</button>
           <span>${financeEscape(department)}</span>
           <small>${rows.length} item${rows.length === 1 ? '' : 's'} · ${financeEscape(financeMoney(subtotal))}</small>
@@ -939,7 +989,7 @@ function financeDragDepartmentStart(event, encodedDepartment) {
   financeState.dragDepartment = department;
   event.dataTransfer.effectAllowed = 'move';
   event.dataTransfer.setData('text/plain', department);
-  event.currentTarget.classList.add('dragging');
+  event.currentTarget.closest('.finance-department-row')?.classList.add('dragging');
 }
 
 function financeDragDepartmentOver(event, encodedDepartment) {
@@ -1078,12 +1128,12 @@ function financeRenderEditor() {
           </div>
           <div style="overflow-x:auto;">
             <table class="finance-lines-table">
-              <colgroup><col style="width:38px"><col style="width:18%"><col style="width:120px"><col style="width:52px"><col style="width:52px"><col style="width:72px"><col style="width:86px"><col style="width:58px"><col style="width:90px"><col style="width:32px"></colgroup>
+              <colgroup><col style="width:34px"><col style="width:38%"><col style="width:76px"><col style="width:44px"><col style="width:38px"><col style="width:54px"><col style="width:76px"><col style="width:48px"><col style="width:78px"><col style="width:28px"></colgroup>
               <thead><tr><th>#</th><th>Description</th><th>Department</th><th>
                 <div class="finance-custom-control finance-header-control">
                   <button type="button" class="finance-header-button" onclick="financeToggleMenu('${allDaysMenu}',event)">Days</button>
                   <div class="finance-custom-menu finance-days-menu" id="${allDaysMenu}">
-                    <label>Days value<input id="financeAllDaysValue" class="finance-input" type="number" min="0" step="0.25" value="${financeEventDays(document)}"></label>
+                    <label>Days value<input id="financeAllDaysValue" class="finance-input" type="number" min="0" step="0.5" value="${financeEventDays(document)}"></label>
                     <button type="button" class="btn btn-primary" onclick="financeApplyAllDays()">Apply to all lines</button>
                   </div>
                 </div>
@@ -1141,11 +1191,14 @@ function financeRenderEditor() {
         <section class="finance-card finance-section">
           <h3>Event pairing</h3>
           <p class="finance-side-note">Pair this quotation to an existing event if the event has already been created. Accepted paired quotations will not create another event.</p>
-          <div class="finance-event-search-wrap">
+          <div class="finance-event-search-wrap finance-event-actions">
             <button type="button" id="financeEventSearch" class="finance-picker-button" onclick="financeOpenEventPicker()">
               <span>${financeEscape(financeEventDisplay(document.eventId) || 'Pair existing event')}</span>
               <small>${document.eventId ? 'Linked event' : 'No event paired'}</small>
             </button>
+            ${document.eventId && typeof isAdminUser === 'function' && isAdminUser() ? `
+              <button type="button" class="btn btn-secondary finance-compare-event" onclick="financeOpenComparePage()">Compare</button>
+            ` : ''}
           </div>
           ${document.eventId ? `<button type="button" class="btn btn-secondary finance-unpair-event" onclick="financeUnpairEvent()">Unpair event</button>` : ''}
         </section>
@@ -1707,4 +1760,662 @@ async function financeSaveNewClient(event) {
   } catch (error) {
     showNotification('error', error.message || 'Failed to save client');
   }
+}
+
+function financeSgd(value) {
+  return `SGD ${Math.abs(financeNumber(value)).toLocaleString('en-SG', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  })}`;
+}
+
+function financeSignedSgd(value) {
+  const amount = financeNumber(value);
+  return `${amount < 0 ? '- ' : ''}${financeSgd(amount)}`;
+}
+
+function financePercentDisplay(value) {
+  return `${financeNumber(value).toLocaleString('en-SG', {
+    minimumFractionDigits: Number(value) % 1 ? 1 : 0,
+    maximumFractionDigits: 1
+  })}%`;
+}
+
+function profitLossEventChooserEvents() {
+  return profitLossState.events || [];
+}
+
+function profitLossCurrentEventId() {
+  return profitLossState.eventId;
+}
+
+function profitLossEventTitle(event) {
+  if (!event) return 'Choose event';
+  return `#${event.id} ${event.name || 'Untitled event'}`;
+}
+
+async function loadProfitLoss(options = {}) {
+  ensureFinanceSections();
+  const root = profitLossRoot();
+  if (!root || profitLossState.loading) return;
+  if (typeof currentUserHasSalesAccess === 'function' && !currentUserHasSalesAccess()) {
+    root.innerHTML = '<div class="finance-empty">Sales access is required for Profit & Loss.</div>';
+    return;
+  }
+  profitLossState.loading = true;
+  if (!options.preserve) root.innerHTML = '<div class="loading">Loading Profit & Loss...</div>';
+  try {
+    const eventsResponse = await apiCall('/api/events?view=summary&limit=500');
+    profitLossState.events = (eventsResponse.data || []).slice().sort((a, b) => Number(b.id || 0) - Number(a.id || 0));
+    if (!profitLossState.eventId) {
+      profitLossState.eventId = Number(profitLossState.events[0]?.id || 0);
+    }
+    if (!profitLossState.eventId) {
+      root.innerHTML = '<div class="finance-empty">Create an event before reviewing Profit & Loss.</div>';
+      return;
+    }
+    await selectProfitLossEvent(profitLossState.eventId, { renderLoading: false });
+  } catch (error) {
+    root.innerHTML = `<div class="finance-empty">Could not load Profit & Loss.<br>${financeEscape(error.message || String(error))}</div>`;
+  } finally {
+    profitLossState.loading = false;
+  }
+}
+
+async function selectProfitLossEvent(eventId, options = {}) {
+  const id = Number(eventId || 0);
+  if (!id) return;
+  profitLossState.eventId = id;
+  const root = profitLossRoot();
+  if (options.renderLoading !== false && root) {
+    root.innerHTML = '<div class="loading">Loading event Profit & Loss...</div>';
+  }
+  try {
+    const response = await apiCall(`/api/finance/profit-loss/${id}`);
+    profitLossState.data = response.data;
+    renderProfitLossPage();
+  } catch (error) {
+    if (root) root.innerHTML = `<div class="finance-empty">Could not load Profit & Loss.<br>${financeEscape(error.message || String(error))}</div>`;
+  }
+}
+
+async function refreshProfitLossForRealtime(eventId) {
+  if (Number(profitLossState.eventId) !== Number(eventId)) return;
+  await selectProfitLossEvent(eventId, { renderLoading: false });
+}
+
+function profitLossOpenQuotation(quotationId) {
+  if (!quotationId) return;
+  showSection('quotations');
+  setTimeout(() => financeOpenDocument(quotationId), 0);
+}
+
+function profitLossOpenManpower(eventId) {
+  if (typeof openEventWorkforce === 'function') {
+    openEventWorkforce(eventId);
+  }
+}
+
+function profitLossPieStyle(summary) {
+  const direct = Math.max(0, financeNumber(summary.directCosts));
+  const other = Math.max(0, financeNumber(summary.otherExpenses));
+  const commission = Math.max(0, financeNumber(summary.commission));
+  const net = Math.max(0, financeNumber(summary.netProfit));
+  const total = direct + other + commission + net || 1;
+  const directEnd = direct / total * 100;
+  const otherEnd = directEnd + other / total * 100;
+  const commissionEnd = otherEnd + commission / total * 100;
+  return `background:conic-gradient(#2563eb 0 ${directEnd}%, #10b981 ${directEnd}% ${otherEnd}%, #4f46e5 ${otherEnd}% ${commissionEnd}%, #f97316 ${commissionEnd}% 100%);`;
+}
+
+function profitLossKpi(title, value, note, extraClass = '', action = '') {
+  const tag = action ? 'button' : 'article';
+  const attrs = action ? `type="button" onclick="${action}"` : '';
+  return `
+    <${tag} class="pnl-kpi ${extraClass}" ${attrs}>
+      <span>${financeEscape(title)}</span>
+      <strong>${financeEscape(value)}</strong>
+      ${note ? `<small>${financeEscape(note)}</small>` : ''}
+    </${tag}>
+  `;
+}
+
+function renderProfitLossPage() {
+  const root = profitLossRoot();
+  const data = profitLossState.data;
+  if (!root || !data) return;
+  const event = data.event || {};
+  const quote = data.quotation || null;
+  const summary = data.summary || {};
+  const expenses = data.expenses || [];
+  const selectedEvent = profitLossState.events.find(row => Number(row.id) === Number(event.id)) || event;
+  const activity = data.activity || [];
+  const directPercent = summary.revenue ? summary.directCosts / summary.revenue * 100 : 0;
+  const otherPercent = summary.revenue ? summary.otherExpenses / summary.revenue * 100 : 0;
+  const commissionPercent = summary.revenue ? summary.commission / summary.revenue * 100 : 0;
+  const netPercent = summary.revenue ? summary.netProfit / summary.revenue * 100 : 0;
+  root.innerHTML = `
+    <div class="pnl-heading">
+      <div>
+        <h2>Profit &amp; Loss</h2>
+        <p class="finance-subtitle">Track revenue, expenses, and net profit for each event.</p>
+      </div>
+      <button type="button" class="btn btn-primary" onclick="window.print()">Export</button>
+    </div>
+
+    <div class="plan-event-bar pnl-event-bar">
+      <button type="button" class="plan-event-select-wrap"
+              aria-haspopup="dialog" aria-label="Choose a Profit and Loss event"
+              onclick="planOpenEventChooser('profit-loss')">
+        <div class="plan-event-icon" aria-hidden="true">${typeof planMetricIconSvg === 'function' ? planMetricIconSvg('calendar') : ''}</div>
+        <div style="min-width:0;flex:1;">
+          <div class="plan-event-title-row">
+            <span class="plan-event-id">#${financeEscape(String(event.id || ''))}</span>
+            <span class="plan-event-name">${financeEscape(event.name || selectedEvent.name || 'Untitled event')}</span>
+          </div>
+          <div class="plan-event-meta">
+            <span>${financeEscape([event.startDate, event.endDate].filter(Boolean).join(' - '))}</span>
+            ${event.location ? `<span aria-hidden="true">-</span><span>${financeEscape(event.location)}</span>` : ''}
+            ${event.state ? `<span class="plan-badge">${financeEscape(event.state)}</span>` : ''}
+          </div>
+        </div>
+        <span class="plan-event-picker-chevron" aria-hidden="true">⌄</span>
+      </button>
+      <div class="pnl-event-facts">
+        <div><span>Event Date</span><strong>${financeEscape(event.startDate || 'Date not set')}</strong></div>
+        <div><span>Client</span><strong>${financeEscape(quote?.client?.name || quote?.client?.company || 'No quotation client')}</strong></div>
+        <div><span>Location</span><strong>${financeEscape(event.location || 'Location not set')}</strong></div>
+        <button type="button" class="btn btn-secondary" onclick="viewEvent(${Number(event.id) || 0})">View Event Details</button>
+      </div>
+    </div>
+
+    <div class="pnl-kpis">
+      ${profitLossKpi('Revenue from Quotation', financeSgd(summary.revenue), quote ? `Quotation: ${quote.number}` : 'No quotation paired', 'pnl-link-kpi', quote ? `profitLossOpenQuotation('${financeEscapeAttr(quote.id)}')` : '')}
+      ${profitLossKpi('Manpower Cost', financeSgd(summary.manpowerCost), summary.manpowerInvoiceCost > 0 ? 'From manpower invoices' : 'From manpower assignments', 'pnl-link-kpi', `profitLossOpenManpower(${Number(event.id) || 0})`)}
+      ${profitLossKpi('Transport Cost', financeSgd(summary.transportCost), 'From transport bookings')}
+      ${profitLossKpi('Other Expenses', financeSgd(summary.otherExpenses), `${financeSgd(summary.manualOtherExpenses)} added here`)}
+      ${profitLossKpi('Commission (10%)', financeSgd(summary.commission), '10% of net profit before commission')}
+      ${profitLossKpi('Net Profit', financeSignedSgd(summary.netProfit), '')}
+      ${profitLossKpi('Profit Margin', financePercentDisplay(summary.profitMargin), 'of revenue')}
+    </div>
+
+    <div class="pnl-main-grid">
+      <section class="finance-card pnl-calculation">
+        <h3>Profit Calculation</h3>
+        <div class="pnl-calc-row"><span>Revenue from Quotation</span><strong>${financeSgd(summary.revenue)}</strong></div>
+        <h4>Less: Direct Costs</h4>
+        <div class="pnl-calc-row"><span>Manpower Cost</span><strong>- ${financeSgd(summary.manpowerCost)}</strong></div>
+        <div class="pnl-calc-row"><span>Transport Cost</span><strong>- ${financeSgd(summary.transportCost)}</strong></div>
+        <div class="pnl-calc-row"><span>Subtotal (Direct Costs)</span><strong>- ${financeSgd(summary.directCosts)}</strong></div>
+        <h4>Less: Other Expenses</h4>
+        <div class="pnl-calc-row"><span>Other Expenses</span><strong>- ${financeSgd(summary.otherExpenses)}</strong></div>
+        <div class="pnl-calc-row pnl-positive"><span>Net Profit (Before Commission)</span><strong>${financeSignedSgd(summary.beforeCommission)}</strong></div>
+        <div class="pnl-calc-row"><span>Less: Commission (10%)</span><strong>- ${financeSgd(summary.commission)}</strong></div>
+        <div class="pnl-calc-total">
+          <span>Net Profit (After Commission)</span><strong>${financeSignedSgd(summary.netProfit)}</strong>
+          <span>Profit Margin</span><strong>${financePercentDisplay(summary.profitMargin)}</strong>
+        </div>
+      </section>
+
+      <section class="finance-card pnl-expenses">
+        <div class="pnl-section-head">
+          <h3>Expense Breakdown</h3>
+          <div class="pnl-actions">
+            <button type="button" class="btn btn-secondary" onclick="profitLossOpenExpenseModal('manual')">Add Expense</button>
+            <button type="button" class="btn btn-primary" onclick="profitLossOpenExpenseModal('upload')">Upload Receipt</button>
+          </div>
+        </div>
+        <div class="pnl-breakdown-strip">
+          <div><span>Manpower</span><strong>${financeSgd(summary.manpowerCost)}</strong></div>
+          <div><span>Transport</span><strong>${financeSgd(summary.transportCost)}</strong></div>
+          <div><span>Worker Claims</span><strong>${financeSgd(summary.workerClaimsCost)}</strong></div>
+          <div><span>Other Added</span><strong>${financeSgd(summary.manualOtherExpenses)}</strong></div>
+          <div><span>Commission</span><strong>${financeSgd(summary.commission)}</strong></div>
+        </div>
+        <div class="pnl-table-wrap">
+          <table class="pnl-table">
+            <thead><tr><th>Description</th><th>Category</th><th>Vendor / Payee</th><th>Date</th><th>Amount</th><th>Attachment</th><th></th></tr></thead>
+            <tbody>
+              ${expenses.map(row => `
+                <tr>
+                  <td><strong>${financeEscape(row.description)}</strong></td>
+                  <td>${financeEscape(row.category)}</td>
+                  <td>${financeEscape(row.vendor || '-')}</td>
+                  <td>${financeEscape(row.expenseDate || '-')}</td>
+                  <td><strong>${financeSgd(row.amount)}</strong></td>
+                  <td>${row.attachment ? `<a href="${financeEscapeAttr(row.attachment.previewUrl)}" target="_blank" rel="noopener">${financeEscape(row.attachment.originalName || 'Receipt')}</a>` : '-'}</td>
+                  <td><button type="button" class="finance-delete-line" onclick="profitLossDeleteExpense('${financeEscapeAttr(row.id)}')" aria-label="Delete expense">&times;</button></td>
+                </tr>
+              `).join('') || '<tr><td colspan="7" class="pnl-empty-row">No other expenses have been added.</td></tr>'}
+            </tbody>
+          </table>
+        </div>
+        <div class="pnl-total-line"><span>Total Other Expenses</span><strong>${financeSgd(summary.otherExpenses)}</strong></div>
+      </section>
+
+      <aside class="pnl-side">
+        <section class="finance-card pnl-summary-card">
+          <h3>Profit Summary</h3>
+          <div class="pnl-pie-wrap">
+            <div class="pnl-pie" style="${profitLossPieStyle(summary)}"><div><span>Net Profit</span><strong>${financeSgd(summary.netProfit)}</strong><span>${financePercentDisplay(summary.profitMargin)}</span></div></div>
+            <div class="pnl-legend">
+              <span><i class="pnl-dot direct"></i>Direct Costs <strong>${financePercentDisplay(directPercent)}</strong></span>
+              <span><i class="pnl-dot other"></i>Other Expenses <strong>${financePercentDisplay(otherPercent)}</strong></span>
+              <span><i class="pnl-dot commission"></i>Commission <strong>${financePercentDisplay(commissionPercent)}</strong></span>
+              <span><i class="pnl-dot net"></i>Net Profit <strong>${financePercentDisplay(netPercent)}</strong></span>
+            </div>
+          </div>
+        </section>
+        <section class="finance-card pnl-activity">
+          <div class="pnl-section-head"><h3>Recent Activity</h3></div>
+          ${activity.map(row => `
+            <div class="pnl-activity-row">
+              <span>${financeEscape(row.timestamp || '')}</span>
+              <strong>${financeEscape(row.action || '')}</strong>
+              <small>${financeEscape(row.user || '')}</small>
+            </div>
+          `).join('') || '<div class="finance-empty" style="padding:24px 0;">No recent activity.</div>'}
+        </section>
+      </aside>
+    </div>
+  `;
+}
+
+function financeEnsureProfitLossExpenseModal() {
+  if (document.getElementById('profitLossExpenseModal')) return;
+  const modal = document.createElement('div');
+  modal.id = 'profitLossExpenseModal';
+  modal.className = 'modal';
+  modal.innerHTML = `
+    <div class="modal-content pnl-expense-modal">
+      <div class="modal-header"><h3 class="modal-title" id="profitLossExpenseTitle">Add Expense</h3><button type="button" class="close-btn" onclick="closeModal('profitLossExpenseModal')">&times;</button></div>
+      <form id="profitLossExpenseForm" onsubmit="profitLossSubmitExpense(event)">
+        <div class="finance-form-grid">
+          <label class="finance-field finance-span-all"><span>Description</span><input id="profitLossExpenseDescription" class="finance-input" maxlength="300" placeholder="e.g. Stage backdrop invoice"></label>
+          <label class="finance-field"><span>Category</span><input id="profitLossExpenseCategory" class="finance-input" list="profitLossExpenseCategories" placeholder="Miscellaneous"></label>
+          <label class="finance-field"><span>Vendor / Payee</span><input id="profitLossExpenseVendor" class="finance-input" maxlength="180"></label>
+          <label class="finance-field"><span>Amount</span><input id="profitLossExpenseAmount" class="finance-input" inputmode="decimal" placeholder="0.00"></label>
+          <label class="finance-field"><span>Date</span><input id="profitLossExpenseDate" class="finance-input" type="date"></label>
+          <label class="finance-field finance-span-all" id="profitLossExpenseFileField"><span>Receipt or document</span><input id="profitLossExpenseFile" class="finance-input" type="file" accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg"></label>
+        </div>
+        <datalist id="profitLossExpenseCategories">
+          <option value="Meal Claims"></option>
+          <option value="External Vendors"></option>
+          <option value="Miscellaneous"></option>
+          <option value="Production Supplies"></option>
+          <option value="Parking & Tolls"></option>
+        </datalist>
+        <div class="modal-actions finance-picker-actions">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('profitLossExpenseModal')">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Expense</button>
+        </div>
+      </form>
+    </div>
+  `;
+  document.body.appendChild(modal);
+}
+
+function profitLossOpenExpenseModal(mode = 'manual') {
+  financeEnsureProfitLossExpenseModal();
+  profitLossState.expenseMode = mode;
+  document.getElementById('profitLossExpenseForm')?.reset();
+  const title = document.getElementById('profitLossExpenseTitle');
+  const fileField = document.getElementById('profitLossExpenseFileField');
+  if (title) title.textContent = mode === 'upload' ? 'Upload Receipt' : 'Add Expense';
+  if (fileField) fileField.style.display = mode === 'upload' ? 'grid' : 'none';
+  openModal('profitLossExpenseModal');
+}
+
+async function profitLossSubmitExpense(event) {
+  event.preventDefault();
+  if (!profitLossState.eventId) return;
+  const form = new FormData();
+  const value = id => document.getElementById(id)?.value.trim() || '';
+  form.append('description', value('profitLossExpenseDescription'));
+  form.append('category', value('profitLossExpenseCategory') || 'Miscellaneous');
+  form.append('vendor', value('profitLossExpenseVendor'));
+  form.append('amount', value('profitLossExpenseAmount'));
+  form.append('expenseDate', value('profitLossExpenseDate'));
+  const file = document.getElementById('profitLossExpenseFile')?.files?.[0];
+  if (file) form.append('file', file);
+  try {
+    const response = await apiCall(`/api/finance/profit-loss/${profitLossState.eventId}/expenses`, 'POST', form);
+    profitLossState.data = response.data;
+    closeModal('profitLossExpenseModal');
+    renderProfitLossPage();
+    showNotification('success', file ? 'Receipt uploaded' : 'Expense added');
+  } catch (error) {
+    showNotification('error', error.message || 'Failed to save expense');
+  }
+}
+
+async function profitLossDeleteExpense(expenseId) {
+  if (!expenseId || !profitLossState.eventId) return;
+  const confirmed = await showAppConfirm({
+    title: 'Delete Expense',
+    message: 'Remove this expense from Profit & Loss?',
+    confirmText: 'Delete',
+    cancelText: 'Cancel',
+    destructive: true
+  });
+  if (!confirmed) return;
+  try {
+    const response = await apiCall(`/api/finance/profit-loss/${profitLossState.eventId}/expenses/${encodeURIComponent(expenseId)}`, 'DELETE');
+    profitLossState.data = response.data;
+    renderProfitLossPage();
+  } catch (error) {
+    showNotification('error', error.message || 'Failed to delete expense');
+  }
+}
+
+function compareEventChooserEvents() {
+  return compareState.events || [];
+}
+
+function compareCurrentEventId() {
+  return compareState.eventId;
+}
+
+function openCompareForEvent(eventId, quotationId = '') {
+  ensureFinanceSections();
+  compareState.eventId = Number(eventId || 0);
+  compareState.quotationId = quotationId || '';
+  compareState.data = null;
+  showSection('compare');
+}
+
+async function loadComparePage(options = {}) {
+  ensureFinanceSections();
+  const root = compareRoot();
+  if (!root || compareState.loading) return;
+  if (typeof isAdminUser === 'function' && !isAdminUser()) {
+    root.innerHTML = '<div class="finance-empty">Manager access is required for Compare.</div>';
+    return;
+  }
+  compareState.loading = true;
+  if (!options.preserve) root.innerHTML = '<div class="loading">Loading comparison...</div>';
+  try {
+    const eventsResponse = await apiCall('/api/events?view=summary&limit=500');
+    compareState.events = (eventsResponse.data || []).slice().sort((a, b) => Number(b.id || 0) - Number(a.id || 0));
+    if (!compareState.eventId) compareState.eventId = Number(compareState.events[0]?.id || 0);
+    if (!compareState.eventId) {
+      root.innerHTML = '<div class="finance-empty">Create an event before comparing quotation items.</div>';
+      return;
+    }
+    await selectCompareEvent(compareState.eventId, { renderLoading: false, keepQuotation: true });
+  } catch (error) {
+    root.innerHTML = `<div class="finance-empty">Could not load Compare.<br>${financeEscape(error.message || String(error))}</div>`;
+  } finally {
+    compareState.loading = false;
+  }
+}
+
+async function selectCompareEvent(eventId, options = {}) {
+  const id = Number(eventId || 0);
+  if (!id) return;
+  compareState.eventId = id;
+  if (!options.keepQuotation) compareState.quotationId = '';
+  const root = compareRoot();
+  if (options.renderLoading !== false && root) root.innerHTML = '<div class="loading">Loading comparison...</div>';
+  try {
+    const query = new URLSearchParams({ eventId: String(id) });
+    if (compareState.quotationId) query.set('quotationId', compareState.quotationId);
+    const response = await apiCall(`/api/finance/compare?${query.toString()}`);
+    compareState.data = response.data;
+    compareState.quotationId = response.data?.quotation?.id || '';
+    renderComparePage();
+  } catch (error) {
+    if (root) root.innerHTML = `<div class="finance-empty">Could not load comparison.<br>${financeEscape(error.message || String(error))}</div>`;
+  }
+}
+
+async function refreshCompareForRealtime(eventId) {
+  if (Number(compareState.eventId) !== Number(eventId)) return;
+  await selectCompareEvent(eventId, { renderLoading: false, keepQuotation: true });
+}
+
+function compareSetFilter(filter) {
+  compareState.filter = filter || 'all';
+  renderComparePage();
+}
+
+function compareSetSearch(value) {
+  compareState.search = value || '';
+  renderComparePage();
+}
+
+function compareStatusLabel(status) {
+  return ({
+    matched: 'Matched',
+    missing_in_event: 'Missing in Event',
+    extra_in_event: 'Extra in Event',
+    qty_mismatch: 'Qty Mismatch'
+  })[status] || status;
+}
+
+function compareVisibleRows() {
+  const rows = compareState.data?.rows || [];
+  const search = String(compareState.search || '').trim().toLowerCase();
+  const filter = compareState.filter || 'all';
+  return rows.filter(row => {
+    const matchesFilter = filter === 'all' || row.status === filter;
+    const text = [
+      row.quotationItem?.title,
+      row.quotationItem?.subtitle,
+      row.eventItem?.title,
+      row.eventItem?.subtitle,
+      row.status
+    ].join(' ').toLowerCase();
+    return matchesFilter && (!search || text.includes(search));
+  });
+}
+
+function compareRowActions(row) {
+  const canEditQuote = !!compareState.data?.permissions?.canEditQuotation;
+  const quoteQty = financeNumber(row.quotationItem?.quantity);
+  const eventQty = financeNumber(row.eventItem?.quantity);
+  const actions = [];
+  if (quoteQty > eventQty) {
+    actions.push(`<button type="button" class="compare-action primary" onclick="compareRunRowAction('add-event','${financeEscapeAttr(row.key)}')">Add to Event</button>`);
+  }
+  if (eventQty > quoteQty) {
+    actions.push(`<button type="button" class="compare-action danger" onclick="compareRunRowAction('remove-extra','${financeEscapeAttr(row.key)}')">Remove Extra</button>`);
+    if (canEditQuote) {
+      actions.push(`<button type="button" class="compare-action quote" onclick="compareRunRowAction('add-quote','${financeEscapeAttr(row.key)}')">Add to Quote</button>`);
+    }
+  }
+  if (!actions.length) {
+    actions.push('<span class="compare-action-static">In sync</span>');
+  }
+  return actions.join('');
+}
+
+function compareItemCell(item, side) {
+  const isEmpty = !item?.quantity;
+  return `
+    <div class="compare-item ${isEmpty ? 'empty' : ''}">
+      <div class="compare-item-thumb" aria-hidden="true">${side === 'quote' ? 'Q' : 'E'}</div>
+      <div>
+        <strong>${financeEscape(isEmpty ? 'Not included' : item.title || 'Untitled item')}</strong>
+        <span>${financeEscape(isEmpty ? (side === 'quote' ? 'Not included in quotation' : 'Not included in event') : [item.subtitle, item.department].filter(Boolean).join(' - '))}</span>
+      </div>
+    </div>
+  `;
+}
+
+function renderComparePage() {
+  const root = compareRoot();
+  const data = compareState.data;
+  if (!root || !data) return;
+  const event = data.event || {};
+  const quote = data.quotation || null;
+  const counts = data.counts || {};
+  const rows = compareVisibleRows();
+  root.innerHTML = `
+    <div class="compare-heading">
+      <div>
+        <h2>Quotation vs Event Comparison</h2>
+        <p class="finance-subtitle">Compare quoted items with event requirements and quickly sync differences.</p>
+      </div>
+      <div class="compare-top-actions">
+        <input class="finance-search" type="search" value="${financeEscapeAttr(compareState.search)}" placeholder="Search items, assets, SKUs..." oninput="compareSetSearch(this.value)">
+      </div>
+    </div>
+
+    <div class="compare-control-bar finance-card">
+      <button type="button" class="finance-picker-button" onclick="planOpenEventChooser('compare')">
+        <span>${financeEscape(`#${event.id || ''} ${event.name || 'Choose event'}`)}</span>
+        <small>Event</small>
+      </button>
+      <button type="button" class="finance-picker-button" onclick="compareOpenQuotationPicker()">
+        <span>${financeEscape(quote ? quote.number : 'No quotation paired')}</span>
+        <small>Quotation</small>
+      </button>
+      <div class="compare-stat matched"><strong>${Number(counts.matched || 0)}</strong><span>Matched</span></div>
+      <div class="compare-stat missing"><strong>${Number(counts.missingInEvent || 0)}</strong><span>Missing in Event</span></div>
+      <div class="compare-stat extra"><strong>${Number(counts.extraInEvent || 0)}</strong><span>Extra in Event</span></div>
+      <div class="compare-stat mismatch"><strong>${Number(counts.qtyMismatch || 0)}</strong><span>Qty Mismatch</span></div>
+    </div>
+
+    <div class="compare-layout">
+      <section class="finance-card compare-table-card">
+        <div class="compare-tabs">
+          ${[
+            ['all', 'All'],
+            ['matched', 'Matched'],
+            ['missing_in_event', 'Missing'],
+            ['extra_in_event', 'Extra'],
+            ['qty_mismatch', 'Qty Mismatch']
+          ].map(([key, label]) => `
+            <button type="button" class="${compareState.filter === key ? 'active' : ''}" onclick="compareSetFilter('${key}')">${label}</button>
+          `).join('')}
+        </div>
+        <div class="compare-table">
+          <div class="compare-table-head">
+            <span>Quotation Items<br><small>${Number(counts.quotationItems || 0)} items</small></span>
+            <span>Compare &amp; Actions</span>
+            <span>Event Requirements<br><small>${Number(counts.eventItems || 0)} items</small></span>
+          </div>
+          ${rows.map(row => `
+            <article class="compare-row status-${financeEscapeAttr(row.status)}">
+              <div class="compare-side">
+                ${compareItemCell(row.quotationItem, 'quote')}
+                <div class="compare-qty"><span>Qty</span><strong>${Number(row.quotationItem?.quantity || 0)}</strong><small>${financeEscape(row.quotationItem?.uom || '')}</small></div>
+              </div>
+              <div class="compare-actions-cell">
+                <span class="compare-status">${financeEscape(compareStatusLabel(row.status))}</span>
+                ${compareRowActions(row)}
+              </div>
+              <div class="compare-side">
+                ${compareItemCell(row.eventItem, 'event')}
+                <div class="compare-qty"><span>Qty</span><strong>${Number(row.eventItem?.quantity || 0)}</strong><small>${financeEscape(row.eventItem?.uom || '')}</small></div>
+              </div>
+            </article>
+          `).join('') || '<div class="finance-empty">No comparison rows match this view.</div>'}
+        </div>
+      </section>
+
+      <aside class="compare-side-panel">
+        <section class="finance-card compare-summary">
+          <h3>Comparison Summary</h3>
+          <div><span>Quotation Items</span><strong>${Number(counts.quotationItems || 0)}</strong></div>
+          <div><span>Event Items</span><strong>${Number(counts.eventItems || 0)}</strong></div>
+          <hr>
+          <div class="matched"><span>Matched</span><strong>${Number(counts.matched || 0)}</strong></div>
+          <div class="missing"><span>Missing in Event</span><strong>${Number(counts.missingInEvent || 0)}</strong></div>
+          <div class="extra"><span>Extra in Event</span><strong>${Number(counts.extraInEvent || 0)}</strong></div>
+          <div class="mismatch"><span>Qty Mismatch</span><strong>${Number(counts.qtyMismatch || 0)}</strong></div>
+        </section>
+        <section class="finance-card compare-suggestions">
+          <h3>Suggested Actions</h3>
+          <button type="button" onclick="compareBulkAction('add-event')" ${counts.missingInEvent ? '' : 'disabled'}>Add Missing to Event <strong>${Number(counts.missingInEvent || 0)}</strong></button>
+          <button type="button" onclick="compareBulkAction('remove-extra')" ${counts.extraInEvent ? '' : 'disabled'}>Remove Extras from Event <strong>${Number(counts.extraInEvent || 0)}</strong></button>
+          ${data.permissions?.canEditQuotation ? `<button type="button" onclick="compareBulkAction('add-quote')" ${counts.extraInEvent ? '' : 'disabled'}>Add Extras to Quotation <strong>${Number(counts.extraInEvent || 0)}</strong></button>` : ''}
+          <button type="button" onclick="compareBulkAction('resolve-mismatch')" ${counts.qtyMismatch ? '' : 'disabled'}>Resolve Qty Mismatches <strong>${Number(counts.qtyMismatch || 0)}</strong></button>
+        </section>
+      </aside>
+    </div>
+  `;
+}
+
+async function compareRunRowAction(action, key, options = {}) {
+  if (!compareState.eventId || !key) return;
+  const endpoints = {
+    'add-event': 'add-to-event',
+    'remove-extra': 'remove-extra',
+    'add-quote': 'add-to-quotation'
+  };
+  const endpoint = endpoints[action];
+  if (!endpoint) return;
+  try {
+    const response = await apiCall(`/api/finance/compare/${compareState.eventId}/${endpoint}`, 'POST', {
+      quotationId: compareState.quotationId,
+      key
+    });
+    compareState.data = response.data;
+    compareState.quotationId = response.data?.quotation?.id || compareState.quotationId;
+    if (!options.silent) showNotification('success', 'Comparison updated');
+    renderComparePage();
+  } catch (error) {
+    showNotification('error', error.message || 'Compare action failed');
+    throw error;
+  }
+}
+
+async function compareBulkAction(action) {
+  const rows = compareState.data?.rows || [];
+  const targets = rows.filter(row => {
+    const quoteQty = financeNumber(row.quotationItem?.quantity);
+    const eventQty = financeNumber(row.eventItem?.quantity);
+    if (action === 'add-event') return quoteQty > eventQty;
+    if (action === 'remove-extra') return eventQty > quoteQty;
+    if (action === 'add-quote') return eventQty > quoteQty;
+    if (action === 'resolve-mismatch') return row.status === 'qty_mismatch';
+    return false;
+  });
+  for (const row of targets) {
+    const quoteQty = financeNumber(row.quotationItem?.quantity);
+    const eventQty = financeNumber(row.eventItem?.quantity);
+    const chosen = action === 'resolve-mismatch'
+      ? (quoteQty > eventQty ? 'add-event' : 'remove-extra')
+      : action;
+    await compareRunRowAction(chosen, row.key, { silent: true });
+  }
+  if (targets.length) showNotification('success', 'Comparison updated');
+}
+
+function compareEnsureQuotationPickerModal() {
+  if (document.getElementById('compareQuotationPickerModal')) return;
+  const modal = document.createElement('div');
+  modal.id = 'compareQuotationPickerModal';
+  modal.className = 'modal';
+  modal.innerHTML = `
+    <div class="modal-content finance-picker-modal">
+      <div class="modal-header"><h3 class="modal-title">Choose Quotation</h3><button type="button" class="close-btn" onclick="closeModal('compareQuotationPickerModal')">&times;</button></div>
+      <div id="compareQuotationPickerResults" class="finance-picker-results"></div>
+      <div class="modal-actions finance-picker-actions"><button type="button" class="btn btn-secondary" onclick="closeModal('compareQuotationPickerModal')">Cancel</button></div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+}
+
+function compareOpenQuotationPicker() {
+  compareEnsureQuotationPickerModal();
+  const results = document.getElementById('compareQuotationPickerResults');
+  const rows = compareState.data?.quotations || [];
+  if (results) {
+    results.innerHTML = rows.map(row => `
+      <button type="button" class="finance-picker-option" onclick="compareChooseQuotation('${financeEscapeAttr(row.id)}')">
+        <strong>${financeEscape(row.number || 'Quotation')}</strong>
+        <span>${financeEscape([row.projectName, row.client?.name || row.client?.company].filter(Boolean).join(' - '))}</span>
+      </button>
+    `).join('') || '<div class="finance-suggestion-empty">No quotations are paired to this event.</div>';
+  }
+  openModal('compareQuotationPickerModal');
+}
+
+async function compareChooseQuotation(quotationId) {
+  compareState.quotationId = quotationId || '';
+  closeModal('compareQuotationPickerModal');
+  await selectCompareEvent(compareState.eventId, { keepQuotation: true });
 }
