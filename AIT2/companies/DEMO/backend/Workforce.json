@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "freelancers": [
+    {
+      "id": "freelancer_53a54d9d2bf98651",
+      "name": "Benjamin Ng",
+      "phone": "+6590405008",
+      "email": "",
+      "notes": "",
+      "active": true,
+      "personnelOnly": false,
+      "createdAt": "2026-07-10T23:35:24+08:00",
+      "updatedAt": "2026-07-10T23:37:00+08:00",
+      "company": "",
+      "workerPasswordSalt": "5d1e16ce7e37747e244edb6b4cf86fb7",
+      "workerPasswordHash": "39c7525f88ebd7ccad525805d8b4e82593b92c88e7de92963e26cbafd2606528",
+      "workerCredentialType": "pin",
+      "workerAuthVersion": 1,
+      "workerCredentialsSetAt": "2026-07-10T23:37:00+08:00",
+      "workerLastLoginAt": "2026-07-10T23:37:00+08:00"
+    }
+  ],
+  "vendors": [
+    {
+      "id": "vendor_2dc4cfc98797009d",
+      "name": "Avec Vision Pte Ltd",
+      "memberIds": [
+        "freelancer_53a54d9d2bf98651"
+      ],
+      "notes": "",
+      "active": true,
+      "createdAt": "2026-07-10T23:35:37+08:00",
+      "updatedAt": "2026-07-10T23:35:37+08:00"
+    }
+  ],
+  "roles": [],
+  "assignments": {
+    "1": [],
+    "2": []
+  },
+  "manualDepartments": {
+    "2": []
+  },
+  "hiddenDepartments": {
+    "2": [
+      "AX"
+    ]
+  },
+  "uploadAllowances": {},
+  "transportVendors": [],
+  "transportLocations": [],
+  "transportBookings": {},
+  "submissions": {
+    "2": {
+      "freelancer_53a54d9d2bf98651": {
+        "invoices": [],
+        "claims": []
+      }
+    }
+  },
+  "updatedAt": "2026-07-10T23:50:35+08:00"
+}

@@ -1,0 +1,1 @@
+{"id": "1783699158882-953-98fbb9ac", "topic": "data-changed", "details": {"topics": ["user-presence"], "changes": [{"topic": "user-presence", "details": {"action": "User admin logged out from web interface", "username": "admin", "status": "logout"}}], "path": "/logout", "method": "GET"}, "actor": "system", "originClientId": "", "timestamp": "2026-07-10T23:59:18"}

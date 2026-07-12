@@ -36,6 +36,15 @@
       "createdAt": "2026-06-26T23:28:58",
       "createdBy": "bnjm2000",
       "brandingSetupRequired": false
+    },
+    "DEMO": {
+      "code": "DEMO",
+      "name": "Demo",
+      "backendFolder": "companies/DEMO/backend",
+      "frontendFolder": "companies/DEMO/frontend",
+      "createdAt": "2026-07-10T23:21:48",
+      "createdBy": "bnjm2000",
+      "brandingSetupRequired": false
     }
   },
   "userCompanies": {
@@ -43,9 +52,9 @@
     "feezahmnsr": "AVPL",
     "cterence": "AVPL",
     "tjacky": "AVPL",
-    "user": "AVPL",
+    "user": "DEMO",
     "cjamie": "AVPL",
-    "admin": "AVPL",
+    "admin": "DEMO",
     "rrafie": "AVPL",
     "Adi": "AEE",
     "emily": "TSC",
@@ -55,5 +64,5 @@
   "superAdmins": [
     "bnjm2000"
   ],
-  "updatedAt": "2026-07-09T13:37:45"
+  "updatedAt": "2026-07-10T23:23:12"
 }
