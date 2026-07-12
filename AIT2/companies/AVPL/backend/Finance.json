@@ -1455,7 +1455,7 @@
         "postalCode": "Singapore 608526"
       },
       "quotationDate": "2026-07-09",
-      "validUntil": "2026-08-09",
+      "validUntil": "2026-08-11",
       "projectName": "Dry Hire of 75\" TV",
       "title": "Dry Hire of 75\" TV",
       "reference": "",
@@ -1546,19 +1546,146 @@
       "showDepartmentSubtotals": true,
       "totalLocked": false,
       "lockedPreTaxTotal": null,
-      "revisions": [],
-      "sentAt": "",
-      "acceptedAt": "2026-07-10T16:21:47",
+      "revisions": [
+        {
+          "revision": 1,
+          "number": "QT-2026-004-01",
+          "sentAt": "2026-07-12T23:44:40",
+          "validUntil": "2026-08-11",
+          "validityDays": 30,
+          "fingerprint": "{\"adjustments\":[],\"baseSequence\":4,\"client\":{\"address1\":\"2 Venture Dr, #14-02\",\"address2\":\"Vision Exchange\",\"address3\":\"\",\"company\":\"Avery Events and Exhibitions\",\"contactPerson\":\"\",\"email\":\"\",\"name\":\"Adityan Sohien\",\"phone\":\"+65 9652 3212\",\"postalCode\":\"Singapore 608526\",\"taxNumber\":\"\"},\"createdAt\":\"2026-07-07T15:30:32\",\"createdBy\":\"bnjm2000\",\"currency\":\"SGD\",\"departments\":[\"Video Department\",\"Staging Department\"],\"eventDays\":1,\"eventLocation\":\"\",\"eventReference\":\"\",\"id\":\"3afb6ff7bcb593c079c3823a\",\"invoicedAt\":\"\",\"lineItems\":[{\"brand\":\"Samsung\",\"catalogKey\":\"inventory:vx|samsung|lh75qmcebgcxxs\",\"days\":1.0,\"department\":\"Video Department\",\"departmentCode\":\"VX\",\"description\":\"Samsung LH75QMCEBGCXXS 75\\\" Crystal UHD Signage\",\"discountPercent\":50.0,\"id\":\"line_1783409464029_2390b5b3483eb8\",\"isCustom\":false,\"model\":\"LH75QMCEBGCXXS\",\"quantity\":1.0,\"sourceAssetIds\":[\"QM75C#01\",\"QM75C#02\",\"QM75C#03\",\"QM75C#04\"],\"total\":300.0,\"unitPrice\":600.0,\"uom\":\"units\"},{\"brand\":\"Global Truss\",\"catalogKey\":\"inventory:stg|global truss|f34 corner block (silver)\",\"days\":1.0,\"department\":\"Staging Department\",\"departmentCode\":\"STG\",\"description\":\"Corner Block (silver)\",\"discountPercent\":75.0,\"id\":\"87f73c0197d8\",\"isCustom\":false,\"model\":\"F34 Corner Block (Silver)\",\"quantity\":5.0,\"sourceAssetIds\":[],\"total\":50.0,\"unitPrice\":40.0,\"uom\":\"units\"},{\"brand\":\"Samsung\",\"catalogKey\":\"inventory:vx|samsung|ua75ru7100kxxs\",\"days\":1.0,\"department\":\"Video Department\",\"departmentCode\":\"VX\",\"description\":\"Samsung UA75RU7100KXXS 75\\\" Smart TV\",\"discountPercent\":100,\"id\":\"line_1783565923768_edfb1e0f899838\",\"isCustom\":false,\"model\":\"UA75RU7100KXXS\",\"quantity\":1.0,\"sourceAssetIds\":[\"75INCH#01\"],\"total\":0.0,\"unitPrice\":450.0,\"uom\":\"units\"}],\"lockedPreTaxTotal\":null,\"notes\":\"\",\"number\":\"QT-2026-004-01\",\"paidAt\":\"\",\"paymentTerms\":\"30 Days\",\"projectName\":\"Dry Hire of 75\\\" TV\",\"quotationDate\":\"2026-07-09\",\"reference\":\"\",\"rehearsalDate\":\"\",\"rehearsalTime\":\"\",\"revision\":1,\"salesperson\":\"Benjamin Ng\",\"setupDate\":\"\",\"setupTime\":\"\",\"showDate\":\"2026-07-09\",\"showDepartmentDiscounts\":true,\"showDepartmentSubtotals\":true,\"showTime\":\"\",\"showUnitPrices\":false,\"sourceQuotationId\":\"\",\"statusChangedAt\":\"2026-07-12T23:44:40\",\"taxRate\":9.0,\"teardownDate\":\"\",\"teardownTime\":\"\",\"terms\":\"1.  Validity: 14 days\\n2.  Work shall only commence upon receiving the certified copy of our quotation.  \\n3.  Upon confirmation, a 50% non-refundable down payment is required, and the remaining balance must be paid upon\\n      completion of the setup.\\n4.  All items are rented for indoor usage only (unless otherwise stated).\\n5.  Confirmation of rental is on a first-come, first-served basis.\\n6.  T/T to: OCBC Bank Limited, 65 Chulia Street, #01 - 00, OCBC Centre, Singapore 049513.\\n     Account Number (S$): 601 - 546195 - 001, Swift Code: OCBCSGSG, Account Name: Avec Vision Pte Ltd.\\n7.  The hirer is responsible for according to due diligence and cares for equipment.  In agreement, they will undertake liability for\\n\\\"     the loss or damage of the equipment rented.\\t\\\"\\n8.  Cancellation charge:  100% of the total amount if cancellation occurs after the completion of the setup.\\n9.  Any additional services or equipment not mentioned in this quotation will be charged accordingly.\\n\\nWe hope the above quotation is acceptable to you and will be looking forward to your early confirmation.   Please feel free to\\ncontact the undersigned should you require any further information.\",\"title\":\"Dry Hire of 75\\\" TV\",\"totalLocked\":false,\"type\":\"quotation\",\"validUntil\":\"2026-08-11\",\"validityDays\":30}",
+          "snapshot": {
+            "id": "3afb6ff7bcb593c079c3823a",
+            "type": "quotation",
+            "number": "QT-2026-004-01",
+            "baseSequence": 4,
+            "revision": 1,
+            "client": {
+              "name": "Adityan Sohien",
+              "company": "Avery Events and Exhibitions",
+              "contactPerson": "",
+              "email": "",
+              "phone": "+65 9652 3212",
+              "taxNumber": "",
+              "address1": "2 Venture Dr, #14-02",
+              "address2": "Vision Exchange",
+              "address3": "",
+              "postalCode": "Singapore 608526"
+            },
+            "quotationDate": "2026-07-09",
+            "validUntil": "2026-08-11",
+            "projectName": "Dry Hire of 75\" TV",
+            "title": "Dry Hire of 75\" TV",
+            "reference": "",
+            "eventReference": "",
+            "salesperson": "Benjamin Ng",
+            "paymentTerms": "30 Days",
+            "eventLocation": "",
+            "setupDate": "",
+            "setupTime": "",
+            "rehearsalDate": "",
+            "rehearsalTime": "",
+            "showDate": "2026-07-09",
+            "showTime": "",
+            "teardownDate": "",
+            "teardownTime": "",
+            "validityDays": 30,
+            "currency": "SGD",
+            "taxRate": 9.0,
+            "notes": "",
+            "terms": "1.  Validity: 14 days\n2.  Work shall only commence upon receiving the certified copy of our quotation.  \n3.  Upon confirmation, a 50% non-refundable down payment is required, and the remaining balance must be paid upon\n      completion of the setup.\n4.  All items are rented for indoor usage only (unless otherwise stated).\n5.  Confirmation of rental is on a first-come, first-served basis.\n6.  T/T to: OCBC Bank Limited, 65 Chulia Street, #01 - 00, OCBC Centre, Singapore 049513.\n     Account Number (S$): 601 - 546195 - 001, Swift Code: OCBCSGSG, Account Name: Avec Vision Pte Ltd.\n7.  The hirer is responsible for according to due diligence and cares for equipment.  In agreement, they will undertake liability for\n\"     the loss or damage of the equipment rented.\t\"\n8.  Cancellation charge:  100% of the total amount if cancellation occurs after the completion of the setup.\n9.  Any additional services or equipment not mentioned in this quotation will be charged accordingly.\n\nWe hope the above quotation is acceptable to you and will be looking forward to your early confirmation.   Please feel free to\ncontact the undersigned should you require any further information.",
+            "lineItems": [
+              {
+                "id": "line_1783409464029_2390b5b3483eb8",
+                "catalogKey": "inventory:vx|samsung|lh75qmcebgcxxs",
+                "sourceAssetIds": [
+                  "QM75C#01",
+                  "QM75C#02",
+                  "QM75C#03",
+                  "QM75C#04"
+                ],
+                "brand": "Samsung",
+                "model": "LH75QMCEBGCXXS",
+                "description": "Samsung LH75QMCEBGCXXS 75\" Crystal UHD Signage",
+                "department": "Video Department",
+                "departmentCode": "VX",
+                "days": 1.0,
+                "quantity": 1.0,
+                "uom": "units",
+                "unitPrice": 600.0,
+                "discountPercent": 50.0,
+                "total": 300.0,
+                "isCustom": false
+              },
+              {
+                "id": "87f73c0197d8",
+                "catalogKey": "inventory:stg|global truss|f34 corner block (silver)",
+                "sourceAssetIds": [],
+                "brand": "Global Truss",
+                "model": "F34 Corner Block (Silver)",
+                "description": "Corner Block (silver)",
+                "department": "Staging Department",
+                "departmentCode": "STG",
+                "days": 1.0,
+                "quantity": 5.0,
+                "uom": "units",
+                "unitPrice": 40.0,
+                "discountPercent": 75.0,
+                "total": 50.0,
+                "isCustom": false
+              },
+              {
+                "id": "line_1783565923768_edfb1e0f899838",
+                "catalogKey": "inventory:vx|samsung|ua75ru7100kxxs",
+                "sourceAssetIds": [
+                  "75INCH#01"
+                ],
+                "brand": "Samsung",
+                "model": "UA75RU7100KXXS",
+                "description": "Samsung UA75RU7100KXXS 75\" Smart TV",
+                "department": "Video Department",
+                "departmentCode": "VX",
+                "days": 1.0,
+                "quantity": 1.0,
+                "uom": "units",
+                "unitPrice": 450.0,
+                "discountPercent": 100,
+                "total": 0.0,
+                "isCustom": false
+              }
+            ],
+            "adjustments": [],
+            "departments": [
+              "Video Department",
+              "Staging Department"
+            ],
+            "showUnitPrices": false,
+            "showDepartmentDiscounts": true,
+            "showDepartmentSubtotals": true,
+            "totalLocked": false,
+            "lockedPreTaxTotal": null,
+            "invoicedAt": "",
+            "paidAt": "",
+            "statusChangedAt": "2026-07-12T23:44:40",
+            "sourceQuotationId": "",
+            "createdAt": "2026-07-07T15:30:32",
+            "createdBy": "bnjm2000",
+            "eventDays": 1
+          }
+        }
+      ],
+      "sentAt": "2026-07-12T23:44:40",
+      "acceptedAt": "2026-07-12T23:44:43",
       "invoicedAt": "",
       "paidAt": "",
-      "statusChangedAt": "2026-07-10T16:21:47",
+      "statusChangedAt": "2026-07-12T23:44:43",
       "eventId": 154,
       "eventManagedByQuotation": false,
       "eventSyncFingerprint": "",
       "sourceQuotationId": "",
       "createdAt": "2026-07-07T15:30:32",
       "createdBy": "bnjm2000",
-      "updatedAt": "2026-07-10T21:01:21",
+      "updatedAt": "2026-07-12T23:44:43",
       "updatedBy": "bnjm2000",
       "eventDays": 1,
       "totals": {
@@ -2185,6 +2312,82 @@
       "createdAt": "2026-07-12T00:32:14",
       "createdBy": "bnjm2000",
       "updatedAt": "2026-07-12T00:32:14",
+      "updatedBy": "bnjm2000",
+      "eventDays": 1,
+      "totals": {
+        "subtotal": 0,
+        "adjustments": 0,
+        "discount": 0,
+        "netSubtotal": 0,
+        "calculatedPreTax": 0,
+        "lockedPreTax": null,
+        "lockDifference": 0,
+        "tax": 0.0,
+        "total": 0.0
+      }
+    },
+    {
+      "id": "de42cfb325eb6cde3a8f9049",
+      "type": "quotation",
+      "number": "QT-2026-009-01",
+      "baseSequence": 9,
+      "revision": 1,
+      "status": "draft",
+      "client": {
+        "name": "",
+        "company": "",
+        "contactPerson": "",
+        "email": "",
+        "phone": "",
+        "taxNumber": "",
+        "address1": "",
+        "address2": "",
+        "address3": "",
+        "postalCode": ""
+      },
+      "quotationDate": "2026-07-12",
+      "validUntil": "2026-08-11",
+      "projectName": "",
+      "title": "",
+      "reference": "",
+      "eventReference": "",
+      "salesperson": "Benjamin Ng",
+      "paymentTerms": "30 Days",
+      "eventLocation": "",
+      "setupDate": "",
+      "setupTime": "",
+      "rehearsalDate": "",
+      "rehearsalTime": "",
+      "showDate": "",
+      "showTime": "",
+      "teardownDate": "",
+      "teardownTime": "",
+      "validityDays": 30,
+      "currency": "SGD",
+      "taxRate": 9.0,
+      "notes": "",
+      "terms": "1.  Validity: 14 days\n2.  Work shall only commence upon receiving the certified copy of our quotation.  \n3.  Upon confirmation, a 50% non-refundable down payment is required, and the remaining balance must be paid upon\n      completion of the setup.\n4.  All items are rented for indoor usage only (unless otherwise stated).\n5.  Confirmation of rental is on a first-come, first-served basis.\n6.  T/T to: OCBC Bank Limited, 65 Chulia Street, #01 - 00, OCBC Centre, Singapore 049513.\n     Account Number (S$): 601 - 546195 - 001, Swift Code: OCBCSGSG, Account Name: Avec Vision Pte Ltd.\n7.  The hirer is responsible for according to due diligence and cares for equipment.  In agreement, they will undertake liability for\n\"     the loss or damage of the equipment rented.\t\"\n8.  Cancellation charge:  100% of the total amount if cancellation occurs after the completion of the setup.\n9.  Any additional services or equipment not mentioned in this quotation will be charged accordingly.\n\nWe hope the above quotation is acceptable to you and will be looking forward to your early confirmation.   Please feel free to\ncontact the undersigned should you require any further information.",
+      "lineItems": [],
+      "adjustments": [],
+      "departments": [],
+      "showUnitPrices": false,
+      "showDepartmentDiscounts": false,
+      "showDepartmentSubtotals": true,
+      "totalLocked": false,
+      "lockedPreTaxTotal": null,
+      "revisions": [],
+      "sentAt": "",
+      "acceptedAt": "",
+      "invoicedAt": "",
+      "paidAt": "",
+      "statusChangedAt": "",
+      "eventId": null,
+      "eventManagedByQuotation": false,
+      "eventSyncFingerprint": "",
+      "sourceQuotationId": "",
+      "createdAt": "2026-07-12T23:45:01",
+      "createdBy": "bnjm2000",
+      "updatedAt": "2026-07-12T23:45:01",
       "updatedBy": "bnjm2000",
       "eventDays": 1,
       "totals": {
@@ -3134,7 +3337,7 @@
       "department": "Video Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-10T21:01:21"
+      "updatedAt": "2026-07-12T23:44:43"
     },
     "bnjm2000::asset:qm75c#01": {
       "description": "Samsung LH75QMCEBGCXXS 75\" Crystal UHD Signage",
@@ -3142,7 +3345,7 @@
       "department": "Video Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-10T21:01:21"
+      "updatedAt": "2026-07-12T23:44:43"
     },
     "bnjm2000::asset:qm75c#02": {
       "description": "Samsung LH75QMCEBGCXXS 75\" Crystal UHD Signage",
@@ -3150,7 +3353,7 @@
       "department": "Video Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-10T21:01:21"
+      "updatedAt": "2026-07-12T23:44:43"
     },
     "bnjm2000::asset:qm75c#03": {
       "description": "Samsung LH75QMCEBGCXXS 75\" Crystal UHD Signage",
@@ -3158,7 +3361,7 @@
       "department": "Video Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-10T21:01:21"
+      "updatedAt": "2026-07-12T23:44:43"
     },
     "bnjm2000::asset:qm75c#04": {
       "description": "Samsung LH75QMCEBGCXXS 75\" Crystal UHD Signage",
@@ -3166,7 +3369,7 @@
       "department": "Video Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-10T21:01:21"
+      "updatedAt": "2026-07-12T23:44:43"
     },
     "bnjm2000::inventory:stg|global truss|f34 corner block (silver)": {
       "description": "Corner Block (silver)",
@@ -3174,7 +3377,7 @@
       "department": "Staging Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-10T21:01:21"
+      "updatedAt": "2026-07-12T23:44:43"
     },
     "bnjm2000::asset:bulk-0007": {
       "description": "Global Truss F34 Corner Block (Silver) Corner Block (silver)",
@@ -4014,7 +4217,7 @@
       "department": "Video Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-10T21:01:21"
+      "updatedAt": "2026-07-12T23:44:43"
     },
     "bnjm2000::asset:75inch#01": {
       "description": "Samsung UA75RU7100KXXS 75\" Smart TV",
@@ -4022,7 +4225,7 @@
       "department": "Video Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-10T21:01:21"
+      "updatedAt": "2026-07-12T23:44:43"
     }
   },
   "profitLoss": {

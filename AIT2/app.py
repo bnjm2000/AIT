@@ -15,6 +15,7 @@ import tempfile
 import threading
 import time
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from contextvars import ContextVar
 from datetime import datetime, timedelta
 from functools import wraps
@@ -194,6 +195,10 @@ _prepare_action_lock = threading.RLock()
 _inventory_action_lock = threading.RLock()
 _planning_templates_lock = threading.RLock()
 _finance_lock = threading.RLock()
+_upload_processing_executor = ThreadPoolExecutor(
+    max_workers=max(1, int(os.environ.get('UPLOAD_PROCESSING_WORKERS', '1'))),
+    thread_name_prefix='upload-processing',
+)
 
 # Server-sent events notify logged-in browsers when shared CSV data changes.
 _realtime_subscribers = {}
@@ -449,17 +454,52 @@ def _validate_company_rename_folder(old_code, new_code, record):
     except ValueError:
         raise ValueError('Company folder is outside the companies folder')
 
-    for folder in (_company_record_backend_folder(record), _company_record_frontend_folder(record)):
+    record_folders = [
+        os.path.abspath(folder)
+        for folder in (
+            _company_record_backend_folder(record),
+            _company_record_frontend_folder(record)
+        )
+        if folder
+    ]
+    standard_folder_matches = True
+
+    for folder in record_folders:
         if not folder:
             continue
-        folder = os.path.abspath(folder)
         try:
             if os.path.commonpath([old_folder, folder]) != old_folder:
-                raise ValueError('Company assets must be inside the standard company folder before renaming')
+                standard_folder_matches = False
+                break
         except ValueError:
-            raise ValueError('Company assets must be inside the standard company folder before renaming')
+            standard_folder_matches = False
+            break
 
-    if os.path.exists(new_folder):
+    if not standard_folder_matches:
+        # Legacy installs may have a normalized company code (SHOWBASE) while
+        # the actual assets still live in the old AVPL folder. Allow that
+        # one-hop migration when backend/frontend share a company parent.
+        parent_folders = {os.path.dirname(folder) for folder in record_folders}
+        if len(parent_folders) != 1:
+            raise ValueError('Company assets must be inside one company folder before renaming')
+        legacy_folder = os.path.abspath(next(iter(parent_folders)))
+        try:
+            if (
+                os.path.commonpath([company_root, legacy_folder]) != company_root
+                or legacy_folder == company_root
+            ):
+                raise ValueError('Company assets must be inside the companies folder before renaming')
+            for folder in record_folders:
+                if os.path.commonpath([legacy_folder, folder]) != legacy_folder:
+                    raise ValueError('Company assets must be inside one company folder before renaming')
+        except ValueError:
+            raise ValueError('Company assets must be inside one company folder before renaming')
+        old_folder = legacy_folder
+
+    if (
+        os.path.exists(new_folder)
+        and os.path.normcase(os.path.abspath(new_folder)) != os.path.normcase(os.path.abspath(old_folder))
+    ):
         raise ValueError(f'Company folder for {new_code} already exists')
 
     return old_folder, new_folder
@@ -477,9 +517,25 @@ def _safe_company_rename_record(old_code, new_code, record):
 
     old_folder, new_folder = _validate_company_rename_folder(old_code, new_code, record)
 
-    if os.path.exists(old_folder):
-        os.makedirs(os.path.dirname(new_folder), exist_ok=True)
-        shutil.move(old_folder, new_folder)
+    if (
+        os.path.exists(old_folder)
+        and os.path.normcase(os.path.abspath(old_folder)) != os.path.normcase(os.path.abspath(new_folder))
+    ):
+        try:
+            os.makedirs(os.path.dirname(new_folder), exist_ok=True)
+            shutil.move(old_folder, new_folder)
+        except OSError as exc:
+            logger.warning(
+                'Could not rename company folder %s to %s; preserving existing folder paths for company code %s: %s',
+                old_folder,
+                new_folder,
+                new_code,
+                exc,
+            )
+            updated = dict(record or {})
+            updated['code'] = new_code
+            _ensure_company_folders(updated)
+            return updated
 
     updated = dict(record or {})
     updated['code'] = new_code
@@ -903,7 +959,7 @@ def _normalise_event_assigned_users(values, require_known=False):
         canonical = known_by_lower.get(raw_username.lower(), raw_username)
         if require_known and canonical.lower() not in known_by_lower:
             raise ValueError(f'Assigned user not found: {raw_username}')
-        if require_known and not _current_admin_can_manage_user(canonical):
+        if require_known and not _user_is_assigned_to_current_company(canonical):
             raise ValueError(f'You can only assign users from your company: {canonical}')
         key = canonical.lower()
         if key in seen:
@@ -1401,6 +1457,25 @@ def _current_actor_for_realtime():
     return session.get('user', 'system')
 
 
+def _company_code_for_realtime():
+    manager = _current_data_manager_object()
+    manager_code = _normalise_company_code(
+        getattr(manager, 'company_code', None),
+        ''
+    ) if manager is not None else ''
+    if manager_code:
+        return manager_code
+    if has_request_context():
+        return _normalise_company_code(_current_company_code(), DEFAULT_COMPANY_CODE)
+    return _normalise_company_code(_active_company_code, DEFAULT_COMPANY_CODE)
+
+
+def _with_realtime_scope(details=None):
+    scoped = dict(details or {})
+    scoped.setdefault('companyCode', _company_code_for_realtime())
+    return scoped
+
+
 def _publish_realtime_update_now(topic='data-changed', details=None, origin_client_id=None):
     """Push a compact change notice to every connected browser."""
     global _realtime_sequence
@@ -1412,7 +1487,7 @@ def _publish_realtime_update_now(topic='data-changed', details=None, origin_clie
     payload = {
         'id': event_id,
         'topic': topic,
-        'details': details or {},
+        'details': _with_realtime_scope(details),
         'actor': _current_actor_for_realtime(),
         'originClientId': origin_client_id or _client_id_from_request(),
         'timestamp': datetime.now().isoformat(timespec='seconds')
@@ -1445,11 +1520,11 @@ def mark_realtime_change(topic='data-changed', details=None):
     """
     if has_request_context():
         changes = getattr(g, 'realtime_changes', [])
-        changes.append({'topic': topic, 'details': details or {}})
+        changes.append({'topic': topic, 'details': _with_realtime_scope(details)})
         g.realtime_changes = changes
         return
 
-    _publish_realtime_update_now(topic, details or {}, '')
+    _publish_realtime_update_now(topic, _with_realtime_scope(details), '')
 
 
 def _event_asset_realtime_change_for_request():
@@ -1843,6 +1918,7 @@ def _department_payload(code, departments=None):
 
 # ---------------- PDF branding settings helpers ----------------
 DEFAULT_PDF_FOOTER_TEXT = ''
+DEFAULT_PDF_THEME_COLOR = '#0f766e'
 DEFAULT_FINANCE_TERMS = (
     "This quotation is valid until the validity date shown above.\n"
     "A 50% deposit is required to confirm the booking, with the balance payable before the event date.\n"
@@ -1889,6 +1965,8 @@ def _pdf_settings_defaults():
         'defaultPaymentTerms': '30 Days',
         'defaultValidityDays': 30,
         'defaultTerms': DEFAULT_FINANCE_TERMS,
+        'themeColor': DEFAULT_PDF_THEME_COLOR,
+        'letterheadText': '',
         'updatedAt': '',
     }
 
@@ -1943,6 +2021,7 @@ def _normalise_pdf_settings(settings, company_code=None):
         'website', 'bankName', 'bankAccountName', 'bankAccountNumber',
         'paynowUen', 'currency', 'taxLabel', 'quotationPrefix',
         'invoicePrefix', 'defaultPaymentTerms', 'defaultTerms',
+        'themeColor', 'letterheadText',
     ):
         merged[key] = str(merged.get(key) or '').strip()
     merged['currency'] = merged['currency'].upper()[:6] or 'SGD'
@@ -1950,6 +2029,8 @@ def _normalise_pdf_settings(settings, company_code=None):
     merged['invoicePrefix'] = re.sub(r'[^A-Z0-9_-]+', '', merged['invoicePrefix'].upper())[:12] or 'INV'
     merged['taxRate'] = max(0, min(100, _safe_float(merged.get('taxRate'), 0)))
     merged['defaultValidityDays'] = max(1, min(365, _safe_int(merged.get('defaultValidityDays'), 30)))
+    if not re.fullmatch(r'#[0-9A-Fa-f]{6}', merged.get('themeColor') or ''):
+        merged['themeColor'] = DEFAULT_PDF_THEME_COLOR
     merged['updatedAt'] = str(merged.get('updatedAt') or '').strip()
 
     logo_path = _pdf_logo_path(merged, company_code) if merged['logoFilename'] else ''
@@ -2023,6 +2104,8 @@ def _pdf_settings_payload(settings=None):
         'defaultPaymentTerms': settings.get('defaultPaymentTerms', '30 Days'),
         'defaultValidityDays': settings.get('defaultValidityDays', 30),
         'defaultTerms': settings.get('defaultTerms', DEFAULT_FINANCE_TERMS),
+        'themeColor': settings.get('themeColor', DEFAULT_PDF_THEME_COLOR),
+        'letterheadText': settings.get('letterheadText', ''),
         'updatedAt': settings.get('updatedAt', ''),
     }
 
@@ -4389,13 +4472,15 @@ def get_available_assets_for_event(event_id):
                 final_list.append(_bulk_asset_to_available_dict(asset, event))
                 continue
 
-            if getattr(asset, 'is_missing', False) or getattr(asset, 'is_ooc', False) or _is_disposed(asset):
+            if _is_disposed(asset) or getattr(asset, 'is_ooc', False):
                 continue
+
+            is_missing = bool(getattr(asset, 'is_missing', False))
 
             if asset_id in current_event_refs:
                 continue
 
-            if asset_id in busy_elsewhere:
+            if not is_missing and asset_id in busy_elsewhere:
                 continue
 
             final_list.append({
@@ -4419,8 +4504,10 @@ def get_available_assets_for_event(event_id):
                 'isDisposed': _is_disposed(asset),
                 'isBulk': False,
                 'quantity': 1,
-                'availableQuantity': 1,
+                'availableQuantity': 0 if is_missing else 1,
+                'preparableQuantity': 0 if is_missing else 1,
                 'degradedReasons': _asset_degraded_reasons(asset),
+                'notAvailableReason': 'missing' if is_missing else '',
             })
 
         return jsonify({'success': True, 'data': final_list})
@@ -5845,12 +5932,46 @@ def worker_confirm_payment(submission_id):
         return jsonify({'error': str(exc)}), 401
 
 
+def _queue_worker_submission_processing(args):
+    if app.config.get('TESTING'):
+        _process_worker_submission_upload(*args)
+        return None
+
+    future = _upload_processing_executor.submit(
+        _process_worker_submission_upload,
+        *args,
+    )
+
+    def _log_processing_failure(done_future):
+        try:
+            done_future.result()
+        except Exception:
+            logger.exception('Unhandled upload processing worker failure')
+
+    future.add_done_callback(_log_processing_failure)
+    return future
+
+
 def _process_worker_submission_upload(
     manager, data_folder, event_id, freelancer_id, submission_id, kind
 ):
     """Extract a document amount after the upload request has completed."""
     manager_token = _request_data_manager.set(manager)
     try:
+        with mutate_workforce(data_folder) as workforce:
+            found = _find_worker_owned_submission(
+                workforce, freelancer_id, submission_id
+            )
+            if not found:
+                return
+            found['record'].update({
+                'processingState': 'Processing',
+                'processingStartedAt': now_iso(),
+                'processingError': '',
+                'submissionStage': 'Processing',
+            })
+        _workforce_changed(event_id, f'{kind}-processing-started')
+
         with mutate_workforce(data_folder) as workforce:
             found = _find_worker_owned_submission(
                 workforce, freelancer_id, submission_id
@@ -6114,8 +6235,8 @@ def worker_upload_submission():
                     'denialReason': '',
                     'reviewHistory': [],
                     'amount': claim_amount if details_complete else None,
-                    'processingState': 'Processing',
-                    'submissionStage': 'Processing',
+                    'processingState': 'Queued',
+                    'submissionStage': 'Queued',
                 }
                 if kind == 'invoice':
                     record['allocations'] = []
@@ -6147,15 +6268,7 @@ def worker_upload_submission():
             args = (
                 manager, data_folder, event_id, freelancer_id, record_id, kind
             )
-            if app.config.get('TESTING'):
-                _process_worker_submission_upload(*args)
-            else:
-                threading.Thread(
-                    target=_process_worker_submission_upload,
-                    args=args,
-                    daemon=True,
-                    name=f'worker-upload-{record_id}',
-                ).start()
+            _queue_worker_submission_processing(args)
         return jsonify({
             'success': True,
             'message': (
@@ -6324,6 +6437,109 @@ def update_workforce_freelancer(freelancer_id):
     return jsonify({'success': True, 'data': freelancer})
 
 
+def _remove_workforce_subject_records(workforce, data_folder, subject_id):
+    subject_key = str(subject_id or '')
+    affected_event_ids = set()
+    assignments_removed = 0
+    allowances_removed = 0
+    submissions_removed = 0
+    files_removed = 0
+
+    assignments = workforce.get('assignments') or {}
+    for event_key, rows in list(assignments.items()):
+        if not isinstance(rows, list):
+            continue
+        kept_rows = []
+        for row in rows:
+            row_subject = str(
+                row.get('freelancerId') or row.get('vendorId') or ''
+            ) if isinstance(row, dict) else ''
+            if row_subject == subject_key:
+                assignments_removed += 1
+                affected_event_ids.add(str(event_key))
+            else:
+                kept_rows.append(row)
+        if len(kept_rows) != len(rows):
+            rows[:] = kept_rows
+
+    allowances = workforce.get('uploadAllowances') or {}
+    for event_key, event_rows in list(allowances.items()):
+        if isinstance(event_rows, dict) and subject_key in event_rows:
+            event_rows.pop(subject_key, None)
+            allowances_removed += 1
+            affected_event_ids.add(str(event_key))
+
+    submissions = workforce.get('submissions') or {}
+    for event_key, event_rows in list(submissions.items()):
+        if not isinstance(event_rows, dict) or subject_key not in event_rows:
+            continue
+        subject_rows = event_rows.pop(subject_key, {}) or {}
+        affected_event_ids.add(str(event_key))
+        if not event_rows:
+            submissions.pop(str(event_key), None)
+        for bucket in ('invoices', 'claims'):
+            records = subject_rows.get(bucket) if isinstance(subject_rows, dict) else []
+            for record in records if isinstance(records, list) else []:
+                if not isinstance(record, dict):
+                    continue
+                submissions_removed += 1
+                if record.get('storedPath'):
+                    files_removed += 1
+                delete_upload(data_folder, record)
+
+    return {
+        'affectedEventIds': sorted(
+            int(value) for value in affected_event_ids if str(value).isdigit()
+        ),
+        'assignmentsRemoved': assignments_removed,
+        'allowancesRemoved': allowances_removed,
+        'submissionsRemoved': submissions_removed,
+        'filesRemoved': files_removed,
+    }
+
+
+@app.route('/api/workforce/freelancers/<freelancer_id>', methods=['DELETE'])
+@require_admin
+def delete_workforce_freelancer(freelancer_id):
+    data_folder = _workforce_folder()
+    with mutate_workforce(data_folder) as workforce:
+        freelancers = workforce.setdefault('freelancers', [])
+        freelancer = find_by_id(freelancers, freelancer_id)
+        if not freelancer:
+            return jsonify({'error': 'Worker not found'}), 404
+        freelancers[:] = [
+            row for row in freelancers
+            if not isinstance(row, dict) or str(row.get('id')) != str(freelancer_id)
+        ]
+        cleanup = _remove_workforce_subject_records(
+            workforce, data_folder, freelancer_id
+        )
+        vendor_links_removed = 0
+        for vendor in workforce.get('vendors', []):
+            if not isinstance(vendor, dict):
+                continue
+            member_ids = [
+                str(value) for value in vendor.get('memberIds', [])
+                if str(value) != str(freelancer_id)
+            ]
+            if len(member_ids) != len(vendor.get('memberIds', []) or []):
+                vendor['memberIds'] = member_ids
+                vendor['updatedAt'] = now_iso()
+                vendor_links_removed += 1
+        cleanup['vendorLinksRemoved'] = vendor_links_removed
+        name = str(freelancer.get('name') or 'worker')
+
+    log_action(f"Deleted worker {name}")
+    for event_id in cleanup['affectedEventIds']:
+        _workforce_changed(event_id, 'worker-deleted')
+    mark_realtime_change('workforce', {
+        'action': 'worker-profile-deleted',
+        'freelancerId': str(freelancer_id),
+        'eventIds': cleanup['affectedEventIds'],
+    })
+    return jsonify({'success': True, 'cleanup': cleanup})
+
+
 @app.route('/api/workforce/vendors', methods=['POST'])
 @require_admin
 def create_workforce_vendor():
@@ -6419,6 +6635,35 @@ def update_workforce_vendor(vendor_id):
         'success': True,
         'data': _admin_vendor_payload(saved_vendor or vendor, saved_workforce),
     })
+
+
+@app.route('/api/workforce/vendors/<vendor_id>', methods=['DELETE'])
+@require_admin
+def delete_workforce_vendor(vendor_id):
+    data_folder = _workforce_folder()
+    with mutate_workforce(data_folder) as workforce:
+        vendors = workforce.setdefault('vendors', [])
+        vendor = find_by_id(vendors, vendor_id)
+        if not vendor:
+            return jsonify({'error': 'Vendor not found'}), 404
+        vendors[:] = [
+            row for row in vendors
+            if not isinstance(row, dict) or str(row.get('id')) != str(vendor_id)
+        ]
+        cleanup = _remove_workforce_subject_records(
+            workforce, data_folder, vendor_id
+        )
+        name = str(vendor.get('name') or 'vendor')
+
+    log_action(f"Deleted workforce vendor {name}")
+    for event_id in cleanup['affectedEventIds']:
+        _workforce_changed(event_id, 'vendor-deleted')
+    mark_realtime_change('workforce', {
+        'action': 'vendor-profile-deleted',
+        'vendorId': str(vendor_id),
+        'eventIds': cleanup['affectedEventIds'],
+    })
+    return jsonify({'success': True, 'cleanup': cleanup})
 
 
 @app.route(
@@ -7031,17 +7276,79 @@ def update_workforce_assignment(event_id, assignment_id):
 )
 @require_admin
 def delete_workforce_assignment(event_id, assignment_id):
-    with mutate_workforce(_workforce_folder()) as workforce:
+    data_folder = _workforce_folder()
+    delete_uploads_confirmed = str(
+        request.args.get('deleteUploads') or ''
+    ).strip().lower() in {'1', 'true', 'yes'}
+    with mutate_workforce(data_folder) as workforce:
         rows = event_assignments(workforce, event_id)
-        before = len(rows)
-        rows[:] = [
+        assignment = find_by_id(rows, assignment_id)
+        if not assignment:
+            return jsonify({'error': 'Assignment not found'}), 404
+        subject_id = str(
+            assignment.get('freelancerId') or assignment.get('vendorId') or ''
+        )
+        kept_rows = [
             row for row in rows
             if not isinstance(row, dict) or str(row.get('id')) != str(assignment_id)
         ]
-        if len(rows) == before:
-            return jsonify({'error': 'Assignment not found'}), 404
+        still_assigned = any(
+            str(row.get('freelancerId') or row.get('vendorId') or '') == subject_id
+            for row in kept_rows
+            if isinstance(row, dict)
+        )
+        subject_submissions = worker_submissions(workforce, event_id, subject_id)
+        upload_records = [
+            record
+            for bucket in ('invoices', 'claims')
+            for record in (
+                subject_submissions.get(bucket, [])
+                if isinstance(subject_submissions.get(bucket, []), list)
+                else []
+            )
+            if isinstance(record, dict)
+        ]
+        if upload_records and not still_assigned and not delete_uploads_confirmed:
+            return jsonify({
+                'requiresUploadRemovalConfirmation': True,
+                'uploadCount': len(upload_records),
+                'error': (
+                    'This worker or vendor has uploaded files for this event. '
+                    'Confirm removal to delete those files before removing them.'
+                ),
+            }), 409
+
+        rows[:] = kept_rows
+        removed_upload_count = 0
+        if not still_assigned:
+            allowances = workforce.setdefault('uploadAllowances', {}).get(
+                str(event_id)
+            )
+            if isinstance(allowances, dict):
+                allowances.pop(subject_id, None)
+            event_submissions = (workforce.get('submissions') or {}).get(
+                str(event_id)
+            )
+            if isinstance(event_submissions, dict):
+                removed_rows = event_submissions.pop(subject_id, {}) or {}
+                for bucket in ('invoices', 'claims'):
+                    records = (
+                        removed_rows.get(bucket, [])
+                        if isinstance(removed_rows, dict)
+                        else []
+                    )
+                    for record in records if isinstance(records, list) else []:
+                        if isinstance(record, dict):
+                            delete_upload(data_folder, record)
+                            removed_upload_count += 1
+                if not event_submissions:
+                    (workforce.get('submissions') or {}).pop(str(event_id), None)
     log_action(f"Removed workforce assignment from event {event_id}")
-    _workforce_changed(event_id, 'assignment-deleted')
+    _workforce_changed(
+        event_id,
+        'assignment-deleted-files-removed'
+        if removed_upload_count else 'assignment-deleted',
+    )
     return jsonify({'success': True, 'data': _admin_workforce_payload(event_id)})
 
 
@@ -7189,8 +7496,8 @@ def admin_upload_workforce_submission(event_id, freelancer_id):
                     'submittedAt': now_iso(),
                     'status': 'Pending Review',
                     'denialReason': '',
-                    'processingState': 'Processing',
-                    'submissionStage': 'Processing',
+                    'processingState': 'Queued',
+                    'submissionStage': 'Queued',
                     'amount': entered_amount,
                     'reviewHistory': [{
                         'at': now_iso(),
@@ -7224,15 +7531,7 @@ def admin_upload_workforce_submission(event_id, freelancer_id):
             args = (
                 manager, data_folder, event_id, freelancer_id, record_id, kind
             )
-            if app.config.get('TESTING'):
-                _process_worker_submission_upload(*args)
-            else:
-                threading.Thread(
-                    target=_process_worker_submission_upload,
-                    args=args,
-                    daemon=True,
-                    name=f'admin-upload-{record_id}',
-                ).start()
+            _queue_worker_submission_processing(args)
         return jsonify({
             'success': True,
             'data': _admin_workforce_payload(event_id),
@@ -9649,7 +9948,7 @@ def update_pdf_settings():
             'phone', 'email', 'website', 'bankName', 'bankAccountName',
             'bankAccountNumber', 'paynowUen', 'currency', 'taxLabel',
             'quotationPrefix', 'invoicePrefix', 'defaultPaymentTerms',
-            'defaultTerms',
+            'defaultTerms', 'themeColor', 'letterheadText',
         )
         for key in text_fields:
             if key not in data:
@@ -11992,6 +12291,44 @@ def delete_event(event_id):
             return jsonify({'error': 'Event not found'}), 404
 
         event_name = event.name
+        data = request.get_json(silent=True) or {}
+        has_event_content = any((
+            bool(getattr(event, 'asset_models', []) or []),
+            bool(getattr(event, 'prepared_items', []) or []),
+            bool(getattr(event, 'actually_prepared', []) or []),
+            bool(getattr(event, 'returned_items', []) or []),
+            bool(getattr(event, 'extra_assets', []) or []),
+            bool(getattr(event, 'notes', '') or ''),
+            bool(_event_files_for_response(event_id)),
+        ))
+
+        workforce_folder = _workforce_folder()
+        workforce_files_removed = 0
+        workforce_rows_removed = 0
+        workforce_snapshot = load_workforce(workforce_folder)
+        event_workforce_rows = (
+            len(event_assignments(workforce_snapshot, event_id)) +
+            sum(
+                len((rows or {}).get('invoices', []) or []) +
+                len((rows or {}).get('claims', []) or [])
+                for rows in (
+                    (workforce_snapshot.get('submissions') or {})
+                    .get(str(event_id), {})
+                    .values()
+                )
+                if isinstance(rows, dict)
+            ) +
+            len(event_bookings(workforce_snapshot, event_id))
+        )
+        has_event_content = has_event_content or event_workforce_rows > 0
+
+        if has_event_content:
+            ok, message = _verify_current_admin_password(data.get('adminPassword'))
+            if not ok:
+                return jsonify({
+                    'error': message,
+                    'requiresPassword': True,
+                }), 403
 
         # Backup event file
         data_manager.backup_event_file(event_id)
@@ -12025,17 +12362,65 @@ def delete_event(event_id):
         del data_manager.events[event_id]
         data_manager.delete_event_file(event_id)
 
+        with mutate_workforce(workforce_folder) as workforce:
+            event_key = str(event_id)
+            workforce_rows_removed += len(
+                workforce.get('assignments', {}).get(event_key, []) or []
+            )
+            workforce.get('assignments', {}).pop(event_key, None)
+            workforce.get('manualDepartments', {}).pop(event_key, None)
+            workforce.get('hiddenDepartments', {}).pop(event_key, None)
+            workforce.get('uploadAllowances', {}).pop(event_key, None)
+
+            submission_subjects = (
+                workforce.get('submissions', {}).pop(event_key, {}) or {}
+            )
+            for rows in submission_subjects.values():
+                if not isinstance(rows, dict):
+                    continue
+                for plural in ('invoices', 'claims'):
+                    for record in rows.get(plural, []) or []:
+                        if isinstance(record, dict):
+                            delete_upload(workforce_folder, record)
+                            workforce_files_removed += 1
+                            workforce_rows_removed += 1
+
+            transport_bookings = (
+                workforce.get('transportBookings', {}).pop(event_key, []) or []
+            )
+            workforce_rows_removed += len(transport_bookings)
+            for booking in transport_bookings:
+                invoice = booking.get('invoice') if isinstance(booking, dict) else None
+                if isinstance(invoice, dict):
+                    delete_upload(workforce_folder, invoice)
+                    workforce_files_removed += 1
+
         # Invalidate cache
         invalidate_cache()
 
         # Log the deletion with details of reset assets. Event-specific logs were
         # stored inside the deleted event file, so they are removed with the event.
+        workforce_text = (
+            f" Removed {workforce_rows_removed} workforce row(s)"
+            f" and {workforce_files_removed} upload file(s)."
+            if workforce_rows_removed or workforce_files_removed
+            else ""
+        )
         if assets_reset:
-            log_action(f"Deleted event {event_id}: {event_name} via web interface. Reset {len(assets_reset)} asset locations: {', '.join(assets_reset[:5])}{'...' if len(assets_reset) > 5 else ''}.")
+            log_action(f"Deleted event {event_id}: {event_name} via web interface. Reset {len(assets_reset)} asset locations: {', '.join(assets_reset[:5])}{'...' if len(assets_reset) > 5 else ''}.{workforce_text}")
         else:
-            log_action(f"Deleted event {event_id}: {event_name} via web interface. No asset locations to reset.")
+            log_action(f"Deleted event {event_id}: {event_name} via web interface. No asset locations to reset.{workforce_text}")
 
-        return jsonify({'success': True, 'message': 'Event deleted successfully', 'assetsReset': len(assets_reset)})
+        mark_realtime_change('events', {'eventId': event_id, 'action': 'deleted'})
+        mark_realtime_change('workforce', {'eventId': event_id, 'action': 'event-deleted'})
+
+        return jsonify({
+            'success': True,
+            'message': 'Event deleted successfully',
+            'assetsReset': len(assets_reset),
+            'workforceRowsRemoved': workforce_rows_removed,
+            'workforceFilesRemoved': workforce_files_removed,
+        })
     except Exception as e:
         logger.error(f"Error deleting event {event_id}: {e}")
         return jsonify({'error': f'Failed to delete event: {str(e)}'}), 500
@@ -13557,6 +13942,31 @@ def assign_specific_asset_to_model(event_id):
                 return jsonify({'error': 'Asset not found'}), 404
 
             logger.info(f"Assigning asset {asset_id} - Brand: {asset.brand}, Model: {asset.model_number}, Dept: {asset.department_code}")
+
+            clear_missing_for_prepare = bool(
+                data.get('markFound') or
+                data.get('clearMissing') or
+                data.get('markMissingFound')
+            )
+            if getattr(asset, 'is_missing', False) and clear_missing_for_prepare:
+                maintenance_result, maintenance_status, maintenance_changed = _apply_standard_maintenance_request(
+                    asset_id,
+                    asset,
+                    {
+                        'logEntry': (
+                            f"Marked found while preparing event {event_id}"
+                            f"{f' - {event.name}' if getattr(event, 'name', '') else ''}"
+                        ),
+                        'targetStatus': 'ok',
+                        'maintenanceDate': datetime.now().strftime('%Y-%m-%d'),
+                        'clientRequestId': f'prepare-found:{event_id}:{asset_id}',
+                    },
+                    uploaded_files=[],
+                )
+                if maintenance_status >= 400:
+                    return jsonify({'error': maintenance_result.get('error') or 'Failed to mark asset as found'}), maintenance_status
+                if maintenance_changed:
+                    log_action(f"Marked missing asset {asset_id} as found while preparing event {event_id}")
 
             block_reason = _asset_prepare_block_reason(asset)
             if block_reason:
@@ -18725,6 +19135,25 @@ def _normalise_finance_document(value, document_type='quotation', existing=None)
     ]
     date_key = 'quotationDate' if document_type == 'quotation' else 'invoiceDate'
     secondary_date_key = 'validUntil' if document_type == 'quotation' else 'dueDate'
+    validity_unit = str(
+        value.get('validityUnit')
+        if 'validityUnit' in value
+        else existing.get('validityUnit') or 'days'
+    ).strip().lower()
+    if validity_unit not in {'days', 'weeks', 'months'}:
+        validity_unit = 'days'
+    validity_multiplier = {'days': 1, 'weeks': 7, 'months': 30}[validity_unit]
+    validity_amount = max(1, min(365, _safe_int(
+        value.get('validityAmount')
+        if 'validityAmount' in value
+        else existing.get('validityAmount')
+        if existing.get('validityAmount') not in (None, '')
+        else value.get('validityDays')
+        if 'validityDays' in value
+        else existing.get('validityDays'),
+        validity_days,
+    )))
+    validity_total_days = max(1, min(3650, validity_amount * validity_multiplier))
     current_username = _finance_current_username()
     prefix, number_year, parsed_sequence, parsed_revision = _finance_parse_number(
         existing.get('number') or value.get('number'),
@@ -18774,7 +19203,12 @@ def _normalise_finance_document(value, document_type='quotation', existing=None)
     document = {
         'id': existing.get('id') or re.sub(r'[^A-Za-z0-9_-]+', '', str(value.get('id') or ''))[:80] or secrets.token_hex(12),
         'type': document_type,
-        'number': existing.get('number') or str(value.get('number') or '').strip()[:80],
+        'number': (
+            str(value.get('number')).strip()[:80]
+            if 'number' in value and str(value.get('number') or '').strip()
+            else existing.get('number') or ''
+        ),
+        'customNumber': bool(value.get('customNumber') if 'customNumber' in value else existing.get('customNumber', False)),
         'baseSequence': base_sequence,
         'revision': revision,
         'status': status,
@@ -18796,10 +19230,9 @@ def _normalise_finance_document(value, document_type='quotation', existing=None)
         'showTime': str(value.get('showTime') if 'showTime' in value else existing.get('showTime') or '').strip()[:20],
         'teardownDate': str(value.get('teardownDate') if 'teardownDate' in value else existing.get('teardownDate') or '').strip()[:20],
         'teardownTime': str(value.get('teardownTime') if 'teardownTime' in value else existing.get('teardownTime') or '').strip()[:20],
-        'validityDays': max(1, min(365, _safe_int(
-            value.get('validityDays') if 'validityDays' in value else existing.get('validityDays'),
-            validity_days,
-        ))),
+        'validityAmount': validity_amount,
+        'validityUnit': validity_unit,
+        'validityDays': validity_total_days,
         'currency': str(value.get('currency') if 'currency' in value else existing.get('currency') or settings.get('currency', 'SGD')).strip().upper()[:6] or 'SGD',
         'taxRate': round(max(0, min(100, _safe_float(value.get('taxRate') if 'taxRate' in value else existing.get('taxRate', settings.get('taxRate', 0)), 0))), 4),
         'notes': str(value.get('notes') if 'notes' in value else existing.get('notes') or '').strip()[:5000],
@@ -18810,6 +19243,7 @@ def _normalise_finance_document(value, document_type='quotation', existing=None)
         'showUnitPrices': bool(value.get('showUnitPrices') if 'showUnitPrices' in value else existing.get('showUnitPrices', False)),
         'showDepartmentDiscounts': bool(value.get('showDepartmentDiscounts') if 'showDepartmentDiscounts' in value else existing.get('showDepartmentDiscounts', False)),
         'showDepartmentSubtotals': (value.get('showDepartmentSubtotals') if 'showDepartmentSubtotals' in value else existing.get('showDepartmentSubtotals', True)) is not False,
+        'showLineNumbers': (value.get('showLineNumbers') if 'showLineNumbers' in value else existing.get('showLineNumbers', True)) is not False,
         'totalLocked': total_locked,
         'lockedPreTaxTotal': locked_pre_tax_total,
         'revisions': list(existing.get('revisions') or value.get('revisions') or []),
@@ -18829,12 +19263,13 @@ def _normalise_finance_document(value, document_type='quotation', existing=None)
     }
     if document_type == 'quotation':
         quote_prefix = str(settings.get('quotationPrefix') or prefix or 'QT').upper()
-        document['number'] = _finance_format_number(
-            quote_prefix,
-            number_year or now.year,
-            base_sequence,
-            revision,
-        )
+        if not document.get('customNumber'):
+            document['number'] = _finance_format_number(
+                quote_prefix,
+                number_year or now.year,
+                base_sequence,
+                revision,
+            )
         if not document.get('eventId'):
             document['eventManagedByQuotation'] = False
             document['eventSyncFingerprint'] = ''
@@ -18918,6 +19353,8 @@ def _finance_snapshot_revision(document):
         'number': document.get('number'),
         'sentAt': document.get('sentAt'),
         'validUntil': document.get('validUntil'),
+        'validityAmount': document.get('validityAmount'),
+        'validityUnit': document.get('validityUnit'),
         'validityDays': document.get('validityDays'),
         'fingerprint': _finance_revision_fingerprint(document),
         'snapshot': _finance_revision_payload(document),
@@ -18931,7 +19368,8 @@ def _finance_snapshot_revision(document):
 def _finance_reset_to_draft_revision(document):
     prefix, year, sequence, _revision = _finance_parse_number(document.get('number'))
     document['revision'] = 1
-    document['number'] = _finance_format_number(prefix, year, sequence, 1)
+    if not document.get('customNumber'):
+        document['number'] = _finance_format_number(prefix, year, sequence, 1)
     document['status'] = 'draft'
     document['sentAt'] = ''
     document['acceptedAt'] = ''
@@ -19246,6 +19684,27 @@ def _finance_profit_loss_event_expenses(data, event_id, create=False):
     return expenses.get(key, []) if isinstance(expenses.get(key), list) else []
 
 
+def _finance_profit_loss_expense_bucket(category):
+    text = re.sub(r'\s+', ' ', str(category or '').strip()).casefold()
+    if any(term in text for term in ('transport', 'lorry', 'cab', 'taxi', 'grab', 'vehicle')):
+        return 'transport'
+    if any(term in text for term in ('meal', 'food', 'refreshment')):
+        return 'meal'
+    return 'other'
+
+
+def _finance_profit_loss_category_label(category, source='manual'):
+    bucket = _finance_profit_loss_expense_bucket(category)
+    if bucket == 'transport':
+        return 'Crew Transport' if source == 'worker-claim' else 'Additional Transport'
+    if bucket == 'meal':
+        return 'Meal Claims' if source == 'worker-claim' else 'Meals'
+    label = re.sub(r'\s+', ' ', str(category or '').strip())
+    if label:
+        return label[:80]
+    return 'Worker Claims' if source == 'worker-claim' else 'Other Expenses'
+
+
 def _finance_normalise_iso_date(value):
     raw = str(value or '').strip()
     if not raw:
@@ -19285,6 +19744,10 @@ def _normalise_profit_loss_expense(value, event_id):
 
 def _profit_loss_expense_payload(expense):
     row = dict(expense or {})
+    row.setdefault('source', 'manual')
+    row.setdefault('readOnly', False)
+    row['categoryKey'] = _finance_profit_loss_expense_bucket(row.get('category'))
+    row['categoryLabel'] = _finance_profit_loss_category_label(row.get('category'), row.get('source'))
     attachment = row.get('attachment') if isinstance(row.get('attachment'), dict) else None
     if attachment:
         expense_id = quote(str(row.get('id') or ''))
@@ -19357,6 +19820,88 @@ def _finance_profit_loss_workforce_costs(event_id):
     }
 
 
+def _finance_profit_loss_subject_name(workforce, subject_id):
+    subject_id = str(subject_id or '')
+    for bucket in ('freelancers', 'vendors'):
+        rows = workforce.get(bucket) if isinstance(workforce, dict) else []
+        bucket_rows = rows if isinstance(rows, list) else []
+        for row in bucket_rows:
+            if not isinstance(row, dict) or str(row.get('id') or '') != subject_id:
+                continue
+            return (
+                str(
+                    row.get('name')
+                    or row.get('company')
+                    or row.get('companyName')
+                    or row.get('contactPerson')
+                    or subject_id
+                ).strip()
+                or subject_id
+            )
+    return subject_id
+
+
+def _finance_profit_loss_worker_claim_expenses(workforce, event_id):
+    submissions = workforce.get('submissions') if isinstance(workforce, dict) else {}
+    event_rows = (
+        (submissions or {}).get(str(event_id), {})
+        if isinstance(submissions, dict)
+        else {}
+    )
+    result = []
+    event_items = event_rows.items() if isinstance(event_rows, dict) else []
+    for subject_id, rows in event_items:
+        if not isinstance(rows, dict):
+            continue
+        subject_name = _finance_profit_loss_subject_name(workforce, subject_id)
+        claims = rows.get('claims') if isinstance(rows.get('claims'), list) else []
+        for claim in claims:
+            if not isinstance(claim, dict) or claim.get('status') == 'Denied':
+                continue
+            if 'detailsComplete' in claim and not claim.get('detailsComplete'):
+                continue
+            amount = money(claim.get('amount'), 0.0) or 0.0
+            if amount <= 0:
+                continue
+            claim_id = str(claim.get('id') or '')
+            submission_id = quote(claim_id)
+            original_name = str(claim.get('originalName') or '').strip()
+            attachment = None
+            if original_name or claim.get('storedPath'):
+                attachment = {
+                    'originalName': original_name or 'Claim file',
+                    'previewUrl': f'/api/workforce/submissions/{submission_id}/file',
+                    'downloadUrl': f'/api/workforce/submissions/{submission_id}/file?download=1',
+                }
+            category = str(claim.get('category') or 'Worker Claims').strip()
+            description = (
+                str(claim.get('description') or claim.get('notes') or '').strip()
+                or original_name
+                or 'Worker claim'
+            )
+            result.append({
+                'id': f'worker-claim-{subject_id}-{claim_id}'[:120],
+                'sourceId': claim_id,
+                'source': 'worker-claim',
+                'readOnly': True,
+                'eventId': int(event_id),
+                'description': description[:300],
+                'category': category[:120],
+                'categoryKey': _finance_profit_loss_expense_bucket(category),
+                'categoryLabel': _finance_profit_loss_category_label(category, 'worker-claim'),
+                'vendor': subject_name,
+                'amount': round(amount, 2),
+                'expenseDate': _finance_normalise_iso_date(claim.get('claimDate') or claim.get('date')),
+                'attachment': attachment,
+                'createdAt': str(claim.get('submittedAt') or ''),
+                'createdBy': subject_name,
+                'updatedAt': str(claim.get('detailsCompletedAt') or claim.get('submittedAt') or ''),
+                'updatedBy': subject_name,
+            })
+    result.sort(key=lambda row: (row.get('expenseDate') or '', row.get('createdAt') or ''), reverse=True)
+    return result
+
+
 def _finance_profit_loss_payload(event, finance_data):
     event_id = int(event.event_id)
     quotations = _finance_quotations_for_event(finance_data, event_id, accessible_only=True)
@@ -19367,19 +19912,71 @@ def _finance_profit_loss_payload(event, finance_data):
         for row in _finance_profit_loss_event_expenses(finance_data, event_id)
         if isinstance(row, dict)
     ]
-    manual_other_expenses = round(sum(_safe_float(row.get('amount'), 0) for row in expenses), 2)
+    workforce = load_workforce(_workforce_folder())
+    worker_claim_expenses = _finance_profit_loss_worker_claim_expenses(workforce, event_id)
+    manual_transport_expenses = round(sum(
+        _safe_float(row.get('amount'), 0)
+        for row in expenses
+        if _finance_profit_loss_expense_bucket(row.get('category')) == 'transport'
+    ), 2)
+    manual_other_expenses = round(sum(
+        _safe_float(row.get('amount'), 0)
+        for row in expenses
+        if _finance_profit_loss_expense_bucket(row.get('category')) != 'transport'
+    ), 2)
+    crew_transport_claims = round(sum(
+        _safe_float(row.get('amount'), 0)
+        for row in worker_claim_expenses
+        if row.get('categoryKey') == 'transport'
+    ), 2)
+    worker_other_claims = round(sum(
+        _safe_float(row.get('amount'), 0)
+        for row in worker_claim_expenses
+        if row.get('categoryKey') != 'transport'
+    ), 2)
     workforce_costs = _finance_profit_loss_workforce_costs(event_id)
-    other_expenses = round(workforce_costs['workerClaimsCost'] + manual_other_expenses, 2)
-    direct_costs = round(workforce_costs['manpowerCost'] + workforce_costs['transportCost'], 2)
+    transport_cost = round(
+        workforce_costs['transportCost'] + crew_transport_claims + manual_transport_expenses,
+        2,
+    )
+    other_expenses = round(worker_other_claims + manual_other_expenses, 2)
+    direct_costs = round(workforce_costs['manpowerCost'] + transport_cost, 2)
     before_commission = round(revenue - direct_costs - other_expenses, 2)
-    commission_rate = 10
-    commission = round(max(0, before_commission) * commission_rate / 100, 2)
+    commission_rate = 0
+    commission = 0.0
     net_profit = round(before_commission - commission, 2)
     profit_margin = round((net_profit / revenue * 100) if revenue else 0, 2)
+    expense_category_totals = {}
+
+    def add_expense_category(row):
+        amount = round(_safe_float(row.get('amount'), 0), 2)
+        if amount <= 0:
+            return
+        key = str(row.get('categoryLabel') or row.get('category') or 'Other Expenses')
+        entry = expense_category_totals.setdefault(key, {
+            'label': key,
+            'amount': 0.0,
+            'source': row.get('source') or 'manual',
+        })
+        entry['amount'] = round(entry['amount'] + amount, 2)
+
+    for row in worker_claim_expenses:
+        add_expense_category(row)
+    for row in expenses:
+        add_expense_category(_profit_loss_expense_payload(row))
+
+    expense_categories = sorted(
+        expense_category_totals.values(),
+        key=lambda row: (-_safe_float(row.get('amount'), 0), str(row.get('label') or '')),
+    )
     breakdown = {
         'manpower': workforce_costs['manpowerCost'],
-        'transport': workforce_costs['transportCost'],
-        'workerClaims': workforce_costs['workerClaimsCost'],
+        'transportBookings': workforce_costs['transportCost'],
+        'crewTransportClaims': crew_transport_claims,
+        'manualTransportExpenses': manual_transport_expenses,
+        'transport': transport_cost,
+        'workerClaims': round(crew_transport_claims + worker_other_claims, 2),
+        'workerOtherClaims': worker_other_claims,
         'manualOtherExpenses': manual_other_expenses,
         'commission': commission,
     }
@@ -19406,8 +20003,12 @@ def _finance_profit_loss_payload(event, finance_data):
             'manpowerCost': workforce_costs['manpowerCost'],
             'manpowerInvoiceCost': workforce_costs['manpowerInvoiceCost'],
             'manpowerEstimatedCost': workforce_costs['manpowerEstimatedCost'],
-            'transportCost': workforce_costs['transportCost'],
-            'workerClaimsCost': workforce_costs['workerClaimsCost'],
+            'transportBookingCost': workforce_costs['transportCost'],
+            'crewTransportClaimsCost': crew_transport_claims,
+            'manualTransportExpenses': manual_transport_expenses,
+            'transportCost': transport_cost,
+            'workerClaimsCost': round(crew_transport_claims + worker_other_claims, 2),
+            'workerOtherClaimsCost': worker_other_claims,
             'manualOtherExpenses': manual_other_expenses,
             'otherExpenses': other_expenses,
             'beforeCommission': before_commission,
@@ -19417,7 +20018,8 @@ def _finance_profit_loss_payload(event, finance_data):
             'profitMargin': profit_margin,
         },
         'breakdown': breakdown,
-        'expenses': [_profit_loss_expense_payload(row) for row in expenses],
+        'expenses': worker_claim_expenses + [_profit_loss_expense_payload(row) for row in expenses],
+        'expenseCategories': expense_categories,
         'activity': _event_activity_logs_for_response(event)[-8:][::-1],
     }
 
@@ -19609,17 +20211,7 @@ def _finance_compare_item_from_event_ref(ref):
 
 def _finance_compare_event_items(event):
     items = {}
-    seen_refs = set()
     for ref in getattr(event, 'prepared_items', []) or []:
-        parsed = _finance_compare_item_from_event_ref(ref)
-        if not parsed:
-            continue
-        identity, quantity, details = parsed
-        _finance_compare_add_item(items, identity, quantity, details, ref=ref)
-        seen_refs.add(str(ref))
-    for ref in getattr(event, 'extra_assets', []) or []:
-        if str(ref) in seen_refs:
-            continue
         parsed = _finance_compare_item_from_event_ref(ref)
         if not parsed:
             continue
@@ -20008,6 +20600,14 @@ def _finance_get_update_delete(document_id, document_type):
 
         request_data = request.get_json() or {}
         updated = _normalise_finance_document(request_data, document_type, existing)
+        if any(
+            str(row.get('id')) != str(document_id)
+            and row.get('type') == document_type
+            and str(row.get('number') or '').strip().casefold() == str(updated.get('number') or '').strip().casefold()
+            for row in finance_data.get('documents') or []
+            if isinstance(row, dict)
+        ):
+            return jsonify({'error': f'{document_type.title()} number is already in use'}), 409
         if document_type == 'quotation':
             missing_link_cleared = False
             if not str(updated.get('projectName') or '').strip():
@@ -20027,15 +20627,16 @@ def _finance_get_update_delete(document_id, document_type):
             )
             if content_changed and _finance_revision_is_snapshotted(existing_normalised):
                 updated['revision'] = _safe_int(existing_normalised.get('revision'), 1) + 1
-                prefix, year, sequence, _revision = _finance_parse_number(
-                    existing_normalised.get('number')
-                )
-                updated['number'] = _finance_format_number(
-                    prefix,
-                    year,
-                    sequence,
-                    updated['revision'],
-                )
+                if not updated.get('customNumber'):
+                    prefix, year, sequence, _revision = _finance_parse_number(
+                        existing_normalised.get('number')
+                    )
+                    updated['number'] = _finance_format_number(
+                        prefix,
+                        year,
+                        sequence,
+                        updated['revision'],
+                    )
                 updated['status'] = 'draft'
                 updated['sentAt'] = ''
 

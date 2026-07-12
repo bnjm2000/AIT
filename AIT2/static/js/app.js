@@ -3015,9 +3015,75 @@ function sectionFromNavItem(item) {
   return match ? match[1] : '';
 }
 
+function navWireIconSvg(section) {
+  const paths = {
+    events: '<rect x="4" y="5" width="16" height="15" rx="2"></rect><path d="M8 3v4M16 3v4M4 10h16"></path>',
+    plan: '<rect x="6" y="4" width="12" height="16" rx="2"></rect><path d="M9 4.5h6M9 10h6M9 14h4"></path>',
+    workforce: '<circle cx="8" cy="8" r="3"></circle><path d="M3.5 19a4.5 4.5 0 0 1 9 0"></path><path d="M16 8h3l2 3v5h-5zM15 16h7"></path><circle cx="17" cy="18" r="1.5"></circle><circle cx="21" cy="18" r="1.5"></circle>',
+    'prepare-new': '<path d="M4 7.5 12 3l8 4.5v9L12 21l-8-4.5z"></path><path d="M12 12v9M4.5 8 12 12l7.5-4"></path><path d="m15 14 1.6 1.6L20 12"></path>',
+    return: '<path d="M9 7 4 12l5 5"></path><path d="M4 12h10a6 6 0 0 1 6 6"></path>',
+    transfer: '<path d="M7 7h13l-4-4M17 17H4l4 4"></path>',
+    inventory: '<path d="m3 7 9-4 9 4-9 4z"></path><path d="M3 7v10l9 4 9-4V7M12 11v10"></path>',
+    containers: '<rect x="4" y="5" width="16" height="5" rx="1"></rect><rect x="4" y="14" width="16" height="5" rx="1"></rect><path d="M8 10v4M16 10v4"></path>',
+    maintenance: '<path d="m14.7 6.3 3-3a4 4 0 0 1-5 5l-7 7a2 2 0 1 0 2.8 2.8l7-7a4 4 0 0 1 5-5l-3 3"></path>',
+    'asset-check': '<circle cx="12" cy="12" r="8"></circle><path d="m8.5 12 2.3 2.3 4.7-5"></path>',
+    'maintenance-report': '<path d="M7 3h7l4 4v14H7z"></path><path d="M14 3v5h4M9 13h6M9 17h4"></path>',
+    logs: '<path d="M5 5h14M5 12h14M5 19h10"></path><path d="M4 5h.01M4 12h.01M4 19h.01"></path>',
+    users: '<circle cx="9" cy="8" r="3"></circle><path d="M4 20a5 5 0 0 1 10 0"></path><path d="M17 11h4M19 9v4"></path>',
+    'pdf-settings': '<path d="M7 3h7l4 4v14H7z"></path><path d="M14 3v5h4M9 13h6"></path><path d="M9 17h2"></path>',
+    companies: '<path d="M4 20V7l8-4 8 4v13"></path><path d="M8 20v-4h8v4M8 9h.01M12 9h.01M16 9h.01M8 13h.01M12 13h.01M16 13h.01"></path>',
+    'change-password': '<rect x="5" y="10" width="14" height="10" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v2"></path>',
+    logout: '<path d="M10 4H5v16h5"></path><path d="M14 8l4 4-4 4M18 12H9"></path>'
+  };
+  return `<span class="nav-wire-icon" aria-hidden="true"><svg viewBox="0 0 24 24">${paths[section] || paths.events}</svg></span>`;
+}
+
+function navLabelForSection(section, fallback = '') {
+  return ({
+    events: 'All Events',
+    plan: 'Plan',
+    workforce: 'Manpower & Transport',
+    'prepare-new': 'Prepare',
+    return: 'Return Assets',
+    transfer: 'Transfer Assets',
+    inventory: 'View Inventory',
+    containers: 'Containers',
+    maintenance: 'Maintenance',
+    'asset-check': 'Asset Check',
+    'maintenance-report': 'Maintenance Report',
+    logs: 'System Logs',
+    users: 'User Management',
+    'pdf-settings': 'Company Details',
+    companies: 'Companies',
+    'change-password': 'Change Password',
+    logout: 'Logout'
+  })[section] || fallback || section;
+}
+
+function applySidebarWireIcons(sidebar) {
+  if (!sidebar) return;
+  sidebar.querySelectorAll('.nav-item').forEach(item => {
+    const onclick = item.getAttribute('onclick') || '';
+    if (/showSection\(['"]prepare['"]\)/.test(onclick) || item.dataset.section === 'prepare') {
+      item.remove();
+      return;
+    }
+
+    const section = onclick.includes('logout()') ? 'logout' : sectionFromNavItem(item);
+    if (!section) return;
+    const counter = item.querySelector('#overdue-counter');
+    const label = navLabelForSection(section, item.dataset.label || item.textContent.trim());
+    item.removeAttribute('data-mark');
+    item.removeAttribute('data-label');
+    item.innerHTML = `${navWireIconSvg(section)}<span class="nav-label">${escapeHtml(label)}</span>`;
+    if (counter && section === 'return') item.appendChild(counter);
+  });
+}
+
 function setupSidebarNavigation(root = document) {
   const sidebar = root.getElementById ? root.getElementById('appSidebar') : document.getElementById('appSidebar');
   if (!sidebar) return;
+  applySidebarWireIcons(sidebar);
 
   // Normalise every sidebar button on every call. Dynamic tabs such as Users,
   // PDF Settings, Companies and Change Password may be inserted after startup.
@@ -3359,6 +3425,27 @@ function ensureAppDialogStyles() {
       white-space: pre-line;
     }
 
+    .app-dialog-field {
+      margin-top: 12px;
+      white-space: normal;
+    }
+
+    .app-dialog-field input {
+      width: 100%;
+      border: 1px solid #d9e2ec;
+      border-radius: 8px;
+      padding: 10px 12px;
+      font: inherit;
+      color: #102a43;
+      background: #fff;
+    }
+
+    .app-dialog-field input:focus {
+      border-color: var(--brand-main, #0f766e);
+      box-shadow: 0 0 0 3px rgba(15, 118, 110, .12);
+      outline: none;
+    }
+
     .app-dialog-actions {
       display: flex;
       justify-content: flex-end;
@@ -3437,11 +3524,28 @@ function showAppDialog(options = {}) {
     const closeButton = modal.querySelector('[data-dialog-close]');
     const variant = options.variant || 'info';
     const isAlert = options.kind === 'alert';
-    const cancelResult = isAlert ? true : false;
+    const isPrompt = options.kind === 'prompt';
+    const cancelResult = isAlert ? true : (isPrompt ? null : false);
 
     content.dataset.variant = variant;
     titleEl.textContent = options.title || (isAlert ? 'Notice' : 'Confirm Action');
-    messageEl.textContent = options.message || '';
+    messageEl.textContent = '';
+    const messageText = document.createElement('div');
+    messageText.textContent = options.message || '';
+    messageEl.appendChild(messageText);
+    let promptInput = null;
+    if (isPrompt) {
+      const field = document.createElement('label');
+      field.className = 'app-dialog-field';
+      field.innerHTML = `<span class="sr-only">${escapeHtml(options.inputLabel || 'Input')}</span>`;
+      promptInput = document.createElement('input');
+      promptInput.type = options.inputType || 'text';
+      promptInput.autocomplete = options.autocomplete || 'off';
+      promptInput.placeholder = options.placeholder || '';
+      promptInput.value = options.defaultValue || '';
+      field.appendChild(promptInput);
+      messageEl.appendChild(field);
+    }
     iconEl.textContent = variant === 'info' ? 'i' : '!';
     confirmButton.textContent = options.confirmText || (isAlert ? 'OK' : 'Confirm');
     confirmButton.className = `btn ${variant === 'danger' ? 'btn-danger' : variant === 'warning' ? 'btn-warning' : 'btn-primary'}`;
@@ -3475,7 +3579,18 @@ function showAppDialog(options = {}) {
       resolve(result);
     };
 
-    const handleConfirm = () => finish(true);
+    const handleConfirm = () => {
+      if (isPrompt) {
+        const value = promptInput?.value || '';
+        if (options.required && !value.trim()) {
+          promptInput?.focus();
+          return;
+        }
+        finish(value);
+        return;
+      }
+      finish(true);
+    };
     const handleCancel = () => finish(false);
     const handleClose = () => finish(cancelResult);
     const handleBackdropClick = (event) => {
@@ -3507,7 +3622,8 @@ function showAppDialog(options = {}) {
     modal.setAttribute('aria-labelledby', 'appDialogTitle');
     modal.setAttribute('aria-describedby', 'appDialogMessage');
     enhanceModalAccessibility(modal);
-    focusModalStart(modal);
+    if (promptInput) setTimeout(() => promptInput.focus({ preventScroll: true }), 0);
+    else focusModalStart(modal);
   });
 
   appDialogQueue = appDialogQueue.catch(() => undefined).then(runDialog);
@@ -3520,6 +3636,10 @@ function showAppConfirm(options = {}) {
 
 function showAppAlert(options = {}) {
   return showAppDialog({ ...options, kind: 'alert', confirmText: options.confirmText || 'OK' });
+}
+
+function showAppPrompt(options = {}) {
+  return showAppDialog({ ...options, kind: 'prompt' });
 }
 
 function enhanceModalAccessibility(root = document) {
@@ -3579,7 +3699,10 @@ async function apiCall(endpoint, method = "GET", data = null) {
     const result = await response.json();
 
     if (!response.ok) {
-      throw new Error(result.error || "API call failed");
+      const apiError = new Error(result.error || "API call failed");
+      apiError.status = response.status;
+      apiError.payload = result;
+      throw apiError;
     }
 
     return result;
@@ -3806,6 +3929,8 @@ function normalisePdfSettings(settings = {}) {
     defaultPaymentTerms: settings.defaultPaymentTerms || "30 Days",
     defaultValidityDays: Number(settings.defaultValidityDays || 30),
     defaultTerms: settings.defaultTerms || "",
+    themeColor: /^#[0-9A-Fa-f]{6}$/.test(settings.themeColor || '') ? settings.themeColor : "#0f766e",
+    letterheadText: settings.letterheadText || "",
     updatedAt: settings.updatedAt || ""
   };
 }
@@ -3988,12 +4113,23 @@ function ensurePdfSettingsSection() {
               <label class="form-group"><span class="form-label">Phone</span><input id="companyDetailsPhone" class="form-input"></label>
               <label class="form-group"><span class="form-label">Email</span><input id="companyDetailsEmail" class="form-input" type="email"></label>
               <label class="form-group company-details-wide"><span class="form-label">Website</span><input id="companyDetailsWebsite" class="form-input"></label>
+              <label class="form-group company-details-wide"><span class="form-label">Letterhead</span><textarea id="companyDetailsLetterhead" class="form-input" rows="3"></textarea></label>
             </div>
           </section>
 
           <section class="company-details-card">
             <h3>Billing &amp; document defaults</h3>
             <div class="company-details-grid">
+              <label class="form-group company-details-wide"><span class="form-label">PDF colour theme</span>
+                <div class="company-theme-control">
+                  <input id="companyDetailsThemePicker" type="color" value="#0f766e" oninput="syncCompanyThemeColor(this.value)">
+                  <input id="companyDetailsThemeColor" class="form-input" maxlength="7" value="#0f766e" oninput="syncCompanyThemeColor(this.value)">
+                  <button type="button" class="company-theme-swatch" style="--swatch:#0f766e" onclick="syncCompanyThemeColor('#0f766e')" title="Showbase teal"></button>
+                  <button type="button" class="company-theme-swatch" style="--swatch:#1d4ed8" onclick="syncCompanyThemeColor('#1d4ed8')" title="Corporate blue"></button>
+                  <button type="button" class="company-theme-swatch" style="--swatch:#334155" onclick="syncCompanyThemeColor('#334155')" title="Slate"></button>
+                  <button type="button" class="company-theme-swatch" style="--swatch:#7c2d12" onclick="syncCompanyThemeColor('#7c2d12')" title="Warm brown"></button>
+                </div>
+              </label>
               <label class="form-group"><span class="form-label">Bank</span><input id="companyDetailsBank" class="form-input"></label>
               <label class="form-group"><span class="form-label">Account name</span><input id="companyDetailsAccountName" class="form-input"></label>
               <label class="form-group"><span class="form-label">Account number</span><input id="companyDetailsAccountNumber" class="form-input"></label>
@@ -4059,6 +4195,7 @@ function renderPdfSettingsForm() {
     companyDetailsPhone: pdfSettings.phone,
     companyDetailsEmail: pdfSettings.email,
     companyDetailsWebsite: pdfSettings.website,
+    companyDetailsLetterhead: pdfSettings.letterheadText || [pdfSettings.companyName, pdfSettings.billingAddress].filter(Boolean).join('\n'),
     companyDetailsBank: pdfSettings.bankName,
     companyDetailsAccountName: pdfSettings.bankAccountName,
     companyDetailsAccountNumber: pdfSettings.bankAccountNumber,
@@ -4070,12 +4207,17 @@ function renderPdfSettingsForm() {
     companyDetailsQuotePrefix: pdfSettings.quotationPrefix,
     companyDetailsInvoicePrefix: pdfSettings.invoicePrefix,
     companyDetailsPaymentTerms: pdfSettings.defaultPaymentTerms,
-    companyDetailsTerms: pdfSettings.defaultTerms
+    companyDetailsTerms: pdfSettings.defaultTerms,
+    companyDetailsThemeColor: pdfSettings.themeColor
   };
   Object.entries(values).forEach(([id, value]) => {
     const field = document.getElementById(id);
     if (field && field.value !== String(value ?? '')) field.value = value ?? '';
   });
+  const themePicker = document.getElementById('companyDetailsThemePicker');
+  if (themePicker && /^#[0-9A-Fa-f]{6}$/.test(pdfSettings.themeColor || '')) {
+    themePicker.value = pdfSettings.themeColor;
+  }
 }
 
 async function loadPdfSettingsSection() {
@@ -4160,6 +4302,16 @@ async function resetPdfSettingsLogo() {
   }
 }
 
+function syncCompanyThemeColor(value) {
+  const clean = String(value || '').trim();
+  if (!/^#[0-9A-Fa-f]{6}$/.test(clean)) return;
+  const normalised = clean.toLowerCase();
+  const picker = document.getElementById('companyDetailsThemePicker');
+  const input = document.getElementById('companyDetailsThemeColor');
+  if (picker && picker.value !== normalised) picker.value = normalised;
+  if (input && input.value !== normalised) input.value = normalised;
+}
+
 async function saveCompanyDetails() {
   if (!isAdminUser()) {
     showNotification('error', 'Admin privileges required');
@@ -4186,7 +4338,9 @@ async function saveCompanyDetails() {
     invoicePrefix: value('companyDetailsInvoicePrefix'),
     defaultPaymentTerms: value('companyDetailsPaymentTerms'),
     defaultValidityDays: Number(value('companyDetailsValidity') || 30),
-    defaultTerms: value('companyDetailsTerms')
+    defaultTerms: value('companyDetailsTerms'),
+    themeColor: value('companyDetailsThemeColor') || '#0f766e',
+    letterheadText: value('companyDetailsLetterhead')
   };
 
   try {
@@ -18135,7 +18289,8 @@ function planMetricIconSvg(kind) {
     quantity: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="7" height="7" rx="1"></rect><rect x="14" y="4" width="7" height="7" rx="1"></rect><rect x="3" y="15" width="7" height="6" rx="1"></rect><rect x="14" y="15" width="7" height="6" rx="1"></rect></svg>',
     departments: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="2.5"></circle><circle cx="5" cy="18" r="2.5"></circle><circle cx="19" cy="18" r="2.5"></circle><path d="M12 7.5v4M5 15.5v-4h14v4"></path></svg>',
     templates: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l3 3v15H6z"></path><path d="M14 3v4h4M9 11h6M9 15h6"></path></svg>',
-    calendar: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M7 3v4M17 3v4M3 10h18"></path></svg>'
+    calendar: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M7 3v4M17 3v4M3 10h18"></path></svg>',
+    assignment: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6l1 2h3v15H5V6h3l1-2Z"></path><path d="M9 12l2 2 4-5M8 18h8"></path></svg>'
   };
   return icons[kind] || icons.lines;
 }
@@ -18216,6 +18371,7 @@ function planAvailabilityFor(group) {
     overlap: Number(entry?.overlappingDemand || 0),
     overlapEvents: entry?.overlappingEvents || [],
     usedHere: Number(entry?.usedInThisEvent || 0),
+    preparable: Number(entry?.preparable ?? entry?.available ?? group.count ?? 0),
     assetOOC: Number(entry?.assetOOC || 0),
     assetMissing: Number(entry?.assetMissing || 0),
     bulkMaintenanceOOC: Number(entry?.bulkMaintenanceOOC || 0),
@@ -18444,6 +18600,44 @@ function planCustomQuantityControl(custom) {
   `;
 }
 
+function planRequirementShortage(group) {
+  const required = Math.max(1, Number(group?.requiredQuantity || 1));
+  const availability = planAvailabilityFor(group);
+  const fulfillableForThisEvent = Math.max(
+    0,
+    Number(availability.available || 0) + Number(availability.usedHere || 0)
+  );
+  const shortage = Math.max(required - fulfillableForThisEvent, 0);
+  if (shortage <= 0) return null;
+  return {
+    shortage,
+    availability,
+    reason: modelAvailabilityReasonTooltip(
+      availability.available,
+      availability.physical,
+      availability
+    ) || `${shortage} required unit${shortage === 1 ? '' : 's'} cannot be fulfilled with the current inventory/date availability.`
+  };
+}
+
+function planShowShortageReason(encodedReason) {
+  showAppAlert({
+    title: 'Shortage Detected',
+    message: planDecode(encodedReason) || 'This requirement has a shortage.',
+    variant: 'warning',
+  });
+}
+
+function planStartSwapSearch(encodedBrand, encodedModel) {
+  const query = [planDecode(encodedBrand), planDecode(encodedModel)].filter(Boolean).join(' ');
+  planPageState.search = query;
+  const input = document.getElementById('planAssetSearch');
+  if (input) input.value = query;
+  renderPlanAvailableResults();
+  document.getElementById('planAvailableCard')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  showNotification('info', 'Choose a replacement model from Available Asset Models, then remove or reduce the shortage item.');
+}
+
 function renderPlanRequirementsCard() {
   const byDepartment = new Map();
   planModelGroups().forEach(group => {
@@ -18472,19 +18666,33 @@ function renderPlanRequirementsCard() {
       const rowHtml = rows.map(row => {
         if (row.type === 'model') {
           const group = row.group;
+          const shortage = planRequirementShortage(group);
+          const shortageReason = shortage?.reason || '';
           return `
-            <div class="plan-requirement-row">
+            <div class="plan-requirement-row ${shortage ? 'has-shortage' : ''}">
               <div class="plan-item-title-line">
                 <div class="plan-item-name">${escapeHtml([group.brand, group.model].filter(Boolean).join(' '))}</div>
+                ${shortage ? `
+                  <button type="button" class="plan-shortage-info"
+                          title="${escapeHtmlAttr(shortageReason)}"
+                          aria-label="Show shortage reason"
+                          onclick="planShowShortageReason('${planEncode(shortageReason)}')">!</button>
+                ` : ''}
                 ${planDepartmentCodeBadgeHtml(group.department)}
               </div>
               <div class="plan-item-description">${escapeHtml(group.description || 'No description')}</div>
               ${planRequirementQuantityControl(group)}
-              <button type="button" class="plan-button plan-button-danger plan-button-small"
-                      title="Remove requirement"
-                      onclick="planRemoveModel('${planEncode(group.department)}','${planEncode(group.brand)}','${planEncode(group.model)}','${planEncode(group.description || '')}')">
-                &#128465;
-              </button>
+              <div class="plan-row-actions">
+                ${shortage ? `
+                  <button type="button" class="plan-button plan-button-small plan-swap-button"
+                          onclick="planStartSwapSearch('${planEncode(group.brand)}','${planEncode(group.model)}')">Swap</button>
+                ` : ''}
+                <button type="button" class="plan-button plan-button-danger plan-button-small"
+                        title="Remove requirement"
+                        onclick="planRemoveModel('${planEncode(group.department)}','${planEncode(group.brand)}','${planEncode(group.model)}','${planEncode(group.description || '')}')">
+                  &#128465;
+                </button>
+              </div>
             </div>
           `;
         }
@@ -18504,11 +18712,13 @@ function renderPlanRequirementsCard() {
             </div>
             <div class="plan-item-description">${escapeHtml(description)}</div>
             ${planCustomQuantityControl(custom)}
-            <button type="button" class="plan-button plan-button-danger plan-button-small"
-                    title="Remove custom asset"
-                    onclick="planRemoveCustomAsset('${planEncode(custom.id)}')">
-              &#128465;
-            </button>
+            <div class="plan-row-actions">
+              <button type="button" class="plan-button plan-button-danger plan-button-small"
+                      title="Remove custom asset"
+                      onclick="planRemoveCustomAsset('${planEncode(custom.id)}')">
+                &#128465;
+              </button>
+            </div>
           </div>
         `;
       }).join('');
@@ -18787,7 +18997,10 @@ function renderPlanPage() {
         </div>
 
         <div class="plan-workspace">
-          <div id="planAvailableCard">${renderPlanAvailableCard()}</div>
+          <div class="plan-available-stack">
+            <div id="planAvailableCard">${renderPlanAvailableCard()}</div>
+            <div id="planCustomItemCard">${renderPlanCustomItemCard()}</div>
+          </div>
           <div id="planRequirementsCard">${renderPlanRequirementsCard()}</div>
         </div>
 
@@ -18795,7 +19008,6 @@ function renderPlanPage() {
       <aside class="plan-aside">
         ${renderPlanEventDetailsCard()}
         ${renderPlanTemplatesCard()}
-        ${renderPlanCustomItemCard()}
         <button type="button" class="plan-button plan-button-primary plan-aside-proceed"
                 onclick="planProceedToPrepare()">Proceed to Prepare →</button>
       </aside>
@@ -19420,24 +19632,8 @@ function prepareNewStatusBadge(status, label = '') {
 }
 
 function prepareNewInitialExpansion() {
-  const groups = prepareNewModelGroups();
-  if (!groups.length) return;
-  if (!prepareNewPageState.expandedDepartments.size) {
-    const firstIncomplete = groups.find(group =>
-      getCountablePreparedQuantity(group) < Number(group.requiredQuantity || 0)
-    ) || groups[0];
-    prepareNewPageState.expandedDepartments.add(
-      normalizeDepartmentCode(firstIncomplete.department || 'UN')
-    );
-  }
-  if (!prepareNewPageState.expandedModels.size) {
-    const firstIncomplete = groups.find(group =>
-      getCountablePreparedQuantity(group) < Number(group.requiredQuantity || 0)
-    );
-    if (firstIncomplete) {
-      prepareNewPageState.expandedModels.add(prepareNewModelKey(firstIncomplete));
-    }
-  }
+  // Sections are intentionally closed by default; user-opened sections are
+  // tracked through ontoggle and restored during realtime refreshes.
 }
 
 function prepareNewSetDepartmentExpanded(encodedDepartment, open) {
@@ -19473,25 +19669,37 @@ function prepareNewAssetCard(asset, options = {}) {
   const encodedId = planEncode(id);
   const assigned = !!options.assigned;
   const returned = (prepareNewPageState.event?.returnedItems || []).includes(id);
+  const missing = !!(asset?.isMissing || String(asset?.status || '').toLowerCase() === 'missing');
+  const degraded = !!(asset?.isDegraded || String(asset?.status || '').toLowerCase() === 'degraded');
   const label = asset?.displayId || asset?.bulkId || id || 'Inventory asset';
   const serial = asset?.serial || (asset?.isBulk ? `Qty: ${Number(asset?.quantity || 1)}` : 'No serial');
   const status = returned
     ? prepareNewStatusBadge('returned', 'Returned')
     : (assigned
-      ? prepareNewStatusBadge('assigned', options.extra ? 'Extra' : 'Assigned')
-      : prepareNewStatusBadge('available', 'Available'));
+      ? prepareNewStatusBadge('assigned', options.extra ? 'Extra' : 'Prepared')
+      : missing
+        ? prepareNewStatusBadge('missing', 'Missing')
+        : prepareNewStatusBadge('available', 'Available'));
+  const flagBadges = [
+    degraded ? prepareNewStatusBadge('degraded', 'Degraded') : '',
+    missing ? prepareNewStatusBadge('missing', 'Missing') : ''
+  ].filter(Boolean).join('');
   const action = returned
     ? ''
     : (assigned
       ? `<button type="button" class="plan-button plan-button-small prepare-new-asset-action"
                  onclick="event.stopPropagation();prepareNewUnprepareAsset(${eventId}, '${encodedId}')">Undo</button>`
+      : missing
+        ? `<button type="button" class="plan-button plan-button-small prepare-new-asset-action"
+                   onclick="event.stopPropagation();prepareNewAssignMissingAsset(${eventId}, '${encodedId}')">Found &amp; Prepare</button>`
       : `<button type="button" class="plan-button plan-button-small prepare-new-asset-action"
-                 onclick="event.stopPropagation();prepareNewAssignAsset(${eventId}, '${encodedId}')">Assign</button>`);
+                 onclick="event.stopPropagation();prepareNewAssignAsset(${eventId}, '${encodedId}')">Prepare</button>`);
   return `
-    <div class="prepare-new-asset-card ${assigned ? 'assigned' : ''}">
+    <div class="prepare-new-asset-card ${assigned ? 'assigned' : ''} ${missing ? 'missing' : ''} ${degraded ? 'degraded' : ''}">
       <div title="${escapeHtmlAttr(label)}">
         <strong>${escapeHtml(label)}</strong>
         <small>${escapeHtml(serial)}</small>
+        ${flagBadges ? `<div class="prepare-new-asset-flags">${flagBadges}</div>` : ''}
       </div>
       <div>${action || status}</div>
     </div>
@@ -19528,13 +19736,13 @@ function prepareNewModelSection(group) {
           <span>${escapeHtml(group.description || '')}</span>
         </span>
         <span class="prepare-new-model-count"><strong>${required}</strong>Required</span>
-        <span class="prepare-new-model-count"><strong>${assignedQuantity}</strong>Assigned</span>
-        ${prepareNewStatusBadge(complete ? 'complete' : 'pending', complete ? 'Complete' : 'Assign')}
+        <span class="prepare-new-model-count"><strong>${assignedQuantity}</strong>Prepared</span>
+        ${prepareNewStatusBadge(complete ? 'complete' : 'pending', complete ? 'Complete' : 'Prepare')}
       </summary>
       <div class="prepare-new-model-assets">
         <div class="prepare-new-model-assets-head">
           <span>Select exact assets from inventory</span>
-          <span>${assignedQuantity} / ${required} assigned</span>
+          <span>${assignedQuantity} / ${required} prepared</span>
         </div>
         <div class="prepare-new-asset-grid">
           ${allCards.length ? allCards.join('') : '<div class="prepare-new-empty">No matching assets are currently available.</div>'}
@@ -19588,7 +19796,7 @@ function renderPrepareNewDirectRequirements(rows) {
     const assets = (row.assets || []).filter(asset => !parseCustomAsset(asset.id, asset));
     const complete = Number(row.packed || 0) >= Number(row.required || 0);
     return `
-      <details class="prepare-new-model" ${index === 0 && !complete ? 'open' : ''}>
+      <details class="prepare-new-model">
         <summary>
           <span class="prepare-new-model-title">
             <strong>${escapeHtml(row.description || 'Assigned assets')}</strong>
@@ -19612,7 +19820,7 @@ function prepareNewExtrasSection() {
   const extras = prepareNewSnapshot().extras || [];
   if (!extras.length) return '';
   return `
-    <details class="prepare-new-department" open>
+    <details class="prepare-new-department">
       <summary>
         <span class="prepare-new-department-name">
           <span class="plan-department-dot" style="--department-color:#7c3aed"></span>
@@ -19669,7 +19877,7 @@ function renderPrepareNewAssignment() {
             <span class="plan-badge">${departmentGroups.length} line${departmentGroups.length === 1 ? '' : 's'}</span>
           </span>
           <span class="prepare-new-progress">
-            ${assigned} / ${required} assigned
+            ${assigned} / ${required} prepared
             <span class="prepare-new-progress-track"><span style="width:${percent}%"></span></span>
           </span>
           <span aria-hidden="true">\u2304</span>
@@ -19820,6 +20028,31 @@ function renderPrepareNewCustomForm() {
   `;
 }
 
+function renderPrepareNewOverallProgressCard() {
+  const totals = prepareNewTotals();
+  const percent = totals.required > 0
+    ? Math.min(100, Math.round((totals.prepared / totals.required) * 100))
+    : 0;
+  return `
+    <section class="prepare-new-card prepare-new-progress-card">
+      <div class="prepare-new-card-header">
+        <h3>Overall Progress</h3>
+        <span class="prepare-new-status prepare-new-status-${percent >= 100 ? 'complete' : 'pending'}">${percent}%</span>
+      </div>
+      <div class="prepare-new-card-body">
+        <div class="prepare-new-overall-copy">
+          <strong>${Number(totals.prepared || 0)} / ${Number(totals.required || 0)}</strong>
+          <span>prepared</span>
+        </div>
+        <div class="prepare-new-overall-track" aria-hidden="true">
+          <span style="width:${percent}%"></span>
+        </div>
+        ${totals.extra > 0 ? `<small>${Number(totals.extra)} extra item${totals.extra === 1 ? '' : 's'} prepared</small>` : ''}
+      </div>
+    </section>
+  `;
+}
+
 function renderPrepareNewExitButton(mobile = false) {
   const complete = prepareNewIsComplete();
   return `
@@ -19920,7 +20153,7 @@ function renderPrepareNewPage() {
       <div class="prepare-new-column prepare-new-center">
         <section class="prepare-new-card prepare-new-assignment-card">
           <div class="prepare-new-card-header">
-            <h3>&#9638; Assignment Workspace</h3>
+            <h3><span class="prepare-new-heading-icon">${planMetricIconSvg('assignment')}</span>Assignment Workspace</h3>
             <span class="prepare-new-status prepare-new-status-${prepareNewIsComplete() ? 'complete' : 'pending'}">
               ${totals.prepared} / ${totals.required} prepared
             </span>
@@ -19931,6 +20164,7 @@ function renderPrepareNewPage() {
       <div class="prepare-new-column prepare-new-right">
         ${renderPrepareNewEventDetails()}
         ${renderPrepareNewCustomForm()}
+        ${renderPrepareNewOverallProgressCard()}
         ${renderPrepareNewExitButton()}
       </div>
       <div class="prepare-new-mobile-action">${renderPrepareNewExitButton(true)}</div>
@@ -20083,6 +20317,39 @@ async function prepareNewApplyRealtimeEvent(event) {
     return;
   }
   await refreshPrepareNewSelectedEvent({ preserve: true });
+}
+
+async function prepareNewAssignMissingAsset(eventId, encodedAssetId) {
+  const assetId = planDecode(encodedAssetId);
+  const confirmed = await showAppConfirm({
+    title: 'Missing Asset',
+    message: `${assetId} is currently marked as missing. Mark it as found and prepare it for this event?`,
+    confirmText: 'Mark Found & Prepare',
+    cancelText: 'Cancel',
+    variant: 'warning',
+  });
+  if (!confirmed) return;
+
+  let actionStarted = false;
+  try {
+    actionStarted = beginPrepareAssetAction(assetId, 'Marking found...');
+    if (!actionStarted) return;
+    const response = await apiCall(`/api/events/${eventId}/assign-specific`, 'POST', {
+      assetId,
+      markFound: true,
+    });
+    await showApiWarning(response);
+    const preparedAssetId = response?.data?.assetId || assetId;
+    showNotification('success', `${preparedAssetId} marked found and prepared`);
+    updateAllButtonsForAsset(preparedAssetId, true, { sourceAssetId: assetId });
+    schedulePrepareUiSync(eventId);
+    await refreshPrepareNewSelectedEvent({ preserve: true });
+  } catch (error) {
+    showNotification('error', `Failed to prepare missing asset: ${error.message}`);
+    updateAllButtonsForAsset(assetId, false);
+  } finally {
+    if (actionStarted) endPrepareAssetAction(assetId);
+  }
 }
 
 async function prepareNewAssignAsset(eventId, encodedAssetId) {
@@ -20245,7 +20512,34 @@ async function deleteEvent(eventId) {
       loadAllEvents();
     }
   } catch (error) {
-    showNotification("error", "Failed to delete event");
+    if (error?.payload?.requiresPassword) {
+      const adminPassword = await showAppPrompt({
+        title: 'Confirm Event Deletion',
+        message: 'This event is not blank. Enter your admin password to delete it and remove related workforce assignments, uploads and transport records.',
+        inputLabel: 'Admin password',
+        inputType: 'password',
+        autocomplete: 'current-password',
+        placeholder: 'Admin password',
+        confirmText: 'Delete Event',
+        cancelText: 'Cancel',
+        variant: 'danger',
+        required: true,
+      });
+      if (!adminPassword) return;
+      try {
+        await apiCall(`/api/events/${eventId}`, "DELETE", { adminPassword });
+        showNotification("success", "Event deleted successfully");
+        if (document.getElementById("dashboard-section").classList.contains("active")) {
+          loadDashboard();
+        } else if (document.getElementById("events-section").classList.contains("active")) {
+          loadAllEvents();
+        }
+      } catch (retryError) {
+        showNotification("error", retryError.message || "Failed to delete event");
+      }
+      return;
+    }
+    showNotification("error", error.message || "Failed to delete event");
   }
 }
 
@@ -20592,8 +20886,13 @@ function eventAssigneeSearchText(user) {
 async function ensureEventAssigneeUsers(force = false) {
   if (!force && eventAssigneeUsers.length) return eventAssigneeUsers;
   const response = await apiCall('/api/users');
+  const activeCompanyCode = String(currentUser?.company?.code || currentUser?.companyCode || '').toUpperCase();
   eventAssigneeUsers = (response.data || [])
     .slice()
+    .filter(user => (
+      !activeCompanyCode ||
+      String(user?.companyCode || '').toUpperCase() === activeCompanyCode
+    ))
     .sort((left, right) => (
       eventAssigneeDisplayName(left).localeCompare(eventAssigneeDisplayName(right), undefined, { sensitivity: 'base' }) ||
       String(left.username || '').localeCompare(String(right.username || ''), undefined, { sensitivity: 'base' })
@@ -26668,8 +26967,11 @@ async function logout() {
 function setRealtimeStatus(state) {
   const status = document.getElementById("realtime-status");
   if (!status) return;
+  if (state === "connected" && typeof navigator !== "undefined" && navigator.onLine === false) {
+    state = "offline";
+  }
   status.dataset.state = state;
-  const labelText = state === "connected" ? "Live" : "Reconnecting";
+  const labelText = state === "connected" ? "Live" : (state === "offline" ? "Offline" : "Reconnecting");
   status.title = `Realtime: ${labelText}`;
   status.setAttribute("aria-label", `Realtime: ${labelText}`);
   const label = status.querySelector("[data-sync-label]");
@@ -26730,6 +27032,68 @@ function realtimeTopicsFromPayload(payload) {
 
   const topic = String(payload?.topic || '').trim();
   return topic ? [topic] : [];
+}
+
+function currentRealtimeCompanyCode() {
+  return String(
+    currentUser?.company?.code ||
+    currentUser?.companyCode ||
+    currentUser?.assignedCompanyCode ||
+    ''
+  ).trim().toUpperCase();
+}
+
+function realtimeCompanyCodesFromPayload(payload) {
+  const codes = new Set();
+  const addCode = value => {
+    const code = String(value || '').trim().toUpperCase();
+    if (code) codes.add(code);
+  };
+  const details = payload?.details || {};
+  addCode(details.companyCode);
+  addCode(details.previousCompanyCode);
+  if (Array.isArray(details.changes)) {
+    details.changes.forEach(change => {
+      addCode(change?.details?.companyCode);
+      addCode(change?.details?.previousCompanyCode);
+    });
+  }
+  return Array.from(codes);
+}
+
+function realtimePayloadMatchesCurrentCompany(payload) {
+  const currentCode = currentRealtimeCompanyCode();
+  const payloadCodes = realtimeCompanyCodesFromPayload(payload);
+  if (!currentCode || !payloadCodes.length) return true;
+  return payloadCodes.includes(currentCode);
+}
+
+function eventIdsFromRealtimePayload(payload) {
+  const ids = new Set();
+  const addId = value => {
+    const numeric = Number(value);
+    if (Number.isFinite(numeric) && numeric > 0) ids.add(numeric);
+  };
+  const addDetails = details => {
+    if (!details || typeof details !== 'object') return;
+    addId(details.eventId);
+    (details.eventIds || details.updatedEvents || []).forEach(item => {
+      if (typeof item === 'object') addId(item.eventId || item.id);
+      else addId(item);
+    });
+  };
+  addDetails(payload?.details);
+  (payload?.details?.changes || []).forEach(change => addDetails(change?.details));
+  return Array.from(ids);
+}
+
+function realtimePayloadHasAction(payload, actionName) {
+  const target = String(actionName || '').trim().toLowerCase();
+  if (!target) return false;
+  const details = payload?.details || {};
+  const matches = detailsValue => String(detailsValue || '').trim().toLowerCase() === target;
+  if (matches(details.action)) return true;
+  return (details.changes || []).some(change => matches(change?.details?.action));
 }
 
 function shouldRefreshVisibleDataForRealtimePayload(payload) {
@@ -27114,6 +27478,40 @@ function connectRealtimeUpdates() {
       if (payload.originClientId && payload.originClientId === REALTIME_CLIENT_ID) {
         return;
       }
+      if (!realtimePayloadMatchesCurrentCompany(payload)) {
+        return;
+      }
+      const eventIds = eventIdsFromRealtimePayload(payload);
+      if (eventIds.length) {
+        const activeSection = getActiveSectionId();
+        const activeWorkforceEventId = typeof workforcePageState !== 'undefined'
+          ? workforcePageState?.eventId
+          : null;
+        if (
+          activeSection === 'workforce' &&
+          eventIds.some(eventId => Number(eventId) === Number(activeWorkforceEventId))
+        ) {
+          queueRealtimeRefresh();
+          return;
+        }
+        if (realtimePayloadHasAction(payload, 'deleted')) {
+          if (activeSection === 'workforce') return;
+          if (hasVisibleEventAssetView(eventIds)) {
+            queueRealtimeRefresh();
+          }
+          return;
+        }
+        if (
+          activeSection === 'workforce' &&
+          !eventIds.some(eventId => Number(eventId) === Number(activeWorkforceEventId))
+        ) {
+          return;
+        }
+        if (hasVisibleEventAssetView(eventIds)) {
+          queueEventAssetRefresh(eventIds);
+          return;
+        }
+      }
       const eventAssetChanges = eventAssetChangesFromRealtimePayload(payload);
       if (eventAssetChanges.length) {
         const eventIds = eventAssetChanges.map(change => change.eventId);
@@ -27144,6 +27542,13 @@ function connectRealtimeUpdates() {
 
 window.addEventListener("pagehide", disconnectRealtimeUpdates);
 window.addEventListener("pageshow", () => {
+  if (!__realtimeSource) connectRealtimeUpdates();
+});
+window.addEventListener("offline", () => {
+  setRealtimeStatus("offline");
+});
+window.addEventListener("online", () => {
+  setRealtimeStatus("reconnecting");
   if (!__realtimeSource) connectRealtimeUpdates();
 });
 
@@ -27833,7 +28238,8 @@ function parseEventOverviewDate(value) {
 }
 
 function eventTagBadgeHtml(event) {
-  return `<span style="padding:2px 8px;border-radius:12px;font-size:10px;font-weight:bold;${getTagStyle(event.tag || 'events')}">${getTagDisplay(event.tag || 'events')}</span>`;
+  const type = overviewEventType(event);
+  return `<span class="event-type-badge ${type === 'dry hire' ? 'dry-hire' : ''}">${type === 'dry hire' ? 'Dry Hire' : 'Events'}</span>`;
 }
 
 function getEventWorkflowPalette(state) {
@@ -27845,7 +28251,7 @@ function getEventWorkflowPalette(state) {
     Ongoing: { main: '#0b97a4', soft: '#edfafa' },
     'Last Day': { main: '#0b97a4', soft: '#edfafa' },
     Returning: { main: '#f97316', soft: '#fff5ea' },
-    'Pending Closure': { main: '#7c3aed', soft: '#f5f3ff' },
+    'Pending Closure': { main: '#334155', soft: '#e2e8f0' },
     Overdue: { main: '#ef3340', soft: '#fff0f1' },
     Closed: { main: '#64748b', soft: '#f1f5f9' }
   };
@@ -27868,7 +28274,7 @@ function renderProgressCell(done, total) {
   `;
 }
 
-let allEventsStateFilter = 'All';
+let allEventsStateFilter = 'Active';
 let allEventsTypeFilter = 'all';
 let eventOverviewDocumentHandlersBound = false;
 
@@ -27971,7 +28377,7 @@ function setEventStateFilter(state) {
 function eventMatchesOverviewStateFilter(event, stateFilter = allEventsStateFilter) {
   if (!stateFilter || stateFilter === 'All') return true;
   const displayState = overviewDisplayState(event);
-  if (stateFilter === 'Active') return displayState !== 'Closed';
+  if (stateFilter === 'Active') return !['Closed', 'Pending Closure'].includes(displayState);
   return displayState === stateFilter;
 }
 
@@ -28255,7 +28661,24 @@ function toggleEventCardMenu(event, eventId, context = 'card') {
   const target = document.getElementById(`event-card-menu-${context}-${eventId}`);
   const shouldOpen = target && !target.classList.contains('open');
   document.querySelectorAll('.event-card-menu.open').forEach(menu => menu.classList.remove('open'));
+  if (target) {
+    target.style.position = '';
+    target.style.top = '';
+    target.style.left = '';
+    target.style.right = '';
+    target.style.bottom = '';
+  }
   target?.classList.toggle('open', !!shouldOpen);
+  if (target && shouldOpen && context === 'list') {
+    const rect = event?.currentTarget?.getBoundingClientRect();
+    if (rect) {
+      target.style.position = 'fixed';
+      target.style.top = `${Math.min(rect.bottom + 6, window.innerHeight - 12)}px`;
+      target.style.left = `${Math.max(12, Math.min(rect.right - target.offsetWidth, window.innerWidth - target.offsetWidth - 12))}px`;
+      target.style.right = 'auto';
+      target.style.bottom = 'auto';
+    }
+  }
 }
 
 function eventMenuIconHtml(icon) {
@@ -28285,6 +28708,15 @@ function eventMenuIconHtml(icon) {
     force: `
       <path d="m13 2-9 12h8l-1 8 9-12h-8Z"></path>
     `,
+    delivery: `
+      <path d="M7 3h7l4 4v14H7z"></path>
+      <path d="M14 3v5h4"></path>
+      <path d="M9 13h6M9 17h4"></path>
+    `,
+    packing: `
+      <path d="m3 7 9-4 9 4-9 4z"></path>
+      <path d="M3 7v10l9 4 9-4V7M12 11v10"></path>
+    `,
     delete: `
       <path d="M3 6h18"></path>
       <path d="M8 6V4h8v2"></path>
@@ -28299,10 +28731,12 @@ function eventMenuIconHtml(icon) {
 function eventCardMenuHtml(event, context = 'card') {
   const detailsAction = event.state === 'Closed'
     ? `<button type="button" onclick="viewEvent(${event.id})">${eventMenuIconHtml('view')}<span>View</span></button>`
-    : (isAdminUser()
-      ? `<button type="button" onclick="editEvent(${event.id})">${eventMenuIconHtml('edit')}<span>Edit</span></button>`
+    : (!isAdminUser()
+      ? `<button type="button" onclick="viewEvent(${event.id})">${eventMenuIconHtml('view')}<span>View</span></button>`
       : '');
   const adminActions = isAdminUser() ? `
+    <button type="button" onclick="openDeliveryOrderTab(${event.id})">${eventMenuIconHtml('delivery')}<span>Generate DO</span></button>
+    <button type="button" onclick="generatePackingList(${event.id})">${eventMenuIconHtml('packing')}<span>Packing List</span></button>
     <button type="button" onclick="openEventPlanning(${event.id})">${eventMenuIconHtml('plan')}<span>Plan</span></button>
     <button type="button" onclick="openEventWorkforce(${event.id})">${eventMenuIconHtml('workforce')}<span>Manpower &amp; Transport</span></button>
     <button type="button" onclick="showForceStateModal(${event.id}, '${escapeHtmlAttr(event.state || '')}')">${eventMenuIconHtml('force')}<span>Force</span></button>
@@ -28378,7 +28812,10 @@ function createEventsOverviewCard(event) {
           <span>#${escapeHtml(String(event.id))}</span>
           <span class="event-type-badge ${overviewEventType(event) === 'dry hire' ? 'dry-hire' : ''}">${overviewEventType(event) === 'dry hire' ? 'Dry Hire' : 'Events'}</span>
         </div>
-        <span class="event-workflow-state">${escapeHtml(eventStateDisplayLabel(displayState))}</span>
+        <div class="event-card-top-actions">
+          <span class="event-workflow-state">${escapeHtml(eventStateDisplayLabel(displayState))}</span>
+          ${isAdminUser() ? `<button type="button" class="event-edit-icon-button" title="Edit event" aria-label="Edit ${escapeHtmlAttr(event.name || `event ${event.id}`)}" onclick="editEvent(${event.id})">${eventMenuIconHtml('edit')}</button>` : ''}
+        </div>
       </div>
       <h3 class="event-workflow-title">${escapeHtml(event.name || '')}</h3>
       <div class="event-workflow-meta">

@@ -149,17 +149,22 @@
         flex: 0 0 10px;
         border-radius: 999px;
         background: #94a3b8;
-        box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.18);
+        box-shadow: none;
       }
 
       .sync-status[data-state="connected"] span {
         background: #16a34a;
-        box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.18);
+        box-shadow: none;
       }
 
       .sync-status[data-state="reconnecting"] span {
         background: #f59e0b;
-        box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.2);
+        box-shadow: none;
+      }
+
+      .sync-status[data-state="offline"] span {
+        background: #94a3b8;
+        box-shadow: none;
       }
 
       .nav-section {
@@ -332,7 +337,7 @@
       }
 
       .event-card.state-pending-closure {
-        border-left-color: #7c3aed;
+        border-left-color: #334155;
       }
 
       .event-card.state-closed {
@@ -780,8 +785,8 @@
         color: #007c15;
       }
       .state-pending-closure {
-        background: #ede9fe;
-        color: #6d28d9;
+        background: #e2e8f0;
+        color: #334155;
       }
       .state-closed {
         background: #e2e3e5;
@@ -2809,8 +2814,43 @@
         color: #ccfbf1;
       }
 
+      .nav-wire-icon {
+        display: grid;
+        width: 27px;
+        height: 27px;
+        flex: 0 0 27px;
+        place-items: center;
+        border-radius: 8px;
+        background: #eef8f6;
+        color: #0f766e;
+      }
+
+      .nav-wire-icon svg {
+        width: 17px;
+        height: 17px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.8;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      .nav-label {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 13px;
+      }
+
+      .nav-item.active .nav-wire-icon,
+      .nav-item[aria-current="page"] .nav-wire-icon {
+        background: rgba(255, 255, 255, 0.18);
+        color: #ccfbf1;
+      }
+
       .nav-item[onclick="logout()"]:not([data-label]) {
-        display: none;
+        display: flex;
       }
 
       #overdue-counter {
@@ -3265,6 +3305,44 @@
         padding: 8px 15px;
       }
 
+      .events-sort-control {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 40px;
+        border: 1px solid #dbe1ea;
+        border-radius: 9px;
+        background: #fff;
+        color: #475569;
+        padding: 0 34px 0 12px;
+        font-size: 12px;
+        font-weight: 750;
+      }
+
+      .events-sort-control::after {
+        content: "";
+        position: absolute;
+        right: 12px;
+        width: 8px;
+        height: 8px;
+        border-right: 1.8px solid #64748b;
+        border-bottom: 1.8px solid #64748b;
+        transform: rotate(45deg) translateY(-2px);
+        pointer-events: none;
+      }
+
+      .events-sort-control select {
+        min-height: 38px !important;
+        border: 0 !important;
+        appearance: none;
+        background: transparent;
+        color: #111827;
+        cursor: pointer;
+        font-weight: 800;
+        padding: 0;
+      }
+
       .events-view-toggle {
         display: inline-flex;
         overflow: hidden;
@@ -3395,7 +3473,7 @@
       .events-state-filters [data-event-state="Ready"]:not(.active) { color: #15803d; }
       .events-state-filters [data-event-state="Ongoing"]:not(.active) { color: #07818d; }
       .events-state-filters [data-event-state="Returning"]:not(.active) { color: #ea580c; }
-      .events-state-filters [data-event-state="Pending Closure"]:not(.active) { color: #7c3aed; }
+      .events-state-filters [data-event-state="Pending Closure"]:not(.active) { color: #334155; }
       .events-state-filters [data-event-state="Overdue"]:not(.active) { color: #dc2626; }
 
       .event-assignee-picker {
@@ -3575,7 +3653,7 @@
       .events-workflow-card.state-ongoing,
       .events-workflow-card.state-last-day { --event-state: #0b97a4; --event-soft: #edfafa; }
       .events-workflow-card.state-returning { --event-state: #f97316; --event-soft: #fff5ea; }
-      .events-workflow-card.state-pending-closure { --event-state: #7c3aed; --event-soft: #f5f3ff; }
+      .events-workflow-card.state-pending-closure { --event-state: #334155; --event-soft: #e2e8f0; }
       .events-workflow-card.state-overdue { --event-state: #ef3340; --event-soft: #fff0f1; }
       .events-workflow-card.state-closed { --event-state: #64748b; --event-soft: #f1f5f9; }
 
@@ -3656,6 +3734,39 @@
         display: inline-flex;
         align-items: center;
         gap: 5px;
+      }
+
+      .event-card-top-actions {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-left: auto;
+      }
+
+      .event-edit-icon-button {
+        display: inline-grid;
+        width: 30px;
+        height: 30px;
+        place-items: center;
+        border: 1px solid #dbe5ef;
+        border-radius: 7px;
+        background: #fff;
+        color: #334155;
+        cursor: pointer;
+        transition: background .16s ease, border-color .16s ease, transform .16s ease;
+      }
+
+      .event-edit-icon-button:hover,
+      .event-edit-icon-button:focus-visible {
+        border-color: color-mix(in srgb, var(--event-state) 45%, #dbe5ef);
+        background: var(--event-soft);
+        color: var(--event-state);
+        transform: translateY(-1px);
+      }
+
+      .event-edit-icon-button .event-card-menu-icon {
+        width: 15px;
+        height: 15px;
       }
 
       .event-location-icon {
@@ -3996,9 +4107,12 @@
           flex: 1 1 100%;
         }
 
-        .events-overview-grid,
-        .events-overview-stats {
+        .events-overview-grid {
           grid-template-columns: 1fr;
+        }
+
+        .events-overview-stats {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
         }
 
         .event-workflow-progress {
@@ -4536,7 +4650,9 @@
         --plan-ink: #10213d;
         --plan-muted: #667085;
         --plan-border: #dfe4ee;
-        --plan-indigo: #4338ca;
+        --plan-indigo: var(--brand-dark, #0f4f5d);
+        --plan-brand: var(--brand-main, #0f766e);
+        --plan-brand-soft: var(--brand-soft, #e6fffb);
         color: var(--plan-ink);
         display: flex;
         flex-direction: column;
@@ -4626,7 +4742,7 @@
       }
 
       .plan-event-select-wrap:focus-visible {
-        outline: 3px solid rgba(67, 56, 202, 0.2);
+        outline: 3px solid color-mix(in srgb, var(--plan-brand) 22%, transparent);
         outline-offset: 2px;
         border-color: var(--plan-indigo);
       }
@@ -4637,7 +4753,7 @@
         width: 38px;
         height: 38px;
         border-radius: 10px;
-        background: #eeecff;
+        background: var(--plan-brand-soft);
         color: var(--plan-indigo);
         font-size: 21px;
         flex: 0 0 auto;
@@ -4761,8 +4877,8 @@
       }
 
       .plan-badge-state-pending-closure {
-        background: #ede9fe;
-        color: #6d28d9;
+        background: #e2e8f0;
+        color: #334155;
       }
 
       .plan-badge-state-closed,
@@ -4820,8 +4936,8 @@
       }
 
       .plan-button-primary:hover {
-        border-color: #3730a3;
-        background: #3730a3;
+        border-color: var(--brand-dark, #0f4f5d);
+        background: var(--brand-dark, #0f4f5d);
       }
 
       .plan-button-danger {
@@ -4862,7 +4978,7 @@
         width: 32px;
         height: 32px;
         border-radius: 9px;
-        background: #eeecff;
+        background: var(--plan-brand-soft);
         color: var(--plan-indigo);
         font-size: 16px;
       }
@@ -4902,6 +5018,15 @@
         overflow: hidden;
       }
 
+      .plan-available-stack {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        min-width: 0;
+        min-height: 0;
+        height: 100%;
+      }
+
       .plan-card {
         overflow: hidden;
       }
@@ -4910,6 +5035,14 @@
       #planRequirementsCard {
         height: 100%;
         min-height: 0;
+      }
+
+      #planAvailableCard {
+        flex: 1 1 auto;
+      }
+
+      #planCustomItemCard {
+        flex: 0 0 auto;
       }
 
       #planAvailableCard > .plan-card,
@@ -5013,7 +5146,7 @@
       .plan-chip-department:hover,
       .plan-chip-department.active {
         opacity: 1;
-        box-shadow: 0 0 0 2px rgba(67, 56, 202, 0.16);
+        box-shadow: 0 0 0 2px color-mix(in srgb, var(--plan-brand) 18%, transparent);
       }
 
       .plan-results {
@@ -5180,6 +5313,44 @@
         padding: 6px 10px;
       }
 
+      .plan-requirement-row.has-shortage {
+        border-left: 3px solid #f59e0b;
+        background: #fff8eb;
+      }
+
+      .plan-shortage-info {
+        display: inline-grid;
+        place-items: center;
+        width: 18px;
+        height: 18px;
+        border: 1px solid #f59e0b;
+        border-radius: 50%;
+        background: #fff7ed;
+        color: #92400e;
+        cursor: pointer;
+        font-size: 11px;
+        font-weight: 900;
+        line-height: 1;
+      }
+
+      .plan-row-actions {
+        display: inline-flex;
+        justify-content: flex-end;
+        gap: 6px;
+        min-width: 0;
+      }
+
+      .plan-swap-button {
+        border-color: #fbbf24;
+        color: #92400e;
+        background: #fffbeb;
+      }
+
+      .plan-swap-button:hover {
+        border-color: #f59e0b;
+        background: #fef3c7;
+      }
+
       .plan-empty {
         padding: 28px 18px;
         color: var(--plan-muted);
@@ -5328,7 +5499,7 @@
         border-radius: 7px;
         background: var(--plan-indigo);
         color: #fff;
-        box-shadow: 0 1px 3px rgba(67, 56, 202, 0.25);
+        box-shadow: 0 1px 3px color-mix(in srgb, var(--plan-brand) 24%, transparent);
       }
 
       .plan-custom-field-grid {
@@ -5784,7 +5955,7 @@
         }
 
         .plan-workspace {
-          grid-template-columns: minmax(300px, 0.9fr) minmax(400px, 1.1fr);
+          grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
           overflow: visible;
         }
 
@@ -5878,8 +6049,10 @@
         }
 
         #planAvailableCard,
+        #planCustomItemCard,
         #planRequirementsCard,
         #planAvailableCard > .plan-card,
+        #planCustomItemCard > .plan-card,
         #planRequirementsCard > .plan-card {
           height: auto;
           min-height: 0;
@@ -5951,6 +6124,14 @@
         .plan-requirement-row .plan-item-description {
           grid-column: 1 / -1;
         }
+
+        .plan-requirement-row .plan-qty-control {
+          justify-self: start;
+        }
+
+        .plan-row-actions {
+          justify-content: flex-end;
+        }
       }
 
       #prepare-new-section {
@@ -5972,7 +6153,9 @@
         --plan-ink: #10213d;
         --plan-muted: #667085;
         --plan-border: #dfe4ee;
-        --plan-indigo: #4338ca;
+        --plan-indigo: var(--brand-dark, #0f4f5d);
+        --plan-brand: var(--brand-main, #0f766e);
+        --plan-brand-soft: var(--brand-soft, #e6fffb);
         display: flex;
         flex-direction: column;
         height: 100%;
@@ -6071,6 +6254,26 @@
         gap: 7px;
         margin: 0;
         font-size: 14px;
+      }
+
+      .prepare-new-heading-icon {
+        display: inline-grid;
+        place-items: center;
+        width: 22px;
+        height: 22px;
+        border-radius: 7px;
+        background: var(--plan-brand-soft);
+        color: var(--plan-indigo);
+      }
+
+      .prepare-new-heading-icon svg {
+        width: 15px;
+        height: 15px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.9;
+        stroke-linecap: round;
+        stroke-linejoin: round;
       }
 
       .prepare-new-card-body {
@@ -6244,8 +6447,18 @@
       }
 
       .prepare-new-status-assigned {
-        background: #ede9fe;
-        color: #4338ca;
+        background: var(--plan-brand-soft);
+        color: var(--plan-indigo);
+      }
+
+      .prepare-new-status-degraded {
+        background: #fef3c7;
+        color: #92400e;
+      }
+
+      .prepare-new-status-missing {
+        background: #e5e7eb;
+        color: #475467;
       }
 
       .prepare-new-status-collected {
@@ -6397,8 +6610,19 @@
       }
 
       .prepare-new-asset-card.assigned {
-        border-color: #c4b5fd;
-        background: #faf9ff;
+        border-color: color-mix(in srgb, var(--plan-brand) 32%, #fff);
+        background: var(--plan-brand-soft);
+      }
+
+      .prepare-new-asset-card.missing {
+        border-color: #d1d5db;
+        background: #f3f4f6;
+        color: #6b7280;
+      }
+
+      .prepare-new-asset-card.degraded:not(.missing) {
+        border-color: #fde68a;
+        background: #fffbeb;
       }
 
       .prepare-new-asset-card strong,
@@ -6417,6 +6641,13 @@
         margin-top: 2px;
         color: var(--plan-muted);
         font-size: 8px;
+      }
+
+      .prepare-new-asset-flags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        margin-top: 5px;
       }
 
       .prepare-new-asset-action {
@@ -6458,6 +6689,45 @@
 
       .prepare-new-custom-card .plan-aside-body {
         padding: 9px 10px;
+      }
+
+      .prepare-new-progress-card .prepare-new-card-body {
+        display: grid;
+        gap: 8px;
+      }
+
+      .prepare-new-overall-copy {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 8px;
+        color: var(--plan-ink);
+      }
+
+      .prepare-new-overall-copy strong {
+        font-size: 18px;
+      }
+
+      .prepare-new-overall-copy span,
+      .prepare-new-progress-card small {
+        color: var(--plan-muted);
+        font-size: 10px;
+        font-weight: 700;
+      }
+
+      .prepare-new-overall-track {
+        height: 7px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: #e5e7eb;
+      }
+
+      .prepare-new-overall-track span {
+        display: block;
+        height: 100%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, var(--plan-brand), var(--plan-indigo));
+        transition: width .22s ease;
       }
 
       .prepare-new-finish {
@@ -6601,6 +6871,10 @@
           order: 5;
         }
 
+        .prepare-new-progress-card {
+          order: 6;
+        }
+
         .prepare-new-right > .prepare-new-finish {
           display: none;
         }
@@ -6620,7 +6894,7 @@
           bottom: 0;
           z-index: 20;
           display: flex;
-          order: 6;
+          order: 7;
           margin: 12px -14px -14px;
           padding: 10px 14px;
           border-top: 1px solid #dfe4ee;
@@ -6672,7 +6946,8 @@
         --return-ink: #10213d;
         --return-muted: #667085;
         --return-border: #dfe4ee;
-        --return-indigo: #4338ca;
+        --return-indigo: var(--brand-dark, #0f4f5d);
+        --return-brand-soft: var(--brand-soft, #e6fffb);
         color: var(--return-ink);
         display: flex;
         flex-direction: column;
@@ -7406,8 +7681,9 @@
         --transfer-muted: #6b7890;
         --transfer-line: #dfe5ee;
         --transfer-soft: #f6f8fc;
-        --transfer-blue: #2563eb;
-        --transfer-violet: #4f46e5;
+        --transfer-blue: var(--brand-sky, #0ea5e9);
+        --transfer-violet: var(--brand-dark, #0f4f5d);
+        --transfer-brand-soft: var(--brand-soft, #e6fffb);
         --transfer-green: #168a4a;
         --transfer-orange: #e37a12;
       }
@@ -7494,12 +7770,12 @@
 
       .transfer-event-picker:hover,
       .transfer-event-picker:focus-visible {
-        border-color: #aab7ff;
+        border-color: color-mix(in srgb, var(--transfer-violet) 42%, #fff);
         box-shadow: 0 6px 18px rgba(19, 33, 60, 0.09);
       }
 
       .transfer-event-picker:focus-visible {
-        outline: 3px solid rgba(79, 70, 229, 0.18);
+        outline: 3px solid color-mix(in srgb, var(--transfer-violet) 20%, transparent);
         outline-offset: 2px;
       }
 
@@ -7509,14 +7785,14 @@
         width: 44px;
         height: 44px;
         border-radius: 50%;
-        background: #eef2ff;
+        background: var(--transfer-brand-soft);
         color: var(--transfer-violet);
         font-size: 20px;
         font-weight: 900;
       }
 
       .transfer-event-icon.to {
-        background: #f0edff;
+        background: var(--transfer-brand-soft);
       }
 
       .transfer-event-icon svg {
@@ -7858,7 +8134,7 @@
         min-width: 54px;
         padding: 4px 7px;
         border-radius: 999px;
-        background: #eef2ff;
+        background: var(--transfer-brand-soft);
         color: var(--transfer-violet);
         font-size: 10px;
         font-weight: 800;
@@ -8161,8 +8437,8 @@
       }
 
       .transfer-schematic-lane.office div {
-        border-color: #ddd6fe;
-        background: #f7f5ff;
+        border-color: color-mix(in srgb, var(--transfer-violet) 24%, #fff);
+        background: var(--transfer-brand-soft);
       }
 
       .transfer-schematic-lane.office strong,
@@ -8214,9 +8490,9 @@
       }
 
       .transfer-office-action {
-        border: 1px solid #8b5cf6;
-        background: #f5f3ff;
-        color: #4c1d95;
+        border: 1px solid var(--transfer-violet);
+        background: var(--transfer-brand-soft);
+        color: var(--transfer-violet);
       }
 
       .transfer-export-action {
@@ -8577,7 +8853,7 @@
             <div>
               <div class="events-summary-number" id="active-events">0</div>
               <div class="events-summary-label">Active / Upcoming</div>
-              <div class="events-summary-note">Any event not closed</div>
+              <div class="events-summary-note">Excludes pending closure and closed</div>
             </div>
           </div>
           <button type="button" class="events-summary-card summary-overdue" onclick="setEventStateFilter('Overdue')">
@@ -8607,8 +8883,8 @@
         </div>
 
         <div class="events-state-filters" id="eventsStateFilters" aria-label="Filter by event state">
-          <button type="button" class="active" data-event-state="All" onclick="setEventStateFilter('All')">All <span>0</span></button>
-          <button type="button" data-event-state="Active" onclick="setEventStateFilter('Active')">Active <span>0</span></button>
+          <button type="button" data-event-state="All" onclick="setEventStateFilter('All')">All <span>0</span></button>
+          <button type="button" class="active" data-event-state="Active" onclick="setEventStateFilter('Active')">Active <span>0</span></button>
           <button type="button" data-event-state="New" onclick="setEventStateFilter('New')">New <span>0</span></button>
           <button type="button" data-event-state="Planning" onclick="setEventStateFilter('Planning')">Planning <span>0</span></button>
           <button type="button" data-event-state="Preparing" onclick="setEventStateFilter('Preparing')">Preparing <span>0</span></button>

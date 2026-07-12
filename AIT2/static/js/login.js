@@ -41,14 +41,28 @@ function revealAccessPanel(panel, control) {
   });
 }
 
+function setAccessPanelVisibility(panel, visible) {
+  if (!panel) return;
+  clearTimeout(panel.__accessHideTimer);
+  if (visible) {
+    panel.hidden = false;
+    requestAnimationFrame(() => panel.classList.add('is-visible'));
+    return;
+  }
+  panel.classList.remove('is-visible');
+  panel.__accessHideTimer = window.setTimeout(() => {
+    if (!panel.classList.contains('is-visible')) panel.hidden = true;
+  }, window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 190);
+}
+
 function selectAccessType(type) {
   const worker = type === 'worker';
   const panel = loginById(worker ? 'workerPanel' : 'adminPanel');
   const control = loginById(worker ? 'workerPhone' : 'username');
   loginById('workerChoice').classList.toggle('active', worker);
   loginById('adminChoice').classList.toggle('active', !worker);
-  loginById('workerPanel').hidden = !worker;
-  loginById('adminPanel').hidden = worker;
+  setAccessPanelVisibility(loginById('workerPanel'), worker);
+  setAccessPanelVisibility(loginById('adminPanel'), !worker);
   revealAccessPanel(panel, control);
 }
 

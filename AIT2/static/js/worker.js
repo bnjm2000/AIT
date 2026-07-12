@@ -13,7 +13,7 @@ function escapeHtml(value) {
 }
 
 function money(value) {
-  return `SGD ${Number(value || 0).toLocaleString('en-SG', {
+  return `$${Number(value || 0).toLocaleString('en-SG', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
   })}`;
@@ -48,20 +48,31 @@ function formatDate(value, withTime = false) {
   });
 }
 
-function displayStatus(status) {
+function displayStatus(rowOrStatus) {
+  const row = rowOrStatus && typeof rowOrStatus === 'object' ? rowOrStatus : null;
+  const stage = row ? String(row.submissionStage || '').trim() : '';
+  const processing = row ? String(row.processingState || '').trim() : '';
+  if (['Queued', 'Processing'].includes(processing)) return processing;
+  if (['Queued', 'Processing', 'Details Required'].includes(stage)) return stage;
+  const status = row ? row.status : rowOrStatus;
   return status === 'Pending Review' ? 'Submitted' : status;
 }
 
-function statusClass(status) {
-  return `status-${String(displayStatus(status)).toLowerCase().replace(/\s+/g, '-')}`;
+function statusClass(rowOrStatus) {
+  return `status-${String(displayStatus(rowOrStatus)).toLowerCase().replace(/\s+/g, '-')}`;
 }
 
 function submissionStatusBadge(row) {
-  const status = displayStatus(row.status);
+  const status = displayStatus(row);
   if (status === 'Uploading') {
     return `<span class="upload-status"><em class="status-badge status-uploading">Uploading</em>
       <span class="upload-progress-track"><span data-upload-progress="${escapeHtml(row.id)}" style="width:${Number(row.uploadProgress || 0)}%"></span></span>
       <small data-upload-progress-label="${escapeHtml(row.id)}">${Math.round(Number(row.uploadProgress || 0))}%</small></span>`;
+  }
+  if (status === 'Queued' || status === 'Processing') {
+    return `<span class="upload-status"><em class="status-badge ${statusClass(status)}">${escapeHtml(status)}</em>
+      <span class="upload-progress-track processing"><span></span></span>
+      <small>${status === 'Queued' ? 'Waiting' : 'Analysing'}</small></span>`;
   }
   if (status === 'Denied') {
     return `<button class="status-badge status-denied denial-reason-button" type="button"
@@ -72,7 +83,7 @@ function submissionStatusBadge(row) {
 }
 
 function submissionDenialReason(row) {
-  if (displayStatus(row.status) !== 'Denied') return '';
+  if (displayStatus(row) !== 'Denied') return '';
   return `<small class="row-note" id="denialReason-${escapeHtml(row.id)}" hidden>
     ${escapeHtml(row.denialReason || 'No reason was provided by the administrator.')}
   </small>`;
@@ -117,9 +128,10 @@ function allEvents() {
 
 function submissionStatusSummary(rows) {
   if (!rows.length) return 'Not submitted';
-  if (rows.some(row => row.status === 'Uploading')) return 'Uploading';
-  if (rows.some(row => row.status === 'Processing')) return 'Processing';
-  if (rows.some(row => row.status === 'Details Required')) return 'Details Required';
+  if (rows.some(row => displayStatus(row) === 'Uploading')) return 'Uploading';
+  if (rows.some(row => displayStatus(row) === 'Queued')) return 'Queued';
+  if (rows.some(row => displayStatus(row) === 'Processing')) return 'Processing';
+  if (rows.some(row => displayStatus(row) === 'Details Required')) return 'Details Required';
   if (rows.every(row => row.status === 'Payment Confirmed')) return 'Payment Confirmed';
   if (rows.some(row => row.adminStatus === 'Paid')) return 'Paid';
   if (rows.some(row => row.adminStatus === 'Approved')) return 'Approved';
@@ -154,7 +166,7 @@ function submissionActions(company, event, row) {
 function invoiceRows(company, event, rows) {
   if (!rows.length) return '<div class="empty-submissions">No invoice submitted yet.</div>';
   return `<div class="submission-table invoice-table">
-    <div class="submission-head"><span>File Name</span><span>Uploaded On</span><span>Amount (SGD)</span><span>Status</span><span>Action</span></div>
+    <div class="submission-head"><span>File Name</span><span>Uploaded On</span><span>Amount ($)</span><span>Status</span><span>Action</span></div>
     ${rows.map(row => `<div class="submission-line">
       ${row.clientOnly
         ? `<span class="uploading-file-name">${escapeHtml(row.originalName || 'Invoice PDF')}</span>`
@@ -212,6 +224,19 @@ function eventDateBlock(event) {
   return `<strong>${date.getDate()}</strong><span>${date.toLocaleDateString('en-SG', { month: 'short' }).toUpperCase()}</span>`;
 }
 
+function eventRequiresWorkerAction(event, invoices = [], claims = []) {
+  const awaitingInvoiceUpload = Number(event.invoiceSlotsRemaining || 0) > 0
+    && Number(event.invoiceLimit || 0) > 0;
+  const awaitingClaimDetails = claims.some(row =>
+    row.needsDetails || displayStatus(row) === 'Details Required'
+  );
+  const awaitingPaymentConfirmation = [...invoices, ...claims].some(row =>
+    row.canConfirmPayment ||
+    (row.adminStatus === 'Paid' && row.status !== 'Payment Confirmed')
+  );
+  return awaitingInvoiceUpload || awaitingClaimDetails || awaitingPaymentConfirmation;
+}
+
 function renderEvent(company, event, open = false) {
   const invoices = event.submissions.invoices || [];
   const claims = event.submissions.claims || [];
@@ -221,10 +246,12 @@ function renderEvent(company, event, open = false) {
   const claimSummary = eventSubmissionStatusSummary(claims);
   const eventKey = `${company.code}:${event.id}:${event.subjectId || 'worker'}`;
   const vendorEvent = event.subjectType === 'vendor';
+  const requiresAction = eventRequiresWorkerAction(event, invoices, claims);
   return `<details class="event-card ${vendorEvent ? 'vendor-event' : ''}" data-event-key="${escapeHtml(eventKey)}" ${open ? 'open' : ''}>
     <summary>
       <div class="date-block">${eventDateBlock(event)}</div>
       <div class="event-name"><strong>${escapeHtml(event.name)}</strong>
+        ${requiresAction ? '<em class="action-required-badge">Action required!</em>' : ''}
         ${vendorEvent ? `<small class="event-subject-label">For ${escapeHtml(event.subjectName)}</small>` : ''}
         <span>Location: ${escapeHtml(event.location || 'TBC')}</span></div>
       <div class="summary-cell"><span>Role / Dept</span><strong>${escapeHtml(roles || 'Worker')}</strong><small>${escapeHtml(departments)}</small></div>

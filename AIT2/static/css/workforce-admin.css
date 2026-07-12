@@ -1,7 +1,7 @@
 .workforce-page {
-  --wf-brand: #5b4ee6;
-  --wf-brand-dark: #4438ca;
-  --wf-brand-soft: #eef2ff;
+  --wf-brand: var(--brand-main, #0f766e);
+  --wf-brand-dark: var(--brand-dark, #0f4f5d);
+  --wf-brand-soft: var(--brand-soft, #e6fffb);
   --wf-border: #e2e8f0;
   --wf-muted: #64748b;
   --wf-ink: #1f2937;
@@ -433,7 +433,7 @@
 .wf-assignment-chip button {
   border: 0;
   background: none;
-  color: #7c3aed;
+  color: var(--wf-brand-dark);
   padding: 0;
   cursor: pointer;
   font-size: 14px;
@@ -1244,9 +1244,9 @@ button.wf-calendar-day.selected {
 }
 
 .wf-modal {
-  --wf-brand: #5b4ee6;
-  --wf-brand-dark: #4438ca;
-  --wf-brand-soft: #eef2ff;
+  --wf-brand: var(--brand-main, #0f766e);
+  --wf-brand-dark: var(--brand-dark, #0f4f5d);
+  --wf-brand-soft: var(--brand-soft, #e6fffb);
   --wf-border: #e2e8f0;
   --wf-muted: #64748b;
   --wf-ink: #1f2937;
@@ -1308,6 +1308,10 @@ button.wf-calendar-day.selected {
   justify-content: flex-end;
   padding: 15px 20px;
   border-top: 1px solid var(--wf-border);
+}
+
+.wf-modal-danger-action {
+  margin-right: auto;
 }
 
 .wf-form-grid {
@@ -2021,6 +2025,7 @@ button.wf-calendar-day.selected {
   color: #5b3fc6;
 }
 
+.wf-status-button.status-queued,
 .wf-status-button.status-processing {
   border-color: #bae6fd;
   background: #e0f2fe;
@@ -2055,7 +2060,7 @@ button.wf-calendar-day.selected {
   width: 0;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #5b4ee6, #8b5cf6);
+  background: linear-gradient(90deg, var(--wf-brand), var(--wf-brand-dark));
 }
 
 .wf-admin-upload-status small { color: var(--wf-muted); font-size: 8px; text-align: right; }

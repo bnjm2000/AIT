@@ -24,7 +24,8 @@ const workforcePageState = {
   freelancerWorkspaceReturnId: null,
   editingTransportProfileId: null,
   selectedTransportProfileId: null,
-  editingTransportId: null
+  editingTransportId: null,
+  focusTarget: ''
 };
 
 const workforceEventChooserState = {
@@ -46,7 +47,7 @@ function wfAttr(value) {
 }
 
 function wfMoney(value) {
-  return `SGD ${Number(value || 0).toLocaleString('en-SG', {
+  return `$${Number(value || 0).toLocaleString('en-SG', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
   })}`;
@@ -116,13 +117,14 @@ function wfDepartmentsForFreelancer(id) {
   return [...new Set(wfAssignmentsForFreelancer(id).map(row => row.department).filter(Boolean))];
 }
 
-function openEventWorkforce(eventId) {
+function openEventWorkforce(eventId, focus = '') {
   if (!isAdminUser()) {
     showNotification('error', 'Admin privileges are required');
     return;
   }
   workforcePageState.eventId = Number(eventId);
   workforcePageState.data = null;
+  workforcePageState.focusTarget = String(focus || '');
   showSection('workforce');
 }
 
@@ -175,6 +177,9 @@ function wfStatusMenu(record) {
     return `<span class="wf-admin-upload-status"><span class="wf-status-button status-uploading">Uploading</span>
       <span class="wf-admin-progress-track"><span data-wf-upload-progress="${wfAttr(record.id)}" style="width:${Number(record.uploadProgress || 0)}%"></span></span>
       <small data-wf-upload-label="${wfAttr(record.id)}">${Math.round(Number(record.uploadProgress || 0))}%</small></span>`;
+  }
+  if (record.processingState === 'Queued' || record.submissionStage === 'Queued') {
+    return `<span class="wf-status-button ${wfStatusClass('Queued')}">Queued</span>`;
   }
   if (record.processingState === 'Processing') {
     return `<span class="wf-status-button ${wfStatusClass('Processing')}">Processing</span>`;
@@ -332,7 +337,9 @@ function wfDepartmentHtml(department, assignments) {
     });
     return summary;
   }, {});
-  const statusBadges = ['Pending Review', 'Approved', 'Denied', 'Paid', 'Payment Confirmed'].map(status =>
+  const statusBadges = ['Pending Review', 'Approved', 'Denied', 'Paid', 'Payment Confirmed']
+    .filter(status => Number(stateCounts[status] || 0) > 0)
+    .map(status =>
     `<span class="${wfStatusClass(status)}">${status}: <strong>${Number(stateCounts[status] || 0)}</strong></span>`
   ).join('');
   return `<details class="wf-department" data-department="${wfAttr(department)}">
@@ -631,6 +638,13 @@ function renderWorkforcePage() {
       document.getElementById('wfFreelancerSearch')?.value || ''
     );
   }
+  if (workforcePageState.focusTarget === 'transport') {
+    workforcePageState.focusTarget = '';
+    requestAnimationFrame(() => {
+      const panel = root.querySelector('.wf-transport-panel');
+      panel?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }
 }
 
 function wfModal(id, title, body, footer = '', wide = false) {
@@ -677,14 +691,15 @@ function ensureWorkforceModals() {
             onclick="resetFreelancerLogin()">Reset worker login</button>
         </div>
       </div><div class="wf-error" id="wfFreelancerProfileError"></div></div>
-      <footer class="wf-modal-actions"><button class="wf-button" type="button" onclick="closeWorkforceModal('wfFreelancerProfileModal')">Cancel</button>
+      <footer class="wf-modal-actions"><button class="wf-button danger wf-modal-danger-action" id="wfDeleteFreelancerButton" type="button" onclick="deleteFreelancerProfile()" hidden>Delete Worker</button>
+        <button class="wf-button" type="button" onclick="closeWorkforceModal('wfFreelancerProfileModal')">Cancel</button>
         <button class="wf-button primary" type="submit">Save Worker</button></footer></form>`) +
     wfModal('wfAssignmentModal', 'Event Assignment', `<form id="wfAssignmentForm">
       <div class="wf-modal-body"><p class="wf-form-intro" id="wfAssignmentFreelancerName"></p><div class="wf-form-grid">
         <label class="wf-field"><span>Department *</span><select id="wfAssignmentDepartment" required></select></label>
         <label class="wf-field"><span>Role / Position *</span><input id="wfAssignmentRole" required maxlength="100"></label>
         <div class="wf-field full"><span>Working dates *</span><div class="wf-date-calendar" id="wfAssignmentDates"></div></div>
-        <label class="wf-field"><span>Daily rate (SGD) *</span><input id="wfAssignmentRate" type="number" min="0" step=".01" required></label>
+        <label class="wf-field"><span>Daily rate ($) *</span><input id="wfAssignmentRate" type="number" min="0" step=".01" required></label>
       </div><div class="wf-error" id="wfAssignmentError"></div></div>
       <footer class="wf-modal-actions"><button class="wf-button" type="button" onclick="closeWorkforceModal('wfAssignmentModal')">Cancel</button>
         <button class="wf-button primary" type="submit">Add Assignment</button></footer></form>`, '', true) +
@@ -701,7 +716,8 @@ function ensureWorkforceModals() {
         <label class="wf-field full"><span>Notes</span><textarea id="wfVendorNotes"></textarea></label>
         <label class="wf-check full"><input id="wfVendorActive" type="checkbox" checked> Active vendor</label>
       </div><div class="wf-error" id="wfVendorProfileError"></div></div>
-      <footer class="wf-modal-actions"><button class="wf-button" type="button" onclick="closeWorkforceModal('wfVendorProfileModal')">Cancel</button>
+      <footer class="wf-modal-actions"><button class="wf-button danger wf-modal-danger-action" id="wfDeleteVendorButton" type="button" onclick="deleteVendorProfile()" hidden>Delete Vendor</button>
+        <button class="wf-button" type="button" onclick="closeWorkforceModal('wfVendorProfileModal')">Cancel</button>
         <button class="wf-button primary" type="submit">Save Vendor</button></footer></form>`, '', true) +
     wfModal('wfVendorPersonnelModal', 'Add Personnel', `<form id="wfVendorPersonnelForm">
       <div class="wf-modal-body"><div class="wf-form-grid">
@@ -722,11 +738,11 @@ function ensureWorkforceModals() {
         <div class="wf-field full"><span>Working dates *</span><div class="wf-date-calendar" id="wfVendorAssignmentDates"></div></div>
         <div class="wf-form-grid full" id="wfVendorManpowerFields">
           <label class="wf-field"><span>Number of pax *</span><input id="wfVendorPax" type="number" min="1" step="1"></label>
-          <label class="wf-field"><span>Rate per pax / day (SGD) *</span><input id="wfVendorRatePerPax" type="number" min="0" step=".01"></label>
+          <label class="wf-field"><span>Rate per pax / day ($) *</span><input id="wfVendorRatePerPax" type="number" min="0" step=".01"></label>
         </div>
         <div class="wf-form-grid full" id="wfVendorServiceFields" hidden>
           <label class="wf-field"><span>Name of service *</span><input id="wfVendorServiceName" maxlength="120"></label>
-          <label class="wf-field"><span>Cost (SGD) *</span><input id="wfVendorServiceCost" type="number" min="0" step=".01"></label>
+          <label class="wf-field"><span>Cost ($) *</span><input id="wfVendorServiceCost" type="number" min="0" step=".01"></label>
         </div>
       </div><div class="wf-error" id="wfVendorAssignmentError"></div></div>
       <footer class="wf-modal-actions"><button class="wf-button" type="button" onclick="closeWorkforceModal('wfVendorAssignmentModal')">Cancel</button>
@@ -765,7 +781,7 @@ function ensureWorkforceModals() {
         <label class="wf-check full"><input id="wfSaveBookingLocations" type="checkbox" checked> Save these locations for future bookings</label>
         <label class="wf-field"><span>Depart Date *</span><input id="wfDepartDate" type="date" required></label>
         <label class="wf-field"><span>Depart Time *</span><input id="wfDepartTime" type="time" required></label>
-        <label class="wf-field full"><span>Cost (per trip, SGD)</span><input id="wfTransportCost" type="number" min="0" step=".01" value="0"></label>
+        <label class="wf-field full"><span>Cost (per trip, $)</span><input id="wfTransportCost" type="number" min="0" step=".01" value="0"></label>
         <label class="wf-check full"><input id="wfTransportTwoWay" type="checkbox" onchange="syncReturnFields()"> Enable return trip</label>
         <div class="wf-return-fields full" id="wfReturnFields" hidden>
           <label class="wf-field"><span>Return Date *</span><input id="wfReturnDate" type="date"></label>
@@ -1045,6 +1061,18 @@ async function workforceChooseEvent(eventId) {
   await changeWorkforceEvent(eventId);
 }
 
+function wfDirectorySummaryBadges(summary = {}) {
+  return [
+    ['needsInvoice', 'awaiting invoice'],
+    ['needsReview', 'to review'],
+    ['needsPayment', 'to pay'],
+    ['needsReceipt', 'awaiting receipt'],
+  ].map(([key, label]) => {
+    const count = Number(summary[key] || 0);
+    return count > 0 ? `<small><b>${count}</b> ${label}</small>` : '';
+  }).join('');
+}
+
 function openFreelancerDirectory(mode = 'manage', department = '') {
   ensureWorkforceModals();
   workforcePageState.directoryMode = mode;
@@ -1091,10 +1119,7 @@ function renderFreelancerDirectory(search) {
         <span><strong>${wfEscape(row.name)}</strong>
           <small>${Number(row.members?.length || 0)} member${Number(row.members?.length || 0) === 1 ? '' : 's'} with portal access</small>
           <span class="wf-worker-summary">
-            <small><b>${Number(summary.needsInvoice || 0)}</b> awaiting invoice</small>
-            <small><b>${Number(summary.needsReview || 0)}</b> to review</small>
-            <small><b>${Number(summary.needsPayment || 0)}</b> to pay</small>
-            <small><b>${Number(summary.needsReceipt || 0)}</b> awaiting receipt</small>
+            ${wfDirectorySummaryBadges(summary)}
           </span>
         </span>
         <button class="wf-mini-button" type="button">Edit</button>
@@ -1112,10 +1137,7 @@ function renderFreelancerDirectory(search) {
       <span class="wf-avatar">${wfEscape(wfInitials(row.name))}</span><span><strong>${wfEscape(row.name)}</strong>
       <small class="wf-directory-phone">${wfEscape(wfFormatPhone(row.phone) || 'No phone')} ${loginBadge}</small>
       ${workforcePageState.directoryMode === 'manage' ? `<span class="wf-worker-summary">
-        <small><b>${Number(summary.needsInvoice || 0)}</b> awaiting invoice</small>
-        <small><b>${Number(summary.needsReview || 0)}</b> to review</small>
-        <small><b>${Number(summary.needsPayment || 0)}</b> to pay</small>
-        <small><b>${Number(summary.needsReceipt || 0)}</b> awaiting receipt</small>
+        ${wfDirectorySummaryBadges(summary)}
       </span>` : ''}</span>
       ${workforcePageState.directoryMode === 'assign'
         ? '<span class="wf-directory-action">Select &rsaquo;</span>'
@@ -1168,6 +1190,11 @@ function openVendorProfile(id = '') {
   document.getElementById('wfVendorNotes').value = vendor?.notes || '';
   document.getElementById('wfVendorActive').checked = vendor?.active !== false;
   document.getElementById('wfVendorMemberSearch').value = '';
+  const deleteButton = document.getElementById('wfDeleteVendorButton');
+  if (deleteButton) {
+    deleteButton.hidden = !vendor;
+    deleteButton.disabled = false;
+  }
   renderVendorMemberPicker('');
   wfError('wfVendorProfileError');
   openWorkforceModal('wfVendorProfileModal');
@@ -1231,6 +1258,43 @@ async function saveVendorProfile(event) {
   }
 }
 
+async function deleteVendorProfile() {
+  const id = workforcePageState.editingVendorId;
+  const vendor = wfFindVendor(id);
+  if (!id || !vendor) return;
+  const confirmed = await showAppConfirm({
+    title: 'Delete vendor?',
+    message: `This removes ${vendor.name || 'this vendor'} from this company, including event assignments and uploaded invoice or claim files for this company.`,
+    confirmText: 'Delete Vendor',
+    variant: 'danger'
+  });
+  if (!confirmed) return;
+  const button = document.getElementById('wfDeleteVendorButton');
+  if (button) button.disabled = true;
+  wfError('wfVendorProfileError');
+  try {
+    const response = await apiCall(`/api/workforce/vendors/${encodeURIComponent(id)}`, 'DELETE');
+    await refreshWorkforcePage();
+    closeWorkforceModal('wfVendorProfileModal');
+    closeWorkforceModal('wfVendorDirectoryModal');
+    if (
+      String(workforcePageState.historyFreelancerId) === String(id) &&
+      document.getElementById('freelancer-workspace-section')?.classList.contains('active')
+    ) {
+      workforcePageState.historyFreelancerId = null;
+      workforcePageState.freelancerWorkspaceData = null;
+      showSection('workforce');
+    }
+    const removedUploads = Number(response.cleanup?.submissionsRemoved || 0);
+    showNotification('success', removedUploads
+      ? `Vendor deleted. ${removedUploads} uploaded file${removedUploads === 1 ? '' : 's'} removed.`
+      : 'Vendor deleted');
+  } catch (error) {
+    if (button) button.disabled = false;
+    wfError('wfVendorProfileError', error.message);
+  }
+}
+
 function openVendorPersonnel() {
   ensureWorkforceModals();
   document.getElementById('wfVendorPersonnelForm').reset();
@@ -1267,6 +1331,7 @@ async function saveVendorPersonnel(event) {
 }
 
 function wfHistoryDisplayStatus(record) {
+  if (record.processingState === 'Queued' || record.submissionStage === 'Queued') return 'Queued';
   if (record.processingState === 'Processing') return 'Processing';
   if (record.submissionStage === 'Details Required') return 'Details Required';
   if (record.paymentConfirmedAt) return 'Payment Confirmed';
@@ -1394,6 +1459,8 @@ function wfHistoryEventCard(event, freelancerId, subjectType = 'worker') {
 async function openFreelancerHistory(id) {
   workforcePageState.historyFreelancerId = id;
   workforcePageState.freelancerWorkspaceData = null;
+  closeWorkforceModal('wfFreelancerDirectoryModal');
+  closeWorkforceModal('wfVendorDirectoryModal');
   showSection('freelancer-workspace');
 }
 
@@ -1534,10 +1601,7 @@ async function openFreelancerWorkspaceAssignment(eventId, freelancerId, assignme
 async function removeFreelancerWorkspaceAssignment(eventId, freelancerId, assignmentId) {
   try {
     await loadFreelancerHistoryEvent(eventId);
-    await apiCall(
-      `/api/events/${Number(eventId)}/workforce/assignments/${encodeURIComponent(assignmentId)}`,
-      'DELETE'
-    );
+    await deleteWorkforceAssignmentRequest(eventId, assignmentId);
     await openFreelancerHistory(freelancerId);
   } catch (error) {
     showNotification('error', error.message);
@@ -1630,6 +1694,11 @@ function openFreelancerProfile(id = '') {
     `Last login: ${row?.workerLastLoginAt ? wfDateTime(row.workerLastLoginAt) : 'Never'}`;
   resetButton.hidden = !row?.workerLoginConfigured;
   resetButton.disabled = false;
+  const deleteButton = document.getElementById('wfDeleteFreelancerButton');
+  if (deleteButton) {
+    deleteButton.hidden = !row;
+    deleteButton.disabled = false;
+  }
   wfError('wfFreelancerProfileError');
   openWorkforceModal('wfFreelancerProfileModal');
 }
@@ -1683,6 +1752,47 @@ async function saveFreelancerProfile(event) {
       await loadFreelancerWorkspace();
     }
   } catch (error) {
+    wfError('wfFreelancerProfileError', error.message);
+  }
+}
+
+async function deleteFreelancerProfile() {
+  const id = workforcePageState.editingFreelancerId;
+  const row = wfFindFreelancer(id) || (
+    String(workforcePageState.freelancerWorkspaceData?.freelancer?.id) === String(id)
+      ? workforcePageState.freelancerWorkspaceData.freelancer
+      : null
+  );
+  if (!id || !row) return;
+  const confirmed = await showAppConfirm({
+    title: 'Delete worker?',
+    message: `This removes ${row.name || 'this worker'} from this company, including vendor access links, event assignments, and uploaded invoice or claim files for this company.`,
+    confirmText: 'Delete Worker',
+    variant: 'danger'
+  });
+  if (!confirmed) return;
+  const button = document.getElementById('wfDeleteFreelancerButton');
+  if (button) button.disabled = true;
+  wfError('wfFreelancerProfileError');
+  try {
+    const response = await apiCall(`/api/workforce/freelancers/${encodeURIComponent(id)}`, 'DELETE');
+    await refreshWorkforcePage();
+    closeWorkforceModal('wfFreelancerProfileModal');
+    closeWorkforceModal('wfFreelancerDirectoryModal');
+    if (
+      String(workforcePageState.historyFreelancerId) === String(id) &&
+      document.getElementById('freelancer-workspace-section')?.classList.contains('active')
+    ) {
+      workforcePageState.historyFreelancerId = null;
+      workforcePageState.freelancerWorkspaceData = null;
+      showSection('workforce');
+    }
+    const removedUploads = Number(response.cleanup?.submissionsRemoved || 0);
+    showNotification('success', removedUploads
+      ? `Worker deleted. ${removedUploads} uploaded file${removedUploads === 1 ? '' : 's'} removed.`
+      : 'Worker deleted');
+  } catch (error) {
+    if (button) button.disabled = false;
     wfError('wfFreelancerProfileError', error.message);
   }
 }
@@ -1905,9 +2015,37 @@ async function saveVendorAssignment(event) {
 }
 
 async function deleteWorkforceAssignment(id) {
-  const response = await apiCall(`/api/events/${workforcePageState.eventId}/workforce/assignments/${encodeURIComponent(id)}`, 'DELETE');
-  workforcePageState.data = response.data;
-  renderWorkforcePage();
+  try {
+    const response = await deleteWorkforceAssignmentRequest(workforcePageState.eventId, id);
+    workforcePageState.data = response.data;
+    renderWorkforcePage();
+  } catch (error) {
+    showNotification('error', error.message);
+  }
+}
+
+async function deleteWorkforceAssignmentRequest(eventId, assignmentId, confirmedUploads = false) {
+  const suffix = confirmedUploads ? '?deleteUploads=1' : '';
+  try {
+    return await apiCall(
+      `/api/events/${Number(eventId)}/workforce/assignments/${encodeURIComponent(assignmentId)}${suffix}`,
+      'DELETE'
+    );
+  } catch (error) {
+    if (error.payload?.requiresUploadRemovalConfirmation && !confirmedUploads) {
+      const uploadCount = Number(error.payload.uploadCount || 0);
+      const confirmed = await showAppConfirm({
+        title: 'Remove uploaded files?',
+        message: `This person has ${uploadCount} uploaded file${uploadCount === 1 ? '' : 's'} for this event. Removing their last assignment will delete those files too.`,
+        confirmText: 'Remove and Delete Files',
+        variant: 'danger'
+      });
+      if (confirmed) {
+        return deleteWorkforceAssignmentRequest(eventId, assignmentId, true);
+      }
+    }
+    throw error;
+  }
 }
 
 function openManualDepartment() {
@@ -2535,7 +2673,7 @@ async function openWorkforceReview(id, requestedStatus = '', skipOcrRetry = fals
         : `<div class="wf-ocr-card">${wfEscape(record.category || 'Claim')} &middot; ${wfEscape(record.claimDate || '')}<br>${wfEscape(record.description || '')}</div>`}
       ${verified ? `<div class="wf-verified-note">Amount and submission details were verified on ${wfEscape(wfDateTime(record.verifiedAt))}.</div>` : ''}
       <div class="wf-form-grid">
-        <label class="wf-field"><span>Verified amount (SGD) *</span><input id="wfReviewAmount" type="number" min="0" step=".01" value="${record.amount ?? ''}" required ${verified ? 'disabled' : ''}></label>
+        <label class="wf-field"><span>Verified amount ($) *</span><input id="wfReviewAmount" type="number" min="0" step=".01" value="${record.amount ?? ''}" required ${verified ? 'disabled' : ''}></label>
         ${kind === 'claim' ? wfReviewClaimCategoryFields(record, verified) : ''}
       </div>
       ${kind === 'invoice' ? `<div class="wf-section-card"><h4>Department allocation</h4>

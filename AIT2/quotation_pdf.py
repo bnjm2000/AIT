@@ -49,6 +49,43 @@ def _date(value):
         return raw
 
 
+def _validity_label(document):
+    amount = document.get('validityAmount')
+    unit = str(document.get('validityUnit') or 'days').lower()
+    if unit not in {'days', 'weeks', 'months'}:
+        unit = 'days'
+    try:
+        amount = int(float(amount or 0))
+    except (TypeError, ValueError):
+        amount = 0
+    if amount <= 0:
+        try:
+            days = int(float(document.get('validityDays') or 30))
+        except (TypeError, ValueError):
+            days = 30
+        amount = days
+        unit = 'days'
+    label = {
+        'days': 'day(s)',
+        'weeks': 'week(s)',
+        'months': 'month(s)',
+    }[unit]
+    return f"{amount} {label}"
+
+
+def _safe_hex(value, fallback='#0F766E'):
+    raw = str(value or '').strip()
+    return raw if re.fullmatch(r'#[0-9A-Fa-f]{6}', raw) else fallback
+
+
+def _hex_luminance(value):
+    raw = _safe_hex(value).lstrip('#')
+    red = int(raw[0:2], 16) / 255
+    green = int(raw[2:4], 16) / 255
+    blue = int(raw[4:6], 16) / 255
+    return 0.2126 * red + 0.7152 * green + 0.0722 * blue
+
+
 def build_finance_pdf(document, company, logo_path=''):
     """Return an A4 quotation/invoice as PDF bytes."""
     from reportlab.lib import colors
@@ -88,7 +125,11 @@ def build_finance_pdf(document, company, logo_path=''):
     muted = colors.HexColor('#64748B')
     rule = colors.HexColor('#CBD5E1')
     panel = colors.HexColor('#F1F5F9')
-    accent = colors.HexColor('#4338CA')
+    accent_hex = _safe_hex(company.get('themeColor'), '#0F766E')
+    accent_luminance = _hex_luminance(accent_hex)
+    accent = colors.HexColor(accent_hex)
+    accent_text = colors.black if accent_luminance > 0.68 else colors.white
+    accent_on_white = ink if accent_luminance > 0.74 else accent
     success = colors.HexColor('#0F766E')
 
     body = ParagraphStyle(
@@ -118,7 +159,7 @@ def build_finance_pdf(document, company, logo_path=''):
     table_header_label = ParagraphStyle(
         'FinanceTableHeaderLabel',
         parent=label,
-        textColor=colors.HexColor('#F8FAFC'),
+        textColor=accent_text,
     )
     title_style = ParagraphStyle(
         'FinanceTitle',
@@ -134,7 +175,7 @@ def build_finance_pdf(document, company, logo_path=''):
         fontName='Helvetica-Bold',
         fontSize=12,
         leading=15,
-        textColor=accent,
+        textColor=accent_on_white,
         alignment=TA_RIGHT,
     )
     right = ParagraphStyle('FinanceRight', parent=body, alignment=TA_RIGHT)
@@ -155,7 +196,12 @@ def build_finance_pdf(document, company, logo_path=''):
     )
 
     footer_text = _text(company.get('footerText')).strip()
-    company_lines = [
+    letterhead_lines = [
+        _text(line).strip()
+        for line in str(company.get('letterheadText') or '').splitlines()
+        if _text(line).strip()
+    ]
+    company_lines = letterhead_lines or [
         _text(company.get('companyName')),
         f"UEN / Reg No: {_text(company.get('registrationNumber'))}" if company.get('registrationNumber') else '',
         _text(company.get('billingAddress')),
@@ -262,7 +308,7 @@ def build_finance_pdf(document, company, logo_path=''):
     else:
         date_label, date_value = 'Quotation date', document.get('quotationDate') or document.get('date')
         secondary_label = 'Valid for'
-        secondary_value = f"{document.get('validityDays') or 30} days"
+        secondary_value = _validity_label(document)
 
     meta_rows = [
         [_paragraph(date_label, label), _paragraph(_date(date_value), body)],
@@ -347,6 +393,7 @@ def build_finance_pdf(document, company, logo_path=''):
     show_unit_prices = bool(document.get('showUnitPrices'))
     show_department_discounts = bool(document.get('showDepartmentDiscounts'))
     show_department_subtotals = document.get('showDepartmentSubtotals', True) is not False
+    show_line_numbers = document.get('showLineNumbers', True) is not False
     column_widths = [
         8 * mm,
         67 * mm,
@@ -390,9 +437,9 @@ def build_finance_pdf(document, company, logo_path=''):
                 '', '', '', '', '', '', '',
             ],
             [
-                _paragraph('#', table_header_label),
+                _paragraph('#' if show_line_numbers else '', table_header_label),
                 _paragraph('DESCRIPTION', table_header_label),
-                _paragraph('DAYS', table_header_label),
+                _paragraph('DAY(S)', table_header_label),
                 _paragraph('QTY', table_header_label),
                 _paragraph('UOM', table_header_label),
                 _paragraph('UNIT PRICE', table_header_label),
@@ -403,8 +450,8 @@ def build_finance_pdf(document, company, logo_path=''):
         row_styles = [
             ('SPAN', (0, 0), (-1, 0)),
             ('BACKGROUND', (0, 0), (-1, 0), panel),
-            ('BACKGROUND', (0, 1), (-1, 1), ink),
-            ('TEXTCOLOR', (0, 1), (-1, 1), colors.white),
+            ('BACKGROUND', (0, 1), (-1, 1), accent),
+            ('TEXTCOLOR', (0, 1), (-1, 1), accent_text),
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
             ('LEFTPADDING', (0, 0), (-1, -1), 3),
             ('RIGHTPADDING', (0, 0), (-1, -1), 3),
@@ -417,7 +464,7 @@ def build_finance_pdf(document, company, logo_path=''):
         for line in department_lines:
             description = _text(line.get('description'))
             table_rows.append([
-                _paragraph(str(pdf_line_number), right),
+                _paragraph(str(pdf_line_number) if show_line_numbers else '', right),
                 _paragraph(description, body),
                 _paragraph(f"{float(line.get('days') or 0):g}", right),
                 _paragraph(f"{float(line.get('quantity') or 0):g}", right),
@@ -494,12 +541,12 @@ def build_finance_pdf(document, company, logo_path=''):
         summary_rows.extend([
             [_paragraph(f"{tax_label} ({tax_rate:g}%)", body), _paragraph(_money(totals.get('tax'), currency), right)],
             [_paragraph('TOTAL', ParagraphStyle('TotalLabel', parent=body, fontName='Helvetica-Bold', fontSize=10.5)),
-             _paragraph(_money(totals.get('total'), currency), ParagraphStyle('TotalAmount', parent=right_bold, fontSize=11, textColor=accent))],
+             _paragraph(_money(totals.get('total'), currency), ParagraphStyle('TotalAmount', parent=right_bold, fontSize=11, textColor=accent_on_white))],
         ])
     else:
         summary_rows.append([
             _paragraph('TOTAL', ParagraphStyle('TotalLabelNoTax', parent=body, fontName='Helvetica-Bold', fontSize=10.5)),
-            _paragraph(_money(totals.get('netSubtotal'), currency), ParagraphStyle('TotalAmountNoTax', parent=right_bold, fontSize=11, textColor=accent)),
+            _paragraph(_money(totals.get('netSubtotal'), currency), ParagraphStyle('TotalAmountNoTax', parent=right_bold, fontSize=11, textColor=accent_on_white)),
         ])
     summary = Table(
         summary_rows,
