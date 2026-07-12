@@ -3155,6 +3155,36 @@ def _parse_bulk_marker(value):
     return {'bulkId': bulk_id, 'quantity': quantity}
 
 
+PREPARED_MODEL_PREFIX = '[PREPARED]'
+
+
+def _prepared_model_marker(group, quantity):
+    return (
+        f"{PREPARED_MODEL_PREFIX}{group['department']}|"
+        f"{group['brand']}|"
+        f"{group['model']}|"
+        f"{max(1, _safe_int(quantity, 1))}|"
+        f"{group.get('description', '')}"
+    )
+
+
+def _parse_prepared_model_marker(value):
+    if not isinstance(value, str) or not value.startswith(PREPARED_MODEL_PREFIX):
+        return None
+
+    parts = value[len(PREPARED_MODEL_PREFIX):].split('|')
+    if len(parts) < 4:
+        return None
+
+    return {
+        'department': parts[0].strip().upper(),
+        'brand': parts[1].strip(),
+        'model': parts[2].strip(),
+        'quantity': max(1, _safe_int(parts[3], 1)),
+        'description': '|'.join(parts[4:]).strip() if len(parts) > 4 else '',
+    }
+
+
 CUSTOM_ASSET_PREFIX = '[CUSTOM]'
 
 
@@ -3722,7 +3752,7 @@ def _event_specific_counts(event):
             continue
         if item in extra_assets:
             continue
-        if item.startswith('[MODEL]') or _is_bulk_ref(item) or _is_custom_ref(item):
+        if item.startswith('[MODEL]') or _is_prepared_model_ref(item) or _is_bulk_ref(item) or _is_custom_ref(item):
             continue
         required += 1
 
@@ -3732,7 +3762,7 @@ def _event_specific_counts(event):
             continue
         if item in extra_assets:
             continue
-        if item.startswith('[MODEL]') or _is_bulk_ref(item) or _is_custom_ref(item):
+        if item.startswith('[MODEL]') or _is_prepared_model_ref(item) or _is_bulk_ref(item) or _is_custom_ref(item):
             continue
         if item in event.returned_items:
             returned += 1
@@ -3785,6 +3815,10 @@ def _is_bulk_ref(value):
     return _parse_bulk_marker(value) is not None
 
 
+def _is_prepared_model_ref(value):
+    return _parse_prepared_model_marker(value) is not None
+
+
 def _model_key_from_parts(dept, brand, model, description=''):
     return (
         _clean_group_value(dept, True),
@@ -3796,12 +3830,274 @@ def _model_key_from_parts(dept, brand, model, description=''):
 
 def _event_physical_ref_group_key(value):
     """Return the inventory model key represented by an event physical ref."""
+    prepared_marker = _parse_prepared_model_marker(value)
+    if prepared_marker:
+        return _model_key_from_parts(
+            prepared_marker['department'],
+            prepared_marker['brand'],
+            prepared_marker['model'],
+        )
+
     marker = _parse_bulk_marker(value)
     asset_id = marker['bulkId'] if marker else value
     asset = data_manager.inventory.get(asset_id) if data_manager else None
     if not asset:
         return None
     return _asset_group_key(asset)
+
+
+def _group_from_request(data):
+    data = data if isinstance(data, dict) else {}
+    department = _normalise_department_code(data.get('department')) or ''
+    brand = str(data.get('brand') or '').strip()
+    model = str(data.get('model') or '').strip()
+    description = str(data.get('description') or '').strip()
+    if not department or not brand or not model:
+        raise ValueError('Department, brand, and model are required')
+    return {
+        'department': department,
+        'brand': brand,
+        'model': model,
+        'description': description,
+    }
+
+
+def _event_model_group_key(group):
+    return _model_key_from_parts(group['department'], group['brand'], group['model'])
+
+
+def _event_model_required_quantity(event, group):
+    group_key = _event_model_group_key(group)
+    total = 0
+    description = group.get('description') or ''
+    for ref in getattr(event, 'prepared_items', []) or []:
+        marker = _parse_model_marker(ref)
+        if not marker:
+            continue
+        marker_key = _model_key_from_parts(marker['department'], marker['brand'], marker['model'])
+        if marker_key != group_key:
+            continue
+        total += max(0, _safe_int(marker.get('quantity'), 0))
+        if not description and marker.get('description'):
+            description = marker['description']
+    if description and not group.get('description'):
+        group['description'] = description
+    return total
+
+
+def _event_prepared_slot_quantity(event, group):
+    group_key = _event_model_group_key(group)
+    total = 0
+    for ref in getattr(event, 'actually_prepared', []) or []:
+        marker = _parse_prepared_model_marker(ref)
+        if not marker:
+            continue
+        marker_key = _model_key_from_parts(marker['department'], marker['brand'], marker['model'])
+        if marker_key == group_key:
+            total += marker['quantity']
+    return total
+
+
+def _event_specific_asset_quantity(event, group, include_returned=False, include_extra=True):
+    group_key = _event_model_group_key(group)
+    values = list(getattr(event, 'actually_prepared', []) or [])
+    if include_returned:
+        values.extend(getattr(event, 'returned_items', []) or [])
+    extra_assets = set(getattr(event, 'extra_assets', []) or [])
+    seen = set()
+    total = 0
+    for ref in values:
+        if ref in seen:
+            continue
+        seen.add(ref)
+        if not include_extra and ref in extra_assets:
+            continue
+        if _is_bulk_ref(ref) or _is_prepared_model_ref(ref) or _is_custom_ref(ref):
+            continue
+        asset = data_manager.inventory.get(ref) if data_manager else None
+        if asset and _asset_group_key(asset) == group_key:
+            total += 1
+    return total
+
+
+def _event_bulk_quantity_for_group(event, group, include_returned=False):
+    group_key = _event_model_group_key(group)
+    values = list(getattr(event, 'actually_prepared', []) or [])
+    if include_returned:
+        values.extend(getattr(event, 'returned_items', []) or [])
+    return _bulk_quantity_in_values_for_key(values, group_key)
+
+
+def _event_active_prepared_quantity_for_group(event, group, include_extra=True):
+    slot_qty = _event_prepared_slot_quantity(event, group)
+    specific_qty = _event_specific_asset_quantity(event, group, include_returned=False, include_extra=include_extra)
+    bulk_qty = _event_bulk_quantity_for_group(event, group, include_returned=False)
+    return slot_qty + specific_qty + bulk_qty
+
+
+def _event_prepared_open_slots(event, group):
+    prepared_slots = _event_prepared_slot_quantity(event, group)
+    return max(0, prepared_slots)
+
+
+def _decrement_prepared_model_slot(event, group, quantity=1):
+    remaining = max(1, _safe_int(quantity, 1))
+    removed = 0
+    group_key = _event_model_group_key(group)
+    rebuilt = []
+    for ref in getattr(event, 'actually_prepared', []) or []:
+        marker = _parse_prepared_model_marker(ref)
+        if not marker:
+            rebuilt.append(ref)
+            continue
+        marker_key = _model_key_from_parts(marker['department'], marker['brand'], marker['model'])
+        if marker_key != group_key or remaining <= 0:
+            rebuilt.append(ref)
+            continue
+        take = min(marker['quantity'], remaining)
+        left = marker['quantity'] - take
+        removed += take
+        remaining -= take
+        if left > 0:
+            rebuilt.append(_prepared_model_marker(marker, left))
+    event.actually_prepared = rebuilt
+    return removed
+
+
+def _increment_prepared_model_slot(event, group, quantity):
+    quantity = max(1, _safe_int(quantity, 1))
+    group_key = _event_model_group_key(group)
+    rebuilt = []
+    added = False
+    for ref in getattr(event, 'actually_prepared', []) or []:
+        marker = _parse_prepared_model_marker(ref)
+        if not marker:
+            rebuilt.append(ref)
+            continue
+        marker_key = _model_key_from_parts(marker['department'], marker['brand'], marker['model'])
+        if marker_key == group_key and not added:
+            marker['quantity'] += quantity
+            if not marker.get('description') and group.get('description'):
+                marker['description'] = group['description']
+            rebuilt.append(_prepared_model_marker(marker, marker['quantity']))
+            added = True
+        else:
+            rebuilt.append(ref)
+    if not added:
+        rebuilt.append(_prepared_model_marker(group, quantity))
+    event.actually_prepared = rebuilt
+    return quantity
+
+
+def _matching_bulk_assets_for_group(group):
+    group_key = _event_model_group_key(group)
+    return [
+        asset for asset in (data_manager.inventory.values() if data_manager else [])
+        if asset and _is_bulk_asset(asset) and _asset_group_key(asset) == group_key
+    ]
+
+
+def _matching_specific_assets_for_group(group):
+    group_key = _event_model_group_key(group)
+    return [
+        asset for asset in (data_manager.inventory.values() if data_manager else [])
+        if asset and not _is_bulk_asset(asset) and _asset_group_key(asset) == group_key
+    ]
+
+
+def _event_group_is_bulk_quantity(group):
+    bulk_assets = _matching_bulk_assets_for_group(group)
+    specific_assets = _matching_specific_assets_for_group(group)
+    return bool(bulk_assets) and not specific_assets
+
+
+def _specific_prepare_capacity_for_event(event, group):
+    total = 0
+    for asset in _matching_specific_assets_for_group(group):
+        if _is_disposed(asset) or getattr(asset, 'is_ooc', False) or getattr(asset, 'is_missing', False):
+            continue
+        if _find_event_using_asset(asset.asset_id, event):
+            continue
+        total += 1
+    return total
+
+
+def _bulk_prepare_capacity_for_event(event, group):
+    return sum(
+        _bulk_available_quantity_for_event(asset, event)
+        for asset in _matching_bulk_assets_for_group(group)
+    )
+
+
+def _event_prepare_capacity_for_group(event, group):
+    if _event_group_is_bulk_quantity(group):
+        return _bulk_prepare_capacity_for_event(event, group)
+    return _specific_prepare_capacity_for_event(event, group)
+
+
+def _active_bulk_quantity_for_asset(event, bulk_id):
+    returned = set(getattr(event, 'returned_items', []) or [])
+    total = 0
+    for ref in getattr(event, 'actually_prepared', []) or []:
+        if ref in returned:
+            continue
+        marker = _parse_bulk_marker(ref)
+        if marker and marker['bulkId'] == bulk_id:
+            total += marker['quantity']
+    return total
+
+
+def _set_bulk_quantity_for_asset(event, bulk_id, quantity):
+    quantity = max(0, _safe_int(quantity, 0))
+    returned = set(getattr(event, 'returned_items', []) or [])
+    rebuilt = []
+    inserted = False
+    for ref in getattr(event, 'actually_prepared', []) or []:
+        marker = _parse_bulk_marker(ref)
+        if not marker or marker['bulkId'] != bulk_id or ref in returned:
+            rebuilt.append(ref)
+            continue
+        if not inserted and quantity > 0:
+            rebuilt.append(_bulk_marker(bulk_id, quantity))
+            inserted = True
+    if not inserted and quantity > 0:
+        rebuilt.append(_bulk_marker(bulk_id, quantity))
+    event.actually_prepared = rebuilt
+
+
+def _add_bulk_prepared_quantity(event, group, quantity):
+    remaining = max(1, _safe_int(quantity, 1))
+    added = 0
+    for asset in sorted(_matching_bulk_assets_for_group(group), key=lambda item: item.asset_id):
+        capacity = _bulk_available_quantity_for_event(asset, event)
+        current = _active_bulk_quantity_for_asset(event, asset.asset_id)
+        room = max(0, capacity - current)
+        if room <= 0:
+            continue
+        take = min(room, remaining)
+        _set_bulk_quantity_for_asset(event, asset.asset_id, current + take)
+        added += take
+        remaining -= take
+        if remaining <= 0:
+            break
+    return added
+
+
+def _remove_bulk_prepared_quantity(event, group, quantity):
+    remaining = max(1, _safe_int(quantity, 1))
+    removed = 0
+    for asset in sorted(_matching_bulk_assets_for_group(group), key=lambda item: item.asset_id, reverse=True):
+        current = _active_bulk_quantity_for_asset(event, asset.asset_id)
+        if current <= 0:
+            continue
+        take = min(current, remaining)
+        _set_bulk_quantity_for_asset(event, asset.asset_id, current - take)
+        removed += take
+        remaining -= take
+        if remaining <= 0:
+            break
+    return removed
+
 
 
 def _unprepare_event_model_group(event, group_key):
@@ -3816,7 +4112,12 @@ def _unprepare_event_model_group(event, group_key):
         if _event_physical_ref_group_key(ref) != group_key:
             continue
         marker = _parse_bulk_marker(ref)
-        prepared_units += marker['quantity'] if marker else 1
+        prepared_marker = _parse_prepared_model_marker(ref)
+        prepared_units += (
+            marker['quantity']
+            if marker else prepared_marker['quantity']
+            if prepared_marker else 1
+        )
 
     for list_name in ('prepared_items', 'actually_prepared', 'returned_items', 'extra_assets'):
         values = getattr(event, list_name, []) or []
@@ -3834,7 +4135,7 @@ def _unprepare_event_model_group(event, group_key):
 
             references_removed += 1
             marker = _parse_bulk_marker(ref)
-            if marker:
+            if marker or _parse_prepared_model_marker(ref):
                 continue
 
             asset = data_manager.inventory.get(ref)
@@ -3975,7 +4276,7 @@ def _event_active_specific_quantities_by_key(event):
                 totals[_asset_group_key(bulk_asset)] += marker['quantity']
                 continue
 
-            if ref.startswith('[MODEL]') or _is_custom_ref(ref):
+            if ref.startswith('[MODEL]') or _is_prepared_model_ref(ref) or _is_custom_ref(ref):
                 continue
 
             if ref in seen_regular_assets:
@@ -4017,7 +4318,7 @@ def _active_physical_asset_refs_for_event(event):
         for ref in values:
             if not isinstance(ref, str) or not ref or ref in returned:
                 continue
-            if ref.startswith('[MODEL]') or _is_bulk_ref(ref) or _is_custom_ref(ref):
+            if ref.startswith('[MODEL]') or _is_prepared_model_ref(ref) or _is_bulk_ref(ref) or _is_custom_ref(ref):
                 continue
             if ref in data_manager.inventory:
                 refs.add(ref)
@@ -4083,26 +4384,32 @@ def _sum_extra_prepared_quantity(model_group):
 def _refresh_model_group_statuses(model_groups):
     for group in (model_groups or {}).values():
         required = max(0, _safe_int(group.get('requiredQuantity', 0), 0))
+        prepared_slots = max(0, _safe_int(group.get('preparedSlotQuantity', 0), 0))
 
         # Display quantities include extras so each model section can show
         # "5/3 assigned (+2 extra)" and list the extra assets under Assigned Assets.
-        assigned = _sum_assigned_quantity(group, include_extra=True)
+        assigned_specific = _sum_assigned_quantity(group, include_extra=True)
         returned = _sum_returned_quantity(group, include_extra=True)
+        assigned = assigned_specific + prepared_slots
         prepared = max(assigned - returned, 0)
 
         # Countable quantities exclude manual extras. These drive readiness,
         # event totals, and department progress totals.
-        countable_assigned = _sum_assigned_quantity(group, include_extra=False)
+        countable_assigned = _sum_assigned_quantity(group, include_extra=False) + prepared_slots
         countable_returned = _sum_returned_quantity(group, include_extra=False)
         countable_prepared = max(countable_assigned - countable_returned, 0)
 
         group['assignedQuantity'] = assigned
+        group['assignedSpecificQuantity'] = assigned_specific
+        group['preparedSlotQuantity'] = prepared_slots
+        group['isBulkQuantity'] = _event_group_is_bulk_quantity(group)
         group['returnedQuantity'] = returned
         group['preparedQuantity'] = prepared
         group['countableAssignedQuantity'] = countable_assigned
         group['countableReturnedQuantity'] = countable_returned
         group['countablePreparedQuantity'] = min(countable_prepared, required) if required > 0 else countable_prepared
-        group['extraPreparedQuantity'] = _sum_extra_prepared_quantity(group)
+        group['extraPreparedQuantity'] = _sum_extra_prepared_quantity(group) + max(0, countable_prepared - required)
+        group['openPreparedSlots'] = prepared_slots
 
         # Status must be based only on required/countable assets. Extras should
         # never make an incomplete requirement look ready.
@@ -4152,6 +4459,39 @@ def _append_bulk_assignments_to_model_groups(model_groups, event):
             'displayId': '',
             'name': f"{bulk_asset.brand} {bulk_asset.model_number} {bulk_asset.description}".strip()
         })
+
+
+def _append_prepared_slots_to_model_groups(model_groups, event):
+    if not model_groups:
+        return
+
+    for value in getattr(event, 'actually_prepared', []) or []:
+        marker = _parse_prepared_model_marker(value)
+        if not marker:
+            continue
+
+        group_key = '|'.join(_model_key_from_parts(
+            marker['department'],
+            marker['brand'],
+            marker['model'],
+        ))
+        if group_key not in model_groups:
+            model_groups[group_key] = {
+                'department': marker['department'],
+                'brand': marker['brand'],
+                'model': marker['model'],
+                'description': marker.get('description') or '',
+                'requiredQuantity': 0,
+                'assignedAssets': [],
+                'status': 'pending',
+            }
+        elif not model_groups[group_key].get('description') and marker.get('description'):
+            model_groups[group_key]['description'] = marker['description']
+
+        model_groups[group_key]['preparedSlotQuantity'] = (
+            max(0, _safe_int(model_groups[group_key].get('preparedSlotQuantity', 0), 0))
+            + marker['quantity']
+        )
 
 
 def _append_orphan_extra_assignments_to_model_groups(model_groups, event):
@@ -8393,6 +8733,7 @@ def _is_real_asset_ref(value):
 
     blocked_prefixes = (
         '[MODEL]',
+        PREPARED_MODEL_PREFIX,
         '[CUSTOM]',
         '[LOAN]',
         '[MISC]',
@@ -8622,7 +8963,7 @@ def _event_has_specific_group_asset_reference(event, group):
             marker = _parse_bulk_marker(value)
             if marker:
                 asset = data_manager.inventory.get(marker.get('bulkId')) if data_manager else None
-            elif value.startswith('[MODEL]') or _is_custom_ref(value):
+            elif value.startswith('[MODEL]') or _is_prepared_model_ref(value) or _is_custom_ref(value):
                 continue
             else:
                 asset = data_manager.inventory.get(value) if data_manager else None
@@ -8960,7 +9301,7 @@ def get_deployed_asset_quantity(events_to_check=None):
         for ref in getattr(event, 'actually_prepared', []) or []:
             if not isinstance(ref, str) or not ref or ref in returned:
                 continue
-            if _is_custom_ref(ref) or ref.startswith('[MODEL]'):
+            if _is_custom_ref(ref) or _is_prepared_model_ref(ref) or ref.startswith('[MODEL]'):
                 continue
 
             bulk = _parse_bulk_marker(ref)
@@ -10293,10 +10634,15 @@ def get_users():
     users_data = []
     can_see_all_companies = _current_user_is_super_admin()
     current_company_code = _normalise_company_code(_current_company_code(), DEFAULT_COMPANY_CODE)
+    current_username = str(session.get('user') or '').strip()
 
     for user in sorted(data_manager.users.values(), key=lambda u: u.username.lower()):
         company_code = _user_assigned_company_code(user.username)
-        if not can_see_all_companies and _normalise_company_code(company_code, DEFAULT_COMPANY_CODE) != current_company_code:
+        if (
+            not can_see_all_companies
+            and user.username != current_username
+            and _normalise_company_code(company_code, DEFAULT_COMPANY_CODE) != current_company_code
+        ):
             continue
 
         payload = _user_payload(user)
@@ -11253,6 +11599,7 @@ def get_events():
                         continue
 
             _append_bulk_assignments_to_model_groups(model_groups, event)
+            _append_prepared_slots_to_model_groups(model_groups, event)
             _append_orphan_extra_assignments_to_model_groups(model_groups, event)
             _refresh_model_group_statuses(model_groups)
 
@@ -11617,6 +11964,7 @@ def get_event(event_id):
                     logger.error(f"Error parsing model assignment {asset_id}: {e}")
 
         _append_bulk_assignments_to_model_groups(model_groups, event)
+        _append_prepared_slots_to_model_groups(model_groups, event)
         _append_orphan_extra_assignments_to_model_groups(model_groups, event)
         _refresh_model_group_statuses(model_groups)
 
@@ -13994,7 +14342,21 @@ def assign_specific_asset_to_model(event_id):
                 # fill an open slot; if the event already has enough of that model,
                 # the physical asset is tracked as extra.
                 added_requirement_units = 0
-                fills_existing_requirement = _event_model_requirement_remaining_for_asset(event, asset) > 0
+                asset_group = _asset_group_from_item(asset)
+                open_prepared_slots = _event_prepared_open_slots(event, asset_group)
+                if open_prepared_slots <= 0:
+                    return jsonify({
+                        'error': 'Prepare quantity for this line item before assigning a specific asset'
+                    }), 400
+                required_for_group = _event_model_required_quantity(event, asset_group)
+                non_extra_specific = _event_specific_asset_quantity(
+                    event,
+                    asset_group,
+                    include_returned=False,
+                    include_extra=False,
+                )
+                bulk_prepared = _event_bulk_quantity_for_group(event, asset_group, include_returned=False)
+                fills_existing_requirement = (non_extra_specific + bulk_prepared) < required_for_group
 
             logger.info(
                 f"Asset {asset_id}: fromContainer={scan_options['fromContainer']}; "
@@ -14003,6 +14365,8 @@ def assign_specific_asset_to_model(event_id):
             )
             
             if fills_existing_requirement:
+                if not add_scanned_assets_to_event:
+                    _decrement_prepared_model_slot(event, asset_group, 1)
                 removed_refs = _remove_direct_asset_ref_from_prepared_items(event, asset_id)
                 if removed_refs:
                     logger.info(f"Removed {asset_id} from prepared_items because it fulfills a model requirement")
@@ -14010,6 +14374,8 @@ def assign_specific_asset_to_model(event_id):
                     event.extra_assets.remove(asset_id)
                     logger.info(f"Removed {asset_id} from extra_assets. Extra assets: {event.extra_assets}")
             else:
+                if not add_scanned_assets_to_event:
+                    _decrement_prepared_model_slot(event, asset_group, 1)
                 # Loose extras and direct specific-asset events still need an
                 # explicit prepared_items row so they remain part of the packing list.
                 if asset_id not in event.prepared_items:
@@ -14057,9 +14423,137 @@ def assign_specific_asset_to_model(event_id):
         logger.error(f"Error assigning specific asset to event {event_id}: {e}")
         return jsonify({'error': 'Failed to assign asset'}), 500
 
+
+@app.route('/api/events/<int:event_id>/prepare-model-quantity', methods=['POST'])
+@require_auth
+@require_event_access
+@with_prepare_action_lock
+def prepare_event_model_quantity(event_id):
+    """Prepare or unprepare a model line by quantity before exact asset IDs are assigned."""
+    try:
+        event = data_manager.events.get(event_id)
+        if not event:
+            return jsonify({'error': 'Event not found'}), 404
+
+        _ensure_event_custom_lists(event)
+        data = request.get_json(silent=True) or {}
+        group = _group_from_request(data)
+        action = str(data.get('action') or 'prepare').strip().lower()
+        requested_quantity = _safe_int(data.get('quantity'), 0)
+        prepare_all = bool(data.get('all') or data.get('prepareAll'))
+
+        required = _event_model_required_quantity(event, group)
+        if required <= 0:
+            return jsonify({'error': 'Model requirement not found for this event'}), 404
+
+        is_bulk = _event_group_is_bulk_quantity(group)
+        current_prepared = _event_active_prepared_quantity_for_group(event, group, include_extra=True)
+
+        if action == 'prepare':
+            quantity = max(0, required - current_prepared) if prepare_all else requested_quantity
+            if quantity <= 0:
+                return jsonify({
+                    'success': True,
+                    'message': 'This line item is already prepared',
+                    'data': {
+                        'preparedQuantity': current_prepared,
+                        'requiredQuantity': required,
+                        'preparedNow': 0,
+                    },
+                })
+
+            capacity = _event_prepare_capacity_for_group(event, group)
+            if current_prepared + quantity > capacity:
+                return jsonify({
+                    'error': (
+                        f"Only {max(0, capacity - current_prepared)} more unit"
+                        f"{'' if max(0, capacity - current_prepared) == 1 else 's'} can be prepared for this event date range"
+                    )
+                }), 400
+
+            if is_bulk:
+                prepared_now = _add_bulk_prepared_quantity(event, group, quantity)
+                if prepared_now != quantity:
+                    return jsonify({'error': 'Not enough bulk quantity is available'}), 400
+            else:
+                prepared_now = _increment_prepared_model_slot(event, group, quantity)
+
+            update_event_state(event)
+            data_manager.save_event(event)
+            invalidate_cache()
+
+            log_action(
+                f"Prepared {prepared_now}x {group['brand']} {group['model']} "
+                f"quantity for event {event_id}"
+            )
+
+            return jsonify({
+                'success': True,
+                'message': f"Prepared {prepared_now}x {group['brand']} {group['model']}",
+                'data': {
+                    'preparedNow': prepared_now,
+                    'requiredQuantity': required,
+                    'preparedQuantity': current_prepared + prepared_now,
+                    'isBulk': is_bulk,
+                },
+            })
+
+        if action in {'unprepare', 'unprepared'}:
+            quantity = requested_quantity
+            if quantity <= 0:
+                return jsonify({'error': 'Quantity is required'}), 400
+
+            if is_bulk:
+                removable = _event_bulk_quantity_for_group(event, group, include_returned=False)
+                if quantity > removable:
+                    return jsonify({'error': f'Only {removable} prepared unit(s) can be unprepared'}), 400
+                removed_now = _remove_bulk_prepared_quantity(event, group, quantity)
+            else:
+                removable = _event_prepared_slot_quantity(event, group)
+                if quantity > removable:
+                    assigned = _event_specific_asset_quantity(event, group, include_returned=False, include_extra=True)
+                    if assigned > 0:
+                        return jsonify({
+                            'error': (
+                                f"Only {removable} unassigned prepared unit(s) can be unprepared. "
+                                "Unassign specific assets to unprepare those units."
+                            )
+                        }), 400
+                    return jsonify({'error': f'Only {removable} prepared unit(s) can be unprepared'}), 400
+                removed_now = _decrement_prepared_model_slot(event, group, quantity)
+
+            update_event_state(event)
+            data_manager.save_event(event)
+            invalidate_cache()
+
+            log_action(
+                f"Unprepared {removed_now}x {group['brand']} {group['model']} "
+                f"quantity from event {event_id}"
+            )
+
+            return jsonify({
+                'success': True,
+                'message': f"Unprepared {removed_now}x {group['brand']} {group['model']}",
+                'data': {
+                    'unpreparedNow': removed_now,
+                    'requiredQuantity': required,
+                    'preparedQuantity': max(0, current_prepared - removed_now),
+                    'isBulk': is_bulk,
+                },
+            })
+
+        return jsonify({'error': 'Unsupported prepare action'}), 400
+
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+    except Exception as exc:
+        logger.error("Error preparing model quantity for event %s: %s", event_id, exc, exc_info=True)
+        return jsonify({'error': 'Failed to update prepared quantity'}), 500
+
 @app.route('/api/events/<int:event_id>/unassign-specific', methods=['POST'])
 @require_auth
 @require_event_access
+@with_prepare_action_lock
 def unassign_specific_asset_from_model(event_id):
     """Unassign a specific asset from a model requirement"""
     try:
@@ -14098,6 +14592,12 @@ def unassign_specific_asset_from_model(event_id):
 
         # Remove from actually_prepared
         event.actually_prepared.remove(asset_id)
+        if asset_id in getattr(event, 'prepared_items', []) or []:
+            event.prepared_items.remove(asset_id)
+        if hasattr(event, 'extra_assets') and asset_id in event.extra_assets:
+            event.extra_assets.remove(asset_id)
+        if asset_id in getattr(event, 'returned_items', []) or []:
+            event.returned_items.remove(asset_id)
 
         # For regular assets, reset location
         if not _is_custom_ref(asset_id):
@@ -14116,9 +14616,9 @@ def unassign_specific_asset_from_model(event_id):
         invalidate_cache()
 
         log_action(
-            f"Unassigned specific asset {asset_id} from event {event_id}")
+            f"Unassigned and unprepared specific asset {asset_id} from event {event_id}")
 
-        return jsonify({'success': True, 'message': f'Asset {asset_id} unassigned from event'})
+        return jsonify({'success': True, 'message': f'Asset {asset_id} unassigned and unprepared from event'})
 
     except Exception as e:
         logger.error(
@@ -19138,19 +19638,24 @@ def _normalise_finance_document(value, document_type='quotation', existing=None)
     validity_unit = str(
         value.get('validityUnit')
         if 'validityUnit' in value
+        else 'days'
+        if 'validityDays' in value and 'validityAmount' not in value
         else existing.get('validityUnit') or 'days'
     ).strip().lower()
     if validity_unit not in {'days', 'weeks', 'months'}:
         validity_unit = 'days'
     validity_multiplier = {'days': 1, 'weeks': 7, 'months': 30}[validity_unit]
-    validity_amount = max(1, min(365, _safe_int(
+    validity_amount_source = (
         value.get('validityAmount')
         if 'validityAmount' in value
-        else existing.get('validityAmount')
-        if existing.get('validityAmount') not in (None, '')
         else value.get('validityDays')
         if 'validityDays' in value
-        else existing.get('validityDays'),
+        else existing.get('validityAmount')
+        if existing.get('validityAmount') not in (None, '')
+        else existing.get('validityDays')
+    )
+    validity_amount = max(1, min(365, _safe_int(
+        validity_amount_source,
         validity_days,
     )))
     validity_total_days = max(1, min(3650, validity_amount * validity_multiplier))

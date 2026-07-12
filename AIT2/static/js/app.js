@@ -19648,6 +19648,12 @@ function prepareNewSetModelExpanded(encodedKey, open) {
   else prepareNewPageState.expandedModels.delete(key);
 }
 
+function prepareNewRenderAfterModelToggle(encodedKey) {
+  const key = planDecode(encodedKey);
+  prepareNewPageState.expandedModels.add(key);
+  renderPrepareNewPage();
+}
+
 function prepareNewAvailableAssetsForGroup(group) {
   const department = normalizeDepartmentCode(group?.department || 'UN');
   return (prepareNewPageState.availableAssets || [])
@@ -19663,11 +19669,129 @@ function prepareNewAvailableAssetsForGroup(group) {
     ));
 }
 
+function prepareNewGroupPayload(group) {
+  return {
+    department: normalizeDepartmentCode(group?.department || 'UN'),
+    brand: String(group?.brand || ''),
+    model: String(group?.model || ''),
+    description: String(group?.description || '')
+  };
+}
+
+function prepareNewGroupIsBulk(group) {
+  if (typeof group?.isBulkQuantity !== 'undefined') return !!group.isBulkQuantity;
+  const matching = prepareNewAvailableAssetsForGroup(group)
+    .concat(group?.assignedAssets || []);
+  return matching.some(asset => asset?.isBulk) && !matching.some(asset => !asset?.isBulk);
+}
+
+function prepareNewOpenPreparedSlots(group) {
+  if (typeof group?.openPreparedSlots !== 'undefined') {
+    return Number(group.openPreparedSlots || 0);
+  }
+  return Math.max(0, getPreparedQuantity(group) - Number(group?.assignedSpecificQuantity || 0));
+}
+
+function prepareNewToggleActionMenu(event, encodedKey) {
+  event.preventDefault();
+  event.stopPropagation();
+  const key = planDecode(encodedKey);
+  document.querySelectorAll('.prepare-new-action-menu.open').forEach(menu => {
+    if (menu.dataset.modelKey !== key) menu.classList.remove('open');
+  });
+  const menu = Array.from(document.querySelectorAll('.prepare-new-action-menu'))
+    .find(node => node.dataset.modelKey === key);
+  menu?.classList.toggle('open');
+}
+
+async function prepareNewPromptQuantity({ title, message, confirmText, max = 0 }) {
+  const value = await showAppPrompt({
+    title,
+    message,
+    inputType: 'number',
+    inputLabel: 'Quantity',
+    placeholder: max > 0 ? `Max ${max}` : 'Quantity',
+    defaultValue: '1',
+    confirmText,
+    cancelText: 'Cancel',
+    required: true
+  });
+  if (value === null || value === false) return 0;
+  const quantity = Number.parseInt(String(value || '').trim(), 10);
+  if (!Number.isFinite(quantity) || quantity <= 0) {
+    showNotification('warning', 'Enter a quantity greater than 0');
+    return 0;
+  }
+  if (max > 0 && quantity > max) {
+    showNotification('warning', `Only ${max} can be selected`);
+    return 0;
+  }
+  return quantity;
+}
+
+async function prepareNewChangeModelQuantity(group, action, quantity, options = {}) {
+  const eventId = Number(prepareNewPageState.eventId);
+  if (!eventId) return;
+  try {
+    const response = await apiCall(`/api/events/${eventId}/prepare-model-quantity`, 'POST', {
+      ...prepareNewGroupPayload(group),
+      action,
+      quantity,
+      all: !!options.all
+    });
+    showNotification('success', response.message || 'Prepared quantity updated');
+    schedulePrepareUiSync(eventId);
+    await refreshPrepareNewSelectedEvent({ preserve: true });
+  } catch (error) {
+    showNotification('error', error.message || 'Failed to update prepared quantity');
+  }
+}
+
+async function prepareNewPrepareAll(encodedKey) {
+  const key = planDecode(encodedKey);
+  const group = prepareNewModelGroups().find(item => prepareNewModelKey(item) === key);
+  if (!group) return;
+  await prepareNewChangeModelQuantity(group, 'prepare', 0, { all: true });
+}
+
+async function prepareNewPrepareQty(encodedKey) {
+  const key = planDecode(encodedKey);
+  const group = prepareNewModelGroups().find(item => prepareNewModelKey(item) === key);
+  if (!group) return;
+  const quantity = await prepareNewPromptQuantity({
+    title: 'Prepare Qty',
+    message: `How many ${[group.brand, group.model].filter(Boolean).join(' ') || 'items'} would you like to prepare?`,
+    confirmText: 'Prepare'
+  });
+  if (quantity > 0) await prepareNewChangeModelQuantity(group, 'prepare', quantity);
+}
+
+async function prepareNewUnprepareQty(encodedKey) {
+  const key = planDecode(encodedKey);
+  const group = prepareNewModelGroups().find(item => prepareNewModelKey(item) === key);
+  if (!group) return;
+  const max = prepareNewGroupIsBulk(group)
+    ? getPreparedQuantity(group)
+    : prepareNewOpenPreparedSlots(group);
+  if (max <= 0) {
+    showNotification('info', 'There are no unassigned prepared units to unprepare');
+    return;
+  }
+  const quantity = await prepareNewPromptQuantity({
+    title: 'Unprepare Qty',
+    message: `How many unassigned prepared unit(s) would you like to unprepare?`,
+    confirmText: 'Unprepare',
+    max
+  });
+  if (quantity > 0) await prepareNewChangeModelQuantity(group, 'unprepare', quantity);
+}
+
 function prepareNewAssetCard(asset, options = {}) {
   const eventId = Number(prepareNewPageState.eventId);
   const id = String(asset?.id || asset?.bulkId || '');
   const encodedId = planEncode(id);
   const assigned = !!options.assigned;
+  const canAssign = options.canAssign !== false;
   const returned = (prepareNewPageState.event?.returnedItems || []).includes(id);
   const missing = !!(asset?.isMissing || String(asset?.status || '').toLowerCase() === 'missing');
   const degraded = !!(asset?.isDegraded || String(asset?.status || '').toLowerCase() === 'degraded');
@@ -19688,12 +19812,14 @@ function prepareNewAssetCard(asset, options = {}) {
     ? ''
     : (assigned
       ? `<button type="button" class="plan-button plan-button-small prepare-new-asset-action"
-                 onclick="event.stopPropagation();prepareNewUnprepareAsset(${eventId}, '${encodedId}')">Undo</button>`
+                 onclick="event.stopPropagation();prepareNewUnassignAsset(${eventId}, '${encodedId}')">Unassign</button>`
       : missing
         ? `<button type="button" class="plan-button plan-button-small prepare-new-asset-action"
-                   onclick="event.stopPropagation();prepareNewAssignMissingAsset(${eventId}, '${encodedId}')">Found &amp; Prepare</button>`
+                   ${canAssign ? '' : 'disabled'}
+                   onclick="event.stopPropagation();prepareNewAssignMissingAsset(${eventId}, '${encodedId}')">Found &amp; Assign</button>`
       : `<button type="button" class="plan-button plan-button-small prepare-new-asset-action"
-                 onclick="event.stopPropagation();prepareNewAssignAsset(${eventId}, '${encodedId}')">Prepare</button>`);
+                 ${canAssign ? '' : 'disabled'}
+                 onclick="event.stopPropagation();prepareNewAssignAsset(${eventId}, '${encodedId}')">Assign</button>`);
   return `
     <div class="prepare-new-asset-card ${assigned ? 'assigned' : ''} ${missing ? 'missing' : ''} ${degraded ? 'degraded' : ''}">
       <div title="${escapeHtmlAttr(label)}">
@@ -19708,46 +19834,78 @@ function prepareNewAssetCard(asset, options = {}) {
 
 function prepareNewModelSection(group) {
   const required = Number(group.requiredQuantity || 0);
-  const assignedQuantity = getCountablePreparedQuantity(group);
-  const available = prepareNewAvailableAssetsForGroup(group);
+  const preparedQuantity = getPreparedQuantity(group);
+  const countablePrepared = getCountablePreparedQuantity(group);
+  const extraPrepared = getExtraPreparedQuantity(group);
+  const isBulk = prepareNewGroupIsBulk(group);
+  const openSlots = prepareNewOpenPreparedSlots(group);
+  const available = prepareNewAvailableAssetsForGroup(group).filter(asset => !asset?.isBulk);
   const assigned = [...(group.assignedAssets || [])].sort((a, b) =>
     String(a?.id || '').localeCompare(String(b?.id || ''), undefined, {
       numeric: true,
       sensitivity: 'base'
     })
-  );
+  ).filter(asset => !asset?.isBulk);
   const key = prepareNewModelKey(group);
-  const isOpen = prepareNewPageState.expandedModels.has(key);
-  const complete = assignedQuantity >= required;
+  const complete = countablePrepared >= required;
+  const isOpen = !isBulk && complete && prepareNewPageState.expandedModels.has(key);
   const modelName = [group.brand, group.model].filter(Boolean).join(' ') || 'Unspecified model';
+  const canAssignExactAssets = !isBulk && complete;
   const allCards = [
     ...assigned.map(asset => prepareNewAssetCard(asset, {
       assigned: true,
       extra: !!asset?.isExtra
     })),
-    ...available.map(asset => prepareNewAssetCard(asset))
+    ...(canAssignExactAssets
+      ? available.map(asset => prepareNewAssetCard(asset, { canAssign: openSlots > 0 }))
+      : [])
   ];
+  const encodedKey = planEncode(key);
+  const primaryAction = isBulk
+    ? (complete
+      ? `<span class="prepare-new-prepared-label">${prepareNewStatusBadge('complete', 'Prepared')}</span>`
+      : `<button type="button" class="plan-button plan-button-small prepare-new-primary-action"
+                 onclick="event.preventDefault();event.stopPropagation();prepareNewPrepareAll('${encodedKey}')">Prepare all</button>`)
+    : (complete
+      ? `<button type="button" class="plan-button plan-button-small prepare-new-primary-action"
+                 onclick="event.preventDefault();event.stopPropagation();prepareNewSetModelExpanded('${encodedKey}', true); prepareNewRenderAfterModelToggle('${encodedKey}')">Assign</button>`
+      : `<button type="button" class="plan-button plan-button-small prepare-new-primary-action"
+                 onclick="event.preventDefault();event.stopPropagation();prepareNewPrepareAll('${encodedKey}')">Prepare all</button>`);
+  const menu = `
+    <span class="prepare-new-action-wrap">
+      <button type="button" class="prepare-new-more-button" aria-label="More prepare actions"
+              onclick="prepareNewToggleActionMenu(event, '${encodedKey}')">...</button>
+      <span class="prepare-new-action-menu" data-model-key="${escapeHtmlAttr(key)}">
+        <button type="button" onclick="event.stopPropagation();prepareNewPrepareQty('${encodedKey}')">Prepare qty</button>
+        ${(isBulk ? preparedQuantity > 0 : openSlots > 0) ? `<button type="button" onclick="event.stopPropagation();prepareNewUnprepareQty('${encodedKey}')">Unprepare qty</button>` : ''}
+      </span>
+    </span>
+  `;
+  const spareLabel = extraPrepared > 0
+    ? `<span class="prepare-new-spare-label">${extraPrepared} spare</span>`
+    : '';
+  const showExactAssetPanel = !isBulk && (complete || assigned.length > 0);
   return `
     <details class="prepare-new-model" ${isOpen ? 'open' : ''}
-             ontoggle="prepareNewSetModelExpanded('${planEncode(key)}', this.open)">
+             ontoggle="prepareNewSetModelExpanded('${encodedKey}', this.open)">
       <summary>
         <span class="prepare-new-model-title">
           <strong>${escapeHtml(modelName)}</strong>
           <span>${escapeHtml(group.description || '')}</span>
         </span>
         <span class="prepare-new-model-count"><strong>${required}</strong>Required</span>
-        <span class="prepare-new-model-count"><strong>${assignedQuantity}</strong>Prepared</span>
-        ${prepareNewStatusBadge(complete ? 'complete' : 'pending', complete ? 'Complete' : 'Prepare')}
+        <span class="prepare-new-model-count"><strong>${preparedQuantity}</strong>Prepared${spareLabel}</span>
+        <span class="prepare-new-model-actions">${primaryAction}${menu}</span>
       </summary>
-      <div class="prepare-new-model-assets">
+      ${showExactAssetPanel ? `<div class="prepare-new-model-assets">
         <div class="prepare-new-model-assets-head">
           <span>Select exact assets from inventory</span>
-          <span>${assignedQuantity} / ${required} prepared</span>
+          <span>${openSlots} prepared slot${openSlots === 1 ? '' : 's'} ready to assign</span>
         </div>
         <div class="prepare-new-asset-grid">
           ${allCards.length ? allCards.join('') : '<div class="prepare-new-empty">No matching assets are currently available.</div>'}
         </div>
-      </div>
+      </div>` : ''}
     </details>
   `;
 }
@@ -20340,7 +20498,7 @@ async function prepareNewAssignMissingAsset(eventId, encodedAssetId) {
     });
     await showApiWarning(response);
     const preparedAssetId = response?.data?.assetId || assetId;
-    showNotification('success', `${preparedAssetId} marked found and prepared`);
+    showNotification('success', `${preparedAssetId} marked found and assigned`);
     updateAllButtonsForAsset(preparedAssetId, true, { sourceAssetId: assetId });
     schedulePrepareUiSync(eventId);
     await refreshPrepareNewSelectedEvent({ preserve: true });
@@ -20364,6 +20522,12 @@ async function prepareNewPrepareAsset(eventId, encodedAssetId) {
 
 async function prepareNewUnprepareAsset(eventId, encodedAssetId) {
   await unprepareSpecificAsset(eventId, planDecode(encodedAssetId));
+  await refreshPrepareNewSelectedEvent({ preserve: true });
+}
+
+async function prepareNewUnassignAsset(eventId, encodedAssetId) {
+  const assetId = planDecode(encodedAssetId);
+  await unassignSpecificAsset(eventId, assetId);
   await refreshPrepareNewSelectedEvent({ preserve: true });
 }
 

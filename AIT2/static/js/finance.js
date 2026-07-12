@@ -375,6 +375,31 @@ function financeToggleMenu(menuId, event) {
   if (open) target.classList.add('open');
 }
 
+function financeValidityUnitControl(currentUnit, menuId, selectHandler) {
+  const unit = financeValidityUnitMeta(currentUnit).value;
+  const label = financeValidityUnitMeta(unit).label;
+  return `
+    <span class="finance-custom-control finance-validity-unit-control" onclick="event.stopPropagation()">
+      <button type="button" class="finance-validity-unit-button" onclick="financeToggleMenu('${financeEscapeAttr(menuId)}',event)">
+        ${financeEscape(label)}<span aria-hidden="true">v</span>
+      </button>
+      <span class="finance-custom-menu finance-validity-menu" id="${financeEscapeAttr(menuId)}">
+        ${FINANCE_VALIDITY_UNITS.map(row => `
+          <button type="button" class="${row.value === unit ? 'selected' : ''}" onclick="${selectHandler}('${financeEscapeAttr(row.value)}')">${financeEscape(row.label)}</button>
+        `).join('')}
+      </span>
+    </span>
+  `;
+}
+
+function financeSetSentValidityUnit(value) {
+  const unit = financeValidityUnitMeta(value).value;
+  const input = document.getElementById('financeSentValidityUnitValue');
+  if (input) input.value = unit;
+  const holder = document.getElementById('financeSentValidityUnitHolder');
+  if (holder) holder.innerHTML = financeValidityUnitControl(unit, 'finance-sent-validity-unit-menu', 'financeSetSentValidityUnit');
+}
+
 document.addEventListener('click', event => {
   if (event.target.closest('.finance-custom-control')) return;
   document.querySelectorAll('.finance-custom-menu.open').forEach(menu => menu.classList.remove('open'));
@@ -1119,7 +1144,7 @@ function financeRenderEditor() {
         <span class="finance-save-state" id="financeSaveState">${snapshotMode ? 'Viewing sent snapshot — read only' : (document.projectName ? 'All changes saved' : 'Project Name is required before saving')}</span>
       </div>
       <div class="finance-editor-actions">
-        ${snapshotMode ? '<span class="finance-readonly-pill">Revision view</span>' : `
+        ${snapshotMode ? '<span class="finance-readonly-pill" title="Snapshot view">Revision view</span>' : `
           <div class="finance-editor-revision-chip">${financeSnapshotControl(document)}</div>
           ${financeStatusControl(document, 'editor')}
           <button type="button" class="btn btn-danger" onclick="financeDeleteCurrent()">Delete</button>
@@ -1151,7 +1176,7 @@ function financeRenderEditor() {
             <label class="finance-field finance-span-2"><span>Project Name *</span><input class="finance-input" required value="${financeEscapeAttr(document.projectName || '')}" onchange="financeFieldChange('projectName',this.value)"></label>
             <label class="finance-field finance-span-2"><span>Location</span><input class="finance-input" list="financeLocationSuggestions" value="${financeEscapeAttr(document.eventLocation || '')}" onchange="financeFieldChange('eventLocation',this.value)"></label>
             <label class="finance-field"><span>Quotation date</span><input class="finance-input" type="date" value="${financeEscapeAttr(document.quotationDate || '')}" onchange="financeFieldChange('quotationDate',this.value)"></label>
-            <label class="finance-field"><span>Valid for</span><span class="finance-validity-control"><input class="finance-input" type="number" min="1" max="365" value="${financeEscapeAttr(validityAmount)}" onchange="financeSetValidityAmount(this.value)"><select class="finance-select" onchange="financeSetValidityUnit(this.value)">${FINANCE_VALIDITY_UNITS.map(row => `<option value="${row.value}" ${row.value === validityUnit ? 'selected' : ''}>${row.label}</option>`).join('')}</select></span></label>
+            <label class="finance-field"><span>Valid for</span><span class="finance-validity-control"><input class="finance-input" type="number" min="1" max="365" value="${financeEscapeAttr(validityAmount)}" onchange="financeSetValidityAmount(this.value)">${financeValidityUnitControl(validityUnit, 'finance-editor-validity-unit-menu', 'financeSetValidityUnit')}</span></label>
             <label class="finance-field"><span>PO / reference number</span><input class="finance-input" value="${financeEscapeAttr(document.reference || '')}" onchange="financeFieldChange('reference',this.value)"></label>
             <label class="finance-field"><span>Payment terms</span><input class="finance-input" value="${financeEscapeAttr(document.paymentTerms || '')}" onchange="financeFieldChange('paymentTerms',this.value)"></label>
           </div>
@@ -1703,7 +1728,7 @@ function financeEnsureSentModal() {
     <div class="modal-content" style="max-width:480px;">
       <div class="modal-header"><h3 class="modal-title">Mark quotation as Sent</h3><button type="button" class="close-btn" onclick="closeModal('financeSentModal')">×</button></div>
       <p style="color:#64748b;margin-bottom:16px;">A revision of this quotation will be saved. Later edits will create the next revision.</p>
-      <label class="finance-field"><span>Valid for</span><span class="finance-validity-control"><input id="financeSentValidityAmount" class="finance-input" type="number" min="1" max="365" value="30"><select id="financeSentValidityUnit" class="finance-select">${FINANCE_VALIDITY_UNITS.map(row => `<option value="${row.value}">${row.label}</option>`).join('')}</select></span></label>
+      <label class="finance-field"><span>Valid for</span><span class="finance-validity-control"><input id="financeSentValidityAmount" class="finance-input" type="number" min="1" max="365" value="30"><input id="financeSentValidityUnitValue" type="hidden" value="days"><span id="financeSentValidityUnitHolder">${financeValidityUnitControl('days', 'finance-sent-validity-unit-menu', 'financeSetSentValidityUnit')}</span></span></label>
       <div class="modal-actions" style="display:flex;justify-content:flex-end;gap:8px;margin-top:20px;"><button type="button" class="btn btn-secondary" onclick="closeModal('financeSentModal')">Cancel</button><button type="button" class="btn btn-primary" onclick="financeConfirmSent()">Mark as Sent</button></div>
     </div>
   `;
@@ -1718,7 +1743,7 @@ async function financeRequestStatus(documentId, status, context) {
   if (status === 'sent') {
     financeEnsureSentModal();
     document.getElementById('financeSentValidityAmount').value = financeValidityAmount(documentRow);
-    document.getElementById('financeSentValidityUnit').value = financeValidityUnit(documentRow);
+    financeSetSentValidityUnit(financeValidityUnit(documentRow));
     openModal('financeSentModal');
     return;
   }
@@ -1739,7 +1764,7 @@ async function financeRequestStatus(documentId, status, context) {
 
 async function financeConfirmSent() {
   const amount = Math.max(1, financeNumber(document.getElementById('financeSentValidityAmount')?.value, 30));
-  const unit = financeValidityUnitMeta(document.getElementById('financeSentValidityUnit')?.value).value;
+  const unit = financeValidityUnitMeta(document.getElementById('financeSentValidityUnitValue')?.value).value;
   const days = Math.max(1, Math.round(amount * financeValidityUnitMeta(unit).multiplier));
   closeModal('financeSentModal');
   await financeCommitStatus(financeState.statusTargetId, 'sent', {

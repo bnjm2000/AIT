@@ -90,8 +90,26 @@ class PrepareQuickAddAndAdminDeleteTests(unittest.TestCase):
             json={'assetId': asset_id, **payload},
         )
 
+    def post_prepare_quantity(self, event_id, quantity=1, all_quantity=False):
+        self.login_as('normal')
+        return self.client.post(
+            f'/api/events/{event_id}/prepare-model-quantity',
+            json={
+                'department': 'AX',
+                'brand': 'TestBrand',
+                'model': 'TestModel',
+                'description': 'Matching item',
+                'quantity': quantity,
+                'all': all_quantity,
+                'action': 'prepare',
+            },
+        )
+
     def test_quick_add_disabled_tracks_surplus_as_extra(self):
         event = self.make_event()
+
+        prepare_response = self.post_prepare_quantity(event.event_id)
+        self.assertEqual(prepare_response.status_code, 200, prepare_response.get_data(as_text=True))
 
         response = self.post_assign(event.event_id, quickAdd=False)
 
@@ -135,6 +153,9 @@ class PrepareQuickAddAndAdminDeleteTests(unittest.TestCase):
             extra=[],
         )
 
+        prepare_response = self.post_prepare_quantity(event.event_id, all_quantity=True)
+        self.assertEqual(prepare_response.status_code, 200, prepare_response.get_data(as_text=True))
+
         response = self.post_assign(event.event_id, asset_id='A#01')
 
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
@@ -166,6 +187,75 @@ class PrepareQuickAddAndAdminDeleteTests(unittest.TestCase):
         ]
         detail_asset = next(asset for asset in department_assets if asset['id'] == 'A#01')
         self.assertFalse(detail_asset.get('isExtra'))
+
+    def test_specific_asset_requires_prepared_quantity_before_assignment(self):
+        event = self.make_event(
+            event_id=120,
+            prepared=['[MODEL]AX|TestBrand|TestModel|1|Matching item'],
+            actual=[],
+            extra=[],
+        )
+
+        response = self.post_assign(event.event_id, asset_id='A#01')
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('Prepare quantity', response.get_json()['error'])
+        self.assertNotIn('A#01', event.actually_prepared)
+
+    def test_unprepare_quantity_cannot_remove_assigned_specific_asset(self):
+        event = self.make_event(
+            event_id=121,
+            prepared=['[MODEL]AX|TestBrand|TestModel|1|Matching item'],
+            actual=[],
+            extra=[],
+        )
+        prepare_response = self.post_prepare_quantity(event.event_id, all_quantity=True)
+        self.assertEqual(prepare_response.status_code, 200, prepare_response.get_data(as_text=True))
+        assign_response = self.post_assign(event.event_id, asset_id='A#01')
+        self.assertEqual(assign_response.status_code, 200, assign_response.get_data(as_text=True))
+
+        self.login_as('normal')
+        response = self.client.post(
+            f'/api/events/{event.event_id}/prepare-model-quantity',
+            json={
+                'department': 'AX',
+                'brand': 'TestBrand',
+                'model': 'TestModel',
+                'description': 'Matching item',
+                'quantity': 1,
+                'action': 'unprepare',
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('Unassign specific assets', response.get_json()['error'])
+        self.assertIn('A#01', event.actually_prepared)
+
+    def test_unassign_specific_asset_unprepares_it_and_logs_action(self):
+        event = self.make_event(
+            event_id=122,
+            prepared=['[MODEL]AX|TestBrand|TestModel|1|Matching item'],
+            actual=[],
+            extra=[],
+        )
+        prepare_response = self.post_prepare_quantity(event.event_id, all_quantity=True)
+        self.assertEqual(prepare_response.status_code, 200, prepare_response.get_data(as_text=True))
+        assign_response = self.post_assign(event.event_id, asset_id='A#01')
+        self.assertEqual(assign_response.status_code, 200, assign_response.get_data(as_text=True))
+
+        self.login_as('normal')
+        response = self.client.post(
+            f'/api/events/{event.event_id}/unassign-specific',
+            json={'assetId': 'A#01'},
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertNotIn('A#01', event.actually_prepared)
+        self.assertEqual(self.data_manager.inventory['A#01'].current_location, 'Store')
+        self.assertTrue(any(
+            'Unassigned and unprepared specific asset A#01' in record.get('action', '')
+            for record in event.event_logs
+        ))
 
     def test_event_progress_totals_include_misc_quantity_with_model_requirements(self):
         misc_marker = app_module._make_custom_marker(
@@ -302,7 +392,7 @@ class PrepareQuickAddAndAdminDeleteTests(unittest.TestCase):
         )
         self.assertEqual(model_group['requiredQuantity'], 1)
         self.assertEqual(model_group['preparedQuantity'], 2)
-        self.assertEqual(model_group['extraPreparedQuantity'], 0)
+        self.assertEqual(model_group['extraPreparedQuantity'], 1)
 
     def test_reducing_model_quantity_keeps_prepared_bulk_quantity(self):
         self.data_manager.inventory['BULK-0001'] = self.make_asset(
@@ -344,6 +434,9 @@ class PrepareQuickAddAndAdminDeleteTests(unittest.TestCase):
 
     def test_quick_add_false_overrides_container_auto_add(self):
         event = self.make_event(event_id=104)
+
+        prepare_response = self.post_prepare_quantity(event.event_id)
+        self.assertEqual(prepare_response.status_code, 200, prepare_response.get_data(as_text=True))
 
         response = self.post_assign(event.event_id, quickAdd=False, fromContainer=True, source='container')
 

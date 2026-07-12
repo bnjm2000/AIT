@@ -358,6 +358,40 @@
   gap: 6px;
 }
 
+.finance-validity-unit-control,
+.finance-validity-unit-control > span {
+  display: block;
+  min-width: 0;
+}
+
+.finance-validity-unit-button {
+  width: 100%;
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 10px;
+  border: 1px solid var(--finance-border);
+  border-radius: 9px;
+  background: #fff;
+  color: var(--finance-ink);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.finance-validity-unit-button:hover,
+.finance-validity-unit-button:focus-visible {
+  border-color: var(--finance-accent);
+  outline: 0;
+}
+
+.finance-validity-menu {
+  left: 0;
+  right: auto;
+  min-width: 100%;
+}
+
 .finance-field {
   display: grid;
   gap: 5px;

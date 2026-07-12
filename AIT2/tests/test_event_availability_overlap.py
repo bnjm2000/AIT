@@ -192,7 +192,9 @@ class EventAvailabilityOverlapTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
         assets = response.get_json()['data']
         by_id = {item['id'] or item.get('bulkId'): item for item in assets}
-        self.assertNotIn('MISS#01', by_id)
+        self.assertIn('MISS#01', by_id)
+        self.assertTrue(by_id['MISS#01']['isMissing'])
+        self.assertEqual(by_id['MISS#01']['preparableQuantity'], 0)
         self.assertNotIn('OOC#01', by_id)
         self.assertIn('DEG#01', by_id)
         self.assertTrue(by_id['DEG#01']['isDegraded'])
@@ -462,6 +464,16 @@ class EventAvailabilityOverlapTests(unittest.TestCase):
         ))
 
         self.login_as()
+        prepare_response = self.client.post('/api/events/100/prepare-model-quantity', json={
+            'department': 'AX',
+            'brand': 'TestBrand',
+            'model': 'RegularModel',
+            'description': 'Regular item',
+            'quantity': 1,
+            'action': 'prepare',
+        })
+        self.assertEqual(prepare_response.status_code, 200, prepare_response.get_data(as_text=True))
+
         response = self.client.post('/api/events/100/assign-specific', json={'assetId': 'A#01'})
 
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
