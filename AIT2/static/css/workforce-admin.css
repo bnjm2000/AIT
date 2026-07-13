@@ -2067,6 +2067,47 @@ button.wf-calendar-day.selected {
 .wf-admin-upload-progress { display: grid; grid-template-columns: auto minmax(120px, 1fr) auto; gap: 8px; align-items: center; }
 .wf-admin-upload-progress[hidden] { display: none; }
 
+.wf-admin-dropzone {
+  min-height: 112px;
+  place-items: center;
+  align-content: center;
+  gap: 5px;
+  border: 1.5px dashed color-mix(in srgb, var(--wf-brand, #0f766e) 48%, #cbd5e1);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--wf-brand-soft, #e6fffb) 55%, #fff);
+  cursor: pointer;
+  text-align: center;
+  transition: border-color .15s ease, background .15s ease, box-shadow .15s ease;
+}
+
+.wf-admin-dropzone.dragging {
+  border-color: var(--wf-brand, #0f766e);
+  background: var(--wf-brand-soft, #e6fffb);
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, .12);
+}
+
+.wf-admin-dropzone input[type="file"] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.wf-admin-dropzone strong {
+  color: var(--wf-ink, #172033);
+  font-size: 12px;
+}
+
+.wf-admin-dropzone small {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--wf-muted, #64748b);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .wf-status-button.status-details-required {
   border-color: #fed7aa;
   background: #fff7ed;

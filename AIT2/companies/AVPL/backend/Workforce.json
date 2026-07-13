@@ -1207,22 +1207,6 @@
         "ratePerPax": 250.0,
         "dailyRate": 250.0,
         "roleName": "1 pax manpower"
-      },
-      {
-        "id": "assignment_84861575da49dc47",
-        "freelancerId": "freelancer_dda007d3c157c08b",
-        "subjectType": "worker",
-        "department": "AX",
-        "roleId": "",
-        "roleName": "Setup/Teardown Crew",
-        "days": 2,
-        "workDates": [
-          "2026-04-22",
-          "2026-04-24"
-        ],
-        "dailyRate": 200.0,
-        "notes": "",
-        "createdAt": "2026-07-10T23:30:50+08:00"
       }
     ],
     "90": [
@@ -1329,23 +1313,7 @@
         "createdAt": "2026-07-09T13:36:38+08:00"
       }
     ],
-    "156": [
-      {
-        "id": "assignment_507123f8fa129ba3",
-        "freelancerId": "freelancer_056254ccad945f33",
-        "subjectType": "worker",
-        "department": "AX",
-        "roleId": "",
-        "roleName": "MI",
-        "days": 1,
-        "workDates": [
-          "2026-07-10"
-        ],
-        "dailyRate": 1000.0,
-        "notes": "",
-        "createdAt": "2026-07-10T15:50:42+08:00"
-      }
-    ]
+    "155": []
   },
   "manualDepartments": {
     "132": [],
@@ -1364,14 +1332,7 @@
         "createdAt": "2026-07-05T15:22:43+08:00"
       }
     ],
-    "127": [],
-    "156": [
-      {
-        "code": "AX",
-        "name": "Audio",
-        "createdAt": "2026-07-10T15:50:21+08:00"
-      }
-    ]
+    "127": []
   },
   "hiddenDepartments": {
     "132": [
@@ -1391,8 +1352,7 @@
     ],
     "127": [
       "ELEC"
-    ],
-    "156": []
+    ]
   },
   "uploadAllowances": {
     "132": {
@@ -1674,34 +1634,6 @@
         "createdAt": "2026-07-05T17:45:53+08:00",
         "updatedAt": "2026-07-05T17:45:53+08:00"
       }
-    ],
-    "156": [
-      {
-        "id": "transport_e222fe96e73690e1",
-        "vendorId": "vendor_85e590be636dc47e",
-        "locationFrom": "Office (601 Sims Drive, Pan-I Complex, Singapore 387382)",
-        "locationTo": "*SCAPE Loading Bay (2 Orchard Link, Singapore 237978)",
-        "twoWay": false,
-        "departDate": "2026-07-10",
-        "departTime": "10:00",
-        "returnDate": "2026-07-10",
-        "returnTime": "",
-        "cost": 200.0,
-        "status": "Pending Review",
-        "vehicleType": "24ft Lorry",
-        "company": "",
-        "driver": "Ang Ku Kueh",
-        "companyDriver": "Ang Ku Kueh",
-        "contactNumber": "+6598266597",
-        "vehicleNumber": "",
-        "purpose": "Event transport",
-        "loadType": "",
-        "notes": "",
-        "invoice": null,
-        "reviewHistory": [],
-        "createdAt": "2026-07-10T15:54:46+08:00",
-        "updatedAt": "2026-07-10T15:54:46+08:00"
-      }
     ]
   },
   "submissions": {
@@ -1731,6 +1663,13 @@
                 "from": "Pending Review",
                 "to": "Paid",
                 "amount": 200.0
+              },
+              {
+                "at": "2026-07-13T01:11:51+08:00",
+                "by": "bnjm2000",
+                "from": "Paid",
+                "to": "Paid",
+                "amount": 200.0
               }
             ],
             "amount": 200.0,
@@ -1744,10 +1683,13 @@
                 "amount": 200.0
               }
             ],
-            "reviewedAt": "2026-07-05T14:43:53+08:00",
+            "reviewedAt": "2026-07-13T01:11:51+08:00",
             "reviewedBy": "bnjm2000",
             "verifiedAt": "2026-07-05T14:43:53+08:00",
-            "verifiedBy": "bnjm2000"
+            "verifiedBy": "bnjm2000",
+            "paymentConfirmedAt": "2026-07-13T01:11:51+08:00",
+            "paymentConfirmedByAdmin": "bnjm2000",
+            "paymentConfirmedByWorker": false
           }
         ],
         "claims": []
@@ -2195,6 +2137,20 @@
                 "from": "Pending Review",
                 "to": "Approved",
                 "amount": 750.0
+              },
+              {
+                "at": "2026-07-13T01:11:36+08:00",
+                "by": "bnjm2000",
+                "from": "Approved",
+                "to": "Pending Review",
+                "amount": 750.0
+              },
+              {
+                "at": "2026-07-13T01:11:41+08:00",
+                "by": "bnjm2000",
+                "from": "Pending Review",
+                "to": "Approved",
+                "amount": 750.0
               }
             ],
             "allocations": [
@@ -2209,7 +2165,7 @@
             "ocrDateMatchedText": "",
             "ocrUsed": true,
             "processedAt": "2026-07-06T15:59:44+08:00",
-            "reviewedAt": "2026-07-09T12:04:13+08:00",
+            "reviewedAt": "2026-07-13T01:11:41+08:00",
             "reviewedBy": "bnjm2000",
             "verifiedAt": "2026-07-06T19:43:02+08:00",
             "verifiedBy": "bnjm2000"
@@ -4308,10 +4264,6 @@
           }
         ],
         "claims": []
-      },
-      "freelancer_dda007d3c157c08b": {
-        "invoices": [],
-        "claims": []
       }
     },
     "90": {
@@ -4675,61 +4627,7 @@
         ],
         "claims": []
       }
-    },
-    "156": {
-      "freelancer_056254ccad945f33": {
-        "invoices": [
-          {
-            "id": "sub_050251c59f68f2b6",
-            "originalName": "PORTUGAL. THE MAN - US PRODUCTION RIDER - 2026 V2.pdf",
-            "storedPath": "workforce_uploads/156/freelancer_056254ccad945f33/invoice-91143ae0e42f77fa707f41d4.pdf",
-            "size": 2396145,
-            "contentType": "application/pdf",
-            "submittedAt": "2026-07-10T15:51:33+08:00",
-            "status": "Paid",
-            "denialReason": "",
-            "reviewHistory": [
-              {
-                "at": "2026-07-10T15:53:17+08:00",
-                "by": "bnjm2000",
-                "from": "Pending Review",
-                "to": "Approved",
-                "amount": 1000.0
-              },
-              {
-                "at": "2026-07-10T15:53:23+08:00",
-                "by": "bnjm2000",
-                "from": "Approved",
-                "to": "Paid",
-                "amount": 1000.0
-              }
-            ],
-            "amount": 1000.0,
-            "processingState": "Complete",
-            "submissionStage": "Submitted",
-            "allocations": [
-              {
-                "department": "AX",
-                "amount": 1000.0
-              }
-            ],
-            "ocrConfidence": "Medium",
-            "ocrSource": "PDF text",
-            "ocrMatchedText": "PRODUCTION OVERVIEW CONTACT NAME Ash Volz NAME Morgan Isaac POSITION Tour Manager POSITION Production Manager EMAIL ashleigh.volz@me.com EMAIL morgan.L.isaac@gmail.com CELL +1 480 295 9132 (US) CELL + 6839 (US) 1 703 595 Hello Promoters, Fr",
-            "ocrDateMatchedText": "",
-            "ocrUsed": false,
-            "processedAt": "2026-07-10T15:51:41+08:00",
-            "reviewedAt": "2026-07-10T15:53:23+08:00",
-            "reviewedBy": "bnjm2000",
-            "verifiedAt": "2026-07-10T15:53:17+08:00",
-            "verifiedBy": "bnjm2000",
-            "paymentConfirmedAt": "2026-07-10T15:54:07+08:00",
-            "paymentConfirmedByWorker": true
-          }
-        ],
-        "claims": []
-      }
     }
   },
-  "updatedAt": "2026-07-12T00:53:16+08:00"
+  "updatedAt": "2026-07-13T14:35:28+08:00"
 }

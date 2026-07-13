@@ -2759,6 +2759,8 @@
         display: flex;
         align-items: center;
         gap: 10px;
+        width: 100%;
+        min-width: 0;
         border: 1px solid transparent;
         background: transparent;
         color: #334155;
@@ -2836,11 +2838,16 @@
       }
 
       .nav-label {
+        flex: 1 1 auto;
         min-width: 0;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
         font-size: 13px;
+      }
+
+      .nav-item.nav-item-text-only .nav-label {
+        padding-left: 37px;
       }
 
       .nav-item.active .nav-wire-icon,
@@ -3743,7 +3750,7 @@
         margin-left: auto;
       }
 
-      .event-edit-icon-button {
+      .event-top-icon-button {
         display: inline-grid;
         width: 30px;
         height: 30px;
@@ -3756,15 +3763,15 @@
         transition: background .16s ease, border-color .16s ease, transform .16s ease;
       }
 
-      .event-edit-icon-button:hover,
-      .event-edit-icon-button:focus-visible {
+      .event-top-icon-button:hover,
+      .event-top-icon-button:focus-visible {
         border-color: color-mix(in srgb, var(--event-state) 45%, #dbe5ef);
         background: var(--event-soft);
         color: var(--event-state);
         transform: translateY(-1px);
       }
 
-      .event-edit-icon-button .event-card-menu-icon {
+      .event-top-icon-button .event-card-menu-icon {
         width: 15px;
         height: 15px;
       }
@@ -4680,6 +4687,86 @@
 
       .plan-page-heading {
         margin-bottom: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+
+      .event-subproject-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        flex: 0 0 auto;
+        color: #475569;
+        font-size: 12px;
+        font-weight: 800;
+      }
+
+      .event-subproject-toggle input {
+        width: 16px;
+        height: 16px;
+        accent-color: var(--brand-main);
+      }
+
+      .event-subproject-breakdown {
+        grid-column: 1 / -1;
+        margin-bottom: 12px;
+      }
+
+      .event-subproject-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 10px;
+        padding: 0 14px 14px;
+      }
+
+      .event-subproject-room {
+        min-width: 0;
+        border: 1px solid #dbe3ea;
+        border-radius: 6px;
+        background: #fff;
+      }
+
+      .event-subproject-room h4 {
+        margin: 0;
+        padding: 9px 10px;
+        border-bottom: 1px solid #e2e8f0;
+        font-size: 13px;
+      }
+
+      .event-subproject-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 8px 10px;
+        border-bottom: 1px solid #f1f5f9;
+        font-size: 12px;
+      }
+
+      .event-subproject-item:last-child {
+        border-bottom: 0;
+      }
+
+      .event-subproject-item span {
+        min-width: 0;
+      }
+
+      .event-subproject-item strong,
+      .event-subproject-item small {
+        display: block;
+      }
+
+      .event-subproject-item small {
+        margin-top: 2px;
+        color: #64748b;
+      }
+
+      .prepare-new-heading-actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
       }
 
       .plan-page-heading h2 {
@@ -8798,7 +8885,6 @@
           <div class="nav-section">
             <h3>Settings</h3>
             <button type="button" class="nav-item" data-mark="LO" data-label="Logout" onclick="logout()">Logout</button>
-            <button type="button" class="nav-item" onclick="logout()">🚪 Logout</button>
           </div>
         </nav>
       <main class="main-content" id="mainContent" tabindex="-1">

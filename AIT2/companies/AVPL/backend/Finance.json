@@ -1,5 +1,5 @@
 {
-  "version": 5,
+  "version": 6,
   "documents": [
     {
       "id": "c85f31d125430efa2ba36ca2",
@@ -465,12 +465,16 @@
         "lockDifference": 0.0,
         "tax": 1525.5,
         "total": 18475.5
-      }
+      },
+      "totalDiscountLabel": "",
+      "additionalShows": [],
+      "additionalTeardowns": []
     },
     {
       "id": "ae45f7d8fccd3d4bab347f19",
       "type": "quotation",
       "number": "QT-2026-002-01",
+      "customNumber": false,
       "baseSequence": 2,
       "revision": 1,
       "status": "draft",
@@ -486,7 +490,7 @@
         "address3": "",
         "postalCode": ""
       },
-      "quotationDate": "2026-07-09",
+      "quotationDate": "2026-07-13",
       "validUntil": "",
       "projectName": "SMU Event",
       "title": "SMU Event",
@@ -503,6 +507,10 @@
       "showTime": "",
       "teardownDate": "",
       "teardownTime": "",
+      "additionalShows": [],
+      "additionalTeardowns": [],
+      "validityAmount": 30,
+      "validityUnit": "days",
       "validityDays": 30,
       "currency": "SGD",
       "taxRate": 9.0,
@@ -1113,6 +1121,7 @@
           "label": "25.22% total discount",
           "amount": -5060.0,
           "percent": 25.2243,
+          "calculationMode": "amount",
           "kind": "discount",
           "lockedTotalAdjustment": true
         }
@@ -1127,21 +1136,23 @@
       "showUnitPrices": false,
       "showDepartmentDiscounts": false,
       "showDepartmentSubtotals": true,
+      "showLineNumbers": true,
       "totalLocked": true,
       "lockedPreTaxTotal": 15000.0,
+      "totalDiscountLabel": "",
       "revisions": [],
       "sentAt": "",
       "acceptedAt": "",
       "invoicedAt": "",
       "paidAt": "",
-      "statusChangedAt": "2026-07-09T00:34:57",
+      "statusChangedAt": "2026-07-13T12:50:42",
       "eventId": null,
       "eventManagedByQuotation": false,
       "eventSyncFingerprint": "",
       "sourceQuotationId": "",
       "createdAt": "2026-07-07T00:25:43",
       "createdBy": "bnjm2000",
-      "updatedAt": "2026-07-09T00:34:56",
+      "updatedAt": "2026-07-13T12:50:42",
       "updatedBy": "bnjm2000",
       "eventDays": 1,
       "totals": {
@@ -1433,12 +1444,16 @@
       "showDepartmentSubtotals": true,
       "invoicedAt": "",
       "paidAt": "",
-      "statusChangedAt": "2026-07-07T01:42:52"
+      "statusChangedAt": "2026-07-07T01:42:52",
+      "totalDiscountLabel": "",
+      "additionalShows": [],
+      "additionalTeardowns": []
     },
     {
       "id": "3afb6ff7bcb593c079c3823a",
       "type": "quotation",
       "number": "QT-2026-004-01",
+      "customNumber": false,
       "baseSequence": 4,
       "revision": 1,
       "status": "accepted",
@@ -1471,6 +1486,8 @@
       "showTime": "",
       "teardownDate": "",
       "teardownTime": "",
+      "validityAmount": 30,
+      "validityUnit": "days",
       "validityDays": 30,
       "currency": "SGD",
       "taxRate": 9.0,
@@ -1544,6 +1561,7 @@
       "showUnitPrices": false,
       "showDepartmentDiscounts": true,
       "showDepartmentSubtotals": true,
+      "showLineNumbers": true,
       "totalLocked": false,
       "lockedPreTaxTotal": null,
       "revisions": [
@@ -1675,17 +1693,17 @@
         }
       ],
       "sentAt": "2026-07-12T23:44:40",
-      "acceptedAt": "2026-07-12T23:44:43",
+      "acceptedAt": "2026-07-13T00:57:17",
       "invoicedAt": "",
       "paidAt": "",
-      "statusChangedAt": "2026-07-12T23:44:43",
+      "statusChangedAt": "2026-07-13T00:57:17",
       "eventId": 154,
       "eventManagedByQuotation": false,
       "eventSyncFingerprint": "",
       "sourceQuotationId": "",
       "createdAt": "2026-07-07T15:30:32",
       "createdBy": "bnjm2000",
-      "updatedAt": "2026-07-12T23:44:43",
+      "updatedAt": "2026-07-13T00:57:30",
       "updatedBy": "bnjm2000",
       "eventDays": 1,
       "totals": {
@@ -1698,7 +1716,10 @@
         "lockDifference": 0,
         "tax": 31.5,
         "total": 381.5
-      }
+      },
+      "totalDiscountLabel": "",
+      "additionalShows": [],
+      "additionalTeardowns": []
     },
     {
       "id": "a5c676c64268acbc07325ba5",
@@ -2041,7 +2062,10 @@
         "lockDifference": 0,
         "tax": 340.65,
         "total": 4125.65
-      }
+      },
+      "totalDiscountLabel": "",
+      "additionalShows": [],
+      "additionalTeardowns": []
     },
     {
       "id": "d07c45ae1bdf1848f4c9e45d",
@@ -2172,7 +2196,10 @@
         "lockDifference": 0.0,
         "tax": 252.0,
         "total": 3052.0
-      }
+      },
+      "totalDiscountLabel": "",
+      "additionalShows": [],
+      "additionalTeardowns": []
     },
     {
       "id": "4d0ce480b1c450be710fd7f7",
@@ -2248,7 +2275,10 @@
         "lockDifference": 0,
         "tax": 0.0,
         "total": 0.0
-      }
+      },
+      "totalDiscountLabel": "",
+      "additionalShows": [],
+      "additionalTeardowns": []
     },
     {
       "id": "cc09986ea85c801143ceed3c",
@@ -2324,7 +2354,10 @@
         "lockDifference": 0,
         "tax": 0.0,
         "total": 0.0
-      }
+      },
+      "totalDiscountLabel": "",
+      "additionalShows": [],
+      "additionalTeardowns": []
     },
     {
       "id": "de42cfb325eb6cde3a8f9049",
@@ -2400,6 +2433,207 @@
         "lockDifference": 0,
         "tax": 0.0,
         "total": 0.0
+      },
+      "totalDiscountLabel": "",
+      "additionalShows": [],
+      "additionalTeardowns": []
+    },
+    {
+      "id": "c540463fcc1840cde89cd4ce",
+      "type": "quotation",
+      "number": "QT-2026-010-01",
+      "customNumber": true,
+      "baseSequence": 10,
+      "revision": 1,
+      "status": "draft",
+      "client": {
+        "name": "Adityan Sohien",
+        "company": "Avery Events and Exhibitions",
+        "contactPerson": "",
+        "email": "",
+        "phone": "+65 9652 3212",
+        "taxNumber": "",
+        "address1": "2 Venture Dr, #14-02",
+        "address2": "Vision Exchange",
+        "address3": "",
+        "postalCode": "Singapore 608526"
+      },
+      "quotationDate": "2026-07-13",
+      "validUntil": "",
+      "projectName": "Dry Hire of 43\" TV",
+      "title": "Dry Hire of 43\" TV",
+      "reference": "",
+      "eventReference": "",
+      "salesperson": "Benjamin Ng",
+      "paymentTerms": "30 Days",
+      "eventLocation": "",
+      "setupDate": "2027-07-13",
+      "setupTime": "",
+      "rehearsalDate": "",
+      "rehearsalTime": "",
+      "showDate": "2027-07-14",
+      "showTime": "",
+      "teardownDate": "",
+      "teardownTime": "",
+      "additionalShows": [],
+      "additionalTeardowns": [],
+      "validityAmount": 30,
+      "validityUnit": "days",
+      "validityDays": 30,
+      "currency": "SGD",
+      "taxRate": 9.0,
+      "notes": "",
+      "terms": "1.  Validity: 14 days\n2.  Work shall only commence upon receiving the certified copy of our quotation.  \n3.  Upon confirmation, a 50% non-refundable down payment is required, and the remaining balance must be paid upon\n      completion of the setup.\n4.  All items are rented for indoor usage only (unless otherwise stated).\n5.  Confirmation of rental is on a first-come, first-served basis.\n6.  T/T to: OCBC Bank Limited, 65 Chulia Street, #01 - 00, OCBC Centre, Singapore 049513.\n     Account Number (S$): 601 - 546195 - 001, Swift Code: OCBCSGSG, Account Name: Avec Vision Pte Ltd.\n7.  The hirer is responsible for according to due diligence and cares for equipment.  In agreement, they will undertake liability for\n\"     the loss or damage of the equipment rented.\t\"\n8.  Cancellation charge:  100% of the total amount if cancellation occurs after the completion of the setup.\n9.  Any additional services or equipment not mentioned in this quotation will be charged accordingly.\n\nWe hope the above quotation is acceptable to you and will be looking forward to your early confirmation.   Please feel free to\ncontact the undersigned should you require any further information.",
+      "lineItems": [
+        {
+          "id": "line_1783875603149_fadac2e0aca1d8",
+          "catalogKey": "inventory:ax|yamaha|ql5",
+          "sourceAssetIds": [
+            "QL5#01"
+          ],
+          "brand": "Yamaha",
+          "model": "QL5",
+          "description": "Yamaha QL5 Digital Mixer",
+          "department": "Audio Department",
+          "departmentCode": "AX",
+          "days": 1.0,
+          "quantity": 1.0,
+          "uom": "units",
+          "unitPrice": 650.0,
+          "discountPercent": 0.0,
+          "total": 650.0,
+          "isCustom": false
+        },
+        {
+          "id": "line_1783875607591_d6be7c41c00f98",
+          "catalogKey": "inventory:ax|dpa|4488 (beige)",
+          "sourceAssetIds": [
+            "4488#01",
+            "4488#02",
+            "4488#03",
+            "4488#04",
+            "4488#05",
+            "4488#06",
+            "4488#07",
+            "4488#08",
+            "4488#09",
+            "4488#10",
+            "4488#11",
+            "4488#12"
+          ],
+          "brand": "DPA",
+          "model": "4488 (beige)",
+          "description": "DPA 4488 (beige) Directional Headset",
+          "department": "Audio Department",
+          "departmentCode": "AX",
+          "days": 1.0,
+          "quantity": 2.0,
+          "uom": "units",
+          "unitPrice": 30.0,
+          "discountPercent": 0.0,
+          "total": 60.0,
+          "isCustom": false
+        },
+        {
+          "id": "line_1783916895473_99ccdfe9c5a6f8",
+          "catalogKey": "inventory:vx|lg|43uq7550psf",
+          "sourceAssetIds": [
+            "43INCH#02",
+            "43INCH#03",
+            "43INCH#04",
+            "43INCH#05",
+            "43INCH#06",
+            "43INCH#07",
+            "43INCH#08",
+            "43INCH#09",
+            "43INCH#10",
+            "43INCH#11"
+          ],
+          "brand": "LG",
+          "model": "43UQ7550PSF",
+          "description": "LG 43UQ7550PSF 43\" TV",
+          "department": "Video Department",
+          "departmentCode": "VX",
+          "days": 1.0,
+          "quantity": 4.0,
+          "uom": "units",
+          "unitPrice": 150.0,
+          "discountPercent": 0.0,
+          "total": 600.0,
+          "isCustom": false
+        },
+        {
+          "id": "line_1783922412647_a658cbe37d52d8",
+          "catalogKey": "inventory:ax|shure|sm58s",
+          "sourceAssetIds": [
+            "SM58S#01",
+            "SM58S#02",
+            "SM58S#03",
+            "SM58S#04"
+          ],
+          "brand": "Shure",
+          "model": "SM58S",
+          "description": "Shure SM58S cardioid dynamic w/ switch",
+          "department": "Audio Department",
+          "departmentCode": "AX",
+          "days": 1.0,
+          "quantity": 2.0,
+          "uom": "units",
+          "unitPrice": 20.0,
+          "discountPercent": 0.0,
+          "total": 40.0,
+          "isCustom": false
+        }
+      ],
+      "adjustments": [
+        {
+          "id": "adjustment_1783923981621_9d44678bad1e1",
+          "scope": "department",
+          "department": "Video Department",
+          "label": "Department discount",
+          "amount": -200.0,
+          "percent": 33.3333,
+          "calculationMode": "amount",
+          "kind": "discount",
+          "lockedTotalAdjustment": false
+        }
+      ],
+      "departments": [
+        "Audio Department",
+        "Video Department"
+      ],
+      "showUnitPrices": true,
+      "showDepartmentDiscounts": false,
+      "showDepartmentSubtotals": true,
+      "showLineNumbers": true,
+      "totalLocked": false,
+      "lockedPreTaxTotal": null,
+      "totalDiscountLabel": "",
+      "revisions": [],
+      "sentAt": "",
+      "acceptedAt": "",
+      "invoicedAt": "",
+      "paidAt": "",
+      "statusChangedAt": "2026-07-13T14:49:45",
+      "eventId": 155,
+      "eventManagedByQuotation": false,
+      "eventSyncFingerprint": "",
+      "sourceQuotationId": "",
+      "createdAt": "2026-07-13T00:57:33",
+      "createdBy": "bnjm2000",
+      "updatedAt": "2026-07-13T14:49:45",
+      "updatedBy": "bnjm2000",
+      "eventDays": 2,
+      "totals": {
+        "subtotal": 1350.0,
+        "adjustments": -200.0,
+        "discount": 200.0,
+        "netSubtotal": 1150.0,
+        "calculatedPreTax": 1150.0,
+        "lockedPreTax": null,
+        "lockDifference": 0,
+        "tax": 103.5,
+        "total": 1253.5
       }
     }
   ],
@@ -2697,7 +2931,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-09T00:34:56"
+      "updatedAt": "2026-07-13T12:50:42"
     },
     "bnjm2000::ax|l-acoustics|x12|12\" passive coaxial enclosure": {
       "description": "L-Acoustics X12 12\" passive coaxial enclosure",
@@ -2705,7 +2939,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-09T00:34:56"
+      "updatedAt": "2026-07-13T12:50:42"
     },
     "bnjm2000::ax|l-acoustics|sb18|high power compact subwoofer: 1 x 18\"": {
       "description": "L-Acoustics SB18 High power compact subwoofer: 1 x 18\"",
@@ -2713,7 +2947,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-09T00:34:56"
+      "updatedAt": "2026-07-13T12:50:42"
     },
     "bnjm2000::ax|l-acoustics|la4x|amplified controller": {
       "description": "L-Acoustics LA4X Amplified controller",
@@ -2721,7 +2955,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-09T00:34:56"
+      "updatedAt": "2026-07-13T12:50:42"
     },
     "bnjm2000::ax|shure|ulxd4d [l50]|dual channel receiver": {
       "description": "Shure ULXD4D [L50] Dual Channel Receiver",
@@ -2729,7 +2963,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-09T00:34:56"
+      "updatedAt": "2026-07-13T12:50:42"
     },
     "bnjm2000::ax|shure|ulxd4q [l50]|quad channel receiver": {
       "description": "Shure ULXD4Q [L50] Quad Channel Receiver",
@@ -2737,7 +2971,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-09T00:34:56"
+      "updatedAt": "2026-07-13T12:50:42"
     },
     "bnjm2000::ax|shure|ulxd2 [l50]|handheld microphone": {
       "description": "Shure ULXD2 [L50] Handheld Microphone",
@@ -2745,7 +2979,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-09T00:34:56"
+      "updatedAt": "2026-07-13T12:50:42"
     },
     "bnjm2000::ax|sennheiser|dad(uhf)|spectera bidirectional digital antenna": {
       "description": "Sennheiser DAD(UHF) Spectera Bidirectional digital antenna",
@@ -2753,7 +2987,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-09T00:34:56"
+      "updatedAt": "2026-07-13T12:50:42"
     },
     "bnjm2000::ax|sennheiser|sek(uhf)|spectera bidirectional bodypack": {
       "description": "Sennheiser SEK(UHF) Spectera Bidirectional bodypack",
@@ -2761,7 +2995,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-09T00:34:56"
+      "updatedAt": "2026-07-13T12:50:42"
     },
     "bnjm2000::ax|sennheiser|spectera base station|1ru spectera base station": {
       "description": "Sennheiser Spectera Base Station 1RU Spectera Base Station",
@@ -2769,7 +3003,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-09T00:34:56"
+      "updatedAt": "2026-07-13T12:50:42"
     },
     "bnjm2000::ax|yamaha|rio3224-d2|high performance i/o rack": {
       "description": "Yamaha Rio3224-d2 High Performance I/O Rack",
@@ -2777,7 +3011,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-09T00:34:56"
+      "updatedAt": "2026-07-13T12:50:42"
     },
     "bnjm2000::ax|yamaha|rio1608-d2|high performance i/o rack": {
       "description": "Yamaha Rio1608-d2 High Performance I/O Rack",
@@ -2785,7 +3019,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-09T00:34:56"
+      "updatedAt": "2026-07-13T12:50:42"
     },
     "bnjm2000::ax|shure|sm58s|cardioid dynamic w/ switch": {
       "description": "Shure SM58S cardioid dynamic w/ switch",
@@ -2793,7 +3027,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-09T00:34:56"
+      "updatedAt": "2026-07-13T12:50:42"
     },
     "bnjm2000::ax|shure|beta 91a|boundary condenser microphone": {
       "description": "Shure Beta 91A Boundary condenser microphone",
@@ -2801,7 +3035,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-09T00:34:56"
+      "updatedAt": "2026-07-13T12:50:42"
     },
     "bnjm2000::ax|audix|d6|professional dynamic instrument microphone": {
       "description": "Audix D6 Professional Dynamic Instrument Microphone",
@@ -2809,7 +3043,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-09T00:34:56"
+      "updatedAt": "2026-07-13T12:50:42"
     },
     "bnjm2000::ax|shure|sm57|cardioid dynamic instrument mic": {
       "description": "Shure SM57 cardioid dynamic instrument mic",
@@ -2817,7 +3051,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-09T00:34:56"
+      "updatedAt": "2026-07-13T12:50:42"
     },
     "bnjm2000::ax|akg|c451b|cardioid condenser microphone": {
       "description": "AKG C451B Cardioid condenser microphone",
@@ -2825,7 +3059,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-09T00:34:56"
+      "updatedAt": "2026-07-13T12:50:42"
     },
     "bnjm2000::ax|sennheiser|e904|dynamic cardioid instrument microphone": {
       "description": "Sennheiser E904 Dynamic cardioid instrument microphone",
@@ -2833,7 +3067,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-09T00:34:56"
+      "updatedAt": "2026-07-13T12:50:42"
     },
     "bnjm2000::ax|radial engineering|j48 stereo|phantom powered active direct injection box": {
       "description": "Radial Engineering J48 Stereo Phantom Powered Active Direct Injection Box",
@@ -2841,7 +3075,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-09T00:34:56"
+      "updatedAt": "2026-07-13T12:50:42"
     },
     "bnjm2000::ax|radial engineering|j48 mono|phantom powered active direct injection box": {
       "description": "Radial Engineering J48 Mono Phantom Powered Active Direct Injection Box",
@@ -2849,7 +3083,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-09T00:34:56"
+      "updatedAt": "2026-07-13T12:50:42"
     },
     "bnjm2000::ax|mackie|srm150|5.52\" compact powered monitor 150w": {
       "description": "Mackie SRM150 5.52\" compact powered monitor 150W",
@@ -2857,7 +3091,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-09T00:34:56"
+      "updatedAt": "2026-07-13T12:50:42"
     },
     "bnjm2000::ax|hp|1810-24g|managed gigabit ethernet switch": {
       "description": "HP 1810-24G managed gigabit ethernet switch",
@@ -2865,7 +3099,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-09T00:34:56"
+      "updatedAt": "2026-07-13T12:50:42"
     },
     "bnjm2000::lx|grandma3|compact xt|console": {
       "description": "GrandMA3 Compact XT Console",
@@ -2873,7 +3107,7 @@
       "department": "Lighting Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-09T00:34:56"
+      "updatedAt": "2026-07-13T12:50:42"
     },
     "bnjm2000::lx|dts|nickwash 600|self-contained compact high-output led moving head projector": {
       "description": "DTS NickWash 600 self-contained compact high-output LED moving head projector",
@@ -2881,7 +3115,7 @@
       "department": "Lighting Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-09T00:34:56"
+      "updatedAt": "2026-07-13T12:50:42"
     },
     "bnjm2000::lx|ayrton|diablo (w.dmx)|profile led": {
       "description": "Ayrton Diablo (W.DMX) Profile LED",
@@ -2905,7 +3139,7 @@
       "department": "Lighting Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-09T00:34:56"
+      "updatedAt": "2026-07-13T12:50:42"
     },
     "bnjm2000::lx|le maitre|mvs hazer|hazer machine": {
       "description": "Le Maitre MVS Hazer Hazer machine",
@@ -2913,7 +3147,7 @@
       "department": "Lighting Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-09T00:34:56"
+      "updatedAt": "2026-07-13T12:50:42"
     },
     "bnjm2000::stg|global truss|f34 truss - 2m (silver)|2m truss (silver)": {
       "description": "Global Truss F34 Truss - 2m (Silver) 2m truss (silver)",
@@ -2921,7 +3155,7 @@
       "department": "Staging Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-09T00:34:56"
+      "updatedAt": "2026-07-13T12:50:42"
     },
     "bnjm2000::stg|global truss|f34 truss - 1.5m (silver)|1.5m truss (silver)": {
       "description": "Global Truss F34 Truss - 1.5m (Silver) 1.5m truss (silver)",
@@ -2929,7 +3163,7 @@
       "department": "Staging Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-09T00:34:56"
+      "updatedAt": "2026-07-13T12:50:42"
     },
     "bnjm2000::stg|custom|605mm base plate|605x605mm heavy-duty base plate": {
       "description": "Custom 605mm Base plate 605x605mm heavy-duty base plate",
@@ -2937,7 +3171,7 @@
       "department": "Staging Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-09T00:34:56"
+      "updatedAt": "2026-07-13T12:50:42"
     },
     "bnjm2000::stg|custom|308mm|light-duty top plate": {
       "description": "Custom 308mm light-duty top plate",
@@ -2945,7 +3179,7 @@
       "department": "Staging Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-09T00:34:56"
+      "updatedAt": "2026-07-13T12:50:42"
     },
     "bnjm2000::inventory:ax|l-acoustics|kara ii": {
       "description": "L-Acoustics KARA II Long Throw Concert Sound Loudspeaker",
@@ -3337,7 +3571,7 @@
       "department": "Video Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-12T23:44:43"
+      "updatedAt": "2026-07-13T00:57:30"
     },
     "bnjm2000::asset:qm75c#01": {
       "description": "Samsung LH75QMCEBGCXXS 75\" Crystal UHD Signage",
@@ -3345,7 +3579,7 @@
       "department": "Video Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-12T23:44:43"
+      "updatedAt": "2026-07-13T00:57:30"
     },
     "bnjm2000::asset:qm75c#02": {
       "description": "Samsung LH75QMCEBGCXXS 75\" Crystal UHD Signage",
@@ -3353,7 +3587,7 @@
       "department": "Video Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-12T23:44:43"
+      "updatedAt": "2026-07-13T00:57:30"
     },
     "bnjm2000::asset:qm75c#03": {
       "description": "Samsung LH75QMCEBGCXXS 75\" Crystal UHD Signage",
@@ -3361,7 +3595,7 @@
       "department": "Video Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-12T23:44:43"
+      "updatedAt": "2026-07-13T00:57:30"
     },
     "bnjm2000::asset:qm75c#04": {
       "description": "Samsung LH75QMCEBGCXXS 75\" Crystal UHD Signage",
@@ -3369,7 +3603,7 @@
       "department": "Video Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-12T23:44:43"
+      "updatedAt": "2026-07-13T00:57:30"
     },
     "bnjm2000::inventory:stg|global truss|f34 corner block (silver)": {
       "description": "Corner Block (silver)",
@@ -3377,7 +3611,7 @@
       "department": "Staging Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-12T23:44:43"
+      "updatedAt": "2026-07-13T00:57:30"
     },
     "bnjm2000::asset:bulk-0007": {
       "description": "Global Truss F34 Corner Block (Silver) Corner Block (silver)",
@@ -3729,7 +3963,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-08T19:59:39"
+      "updatedAt": "2026-07-13T14:49:45"
     },
     "bnjm2000::asset:4488#01": {
       "description": "DPA 4488 (beige) Directional Headset",
@@ -3737,7 +3971,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-08T19:59:39"
+      "updatedAt": "2026-07-13T14:49:45"
     },
     "bnjm2000::asset:4488#02": {
       "description": "DPA 4488 (beige) Directional Headset",
@@ -3745,7 +3979,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-08T19:59:39"
+      "updatedAt": "2026-07-13T14:49:45"
     },
     "bnjm2000::asset:4488#03": {
       "description": "DPA 4488 (beige) Directional Headset",
@@ -3753,7 +3987,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-08T19:59:39"
+      "updatedAt": "2026-07-13T14:49:45"
     },
     "bnjm2000::asset:4488#04": {
       "description": "DPA 4488 (beige) Directional Headset",
@@ -3761,7 +3995,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-08T19:59:39"
+      "updatedAt": "2026-07-13T14:49:45"
     },
     "bnjm2000::asset:4488#05": {
       "description": "DPA 4488 (beige) Directional Headset",
@@ -3769,7 +4003,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-08T19:59:39"
+      "updatedAt": "2026-07-13T14:49:45"
     },
     "bnjm2000::asset:4488#06": {
       "description": "DPA 4488 (beige) Directional Headset",
@@ -3777,7 +4011,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-08T19:59:39"
+      "updatedAt": "2026-07-13T14:49:45"
     },
     "bnjm2000::asset:4488#07": {
       "description": "DPA 4488 (beige) Directional Headset",
@@ -3785,7 +4019,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-08T19:59:39"
+      "updatedAt": "2026-07-13T14:49:45"
     },
     "bnjm2000::asset:4488#08": {
       "description": "DPA 4488 (beige) Directional Headset",
@@ -3793,7 +4027,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-08T19:59:39"
+      "updatedAt": "2026-07-13T14:49:45"
     },
     "bnjm2000::asset:4488#09": {
       "description": "DPA 4488 (beige) Directional Headset",
@@ -3801,7 +4035,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-08T19:59:39"
+      "updatedAt": "2026-07-13T14:49:45"
     },
     "bnjm2000::asset:4488#10": {
       "description": "DPA 4488 (beige) Directional Headset",
@@ -3809,7 +4043,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-08T19:59:39"
+      "updatedAt": "2026-07-13T14:49:45"
     },
     "bnjm2000::asset:4488#11": {
       "description": "DPA 4488 (beige) Directional Headset",
@@ -3817,7 +4051,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-08T19:59:39"
+      "updatedAt": "2026-07-13T14:49:45"
     },
     "bnjm2000::asset:4488#12": {
       "description": "DPA 4488 (beige) Directional Headset",
@@ -3825,7 +4059,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-08T19:59:39"
+      "updatedAt": "2026-07-13T14:49:45"
     },
     "bnjm2000::inventory:ax|shure|ha-8091": {
       "description": "Shure HA-8091 Passive Domed Helical Antenna",
@@ -3849,7 +4083,7 @@
       "department": "Lighting Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-09T00:34:56"
+      "updatedAt": "2026-07-13T12:50:42"
     },
     "bnjm2000::asset:diablo#01": {
       "description": "Ayrton Diablo (W.DMX) Profile LED - moving head",
@@ -4209,7 +4443,7 @@
       "department": "Lighting Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-09T00:34:56"
+      "updatedAt": "2026-07-13T12:50:42"
     },
     "bnjm2000::inventory:vx|samsung|ua75ru7100kxxs": {
       "description": "Samsung UA75RU7100KXXS 75\" Smart TV",
@@ -4217,7 +4451,7 @@
       "department": "Video Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-12T23:44:43"
+      "updatedAt": "2026-07-13T00:57:30"
     },
     "bnjm2000::asset:75inch#01": {
       "description": "Samsung UA75RU7100KXXS 75\" Smart TV",
@@ -4225,10 +4459,190 @@
       "department": "Video Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-12T23:44:43"
+      "updatedAt": "2026-07-13T00:57:30"
+    },
+    "bnjm2000::inventory:ax|yamaha|ql5": {
+      "description": "Yamaha QL5 Digital Mixer",
+      "unitPrice": 650.0,
+      "department": "Audio Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-13T14:49:45"
+    },
+    "bnjm2000::asset:ql5#01": {
+      "description": "Yamaha QL5 Digital Mixer",
+      "unitPrice": 650.0,
+      "department": "Audio Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-13T14:49:45"
+    },
+    "bnjm2000::inventory:vx|lg|43up7550ptc": {
+      "description": "LG 43UP7550PTC 43\" TV",
+      "unitPrice": 150.0,
+      "department": "Video Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-13T12:28:24"
+    },
+    "bnjm2000::asset:43inch#01": {
+      "description": "LG 43UP7550PTC 43\" TV",
+      "unitPrice": 150.0,
+      "department": "Video Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-13T12:28:24"
+    },
+    "bnjm2000::inventory:vx|lg|43uq7550psf": {
+      "description": "LG 43UQ7550PSF 43\" TV",
+      "unitPrice": 150.0,
+      "department": "Video Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-13T14:49:45"
+    },
+    "bnjm2000::asset:43inch#02": {
+      "description": "LG 43UQ7550PSF 43\" TV",
+      "unitPrice": 150.0,
+      "department": "Video Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-13T14:49:45"
+    },
+    "bnjm2000::asset:43inch#03": {
+      "description": "LG 43UQ7550PSF 43\" TV",
+      "unitPrice": 150.0,
+      "department": "Video Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-13T14:49:45"
+    },
+    "bnjm2000::asset:43inch#04": {
+      "description": "LG 43UQ7550PSF 43\" TV",
+      "unitPrice": 150.0,
+      "department": "Video Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-13T14:49:45"
+    },
+    "bnjm2000::asset:43inch#05": {
+      "description": "LG 43UQ7550PSF 43\" TV",
+      "unitPrice": 150.0,
+      "department": "Video Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-13T14:49:45"
+    },
+    "bnjm2000::asset:43inch#06": {
+      "description": "LG 43UQ7550PSF 43\" TV",
+      "unitPrice": 150.0,
+      "department": "Video Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-13T14:49:45"
+    },
+    "bnjm2000::asset:43inch#07": {
+      "description": "LG 43UQ7550PSF 43\" TV",
+      "unitPrice": 150.0,
+      "department": "Video Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-13T14:49:45"
+    },
+    "bnjm2000::asset:43inch#08": {
+      "description": "LG 43UQ7550PSF 43\" TV",
+      "unitPrice": 150.0,
+      "department": "Video Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-13T14:49:45"
+    },
+    "bnjm2000::asset:43inch#09": {
+      "description": "LG 43UQ7550PSF 43\" TV",
+      "unitPrice": 150.0,
+      "department": "Video Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-13T14:49:45"
+    },
+    "bnjm2000::asset:43inch#10": {
+      "description": "LG 43UQ7550PSF 43\" TV",
+      "unitPrice": 150.0,
+      "department": "Video Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-13T14:49:45"
+    },
+    "bnjm2000::asset:43inch#11": {
+      "description": "LG 43UQ7550PSF 43\" TV",
+      "unitPrice": 150.0,
+      "department": "Video Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-13T14:49:45"
+    },
+    "bnjm2000::inventory:ax|shure|sm58s": {
+      "description": "Shure SM58S cardioid dynamic w/ switch",
+      "unitPrice": 20.0,
+      "department": "Audio Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-13T14:49:45"
+    },
+    "bnjm2000::asset:sm58s#01": {
+      "description": "Shure SM58S cardioid dynamic w/ switch",
+      "unitPrice": 20.0,
+      "department": "Audio Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-13T14:49:45"
+    },
+    "bnjm2000::asset:sm58s#02": {
+      "description": "Shure SM58S cardioid dynamic w/ switch",
+      "unitPrice": 20.0,
+      "department": "Audio Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-13T14:49:45"
+    },
+    "bnjm2000::asset:sm58s#03": {
+      "description": "Shure SM58S cardioid dynamic w/ switch",
+      "unitPrice": 20.0,
+      "department": "Audio Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-13T14:49:45"
+    },
+    "bnjm2000::asset:sm58s#04": {
+      "description": "Shure SM58S cardioid dynamic w/ switch",
+      "unitPrice": 20.0,
+      "department": "Audio Department",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-13T14:49:45"
     }
   },
   "profitLoss": {
-    "expenses": {}
+    "expenses": {},
+    "commissions": {
+      "155": [
+        {
+          "id": "commission_1783924506216_bf2b6ec4c00b6",
+          "recipient": "Benjamin",
+          "calculationMode": "percent",
+          "percent": 10.0,
+          "amount": 115.0
+        }
+      ],
+      "154": [
+        {
+          "id": "commission_1783924536915_1e3648103b94c",
+          "recipient": "Benjamin",
+          "calculationMode": "percent",
+          "percent": 10.0,
+          "amount": 35.0
+        }
+      ]
+    }
   }
 }

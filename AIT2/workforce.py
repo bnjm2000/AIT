@@ -344,7 +344,10 @@ def _rapid_ocr_engine():
         if _OCR_ENGINE is None:
             from rapidocr_onnxruntime import RapidOCR
 
-            _OCR_ENGINE = RapidOCR()
+            _OCR_ENGINE = RapidOCR(
+                intra_op_num_threads=1,
+                inter_op_num_threads=1,
+            )
         return _OCR_ENGINE
 
 

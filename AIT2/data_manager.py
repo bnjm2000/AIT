@@ -36,7 +36,7 @@ INVENTORY_FIELDNAMES = [
 EVENT_FIELDNAMES = [
     'EventID', 'Name', 'Location', 'StartDate', 'EndDate', 'AssetModels', 'PreparedItems',
     'ReturnedItems', 'State', 'ActuallyPrepared', 'ExtraAssets', 'CustomCollected',
-    'Tag', 'ForceStateOverride', 'EventLogs', 'Notes', 'AssignedUsers'
+    'Tag', 'ForceStateOverride', 'EventLogs', 'Notes', 'AssignedUsers', 'Subprojects'
 ]
 CLIENT_FIELDNAMES = [
     'Name', 'Company', 'ContactPerson', 'Email', 'Phone', 'TaxNumber',
@@ -840,6 +840,7 @@ class DataManager:
                 if event_data.get('EventLogs'):
                     event_logs = self.normalize_event_logs(self._load_event_json_list(event_data, 'EventLogs', filename))
                 assigned_users = self._load_event_json_list(event_data, 'AssignedUsers', filename)
+                subprojects = self._load_event_json_list(event_data, 'Subprojects', filename)
 
                 raw_state = event_data.get('State', 'New')
                 state = normalize_event_state(raw_state)
@@ -863,7 +864,8 @@ class DataManager:
                     custom_collected=custom_collected,
                     notes=raw_notes,
                     event_logs=event_logs,
-                    assigned_users=assigned_users
+                    assigned_users=assigned_users,
+                    subprojects=subprojects,
                 )
 
                 event.actually_prepared = actually_prepared
@@ -874,6 +876,7 @@ class DataManager:
                 event.notes = raw_notes
                 event.event_logs = event_logs
                 event.assigned_users = assigned_users
+                event.subprojects = subprojects
                 event._legacy_state_migrated = str(raw_state or '').strip() != state
 
                 self.events[event_id] = event
@@ -900,6 +903,7 @@ class DataManager:
         location = getattr(event, 'location', '')
         event_logs = self.normalize_event_logs(getattr(event, 'event_logs', []))
         assigned_users = list(getattr(event, 'assigned_users', []) or [])
+        subprojects = list(getattr(event, 'subprojects', []) or [])
         
         if not hasattr(event, 'prepared_items'):
             logger.error("Event %s missing prepared_items - NOT SAVING to prevent data loss!", event.event_id)
@@ -921,6 +925,7 @@ class DataManager:
             custom_collected_json = json.dumps(custom_collected)
             event_logs_json = json.dumps(event_logs)
             assigned_users_json = json.dumps(assigned_users)
+            subprojects_json = json.dumps(subprojects)
         except (TypeError, ValueError) as e:
             logger.error("Cannot serialize event %s data to JSON: %s", event.event_id, e)
             logger.error("prepared_items: %s", event.prepared_items)
@@ -948,7 +953,8 @@ class DataManager:
                 'ForceStateOverride': str(force_state_override),
                 'EventLogs': event_logs_json,
                 'Notes': notes,
-                'AssignedUsers': assigned_users_json
+                'AssignedUsers': assigned_users_json,
+                'Subprojects': subprojects_json,
             }
             
             logger.debug("Row data being written: %s", row_data)

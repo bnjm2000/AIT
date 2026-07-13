@@ -335,6 +335,7 @@ class PostgresDataManager(DataManager):
                 getattr(event, 'event_logs', [])
             ),
             'assignedUsers': list(getattr(event, 'assigned_users', []) or []),
+            'subprojects': list(getattr(event, 'subprojects', []) or []),
         }
 
     def _client_data(self, client):
@@ -512,6 +513,7 @@ class PostgresDataManager(DataManager):
                         notes=data.get('notes', ''),
                         event_logs=data.get('eventLogs') or [],
                         assigned_users=data.get('assignedUsers') or [],
+                        subprojects=data.get('subprojects') or [],
                     )
                     event._legacy_state_migrated = str(raw_state or '').strip() != event.state
                     events[int(event_id)] = event

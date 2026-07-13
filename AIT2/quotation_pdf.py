@@ -89,11 +89,12 @@ def _hex_luminance(value):
 def build_finance_pdf(document, company, logo_path=''):
     """Return an A4 quotation/invoice as PDF bytes."""
     from reportlab.lib import colors
-    from reportlab.lib.enums import TA_LEFT, TA_RIGHT
+    from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
     from reportlab.lib.units import mm
     from reportlab.lib.utils import ImageReader
+    from reportlab.pdfgen.canvas import Canvas
     from reportlab.platypus import (
         HRFlowable,
         KeepTogether,
@@ -179,6 +180,13 @@ def build_finance_pdf(document, company, logo_path=''):
         alignment=TA_RIGHT,
     )
     right = ParagraphStyle('FinanceRight', parent=body, alignment=TA_RIGHT)
+    center = ParagraphStyle('FinanceCenter', parent=body, alignment=TA_CENTER)
+    table_header_center = ParagraphStyle(
+        'FinanceTableHeaderCenter', parent=table_header_label, alignment=TA_CENTER
+    )
+    table_header_right = ParagraphStyle(
+        'FinanceTableHeaderRight', parent=table_header_label, alignment=TA_RIGHT
+    )
     right_bold = ParagraphStyle(
         'FinanceRightBold',
         parent=right,
@@ -257,12 +265,32 @@ def build_finance_pdf(document, company, logo_path=''):
         canvas.setFont('Helvetica', 6.2)
         footer_line = footer_text.replace('\n', ' | ') if footer_text else company_lines[0] if company_lines else ''
         canvas.drawString(margin, 9 * mm, footer_line[:125])
-        canvas.drawRightString(
-            page_width - margin,
-            9 * mm,
-            f"Page {pdf_doc.page}",
-        )
         canvas.restoreState()
+
+    class NumberedCanvas(Canvas):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self._saved_page_states = []
+
+        def showPage(self):
+            self._saved_page_states.append(dict(self.__dict__))
+            self._startPage()
+
+        def save(self):
+            page_count = len(self._saved_page_states)
+            for page_number, state in enumerate(self._saved_page_states, start=1):
+                self.__dict__.update(state)
+                self.saveState()
+                self.setFillColor(muted)
+                self.setFont('Helvetica', 6.2)
+                self.drawRightString(
+                    page_width - margin,
+                    9 * mm,
+                    f"Page {page_number} of {page_count}",
+                )
+                self.restoreState()
+                Canvas.showPage(self)
+            Canvas.save(self)
 
     document_type = str(document.get('type') or 'quotation').lower()
     title = 'INVOICE' if document_type == 'invoice' else 'QUOTATION'
@@ -271,6 +299,7 @@ def build_finance_pdf(document, company, logo_path=''):
     client = document.get('client') or {}
     lines = document.get('lineItems') or []
     adjustments = document.get('adjustments') or []
+    subprojects = document.get('subprojects') or [{'id': 'main', 'name': 'Main Room'}]
 
     story = [
         Table(
@@ -365,6 +394,19 @@ def build_finance_pdf(document, company, logo_path=''):
                 if document.get(time_key):
                     value = f"{value} {document[time_key]}"
             event_bits.append(f"<b>{escape(event_label)}:</b> {escape(_text(value))}")
+    for event_label, key in (
+        ('Show', 'additionalShows'),
+        ('Teardown', 'additionalTeardowns'),
+    ):
+        for index, row in enumerate(document.get(key) or [], start=2):
+            if not isinstance(row, dict) or not row.get('date'):
+                continue
+            value = _date(row.get('date'))
+            if row.get('time'):
+                value = f"{value} {row['time']}"
+            event_bits.append(
+                f"<b>{escape(event_label)} {index}:</b> {escape(_text(value))}"
+            )
     if event_bits:
         event_panel = Table(
             [[Paragraph('<br/>'.join(event_bits), body)]],
@@ -408,12 +450,69 @@ def build_finance_pdf(document, company, logo_path=''):
     if show_unit_prices or show_department_subtotals:
         story.append(_paragraph('LINE ITEMS', section_title))
 
-    export_departments = departments if (show_unit_prices or show_department_subtotals) else []
-    pdf_line_number = 1
-    for department in export_departments:
+    export_groups = []
+    if show_unit_prices or show_department_subtotals:
+        for subproject in subprojects:
+            subproject_id = str(subproject.get('id') or 'main')
+            subproject_departments = []
+            for line in lines:
+                if str(line.get('subprojectId') or 'main') != subproject_id:
+                    continue
+                department = str(line.get('department') or 'General').strip() or 'General'
+                if department not in subproject_departments:
+                    subproject_departments.append(department)
+            export_groups.extend(
+                (subproject, department)
+                for department in subproject_departments
+            )
+    department_summaries = []
+    for subproject, department in export_groups:
+        subproject_id = str(subproject.get('id') or 'main')
         department_lines = [
             line for line in lines
             if (str(line.get('department') or 'General').strip() or 'General') == department
+            and str(line.get('subprojectId') or 'main') == subproject_id
+        ]
+        if not department_lines:
+            continue
+        department_total = sum(float(line.get('total') or 0) for line in department_lines)
+        department_total += sum(
+            float(row.get('amount') or 0)
+            for row in adjustments
+            if row.get('scope') == 'department' and row.get('department') == department
+            and str(row.get('subprojectId') or 'main') == subproject_id
+        )
+        department_summaries.append({
+            'name': department,
+            'subprojectId': subproject_id,
+            'subprojectName': str(subproject.get('name') or 'Room'),
+            'lineCount': len(department_lines),
+            'total': department_total,
+        })
+    pdf_line_number = 1
+    current_subproject_id = None
+    for subproject, department in export_groups:
+        subproject_id = str(subproject.get('id') or 'main')
+        if subproject_id != current_subproject_id:
+            current_subproject_id = subproject_id
+            story.extend([
+                _paragraph(
+                    str(subproject.get('name') or 'Room').upper(),
+                    ParagraphStyle(
+                        f"Subproject-{subproject_id}",
+                        parent=section_title,
+                        fontSize=12,
+                        leading=15,
+                        textColor=accent_on_white,
+                        spaceBefore=5,
+                    ),
+                ),
+                Spacer(1, 1 * mm),
+            ])
+        department_lines = [
+            line for line in lines
+            if (str(line.get('department') or 'General').strip() or 'General') == department
+            and str(line.get('subprojectId') or 'main') == subproject_id
         ]
         if not department_lines:
             continue
@@ -421,6 +520,7 @@ def build_finance_pdf(document, company, logo_path=''):
         department_adjustments = [
             row for row in adjustments
             if row.get('scope') == 'department' and row.get('department') == department
+            and str(row.get('subprojectId') or 'main') == subproject_id
         ]
         department_total += sum(float(row.get('amount') or 0) for row in department_adjustments)
         table_rows = [
@@ -437,14 +537,14 @@ def build_finance_pdf(document, company, logo_path=''):
                 '', '', '', '', '', '', '',
             ],
             [
-                _paragraph('#' if show_line_numbers else '', table_header_label),
+                _paragraph('#' if show_line_numbers else '', table_header_center),
                 _paragraph('DESCRIPTION', table_header_label),
-                _paragraph('DAY(S)', table_header_label),
-                _paragraph('QTY', table_header_label),
-                _paragraph('UOM', table_header_label),
-                _paragraph('UNIT PRICE', table_header_label),
-                _paragraph('DISC %', table_header_label),
-                _paragraph('TOTAL', table_header_label),
+                _paragraph('DAY(S)', table_header_right),
+                _paragraph('QTY', table_header_right),
+                _paragraph('UOM', table_header_right),
+                _paragraph('UNIT PRICE', table_header_right),
+                _paragraph('DISC %', table_header_right),
+                _paragraph('TOTAL', table_header_right),
             ],
         ]
         row_styles = [
@@ -464,11 +564,11 @@ def build_finance_pdf(document, company, logo_path=''):
         for line in department_lines:
             description = _text(line.get('description'))
             table_rows.append([
-                _paragraph(str(pdf_line_number) if show_line_numbers else '', right),
+                _paragraph(str(pdf_line_number) if show_line_numbers else '', center),
                 _paragraph(description, body),
                 _paragraph(f"{float(line.get('days') or 0):g}", right),
                 _paragraph(f"{float(line.get('quantity') or 0):g}", right),
-                _paragraph('unit(s)' if line.get('uom') == 'units' else line.get('uom'), body),
+                _paragraph('unit(s)' if line.get('uom') == 'units' else line.get('uom'), right),
                 _paragraph(_money(line.get('unitPrice'), currency) if show_unit_prices else '', right),
                 _paragraph(
                     f"{float(line.get('discountPercent') or 0):g}%"
@@ -523,8 +623,59 @@ def build_finance_pdf(document, company, logo_path=''):
         )
         story.extend([table_flowable, Spacer(1, 3 * mm)])
 
+    if export_groups:
+        story.append(PageBreak())
+
     tax_label = _text(company.get('taxLabel') or 'Tax')
     tax_rate = float(document.get('taxRate') or 0)
+    use_subproject_summary = len(subprojects) > 1
+    story.append(_paragraph(
+        'SUB-PROJECT SUMMARY' if use_subproject_summary else 'DEPARTMENT SUMMARY',
+        section_title,
+    ))
+    if department_summaries:
+        if use_subproject_summary:
+            summary_source = []
+            for subproject in subprojects:
+                subproject_id = str(subproject.get('id') or 'main')
+                rows = [row for row in department_summaries if row['subprojectId'] == subproject_id]
+                if rows:
+                    summary_source.append({
+                        'name': str(subproject.get('name') or 'Room'),
+                        'lineCount': sum(row['lineCount'] for row in rows),
+                        'total': sum(row['total'] for row in rows),
+                    })
+        else:
+            summary_source = department_summaries
+        department_summary_rows = [[
+            _paragraph('SUB-PROJECT' if use_subproject_summary else 'DEPARTMENT', table_header_label),
+            _paragraph('LINE ITEMS', table_header_center),
+            _paragraph('SUBTOTAL', table_header_right),
+        ]]
+        for department_summary in summary_source:
+            department_summary_rows.append([
+                _paragraph(department_summary['name'], body),
+                _paragraph(str(department_summary['lineCount']), center),
+                _paragraph(_money(department_summary['total'], currency), right_bold),
+            ])
+        department_summary = Table(
+            department_summary_rows,
+            repeatRows=1,
+            colWidths=[doc.width - 56 * mm, 22 * mm, 34 * mm],
+            style=TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), accent),
+                ('TEXTCOLOR', (0, 0), (-1, 0), accent_text),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('LEFTPADDING', (0, 0), (-1, -1), 7),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 7),
+                ('TOPPADDING', (0, 0), (-1, -1), 5),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+                ('LINEBELOW', (0, 1), (-1, -1), 0.35, rule),
+                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FAFC')]),
+            ]),
+        )
+        story.extend([department_summary, Spacer(1, 4 * mm)])
+
     summary_rows = []
     if show_unit_prices or show_department_subtotals:
         for adjustment in adjustments:
@@ -554,11 +705,11 @@ def build_finance_pdf(document, company, logo_path=''):
         hAlign='RIGHT',
         style=TableStyle([
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('LEFTPADDING', (0, 0), (-1, -1), 8),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 8),
-            ('TOPPADDING', (0, 0), (-1, -1), 5),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
-            ('LINEABOVE', (0, -1), (-1, -1), 1, ink),
+            ('LEFTPADDING', (0, 0), (-1, -1), 9),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 9),
+            ('TOPPADDING', (0, 0), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+            ('LINEABOVE', (0, -1), (-1, -1), 1.1, ink),
             ('BACKGROUND', (0, -1), (-1, -1), panel),
         ]),
     )
@@ -592,7 +743,12 @@ def build_finance_pdf(document, company, logo_path=''):
             _paragraph(terms, small),
         ]))
 
-    doc.build(story, onFirstPage=draw_page, onLaterPages=draw_page)
+    doc.build(
+        story,
+        onFirstPage=draw_page,
+        onLaterPages=draw_page,
+        canvasmaker=NumberedCanvas,
+    )
     return buffer.getvalue()
 
 

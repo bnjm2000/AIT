@@ -1,4 +1,5 @@
 import io
+import threading
 import json
 import os
 import tempfile
@@ -180,6 +181,48 @@ class WorkforcePortalTests(unittest.TestCase):
         ][0]
         self.assertEqual(rescanned["amount"], 1388.40)
         self.assertTrue(rescanned["ocrRetriedAt"])
+
+    def test_background_ocr_does_not_hold_the_workforce_store_lock(self):
+        freelancer_id = self.create_worker_assignment()
+        store_was_readable = []
+
+        def extraction_while_checking_store(_path):
+            finished = threading.Event()
+
+            def read_store():
+                app_module.load_workforce(app_module._workforce_folder())
+                finished.set()
+
+            reader = threading.Thread(target=read_store, daemon=True)
+            reader.start()
+            reader.join(timeout=1)
+            store_was_readable.append(finished.is_set())
+            return {
+                "amount": 250,
+                "confidence": "High",
+                "source": "PDF text",
+                "matchedText": "Total $250.00",
+                "ocrUsed": False,
+            }
+
+        with patch.object(
+            app_module,
+            "extract_invoice_amount",
+            side_effect=extraction_while_checking_store,
+        ):
+            response = self.client.post(
+                f"/api/events/143/workforce/submissions/{freelancer_id}",
+                data={
+                    "kind": "invoice",
+                    "file": (io.BytesIO(PDF_BYTES), "non-blocking.pdf"),
+                },
+                content_type="multipart/form-data",
+            )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(store_was_readable, [True])
+        invoice = response.get_json()["data"]["submissions"][freelancer_id]["invoices"][0]
+        self.assertEqual(invoice["processingState"], "Complete")
 
     def create_worker_assignment(self):
         self.login("admin", True)
@@ -1723,6 +1766,18 @@ class WorkforcePortalTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 400)
         self.assertIn("within the event", response.get_json()["error"])
+
+    def test_admin_and_worker_upload_surfaces_support_drag_and_drop(self):
+        static_folder = os.path.join(os.path.dirname(app_module.__file__), "static", "js")
+        with open(os.path.join(static_folder, "workforce-admin.js"), encoding="utf-8") as source_file:
+            admin_source = source_file.read()
+        with open(os.path.join(static_folder, "worker.js"), encoding="utf-8") as source_file:
+            worker_source = source_file.read()
+        self.assertIn("wfAdminUploadDropzone", admin_source)
+        self.assertIn("event.dataTransfer?.files", admin_source)
+        self.assertIn("new DataTransfer()", admin_source)
+        self.assertIn("event-dropzone", worker_source)
+        self.assertIn("dataTransfer.files", worker_source)
 
 
 if __name__ == "__main__":

@@ -192,6 +192,43 @@ class PlanningTemplateTests(unittest.TestCase):
         for category in ('details', 'prepare', 'return', 'manpower'):
             self.assertIn(f'.event-activity-{category}', template)
 
+    def test_sidebar_navigation_has_one_logout_and_clean_finance_labels(self):
+        project_root = os.path.dirname(os.path.dirname(__file__))
+        with open(
+            os.path.join(project_root, 'templates', 'index.html'),
+            encoding='utf-8',
+        ) as template_file:
+            template = template_file.read()
+        with open(
+            os.path.join(project_root, 'static', 'js', 'finance.js'),
+            encoding='utf-8',
+        ) as finance_file:
+            finance_source = finance_file.read()
+        with open(
+            os.path.join(project_root, 'static', 'js', 'app.js'),
+            encoding='utf-8',
+        ) as app_file:
+            app_source = app_file.read()
+
+        self.assertEqual(
+            template.count(
+                '<button type="button" class="nav-item" data-mark="LO" '
+                'data-label="Logout" onclick="logout()">'
+            ),
+            1,
+        )
+        self.assertNotIn(
+            '<button type="button" class="nav-item" onclick="logout()">',
+            template,
+        )
+        self.assertIn('data-section="quotations">Quotations', finance_source)
+        self.assertIn('data-section="profit-loss">Profit &amp; Loss', finance_source)
+        self.assertNotIn('>▤ Quotations', finance_source)
+        self.assertNotIn('>◉ Profit &amp; Loss', finance_source)
+        self.assertIn("quotations: '<path", app_source)
+        self.assertIn("'profit-loss': '<path", app_source)
+        self.assertIn("companiesTab.dataset.label = 'Companies'", app_source)
+
     def test_prepare_trial_and_legacy_workspaces_are_both_available(self):
         self.login('admin')
         response = self.client.get('/')

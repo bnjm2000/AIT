@@ -275,6 +275,24 @@ class EventAssignmentAccessTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
         self.assertEqual({event['id'] for event in response.get_json()['data']}, {1, 2})
 
+    def test_summary_includes_department_progress_without_full_model_groups(self):
+        event = self.data_manager.events[1]
+        event.prepared_items = ['[MODEL]AX|TestBrand|TestModel|2|Test asset']
+        event.actually_prepared = ['A#01']
+        event.start_date = '20260720'
+        event.end_date = '20260721'
+        event.state = 'Preparing'
+        self.login('admin')
+
+        response = self.client.get('/api/events?view=summary')
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        payload = next(row for row in response.get_json()['data'] if row['id'] == 1)
+        self.assertNotIn('modelGroups', payload)
+        self.assertEqual(payload['departmentProgress'], [
+            {'code': 'AX', 'done': 1, 'total': 2},
+        ])
+
         self.login('manager')
         response = self.client.get('/api/events?view=summary')
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))

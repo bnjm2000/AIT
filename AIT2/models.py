@@ -215,6 +215,7 @@ class Event:
         event_logs=None,
         location='',
         assigned_users=None,
+        subprojects=None,
     ):
         clean_name, clean_location, legacy_location_extracted = (
             split_legacy_event_name_location(name, location)
@@ -238,6 +239,7 @@ class Event:
         self.notes = notes or ''
         self.event_logs = event_logs if event_logs is not None else []
         self.assigned_users = list(assigned_users or [])
+        self.subprojects = list(subprojects or [])
 
 
 class LogEntry:

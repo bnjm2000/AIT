@@ -30,14 +30,17 @@ const financeState = {
   collapsedDepartments: {},
   dragLineIndex: null,
   dragDepartment: '',
-  snapshotMode: false
+  snapshotMode: false,
+  activeSubprojectId: 'main',
+  showSubprojects: true
 };
 
 const profitLossState = {
   events: [],
   eventId: null,
   data: null,
-  loading: false
+  loading: false,
+  commissionDraft: []
 };
 
 const compareState = {
@@ -117,6 +120,79 @@ function financeLocationOptions() {
     .slice(0, 80);
 }
 
+function financeShowLocationSuggestions(value = '') {
+  const results = document.getElementById('financeLocationResults');
+  if (!results) return;
+  const query = String(value || '').trim().toLowerCase();
+  const options = financeLocationOptions()
+    .filter(location => !query || location.toLowerCase().includes(query))
+    .slice(0, 6);
+  results.innerHTML = options.map(location => `
+    <button type="button" onmousedown="event.preventDefault();financeChooseLocation('${financeEscapeAttr(encodeURIComponent(location))}')">${financeEscape(location)}</button>
+  `).join('');
+  results.classList.toggle('open', options.length > 0);
+}
+
+function financeChooseLocation(encodedLocation) {
+  const location = decodeURIComponent(encodedLocation);
+  const input = document.getElementById('financeLocationInput');
+  if (input) input.value = location;
+  document.getElementById('financeLocationResults')?.classList.remove('open');
+  financeFieldChange('eventLocation', location);
+}
+
+function financeAdditionalScheduleRows(kind, document = financeState.current) {
+  const key = kind === 'show' ? 'additionalShows' : 'additionalTeardowns';
+  return Array.isArray(document?.[key]) ? document[key] : [];
+}
+
+function financeAddScheduleRow(kind) {
+  if (!financeState.current || !['show', 'teardown'].includes(kind)) return;
+  const key = kind === 'show' ? 'additionalShows' : 'additionalTeardowns';
+  const rows = financeState.current[key] || (financeState.current[key] = []);
+  rows.push({ id: `schedule_${Date.now()}_${Math.random().toString(16).slice(2)}`, date: '', time: '' });
+  financeQueueSave();
+  financeRenderEditor();
+}
+
+function financeAdditionalScheduleChange(kind, index, field, value) {
+  const row = financeAdditionalScheduleRows(kind)[index];
+  if (!row || !['date', 'time'].includes(field)) return;
+  row[field] = value;
+  financeQueueSave();
+}
+
+function financeRemoveScheduleRow(kind, index) {
+  const key = kind === 'show' ? 'additionalShows' : 'additionalTeardowns';
+  if (!financeState.current || !Array.isArray(financeState.current[key])) return;
+  financeState.current[key].splice(index, 1);
+  financeQueueSave();
+  financeRenderEditor();
+}
+
+function financeSchedulePair(label, key) {
+  const document = financeState.current || {};
+  return `
+    <div class="finance-schedule-pair">
+      <strong>${financeEscape(label)}</strong>
+      <input class="finance-input" type="date" value="${financeEscapeAttr(document[`${key}Date`] || '')}" onchange="financeScheduleChange('${key}Date',this.value)">
+      <input class="finance-input" type="time" value="${financeEscapeAttr(document[`${key}Time`] || '')}" onchange="financeScheduleChange('${key}Time',this.value)">
+    </div>
+  `;
+}
+
+function financeAdditionalSchedulePair(kind, row, index) {
+  const label = kind === 'show' ? `Show ${index + 2}` : `Teardown ${index + 2}`;
+  return `
+    <div class="finance-schedule-pair finance-schedule-extra">
+      <strong>${financeEscape(label)}</strong>
+      <input class="finance-input" type="date" value="${financeEscapeAttr(row.date || '')}" onchange="financeAdditionalScheduleChange('${kind}',${index},'date',this.value)">
+      <input class="finance-input" type="time" value="${financeEscapeAttr(row.time || '')}" onchange="financeAdditionalScheduleChange('${kind}',${index},'time',this.value)">
+      <button type="button" class="finance-schedule-remove" title="Remove ${financeEscapeAttr(label)}" aria-label="Remove ${financeEscapeAttr(label)}" onclick="financeRemoveScheduleRow('${kind}',${index})">&times;</button>
+    </div>
+  `;
+}
+
 function financePercent(value, fallback = 0) {
   return Math.max(-9999, Math.min(100, financeNumber(value, fallback)));
 }
@@ -130,6 +206,7 @@ function financeRecalculateAdjustments(document) {
   const lines = document?.lineItems || [];
   const adjustments = document?.adjustments || [];
   adjustments.filter(row => row.scope === 'department').forEach(row => {
+    if ((row.calculationMode || 'percent') !== 'percent') return;
     const percent = Math.max(0, financeNumber(row.percent));
     if (!percent) return;
     const base = lines
@@ -162,9 +239,13 @@ function financeTotals(document = financeState.current) {
 }
 
 function financeEventDays(document = financeState.current) {
-  if (!document?.setupDate || !document?.teardownDate) return 1;
+  const teardownDates = [
+    document?.teardownDate,
+    ...financeAdditionalScheduleRows('teardown', document).map(row => row.date)
+  ].filter(Boolean).sort();
+  if (!document?.setupDate || !teardownDates.length) return 1;
   const start = new Date(`${document.setupDate}T00:00:00`);
-  const end = new Date(`${document.teardownDate}T00:00:00`);
+  const end = new Date(`${teardownDates[teardownDates.length - 1]}T00:00:00`);
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return 1;
   return Math.max(1, Math.round((end - start) / 86400000) + 1);
 }
@@ -173,9 +254,26 @@ function financeUomLabel(value) {
   return FINANCE_UOMS.find(row => row.value === value)?.label || 'unit(s)';
 }
 
-function financeActiveDepartments(document = financeState.current) {
+function financeSubprojects(document = financeState.current) {
+  if (!document) return [];
+  if (!Array.isArray(document.subprojects) || !document.subprojects.length) {
+    document.subprojects = [{ id: 'main', name: 'Main Room' }];
+  }
+  return document.subprojects;
+}
+
+function financeCurrentSubprojectId(document = financeState.current) {
+  const rows = financeSubprojects(document);
+  const active = rows.find(row => row.id === financeState.activeSubprojectId);
+  if (active) return active.id;
+  financeState.activeSubprojectId = rows[0]?.id || 'main';
+  return financeState.activeSubprojectId;
+}
+
+function financeActiveDepartments(document = financeState.current, subprojectId = financeCurrentSubprojectId(document)) {
   const departments = [];
   (document?.lineItems || []).forEach(line => {
+    if (String(line.subprojectId || 'main') !== String(subprojectId || 'main')) return;
     const department = String(line.department || 'Unknown Department').trim() || 'Unknown Department';
     if (!departments.includes(department)) departments.push(department);
   });
@@ -186,11 +284,15 @@ function financeSyncDocumentDepartments(document = financeState.current) {
   if (!document) return [];
   (document.lineItems || []).forEach(line => {
     line.department = String(line.department || 'Unknown Department').trim() || 'Unknown Department';
+    line.subprojectId = line.subprojectId || financeSubprojects(document)[0]?.id || 'main';
   });
-  const departments = financeActiveDepartments(document);
+  const departments = [...new Set((document.lineItems || []).map(line => line.department))];
   document.departments = departments;
-  const active = new Set(departments);
-  document.adjustments = (document.adjustments || []).filter(row => row.scope !== 'department' || active.has(row.department));
+  const active = new Set((document.lineItems || []).map(line => `${line.subprojectId || 'main'}::${line.department}`));
+  document.adjustments = (document.adjustments || []).filter(row => (
+    row.scope !== 'department'
+    || active.has(`${row.subprojectId || 'main'}::${row.department}`)
+  ));
   return departments;
 }
 
@@ -238,9 +340,10 @@ function financeApplyLockedTotalAdjustment(document = financeState.current) {
       id: financeLockedAdjustmentId(document),
       scope: 'total',
       department: '',
-      label: `${labelPercent}% total ${difference < 0 ? 'discount' : 'adjustment'}`,
+      label: String(document.totalDiscountLabel || '').trim() || `${labelPercent}% total ${difference < 0 ? 'discount' : 'adjustment'}`,
       amount: difference,
       percent,
+      calculationMode: 'amount',
       kind: difference < 0 ? 'discount' : 'adjustment',
       lockedTotalAdjustment: true
     }
@@ -248,7 +351,7 @@ function financeApplyLockedTotalAdjustment(document = financeState.current) {
 }
 
 function financeDepartmentCollapseKey(department, document = financeState.current) {
-  return `${document?.id || 'current'}::${department}`;
+  return `${document?.id || 'current'}::${financeCurrentSubprojectId(document)}::${department}`;
 }
 
 function financeIsDepartmentCollapsed(department) {
@@ -385,14 +488,19 @@ function financeValidityUnitControl(currentUnit, menuId, selectHandler) {
       </button>
       <span class="finance-custom-menu finance-validity-menu" id="${financeEscapeAttr(menuId)}">
         ${FINANCE_VALIDITY_UNITS.map(row => `
-          <button type="button" class="${row.value === unit ? 'selected' : ''}" onclick="${selectHandler}('${financeEscapeAttr(row.value)}')">${financeEscape(row.label)}</button>
+          <button type="button" class="${row.value === unit ? 'selected' : ''}" onclick="financeCloseMenus();${selectHandler}('${financeEscapeAttr(row.value)}')">${financeEscape(row.label)}</button>
         `).join('')}
       </span>
     </span>
   `;
 }
 
+function financeCloseMenus() {
+  document.querySelectorAll('.finance-custom-menu.open').forEach(menu => menu.classList.remove('open'));
+}
+
 function financeSetSentValidityUnit(value) {
+  financeCloseMenus();
   const unit = financeValidityUnitMeta(value).value;
   const input = document.getElementById('financeSentValidityUnitValue');
   if (input) input.value = unit;
@@ -402,7 +510,7 @@ function financeSetSentValidityUnit(value) {
 
 document.addEventListener('click', event => {
   if (event.target.closest('.finance-custom-control')) return;
-  document.querySelectorAll('.finance-custom-menu.open').forEach(menu => menu.classList.remove('open'));
+  financeCloseMenus();
 });
 
 function financeStatusControl(document, context = 'list') {
@@ -481,8 +589,8 @@ function setupFinanceNavigation() {
   section.dataset.financeNavigation = 'true';
   section.innerHTML = `
     <h3>Finance</h3>
-    <button type="button" class="nav-item" data-section="quotations">▤ Quotations</button>
-    <button type="button" class="nav-item" data-section="profit-loss">◉ Profit &amp; Loss</button>
+    <button type="button" class="nav-item" data-section="quotations">Quotations</button>
+    <button type="button" class="nav-item" data-section="profit-loss">Profit &amp; Loss</button>
   `;
   const reports = Array.from(sidebar.querySelectorAll('.nav-section')).find(row => row.querySelector('h3')?.textContent.trim() === 'Reports');
   const settings = Array.from(sidebar.querySelectorAll('.nav-section')).find(row => row.querySelector('h3')?.textContent.trim() === 'Settings');
@@ -579,6 +687,9 @@ async function financeCreateDocument() {
   try {
     const response = await apiCall('/api/quotations', 'POST', {});
     financeState.current = response.data;
+    financeState.current._createdBlank = true;
+    financeState.current._initialQuotationDate = financeState.current.quotationDate || '';
+    financeState.activeSubprojectId = financeSubprojects(financeState.current)[0]?.id || 'main';
     financeState.snapshotMode = false;
     financeState.addDepartment = '';
     await financeLoadEditorData();
@@ -592,6 +703,7 @@ async function financeOpenDocument(documentId) {
   try {
     const response = await apiCall(`/api/quotations/${encodeURIComponent(documentId)}`);
     financeState.current = response.data;
+    financeState.activeSubprojectId = financeSubprojects(financeState.current)[0]?.id || 'main';
     financeState.snapshotMode = false;
     financeState.addDepartment = '';
     await financeLoadEditorData();
@@ -608,7 +720,7 @@ function financeRefreshDraftDate(document = financeState.current) {
   const today = financeTodayIso();
   if (document.quotationDate === today) return false;
   document.quotationDate = today;
-  return !!document.projectName;
+  return true;
 }
 
 function financeOpenSnapshot(documentId, revision) {
@@ -900,12 +1012,16 @@ function financeUomControl(line, index) {
 }
 
 function financeAdjustmentRows(department) {
+  const subprojectId = financeCurrentSubprojectId();
   return (financeState.current?.adjustments || [])
-    .filter(row => row.scope === 'department' && row.department === department)
+    .filter(row => row.scope === 'department' && row.department === department && (row.subprojectId || 'main') === subprojectId)
     .map(row => `
-      <tr class="finance-adjustment-row">
-        <td></td><td colspan="7">${financeEscape(row.label)}</td>
-        <td style="text-align:right;">${financeEscape(financeMoney(row.amount))}</td>
+      <tr class="finance-adjustment-row finance-adjustment-editor-row">
+        <td></td>
+        <td colspan="3"><input class="finance-adjustment-label" value="${financeEscapeAttr(row.label || 'Department discount')}" aria-label="Discount name" onchange="financeSetAdjustmentLabel('${financeEscapeAttr(row.id)}',this.value)"></td>
+        <td colspan="2"><span class="finance-percent-input finance-adjustment-percent"><input type="number" min="0" max="100" step="0.1" value="${financeEscapeAttr(financeNumber(row.percent).toFixed(2).replace(/\.?0+$/, ''))}" aria-label="Department discount percentage" onchange="financeSetDepartmentAdjustmentPercent('${financeEscapeAttr(row.id)}','${financeEscapeAttr(encodeURIComponent(department))}',this.value)"><span>%</span></span></td>
+        <td colspan="2"><div class="finance-money-input finance-adjustment-amount"><span>$</span><input type="number" min="0" step="0.01" value="${financeEscapeAttr(Math.abs(financeNumber(row.amount)).toFixed(2))}" aria-label="Department discount amount" onchange="financeSetDepartmentAdjustmentAmount('${financeEscapeAttr(row.id)}','${financeEscapeAttr(encodeURIComponent(department))}',this.value)"></div></td>
+        <td></td>
         <td><button type="button" class="finance-delete-line" onclick="financeRemoveAdjustment('${financeEscapeAttr(row.id)}')">×</button></td>
       </tr>
     `).join('');
@@ -925,6 +1041,7 @@ function financeTotalAdjustmentRows() {
 
 function financeRenderLineGroups() {
   const document = financeState.current;
+  const subprojectId = financeCurrentSubprojectId(document);
   const showLineNumbers = document?.showLineNumbers !== false;
   const configured = financeActiveDepartments(document);
   if (!configured.length) {
@@ -938,9 +1055,9 @@ function financeRenderLineGroups() {
   let displayIndex = 0;
   return configured.map(department => {
     const rows = (document.lineItems || []).map((line, index) => ({ line, index }))
-      .filter(row => (row.line.department || 'Unknown Department') === department);
+      .filter(row => (row.line.department || 'Unknown Department') === department && (row.line.subprojectId || 'main') === subprojectId);
     const base = rows.reduce((sum, row) => sum + financeLineTotal(row.line), 0);
-    const adjustment = (document.adjustments || []).filter(row => row.scope === 'department' && row.department === department)
+    const adjustment = (document.adjustments || []).filter(row => row.scope === 'department' && row.department === department && (row.subprojectId || 'main') === subprojectId)
       .reduce((sum, row) => sum + financeNumber(row.amount), 0);
     const subtotal = base + adjustment;
     const encoded = encodeURIComponent(department);
@@ -992,12 +1109,123 @@ function financeRenderLineGroups() {
         ${lineRows}
         ${financeAdjustmentRows(department)}
         <tr class="finance-department-subtotal-row">
-          <td></td><td colspan="7">${financeEscape(department)} subtotal</td>
+          <td></td><td colspan="5">${financeEscape(department)} subtotal</td>
+          <td colspan="2">${(document.adjustments || []).some(row => row.scope === 'department' && row.department === department && (row.subprojectId || 'main') === subprojectId) ? '' : `<button type="button" class="finance-add-discount" onclick="financeAddDepartmentDiscount('${financeEscapeAttr(encoded)}')">+ Discount</button>`}</td>
           <td><div class="finance-money-input finance-subtotal-input"><span>$</span><input type="number" step="0.01" value="${subtotal.toFixed(2)}" onchange="financeOverrideDepartmentSubtotal(decodeURIComponent('${encoded}'),this.value)"></div></td><td></td>
         </tr>
       `}
     `;
   }).join('') + financeTotalAdjustmentRows();
+}
+
+function financeRenderSubprojectTabs() {
+  const activeId = financeCurrentSubprojectId();
+  const rows = financeSubprojects();
+  return `
+    <div class="finance-subproject-tabs" role="tablist" aria-label="Quotation sub-projects">
+      ${rows.map(row => `
+        <span class="finance-subproject-tab ${row.id === activeId ? 'active' : ''}">
+          <button type="button" role="tab" aria-selected="${row.id === activeId}" onclick="financeSelectSubproject('${financeEscapeAttr(row.id)}')">${financeEscape(row.name)}</button>
+          <button type="button" class="finance-subproject-edit" title="Rename sub-project" onclick="financeRenameSubproject('${financeEscapeAttr(row.id)}')">&#9998;</button>
+          ${rows.length > 1 ? `<button type="button" class="finance-subproject-delete" title="Delete sub-project" onclick="financeDeleteSubproject('${financeEscapeAttr(row.id)}')">&times;</button>` : ''}
+        </span>
+      `).join('')}
+      <button type="button" class="finance-subproject-add" onclick="financeAddSubproject()">+ Sub-project</button>
+    </div>
+  `;
+}
+
+function financeToggleSubprojectView() {
+  financeState.showSubprojects = !financeState.showSubprojects;
+  financeRenderEditor();
+}
+
+function financeRenderCollatedLineGroups() {
+  const groups = new Map();
+  (financeState.current?.lineItems || []).forEach(line => {
+    const key = [line.catalogKey || '', line.brand || '', line.model || '', line.description || '', line.department || '', line.uom || 'units'].join('|').toLowerCase();
+    const existing = groups.get(key) || { ...line, quantity: 0, total: 0, roomCount: 0, roomIds: new Set() };
+    existing.quantity += financeNumber(line.quantity);
+    existing.total = financeNumber(existing.total) + financeLineTotal(line);
+    existing.roomIds.add(line.subprojectId || 'main');
+    existing.roomCount = existing.roomIds.size;
+    groups.set(key, existing);
+  });
+  let index = 0;
+  return [...groups.values()].map(line => `
+    <tr class="finance-line-row finance-collated-line">
+      <td>${financeState.current?.showLineNumbers === false ? '' : ++index}</td>
+      <td><strong>${financeEscape([line.brand, line.model].filter(Boolean).join(' '))}</strong><small>${financeEscape(line.description || '')}</small></td>
+      <td>${financeEscape(line.department || '')}</td>
+      <td>${financeNumber(line.days)}</td>
+      <td><strong>${financeNumber(line.quantity)}</strong></td>
+      <td>${financeEscape(financeUomLabel(line.uom))}</td>
+      <td>${financeEscape(financeMoney(line.unitPrice))}</td>
+      <td>${financeNumber(line.discountPercent) ? `${financeNumber(line.discountPercent)}%` : ''}</td>
+      <td>${financeEscape(financeMoney(line.total))}</td>
+      <td title="Used in ${line.roomCount} sub-project(s)">${line.roomCount}</td>
+    </tr>
+  `).join('') || '<tr class="finance-empty-department"><td colspan="10">No line items yet.</td></tr>';
+}
+
+function financeSelectSubproject(subprojectId) {
+  if (!financeSubprojects().some(row => row.id === subprojectId)) return;
+  financeState.activeSubprojectId = subprojectId;
+  financeState.addDepartment = '';
+  financeRenderEditor();
+}
+
+async function financeAddSubproject() {
+  const name = await showAppPrompt({
+    title: 'Add sub-project',
+    message: 'Name this room or work area.',
+    inputLabel: 'Sub-project name',
+    defaultValue: `Room ${financeSubprojects().length + 1}`,
+    confirmText: 'Add'
+  });
+  if (!String(name || '').trim()) return;
+  const id = `room_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+  financeSubprojects().push({ id, name: String(name).trim() });
+  financeState.activeSubprojectId = id;
+  financeQueueSave();
+  financeRenderEditor();
+}
+
+async function financeRenameSubproject(subprojectId) {
+  const row = financeSubprojects().find(item => item.id === subprojectId);
+  if (!row) return;
+  const name = await showAppPrompt({
+    title: 'Rename sub-project',
+    message: 'Use a clear room or area name.',
+    inputLabel: 'Sub-project name',
+    defaultValue: row.name,
+    confirmText: 'Rename'
+  });
+  if (!String(name || '').trim()) return;
+  row.name = String(name).trim();
+  financeQueueSave();
+  financeRenderEditor();
+}
+
+async function financeDeleteSubproject(subprojectId) {
+  const rows = financeSubprojects();
+  const row = rows.find(item => item.id === subprojectId);
+  if (!row || rows.length <= 1) return;
+  const lineCount = (financeState.current?.lineItems || []).filter(line => (line.subprojectId || 'main') === subprojectId).length;
+  const confirmed = await showAppConfirm({
+    title: 'Delete sub-project',
+    message: lineCount ? `Delete ${row.name} and its ${lineCount} line item(s)?` : `Delete ${row.name}?`,
+    confirmText: 'Delete',
+    destructive: true
+  });
+  if (!confirmed) return;
+  financeState.current.subprojects = rows.filter(item => item.id !== subprojectId);
+  financeState.current.lineItems = (financeState.current.lineItems || []).filter(line => (line.subprojectId || 'main') !== subprojectId);
+  financeState.current.adjustments = (financeState.current.adjustments || []).filter(item => (item.subprojectId || 'main') !== subprojectId || item.scope === 'total');
+  financeState.activeSubprojectId = financeState.current.subprojects[0].id;
+  financeSyncDocumentDepartments();
+  financeQueueSave();
+  financeRenderEditor();
 }
 
 function financeToggleDepartmentCollapse(encodedDepartment) {
@@ -1132,21 +1360,24 @@ function financeRenderEditor() {
   const snapshotMode = !!financeState.snapshotMode;
   const validityUnit = financeValidityUnit(document);
   const validityAmount = financeValidityAmount(document);
-  const locationOptions = financeLocationOptions();
   root.innerHTML = `
     <div class="finance-editor-header">
       <div class="finance-editor-identity">
         <button type="button" class="finance-back" onclick="financeBackToList()">← Back to Quotations</button>
-        <label class="finance-number-field">
-          <span>Quotation number</span>
-          <input id="financeDocumentNumber" class="finance-number-input" value="${financeEscapeAttr(document.number || '')}" onchange="financeSetQuotationNumber(this.value)">
-        </label>
+        <div class="finance-editor-title-row">
+          <label class="finance-number-field">
+            <span>Quotation number</span>
+            <input id="financeDocumentNumber" class="finance-number-input" value="${financeEscapeAttr(document.number || '')}" onchange="financeSetQuotationNumber(this.value)">
+          </label>
+          ${snapshotMode ? '<span class="finance-readonly-pill" title="Snapshot view">Revision view</span>' : `
+            <div class="finance-editor-revision-chip">${financeSnapshotControl(document)}</div>
+            ${financeStatusControl(document, 'editor')}
+          `}
+        </div>
         <span class="finance-save-state" id="financeSaveState">${snapshotMode ? 'Viewing sent snapshot — read only' : (document.projectName ? 'All changes saved' : 'Project Name is required before saving')}</span>
       </div>
       <div class="finance-editor-actions">
-        ${snapshotMode ? '<span class="finance-readonly-pill" title="Snapshot view">Revision view</span>' : `
-          <div class="finance-editor-revision-chip">${financeSnapshotControl(document)}</div>
-          ${financeStatusControl(document, 'editor')}
+        ${snapshotMode ? '' : `
           <button type="button" class="btn btn-danger" onclick="financeDeleteCurrent()">Delete</button>
           <button type="button" class="btn btn-primary" onclick="financeSaveAndExit()">Save and Exit</button>
         `}
@@ -1174,37 +1405,39 @@ function financeRenderEditor() {
             <label class="finance-field finance-span-3"><span>Billing address</span><input class="finance-input" value="${financeEscapeAttr([client.address1, client.address2, client.address3, client.postalCode].filter(Boolean).join(', '))}" onchange="financeSetClientAddress(this.value)"></label>
             <label class="finance-field"><span>Salesperson</span><input class="finance-input" value="${financeEscapeAttr(document.salesperson || '')}" onchange="financeFieldChange('salesperson',this.value)"></label>
             <label class="finance-field finance-span-2"><span>Project Name *</span><input class="finance-input" required value="${financeEscapeAttr(document.projectName || '')}" onchange="financeFieldChange('projectName',this.value)"></label>
-            <label class="finance-field finance-span-2"><span>Location</span><input class="finance-input" list="financeLocationSuggestions" value="${financeEscapeAttr(document.eventLocation || '')}" onchange="financeFieldChange('eventLocation',this.value)"></label>
+            <label class="finance-field finance-span-2"><span>Location</span><span class="finance-location-combobox"><input id="financeLocationInput" class="finance-input" value="${financeEscapeAttr(document.eventLocation || '')}" autocomplete="off" onfocus="financeShowLocationSuggestions(this.value)" oninput="financeFieldChange('eventLocation',this.value);financeShowLocationSuggestions(this.value)" onchange="financeFieldChange('eventLocation',this.value)" onblur="setTimeout(() => document.getElementById('financeLocationResults')?.classList.remove('open'),120)"><span class="finance-location-results" id="financeLocationResults"></span></span></label>
             <label class="finance-field"><span>Quotation date</span><input class="finance-input" type="date" value="${financeEscapeAttr(document.quotationDate || '')}" onchange="financeFieldChange('quotationDate',this.value)"></label>
             <label class="finance-field"><span>Valid for</span><span class="finance-validity-control"><input class="finance-input" type="number" min="1" max="365" value="${financeEscapeAttr(validityAmount)}" onchange="financeSetValidityAmount(this.value)">${financeValidityUnitControl(validityUnit, 'finance-editor-validity-unit-menu', 'financeSetValidityUnit')}</span></label>
             <label class="finance-field"><span>PO / reference number</span><input class="finance-input" value="${financeEscapeAttr(document.reference || '')}" onchange="financeFieldChange('reference',this.value)"></label>
             <label class="finance-field"><span>Payment terms</span><input class="finance-input" value="${financeEscapeAttr(document.paymentTerms || '')}" onchange="financeFieldChange('paymentTerms',this.value)"></label>
           </div>
-          <datalist id="financeLocationSuggestions">
-            ${locationOptions.map(value => `<option value="${financeEscapeAttr(value)}"></option>`).join('')}
-          </datalist>
         </section>
 
         <section class="finance-card finance-section">
           <div class="finance-section-heading"><div><h3>Event schedule</h3><p>Dates are optional. New line items will use ${financeEventDays(document)} day(s).</p></div></div>
           <div class="finance-schedule-grid">
-            ${[['Set-up','setup'],['Rehearsal','rehearsal'],['Show','show'],['Teardown','teardown']].map(([label,key]) => `
-              <div class="finance-schedule-pair">
-                <strong>${label}</strong>
-                <input class="finance-input" type="date" value="${financeEscapeAttr(document[`${key}Date`] || '')}" onchange="financeScheduleChange('${key}Date',this.value)">
-                <input class="finance-input" type="time" value="${financeEscapeAttr(document[`${key}Time`] || '')}" onchange="financeScheduleChange('${key}Time',this.value)">
-              </div>
-            `).join('')}
+            ${financeSchedulePair('Set-up', 'setup')}
+            ${financeSchedulePair('Teardown', 'teardown')}
+            ${financeSchedulePair('Rehearsal', 'rehearsal')}
+            ${financeSchedulePair('Show', 'show')}
+            ${financeAdditionalScheduleRows('show', document).map((row, index) => financeAdditionalSchedulePair('show', row, index)).join('')}
+            ${financeAdditionalScheduleRows('teardown', document).map((row, index) => financeAdditionalSchedulePair('teardown', row, index)).join('')}
+          </div>
+          <div class="finance-schedule-actions">
+            <button type="button" class="btn btn-secondary" onclick="financeAddScheduleRow('show')">+ Add show</button>
+            <button type="button" class="btn btn-secondary" onclick="financeAddScheduleRow('teardown')">+ Add teardown</button>
           </div>
         </section>
 
         <section class="finance-card finance-lines-card">
+          ${financeState.showSubprojects ? financeRenderSubprojectTabs() : ''}
           <div class="finance-section finance-section-heading">
-            <div><h3>Line items</h3><p>Department names accept free text and saved suggestions.</p></div>
+            <div><h3>Line items</h3><p>${financeState.showSubprojects ? 'Department names accept free text and saved suggestions.' : 'Collated totals across every sub-project. Switch on sub-projects to edit lines.'}</p></div>
+            <label class="finance-view-toggle"><input type="checkbox" ${financeState.showSubprojects ? 'checked' : ''} onchange="financeToggleSubprojectView()"><span>Sub-projects</span></label>
           </div>
-          <div style="overflow-x:auto;">
+          <div class="finance-lines-scroll">
             <table class="finance-lines-table">
-              <colgroup><col style="width:34px"><col style="width:38%"><col style="width:76px"><col style="width:44px"><col style="width:38px"><col style="width:54px"><col style="width:76px"><col style="width:48px"><col style="width:78px"><col style="width:28px"></colgroup>
+              <colgroup><col style="width:44px"><col style="width:350px"><col style="width:120px"><col style="width:72px"><col style="width:72px"><col style="width:88px"><col style="width:112px"><col style="width:84px"><col style="width:116px"><col style="width:36px"></colgroup>
               <thead><tr><th>${document.showLineNumbers === false ? '' : '#'}</th><th>Description</th><th>Department</th><th>
                 <div class="finance-custom-control finance-header-control">
                   <button type="button" class="finance-header-button" onclick="financeToggleMenu('${allDaysMenu}',event)">Days</button>
@@ -1214,10 +1447,10 @@ function financeRenderEditor() {
                   </div>
                 </div>
               </th><th>Qty</th><th>UOM</th><th>Unit price</th><th>Disc %</th><th style="text-align:right;">Total</th><th></th></tr></thead>
-              <tbody>${financeRenderLineGroups()}</tbody>
+              <tbody>${financeState.showSubprojects ? financeRenderLineGroups() : financeRenderCollatedLineGroups()}</tbody>
             </table>
           </div>
-          <div class="finance-add-row finance-add-row-expanded">
+          ${financeState.showSubprojects ? `<div class="finance-add-row finance-add-row-expanded">
             <div class="finance-add-item-wrap">
               <input id="financeAddItemInput" class="finance-input" placeholder="Search inventory or previously used custom items..." autocomplete="off" oninput="financeSearchCatalog(this.value)" onkeydown="financeAddItemKeydown(event)">
               <div id="financeCatalogResults" class="finance-catalog-results"></div>
@@ -1227,7 +1460,7 @@ function financeRenderEditor() {
               <div class="finance-inline-suggestions" id="financeAddDepartmentResults"></div>
             </div>
             <button type="button" class="btn btn-primary" onclick="financeAddCustomItem()">+ Add</button>
-          </div>
+          </div>` : ''}
         </section>
 
         <section class="finance-card finance-section">
@@ -1243,7 +1476,7 @@ function financeRenderEditor() {
           <div class="finance-summary-row"><span>Items before adjustments</span><strong>${financeEscape(financeMoney(totals.subtotal))}</strong></div>
           ${totals.discount ? `<div class="finance-summary-row"><span>Discounts</span><strong class="finance-negative">${financeEscape(financeMoney(-totals.discount))}</strong></div>` : ''}
           <div class="finance-summary-row finance-pre-tax-row">
-            <span>Total before GST</span>
+            <span>${document.totalLocked ? `<input class="finance-total-discount-label" value="${financeEscapeAttr(document.totalDiscountLabel || 'Total discount')}" aria-label="Total discount name" onchange="financeSetTotalDiscountLabel(this.value)">` : 'Total before GST'}</span>
             <div class="finance-lock-value">
               <div class="finance-money-input finance-pre-tax-input"><input type="text" inputmode="decimal" value="${financeEscapeAttr(financeMoney(document.totalLocked ? totals.lockedPreTax : totals.netSubtotal))}" onfocus="this.select()" onchange="financeSetLockedPreTax(this.value)"></div>
               <button type="button" class="finance-lock-button ${document.totalLocked ? 'locked' : ''}" title="${document.totalLocked ? 'Unlock pre-GST total' : 'Lock pre-GST total'}" onclick="financeToggleTotalLock()"> ${document.totalLocked ? '🔒' : '🔓'} </button>
@@ -1264,7 +1497,7 @@ function financeRenderEditor() {
           ${financeSwitch('Show department discounts', !!document.showDepartmentDiscounts, "financeToggleDocumentFlag('showDepartmentDiscounts')")}
           ${financeSwitch('Show department subtotals', document.showDepartmentSubtotals !== false, "financeToggleDocumentFlag('showDepartmentSubtotals')")}
           ${financeSwitch('Show line item numbers', document.showLineNumbers !== false, "financeToggleDocumentFlag('showLineNumbers')")}
-          <button type="button" class="btn btn-secondary finance-export-inline" onclick="financeExportPdf()">Export PDF</button>
+          <button type="button" class="btn btn-primary finance-export-inline" onclick="financeExportPdf()">Export PDF</button>
         </section>
         <section class="finance-card finance-section">
           <h3>Event pairing</h3>
@@ -1296,12 +1529,23 @@ function financeBackToList() {
   clearTimeout(financeState.saveTimer);
   const leave = () => { financeState.current = null; financeState.snapshotMode = false; financeLoadList(); };
   if (financeState.snapshotMode) return leave();
-  if (!financeState.current?.projectName) return leave();
+  if (financeQuotationIsBlank(financeState.current)) {
+    return apiCall(`/api/quotations/${encodeURIComponent(financeState.current.id)}`, 'DELETE')
+      .catch(() => null)
+      .finally(leave);
+  }
   financeSaveCurrent(false).finally(leave);
 }
 
 async function financeSaveAndExit() {
   try {
+    if (financeQuotationIsBlank(financeState.current)) {
+      await apiCall(`/api/quotations/${encodeURIComponent(financeState.current.id)}`, 'DELETE');
+      financeState.current = null;
+      financeState.snapshotMode = false;
+      financeLoadList();
+      return;
+    }
     await financeSaveCurrent(false);
     showNotification('success', 'Quotation saved');
     financeState.current = null;
@@ -1321,7 +1565,10 @@ function financeSetQuotationNumber(value) {
     showNotification('warning', 'Quotation number cannot be blank');
     return;
   }
-  financeState.current.number = clean;
+  const revision = Math.max(1, Math.min(99, financeNumber(financeState.current.revision, 1)));
+  financeState.current.number = /-\d{2}$/.test(clean)
+    ? clean.replace(/-\d{2}$/, `-${String(revision).padStart(2, '0')}`)
+    : `${clean}-${String(revision).padStart(2, '0')}`;
   financeState.current.customNumber = true;
   financeQueueSave();
 }
@@ -1353,6 +1600,14 @@ function financeFieldChange(field, value) {
 function financeSetTaxRate(value) {
   if (!financeState.current) return;
   financeState.current.taxRate = Math.max(0, Math.min(100, financeNumber(value, 0)));
+  financeQueueSave();
+  financeRenderEditor();
+}
+
+function financeSetTotalDiscountLabel(value) {
+  if (!financeState.current) return;
+  financeState.current.totalDiscountLabel = String(value || '').trim() || 'Total discount';
+  financeApplyLockedTotalAdjustment(financeState.current);
   financeQueueSave();
   financeRenderEditor();
 }
@@ -1434,22 +1689,82 @@ function financeRemoveAdjustment(id) {
   financeRenderEditor();
 }
 
+function financeDepartmentAdjustment(id, encodedDepartment, create = false) {
+  const adjustments = financeState.current?.adjustments || (financeState.current.adjustments = []);
+  let row = adjustments.find(adjustment => adjustment.id === id);
+  if (!row && create) {
+    const department = decodeURIComponent(encodedDepartment);
+    row = {
+      id: id || `adjustment_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+      scope: 'department',
+      department,
+      label: 'Department discount',
+      amount: 0,
+      percent: 0,
+      kind: 'discount',
+      calculationMode: 'percent',
+      subprojectId: financeCurrentSubprojectId()
+    };
+    adjustments.push(row);
+  }
+  return row;
+}
+
+function financeAddDepartmentDiscount(encodedDepartment) {
+  financeDepartmentAdjustment('', encodedDepartment, true);
+  financeQueueSave();
+  financeRenderEditor();
+}
+
+function financeSetAdjustmentLabel(id, value) {
+  const row = (financeState.current?.adjustments || []).find(adjustment => adjustment.id === id);
+  if (!row) return;
+  row.label = String(value || '').trim() || (row.scope === 'department' ? 'Department discount' : 'Total discount');
+  financeQueueSave();
+}
+
+function financeSetDepartmentAdjustmentPercent(id, encodedDepartment, value) {
+  const row = financeDepartmentAdjustment(id, encodedDepartment, true);
+  row.kind = 'discount';
+  row.calculationMode = 'percent';
+  row.percent = Math.max(0, Math.min(100, financeNumber(value)));
+  financeQueueSave();
+  financeRenderEditor();
+}
+
+function financeSetDepartmentAdjustmentAmount(id, encodedDepartment, value) {
+  const row = financeDepartmentAdjustment(id, encodedDepartment, true);
+  const department = decodeURIComponent(encodedDepartment);
+  const base = (financeState.current?.lineItems || [])
+    .filter(line => line.department === department && (line.subprojectId || 'main') === (row.subprojectId || 'main'))
+    .reduce((sum, line) => sum + financeLineTotal(line), 0);
+  const amount = Math.max(0, financeCurrencyNumber(value));
+  row.kind = 'discount';
+  row.calculationMode = 'amount';
+  row.amount = -Math.round(amount * 100) / 100;
+  row.percent = base ? Math.round(amount / base * 100 * 10000) / 10000 : 0;
+  financeQueueSave();
+  financeRenderEditor();
+}
+
 function financeOverrideDepartmentSubtotal(department, rawTarget) {
   const target = Math.max(0, financeNumber(rawTarget));
-  const base = financeState.current.lineItems.filter(line => line.department === department).reduce((sum, line) => sum + financeLineTotal(line), 0);
+  const subprojectId = financeCurrentSubprojectId();
+  const base = financeState.current.lineItems.filter(line => line.department === department && (line.subprojectId || 'main') === subprojectId).reduce((sum, line) => sum + financeLineTotal(line), 0);
   const difference = target - base;
   const percent = base ? Math.abs(difference) / base * 100 : 0;
   const adjustments = financeState.current.adjustments || (financeState.current.adjustments = []);
-  const existing = adjustments.find(row => row.scope === 'department' && row.department === department);
+  const existing = adjustments.find(row => row.scope === 'department' && row.department === department && (row.subprojectId || 'main') === subprojectId);
   if (Math.abs(difference) < 0.005) {
     financeState.current.adjustments = adjustments.filter(row => row !== existing);
   } else {
-    const row = existing || { id: `adjustment_${Date.now()}_${Math.random().toString(16).slice(2)}`, scope: 'department', department };
+    const row = existing || { id: `adjustment_${Date.now()}_${Math.random().toString(16).slice(2)}`, scope: 'department', department, subprojectId };
     Object.assign(row, {
       amount: Math.round(difference * 100) / 100,
       percent,
       kind: difference < 0 ? 'discount' : 'adjustment',
-      label: `${percent.toFixed(2).replace(/\.?0+$/, '')}% department ${difference < 0 ? 'discount' : 'adjustment'}`
+      calculationMode: 'amount',
+      label: existing?.label || `Department ${difference < 0 ? 'discount' : 'adjustment'}`
     });
     if (!existing) adjustments.push(row);
   }
@@ -1459,7 +1774,12 @@ function financeOverrideDepartmentSubtotal(department, rawTarget) {
 
 function financeApplyAllDays() {
   const value = Math.max(0, financeNumber(document.getElementById('financeAllDaysValue')?.value, 1));
-  financeState.current.lineItems.forEach(line => { line.days = value; line.total = financeLineTotal(line); });
+  const subprojectId = financeCurrentSubprojectId();
+  financeState.current.lineItems.forEach(line => {
+    if ((line.subprojectId || 'main') !== subprojectId) return;
+    line.days = value;
+    line.total = financeLineTotal(line);
+  });
   financeQueueSave();
   financeRenderEditor();
 }
@@ -1494,21 +1814,40 @@ function financeToggleDocumentFlag(field) {
 function financeQueueSave() {
   financeState.changeVersion += 1;
   const state = document.getElementById('financeSaveState');
-  if (state) state.textContent = financeState.current?.projectName ? 'Unsaved changes' : 'Project Name is required before saving';
+  if (state) state.textContent = 'Unsaved changes';
   clearTimeout(financeState.saveTimer);
-  if (!financeState.current?.projectName) return;
   financeState.saveTimer = setTimeout(() => financeSaveCurrent(false), 650);
+}
+
+function financeQuotationIsBlank(document) {
+  if (!document?._createdBlank) return false;
+  const client = document.client || {};
+  const hasClient = Object.values(client).some(value => String(value || '').trim());
+  const dateChanged = String(document.quotationDate || '') !== String(document._initialQuotationDate || '');
+  const rooms = financeSubprojects(document);
+  const hasCustomRooms = rooms.length > 1 || String(rooms[0]?.name || '') !== 'Main Room';
+  const hasOtherContent = [
+    document.reference,
+    document.eventReference,
+    document.eventLocation,
+    document.setupDate,
+    document.rehearsalDate,
+    document.showDate,
+    document.teardownDate,
+    document.notes
+  ].some(value => String(value || '').trim());
+  return !hasClient
+    && !String(document.projectName || '').trim()
+    && !(document.departments || []).length
+    && !(document.lineItems || []).length
+    && !hasCustomRooms
+    && !hasOtherContent
+    && !dateChanged;
 }
 
 async function financeSaveCurrent(notify = false) {
   const current = financeState.current;
   if (!current) return null;
-  if (!String(current.projectName || '').trim()) {
-    const state = document.getElementById('financeSaveState');
-    if (state) state.textContent = 'Project Name is required before saving';
-    if (notify) showNotification('warning', 'Project Name is required');
-    throw new Error('Project Name is required');
-  }
   financeSyncDocumentDepartments(current);
   financeApplyLockedTotalAdjustment(current);
   clearTimeout(financeState.saveTimer);
@@ -1520,6 +1859,8 @@ async function financeSaveCurrent(notify = false) {
     if (financeState.current?.id === current.id && financeState.changeVersion === version) {
       const previousNumber = financeState.current.number;
       const previousStatus = financeState.current.status;
+      response.data._createdBlank = current._createdBlank;
+      response.data._initialQuotationDate = current._initialQuotationDate;
       financeState.current = response.data;
       if (previousNumber !== response.data.number || previousStatus !== response.data.status || notify) financeRenderEditor();
     } else if (financeState.current?.id === current.id) {
@@ -1532,7 +1873,7 @@ async function financeSaveCurrent(notify = false) {
     return response.data;
   } catch (error) {
     if (state) state.textContent = 'Save failed';
-    if (notify || error.message !== 'Project Name is required') showNotification('error', error.message || 'Failed to save quotation');
+    if (notify) showNotification('error', error.message || 'Failed to save quotation');
     throw error;
   }
 }
@@ -1639,7 +1980,8 @@ function financeAddLineFromCatalog(selected, departmentOverride = '', quantityOv
     unitPrice: financeNumber(selected.unitPrice),
     discountPercent: 0,
     total: financeNumber(selected.unitPrice) * days * quantity,
-    isCustom: !!selected.isCustom
+    isCustom: !!selected.isCustom,
+    subprojectId: financeCurrentSubprojectId()
   });
 }
 
@@ -1689,7 +2031,8 @@ async function financeAddCustomItem() {
     unitPrice: financeNumber(exactLoaded.unitPrice),
     discountPercent: 0,
     total: financeNumber(exactLoaded.unitPrice) * financeEventDays(),
-    isCustom: true
+    isCustom: true,
+    subprojectId: financeCurrentSubprojectId()
   });
   financeSyncDocumentDepartments();
   financeState.catalog = [];
@@ -2114,7 +2457,7 @@ function renderProfitLossPage() {
       ${profitLossKpi('Manpower Cost', financeSgd(summary.manpowerCost), summary.manpowerInvoiceCost > 0 ? 'From manpower invoices' : 'From manpower assignments', 'pnl-link-kpi', `profitLossOpenManpower(${Number(event.id) || 0})`)}
       ${profitLossKpi('Transport Cost', financeSgd(summary.transportCost), transportNoteParts.join(' | ') || 'No transport costs', 'pnl-link-kpi', `profitLossOpenManpower(${Number(event.id) || 0}, 'transport')`)}
       ${profitLossKpi('Other Expenses', financeSgd(summary.otherExpenses), otherNoteParts.join(' | ') || 'No other expenses')}
-      ${profitLossKpi('Commission', financeSgd(summary.commission), financeNumber(summary.commission) > 0 ? `${financePercentDisplay(summary.commissionRate)} configured` : 'No commission added')}
+      ${profitLossKpi('Commission', financeSgd(summary.commission), financeNumber(summary.commission) > 0 ? `${(data.commissions || []).length} recipient${(data.commissions || []).length === 1 ? '' : 's'} · ${financePercentDisplay(summary.commissionRate)}` : 'Click to add commission', 'pnl-link-kpi', 'profitLossOpenCommissionModal()')}
       ${profitLossKpi('Net Profit', financeSignedSgd(summary.netProfit), '')}
       ${profitLossKpi('Profit Margin', financePercentDisplay(summary.profitMargin), 'of revenue')}
     </div>
@@ -2239,6 +2582,99 @@ function financeEnsureProfitLossExpenseModal() {
     </div>
   `;
   document.body.appendChild(modal);
+}
+
+function financeEnsureProfitLossCommissionModal() {
+  if (document.getElementById('profitLossCommissionModal')) return;
+  const modal = document.createElement('div');
+  modal.id = 'profitLossCommissionModal';
+  modal.className = 'modal';
+  modal.innerHTML = `
+    <div class="modal-content finance-commission-modal">
+      <div class="modal-header"><h3 class="modal-title">Commission</h3><button type="button" class="close-btn" onclick="closeModal('profitLossCommissionModal')">&times;</button></div>
+      <form onsubmit="profitLossSaveCommissions(event)">
+        <div class="modal-body">
+          <div id="profitLossCommissionRows" class="pnl-commission-rows"></div>
+          <button type="button" class="btn btn-secondary" onclick="profitLossAddCommissionRow()">+ Add commission</button>
+          <div class="wf-error" id="profitLossCommissionError"></div>
+        </div>
+        <div class="modal-footer"><button type="button" class="btn btn-secondary" onclick="closeModal('profitLossCommissionModal')">Cancel</button><button type="submit" class="btn btn-primary">Save commission</button></div>
+      </form>
+    </div>`;
+  document.body.appendChild(modal);
+}
+
+function profitLossCommissionDraft() {
+  return profitLossState.commissionDraft || (profitLossState.commissionDraft = []);
+}
+
+function profitLossOpenCommissionModal() {
+  financeEnsureProfitLossCommissionModal();
+  profitLossState.commissionDraft = (profitLossState.data?.commissions || []).map(row => ({ ...row }));
+  if (!profitLossState.commissionDraft.length) profitLossAddCommissionRow(false);
+  profitLossRenderCommissionRows();
+  openModal('profitLossCommissionModal');
+}
+
+function profitLossAddCommissionRow(render = true) {
+  profitLossCommissionDraft().push({
+    id: `commission_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+    recipient: '', calculationMode: 'percent', percent: 0, amount: 0
+  });
+  if (render) profitLossRenderCommissionRows();
+}
+
+function profitLossRemoveCommissionRow(index) {
+  profitLossCommissionDraft().splice(index, 1);
+  profitLossRenderCommissionRows();
+}
+
+function profitLossCommissionChange(index, field, value) {
+  const row = profitLossCommissionDraft()[index];
+  if (!row) return;
+  if (field === 'recipient') row.recipient = value;
+  if (field === 'calculationMode') row.calculationMode = value === 'amount' ? 'amount' : 'percent';
+  if (field === 'percent') {
+    row.percent = Math.max(0, Math.min(100, financeNumber(value)));
+    row.amount = Math.round(financeNumber(profitLossState.data?.summary?.revenue) * row.percent) / 100;
+    row.calculationMode = 'percent';
+  }
+  if (field === 'amount') {
+    row.amount = Math.max(0, financeCurrencyNumber(value));
+    const revenue = financeNumber(profitLossState.data?.summary?.revenue);
+    row.percent = revenue ? Math.round(row.amount / revenue * 100 * 10000) / 10000 : 0;
+    row.calculationMode = 'amount';
+  }
+  profitLossRenderCommissionRows();
+}
+
+function profitLossRenderCommissionRows() {
+  const holder = document.getElementById('profitLossCommissionRows');
+  if (!holder) return;
+  holder.innerHTML = profitLossCommissionDraft().map((row, index) => `
+    <div class="pnl-commission-row">
+      <label class="finance-field"><span>Recipient</span><input class="finance-input" value="${financeEscapeAttr(row.recipient || '')}" placeholder="Name or company" onchange="profitLossCommissionChange(${index},'recipient',this.value)"></label>
+      <label class="finance-field"><span>Percentage</span><span class="finance-percent-input"><input class="finance-input" type="number" min="0" max="100" step="0.1" value="${financeEscapeAttr(row.percent || 0)}" onchange="profitLossCommissionChange(${index},'percent',this.value)"><span>%</span></span></label>
+      <label class="finance-field"><span>Amount</span><span class="finance-money-input"><span>$</span><input class="finance-input" type="number" min="0" step="0.01" value="${financeEscapeAttr(row.amount || 0)}" onchange="profitLossCommissionChange(${index},'amount',this.value)"></span></label>
+      <span class="pnl-commission-mode">Using ${row.calculationMode === 'amount' ? 'amount' : 'percentage'}</span>
+      <button type="button" class="finance-delete-line" title="Remove commission" aria-label="Remove commission" onclick="profitLossRemoveCommissionRow(${index})">&times;</button>
+    </div>
+  `).join('') || '<div class="finance-empty" style="padding:18px 0;">No commission rows.</div>';
+}
+
+async function profitLossSaveCommissions(event) {
+  event.preventDefault();
+  const rows = profitLossCommissionDraft().filter(row => row.recipient || financeNumber(row.percent) > 0 || financeNumber(row.amount) > 0);
+  try {
+    const response = await apiCall(`/api/finance/profit-loss/${profitLossState.eventId}/commissions`, 'PUT', { commissions: rows });
+    profitLossState.data = response.data;
+    closeModal('profitLossCommissionModal');
+    renderProfitLossPage();
+    showNotification('success', 'Commission updated');
+  } catch (error) {
+    const holder = document.getElementById('profitLossCommissionError');
+    if (holder) holder.textContent = error.message || 'Failed to save commission';
+  }
 }
 
 function profitLossOpenExpenseModal() {

@@ -3779,6 +3779,80 @@ def _event_specific_counts(event):
     }
 
 
+def _event_department_progress_payload(event, model_groups, has_model_assignments):
+    """Return compact per-department progress for event overview cards."""
+    _ensure_event_custom_lists(event)
+    state = str(getattr(event, 'state', '') or '')
+    uses_returns = state in ('Returning', 'Overdue', 'Pending Closure', 'Closed')
+    uses_out = state in ('Ongoing', 'Last Day')
+    totals = {}
+
+    def add(department, required, prepared=0, returned=0):
+        code = _normalise_department_code(department) or 'UN'
+        row = totals.setdefault(code, {'code': code, 'done': 0, 'total': 0})
+        quantity = max(0, _safe_int(required, 0))
+        prepared_quantity = max(0, _safe_int(prepared, 0))
+        returned_quantity = max(0, _safe_int(returned, 0))
+        if uses_returns:
+            done = returned_quantity
+        elif uses_out:
+            done = max(prepared_quantity - returned_quantity, 0)
+        elif state == 'New':
+            done = 0
+        else:
+            done = prepared_quantity
+        row['done'] += min(done, quantity) if quantity else 0
+        row['total'] += quantity
+
+    for group in model_groups.values():
+        add(
+            group.get('department'),
+            group.get('requiredQuantity'),
+            group.get('countablePreparedQuantity'),
+            group.get('countableReturnedQuantity'),
+        )
+
+    for marker in event.prepared_items:
+        custom = _parse_custom_marker(marker)
+        if not custom:
+            continue
+        quantity = max(1, _safe_int(custom.get('quantity'), 1))
+        is_returned = marker in event.returned_items
+        is_prepared = marker in event.actually_prepared
+        is_collected = custom['type'] == 'LOAN' and marker in event.custom_collected
+        add(
+            custom.get('department'),
+            quantity,
+            quantity if is_prepared or is_returned or is_collected else 0,
+            quantity if is_returned else 0,
+        )
+
+    if not has_model_assignments:
+        extra_assets = set(getattr(event, 'extra_assets', []) or [])
+        for asset_id in dict.fromkeys(event.prepared_items):
+            if (
+                not isinstance(asset_id, str)
+                or asset_id in extra_assets
+                or asset_id.startswith('[MODEL]')
+                or _is_prepared_model_ref(asset_id)
+                or _is_bulk_ref(asset_id)
+                or _is_custom_ref(asset_id)
+            ):
+                continue
+            asset = data_manager.inventory.get(asset_id)
+            add(
+                getattr(asset, 'department_code', 'UN') if asset else 'UN',
+                1,
+                1 if asset_id in event.actually_prepared or asset_id in event.returned_items else 0,
+                1 if asset_id in event.returned_items else 0,
+            )
+
+    return sorted(
+        (row for row in totals.values() if row['total'] > 0),
+        key=lambda row: (-row['total'], row['code']),
+    )
+
+
 def _event_extra_asset_quantity(event):
     """Active manual extras for the Event Summary card.
 
@@ -6324,15 +6398,26 @@ def _process_worker_submission_upload(
             )
             if not path or not os.path.isfile(path):
                 raise FileNotFoundError('Uploaded file could not be found')
-            extraction = (
-                extract_invoice_amount(path)
-                if kind == 'invoice'
-                else extract_claim_amount(
-                    path,
-                    record.get('contentType', ''),
-                    record.get('originalName', ''),
-                )
+            content_type = record.get('contentType', '')
+            original_name = record.get('originalName', '')
+
+        extraction = (
+            extract_invoice_amount(path)
+            if kind == 'invoice'
+            else extract_claim_amount(
+                path,
+                content_type,
+                original_name,
             )
+        )
+
+        with mutate_workforce(data_folder) as workforce:
+            found = _find_worker_owned_submission(
+                workforce, freelancer_id, submission_id
+            )
+            if not found:
+                return
+            record = found['record']
             detected_amount = extraction.get('amount')
             if detected_amount is not None:
                 record['amount'] = detected_amount
@@ -11651,6 +11736,11 @@ def get_events():
                 'fileCount': len(_event_files_for_response(event.event_id)),
                 'assignedUsernames': _event_assigned_usernames(event),
                 'assignedUsers': _event_assignee_payloads(event),
+                'departmentProgress': _event_department_progress_payload(
+                    event,
+                    model_groups,
+                    has_model_assignments,
+                ),
             }
             if not summary_view:
                 event_payload.update({
@@ -11661,6 +11751,7 @@ def get_events():
                     'customCollected': getattr(event, 'custom_collected', []),
                     'returnableRefs': returnable_counts['refs'],
                     'modelGroups': model_groups,
+                    'subprojects': getattr(event, 'subprojects', []) or [],
                 })
             events_data.append(event_payload)
 
@@ -12072,6 +12163,7 @@ def get_event(event_id):
             'totalReturned': total_returned,
             'totalExtraAssets': total_extra_assets,
             'modelGroups': model_groups,
+            'subprojects': getattr(event, 'subprojects', []) or [],
             'forceStateOverride': getattr(event, 'force_state_override', False),
             'notes': getattr(event, 'notes', '') or '',
             'files': _event_files_for_response(event.event_id),
@@ -18937,7 +19029,7 @@ def check_and_update_ongoing_events():
 # ---------------- Quotations and invoices ----------------
 
 FINANCE_FILENAME = 'Finance.json'
-FINANCE_VERSION = 5
+FINANCE_VERSION = 7
 FINANCE_QUOTATION_STATUSES = (
     'draft', 'sent', 'accepted', 'declined', 'expired',
     'cancelled', 'invoiced', 'paid',
@@ -18957,6 +19049,7 @@ def _finance_defaults():
         'priceBook': {},
         'profitLoss': {
             'expenses': {},
+            'commissions': {},
         },
     }
 
@@ -19024,7 +19117,12 @@ def _finance_department_details(value, code_hint=''):
 
 
 def _finance_format_number(prefix, year, sequence, revision):
-    return f"{prefix}-{year}-{max(1, int(sequence)):03d}-{max(1, int(revision)):02d}"
+    return f"{prefix}-{year}-{max(1, int(sequence)):03d}-{min(99, max(1, int(revision))):02d}"
+
+
+def _finance_number_with_revision(number, revision):
+    base = re.sub(r'-\d{2}$', '', str(number or '').strip()) or 'QT'
+    return f"{base}-{min(99, max(1, int(revision))):02d}"
 
 
 def _finance_active_departments(lines):
@@ -19072,10 +19170,13 @@ def _migrate_finance_data(data):
 
     profit_loss = data.get('profitLoss')
     if not isinstance(profit_loss, dict):
-        data['profitLoss'] = {'expenses': {}}
+        data['profitLoss'] = {'expenses': {}, 'commissions': {}}
         changed = True
     elif not isinstance(profit_loss.get('expenses'), dict):
         profit_loss['expenses'] = {}
+        changed = True
+    if isinstance(data.get('profitLoss'), dict) and not isinstance(data['profitLoss'].get('commissions'), dict):
+        data['profitLoss']['commissions'] = {}
         changed = True
 
     for index, document in enumerate(documents, start=1):
@@ -19093,11 +19194,15 @@ def _migrate_finance_data(data):
         )
         sequence = max(1, _safe_int(document.get('baseSequence'), sequence))
         revision = max(1, _safe_int(document.get('revision'), revision))
-        number = _finance_format_number(
-            quote_prefix or parsed_prefix,
-            year,
-            sequence,
-            revision,
+        number = (
+            _finance_number_with_revision(document.get('number'), revision)
+            if document.get('customNumber')
+            else _finance_format_number(
+                quote_prefix or parsed_prefix,
+                year,
+                sequence,
+                revision,
+            )
         )
         if document.get('number') != number:
             document['number'] = number
@@ -19115,6 +19220,7 @@ def _migrate_finance_data(data):
             ('showDepartmentSubtotals', document.get('showDepartmentSubtotals', True) is not False),
             ('totalLocked', bool(document.get('totalLocked', False))),
             ('lockedPreTaxTotal', document.get('lockedPreTaxTotal')),
+            ('totalDiscountLabel', document.get('totalDiscountLabel') or ''),
             ('setupDate', document.get('setupDate') or ''),
             ('setupTime', document.get('setupTime') or ''),
             ('rehearsalDate', document.get('rehearsalDate') or ''),
@@ -19123,6 +19229,8 @@ def _migrate_finance_data(data):
             ('showTime', document.get('showTime') or ''),
             ('teardownDate', document.get('teardownDate') or ''),
             ('teardownTime', document.get('teardownTime') or ''),
+            ('additionalShows', document.get('additionalShows') or []),
+            ('additionalTeardowns', document.get('additionalTeardowns') or []),
         ):
             if key not in document:
                 document[key] = value
@@ -19155,6 +19263,18 @@ def _migrate_finance_data(data):
                 changed = True
             if name not in department_names:
                 department_names.append(name)
+
+        normalised_subprojects = _normalise_finance_subprojects(
+            document.get('subprojects'),
+            document.get('lineItems') or [],
+        )
+        if document.get('subprojects') != normalised_subprojects:
+            document['subprojects'] = normalised_subprojects
+            changed = True
+        for adjustment in document.get('adjustments') or []:
+            if isinstance(adjustment, dict) and not adjustment.get('subprojectId'):
+                adjustment['subprojectId'] = normalised_subprojects[0]['id']
+                changed = True
 
         if document.get('departments') != department_names:
             document['departments'] = department_names
@@ -19210,7 +19330,7 @@ def _save_finance_data(data):
         'version': FINANCE_VERSION,
         'documents': data.get('documents') or [],
         'priceBook': data.get('priceBook') or {},
-        'profitLoss': data.get('profitLoss') if isinstance(data.get('profitLoss'), dict) else {'expenses': {}},
+        'profitLoss': data.get('profitLoss') if isinstance(data.get('profitLoss'), dict) else {'expenses': {}, 'commissions': {}},
     }
     temp_path = f"{filepath}.{secrets.token_hex(6)}.tmp"
     with open(temp_path, 'w', encoding='utf-8') as finance_file:
@@ -19460,7 +19580,51 @@ def _normalise_finance_line(value):
         'discountPercent': round(discount, 4),
         'total': round(total, 2),
         'isCustom': bool(value.get('isCustom') or not catalog_key),
+        'subprojectId': re.sub(
+            r'[^A-Za-z0-9_-]+', '', str(value.get('subprojectId') or '')
+        )[:80] or 'main',
     }
+
+
+def _normalise_finance_subprojects(value, lines):
+    rows = value if isinstance(value, list) else []
+    result = []
+    seen = set()
+    for index, row in enumerate(rows[:40]):
+        if not isinstance(row, dict):
+            continue
+        subproject_id = re.sub(
+            r'[^A-Za-z0-9_-]+', '', str(row.get('id') or '')
+        )[:80] or f'room_{index + 1}'
+        if subproject_id in seen:
+            continue
+        seen.add(subproject_id)
+        result.append({
+            'id': subproject_id,
+            'name': str(row.get('name') or '').strip()[:160] or f'Room {index + 1}',
+        })
+    if not result:
+        result = [{'id': 'main', 'name': 'Main Room'}]
+    valid_ids = {row['id'] for row in result}
+    fallback_id = result[0]['id']
+    for line in lines:
+        if line.get('subprojectId') not in valid_ids:
+            line['subprojectId'] = fallback_id
+    return result
+
+
+def _normalise_finance_schedule_rows(value):
+    rows = value if isinstance(value, list) else []
+    result = []
+    for row in rows[:40]:
+        if not isinstance(row, dict):
+            continue
+        result.append({
+            'id': re.sub(r'[^A-Za-z0-9_-]+', '', str(row.get('id') or ''))[:80] or secrets.token_hex(6),
+            'date': str(row.get('date') or '').strip()[:20],
+            'time': str(row.get('time') or '').strip()[:20],
+        })
+    return result
 
 
 def _normalise_finance_adjustment(value):
@@ -19473,6 +19637,9 @@ def _normalise_finance_adjustment(value):
         or adjustment_id.startswith('locked_total_')
         or _finance_is_generated_total_adjustment(value)
     )
+    calculation_mode = str(value.get('calculationMode') or '').strip().lower()
+    if calculation_mode not in {'percent', 'amount'}:
+        calculation_mode = 'percent' if _safe_float(value.get('percent'), 0) else 'amount'
     return {
         'id': adjustment_id,
         'scope': scope,
@@ -19480,8 +19647,12 @@ def _normalise_finance_adjustment(value):
         'label': str(value.get('label') or 'Discount').strip()[:300] or 'Discount',
         'amount': round(_safe_float(value.get('amount'), 0), 2),
         'percent': round(max(0, _safe_float(value.get('percent'), 0)), 4),
+        'calculationMode': calculation_mode,
         'kind': 'discount' if str(value.get('kind') or '').lower() == 'discount' or _safe_float(value.get('amount'), 0) < 0 else 'adjustment',
         'lockedTotalAdjustment': locked_total_adjustment,
+        'subprojectId': re.sub(
+            r'[^A-Za-z0-9_-]+', '', str(value.get('subprojectId') or '')
+        )[:80] or 'main',
     }
 
 
@@ -19510,15 +19681,19 @@ def _recalculate_finance_adjustments(document):
     for adjustment in adjustments:
         if _finance_is_locked_adjustment(adjustment):
             continue
+        if adjustment.get('calculationMode') != 'percent':
+            continue
         percent = max(0, _safe_float(adjustment.get('percent'), 0))
         if not percent:
             continue
         if adjustment.get('scope') == 'department':
             department = adjustment.get('department')
+            subproject_id = adjustment.get('subprojectId') or 'main'
             base = sum(
                 _safe_float(line.get('total'), 0)
                 for line in lines
                 if line.get('department') == department
+                and (line.get('subprojectId') or 'main') == subproject_id
             )
         else:
             base = sum(_safe_float(line.get('total'), 0) for line in lines)
@@ -19568,13 +19743,14 @@ def _apply_locked_total_adjustment(document):
         'id': _finance_locked_adjustment_id(document),
         'scope': 'total',
         'department': '',
-        'label': (
+        'label': str(document.get('totalDiscountLabel') or '').strip() or (
             f"{label_percent}% total discount"
             if difference < 0
             else f"{label_percent}% total adjustment"
         ),
         'amount': difference,
         'percent': percent,
+        'calculationMode': 'amount',
         'kind': 'discount' if difference < 0 else 'adjustment',
         'lockedTotalAdjustment': True,
     }
@@ -19628,6 +19804,12 @@ def _normalise_finance_document(value, document_type='quotation', existing=None)
         for row in (value.get('lineItems') if 'lineItems' in value else existing.get('lineItems') or [])
         if isinstance(row, dict)
     ]
+    subprojects = _normalise_finance_subprojects(
+        value.get('subprojects')
+        if 'subprojects' in value
+        else existing.get('subprojects'),
+        lines,
+    )
     adjustments = [
         _normalise_finance_adjustment(row)
         for row in (value.get('adjustments') if 'adjustments' in value else existing.get('adjustments') or [])
@@ -19735,6 +19917,12 @@ def _normalise_finance_document(value, document_type='quotation', existing=None)
         'showTime': str(value.get('showTime') if 'showTime' in value else existing.get('showTime') or '').strip()[:20],
         'teardownDate': str(value.get('teardownDate') if 'teardownDate' in value else existing.get('teardownDate') or '').strip()[:20],
         'teardownTime': str(value.get('teardownTime') if 'teardownTime' in value else existing.get('teardownTime') or '').strip()[:20],
+        'additionalShows': _normalise_finance_schedule_rows(
+            value.get('additionalShows') if 'additionalShows' in value else existing.get('additionalShows')
+        ),
+        'additionalTeardowns': _normalise_finance_schedule_rows(
+            value.get('additionalTeardowns') if 'additionalTeardowns' in value else existing.get('additionalTeardowns')
+        ),
         'validityAmount': validity_amount,
         'validityUnit': validity_unit,
         'validityDays': validity_total_days,
@@ -19743,6 +19931,7 @@ def _normalise_finance_document(value, document_type='quotation', existing=None)
         'notes': str(value.get('notes') if 'notes' in value else existing.get('notes') or '').strip()[:5000],
         'terms': str(value.get('terms') if 'terms' in value else existing.get('terms') or settings.get('defaultTerms', DEFAULT_FINANCE_TERMS)).strip()[:10000],
         'lineItems': lines,
+        'subprojects': subprojects,
         'adjustments': adjustments,
         'departments': departments,
         'showUnitPrices': bool(value.get('showUnitPrices') if 'showUnitPrices' in value else existing.get('showUnitPrices', False)),
@@ -19751,6 +19940,11 @@ def _normalise_finance_document(value, document_type='quotation', existing=None)
         'showLineNumbers': (value.get('showLineNumbers') if 'showLineNumbers' in value else existing.get('showLineNumbers', True)) is not False,
         'totalLocked': total_locked,
         'lockedPreTaxTotal': locked_pre_tax_total,
+        'totalDiscountLabel': str(
+            value.get('totalDiscountLabel')
+            if 'totalDiscountLabel' in value
+            else existing.get('totalDiscountLabel') or ''
+        ).strip()[:300],
         'revisions': list(existing.get('revisions') or value.get('revisions') or []),
         'sentAt': str(value.get('sentAt') or existing.get('sentAt') or '').strip()[:40],
         'acceptedAt': str(value.get('acceptedAt') or existing.get('acceptedAt') or '').strip()[:40],
@@ -19775,13 +19969,15 @@ def _normalise_finance_document(value, document_type='quotation', existing=None)
                 base_sequence,
                 revision,
             )
+        else:
+            document['number'] = _finance_number_with_revision(
+                document.get('number'), revision
+            )
         if not document.get('eventId'):
             document['eventManagedByQuotation'] = False
             document['eventSyncFingerprint'] = ''
-    document['eventDays'] = _finance_date_days(
-        document.get('setupDate'),
-        document.get('teardownDate'),
-    )
+    range_start, range_end = _finance_event_date_range(document)
+    document['eventDays'] = _finance_date_days(range_start, range_end)
     _recalculate_finance_adjustments(document)
     _apply_locked_total_adjustment(document)
     document['totals'] = _finance_totals(document)
@@ -19917,13 +20113,15 @@ def _finance_event_date_range(document):
         document.get('rehearsalDate'),
         document.get('showDate'),
         document.get('teardownDate'),
+        *[row.get('date') for row in document.get('additionalShows') or [] if isinstance(row, dict)],
+        *[row.get('date') for row in document.get('additionalTeardowns') or [] if isinstance(row, dict)],
     ]
     candidates = [value for value in candidates if value]
     if not candidates:
         fallback = document.get('quotationDate') or datetime.now().strftime('%Y-%m-%d')
         return fallback, fallback
-    start = document.get('setupDate') or candidates[0]
-    end = document.get('teardownDate') or candidates[-1]
+    start = document.get('setupDate') or min(candidates)
+    end = max(candidates)
     if end < start:
         end = start
     return start, end
@@ -20006,6 +20204,32 @@ def _finance_event_prepared_items(document):
     return prepared_items
 
 
+def _finance_event_subprojects(document):
+    result = []
+    for subproject in document.get('subprojects') or [{'id': 'main', 'name': 'Main Room'}]:
+        subproject_id = str(subproject.get('id') or 'main')
+        items = []
+        for line in document.get('lineItems') or []:
+            if str(line.get('subprojectId') or 'main') != subproject_id:
+                continue
+            items.append({
+                'lineId': line.get('id'),
+                'department': line.get('department'),
+                'departmentCode': line.get('departmentCode'),
+                'brand': line.get('brand'),
+                'model': line.get('model'),
+                'description': line.get('description'),
+                'quantity': max(0, _safe_float(line.get('quantity'), 0)),
+                'isCustom': bool(line.get('isCustom')),
+            })
+        result.append({
+            'id': subproject_id,
+            'name': str(subproject.get('name') or 'Room').strip() or 'Room',
+            'items': items,
+        })
+    return result
+
+
 def _finance_event_asset_fingerprint(event):
     payload = {
         'assetModels': getattr(event, 'asset_models', []) or [],
@@ -20014,6 +20238,7 @@ def _finance_event_asset_fingerprint(event):
         'returnedItems': getattr(event, 'returned_items', []) or [],
         'extraAssets': getattr(event, 'extra_assets', []) or [],
         'customCollected': getattr(event, 'custom_collected', []) or [],
+        'subprojects': getattr(event, 'subprojects', []) or [],
     }
     return hashlib.sha256(json.dumps(
         payload,
@@ -20041,6 +20266,7 @@ def _finance_can_adopt_legacy_created_event(document, event):
         getattr(event, 'extra_assets', []) or [],
         getattr(event, 'custom_collected', []) or [],
         getattr(event, 'asset_models', []) or [],
+        getattr(event, 'subprojects', []) or [],
     ))
 
 
@@ -20069,6 +20295,7 @@ def _finance_sync_managed_event(document):
 
     event.asset_models = []
     event.prepared_items = _finance_event_prepared_items(document)
+    event.subprojects = _finance_event_subprojects(document)
     data_manager.save_event(event)
     invalidate_cache()
     document['eventSyncFingerprint'] = _finance_event_asset_fingerprint(event)
@@ -20102,6 +20329,7 @@ def _finance_create_event(document):
         tag='event',
         assigned_users=assigned_users,
         notes=f"Created from quotation {document.get('number')}",
+        subprojects=_finance_event_subprojects(document),
     )
     data_manager.events[event_id] = event
     data_manager.save_event(event)
@@ -20174,10 +20402,12 @@ def _finance_find_document(data, document_id, document_type):
 def _finance_profit_loss_store(data):
     store = data.get('profitLoss')
     if not isinstance(store, dict):
-        store = {'expenses': {}}
+        store = {'expenses': {}, 'commissions': {}}
         data['profitLoss'] = store
     if not isinstance(store.get('expenses'), dict):
         store['expenses'] = {}
+    if not isinstance(store.get('commissions'), dict):
+        store['commissions'] = {}
     return store
 
 
@@ -20187,6 +20417,39 @@ def _finance_profit_loss_event_expenses(data, event_id, create=False):
     if create:
         return expenses.setdefault(key, [])
     return expenses.get(key, []) if isinstance(expenses.get(key), list) else []
+
+
+def _normalise_profit_loss_commission(value, revenue=0):
+    value = value if isinstance(value, dict) else {}
+    mode = str(value.get('calculationMode') or value.get('mode') or 'percent').strip().lower()
+    if mode not in {'percent', 'amount'}:
+        mode = 'percent'
+    percent = round(max(0, min(100, _safe_float(value.get('percent'), 0))), 4)
+    entered_amount = round(max(0, _safe_float(value.get('amount'), 0)), 2)
+    amount = round(revenue * percent / 100, 2) if mode == 'percent' else entered_amount
+    if mode == 'amount':
+        percent = round((amount / revenue * 100) if revenue else 0, 4)
+    return {
+        'id': re.sub(r'[^A-Za-z0-9_-]+', '', str(value.get('id') or ''))[:80] or new_id('commission'),
+        'recipient': str(value.get('recipient') or value.get('payee') or '').strip()[:180],
+        'calculationMode': mode,
+        'percent': percent,
+        'amount': amount,
+    }
+
+
+def _finance_profit_loss_event_commissions(data, event_id, revenue=0, create=False):
+    commissions = _finance_profit_loss_store(data).setdefault('commissions', {})
+    key = str(int(event_id))
+    if create:
+        rows = commissions.setdefault(key, [])
+    else:
+        rows = commissions.get(key, []) if isinstance(commissions.get(key), list) else []
+    return [
+        _normalise_profit_loss_commission(row, revenue)
+        for row in rows
+        if isinstance(row, dict)
+    ]
 
 
 def _finance_profit_loss_expense_bucket(category):
@@ -20199,11 +20462,6 @@ def _finance_profit_loss_expense_bucket(category):
 
 
 def _finance_profit_loss_category_label(category, source='manual'):
-    bucket = _finance_profit_loss_expense_bucket(category)
-    if bucket == 'transport':
-        return 'Crew Transport' if source == 'worker-claim' else 'Additional Transport'
-    if bucket == 'meal':
-        return 'Meal Claims' if source == 'worker-claim' else 'Meals'
     label = re.sub(r'\s+', ' ', str(category or '').strip())
     if label:
         return label[:80]
@@ -20447,8 +20705,9 @@ def _finance_profit_loss_payload(event, finance_data):
     other_expenses = round(worker_other_claims + manual_other_expenses, 2)
     direct_costs = round(workforce_costs['manpowerCost'] + transport_cost, 2)
     before_commission = round(revenue - direct_costs - other_expenses, 2)
-    commission_rate = 0
-    commission = 0.0
+    commissions = _finance_profit_loss_event_commissions(finance_data, event_id, revenue)
+    commission = round(sum(_safe_float(row.get('amount'), 0) for row in commissions), 2)
+    commission_rate = round((commission / revenue * 100) if revenue else 0, 4)
     net_profit = round(before_commission - commission, 2)
     profit_margin = round((net_profit / revenue * 100) if revenue else 0, 2)
     expense_category_totals = {}
@@ -20524,6 +20783,7 @@ def _finance_profit_loss_payload(event, finance_data):
         },
         'breakdown': breakdown,
         'expenses': worker_claim_expenses + [_profit_loss_expense_payload(row) for row in expenses],
+        'commissions': commissions,
         'expenseCategories': expense_categories,
         'activity': _event_activity_logs_for_response(event)[-8:][::-1],
     }
@@ -20968,7 +21228,7 @@ def _finance_compare_add_to_event(event, row):
         }, quote_qty - event_qty)
 
 
-def _finance_compare_line_from_event_item(event_item, quantity, event):
+def _finance_compare_line_from_event_item(event_item, quantity, event, finance_data=None):
     identity = event_item.get('identity') or {}
     department_name, department_code = _finance_department_details(
         event_item.get('departmentCode') or identity.get('department') or 'UN',
@@ -20979,7 +21239,16 @@ def _finance_compare_line_from_event_item(event_item, quantity, event):
         _event_date_for_input(getattr(event, 'end_date', '')),
     )
     description = event_item.get('description') or event_item.get('title') or 'Event item'
+    remembered = {}
     if identity.get('kind') == 'custom':
+        for document in reversed((finance_data or {}).get('documents') or []):
+            remembered = next((
+                line for line in reversed(document.get('lineItems') or [])
+                if str(line.get('description') or '').strip().casefold() == description.casefold()
+                and _safe_float(line.get('unitPrice'), 0) > 0
+            ), {})
+            if remembered:
+                break
         return _normalise_finance_line({
             'id': secrets.token_hex(6),
             'catalogKey': '',
@@ -20989,15 +21258,21 @@ def _finance_compare_line_from_event_item(event_item, quantity, event):
             'days': days,
             'quantity': quantity,
             'uom': event_item.get('uom') or 'units',
-            'unitPrice': 0,
+            'unitPrice': _safe_float(remembered.get('unitPrice'), 0),
             'discountPercent': 0,
             'isCustom': True,
         })
     brand = identity.get('brand') or ''
     model = identity.get('model') or ''
+    catalog_key = _finance_catalog_key(department_code, brand, model, description)
+    remembered = _finance_remembered_price(
+        (finance_data or {}).get('priceBook') or {},
+        catalog_key,
+        event_item.get('sourceAssetIds') or [],
+    )
     return _normalise_finance_line({
         'id': secrets.token_hex(6),
-        'catalogKey': _finance_catalog_key(department_code, brand, model, description),
+        'catalogKey': catalog_key,
         'sourceAssetIds': [],
         'brand': brand,
         'model': model,
@@ -21007,7 +21282,7 @@ def _finance_compare_line_from_event_item(event_item, quantity, event):
         'days': days,
         'quantity': quantity,
         'uom': 'units',
-        'unitPrice': 0,
+        'unitPrice': _safe_float(remembered.get('unitPrice'), 0),
         'discountPercent': 0,
         'isCustom': False,
     })
@@ -21030,7 +21305,9 @@ def _finance_compare_add_to_quotation(finance_data, quotation, event, row):
                 break
     else:
         quotation.setdefault('lineItems', []).append(
-            _finance_compare_line_from_event_item(event_item, delta, event)
+            _finance_compare_line_from_event_item(
+                event_item, delta, event, finance_data
+            )
         )
     updated = _normalise_finance_document(quotation, 'quotation', quotation)
     _remember_finance_prices(finance_data, updated)
@@ -21115,8 +21392,6 @@ def _finance_get_update_delete(document_id, document_type):
             return jsonify({'error': f'{document_type.title()} number is already in use'}), 409
         if document_type == 'quotation':
             missing_link_cleared = False
-            if not str(updated.get('projectName') or '').strip():
-                return jsonify({'error': 'Project Name is required'}), 400
             if updated.get('eventId') and ('eventId' in request_data or str(request_data.get('status') or '').strip().lower() == 'accepted'):
                 linked_event = data_manager.events.get(_safe_int(updated.get('eventId'), 0))
                 if not linked_event:
@@ -21130,9 +21405,22 @@ def _finance_get_update_delete(document_id, document_type):
                 _finance_revision_fingerprint(updated)
                 != _finance_revision_fingerprint(existing_normalised)
             )
-            if content_changed and _finance_revision_is_snapshotted(existing_normalised):
+            revision_locked = (
+                existing_normalised.get('status') == 'sent'
+                or _finance_revision_is_snapshotted(existing_normalised)
+            )
+            if content_changed and revision_locked:
+                if _safe_int(existing_normalised.get('revision'), 1) >= 99:
+                    return jsonify({
+                        'error': 'This quotation has reached the maximum of 99 revisions'
+                    }), 409
                 updated['revision'] = _safe_int(existing_normalised.get('revision'), 1) + 1
-                if not updated.get('customNumber'):
+                if updated.get('customNumber'):
+                    updated['number'] = _finance_number_with_revision(
+                        existing_normalised.get('number'),
+                        updated['revision'],
+                    )
+                else:
                     prefix, year, sequence, _revision = _finance_parse_number(
                         existing_normalised.get('number')
                     )
@@ -21146,9 +21434,7 @@ def _finance_get_update_delete(document_id, document_type):
                 updated['sentAt'] = ''
 
             requested_status = str(request_data.get('status') or '').strip().lower()
-            if requested_status == 'draft' and updated.get('status') == 'draft':
-                _finance_reset_to_draft_revision(updated)
-            elif requested_status == 'sent' and updated.get('status') == 'sent':
+            if requested_status == 'sent' and updated.get('status') == 'sent':
                 sent_at = datetime.now()
                 updated['sentAt'] = sent_at.isoformat(timespec='seconds')
                 updated['statusChangedAt'] = updated['sentAt']
@@ -21414,6 +21700,38 @@ def finance_profit_loss_event(event_id):
         finance_data = _load_finance_data()
         payload = _finance_profit_loss_payload(event, finance_data)
     return jsonify({'success': True, 'data': payload})
+
+
+@app.route('/api/finance/profit-loss/<int:event_id>/commissions', methods=['PUT'])
+@require_sales
+def finance_profit_loss_update_commissions(event_id):
+    event = data_manager.events.get(event_id)
+    if not event:
+        return jsonify({'error': 'Event not found'}), 404
+    if not _current_user_can_access_event(event):
+        return _event_access_denied_response()
+    payload = request.get_json(silent=True) or {}
+    rows = payload.get('commissions')
+    if not isinstance(rows, list):
+        return jsonify({'error': 'Commissions must be a list'}), 400
+
+    with _finance_lock:
+        finance_data = _load_finance_data()
+        quotation_rows = _finance_quotations_for_event(finance_data, event_id, accessible_only=True)
+        revenue = round(_safe_float((quotation_rows[0] if quotation_rows else {}).get('totals', {}).get('netSubtotal'), 0), 2)
+        normalised = [
+            _normalise_profit_loss_commission(row, revenue)
+            for row in rows[:50]
+            if isinstance(row, dict)
+        ]
+        store = _finance_profit_loss_store(finance_data).setdefault('commissions', {})
+        store[str(event_id)] = normalised
+        _save_finance_data(finance_data)
+        response_payload = _finance_profit_loss_payload(event, finance_data)
+
+    log_action(f"Updated {len(normalised)} commission row(s) for event {event_id}")
+    mark_realtime_change('finance', {'eventId': event_id, 'action': 'profit-loss-commissions-updated'})
+    return jsonify({'success': True, 'data': response_payload})
 
 
 @app.route('/api/finance/profit-loss/<int:event_id>/expenses', methods=['POST'])

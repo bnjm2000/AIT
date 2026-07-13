@@ -795,7 +795,7 @@ function ensureWorkforceModals() {
       <div class="wf-modal-body"><p class="wf-form-intro" id="wfAdminUploadSubtitle"></p>
         <div id="wfAdminInvoiceFields"><p class="wf-help">Invoice amount will be read from the PDF and verified during review.</p></div>
         <div id="wfAdminClaimFields" hidden><p class="wf-help">Claim amount and date will be analysed after upload. Verify them during review.</p></div>
-        <label class="wf-field"><span id="wfAdminUploadFileLabel">Invoice PDF *</span><input id="wfAdminUploadFile" name="files" type="file" required></label>
+        <label class="wf-field wf-admin-dropzone" id="wfAdminUploadDropzone"><span id="wfAdminUploadFileLabel">Invoice PDF *</span><input id="wfAdminUploadFile" name="files" type="file" required><strong id="wfAdminUploadDropPrompt">Drag &amp; drop or choose a file</strong><small id="wfAdminUploadSelectedFiles">No file selected</small></label>
         <div class="wf-admin-upload-progress" id="wfAdminUploadProgress" hidden><strong>Uploading</strong>
           <span><i id="wfAdminUploadProgressBar"></i></span><small id="wfAdminUploadProgressLabel">0%</small></div>
         <div class="wf-error" id="wfAdminUploadError"></div></div>
@@ -826,7 +826,45 @@ function ensureWorkforceModals() {
   document.getElementById('wfLocationForm').addEventListener('submit', saveTransportLocation);
   document.getElementById('wfTransportBookingForm').addEventListener('submit', saveTransportBooking);
   document.getElementById('wfAdminUploadForm').addEventListener('submit', submitAdminWorkforceUpload);
+  setupAdminWorkforceDropzone();
   document.getElementById('wfDenialReasonForm').addEventListener('submit', saveWorkforceDenialReason);
+}
+
+function setupAdminWorkforceDropzone() {
+  const zone = document.getElementById('wfAdminUploadDropzone');
+  const input = document.getElementById('wfAdminUploadFile');
+  if (!zone || !input || zone.dataset.dropReady === 'true') return;
+  zone.dataset.dropReady = 'true';
+  ['dragenter', 'dragover'].forEach(name => zone.addEventListener(name, event => {
+    event.preventDefault();
+    event.stopPropagation();
+    zone.classList.add('dragging');
+  }));
+  ['dragleave', 'drop'].forEach(name => zone.addEventListener(name, event => {
+    event.preventDefault();
+    event.stopPropagation();
+    zone.classList.remove('dragging');
+  }));
+  zone.addEventListener('drop', event => {
+    const incoming = [...(event.dataTransfer?.files || [])];
+    if (!incoming.length) return;
+    const chosen = input.multiple ? incoming : incoming.slice(0, 1);
+    const transfer = new DataTransfer();
+    chosen.forEach(file => transfer.items.add(file));
+    input.files = transfer.files;
+    updateAdminWorkforceDropzoneFiles();
+  });
+  input.addEventListener('change', updateAdminWorkforceDropzoneFiles);
+}
+
+function updateAdminWorkforceDropzoneFiles() {
+  const input = document.getElementById('wfAdminUploadFile');
+  const label = document.getElementById('wfAdminUploadSelectedFiles');
+  if (!input || !label) return;
+  const files = [...input.files];
+  label.textContent = files.length
+    ? files.map(file => file.name).join(', ')
+    : 'No file selected';
 }
 
 function openWorkforceModal(id) {
@@ -2115,6 +2153,8 @@ function openAdminWorkforceUpload(freelancerId, kind) {
   file.accept = claim ? '.pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg' : '.pdf,application/pdf';
   file.multiple = claim;
   document.getElementById('wfAdminUploadFileLabel').textContent = claim ? 'Claim files (PDF, PNG or JPG) *' : 'Invoice PDF *';
+  document.getElementById('wfAdminUploadDropPrompt').textContent = claim ? 'Drag & drop or choose claim files' : 'Drag & drop or choose an invoice';
+  updateAdminWorkforceDropzoneFiles();
   document.querySelector('#wfAdminUploadForm [type="submit"]').textContent = claim ? 'Upload Files' : 'Upload File';
   document.getElementById('wfAdminUploadProgress').hidden = true;
   wfError('wfAdminUploadError');

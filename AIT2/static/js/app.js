@@ -3029,6 +3029,8 @@ function navWireIconSvg(section) {
     'asset-check': '<circle cx="12" cy="12" r="8"></circle><path d="m8.5 12 2.3 2.3 4.7-5"></path>',
     'maintenance-report': '<path d="M7 3h7l4 4v14H7z"></path><path d="M14 3v5h4M9 13h6M9 17h4"></path>',
     logs: '<path d="M5 5h14M5 12h14M5 19h10"></path><path d="M4 5h.01M4 12h.01M4 19h.01"></path>',
+    quotations: '<path d="M7 3h7l4 4v14H7z"></path><path d="M14 3v5h4M9 12h6M9 16h6"></path>',
+    'profit-loss': '<path d="M4 19V9M10 19V5M16 19v-7M22 19H2"></path><path d="m4 6 5-3 6 4 6-5"></path>',
     users: '<circle cx="9" cy="8" r="3"></circle><path d="M4 20a5 5 0 0 1 10 0"></path><path d="M17 11h4M19 9v4"></path>',
     'pdf-settings': '<path d="M7 3h7l4 4v14H7z"></path><path d="M14 3v5h4M9 13h6"></path><path d="M9 17h2"></path>',
     companies: '<path d="M4 20V7l8-4 8 4v13"></path><path d="M8 20v-4h8v4M8 9h.01M12 9h.01M16 9h.01M8 13h.01M12 13h.01M16 13h.01"></path>',
@@ -3052,6 +3054,8 @@ function navLabelForSection(section, fallback = '') {
     'asset-check': 'Asset Check',
     'maintenance-report': 'Maintenance Report',
     logs: 'System Logs',
+    quotations: 'Quotations',
+    'profit-loss': 'Profit & Loss',
     users: 'User Management',
     'pdf-settings': 'Company Details',
     companies: 'Companies',
@@ -3073,9 +3077,11 @@ function applySidebarWireIcons(sidebar) {
     if (!section) return;
     const counter = item.querySelector('#overdue-counter');
     const label = navLabelForSection(section, item.dataset.label || item.textContent.trim());
+    const textOnly = item.dataset.textOnly === 'true';
     item.removeAttribute('data-mark');
     item.removeAttribute('data-label');
-    item.innerHTML = `${navWireIconSvg(section)}<span class="nav-label">${escapeHtml(label)}</span>`;
+    item.classList.toggle('nav-item-text-only', textOnly);
+    item.innerHTML = `${textOnly ? '' : navWireIconSvg(section)}<span class="nav-label">${escapeHtml(label)}</span>`;
     if (counter && section === 'return') item.appendChild(counter);
   });
 }
@@ -4596,7 +4602,8 @@ function ensureCompanyManagementNavItem() {
   companiesTab.type = 'button';
   companiesTab.className = 'nav-item owner-only';
   companiesTab.dataset.section = 'companies';
-  companiesTab.innerHTML = '&#127970; Companies';
+  companiesTab.dataset.label = 'Companies';
+  companiesTab.textContent = 'Companies';
 
   const logoutButton = settingsSection.querySelector(`[onclick="logout()"]`);
   if (logoutButton) {
@@ -13017,6 +13024,7 @@ const returnPageState = {
   pendingActions: new Set(),
   requestVersion: 0,
   loaded: false,
+  showSubprojects: false,
 };
 
 const returnEventChooserState = {
@@ -13862,8 +13870,8 @@ function renderReturnPage(options = {}) {
   const hasAssignedAssets = returnPageHasAssignedAssets(event);
   root.innerHTML = `
     <div class="return-page-heading">
-      <h2>Return Event Assets</h2>
-      <p>Receive, verify, and return deployed assets to inventory.</p>
+      <div><h2>Return Event Assets</h2><p>Receive, verify, and return deployed assets to inventory.</p></div>
+      ${eventSubprojects(event).length ? renderEventSubprojectToggle('returnPageState', returnPageState.showSubprojects, 'renderReturnPage') : ''}
     </div>
     <div class="return-layout">
       <div class="return-primary">
@@ -13896,6 +13904,7 @@ function renderReturnPage(options = {}) {
             <div class="return-metric"><div class="return-metric-icon">${planMetricIconSvg('departments')}</div><div><strong>${metrics.departments}</strong><span>Departments</span></div></div>
           </div>
         </div>
+        ${returnPageState.showSubprojects ? renderEventSubprojectBreakdown(event, 'Sub-project return overview') : ''}
         <section class="return-assets-card return-surface">
           <div class="return-card-header">
             <div>
@@ -17795,8 +17804,40 @@ var planPageState = {
   department: 'ALL',
   showContainers: true,
   loading: false,
-  templateDraft: null
+  templateDraft: null,
+  showSubprojects: false
 };
+
+function eventSubprojects(event) {
+  return Array.isArray(event?.subprojects) ? event.subprojects.filter(row => row && Array.isArray(row.items)) : [];
+}
+
+function renderEventSubprojectToggle(stateName, checked, renderFunction) {
+  return `<label class="event-subproject-toggle"><input type="checkbox" ${checked ? 'checked' : ''} onchange="${stateName}.showSubprojects=this.checked;${renderFunction}()"><span>Sub-projects</span></label>`;
+}
+
+function renderEventSubprojectBreakdown(event, title = 'Sub-project requirements') {
+  const rooms = eventSubprojects(event);
+  if (!rooms.length) return '';
+  return `
+    <section class="plan-card event-subproject-breakdown">
+      <div class="plan-card-header"><div><h3>${escapeHtml(title)}</h3><p>Quantities are separated by room or work area.</p></div></div>
+      <div class="event-subproject-grid">
+        ${rooms.map(room => `
+          <div class="event-subproject-room">
+            <h4>${escapeHtml(room.name || 'Room')}</h4>
+            ${(room.items || []).map(item => `
+              <div class="event-subproject-item">
+                <span><strong>${escapeHtml([item.brand, item.model].filter(Boolean).join(' ') || item.description || 'Item')}</strong><small>${escapeHtml(item.department || item.departmentCode || '')}</small></span>
+                <strong>${Number(item.quantity || 0)}</strong>
+              </div>
+            `).join('') || '<div class="plan-empty">No items in this sub-project.</div>'}
+          </div>
+        `).join('')}
+      </div>
+    </section>
+  `;
+}
 
 var planEventChooserState = {
   search: '',
@@ -18958,8 +18999,8 @@ function renderPlanPage() {
   const totals = planTotals();
   root.innerHTML = `
     <div class="plan-page-heading">
-      <h2>Plan Event Assets</h2>
-      <p>Add required asset models and quantities for this event.</p>
+      <div><h2>Plan Event Assets</h2><p>Add required asset models and quantities for this event.</p></div>
+      ${eventSubprojects(event).length ? renderEventSubprojectToggle('planPageState', planPageState.showSubprojects, 'renderPlanPage') : ''}
     </div>
 
     <div class="plan-layout">
@@ -18997,6 +19038,7 @@ function renderPlanPage() {
         </div>
 
         <div class="plan-workspace">
+          ${planPageState.showSubprojects ? renderEventSubprojectBreakdown(event) : ''}
           <div class="plan-available-stack">
             <div id="planAvailableCard">${renderPlanAvailableCard()}</div>
             <div id="planCustomItemCard">${renderPlanCustomItemCard()}</div>
@@ -19562,7 +19604,8 @@ var prepareNewPageState = {
   refreshQueued: false,
   requestSequence: 0,
   expandedDepartments: new Set(),
-  expandedModels: new Set()
+  expandedModels: new Set(),
+  showSubprojects: false
 };
 
 var prepareNewNotesTimer = null;
@@ -20239,7 +20282,10 @@ function renderPrepareNewPage() {
         <h2>Prepare Event Assets</h2>
         <p>Assign exact assets by scanning, typing, or selecting them manually.</p>
       </div>
-      <button type="button" class="plan-button" onclick="prepareNewReturnToPlan()">\u2190 Return to Planning</button>
+      <div class="prepare-new-heading-actions">
+        ${eventSubprojects(event).length ? renderEventSubprojectToggle('prepareNewPageState', prepareNewPageState.showSubprojects, 'renderPrepareNewPage') : ''}
+        <button type="button" class="plan-button" onclick="prepareNewReturnToPlan()">\u2190 Return to Planning</button>
+      </div>
     </div>
     <div class="prepare-new-top">
       <button type="button" class="plan-event-select-wrap"
@@ -20268,6 +20314,7 @@ function renderPrepareNewPage() {
         <div class="plan-metric"><div class="plan-metric-icon">${planMetricIconSvg('departments')}</div><div><strong>${totals.departments}</strong><span>Active Departments</span></div></div>
       </div>
     </div>
+    ${prepareNewPageState.showSubprojects ? renderEventSubprojectBreakdown(event, 'Sub-project preparation') : ''}
     <div class="prepare-new-workspace">
       <div class="prepare-new-column prepare-new-left">
         <section class="prepare-new-card prepare-new-scan-card">
@@ -28616,6 +28663,10 @@ function eventOverviewProgress(event) {
 }
 
 function eventDepartmentProgress(event) {
+  if (Array.isArray(event.departmentProgress) && event.departmentProgress.length) {
+    return event.departmentProgress;
+  }
+
   const phaseUsesReturns = ['Returning', 'Overdue', 'Pending Closure', 'Closed'].includes(event.state);
   const phaseUsesOut = ['Ongoing', 'Last Day'].includes(event.state);
   const totals = new Map();
@@ -28893,9 +28944,9 @@ function eventMenuIconHtml(icon) {
 }
 
 function eventCardMenuHtml(event, context = 'card') {
-  const detailsAction = event.state === 'Closed'
+  const detailsAction = context !== 'card' && event.state === 'Closed'
     ? `<button type="button" onclick="viewEvent(${event.id})">${eventMenuIconHtml('view')}<span>View</span></button>`
-    : (!isAdminUser()
+    : (context !== 'card' && !isAdminUser()
       ? `<button type="button" onclick="viewEvent(${event.id})">${eventMenuIconHtml('view')}<span>View</span></button>`
       : '');
   const adminActions = isAdminUser() ? `
@@ -28955,9 +29006,10 @@ function createEventsOverviewCard(event) {
     const done = Math.max(0, Number(row.done || 0));
     const pct = total ? Math.min(100, Math.round((done / total) * 100)) : 0;
     const meta = getDepartmentMeta(row.code);
-    const label = row.label || meta.name || meta.code || row.code;
+    const label = row.label || meta.code || row.code;
+    const fullLabel = row.label || meta.name || label;
     return `
-      <div class="event-department-row" title="${escapeHtmlAttr(label)}">
+      <div class="event-department-row" title="${escapeHtmlAttr(fullLabel)}">
         <span>${escapeHtml(label)}</span>
         <span class="event-department-track"><span style="width:${pct}%"></span></span>
         <span>${done}/${total}</span>
@@ -28978,7 +29030,8 @@ function createEventsOverviewCard(event) {
         </div>
         <div class="event-card-top-actions">
           <span class="event-workflow-state">${escapeHtml(eventStateDisplayLabel(displayState))}</span>
-          ${isAdminUser() ? `<button type="button" class="event-edit-icon-button" title="Edit event" aria-label="Edit ${escapeHtmlAttr(event.name || `event ${event.id}`)}" onclick="editEvent(${event.id})">${eventMenuIconHtml('edit')}</button>` : ''}
+          <button type="button" class="event-top-icon-button" title="View event" aria-label="View ${escapeHtmlAttr(event.name || `event ${event.id}`)}" onclick="viewEvent(${event.id})">${eventMenuIconHtml('view')}</button>
+          ${isAdminUser() ? `<button type="button" class="event-top-icon-button" title="Edit event" aria-label="Edit ${escapeHtmlAttr(event.name || `event ${event.id}`)}" onclick="editEvent(${event.id})">${eventMenuIconHtml('edit')}</button>` : ''}
         </div>
       </div>
       <h3 class="event-workflow-title">${escapeHtml(event.name || '')}</h3>
