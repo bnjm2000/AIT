@@ -2850,6 +2850,12 @@
         padding-left: 37px;
       }
 
+      .sidebar .nav-item.nav-item-inline {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+      }
+
       .nav-item.active .nav-wire-icon,
       .nav-item[aria-current="page"] .nav-wire-icon {
         background: rgba(255, 255, 255, 0.18);
@@ -8803,7 +8809,7 @@
     <a class="skip-link" href="#mainContent">Skip to main content</a>
     <div class="container" id="appShell">
       <div class="header" role="banner">
-        <a class="app-brand-lockup" href="#events-section" aria-label="Showbase home" onclick="showSection('events')">
+        <a class="app-brand-lockup" href="/events" aria-label="Showbase home" onclick="event.preventDefault();showSection('events')">
           <img src="{{ url_for('static', filename='images/showbase-logo.svg') }}" alt="Showbase" />
         </a>
         <div class="sync-status" id="realtime-status" data-state="reconnecting" title="Realtime: Reconnecting" role="status" aria-live="polite" aria-label="Realtime: Reconnecting">
@@ -10292,6 +10298,7 @@
 
       </main>
 
+    <script>window.__INITIAL_APP_SECTION__ = {{ initial_section|tojson }};</script>
     <script src="{{ url_for('static', filename='js/app.js', v=app_js_version) }}"></script>
     <script src="{{ url_for('static', filename='js/finance.js', v=app_js_version) }}"></script>
     <script src="{{ url_for('static', filename='js/workforce-admin.js', v=workforce_js_version) }}"></script>

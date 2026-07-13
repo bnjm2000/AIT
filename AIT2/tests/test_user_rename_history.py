@@ -5,7 +5,7 @@ from urllib.parse import quote
 import app as app_module
 from data_manager import DataManager
 from maintenance_logs import make_maintenance_log, normalize_maintenance_log
-from models import Event, InventoryItem, LogEntry, User, hash_password
+from models import Container, Event, InventoryItem, LogEntry, User, hash_password
 
 
 class UserRenameHistoryTests(unittest.TestCase):
@@ -82,6 +82,15 @@ class UserRenameHistoryTests(unittest.TestCase):
         )
         self.data_manager.save_inventory()
 
+        self.data_manager.containers['CASE-1'] = Container(
+            'CASE-1',
+            [self.asset_id],
+            maintenance_logs=[
+                make_maintenance_log('2026/05/01', 'tech-old', 'Checked case wheels'),
+            ],
+        )
+        self.data_manager.save_containers()
+
         app_module.app.config['TESTING'] = True
         app_module.set_data_manager_for_testing(self.data_manager)
         self.client = app_module.app.test_client()
@@ -137,6 +146,12 @@ class UserRenameHistoryTests(unittest.TestCase):
         )
         self.assertEqual(maintenance_logs[2]['user'], 'admin')
         self.assertEqual(maintenance_logs[2]['description'], 'Manual note mentions tech-old')
+
+        container_log = normalize_maintenance_log(
+            self.data_manager.containers['CASE-1'].maintenance_logs[0]
+        )
+        self.assertEqual(container_log['user'], 'tech-new')
+        self.assertEqual(container_log['description'], 'Checked case wheels')
 
 
 if __name__ == '__main__':

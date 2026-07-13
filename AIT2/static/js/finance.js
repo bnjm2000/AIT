@@ -32,7 +32,8 @@ const financeState = {
   dragDepartment: '',
   snapshotMode: false,
   activeSubprojectId: 'main',
-  showSubprojects: true
+  showSubprojects: true,
+  editorDataLoadedAt: 0
 };
 
 const profitLossState = {
@@ -142,13 +143,21 @@ function financeChooseLocation(encodedLocation) {
 }
 
 function financeAdditionalScheduleRows(kind, document = financeState.current) {
-  const key = kind === 'show' ? 'additionalShows' : 'additionalTeardowns';
+  const key = {
+    rehearsal: 'additionalRehearsals',
+    show: 'additionalShows',
+    teardown: 'additionalTeardowns'
+  }[kind];
   return Array.isArray(document?.[key]) ? document[key] : [];
 }
 
 function financeAddScheduleRow(kind) {
-  if (!financeState.current || !['show', 'teardown'].includes(kind)) return;
-  const key = kind === 'show' ? 'additionalShows' : 'additionalTeardowns';
+  if (!financeState.current || !['rehearsal', 'show', 'teardown'].includes(kind)) return;
+  const key = {
+    rehearsal: 'additionalRehearsals',
+    show: 'additionalShows',
+    teardown: 'additionalTeardowns'
+  }[kind];
   const rows = financeState.current[key] || (financeState.current[key] = []);
   rows.push({ id: `schedule_${Date.now()}_${Math.random().toString(16).slice(2)}`, date: '', time: '' });
   financeQueueSave();
@@ -163,7 +172,11 @@ function financeAdditionalScheduleChange(kind, index, field, value) {
 }
 
 function financeRemoveScheduleRow(kind, index) {
-  const key = kind === 'show' ? 'additionalShows' : 'additionalTeardowns';
+  const key = {
+    rehearsal: 'additionalRehearsals',
+    show: 'additionalShows',
+    teardown: 'additionalTeardowns'
+  }[kind];
   if (!financeState.current || !Array.isArray(financeState.current[key])) return;
   financeState.current[key].splice(index, 1);
   financeQueueSave();
@@ -182,7 +195,7 @@ function financeSchedulePair(label, key) {
 }
 
 function financeAdditionalSchedulePair(kind, row, index) {
-  const label = kind === 'show' ? `Show ${index + 2}` : `Teardown ${index + 2}`;
+  const label = `${kind.charAt(0).toUpperCase()}${kind.slice(1)} ${index + 2}`;
   return `
     <div class="finance-schedule-pair finance-schedule-extra">
       <strong>${financeEscape(label)}</strong>
@@ -542,13 +555,49 @@ function financeSnapshotControl(document) {
       </button>
       <div class="finance-custom-menu finance-snapshot-menu" id="${financeEscapeAttr(menuId)}">
         ${revisions.map(row => `
-          <button type="button" onclick="financeOpenSnapshot('${financeEscapeAttr(document.id)}',${Number(row.revision) || 1})">
-            <strong>${financeEscape(row.number || `Revision ${row.revision}`)}</strong>
-            <span>${financeEscape(financeSnapshotValidity(row))}</span>
-          </button>
+          <div class="finance-snapshot-row">
+            <button type="button" class="finance-snapshot-preview" title="Open PDF" onclick="financeOpenRevisionPdf('${financeEscapeAttr(document.id)}',${Number(row.revision) || 1})">
+              <strong>${financeEscape(row.number || `Revision ${row.revision}`)}</strong>
+              <span>${financeEscape(financeSnapshotValidity(row))}</span>
+            </button>
+            <button type="button" class="finance-snapshot-edit" title="Edit this sent revision" aria-label="Edit ${financeEscapeAttr(row.number || `revision ${row.revision}`)}" onclick="financeEditRevision('${financeEscapeAttr(document.id)}',${Number(row.revision) || 1})">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path><path d="m15 5 4 4"></path></svg>
+            </button>
+            <button type="button" class="finance-snapshot-delete" title="Delete this revision" aria-label="Delete ${financeEscapeAttr(row.number || `revision ${row.revision}`)}" onclick="financeDeleteRevision('${financeEscapeAttr(document.id)}',${Number(row.revision) || 1})">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"></path><path d="M8 6V4h8v2"></path><path d="M19 6l-1 15H6L5 6"></path><path d="M10 11v5M14 11v5"></path></svg>
+            </button>
+          </div>
         `).join('')}
       </div>
     </div>
+  `;
+}
+
+function financeCanExportInvoice(document = financeState.current) {
+  return ['accepted', 'cancelled', 'invoiced', 'paid'].includes(String(document?.status || '').toLowerCase());
+}
+
+function financeExportInvoiceButton(document = financeState.current) {
+  if (!financeCanExportInvoice(document)) return '';
+  return `
+    <button type="button" class="finance-export-invoice-button" onclick="event.stopPropagation();financeExportInvoice('${financeEscapeAttr(document.id)}')">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l4 4v14H7z"></path><path d="M14 3v5h4"></path><path d="M9 13h6M9 17h4"></path></svg>
+      <span>Export Invoice</span>
+    </button>
+  `;
+}
+
+function financeCanExportQuotation(document = financeState.current) {
+  return ['draft', 'sent'].includes(String(document?.status || '').toLowerCase());
+}
+
+function financeExportQuotationButton(document = financeState.current) {
+  if (!financeCanExportQuotation(document)) return '';
+  return `
+    <button type="button" class="finance-export-quotation-button" onclick="event.stopPropagation();financeExportQuotation('${financeEscapeAttr(document.id)}')">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l4 4v14H7z"></path><path d="M14 3v5h4"></path><path d="M9 13h6M9 17h4"></path></svg>
+      <span>Export Quotation</span>
+    </button>
   `;
 }
 
@@ -632,18 +681,23 @@ async function financeLoadList(query = '') {
 function financeRenderList(query = '') {
   const root = financeRoot();
   if (!root) return;
+  const ownerView = typeof isOwnerUser === 'function'
+    ? isOwnerUser()
+    : !!(window.currentUser?.isOwner || window.currentUser?.isSuperAdmin);
   const rows = financeState.documents.map(document => {
     const client = document.client || {};
     const total = document.totals?.total ?? financeTotals(document).total;
     const dateSummary = financeListDateSummary(document);
     return `
-      <tr onclick="financeOpenDocument('${financeEscapeAttr(document.id)}')">
-        <td><span class="finance-doc-number">${financeEscape(document.number)}</span><br><small>Rev ${String(document.revision || 1).padStart(2, '0')}</small></td>
+      <tr class="finance-list-row ${document.status === 'cancelled' ? 'is-cancelled' : ''}" onclick="financeOpenDocument('${financeEscapeAttr(document.id)}')">
+        <td><span class="finance-doc-number">${financeEscape(document.number)}</span><br><small>Rev ${String(document.revision || 1).padStart(2, '0')}</small>${document.invoiceNumber ? `<br><small class="finance-linked-invoice">Invoice ${financeEscape(document.invoiceNumber)}</small>` : ''}</td>
         <td><strong>${financeEscape(client.name || client.contactPerson || 'No client')}</strong><br><small>${financeEscape(client.company || client.email || '')}</small></td>
         <td>${financeEscape(document.projectName || 'Project name required')}</td>
+        ${ownerView ? `<td><strong>${financeEscape(document.salesperson || document.createdBy || 'Unassigned')}</strong>${document.createdBy ? `<br><small>${financeEscape(document.createdBy)}</small>` : ''}</td>` : ''}
         <td><span>${financeEscape(dateSummary.label)}${dateSummary.date ? ` ${financeEscape(dateSummary.date)}` : ''}</span>${dateSummary.detail ? `<br><small>${financeEscape(dateSummary.detail)}</small>` : ''}</td>
         <td>${financeSnapshotControl(document)}</td>
-        <td>${financeStatusControl(document, 'list')}</td>
+        <td class="finance-list-status-cell"><div class="finance-list-status-actions">${financeStatusControl(document, 'list')}</div></td>
+        <td class="finance-list-export-cell"><div class="finance-list-export-action">${financeExportQuotationButton(document)}${financeExportInvoiceButton(document)}</div></td>
         <td style="text-align:right;font-weight:750;">${financeEscape(financeMoney(total))}</td>
       </tr>
     `;
@@ -659,7 +713,7 @@ function financeRenderList(query = '') {
     <div class="finance-card">
       ${rows ? `
         <table class="finance-list-table">
-          <thead><tr><th>Number</th><th>Bill to</th><th>Project Name</th><th>Date</th><th>Revisions</th><th>Status</th><th style="text-align:right;">Total</th></tr></thead>
+          <thead><tr><th>Number</th><th>Bill to</th><th>Project Name</th>${ownerView ? '<th>Salesperson</th>' : ''}<th>Date</th><th>Revisions</th><th class="finance-list-status-heading">Status</th><th class="finance-list-export-heading">Export</th><th style="text-align:right;">Total</th></tr></thead>
           <tbody>${rows}</tbody>
         </table>
       ` : '<div class="finance-empty">No quotations yet.<br><button type="button" class="btn btn-primary" style="margin-top:14px;" onclick="financeCreateDocument()">Create the first quotation</button></div>'}
@@ -672,7 +726,8 @@ function financeQueueListSearch(query) {
   financeState.listTimer = setTimeout(() => financeLoadList(query), 280);
 }
 
-async function financeLoadEditorData() {
+async function financeLoadEditorData(force = false) {
+  if (!force && financeState.editorDataLoadedAt && Date.now() - financeState.editorDataLoadedAt < 30000) return;
   const [clientsResponse, departmentsResponse, eventsResponse] = await Promise.all([
     apiCall('/api/clients').catch(() => ({ data: [] })),
     apiCall('/api/finance/departments').catch(() => ({ data: ['Manpower', 'Transportation'] })),
@@ -681,6 +736,7 @@ async function financeLoadEditorData() {
   financeState.clients = clientsResponse.data || [];
   financeState.departments = departmentsResponse.data || ['Manpower', 'Transportation'];
   financeState.events = eventsResponse.data || [];
+  financeState.editorDataLoadedAt = Date.now();
 }
 
 async function financeCreateDocument() {
@@ -700,17 +756,31 @@ async function financeCreateDocument() {
 }
 
 async function financeOpenDocument(documentId) {
+  const root = financeRoot();
+  const listQuery = root?.querySelector('.finance-search')?.value || '';
+  if (root) {
+    root.innerHTML = `
+      <div class="finance-editor-loading" role="status" aria-live="polite">
+        <span class="finance-loading-spinner" aria-hidden="true"></span>
+        <strong>Loading quotation...</strong>
+      </div>
+    `;
+  }
   try {
+    const editorDataPromise = financeLoadEditorData();
     const response = await apiCall(`/api/quotations/${encodeURIComponent(documentId)}`);
     financeState.current = response.data;
     financeState.activeSubprojectId = financeSubprojects(financeState.current)[0]?.id || 'main';
     financeState.snapshotMode = false;
     financeState.addDepartment = '';
-    await financeLoadEditorData();
     const refreshedDraftDate = financeRefreshDraftDate();
     financeRenderEditor();
     if (refreshedDraftDate) financeQueueSave();
+    editorDataPromise.then(() => {
+      if (financeState.current?.id === documentId) financeRenderEditor();
+    });
   } catch (error) {
+    financeRenderList(listQuery);
     showNotification('error', error.message || 'Failed to open quotation');
   }
 }
@@ -723,10 +793,27 @@ function financeRefreshDraftDate(document = financeState.current) {
   return true;
 }
 
-function financeOpenSnapshot(documentId, revision) {
-  const documentRow = financeState.documents.find(row => row.id === documentId);
+function financeOpenRevisionPdf(documentId, revision) {
+  financeCloseMenus();
+  const url = `/api/quotations/${encodeURIComponent(documentId)}/pdf?revision=${encodeURIComponent(revision)}`;
+  const opened = window.open(url, '_blank', 'noopener');
+  if (!opened) showNotification('warning', 'Please allow pop-ups to preview the PDF');
+}
+
+async function financeEditRevision(documentId, revision) {
+  financeCloseMenus();
+  const documentRow = financeState.current?.id === documentId
+    ? financeState.current
+    : financeState.documents.find(row => row.id === documentId);
   const snapshotRow = (documentRow?.revisions || []).find(row => Number(row.revision) === Number(revision));
   if (!documentRow || !snapshotRow?.snapshot) return;
+  const confirmed = await showAppConfirm({
+    title: 'Edit sent revision?',
+    message: `${snapshotRow.number || `Revision ${revision}`} has already been sent to the client. Changes will update this sent revision and its archived PDF directly without creating a new revision.`,
+    confirmText: 'Edit Revision',
+    cancelText: 'Cancel'
+  });
+  if (!confirmed) return;
   financeState.current = {
     ...snapshotRow.snapshot,
     id: documentRow.id,
@@ -742,9 +829,77 @@ function financeOpenSnapshot(documentId, revision) {
     revisions: documentRow.revisions || [],
     totals: snapshotRow.snapshot.totals || financeTotals(snapshotRow.snapshot)
   };
-  financeState.snapshotMode = true;
+  financeState.activeSubprojectId = financeSubprojects(financeState.current)[0]?.id || 'main';
+  financeState.snapshotMode = false;
   financeState.addDepartment = '';
+  financeState.current._editingSentRevision = Number(snapshotRow.revision) || 1;
   financeRenderEditor();
+}
+
+async function financeDeleteRevision(documentId, revision) {
+  financeCloseMenus();
+  const documentRow = financeState.current?.id === documentId
+    ? financeState.current
+    : financeState.documents.find(row => row.id === documentId);
+  const revisionRow = (documentRow?.revisions || []).find(row => Number(row.revision) === Number(revision));
+  if (!documentRow || !revisionRow) return;
+  const confirmed = await showAppConfirm({
+    title: 'Delete sent revision?',
+    message: `${revisionRow.number || `Revision ${revision}`} has been sent to the client. Deleting it removes its archived PDF and cannot be undone.`,
+    confirmText: 'Delete Revision',
+    cancelText: 'Cancel',
+    destructive: true
+  });
+  if (!confirmed) return;
+  try {
+    clearTimeout(financeState.saveTimer);
+    const response = await apiCall(
+      `/api/quotations/${encodeURIComponent(documentId)}/revisions/${encodeURIComponent(revision)}`,
+      'DELETE'
+    );
+    if (financeState.current?.id === documentId) {
+      financeState.current = response.data;
+      financeState.snapshotMode = false;
+      financeRenderEditor();
+    } else {
+      const index = financeState.documents.findIndex(row => row.id === documentId);
+      if (index >= 0) financeState.documents[index] = response.data;
+      financeRenderList(document.querySelector('.finance-search')?.value || '');
+    }
+    showNotification('success', 'Quotation revision deleted');
+  } catch (error) {
+    showNotification('error', error.message || 'Failed to delete quotation revision');
+  }
+}
+
+function financeCanDiscardDraft(document = financeState.current) {
+  const revision = Number(document?.revision || 1);
+  return document?.status === 'draft'
+    && revision > 1
+    && (document.revisions || []).some(row => Number(row?.revision || 0) < revision && row?.snapshot);
+}
+
+async function financeDiscardChanges() {
+  const current = financeState.current;
+  if (!current || !financeCanDiscardDraft(current)) return;
+  clearTimeout(financeState.saveTimer);
+  const confirmed = await showAppConfirm({
+    title: 'Discard draft changes?',
+    message: `Discard revision ${String(current.revision || 1).padStart(2, '0')} and restore the previous sent revision? All changes in this draft will be lost.`,
+    confirmText: 'Discard Changes',
+    cancelText: 'Keep Editing',
+    danger: true
+  });
+  if (!confirmed) return;
+  try {
+    const response = await apiCall(`/api/quotations/${encodeURIComponent(current.id)}/discard-revision`, 'POST', {});
+    financeState.current = response.data;
+    financeState.snapshotMode = false;
+    financeRenderEditor();
+    showNotification('success', `Draft discarded. ${response.data.number} has been restored.`);
+  } catch (error) {
+    showNotification('error', error.message || 'Failed to discard draft changes');
+  }
 }
 
 function financeClientDisplay(client) {
@@ -1358,6 +1513,7 @@ function financeRenderEditor() {
   const client = document.client || {};
   const allDaysMenu = `finance-days-all-${document.id}`;
   const snapshotMode = !!financeState.snapshotMode;
+  const editingSentRevision = Number(document._editingSentRevision || 0);
   const validityUnit = financeValidityUnit(document);
   const validityAmount = financeValidityAmount(document);
   root.innerHTML = `
@@ -1371,7 +1527,11 @@ function financeRenderEditor() {
           </label>
           ${snapshotMode ? '<span class="finance-readonly-pill" title="Snapshot view">Revision view</span>' : `
             <div class="finance-editor-revision-chip">${financeSnapshotControl(document)}</div>
-            ${financeStatusControl(document, 'editor')}
+            ${editingSentRevision ? `<span class="finance-readonly-pill">Editing sent revision ${String(editingSentRevision).padStart(2, '0')}</span>` : `
+              ${financeStatusControl(document, 'editor')}
+              ${financeExportQuotationButton(document)}
+              ${financeExportInvoiceButton(document)}
+            `}
           `}
         </div>
         <span class="finance-save-state" id="financeSaveState">${snapshotMode ? 'Viewing sent snapshot — read only' : (document.projectName ? 'All changes saved' : 'Project Name is required before saving')}</span>
@@ -1379,6 +1539,7 @@ function financeRenderEditor() {
       <div class="finance-editor-actions">
         ${snapshotMode ? '' : `
           <button type="button" class="btn btn-danger" onclick="financeDeleteCurrent()">Delete</button>
+          ${financeCanDiscardDraft(document) ? '<button type="button" class="btn btn-secondary finance-discard-draft" onclick="financeDiscardChanges()">Discard changes</button>' : ''}
           <button type="button" class="btn btn-primary" onclick="financeSaveAndExit()">Save and Exit</button>
         `}
       </div>
@@ -1417,13 +1578,15 @@ function financeRenderEditor() {
           <div class="finance-section-heading"><div><h3>Event schedule</h3><p>Dates are optional. New line items will use ${financeEventDays(document)} day(s).</p></div></div>
           <div class="finance-schedule-grid">
             ${financeSchedulePair('Set-up', 'setup')}
-            ${financeSchedulePair('Teardown', 'teardown')}
             ${financeSchedulePair('Rehearsal', 'rehearsal')}
+            ${financeAdditionalScheduleRows('rehearsal', document).map((row, index) => financeAdditionalSchedulePair('rehearsal', row, index)).join('')}
             ${financeSchedulePair('Show', 'show')}
             ${financeAdditionalScheduleRows('show', document).map((row, index) => financeAdditionalSchedulePair('show', row, index)).join('')}
+            ${financeSchedulePair('Teardown', 'teardown')}
             ${financeAdditionalScheduleRows('teardown', document).map((row, index) => financeAdditionalSchedulePair('teardown', row, index)).join('')}
           </div>
           <div class="finance-schedule-actions">
+            <button type="button" class="btn btn-secondary" onclick="financeAddScheduleRow('rehearsal')">+ Add rehearsal</button>
             <button type="button" class="btn btn-secondary" onclick="financeAddScheduleRow('show')">+ Add show</button>
             <button type="button" class="btn btn-secondary" onclick="financeAddScheduleRow('teardown')">+ Add teardown</button>
           </div>
@@ -1835,7 +1998,11 @@ function financeQuotationIsBlank(document) {
     document.showDate,
     document.teardownDate,
     document.notes
-  ].some(value => String(value || '').trim());
+  ].some(value => String(value || '').trim()) || [
+    ...(document.additionalRehearsals || []),
+    ...(document.additionalShows || []),
+    ...(document.additionalTeardowns || [])
+  ].some(row => String(row?.date || row?.time || '').trim());
   return !hasClient
     && !String(document.projectName || '').trim()
     && !(document.departments || []).length
@@ -1855,12 +2022,17 @@ async function financeSaveCurrent(notify = false) {
   const state = document.getElementById('financeSaveState');
   if (state) state.textContent = 'Saving...';
   try {
-    const response = await apiCall(`/api/quotations/${encodeURIComponent(current.id)}`, 'PUT', current);
+    const editingSentRevision = Number(current._editingSentRevision || 0);
+    const endpoint = editingSentRevision
+      ? `/api/quotations/${encodeURIComponent(current.id)}/revisions/${encodeURIComponent(editingSentRevision)}`
+      : `/api/quotations/${encodeURIComponent(current.id)}`;
+    const response = await apiCall(endpoint, 'PUT', current);
     if (financeState.current?.id === current.id && financeState.changeVersion === version) {
       const previousNumber = financeState.current.number;
       const previousStatus = financeState.current.status;
       response.data._createdBlank = current._createdBlank;
       response.data._initialQuotationDate = current._initialQuotationDate;
+      if (editingSentRevision) response.data._editingSentRevision = editingSentRevision;
       financeState.current = response.data;
       if (previousNumber !== response.data.number || previousStatus !== response.data.status || notify) financeRenderEditor();
     } else if (financeState.current?.id === current.id) {
@@ -1868,7 +2040,7 @@ async function financeSaveCurrent(notify = false) {
       financeState.saveTimer = setTimeout(() => financeSaveCurrent(false), 300);
     }
     const nextState = document.getElementById('financeSaveState');
-    if (nextState) nextState.textContent = 'All changes saved';
+    if (nextState) nextState.textContent = editingSentRevision ? 'Revision changes saved' : 'All changes saved';
     if (notify) showNotification('success', 'Quotation saved');
     return response.data;
   } catch (error) {
@@ -2139,8 +2311,18 @@ async function financeCommitStatus(documentId, status, extras) {
 }
 
 async function financeExportPdf() {
+  return financeExportQuotation(financeState.current?.id);
+}
+
+async function financeExportQuotation(documentId = financeState.current?.id) {
+  const quotation = financeState.current?.id === documentId
+    ? financeState.current
+    : financeState.documents.find(row => row.id === documentId);
+  if (!quotation || !financeCanExportQuotation(quotation)) return;
   try {
-    const current = await financeSaveCurrent(false);
+    const current = financeState.current?.id === quotation.id
+      ? await financeSaveCurrent(false)
+      : quotation;
     const pdfUrl = `/api/quotations/${encodeURIComponent(current.id)}/pdf`;
     const opened = window.open(pdfUrl, '_blank', 'noopener');
     if (!opened) {
@@ -2148,6 +2330,39 @@ async function financeExportPdf() {
     }
   } catch (error) {
     showNotification('error', error.message || 'Failed to export quotation');
+  }
+}
+
+async function financeExportInvoice(documentId = financeState.current?.id) {
+  const current = financeState.current?.id === documentId
+    ? financeState.current
+    : financeState.documents.find(row => row.id === documentId);
+  if (!current || !financeCanExportInvoice(current)) return;
+  try {
+    if (financeState.current?.id === current.id) await financeSaveCurrent(false);
+    const response = await apiCall(
+      `/api/quotations/${encodeURIComponent(current.id)}/convert-to-invoice`,
+      'POST',
+      {}
+    );
+    const invoice = response.data;
+    const refreshed = await apiCall(`/api/quotations/${encodeURIComponent(current.id)}`);
+    if (financeState.current?.id === current.id) {
+      financeState.current = refreshed.data;
+      financeRenderEditor();
+    } else {
+      const index = financeState.documents.findIndex(row => row.id === current.id);
+      if (index >= 0) financeState.documents[index] = refreshed.data;
+      financeRenderList(document.querySelector('.finance-search')?.value || '');
+    }
+    const opened = window.open(
+      `/api/invoices/${encodeURIComponent(invoice.id)}/pdf`,
+      '_blank',
+      'noopener'
+    );
+    if (!opened) showNotification('warning', 'Please allow pop-ups to preview the invoice PDF');
+  } catch (error) {
+    showNotification('error', error.message || 'Failed to export invoice');
   }
 }
 

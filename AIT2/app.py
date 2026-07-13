@@ -23,6 +23,7 @@ from types import SimpleNamespace
 from urllib.parse import quote, unquote_plus
 
 from flask import (
+    abort,
     Flask,
     Response,
     g,
@@ -706,6 +707,28 @@ def _assign_user_to_company(username, company_code):
         raise ValueError('Company not found')
     registry['userCompanies'][username] = code
     return _save_company_registry(registry)
+
+
+def _update_username_history_references(old_username, new_username, company_code):
+    """Rename persisted history in the company the user belongs to."""
+    code = _normalise_company_code(company_code, DEFAULT_COMPANY_CODE)
+    test_manager = app.config.get('TEST_DATA_MANAGER')
+    if app.config.get('TESTING') and test_manager is not None and code not in _company_data_managers:
+        manager = test_manager
+    else:
+        manager = _get_company_data_manager(code)
+    current_manager = _current_data_manager_object()
+    acquired = False
+    try:
+        if manager is not current_manager and hasattr(manager, 'acquire_write_request'):
+            manager.acquire_write_request()
+            acquired = True
+        if manager is not current_manager:
+            manager.load_all_data()
+        return manager.update_username_references(old_username, new_username)
+    finally:
+        if acquired:
+            manager.release_write_request()
 
 
 def _user_is_assigned_to_current_company(username):
@@ -8751,13 +8774,20 @@ def _user_presence_realtime_details_from_log_action(action):
 def log_action(action, user=None):
     """Helper function to log actions."""
     try:
+        actor = (
+            str(user).strip()
+            if user is not None and str(user).strip()
+            else session.get('user', 'system')
+        )
+        if (
+            (has_request_context() and _current_user_is_owner())
+            or _is_owner_username(actor)
+        ):
+            return
+
         log_entry = LogEntry(
             timestamp=datetime.now().strftime("%Y/%m/%d %H:%M:%S"),
-            user=(
-                str(user).strip()
-                if user is not None and str(user).strip()
-                else session.get('user', 'system')
-            ),
+            user=actor,
             action=action
         )
 
@@ -9798,16 +9828,88 @@ def _static_asset_version(filename):
         return int(time.time())
 
 
-@app.route('/')
-@require_auth
-def index():
-    """Serve the main web interface"""
+APP_PAGE_SECTIONS = {
+    '/dashboard': 'dashboard',
+    '/events': 'events',
+    '/plan': 'plan',
+    '/manpower': 'workforce',
+    '/prepare': 'prepare-new',
+    '/return': 'return',
+    '/transfer': 'transfer',
+    '/inventory': 'inventory',
+    '/containers': 'containers',
+    '/maintenance': 'maintenance',
+    '/asset-check': 'asset-check',
+    '/maintenance-report': 'maintenance-report',
+    '/logs': 'logs',
+    '/quotations': 'quotations',
+    '/profit-loss': 'profit-loss',
+    '/compare': 'compare',
+    '/users': 'users',
+    '/company-details': 'pdf-settings',
+    '/companies': 'companies',
+    '/change-password': 'change-password',
+    '/delivery-order': 'delivery-order',
+}
+APP_ADMIN_PAGE_SECTIONS = {
+    'plan', 'compare', 'workforce', 'logs', 'maintenance-report',
+    'users', 'pdf-settings',
+}
+APP_OWNER_PAGE_SECTIONS = {'companies'}
+APP_SALES_PAGE_SECTIONS = {'quotations', 'profit-loss'}
+
+
+def _render_app_page(section):
     return render_template(
         'index.html',
+        initial_section=section,
         app_js_version=_static_asset_version('js/app.js'),
         workforce_js_version=_static_asset_version('js/workforce-admin.js'),
         workforce_css_version=_static_asset_version('css/workforce-admin.css'),
     )
+
+
+@app.route('/')
+@require_auth
+def index():
+    """Redirect the legacy root URL to the named events workspace."""
+    return redirect('/events')
+
+
+@app.route('/dashboard')
+@app.route('/events')
+@app.route('/plan')
+@app.route('/manpower')
+@app.route('/prepare')
+@app.route('/return')
+@app.route('/transfer')
+@app.route('/inventory')
+@app.route('/containers')
+@app.route('/maintenance')
+@app.route('/asset-check')
+@app.route('/maintenance-report')
+@app.route('/logs')
+@app.route('/quotations')
+@app.route('/profit-loss')
+@app.route('/compare')
+@app.route('/users')
+@app.route('/company-details')
+@app.route('/companies')
+@app.route('/change-password')
+@app.route('/delivery-order')
+@require_auth
+def app_page():
+    """Serve a named app workspace after enforcing its page permission."""
+    section = APP_PAGE_SECTIONS.get(request.path)
+    if not section:
+        abort(404)
+    if section in APP_ADMIN_PAGE_SECTIONS and not _current_user_effective_is_admin():
+        return redirect('/events')
+    if section in APP_OWNER_PAGE_SECTIONS and not _current_user_is_owner():
+        return redirect('/events')
+    if section in APP_SALES_PAGE_SECTIONS and not _current_user_has_sales_access():
+        return redirect('/events')
+    return _render_app_page(section)
 
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -9815,7 +9917,7 @@ def login():
     """Handle user authentication"""
     if request.method == 'GET':
         if 'user' in session:
-            return redirect(url_for('index'))
+            return redirect('/events')
         return render_template(
             'login.html',
             login_js_version=_static_asset_version('js/login.js'),
@@ -9834,7 +9936,7 @@ def login():
             user = data_manager.users[username]
 
             if not getattr(user, 'is_active', True):
-                log_action(f"Inactive login attempt for username: {username}")
+                log_action(f"Inactive login attempt for username: {username}", user=username)
                 return jsonify({
                     'success': False,
                     'message': 'This account is inactive. Please contact an admin.'
@@ -9865,10 +9967,10 @@ def login():
                 return jsonify({
                     'success': True,
                     'message': 'Login successful',
-                    'redirect': url_for('index')
+                    'redirect': '/events'
                 })
 
-        log_action(f"Failed login attempt for username: {username}")
+        log_action(f"Failed login attempt for username: {username}", user=username)
         return jsonify({'success': False, 'message': 'Invalid credentials'}), 401
 
     except Exception as e:
@@ -10717,11 +10819,14 @@ def delete_department(department_code):
 def get_users():
     """Admin: list users"""
     users_data = []
+    can_see_owners = _current_user_is_owner()
     can_see_all_companies = _current_user_is_super_admin()
     current_company_code = _normalise_company_code(_current_company_code(), DEFAULT_COMPANY_CODE)
     current_username = str(session.get('user') or '').strip()
 
     for user in sorted(data_manager.users.values(), key=lambda u: u.username.lower()):
+        if not can_see_owners and _is_owner_username(user.username):
+            continue
         company_code = _user_assigned_company_code(user.username)
         if (
             not can_see_all_companies
@@ -10827,6 +10932,7 @@ def update_user(username):
         username_changed = False
         renamed_from = old_username
         renamed_to = old_username
+        history_company_code = _user_assigned_company_code(old_username)
         rename_counts = None
         requested_company = None
         requested_role = None
@@ -10875,7 +10981,11 @@ def update_user(username):
                 if session.get('user') == old_username:
                     session['user'] = new_username
 
-                rename_counts = data_manager.update_username_references(old_username, new_username)
+                rename_counts = _update_username_history_references(
+                    old_username,
+                    new_username,
+                    history_company_code,
+                )
 
         if requested_role:
             user.role = requested_role
@@ -19225,6 +19335,7 @@ def _migrate_finance_data(data):
             ('setupTime', document.get('setupTime') or ''),
             ('rehearsalDate', document.get('rehearsalDate') or ''),
             ('rehearsalTime', document.get('rehearsalTime') or ''),
+            ('additionalRehearsals', document.get('additionalRehearsals') or []),
             ('showDate', document.get('showDate') or document.get('eventDate') or ''),
             ('showTime', document.get('showTime') or ''),
             ('teardownDate', document.get('teardownDate') or ''),
@@ -19913,6 +20024,9 @@ def _normalise_finance_document(value, document_type='quotation', existing=None)
         'setupTime': str(value.get('setupTime') if 'setupTime' in value else existing.get('setupTime') or '').strip()[:20],
         'rehearsalDate': str(value.get('rehearsalDate') if 'rehearsalDate' in value else existing.get('rehearsalDate') or '').strip()[:20],
         'rehearsalTime': str(value.get('rehearsalTime') if 'rehearsalTime' in value else existing.get('rehearsalTime') or '').strip()[:20],
+        'additionalRehearsals': _normalise_finance_schedule_rows(
+            value.get('additionalRehearsals') if 'additionalRehearsals' in value else existing.get('additionalRehearsals')
+        ),
         'showDate': str(value.get('showDate') if 'showDate' in value else existing.get('showDate') or existing.get('eventDate') or '').strip()[:20],
         'showTime': str(value.get('showTime') if 'showTime' in value else existing.get('showTime') or '').strip()[:20],
         'teardownDate': str(value.get('teardownDate') if 'teardownDate' in value else existing.get('teardownDate') or '').strip()[:20],
@@ -19955,6 +20069,7 @@ def _normalise_finance_document(value, document_type='quotation', existing=None)
         'eventManagedByQuotation': bool(value.get('eventManagedByQuotation') if 'eventManagedByQuotation' in value else existing.get('eventManagedByQuotation', False)),
         'eventSyncFingerprint': str(value.get('eventSyncFingerprint') if 'eventSyncFingerprint' in value else existing.get('eventSyncFingerprint') or '').strip()[:200],
         'sourceQuotationId': str(value.get('sourceQuotationId') or existing.get('sourceQuotationId') or '').strip()[:80],
+        'sourceQuotationNumber': str(value.get('sourceQuotationNumber') or existing.get('sourceQuotationNumber') or '').strip()[:80],
         'createdAt': existing.get('createdAt') or now.isoformat(timespec='seconds'),
         'createdBy': existing.get('createdBy') or current_username,
         'updatedAt': existing.get('updatedAt') if is_read_normalisation else now.isoformat(timespec='seconds'),
@@ -20111,6 +20226,7 @@ def _finance_event_date_range(document):
     candidates = [
         document.get('setupDate'),
         document.get('rehearsalDate'),
+        *[row.get('date') for row in document.get('additionalRehearsals') or [] if isinstance(row, dict)],
         document.get('showDate'),
         document.get('teardownDate'),
         *[row.get('date') for row in document.get('additionalShows') or [] if isinstance(row, dict)],
@@ -21325,11 +21441,23 @@ def _finance_list_or_create(document_type):
             _save_finance_data(finance_data)
         if request.method == 'GET':
             query = str(request.args.get('query') or '').strip().lower()
+            linked_invoices = {}
+            for document in finance_data.get('documents') or []:
+                if document.get('type') != 'invoice':
+                    continue
+                quotation_id = str(document.get('sourceQuotationId') or '').strip()
+                if quotation_id and _finance_user_can_access(document):
+                    linked_invoices[quotation_id] = document
             rows = [
                 _normalise_finance_document(row, document_type, row)
                 for row in finance_data.get('documents') or []
                 if row.get('type') == document_type and _finance_user_can_access(row)
             ]
+            if document_type == 'quotation':
+                for row in rows:
+                    invoice = linked_invoices.get(str(row.get('id') or ''))
+                    row['invoiceId'] = str((invoice or {}).get('id') or '')
+                    row['invoiceNumber'] = str((invoice or {}).get('number') or '')
             if query:
                 rows = [
                     row for row in rows
@@ -21337,6 +21465,9 @@ def _finance_list_or_create(document_type):
                         row.get('number', ''),
                         row.get('title', ''),
                         row.get('reference', ''),
+                        row.get('invoiceNumber', ''),
+                        row.get('salesperson', ''),
+                        row.get('createdBy', ''),
                         (row.get('client') or {}).get('name', ''),
                         (row.get('client') or {}).get('company', ''),
                     )).lower()
@@ -22082,12 +22213,33 @@ def convert_quotation_to_invoice(document_id):
             None,
         )
         if existing_invoice:
-            return jsonify({'success': True, 'data': _normalise_finance_document(existing_invoice, 'invoice', existing_invoice)})
+            pdf_visibility = {
+                key: quotation.get(key)
+                for key in (
+                    'showUnitPrices',
+                    'showDepartmentDiscounts',
+                    'showDepartmentSubtotals',
+                    'showLineNumbers',
+                )
+            }
+            pdf_visibility['sourceQuotationNumber'] = quotation.get('number') or ''
+            updated_invoice = _normalise_finance_document(
+                pdf_visibility,
+                'invoice',
+                existing_invoice,
+            )
+            finance_data['documents'] = [
+                updated_invoice if str(row.get('id')) == str(existing_invoice.get('id')) else row
+                for row in finance_data.get('documents') or []
+            ]
+            _save_finance_data(finance_data)
+            return jsonify({'success': True, 'data': updated_invoice})
 
         source = dict(quotation)
         source.pop('id', None)
         source.pop('number', None)
         source['sourceQuotationId'] = document_id
+        source['sourceQuotationNumber'] = quotation.get('number') or ''
         source['status'] = 'draft'
         source['invoiceDate'] = datetime.now().strftime('%Y-%m-%d')
         source['dueDate'] = (datetime.now() + timedelta(days=30)).strftime('%Y-%m-%d')
@@ -22097,7 +22249,16 @@ def convert_quotation_to_invoice(document_id):
 
         for index, row in enumerate(finance_data.get('documents') or []):
             if str(row.get('id')) == str(document_id):
-                updated_quote = _normalise_finance_document({'status': 'accepted'}, 'quotation', quotation)
+                quotation_status = str(quotation.get('status') or '').strip().lower()
+                next_status = 'invoiced' if quotation_status == 'accepted' else quotation_status
+                updated_quote = _normalise_finance_document(
+                    {'status': next_status or 'invoiced'},
+                    'quotation',
+                    quotation,
+                )
+                if next_status == 'invoiced':
+                    updated_quote['invoicedAt'] = datetime.now().isoformat(timespec='seconds')
+                    updated_quote['statusChangedAt'] = updated_quote['invoicedAt']
                 finance_data['documents'][index] = updated_quote
                 break
 
@@ -22112,7 +22273,37 @@ def _finance_pdf_response(document_id, document_type):
         stored = _finance_find_document(finance_data, document_id, document_type)
         if not stored or not _finance_user_can_access(stored):
             return jsonify({'error': f'{document_type.title()} not found'}), 404
-        document = _normalise_finance_document(stored, document_type, stored)
+        revision = _safe_int(request.args.get('revision'), 0)
+        if revision and document_type == 'quotation':
+            revision_row = next(
+                (
+                    row for row in stored.get('revisions') or []
+                    if isinstance(row, dict)
+                    and _safe_int(row.get('revision'), 0) == revision
+                    and isinstance(row.get('snapshot'), dict)
+                ),
+                None,
+            )
+            if not revision_row:
+                return jsonify({'error': 'Quotation revision not found'}), 404
+            revision_source = {
+                **revision_row['snapshot'],
+                'id': stored.get('id'),
+                'type': 'quotation',
+                'number': revision_row.get('number') or revision_row['snapshot'].get('number'),
+                'revision': revision,
+                'status': 'sent',
+                'sentAt': revision_row.get('sentAt') or '',
+                'validUntil': revision_row.get('validUntil') or revision_row['snapshot'].get('validUntil') or '',
+                'validityAmount': revision_row.get('validityAmount') or revision_row['snapshot'].get('validityAmount'),
+                'validityUnit': revision_row.get('validityUnit') or revision_row['snapshot'].get('validityUnit'),
+                'validityDays': revision_row.get('validityDays') or revision_row['snapshot'].get('validityDays'),
+            }
+            document = _normalise_finance_document(revision_source, document_type, {})
+            document['number'] = revision_source['number']
+            document['revision'] = revision
+        else:
+            document = _normalise_finance_document(stored, document_type, stored)
         export_error = _finance_export_error(document)
         if export_error:
             return jsonify({'error': export_error}), 400
@@ -22144,6 +22335,223 @@ def _finance_pdf_response(document_id, document_type):
 @require_sales
 def quotation_pdf(document_id):
     return _finance_pdf_response(document_id, 'quotation')
+
+
+@app.route('/api/quotations/<document_id>/discard-revision', methods=['POST'])
+@require_sales
+def discard_quotation_revision(document_id):
+    with _finance_lock:
+        finance_data = _load_finance_data()
+        stored = _finance_find_document(finance_data, document_id, 'quotation')
+        if not stored or not _finance_user_can_access(stored):
+            return jsonify({'error': 'Quotation not found'}), 404
+
+        current = _normalise_finance_document(stored, 'quotation', stored)
+        current_revision = _safe_int(current.get('revision'), 1)
+        if current.get('status') != 'draft' or current_revision <= 1:
+            return jsonify({'error': 'This quotation has no draft revision to discard'}), 409
+
+        target = max(
+            (
+                row for row in current.get('revisions') or []
+                if isinstance(row, dict)
+                and isinstance(row.get('snapshot'), dict)
+                and _safe_int(row.get('revision'), 0) < current_revision
+            ),
+            key=lambda row: _safe_int(row.get('revision'), 0),
+            default=None,
+        )
+        if not target:
+            return jsonify({'error': 'The previous sent revision is unavailable'}), 409
+
+        target_revision = _safe_int(target.get('revision'), 1)
+        restored_source = {
+            **target['snapshot'],
+            'id': current.get('id'),
+            'type': 'quotation',
+            'number': target.get('number') or target['snapshot'].get('number'),
+            'revision': target_revision,
+            'status': 'sent',
+            'sentAt': target.get('sentAt') or '',
+            'validUntil': target.get('validUntil') or target['snapshot'].get('validUntil') or '',
+            'validityAmount': target.get('validityAmount') or target['snapshot'].get('validityAmount'),
+            'validityUnit': target.get('validityUnit') or target['snapshot'].get('validityUnit'),
+            'validityDays': target.get('validityDays') or target['snapshot'].get('validityDays'),
+        }
+        restored = _normalise_finance_document(restored_source, 'quotation', {})
+        restored.update({
+            'id': current.get('id'),
+            'number': restored_source['number'],
+            'revision': target_revision,
+            'status': 'sent',
+            'sentAt': restored_source['sentAt'],
+            'validUntil': restored_source['validUntil'],
+            'revisions': current.get('revisions') or [],
+            'eventId': current.get('eventId'),
+            'eventManagedByQuotation': current.get('eventManagedByQuotation', False),
+            'eventSyncFingerprint': current.get('eventSyncFingerprint', ''),
+            'statusChangedAt': restored_source['sentAt'],
+            'updatedAt': datetime.now().isoformat(timespec='seconds'),
+            'updatedBy': _finance_current_username(),
+        })
+        finance_data['documents'] = [
+            restored if str(row.get('id')) == str(document_id) else row
+            for row in finance_data.get('documents') or []
+        ]
+        _save_finance_data(finance_data)
+        log_action(
+            f"Discarded draft revision {current_revision:02d} of quotation "
+            f"{current.get('number')} and restored revision {target_revision:02d}"
+        )
+        return jsonify({'success': True, 'data': restored})
+
+
+@app.route('/api/quotations/<document_id>/revisions/<int:revision>', methods=['PUT', 'DELETE'])
+@require_sales
+def update_or_delete_quotation_revision(document_id, revision):
+    with _finance_lock:
+        finance_data = _load_finance_data()
+        stored = _finance_find_document(finance_data, document_id, 'quotation')
+        if not stored or not _finance_user_can_access(stored):
+            return jsonify({'error': 'Quotation not found'}), 404
+
+        current = _normalise_finance_document(stored, 'quotation', stored)
+        revisions = current.get('revisions') or []
+        revision_row = next(
+            (
+                row for row in revisions
+                if isinstance(row, dict)
+                and _safe_int(row.get('revision'), 0) == revision
+                and isinstance(row.get('snapshot'), dict)
+            ),
+            None,
+        )
+        if not revision_row:
+            return jsonify({'error': 'Quotation revision not found'}), 404
+
+        if request.method == 'DELETE':
+            remaining = [row for row in revisions if row is not revision_row]
+            current_revision = _safe_int(current.get('revision'), 1)
+            if current_revision == revision:
+                fallback = max(
+                    (
+                        row for row in remaining
+                        if isinstance(row, dict) and isinstance(row.get('snapshot'), dict)
+                    ),
+                    key=lambda row: _safe_int(row.get('revision'), 0),
+                    default=None,
+                )
+                if fallback:
+                    fallback_revision = _safe_int(fallback.get('revision'), 1)
+                    fallback_source = {
+                        **fallback['snapshot'],
+                        'id': current.get('id'),
+                        'type': 'quotation',
+                        'number': fallback.get('number') or fallback['snapshot'].get('number'),
+                        'revision': fallback_revision,
+                        'status': 'sent',
+                        'sentAt': fallback.get('sentAt') or '',
+                        'validUntil': fallback.get('validUntil') or fallback['snapshot'].get('validUntil') or '',
+                        'validityAmount': fallback.get('validityAmount') or fallback['snapshot'].get('validityAmount'),
+                        'validityUnit': fallback.get('validityUnit') or fallback['snapshot'].get('validityUnit'),
+                        'validityDays': fallback.get('validityDays') or fallback['snapshot'].get('validityDays'),
+                    }
+                    replacement = _normalise_finance_document(fallback_source, 'quotation', {})
+                    replacement.update({
+                        'id': current.get('id'),
+                        'number': fallback_source['number'],
+                        'revision': fallback_revision,
+                        'status': 'sent',
+                        'sentAt': fallback_source['sentAt'],
+                        'validUntil': fallback_source['validUntil'],
+                        'revisions': remaining,
+                        'eventId': current.get('eventId'),
+                        'eventManagedByQuotation': current.get('eventManagedByQuotation', False),
+                        'eventSyncFingerprint': current.get('eventSyncFingerprint', ''),
+                    })
+                else:
+                    replacement = dict(current)
+                    replacement['revisions'] = []
+                    _finance_reset_to_draft_revision(replacement)
+            else:
+                replacement = dict(current)
+                replacement['revisions'] = remaining
+
+            replacement['updatedAt'] = datetime.now().isoformat(timespec='seconds')
+            replacement['updatedBy'] = _finance_current_username()
+            finance_data['documents'] = [
+                replacement if str(row.get('id')) == str(document_id) else row
+                for row in finance_data.get('documents') or []
+            ]
+            _save_finance_data(finance_data)
+            log_action(f"Deleted revision {revision:02d} from quotation {current.get('number')}")
+            return jsonify({'success': True, 'data': replacement})
+
+        snapshot_existing = {
+            **revision_row['snapshot'],
+            'id': current.get('id'),
+            'type': 'quotation',
+            'number': revision_row.get('number') or revision_row['snapshot'].get('number'),
+            'revision': revision,
+            'status': 'sent',
+            'sentAt': revision_row.get('sentAt') or '',
+            'validUntil': revision_row.get('validUntil') or revision_row['snapshot'].get('validUntil') or '',
+            'validityAmount': revision_row.get('validityAmount') or revision_row['snapshot'].get('validityAmount'),
+            'validityUnit': revision_row.get('validityUnit') or revision_row['snapshot'].get('validityUnit'),
+            'validityDays': revision_row.get('validityDays') or revision_row['snapshot'].get('validityDays'),
+        }
+        edited = _normalise_finance_document(request.get_json() or {}, 'quotation', snapshot_existing)
+        edited.update({
+            'id': current.get('id'),
+            'number': snapshot_existing['number'],
+            'revision': revision,
+            'status': 'sent',
+            'sentAt': snapshot_existing['sentAt'],
+        })
+        revision_row.update({
+            'number': edited['number'],
+            'validityAmount': edited.get('validityAmount'),
+            'validityUnit': edited.get('validityUnit'),
+            'validityDays': edited.get('validityDays'),
+            'fingerprint': _finance_revision_fingerprint(edited),
+            'snapshot': _finance_revision_payload(edited),
+        })
+
+        if _safe_int(current.get('revision'), 1) == revision and current.get('status') == 'sent':
+            edited.update({
+                'revisions': revisions,
+                'eventId': current.get('eventId'),
+                'eventManagedByQuotation': current.get('eventManagedByQuotation', False),
+                'eventSyncFingerprint': current.get('eventSyncFingerprint', ''),
+            })
+            replacement = edited
+        else:
+            replacement = dict(current)
+            replacement['revisions'] = revisions
+
+        finance_data['documents'] = [
+            replacement if str(row.get('id')) == str(document_id) else row
+            for row in finance_data.get('documents') or []
+        ]
+        _save_finance_data(finance_data)
+        log_action(f"Edited sent revision {revision:02d} of quotation {edited.get('number')}")
+
+        editor_payload = {
+            **revision_row['snapshot'],
+            'id': current.get('id'),
+            'type': 'quotation',
+            'number': revision_row.get('number'),
+            'revision': revision,
+            'status': 'sent',
+            'sentAt': revision_row.get('sentAt') or '',
+            'validUntil': revision_row.get('validUntil') or '',
+            'validityAmount': revision_row.get('validityAmount'),
+            'validityUnit': revision_row.get('validityUnit'),
+            'validityDays': revision_row.get('validityDays'),
+            'revisions': revisions,
+        }
+        editor_payload['totals'] = _finance_totals(editor_payload)
+        return jsonify({'success': True, 'data': editor_payload})
 
 
 @app.route('/api/invoices/<document_id>/pdf', methods=['GET'])

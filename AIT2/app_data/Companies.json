@@ -10,15 +10,6 @@
       "createdBy": "system",
       "brandingSetupRequired": false
     },
-    "AEE": {
-      "code": "AEE",
-      "name": "Avery Events and Exhibitions",
-      "backendFolder": "companies/AEE/backend",
-      "frontendFolder": "companies/AEE/frontend",
-      "createdAt": "2026-06-25T11:49:19",
-      "createdBy": "bnjm2000",
-      "brandingSetupRequired": true
-    },
     "TSC": {
       "code": "TSC",
       "name": "The Show Company",
@@ -45,10 +36,19 @@
       "createdAt": "2026-07-10T23:21:48",
       "createdBy": "bnjm2000",
       "brandingSetupRequired": false
+    },
+    "AVERY": {
+      "code": "AVERY",
+      "name": "Avery Events and Exhibitions",
+      "backendFolder": "companies/AVERY/backend",
+      "frontendFolder": "companies/AVERY/frontend",
+      "createdAt": "2026-06-25T11:49:19",
+      "createdBy": "bnjm2000",
+      "brandingSetupRequired": true,
+      "updatedAt": "2026-07-13T20:35:21"
     }
   },
   "userCompanies": {
-    "bnjm2000": "AVPL",
     "feezahmnsr": "AVPL",
     "cterence": "AVPL",
     "tjacky": "AVPL",
@@ -56,13 +56,15 @@
     "cjamie": "AVPL",
     "admin": "DEMO",
     "rrafie": "AVPL",
-    "Adi": "AEE",
+    "Adi": "AVERY",
     "emily": "TSC",
     "ct": "TSC",
-    "ac-inventory": "ARP"
+    "ac-inventory": "ARP",
+    "bnjm": "AVPL",
+    "bnjm2000": "AVPL"
   },
   "superAdmins": [
-    "bnjm2000"
+    "bnjm"
   ],
-  "updatedAt": "2026-07-10T23:23:12"
+  "updatedAt": "2026-07-13T20:40:31"
 }

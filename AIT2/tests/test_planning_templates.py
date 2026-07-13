@@ -125,7 +125,7 @@ class PlanningTemplateTests(unittest.TestCase):
 
     def test_index_contains_admin_plan_navigation_and_workspace(self):
         self.login('admin')
-        response = self.client.get('/')
+        response = self.client.get('/events')
         page = response.get_data(as_text=True)
 
         self.assertEqual(response.status_code, 200)
@@ -231,7 +231,7 @@ class PlanningTemplateTests(unittest.TestCase):
 
     def test_prepare_trial_and_legacy_workspaces_are_both_available(self):
         self.login('admin')
-        response = self.client.get('/')
+        response = self.client.get('/events')
         page = response.get_data(as_text=True)
 
         self.assertEqual(response.status_code, 200)

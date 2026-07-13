@@ -4,7 +4,7 @@ import unittest
 
 import app as app_module
 from data_manager import DataManager
-from models import User, hash_password
+from models import LogEntry, User, hash_password
 
 
 class CompanyManagementTests(unittest.TestCase):
@@ -182,6 +182,80 @@ class CompanyManagementTests(unittest.TestCase):
         self.assertEqual(registry['userCompanies']['bnjm2000'], 'AVEC')
         self.assertIn('AVEC', registry['companies'])
         self.assertNotIn('AVPL', registry['companies'])
+
+        persisted_registry = app_module._company_registry_cache
+        app_module._company_registry_cache = None
+        try:
+            reloaded = app_module._load_company_registry()
+            self.assertIn('AVEC', reloaded['companies'])
+            self.assertNotIn('AVPL', reloaded['companies'])
+            self.assertEqual(reloaded['userCompanies']['bnjm2000'], 'AVEC')
+        finally:
+            app_module._company_registry_cache = persisted_registry
+
+    def test_owner_actions_do_not_create_system_or_event_logs(self):
+        self.data_manager.logs = []
+        self.data_manager.save_logs()
+
+        with app_module.app.test_request_context('/'):
+            app_module.session['user'] = 'bnjm2000'
+            app_module.session['is_super_admin'] = True
+            app_module.session['company_code'] = 'AVPL'
+            app_module.log_action('Updated company details')
+            app_module.log_action('Updated event 999', user='bnjm2000')
+
+        self.assertEqual(self.data_manager.logs, [])
+
+    def test_owner_renaming_user_updates_the_users_assigned_company_history(self):
+        self.login_super_admin()
+        tsc_manager = app_module._get_company_data_manager('TSC')
+        tsc_manager.logs = [
+            LogEntry(
+                '2026/07/13 20:00:00',
+                'tech',
+                'User tech updated an assigned event',
+            )
+        ]
+        tsc_manager.save_logs()
+
+        response = self.client.put('/api/users/tech', json={'username': 'tech-renamed'})
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        tsc_manager.load_logs()
+        self.assertEqual(tsc_manager.logs[0].user, 'tech-renamed')
+        self.assertIn('User tech-renamed', tsc_manager.logs[0].action)
+        registry = app_module._load_company_registry()
+        self.assertEqual(registry['userCompanies']['tech-renamed'], 'TSC')
+        self.assertNotIn('tech', registry['userCompanies'])
+
+    def test_user_management_hides_owners_from_non_owners(self):
+        self.data_manager.users['admin-avpl'] = User(
+            'admin-avpl', hash_password('pw', 'adminsalt'), 'adminsalt', True, True
+        )
+        self.data_manager.save_users()
+        registry = app_module._load_company_registry()
+        registry['userCompanies']['admin-avpl'] = 'AVPL'
+        app_module._save_company_registry(registry)
+
+        with self.client.session_transaction() as session:
+            session['user'] = 'admin-avpl'
+            session['is_admin'] = True
+            session['is_super_admin'] = False
+            session['company_code'] = 'AVPL'
+
+        admin_response = self.client.get('/api/users')
+        self.assertEqual(admin_response.status_code, 200, admin_response.get_data(as_text=True))
+        admin_usernames = {row['username'] for row in admin_response.get_json()['data']}
+        self.assertIn('admin-avpl', admin_usernames)
+        self.assertNotIn('bnjm2000', admin_usernames)
+        self.assertNotIn('chief', admin_usernames)
+
+        self.login_super_admin()
+        owner_response = self.client.get('/api/users')
+        self.assertEqual(owner_response.status_code, 200, owner_response.get_data(as_text=True))
+        owner_usernames = {row['username'] for row in owner_response.get_json()['data']}
+        self.assertIn('bnjm2000', owner_usernames)
+        self.assertIn('chief', owner_usernames)
 
     def test_company_name_cannot_be_blank(self):
         self.login_super_admin()

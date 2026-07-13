@@ -3128,21 +3128,64 @@ function setupSidebarNavigation(root = document) {
     event.preventDefault();
     event.stopPropagation();
     event.stopImmediatePropagation();
+    if (section === 'logout') {
+      logout();
+      return;
+    }
     showSection(section);
   }, true);
 }
-function showSection(sectionName) {
+
+const APP_SECTION_PATHS = Object.freeze({
+  dashboard: '/dashboard',
+  events: '/events',
+  plan: '/plan',
+  workforce: '/manpower',
+  'freelancer-workspace': '/manpower',
+  'prepare-new': '/prepare',
+  return: '/return',
+  transfer: '/transfer',
+  inventory: '/inventory',
+  containers: '/containers',
+  maintenance: '/maintenance',
+  'asset-check': '/asset-check',
+  'maintenance-report': '/maintenance-report',
+  logs: '/logs',
+  quotations: '/quotations',
+  'profit-loss': '/profit-loss',
+  compare: '/compare',
+  users: '/users',
+  'pdf-settings': '/company-details',
+  companies: '/companies',
+  'change-password': '/change-password',
+  'delivery-order': '/delivery-order'
+});
+
+function appSectionFromPath(pathname = window.location.pathname) {
+  const cleanPath = String(pathname || '/').replace(/\/+$/, '') || '/';
+  if (cleanPath === '/') return 'events';
+  return Object.entries(APP_SECTION_PATHS).find(([, path]) => path === cleanPath)?.[0] || 'events';
+}
+
+function updateAppSectionHistory(sectionName, replace = false) {
+  const path = APP_SECTION_PATHS[sectionName];
+  if (!path || window.location.pathname === path) return;
+  const method = replace ? 'replaceState' : 'pushState';
+  window.history[method]({ section: sectionName }, '', path);
+}
+
+function showSection(sectionName, options = {}) {
   const adminOnlySections = new Set(["plan", "compare", "workforce", "freelancer-workspace", "logs", "maintenance-report", "users", "pdf-settings"]);
   const ownerOnlySections = new Set(["companies"]);
   const salesOnlySections = new Set(["quotations", "profit-loss"]);
   if (adminOnlySections.has(sectionName) && !isAdminUser()) {
-    return showSection("events");
+    return showSection("events", { ...options, replaceHistory: true });
   }
   if (ownerOnlySections.has(sectionName) && !isOwnerUser()) {
-    return showSection("events");
+    return showSection("events", { ...options, replaceHistory: true });
   }
   if (salesOnlySections.has(sectionName) && !currentUserHasSalesAccess()) {
-    return showSection("events");
+    return showSection("events", { ...options, replaceHistory: true });
   }
 
   if (
@@ -3162,6 +3205,10 @@ function showSection(sectionName) {
 
   const targetSection = document.getElementById(sectionName + "-section");
   if (!targetSection) return;
+
+  if (options.updateHistory !== false) {
+    updateAppSectionHistory(sectionName, options.replaceHistory === true);
+  }
 
   const contentArea = targetSection.closest('.content-area');
   if (contentArea) contentArea.scrollTop = 0;
@@ -3270,6 +3317,11 @@ function showSection(sectionName) {
       break;
   }
 }
+
+window.addEventListener('popstate', () => {
+  if (!currentUser) return;
+  showSection(appSectionFromPath(), { updateHistory: false });
+});
 
 // Modal functions
 let __lastFocusedBeforeModal = null;
@@ -4585,7 +4637,12 @@ function removeCompanyManagementTab() {
 }
 
 function ensureCompanyManagementNavItem() {
-  if (document.querySelector(`[data-section="companies"], [onclick="showSection('companies')"]`)) return;
+  const existingTab = document.querySelector(`[data-section="companies"], [onclick="showSection('companies')"]`);
+  if (existingTab) {
+    existingTab.classList.add('nav-item-inline');
+    setupSidebarNavigation();
+    return;
+  }
 
   const settingsSection = Array.from(document.querySelectorAll('.nav-section'))
     .find(section => {
@@ -4600,7 +4657,7 @@ function ensureCompanyManagementNavItem() {
 
   const companiesTab = document.createElement('button');
   companiesTab.type = 'button';
-  companiesTab.className = 'nav-item owner-only';
+  companiesTab.className = 'nav-item nav-item-inline owner-only';
   companiesTab.dataset.section = 'companies';
   companiesTab.dataset.label = 'Companies';
   companiesTab.textContent = 'Companies';
@@ -4611,6 +4668,7 @@ function ensureCompanyManagementNavItem() {
   } else {
     settingsSection.appendChild(companiesTab);
   }
+  setupSidebarNavigation();
 }
 
 function ensureCompanyManagementSection() {
@@ -6002,9 +6060,15 @@ async function editCompanyFromUsersAdmin() {
   }
 
   try {
-    await apiCall(`/api/companies/${encodeURIComponent(originalCode)}`, 'PUT', { code, name });
+    const response = await apiCall(`/api/companies/${encodeURIComponent(originalCode)}`, 'PUT', { code, name });
+    const renamedActiveCompany = String(currentUser?.company?.code || '').toUpperCase() === String(originalCode).toUpperCase()
+      && String(response?.data?.code || '').toUpperCase() !== String(originalCode).toUpperCase();
     closeModal('editCompanyModal');
     showNotification('success', 'Company updated');
+    if (renamedActiveCompany) {
+      window.location.reload();
+      return;
+    }
     await loadCompaniesAdmin();
     if (document.getElementById('users-section')) {
       await loadUsersAdmin();
@@ -27834,10 +27898,10 @@ async function initializeApp() {
       console.warn('Departments not loaded during startup:', departmentError);
     }
 
-    // Add a small delay to ensure all DOM elements are ready
+    // Resolve the server-approved deep link after dynamic sections are ready.
+    const initialSection = window.__INITIAL_APP_SECTION__ || appSectionFromPath();
     setTimeout(async () => {
-      // Load initial data
-      await loadAllEvents();
+      showSection(initialSection, { updateHistory: false });
     }, 200);
 
     connectRealtimeUpdates();

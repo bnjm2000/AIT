@@ -2,6 +2,7 @@
 
 from io import BytesIO
 from html import escape
+from datetime import datetime, timedelta
 import os
 import re
 
@@ -40,13 +41,53 @@ def _money(value, currency='SGD'):
 
 
 def _date(value):
-    from datetime import datetime
-
     raw = str(value or '').strip()
     try:
         return datetime.strptime(raw, '%Y-%m-%d').strftime('%d %b %Y')
     except ValueError:
         return raw
+
+
+def _schedule_date_summary(rows):
+    parsed = []
+    unparsed = []
+    seen = set()
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        raw = str(row.get('date') or '').strip()
+        if not raw or raw in seen:
+            continue
+        seen.add(raw)
+        try:
+            parsed.append((datetime.strptime(raw, '%Y-%m-%d').date(), str(row.get('time') or '').strip()))
+        except ValueError:
+            unparsed.append(_date(raw))
+
+    parsed.sort(key=lambda item: item[0])
+    groups = []
+    for value, time_value in parsed:
+        if groups and value == groups[-1][-1][0] + timedelta(days=1):
+            groups[-1].append((value, time_value))
+        else:
+            groups.append([(value, time_value)])
+
+    def format_group(group):
+        start, end = group[0][0], group[-1][0]
+        if start == end:
+            label = f"{start.day} {start.strftime('%B %Y')}"
+        elif start.year == end.year and start.month == end.month:
+            label = f"{start.day}-{end.day} {end.strftime('%B %Y')}"
+        elif start.year == end.year:
+            label = f"{start.day} {start.strftime('%B')}-{end.day} {end.strftime('%B %Y')}"
+        else:
+            label = f"{start.day} {start.strftime('%B %Y')}-{end.day} {end.strftime('%B %Y')}"
+        times = {time_value for _value, time_value in group if time_value}
+        if len(times) == 1 and len(group) == 1:
+            label = f"{label} {next(iter(times))}"
+        return label
+
+    return ', '.join([*(format_group(group) for group in groups), *unparsed])
 
 
 def _validity_label(document):
@@ -176,6 +217,15 @@ def build_finance_pdf(document, company, logo_path=''):
         fontName='Helvetica-Bold',
         fontSize=12,
         leading=15,
+        textColor=accent_on_white,
+        alignment=TA_RIGHT,
+    )
+    project_reference_style = ParagraphStyle(
+        'FinanceProjectReference',
+        parent=body,
+        fontName='Helvetica-Bold',
+        fontSize=11.5,
+        leading=14,
         textColor=accent_on_white,
         alignment=TA_RIGHT,
     )
@@ -342,7 +392,7 @@ def build_finance_pdf(document, company, logo_path=''):
     meta_rows = [
         [_paragraph(date_label, label), _paragraph(_date(date_value), body)],
         [_paragraph(secondary_label, label), _paragraph(_date(secondary_value) if document_type == 'invoice' else secondary_value, body)],
-        [_paragraph('Reference', label), _paragraph(document.get('reference'), body)],
+        [_paragraph('PO / Reference' if document_type == 'invoice' else 'Reference', label), _paragraph(document.get('reference'), body)],
         [_paragraph('Salesperson', label), _paragraph(document.get('salesperson'), body)],
         [_paragraph('Payment terms', label), _paragraph(document.get('paymentTerms'), body)],
     ]
@@ -381,39 +431,41 @@ def build_finance_pdf(document, company, logo_path=''):
     for event_label, key in (
         ('Project Name', 'projectName'),
         ('Location', 'eventLocation'),
-        ('Set-up', 'setupDate'),
-        ('Rehearsal', 'rehearsalDate'),
-        ('Show', 'showDate'),
-        ('Teardown', 'teardownDate'),
     ):
         if document.get(key):
-            value = document[key]
-            if key.endswith('Date'):
-                time_key = key.replace('Date', 'Time')
-                value = _date(value)
-                if document.get(time_key):
-                    value = f"{value} {document[time_key]}"
-            event_bits.append(f"<b>{escape(event_label)}:</b> {escape(_text(value))}")
-    for event_label, key in (
-        ('Show', 'additionalShows'),
-        ('Teardown', 'additionalTeardowns'),
+            event_bits.append(f"<b>{escape(event_label)}:</b> {escape(_text(document[key]))}")
+    for event_label, date_key, time_key, additional_key in (
+        ('Set-up', 'setupDate', 'setupTime', None),
+        ('Rehearsal', 'rehearsalDate', 'rehearsalTime', 'additionalRehearsals'),
+        ('Show', 'showDate', 'showTime', 'additionalShows'),
+        ('Teardown', 'teardownDate', 'teardownTime', 'additionalTeardowns'),
     ):
-        for index, row in enumerate(document.get(key) or [], start=2):
-            if not isinstance(row, dict) or not row.get('date'):
-                continue
-            value = _date(row.get('date'))
-            if row.get('time'):
-                value = f"{value} {row['time']}"
-            event_bits.append(
-                f"<b>{escape(event_label)} {index}:</b> {escape(_text(value))}"
-            )
+        rows = []
+        if document.get(date_key):
+            rows.append({'date': document.get(date_key), 'time': document.get(time_key)})
+        if additional_key:
+            rows.extend(document.get(additional_key) or [])
+        value = _schedule_date_summary(rows)
+        if value:
+            event_bits.append(f"<b>{escape(event_label)}:</b> {escape(_text(value))}")
     if event_bits:
+        quotation_reference = (
+            f"Ref: {_text(document.get('sourceQuotationNumber'))}"
+            if document_type == 'invoice' and document.get('sourceQuotationNumber')
+            else ''
+        )
+        event_panel_cells = [Paragraph('<br/>'.join(event_bits), body)]
+        event_panel_widths = [doc.width]
+        if quotation_reference:
+            event_panel_cells.append(_paragraph(quotation_reference, project_reference_style))
+            event_panel_widths = [doc.width * 0.68, doc.width * 0.32]
         event_panel = Table(
-            [[Paragraph('<br/>'.join(event_bits), body)]],
-            colWidths=[doc.width],
+            [event_panel_cells],
+            colWidths=event_panel_widths,
             style=TableStyle([
                 ('BACKGROUND', (0, 0), (-1, -1), panel),
                 ('BOX', (0, 0), (-1, -1), 0.5, rule),
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
                 ('LEFTPADDING', (0, 0), (-1, -1), 4 * mm),
                 ('RIGHTPADDING', (0, 0), (-1, -1), 4 * mm),
                 ('TOPPADDING', (0, 0), (-1, -1), 3 * mm),
@@ -491,24 +543,26 @@ def build_finance_pdf(document, company, logo_path=''):
         })
     pdf_line_number = 1
     current_subproject_id = None
+    show_subproject_headers = len(subprojects) > 1
     for subproject, department in export_groups:
         subproject_id = str(subproject.get('id') or 'main')
         if subproject_id != current_subproject_id:
             current_subproject_id = subproject_id
-            story.extend([
-                _paragraph(
-                    str(subproject.get('name') or 'Room').upper(),
-                    ParagraphStyle(
-                        f"Subproject-{subproject_id}",
-                        parent=section_title,
-                        fontSize=12,
-                        leading=15,
-                        textColor=accent_on_white,
-                        spaceBefore=5,
+            if show_subproject_headers:
+                story.extend([
+                    _paragraph(
+                        str(subproject.get('name') or 'Room').upper(),
+                        ParagraphStyle(
+                            f"Subproject-{subproject_id}",
+                            parent=section_title,
+                            fontSize=12,
+                            leading=15,
+                            textColor=accent_on_white,
+                            spaceBefore=5,
+                        ),
                     ),
-                ),
-                Spacer(1, 1 * mm),
-            ])
+                    Spacer(1, 1 * mm),
+                ])
         department_lines = [
             line for line in lines
             if (str(line.get('department') or 'General').strip() or 'General') == department

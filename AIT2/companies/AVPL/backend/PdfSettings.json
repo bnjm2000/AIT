@@ -9,9 +9,9 @@
   "phone": "",
   "email": "",
   "website": "",
-  "bankName": "",
-  "bankAccountName": "",
-  "bankAccountNumber": "",
+  "bankName": "OCBC Bank Limited",
+  "bankAccountName": "Avec Vision Pte Ltd",
+  "bankAccountNumber": "601 - 546195 - 001",
   "paynowUen": "",
   "currency": "SGD",
   "taxLabel": "GST",
@@ -21,7 +21,7 @@
   "defaultPaymentTerms": "30 Days",
   "defaultValidityDays": 30,
   "defaultTerms": "1.  Validity: 14 days\n2.  Work shall only commence upon receiving the certified copy of our quotation.  \n3.  Upon confirmation, a 50% non-refundable down payment is required, and the remaining balance must be paid upon\n      completion of the setup.\n4.  All items are rented for indoor usage only (unless otherwise stated).\n5.  Confirmation of rental is on a first-come, first-served basis.\n6.  T/T to: OCBC Bank Limited, 65 Chulia Street, #01 - 00, OCBC Centre, Singapore 049513.\n     Account Number (S$): 601 - 546195 - 001, Swift Code: OCBCSGSG, Account Name: Avec Vision Pte Ltd.\n7.  The hirer is responsible for according to due diligence and cares for equipment.  In agreement, they will undertake liability for\n\"     the loss or damage of the equipment rented.\t\"\n8.  Cancellation charge:  100% of the total amount if cancellation occurs after the completion of the setup.\n9.  Any additional services or equipment not mentioned in this quotation will be charged accordingly.\n\nWe hope the above quotation is acceptable to you and will be looking forward to your early confirmation.   Please feel free to\ncontact the undersigned should you require any further information.",
-  "themeColor": "#c20000",
-  "letterheadText": "Avec Vision Private Limited\n601 Sims Drive, PAN-I Complex #04-10, Singapore 387382",
-  "updatedAt": "2026-07-13T14:49:31"
+  "themeColor": "#1d90d7",
+  "letterheadText": "Avec Vision Private Limited\n601 Sims Drive, PAN-I Complex #04-10\nSingapore 387382",
+  "updatedAt": "2026-07-13T20:37:51"
 }

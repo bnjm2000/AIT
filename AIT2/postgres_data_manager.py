@@ -1353,7 +1353,7 @@ class PostgresDataManager(DataManager):
                     (
                         new_company_code,
                         new_company_name,
-                        old_row[1],
+                        Jsonb(old_row[1] or {}),
                         old_row[2],
                     ),
                 )
