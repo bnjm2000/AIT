@@ -165,6 +165,56 @@ class EventAvailabilityOverlapTests(unittest.TestCase):
         self.assertEqual(regular['available'], 5)
         self.assertEqual(regular['unavailable'], 1)
 
+    def test_plan_can_request_physical_total_despite_missing_ooc_and_overlap(self):
+        event = self.make_event(100)
+        self.make_event(101, prepared=['[MODEL]AX|TestBrand|RegularModel|4|Regular item'])
+        self.data_manager.inventory['A#01'].is_missing = True
+        self.data_manager.inventory['A#02'].is_ooc = True
+        self.login_as('admin', True)
+
+        response = self.client.post('/api/events/100/models', json={
+            'department': 'AX',
+            'brand': 'TestBrand',
+            'model': 'RegularModel',
+            'description': 'Regular item',
+            'quantity': 6,
+        })
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertIn('[MODEL]AX|TestBrand|RegularModel|6|Regular item', event.prepared_items)
+
+    def test_replace_model_requirement_updates_both_rows_together(self):
+        event = self.make_event(
+            100,
+            prepared=['[MODEL]AX|TestBrand|RegularModel|4|Regular item'],
+        )
+        for index in range(1, 4):
+            asset_id = f'R#{index:02d}'
+            self.data_manager.inventory[asset_id] = self.make_asset(
+                asset_id,
+                brand='OtherBrand',
+                model='ReplacementModel',
+                description='Replacement item',
+            )
+        self.login_as('admin', True)
+
+        response = self.client.post('/api/events/100/models/replace', json={
+            'source': {
+                'department': 'AX', 'brand': 'TestBrand',
+                'model': 'RegularModel', 'description': 'Regular item',
+            },
+            'replacement': {
+                'department': 'AX', 'brand': 'OtherBrand',
+                'model': 'ReplacementModel', 'description': 'Replacement item',
+            },
+            'quantity': 2,
+        })
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertIn('[MODEL]AX|TestBrand|RegularModel|2|Regular item', event.prepared_items)
+        self.assertIn('[MODEL]AX|OtherBrand|ReplacementModel|2|Replacement item', event.prepared_items)
+        self.assertIn('Replaced 2x TestBrand RegularModel', event.event_logs[-1]['action'])
+
     def test_prepare_dropdown_hides_assets_assigned_to_any_other_event(self):
         self.make_event(100)
         self.make_event(101, prepared=['A#01'])

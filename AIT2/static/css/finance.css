@@ -1198,6 +1198,172 @@
   background: #eef2ff;
 }
 
+.finance-rate-card-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+}
+
+.finance-rate-card-button svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.finance-rate-card-modal {
+  width: min(900px, calc(100vw - 32px));
+  max-height: min(820px, calc(100vh - 32px));
+  overflow: hidden;
+}
+
+.finance-rate-card-toolbar {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto;
+  gap: 10px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--finance-border);
+}
+
+.finance-rate-card-form {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  align-items: center;
+  gap: 8px;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--finance-border);
+  background: #f8fafc;
+}
+
+.finance-rate-card-brand,
+.finance-rate-card-model,
+.finance-rate-card-description,
+.finance-rate-card-department-field {
+  grid-column: span 2;
+}
+
+.finance-rate-card-price,
+.finance-rate-card-uom-control {
+  grid-column: span 1;
+}
+
+.finance-rate-card-save {
+  grid-column: span 2;
+}
+
+.finance-rate-card-form:not([hidden]) {
+  display: grid;
+}
+
+.finance-rate-card-uom-control .finance-line-select-button {
+  min-height: 38px;
+  padding: 7px 10px;
+  border-color: var(--finance-border);
+  background: #fff;
+}
+
+.finance-rate-card-results {
+  max-height: min(620px, calc(100vh - 230px));
+  overflow-y: auto;
+}
+
+.finance-rate-card-department h4 {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 9px 18px;
+  border-bottom: 1px solid var(--finance-border);
+  background: #f1f5f9;
+  color: var(--finance-ink);
+  font-size: 12px;
+}
+
+.finance-rate-card-department h4 span {
+  color: var(--finance-muted);
+  font-weight: 650;
+}
+
+.finance-rate-card-row {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) 140px auto 34px;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 18px;
+  border-bottom: 1px solid #eef0f4;
+}
+
+.finance-rate-card-delete {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: #8f2630;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.finance-rate-card-delete:hover,
+.finance-rate-card-delete:focus-visible {
+  border-color: #fecdd3;
+  background: #fff1f2;
+  outline: none;
+}
+
+.finance-rate-card-row > div,
+.finance-rate-card-row strong,
+.finance-rate-card-row small {
+  min-width: 0;
+}
+
+.finance-rate-card-row strong,
+.finance-rate-card-row small {
+  display: block;
+}
+
+.finance-rate-card-row small {
+  margin-top: 3px;
+  color: var(--finance-muted);
+}
+
+.finance-rate-card-row .finance-money-input {
+  border: 1px solid var(--finance-border);
+  border-radius: 7px;
+  background: #fff;
+}
+
+.finance-rate-card-row .finance-money-input input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  text-align: right;
+}
+
+@media (max-width: 720px) {
+  .finance-rate-card-toolbar,
+  .finance-rate-card-form,
+  .finance-rate-card-row {
+    grid-template-columns: 1fr;
+  }
+
+  .finance-rate-card-form > * {
+    grid-column: 1;
+  }
+
+  .finance-rate-card-row {
+    gap: 8px;
+  }
+}
+
 .finance-summary-row {
   display: flex;
   justify-content: space-between;

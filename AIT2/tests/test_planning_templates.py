@@ -171,6 +171,22 @@ class PlanningTemplateTests(unittest.TestCase):
             script,
         )
 
+    def test_plan_replacement_assignees_and_company_onboarding_controls_exist(self):
+        project_root = os.path.dirname(os.path.dirname(__file__))
+        with open(
+            os.path.join(project_root, 'static', 'js', 'app.js'),
+            encoding='utf-8',
+        ) as script_file:
+            script = script_file.read()
+
+        self.assertIn("/models/replace`, 'POST'", script)
+        self.assertIn('function planOpenReplacement(', script)
+        self.assertIn("onclick=\"assignAllEventAssignees('${context}')\"", script)
+        self.assertIn('user?.isActive !== false', script)
+        self.assertNotIn('await showCompanyBrandingPromptIfNeeded();', script)
+        self.assertIn("initialSection = 'pdf-settings'", script)
+        self.assertIn('class="inventory-onboarding-empty"', script)
+
     def test_event_detail_actions_are_shared_by_all_workspaces(self):
         project_root = os.path.dirname(os.path.dirname(__file__))
         with open(

@@ -32,7 +32,9 @@ const financeState = {
   dragDepartment: '',
   snapshotMode: false,
   activeSubprojectId: 'main',
-  showSubprojects: true,
+  rateCard: [],
+  rateCardSearch: '',
+  rateCardUom: 'units',
   editorDataLoadedAt: 0
 };
 
@@ -152,7 +154,7 @@ function financeAdditionalScheduleRows(kind, document = financeState.current) {
 }
 
 function financeAddScheduleRow(kind) {
-  if (!financeState.current || !['rehearsal', 'show', 'teardown'].includes(kind)) return;
+  if (!financeState.current || !['rehearsal', 'show'].includes(kind)) return;
   const key = {
     rehearsal: 'additionalRehearsals',
     show: 'additionalShows',
@@ -1128,10 +1130,21 @@ function financeChooseDepartment(index, encodedValue) {
   const value = decodeURIComponent(encodedValue);
   const line = financeState.current?.lineItems?.[index];
   if (!line) return;
+  const input = document.querySelector(`[data-finance-department-index="${index}"]`);
+  if (input) {
+    input.value = value;
+    input.dataset.departmentSelectionCommitted = 'true';
+  }
   line.department = value;
+  line.departmentCode = '';
   financeSyncDocumentDepartments();
   financeQueueSave();
   financeRenderEditor();
+}
+
+function financeCommitDepartmentInput(index, input) {
+  if (input?.dataset?.departmentSelectionCommitted === 'true') return;
+  financeLineChange(index, 'department', input?.value || '');
 }
 
 function financeShowAddDepartmentSuggestions(query) {
@@ -1231,9 +1244,10 @@ function financeRenderLineGroups() {
           <td>
             <div class="finance-inline-combobox">
               <input class="finance-line-input" value="${financeEscapeAttr(line.department)}" aria-label="Department" autocomplete="off"
+                data-finance-department-index="${index}"
                 onfocus="financeShowDepartmentSuggestions(${index},this.value,'${departmentResultsId}')"
                 oninput="financeShowDepartmentSuggestions(${index},this.value,'${departmentResultsId}')"
-                onchange="financeLineChange(${index},'department',this.value)">
+                onchange="financeCommitDepartmentInput(${index},this)">
               <div class="finance-inline-suggestions" id="${departmentResultsId}"></div>
             </div>
           </td>
@@ -1290,37 +1304,193 @@ function financeRenderSubprojectTabs() {
   `;
 }
 
-function financeToggleSubprojectView() {
-  financeState.showSubprojects = !financeState.showSubprojects;
-  financeRenderEditor();
+function ensureFinanceRateCardModal() {
+  let modal = document.getElementById('financeRateCardModal');
+  if (modal) return modal;
+  modal = document.createElement('div');
+  modal.id = 'financeRateCardModal';
+  modal.className = 'modal';
+  modal.innerHTML = `
+    <div class="modal-content finance-rate-card-modal">
+      <div class="modal-header">
+        <div><h3>Rate Card</h3><small>Remembered rates from inventory and custom quotation items</small></div>
+        <button type="button" class="close-btn" aria-label="Close rate card" onclick="closeModal('financeRateCardModal')">&times;</button>
+      </div>
+      <div class="finance-rate-card-toolbar">
+        <input id="financeRateCardSearch" class="finance-input" type="search" placeholder="Search assets or departments..." oninput="financeState.rateCardSearch=this.value;financeRenderRateCard()">
+        <button type="button" class="btn btn-primary" onclick="financeToggleRateCardForm()">+ Add item</button>
+      </div>
+      <form id="financeRateCardForm" class="finance-rate-card-form" hidden onsubmit="financeCreateRateCardItem(event)">
+        <input id="financeRateCardBrand" class="finance-input finance-rate-card-brand" placeholder="Brand">
+        <input id="financeRateCardModel" class="finance-input finance-rate-card-model" placeholder="Model">
+        <input id="financeRateCardDescription" class="finance-input finance-rate-card-description" required placeholder="Description">
+        <div class="finance-inline-combobox finance-rate-card-department-field">
+          <input id="financeRateCardDepartment" class="finance-input" required placeholder="Department" autocomplete="off"
+                 oninput="financeShowRateCardDepartmentSuggestions(this.value)" onfocus="financeShowRateCardDepartmentSuggestions(this.value)">
+          <div id="financeRateCardDepartmentResults" class="finance-inline-suggestions"></div>
+        </div>
+        <input id="financeRateCardPrice" class="finance-input finance-rate-card-price" required type="number" min="0.01" step="0.01" placeholder="Rate">
+        <div class="finance-custom-control finance-rate-card-uom-control">
+          <button id="financeRateCardUomButton" type="button" class="finance-line-select-button" onclick="financeToggleMenu('finance-rate-card-uom-menu',event)">unit(s)<span>⌄</span></button>
+          <div id="finance-rate-card-uom-menu" class="finance-custom-menu finance-uom-menu">
+            ${FINANCE_UOMS.map(row => `<button type="button" onclick="financeChooseRateCardUom('${row.value}')">${financeEscape(row.label)}</button>`).join('')}
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary finance-rate-card-save">Save item</button>
+      </form>
+      <div id="financeRateCardResults" class="finance-rate-card-results"></div>
+    </div>
+  `;
+  modal.addEventListener('click', event => {
+    if (event.target === modal) closeModal('financeRateCardModal');
+  });
+  document.body.appendChild(modal);
+  return modal;
 }
 
-function financeRenderCollatedLineGroups() {
-  const groups = new Map();
-  (financeState.current?.lineItems || []).forEach(line => {
-    const key = [line.catalogKey || '', line.brand || '', line.model || '', line.description || '', line.department || '', line.uom || 'units'].join('|').toLowerCase();
-    const existing = groups.get(key) || { ...line, quantity: 0, total: 0, roomCount: 0, roomIds: new Set() };
-    existing.quantity += financeNumber(line.quantity);
-    existing.total = financeNumber(existing.total) + financeLineTotal(line);
-    existing.roomIds.add(line.subprojectId || 'main');
-    existing.roomCount = existing.roomIds.size;
-    groups.set(key, existing);
+async function financeOpenRateCard() {
+  ensureFinanceRateCardModal();
+  financeState.rateCardSearch = '';
+  document.getElementById('financeRateCardSearch').value = '';
+  document.getElementById('financeRateCardResults').innerHTML = '<div class="finance-suggestion-empty">Loading rates...</div>';
+  openModal('financeRateCardModal');
+  try {
+    const response = await apiCall('/api/finance/rate-card');
+    financeState.rateCard = response.data || [];
+    financeRenderRateCard();
+  } catch (error) {
+    document.getElementById('financeRateCardResults').innerHTML = `<div class="finance-suggestion-empty">${financeEscape(error.message || 'Unable to load rate card')}</div>`;
+  }
+}
+
+function financeRenderRateCard() {
+  const root = document.getElementById('financeRateCardResults');
+  if (!root) return;
+  const query = String(financeState.rateCardSearch || '').trim().toLowerCase();
+  const filtered = (financeState.rateCard || []).filter(row => !query || [
+    row.department, row.brand, row.model, row.description
+  ].join(' ').toLowerCase().includes(query));
+  const departments = new Map();
+  filtered.forEach(row => {
+    const department = String(row.department || 'Unknown Department');
+    if (!departments.has(department)) departments.set(department, []);
+    departments.get(department).push(row);
   });
-  let index = 0;
-  return [...groups.values()].map(line => `
-    <tr class="finance-line-row finance-collated-line">
-      <td>${financeState.current?.showLineNumbers === false ? '' : ++index}</td>
-      <td><strong>${financeEscape([line.brand, line.model].filter(Boolean).join(' '))}</strong><small>${financeEscape(line.description || '')}</small></td>
-      <td>${financeEscape(line.department || '')}</td>
-      <td>${financeNumber(line.days)}</td>
-      <td><strong>${financeNumber(line.quantity)}</strong></td>
-      <td>${financeEscape(financeUomLabel(line.uom))}</td>
-      <td>${financeEscape(financeMoney(line.unitPrice))}</td>
-      <td>${financeNumber(line.discountPercent) ? `${financeNumber(line.discountPercent)}%` : ''}</td>
-      <td>${financeEscape(financeMoney(line.total))}</td>
-      <td title="Used in ${line.roomCount} sub-project(s)">${line.roomCount}</td>
-    </tr>
-  `).join('') || '<tr class="finance-empty-department"><td colspan="10">No line items yet.</td></tr>';
+  root.innerHTML = [...departments.entries()]
+    .sort(([left], [right]) => left.localeCompare(right, undefined, { sensitivity: 'base' }))
+    .map(([department, rows]) => `
+      <section class="finance-rate-card-department">
+        <h4>${financeEscape(department)} <span>${rows.length}</span></h4>
+        ${rows.sort((left, right) => [left.brand, left.model, left.description].filter(Boolean).join(' ').localeCompare([right.brand, right.model, right.description].filter(Boolean).join(' '), undefined, { sensitivity: 'base' })).map(row => {
+          const index = financeState.rateCard.indexOf(row);
+          const title = [row.brand, row.model].filter(Boolean).join(' ') || row.description;
+          const detail = [row.brand || row.model ? row.description : '', financeUomLabel(row.uom)].filter(Boolean).join(' · ');
+          return `
+            <div class="finance-rate-card-row">
+              <div><strong>${financeEscape(title)}</strong>${detail ? `<small>${financeEscape(detail)}</small>` : ''}</div>
+              <label class="finance-money-input"><span>$</span><input type="number" min="0.01" step="0.01" value="${financeEscapeAttr(row.unitPrice)}" aria-label="Rate for ${financeEscapeAttr(title)}" onchange="financeUpdateRateCardItem(${index},this.value)"></label>
+              <button type="button" class="btn btn-secondary" onclick="financeAddRateCardItemToQuotation(${index})">Add</button>
+              <button type="button" class="finance-rate-card-delete" title="Delete rate card item" aria-label="Delete ${financeEscapeAttr(title)}" onclick="financeDeleteRateCardItem(${index})">&times;</button>
+            </div>
+          `;
+        }).join('')}
+      </section>
+    `).join('') || '<div class="finance-suggestion-empty">No remembered rates match this search.</div>';
+}
+
+function financeToggleRateCardForm() {
+  const form = document.getElementById('financeRateCardForm');
+  if (!form) return;
+  form.hidden = !form.hidden;
+  if (!form.hidden) document.getElementById('financeRateCardDescription')?.focus();
+}
+
+function financeShowRateCardDepartmentSuggestions(query) {
+  const root = document.getElementById('financeRateCardDepartmentResults');
+  if (!root) return;
+  root.innerHTML = financeDepartmentSuggestions(query).map(value => `
+    <button type="button" onmousedown="event.preventDefault();financeChooseRateCardDepartment('${financeEscapeAttr(encodeURIComponent(value))}')">${financeEscape(value)}</button>
+  `).join('');
+  root.classList.toggle('open', !!root.innerHTML);
+}
+
+function financeChooseRateCardDepartment(encodedValue) {
+  const input = document.getElementById('financeRateCardDepartment');
+  if (input) input.value = decodeURIComponent(encodedValue);
+  document.getElementById('financeRateCardDepartmentResults')?.classList.remove('open');
+}
+
+function financeChooseRateCardUom(value) {
+  financeState.rateCardUom = FINANCE_UOMS.some(row => row.value === value) ? value : 'units';
+  const button = document.getElementById('financeRateCardUomButton');
+  if (button) button.innerHTML = `${financeEscape(financeUomLabel(financeState.rateCardUom))}<span>⌄</span>`;
+  document.getElementById('finance-rate-card-uom-menu')?.classList.remove('open');
+}
+
+async function financeSaveRateCardItem(item) {
+  const response = await apiCall('/api/finance/rate-card', 'POST', item);
+  financeState.rateCard = response.data || [];
+  financeState.catalogCache = {};
+  financeRenderRateCard();
+}
+
+async function financeCreateRateCardItem(event) {
+  event.preventDefault();
+  try {
+    await financeSaveRateCardItem({
+      brand: document.getElementById('financeRateCardBrand')?.value || '',
+      model: document.getElementById('financeRateCardModel')?.value || '',
+      description: document.getElementById('financeRateCardDescription')?.value || '',
+      department: document.getElementById('financeRateCardDepartment')?.value || '',
+      unitPrice: document.getElementById('financeRateCardPrice')?.value || 0,
+      uom: financeState.rateCardUom || 'units',
+      isCustom: true
+    });
+    event.currentTarget.reset();
+    financeChooseRateCardUom('units');
+    event.currentTarget.hidden = true;
+    showNotification('success', 'Rate card item added');
+  } catch (error) {}
+}
+
+async function financeUpdateRateCardItem(index, value) {
+  const item = financeState.rateCard[index];
+  if (!item) return;
+  try {
+    await financeSaveRateCardItem({ ...item, unitPrice: value });
+  } catch (error) {
+    financeRenderRateCard();
+  }
+}
+
+async function financeDeleteRateCardItem(index) {
+  const item = financeState.rateCard[index];
+  if (!item) return;
+  const title = [item.brand, item.model].filter(Boolean).join(' ') || item.description;
+  const confirmed = await showAppConfirm({
+    title: 'Delete rate card item',
+    message: `Remove ${title} from the rate card?`,
+    confirmText: 'Delete',
+    destructive: true
+  });
+  if (!confirmed) return;
+  try {
+    const response = await apiCall('/api/finance/rate-card', 'DELETE', item);
+    financeState.rateCard = response.data || [];
+    financeState.catalogCache = {};
+    financeRenderRateCard();
+    showNotification('success', 'Rate card item deleted');
+  } catch (error) {}
+}
+
+function financeAddRateCardItemToQuotation(index) {
+  const item = financeState.rateCard[index];
+  if (!item || financeState.snapshotMode) return;
+  financeAddLineFromCatalog(item);
+  financeSyncDocumentDepartments();
+  financeQueueSave();
+  financeRenderEditor();
+  showNotification('success', `${item.description} added to quotation`);
 }
 
 function financeSelectSubproject(subprojectId) {
@@ -1578,25 +1748,27 @@ function financeRenderEditor() {
           <div class="finance-section-heading"><div><h3>Event schedule</h3><p>Dates are optional. New line items will use ${financeEventDays(document)} day(s).</p></div></div>
           <div class="finance-schedule-grid">
             ${financeSchedulePair('Set-up', 'setup')}
-            ${financeSchedulePair('Rehearsal', 'rehearsal')}
-            ${financeAdditionalScheduleRows('rehearsal', document).map((row, index) => financeAdditionalSchedulePair('rehearsal', row, index)).join('')}
-            ${financeSchedulePair('Show', 'show')}
-            ${financeAdditionalScheduleRows('show', document).map((row, index) => financeAdditionalSchedulePair('show', row, index)).join('')}
             ${financeSchedulePair('Teardown', 'teardown')}
+            ${financeSchedulePair('Rehearsal', 'rehearsal')}
+            ${financeSchedulePair('Show', 'show')}
+            ${financeAdditionalScheduleRows('rehearsal', document).map((row, index) => financeAdditionalSchedulePair('rehearsal', row, index)).join('')}
+            ${financeAdditionalScheduleRows('show', document).map((row, index) => financeAdditionalSchedulePair('show', row, index)).join('')}
             ${financeAdditionalScheduleRows('teardown', document).map((row, index) => financeAdditionalSchedulePair('teardown', row, index)).join('')}
           </div>
           <div class="finance-schedule-actions">
             <button type="button" class="btn btn-secondary" onclick="financeAddScheduleRow('rehearsal')">+ Add rehearsal</button>
             <button type="button" class="btn btn-secondary" onclick="financeAddScheduleRow('show')">+ Add show</button>
-            <button type="button" class="btn btn-secondary" onclick="financeAddScheduleRow('teardown')">+ Add teardown</button>
           </div>
         </section>
 
         <section class="finance-card finance-lines-card">
-          ${financeState.showSubprojects ? financeRenderSubprojectTabs() : ''}
+          ${financeRenderSubprojectTabs()}
           <div class="finance-section finance-section-heading">
-            <div><h3>Line items</h3><p>${financeState.showSubprojects ? 'Department names accept free text and saved suggestions.' : 'Collated totals across every sub-project. Switch on sub-projects to edit lines.'}</p></div>
-            <label class="finance-view-toggle"><input type="checkbox" ${financeState.showSubprojects ? 'checked' : ''} onchange="financeToggleSubprojectView()"><span>Sub-projects</span></label>
+            <div><h3>Line items</h3><p>Department names accept free text and saved suggestions.</p></div>
+            <button type="button" class="btn btn-secondary finance-rate-card-button" onclick="financeOpenRateCard()">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"></rect><path d="M8 8h8M8 12h8M8 16h5"></path></svg>
+              Show rate card
+            </button>
           </div>
           <div class="finance-lines-scroll">
             <table class="finance-lines-table">
@@ -1610,10 +1782,10 @@ function financeRenderEditor() {
                   </div>
                 </div>
               </th><th>Qty</th><th>UOM</th><th>Unit price</th><th>Disc %</th><th style="text-align:right;">Total</th><th></th></tr></thead>
-              <tbody>${financeState.showSubprojects ? financeRenderLineGroups() : financeRenderCollatedLineGroups()}</tbody>
+              <tbody>${financeRenderLineGroups()}</tbody>
             </table>
           </div>
-          ${financeState.showSubprojects ? `<div class="finance-add-row finance-add-row-expanded">
+          <div class="finance-add-row finance-add-row-expanded">
             <div class="finance-add-item-wrap">
               <input id="financeAddItemInput" class="finance-input" placeholder="Search inventory or previously used custom items..." autocomplete="off" oninput="financeSearchCatalog(this.value)" onkeydown="financeAddItemKeydown(event)">
               <div id="financeCatalogResults" class="finance-catalog-results"></div>
@@ -1623,7 +1795,7 @@ function financeRenderEditor() {
               <div class="finance-inline-suggestions" id="financeAddDepartmentResults"></div>
             </div>
             <button type="button" class="btn btn-primary" onclick="financeAddCustomItem()">+ Add</button>
-          </div>` : ''}
+          </div>
         </section>
 
         <section class="finance-card finance-section">
@@ -2100,7 +2272,7 @@ function financeSearchCatalog(query) {
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || 'Failed to search items');
       if (requestSeq !== financeState.catalogRequestSeq) return;
-      financeState.catalog = payload.data || [];
+      financeState.catalog = financeGroupEquivalentContainers(payload.data || []);
       financeState.catalogCache[cacheKey] = financeState.catalog;
       financeState.catalogQuery = cacheKey;
     } catch {
@@ -2119,12 +2291,63 @@ function financeSearchCatalog(query) {
   financeState.catalogTimer = setTimeout(runSearch, 120);
 }
 
+function financeContainerFamilyLabel(containerId) {
+  const clean = String(containerId || '').trim();
+  return clean.replace(/\s*(?:#|(?:no|number)\.?\s+)\s*[a-z]?\d+(?:[._/-][a-z0-9]+)*\s*$/i, '').trim() || clean;
+}
+
+function financeContainerContentsSignature(row) {
+  return (row?.containerItems || []).map(item => [
+    String(item.departmentCode || item.department || '').trim().toLowerCase(),
+    String(item.brand || '').trim().toLowerCase(),
+    String(item.model || '').trim().toLowerCase(),
+    String(item.description || '').trim().toLowerCase(),
+    financeNumber(item.containerQuantity || item.availableQuantity || 0)
+  ].join('|')).sort().join('||');
+}
+
+function financeGroupEquivalentContainers(rows) {
+  const groups = new Map();
+  const result = [];
+  (rows || []).forEach(row => {
+    if (!row?.isContainer) {
+      result.push(row);
+      return;
+    }
+    const family = financeContainerFamilyLabel(row.containerId);
+    const key = `${family.toLowerCase()}::${financeContainerContentsSignature(row)}`;
+    if (!groups.has(key)) {
+      const grouped = { ...row, containerFamily: family, containerIds: [row.containerId], containerCount: 1 };
+      groups.set(key, grouped);
+      result.push(grouped);
+      return;
+    }
+    const grouped = groups.get(key);
+    grouped.containerIds.push(row.containerId);
+    grouped.containerCount += 1;
+  });
+  return result;
+}
+
+function financeCatalogDescription(row) {
+  if (!row?.isContainer) return financeEscape(row?.description || '');
+  const label = financeEscape(row.containerFamily || row.description || 'Container');
+  return row.containerCount > 1
+    ? `${label} <small>(${row.containerCount} matching containers)</small>`
+    : label;
+}
+
+function financeCatalogAvailability(row) {
+  if (row?.availableQuantity === null) return 'previously used';
+  return `${financeNumber(row?.availableQuantity)} ${row?.isContainer ? 'per container' : 'available'}`;
+}
+
 function financeRenderCatalog() {
   const results = document.getElementById('financeCatalogResults');
   if (!results) return;
   results.innerHTML = financeState.catalog.map((row, index) => `
     <button type="button" class="finance-catalog-option" onclick="financeSelectCatalog(${index})">
-      <span><strong>${financeEscape(row.description)}</strong><br><small>${financeEscape(row.department)}${row.availableQuantity === null ? ' · previously used' : ` · ${financeNumber(row.availableQuantity)} available`}</small></span>
+      <span><strong>${financeCatalogDescription(row)}</strong><br><small>${financeEscape(row.department)} &middot; ${financeCatalogAvailability(row)}</small></span>
       <span>${row.unitPrice ? financeEscape(financeMoney(row.unitPrice)) : '<small>No saved price</small>'}</span>
     </button>
   `).join('') || '<div class="finance-suggestion-empty">Press Add to create a custom item</div>';

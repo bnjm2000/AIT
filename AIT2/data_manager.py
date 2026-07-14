@@ -485,6 +485,7 @@ class DataManager:
             'containerMaintenanceLogs': 0,
             'assetChangeHistory': 0,
             'assets': 0,
+            'financeDocuments': 0,
         }
         if not old_username or not new_username or old_username == new_username:
             return counts
@@ -609,6 +610,43 @@ class DataManager:
 
         if containers_changed:
             self.save_containers()
+
+        finance_path = self._data_path('Finance.json')
+        if os.path.isfile(finance_path):
+            try:
+                with open(finance_path, 'r', encoding='utf-8') as finance_file:
+                    finance_data = json.load(finance_file)
+
+                def rename_finance_identity(value):
+                    changed = False
+                    if isinstance(value, list):
+                        for item in value:
+                            if rename_finance_identity(item):
+                                changed = True
+                    elif isinstance(value, dict):
+                        for key, item in list(value.items()):
+                            if key in {'createdBy', 'updatedBy', 'salesperson'} and item == old_username:
+                                value[key] = new_username
+                                changed = True
+                            elif isinstance(item, (dict, list)) and rename_finance_identity(item):
+                                changed = True
+                    return changed
+
+                for document in finance_data.get('documents', []) or []:
+                    if rename_finance_identity(document):
+                        counts['financeDocuments'] += 1
+
+                if counts['financeDocuments']:
+                    temp_path = f'{finance_path}.rename.tmp'
+                    with open(temp_path, 'w', encoding='utf-8') as finance_file:
+                        json.dump(finance_data, finance_file, ensure_ascii=False, indent=2)
+                    os.replace(temp_path, finance_path)
+            except (OSError, ValueError, TypeError) as exc:
+                logging.getLogger(__name__).warning(
+                    'Unable to rename quotation salesperson references in %s: %s',
+                    finance_path,
+                    exc,
+                )
 
         return counts
 

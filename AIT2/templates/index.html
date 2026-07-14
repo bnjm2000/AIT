@@ -5407,8 +5407,8 @@
       }
 
       .plan-requirement-row.has-shortage {
-        border-left: 3px solid #f59e0b;
-        background: #fff8eb;
+        border-left: 3px solid #dc2626;
+        background: #fff1f2;
       }
 
       .plan-shortage-info {
@@ -5416,10 +5416,10 @@
         place-items: center;
         width: 18px;
         height: 18px;
-        border: 1px solid #f59e0b;
+        border: 1px solid #dc2626;
         border-radius: 50%;
-        background: #fff7ed;
-        color: #92400e;
+        background: #fff;
+        color: #b91c1c;
         cursor: pointer;
         font-size: 11px;
         font-weight: 900;
@@ -5434,15 +5434,36 @@
       }
 
       .plan-swap-button {
-        border-color: #fbbf24;
-        color: #92400e;
-        background: #fffbeb;
+        border-color: #fca5a5;
+        color: #991b1b;
+        background: #fff;
       }
 
       .plan-swap-button:hover {
-        border-color: #f59e0b;
-        background: #fef3c7;
+        border-color: #dc2626;
+        background: #fee2e2;
       }
+
+      .plan-replacement-modal-content { max-width: 720px; }
+      .plan-replacement-toolbar { display:grid; grid-template-columns:120px 1fr; gap:12px; padding:14px 18px; border-bottom:1px solid #e5e7eb; }
+      .plan-replacement-toolbar label { display:grid; gap:4px; color:#667085; font-size:11px; font-weight:700; }
+      .plan-replacement-toolbar input { min-width:0; }
+      .plan-replacement-options { max-height:min(55vh,520px); overflow:auto; }
+      .plan-replacement-option { display:grid; grid-template-columns:minmax(0,1fr) auto auto; align-items:center; gap:12px; padding:11px 18px; border-bottom:1px solid #eef0f4; }
+      .plan-replacement-option > div { min-width:0; }
+      .plan-replacement-option strong, .plan-replacement-option small { display:block; }
+      .plan-replacement-option small { margin-top:3px; color:#667085; }
+
+      .inventory-onboarding-empty {
+        min-height: 320px;
+        display: grid;
+        place-content: center;
+        justify-items: center;
+        gap: 10px;
+        color: #667085;
+        text-align: center;
+      }
+      .inventory-onboarding-empty strong { color:#1f2937; font-size:18px; }
 
       .plan-empty {
         padding: 28px 18px;

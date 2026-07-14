@@ -1018,7 +1018,7 @@
         "address3": "",
         "postalCode": ""
       },
-      "quotationDate": "2026-07-13",
+      "quotationDate": "2026-07-14",
       "validUntil": "2026-08-12",
       "projectName": "SMU Event",
       "title": "SMU Event",
@@ -1031,6 +1031,7 @@
       "setupTime": "",
       "rehearsalDate": "",
       "rehearsalTime": "",
+      "additionalRehearsals": [],
       "showDate": "",
       "showTime": "",
       "teardownDate": "",
@@ -1751,7 +1752,7 @@
       "acceptedAt": "",
       "invoicedAt": "",
       "paidAt": "",
-      "statusChangedAt": "2026-07-13T19:44:36",
+      "statusChangedAt": "2026-07-14T00:03:12",
       "eventId": null,
       "eventManagedByQuotation": false,
       "eventSyncFingerprint": "",
@@ -1759,8 +1760,8 @@
       "sourceQuotationNumber": "",
       "createdAt": "2026-07-07T00:25:43",
       "createdBy": "bnjm2000",
-      "updatedAt": "2026-07-13T19:44:36",
-      "updatedBy": "bnjm2000",
+      "updatedAt": "2026-07-14T00:03:12",
+      "updatedBy": "bnjm",
       "eventDays": 1,
       "totals": {
         "subtotal": 20860.0,
@@ -1772,8 +1773,7 @@
         "lockDifference": 0.0,
         "tax": 1350.0,
         "total": 16350.0
-      },
-      "additionalRehearsals": []
+      }
     },
     {
       "id": "aa80a3fa611325083f00e7f4",
@@ -3245,6 +3245,7 @@
       "id": "de42cfb325eb6cde3a8f9049",
       "type": "quotation",
       "number": "QT-2026-009-01",
+      "customNumber": false,
       "baseSequence": 9,
       "revision": 1,
       "status": "draft",
@@ -3260,10 +3261,10 @@
         "address3": "",
         "postalCode": ""
       },
-      "quotationDate": "2026-07-12",
+      "quotationDate": "2026-07-14",
       "validUntil": "2026-08-11",
-      "projectName": "",
-      "title": "",
+      "projectName": "test",
+      "title": "test",
       "reference": "",
       "eventReference": "",
       "salesperson": "Benjamin Ng",
@@ -3273,37 +3274,51 @@
       "setupTime": "",
       "rehearsalDate": "",
       "rehearsalTime": "",
+      "additionalRehearsals": [],
       "showDate": "",
       "showTime": "",
       "teardownDate": "",
       "teardownTime": "",
+      "additionalShows": [],
+      "additionalTeardowns": [],
+      "validityAmount": 30,
+      "validityUnit": "days",
       "validityDays": 30,
       "currency": "SGD",
       "taxRate": 9.0,
       "notes": "",
       "terms": "1.  Validity: 14 days\n2.  Work shall only commence upon receiving the certified copy of our quotation.  \n3.  Upon confirmation, a 50% non-refundable down payment is required, and the remaining balance must be paid upon\n      completion of the setup.\n4.  All items are rented for indoor usage only (unless otherwise stated).\n5.  Confirmation of rental is on a first-come, first-served basis.\n6.  T/T to: OCBC Bank Limited, 65 Chulia Street, #01 - 00, OCBC Centre, Singapore 049513.\n     Account Number (S$): 601 - 546195 - 001, Swift Code: OCBCSGSG, Account Name: Avec Vision Pte Ltd.\n7.  The hirer is responsible for according to due diligence and cares for equipment.  In agreement, they will undertake liability for\n\"     the loss or damage of the equipment rented.\t\"\n8.  Cancellation charge:  100% of the total amount if cancellation occurs after the completion of the setup.\n9.  Any additional services or equipment not mentioned in this quotation will be charged accordingly.\n\nWe hope the above quotation is acceptable to you and will be looking forward to your early confirmation.   Please feel free to\ncontact the undersigned should you require any further information.",
       "lineItems": [],
+      "subprojects": [
+        {
+          "id": "main",
+          "name": "Main Room"
+        }
+      ],
       "adjustments": [],
       "departments": [],
       "showUnitPrices": false,
       "showDepartmentDiscounts": false,
       "showDepartmentSubtotals": true,
+      "showLineNumbers": true,
       "totalLocked": false,
       "lockedPreTaxTotal": null,
+      "totalDiscountLabel": "",
       "revisions": [],
       "sentAt": "",
       "acceptedAt": "",
       "invoicedAt": "",
       "paidAt": "",
-      "statusChangedAt": "",
+      "statusChangedAt": "2026-07-14T13:48:58",
       "eventId": null,
       "eventManagedByQuotation": false,
       "eventSyncFingerprint": "",
       "sourceQuotationId": "",
+      "sourceQuotationNumber": "",
       "createdAt": "2026-07-12T23:45:01",
       "createdBy": "bnjm2000",
-      "updatedAt": "2026-07-12T23:45:01",
-      "updatedBy": "bnjm2000",
+      "updatedAt": "2026-07-14T13:48:58",
+      "updatedBy": "bnjm",
       "eventDays": 1,
       "totals": {
         "subtotal": 0,
@@ -3315,17 +3330,7 @@
         "lockDifference": 0,
         "tax": 0.0,
         "total": 0.0
-      },
-      "totalDiscountLabel": "",
-      "additionalShows": [],
-      "additionalTeardowns": [],
-      "subprojects": [
-        {
-          "id": "main",
-          "name": "Main Room"
-        }
-      ],
-      "additionalRehearsals": []
+      }
     },
     {
       "id": "c540463fcc1840cde89cd4ce",
@@ -4669,7 +4674,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-13T19:44:36"
+      "updatedAt": "2026-07-14T00:03:12"
     },
     "bnjm2000::ax|l-acoustics|x12|12\" passive coaxial enclosure": {
       "description": "L-Acoustics X12 12\" passive coaxial enclosure",
@@ -4677,7 +4682,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-13T19:44:36"
+      "updatedAt": "2026-07-14T00:03:12"
     },
     "bnjm2000::ax|l-acoustics|sb18|high power compact subwoofer: 1 x 18\"": {
       "description": "L-Acoustics SB18 High power compact subwoofer: 1 x 18\"",
@@ -4685,7 +4690,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-13T19:44:36"
+      "updatedAt": "2026-07-14T00:03:12"
     },
     "bnjm2000::ax|l-acoustics|la4x|amplified controller": {
       "description": "L-Acoustics LA4X Amplified controller",
@@ -4693,7 +4698,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-13T19:44:36"
+      "updatedAt": "2026-07-14T00:03:12"
     },
     "bnjm2000::ax|shure|ulxd4d [l50]|dual channel receiver": {
       "description": "Shure ULXD4D [L50] Dual Channel Receiver",
@@ -4701,7 +4706,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-13T19:44:36"
+      "updatedAt": "2026-07-14T00:03:12"
     },
     "bnjm2000::ax|shure|ulxd4q [l50]|quad channel receiver": {
       "description": "Shure ULXD4Q [L50] Quad Channel Receiver",
@@ -4709,7 +4714,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-13T19:44:36"
+      "updatedAt": "2026-07-14T00:03:12"
     },
     "bnjm2000::ax|shure|ulxd2 [l50]|handheld microphone": {
       "description": "Shure ULXD2 [L50] Handheld Microphone",
@@ -4717,7 +4722,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-13T19:44:36"
+      "updatedAt": "2026-07-14T00:03:12"
     },
     "bnjm2000::ax|sennheiser|dad(uhf)|spectera bidirectional digital antenna": {
       "description": "Sennheiser DAD(UHF) Spectera Bidirectional digital antenna",
@@ -4725,7 +4730,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-13T19:44:36"
+      "updatedAt": "2026-07-14T00:03:12"
     },
     "bnjm2000::ax|sennheiser|sek(uhf)|spectera bidirectional bodypack": {
       "description": "Sennheiser SEK(UHF) Spectera Bidirectional bodypack",
@@ -4733,7 +4738,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-13T19:44:36"
+      "updatedAt": "2026-07-14T00:03:12"
     },
     "bnjm2000::ax|sennheiser|spectera base station|1ru spectera base station": {
       "description": "Sennheiser Spectera Base Station 1RU Spectera Base Station",
@@ -4741,7 +4746,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-13T19:44:36"
+      "updatedAt": "2026-07-14T00:03:12"
     },
     "bnjm2000::ax|yamaha|rio3224-d2|high performance i/o rack": {
       "description": "Yamaha Rio3224-d2 High Performance I/O Rack",
@@ -4749,7 +4754,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-13T19:44:36"
+      "updatedAt": "2026-07-14T00:03:12"
     },
     "bnjm2000::ax|yamaha|rio1608-d2|high performance i/o rack": {
       "description": "Yamaha Rio1608-d2 High Performance I/O Rack",
@@ -4757,7 +4762,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-13T19:44:36"
+      "updatedAt": "2026-07-14T00:03:12"
     },
     "bnjm2000::ax|shure|sm58s|cardioid dynamic w/ switch": {
       "description": "Shure SM58S cardioid dynamic w/ switch",
@@ -4765,7 +4770,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-13T19:44:36"
+      "updatedAt": "2026-07-14T00:03:12"
     },
     "bnjm2000::ax|shure|beta 91a|boundary condenser microphone": {
       "description": "Shure Beta 91A Boundary condenser microphone",
@@ -4773,7 +4778,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-13T19:44:36"
+      "updatedAt": "2026-07-14T00:03:12"
     },
     "bnjm2000::ax|audix|d6|professional dynamic instrument microphone": {
       "description": "Audix D6 Professional Dynamic Instrument Microphone",
@@ -4781,7 +4786,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-13T19:44:36"
+      "updatedAt": "2026-07-14T00:03:12"
     },
     "bnjm2000::ax|shure|sm57|cardioid dynamic instrument mic": {
       "description": "Shure SM57 cardioid dynamic instrument mic",
@@ -4789,7 +4794,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-13T19:44:36"
+      "updatedAt": "2026-07-14T00:03:12"
     },
     "bnjm2000::ax|akg|c451b|cardioid condenser microphone": {
       "description": "AKG C451B Cardioid condenser microphone",
@@ -4797,7 +4802,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-13T19:44:36"
+      "updatedAt": "2026-07-14T00:03:12"
     },
     "bnjm2000::ax|sennheiser|e904|dynamic cardioid instrument microphone": {
       "description": "Sennheiser E904 Dynamic cardioid instrument microphone",
@@ -4805,7 +4810,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-13T19:44:36"
+      "updatedAt": "2026-07-14T00:03:12"
     },
     "bnjm2000::ax|radial engineering|j48 stereo|phantom powered active direct injection box": {
       "description": "Radial Engineering J48 Stereo Phantom Powered Active Direct Injection Box",
@@ -4813,7 +4818,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-13T19:44:36"
+      "updatedAt": "2026-07-14T00:03:12"
     },
     "bnjm2000::ax|radial engineering|j48 mono|phantom powered active direct injection box": {
       "description": "Radial Engineering J48 Mono Phantom Powered Active Direct Injection Box",
@@ -4821,7 +4826,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-13T19:44:36"
+      "updatedAt": "2026-07-14T00:03:12"
     },
     "bnjm2000::ax|mackie|srm150|5.52\" compact powered monitor 150w": {
       "description": "Mackie SRM150 5.52\" compact powered monitor 150W",
@@ -4829,7 +4834,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-13T19:44:36"
+      "updatedAt": "2026-07-14T00:03:12"
     },
     "bnjm2000::ax|hp|1810-24g|managed gigabit ethernet switch": {
       "description": "HP 1810-24G managed gigabit ethernet switch",
@@ -4837,7 +4842,7 @@
       "department": "Audio Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-13T19:44:36"
+      "updatedAt": "2026-07-14T00:03:12"
     },
     "bnjm2000::lx|grandma3|compact xt|console": {
       "description": "GrandMA3 Compact XT Console",
@@ -4845,7 +4850,7 @@
       "department": "Lighting Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-13T19:44:36"
+      "updatedAt": "2026-07-14T00:03:12"
     },
     "bnjm2000::lx|dts|nickwash 600|self-contained compact high-output led moving head projector": {
       "description": "DTS NickWash 600 self-contained compact high-output LED moving head projector",
@@ -4853,7 +4858,7 @@
       "department": "Lighting Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-13T19:44:36"
+      "updatedAt": "2026-07-14T00:03:12"
     },
     "bnjm2000::lx|ayrton|diablo (w.dmx)|profile led": {
       "description": "Ayrton Diablo (W.DMX) Profile LED",
@@ -4877,7 +4882,7 @@
       "department": "Lighting Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-13T19:44:36"
+      "updatedAt": "2026-07-14T00:03:12"
     },
     "bnjm2000::lx|le maitre|mvs hazer|hazer machine": {
       "description": "Le Maitre MVS Hazer Hazer machine",
@@ -4885,7 +4890,7 @@
       "department": "Lighting Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-13T19:44:36"
+      "updatedAt": "2026-07-14T00:03:12"
     },
     "bnjm2000::stg|global truss|f34 truss - 2m (silver)|2m truss (silver)": {
       "description": "Global Truss F34 Truss - 2m (Silver) 2m truss (silver)",
@@ -4893,7 +4898,7 @@
       "department": "Staging Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-13T19:44:36"
+      "updatedAt": "2026-07-14T00:03:12"
     },
     "bnjm2000::stg|global truss|f34 truss - 1.5m (silver)|1.5m truss (silver)": {
       "description": "Global Truss F34 Truss - 1.5m (Silver) 1.5m truss (silver)",
@@ -4901,7 +4906,7 @@
       "department": "Staging Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-13T19:44:36"
+      "updatedAt": "2026-07-14T00:03:12"
     },
     "bnjm2000::stg|custom|605mm base plate|605x605mm heavy-duty base plate": {
       "description": "Custom 605mm Base plate 605x605mm heavy-duty base plate",
@@ -4909,7 +4914,7 @@
       "department": "Staging Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-13T19:44:36"
+      "updatedAt": "2026-07-14T00:03:12"
     },
     "bnjm2000::stg|custom|308mm|light-duty top plate": {
       "description": "Custom 308mm light-duty top plate",
@@ -4917,7 +4922,7 @@
       "department": "Staging Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-13T19:44:36"
+      "updatedAt": "2026-07-14T00:03:12"
     },
     "bnjm2000::inventory:ax|l-acoustics|kara ii": {
       "description": "L-Acoustics KARA II Long Throw Concert Sound Loudspeaker",
@@ -5529,155 +5534,212 @@
     },
     "bnjm2000::inventory:ax|shure|ulxd1 [l50]": {
       "description": "Shure ULXD1 [L50] Beltpack",
+      "brand": "Shure",
+      "model": "ULXD1 [L50]",
       "unitPrice": 50.0,
       "department": "Audio Department",
+      "departmentCode": "AX",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-13T19:50:04"
+      "updatedAt": "2026-07-14T13:36:33"
     },
     "bnjm2000::asset:ulxd1#01": {
       "description": "Shure ULXD1 [L50] Beltpack",
+      "brand": "Shure",
+      "model": "ULXD1 [L50]",
       "unitPrice": 50.0,
       "department": "Audio Department",
+      "departmentCode": "AX",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-13T19:50:04"
+      "updatedAt": "2026-07-14T13:36:33"
     },
     "bnjm2000::asset:ulxd1#02": {
       "description": "Shure ULXD1 [L50] Beltpack",
+      "brand": "Shure",
+      "model": "ULXD1 [L50]",
       "unitPrice": 50.0,
       "department": "Audio Department",
+      "departmentCode": "AX",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-13T19:50:04"
+      "updatedAt": "2026-07-14T13:36:33"
     },
     "bnjm2000::asset:ulxd1#03": {
       "description": "Shure ULXD1 [L50] Beltpack",
+      "brand": "Shure",
+      "model": "ULXD1 [L50]",
       "unitPrice": 50.0,
       "department": "Audio Department",
+      "departmentCode": "AX",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-13T19:50:04"
+      "updatedAt": "2026-07-14T13:36:33"
     },
     "bnjm2000::asset:ulxd1#04": {
       "description": "Shure ULXD1 [L50] Beltpack",
+      "brand": "Shure",
+      "model": "ULXD1 [L50]",
       "unitPrice": 50.0,
       "department": "Audio Department",
+      "departmentCode": "AX",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-13T19:50:04"
+      "updatedAt": "2026-07-14T13:36:33"
     },
     "bnjm2000::asset:ulxd1#05": {
       "description": "Shure ULXD1 [L50] Beltpack",
+      "brand": "Shure",
+      "model": "ULXD1 [L50]",
       "unitPrice": 50.0,
       "department": "Audio Department",
+      "departmentCode": "AX",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-13T19:50:04"
+      "updatedAt": "2026-07-14T13:36:33"
     },
     "bnjm2000::asset:ulxd1#06": {
       "description": "Shure ULXD1 [L50] Beltpack",
+      "brand": "Shure",
+      "model": "ULXD1 [L50]",
       "unitPrice": 50.0,
       "department": "Audio Department",
+      "departmentCode": "AX",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-13T19:50:04"
+      "updatedAt": "2026-07-14T13:36:33"
     },
     "bnjm2000::asset:ulxd1#07": {
       "description": "Shure ULXD1 [L50] Beltpack",
+      "brand": "Shure",
+      "model": "ULXD1 [L50]",
       "unitPrice": 50.0,
       "department": "Audio Department",
+      "departmentCode": "AX",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-13T19:50:04"
+      "updatedAt": "2026-07-14T13:36:33"
     },
     "bnjm2000::asset:ulxd1#08": {
       "description": "Shure ULXD1 [L50] Beltpack",
+      "brand": "Shure",
+      "model": "ULXD1 [L50]",
       "unitPrice": 50.0,
       "department": "Audio Department",
+      "departmentCode": "AX",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-13T19:50:04"
+      "updatedAt": "2026-07-14T13:36:33"
     },
     "bnjm2000::asset:ulxd1#09": {
       "description": "Shure ULXD1 [L50] Beltpack",
+      "brand": "Shure",
+      "model": "ULXD1 [L50]",
       "unitPrice": 50.0,
       "department": "Audio Department",
+      "departmentCode": "AX",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-13T19:50:04"
+      "updatedAt": "2026-07-14T13:36:33"
     },
     "bnjm2000::asset:ulxd1#10": {
       "description": "Shure ULXD1 [L50] Beltpack",
+      "brand": "Shure",
+      "model": "ULXD1 [L50]",
       "unitPrice": 50.0,
       "department": "Audio Department",
+      "departmentCode": "AX",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-13T19:50:04"
+      "updatedAt": "2026-07-14T13:36:33"
     },
     "bnjm2000::asset:ulxd1#11": {
       "description": "Shure ULXD1 [L50] Beltpack",
+      "brand": "Shure",
+      "model": "ULXD1 [L50]",
       "unitPrice": 50.0,
       "department": "Audio Department",
+      "departmentCode": "AX",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-13T19:50:04"
+      "updatedAt": "2026-07-14T13:36:33"
     },
     "bnjm2000::asset:ulxd1#12": {
       "description": "Shure ULXD1 [L50] Beltpack",
+      "brand": "Shure",
+      "model": "ULXD1 [L50]",
       "unitPrice": 50.0,
       "department": "Audio Department",
+      "departmentCode": "AX",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-13T19:50:04"
+      "updatedAt": "2026-07-14T13:36:33"
     },
     "bnjm2000::asset:ulxd1#19": {
       "description": "Shure ULXD1 [L50] Beltpack",
+      "brand": "Shure",
+      "model": "ULXD1 [L50]",
       "unitPrice": 50.0,
       "department": "Audio Department",
+      "departmentCode": "AX",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-13T19:50:04"
+      "updatedAt": "2026-07-14T13:36:33"
     },
     "bnjm2000::inventory:ax|shure|ulxd4d [l50]": {
       "description": "Shure ULXD4D [L50] Dual Channel Receiver",
+      "brand": "Shure",
+      "model": "ULXD4D [L50]",
       "unitPrice": 200.0,
       "department": "Audio Department",
+      "departmentCode": "AX",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-13T19:50:04"
+      "updatedAt": "2026-07-14T13:36:32"
     },
     "bnjm2000::asset:ulxd4d#01": {
       "description": "Shure ULXD4D [L50] Dual Channel Receiver",
+      "brand": "Shure",
+      "model": "ULXD4D [L50]",
       "unitPrice": 200.0,
       "department": "Audio Department",
+      "departmentCode": "AX",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-13T19:50:04"
+      "updatedAt": "2026-07-14T13:36:32"
     },
     "bnjm2000::asset:ulxd4d#02": {
       "description": "Shure ULXD4D [L50] Dual Channel Receiver",
+      "brand": "Shure",
+      "model": "ULXD4D [L50]",
       "unitPrice": 200.0,
       "department": "Audio Department",
+      "departmentCode": "AX",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-13T19:50:04"
+      "updatedAt": "2026-07-14T13:36:32"
     },
     "bnjm2000::asset:ulxd4d#03": {
       "description": "Shure ULXD4D [L50] Dual Channel Receiver",
+      "brand": "Shure",
+      "model": "ULXD4D [L50]",
       "unitPrice": 200.0,
       "department": "Audio Department",
+      "departmentCode": "AX",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-13T19:50:04"
+      "updatedAt": "2026-07-14T13:36:32"
     },
     "bnjm2000::asset:ulxd4d#04": {
       "description": "Shure ULXD4D [L50] Dual Channel Receiver",
+      "brand": "Shure",
+      "model": "ULXD4D [L50]",
       "unitPrice": 200.0,
       "department": "Audio Department",
+      "departmentCode": "AX",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-13T19:50:04"
+      "updatedAt": "2026-07-14T13:36:32"
     },
     "bnjm2000::inventory:ax|shure|ua845": {
       "description": "Shure UA845 UHF Antenna Distribution System",
@@ -5821,7 +5883,7 @@
       "department": "Lighting Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-13T19:44:36"
+      "updatedAt": "2026-07-14T00:03:12"
     },
     "bnjm2000::asset:diablo#01": {
       "description": "Ayrton Diablo (W.DMX) Profile LED - moving head",
@@ -6181,7 +6243,7 @@
       "department": "Lighting Department",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-13T19:44:36"
+      "updatedAt": "2026-07-14T00:03:12"
     },
     "bnjm2000::inventory:vx|samsung|ua75ru7100kxxs": {
       "description": "Samsung UA75RU7100KXXS 75\" Smart TV",
@@ -6321,43 +6383,1823 @@
     },
     "bnjm2000::inventory:ax|shure|sm58s": {
       "description": "Shure SM58S cardioid dynamic w/ switch",
+      "brand": "Shure",
+      "model": "SM58S",
       "unitPrice": 20.0,
       "department": "Audio Department",
+      "departmentCode": "AX",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-13T19:51:59"
+      "updatedAt": "2026-07-14T13:48:05"
     },
     "bnjm2000::asset:sm58s#01": {
       "description": "Shure SM58S cardioid dynamic w/ switch",
+      "brand": "Shure",
+      "model": "SM58S",
       "unitPrice": 20.0,
       "department": "Audio Department",
+      "departmentCode": "AX",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-13T19:51:59"
+      "updatedAt": "2026-07-14T13:48:05"
     },
     "bnjm2000::asset:sm58s#02": {
       "description": "Shure SM58S cardioid dynamic w/ switch",
+      "brand": "Shure",
+      "model": "SM58S",
       "unitPrice": 20.0,
       "department": "Audio Department",
+      "departmentCode": "AX",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-13T19:51:59"
+      "updatedAt": "2026-07-14T13:48:05"
     },
     "bnjm2000::asset:sm58s#03": {
       "description": "Shure SM58S cardioid dynamic w/ switch",
+      "brand": "Shure",
+      "model": "SM58S",
       "unitPrice": 20.0,
       "department": "Audio Department",
+      "departmentCode": "AX",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-13T19:51:59"
+      "updatedAt": "2026-07-14T13:48:05"
     },
     "bnjm2000::asset:sm58s#04": {
       "description": "Shure SM58S cardioid dynamic w/ switch",
+      "brand": "Shure",
+      "model": "SM58S",
       "unitPrice": 20.0,
       "department": "Audio Department",
+      "departmentCode": "AX",
       "uom": "units",
       "owner": "bnjm2000",
-      "updatedAt": "2026-07-13T19:51:59"
+      "updatedAt": "2026-07-14T13:48:05"
+    },
+    "bnjm::custom:24' delivery truck c/w driver (round trip)": {
+      "description": "24' delivery truck c/w driver (round trip)",
+      "department": "Transportation",
+      "departmentCode": "TRANSPORTATION",
+      "brand": "",
+      "model": "",
+      "unitPrice": 400.0,
+      "uom": "units",
+      "owner": "bnjm",
+      "updatedAt": "2026-07-14T13:15:06"
+    },
+    "bnjm::ax|audix|d6|professional dynamic instrument microphone": {
+      "deleted": true,
+      "description": "Audix D6 Professional Dynamic Instrument Microphone",
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "brand": "audix",
+      "model": "d6",
+      "owner": "bnjm",
+      "updatedAt": "2026-07-14T13:28:48"
+    },
+    "bnjm::ax|l-acoustics|karaii|long throw concert sound loudspeaker": {
+      "deleted": true,
+      "description": "L-Acoustics KARA II Long Throw Concert Sound Loudspeaker",
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "brand": "l-acoustics",
+      "model": "karaii",
+      "owner": "bnjm",
+      "updatedAt": "2026-07-14T13:29:13"
+    },
+    "bnjm::custom:av technician for setup/teardown": {
+      "deleted": true,
+      "description": "AV Technician for setup/teardown",
+      "department": "Manpower",
+      "departmentCode": "MANPOWER",
+      "brand": "",
+      "model": "",
+      "owner": "bnjm",
+      "updatedAt": "2026-07-14T13:29:43"
+    },
+    "bnjm2000::inventory:ax|l-acoustics|la12x": {
+      "description": "L-Acoustics LA12X Amplified controller",
+      "brand": "L-Acoustics",
+      "model": "LA12X",
+      "unitPrice": 650.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:30:32"
+    },
+    "bnjm2000::asset:la12x#01": {
+      "description": "L-Acoustics LA12X Amplified controller",
+      "brand": "L-Acoustics",
+      "model": "LA12X",
+      "unitPrice": 650.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:30:32"
+    },
+    "bnjm2000::asset:la12x#02": {
+      "description": "L-Acoustics LA12X Amplified controller",
+      "brand": "L-Acoustics",
+      "model": "LA12X",
+      "unitPrice": 650.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:30:32"
+    },
+    "bnjm2000::asset:la12x#03": {
+      "description": "L-Acoustics LA12X Amplified controller",
+      "brand": "L-Acoustics",
+      "model": "LA12X",
+      "unitPrice": 650.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:30:32"
+    },
+    "bnjm2000::asset:la12x#04": {
+      "description": "L-Acoustics LA12X Amplified controller",
+      "brand": "L-Acoustics",
+      "model": "LA12X",
+      "unitPrice": 650.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:30:32"
+    },
+    "bnjm2000::asset:la12x#05": {
+      "description": "L-Acoustics LA12X Amplified controller",
+      "brand": "L-Acoustics",
+      "model": "LA12X",
+      "unitPrice": 650.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:30:32"
+    },
+    "bnjm2000::asset:la12x#06": {
+      "description": "L-Acoustics LA12X Amplified controller",
+      "brand": "L-Acoustics",
+      "model": "LA12X",
+      "unitPrice": 650.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:30:32"
+    },
+    "bnjm2000::asset:la12x#07": {
+      "description": "L-Acoustics LA12X Amplified controller",
+      "brand": "L-Acoustics",
+      "model": "LA12X",
+      "unitPrice": 650.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:30:32"
+    },
+    "bnjm2000::asset:la12x#08": {
+      "description": "L-Acoustics LA12X Amplified controller",
+      "brand": "L-Acoustics",
+      "model": "LA12X",
+      "unitPrice": 650.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:30:32"
+    },
+    "bnjm::ax|l-acoustics|la12x|amplified controller": {
+      "deleted": true,
+      "description": "L-Acoustics LA12X Amplified controller",
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "brand": "l-acoustics",
+      "model": "la12x",
+      "owner": "bnjm",
+      "updatedAt": "2026-07-14T13:30:22"
+    },
+    "bnjm2000::inventory:ax|hp|1810-24g": {
+      "description": "HP 1810-24G managed gigabit ethernet switch",
+      "brand": "HP",
+      "model": "1810-24G",
+      "unitPrice": 50.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:31:44"
+    },
+    "bnjm2000::asset:181024g#01": {
+      "description": "HP 1810-24G managed gigabit ethernet switch",
+      "brand": "HP",
+      "model": "1810-24G",
+      "unitPrice": 50.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:31:44"
+    },
+    "bnjm2000::asset:181024g#02": {
+      "description": "HP 1810-24G managed gigabit ethernet switch",
+      "brand": "HP",
+      "model": "1810-24G",
+      "unitPrice": 50.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:31:44"
+    },
+    "bnjm::ax|hp|1810-24g|managed gigabit ethernet switch": {
+      "deleted": true,
+      "description": "HP 1810-24G managed gigabit ethernet switch",
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "brand": "hp",
+      "model": "1810-24g",
+      "owner": "bnjm",
+      "updatedAt": "2026-07-14T13:30:41"
+    },
+    "bnjm::ax|l-acoustics|x12|12\" passive coaxial enclosure": {
+      "deleted": true,
+      "description": "L-Acoustics X12 12\" passive coaxial enclosure",
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "brand": "l-acoustics",
+      "model": "x12",
+      "owner": "bnjm",
+      "updatedAt": "2026-07-14T13:30:47"
+    },
+    "bnjm2000::inventory:ax|radial engineering|j48 stereo": {
+      "description": "Radial Engineering J48 Stereo Phantom Powered Active Direct Injection Box",
+      "brand": "Radial Engineering",
+      "model": "J48 Stereo",
+      "unitPrice": 30.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:31:44"
+    },
+    "bnjm2000::asset:j48s#01": {
+      "description": "Radial Engineering J48 Stereo Phantom Powered Active Direct Injection Box",
+      "brand": "Radial Engineering",
+      "model": "J48 Stereo",
+      "unitPrice": 30.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:31:44"
+    },
+    "bnjm2000::asset:j48s#02": {
+      "description": "Radial Engineering J48 Stereo Phantom Powered Active Direct Injection Box",
+      "brand": "Radial Engineering",
+      "model": "J48 Stereo",
+      "unitPrice": 30.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:31:44"
+    },
+    "bnjm2000::asset:j48s#03": {
+      "description": "Radial Engineering J48 Stereo Phantom Powered Active Direct Injection Box",
+      "brand": "Radial Engineering",
+      "model": "J48 Stereo",
+      "unitPrice": 30.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:31:44"
+    },
+    "bnjm2000::asset:j48s#04": {
+      "description": "Radial Engineering J48 Stereo Phantom Powered Active Direct Injection Box",
+      "brand": "Radial Engineering",
+      "model": "J48 Stereo",
+      "unitPrice": 30.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:31:44"
+    },
+    "bnjm2000::asset:j48s#05": {
+      "description": "Radial Engineering J48 Stereo Phantom Powered Active Direct Injection Box",
+      "brand": "Radial Engineering",
+      "model": "J48 Stereo",
+      "unitPrice": 30.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:31:44"
+    },
+    "bnjm2000::asset:j48s#06": {
+      "description": "Radial Engineering J48 Stereo Phantom Powered Active Direct Injection Box",
+      "brand": "Radial Engineering",
+      "model": "J48 Stereo",
+      "unitPrice": 30.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:31:44"
+    },
+    "bnjm2000::inventory:ax|radial engineering|j48 mono": {
+      "description": "Radial Engineering J48 Mono Phantom Powered Active Direct Injection Box",
+      "brand": "Radial Engineering",
+      "model": "J48 Mono",
+      "unitPrice": 60.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:31:44"
+    },
+    "bnjm2000::asset:j48m#01": {
+      "description": "Radial Engineering J48 Mono Phantom Powered Active Direct Injection Box",
+      "brand": "Radial Engineering",
+      "model": "J48 Mono",
+      "unitPrice": 60.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:31:44"
+    },
+    "bnjm2000::asset:j48m#02": {
+      "description": "Radial Engineering J48 Mono Phantom Powered Active Direct Injection Box",
+      "brand": "Radial Engineering",
+      "model": "J48 Mono",
+      "unitPrice": 60.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:31:44"
+    },
+    "bnjm2000::asset:j48m#03": {
+      "description": "Radial Engineering J48 Mono Phantom Powered Active Direct Injection Box",
+      "brand": "Radial Engineering",
+      "model": "J48 Mono",
+      "unitPrice": 60.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:31:44"
+    },
+    "bnjm2000::asset:j48m#04": {
+      "description": "Radial Engineering J48 Mono Phantom Powered Active Direct Injection Box",
+      "brand": "Radial Engineering",
+      "model": "J48 Mono",
+      "unitPrice": 60.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:31:44"
+    },
+    "bnjm2000::asset:j48m#05": {
+      "description": "Radial Engineering J48 Mono Phantom Powered Active Direct Injection Box",
+      "brand": "Radial Engineering",
+      "model": "J48 Mono",
+      "unitPrice": 60.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:31:44"
+    },
+    "bnjm2000::asset:j48m#06": {
+      "description": "Radial Engineering J48 Mono Phantom Powered Active Direct Injection Box",
+      "brand": "Radial Engineering",
+      "model": "J48 Mono",
+      "unitPrice": 60.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:31:44"
+    },
+    "bnjm2000::asset:j48m#07": {
+      "description": "Radial Engineering J48 Mono Phantom Powered Active Direct Injection Box",
+      "brand": "Radial Engineering",
+      "model": "J48 Mono",
+      "unitPrice": 60.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:31:44"
+    },
+    "bnjm2000::asset:j48m#08": {
+      "description": "Radial Engineering J48 Mono Phantom Powered Active Direct Injection Box",
+      "brand": "Radial Engineering",
+      "model": "J48 Mono",
+      "unitPrice": 60.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:31:44"
+    },
+    "bnjm2000::asset:j48m#09": {
+      "description": "Radial Engineering J48 Mono Phantom Powered Active Direct Injection Box",
+      "brand": "Radial Engineering",
+      "model": "J48 Mono",
+      "unitPrice": 60.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:31:44"
+    },
+    "bnjm2000::asset:j48m#10": {
+      "description": "Radial Engineering J48 Mono Phantom Powered Active Direct Injection Box",
+      "brand": "Radial Engineering",
+      "model": "J48 Mono",
+      "unitPrice": 60.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:31:44"
+    },
+    "bnjm::ax|radial engineering|j48 mono|phantom powered active direct injection box": {
+      "deleted": true,
+      "description": "Radial Engineering J48 Mono Phantom Powered Active Direct Injection Box",
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "brand": "radial engineering",
+      "model": "j48 mono",
+      "owner": "bnjm",
+      "updatedAt": "2026-07-14T13:31:20"
+    },
+    "bnjm::ax|radial engineering|j48 stereo|phantom powered active direct injection box": {
+      "deleted": true,
+      "description": "Radial Engineering J48 Stereo Phantom Powered Active Direct Injection Box",
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "brand": "radial engineering",
+      "model": "j48 stereo",
+      "owner": "bnjm",
+      "updatedAt": "2026-07-14T13:31:25"
+    },
+    "bnjm2000::inventory:ax|sennheiser|spectera base station": {
+      "description": "Sennheiser Spectera Base Station 1RU Spectera Base Station",
+      "brand": "Sennheiser",
+      "model": "Spectera Base Station",
+      "unitPrice": 400.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:31:44"
+    },
+    "bnjm2000::asset:sbs#01": {
+      "description": "Sennheiser Spectera Base Station 1RU Spectera Base Station",
+      "brand": "Sennheiser",
+      "model": "Spectera Base Station",
+      "unitPrice": 400.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:31:44"
+    },
+    "bnjm2000::inventory:ax|sennheiser|sek(uhf)": {
+      "description": "Sennheiser SEK(UHF) Spectera Bidirectional bodypack",
+      "brand": "Sennheiser",
+      "model": "SEK(UHF)",
+      "unitPrice": 150.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:31:44"
+    },
+    "bnjm2000::asset:sek#01": {
+      "description": "Sennheiser SEK(UHF) Spectera Bidirectional bodypack",
+      "brand": "Sennheiser",
+      "model": "SEK(UHF)",
+      "unitPrice": 150.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:31:44"
+    },
+    "bnjm2000::asset:sek#02": {
+      "description": "Sennheiser SEK(UHF) Spectera Bidirectional bodypack",
+      "brand": "Sennheiser",
+      "model": "SEK(UHF)",
+      "unitPrice": 150.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:31:44"
+    },
+    "bnjm2000::asset:sek#03": {
+      "description": "Sennheiser SEK(UHF) Spectera Bidirectional bodypack",
+      "brand": "Sennheiser",
+      "model": "SEK(UHF)",
+      "unitPrice": 150.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:31:44"
+    },
+    "bnjm2000::asset:sek#04": {
+      "description": "Sennheiser SEK(UHF) Spectera Bidirectional bodypack",
+      "brand": "Sennheiser",
+      "model": "SEK(UHF)",
+      "unitPrice": 150.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:31:44"
+    },
+    "bnjm2000::asset:sek#05": {
+      "description": "Sennheiser SEK(UHF) Spectera Bidirectional bodypack",
+      "brand": "Sennheiser",
+      "model": "SEK(UHF)",
+      "unitPrice": 150.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:31:44"
+    },
+    "bnjm2000::asset:sek#06": {
+      "description": "Sennheiser SEK(UHF) Spectera Bidirectional bodypack",
+      "brand": "Sennheiser",
+      "model": "SEK(UHF)",
+      "unitPrice": 150.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:31:44"
+    },
+    "bnjm2000::asset:sek#07": {
+      "description": "Sennheiser SEK(UHF) Spectera Bidirectional bodypack",
+      "brand": "Sennheiser",
+      "model": "SEK(UHF)",
+      "unitPrice": 150.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:31:44"
+    },
+    "bnjm2000::asset:sek#08": {
+      "description": "Sennheiser SEK(UHF) Spectera Bidirectional bodypack",
+      "brand": "Sennheiser",
+      "model": "SEK(UHF)",
+      "unitPrice": 150.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:31:44"
+    },
+    "bnjm2000::asset:sek#09": {
+      "description": "Sennheiser SEK(UHF) Spectera Bidirectional bodypack",
+      "brand": "Sennheiser",
+      "model": "SEK(UHF)",
+      "unitPrice": 150.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:31:44"
+    },
+    "bnjm2000::asset:sek#10": {
+      "description": "Sennheiser SEK(UHF) Spectera Bidirectional bodypack",
+      "brand": "Sennheiser",
+      "model": "SEK(UHF)",
+      "unitPrice": 150.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:31:44"
+    },
+    "bnjm2000::inventory:ax|sennheiser|dad(uhf)": {
+      "description": "Sennheiser DAD(UHF) Spectera Bidirectional digital antenna",
+      "brand": "Sennheiser",
+      "model": "DAD(UHF)",
+      "unitPrice": 150.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:31:44"
+    },
+    "bnjm2000::asset:dad#01": {
+      "description": "Sennheiser DAD(UHF) Spectera Bidirectional digital antenna",
+      "brand": "Sennheiser",
+      "model": "DAD(UHF)",
+      "unitPrice": 150.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:31:44"
+    },
+    "bnjm2000::asset:dad#02": {
+      "description": "Sennheiser DAD(UHF) Spectera Bidirectional digital antenna",
+      "brand": "Sennheiser",
+      "model": "DAD(UHF)",
+      "unitPrice": 150.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:31:44"
+    },
+    "bnjm::ax|sennheiser|dad(uhf)|spectera bidirectional digital antenna": {
+      "deleted": true,
+      "description": "Sennheiser DAD(UHF) Spectera Bidirectional digital antenna",
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "brand": "sennheiser",
+      "model": "dad(uhf)",
+      "owner": "bnjm",
+      "updatedAt": "2026-07-14T13:31:57"
+    },
+    "bnjm::ax|sennheiser|sek(uhf)|spectera bidirectional bodypack": {
+      "deleted": true,
+      "description": "Sennheiser SEK(UHF) Spectera Bidirectional bodypack",
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "brand": "sennheiser",
+      "model": "sek(uhf)",
+      "owner": "bnjm",
+      "updatedAt": "2026-07-14T13:32:05"
+    },
+    "bnjm::ax|sennheiser|spectera base station|1ru spectera base station": {
+      "deleted": true,
+      "description": "Sennheiser Spectera Base Station 1RU Spectera Base Station",
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "brand": "sennheiser",
+      "model": "spectera base station",
+      "owner": "bnjm",
+      "updatedAt": "2026-07-14T13:32:10"
+    },
+    "bnjm::ax|shure|sm58s|cardioid dynamic w/ switch": {
+      "deleted": true,
+      "description": "Shure SM58S cardioid dynamic w/ switch",
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "brand": "shure",
+      "model": "sm58s",
+      "owner": "bnjm",
+      "updatedAt": "2026-07-14T13:32:22"
+    },
+    "bnjm::ax|yamaha|ql5|digital mixer": {
+      "deleted": true,
+      "description": "Yamaha QL5 Digital Mixer",
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "brand": "yamaha",
+      "model": "ql5",
+      "owner": "bnjm",
+      "updatedAt": "2026-07-14T13:32:46"
+    },
+    "bnjm2000::inventory:ax|yamaha|ql1": {
+      "description": "Yamaha QL1 Digital Mixer",
+      "brand": "Yamaha",
+      "model": "QL1",
+      "unitPrice": 400.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:29"
+    },
+    "bnjm2000::asset:ql1#01": {
+      "description": "Yamaha QL1 Digital Mixer",
+      "brand": "Yamaha",
+      "model": "QL1",
+      "unitPrice": 400.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:29"
+    },
+    "bnjm2000::asset:ql1#02": {
+      "description": "Yamaha QL1 Digital Mixer",
+      "brand": "Yamaha",
+      "model": "QL1",
+      "unitPrice": 400.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:29"
+    },
+    "bnjm2000::inventory:ax|yamaha|cl5": {
+      "description": "Yamaha CL5 Digital Mixer",
+      "brand": "Yamaha",
+      "model": "CL5",
+      "unitPrice": 1200.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:29"
+    },
+    "bnjm2000::asset:cl5#01": {
+      "description": "Yamaha CL5 Digital Mixer",
+      "brand": "Yamaha",
+      "model": "CL5",
+      "unitPrice": 1200.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:29"
+    },
+    "bnjm2000::inventory:ax|mackie|srm150": {
+      "description": "Mackie SRM150 5.52\" compact powered monitor 150W",
+      "brand": "Mackie",
+      "model": "SRM150",
+      "unitPrice": 80.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:29"
+    },
+    "bnjm2000::asset:srm150#01": {
+      "description": "Mackie SRM150 5.52\" compact powered monitor 150W",
+      "brand": "Mackie",
+      "model": "SRM150",
+      "unitPrice": 80.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:29"
+    },
+    "bnjm2000::asset:srm150#02": {
+      "description": "Mackie SRM150 5.52\" compact powered monitor 150W",
+      "brand": "Mackie",
+      "model": "SRM150",
+      "unitPrice": 80.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:29"
+    },
+    "bnjm::ax|yamaha|cl5|digital mixer": {
+      "deleted": true,
+      "description": "Yamaha CL5 Digital Mixer",
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "brand": "yamaha",
+      "model": "cl5",
+      "owner": "bnjm",
+      "updatedAt": "2026-07-14T13:33:17"
+    },
+    "bnjm::ax|yamaha|ql1|digital mixer": {
+      "deleted": true,
+      "description": "Yamaha QL1 Digital Mixer",
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "brand": "yamaha",
+      "model": "ql1",
+      "owner": "bnjm",
+      "updatedAt": "2026-07-14T13:33:23"
+    },
+    "bnjm::ax|shure|ulxd4d [l50]|dual channel receiver": {
+      "deleted": true,
+      "description": "Shure ULXD4D [L50] Dual Channel Receiver",
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "brand": "shure",
+      "model": "ulxd4d [l50]",
+      "owner": "bnjm",
+      "updatedAt": "2026-07-14T13:33:38"
+    },
+    "bnjm2000::inventory:ax|sennheiser|e904": {
+      "description": "Sennheiser E904 Dynamic cardioid instrument microphone",
+      "brand": "Sennheiser",
+      "model": "E904",
+      "unitPrice": 30.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:29"
+    },
+    "bnjm2000::asset:e904#01": {
+      "description": "Sennheiser E904 Dynamic cardioid instrument microphone",
+      "brand": "Sennheiser",
+      "model": "E904",
+      "unitPrice": 30.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:29"
+    },
+    "bnjm2000::asset:e904#02": {
+      "description": "Sennheiser E904 Dynamic cardioid instrument microphone",
+      "brand": "Sennheiser",
+      "model": "E904",
+      "unitPrice": 30.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:29"
+    },
+    "bnjm2000::asset:e904#03": {
+      "description": "Sennheiser E904 Dynamic cardioid instrument microphone",
+      "brand": "Sennheiser",
+      "model": "E904",
+      "unitPrice": 30.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:29"
+    },
+    "bnjm2000::asset:e904#04": {
+      "description": "Sennheiser E904 Dynamic cardioid instrument microphone",
+      "brand": "Sennheiser",
+      "model": "E904",
+      "unitPrice": 30.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:29"
+    },
+    "bnjm2000::asset:e904#05": {
+      "description": "Sennheiser E904 Dynamic cardioid instrument microphone",
+      "brand": "Sennheiser",
+      "model": "E904",
+      "unitPrice": 30.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:29"
+    },
+    "bnjm2000::inventory:ax|shure|ulxd2 [g52]": {
+      "description": "Shure ULXD2 [G52] Handheld Microphone",
+      "brand": "Shure",
+      "model": "ULXD2 [G52]",
+      "unitPrice": 50.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:29"
+    },
+    "bnjm2000::asset:ulxd2#13": {
+      "description": "Shure ULXD2 [G52] Handheld Microphone",
+      "brand": "Shure",
+      "model": "ULXD2 [G52]",
+      "unitPrice": 50.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:29"
+    },
+    "bnjm2000::asset:ulxd2#14": {
+      "description": "Shure ULXD2 [G52] Handheld Microphone",
+      "brand": "Shure",
+      "model": "ULXD2 [G52]",
+      "unitPrice": 50.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:29"
+    },
+    "bnjm2000::asset:ulxd2#15": {
+      "description": "Shure ULXD2 [G52] Handheld Microphone",
+      "brand": "Shure",
+      "model": "ULXD2 [G52]",
+      "unitPrice": 50.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:29"
+    },
+    "bnjm2000::asset:ulxd2#16": {
+      "description": "Shure ULXD2 [G52] Handheld Microphone",
+      "brand": "Shure",
+      "model": "ULXD2 [G52]",
+      "unitPrice": 50.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:29"
+    },
+    "bnjm2000::asset:ulxd2#17": {
+      "description": "Shure ULXD2 [G52] Handheld Microphone",
+      "brand": "Shure",
+      "model": "ULXD2 [G52]",
+      "unitPrice": 50.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:29"
+    },
+    "bnjm2000::asset:ulxd2#18": {
+      "description": "Shure ULXD2 [G52] Handheld Microphone",
+      "brand": "Shure",
+      "model": "ULXD2 [G52]",
+      "unitPrice": 50.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:29"
+    },
+    "bnjm2000::inventory:ax|shure|ulxd2 [l50]": {
+      "description": "Shure ULXD2 [L50] Handheld Microphone",
+      "brand": "Shure",
+      "model": "ULXD2 [L50]",
+      "unitPrice": 50.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:29"
+    },
+    "bnjm2000::asset:ulxd2#01": {
+      "description": "Shure ULXD2 [L50] Handheld Microphone",
+      "brand": "Shure",
+      "model": "ULXD2 [L50]",
+      "unitPrice": 50.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:29"
+    },
+    "bnjm2000::asset:ulxd2#02": {
+      "description": "Shure ULXD2 [L50] Handheld Microphone",
+      "brand": "Shure",
+      "model": "ULXD2 [L50]",
+      "unitPrice": 50.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:29"
+    },
+    "bnjm2000::asset:ulxd2#03": {
+      "description": "Shure ULXD2 [L50] Handheld Microphone",
+      "brand": "Shure",
+      "model": "ULXD2 [L50]",
+      "unitPrice": 50.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:29"
+    },
+    "bnjm2000::asset:ulxd2#04": {
+      "description": "Shure ULXD2 [L50] Handheld Microphone",
+      "brand": "Shure",
+      "model": "ULXD2 [L50]",
+      "unitPrice": 50.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:29"
+    },
+    "bnjm2000::asset:ulxd2#05": {
+      "description": "Shure ULXD2 [L50] Handheld Microphone",
+      "brand": "Shure",
+      "model": "ULXD2 [L50]",
+      "unitPrice": 50.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:29"
+    },
+    "bnjm2000::asset:ulxd2#06": {
+      "description": "Shure ULXD2 [L50] Handheld Microphone",
+      "brand": "Shure",
+      "model": "ULXD2 [L50]",
+      "unitPrice": 50.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:29"
+    },
+    "bnjm2000::asset:ulxd2#07": {
+      "description": "Shure ULXD2 [L50] Handheld Microphone",
+      "brand": "Shure",
+      "model": "ULXD2 [L50]",
+      "unitPrice": 50.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:29"
+    },
+    "bnjm2000::asset:ulxd2#08": {
+      "description": "Shure ULXD2 [L50] Handheld Microphone",
+      "brand": "Shure",
+      "model": "ULXD2 [L50]",
+      "unitPrice": 50.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:29"
+    },
+    "bnjm2000::asset:ulxd2#09": {
+      "description": "Shure ULXD2 [L50] Handheld Microphone",
+      "brand": "Shure",
+      "model": "ULXD2 [L50]",
+      "unitPrice": 50.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:29"
+    },
+    "bnjm2000::asset:ulxd2#10": {
+      "description": "Shure ULXD2 [L50] Handheld Microphone",
+      "brand": "Shure",
+      "model": "ULXD2 [L50]",
+      "unitPrice": 50.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:29"
+    },
+    "bnjm2000::asset:ulxd2#11": {
+      "description": "Shure ULXD2 [L50] Handheld Microphone",
+      "brand": "Shure",
+      "model": "ULXD2 [L50]",
+      "unitPrice": 50.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:29"
+    },
+    "bnjm2000::asset:ulxd2#12": {
+      "description": "Shure ULXD2 [L50] Handheld Microphone",
+      "brand": "Shure",
+      "model": "ULXD2 [L50]",
+      "unitPrice": 50.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:29"
+    },
+    "bnjm2000::inventory:ax|shure|ulxd4d [g52]": {
+      "description": "Shure ULXD4D [G52] Dual Channel Receiver",
+      "brand": "Shure",
+      "model": "ULXD4D [G52]",
+      "unitPrice": 200.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:29"
+    },
+    "bnjm2000::asset:ulxd4d#05": {
+      "description": "Shure ULXD4D [G52] Dual Channel Receiver",
+      "brand": "Shure",
+      "model": "ULXD4D [G52]",
+      "unitPrice": 200.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:29"
+    },
+    "bnjm2000::asset:ulxd4d#06": {
+      "description": "Shure ULXD4D [G52] Dual Channel Receiver",
+      "brand": "Shure",
+      "model": "ULXD4D [G52]",
+      "unitPrice": 200.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:29"
+    },
+    "bnjm2000::inventory:ax|shure|ulxd4q [l50]": {
+      "description": "Shure ULXD4Q [L50] Quad Channel Receiver",
+      "brand": "Shure",
+      "model": "ULXD4Q [L50]",
+      "unitPrice": 400.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:33"
+    },
+    "bnjm2000::asset:ulxd4q#01": {
+      "description": "Shure ULXD4Q [L50] Quad Channel Receiver",
+      "brand": "Shure",
+      "model": "ULXD4Q [L50]",
+      "unitPrice": 400.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:33"
+    },
+    "bnjm2000::inventory:ax|shure|ulxd4q [g52]": {
+      "description": "Shure ULXD4Q [G52] Quad Channel Receiver",
+      "brand": "Shure",
+      "model": "ULXD4Q [G52]",
+      "unitPrice": 400.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:33"
+    },
+    "bnjm2000::asset:ulxd4q#02": {
+      "description": "Shure ULXD4Q [G52] Quad Channel Receiver",
+      "brand": "Shure",
+      "model": "ULXD4Q [G52]",
+      "unitPrice": 400.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:33"
+    },
+    "bnjm2000::asset:ulxd4q#03": {
+      "description": "Shure ULXD4Q [G52] Quad Channel Receiver",
+      "brand": "Shure",
+      "model": "ULXD4Q [G52]",
+      "unitPrice": 400.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:33"
+    },
+    "bnjm::ax|shure|ulxd2 [g52]|handheld microphone": {
+      "deleted": true,
+      "description": "Shure ULXD2 [G52] Handheld Microphone",
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "brand": "shure",
+      "model": "ulxd2 [g52]",
+      "owner": "bnjm",
+      "updatedAt": "2026-07-14T13:35:02"
+    },
+    "bnjm::ax|shure|ulxd2 [l50]|handheld microphone": {
+      "deleted": true,
+      "description": "Shure ULXD2 [L50] Handheld Microphone",
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "brand": "shure",
+      "model": "ulxd2 [l50]",
+      "owner": "bnjm",
+      "updatedAt": "2026-07-14T13:35:07"
+    },
+    "bnjm::ax|shure|ulxd4d [g52]|dual channel receiver": {
+      "deleted": true,
+      "description": "Shure ULXD4D [G52] Dual Channel Receiver",
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "brand": "shure",
+      "model": "ulxd4d [g52]",
+      "owner": "bnjm",
+      "updatedAt": "2026-07-14T13:35:11"
+    },
+    "bnjm::ax|shure|ulxd4q [g52]|quad channel receiver": {
+      "deleted": true,
+      "description": "Shure ULXD4Q [G52] Quad Channel Receiver",
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "brand": "shure",
+      "model": "ulxd4q [g52]",
+      "owner": "bnjm",
+      "updatedAt": "2026-07-14T13:35:16"
+    },
+    "bnjm::ax|shure|ulxd4q [l50]|quad channel receiver": {
+      "deleted": true,
+      "description": "Shure ULXD4Q [L50] Quad Channel Receiver",
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "brand": "shure",
+      "model": "ulxd4q [l50]",
+      "owner": "bnjm",
+      "updatedAt": "2026-07-14T13:35:22"
+    },
+    "bnjm2000::inventory:ax|shure|ulxd1 [g52]": {
+      "description": "Shure ULXD1 [G52] Beltpack",
+      "brand": "Shure",
+      "model": "ULXD1 [G52]",
+      "unitPrice": 50.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:33"
+    },
+    "bnjm2000::asset:ulxd1#13": {
+      "description": "Shure ULXD1 [G52] Beltpack",
+      "brand": "Shure",
+      "model": "ULXD1 [G52]",
+      "unitPrice": 50.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:33"
+    },
+    "bnjm2000::asset:ulxd1#14": {
+      "description": "Shure ULXD1 [G52] Beltpack",
+      "brand": "Shure",
+      "model": "ULXD1 [G52]",
+      "unitPrice": 50.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:33"
+    },
+    "bnjm2000::asset:ulxd1#15": {
+      "description": "Shure ULXD1 [G52] Beltpack",
+      "brand": "Shure",
+      "model": "ULXD1 [G52]",
+      "unitPrice": 50.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:33"
+    },
+    "bnjm2000::asset:ulxd1#16": {
+      "description": "Shure ULXD1 [G52] Beltpack",
+      "brand": "Shure",
+      "model": "ULXD1 [G52]",
+      "unitPrice": 50.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:33"
+    },
+    "bnjm2000::asset:ulxd1#17": {
+      "description": "Shure ULXD1 [G52] Beltpack",
+      "brand": "Shure",
+      "model": "ULXD1 [G52]",
+      "unitPrice": 50.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:33"
+    },
+    "bnjm2000::asset:ulxd1#18": {
+      "description": "Shure ULXD1 [G52] Beltpack",
+      "brand": "Shure",
+      "model": "ULXD1 [G52]",
+      "unitPrice": 50.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:33"
+    },
+    "bnjm2000::inventory:ax|l-acoustics|sb18": {
+      "description": "L-Acoustics SB18 High power compact subwoofer: 1 x 18\"",
+      "brand": "L-Acoustics",
+      "model": "SB18",
+      "unitPrice": 250.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:33"
+    },
+    "bnjm2000::asset:sb18#01": {
+      "description": "L-Acoustics SB18 High power compact subwoofer: 1 x 18\"",
+      "brand": "L-Acoustics",
+      "model": "SB18",
+      "unitPrice": 250.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:33"
+    },
+    "bnjm2000::asset:sb18#02": {
+      "description": "L-Acoustics SB18 High power compact subwoofer: 1 x 18\"",
+      "brand": "L-Acoustics",
+      "model": "SB18",
+      "unitPrice": 250.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:33"
+    },
+    "bnjm2000::asset:sb18#03": {
+      "description": "L-Acoustics SB18 High power compact subwoofer: 1 x 18\"",
+      "brand": "L-Acoustics",
+      "model": "SB18",
+      "unitPrice": 250.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:33"
+    },
+    "bnjm2000::asset:sb18#04": {
+      "description": "L-Acoustics SB18 High power compact subwoofer: 1 x 18\"",
+      "brand": "L-Acoustics",
+      "model": "SB18",
+      "unitPrice": 250.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:33"
+    },
+    "bnjm2000::asset:sb18#05": {
+      "description": "L-Acoustics SB18 High power compact subwoofer: 1 x 18\"",
+      "brand": "L-Acoustics",
+      "model": "SB18",
+      "unitPrice": 250.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:33"
+    },
+    "bnjm2000::asset:sb18#06": {
+      "description": "L-Acoustics SB18 High power compact subwoofer: 1 x 18\"",
+      "brand": "L-Acoustics",
+      "model": "SB18",
+      "unitPrice": 250.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:33"
+    },
+    "bnjm2000::asset:sb18#07": {
+      "description": "L-Acoustics SB18 High power compact subwoofer: 1 x 18\"",
+      "brand": "L-Acoustics",
+      "model": "SB18",
+      "unitPrice": 250.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:33"
+    },
+    "bnjm2000::asset:sb18#08": {
+      "description": "L-Acoustics SB18 High power compact subwoofer: 1 x 18\"",
+      "brand": "L-Acoustics",
+      "model": "SB18",
+      "unitPrice": 250.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:33"
+    },
+    "bnjm2000::asset:sb18#09": {
+      "description": "L-Acoustics SB18 High power compact subwoofer: 1 x 18\"",
+      "brand": "L-Acoustics",
+      "model": "SB18",
+      "unitPrice": 250.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:33"
+    },
+    "bnjm2000::asset:sb18#10": {
+      "description": "L-Acoustics SB18 High power compact subwoofer: 1 x 18\"",
+      "brand": "L-Acoustics",
+      "model": "SB18",
+      "unitPrice": 250.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:33"
+    },
+    "bnjm2000::asset:sb18#11": {
+      "description": "L-Acoustics SB18 High power compact subwoofer: 1 x 18\"",
+      "brand": "L-Acoustics",
+      "model": "SB18",
+      "unitPrice": 250.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:33"
+    },
+    "bnjm2000::asset:sb18#12": {
+      "description": "L-Acoustics SB18 High power compact subwoofer: 1 x 18\"",
+      "brand": "L-Acoustics",
+      "model": "SB18",
+      "unitPrice": 250.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:33"
+    },
+    "bnjm2000::inventory:ax|l-acoustics|la4x": {
+      "description": "L-Acoustics LA4X Amplified controller",
+      "brand": "L-Acoustics",
+      "model": "LA4X",
+      "unitPrice": 350.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:33"
+    },
+    "bnjm2000::asset:la4x#01": {
+      "description": "L-Acoustics LA4X Amplified controller",
+      "brand": "L-Acoustics",
+      "model": "LA4X",
+      "unitPrice": 350.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:33"
+    },
+    "bnjm2000::asset:la4x#02": {
+      "description": "L-Acoustics LA4X Amplified controller",
+      "brand": "L-Acoustics",
+      "model": "LA4X",
+      "unitPrice": 350.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:33"
+    },
+    "bnjm2000::asset:la4x#03": {
+      "description": "L-Acoustics LA4X Amplified controller",
+      "brand": "L-Acoustics",
+      "model": "LA4X",
+      "unitPrice": 350.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:33"
+    },
+    "bnjm2000::asset:la4x#04": {
+      "description": "L-Acoustics LA4X Amplified controller",
+      "brand": "L-Acoustics",
+      "model": "LA4X",
+      "unitPrice": 350.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:33"
+    },
+    "bnjm2000::asset:la4x#05": {
+      "description": "L-Acoustics LA4X Amplified controller",
+      "brand": "L-Acoustics",
+      "model": "LA4X",
+      "unitPrice": 350.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:33"
+    },
+    "bnjm2000::asset:la4x#06": {
+      "description": "L-Acoustics LA4X Amplified controller",
+      "brand": "L-Acoustics",
+      "model": "LA4X",
+      "unitPrice": 350.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:33"
+    },
+    "bnjm2000::asset:la4x#07": {
+      "description": "L-Acoustics LA4X Amplified controller",
+      "brand": "L-Acoustics",
+      "model": "LA4X",
+      "unitPrice": 350.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:33"
+    },
+    "bnjm2000::asset:la4x#08": {
+      "description": "L-Acoustics LA4X Amplified controller",
+      "brand": "L-Acoustics",
+      "model": "LA4X",
+      "unitPrice": 350.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:33"
+    },
+    "bnjm2000::asset:la4x#09": {
+      "description": "L-Acoustics LA4X Amplified controller",
+      "brand": "L-Acoustics",
+      "model": "LA4X",
+      "unitPrice": 350.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:33"
+    },
+    "bnjm2000::asset:la4x#10": {
+      "description": "L-Acoustics LA4X Amplified controller",
+      "brand": "L-Acoustics",
+      "model": "LA4X",
+      "unitPrice": 350.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:33"
+    },
+    "bnjm2000::inventory:ax|shure|beta 91a": {
+      "description": "Shure Beta 91A Boundary condenser microphone",
+      "brand": "Shure",
+      "model": "Beta 91A",
+      "unitPrice": 50.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:33"
+    },
+    "bnjm2000::asset:b91a#01": {
+      "description": "Shure Beta 91A Boundary condenser microphone",
+      "brand": "Shure",
+      "model": "Beta 91A",
+      "unitPrice": 50.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:33"
+    },
+    "bnjm2000::inventory:ax|shure|beta 52a": {
+      "description": "Shure Beta 52A Kick drum micrphone",
+      "brand": "Shure",
+      "model": "Beta 52A",
+      "unitPrice": 20.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:33"
+    },
+    "bnjm2000::asset:b52a#01": {
+      "description": "Shure Beta 52A Kick drum micrphone",
+      "brand": "Shure",
+      "model": "Beta 52A",
+      "unitPrice": 20.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:36:33"
+    },
+    "bnjm::ax|l-acoustics|la4x|amplified controller": {
+      "deleted": true,
+      "description": "L-Acoustics LA4X Amplified controller",
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "brand": "l-acoustics",
+      "model": "la4x",
+      "owner": "bnjm",
+      "updatedAt": "2026-07-14T13:36:42"
+    },
+    "bnjm::ax|l-acoustics|sb18|high power compact subwoofer: 1 x 18\"": {
+      "deleted": true,
+      "description": "L-Acoustics SB18 High power compact subwoofer: 1 x 18\"",
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "brand": "l-acoustics",
+      "model": "sb18",
+      "owner": "bnjm",
+      "updatedAt": "2026-07-14T13:36:45"
+    },
+    "bnjm::ax|mackie|srm150|5.52\" compact powered monitor 150w": {
+      "deleted": true,
+      "description": "Mackie SRM150 5.52\" compact powered monitor 150W",
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "brand": "mackie",
+      "model": "srm150",
+      "owner": "bnjm",
+      "updatedAt": "2026-07-14T13:36:50"
+    },
+    "bnjm::ax|shure|beta 52a|kick drum mic": {
+      "deleted": true,
+      "description": "Shure Beta 52A Kick drum microphone",
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "brand": "shure",
+      "model": "beta 52a",
+      "owner": "bnjm",
+      "updatedAt": "2026-07-14T13:36:56"
+    },
+    "bnjm::ax|shure|beta 91a|boundary condenser microphone": {
+      "deleted": true,
+      "description": "Shure Beta 91A Boundary condenser microphone",
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "brand": "shure",
+      "model": "beta 91a",
+      "owner": "bnjm",
+      "updatedAt": "2026-07-14T13:36:59"
+    },
+    "bnjm::lx|ayrton|diablo (w.dmx)|profile led": {
+      "deleted": true,
+      "description": "Ayrton Diablo (W.DMX) Profile LED",
+      "department": "Lighting Department",
+      "departmentCode": "LX",
+      "brand": "ayrton",
+      "model": "diablo (w.dmx)",
+      "owner": "bnjm",
+      "updatedAt": "2026-07-14T13:37:12"
+    },
+    "bnjm::lx|robe|robin ledbeam 350 wash|wash led": {
+      "deleted": true,
+      "description": "Robe Robin LEDBeam 350 Wash Wash LED",
+      "department": "Lighting Department",
+      "departmentCode": "LX",
+      "brand": "robe",
+      "model": "robin ledbeam 350 wash",
+      "owner": "bnjm",
+      "updatedAt": "2026-07-14T13:37:19"
+    },
+    "bnjm2000::inventory:ax|yamaha|rio3224-d2": {
+      "description": "Yamaha Rio3224-d2 High Performance I/O Rack",
+      "brand": "Yamaha",
+      "model": "Rio3224-d2",
+      "unitPrice": 450.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:48:05"
+    },
+    "bnjm2000::asset:rio3224-d2 #01": {
+      "description": "Yamaha Rio3224-d2 High Performance I/O Rack",
+      "brand": "Yamaha",
+      "model": "Rio3224-d2",
+      "unitPrice": 450.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:48:05"
+    },
+    "bnjm2000::inventory:ax|yamaha|rio1608-d2": {
+      "description": "Yamaha Rio1608-d2 High Performance I/O Rack",
+      "brand": "Yamaha",
+      "model": "Rio1608-d2",
+      "unitPrice": 250.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:48:05"
+    },
+    "bnjm2000::asset:rio1608-d2 #01": {
+      "description": "Yamaha Rio1608-d2 High Performance I/O Rack",
+      "brand": "Yamaha",
+      "model": "Rio1608-d2",
+      "unitPrice": 250.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:48:05"
+    },
+    "bnjm2000::inventory:ax|yamaha|rio3224-d": {
+      "description": "Yamaha Rio3224-d High Performance I/O Rack",
+      "brand": "Yamaha",
+      "model": "Rio3224-d",
+      "unitPrice": 450.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:48:05"
+    },
+    "bnjm2000::asset:rio3224-d #01": {
+      "description": "Yamaha Rio3224-d High Performance I/O Rack",
+      "brand": "Yamaha",
+      "model": "Rio3224-d",
+      "unitPrice": 450.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:48:05"
+    },
+    "bnjm2000::asset:rio3224-d #02": {
+      "description": "Yamaha Rio3224-d High Performance I/O Rack",
+      "brand": "Yamaha",
+      "model": "Rio3224-d",
+      "unitPrice": 450.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:48:05"
+    },
+    "bnjm2000::inventory:ax|yamaha|rio1608-d": {
+      "description": "Yamaha Rio1608-d High Performance I/O Rack",
+      "brand": "Yamaha",
+      "model": "Rio1608-d",
+      "unitPrice": 250.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:48:57"
+    },
+    "bnjm2000::asset:rio1608-d #01": {
+      "description": "Yamaha Rio1608-d High Performance I/O Rack",
+      "brand": "Yamaha",
+      "model": "Rio1608-d",
+      "unitPrice": 250.0,
+      "department": "Audio Department",
+      "departmentCode": "AX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:48:57"
+    },
+    "bnjm2000::inventory:lx|grandma3|compact xt": {
+      "description": "GrandMA3 Compact XT Console",
+      "brand": "GrandMA3",
+      "model": "Compact XT",
+      "unitPrice": 850.0,
+      "department": "Lighting Department",
+      "departmentCode": "LX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:48:58"
+    },
+    "bnjm2000::asset:compactxt#01": {
+      "description": "GrandMA3 Compact XT Console",
+      "brand": "GrandMA3",
+      "model": "Compact XT",
+      "unitPrice": 850.0,
+      "department": "Lighting Department",
+      "departmentCode": "LX",
+      "uom": "units",
+      "owner": "bnjm2000",
+      "updatedAt": "2026-07-14T13:48:58"
     }
   },
   "profitLoss": {

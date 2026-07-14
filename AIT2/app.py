@@ -1235,6 +1235,10 @@ def _mark_company_branding_setup_complete(company_code=None):
     record = registry['companies'].get(code)
     if not record:
         return registry
+    settings = _load_pdf_settings(code)
+    logo_path = _pdf_logo_path(settings, code) if settings.get('logoFilename') else ''
+    if not str(settings.get('companyName') or '').strip() or not os.path.isfile(logo_path):
+        return registry
     if record.get('brandingSetupRequired'):
         record['brandingSetupRequired'] = False
         registry['companies'][code] = record
@@ -2097,7 +2101,11 @@ def _save_pdf_settings(settings):
 def _pdf_settings_payload(settings=None):
     settings = _normalise_pdf_settings(settings or _load_pdf_settings())
     logo_path = _pdf_logo_path(settings) if settings.get('logoFilename') else ''
-    has_custom_logo = bool(logo_path and os.path.exists(logo_path))
+    has_custom_logo = bool(
+        logo_path
+        and os.path.exists(logo_path)
+        and not _is_inherited_default_company_logo(_current_company_code(), logo_path)
+    )
     logo_url = ''
 
     if has_custom_logo:
@@ -11038,7 +11046,8 @@ def update_user(username):
                 f"Renamed user {renamed_from} -> {renamed_to}; "
                 f"updated {rename_counts.get('systemLogs', 0)} system log(s), "
                 f"{rename_counts.get('eventLogs', 0)} event log(s), "
-                f"{maintenance_reference_count} maintenance record(s)"
+                f"{maintenance_reference_count} maintenance record(s), "
+                f"{rename_counts.get('financeDocuments', 0)} quotation(s)"
             )
             if maintenance_reference_count:
                 invalidate_cache()
@@ -13085,7 +13094,6 @@ def manage_event_models(event_id):
                 _asset_inventory_quantity(asset)
                 for asset in data_manager.inventory.values()
                 if asset
-                and not getattr(asset, 'is_missing', False)
                 and not _is_disposed(asset)
                 and _asset_group_key(asset) == group_key
             )
@@ -13199,7 +13207,6 @@ def manage_event_models(event_id):
                 _asset_inventory_quantity(asset)
                 for asset in data_manager.inventory.values()
                 if asset
-                and not getattr(asset, 'is_missing', False)
                 and not _is_disposed(asset)
                 and _asset_group_key(asset) == group_key
             )
@@ -13367,6 +13374,123 @@ def manage_event_models(event_id):
     except Exception as e:
         logger.error(f"Error managing event models: {e}")
         return jsonify({'error': 'Failed to manage event models'}), 500
+
+
+@app.route('/api/events/<int:event_id>/models/replace', methods=['POST'])
+@require_admin
+@with_prepare_action_lock
+def replace_event_model_requirement(event_id):
+    """Replace part of one planned model requirement with another atomically."""
+    try:
+        event = data_manager.events.get(event_id)
+        if not event:
+            return jsonify({'error': 'Event not found'}), 404
+
+        payload = request.get_json() or {}
+        source = payload.get('source') or {}
+        replacement = payload.get('replacement') or {}
+        quantity = max(1, _safe_int(payload.get('quantity'), 1))
+
+        def model_details(value):
+            department = str(value.get('department') or '').strip().upper()
+            brand = str(value.get('brand') or '').strip()
+            model = str(value.get('model') or '').strip()
+            description = str(value.get('description') or '').strip()
+            if not department or not brand or not model:
+                raise ValueError('Department, brand, and model are required')
+            return department, brand, model, description
+
+        source_department, source_brand, source_model, source_description = model_details(source)
+        target_department, target_brand, target_model, target_description = model_details(replacement)
+        source_key = _model_key_from_parts(source_department, source_brand, source_model)
+        target_key = _model_key_from_parts(target_department, target_brand, target_model)
+        if source_key == target_key:
+            return jsonify({'error': 'Choose a different replacement model'}), 400
+
+        source_quantity = 0
+        target_quantity = 0
+        source_indexes = []
+        target_indexes = []
+        for index, item in enumerate(getattr(event, 'prepared_items', []) or []):
+            marker = _parse_model_marker(item)
+            if not marker:
+                continue
+            marker_key = _model_key_from_parts(
+                marker.get('department'), marker.get('brand'), marker.get('model')
+            )
+            marker_quantity = max(0, _safe_int(marker.get('quantity'), 0))
+            if marker_key == source_key:
+                source_quantity += marker_quantity
+                source_indexes.append(index)
+                source_description = source_description or str(marker.get('description') or '')
+            elif marker_key == target_key:
+                target_quantity += marker_quantity
+                target_indexes.append(index)
+                target_description = target_description or str(marker.get('description') or '')
+
+        if source_quantity <= 0:
+            return jsonify({'error': 'Original model requirement not found'}), 404
+        if quantity > source_quantity:
+            return jsonify({'error': 'Replacement quantity exceeds the original requirement'}), 400
+
+        physical_target_quantity = sum(
+            _asset_inventory_quantity(asset)
+            for asset in data_manager.inventory.values()
+            if asset and not _is_disposed(asset) and _asset_group_key(asset) == target_key
+        )
+        if target_quantity + quantity > physical_target_quantity:
+            return jsonify({
+                'error': (
+                    f'Only {physical_target_quantity} total {target_brand} {target_model} '
+                    f'unit(s) exist; {target_quantity} are already requested here.'
+                )
+            }), 400
+
+        removed_indexes = set(source_indexes + target_indexes)
+        updated_items = [
+            item for index, item in enumerate(event.prepared_items)
+            if index not in removed_indexes
+        ]
+        remaining_source = source_quantity - quantity
+        if remaining_source > 0:
+            updated_items.append(_make_model_marker({
+                'department': source_department,
+                'brand': source_brand,
+                'model': source_model,
+                'description': source_description,
+            }, remaining_source))
+        updated_items.append(_make_model_marker({
+            'department': target_department,
+            'brand': target_brand,
+            'model': target_model,
+            'description': target_description,
+        }, target_quantity + quantity))
+
+        event.prepared_items = updated_items
+        update_event_state(event)
+        data_manager.save_event(event)
+        invalidate_cache()
+        log_action(
+            f'Replaced {quantity}x {source_brand} {source_model} with '
+            f'{target_brand} {target_model} for event {event_id}'
+        )
+        mark_realtime_change('event-assets', {
+            'eventId': event_id,
+            'action': 'replace-model-requirement',
+        })
+        return jsonify({
+            'success': True,
+            'message': f'Replaced {quantity} item(s)',
+            'data': {
+                'sourceQuantity': remaining_source,
+                'replacementQuantity': target_quantity + quantity,
+            },
+        })
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+    except Exception as exc:
+        logger.error('Failed to replace event model requirement: %s', exc, exc_info=True)
+        return jsonify({'error': 'Failed to replace model requirement'}), 500
 
 
 @app.route('/api/planning-templates', methods=['GET', 'POST'])
@@ -19197,12 +19321,18 @@ def _finance_department_details(value, code_hint=''):
     hinted_code = _normalise_department_code(code_hint)
     raw_code = _normalise_department_code(raw)
     match = None
-    if hinted_code in departments:
-        match = departments[hinted_code]
+    lowered = raw.lower().removesuffix(' department').strip()
+    hinted = departments.get(hinted_code)
+    hinted_name = str((hinted or {}).get('name') or '').strip().lower()
+    if hinted and (
+        not raw
+        or raw.upper() == hinted_code
+        or lowered == hinted_name.removesuffix(' department').strip()
+    ):
+        match = hinted
     elif raw_code in departments and raw.upper() == raw_code:
         match = departments[raw_code]
     else:
-        lowered = raw.lower().removesuffix(' department').strip()
         match = next(
             (
                 row for row in departments.values()
@@ -20463,13 +20593,16 @@ def _remember_finance_prices(finance_data, document):
     for line in document.get('lineItems') or []:
         description = str(line.get('description') or '').strip()
         unit_price = _safe_float(line.get('unitPrice'), 0)
-        if not description or unit_price <= 0 or line.get('isCustom'):
+        if not description or unit_price <= 0:
             continue
         key = str(line.get('catalogKey') or '').strip() or _finance_custom_price_key(description)
         payload = {
             'description': description,
+            'brand': str(line.get('brand') or '').strip()[:240],
+            'model': str(line.get('model') or '').strip()[:240],
             'unitPrice': round(unit_price, 2),
             'department': line.get('department') or 'UN',
+            'departmentCode': line.get('departmentCode') or '',
             'uom': line.get('uom') or 'units',
             'owner': owner,
             'updatedAt': document.get('updatedAt'),
@@ -20477,6 +20610,142 @@ def _remember_finance_prices(finance_data, document):
         price_book[f"{owner}::{key}"] = payload
         for asset_id in line.get('sourceAssetIds') or []:
             price_book[f"{owner}::asset:{str(asset_id).lower()}"] = payload
+
+
+def _finance_price_book_key_is_visible(key):
+    raw = str(key or '')
+    if '::' not in raw or _current_user_is_owner():
+        return True
+    return raw.split('::', 1)[0].strip().lower() == _finance_current_username().lower()
+
+
+def _finance_rate_card_rows(finance_data):
+    rows = {}
+    inventory_rows = {}
+
+    for asset_id, asset in (data_manager.inventory.items() if data_manager else []):
+        if not asset or _is_disposed(asset):
+            continue
+        department, department_code = _finance_department_details(
+            getattr(asset, 'department_code', ''),
+            getattr(asset, 'department_code', ''),
+        )
+        brand = str(getattr(asset, 'brand', '') or '').strip()
+        model = str(getattr(asset, 'model_number', '') or '').strip()
+        description = str(getattr(asset, 'description', '') or '').strip()
+        catalog_key = _finance_catalog_key(department_code, brand, model, description)
+        canonical = inventory_rows.setdefault(catalog_key.lower(), {
+            'catalogKey': catalog_key,
+            'brand': brand,
+            'model': model,
+            'description': description,
+            'department': department,
+            'departmentCode': department_code,
+            'sourceAssetIds': [],
+        })
+        canonical['sourceAssetIds'].append(str(asset_id))
+
+    inventory_signatures = {
+        (
+            _normalise_department_code(row.get('departmentCode') or row.get('department')),
+            str(row.get('brand') or '').casefold(),
+            str(row.get('model') or '').casefold(),
+        ): row
+        for row in inventory_rows.values()
+    }
+
+    def resolve_inventory(line, catalog_key):
+        canonical = inventory_rows.get(str(catalog_key or '').lower())
+        if not canonical:
+            canonical = inventory_signatures.get((
+                _normalise_department_code(line.get('departmentCode') or line.get('department')),
+                str(line.get('brand') or '').casefold(),
+                str(line.get('model') or '').casefold(),
+            ))
+        if canonical:
+            return canonical['catalogKey'], canonical
+        return catalog_key, None
+
+    def add_row(source, key_hint=''):
+        if not isinstance(source, dict):
+            return
+        line = _normalise_finance_line(source)
+        if line.get('unitPrice', 0) <= 0 or not line.get('description'):
+            return
+        key_hint = str(key_hint or '').strip()
+        catalog_key = str(line.get('catalogKey') or '').strip()
+        if not catalog_key and key_hint and not key_hint.startswith('custom:'):
+            catalog_key = key_hint
+        catalog_key, canonical = resolve_inventory(line, catalog_key)
+        if canonical:
+            line.update(canonical)
+        identity = catalog_key.lower() or (
+            f"custom:{line.get('department', '').strip().lower()}::"
+            f"{line.get('description', '').strip().lower()}"
+        )
+        rows[identity] = {
+            'id': identity,
+            'catalogKey': catalog_key,
+            'sourceAssetIds': line.get('sourceAssetIds') or [],
+            'brand': line.get('brand') or '',
+            'model': line.get('model') or '',
+            'description': line.get('description') or '',
+            'department': line.get('department') or 'Unknown Department',
+            'departmentCode': line.get('departmentCode') or '',
+            'unitPrice': line.get('unitPrice') or 0,
+            'uom': line.get('uom') or 'units',
+            'isCustom': bool(line.get('isCustom') or not catalog_key),
+        }
+
+    for document in finance_data.get('documents') or []:
+        if document.get('type') != 'quotation' or not _finance_user_can_access(document):
+            continue
+        for line in document.get('lineItems') or []:
+            add_row(line)
+
+    for stored_key, payload in (finance_data.get('priceBook') or {}).items():
+        if not _finance_price_book_key_is_visible(stored_key):
+            continue
+        base_key = str(stored_key).split('::', 1)[-1]
+        if base_key.startswith('asset:') or not isinstance(payload, dict):
+            continue
+        catalog_key = '' if base_key.startswith('custom:') else base_key
+        tombstone_line = _normalise_finance_line({
+            'catalogKey': catalog_key,
+            'description': payload.get('description') or base_key.removeprefix('custom:'),
+            'department': payload.get('department') or 'Unknown Department',
+            'departmentCode': payload.get('departmentCode') or '',
+            'brand': payload.get('brand') or '',
+            'model': payload.get('model') or '',
+        })
+        catalog_key, _ = resolve_inventory(tombstone_line, catalog_key)
+        identity = catalog_key.lower() or (
+            f"custom:{str(payload.get('department') or 'Unknown Department').strip().lower()}::"
+            f"{str(payload.get('description') or base_key.removeprefix('custom:')).strip().lower()}"
+        )
+        if payload.get('deleted'):
+            rows.pop(identity, None)
+            continue
+        add_row({
+            'catalogKey': catalog_key,
+            'description': payload.get('description') or base_key.removeprefix('custom:'),
+            'department': payload.get('department') or 'Unknown Department',
+            'departmentCode': payload.get('departmentCode') or '',
+            'brand': payload.get('brand') or '',
+            'model': payload.get('model') or '',
+            'unitPrice': payload.get('unitPrice'),
+            'uom': payload.get('uom') or 'units',
+            'isCustom': base_key.startswith('custom:'),
+        }, base_key)
+
+    return sorted(rows.values(), key=lambda row: (
+        str(row.get('department') or '').casefold(),
+        ' '.join((
+            str(row.get('brand') or ''),
+            str(row.get('model') or ''),
+            str(row.get('description') or ''),
+        )).casefold(),
+    ))
 
 
 def _finance_remembered_price(price_book, catalog_key, asset_ids):
@@ -20489,18 +20758,21 @@ def _finance_remembered_price(price_book, catalog_key, asset_ids):
     for owner in owner_prefixes:
         for asset_id in asset_ids:
             remembered = price_book.get(f"{owner}::asset:{str(asset_id).lower()}")
-            if remembered:
+            if remembered and not remembered.get('deleted'):
                 return remembered
         remembered = price_book.get(f"{owner}::{catalog_key}")
-        if remembered:
+        if remembered and not remembered.get('deleted'):
             return remembered
     remembered = price_book.get(catalog_key)
-    if remembered:
+    if remembered and not remembered.get('deleted'):
         return remembered
     legacy_prefix = str(catalog_key or '').removeprefix('inventory:') + '|'
     for key, value in reversed(list(price_book.items())):
+        raw_key = str(key or '')
+        if '::' in raw_key and raw_key.split('::', 1)[0].strip().lower() not in owner_prefixes:
+            continue
         base_key = str(key).split('::', 1)[-1]
-        if base_key.startswith(legacy_prefix):
+        if base_key.startswith(legacy_prefix) and isinstance(value, dict) and not value.get('deleted'):
             return value
     return {}
 
@@ -21793,6 +22065,138 @@ def finance_catalog():
         )
         row['unitPrice'] = _safe_float(remembered.get('unitPrice'), 0)
         row['uom'] = remembered.get('uom') if remembered.get('uom') in ('units', 'pax', 'lot') else 'units'
+    return jsonify({'success': True, 'data': rows})
+
+
+@app.route('/api/finance/rate-card', methods=['GET', 'POST', 'DELETE'])
+@require_sales
+def finance_rate_card():
+    with _finance_lock:
+        finance_data = _load_finance_data()
+        if request.method == 'GET':
+            query = str(request.args.get('query') or '').strip().casefold()
+            rows = _finance_rate_card_rows(finance_data)
+            if query:
+                rows = [
+                    row for row in rows
+                    if query in ' '.join((
+                        str(row.get('department') or ''),
+                        str(row.get('brand') or ''),
+                        str(row.get('model') or ''),
+                        str(row.get('description') or ''),
+                    )).casefold()
+                ]
+            return jsonify({'success': True, 'data': rows[:500]})
+
+        payload = request.get_json(silent=True) or {}
+        description = str(payload.get('description') or '').strip()[:1000]
+        department, department_code = _finance_department_details(
+            payload.get('department'), payload.get('departmentCode')
+        )
+        if not description:
+            return jsonify({'error': 'Description is required'}), 400
+        catalog_key = str(payload.get('catalogKey') or '').strip()[:500]
+        if not catalog_key:
+            catalog_key = _finance_custom_price_key(description)
+        matched_assets = []
+        if payload.get('brand') and payload.get('model'):
+            target_department = _normalise_department_code(
+                payload.get('departmentCode') or payload.get('department')
+            )
+            target_brand = str(payload.get('brand') or '').strip().casefold()
+            target_model = str(payload.get('model') or '').strip().casefold()
+            matched_assets = [
+                (asset_id, asset)
+                for asset_id, asset in (data_manager.inventory.items() if data_manager else [])
+                if asset and not _is_disposed(asset)
+                and _normalise_department_code(getattr(asset, 'department_code', '')) == target_department
+                and str(getattr(asset, 'brand', '') or '').strip().casefold() == target_brand
+                and str(getattr(asset, 'model_number', '') or '').strip().casefold() == target_model
+            ]
+        if matched_assets:
+            _, canonical_asset = matched_assets[0]
+            canonical_department, canonical_department_code = _finance_department_details(
+                getattr(canonical_asset, 'department_code', ''),
+                getattr(canonical_asset, 'department_code', ''),
+            )
+            payload = {
+                **payload,
+                'brand': str(getattr(canonical_asset, 'brand', '') or '').strip(),
+                'model': str(getattr(canonical_asset, 'model_number', '') or '').strip(),
+                'description': str(getattr(canonical_asset, 'description', '') or '').strip(),
+                'department': canonical_department,
+                'departmentCode': canonical_department_code,
+                'sourceAssetIds': [str(asset_id) for asset_id, _ in matched_assets],
+            }
+            description = payload['description']
+            catalog_key = _finance_catalog_key(
+                canonical_department_code,
+                payload['brand'],
+                payload['model'],
+                description,
+            )
+        owner = _finance_current_username().lower()
+        price_book = finance_data.setdefault('priceBook', {})
+        owner_prefix = f'{owner}::'
+        target_key = f'{owner_prefix}{catalog_key}'
+        source_asset_ids = {
+            str(asset_id).strip().lower()
+            for asset_id in (payload.get('sourceAssetIds') or [])
+            if str(asset_id or '').strip()
+        }
+
+        if request.method == 'DELETE':
+            for stored_key in list(price_book):
+                if stored_key.lower() == target_key.lower() or (
+                    stored_key.lower().startswith(f'{owner_prefix}asset:')
+                    and stored_key.rsplit(':', 1)[-1].lower() in source_asset_ids
+                ):
+                    price_book.pop(stored_key, None)
+            price_book[target_key] = {
+                'deleted': True,
+                'description': description,
+                'department': str(payload.get('department') or 'Unknown Department').strip(),
+                'departmentCode': str(payload.get('departmentCode') or '').strip(),
+                'brand': str(payload.get('brand') or '').strip()[:240],
+                'model': str(payload.get('model') or '').strip()[:240],
+                'owner': owner,
+                'updatedAt': datetime.now().isoformat(timespec='seconds'),
+            }
+            _save_finance_data(finance_data)
+            rows = _finance_rate_card_rows(finance_data)
+            action = f"Deleted rate card item {description}"
+        else:
+            unit_price = round(max(0, _safe_float(payload.get('unitPrice'), 0)), 2)
+            if unit_price <= 0:
+                return jsonify({'error': 'Rate must be greater than zero'}), 400
+            uom = str(payload.get('uom') or 'units').strip().lower()
+            if uom not in {'units', 'pax', 'lot'}:
+                uom = 'units'
+            department, department_code = _finance_department_details(
+                payload.get('department'), payload.get('departmentCode')
+            )
+            stored = {
+                'description': description,
+                'department': department,
+                'departmentCode': department_code,
+                'brand': str(payload.get('brand') or '').strip()[:240],
+                'model': str(payload.get('model') or '').strip()[:240],
+                'unitPrice': unit_price,
+                'uom': uom,
+                'owner': owner,
+                'updatedAt': datetime.now().isoformat(timespec='seconds'),
+            }
+            for stored_key in list(price_book):
+                if stored_key.lower() == target_key.lower():
+                    price_book.pop(stored_key, None)
+            price_book[target_key] = stored
+            for asset_id in source_asset_ids:
+                price_book[f'{owner_prefix}asset:{asset_id}'] = stored
+            _save_finance_data(finance_data)
+            rows = _finance_rate_card_rows(finance_data)
+            action = f"Updated rate card item {description}"
+
+    log_action(action)
     return jsonify({'success': True, 'data': rows})
 
 

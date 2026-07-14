@@ -1,5 +1,7 @@
 import tempfile
 import unittest
+import json
+import os
 from urllib.parse import quote
 
 import app as app_module
@@ -91,6 +93,19 @@ class UserRenameHistoryTests(unittest.TestCase):
         )
         self.data_manager.save_containers()
 
+        with open(os.path.join(self.tempdir.name, 'Finance.json'), 'w', encoding='utf-8') as finance_file:
+            json.dump({
+                'version': 7,
+                'documents': [{
+                    'id': 'quote-1',
+                    'createdBy': 'tech-old',
+                    'salesperson': 'tech-old',
+                    'revisions': [{'salesperson': 'tech-old', 'updatedBy': 'tech-old'}],
+                }],
+                'priceBook': {},
+                'profitLoss': {'expenses': {}, 'commissions': {}},
+            }, finance_file)
+
         app_module.app.config['TESTING'] = True
         app_module.set_data_manager_for_testing(self.data_manager)
         self.client = app_module.app.test_client()
@@ -152,6 +167,12 @@ class UserRenameHistoryTests(unittest.TestCase):
         )
         self.assertEqual(container_log['user'], 'tech-new')
         self.assertEqual(container_log['description'], 'Checked case wheels')
+
+        with open(os.path.join(self.tempdir.name, 'Finance.json'), encoding='utf-8') as finance_file:
+            quotation = json.load(finance_file)['documents'][0]
+        self.assertEqual(quotation['createdBy'], 'tech-new')
+        self.assertEqual(quotation['salesperson'], 'tech-new')
+        self.assertEqual(quotation['revisions'][0]['salesperson'], 'tech-new')
 
 
 if __name__ == '__main__':

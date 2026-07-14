@@ -4325,6 +4325,7 @@ async function uploadPdfSettingsLogo() {
     applyPdfSettingsToApp();
     renderPdfSettingsForm();
     showNotification('success', 'PDF logo updated');
+    await continueCompanyOnboardingIfReady();
   } catch (error) {
     console.error('PDF logo upload failed:', error);
     showNotification('error', error.message || 'Failed to upload logo');
@@ -4406,8 +4407,21 @@ async function saveCompanyDetails() {
     pdfSettings = normalisePdfSettings(res.data || {});
     renderPdfSettingsForm();
     showNotification('success', 'Company details saved');
+    await continueCompanyOnboardingIfReady();
   } catch (error) {
     showNotification('error', error.message || 'Failed to save company details');
+  }
+}
+
+async function continueCompanyOnboardingIfReady() {
+  if (!isAdminUser() || !String(pdfSettings?.companyName || '').trim() || !pdfSettings?.hasCustomLogo) return;
+  try {
+    const response = await apiCall('/api/assets');
+    if (!(response.data || []).length) {
+      showSection('inventory', { replaceHistory: true });
+    }
+  } catch (error) {
+    console.warn('Unable to continue company onboarding:', error);
   }
 }
 
@@ -7889,8 +7903,13 @@ function displayInventoryTable(assetsToShow) {
 
   if (assetsToShow.length === 0) {
     destroyVirtualTable('inventory');
-    container.innerHTML =
-      '<p style="text-align: center; color: #666; padding: 40px;">No assets found.</p>';
+    container.innerHTML = isAdminUser() ? `
+      <div class="inventory-onboarding-empty">
+        <strong>Add your first asset</strong>
+        <span>Inventory items will appear here once they are added.</span>
+        <button type="button" class="btn btn-primary" onclick="openModal('addAssetModal')">Add Asset</button>
+      </div>
+    ` : '<p style="text-align: center; color: #666; padding: 40px;">No assets found.</p>';
     updateInventorySelectionUi([]);
     return;
   }
@@ -18733,14 +18752,113 @@ function planShowShortageReason(encodedReason) {
   });
 }
 
-function planStartSwapSearch(encodedBrand, encodedModel) {
-  const query = [planDecode(encodedBrand), planDecode(encodedModel)].filter(Boolean).join(' ');
-  planPageState.search = query;
-  const input = document.getElementById('planAssetSearch');
-  if (input) input.value = query;
-  renderPlanAvailableResults();
-  document.getElementById('planAvailableCard')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  showNotification('info', 'Choose a replacement model from Available Asset Models, then remove or reduce the shortage item.');
+var planReplacementState = { source: null, shortage: 1, search: '' };
+
+function ensurePlanReplacementModal() {
+  let modal = document.getElementById('planReplacementModal');
+  if (modal) return modal;
+  modal = document.createElement('div');
+  modal.id = 'planReplacementModal';
+  modal.className = 'modal';
+  modal.innerHTML = `
+    <div class="modal-content plan-replacement-modal-content">
+      <div class="modal-header">
+        <div><h3>Replace Shortage</h3><small id="planReplacementSourceLabel"></small></div>
+        <button type="button" class="close-btn" aria-label="Close" onclick="closeModal('planReplacementModal')">&times;</button>
+      </div>
+      <div class="plan-replacement-toolbar">
+        <label>Quantity<input id="planReplacementQuantity" type="number" min="1" value="1"></label>
+        <input id="planReplacementSearch" class="form-input" type="search" placeholder="Search replacement assets..."
+               oninput="planReplacementState.search=this.value;renderPlanReplacementOptions()">
+      </div>
+      <div id="planReplacementOptions" class="plan-replacement-options"></div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  return modal;
+}
+
+function planOpenReplacement(encodedDepartment, encodedBrand, encodedModel, encodedDescription, shortage) {
+  const source = {
+    department: planDecode(encodedDepartment),
+    brand: planDecode(encodedBrand),
+    model: planDecode(encodedModel),
+    description: planDecode(encodedDescription)
+  };
+  planReplacementState = {
+    source,
+    shortage: Math.max(1, Number(shortage || 1)),
+    search: ''
+  };
+  ensurePlanReplacementModal();
+  document.getElementById('planReplacementSourceLabel').textContent =
+    `${source.brand} ${source.model} needs a replacement`;
+  const quantity = document.getElementById('planReplacementQuantity');
+  const sourceGroup = planModelGroups().find(group => modelGroupMatchesEditGroup(
+    group, source.department, source.brand, source.model
+  ));
+  const maxQuantity = Math.max(1, Number(sourceGroup?.requiredQuantity || planReplacementState.shortage));
+  quantity.value = Math.min(planReplacementState.shortage, maxQuantity);
+  quantity.max = maxQuantity;
+  document.getElementById('planReplacementSearch').value = '';
+  renderPlanReplacementOptions();
+  openModal('planReplacementModal');
+}
+
+function renderPlanReplacementOptions() {
+  const container = document.getElementById('planReplacementOptions');
+  if (!container || !planReplacementState.source) return;
+  const query = String(planReplacementState.search || '').trim().toLowerCase();
+  const source = planReplacementState.source;
+  const options = planAvailableModelGroups().filter(group => {
+    if (modelGroupMatchesEditGroup(group, source.department, source.brand, source.model)) return false;
+    if (query && !planAvailableModelSearchText(group).includes(query)) return false;
+    const availability = planAvailabilityFor(group);
+    return Math.max(0, availability.physical - availability.usedHere) > 0;
+  }).slice(0, 60);
+
+  container.innerHTML = options.map(group => {
+    const availability = planAvailabilityFor(group);
+    const maximum = Math.max(0, availability.physical - availability.usedHere);
+    return `
+      <div class="plan-replacement-option">
+        <div>
+          <strong>${escapeHtml([group.brand, group.model].filter(Boolean).join(' '))}</strong>
+          <small>${escapeHtml(group.description || 'No description')} &middot; ${maximum} available to plan</small>
+        </div>
+        ${planDepartmentCodeBadgeHtml(group.department)}
+        <button type="button" class="plan-button plan-button-small"
+                onclick="planReplaceRequirement('${planEncode(group.department)}','${planEncode(group.brand)}','${planEncode(group.model)}','${planEncode(group.description || '')}',${maximum})">
+          Replace
+        </button>
+      </div>
+    `;
+  }).join('') || '<div class="plan-empty">No replacement models match this search.</div>';
+}
+
+async function planReplaceRequirement(encodedDepartment, encodedBrand, encodedModel, encodedDescription, maximum) {
+  const input = document.getElementById('planReplacementQuantity');
+  const quantity = Math.max(1, Number(input?.value || 1));
+  if (quantity > Number(maximum || 0)) {
+    showNotification('warning', `This replacement has only ${maximum} unit(s) available to plan.`);
+    input?.focus();
+    return;
+  }
+  try {
+    await apiCall(`/api/events/${planPageState.eventId}/models/replace`, 'POST', {
+      source: planReplacementState.source,
+      replacement: {
+        department: planDecode(encodedDepartment),
+        brand: planDecode(encodedBrand),
+        model: planDecode(encodedModel),
+        description: planDecode(encodedDescription)
+      },
+      quantity
+    });
+    closeModal('planReplacementModal');
+    showNotification('success', `Replaced ${quantity} planned item${quantity === 1 ? '' : 's'}`);
+    await refreshPlanSelectedEvent();
+  } catch (error) {}
 }
 
 function renderPlanRequirementsCard() {
@@ -18790,7 +18908,7 @@ function renderPlanRequirementsCard() {
               <div class="plan-row-actions">
                 ${shortage ? `
                   <button type="button" class="plan-button plan-button-small plan-swap-button"
-                          onclick="planStartSwapSearch('${planEncode(group.brand)}','${planEncode(group.model)}')">Swap</button>
+                          onclick="planOpenReplacement('${planEncode(group.department)}','${planEncode(group.brand)}','${planEncode(group.model)}','${planEncode(group.description || '')}',${shortage.shortage})">Replace</button>
                 ` : ''}
                 <button type="button" class="plan-button plan-button-danger plan-button-small"
                         title="Remove requirement"
@@ -21165,8 +21283,11 @@ async function ensureEventAssigneeUsers(force = false) {
   eventAssigneeUsers = (response.data || [])
     .slice()
     .filter(user => (
-      !activeCompanyCode ||
-      String(user?.companyCode || '').toUpperCase() === activeCompanyCode
+      user?.isActive !== false &&
+      (
+        !activeCompanyCode ||
+        String(user?.companyCode || '').toUpperCase() === activeCompanyCode
+      )
     ))
     .sort((left, right) => (
       eventAssigneeDisplayName(left).localeCompare(eventAssigneeDisplayName(right), undefined, { sensitivity: 'base' }) ||
@@ -21181,13 +21302,19 @@ function eventAssigneePickerMarkup(context, assigned = []) {
   state.clear();
   (assigned || []).forEach(username => {
     const clean = String(username || '').trim();
-    if (clean) state.add(clean);
+    const activeUser = eventAssigneeUsers.some(user =>
+      String(user?.username || '').toLowerCase() === clean.toLowerCase()
+    );
+    if (clean && activeUser) state.add(clean);
   });
   return `
     <div class="event-assignee-picker" data-event-assignee-context="${context}">
       <div class="event-assignee-heading">
-        <label class="form-label" for="${prefix}AssigneeSearch">Assigned Users</label>
-        <small>Users only see events assigned to them.</small>
+        <div>
+          <label class="form-label" for="${prefix}AssigneeSearch">Assigned Users</label>
+          <small>Only active users are shown.</small>
+        </div>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="assignAllEventAssignees('${context}')">Assign All</button>
       </div>
       <div id="${prefix}AssigneeSelected" class="event-assignee-selected"></div>
       <input
@@ -21260,6 +21387,15 @@ function toggleEventAssignee(context, username) {
 
 function removeEventAssignee(context, username) {
   eventAssigneeState(context).delete(String(username || '').trim());
+  renderEventAssigneePicker(context);
+}
+
+function assignAllEventAssignees(context) {
+  const state = eventAssigneeState(context);
+  eventAssigneeUsers.forEach(user => {
+    const username = String(user?.username || '').trim();
+    if (username && user?.isActive !== false) state.add(username);
+  });
   renderEventAssigneePicker(context);
 }
 
@@ -27889,7 +28025,6 @@ async function initializeApp() {
       await setupFinanceNavigation();
     }
     applyPermissionUi();
-    await showCompanyBrandingPromptIfNeeded();
 
     // Load configurable department names/colours for badges and dropdowns.
     try {
@@ -27899,7 +28034,26 @@ async function initializeApp() {
     }
 
     // Resolve the server-approved deep link after dynamic sections are ready.
-    const initialSection = window.__INITIAL_APP_SECTION__ || appSectionFromPath();
+    const requestedInitialSection = window.__INITIAL_APP_SECTION__ || appSectionFromPath();
+    let initialSection = requestedInitialSection;
+    if (isAdminUser()) {
+      if (
+        currentUser?.company?.brandingSetupRequired &&
+        (!String(pdfSettings?.companyName || '').trim() || !pdfSettings?.hasCustomLogo)
+      ) {
+        initialSection = 'pdf-settings';
+      } else {
+        try {
+          const inventoryResponse = await apiCall('/api/assets');
+          if (!(inventoryResponse.data || []).length) initialSection = 'inventory';
+        } catch (inventoryError) {
+          console.warn('Unable to check company inventory onboarding:', inventoryError);
+        }
+      }
+    }
+    if (initialSection !== requestedInitialSection) {
+      updateAppSectionHistory(initialSection, true);
+    }
     setTimeout(async () => {
       showSection(initialSection, { updateHistory: false });
     }, 200);

@@ -647,6 +647,165 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertEqual(audio_child['unitPrice'], 444)
         self.assertEqual(audio_child['containerQuantity'], 1)
 
+    def test_rate_card_lists_remembered_inventory_and_custom_items_by_user(self):
+        quotation = self.create_quote('Rate Card Memory')
+        inventory_line = self.client.get('/api/finance/catalog?query=SB18').get_json()['data'][0]
+        quotation['lineItems'] = [
+            {
+                **inventory_line,
+                'id': 'inventory-rate', 'days': 1, 'quantity': 1,
+                'unitPrice': 444, 'discountPercent': 0,
+            },
+            {
+                'id': 'custom-rate', 'catalogKey': '', 'sourceAssetIds': [],
+                'description': 'Special projection operator',
+                'department': 'Manpower', 'departmentCode': '',
+                'days': 1, 'quantity': 1, 'uom': 'pax',
+                'unitPrice': 325, 'discountPercent': 0, 'isCustom': True,
+            },
+        ]
+        saved = self.client.put(
+            f"/api/quotations/{quotation['id']}", json=quotation,
+        )
+        self.assertEqual(saved.status_code, 200, saved.get_data(as_text=True))
+
+        rows = self.client.get('/api/finance/rate-card').get_json()['data']
+        by_description = {row['description']: row for row in rows}
+        inventory_rate = next(
+            row for row in rows if row.get('catalogKey') == inventory_line['catalogKey']
+        )
+        self.assertEqual(inventory_rate['brand'], 'L-Acoustics')
+        self.assertEqual(inventory_rate['model'], 'SB18 III')
+        self.assertEqual(inventory_rate['description'], 'Subwoofer')
+        self.assertEqual(inventory_rate['unitPrice'], 444)
+        self.assertEqual(by_description['Special projection operator']['unitPrice'], 325)
+        self.assertEqual(by_description['Special projection operator']['uom'], 'pax')
+        self.assertEqual(
+            rows,
+            sorted(rows, key=lambda row: (
+                row['department'].casefold(),
+                ' '.join((row['brand'], row['model'], row['description'])).casefold(),
+            )),
+        )
+
+        self.login('bob')
+        self.assertEqual(self.client.get('/api/finance/rate-card').get_json()['data'], [])
+
+    def test_rate_card_accepts_new_unique_items_and_updates_rates(self):
+        created = self.client.post('/api/finance/rate-card', json={
+            'brand': 'disguise',
+            'model': 'gx 3',
+            'description': 'Freelance media server programmer',
+            'department': 'Specialist Crew',
+            'unitPrice': 650,
+            'uom': 'pax',
+        })
+        self.assertEqual(created.status_code, 200, created.get_data(as_text=True))
+        row = next(
+            item for item in created.get_json()['data']
+            if item['description'] == 'Freelance media server programmer'
+        )
+        self.assertTrue(row['isCustom'])
+        self.assertEqual(row['brand'], 'disguise')
+        self.assertEqual(row['model'], 'gx 3')
+        self.assertEqual(row['department'], 'Specialist Crew')
+
+        updated = self.client.post('/api/finance/rate-card', json={
+            **row,
+            'unitPrice': 725,
+        })
+        self.assertEqual(updated.status_code, 200, updated.get_data(as_text=True))
+        searched = self.client.get(
+            '/api/finance/rate-card', query_string={'query': 'media server'},
+        ).get_json()['data']
+        self.assertEqual(len(searched), 1)
+        self.assertEqual(searched[0]['unitPrice'], 725)
+
+        deleted = self.client.delete('/api/finance/rate-card', json=searched[0])
+        self.assertEqual(deleted.status_code, 200, deleted.get_data(as_text=True))
+        searched = self.client.get(
+            '/api/finance/rate-card', query_string={'query': 'media server'},
+        ).get_json()['data']
+        self.assertEqual(searched, [])
+
+    def test_rate_card_inventory_price_update_reuses_catalog_row_and_aliases(self):
+        quotation = self.create_quote('Rate Card Asset Update')
+        inventory_line = self.client.get('/api/finance/catalog?query=SB18').get_json()['data'][0]
+        quotation['lineItems'] = [{
+            **inventory_line,
+            'id': 'inventory-rate-update',
+            'days': 1,
+            'quantity': 1,
+            'unitPrice': 444,
+            'discountPercent': 0,
+        }]
+        saved = self.client.put(f"/api/quotations/{quotation['id']}", json=quotation)
+        self.assertEqual(saved.status_code, 200, saved.get_data(as_text=True))
+
+        row = next(
+            item for item in self.client.get('/api/finance/rate-card').get_json()['data']
+            if item.get('catalogKey') == inventory_line['catalogKey']
+        )
+        updated = self.client.post('/api/finance/rate-card', json={**row, 'unitPrice': 555})
+        self.assertEqual(updated.status_code, 200, updated.get_data(as_text=True))
+        matching = [
+            item for item in updated.get_json()['data']
+            if item.get('catalogKey') == inventory_line['catalogKey']
+        ]
+        self.assertEqual(len(matching), 1)
+        self.assertEqual(matching[0]['unitPrice'], 555)
+        catalog_row = self.client.get('/api/finance/catalog?query=SB18').get_json()['data'][0]
+        self.assertEqual(catalog_row['unitPrice'], 555)
+
+    def test_rate_card_migrates_legacy_asset_key_before_catalog_lookup(self):
+        quotation = self.create_quote('Legacy Rate Card Asset')
+        quotation['lineItems'] = [{
+            'id': 'legacy-inventory-rate',
+            'catalogKey': 'ax|l-acoustics|sb18 iii|subwoofer',
+            'sourceAssetIds': [],
+            'brand': 'l-acoustics',
+            'model': 'sb18 iii',
+            'description': 'L-Acoustics SB18 III Subwoofer',
+            'department': 'Audio Department',
+            'departmentCode': 'AX',
+            'days': 1,
+            'quantity': 1,
+            'uom': 'units',
+            'unitPrice': 444,
+            'discountPercent': 0,
+        }]
+        saved = self.client.put(f"/api/quotations/{quotation['id']}", json=quotation)
+        self.assertEqual(saved.status_code, 200, saved.get_data(as_text=True))
+
+        row = next(
+            item for item in self.client.get('/api/finance/rate-card').get_json()['data']
+            if item.get('model') == 'SB18 III'
+        )
+        self.assertEqual(row['catalogKey'], 'inventory:ax|l-acoustics|sb18 iii')
+        self.assertEqual(row['description'], 'Subwoofer')
+        updated = self.client.post('/api/finance/rate-card', json={**row, 'unitPrice': 575})
+        self.assertEqual(updated.status_code, 200, updated.get_data(as_text=True))
+
+        catalog_row = self.client.get('/api/finance/catalog?query=SB18').get_json()['data'][0]
+        self.assertEqual(catalog_row['unitPrice'], 575)
+
+    def test_rate_card_replaces_subproject_visibility_toggle(self):
+        project_root = os.path.dirname(os.path.dirname(__file__))
+        with open(
+            os.path.join(project_root, 'static', 'js', 'finance.js'),
+            encoding='utf-8',
+        ) as source_file:
+            source = source_file.read()
+
+        self.assertNotIn('financeToggleSubprojectView', source)
+        self.assertNotIn('financeState.showSubprojects', source)
+        self.assertIn('Show rate card', source)
+        self.assertIn('function financeOpenRateCard()', source)
+        self.assertIn('function financeDeleteRateCardItem(index)', source)
+        self.assertIn('financeRateCardBrand', source)
+        self.assertIn('financeRateCardModel', source)
+        self.assertIn('financeRenderSubprojectTabs()', source)
+
     def test_line_total_discount_can_raise_or_lower_total(self):
         quotation = self.create_quote('Editable Line Total')
         quotation['lineItems'] = [{
@@ -675,6 +834,67 @@ class FinanceFeatureTests(unittest.TestCase):
         ).get_json()['data']
         self.assertEqual(raised['lineItems'][0]['discountPercent'], -25)
         self.assertEqual(raised['lineItems'][0]['total'], 750)
+
+    def test_selected_department_name_overrides_stale_department_code(self):
+        quotation = self.create_quote('Department Canonicalisation')
+        quotation['lineItems'] = [{
+            'id': 'line-lighting',
+            'catalogKey': 'inventory:lx|robe|spiider',
+            'description': 'Lighting fixture',
+            'department': 'Lighting Department',
+            'departmentCode': 'AX',
+            'days': 1,
+            'quantity': 1,
+            'uom': 'units',
+            'unitPrice': 100,
+            'discountPercent': 0,
+        }]
+
+        response = self.client.put(
+            f"/api/quotations/{quotation['id']}",
+            json=quotation,
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        line = response.get_json()['data']['lineItems'][0]
+        self.assertEqual(line['department'], 'Lighting Department')
+        self.assertEqual(line['departmentCode'], 'LX')
+
+    def test_free_typed_department_name_remains_custom(self):
+        quotation = self.create_quote('Custom Department')
+        quotation['lineItems'] = [{
+            'id': 'line-custom-department',
+            'catalogKey': '',
+            'description': 'Custom work',
+            'department': 'lig',
+            'departmentCode': '',
+            'days': 1,
+            'quantity': 1,
+            'uom': 'units',
+            'unitPrice': 100,
+            'discountPercent': 0,
+            'isCustom': True,
+        }]
+
+        response = self.client.put(
+            f"/api/quotations/{quotation['id']}",
+            json=quotation,
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(response.get_json()['data']['lineItems'][0]['department'], 'lig')
+
+    def test_department_suggestion_selection_suppresses_stale_change_event(self):
+        project_root = os.path.dirname(os.path.dirname(__file__))
+        with open(
+            os.path.join(project_root, 'static', 'js', 'finance.js'),
+            encoding='utf-8',
+        ) as source_file:
+            source = source_file.read()
+
+        self.assertIn("input.dataset.departmentSelectionCommitted = 'true'", source)
+        self.assertIn("line.departmentCode = ''", source)
+        self.assertIn('function financeCommitDepartmentInput(index, input)', source)
 
     def test_locked_pre_gst_total_applies_total_discount_and_exports(self):
         quotation = self.create_quote('Locked Total')
@@ -955,6 +1175,24 @@ class FinanceFeatureTests(unittest.TestCase):
         event = self.data_manager.events[accepted['eventId']]
         self.assertEqual(event.start_date, '20260801')
         self.assertEqual(event.end_date, '20260805')
+
+    def test_editor_pairs_setup_teardown_then_rehearsal_show(self):
+        project_root = os.path.dirname(os.path.dirname(__file__))
+        with open(
+            os.path.join(project_root, 'static', 'js', 'finance.js'),
+            encoding='utf-8',
+        ) as source_file:
+            source = source_file.read()
+
+        setup = source.index("financeSchedulePair('Set-up', 'setup')")
+        teardown = source.index("financeSchedulePair('Teardown', 'teardown')")
+        rehearsal = source.index("financeSchedulePair('Rehearsal', 'rehearsal')")
+        show = source.index("financeSchedulePair('Show', 'show')")
+        self.assertLess(setup, teardown)
+        self.assertLess(teardown, rehearsal)
+        self.assertLess(rehearsal, show)
+        self.assertNotIn("financeAddScheduleRow('teardown')", source)
+        self.assertIn("!['rehearsal', 'show'].includes(kind)", source)
 
     def test_pdf_groups_consecutive_rehearsal_show_and_teardown_dates(self):
         quotation = self.create_quote('Consecutive Schedule')
@@ -1342,11 +1580,13 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertIn('abortcontroller', source)
         self.assertIn('iscontainer', source)
         self.assertIn('containeritems', source)
+        self.assertIn('financegroupequivalentcontainers', source)
+        self.assertIn('matching containers', source)
         self.assertIn('financedropdepartment', source)
         self.assertIn('finance-department-drag-handle\" draggable=\"true', source)
         self.assertIn("closest('.finance-department-row')", source)
         self.assertIn("financeaddschedulerow('show')", source)
-        self.assertIn("financeaddschedulerow('teardown')", source)
+        self.assertNotIn("financeaddschedulerow('teardown')", source)
         self.assertIn('financelocationresults', source)
         self.assertIn('financesetdepartmentadjustmentpercent', source)
         self.assertIn('financesetdepartmentadjustmentamount', source)
