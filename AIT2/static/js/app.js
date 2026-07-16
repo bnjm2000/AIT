@@ -8253,62 +8253,74 @@ function openAssetDetailsModal(encodedAssetId) {
   const encodedApiId = encodeURIComponent(apiId);
   const displayId = asset.isBulk ? 'Bulk Item' : (asset.id || apiId);
   const notes = String(asset.notes || '').trim();
-  const quantityText = asset.isBulk
-    ? `${asset.availableQuantity ?? asset.quantity ?? 1}/${asset.quantity ?? 1}`
-    : '1';
+  const degradedReasons = [
+    ...(Array.isArray(asset.degradedReasons) ? asset.degradedReasons : []),
+    ...(Array.isArray(asset.bulkDegradedReasons) ? asset.bulkDegradedReasons : []),
+  ].map(reason => cleanDegradedReasonText(reason)).filter(Boolean);
+  const uniqueDegradedReasons = [...new Set(degradedReasons)];
+  const bulkStockHtml = asset.isBulk ? `
+    <section class="asset-details-section">
+      <div class="asset-details-section-heading"><h4>Bulk stock</h4><span>Quantity and deployment information</span></div>
+      <div class="asset-details-grid asset-details-stock-grid">
+        <div class="asset-details-field"><span>Total quantity</span><strong>${escapeHtml(String(asset.quantity ?? 1))}</strong></div>
+        <div class="asset-details-field"><span>Available</span><strong>${escapeHtml(String(asset.availableQuantity ?? asset.quantity ?? 1))}</strong></div>
+        <div class="asset-details-field"><span>Preparable</span><strong>${escapeHtml(String(asset.preparableQuantity ?? asset.availableQuantity ?? asset.quantity ?? 1))}</strong></div>
+        <div class="asset-details-field"><span>Healthy</span><strong>${escapeHtml(String(asset.healthyQuantity ?? asset.availableQuantity ?? asset.quantity ?? 1))}</strong></div>
+        <div class="asset-details-field"><span>Deployed</span><strong>${escapeHtml(String(asset.deployedQuantity ?? 0))}</strong></div>
+        <div class="asset-details-field"><span>OOC / missing / degraded</span><strong>${escapeHtml(`${asset.bulkOOCQuantity || 0} / ${asset.bulkMissingQuantity || 0} / ${asset.bulkDegradedQuantity || 0}`)}</strong></div>
+      </div>
+      ${bulkDeploymentDetailsHtml(asset)}
+    </section>
+  ` : '';
 
   title.textContent = `${asset.isBulk ? 'Bulk Asset' : 'Asset'} Details`;
   content.innerHTML = `
-    <div class="modal-body">
-      <div style="background:#f8f9fa;border:1px solid #e9ecef;border-radius:8px;padding:16px;margin-bottom:16px;">
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px;">
-          <div>
-            <div style="color:#6c757d;font-size:12px;font-weight:700;text-transform:uppercase;margin-bottom:4px;">Asset ID</div>
-            <div style="font-weight:800;font-size:18px;">${escapeHtml(displayId)}</div>
-            ${asset.isBulk ? `<div style="color:#6c757d;font-size:12px;margin-top:4px;">Internal ID: ${escapeHtml(apiId)}</div>` : ''}
-          </div>
-          <div>
-            <div><strong>Brand:</strong> ${escapeHtml(asset.brand || '')}</div>
-            <div><strong>Model:</strong> ${escapeHtml(asset.model || '')}</div>
-            <div><strong>Description:</strong> ${escapeHtml(asset.description || 'N/A')}</div>
-          </div>
-          <div>
-            <div><strong>Primary serial:</strong> ${escapeHtml(asset.isBulk ? 'N/A' : (asset.serial || 'N/A'))}</div>
-            <div><strong>Second serial:</strong> ${escapeHtml(asset.isBulk ? 'N/A' : (asset.serial2 || 'N/A'))}</div>
-            <div><strong>Quantity:</strong> ${escapeHtml(String(quantityText))}</div>
-            <div><strong>Purchased:</strong> ${escapeHtml(formatAssetPurchaseDate(asset.dateOfPurchase || asset.purchaseDate || ''))}</div>
-          </div>
-          <div>
-            <div><strong>Department:</strong> ${departmentBadgeHtml(asset.department)}</div>
-            <div style="margin-top:4px;"><strong>Status:</strong> ${statusBadgeHtml(asset.status || 'available')}</div>
-            <div style="margin-top:4px;"><strong>Location:</strong> ${escapeHtml(asset.location || 'Store')}</div>
-          </div>
+    <div class="modal-body asset-details-body">
+      <div class="asset-details-identity">
+        <div class="asset-details-identity-label"><span>${asset.isBulk ? 'Bulk stock record' : 'Asset ID'}</span></div>
+        <div class="asset-details-identity-record">
+          <div><strong>${escapeHtml(displayId)}</strong>${asset.isBulk ? `<small>Internal ID: ${escapeHtml(apiId)}</small>` : ''}</div>
+          <div class="asset-details-product"><div class="asset-details-product-heading"><strong>${escapeHtml([asset.brand, asset.model].filter(Boolean).join(' ') || 'Brand and model not recorded')}</strong>${departmentBadgeHtml(asset.department)}</div><span>${escapeHtml(asset.description || 'No description recorded')}</span></div>
         </div>
       </div>
 
-      <div style="border:1px solid #e9ecef;border-radius:8px;padding:16px;margin-bottom:16px;background:#fff;">
-        <h4 style="margin:0 0 10px 0;color:#495057;">Notes</h4>
-        <div style="white-space:pre-wrap;line-height:1.5;color:${notes ? '#212529' : '#6c757d'};">
-          ${notes ? escapeHtml(notes) : '<span style="font-style:italic;">No notes for this asset.</span>'}
+      <section class="asset-details-section">
+        <div class="asset-details-section-heading"><h4>Asset information</h4><span>Serial numbers and dates</span></div>
+        <div class="asset-details-grid">
+          ${asset.isBulk ? '' : `
+            <div class="asset-details-field"><span>Primary serial number</span><strong>${escapeHtml(asset.serial || 'NIL')}</strong></div>
+            <div class="asset-details-field"><span>Secondary serial number</span><strong>${escapeHtml(asset.serial2 || 'NIL')}</strong></div>
+          `}
+          <div class="asset-details-field"><span>Date purchased</span><strong>${escapeHtml(formatAssetPurchaseDate(asset.dateOfPurchase || asset.purchaseDate || '') || 'Not recorded')}</strong></div>
+          <div class="asset-details-field"><span>Date added</span><strong>${escapeHtml(formatAssetAuditDateTime(asset.dateAdded || '') || 'Not recorded')}</strong></div>
+          <div class="asset-details-field"><span>Last modified</span><strong>${escapeHtml(formatAssetAuditDateTime(asset.dateModified || '') || 'Not recorded')}</strong></div>
         </div>
-      </div>
+      </section>
 
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;margin-bottom:16px;">
-        <div style="border:1px solid #e9ecef;border-radius:8px;padding:12px;">
-          <strong>Default Location</strong><br>
-          ${escapeHtml(asset.defaultLocation || 'Store')}
+      <section class="asset-details-section">
+        <div class="asset-details-section-heading"><h4>Status and location</h4><span>Current operational state</span></div>
+        <div class="asset-details-grid asset-details-operational-grid">
+          <div class="asset-details-field"><span>Availability</span><strong>${inventoryAvailabilityBadgesHtml(asset)}</strong></div>
+          <div class="asset-details-field"><span>Condition</span><strong>${assetFlagBadgesHtml(asset)}</strong></div>
+          <div class="asset-details-field"><span>Default location</span><strong>${escapeHtml(asset.defaultLocation || 'Store')}</strong></div>
+          <div class="asset-details-field"><span>Current location</span><strong>${escapeHtml(asset.currentLocation || asset.location || asset.defaultLocation || 'Store')}</strong></div>
         </div>
-        <div style="border:1px solid #e9ecef;border-radius:8px;padding:12px;">
-          <strong>Current Location</strong><br>
-          ${escapeHtml(asset.currentLocation || asset.location || 'Store')}
-        </div>
-        <div style="border:1px solid #e9ecef;border-radius:8px;padding:12px;">
-          <strong>Flags</strong><br>
-          ${assetFlagBadgesHtml(asset)}
-        </div>
-      </div>
+        ${uniqueDegradedReasons.length ? `<div class="asset-details-reasons"><strong>Degraded reason${uniqueDegradedReasons.length === 1 ? '' : 's'}</strong><ul>${uniqueDegradedReasons.map(reason => `<li>${escapeHtml(reason)}</li>`).join('')}</ul></div>` : ''}
+      </section>
 
-      <div class="modal-actions" style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;">
+      ${bulkStockHtml}
+
+      <section class="asset-details-section">
+        <div class="asset-details-section-heading"><h4>Notes</h4><span>Asset-specific information</span></div>
+        <div class="asset-details-notes ${notes ? '' : 'is-empty'}">${notes ? escapeHtml(notes) : 'No notes for this asset.'}</div>
+      </section>
+
+      <section class="asset-details-section asset-details-history">
+        <div class="asset-details-section-heading"><h4>Edit history</h4><span>${Array.isArray(asset.changeHistory) ? asset.changeHistory.length : 0} recorded change${Array.isArray(asset.changeHistory) && asset.changeHistory.length === 1 ? '' : 's'}</span></div>
+        <div class="asset-details-history-list">${assetChangeHistoryHtml(asset)}</div>
+      </section>
+
+      <div class="modal-actions asset-details-actions">
         <button type="button" class="btn btn-primary" onclick="closeModal('assetDetailsModal'); viewMaintenanceLog('${escapeHtmlAttr(encodedApiId)}')">View Log</button>
         ${
           isAdminUser()
@@ -8329,7 +8341,7 @@ function inventoryVirtualRowHtml(asset, isAdmin) {
   const description = asset.description || "";
   const quantityHtml = asset.isBulk
     ? `${escapeHtml(String(asset.availableQuantity ?? asset.quantity ?? 1))}/${escapeHtml(String(asset.quantity ?? 1))}${bulkDeploymentDetailsHtml(asset)}`
-    : '1';
+    : '';
   const selectionCellHtml = isAdmin
     ? `<td class="inventory-select-cell">
          <input
@@ -8849,22 +8861,6 @@ function ensureAssetEditModal() {
           </small>
         </div>
 
-        <div style="background:#f8f9fa;border:1px solid #e9ecef;border-radius:8px;padding:12px;margin-top:16px;">
-          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;">
-            <div class="form-group" style="margin-bottom:0;">
-              <label class="form-label">Date Added</label>
-              <input id="editAssetDateAdded" class="form-input" readonly>
-            </div>
-            <div class="form-group" style="margin-bottom:0;">
-              <label class="form-label">Date Modified</label>
-              <input id="editAssetDateModified" class="form-input" readonly>
-            </div>
-          </div>
-          <details style="margin-top:12px;">
-            <summary style="cursor:pointer;font-weight:700;color:#495057;">Change History</summary>
-            <div id="editAssetChangeHistory" style="margin-top:8px;max-height:260px;overflow-y:auto;"></div>
-          </details>
-        </div>
       </div>
 
       <div class="modal-footer modal-actions" style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
@@ -8925,9 +8921,6 @@ function openEditAssetModal(encodedAssetId) {
   document.getElementById('editAssetDepartment').value = asset.department || 'UN';
   document.getElementById('editAssetDefaultLocation').value = asset.defaultLocation || 'Store';
   document.getElementById('editAssetCurrentLocation').value = asset.currentLocation || '';
-  document.getElementById('editAssetDateAdded').value = formatAssetAuditDateTime(asset.dateAdded || '');
-  document.getElementById('editAssetDateModified').value = formatAssetAuditDateTime(asset.dateModified || '');
-  document.getElementById('editAssetChangeHistory').innerHTML = assetChangeHistoryHtml(asset);
   const editStatusEl = document.getElementById('editAssetStatus');
   if (editStatusEl) {
     const conditionStatus = getAssetConditionStatus(asset);

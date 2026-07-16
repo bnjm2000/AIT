@@ -173,6 +173,34 @@ def test_maintenance_history_keeps_actions_and_adds_overview_search():
     assert "deleteMaintenanceLog(" in script
 
 
+def test_inventory_asset_details_include_audit_data_and_bulk_only_quantity():
+    template = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
+    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+
+    assert 'id="assetDetailsModal" class="modal">\n      <div class="modal-content asset-details-shell">' in template
+    assert 'id="addEventModal" class="modal">\n      <div class="modal-content asset-details-shell">' not in template
+    assert "<span>Date added</span>" in script
+    assert "<span>Last modified</span>" in script
+    assert "asset.serial || 'NIL'" in script
+    assert "asset.serial2 || 'NIL'" in script
+    assert "assetChangeHistoryHtml(asset)" in script
+    assert 'class="asset-details-section asset-details-history"' in script
+    details_source = script[
+        script.index("function openAssetDetailsModal"):
+        script.index("function inventoryVirtualRowHtml")
+    ]
+    assert 'class="asset-details-identity-label"' in details_source
+    assert "departmentBadgeHtml(asset.department)" in details_source
+    assert 'class="asset-details-product"' in details_source
+    assert 'class="asset-details-product-heading"' in details_source
+    assert "asset-details-product-heading\"><strong>${escapeHtml([asset.brand, asset.model]" in details_source
+    assert 'class="asset-details-grid asset-details-operational-grid"' in details_source
+    assert "<h4>Maintenance</h4>" not in details_source
+    assert "const bulkStockHtml = asset.isBulk" in script
+    assert ": '';" in script[script.index("function inventoryVirtualRowHtml"):script.index("const INVENTORY_CONDITION_META")]
+    assert "editAssetChangeHistory" not in script
+
+
 def test_maintenance_page_uses_filter_buttons_with_shared_tab_search():
     template = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
     script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
