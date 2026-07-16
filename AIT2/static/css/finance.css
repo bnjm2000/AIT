@@ -327,6 +327,11 @@
   background: #f8faff;
 }
 
+.finance-list-row.is-updating {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
 .finance-list-row.is-cancelled td {
   background-image: linear-gradient(
     to bottom,
@@ -349,6 +354,19 @@
 .finance-doc-number {
   color: var(--finance-accent);
   font-weight: 750;
+}
+
+.finance-project-cell strong,
+.finance-project-dates {
+  display: block;
+}
+
+.finance-project-dates {
+  margin-top: 4px;
+  color: var(--finance-muted);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.35;
 }
 
 .finance-muted-inline {
@@ -393,16 +411,18 @@
 .finance-status[data-status="sent"],
 .finance-status-dot[data-status="sent"] { color: #1e40af; background: #93c5fd; }
 .finance-status[data-status="accepted"],
-.finance-status[data-status="paid"],
-.finance-status-dot[data-status="accepted"],
-.finance-status-dot[data-status="paid"] {
+.finance-status-dot[data-status="accepted"] {
   color: #065f46;
   background: #86efac;
 }
 
-.finance-status[data-status="declined"],
+.finance-status[data-status="paid"],
+.finance-status-dot[data-status="paid"] {
+  color: #155e75;
+  background: #a5f3fc;
+}
+
 .finance-status[data-status="cancelled"],
-.finance-status-dot[data-status="declined"],
 .finance-status-dot[data-status="cancelled"] {
   color: #991b1b;
   background: #fca5a5;
@@ -412,6 +432,78 @@
 .finance-status-dot[data-status="expired"] { color: #92400e; background: #fcd34d; }
 .finance-status[data-status="invoiced"],
 .finance-status-dot[data-status="invoiced"] { color: #5b21b6; background: #c4b5fd; }
+.finance-status[data-status="overdue"],
+.finance-status-dot[data-status="overdue"] { color: #9f1239; background: #fecdd3; }
+
+.finance-payment-countdown,
+.finance-payment-preview {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 5px 9px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  color: #475569;
+  background: #f8fafc;
+  font-size: 11px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.finance-payment-preview {
+  margin-top: 12px;
+}
+
+.finance-invoiced-fields {
+  display: grid;
+  grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr);
+  gap: 10px;
+}
+
+.finance-event-status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+}
+
+.finance-event-cell-action {
+  max-width: 100%;
+  padding: 4px 6px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.finance-event-cell-action:hover,
+.finance-event-cell-action:focus-visible {
+  border-color: #b8d6cc;
+  background: #eff8f5;
+  outline: 0;
+}
+
+.finance-event-cell-action.is-unpaired {
+  border-color: #cbd5e1;
+  color: var(--finance-accent);
+  background: #fff;
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.finance-event-cell-action.is-missing {
+  color: #991b1b;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.finance-event-status small {
+  color: var(--finance-muted);
+  font-weight: 750;
+}
 
 .finance-empty {
   padding: 60px 20px;
@@ -535,12 +627,14 @@
   min-width: 100%;
 }
 
-.finance-location-combobox {
+.finance-location-combobox,
+.finance-salesperson-combobox {
   position: relative;
   display: block;
 }
 
-.finance-location-results {
+.finance-location-results,
+.finance-salesperson-results {
   position: absolute;
   z-index: 30;
   top: calc(100% + 5px);
@@ -554,11 +648,13 @@
   box-shadow: 0 12px 28px rgba(15, 23, 42, .14);
 }
 
-.finance-location-results.open {
+.finance-location-results.open,
+.finance-salesperson-results.open {
   display: grid;
 }
 
-.finance-location-results button {
+.finance-location-results button,
+.finance-salesperson-results button {
   overflow: hidden;
   padding: 8px 10px;
   border: 0;
@@ -571,8 +667,18 @@
   white-space: nowrap;
 }
 
-.finance-location-results button:hover {
+.finance-location-results button:hover,
+.finance-salesperson-results button:hover {
   background: #f1f5f9;
+}
+
+.finance-salesperson-results button {
+  display: grid;
+  gap: 2px;
+}
+
+.finance-salesperson-results small {
+  color: var(--finance-muted);
 }
 
 .finance-field {
@@ -584,6 +690,23 @@
   color: var(--finance-muted);
   font-size: 11px;
   font-weight: 700;
+}
+
+.finance-client-name-control {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  gap: 6px;
+}
+
+.finance-salutation-control .finance-line-select-button {
+  min-height: 38px;
+  padding: 7px 8px;
+  border-color: var(--finance-border);
+  background: #fff;
+}
+
+.finance-salutation-control .finance-custom-menu {
+  min-width: 86px;
 }
 
 .finance-input,
@@ -1663,12 +1786,11 @@
 
 .finance-status-menu > button[data-status="draft"] { color: #334155; background: #e2e8f0; }
 .finance-status-menu > button[data-status="sent"] { color: #1e3a8a; background: #bfdbfe; }
-.finance-status-menu > button[data-status="accepted"],
-.finance-status-menu > button[data-status="paid"] { color: #064e3b; background: #bbf7d0; }
-.finance-status-menu > button[data-status="declined"],
+.finance-status-menu > button[data-status="accepted"] { color: #064e3b; background: #bbf7d0; }
+.finance-status-menu > button[data-status="paid"] { color: #164e63; background: #cffafe; }
 .finance-status-menu > button[data-status="cancelled"] { color: #7f1d1d; background: #fecaca; }
-.finance-status-menu > button[data-status="expired"] { color: #78350f; background: #fde68a; }
 .finance-status-menu > button[data-status="invoiced"] { color: #4c1d95; background: #ddd6fe; }
+.finance-status-menu > button[data-status="overdue"] { color: #881337; background: #ffe4e6; }
 
 .finance-status-menu > button[data-status]:hover,
 .finance-status-menu > button[data-status].selected {
@@ -1908,6 +2030,7 @@
   .company-details-grid,
   .finance-form-grid,
   .finance-new-client-grid,
+  .finance-invoiced-fields,
   .finance-schedule-grid {
     grid-template-columns: 1fr;
   }

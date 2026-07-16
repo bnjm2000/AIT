@@ -130,6 +130,7 @@ class EventAvailabilityOverlapTests(unittest.TestCase):
         self.assertEqual(regular['physical'], 6)
         self.assertEqual(regular['description'], '')
         self.assertEqual(regular['overlappingDemand'], 4)
+        self.assertEqual(regular['capacityForThisEvent'], 2)
         self.assertEqual(regular['available'], 2)
         self.assertEqual(regular['overlappingEvents'], [{
             'eventId': 101,
@@ -140,6 +141,7 @@ class EventAvailabilityOverlapTests(unittest.TestCase):
         }])
         self.assertEqual(bulk['physical'], 6)
         self.assertEqual(bulk['overlappingDemand'], 4)
+        self.assertEqual(bulk['capacityForThisEvent'], 2)
         self.assertEqual(bulk['available'], 2)
         self.assertEqual(bulk['overlappingEvents'][0]['eventId'], 102)
 
@@ -182,6 +184,25 @@ class EventAvailabilityOverlapTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
         self.assertIn('[MODEL]AX|TestBrand|RegularModel|6|Regular item', event.prepared_items)
+
+        availability = self.availability_entry(100, 'RegularModel', 'Regular item')
+        self.assertEqual(availability['physical'], 6)
+        self.assertEqual(availability['usedInThisEvent'], 6)
+        self.assertEqual(availability['capacityForThisEvent'], 0)
+        self.assertEqual(availability['available'], 0)
+
+    def test_overplanned_requirement_reports_capacity_below_requested_quantity(self):
+        self.make_event(
+            100,
+            prepared=['[MODEL]AX|TestBrand|RegularModel|8|Regular item'],
+        )
+
+        availability = self.availability_entry(100, 'RegularModel', 'Regular item')
+
+        self.assertEqual(availability['physical'], 6)
+        self.assertEqual(availability['usedInThisEvent'], 8)
+        self.assertEqual(availability['capacityForThisEvent'], 6)
+        self.assertEqual(availability['available'], 0)
 
     def test_replace_model_requirement_updates_both_rows_together(self):
         event = self.make_event(

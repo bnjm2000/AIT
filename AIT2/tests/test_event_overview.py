@@ -400,6 +400,32 @@ class EventAssignmentAccessTests(unittest.TestCase):
         reloaded.load_events()
         self.assertEqual(reloaded.events[event_id].assigned_users, ['bob'])
 
+    def test_event_creation_uses_lowest_available_id(self):
+        self.login('admin')
+        later_event = Event(
+            4,
+            'Later event',
+            '20260704',
+            '20260704',
+            [],
+            location='Expo',
+        )
+        self.data_manager.events[4] = later_event
+        self.data_manager.save_event(later_event)
+
+        response = self.client.post('/api/events', json={
+            'name': 'Fill the gap',
+            'location': 'Studio',
+            'startDate': '2026-07-03',
+            'endDate': '2026-07-03',
+            'tag': 'events',
+            'assignedUsers': [],
+        })
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(response.get_json()['eventId'], 3)
+        self.assertEqual(self.data_manager.events[3].name, 'Fill the gap')
+
 
 if __name__ == '__main__':
     unittest.main()

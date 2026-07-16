@@ -100,7 +100,12 @@ class UserRenameHistoryTests(unittest.TestCase):
                     'id': 'quote-1',
                     'createdBy': 'tech-old',
                     'salesperson': 'tech-old',
-                    'revisions': [{'salesperson': 'tech-old', 'updatedBy': 'tech-old'}],
+                    'salespersonUsername': 'tech-old',
+                    'revisions': [{
+                        'salesperson': 'tech-old',
+                        'salespersonUsername': 'tech-old',
+                        'updatedBy': 'tech-old',
+                    }],
                 }],
                 'priceBook': {},
                 'profitLoss': {'expenses': {}, 'commissions': {}},
@@ -172,7 +177,44 @@ class UserRenameHistoryTests(unittest.TestCase):
             quotation = json.load(finance_file)['documents'][0]
         self.assertEqual(quotation['createdBy'], 'tech-new')
         self.assertEqual(quotation['salesperson'], 'tech-new')
+        self.assertEqual(quotation['salespersonUsername'], 'tech-new')
         self.assertEqual(quotation['revisions'][0]['salesperson'], 'tech-new')
+        self.assertEqual(quotation['revisions'][0]['salespersonUsername'], 'tech-new')
+
+    def test_display_name_changes_resolve_in_maintenance_and_finance(self):
+        self.login_as_admin()
+        response = self.client.put(
+            f'/api/users/{quote("tech-old", safe="")}',
+            json={'name': 'Technician One'},
+        )
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+
+        maintenance = app_module._maintenance_log_for_response(
+            self.data_manager.inventory[self.asset_id].maintenance_logs[0]
+        )
+        self.assertEqual(maintenance['user'], 'tech-old')
+        self.assertEqual(maintenance['userDisplayName'], 'Technician One')
+
+        finance = app_module._normalise_finance_document(
+            {
+                'id': 'quote-display-name',
+                'type': 'quotation',
+                'createdBy': 'tech-old',
+                'salesperson': 'Old display',
+                'salespersonUsername': 'tech-old',
+            },
+            'quotation',
+            {
+                'id': 'quote-display-name',
+                'type': 'quotation',
+                'createdBy': 'tech-old',
+                'salesperson': 'Old display',
+                'salespersonUsername': 'tech-old',
+            },
+        )
+        self.assertEqual(finance['salespersonUsername'], 'tech-old')
+        self.assertEqual(finance['salesperson'], 'Technician One')
+        self.assertEqual(finance['createdByName'], 'Technician One')
 
 
 if __name__ == '__main__':

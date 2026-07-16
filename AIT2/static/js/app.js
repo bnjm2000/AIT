@@ -15,7 +15,11 @@ let editEventAssignedUsers = new Set();
 let departmentsLoaded = false;
 let selectedInventoryAssetIds = new Set();
 let expandedInventoryBulkDeploymentIds = new Set();
+let expandedInventoryModelKeys = new Set();
 let maintenanceFlaggedAssets = [];
+let maintenanceSearchTimer = null;
+let maintenanceLogTypeFilter = 'all';
+let maintenanceConditionFilter = 'all';
 let __autoRefreshInFlight = false;
 let __realtimeRefreshQueued = false;
 let __realtimeRefreshTimer = null;
@@ -25,6 +29,8 @@ let __realtimeReconnectTimer = null;
 let __realtimeLastEventId = "";
 let __eventAssetRefreshTimer = null;
 const __eventAssetRefreshIds = new Set();
+let assetLookupSource = null;
+let assetLookupById = new Map();
 
 const VIRTUAL_TABLE_OVERSCAN = 8;
 const virtualTableStates = new Map();
@@ -524,6 +530,10 @@ function applyPermissionUi() {
     el.style.display = currentUserHasSalesAccess() ? (el.dataset.salesDisplay || 'block') : 'none';
   });
 
+  document.querySelectorAll(".log-access-only, [data-log-access-only='true']").forEach(el => {
+    el.style.display = canCurrentUserManageRoles() ? (el.dataset.logAccessDisplay || 'block') : 'none';
+  });
+
   // Older hard-coded create buttons do not all have a class, so hide them by onclick.
   document.querySelectorAll('button').forEach(button => {
     if (
@@ -775,6 +785,7 @@ function ensureDoEditBuckets(data, deptNames = []) {
   data.overrides ||= {};
   data.custom ||= {};
   data.ordering ||= {};
+  data.deleted ||= {};
 
   const dynamicDeptNames = [];
   try {
@@ -787,9 +798,18 @@ function ensureDoEditBuckets(data, deptNames = []) {
   [...getDefaultDoDepartments(), ...dynamicDeptNames, ...deptNames].forEach(dept => {
     if (!dept) return;
     data.custom[dept] ||= [];
+    data.custom[dept] = data.custom[dept].map((item, index) => ({
+      ...item,
+      id: item.id || `legacy-${dept}-${index}`
+    }));
   });
 
   return data;
+}
+
+function makeDoCustomItemId() {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  return `do-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
 function getDoDepartmentList(groupedDepartments = {}, edits = null) {
@@ -1269,15 +1289,167 @@ function applyMaintenanceStatusSelectStyle(selectEl) {
     option.style.color = optionMeta.color;
     option.style.fontWeight = option.value === 'nochange' ? '400' : '600';
   });
+  refreshMaintenanceCustomSelect(selectEl);
 }
 
 function initialiseMaintenanceStatusSelects(root = document) {
   root.querySelectorAll('[data-maintenance-status-select="true"]').forEach(selectEl => {
     applyMaintenanceStatusSelectStyle(selectEl);
+    enhanceMaintenanceCustomSelect(selectEl, 'status');
     if (selectEl.dataset.statusColourBound === 'true') return;
     selectEl.addEventListener('change', () => applyMaintenanceStatusSelectStyle(selectEl));
     selectEl.dataset.statusColourBound = 'true';
   });
+}
+
+function ensureMaintenanceCustomSelectStyles() {
+  if (document.getElementById('maintenance-custom-select-styles')) return;
+  const style = document.createElement('style');
+  style.id = 'maintenance-custom-select-styles';
+  style.textContent = `
+    .maintenance-native-select {
+      position: absolute !important;
+      width: 1px !important;
+      height: 1px !important;
+      padding: 0 !important;
+      margin: 0 !important;
+      opacity: 0 !important;
+      pointer-events: none !important;
+    }
+    .maintenance-custom-select { position: relative; width: 100%; }
+    .maintenance-custom-select-trigger {
+      width: 100%; min-height: 42px; padding: 8px 34px 8px 11px;
+      border: 1px solid #cbd5d1; border-radius: 6px; background: #fff;
+      display: flex; align-items: center; gap: 8px; text-align: left;
+      font: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
+      position: relative; transition: border-color .15s, box-shadow .15s, background .15s;
+    }
+    .maintenance-custom-select-trigger:hover { background: #f8fbfa; }
+    .maintenance-custom-select-trigger:focus-visible { outline: 0; box-shadow: 0 0 0 3px rgba(15,118,110,.14); }
+    .maintenance-custom-select-trigger::after {
+      content: ''; position: absolute; right: 12px; top: 50%; width: 7px; height: 7px;
+      border-right: 2px solid currentColor; border-bottom: 2px solid currentColor;
+      transform: translateY(-65%) rotate(45deg); transition: transform .15s;
+    }
+    .maintenance-custom-select.open .maintenance-custom-select-trigger::after { transform: translateY(-30%) rotate(225deg); }
+    .maintenance-custom-select-swatch { width: 9px; height: 9px; border-radius: 50%; background: var(--option-color); flex: none; }
+    .maintenance-custom-select-menu {
+      display: none; position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 80;
+      padding: 5px; border: 1px solid #cbdad5; border-radius: 6px; background: #fff;
+      box-shadow: 0 12px 28px rgba(15,23,42,.16); max-height: 250px; overflow: auto;
+    }
+    .maintenance-custom-select.open .maintenance-custom-select-menu { display: grid; gap: 3px; animation: maintenanceSelectReveal .13s ease-out; }
+    .maintenance-custom-select-option {
+      width: 100%; min-height: 35px; padding: 7px 9px; border: 1px solid transparent;
+      border-radius: 5px; background: transparent; display: flex; align-items: center; gap: 8px;
+      color: var(--option-color); text-align: left; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+    }
+    .maintenance-custom-select-option:hover,.maintenance-custom-select-option.selected { background: var(--option-background); border-color: color-mix(in srgb,var(--option-color) 24%,transparent); }
+    @keyframes maintenanceSelectReveal { from { opacity:0;transform:translateY(-3px) } to { opacity:1;transform:none } }
+  `;
+  document.head.appendChild(style);
+}
+
+function maintenanceCustomSelectMeta(kind, value) {
+  if (kind === 'type') {
+    const meta = maintenanceLogTypeMeta(value);
+    const colours = {
+      'General': '#64748b',
+      'Preventative maintenance': '#1594ad',
+      'Fault': '#dc5965',
+      'Update': '#8b6fd6',
+      'Repair': '#d89422',
+      'Asset check': '#2ca46f'
+    };
+    return { label: meta.normalized, color: colours[meta.normalized] || colours.General, background: meta.background };
+  }
+  const meta = maintenanceStatusMeta(value);
+  const backgrounds = {
+    nochange: '#f1f3f5', ok: '#e7f6ee', ooc: '#fdebed', missing: '#fff0e2',
+    degraded: '#fff3df', decommissioned: '#edf0f2', disposed: '#edf0f2'
+  };
+  return { ...meta, background: backgrounds[String(value || '').toLowerCase()] || '#f1f3f5' };
+}
+
+function closeMaintenanceCustomSelects(except = null) {
+  document.querySelectorAll('.maintenance-custom-select.open').forEach(wrapper => {
+    if (wrapper === except) return;
+    wrapper.classList.remove('open');
+    wrapper.querySelector('.maintenance-custom-select-trigger')?.setAttribute('aria-expanded', 'false');
+  });
+}
+
+function refreshMaintenanceCustomSelect(selectEl) {
+  if (!selectEl?.dataset.maintenanceCustomKind) return;
+  const wrapper = selectEl.nextElementSibling;
+  if (!wrapper?.classList.contains('maintenance-custom-select')) return;
+  const kind = selectEl.dataset.maintenanceCustomKind;
+  const meta = maintenanceCustomSelectMeta(kind, selectEl.value);
+  const trigger = wrapper.querySelector('.maintenance-custom-select-trigger');
+  if (trigger) {
+    trigger.style.color = meta.color;
+    trigger.style.borderColor = meta.color;
+    trigger.disabled = selectEl.disabled;
+    trigger.querySelector('.maintenance-custom-select-swatch')?.style.setProperty('--option-color', meta.color);
+    const label = trigger.querySelector('.maintenance-custom-select-label');
+    if (label) label.textContent = meta.label;
+  }
+  wrapper.querySelectorAll('.maintenance-custom-select-option').forEach(option => {
+    const selected = option.dataset.value === selectEl.value;
+    option.classList.toggle('selected', selected);
+    option.setAttribute('aria-selected', String(selected));
+  });
+}
+
+function enhanceMaintenanceCustomSelect(selectEl, kind) {
+  if (!selectEl || selectEl.dataset.maintenanceCustomKind) return;
+  ensureMaintenanceCustomSelectStyles();
+  selectEl.dataset.maintenanceCustomKind = kind;
+  selectEl.classList.add('maintenance-native-select');
+  selectEl.tabIndex = -1;
+  selectEl.setAttribute('aria-hidden', 'true');
+
+  const selectedMeta = maintenanceCustomSelectMeta(kind, selectEl.value);
+  const wrapper = document.createElement('div');
+  wrapper.className = 'maintenance-custom-select';
+  wrapper.innerHTML = `
+    <button type="button" class="maintenance-custom-select-trigger" aria-haspopup="listbox" aria-expanded="false" style="color:${selectedMeta.color};border-color:${selectedMeta.color}">
+      <span class="maintenance-custom-select-swatch" style="--option-color:${selectedMeta.color}"></span>
+      <span class="maintenance-custom-select-label">${escapeHtml(selectedMeta.label)}</span>
+    </button>
+    <div class="maintenance-custom-select-menu" role="listbox">
+      ${Array.from(selectEl.options).map(option => {
+        const meta = maintenanceCustomSelectMeta(kind, option.value);
+        return `<button type="button" class="maintenance-custom-select-option${option.value === selectEl.value ? ' selected' : ''}" role="option" aria-selected="${option.value === selectEl.value}" data-value="${escapeHtmlAttr(option.value)}" style="--option-color:${meta.color};--option-background:${meta.background}"><span class="maintenance-custom-select-swatch" style="--option-color:${meta.color}"></span><span>${escapeHtml(meta.label)}</span></button>`;
+      }).join('')}
+    </div>
+  `;
+  selectEl.insertAdjacentElement('afterend', wrapper);
+  const trigger = wrapper.querySelector('.maintenance-custom-select-trigger');
+  trigger?.addEventListener('click', () => {
+    const opening = !wrapper.classList.contains('open');
+    closeMaintenanceCustomSelects(wrapper);
+    wrapper.classList.toggle('open', opening);
+    trigger.setAttribute('aria-expanded', String(opening));
+  });
+  wrapper.querySelectorAll('.maintenance-custom-select-option').forEach(option => {
+    option.addEventListener('click', () => {
+      selectEl.value = option.dataset.value || '';
+      selectEl.dispatchEvent(new Event('change', { bubbles: true }));
+      closeMaintenanceCustomSelects();
+      trigger?.focus();
+    });
+  });
+  const label = document.querySelector(`label[for="${selectEl.id}"]`);
+  label?.addEventListener('click', event => { event.preventDefault(); trigger?.focus(); });
+  if (document.body.dataset.maintenanceSelectDismissBound !== 'true') {
+    document.addEventListener('click', event => {
+      if (!event.target.closest('.maintenance-custom-select')) closeMaintenanceCustomSelects();
+    });
+    document.addEventListener('keydown', event => { if (event.key === 'Escape') closeMaintenanceCustomSelects(); });
+    document.body.dataset.maintenanceSelectDismissBound = 'true';
+  }
+  refreshMaintenanceCustomSelect(selectEl);
 }
 
 function maintenanceStatusSelectHtml(id, name, selected = 'nochange') {
@@ -3164,7 +3336,30 @@ const APP_SECTION_PATHS = Object.freeze({
 function appSectionFromPath(pathname = window.location.pathname) {
   const cleanPath = String(pathname || '/').replace(/\/+$/, '') || '/';
   if (cleanPath === '/') return 'events';
+  if (/^\/events\/\d+$/.test(cleanPath)) return 'events';
+  if (/^\/quotations\/[^/]+$/.test(cleanPath)) return 'quotations';
+  if (/^\/delivery-order\/\d+$/.test(cleanPath)) return 'delivery-order';
+  if (/^\/packing-list\/\d+$/.test(cleanPath)) return 'events';
   return Object.entries(APP_SECTION_PATHS).find(([, path]) => path === cleanPath)?.[0] || 'events';
+}
+
+function appDetailRouteFromPath(pathname = window.location.pathname) {
+  const cleanPath = String(pathname || '/').replace(/\/+$/, '') || '/';
+  let match = cleanPath.match(/^\/quotations\/([^/]+)$/);
+  if (match) return { kind: 'quotation', id: decodeURIComponent(match[1]) };
+  match = cleanPath.match(/^\/events\/(\d+)$/);
+  if (match) return { kind: 'event-overview', eventId: Number(match[1]) };
+  match = cleanPath.match(/^\/delivery-order\/(\d+)$/);
+  if (match) return { kind: 'delivery-order', eventId: Number(match[1]) };
+  match = cleanPath.match(/^\/packing-list\/(\d+)$/);
+  if (match) return { kind: 'packing-list', eventId: Number(match[1]) };
+  return null;
+}
+
+function updateAppDetailHistory(path, replace = false) {
+  if (!path || window.location.pathname === path) return;
+  const method = replace ? 'replaceState' : 'pushState';
+  window.history[method]({}, '', path);
 }
 
 function updateAppSectionHistory(sectionName, replace = false) {
@@ -3178,6 +3373,9 @@ function showSection(sectionName, options = {}) {
   const adminOnlySections = new Set(["plan", "compare", "workforce", "freelancer-workspace", "logs", "maintenance-report", "users", "pdf-settings"]);
   const ownerOnlySections = new Set(["companies"]);
   const salesOnlySections = new Set(["quotations", "profit-loss"]);
+  if (sectionName === 'logs' && !canCurrentUserManageRoles()) {
+    return showSection("events", { ...options, replaceHistory: true });
+  }
   if (adminOnlySections.has(sectionName) && !isAdminUser()) {
     return showSection("events", { ...options, replaceHistory: true });
   }
@@ -3247,6 +3445,12 @@ function showSection(sectionName, options = {}) {
       break;
     case "events":
       loadAllEvents();
+      const eventOverviewRoute = appDetailRouteFromPath();
+      if (options.loadDetail !== false && eventOverviewRoute?.kind === 'event-overview') {
+        viewEvent(eventOverviewRoute.eventId, { updateHistory: false });
+      } else if (!eventOverviewRoute && activeModal('eventDetailsModal')) {
+        closeEventOverview({ updateHistory: false });
+      }
       break;
     case "plan":
       loadPlanPage();
@@ -3299,7 +3503,12 @@ function showSection(sectionName, options = {}) {
       loadPdfSettingsSection();
       break;
     case "quotations":
-      if (typeof loadQuotations === "function") loadQuotations();
+      const quotationRoute = appDetailRouteFromPath();
+      if (options.loadDetail !== false && quotationRoute?.kind === 'quotation' && typeof financeOpenDocument === 'function') {
+        financeOpenDocument(quotationRoute.id, { updateHistory: false });
+      } else if (typeof loadQuotations === "function") {
+        loadQuotations();
+      }
       break;
     case "profit-loss":
       if (typeof loadProfitLoss === "function") loadProfitLoss();
@@ -3314,6 +3523,10 @@ function showSection(sectionName, options = {}) {
       loadChangePasswordSection();
       break;
     case "delivery-order":
+      const deliveryRoute = appDetailRouteFromPath();
+      if (options.loadDetail !== false && deliveryRoute?.kind === 'delivery-order') {
+        openDeliveryOrderTab(deliveryRoute.eventId, { updateHistory: false });
+      }
       break;
   }
 }
@@ -3858,6 +4071,8 @@ function updateEventFilesList(eventId, files) {
     list.innerHTML = renderEventFilesList(eventId, files || []);
   }
 
+  eventOverviewUpdateFiles(eventId, files || []);
+
   if (window.currentEventData && Number(window.currentEventData.id) === Number(eventId)) {
     window.currentEventData.files = files || [];
   }
@@ -3888,12 +4103,20 @@ async function saveEventNotes(eventId) {
 
 async function uploadEventFiles(eventId) {
   const input = document.getElementById(`eventFileInput-${eventId}`);
+  await uploadEventFileSelection(eventId, input?.files || []);
+}
+
+async function uploadEventFileSelection(eventId, fileList) {
+  const input = document.getElementById(`eventFileInput-${eventId}`);
+  const overviewInput = document.getElementById(`eventOverviewFileInput-${eventId}`);
   const button = document.getElementById(`eventFileUploadButton-${eventId}`);
-  const files = Array.from(input?.files || []);
+  const dropzone = document.getElementById(`eventOverviewFileDropzone-${eventId}`);
+  const uploadState = document.getElementById(`eventOverviewUploadState-${eventId}`);
+  const files = Array.from(fileList || []);
 
   if (!files.length) {
     showNotification("warning", "Choose at least one file first");
-    return;
+    return false;
   }
 
   const formData = new FormData();
@@ -3901,6 +4124,10 @@ async function uploadEventFiles(eventId) {
 
   try {
     if (button) button.disabled = true;
+    if (input) input.disabled = true;
+    if (overviewInput) overviewInput.disabled = true;
+    if (dropzone) dropzone.classList.add('is-uploading');
+    if (uploadState) uploadState.textContent = `Uploading ${files.length} file${files.length === 1 ? '' : 's'}...`;
     const response = await fetch(`/api/events/${eventId}/files`, {
       method: "POST",
       headers: {
@@ -3915,13 +4142,21 @@ async function uploadEventFiles(eventId) {
     }
 
     if (input) input.value = "";
+    if (overviewInput) overviewInput.value = "";
     updateEventFilesList(eventId, result.data || []);
+    if (uploadState) uploadState.textContent = 'Upload complete';
     showNotification("success", "File upload complete");
+    return true;
   } catch (error) {
     console.error("Event file upload failed:", error);
+    if (uploadState) uploadState.textContent = 'Upload failed - try again';
     showNotification("error", error.message || "Failed to upload event files");
+    return false;
   } finally {
     if (button) button.disabled = false;
+    if (input) input.disabled = false;
+    if (overviewInput) overviewInput.disabled = false;
+    if (dropzone) dropzone.classList.remove('is-uploading');
   }
 }
 
@@ -4480,9 +4715,130 @@ function ensureCompanyActionModals() {
     .company-edit-button:hover {
       background: #e96b02;
     }
+    .companies-admin-table-scroll {
+      width: 100%;
+      overflow-x: auto;
+    }
+    .companies-admin-table {
+      min-width: 760px;
+      margin-top: 0;
+    }
+    .company-people-total {
+      color: #182230;
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+    .company-role-counts {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+    }
+    .company-role-count {
+      background: #f2f4f7;
+      border: 1px solid #e4e7ec;
+      border-radius: 4px;
+      color: #475467;
+      font-size: 11px;
+      line-height: 1;
+      padding: 5px 6px;
+      white-space: nowrap;
+    }
+    .company-role-count.sales {
+      background: #ecfdf3;
+      border-color: #abefc6;
+      color: #067647;
+    }
+    .company-storage-button {
+      align-items: flex-start;
+      background: transparent;
+      border: 0;
+      color: #087a55;
+      cursor: pointer;
+      display: inline-flex;
+      flex-direction: column;
+      font: inherit;
+      gap: 2px;
+      padding: 4px 0;
+      text-align: left;
+    }
+    .company-storage-button:hover .company-storage-value,
+    .company-storage-button:focus-visible .company-storage-value {
+      text-decoration: underline;
+    }
+    .company-storage-value {
+      font-size: 14px;
+      font-weight: 700;
+    }
+    .company-storage-meta {
+      color: #667085;
+      font-size: 11px;
+    }
+    .company-storage-summary {
+      align-items: baseline;
+      background: #f6fef9;
+      border: 1px solid #abefc6;
+      border-radius: 6px;
+      display: flex;
+      gap: 10px;
+      justify-content: space-between;
+      margin-bottom: 18px;
+      padding: 14px 16px;
+    }
+    .company-storage-summary strong {
+      color: #05603a;
+      font-size: 22px;
+    }
+    .company-storage-summary span {
+      color: #475467;
+      font-size: 12px;
+    }
+    .company-storage-breakdown {
+      display: grid;
+      gap: 14px;
+    }
+    .company-storage-row-header {
+      align-items: baseline;
+      display: flex;
+      gap: 12px;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+    .company-storage-row-label {
+      color: #182230;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .company-storage-row-value {
+      color: #344054;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+    .company-storage-track {
+      background: #eaecf0;
+      border-radius: 3px;
+      height: 6px;
+      overflow: hidden;
+    }
+    .company-storage-fill {
+      background: #12a675;
+      border-radius: inherit;
+      height: 100%;
+      min-width: 2px;
+      transition: width 220ms ease;
+    }
+    .company-storage-row-meta {
+      color: #667085;
+      font-size: 11px;
+      margin-top: 5px;
+    }
     @media (max-width: 640px) {
       .company-action-buttons .btn {
         width: 100%;
+      }
+      .company-storage-summary {
+        align-items: flex-start;
+        flex-direction: column;
       }
     }
   `;
@@ -4574,6 +4930,21 @@ function ensureCompanyActionModals() {
         </div>
       </div>
     </div>
+
+    <div id="companyStorageModal" class="modal">
+      <div class="modal-content" style="max-width:620px;">
+        <div class="modal-header">
+          <div>
+            <h3 id="companyStorageModalTitle" class="modal-title">Company Storage</h3>
+            <p id="companyStorageModalSubtitle" style="margin:4px 0 0;color:#667085;font-size:12px;"></p>
+          </div>
+          <button type="button" class="close-btn" onclick="closeModal('companyStorageModal')" aria-label="Close">&times;</button>
+        </div>
+        <div id="companyStorageModalBody" class="modal-body">
+          <p style="text-align:center;color:#667085;padding:28px 0;">Calculating storage...</p>
+        </div>
+      </div>
+    </div>
   `;
 
   while (wrapper.firstElementChild) {
@@ -4589,6 +4960,85 @@ function companyActionButtonsMarkup() {
       <button type="button" class="btn btn-danger" onclick="openDeleteCompanyModal()">Delete Company</button>
     </div>
   `;
+}
+
+function formatCompanyStorageBytes(value) {
+  const bytes = Math.max(0, Number(value) || 0);
+  if (bytes < 1024) return `${Math.round(bytes)} B`;
+  const units = ['KB', 'MB', 'GB', 'TB'];
+  let size = bytes / 1024;
+  let unitIndex = 0;
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024;
+    unitIndex += 1;
+  }
+  const precision = size >= 100 ? 0 : size >= 10 ? 1 : 2;
+  return `${size.toFixed(precision)} ${units[unitIndex]}`;
+}
+
+function companyStorageItemCount(item) {
+  const parts = [];
+  const fileCount = Number(item?.fileCount || 0);
+  const recordCount = Number(item?.recordCount || 0);
+  if (fileCount) parts.push(`${fileCount} file${fileCount === 1 ? '' : 's'}`);
+  if (recordCount) parts.push(`${recordCount} database record${recordCount === 1 ? '' : 's'}`);
+  return parts.join(' &middot; ') || 'No stored items';
+}
+
+async function openCompanyStorageBreakdown(companyCode) {
+  ensureCompanyActionModals();
+  const company = companyOptions.find(item => String(item.code || '').toUpperCase() === String(companyCode || '').toUpperCase());
+  const title = document.getElementById('companyStorageModalTitle');
+  const subtitle = document.getElementById('companyStorageModalSubtitle');
+  const body = document.getElementById('companyStorageModalBody');
+  if (title) title.textContent = `${company?.name || companyCode} Storage`;
+  if (subtitle) subtitle.textContent = companyCode;
+  if (body) body.innerHTML = '<p style="text-align:center;color:#667085;padding:28px 0;">Calculating storage...</p>';
+  openModal('companyStorageModal');
+
+  try {
+    const response = await apiCall(`/api/companies/${encodeURIComponent(companyCode)}/storage?refresh=1`);
+    const storage = response.data || {};
+    const breakdown = (storage.breakdown || []).filter(item => Number(item.bytes || 0) > 0);
+    if (!body) return;
+    body.innerHTML = `
+      <div class="company-storage-summary">
+        <strong>${formatCompanyStorageBytes(storage.totalBytes)}</strong>
+        <span>${Number(storage.fileCount || 0)} files${Number(storage.recordCount || 0) ? ` &middot; ${Number(storage.recordCount)} database records` : ''}</span>
+      </div>
+      ${breakdown.length ? `
+        <div class="company-storage-breakdown">
+          ${breakdown.map(item => `
+            <div class="company-storage-row">
+              <div class="company-storage-row-header">
+                <span class="company-storage-row-label">${escapeHtml(item.label || item.key || 'Other')}</span>
+                <span class="company-storage-row-value">${formatCompanyStorageBytes(item.bytes)} &middot; ${Number(item.percent || 0).toFixed(1)}%</span>
+              </div>
+              <div class="company-storage-track" aria-hidden="true">
+                <div class="company-storage-fill" style="width:${Math.max(0, Math.min(100, Number(item.percent || 0)))}%;"></div>
+              </div>
+              <div class="company-storage-row-meta">${companyStorageItemCount(item)}</div>
+            </div>
+          `).join('')}
+        </div>
+      ` : '<p style="text-align:center;color:#667085;padding:18px 0;">This company is not using any storage yet.</p>'}
+    `;
+
+    company.storageBytes = Number(storage.totalBytes || 0);
+    company.storageFileCount = Number(storage.fileCount || 0);
+    company.storageRecordCount = Number(storage.recordCount || 0);
+    const tableButton = document.querySelector(`[data-company-storage-code="${CSS.escape(String(companyCode))}"]`);
+    if (tableButton) {
+      const value = tableButton.querySelector('.company-storage-value');
+      const meta = tableButton.querySelector('.company-storage-meta');
+      if (value) value.textContent = formatCompanyStorageBytes(storage.totalBytes);
+      if (meta) meta.textContent = `${Number(storage.fileCount || 0)} files`;
+    }
+  } catch (error) {
+    if (body) {
+      body.innerHTML = `<p style="color:#b42318;text-align:center;padding:28px 0;">Unable to calculate storage: ${escapeHtml(error.message)}</p>`;
+    }
+  }
 }
 
 function openCreateCompanyModal() {
@@ -4762,30 +5212,45 @@ async function loadCompaniesAdmin() {
     }
 
     container.innerHTML = `
-      <table class="table">
+      <div class="companies-admin-table-scroll">
+      <table class="table companies-admin-table">
         <thead>
           <tr>
             <th>Code</th>
             <th>Name</th>
-            <th>Users</th>
-            <th>Backend Folder</th>
-            <th>Frontend Folder</th>
+            <th>People</th>
+            <th>Storage Used</th>
             <th>Branding</th>
           </tr>
         </thead>
         <tbody>
-          ${companies.map(company => `
+          ${companies.map(company => {
+            const roles = company.roleCounts || {};
+            return `
             <tr>
               <td><strong>${escapeHtml(company.code)}</strong>${company.isActive ? ' <span style="font-size:11px;color:#198754;">active</span>' : ''}</td>
               <td>${escapeHtml(company.name || '')}</td>
-              <td>${Number(company.userCount || 0)}</td>
-              <td style="font-size:12px;color:#667085;overflow-wrap:anywhere;">${escapeHtml(company.backendFolder || '')}</td>
-              <td style="font-size:12px;color:#667085;overflow-wrap:anywhere;">${escapeHtml(company.frontendFolder || '')}</td>
+              <td>
+                <div class="company-people-total">${Number(company.userCount || 0)} account${Number(company.userCount || 0) === 1 ? '' : 's'}</div>
+                <div class="company-role-counts">
+                  <span class="company-role-count">${Number(roles.user || 0)} users</span>
+                  <span class="company-role-count">${Number(roles.manager || 0)} managers</span>
+                  <span class="company-role-count">${Number(roles.admin || 0)} admins</span>
+                  <span class="company-role-count sales">${Number(company.salesPersonnelCount || 0)} sales</span>
+                </div>
+              </td>
+              <td>
+                <button type="button" class="company-storage-button" data-company-storage-code="${escapeHtmlAttr(company.code)}" onclick="openCompanyStorageBreakdown(this.dataset.companyStorageCode)" aria-label="View storage breakdown for ${escapeHtmlAttr(company.name || company.code)}">
+                  <span class="company-storage-value">${formatCompanyStorageBytes(company.storageBytes)}</span>
+                  <span class="company-storage-meta">${Number(company.storageFileCount || 0)} files</span>
+                </button>
+              </td>
               <td>${company.brandingSetupRequired ? 'Pending' : 'Ready'}</td>
             </tr>
-          `).join('')}
+          `}).join('')}
         </tbody>
       </table>
+      </div>
     `;
   } catch (error) {
     if (container) {
@@ -5096,31 +5561,29 @@ function ensureDepartmentManagerPanel() {
   if (!currentUser || !currentUser.isAdmin) return;
   if (document.getElementById('department-admin-panel')) return;
 
-  const inventorySection = document.getElementById('inventory-section');
-  const controls = inventorySection?.querySelector('.inventory-controls');
-  if (!inventorySection || !controls) return;
-
-  const panel = document.createElement('details');
+  const panel = document.createElement('div');
   panel.id = 'department-admin-panel';
-  panel.className = 'card';
-  panel.style.cssText = 'margin-bottom:20px;background:white;border-radius:8px;padding:0;box-shadow:0 4px 15px rgba(0,0,0,0.08);overflow:hidden;';
+  panel.className = 'modal';
   panel.innerHTML = `
-    <summary style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:16px 18px;cursor:pointer;list-style:none;">
-      <div>
-        <h3 style="margin:0;color:#333;">Department Management</h3>
-        <p style="margin:4px 0 0;color:#666;font-size:13px;">Admin-only department setup</p>
+    <div class="modal-content" style="max-width:900px;width:94%;max-height:88vh;overflow:hidden;display:flex;flex-direction:column;">
+      <div class="modal-header">
+        <div>
+          <h3 class="modal-title" style="margin:0;">Manage departments</h3>
+          <p style="margin:4px 0 0;color:#64748b;font-size:12px;">Department names, codes and colours</p>
+        </div>
+        <button type="button" class="close-btn" onclick="closeModal('department-admin-panel')" aria-label="Close">&times;</button>
       </div>
-      <span style="font-size:13px;color:#667eea;font-weight:700;">Manage departments &#9662;</span>
-    </summary>
-    <div style="padding:0 18px 18px;">
-      <div style="display:flex;justify-content:flex-end;margin-bottom:12px;">
-        <button class="btn btn-success" onclick="openDepartmentModal()">+ Add Department</button>
+      <div class="modal-body" style="min-height:0;overflow:auto;">
+        <div style="display:flex;justify-content:flex-end;margin-bottom:12px;">
+          <button type="button" class="btn btn-primary" onclick="openDepartmentModal()">Add department</button>
+        </div>
+        <div id="department-admin-table" class="responsive-table-wrap"></div>
       </div>
-      <div id="department-admin-table" style="max-height:360px;overflow:auto;"></div>
     </div>
   `;
 
-  controls.parentNode.insertBefore(panel, controls);
+  document.body.appendChild(panel);
+  enhanceModalAccessibility(panel);
 }
 
 function renderDepartmentManager() {
@@ -5695,6 +6158,11 @@ function ensureCreateUserModal() {
           </div>
 
           <div class="form-group">
+            <label class="form-label" for="newUserPhone">Phone number</label>
+            <input id="newUserPhone" class="form-input" type="tel" placeholder="+65 9123 4567" autocomplete="tel">
+          </div>
+
+          <div class="form-group">
             <label class="form-label" for="newUserPassword">Password</label>
             <input id="newUserPassword" type="password" class="form-input" placeholder="Password" autocomplete="new-password">
           </div>
@@ -5777,6 +6245,7 @@ function usersAdminTableHeader() {
       <tr>
         ${usersAdminSortHeader('Name', 'name')}
         <th>Username</th>
+        <th>Phone</th>
         <th>Role</th>
         <th>Sales</th>
         ${isSuperAdminUser() ? usersAdminSortHeader('Company', 'company') : ''}
@@ -5841,6 +6310,17 @@ function usersAdminRowMarkup(user, index) {
         <div class="users-admin-inline-meta">${userActiveBadgeMarkup(user)}</div>
       </td>
       <td>
+        <input
+          type="tel"
+          id="phone-${rowId}"
+          class="form-input user-admin-phone-input"
+          value="${escapeHtmlAttr(user.phone || '')}"
+          placeholder="+65 9123 4567"
+          autocomplete="tel"
+          ${canEditUser ? '' : 'disabled'}
+        >
+      </td>
+      <td>
         ${canEditRole ? `
           <select id="role-${rowId}" class="form-input user-admin-role-select">
             ${userRoleOptionsMarkup(role)}
@@ -5903,7 +6383,7 @@ function renderUsersAdminTables() {
   const inactiveWasOpen = document.getElementById('inactiveUsersDropdown')?.open || false;
   const filtered = usersAdminUsers.filter(user => {
     if (!search) return true;
-    return [user.name, user.username, user.companyCode, user.companyName, user.role, user.roleLabel, user.hasSalesAccess ? 'sales' : '']
+    return [user.name, user.username, user.phone, user.companyCode, user.companyName, user.role, user.roleLabel, user.hasSalesAccess ? 'sales' : '']
       .some(value => String(value || '').toLocaleLowerCase().includes(search));
   });
   const sorted = isSuperAdminUser() ? sortedUsersAdmin(filtered) : filtered;
@@ -5963,6 +6443,7 @@ async function loadUsersAdmin() {
 async function createUserAdmin() {
   const name = document.getElementById('newUserName')?.value.trim() || '';
   const username = document.getElementById('newUserUsername')?.value.trim();
+  const phone = document.getElementById('newUserPhone')?.value.trim() || '';
   const password = document.getElementById('newUserPassword')?.value;
   const role = document.getElementById('newUserRole')?.value || 'user';
   const hasSalesAccess = document.getElementById('newUserHasSalesAccess')?.checked || false;
@@ -5982,6 +6463,7 @@ async function createUserAdmin() {
   try {
     const payload = {
       name,
+      phone,
       username,
       password,
       isActive
@@ -6000,6 +6482,7 @@ async function createUserAdmin() {
 
     document.getElementById('newUserName').value = '';
     document.getElementById('newUserUsername').value = '';
+    document.getElementById('newUserPhone').value = '';
     document.getElementById('newUserPassword').value = '';
     if (document.getElementById('newUserRole')) {
       document.getElementById('newUserRole').value = 'user';
@@ -6108,6 +6591,7 @@ async function saveUserAdmin(encodedOriginalUsername, rowId) {
 
   const name = document.getElementById(`name-${rowId}`)?.value.trim() || '';
   const newUsername = document.getElementById(`username-${rowId}`)?.value.trim();
+  const phone = document.getElementById(`phone-${rowId}`)?.value.trim() || '';
   const role = document.getElementById(`role-${rowId}`)?.value || '';
   const hasSalesAccess = document.getElementById(`sales-${rowId}`)?.checked || false;
   const isActive = document.getElementById(`active-${rowId}`)?.checked || false;
@@ -6121,6 +6605,7 @@ async function saveUserAdmin(encodedOriginalUsername, rowId) {
   try {
     const payload = {
       name,
+      phone,
       username: newUsername,
       isActive
     };
@@ -7425,7 +7910,7 @@ function clearFilters() {
       });
     updateInventoryCheckboxFilterSummary(filterId);
   });
-  document.getElementById("sort-select").value = "id";
+  document.getElementById("sort-select").value = "brand";
   document.getElementById("sort-descending").checked = false;
   displayFilteredInventory();
 }
@@ -7895,9 +8380,311 @@ function inventoryVirtualRowHtml(asset, isAdmin) {
   `;
 }
 
-function displayInventoryTable(assetsToShow) {
-  ensureInventoryTableStyles();
+const INVENTORY_CONDITION_META = {
+  available: { label: 'OK', color: '#159f6a' },
+  degraded: { label: 'Degraded', color: '#d99a18' },
+  ooc: { label: 'OOC', color: '#d84b52' },
+  missing: { label: 'Missing', color: '#64748b' },
+  decommissioned: { label: 'Decommissioned', color: '#283b36' }
+};
 
+const INVENTORY_AVAILABILITY_META = {
+  available: { label: 'Available', color: '#159f6a' },
+  degraded: { label: 'Degraded', color: '#d99a18' },
+  deployed: { label: 'Deployed', color: '#1769aa' },
+  ooc: { label: 'OOC', color: '#d84b52' },
+  missing: { label: 'Missing', color: '#64748b' },
+  decommissioned: { label: 'Decommissioned', color: '#283b36' }
+};
+
+function inventoryIcon(name) {
+  const paths = {
+    box: '<path d="M4 7.5 12 3l8 4.5v9L12 21l-8-4.5z"/><path d="m4 7.5 8 4.5 8-4.5M12 12v9"/>',
+    check: '<path d="m5 12 4 4L19 6"/>',
+    alert: '<path d="M12 3 2.5 20h19z"/><path d="M12 9v4m0 3h.01"/>',
+    wrench: '<path d="M14.5 6.5a4 4 0 0 0-5 5L4 17l3 3 5.5-5.5a4 4 0 0 0 5-5l-2.5 2.5-3-3z"/>',
+    eye: '<path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6z"/><circle cx="12" cy="12" r="2.5"/>',
+    edit: '<path d="m4 20 4.5-1 10-10-3.5-3.5-10 10zM13.5 7l3.5 3.5"/>',
+    trash: '<path d="M4 7h16M9 7V4h6v3m3 0-1 13H7L6 7m4 4v5m4-5v5"/>',
+    chevron: '<path d="m7 9 5 5 5-5"/>'
+  };
+  return `<svg viewBox="0 0 24 24" aria-hidden="true">${paths[name] || paths.box}</svg>`;
+}
+
+function inventoryAssetQuantity(asset) {
+  return asset?.isBulk ? Math.max(1, Number(asset.quantity || 1) || 1) : 1;
+}
+
+function inventoryConditionCounts(assetList) {
+  const counts = { available: 0, degraded: 0, ooc: 0, missing: 0, decommissioned: 0 };
+  (assetList || []).forEach(asset => {
+    const total = inventoryAssetQuantity(asset);
+    if (!asset?.isBulk) {
+      counts[getAssetConditionStatus(asset)] += 1;
+      return;
+    }
+
+    const wholeStatus = getAssetConditionStatus(asset);
+    if (wholeStatus === 'decommissioned') {
+      counts.decommissioned += total;
+      return;
+    }
+
+    let remaining = total;
+    let wholeStatusHasExplicitQuantity = false;
+    ['ooc', 'missing', 'degraded'].forEach(status => {
+      const field = status === 'ooc' ? 'bulkOOCQuantity' : status === 'missing' ? 'bulkMissingQuantity' : 'bulkDegradedQuantity';
+      const amount = Math.min(remaining, Math.max(0, Number(asset[field] || 0) || 0));
+      counts[status] += amount;
+      remaining -= amount;
+      if (status === wholeStatus && amount > 0) wholeStatusHasExplicitQuantity = true;
+    });
+    if (wholeStatus !== 'available' && !wholeStatusHasExplicitQuantity) {
+      counts[wholeStatus] += remaining;
+      remaining = 0;
+    }
+    counts.available += remaining;
+  });
+  return counts;
+}
+
+function inventoryAvailabilityCounts(assetList) {
+  const counts = {
+    available: 0,
+    degradedAvailable: 0,
+    deployed: 0,
+    ooc: 0,
+    missing: 0,
+    decommissioned: 0,
+    total: 0
+  };
+
+  (assetList || []).forEach(asset => {
+    const total = inventoryAssetQuantity(asset);
+    const condition = getAssetConditionStatus(asset);
+    counts.total += total;
+
+    if (!asset?.isBulk) {
+      if (condition === 'decommissioned') counts.decommissioned += 1;
+      else if (condition === 'missing') counts.missing += 1;
+      else if (condition === 'ooc') counts.ooc += 1;
+      else if (asset.status === 'deployed' || Number(asset.deployedQuantity || 0) > 0) counts.deployed += 1;
+      else {
+        counts.available += 1;
+        if (condition === 'degraded') counts.degradedAvailable += 1;
+      }
+      return;
+    }
+
+    if (condition === 'decommissioned') {
+      counts.decommissioned += total;
+      return;
+    }
+
+    const deployed = Math.min(total, Math.max(0, Number(asset.deployedQuantity || 0) || 0));
+    counts.deployed += deployed;
+    let remaining = total - deployed;
+
+    if (asset.isMissing) {
+      counts.missing += remaining;
+      return;
+    }
+    if (asset.isOOC) {
+      counts.ooc += remaining;
+      return;
+    }
+
+    const missing = Math.min(remaining, Math.max(0, Number(asset.bulkMissingQuantity || 0) || 0));
+    counts.missing += missing;
+    remaining -= missing;
+    const ooc = Math.min(remaining, Math.max(0, Number(asset.bulkOOCQuantity || 0) || 0));
+    counts.ooc += ooc;
+    remaining -= ooc;
+
+    counts.available += remaining;
+    const degraded = asset.isDegraded
+      ? remaining
+      : Math.min(remaining, Math.max(0, Number(asset.bulkDegradedQuantity || 0) || 0));
+    counts.degradedAvailable += degraded;
+  });
+
+  return counts;
+}
+
+function inventoryAvailabilityChartHtml(counts, compact = false) {
+  const segmentsByStatus = {
+    available: Math.max(0, counts.available - counts.degradedAvailable),
+    degraded: counts.degradedAvailable,
+    deployed: counts.deployed,
+    ooc: counts.ooc,
+    missing: counts.missing,
+    decommissioned: counts.decommissioned
+  };
+  const total = counts.total || Object.values(segmentsByStatus).reduce((sum, value) => sum + value, 0);
+  let cursor = 0;
+  const segments = Object.entries(INVENTORY_AVAILABILITY_META).map(([status, meta]) => {
+    const start = cursor;
+    cursor += total ? (segmentsByStatus[status] / total) * 100 : 0;
+    return `${meta.color} ${start.toFixed(2)}% ${cursor.toFixed(2)}%`;
+  }).join(', ');
+  const visible = Object.entries(INVENTORY_AVAILABILITY_META).filter(
+    ([status]) => segmentsByStatus[status] > 0
+  );
+  return `
+    <div class="inventory-donut" style="--donut-background:${total ? `conic-gradient(${segments})` : '#e5ece9'}">
+      <div class="inventory-donut-centre"><strong>${total}</strong>${compact ? 'assets' : 'total'}</div>
+    </div>
+    <div class="inventory-condition-legend">
+      ${visible.map(([status, meta]) => `
+        <div class="inventory-condition-key" style="--key-color:${meta.color}">
+          <i></i><span>${meta.label}</span><strong>${segmentsByStatus[status]}</strong>
+        </div>
+      `).join('') || '<span style="color:#64748b;font-size:11px">No assets</span>'}
+    </div>
+  `;
+}
+
+function inventoryConditionChartHtml(counts, compact = false) {
+  const total = Object.values(counts).reduce((sum, value) => sum + value, 0);
+  let cursor = 0;
+  const segments = Object.entries(INVENTORY_CONDITION_META).map(([status, meta]) => {
+    const start = cursor;
+    cursor += total ? (counts[status] / total) * 100 : 0;
+    return `${meta.color} ${start.toFixed(2)}% ${cursor.toFixed(2)}%`;
+  }).join(', ');
+  const visible = Object.entries(INVENTORY_CONDITION_META).filter(([status]) => counts[status] > 0);
+  return `
+    <div class="inventory-donut" style="--donut-background:${total ? `conic-gradient(${segments})` : '#e5ece9'}">
+      <div class="inventory-donut-centre"><strong>${total}</strong>${compact ? 'assets' : 'total'}</div>
+    </div>
+    <div class="inventory-condition-legend">
+      ${visible.map(([status, meta]) => `
+        <div class="inventory-condition-key" style="--key-color:${meta.color}">
+          <i></i><span>${meta.label}</span><strong>${counts[status]}</strong>
+        </div>
+      `).join('') || '<span style="color:#64748b;font-size:11px">No assets</span>'}
+    </div>
+  `;
+}
+
+function inventoryModelGroupKey(asset) {
+  return [asset?.department, asset?.brand, asset?.model]
+    .map(value => String(value || '').trim().toLocaleLowerCase())
+    .join('\u001f');
+}
+
+function groupInventoryByModel(assetList) {
+  const groups = new Map();
+  (assetList || []).forEach(asset => {
+    const key = inventoryModelGroupKey(asset);
+    if (!groups.has(key)) groups.set(key, { key, assets: [], brand: asset.brand || 'Unbranded', model: asset.model || 'Unspecified model', department: asset.department || 'UN' });
+    groups.get(key).assets.push(asset);
+  });
+  return Array.from(groups.values());
+}
+
+function inventoryLatestMaintenance(assetList) {
+  let latest = null;
+  (assetList || []).forEach(asset => {
+    getMaintenanceLogRecords(asset).forEach(record => {
+      const timestamp = maintenanceLogDateSortValue(record.date);
+      if (!latest || timestamp > latest.timestamp) latest = { ...record, timestamp };
+    });
+  });
+  return latest;
+}
+
+function inventoryMaintenanceDateText(record) {
+  if (!record?.date) return 'No maintenance';
+  const raw = String(record.date);
+  const match = raw.match(/^(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})/);
+  if (!match) return raw;
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  return date.toLocaleDateString('en-SG', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function inventoryGroupDescription(group) {
+  const descriptions = [...new Set(group.assets.map(asset => String(asset.description || '').trim()).filter(Boolean))];
+  if (!descriptions.length) return 'No description';
+  return descriptions.length === 1 ? descriptions[0] : `${descriptions[0]} +${descriptions.length - 1} more`;
+}
+
+function inventoryAvailabilityBadgesHtml(asset) {
+  const counts = inventoryAvailabilityCounts([asset]);
+  const badges = [];
+  const withQuantity = (value, label) => `${counts.total > 1 ? `${value} ` : ''}${label}`;
+
+  if (counts.deployed > 0) badges.push(statusBadgeHtml('deployed', withQuantity(counts.deployed, 'Deployed')));
+  if (counts.ooc > 0) badges.push(statusBadgeHtml('ooc', withQuantity(counts.ooc, 'OOC')));
+  if (counts.missing > 0) badges.push(statusBadgeHtml('missing', withQuantity(counts.missing, 'Missing')));
+  if (counts.decommissioned > 0) badges.push(statusBadgeHtml('decommissioned', withQuantity(counts.decommissioned, 'Decommissioned')));
+
+  const clearAvailable = Math.max(0, counts.available - counts.degradedAvailable);
+  if (clearAvailable > 0) badges.push(statusBadgeHtml('available', withQuantity(clearAvailable, 'OK')));
+  if (counts.degradedAvailable > 0) {
+    badges.push(statusBadgeHtml('degraded', withQuantity(counts.degradedAvailable, 'Degraded')));
+  } else if (counts.deployed > 0 && getAssetConditionStatus(asset) === 'degraded') {
+    badges.push(statusBadgeHtml('degraded', 'Degraded'));
+  }
+
+  return badges.join(' ') || statusBadgeHtml('available', 'OK');
+}
+
+function inventoryIndividualRowHtml(asset, isAdmin) {
+  const assetId = inventoryAssetIdentifier(asset);
+  const encodedId = encodeURIComponent(assetId);
+  const total = inventoryAssetQuantity(asset);
+  const availabilityHtml = inventoryAvailabilityBadgesHtml(asset);
+  const maintenance = inventoryLatestMaintenance([asset]);
+  return `
+    <div class="inventory-individual-row">
+      ${isAdmin ? `<input type="checkbox" class="inventory-row-select" data-asset-id="${escapeHtmlAttr(assetId)}" ${selectedInventoryAssetIds.has(assetId) ? 'checked' : ''} onchange="toggleInventoryAssetSelection(this.dataset.assetId,this.checked)" aria-label="Select ${escapeHtmlAttr(assetId)}">` : '<span></span>'}
+      <div><span class="inventory-individual-id">${escapeHtml(asset.isBulk ? 'Bulk stock' : assetId)}</span><span class="inventory-individual-meta" style="display:block">${escapeHtml(asset.isBulk ? `${total} units` : (asset.serial || 'No serial'))}</span></div>
+      <div>${availabilityHtml}</div>
+      <div class="inventory-individual-meta">${escapeHtml(asset.currentLocation || asset.location || 'Store')}</div>
+      <div class="inventory-individual-meta">${escapeHtml(inventoryMaintenanceDateText(maintenance))}</div>
+      <div class="inventory-individual-actions">
+        <button type="button" class="inventory-icon-button" onclick="openAssetDetailsModal('${escapeHtmlAttr(encodedId)}')" title="View asset" aria-label="View asset">${inventoryIcon('eye')}</button>
+        <button type="button" class="inventory-icon-button" onclick="viewMaintenanceLog('${escapeHtmlAttr(encodedId)}')" title="View past logs" aria-label="View past logs">${inventoryIcon('wrench')}</button>
+        ${isAdmin ? `<button type="button" class="inventory-icon-button" onclick="openEditAssetModal('${escapeHtmlAttr(encodedId)}')" title="Edit asset" aria-label="Edit asset">${inventoryIcon('edit')}</button>` : ''}
+      </div>
+    </div>
+  `;
+}
+
+function toggleInventoryModelGroup(encodedKey) {
+  const key = decodeURIComponent(encodedKey);
+  if (expandedInventoryModelKeys.has(key)) expandedInventoryModelKeys.delete(key);
+  else expandedInventoryModelKeys.add(key);
+  displayFilteredInventory();
+}
+
+function renderInventorySummary() {
+  const sourceAssets = Array.isArray(assets) ? assets : [];
+  const conditionCounts = inventoryConditionCounts(sourceAssets);
+  const availability = inventoryAvailabilityCounts(sourceAssets);
+  const total = availability.total;
+  const attention = conditionCounts.degraded + conditionCounts.ooc + conditionCounts.missing;
+  const modelCount = groupInventoryByModel(sourceAssets).length;
+  const availableMarker = availability.degradedAvailable > 0 ? '*' : '';
+  const cards = [
+    ['box', availability.deployed, 'Assets deployed', total ? `${Math.round(availability.deployed / total * 100)}% of total stock` : `${modelCount} brand/model groups`, '#1769aa', '#eaf3fb'],
+    ['check', `${availability.available}${availableMarker}`, 'Available for use', availability.degradedAvailable > 0 ? `* Includes ${availability.degradedAvailable} degraded` : (total ? `${Math.round(availability.available / total * 100)}% of stock` : 'No stock'), '#138a5b', '#e7f6ee'],
+    ['alert', attention, 'Needs attention', `${conditionCounts.degraded} degraded`, '#bc7a0a', '#fff3df'],
+    ['wrench', conditionCounts.ooc, 'Out of commission', total ? `${Math.round(conditionCounts.ooc / total * 100)}% of stock` : 'No stock', '#b43741', '#fdebed']
+  ];
+  const grid = document.getElementById('inventory-summary-grid');
+  if (grid) grid.innerHTML = cards.map(([icon, value, label, note, color, bg]) => `
+    <div class="inventory-stat">
+      <span class="inventory-stat-mark" style="--stat-color:${color};--stat-bg:${bg}">${inventoryIcon(icon)}</span>
+      <span><strong class="inventory-stat-value">${value}</strong><span class="inventory-stat-label">${label}</span><span class="inventory-stat-note">${note}</span></span>
+    </div>
+  `).join('');
+  const chart = document.getElementById('inventory-overview-chart');
+  if (chart) chart.innerHTML = inventoryAvailabilityChartHtml(availability);
+}
+
+function displayInventoryTable(assetsToShow) {
   const container = document.getElementById("inventory-table-container");
   if (!container) return;
 
@@ -7905,50 +8692,50 @@ function displayInventoryTable(assetsToShow) {
     destroyVirtualTable('inventory');
     container.innerHTML = isAdminUser() ? `
       <div class="inventory-onboarding-empty">
-        <strong>Add your first asset</strong>
-        <span>Inventory items will appear here once they are added.</span>
-        <button type="button" class="btn btn-primary" onclick="openModal('addAssetModal')">Add Asset</button>
+        <div class="inventory-empty">
+          <strong style="display:block;color:#172b26;margin-bottom:5px">No matching assets</strong>
+          <span style="display:block;margin-bottom:14px">Adjust the filters or add an asset.</span>
+          <button type="button" class="btn btn-primary" onclick="openModal('addAssetModal')">Add Asset</button>
+        </div>
       </div>
-    ` : '<p style="text-align: center; color: #666; padding: 40px;">No assets found.</p>';
+    ` : '<div class="inventory-empty">No matching assets.</div>';
     updateInventorySelectionUi([]);
     return;
   }
 
+  destroyVirtualTable('inventory');
   const isAdmin = !!(currentUser && currentUser.isAdmin);
-  const selectionHeaderHtml = isAdmin
-    ? `<th class="inventory-select-cell">
-         <input type="checkbox" id="inventory-select-all-current" onchange="toggleInventorySelectAll(this.checked)" title="Select all visible assets" aria-label="Select all visible assets">
-       </th>`
-    : '';
-
-  renderVirtualTable({
-    stateKey: 'inventory',
-    container,
-    items: assetsToShow,
-    columnCount: isAdmin ? 15 : 14,
-    tableClass: 'table inventory-compact-table',
-    estimatedRowHeight: 64,
-    headerHtml: `
-      <tr>
-        ${selectionHeaderHtml}
-        <th>Asset ID</th>
-        <th>Brand</th>
-        <th>Model</th>
-        <th>Description</th>
-        <th>Serial</th>
-        <th>Qty</th>
-        <th>Purchased</th>
-        <th>Added</th>
-        <th>Modified</th>
-        <th>Department</th>
-        <th>Status</th>
-        <th>Location</th>
-        <th>Flags</th>
-        <th>Actions</th>
-      </tr>
-    `,
-    rowHtml: asset => inventoryVirtualRowHtml(asset, isAdmin)
-  });
+  const groups = groupInventoryByModel(assetsToShow);
+  container.innerHTML = `
+    <div class="inventory-catalogue">
+      <div class="inventory-model-head"><span>Brand / model</span><span>Description</span><span>Department</span><span>Availability</span><span>Last maintenance</span><span></span></div>
+      ${groups.map(group => {
+        const encodedKey = encodeURIComponent(group.key);
+        const expanded = expandedInventoryModelKeys.has(group.key);
+        const availability = inventoryAvailabilityCounts(group.assets);
+        const degradedMarker = availability.degradedAvailable > 0 ? '*' : '';
+        const latest = inventoryLatestMaintenance(group.assets);
+        return `
+          <section class="inventory-model-group">
+            <button type="button" class="inventory-model-summary" aria-expanded="${expanded}" onclick="toggleInventoryModelGroup('${escapeHtmlAttr(encodedKey)}')">
+              <span class="inventory-model-name"><strong>${escapeHtml(group.brand)} ${escapeHtml(group.model)}</strong><span>${group.assets.length} inventory record${group.assets.length === 1 ? '' : 's'}</span></span>
+              <span class="inventory-model-description">${escapeHtml(inventoryGroupDescription(group))}</span>
+              <span>${departmentBadgeHtml(group.department)}</span>
+              <span class="inventory-model-quantity" title="${availability.degradedAvailable > 0 ? `Includes ${availability.degradedAvailable} degraded asset${availability.degradedAvailable === 1 ? '' : 's'}` : 'Available for use'}"><strong>${availability.available}${degradedMarker}/${availability.total}</strong><span>assets available</span></span>
+              <span class="inventory-last-maintenance">${escapeHtml(inventoryMaintenanceDateText(latest))}<span>${latest?.type ? escapeHtml(inventoryStatusText(latest.type)) : ''}</span></span>
+              <span class="inventory-chevron">${inventoryIcon('chevron')}</span>
+            </button>
+            ${expanded ? `
+              <div class="inventory-model-detail">
+                <div class="inventory-group-condition"><h4>Availability overview</h4>${inventoryAvailabilityChartHtml(availability, true)}</div>
+                <div class="inventory-individual-list">${group.assets.map(asset => inventoryIndividualRowHtml(asset, isAdmin)).join('')}</div>
+              </div>
+            ` : ''}
+          </section>
+        `;
+      }).join('')}
+    </div>
+  `;
 
   updateInventorySelectionUi(assetsToShow);
 }
@@ -9304,12 +10091,163 @@ function ensureContainerUiStyles() {
     }
   `;
 
+  style.textContent += `
+    .containers-dashboard {
+      --container-green: var(--brand-primary, #0f766e);
+      --container-green-soft: #e9f7f2;
+      --container-ink: #172b26;
+      --container-muted: #64748b;
+      --container-line: #dce7e3;
+      gap: 12px;
+    }
+    .container-hero { padding:14px;border:1px solid var(--container-line);border-radius:7px;background:#f8fbfa; }
+    .container-hero-title { display:flex;align-items:center;gap:7px;margin:0;color:var(--container-ink);font-size:17px; }
+    .container-hero-title svg { width:19px;height:19px;fill:none;stroke:var(--container-green);stroke-width:2; }
+    .container-hero-subtitle { margin-top:4px;color:var(--container-muted);font-size:10px; }
+    .container-stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 0;
+      overflow: hidden;
+      border: 1px solid var(--container-line);
+      border-radius: 7px;
+      background: #fff;
+      box-shadow: none;
+    }
+    .container-stat-card {
+      min-height: 78px;
+      padding: 12px 14px;
+      border: 0;
+      border-right: 1px solid var(--container-line);
+      border-radius: 0;
+      background: #fff;
+      box-shadow: none;
+    }
+    .container-stat-card:last-child { border-right: 0; }
+    .container-stat-value { margin: 0 0 4px;color: var(--container-ink);font-size: 22px;line-height: 1.1; }
+    .container-stat-label { color: var(--container-muted);font-size: 10px;font-weight: 800;letter-spacing: 0;text-transform: none; }
+    .container-toolbar {
+      grid-template-columns: minmax(220px, 1fr) minmax(170px, 220px) auto;
+      gap: 9px;
+      padding: 10px;
+      border: 1px solid var(--container-line);
+      border-radius: 7px;
+      background: #f8fbfa;
+      box-shadow: none;
+    }
+    .container-search-input,.container-sort-select {
+      min-height: 38px;
+      padding: 8px 11px;
+      border: 1px solid #cbdad5;
+      border-radius: 6px;
+      color: var(--container-ink);
+      background: #fff;
+      font-size: 12px;
+    }
+    .container-search-input:focus,.container-sort-select:focus { border-color: var(--container-green);box-shadow: 0 0 0 3px rgba(15,118,110,.12); }
+    .container-sort-select { cursor: pointer; }
+    .container-cards-grid {
+      display: block;
+      overflow: hidden;
+      border: 1px solid var(--container-line);
+      border-radius: 7px;
+      background: #fff;
+    }
+    .container-list-head,.container-card-modern {
+      display: grid;
+      grid-template-columns: minmax(145px,.75fr) minmax(240px,1.45fr) minmax(130px,.7fr) minmax(125px,.65fr) minmax(105px,.55fr) 104px;
+      gap: 11px;
+      align-items: center;
+    }
+    .container-list-head {
+      padding: 7px 11px;
+      border-bottom: 1px solid var(--container-line);
+      background: #f2f7f5;
+      color: #62756f;
+      font-size: 9px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+    .container-card-modern {
+      min-height: 58px;
+      padding: 7px 11px;
+      border: 0;
+      border-radius: 0;
+      background: #fff;
+      box-shadow: none;
+      transition: background .15s ease;
+    }
+    .container-card-modern + .container-card-modern { border-top: 1px solid #e7eeec; }
+    .container-card-modern:hover { transform: none;border-color: transparent;background: #f7fbf9;box-shadow: none; }
+    .container-card-top { display: block;margin: 0;min-width: 0; }
+    .container-id-badge { display: flex;gap: 7px;color: var(--container-ink);font-size: 12px; }
+    .container-id-badge svg { width: 16px;height: 16px;fill: none;stroke: var(--container-green);stroke-width: 2;flex: none; }
+    .container-serial-text { margin-top: 2px;color: var(--container-muted);font-size: 9px; }
+    .container-count-pill { display: inline-flex;min-height: 22px;align-items: center;padding: 3px 7px;border: 1px solid #cfe5dc;border-radius: 5px;background: var(--container-green-soft);color: #17654f;font-size: 9px; }
+    .container-meta-row { margin: 0;gap: 4px; }
+    .container-meta-pill { padding: 3px 6px;border-color: #dce7e3;border-radius: 4px;background: #f7faf9;color: #50655f;font-size: 9px; }
+    .container-preview-list { min-width: 0;min-height: 0;margin: 0;gap: 2px; }
+    .container-preview-item { padding: 0;border: 0;border-radius: 0;background: transparent;font-size: 10px; }
+    .container-preview-item .asset-badge { display: none; }
+    .container-preview-id { color: var(--container-ink);font-size: 10px; }
+    .container-preview-desc { margin: 0;color: var(--container-muted);font-size: 9px; }
+    .container-condition-list { display: flex;gap: 4px;flex-wrap: wrap; }
+    .container-condition-dot { display: inline-flex;align-items: center;gap: 4px;color: #526862;font-size: 9px;font-weight: 700; }
+    .container-condition-dot::before { width: 6px;height: 6px;border-radius: 50%;background: var(--condition-color);content: ''; }
+    .container-last-log { color: #334b44;font-size: 9px;font-weight: 700; }
+    .container-last-log span { display: block;margin-top: 2px;color: var(--container-muted);font-size: 8px;font-weight: 500; }
+    .container-card-actions { display: flex;justify-content: flex-end;gap: 3px;padding: 0;border: 0;flex-wrap: nowrap; }
+    .container-card-actions .inventory-icon-button { width: 29px;height: 29px;flex: none; }
+    .container-empty-state { border: 0;border-radius: 0;padding: 42px 18px;background: #fff; }
+    .container-empty-state > div:first-child[style*="font-size"] { display:none; }
+    .container-panel { padding:12px;border-color:var(--container-line);border-radius:7px;background:#f8fbfa; }
+    .container-panel-title { color:var(--container-ink);font-size:12px; }
+    .selected-container-assets-grid { gap:5px; }
+    .selected-container-chip { padding:7px 9px;border-color:#d6e6e0;border-left-color:var(--container-green);border-radius:6px; }
+    .selected-container-chip-id { color:var(--container-ink);font-size:11px; }
+    .selected-container-chip-desc { color:var(--container-muted);font-size:9px; }
+    .selected-container-chip button { width:25px;height:25px;border-radius:5px; }
+    .container-search-result { padding:8px 10px; }
+    .container-search-result:hover { background:#eef8f4; }
+    .container-assets-table-wrap { border-color:var(--container-line);border-radius:7px; }
+    .container-assets-table { font-size:10px; }
+    .container-assets-table th { padding:7px 9px;background:#f2f7f5;color:#62756f;font-size:9px; }
+    .container-assets-table td { padding:7px 9px;border-bottom-color:#e7eeec; }
+    @media (max-width: 980px) {
+      .container-list-head,.container-card-modern { grid-template-columns: minmax(130px,.8fr) minmax(210px,1.45fr) minmax(120px,.75fr) minmax(100px,.65fr) 104px; }
+      .container-list-head > :nth-child(4),.container-card-modern > :nth-child(4) { display: none; }
+    }
+    @media (max-width: 720px) {
+      .container-stats-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+      .container-stat-card { border-top: 1px solid var(--container-line); }
+      .container-stat-card:nth-child(-n+2) { border-top: 0; }
+      .container-stat-card:nth-child(even) { border-right: 0; }
+      .container-toolbar { grid-template-columns: 1fr; }
+      .container-toolbar > :last-child { text-align: left !important; }
+      .container-list-head { display: none; }
+      .container-cards-grid { border-radius: 7px; }
+      .container-card-modern { grid-template-columns: minmax(0,1fr) auto;gap: 8px;min-height: 0;padding: 11px; }
+      .container-card-modern > * { min-width: 0; }
+      .container-card-modern > :nth-child(2),.container-card-modern > :nth-child(3),.container-card-modern > :nth-child(4),.container-card-modern > :nth-child(5) { grid-column: 1; }
+      .container-card-modern > :nth-child(6) { grid-column: 2;grid-row: 1 / 6;align-self: center; }
+      .container-card-actions { flex-direction: column; }
+      .container-preview-list { padding: 5px 0; }
+    }
+  `;
+
   document.head.appendChild(style);
 }
 
 function getAssetFromCache(assetId) {
   if (!Array.isArray(assets)) return null;
-  return assets.find(a => a.id === assetId) || null;
+  if (assetLookupSource !== assets) {
+    assetLookupSource = assets;
+    assetLookupById = new Map();
+    assets.forEach(asset => {
+      if (!assetLookupById.has(asset.id)) assetLookupById.set(asset.id, asset);
+    });
+  }
+  return assetLookupById.get(assetId) || null;
 }
 
 function getContainerStats(containerList) {
@@ -9338,6 +10276,35 @@ function getContainerDepartments(container) {
   });
 
   return counts;
+}
+
+function getContainerConditionCounts(container) {
+  const counts = { available: 0, degraded: 0, ooc: 0, missing: 0, decommissioned: 0 };
+  (container.assetIds || []).forEach(assetId => {
+    const asset = getAssetFromCache(assetId);
+    if (!asset) {
+      counts.missing += 1;
+      return;
+    }
+    const condition = getAssetConditionStatus(asset);
+    counts[condition] = (counts[condition] || 0) + 1;
+  });
+  return counts;
+}
+
+function renderContainerConditionSummary(container) {
+  const visible = Object.entries(getContainerConditionCounts(container)).filter(([, count]) => count > 0);
+  if (!visible.length) return '<span class="container-last-log">No assets</span>';
+  return `<div class="container-condition-list">${visible.map(([condition, count]) => {
+    const meta = INVENTORY_CONDITION_META[condition] || INVENTORY_CONDITION_META.available;
+    return `<span class="container-condition-dot" style="--condition-color:${meta.color}" title="${escapeHtmlAttr(meta.label)}">${count} ${escapeHtml(meta.label)}</span>`;
+  }).join('')}</div>`;
+}
+
+function getContainerLatestMaintenance(container) {
+  return getMaintenanceLogRecords(container)
+    .slice()
+    .sort((a, b) => maintenanceLogDateSortValue(b.date) - maintenanceLogDateSortValue(a.date))[0] || null;
 }
 
 function containerMatchesSearch(container, term) {
@@ -9418,7 +10385,7 @@ function renderContainerPreview(container) {
 
   if (assetIds.length > 4) {
     html += `
-      <div style="color:#667eea;font-size:12px;font-weight:700;padding:2px 4px;">
+      <div style="color:#0f766e;font-size:9px;font-weight:800;padding-top:2px;">
         +${assetIds.length - 4} more asset(s)
       </div>
     `;
@@ -9434,66 +10401,58 @@ function renderContainerCards(containerList) {
 
   const searchTerm = document.getElementById('containerSearchInput')?.value.trim() || '';
   const sortBy = document.getElementById('containerSortSelect')?.value || 'id';
-
   const visible = sortContainerList(
-    containerList.filter(c => containerMatchesSearch(c, searchTerm)),
+    containerList.filter(container => containerMatchesSearch(container, searchTerm)),
     sortBy
   );
 
-  if (countLabel) {
-    countLabel.textContent = `${visible.length} of ${containerList.length} container(s)`;
-  }
-
-  if (visible.length === 0) {
+  if (countLabel) countLabel.textContent = `${visible.length} of ${containerList.length} containers`;
+  if (!visible.length) {
     root.innerHTML = `
-      <div class="container-empty-state" style="grid-column:1 / -1;">
-        <div style="font-size:34px;margin-bottom:8px;">🔍</div>
-        <div style="font-weight:800;color:#333;margin-bottom:4px;">No containers found</div>
-        <div>Try a different container ID, asset ID, brand, model, serial number, or department.</div>
-      </div>
-    `;
+      <div class="container-empty-state">
+        <div style="font-weight:800;color:#172b26;margin-bottom:5px">No containers found</div>
+        <div>Try another container ID, asset ID, brand, model, serial number, or department.</div>
+      </div>`;
     return;
   }
 
-  root.innerHTML = visible.map(container => {
+  root.innerHTML = `
+    <div class="container-list-head" aria-hidden="true">
+      <span>Container</span><span>Contents</span><span>Departments</span><span>Condition</span><span>Last maintenance</span><span>Actions</span>
+    </div>
+  ` + visible.map(container => {
     const deptCounts = getContainerDepartments(container);
-    const deptPills = Object.keys(deptCounts).sort().map(dept => {
-      return `<span class="container-meta-pill">${escapeHtml(dept)}: ${deptCounts[dept]}</span>`;
-    }).join('');
-
+    const deptPills = Object.keys(deptCounts).sort().map(department =>
+      `<span class="container-meta-pill">${escapeHtml(department)}: ${deptCounts[department]}</span>`
+    ).join('');
     const jsId = String(container.id).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     const serialNumber = getContainerSerialNumber(container);
     const maintenanceCount = getMaintenanceLogRecords(container).length;
+    const latestMaintenance = getContainerLatestMaintenance(container);
+    const assetCount = (container.assetIds || []).length;
 
     return `
       <div class="container-card-modern">
         <div class="container-card-top">
-          <div style="min-width:0;">
-          <div class="container-id-badge">
-            <span>📦</span>
-            <span>${escapeHtml(container.id)}</span>
-          </div>
+          <div class="container-id-badge">${inventoryIcon('box')}<span>${escapeHtml(container.id)}</span></div>
           ${serialNumber ? `<div class="container-serial-text">SN: ${escapeHtml(serialNumber)}</div>` : ''}
-          </div>
-          <div class="container-count-pill">${(container.assetIds || []).length} asset(s)</div>
         </div>
-
-        <div class="container-meta-row">
-          ${deptPills || '<span class="container-meta-pill">No assets</span>'}
-          <span class="container-meta-pill">${maintenanceCount} maintenance log${maintenanceCount === 1 ? '' : 's'}</span>
-        </div>
-
         <div class="container-preview-list">
+          <span class="container-count-pill">${assetCount} asset${assetCount === 1 ? '' : 's'}</span>
           ${renderContainerPreview(container)}
         </div>
-
-        <div class="container-card-actions">
-          <button class="btn btn-success btn-sm" onclick="openContainerMaintenanceModal('${jsId}')">Log Maintenance</button>
-          <button class="btn btn-secondary btn-sm" onclick="viewContainer('${jsId}')">View</button>
-          <button class="btn btn-primary btn-sm" onclick="editContainer('${jsId}')">Edit</button>
+        <div class="container-meta-row">${deptPills || '<span class="container-meta-pill">No departments</span>'}</div>
+        ${renderContainerConditionSummary(container)}
+        <div class="container-last-log">
+          ${latestMaintenance ? escapeHtml(inventoryMaintenanceDateText(latestMaintenance)) : 'No maintenance'}
+          <span>${maintenanceCount} log${maintenanceCount === 1 ? '' : 's'}</span>
         </div>
-      </div>
-    `;
+        <div class="container-card-actions">
+          <button class="inventory-icon-button" title="Log maintenance" aria-label="Log maintenance" onclick="openContainerMaintenanceModal('${jsId}')">${inventoryIcon('wrench')}</button>
+          <button class="inventory-icon-button" title="View container" aria-label="View container" onclick="viewContainer('${jsId}')">${inventoryIcon('eye')}</button>
+          <button class="inventory-icon-button" title="Edit container" aria-label="Edit container" onclick="editContainer('${jsId}')">${inventoryIcon('edit')}</button>
+        </div>
+      </div>`;
   }).join('');
 }
 
@@ -9562,7 +10521,7 @@ function renderContainerMaintenanceHistory(container) {
   const rows = records.map(log => `
     <tr>
       <td>${escapeHtml(log.date || '')}</td>
-      <td>${escapeHtml(log.user || '')}</td>
+      <td>${escapeHtml(maintenanceLogUserLabel(log))}</td>
       <td>${maintenanceLogTypeBadgeHtml(log.type)}</td>
       <td style="min-width:240px;">${escapeHtml(log.description || '')}</td>
       <td>${maintenanceMediaLinksHtml(log.media)}</td>
@@ -9833,13 +10792,6 @@ async function loadContainers() {
 
   root.innerHTML = `
     <div class="containers-dashboard">
-      <div class="container-hero">
-        <div class="container-hero-title">Container Management</div>
-        <div class="container-hero-subtitle">
-          Create, view, and edit containers. Search by container ID, asset ID, brand, model, serial number, or department.
-        </div>
-      </div>
-
       <div class="container-stats-grid">
         <div class="container-stat-card">
           <div class="container-stat-value" id="containersTotalCount">0</div>
@@ -9909,7 +10861,6 @@ async function loadContainers() {
     if (list.length === 0) {
       document.getElementById('containerCardsGrid').innerHTML = `
         <div class="container-empty-state" style="grid-column:1 / -1;">
-          <div style="font-size:38px;margin-bottom:8px;">📦</div>
           <div style="font-weight:800;color:#333;margin-bottom:4px;">No containers yet</div>
           <div style="margin-bottom:16px;">Create your first container to group assets like cases, racks, or kits.</div>
           <button class="btn btn-success" onclick="createContainer()">+ New Container</button>
@@ -9924,7 +10875,6 @@ async function loadContainers() {
   } catch (error) {
     root.innerHTML = `
       <div class="container-empty-state">
-        <div style="font-size:34px;margin-bottom:8px;">⚠️</div>
         <div style="font-weight:800;color:#333;margin-bottom:4px;">Failed to load containers</div>
         <div style="color:#a00;margin-bottom:14px;">${escapeHtml(error.message || String(error))}</div>
         <button class="btn btn-primary" onclick="loadContainers()">Retry</button>
@@ -10357,9 +11307,9 @@ async function viewContainer(containerId) {
       <div class="container-hero" style="margin-bottom:16px;">
         <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;">
           <div>
-            <div class="container-hero-title">📦 ${escapeHtml(c.id)}</div>
+            <div class="container-hero-title">${inventoryIcon('box')} ${escapeHtml(c.id)}</div>
             <div class="container-hero-subtitle">
-              ${(c.assetIds || []).length} asset(s) in this container${serialNumber ? ` • SN: ${escapeHtml(serialNumber)}` : ''}
+              ${(c.assetIds || []).length} asset(s) in this container${serialNumber ? `, SN: ${escapeHtml(serialNumber)}` : ''}
             </div>
           </div>
 
@@ -10452,46 +11402,214 @@ async function deleteContainer(containerId) {
   }
 }
 
-async function loadLogs() {
-  try {
-    const response = await apiCall("/api/logs");
-    logs = response.data;
+let systemLogViewState = { search: '', user: '', category: 'all' };
+let systemLogSearchTimer = null;
+let systemLogSearchFocusField = '';
 
-    const container = document.getElementById("logs-container");
-
-    if (logs.length === 0) {
-      container.innerHTML =
-        '<p style="text-align: center; color: #666; padding: 40px;">No logs found.</p>';
-      return;
+function ensureSystemLogStyles() {
+  if (document.getElementById('system-log-ui-styles')) return;
+  const style = document.createElement('style');
+  style.id = 'system-log-ui-styles';
+  style.textContent = `
+    #logs-section { --log-green:var(--brand-primary,#0f766e);--log-ink:#172b26;--log-muted:#64748b;--log-line:#dce7e3; }
+    #logs-section .content-header .btn-primary { border-color:var(--log-green);background:var(--log-green);color:#fff; }
+    #logs-section .content-header .btn-primary:hover { filter:brightness(.92); }
+    .system-log-shell { display:grid;gap:12px; }
+    .system-log-summary { display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border:1px solid var(--log-line);border-radius:7px;background:#fff;overflow:hidden; }
+    .system-log-stat { min-height:76px;padding:12px 14px;border-right:1px solid var(--log-line); }
+    .system-log-stat:last-child { border-right:0; }
+    .system-log-stat strong { display:block;color:var(--log-ink);font-size:21px;line-height:1.1; }
+    .system-log-stat span { display:block;margin-top:5px;color:var(--log-muted);font-size:10px;font-weight:700; }
+    .system-log-toolbar { padding:10px;border:1px solid var(--log-line);border-radius:7px;background:#f8fbfa; }
+    .system-log-search-row { display:grid;grid-template-columns:minmax(190px,1fr) minmax(150px,.45fr) auto;gap:8px;align-items:center; }
+    .system-log-input { width:100%;min-height:38px;padding:8px 11px;border:1px solid #cbdad5;border-radius:6px;background:#fff;color:var(--log-ink);font-size:12px; }
+    .system-log-input:focus { outline:0;border-color:var(--log-green);box-shadow:0 0 0 3px rgba(15,118,110,.12); }
+    .system-log-categories { display:flex;gap:5px;margin-top:9px;padding-top:9px;border-top:1px solid #e1eae7;overflow-x:auto; }
+    .system-log-category { flex:none;min-height:30px;padding:5px 9px;border:1px solid #d5e1dd;border-radius:5px;background:#fff;color:#536861;font:inherit;font-size:10px;font-weight:800;cursor:pointer; }
+    .system-log-category:hover,.system-log-category.active { border-color:var(--log-green);background:#e9f7f2;color:#17654f; }
+    .system-log-count { color:var(--log-muted);font-size:10px;font-weight:700;white-space:nowrap; }
+    .system-log-list { border:1px solid var(--log-line);border-radius:7px;background:#fff;overflow:hidden; }
+    .system-log-head,.system-log-row { display:grid;grid-template-columns:145px 120px 100px minmax(0,1fr);gap:10px;align-items:center; }
+    .system-log-list.with-company .system-log-head,.system-log-list.with-company .system-log-row { grid-template-columns:135px 90px 110px 90px minmax(0,1fr); }
+    .system-log-head { padding:7px 11px;border-bottom:1px solid var(--log-line);background:#f2f7f5;color:#62756f;font-size:9px;font-weight:800;text-transform:uppercase; }
+    .system-log-row { position:relative;min-height:45px;padding:6px 11px;color:#334b44;font-size:10px; }
+    .system-log-row + .system-log-row { border-top:1px solid #e7eeec; }
+    .system-log-row::before { position:absolute;left:0;top:9px;bottom:9px;width:3px;border-radius:0 3px 3px 0;background:var(--log-tone);content:''; }
+    .system-log-row:hover { background:#f8fbfa; }
+    .system-log-time strong { display:block;color:var(--log-ink);font-size:10px; }
+    .system-log-time span { display:block;margin-top:2px;color:var(--log-muted);font-size:9px; }
+    .system-log-user { min-width:0;color:var(--log-ink);font-weight:800;overflow-wrap:anywhere; }
+    .system-log-company { min-width:0;color:var(--log-ink);font-size:9px;font-weight:800;overflow-wrap:anywhere; }
+    .system-log-company span { display:block;margin-top:2px;color:var(--log-muted);font-size:8px;font-weight:600; }
+    .system-log-kind { display:inline-flex;width:max-content;max-width:100%;padding:3px 6px;border-radius:4px;background:var(--log-kind-bg);color:var(--log-kind-color);font-size:9px;font-weight:800; }
+    .system-log-action { line-height:1.35;overflow-wrap:anywhere; }
+    .system-log-empty { padding:42px 16px;text-align:center;color:var(--log-muted); }
+    @media(max-width:720px) {
+      .system-log-summary { grid-template-columns:repeat(2,minmax(0,1fr)); }
+      .system-log-stat { border-top:1px solid var(--log-line); }
+      .system-log-stat:nth-child(-n+2) { border-top:0; }
+      .system-log-stat:nth-child(even) { border-right:0; }
+      .system-log-search-row { grid-template-columns:1fr; }
+      .system-log-count { padding:2px 1px; }
+      .system-log-head { display:none; }
+      .system-log-row { grid-template-columns:minmax(0,1fr) auto;gap:6px;padding:10px 10px 10px 13px; }
+      .system-log-time { grid-column:1;grid-row:1; }
+      .system-log-kind { grid-column:2;grid-row:1; }
+      .system-log-user { grid-column:1 / -1;grid-row:2;font-size:9px; }
+      .system-log-company { grid-column:1 / -1;font-size:9px;color:var(--log-muted); }
+      .system-log-action { grid-column:1 / -1;grid-row:auto;font-size:10px; }
     }
+  `;
+  document.head.appendChild(style);
+}
 
-    let tableHTML = `
-            <table class="table">
-                <thead>
-                    <tr>
-                        <th>Timestamp</th>
-                        <th>User</th>
-                        <th>Action</th>
-                    </tr>
-                </thead>
-                <tbody>
-        `;
+function parseSystemLogTimestamp(value) {
+  const match = String(value || '').match(/^(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})[ T](\d{1,2}):(\d{2})(?::(\d{2}))?/);
+  if (!match) return new Date(value);
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]), Number(match[4]), Number(match[5]), Number(match[6] || 0));
+}
 
-    logs.forEach((log) => {
-      tableHTML += `
-                <tr>
-                    <td>${escapeHtml(log.timestamp)}</td>
-                    <td>${escapeHtml(log.user)}</td>
-                    <td>${escapeHtml(log.action)}</td>
-                </tr>
-            `;
+function systemLogCategory(log) {
+  const action = String(log?.action || '').toLowerCase();
+  if (/log(?:ged)? in|log(?:ged)? out|password|login attempt|user /.test(action)) return 'access';
+  if (/asset|inventory|container|maintenance|transfer|prepare|return/.test(action)) return 'inventory';
+  if (/event|planning|quotation|delivery order|packing list/.test(action)) return 'events';
+  if (/worker|vendor|manpower|transport|personnel/.test(action)) return 'workforce';
+  if (/invoice|claim|expense|payment|commission|finance/.test(action)) return 'finance';
+  if (/company|department|settings|logo|pdf/.test(action)) return 'settings';
+  return 'other';
+}
+
+function systemLogCategoryMeta(category) {
+  return ({
+    access: { label:'Access', color:'#2563a6', background:'#eaf3fb' },
+    inventory: { label:'Inventory', color:'#17654f', background:'#e9f7f2' },
+    events: { label:'Events', color:'#7a5c12', background:'#fff5d9' },
+    workforce: { label:'Workforce', color:'#8a4f12', background:'#fff0e2' },
+    finance: { label:'Finance', color:'#7850a5', background:'#f3ecfb' },
+    settings: { label:'Settings', color:'#536861', background:'#edf3f1' },
+    other: { label:'Other', color:'#64748b', background:'#f1f5f4' }
+  })[category] || { label:'Other', color:'#64748b', background:'#f1f5f4' };
+}
+
+function systemLogTone(action) {
+  const value = String(action || '').toLowerCase();
+  if (/failed|deleted|removed|cancelled|missing/.test(value)) return '#d84b52';
+  if (/created|added|uploaded|completed|accepted|paid|logged in/.test(value)) return '#159f6a';
+  if (/updated|changed|edited|assigned|prepared|returned/.test(value)) return '#1594ad';
+  return '#94a3b8';
+}
+
+function setSystemLogCategory(category) {
+  systemLogViewState.category = category || 'all';
+  renderSystemLogs();
+}
+
+function scheduleSystemLogSearch(field, value) {
+  systemLogViewState[field] = value;
+  systemLogSearchFocusField = field;
+  clearTimeout(systemLogSearchTimer);
+  systemLogSearchTimer = setTimeout(renderSystemLogs, 120);
+}
+
+function renderSystemLogs() {
+  const container = document.getElementById('logs-container');
+  if (!container) return;
+  ensureSystemLogStyles();
+
+  const allLogs = Array.isArray(logs) ? logs : [];
+  const showCompany = isOwnerUser();
+  const search = String(systemLogViewState.search || '').trim().toLowerCase();
+  const userSearch = String(systemLogViewState.user || '').trim().toLowerCase();
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const todayCount = allLogs.filter(log => parseSystemLogTimestamp(log.timestamp) >= startOfToday).length;
+  const recentCount = allLogs.filter(log => now - parseSystemLogTimestamp(log.timestamp) <= 24 * 60 * 60 * 1000).length;
+  const userCount = new Set(allLogs.map(log => String(log.user || '').trim()).filter(Boolean)).size;
+  const categories = ['all','access','inventory','events','workforce','finance','settings','other'];
+  const categoryCounts = allLogs.reduce((counts, log) => {
+    const category = systemLogCategory(log);
+    counts[category] = (counts[category] || 0) + 1;
+    return counts;
+  }, {});
+  const visible = allLogs.filter(log => {
+    const category = systemLogCategory(log);
+    const matchesCategory = systemLogViewState.category === 'all' || category === systemLogViewState.category;
+    const matchesSearch = !search || `${log.timestamp || ''} ${log.companyCode || ''} ${log.companyName || ''} ${log.user || ''} ${log.action || ''}`.toLowerCase().includes(search);
+    const matchesUser = !userSearch || String(log.user || '').toLowerCase().includes(userSearch);
+    return matchesCategory && matchesSearch && matchesUser;
+  });
+
+  container.innerHTML = `
+    <div class="system-log-shell">
+      <div class="system-log-summary">
+        <div class="system-log-stat"><strong>${allLogs.length}</strong><span>Total recorded activity</span></div>
+        <div class="system-log-stat"><strong>${todayCount}</strong><span>Actions today</span></div>
+        <div class="system-log-stat"><strong>${recentCount}</strong><span>Last 24 hours</span></div>
+        <div class="system-log-stat"><strong>${userCount}</strong><span>Users represented</span></div>
+      </div>
+      <div class="system-log-toolbar">
+        <div class="system-log-search-row">
+          <input id="systemLogSearch" class="system-log-input" type="search" value="${escapeHtmlAttr(systemLogViewState.search)}" placeholder="Search user, action, or timestamp" aria-label="Search system logs">
+          <input id="systemLogUserSearch" class="system-log-input" type="search" value="${escapeHtmlAttr(systemLogViewState.user)}" placeholder="Filter by user" aria-label="Filter logs by user">
+          <span class="system-log-count">${visible.length} of ${allLogs.length} entries</span>
+        </div>
+        <div class="system-log-categories" aria-label="Log categories">
+          ${categories.map(category => {
+            const label = category === 'all' ? 'All activity' : systemLogCategoryMeta(category).label;
+            const count = category === 'all' ? allLogs.length : (categoryCounts[category] || 0);
+            return `<button type="button" class="system-log-category${systemLogViewState.category === category ? ' active' : ''}" onclick="setSystemLogCategory('${category}')">${label} ${count}</button>`;
+          }).join('')}
+        </div>
+      </div>
+      <div class="system-log-list${showCompany ? ' with-company' : ''}">
+        <div class="system-log-head" aria-hidden="true"><span>Timestamp</span>${showCompany ? '<span>Company</span>' : ''}<span>User</span><span>Area</span><span>Action</span></div>
+        <div id="systemLogRows">
+          ${visible.length ? visible.map(log => {
+            const date = parseSystemLogTimestamp(log.timestamp);
+            const category = systemLogCategory(log);
+            const meta = systemLogCategoryMeta(category);
+            const validDate = !Number.isNaN(date.getTime());
+            return `<article class="system-log-row" style="--log-tone:${systemLogTone(log.action)};--log-kind-color:${meta.color};--log-kind-bg:${meta.background}">
+              <div class="system-log-time"><strong>${validDate ? escapeHtml(date.toLocaleDateString('en-SG',{day:'numeric',month:'short',year:'numeric'})) : escapeHtml(log.timestamp || 'Unknown date')}</strong><span>${validDate ? escapeHtml(date.toLocaleTimeString('en-SG',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false})) : ''}</span></div>
+              ${showCompany ? `<div class="system-log-company"><strong>${escapeHtml(log.companyCode || '')}</strong><span>${escapeHtml(log.companyName || '')}</span></div>` : ''}
+              <div class="system-log-user">${escapeHtml(log.user || 'System')}</div>
+              <span class="system-log-kind">${escapeHtml(meta.label)}</span>
+              <div class="system-log-action">${escapeHtml(log.action || '')}</div>
+            </article>`;
+          }).join('') : '<div class="system-log-empty"><strong>No matching activity</strong><div style="margin-top:5px">Adjust the search or category filter.</div></div>'}
+        </div>
+      </div>
+    </div>`;
+
+  const mainSearch = document.getElementById('systemLogSearch');
+  const userSearchInput = document.getElementById('systemLogUserSearch');
+  mainSearch?.addEventListener('input', event => {
+    scheduleSystemLogSearch('search', event.target.value);
+  });
+  userSearchInput?.addEventListener('input', event => scheduleSystemLogSearch('user', event.target.value));
+  if (systemLogSearchFocusField) {
+    const id = systemLogSearchFocusField === 'user' ? 'systemLogUserSearch' : 'systemLogSearch';
+    systemLogSearchFocusField = '';
+    requestAnimationFrame(() => {
+      const input = document.getElementById(id);
+      input?.focus();
+      input?.setSelectionRange(input.value.length, input.value.length);
     });
+  }
+}
 
-    tableHTML += "</tbody></table>";
-    container.innerHTML = tableHTML;
+async function loadLogs() {
+  const container = document.getElementById('logs-container');
+  if (!container) return;
+  ensureSystemLogStyles();
+  container.innerHTML = '<div class="loading">Loading system activity...</div>';
+  try {
+    const response = await apiCall('/api/logs');
+    logs = Array.isArray(response.data) ? response.data : [];
+    renderSystemLogs();
   } catch (error) {
-    document.getElementById("logs-container").innerHTML =
-      '<p style="color: red; text-align: center;">Error loading logs</p>';
+    container.innerHTML = `<div class="system-log-empty"><strong>Could not load system logs</strong><div style="margin:5px 0 12px">${escapeHtml(error.message || 'Please try again.')}</div><button type="button" class="btn btn-primary" onclick="loadLogs()">Retry</button></div>`;
   }
 }
 
@@ -10836,7 +11954,7 @@ function getFilteredMaintenanceReportRows() {
         const rowAssetId = String(row.assetId || '').toLowerCase();
         if (!filters.assetIds.includes(rowAssetId)) return false;
       }
-      if (filters.user && row.log.user !== filters.user) return false;
+      if (filters.user && maintenanceLogUserLabel(row.log) !== filters.user) return false;
       if (filters.location && row.location !== filters.location) return false;
       if (filters.noTypesSelected) return false;
       if (filters.typeFilterActive && !filters.types.includes(row.type)) return false;
@@ -10850,7 +11968,7 @@ function getFilteredMaintenanceReportRows() {
 
 function populateMaintenanceReportFilters() {
   const rows = getAllMaintenanceReportRows();
-  const users = Array.from(new Set(rows.map(row => row.log.user).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+  const users = Array.from(new Set(rows.map(row => maintenanceLogUserLabel(row.log)).filter(Boolean))).sort((a, b) => a.localeCompare(b));
   const userSelect = document.getElementById('maintenanceReportUserFilter');
   if (userSelect) {
     const selected = userSelect.value;
@@ -10907,6 +12025,17 @@ function populateMaintenanceReportFilters() {
 
 function renderMaintenanceReportPreview() {
   const rows = getFilteredMaintenanceReportRows();
+  const summary = document.getElementById('maintenance-report-summary');
+  if (summary) {
+    const assetCount = new Set(rows.map(row => row.assetId).filter(Boolean)).size;
+    const userCount = new Set(rows.map(row => row.log?.user).filter(Boolean)).size;
+    const cost = rows.reduce((total, row) => total + (Number(formatMaintenanceCost(row.log?.cost) || 0) || 0), 0);
+    summary.innerHTML = `
+      <div class="mr-summary-item"><strong>${rows.length}</strong><span>Matching maintenance logs</span></div>
+      <div class="mr-summary-item"><strong>${assetCount}</strong><span>Assets represented</span></div>
+      <div class="mr-summary-item"><strong>${userCount}</strong><span>Users represented</span></div>
+      <div class="mr-summary-item"><strong>${cost ? `$${cost.toFixed(2)}` : '-'}</strong><span>Recorded maintenance cost</span></div>`;
+  }
   const previewText = document.getElementById('maintenanceReportPreview');
   if (previewText) {
     previewText.textContent = `${rows.length} maintenance log${rows.length === 1 ? '' : 's'} selected`;
@@ -10922,7 +12051,7 @@ function renderMaintenanceReportPreview() {
 
   const previewRows = rows.slice(0, 60);
   container.innerHTML = `
-    <table class="table">
+    <table class="maintenance-report-table">
       <thead>
         <tr>
           <th>Date</th>
@@ -10937,13 +12066,13 @@ function renderMaintenanceReportPreview() {
       <tbody>
         ${previewRows.map(row => `
           <tr>
-            <td>${escapeHtml(maintenanceReportDateForDisplay(row.log.date))}</td>
-            <td>${escapeHtml(row.assetId)}</td>
-            <td>${escapeHtml(row.location)}</td>
-            <td>${maintenanceLogTypeBadgeHtml(row.type)}</td>
-            <td>${escapeHtml(row.log.user)}</td>
-            <td>${escapeHtml(row.log.description)}</td>
-            <td>${maintenanceCostDisplayHtml(row.log.cost)}</td>
+            <td data-label="Date">${escapeHtml(maintenanceReportDateForDisplay(row.log.date))}</td>
+            <td data-label="Asset ID">${escapeHtml(row.assetId)}</td>
+            <td data-label="Location">${escapeHtml(row.location)}</td>
+            <td data-label="Type">${maintenanceLogTypeBadgeHtml(row.type)}</td>
+            <td data-label="User">${escapeHtml(maintenanceLogUserLabel(row.log))}</td>
+            <td data-label="Description">${escapeHtml(row.log.description)}</td>
+            <td data-label="Cost">${maintenanceCostDisplayHtml(row.log.cost)}</td>
           </tr>
         `).join('')}
       </tbody>
@@ -11072,7 +12201,7 @@ function maintenanceReportRowHtml(row, rowNumber) {
       <td><strong>${safe(row.assetId)}</strong><br>${safe(assetText || '-')}</td>
       <td class="maintenance-location-pdf">${safe(row.location || '-')}</td>
       <td class="maintenance-type-pdf">${maintenanceLogTypePdfBadgeHtml(row.type)}</td>
-      <td>${safe(row.log.user)}</td>
+      <td>${safe(maintenanceLogUserLabel(row.log))}</td>
       <td>${safe(row.log.description)}</td>
       <td class="maintenance-cost-pdf">${maintenanceCostDisplayHtml(row.log.cost)}</td>
       <td>${changesText}</td>
@@ -12386,24 +13515,6 @@ function handleCustomAssetClick(event) {
     }
 }
 
-function generateActionButton(eventId, asset, isPrepared) {
-    const safeAssetId = encodeURIComponent(asset.id);
-    
-    if (isPrepared) {
-        return `<button class="btn btn-warning asset-action-btn" 
-                        data-event-id="${eventId}" 
-                        data-asset-id="${safeAssetId}" 
-                        data-action="unprepare"
-                        style="padding: 4px 8px; font-size: 11px; margin-right: 5px;">Unprepare</button>`;
-    } else {
-        return `<button class="btn btn-success asset-action-btn" 
-                        data-event-id="${eventId}" 
-                        data-asset-id="${safeAssetId}" 
-                        data-action="prepare"
-                        style="padding: 4px 8px; font-size: 11px; margin-right: 5px;">Prepare</button>`;
-    }
-}
-
 // Add function to handle adding custom assets in prepare modal
 async function addAndPrepareCustomAsset(eventId) {
     const nameInput = document.getElementById("prepareCustomAssetName");
@@ -13692,13 +14803,13 @@ function eventDetailsActionsHtml(eventId) {
           ${eventDetailsActionIconSvg('edit')}
         </button>
       ` : ''}
-      <button type="button"
+      ${canCurrentUserManageRoles() ? `<button type="button"
               class="event-detail-icon-button event-detail-icon-logs"
               title="View event activity"
               aria-label="View event activity"
-              onclick="openEventActivityLog(${id})">
+              onclick="openEventLogs(${id})">
         ${eventDetailsActionIconSvg('logs')}
-      </button>
+      </button>` : ''}
     </div>
   `;
 }
@@ -13717,7 +14828,7 @@ function eventActivityCategory(log) {
   if (action.includes('return') || action.includes('closed event')) {
     return 'return';
   }
-  if (['prepared', 'unprepared', 'assigned specific asset', 'assigned custom asset', 'assigned asset', 'unassigned', 'collected loan', 'uncollected loan']
+  if (['prepared', 'unprepared', 'assigned to event', 'assigned specific asset', 'assigned custom asset', 'assigned asset', 'unassigned', 'collected loan', 'uncollected loan']
     .some(term => action.includes(term))) {
     return 'prepare';
   }
@@ -13824,6 +14935,7 @@ function renderEventActivityLog(event) {
 }
 
 async function openEventActivityLog(eventId) {
+  if (!canCurrentUserManageRoles()) return;
   const modal = ensureEventActivityModal();
   const list = modal.querySelector('#eventActivityList');
   const subtitle = modal.querySelector('#eventActivitySubtitle');
@@ -13832,8 +14944,13 @@ async function openEventActivityLog(eventId) {
   openModal('eventActivityModal');
 
   try {
-    const response = await apiCall(`/api/events/${Number(eventId)}`);
-    renderEventActivityLog(response.data || {});
+    const response = await apiCall(`/api/events/${Number(eventId)}/logs`);
+    const payload = response.data || {};
+    renderEventActivityLog({
+      id: payload.eventId,
+      name: payload.eventName,
+      eventLogs: payload.logs || [],
+    });
   } catch (error) {
     if (list) {
       list.innerHTML = `
@@ -14719,7 +15836,387 @@ async function openManualTransferModal() {
   openModal('transferModal');
 }
 
-async function viewEvent(eventId) {
+function eventOverviewIcon(kind) {
+  const paths = {
+    calendar: '<rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M8 3v4M16 3v4M3 10h18"></path>',
+    location: '<path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0z"></path><circle cx="12" cy="10" r="2.5"></circle>',
+    assets: '<path d="M4 7l8-4 8 4-8 4zM4 7v10l8 4 8-4V7M12 11v10"></path>',
+    people: '<circle cx="9" cy="8" r="3"></circle><path d="M3 20c0-4 2-7 6-7s6 3 6 7M16 4a3 3 0 0 1 0 6M17 13c2.7.5 4 2.8 4 6"></path>',
+    truck: '<path d="M3 6h11v10H3zM14 10h4l3 3v3h-7z"></path><circle cx="7" cy="18" r="2"></circle><circle cx="18" cy="18" r="2"></circle>',
+    note: '<path d="M5 3h14v18H5zM8 8h8M8 12h8M8 16h5"></path>',
+    file: '<path d="M6 3h8l4 4v14H6zM14 3v5h5"></path>',
+    logs: '<path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5"></path>',
+    edit: '<path d="m4 20 4.5-1 10-10-3.5-3.5-10 10zM13.5 7l3.5 3.5"></path>',
+    plan: '<path d="M4 4h16v16H4zM8 8h8M8 12h6M8 16h4"></path>',
+    prepare: '<path d="M4 12l5 5L20 6"></path>',
+    return: '<path d="M9 7l-5 5 5 5M4 12h16"></path>',
+    delivery: '<path d="M3 6h11v10H3zM14 10h4l3 3v3h-7z"></path><circle cx="7" cy="18" r="2"></circle><circle cx="18" cy="18" r="2"></circle>'
+  };
+  return `<svg viewBox="0 0 24 24" aria-hidden="true">${paths[kind] || paths.file}</svg>`;
+}
+
+function eventOverviewFormatDate(value) {
+  if (!value) return 'Date not set';
+  const clean = String(value).replace(/\//g, '-');
+  const date = new Date(`${clean}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleDateString('en-SG', { day: 'numeric', month: 'long', year: 'numeric' });
+}
+
+function eventOverviewDateRange(event) {
+  const start = eventOverviewFormatDate(event.startDate);
+  const end = eventOverviewFormatDate(event.endDate);
+  return event.startDate === event.endDate ? start : `${start} - ${end}`;
+}
+
+function eventOverviewSection(kind, title, subtitle, body, options = {}) {
+  const subtitleId = options.subtitleId
+    ? ` id="${escapeHtmlAttr(options.subtitleId)}"`
+    : '';
+  return `<section class="event-overview-section">
+    <header class="event-overview-section-head"><div class="event-overview-section-title">
+      <span class="event-overview-section-icon">${eventOverviewIcon(kind)}</span>
+      <div><h3>${escapeHtml(title)}</h3>${subtitle ? `<small${subtitleId}>${escapeHtml(subtitle)}</small>` : ''}</div>
+    </div></header><div class="event-overview-section-body">${body}</div>
+  </section>`;
+}
+
+function eventOverviewAssignedAssetPills(model) {
+  const rows = (model.assignedAssets || []).filter(asset => asset?.id).slice(0, 10);
+  if (!rows.length) return '';
+  const more = Math.max(0, (model.assignedAssets || []).length - rows.length);
+  return `<div class="event-overview-pills">${rows.map(asset =>
+    `<span class="event-overview-pill">${escapeHtml(asset.displayId || asset.id)}</span>`
+  ).join('')}${more ? `<span class="event-overview-pill">+${more} more</span>` : ''}</div>`;
+}
+
+function eventOverviewAssets(event) {
+  const groups = Object.values(event.modelGroups || {});
+  if (groups.length) {
+    const byDepartment = {};
+    groups.forEach(group => (byDepartment[group.department || 'UN'] ||= []).push(group));
+    return Object.entries(byDepartment).sort(([a], [b]) => a.localeCompare(b)).map(([department, rows]) => {
+      const requiredTotal = rows.reduce((sum, row) => sum + Number(row.requiredQuantity || 0), 0);
+      const preparedTotal = rows.reduce((sum, row) => sum + Number(row.countablePreparedQuantity ?? getPreparedQuantity(row) ?? 0), 0);
+      return `<div class="event-overview-department">
+        <div class="event-overview-dept-head"><strong>${escapeHtml(department)} Department</strong><span>${preparedTotal} / ${requiredTotal} prepared</span></div>
+        ${rows.sort((a, b) => `${a.brand} ${a.model}`.localeCompare(`${b.brand} ${b.model}`)).map(row => {
+          const required = Number(row.requiredQuantity || 0);
+          const prepared = Number(row.countablePreparedQuantity ?? getPreparedQuantity(row) ?? 0);
+          const returned = Number(row.countableReturnedQuantity || 0);
+          return `<div class="event-overview-asset-row">
+            <div class="event-overview-asset-name"><strong>${escapeHtml([row.brand, row.model].filter(Boolean).join(' ') || 'Asset')}</strong><small>${escapeHtml(row.description || '')}</small>${eventOverviewAssignedAssetPills(row)}</div>
+            <div class="event-overview-count"><strong>${required}</strong><span>Required</span></div>
+            <div class="event-overview-count"><strong>${prepared}</strong><span>Prepared</span></div>
+            <div class="event-overview-count"><strong>${returned}</strong><span>Returned</span></div>
+          </div>`;
+        }).join('')}</div>`;
+    }).join('');
+  }
+
+  const byDepartment = event.assetsByDepartment || {};
+  const sections = Object.entries(byDepartment).map(([department, rows]) => {
+    const assets = (rows || []).filter(asset => asset?.id && !String(asset.id).startsWith('[MODEL]'));
+    if (!assets.length) return '';
+    return `<div class="event-overview-department"><div class="event-overview-dept-head"><strong>${escapeHtml(department)} Department</strong><span>${assets.length} assigned</span></div>
+      <div class="event-overview-pills">${assets.map(asset => `<span class="event-overview-pill">${escapeHtml(asset.displayId || customAssetLabelFromId(asset.id, asset))}</span>`).join('')}</div></div>`;
+  }).filter(Boolean).join('');
+  return sections || '<div class="event-overview-empty">No assets have been planned for this event.</div>';
+}
+
+function eventOverviewCrew(crew) {
+  if (!crew.length) return '<div class="event-overview-empty">No manpower or vendors assigned.</div>';
+  return `<div class="event-overview-crew">${crew.map(row => {
+    const dates = (row.workDates || []).map(eventOverviewFormatDate).join(', ');
+    const quantity = row.subjectType === 'vendor' && Number(row.pax || 0) > 0 ? ` · ${Number(row.pax)} pax` : '';
+    return `<div class="event-overview-person"><strong>${escapeHtml(row.name || 'Unassigned')}</strong><span>${escapeHtml(row.department || 'General')} · ${escapeHtml(row.role || 'Worker')}${quantity}</span><span>${escapeHtml(dates || `${Number(row.days || 0)} day assignment`)}</span></div>`;
+  }).join('')}</div>`;
+}
+
+function eventOverviewTransport(rows) {
+  if (!rows.length) return '<div class="event-overview-empty">No transport booked for this event.</div>';
+  return rows.map(row => {
+    const vehicle = [row.vehicleType, row.vehicleNumber].filter(Boolean).join(' · ');
+    const operator = [row.company, row.driver].filter(Boolean).join(' / ');
+    const outbound = `${eventOverviewFormatDate(row.departDate)}${row.departTime ? `, ${row.departTime}` : ''}`;
+    const returning = row.twoWay ? `${eventOverviewFormatDate(row.returnDate)}${row.returnTime ? `, ${row.returnTime}` : ''}` : '';
+    return `<div class="event-overview-trip"><strong>${escapeHtml(row.locationFrom || 'Origin TBC')} → ${escapeHtml(row.locationTo || 'Destination TBC')}</strong><span>${escapeHtml(outbound)}${returning ? ` · Return ${escapeHtml(returning)}` : ''}</span><span>${escapeHtml([vehicle, operator, row.contactNumber].filter(Boolean).join(' · '))}</span></div>`;
+  }).join('');
+}
+
+function eventOverviewFiles(event) {
+  const files = event.files || [];
+  if (!files.length) return '<div class="event-overview-empty">No files uploaded.</div>';
+  return files.map(file => {
+    const name = String(file.name || 'Event file');
+    const url = file.downloadUrl || `/api/events/${event.id}/files/${encodeURIComponent(name)}`;
+    const deleteButton = isAdminUser()
+      ? `<button type="button" class="event-overview-file-delete" title="Delete file" aria-label="Delete ${escapeHtmlAttr(name)}" onclick="deleteEventFile(${Number(event.id)}, '${escapeJs(name)}')">&times;</button>`
+      : '';
+    return `<div class="event-overview-file"><div><strong>${escapeHtml(name)}</strong><span>${formatEventFileSize(file.size || 0)}${file.modifiedAt ? ` · ${escapeHtml(formatEventFileModified(file.modifiedAt))}` : ''}</span></div><div class="event-overview-file-actions"><a href="${escapeHtmlAttr(url)}">Download</a>${deleteButton}</div></div>`;
+  }).join('');
+}
+
+function eventOverviewNotesEditor(event) {
+  const eventId = Number(event.id);
+  const notes = String(event.notes || '');
+  return `<div class="event-overview-notes-editor">
+    <textarea id="eventOverviewNotes-${eventId}" class="event-overview-notes"
+              maxlength="50000" data-event-id="${eventId}" data-dirty="false"
+              placeholder="Add notes or special requirements for this event..."
+              oninput="eventOverviewNotesChanged(this)"
+              onblur="eventOverviewFlushNotesSave()">${escapeHtml(notes)}</textarea>
+    <div class="event-overview-notes-footer">
+      <span id="eventOverviewNotesState-${eventId}">Saved</span>
+      <span id="eventOverviewNotesCount-${eventId}">${notes.length}/50000</span>
+    </div>
+  </div>`;
+}
+
+function eventOverviewFilesPanel(event) {
+  const eventId = Number(event.id);
+  return `<div class="event-overview-files-panel">
+    <input id="eventOverviewFileInput-${eventId}" class="event-overview-file-input"
+           type="file" multiple onchange="eventOverviewUploadFiles(${eventId}, this.files)">
+    <label id="eventOverviewFileDropzone-${eventId}" class="event-overview-file-dropzone"
+           for="eventOverviewFileInput-${eventId}">
+      <span class="event-overview-file-drop-icon">${eventOverviewIcon('file')}</span>
+      <span><strong>Drop files here</strong><small id="eventOverviewUploadState-${eventId}">or choose files</small></span>
+    </label>
+    <div id="eventOverviewFilesList-${eventId}" class="event-overview-files-list">
+      ${eventOverviewFiles(event)}
+    </div>
+  </div>`;
+}
+
+var eventOverviewNotesSaveTimer = null;
+var eventOverviewPendingNotesSave = null;
+var eventOverviewNotesSaveInFlight = null;
+
+function eventOverviewNotesChanged(textarea) {
+  const eventId = Number(textarea?.dataset?.eventId || window.currentViewedEventId);
+  const notes = String(textarea?.value || '');
+  if (!eventId) return;
+
+  textarea.dataset.dirty = 'true';
+  const counter = document.getElementById(`eventOverviewNotesCount-${eventId}`);
+  const state = document.getElementById(`eventOverviewNotesState-${eventId}`);
+  if (counter) counter.textContent = `${notes.length}/50000`;
+  if (state) state.textContent = 'Unsaved changes';
+
+  eventOverviewPendingNotesSave = { eventId, notes };
+  clearTimeout(eventOverviewNotesSaveTimer);
+  eventOverviewNotesSaveTimer = setTimeout(eventOverviewFlushNotesSave, 700);
+}
+
+async function eventOverviewFlushNotesSave() {
+  clearTimeout(eventOverviewNotesSaveTimer);
+  eventOverviewNotesSaveTimer = null;
+  if (eventOverviewNotesSaveInFlight) return eventOverviewNotesSaveInFlight;
+  if (!eventOverviewPendingNotesSave?.eventId) return;
+
+  const runSaveQueue = async () => {
+    while (eventOverviewPendingNotesSave?.eventId) {
+      const pending = eventOverviewPendingNotesSave;
+      eventOverviewPendingNotesSave = null;
+      const state = document.getElementById(`eventOverviewNotesState-${pending.eventId}`);
+      if (state) state.textContent = 'Saving...';
+
+      try {
+        const response = await apiCall(
+          `/api/events/${pending.eventId}/notes`,
+          'PUT',
+          { notes: pending.notes }
+        );
+        const textarea = document.getElementById(`eventOverviewNotes-${pending.eventId}`);
+        const hasNewerEdit = eventOverviewPendingNotesSave?.eventId === pending.eventId;
+        if (!hasNewerEdit && textarea?.value === pending.notes) {
+          textarea.dataset.dirty = 'false';
+          if (state) state.textContent = 'Saved';
+          if (window.currentEventData && Number(window.currentEventData.id) === pending.eventId) {
+            window.currentEventData.notes = response.data?.notes ?? pending.notes;
+          }
+        }
+      } catch (error) {
+        if (!eventOverviewPendingNotesSave) eventOverviewPendingNotesSave = pending;
+        if (state) state.textContent = 'Save failed';
+        break;
+      }
+    }
+  };
+
+  const savePromise = runSaveQueue();
+  eventOverviewNotesSaveInFlight = savePromise;
+  try {
+    await savePromise;
+  } finally {
+    if (eventOverviewNotesSaveInFlight === savePromise) {
+      eventOverviewNotesSaveInFlight = null;
+    }
+  }
+}
+
+function eventOverviewBindFileDropzone(eventId) {
+  const dropzone = document.getElementById(`eventOverviewFileDropzone-${eventId}`);
+  if (!dropzone || dropzone.dataset.dropBound === 'true') return;
+  dropzone.dataset.dropBound = 'true';
+
+  ['dragenter', 'dragover'].forEach(type => dropzone.addEventListener(type, dragEvent => {
+    dragEvent.preventDefault();
+    dragEvent.stopPropagation();
+    if (!dropzone.classList.contains('is-uploading')) dropzone.classList.add('drag-active');
+  }));
+  ['dragleave', 'dragend'].forEach(type => dropzone.addEventListener(type, dragEvent => {
+    dragEvent.preventDefault();
+    dragEvent.stopPropagation();
+    if (type === 'dragend' || !dropzone.contains(dragEvent.relatedTarget)) {
+      dropzone.classList.remove('drag-active');
+    }
+  }));
+  dropzone.addEventListener('drop', dragEvent => {
+    dragEvent.preventDefault();
+    dragEvent.stopPropagation();
+    dropzone.classList.remove('drag-active');
+    if (!dropzone.classList.contains('is-uploading')) {
+      eventOverviewUploadFiles(eventId, dragEvent.dataTransfer?.files || []);
+    }
+  });
+}
+
+function eventOverviewUpdateFiles(eventId, files) {
+  const safeFiles = Array.isArray(files) ? files : [];
+  const event = { id: Number(eventId), files: safeFiles };
+  const list = document.getElementById(`eventOverviewFilesList-${eventId}`);
+  const count = document.getElementById(`eventOverviewFilesCount-${eventId}`);
+  if (list) list.innerHTML = eventOverviewFiles(event);
+  if (count) count.textContent = `${safeFiles.length} uploaded`;
+  if (window.currentEventData && Number(window.currentEventData.id) === Number(eventId)) {
+    window.currentEventData.files = safeFiles;
+  }
+}
+
+async function eventOverviewUploadFiles(eventId, fileList) {
+  await uploadEventFileSelection(eventId, fileList);
+}
+
+async function refreshEventOverviewNotesAndFiles(eventId, topics) {
+  const topicSet = new Set(topics || []);
+  const viewingEvent = activeModal('eventDetailsModal') &&
+    Number(window.currentViewedEventId) === Number(eventId);
+  const planningEvent = document.getElementById('plan-section')?.classList.contains('active') &&
+    Number(planPageState.eventId) === Number(eventId);
+  if (!viewingEvent && !planningEvent) return;
+
+  const response = await apiCall(`/api/events/${eventId}`);
+  const event = response.data;
+  if (!event) return;
+
+  if (viewingEvent && topicSet.has('event-files')) {
+    eventOverviewUpdateFiles(eventId, event.files || []);
+  }
+  if (viewingEvent && topicSet.has('event-notes')) {
+    const textarea = document.getElementById(`eventOverviewNotes-${eventId}`);
+    if (textarea && textarea.dataset.dirty !== 'true' && document.activeElement !== textarea) {
+      textarea.value = String(event.notes || '');
+      const counter = document.getElementById(`eventOverviewNotesCount-${eventId}`);
+      const state = document.getElementById(`eventOverviewNotesState-${eventId}`);
+      if (counter) counter.textContent = `${textarea.value.length}/50000`;
+      if (state) state.textContent = 'Updated';
+    }
+    if (window.currentEventData) window.currentEventData.notes = event.notes || '';
+  }
+  if (planningEvent && topicSet.has('event-notes')) {
+    const textarea = document.getElementById('planEventNotes');
+    const hasLocalEdit = planPendingNotesSave?.eventId === Number(eventId);
+    if (textarea && !hasLocalEdit && document.activeElement !== textarea) {
+      textarea.value = String(event.notes || '');
+      const counter = document.getElementById('planNotesCharacterCount');
+      const state = document.getElementById('planNotesSaveState');
+      if (counter) counter.textContent = `${textarea.value.length}/50000`;
+      if (state) state.textContent = 'Updated';
+      planPageState.event.notes = event.notes || '';
+    }
+  }
+}
+
+function eventOverviewInternalUsers(event) {
+  const rows = event.assignedUsers || [];
+  if (!rows.length) return '<div class="event-overview-empty">No internal users assigned.</div>';
+  return `<div class="event-overview-internal-users">${rows.map(row => `<span class="event-overview-pill">${escapeHtml(eventAssigneeDisplayName(row) || row.username || 'User')} · ${escapeHtml(row.roleLabel || row.role || 'User')}</span>`).join('')}</div>`;
+}
+
+function eventOverviewNavigate(kind, eventId) {
+  eventOverviewFlushNotesSave();
+  closeModal('eventDetailsModal');
+  if (kind === 'plan') return openEventPlanning(eventId);
+  if (kind === 'prepare') return openPrepareWorkspaceForEvent(eventId);
+  if (kind === 'manpower' && typeof openEventWorkforce === 'function') return openEventWorkforce(eventId);
+  if (kind === 'return') return openReturnWorkspaceForEvent(eventId);
+  if (kind === 'delivery') return openDeliveryOrderTab(eventId);
+  if (kind === 'packing') return openPackingListPage(eventId);
+}
+
+function closeEventOverview(options = {}) {
+  eventOverviewFlushNotesSave();
+  closeModal('eventDetailsModal');
+  if (options.updateHistory !== false && /^\/events\/\d+$/.test(window.location.pathname)) {
+    updateAppDetailHistory('/events', options.replaceHistory === true);
+  }
+}
+
+async function viewEvent(eventId, options = {}) {
+  const contentRoot = document.getElementById('eventDetailsContent');
+  try {
+    window.currentViewedEventId = eventId;
+    window.currentEventDetailsMode = 'view';
+    window.currentEventId = eventId;
+    if (contentRoot) contentRoot.innerHTML = '<div class="loading">Loading event overview...</div>';
+    openModal('eventDetailsModal');
+    const [eventResponse, overviewResponse] = await Promise.all([
+      apiCall(`/api/events/${eventId}`),
+      apiCall(`/api/events/${eventId}/overview`)
+    ]);
+    const event = eventResponse.data;
+    const operations = overviewResponse.data || { crew: [], transport: [] };
+    window.currentEventData = event;
+    if (options.updateHistory !== false) updateAppDetailHistory(`/events/${Number(eventId)}`, options.replaceHistory === true);
+    document.getElementById('eventDetailsTitle').textContent = `Event #${event.id}`;
+    const required = Number(event.totalAssets || 0);
+    const prepared = Number(event.totalPrepared || 0);
+    const returned = Number(event.totalReturned || 0);
+    const progress = required ? Math.min(100, Math.round((prepared / required) * 100)) : 0;
+    const links = [
+      isAdminUser() ? ['plan', 'Plan'] : null,
+      ['prepare', 'Prepare'],
+      isAdminUser() ? ['manpower', 'Manpower'] : null,
+      ['return', 'Return'],
+      ['delivery', 'Delivery Order'],
+      ['packing', 'Packing List']
+    ].filter(Boolean);
+    const content = `<div class="event-overview-hero">
+      <section class="event-overview-identity"><div class="event-overview-title-row"><div><div class="event-overview-eyebrow"><span>${escapeHtml(event.tag === 'dry hire' ? 'Dry Hire' : 'Event')}</span><span>·</span><span>${escapeHtml(eventStateDisplayLabel(event.state))}</span></div><h1>${escapeHtml(event.name || `Event ${event.id}`)}</h1></div><div class="event-overview-title-actions">${canCurrentUserManageRoles() ? `<button type="button" title="View event logs" aria-label="View event logs" onclick="openEventLogs(${Number(event.id)}, '${escapeJs(event.name || '')}')">${eventOverviewIcon('logs')}</button>` : ''}${isAdminUser() ? `<button type="button" title="Edit event" aria-label="Edit event" onclick="editEvent(${Number(event.id)})">${eventOverviewIcon('edit')}</button>` : ''}</div></div>
+        <div class="event-overview-meta"><span>${eventOverviewIcon('calendar')}${escapeHtml(eventOverviewDateRange(event))}</span><span>${eventOverviewIcon('location')}${escapeHtml(event.location || 'Venue not set')}</span></div></section>
+      <section class="event-overview-progress"><div class="event-overview-metric"><strong>${required}</strong><span>Required</span></div><div class="event-overview-metric"><strong>${prepared}</strong><span>Prepared</span></div><div class="event-overview-metric"><strong>${returned}</strong><span>Returned</span></div><div class="event-overview-progress-bar"><span style="width:${progress}%"></span></div></section>
+    </div>
+    <nav class="event-overview-links" aria-label="Event workspaces">${links.map(([kind, label]) => `<button type="button" class="event-overview-link" onclick="eventOverviewNavigate('${kind}',${Number(event.id)})">${eventOverviewIcon(kind === 'manpower' ? 'people' : kind)}<span>${escapeHtml(label)}</span></button>`).join('')}</nav>
+    <div class="event-overview-grid"><div class="event-overview-column">
+      ${eventOverviewSection('assets', 'Assets', `${prepared} of ${required} prepared`, eventOverviewAssets(event))}
+      ${eventOverviewSection('people', 'Manpower and vendors', `${operations.crew?.length || 0} assignment(s)`, eventOverviewCrew(operations.crew || []))}
+      ${eventOverviewSection('truck', 'Transport', `${operations.transport?.length || 0} booking(s)`, eventOverviewTransport(operations.transport || []))}
+    </div><aside class="event-overview-column">
+      ${eventOverviewSection('people', 'Internal team', 'Users assigned to this event', eventOverviewInternalUsers(event))}
+      ${eventOverviewSection('note', 'Event notes', '', eventOverviewNotesEditor(event))}
+      ${eventOverviewSection('file', 'Files', `${event.files?.length || 0} uploaded`, eventOverviewFilesPanel(event), { subtitleId: `eventOverviewFilesCount-${Number(event.id)}` })}
+    </aside></div>`;
+    contentRoot.innerHTML = content;
+    eventOverviewBindFileDropzone(Number(event.id));
+  } catch (error) {
+    if (contentRoot) contentRoot.innerHTML = `<div class="event-overview-empty">Unable to load this event overview.</div>`;
+    showNotification('error', error.message || 'Failed to load event details');
+  }
+}
+
+async function viewEventLegacy(eventId) {
   try {
     window.currentViewedEventId = eventId;
     window.currentEventDetailsMode = "view";
@@ -15046,9 +16543,6 @@ async function viewEvent(eventId) {
     eventDetailsContent.handleModelToggle = handleModelToggle;
     eventDetailsContent.addEventListener('click', handleModelToggle);
 
-    const logHTML = await createEventLogViewer(event.id, event.name, event.eventLogs || []);
-    eventDetailsContent.innerHTML += logHTML;
-    
     openModal("eventDetailsModal");
   } catch (error) {
     showNotification("error", "Failed to load event details");
@@ -15223,11 +16717,13 @@ function applyMaintenanceLogTypeSelectStyle(selectEl) {
     option.style.color = palette[optionType] || palette.General;
     option.style.fontWeight = '600';
   });
+  refreshMaintenanceCustomSelect(selectEl);
 }
 
 function initialiseMaintenanceLogTypeSelects(root = document) {
   root.querySelectorAll('[data-maintenance-log-type-select="true"]').forEach(selectEl => {
     applyMaintenanceLogTypeSelectStyle(selectEl);
+    enhanceMaintenanceCustomSelect(selectEl, 'type');
     if (selectEl.dataset.logTypeColourBound === 'true') return;
     selectEl.addEventListener('change', () => applyMaintenanceLogTypeSelectStyle(selectEl));
     selectEl.dataset.logTypeColourBound = 'true';
@@ -15368,6 +16864,45 @@ function updateMaintenanceMediaSelection(inputId, listId) {
   list.innerHTML = files.map(file => `
     <span class="maintenance-media-pill" title="${escapeHtmlAttr(file.name)}">${escapeHtml(file.name)}</span>
   `).join('');
+  const dropzone = document.querySelector(`[data-maintenance-drop-input="${inputId}"]`) || document.getElementById('maintenanceMediaDropzone');
+  if (dropzone) dropzone.classList.toggle('has-files', files.length > 0);
+}
+
+function setupMaintenanceMediaDropzone(inputId, listId, dropzoneId) {
+  const input = document.getElementById(inputId);
+  const dropzone = document.getElementById(dropzoneId);
+  if (!input || !dropzone || dropzone.dataset.dropBound === 'true') return;
+  dropzone.dataset.dropBound = 'true';
+  dropzone.dataset.maintenanceDropInput = inputId;
+
+  ['dragenter', 'dragover'].forEach(type => dropzone.addEventListener(type, event => {
+    event.preventDefault();
+    event.stopPropagation();
+    dropzone.classList.add('drag-active');
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
+  }));
+  ['dragleave', 'dragend'].forEach(type => dropzone.addEventListener(type, event => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (type === 'dragend' || !dropzone.contains(event.relatedTarget)) dropzone.classList.remove('drag-active');
+  }));
+  dropzone.addEventListener('drop', event => {
+    event.preventDefault();
+    event.stopPropagation();
+    dropzone.classList.remove('drag-active');
+    const dropped = Array.from(event.dataTransfer?.files || []).filter(file => {
+      const name = String(file.name || '').toLowerCase();
+      return String(file.type || '').startsWith('image/') || String(file.type || '').startsWith('video/') || /\.(jpe?g|png|mp4|mov)$/.test(name);
+    });
+    if (!dropped.length) {
+      showNotification('warning', 'Please choose photo or video files');
+      return;
+    }
+    const transfer = new DataTransfer();
+    [...Array.from(input.files || []), ...dropped].forEach(file => transfer.items.add(file));
+    input.files = transfer.files;
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  });
 }
 
 function maintenancePayloadToRequestData(payload, mediaInputId) {
@@ -15391,6 +16926,7 @@ function normalizeMaintenanceLogRecord(log) {
       id: String(log.id || log.logId || ''),
       date: String(log.date || ''),
       user: String(log.user || ''),
+      userDisplayName: String(log.userDisplayName || log.user || ''),
       description: String(log.description || ''),
       type: normalizeMaintenanceLogType(log.type || log.logType || log.maintenanceType),
       cost: formatMaintenanceCost(log.cost),
@@ -15415,6 +16951,10 @@ function getMaintenanceLogRecords(asset) {
     ? asset.maintenanceLogRecords
     : (Array.isArray(asset?.maintenanceLogs) ? asset.maintenanceLogs : []);
   return source.map(normalizeMaintenanceLogRecord);
+}
+
+function maintenanceLogUserLabel(log) {
+  return String(log?.userDisplayName || log?.user || '').trim();
 }
 
 function isContainerMaintenanceLog(log) {
@@ -15548,19 +17088,101 @@ function getMaintenanceChangeValue(log, kind) {
   return change ? (change.value || change.action || '') : '';
 }
 
+function maintenanceAssetSearchText(asset) {
+  return [
+    getAssetIdentifierForApi(asset), asset.id, asset.brand, asset.model, asset.description,
+    asset.serial, asset.serialNumber, asset.serial2, asset.secondarySerial, asset.secondarySerialNumber,
+    asset.status, asset.location,
+    ...getMaintenanceLogRecords(asset).map(log => `${log.type || ''} ${log.description || ''} ${maintenanceLogUserLabel(log)} ${log.date || ''}`)
+  ].filter(Boolean).join(' ').toLowerCase();
+}
+
+function maintenanceAssetMatchesCondition(asset, condition) {
+  if (!condition || condition === 'all') return true;
+  if (condition === 'ooc') return Boolean(asset.isOOC || Number(asset.bulkOOCQuantity || 0) > 0);
+  if (condition === 'missing') return Boolean(asset.isMissing || Number(asset.bulkMissingQuantity || 0) > 0);
+  if (condition === 'degraded') return Boolean(asset.isDegraded || Number(asset.bulkDegradedQuantity || 0) > 0);
+  if (condition === 'decommissioned') return Boolean(asset.isDisposed || asset.isDecommissioned);
+  return true;
+}
+
+function renderMaintenanceFilterButtons() {
+  const typeRoot = document.getElementById('maintenance-log-type-filters');
+  if (typeRoot) {
+    const typeCounts = assets.reduce((counts, asset) => {
+      const latest = inventoryLatestMaintenance([asset]);
+      const type = latest ? normalizeMaintenanceLogType(latest.type) : 'No history';
+      counts[type] = (counts[type] || 0) + 1;
+      return counts;
+    }, {});
+    const typeOptions = [
+      ['all', 'All', '#0f766e', '#e9f6f2'],
+      ...MAINTENANCE_LOG_TYPES.map(type => {
+        const meta = maintenanceLogTypeMeta(type);
+        return [type, meta.label, meta.color, meta.background];
+      }),
+      ['No history', 'No history', '#64748b', '#edf0f2']
+    ];
+    if (maintenanceLogTypeFilter !== 'all' && !(typeCounts[maintenanceLogTypeFilter] || 0)) maintenanceLogTypeFilter = 'all';
+    typeRoot.innerHTML = typeOptions.filter(([value]) => value === 'all' || (typeCounts[value] || 0) > 0).map(([value, label, color, background]) => {
+      const count = value === 'all' ? assets.length : (typeCounts[value] || 0);
+      return `<button type="button" class="maintenance-filter-button${maintenanceLogTypeFilter === value ? ' active' : ''}" style="--filter-color:${color};--filter-bg:${background}" onclick="setMaintenanceLogTypeFilter('${escapeJs(value)}')">${escapeHtml(label)} ${count}</button>`;
+    }).join('');
+  }
+
+  const conditionRoot = document.getElementById('maintenance-condition-filters');
+  if (conditionRoot) {
+    const options = [
+      ['all', 'All', '#0f766e', '#e9f6f2'],
+      ['ooc', 'OOC', '#a61b29', '#fdebed'],
+      ['missing', 'Missing', '#596b78', '#edf0f2'],
+      ['degraded', 'Degraded', '#8a5b08', '#fff3df'],
+      ['decommissioned', 'Decommissioned', '#3f4d48', '#edf0f2']
+    ];
+    if (maintenanceConditionFilter !== 'all' && !maintenanceFlaggedAssets.some(asset => maintenanceAssetMatchesCondition(asset, maintenanceConditionFilter))) maintenanceConditionFilter = 'all';
+    conditionRoot.innerHTML = options.filter(([value]) => value === 'all' || maintenanceFlaggedAssets.some(asset => maintenanceAssetMatchesCondition(asset, value))).map(([value, label, color, background]) => {
+      const count = value === 'all' ? maintenanceFlaggedAssets.length : maintenanceFlaggedAssets.filter(asset => maintenanceAssetMatchesCondition(asset, value)).length;
+      return `<button type="button" class="maintenance-filter-button${maintenanceConditionFilter === value ? ' active' : ''}" style="--filter-color:${color};--filter-bg:${background}" onclick="setMaintenanceConditionFilter('${value}')">${label} ${count}</button>`;
+    }).join('');
+  }
+}
+
+function applyMaintenanceRecentFilters() {
+  const query = document.getElementById('maintenance-search')?.value.trim().toLowerCase() || '';
+  const filtered = assets.filter(asset => {
+    if (query && !maintenanceAssetSearchText(asset).includes(query)) return false;
+    const latest = inventoryLatestMaintenance([asset]);
+    const type = latest ? normalizeMaintenanceLogType(latest.type) : 'No history';
+    return maintenanceLogTypeFilter === 'all' || type === maintenanceLogTypeFilter;
+  });
+  displayMaintenanceAssets(filtered);
+}
+
+function setMaintenanceLogTypeFilter(type) {
+  maintenanceLogTypeFilter = type || 'all';
+  renderMaintenanceFilterButtons();
+  applyMaintenanceRecentFilters();
+}
+
+function setMaintenanceConditionFilter(condition) {
+  maintenanceConditionFilter = condition || 'all';
+  renderMaintenanceFilterButtons();
+  filterOOCAssets();
+}
+
 async function loadMaintenanceAssets() {
   try {
     const response = await apiCall("/api/assets");
-    
-    // Update the global assets variable
-    assets = response.data;
-    
-    // Check which tab is active and load appropriate content
+    assets = response.data || [];
+    maintenanceFlaggedAssets = getMaintenanceFlaggedAssets(assets);
+    renderMaintenanceDashboardSummary(assets);
+    renderMaintenanceFilterButtons();
     const activeTab = document.querySelector(".maintenance-tab.active");
     if (activeTab && activeTab.getAttribute('data-tab') === 'ooc') {
-      loadOOCAssets();
+      maintenanceFlaggedAssets = getMaintenanceFlaggedAssets(assets);
+      filterOOCAssets();
     } else {
-      displayMaintenanceAssets(response.data);
+      applyMaintenanceRecentFilters();
     }
   } catch (error) {
     document.getElementById("maintenance-assets").innerHTML =
@@ -15568,23 +17190,68 @@ async function loadMaintenanceAssets() {
   }
 }
 
-function maintenanceVirtualRowHtml(asset) {
+function getMaintenanceFlaggedAssets(assetList) {
+  return (assetList || []).filter(asset =>
+    asset.isOOC || asset.isMissing || asset.isDegraded || asset.isDisposed || asset.isDecommissioned ||
+    (asset.isBulk && (
+      Number(asset.bulkOOCQuantity || 0) > 0 ||
+      Number(asset.bulkMissingQuantity || 0) > 0 ||
+      Number(asset.bulkDegradedQuantity || 0) > 0
+    ))
+  );
+}
+
+function renderMaintenanceDashboardSummary(assetList) {
+  const source = Array.isArray(assetList) ? assetList : [];
+  const counts = inventoryConditionCounts(source);
+  const flagged = getMaintenanceFlaggedAssets(source);
+  const logEntries = source.reduce((sum, asset) => sum + getMaintenanceLogRecords(asset).length, 0);
+  const items = [
+    ['wrench', logEntries, 'Maintenance entries', '#1769aa', '#eaf3fb'],
+    ['alert', flagged.length, 'Assets needing attention', '#b4760b', '#fff3df'],
+    ['alert', counts.ooc, 'Out of commission', '#c53d49', '#fdebed'],
+    ['box', counts.missing, 'Missing', '#596b78', '#edf0f2'],
+    ['wrench', counts.degraded, 'Degraded', '#b4760b', '#fff3df']
+  ];
+  const summary = document.getElementById('maintenance-dashboard-summary');
+  if (summary) summary.innerHTML = items.map(([icon, value, label, color, bg]) => `
+    <div class="maintenance-summary-item">
+      <span class="maintenance-summary-mark" style="--summary-color:${color};--summary-bg:${bg}">${inventoryIcon(icon)}</span>
+      <span><strong class="maintenance-summary-value">${value}</strong><span class="maintenance-summary-label">${label}</span></span>
+    </div>
+  `).join('');
+  const recentCount = document.getElementById('maintenance-recent-count');
+  const flaggedCount = document.getElementById('maintenance-flagged-count');
+  const recentTab = document.querySelector('.maintenance-tab[data-tab="all"]');
+  const flaggedTab = document.querySelector('.maintenance-tab[data-tab="ooc"]');
+  if (recentTab && !recentCount) recentTab.innerHTML = `Recent activity <span id="maintenance-recent-count" class="maintenance-tab-count">${logEntries}</span>`;
+  if (flaggedTab && !flaggedCount) flaggedTab.innerHTML = `Needs attention <span id="maintenance-flagged-count" class="maintenance-tab-count">${flagged.length}</span>`;
+  const currentRecentCount = document.getElementById('maintenance-recent-count');
+  const currentFlaggedCount = document.getElementById('maintenance-flagged-count');
+  if (currentRecentCount) currentRecentCount.textContent = String(logEntries);
+  if (currentFlaggedCount) currentFlaggedCount.textContent = String(flagged.length);
+  [recentTab, flaggedTab].forEach(tab => { if (tab) tab.setAttribute('role', 'tab'); });
+  const maintenanceSearch = document.getElementById('maintenance-search');
+  if (maintenanceSearch) maintenanceSearch.placeholder = 'Search asset, serial, model, log or user';
+  renderMaintenanceFilterButtons();
+}
+
+function maintenanceActivityRowHtml(asset, latestRecord = null) {
   const assetId = getAssetIdentifierForApi(asset);
   const displayId = assetMaintenanceDisplayId(asset);
-  const lastMaintenance = getLastAddedMaintenanceLog(asset)?.date || "Never";
+  const latest = latestRecord || inventoryLatestMaintenance([asset]);
+  const model = [asset.brand, asset.model].filter(Boolean).join(' ') || 'Unspecified model';
+  const description = latest?.description || 'No maintenance history recorded';
+  const location = asset.currentLocation || asset.location || 'Store';
 
   return `
-    <tr>
-      <td>${escapeHtml(displayId)}${asset.isBulk ? ' <span class="asset-badge status-available">Bulk Item</span>' : ''}</td>
-      <td>${escapeHtml(asset.brand || '')}</td>
-      <td>${escapeHtml(asset.model || '')}</td>
-      <td><span class="asset-badge status-${escapeHtmlAttr(asset.status || 'available')}">${escapeHtml(asset.status || 'available')}</span></td>
-      <td>${escapeHtml(asset.location || "Store")}</td>
-      <td>${escapeHtml(lastMaintenance)}</td>
-      <td>
-        <button class="btn btn-primary" onclick="viewMaintenanceLog('${escapeJs(assetId)}')">View Log</button>
-      </td>
-    </tr>
+    <button type="button" class="maintenance-activity-row" onclick="viewMaintenanceLog('${escapeJs(assetId)}')" aria-label="View maintenance history for ${escapeHtmlAttr(displayId)}">
+      <span><span class="maintenance-asset-id">${escapeHtml(displayId)}${asset.isBulk ? ' <span class="asset-badge status-available">Bulk</span>' : ''}</span><span class="maintenance-asset-model">${escapeHtml(model)}${asset.description ? ` · ${escapeHtml(asset.description)}` : ''}</span></span>
+      <span class="maintenance-log-summary"><span class="maintenance-log-summary-top">${latest ? maintenanceLogTypeBadgeHtml(latest.type) : '<span class="asset-badge status-decommissioned">No history</span>'}<span class="maintenance-log-author">${latest?.user ? `by ${escapeHtml(maintenanceLogUserLabel(latest))}` : ''}</span></span><span class="maintenance-log-description">${escapeHtml(description)}</span></span>
+      <span>${assetFlagBadgesHtml(asset)}</span>
+      <span class="maintenance-row-date">${escapeHtml(inventoryMaintenanceDateText(latest))}<span>${escapeHtml(location)}</span></span>
+      <span class="maintenance-row-chevron"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></span>
+    </button>
   `;
 }
 
@@ -15594,31 +17261,23 @@ function displayMaintenanceAssets(assetsToShow) {
 
   if (assetsToShow.length === 0) {
     destroyVirtualTable('maintenance-all');
-    container.innerHTML =
-      '<p style="text-align: center; color: #666; padding: 40px;">No assets found.</p>';
+    container.innerHTML = '<div class="maintenance-empty">No assets match this search.</div>';
     return;
   }
 
-  const sortedAssets = sortAssetsByLastAddedMaintenanceLog([...assetsToShow]);
-  renderVirtualTable({
-    stateKey: 'maintenance-all',
-    container,
-    items: sortedAssets,
-    columnCount: 7,
-    estimatedRowHeight: 58,
-    headerHtml: `
-      <tr>
-        <th>Asset ID</th>
-        <th>Brand</th>
-        <th>Model</th>
-        <th>Status</th>
-        <th>Location</th>
-        <th>Last Maintenance</th>
-        <th>Actions</th>
-      </tr>
-    `,
-    rowHtml: maintenanceVirtualRowHtml
+  destroyVirtualTable('maintenance-all');
+  const sortedAssets = assetsToShow.map(asset => ({ asset, latest: inventoryLatestMaintenance([asset]) })).sort((recordA, recordB) => {
+    const dateA = recordA.latest?.timestamp ?? Number.NEGATIVE_INFINITY;
+    const dateB = recordB.latest?.timestamp ?? Number.NEGATIVE_INFINITY;
+    if (dateA !== dateB) return dateB - dateA;
+    return assetMaintenanceDisplayId(recordA.asset).localeCompare(assetMaintenanceDisplayId(recordB.asset), undefined, { numeric: true, sensitivity: 'base' });
   });
+  const visibleAssets = sortedAssets.slice(0, 250);
+  container.innerHTML = `
+    <div class="maintenance-list-header"><span>Asset</span><span>Latest maintenance log</span><span>Condition</span><span>Date / location</span><span></span></div>
+    <div class="maintenance-activity-list">${visibleAssets.map(record => maintenanceActivityRowHtml(record.asset, record.latest)).join('')}</div>
+    ${sortedAssets.length > visibleAssets.length ? `<div style="padding:8px 2px;color:#64748b;font-size:9px">Showing the 250 most recent assets. Search to find another asset.</div>` : ''}
+  `;
 }
 
 let assetCheckState = {
@@ -15781,6 +17440,77 @@ function ensureAssetCheckStyles() {
     }
   `;
 
+  style.textContent += `
+    #asset-check-section { --check-green:var(--brand-primary,#0f766e);--check-ink:#172b26;--check-muted:#64748b;--check-line:#dce7e3; }
+    .asset-check-panel { margin-bottom:12px;padding:14px;border:1px solid var(--check-line);border-radius:7px;box-shadow:none; }
+    .asset-check-intro { display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,.75fr);gap:18px;align-items:center; }
+    .asset-check-intro h3,.asset-check-session-title h3 { margin:0;color:var(--check-ink);font-size:16px; }
+    .asset-check-intro p,.asset-check-session-title p { margin:5px 0 0;color:var(--check-muted);font-size:11px;line-height:1.45; }
+    .asset-check-steps { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px; }
+    .asset-check-step { min-height:54px;padding:8px;border:1px solid #dfe8e5;border-radius:6px;background:#f8fbfa;color:#50655f;font-size:9px;line-height:1.35; }
+    .asset-check-step strong { display:block;margin-bottom:3px;color:var(--check-green);font-size:10px; }
+    .asset-check-scan-row { grid-template-columns:minmax(220px,1fr) auto auto auto;gap:8px;align-items:end;margin-top:13px;padding-top:13px;border-top:1px solid #e4ece9; }
+    .asset-check-scan-row .form-input { min-height:39px;border-color:#cbdad5;border-radius:6px;font-size:12px; }
+    .asset-check-scan-row .form-label { color:#40564f;font-size:10px;font-weight:800; }
+    .asset-check-help { margin-top:5px;color:var(--check-muted);font-size:9px; }
+    .asset-check-session-head { display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap; }
+    .asset-check-progress { margin-top:13px; }
+    .asset-check-progress-meta { display:flex;justify-content:space-between;gap:10px;margin-bottom:5px;color:var(--check-muted);font-size:9px;font-weight:700; }
+    .asset-check-progress-track { height:7px;overflow:hidden;border-radius:4px;background:#e5eeeb; }
+    .asset-check-progress-fill { height:100%;border-radius:inherit;background:var(--check-green);transition:width .2s ease; }
+    .asset-check-summary-grid { grid-template-columns:repeat(4,minmax(0,1fr));gap:0;margin:12px 0 0;border:1px solid var(--check-line);border-radius:7px;overflow:hidden; }
+    .asset-check-summary-card { min-height:66px;padding:10px 12px;border:0;border-right:1px solid var(--check-line);border-radius:0;background:#fff; }
+    .asset-check-summary-card:last-child { border-right:0; }
+    .asset-check-summary-value { margin:0 0 4px;color:var(--check-ink);font-size:19px; }
+    .asset-check-summary-label { color:var(--check-muted);font-size:9px;font-weight:700; }
+    .asset-check-table-wrap { overflow:hidden;border-color:var(--check-line);border-radius:7px; }
+    .asset-check-table { min-width:0;font-size:10px; }
+    .asset-check-table th { padding:7px 10px;background:#f2f7f5;color:#62756f;font-size:9px;text-transform:uppercase; }
+    .asset-check-table td { padding:7px 10px;border-bottom-color:#e7eeec; }
+    .asset-check-table tbody tr { transition:background .16s ease; }
+    .asset-check-row-checked { background:#f0faf6; }
+    .asset-check-row-excluded { background:#f7f9f8;color:#70827c; }
+    .asset-check-row-missing { background:#fff5f5;color:#8f2731; }
+    .asset-check-row-flash { outline:2px solid var(--check-green); }
+    .asset-check-badge { padding:3px 6px;border-radius:4px;font-size:9px; }
+    .asset-check-badge.checked { background:#e7f6ee;color:#13734c; }
+    .asset-check-badge.pending { background:#edf3f1;color:#536861; }
+    .asset-check-badge.ooc { background:#fdebed;color:#a61b29; }
+    .asset-check-badge.excluded { background:#edf0f2;color:#4f5d58; }
+    .asset-check-badge.missing { background:#fdebed;color:#a61b29; }
+    .asset-check-badge.deployed { background:#eaf3fb;color:#155b8f; }
+    .asset-check-badge.away { background:#fff3df;color:#8a5b08; }
+    .asset-check-actions .btn,.asset-check-table .btn { min-height:31px;padding:5px 8px;font-size:9px; }
+    @media(max-width:800px) {
+      .asset-check-intro { grid-template-columns:1fr; }
+      .asset-check-scan-row { grid-template-columns:1fr 1fr; }
+      .asset-check-scan-row .form-group { grid-column:1/-1; }
+      .asset-check-summary-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+      .asset-check-summary-card { border-top:1px solid var(--check-line); }
+      .asset-check-summary-card:nth-child(-n+2) { border-top:0; }
+      .asset-check-summary-card:nth-child(even) { border-right:0; }
+    }
+    @media(max-width:620px) {
+      .asset-check-steps { grid-template-columns:1fr; }
+      .asset-check-step { min-height:0; }
+      .asset-check-scan-row { grid-template-columns:1fr; }
+      .asset-check-scan-row > * { grid-column:1!important; }
+      .asset-check-actions { width:100%;grid-template-columns:1fr; }
+      .asset-check-table-wrap { border:0;background:transparent;overflow:visible; }
+      .asset-check-table,.asset-check-table tbody,.asset-check-table tr,.asset-check-table td { display:block;width:100%;min-width:0; }
+      .asset-check-table thead { display:none; }
+      .asset-check-table tbody { display:grid;gap:7px; }
+      .asset-check-table tr { position:relative;padding:10px 10px 9px;border:1px solid var(--check-line);border-radius:7px;background:#fff; }
+      .asset-check-table tr.asset-check-row-checked { border-left:4px solid #159f6a;background:#f5fbf8; }
+      .asset-check-table tr.asset-check-row-missing { border-left:4px solid #d84b52;background:#fff8f8; }
+      .asset-check-table tr.asset-check-row-excluded { background:#f7f9f8; }
+      .asset-check-table td { display:grid;grid-template-columns:80px minmax(0,1fr);gap:7px;padding:3px 0;border:0;line-height:1.35; }
+      .asset-check-table td::before { color:var(--check-muted);font-size:8px;font-weight:800;text-transform:uppercase;content:attr(data-label); }
+      .asset-check-table td:last-child { margin-top:5px;padding-top:7px;border-top:1px solid #e3ebe8; }
+      .asset-check-table td:last-child .btn { width:100%; }
+    }
+  `;
+
   document.head.appendChild(style);
 }
 
@@ -15803,10 +17533,17 @@ function loadAssetCheck() {
 
   container.innerHTML = `
     <div class="asset-check-panel">
-      <h3 style="margin-bottom: 8px;">Asset Check</h3>
-      <p style="color:#666;margin-bottom:18px;">
-        Scan one Asset ID first. The system will load every asset with the same department, brand, model, and description.
-      </p>
+      <div class="asset-check-intro">
+        <div>
+          <h3>Start a stock check</h3>
+          <p>Scan one Asset ID or serial number to load every matching asset by department, brand, model, and description.</p>
+        </div>
+        <div class="asset-check-steps" aria-label="Asset check workflow">
+          <div class="asset-check-step"><strong>1. Scan</strong>Start with any asset in the model group.</div>
+          <div class="asset-check-step"><strong>2. Count</strong>Scan or check each item physically in Store.</div>
+          <div class="asset-check-step"><strong>3. Resolve</strong>Review unchecked items before marking missing.</div>
+        </div>
+      </div>
 
       <div class="asset-check-scan-row">
         <div class="form-group" style="margin-bottom:0;">
@@ -15823,7 +17560,7 @@ function loadAssetCheck() {
           </div>
         </div>
 
-        <button class="btn btn-success" onclick="startAssetCheck()">Start Check</button>
+        <button class="btn btn-success" onclick="startAssetCheck()">Start check</button>
         ${scannerButtonHtml("scanForAssetCheck('assetCheckSeedInput', 'start')")}
         <button class="btn btn-secondary" onclick="loadAssetCheck()">Reset</button>
       </div>
@@ -15952,22 +17689,26 @@ function renderAssetCheckSession() {
   const uncheckedCount = Math.max(checkableAssets.length - checkedCount, 0);
   const excludedCount = assetCheckState.assets.filter(asset => asset.excluded && !asset.isMissing).length;
   const missingCount = assetCheckState.assets.filter(asset => asset.isMissing).length;
+  const completion = checkableAssets.length ? Math.round((checkedCount / checkableAssets.length) * 100) : 0;
 
   container.innerHTML = `
     <div class="asset-check-panel">
-      <div style="display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap;">
-        <div>
-          <h3 style="margin-bottom:6px;">${escapeHtml(group.displayName || 'Asset Check')}</h3>
-          <div style="color:#666;font-size:14px;">
-            Scan or click each item that is physically present in Store.
-          </div>
+      <div class="asset-check-session-head">
+        <div class="asset-check-session-title">
+          <h3>${escapeHtml(group.displayName || 'Asset Check')}</h3>
+          <p>Scan or check each item physically present in Store. Deployed and away items remain visible but are excluded from the missing count.</p>
         </div>
         <div class="asset-check-actions">
           <button class="btn btn-danger" onclick="markUncheckedAssetCheckMissing()" ${uncheckedCount === 0 ? 'disabled' : ''}>
-            Mark Unchecked as Missing
+            Mark unchecked as missing
           </button>
-          <button class="btn btn-secondary" onclick="loadAssetCheck()">Start New Check</button>
+          <button class="btn btn-secondary" onclick="loadAssetCheck()">New check</button>
         </div>
+      </div>
+
+      <div class="asset-check-progress">
+        <div class="asset-check-progress-meta"><span>${checkedCount} of ${checkableAssets.length} checkable assets sighted</span><strong>${completion}%</strong></div>
+        <div class="asset-check-progress-track"><div class="asset-check-progress-fill" style="width:${completion}%"></div></div>
       </div>
 
       <div class="asset-check-summary-grid">
@@ -15981,7 +17722,7 @@ function renderAssetCheckSession() {
         </div>
         <div class="asset-check-summary-card">
           <div class="asset-check-summary-value">${excludedCount}</div>
-          <div class="asset-check-summary-label">Excluded but Shown</div>
+          <div class="asset-check-summary-label">Excluded but visible</div>
         </div>
         <div class="asset-check-summary-card">
           <div class="asset-check-summary-value">${missingCount}</div>
@@ -16000,9 +17741,9 @@ function renderAssetCheckSession() {
             autocomplete="off"
           >
         </div>
-        <button class="btn btn-success" onclick="checkAsset()">Check Asset</button>
+        <button class="btn btn-success" onclick="checkAsset()">Check asset</button>
         ${scannerButtonHtml("scanForAssetCheck('assetCheckScanInput', 'continue')")}
-        <button class="btn btn-secondary" onclick="renderAssetCheckSession()">Refresh View</button>
+        <button class="btn btn-secondary" onclick="renderAssetCheckSession()">Refresh</button>
       </div>
     </div>
 
@@ -16046,12 +17787,12 @@ function renderAssetCheckRow(asset) {
 
   return `
     <tr id="asset-check-row-${escapeHtmlAttr(encodedAssetId)}" class="${rowClass}">
-      <td><strong>${escapeHtml(assetId || 'Bulk Item')}</strong></td>
-      <td>${escapeHtml(asset.serial || '-')}</td>
-      <td>${getAssetCheckStatusBadge(asset, isChecked)}</td>
-      <td>${escapeHtml(asset.location || 'Store')}</td>
-      <td>${escapeHtml(asset.exclusionReason || (asset.isOOC ? 'OOC, but still checkable because it is in Store' : ''))}</td>
-      <td>
+      <td data-label="Asset ID"><strong>${escapeHtml(assetId || 'Bulk Item')}</strong></td>
+      <td data-label="Serial">${escapeHtml(asset.serial || '-')}</td>
+      <td data-label="Status">${getAssetCheckStatusBadge(asset, isChecked)}</td>
+      <td data-label="Location">${escapeHtml(asset.location || 'Store')}</td>
+      <td data-label="Notes">${escapeHtml(asset.exclusionReason || (asset.isOOC ? 'OOC, but still checkable because it is in Store' : ''))}</td>
+      <td data-label="Action">
         ${asset.checkEligible ? `
           <button class="btn ${isChecked ? 'btn-secondary' : 'btn-success'} btn-sm" onclick="toggleAssetCheck('${escapeHtmlAttr(encodedAssetId)}')">
             ${isChecked ? 'Undo' : 'Check'}
@@ -16244,6 +17985,115 @@ async function markUncheckedAssetCheckMissing() {
 
 
 
+function ensureEventLogsModalStyles() {
+  if (document.getElementById('event-logs-modal-styles')) return;
+  const style = document.createElement('style');
+  style.id = 'event-logs-modal-styles';
+  style.textContent = `
+    #eventLogsModal { z-index:1450;--el-accent:var(--brand-primary,#0f766e);--el-ink:#172b26;--el-muted:#64748b;--el-line:#dce7e3; }
+    #eventLogsModal .event-logs-content { width:min(860px,calc(100vw - 28px));max-width:none;max-height:calc(100vh - 28px);padding:0;overflow:hidden;border:1px solid var(--el-line);border-radius:8px;background:#f7faf9; }
+    #eventLogsModal .event-logs-header { min-height:58px;padding:12px 15px;border-bottom:1px solid var(--el-line);background:#fff; }
+    #eventLogsModal .event-logs-header h3 { margin:0;color:var(--el-ink);font-size:15px; }
+    #eventLogsModal .event-logs-header p { margin:3px 0 0;color:var(--el-muted);font-size:10px; }
+    #eventLogsModal .event-logs-body { max-height:calc(100vh - 88px);padding:12px;overflow:auto; }
+    #eventLogsModal .event-logs-summary { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:10px;border:1px solid var(--el-line);border-radius:7px;background:#fff;overflow:hidden; }
+    #eventLogsModal .event-logs-stat { min-height:61px;padding:10px 11px;border-right:1px solid var(--el-line); }
+    #eventLogsModal .event-logs-stat:last-child { border-right:0; }
+    #eventLogsModal .event-logs-stat strong { display:block;color:var(--el-ink);font-size:17px; }
+    #eventLogsModal .event-logs-stat span { display:block;margin-top:4px;color:var(--el-muted);font-size:8px;font-weight:700; }
+    #eventLogsModal .event-log-search { width:100%;min-height:38px;margin-bottom:10px;padding:8px 11px;border:1px solid #cbdad5;border-radius:6px;background:#fff;color:var(--el-ink);font-size:11px; }
+    #eventLogsModal .event-log-search:focus { outline:0;border-color:var(--el-accent);box-shadow:0 0 0 3px rgba(15,118,110,.12); }
+    #eventLogsModal .event-log-visible-count { margin:-4px 0 8px;color:var(--el-muted);font-size:9px;text-align:right; }
+    #eventLogsModal .event-logs-list { border:1px solid var(--el-line);border-radius:7px;background:#fff;overflow:hidden; }
+    #eventLogsModal .event-log-row { position:relative;display:grid;grid-template-columns:130px 105px minmax(0,1fr);gap:9px;align-items:start;min-height:49px;padding:8px 10px 8px 14px; }
+    #eventLogsModal .event-log-row + .event-log-row { border-top:1px solid #e7eeec; }
+    #eventLogsModal .event-log-row::before { position:absolute;left:0;top:10px;bottom:10px;width:3px;border-radius:0 3px 3px 0;background:var(--log-color);content:''; }
+    #eventLogsModal .event-log-time strong,#eventLogsModal .event-log-user { color:var(--el-ink);font-size:9px;font-weight:800; }
+    #eventLogsModal .event-log-time span { display:block;margin-top:2px;color:var(--el-muted);font-size:8px; }
+    #eventLogsModal .event-log-action { color:#344b44;font-size:10px;line-height:1.4;overflow-wrap:anywhere; }
+    #eventLogsModal .event-logs-empty { padding:38px 16px;text-align:center;color:var(--el-muted);font-size:10px; }
+    @media(max-width:620px){#eventLogsModal .event-logs-content{width:100vw;height:100vh;max-height:none;border:0;border-radius:0}#eventLogsModal .event-logs-body{max-height:calc(100vh - 58px);padding:8px}#eventLogsModal .event-log-row{grid-template-columns:minmax(0,1fr) auto;gap:5px}#eventLogsModal .event-log-time{grid-column:1}.event-log-user{grid-column:2}.event-log-action{grid-column:1/-1}#eventLogsModal .event-logs-summary{grid-template-columns:1fr 1fr}#eventLogsModal .event-logs-stat:nth-child(2){border-right:0}#eventLogsModal .event-logs-stat:last-child{grid-column:1/-1;border-top:1px solid var(--el-line)}}
+  `;
+  document.head.appendChild(style);
+}
+
+function eventLogTone(action) {
+  const value = String(action || '').toLowerCase();
+  if (/delete|remove|unassign|unprepare|cancel|missing|failed/.test(value)) return '#d84b52';
+  if (/return|complete|close|accept|paid/.test(value)) return '#1594ad';
+  if (/add|create|assign|prepare|upload|mark|book/.test(value)) return '#159f6a';
+  return '#94a3b8';
+}
+
+function closeEventLogs() {
+  document.getElementById('eventLogsModal')?.remove();
+}
+
+let eventLogModalRecords = [];
+
+function eventLogSearchText(log) {
+  const items = (log.items || []).map(item => `${item.label || ''} ${item.assetId || ''}`).join(' ');
+  return `${log.timestamp || log.date || ''} ${log.user || ''} ${log.action || ''} ${items}`.toLowerCase();
+}
+
+function renderEventLogModalRows() {
+  const modal = document.getElementById('eventLogsModal');
+  if (!modal) return;
+  const query = String(modal.querySelector('#eventLogSearch')?.value || '').trim().toLowerCase();
+  const visible = eventLogModalRecords.filter(log => !query || eventLogSearchText(log).includes(query));
+  const count = modal.querySelector('.event-log-visible-count');
+  const rows = modal.querySelector('#eventLogRows');
+  if (count) count.textContent = `${visible.length} of ${eventLogModalRecords.length} records`;
+  if (!rows) return;
+  rows.innerHTML = visible.length ? visible.map(log => {
+    const date = parseSystemLogTimestamp(log.timestamp || log.date || '');
+    const validDate = !Number.isNaN(date.getTime());
+    const grouped = Number(log.groupCount || 0) > 1
+      ? ` <span style="color:#667085;font-size:8px;font-weight:700">${Number(log.groupCount)} actions grouped</span>`
+      : '';
+    return `<article class="event-log-row" style="--log-color:${eventLogTone(log.action)}"><div class="event-log-time"><strong>${validDate ? escapeHtml(date.toLocaleDateString('en-SG',{day:'numeric',month:'short',year:'numeric'})) : escapeHtml(log.timestamp || log.date || 'Unknown date')}</strong><span>${validDate ? escapeHtml(date.toLocaleTimeString('en-SG',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false})) : ''}</span></div><div class="event-log-user">${escapeHtml(log.user || 'System')}</div><div class="event-log-action">${escapeHtml(log.action || '')}${grouped}</div></article>`;
+  }).join('') : '<div class="event-logs-empty">No activity matches this search.</div>';
+}
+
+async function openEventLogs(eventId, eventName = '') {
+  if (!canCurrentUserManageRoles()) return;
+  ensureEventLogsModalStyles();
+  closeEventLogs();
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="modal" id="eventLogsModal" style="display:flex;align-items:center;justify-content:center" onclick="if(event.target===this) closeEventLogs()">
+      <div class="modal-content event-logs-content" role="dialog" aria-modal="true" aria-labelledby="eventLogsTitle">
+        <div class="modal-header event-logs-header"><div><h3 id="eventLogsTitle">Event logs</h3><p>${escapeHtml(eventName || `Event ${eventId}`)}</p></div><button type="button" class="close-btn" onclick="closeEventLogs()" aria-label="Close event logs">&times;</button></div>
+        <div class="event-logs-body"><div class="loading">Loading event activity...</div></div>
+      </div>
+    </div>`);
+  const modal = document.getElementById('eventLogsModal');
+  enhanceModalAccessibility(modal);
+  focusModalStart(modal);
+  try {
+    const response = await apiCall(`/api/events/${Number(eventId)}/logs`);
+    const eventRecord = response.data || {};
+    const records = (Array.isArray(eventRecord.logs) ? eventRecord.logs : [])
+      .filter(log => log && log.action)
+      .slice()
+      .sort((a, b) => String(b.timestamp || b.date || '').localeCompare(String(a.timestamp || a.date || '')));
+    eventLogModalRecords = records;
+    const users = new Set(records.map(log => String(log.user || '').trim()).filter(Boolean));
+    const latestDate = records[0]?.timestamp || records[0]?.date || '';
+    const body = modal?.querySelector('.event-logs-body');
+    if (!body) return;
+    body.innerHTML = `
+      <div class="event-logs-summary"><div class="event-logs-stat"><strong>${records.length}</strong><span>Activity records</span></div><div class="event-logs-stat"><strong>${users.size}</strong><span>Users represented</span></div><div class="event-logs-stat"><strong>${escapeHtml(latestDate || '-')}</strong><span>Latest activity</span></div></div>
+      <input id="eventLogSearch" class="event-log-search" type="search" placeholder="Search by user, item, asset ID, or action" aria-label="Search event logs">
+      <div class="event-log-visible-count">${records.length} of ${records.length} records</div>
+      <div class="event-logs-list"><div id="eventLogRows"></div></div>`;
+    body.querySelector('#eventLogSearch')?.addEventListener('input', renderEventLogModalRows);
+    renderEventLogModalRows();
+  } catch (error) {
+    const body = document.querySelector('#eventLogsModal .event-logs-body');
+    if (body) body.innerHTML = `<div class="event-logs-empty">Unable to load event logs.<div style="margin-top:5px">${escapeHtml(error.message || '')}</div></div>`;
+  }
+}
+
 function toggleEventLogSection(sectionId) {
   const section = document.getElementById(sectionId);
   const toggleIcon = document.getElementById(sectionId + '-toggle');
@@ -16362,7 +18212,7 @@ async function createEventLogViewer(eventId, eventName, eventLogs = []) {
               <span style="font-size: 18px; line-height: 1;">${getActionIcon(actionType)}</span>
               <div style="flex: 1;">
                 <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
-                  <span style="font-weight: bold; color: #333;">${escapeHtml(log.user)}</span>
+                  <span style="font-weight: bold; color: #333;">${escapeHtml(maintenanceLogUserLabel(log))}</span>
                   <span style="color: #999; font-size: 12px;">•</span>
                   <span style="color: #666; font-size: 13px;">${escapeHtml(log.date)}</span>
                 </div>
@@ -18489,10 +20339,20 @@ function planAvailabilityFor(group) {
       group.model
     )
   );
+  const physical = Number(entry?.physical ?? group.count ?? 0);
+  const overlap = Number(entry?.overlappingDemand || 0);
+  const unavailableForCondition = Number(entry?.assetOOC || 0)
+    + Number(entry?.assetMissing || 0)
+    + Number(entry?.bulkMaintenanceOOC || 0)
+    + Number(entry?.bulkMaintenanceMissing || 0);
   return {
+    hasEntry: !!entry,
     available: Number(entry?.available ?? group.count ?? 0),
-    physical: Number(entry?.physical ?? group.count ?? 0),
-    overlap: Number(entry?.overlappingDemand || 0),
+    physical,
+    capacity: entry
+      ? Number(entry?.capacityForThisEvent ?? Math.max(physical - overlap - unavailableForCondition, 0))
+      : 0,
+    overlap,
     overlapEvents: entry?.overlappingEvents || [],
     usedHere: Number(entry?.usedInThisEvent || 0),
     preparable: Number(entry?.preparable ?? entry?.available ?? group.count ?? 0),
@@ -18727,20 +20587,21 @@ function planCustomQuantityControl(custom) {
 function planRequirementShortage(group) {
   const required = Math.max(1, Number(group?.requiredQuantity || 1));
   const availability = planAvailabilityFor(group);
-  const fulfillableForThisEvent = Math.max(
-    0,
-    Number(availability.available || 0) + Number(availability.usedHere || 0)
-  );
+  const fulfillableForThisEvent = Math.max(0, Number(availability.capacity || 0));
   const shortage = Math.max(required - fulfillableForThisEvent, 0);
   if (shortage <= 0) return null;
+  const availabilityDetail = availability.hasEntry
+    ? modelAvailabilityReasonTooltip(
+        availability.available,
+        availability.physical,
+        availability
+      )
+    : 'This asset model is not present in the current inventory.';
   return {
     shortage,
     availability,
-    reason: modelAvailabilityReasonTooltip(
-      availability.available,
-      availability.physical,
-      availability
-    ) || `${shortage} required unit${shortage === 1 ? '' : 's'} cannot be fulfilled with the current inventory/date availability.`
+    reason: `${shortage} of ${required} required unit${required === 1 ? '' : 's'} cannot be fulfilled. ` +
+      `Usable capacity for this event is ${fulfillableForThisEvent}.\n\n${availabilityDetail}`
   };
 }
 
@@ -18752,7 +20613,7 @@ function planShowShortageReason(encodedReason) {
   });
 }
 
-var planReplacementState = { source: null, shortage: 1, search: '' };
+var planReplacementState = { source: null, shortage: 1, sourceQuantity: 1, preset: '', search: '' };
 
 function ensurePlanReplacementModal() {
   let modal = document.getElementById('planReplacementModal');
@@ -18767,7 +20628,21 @@ function ensurePlanReplacementModal() {
         <button type="button" class="close-btn" aria-label="Close" onclick="closeModal('planReplacementModal')">&times;</button>
       </div>
       <div class="plan-replacement-toolbar">
-        <label>Quantity<input id="planReplacementQuantity" type="number" min="1" value="1"></label>
+        <div class="plan-replacement-quantity-panel">
+          <span>Quantity</span>
+          <div class="plan-replacement-quantity-row">
+            <div class="plan-qty-control" aria-label="Replacement quantity">
+              <button type="button" aria-label="Decrease replacement quantity" onclick="planAdjustReplacementQuantity(-1)">&minus;</button>
+              <input id="planReplacementQuantity" type="number" min="1" value="1"
+                     aria-label="Replacement quantity" onchange="planSetReplacementQuantity(this.value)">
+              <button type="button" aria-label="Increase replacement quantity" onclick="planAdjustReplacementQuantity(1)">+</button>
+            </div>
+            <div class="plan-replacement-presets" aria-label="Replacement quantity presets">
+              <button id="planReplacementShort" type="button" title="Replace only the quantity currently short for this event period" onclick="planUseReplacementQuantity('short')">Short</button>
+              <button id="planReplacementAll" type="button" title="Replace the full planned quantity for this item" onclick="planUseReplacementQuantity('all')">All</button>
+            </div>
+          </div>
+        </div>
         <input id="planReplacementSearch" class="form-input" type="search" placeholder="Search replacement assets..."
                oninput="planReplacementState.search=this.value;renderPlanReplacementOptions()">
       </div>
@@ -18785,24 +20660,50 @@ function planOpenReplacement(encodedDepartment, encodedBrand, encodedModel, enco
     model: planDecode(encodedModel),
     description: planDecode(encodedDescription)
   };
+  const sourceGroup = planModelGroups().find(group => modelGroupMatchesEditGroup(
+    group, source.department, source.brand, source.model
+  ));
+  const maxQuantity = Math.max(1, Number(sourceGroup?.requiredQuantity || shortage || 1));
   planReplacementState = {
     source,
-    shortage: Math.max(1, Number(shortage || 1)),
+    shortage: Math.min(Math.max(1, Number(shortage || 1)), maxQuantity),
+    sourceQuantity: maxQuantity,
+    preset: 'short',
     search: ''
   };
   ensurePlanReplacementModal();
   document.getElementById('planReplacementSourceLabel').textContent =
     `${source.brand} ${source.model} needs a replacement`;
-  const quantity = document.getElementById('planReplacementQuantity');
-  const sourceGroup = planModelGroups().find(group => modelGroupMatchesEditGroup(
-    group, source.department, source.brand, source.model
-  ));
-  const maxQuantity = Math.max(1, Number(sourceGroup?.requiredQuantity || planReplacementState.shortage));
-  quantity.value = Math.min(planReplacementState.shortage, maxQuantity);
-  quantity.max = maxQuantity;
+  planUseReplacementQuantity('short');
   document.getElementById('planReplacementSearch').value = '';
   renderPlanReplacementOptions();
   openModal('planReplacementModal');
+}
+
+function planSetReplacementQuantity(value, preset = '') {
+  const input = document.getElementById('planReplacementQuantity');
+  const maximum = Math.max(1, Number(planReplacementState.sourceQuantity || 1));
+  const quantity = Math.min(maximum, Math.max(1, Math.round(Number(value || 1))));
+  if (input) {
+    input.max = maximum;
+    input.value = quantity;
+  }
+  planReplacementState.preset = preset;
+  document.getElementById('planReplacementShort')?.classList.toggle('active', preset === 'short');
+  document.getElementById('planReplacementAll')?.classList.toggle('active', preset === 'all');
+  return quantity;
+}
+
+function planAdjustReplacementQuantity(delta) {
+  const input = document.getElementById('planReplacementQuantity');
+  planSetReplacementQuantity(Number(input?.value || 1) + Number(delta || 0));
+}
+
+function planUseReplacementQuantity(mode) {
+  const quantity = mode === 'all'
+    ? planReplacementState.sourceQuantity
+    : planReplacementState.shortage;
+  planSetReplacementQuantity(quantity, mode);
 }
 
 function renderPlanReplacementOptions() {
@@ -18814,12 +20715,12 @@ function renderPlanReplacementOptions() {
     if (modelGroupMatchesEditGroup(group, source.department, source.brand, source.model)) return false;
     if (query && !planAvailableModelSearchText(group).includes(query)) return false;
     const availability = planAvailabilityFor(group);
-    return Math.max(0, availability.physical - availability.usedHere) > 0;
+    return Math.max(0, availability.available) > 0;
   }).slice(0, 60);
 
   container.innerHTML = options.map(group => {
     const availability = planAvailabilityFor(group);
-    const maximum = Math.max(0, availability.physical - availability.usedHere);
+    const maximum = Math.max(0, availability.available);
     return `
       <div class="plan-replacement-option">
         <div>
@@ -20025,7 +21926,7 @@ function prepareNewAssetCard(asset, options = {}) {
   const status = returned
     ? prepareNewStatusBadge('returned', 'Returned')
     : (assigned
-      ? prepareNewStatusBadge('assigned', options.extra ? 'Extra' : 'Prepared')
+      ? prepareNewStatusBadge(options.extra ? 'extra' : 'assigned', options.extra ? 'Extra' : 'Prepared')
       : missing
         ? prepareNewStatusBadge('missing', 'Missing')
         : prepareNewStatusBadge('available', 'Available'));
@@ -20046,13 +21947,13 @@ function prepareNewAssetCard(asset, options = {}) {
                  ${canAssign ? '' : 'disabled'}
                  onclick="event.stopPropagation();prepareNewAssignAsset(${eventId}, '${encodedId}')">Assign</button>`);
   return `
-    <div class="prepare-new-asset-card ${assigned ? 'assigned' : ''} ${missing ? 'missing' : ''} ${degraded ? 'degraded' : ''}">
+    <div class="prepare-new-asset-card ${assigned ? 'assigned' : ''} ${options.extra ? 'extra' : ''} ${missing ? 'missing' : ''} ${degraded ? 'degraded' : ''}">
       <div title="${escapeHtmlAttr(label)}">
         <strong>${escapeHtml(label)}</strong>
         <small>${escapeHtml(serial)}</small>
         ${flagBadges ? `<div class="prepare-new-asset-flags">${flagBadges}</div>` : ''}
       </div>
-      <div>${action || status}</div>
+      <div class="prepare-new-asset-controls">${options.extra ? status : ''}${action || (options.extra ? '' : status)}</div>
     </div>
   `;
 }
@@ -20073,16 +21974,16 @@ function prepareNewModelSection(group) {
   ).filter(asset => !asset?.isBulk);
   const key = prepareNewModelKey(group);
   const complete = countablePrepared >= required;
-  const isOpen = !isBulk && complete && prepareNewPageState.expandedModels.has(key);
+  const isOpen = !isBulk && prepareNewPageState.expandedModels.has(key);
   const modelName = [group.brand, group.model].filter(Boolean).join(' ') || 'Unspecified model';
-  const canAssignExactAssets = !isBulk && complete;
+  const canAssignExactAssets = !isBulk;
   const allCards = [
     ...assigned.map(asset => prepareNewAssetCard(asset, {
       assigned: true,
       extra: !!asset?.isExtra
     })),
     ...(canAssignExactAssets
-      ? available.map(asset => prepareNewAssetCard(asset, { canAssign: openSlots > 0 }))
+      ? available.map(asset => prepareNewAssetCard(asset, { canAssign: true }))
       : [])
   ];
   const encodedKey = planEncode(key);
@@ -20109,7 +22010,7 @@ function prepareNewModelSection(group) {
   const spareLabel = extraPrepared > 0
     ? `<span class="prepare-new-spare-label">${extraPrepared} spare</span>`
     : '';
-  const showExactAssetPanel = !isBulk && (complete || assigned.length > 0);
+  const showExactAssetPanel = !isBulk;
   return `
     <details class="prepare-new-model" ${isOpen ? 'open' : ''}
              ontoggle="prepareNewSetModelExpanded('${encodedKey}', this.open)">
@@ -20125,7 +22026,7 @@ function prepareNewModelSection(group) {
       ${showExactAssetPanel ? `<div class="prepare-new-model-assets">
         <div class="prepare-new-model-assets-head">
           <span>Select exact assets from inventory</span>
-          <span>${openSlots} prepared slot${openSlots === 1 ? '' : 's'} ready to assign</span>
+          <span>${Math.max(0, required - countablePrepared)} still required${extraPrepared > 0 ? ` · ${extraPrepared} spare` : ''}</span>
         </div>
         <div class="prepare-new-asset-grid">
           ${allCards.length ? allCards.join('') : '<div class="prepare-new-empty">No matching assets are currently available.</div>'}
@@ -20199,8 +22100,20 @@ function renderPrepareNewDirectRequirements(rows) {
   }).join('');
 }
 
+function prepareNewStandaloneExtras() {
+  const extrasShownInRequirements = new Set();
+  prepareNewModelGroups().forEach(group => {
+    (group.assignedAssets || []).forEach(asset => {
+      if (asset?.isExtra && asset?.id) extrasShownInRequirements.add(String(asset.id));
+    });
+  });
+  return (prepareNewSnapshot().extras || []).filter(
+    asset => !extrasShownInRequirements.has(String(asset?.id || ''))
+  );
+}
+
 function prepareNewExtrasSection() {
-  const extras = prepareNewSnapshot().extras || [];
+  const extras = prepareNewStandaloneExtras();
   if (!extras.length) return '';
   return `
     <details class="prepare-new-department">
@@ -22050,27 +23963,18 @@ document.addEventListener("DOMContentLoaded", function () {
       updateMaintenanceMediaSelection("maintenanceMediaFiles", "maintenanceMediaFileList");
     });
   }
+  setupMaintenanceMediaDropzone('maintenanceMediaFiles', 'maintenanceMediaFileList', 'maintenanceMediaDropzone');
 
   // Maintenance search functionality
   const maintenanceSearch = document.getElementById("maintenance-search");
   if (maintenanceSearch) {
     maintenanceSearch.addEventListener("input", function (e) {
-      const searchTerm = e.target.value.toLowerCase();
-      const filteredAssets = assets.filter(
-        (asset) => {
-          const assetId = getAssetIdentifierForApi(asset).toLowerCase();
-          return (
-          assetId.includes(searchTerm) ||
-          String(asset.id || '').toLowerCase().includes(searchTerm) ||
-          asset.brand.toLowerCase().includes(searchTerm) ||
-          asset.model.toLowerCase().includes(searchTerm) ||
-          (asset.description &&
-            asset.description.toLowerCase().includes(searchTerm))
-          );
-        }
-      );
-
-      displayMaintenanceAssets(filteredAssets);
+      clearTimeout(maintenanceSearchTimer);
+      maintenanceSearchTimer = setTimeout(() => {
+        const activeTab = document.querySelector('.maintenance-tab.active')?.dataset.tab || 'all';
+        if (activeTab === 'ooc') filterOOCAssets();
+        else applyMaintenanceRecentFilters();
+      }, 120);
     });
   }
 
@@ -22420,12 +24324,9 @@ function updateSelectedAssetsDisplay() {
 }
 
 function switchMaintenanceTab(tabName) {
-  // Remove active class from all tabs
   document.querySelectorAll(".maintenance-tab").forEach((tab) => {
     tab.classList.remove("active");
-    tab.style.background = "none";
-    tab.style.borderBottomColor = "transparent";
-    tab.style.color = "#666";
+    tab.setAttribute('aria-selected', 'false');
   });
 
   // Remove active class from all content
@@ -22434,13 +24335,10 @@ function switchMaintenanceTab(tabName) {
     content.style.display = "none";
   });
 
-  // Add active class to clicked tab
   const activeTab = document.querySelector(`[data-tab="${tabName}"]`);
   if (activeTab) {
     activeTab.classList.add("active");
-    activeTab.style.background = "rgba(118, 75, 162, 0.05)";
-    activeTab.style.borderBottomColor = "#764ba2";
-    activeTab.style.color = "#764ba2";
+    activeTab.setAttribute('aria-selected', 'true');
   }
 
   // Show corresponding content
@@ -22450,19 +24348,10 @@ function switchMaintenanceTab(tabName) {
     contentDiv.style.display = "block";
   }
 
-  // Show/hide the "Log Maintenance" button based on the active tab
-  const logMaintenanceBtn = document.getElementById('log-maintenance-btn');
-  if (logMaintenanceBtn) {
-    if (tabName === 'ooc') {
-      // Hide the button in OOC/Missing tab
-      logMaintenanceBtn.style.display = 'none';
-    } else {
-      // Show the button in All Assets tab
-      logMaintenanceBtn.style.display = 'inline-block';
-    }
-  }
+  const search = document.getElementById('maintenance-search');
+  if (search) search.placeholder = tabName === 'ooc' ? 'Search asset or serial needing attention' : 'Search asset, serial, model, log or user';
+  renderMaintenanceFilterButtons();
 
-  // Load appropriate data
   if (tabName === "all") {
     loadMaintenanceAssets();
   } else if (tabName === "ooc") {
@@ -22473,27 +24362,12 @@ function switchMaintenanceTab(tabName) {
 async function loadOOCAssets() {
   try {
     const response = await apiCall("/api/assets");
-    maintenanceFlaggedAssets = response.data.filter(asset =>
-      asset.isOOC ||
-      asset.isMissing ||
-      asset.isDegraded ||
-      asset.isDisposed ||
-      asset.isDecommissioned ||
-      (asset.isBulk && (
-        Number(asset.bulkOOCQuantity || 0) > 0 ||
-        Number(asset.bulkMissingQuantity || 0) > 0 ||
-        Number(asset.bulkDegradedQuantity || 0) > 0
-      ))
-    );
+    assets = response.data || [];
+    maintenanceFlaggedAssets = getMaintenanceFlaggedAssets(assets);
+    renderMaintenanceDashboardSummary(assets);
+    renderMaintenanceFilterButtons();
     
     filterOOCAssets();
-    
-    // Set up search functionality
-    const searchInput = document.getElementById("ooc-search");
-    if (searchInput) {
-      searchInput.removeEventListener("input", filterOOCAssets);
-      searchInput.addEventListener("input", filterOOCAssets);
-    }
     
   } catch (error) {
     console.error("Error loading flagged assets:", error);
@@ -22545,6 +24419,29 @@ function flaggedMaintenanceVirtualRowHtml(asset) {
   `;
 }
 
+function maintenanceFlagColour(asset) {
+  if (asset.isOOC || asset.status === 'ooc' || Number(asset.bulkOOCQuantity || 0) > 0) return '#d84b52';
+  if (asset.isMissing || asset.status === 'missing' || Number(asset.bulkMissingQuantity || 0) > 0) return '#64748b';
+  if (asset.isDegraded || asset.status === 'degraded' || Number(asset.bulkDegradedQuantity || 0) > 0) return '#d99a18';
+  return '#334b44';
+}
+
+function flaggedMaintenanceCardHtml(asset) {
+  const assetId = getAssetIdentifierForApi(asset);
+  const displayId = assetMaintenanceDisplayId(asset);
+  const lastMaintenance = inventoryLatestMaintenance([asset]);
+  const lastFlagged = getLastFlaggedMaintenanceLog(asset);
+  const model = [asset.brand, asset.model].filter(Boolean).join(' ') || 'Unspecified model';
+  const reason = lastFlagged?.record?.description || (lastFlagged?.status ? `Marked ${lastFlagged.status.toUpperCase()}` : 'No issue reason was recorded.');
+  return `
+    <article class="maintenance-flagged-item ooc-asset-item" data-asset-id="${escapeHtmlAttr(assetId)}" role="button" tabindex="0" style="--flag-color:${maintenanceFlagColour(asset)}" onclick="viewMaintenanceLog('${escapeJs(assetId)}')" onkeydown="if(event.target===this&&(event.key==='Enter'||event.key===' ')){event.preventDefault();viewMaintenanceLog('${escapeJs(assetId)}')}">
+      <div class="maintenance-flagged-top"><div><span class="maintenance-asset-id">${escapeHtml(displayId)}${asset.isBulk ? ' <span class="asset-badge status-available">Bulk</span>' : ''}</span><span class="maintenance-asset-model">${escapeHtml(model)}</span></div><div>${assetFlagBadgesHtml(asset)}</div></div>
+      <div class="maintenance-flagged-reason">${escapeHtml(reason)}</div>
+      <div class="maintenance-flagged-footer"><span>${escapeHtml(inventoryMaintenanceDateText(lastMaintenance))} · ${escapeHtml(asset.location || 'Store')}</span><button type="button" class="maintenance-add-log" onclick="event.stopPropagation();openFlaggedAssetLogEntry('${escapeJs(assetId)}')">Add log</button></div>
+    </article>
+  `;
+}
+
 function displayOOCAssets(oocAssets) {
   const container = document.getElementById("ooc-assets-list");
   if (!container) return;
@@ -22553,31 +24450,14 @@ function displayOOCAssets(oocAssets) {
     destroyVirtualTable('maintenance-flagged');
     const hasSearch = !!document.getElementById('ooc-search')?.value.trim();
     container.innerHTML = hasSearch
-      ? '<p style="text-align: center; color: #666; padding: 40px;">No flagged assets match this search.</p>'
-      : '<p style="text-align: center; color: #666; padding: 40px;">No assets are currently marked as OOC, Missing, Degraded, or Decommissioned.</p>';
+      ? '<div class="maintenance-empty">No assets needing attention match this search.</div>'
+      : '<div class="maintenance-empty">No assets are currently OOC, missing, degraded or decommissioned.</div>';
     return;
   }
 
+  destroyVirtualTable('maintenance-flagged');
   const sortedAssets = sortAssetsByLastAddedMaintenanceLog([...oocAssets]);
-  renderVirtualTable({
-    stateKey: 'maintenance-flagged',
-    container,
-    items: sortedAssets,
-    columnCount: 7,
-    estimatedRowHeight: 62,
-    headerHtml: `
-      <tr>
-        <th>Asset ID</th>
-        <th>Brand & Model</th>
-        <th>Status</th>
-        <th>Location</th>
-        <th>Last Maintenance</th>
-        <th>Flagged Reason</th>
-        <th>Actions</th>
-      </tr>
-    `,
-    rowHtml: flaggedMaintenanceVirtualRowHtml
-  });
+  container.innerHTML = `<div class="maintenance-flagged-grid">${sortedAssets.map(flaggedMaintenanceCardHtml).join('')}</div>`;
 }
 
 
@@ -23243,7 +25123,7 @@ function viewMaintenanceLogDetail(assetId, logIndex) {
             <h3 class="modal-title" style="margin-bottom:4px;">Maintenance Log - ${escapeHtml(safeAssetId)}</h3>
             <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;color:#6c757d;font-size:13px;">
               <span>${escapeHtml(log.date || '')}</span>
-              <span>by ${escapeHtml(log.user || '')}</span>
+              <span>by ${escapeHtml(maintenanceLogUserLabel(log))}</span>
               ${maintenanceLogTypeBadgeHtml(log.type)}
               ${maintenanceLogOriginBadgeHtml(log)}
             </div>
@@ -23259,7 +25139,7 @@ function viewMaintenanceLogDetail(assetId, logIndex) {
             </div>
             <div style="padding:12px;border:1px solid #e9ecef;border-radius:8px;background:#f8f9fa;">
               <div style="font-size:11px;color:#777;text-transform:uppercase;margin-bottom:4px;">Changes</div>
-              <div style="font-weight:600;">${changes.length ? changes.map(change => escapeHtml(change)).join('<br>') : 'No changes'}</div>
+              <div style="display:flex;gap:5px;flex-wrap:wrap;">${changes.length ? changes.map(maintenanceChangeBadgeHtml).join('') : '<span style="color:#64748b;font-size:11px">No changes</span>'}</div>
             </div>
           </div>
 
@@ -23297,7 +25177,150 @@ function viewMaintenanceLogDetail(assetId, logIndex) {
 }
 
 
+function maintenanceTimelineColour(log) {
+  const statuses = getMaintenanceChangeLabels(log).join(' ').toLowerCase();
+  if (statuses.includes('ooc') || statuses.includes('decommissioned')) return '#d84b52';
+  if (statuses.includes('missing')) return '#64748b';
+  if (statuses.includes('degraded')) return '#d99a18';
+  if (statuses.includes('cleared')) return '#159f6a';
+  return '#0f766e';
+}
+
+function maintenanceChangeBadgeHtml(label) {
+  const value = String(label || '').toLowerCase();
+  let background = '#eaf3fb';
+  let color = '#155b8f';
+  if (value.includes('cleared')) {
+    background = '#e7f6ee';
+    color = '#13734c';
+  } else if (value.includes('ooc')) {
+    background = '#fdebed';
+    color = '#a61b29';
+  } else if (value.includes('missing')) {
+    background = '#fff0e2';
+    color = '#a34d08';
+  } else if (value.includes('degraded')) {
+    background = '#fff3df';
+    color = '#8a5b08';
+  } else if (value.includes('decommissioned') || value.includes('disposed')) {
+    background = '#edf0f2';
+    color = '#3f4d48';
+  } else if (value.includes('serial:')) {
+    background = '#f1eafd';
+    color = '#63349a';
+  }
+  return `<span class="maintenance-change-badge" style="display:inline-flex;align-items:center;min-height:22px;padding:3px 7px;border-radius:5px;background:${background};color:${color};font-size:10px;font-weight:800;line-height:1.2">${escapeHtml(label)}</span>`;
+}
+
+function filterMaintenanceLogTimeline(input) {
+  const modal = input?.closest('#maintenanceLogModal');
+  if (!modal) return;
+  const query = String(input.value || '').trim().toLowerCase();
+  let visible = 0;
+  modal.querySelectorAll('.maintenance-timeline-item').forEach(item => {
+    const matches = !query || String(item.dataset.search || '').includes(query);
+    item.classList.toggle('is-filtered', !matches);
+    if (matches) visible += 1;
+  });
+  const count = modal.querySelector('[data-maintenance-visible-count]');
+  if (count) count.textContent = `${visible} shown`;
+}
+
 function showMaintenanceLogModal(asset) {
+  if (asset?.isBulk) {
+    showBulkMaintenanceLogModal(asset);
+    return;
+  }
+
+  const records = getMaintenanceLogRecords(asset).map((log, originalIndex) => ({ ...log, originalIndex }));
+  records.sort((a, b) => maintenanceLogDateSortValue(b.date) - maintenanceLogDateSortValue(a.date));
+  const safeAssetId = getAssetIdentifierForApi(asset);
+  const eventHistoryContainerId = `assetEventHistory_${String(safeAssetId).replace(/[^a-zA-Z0-9]/g, '_')}`;
+  const condition = getAssetConditionStatus(asset);
+  const conditionLabel = INVENTORY_CONDITION_META[condition]?.label || inventoryStatusText(condition);
+  const lastMaintenance = records[0] || null;
+  const attachmentCount = records.reduce((total, log) => total + normalizeMaintenanceMedia(log.media).length, 0);
+  const loggedCost = records.reduce((total, log) => total + (Number(log.cost || 0) || 0), 0);
+
+  document.getElementById('maintenanceLogModal')?.remove();
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="modal maintenance-log-modal" id="maintenanceLogModal" style="display:flex;align-items:center;justify-content:center">
+      <div class="modal-content maintenance-log-content" style="max-width:1120px;width:94%;height:min(820px,92vh);display:flex;flex-direction:column;overflow:hidden;padding:18px">
+        <div class="modal-header" style="flex:none;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid #dfe8e5">
+          <div>
+            <h3 class="modal-title" id="maintenanceLogTitle" style="margin:0">Asset past logs</h3>
+            <div style="margin-top:3px;color:#64748b;font-size:11px">${escapeHtml(asset.brand || 'Unbranded')} ${escapeHtml(asset.model || 'Unspecified model')} · ${escapeHtml(safeAssetId)}</div>
+          </div>
+          <button class="close-btn" onclick="closeMaintenanceLogModal()" aria-label="Close">&times;</button>
+        </div>
+        <div class="maintenance-history-shell">
+          <aside class="maintenance-history-aside">
+            <div class="maintenance-asset-heading">
+              <strong>${escapeHtml(safeAssetId)}</strong>
+              <span>${escapeHtml(asset.description || 'No description')}</span>
+              <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">${departmentBadgeHtml(asset.department)} ${statusBadgeHtml(condition, conditionLabel)}</div>
+            </div>
+            <dl style="display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px 12px;margin:13px 2px 17px;font-size:11px">
+              <dt style="color:#64748b">Serial</dt><dd style="margin:0;color:#263d36;font-weight:700;overflow-wrap:anywhere">${escapeHtml(asset.serial || 'Not recorded')}</dd>
+              <dt style="color:#64748b">Location</dt><dd style="margin:0;color:#263d36;font-weight:700">${escapeHtml(asset.currentLocation || asset.location || 'Store')}</dd>
+              <dt style="color:#64748b">Last maintenance</dt><dd style="margin:0;color:#263d36;font-weight:700">${escapeHtml(inventoryMaintenanceDateText(lastMaintenance))}</dd>
+              <dt style="color:#64748b">Entries</dt><dd style="margin:0;color:#263d36;font-weight:700">${records.length}</dd>
+            </dl>
+            <h4 style="margin:0 0 8px;color:#172b26;font-size:12px">Event use history</h4>
+            <div id="${eventHistoryContainerId}" class="asset-event-history-wrap"><div style="padding:12px;border:1px solid #e1eae7;border-radius:6px;color:#64748b;font-size:11px">Loading...</div></div>
+          </aside>
+          <main class="maintenance-history-main">
+            <div class="maintenance-history-overview">
+              <div class="maintenance-history-stat"><strong>${records.length}</strong><span>Maintenance entries</span></div>
+              <div class="maintenance-history-stat"><strong>${attachmentCount}</strong><span>Photos and videos</span></div>
+              <div class="maintenance-history-stat"><strong>${loggedCost ? `$${loggedCost.toFixed(2)}` : '-'}</strong><span>Recorded maintenance cost</span></div>
+            </div>
+            <div class="maintenance-history-toolbar">
+              <h4>Maintenance history</h4>
+              <input type="search" class="maintenance-history-search" placeholder="Search logs" aria-label="Search maintenance logs" oninput="filterMaintenanceLogTimeline(this)">
+              <button type="button" class="btn btn-primary" style="padding:7px 11px;font-size:11px" onclick="addNewLogEntryFromModal('${escapeJs(safeAssetId)}')">Add log entry</button>
+            </div>
+            <div data-maintenance-visible-count style="margin:-5px 0 7px;color:#64748b;font-size:9px;font-weight:700">${records.length} shown</div>
+            <div class="maintenance-timeline">
+              ${records.length ? records.map(log => {
+                const changes = getMaintenanceChangeLabels(log);
+                const canEdit = canCurrentUserModifyMaintenanceLog(log);
+                const canDelete = isAdminUser() && !isContainerMaintenanceLog(log);
+                const mediaCount = normalizeMaintenanceMedia(log.media).length;
+                return `
+                  <article class="maintenance-timeline-item" data-search="${escapeHtmlAttr(`${log.date || ''} ${maintenanceLogUserLabel(log)} ${log.type || ''} ${log.description || ''} ${changes.join(' ')}`.toLowerCase())}" style="--timeline-color:${maintenanceTimelineColour(log)}" role="button" tabindex="0" onclick="viewMaintenanceLogDetail('${escapeJs(safeAssetId)}',${log.originalIndex})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();viewMaintenanceLogDetail('${escapeJs(safeAssetId)}',${log.originalIndex})}">
+                    <div class="maintenance-timeline-top">
+                      <div><span class="maintenance-timeline-date">${escapeHtml(inventoryMaintenanceDateText(log))}</span><span class="maintenance-timeline-user"> by ${escapeHtml(maintenanceLogUserLabel(log) || 'Unknown user')}</span></div>
+                      <div class="maintenance-timeline-actions">
+                        ${canEdit ? `<button type="button" class="inventory-icon-button" title="Edit log" aria-label="Edit log" onclick="event.preventDefault();event.stopPropagation();editMaintenanceLog('${escapeJs(safeAssetId)}',${log.originalIndex},'')">${inventoryIcon('edit')}</button>` : ''}
+                        ${canDelete ? `<button type="button" class="inventory-icon-button" title="Delete log" aria-label="Delete log" onclick="event.preventDefault();event.stopPropagation();deleteMaintenanceLog('${escapeJs(safeAssetId)}',${log.originalIndex},'')">${inventoryIcon('trash')}</button>` : ''}
+                      </div>
+                    </div>
+                    <div class="maintenance-timeline-meta">${maintenanceLogTypeBadgeHtml(log.type)} ${maintenanceLogOriginBadgeHtml(log)} ${changes.map(maintenanceChangeBadgeHtml).join('')}</div>
+                    <div class="maintenance-timeline-description">${escapeHtml(log.description || 'No description')}</div>
+                    ${(mediaCount || Number(log.cost || 0)) ? `<div class="maintenance-timeline-meta" style="color:#64748b;font-size:10px">${mediaCount ? `<span>${mediaCount} attachment${mediaCount === 1 ? '' : 's'}</span>` : ''}${Number(log.cost || 0) ? `<span>${maintenanceCostDisplayHtml(log.cost, '')}</span>` : ''}</div>` : ''}
+                  </article>
+                `;
+              }).join('') : '<div class="inventory-empty" style="border:1px dashed #cfddd8;border-radius:7px">No maintenance logs yet.</div>'}
+            </div>
+          </main>
+        </div>
+        <div class="modal-actions" style="flex:none;margin-top:14px;padding-top:12px;border-top:1px solid #dfe8e5"><button type="button" class="btn btn-secondary" onclick="closeMaintenanceLogModal()">Close</button></div>
+      </div>
+    </div>
+  `);
+
+  const modal = document.getElementById('maintenanceLogModal');
+  modal?.setAttribute('role', 'dialog');
+  modal?.setAttribute('aria-modal', 'true');
+  modal?.setAttribute('aria-labelledby', 'maintenanceLogTitle');
+  modal?.addEventListener('click', event => { if (event.target === modal) closeMaintenanceLogModal(); });
+  enhanceModalAccessibility(modal);
+  focusModalStart(modal);
+  setTimeout(() => loadAssetEventHistoryCards(safeAssetId, eventHistoryContainerId), 0);
+}
+
+function showMaintenanceLogModalLegacy(asset) {
   if (asset?.isBulk) {
     showBulkMaintenanceLogModal(asset);
     return;
@@ -23499,7 +25522,7 @@ function showMaintenanceLogModal(asset) {
         >
           <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; vertical-align: top; font-weight: 500; text-align: center;">${displayNumber}</td>
           <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; vertical-align: top; font-size: 13px;">${log.date}</td>
-          <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; vertical-align: top; font-size: 13px;">${escapeHtml(log.user)}</td>
+          <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; vertical-align: top; font-size: 13px;">${escapeHtml(maintenanceLogUserLabel(log))}</td>
           <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; vertical-align: top; font-size: 13px;">
             ${maintenanceLogTypeBadgeHtml(log.type)}
             ${maintenanceLogOriginBadgeHtml(log)}
@@ -23677,10 +25700,49 @@ async function loadAssetEventHistory(assetId, containerId) {
   }
 }
 
+async function loadAssetEventHistoryCards(assetId, containerId) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  container.innerHTML = '<div style="padding:12px;border:1px solid #e1eae7;border-radius:6px;color:#64748b;font-size:11px">Loading...</div>';
+  try {
+    const response = await apiCall(`/api/assets/${encodeURIComponent(assetId)}/event-history`);
+    const rows = response?.success && Array.isArray(response.data) ? response.data : [];
+    if (!rows.length) {
+      container.innerHTML = '<div style="padding:12px;border:1px dashed #cfddd8;border-radius:6px;color:#64748b;font-size:11px">No event use recorded.</div>';
+      return;
+    }
+    container.innerHTML = `<div style="display:grid;gap:6px">${rows.map(eventItem => {
+      const dateRange = eventItem.startDate && eventItem.endDate && eventItem.startDate !== eventItem.endDate
+        ? `${eventItem.startDate} - ${eventItem.endDate}`
+        : (eventItem.startDate || eventItem.endDate || 'Date not set');
+      const eventId = Number(eventItem.id || 0);
+      return `
+        <div class="asset-history-event-card" role="button" tabindex="0" style="padding:9px 10px;border:1px solid #e1eae7;border-radius:6px;background:#fff;cursor:pointer" onclick="closeMaintenanceLogModal();viewEvent(${eventId})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();closeMaintenanceLogModal();viewEvent(${eventId})}">
+          <div style="display:flex;justify-content:space-between;gap:7px;align-items:flex-start">
+            <strong style="min-width:0;color:#263d36;font-size:11px;overflow-wrap:anywhere">${escapeHtml(eventItem.name || `Event ${eventItem.id || ''}`)}</strong>
+            ${statusBadgeHtml(eventItem.returned ? 'available' : 'deployed', eventItem.returned ? 'Returned' : 'Out')}
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:5px;color:#64748b;font-size:10px">
+            <span>${escapeHtml(getTagDisplay(eventItem.tag || 'events'))} #${escapeHtml(String(eventItem.id || ''))}</span>
+            <span>${escapeHtml(dateRange)}</span>
+          </div>
+          ${eventItem.location ? `<div style="margin-top:4px;color:#64748b;font-size:10px">${escapeHtml(eventItem.location)}</div>` : ''}
+          ${canCurrentUserManageRoles() ? `<div style="display:flex;justify-content:flex-end;margin-top:7px"><button type="button" class="maintenance-event-logs-button" onclick="event.preventDefault();event.stopPropagation();openEventLogs(${eventId}, '${escapeJs(eventItem.name || '')}')">View event logs</button></div>` : ''}
+        </div>
+      `;
+    }).join('')}</div>`;
+  } catch (error) {
+    console.error('Failed to load asset event history:', error);
+    container.innerHTML = '<div style="padding:12px;border:1px solid #f2c9cd;border-radius:6px;color:#b4232d;font-size:11px">Unable to load event history.</div>';
+  }
+}
+
 if (typeof window !== 'undefined') {
   window.showMaintenanceLogModal = showMaintenanceLogModal;
   window.viewMaintenanceLogDetail = viewMaintenanceLogDetail;
   window.closeMaintenanceLogDetailModal = closeMaintenanceLogDetailModal;
+  window.openEventLogs = openEventLogs;
+  window.closeEventLogs = closeEventLogs;
 }
 
 //WHAT IS LOVE, BABY DONT HURT ME, DONT HURT ME NO MOREEE
@@ -23965,25 +26027,16 @@ async function updateCustomAssetQuantity(eventId, oldAssetId, assetName, assetTy
 
 // Filter OOC assets (for search functionality)
 function filterOOCAssets() {
-  const searchInput = document.getElementById('ooc-search');
+  const searchInput = document.getElementById('maintenance-search');
   const searchTerm = searchInput?.value.toLowerCase().trim() || '';
 
   const filteredAssets = maintenanceFlaggedAssets.filter(asset => {
+    if (!maintenanceAssetMatchesCondition(asset, maintenanceConditionFilter)) return false;
     if (!searchTerm) return true;
 
     const lastMaintenance = getLastAddedMaintenanceLog(asset);
     const lastFlagged = getLastFlaggedMaintenanceLog(asset);
-    const searchableText = [
-      getAssetIdentifierForApi(asset),
-      assetMaintenanceDisplayId(asset),
-      asset.brand,
-      asset.model,
-      asset.status,
-      asset.location,
-      lastMaintenance?.date,
-      lastFlagged?.status,
-      lastFlagged?.record?.description
-    ].filter(Boolean).join(' ').toLowerCase();
+    const searchableText = `${maintenanceAssetSearchText(asset)} ${lastMaintenance?.date || ''} ${lastFlagged?.status || ''} ${lastFlagged?.record?.description || ''}`.toLowerCase();
 
     return searchableText.includes(searchTerm);
   });
@@ -24094,7 +26147,7 @@ function editMaintenanceLog(assetId, logIndex, logId) {
               </div>
 
               <div class="form-group" style="margin-bottom:0;">
-                <label class="form-label" for="editMaintenanceAssetStatus">Asset Status</label>
+                <label class="form-label" for="editMaintenanceAssetStatus">Asset Status Change</label>
                 ${maintenanceStatusSelectHtml('editMaintenanceAssetStatus', 'editAssetStatus', defaultStatusValue)}
               </div>
 
@@ -25420,20 +27473,33 @@ function buildPackingListPdfPages(event, snapshot, context) {
   `).join('');
 }
 
-async function generatePackingList(eventId) {
+function openPackingListPage(eventId) {
+  const id = Number(eventId || 0);
+  if (!id) {
+    showNotification('error', 'No event selected');
+    return;
+  }
+  const opened = window.open(`/packing-list/${id}`, '_blank');
+  if (opened) opened.opener = null;
+  else showNotification('error', 'Pop-up blocked. Please allow pop-ups to open the packing list.');
+}
+
+async function generatePackingList(eventId, options = {}) {
   if (!eventId) {
     showNotification('error', 'No event selected');
     return;
   }
 
-  const packingWindow = window.open('', '_blank', 'width=950,height=1000');
+  const packingWindow = options.targetWindow || window.open('', '_blank', 'width=950,height=1000');
   if (!packingWindow) {
     showNotification('error', 'Pop-up blocked. Please allow pop-ups to export the packing list PDF.');
     return;
   }
 
-  packingWindow.document.write(`<!DOCTYPE html><html><head><title>Preparing Packing List</title></head><body style="font-family:Arial,sans-serif;padding:24px;">Preparing the latest packing list...</body></html>`);
-  packingWindow.document.close();
+  if (!options.targetWindow) {
+    packingWindow.document.write(`<!DOCTYPE html><html><head><title>Preparing Packing List</title></head><body style="font-family:Arial,sans-serif;padding:24px;">Preparing the latest packing list...</body></html>`);
+    packingWindow.document.close();
+  }
 
   try {
     const [response] = await Promise.all([
@@ -25516,7 +27582,9 @@ async function generatePackingList(eventId) {
     packingWindow.document.write(html);
     packingWindow.document.close();
     packingWindow.focus();
-    showNotification('success', 'Packing list PDF generated from the latest event state');
+    if (!options.targetWindow) {
+      showNotification('success', 'Packing list PDF generated from the latest event state');
+    }
   } catch (error) {
     console.error('Packing list PDF generation failed:', error);
     if (!packingWindow.closed) {
@@ -25530,27 +27598,25 @@ async function generatePackingList(eventId) {
 
 let currentDeliveryOrderEvent = null;
 
-async function openDeliveryOrderTab(eventId) {
+async function openDeliveryOrderTab(eventId, options = {}) {
     // Use stored event data if available, otherwise fetch it
     if (window.currentEventData && window.currentEventData.id === eventId) {
         currentDeliveryOrderEvent = window.currentEventData;
         await populateDeliveryOrderForm(window.currentEventData);
-        showSection('delivery-order');
-        
-        // Update the tab to show it's active
-        const deliveryTab = document.getElementById('delivery-order-tab');
-        if (deliveryTab) deliveryTab.click();
+        showSection('delivery-order', { updateHistory: false, loadDetail: false });
+        if (options.updateHistory !== false) {
+          updateAppDetailHistory(`/delivery-order/${Number(eventId)}`, options.replaceHistory === true);
+        }
     } else {
         // Fallback: fetch event data
         try {
             const response = await apiCall(`/api/events/${eventId}`);
             currentDeliveryOrderEvent = response.data;
             await populateDeliveryOrderForm(response.data);
-            showSection('delivery-order');
-            
-            // Update the tab to show it's active
-            const deliveryTab = document.getElementById('delivery-order-tab');
-            if (deliveryTab) deliveryTab.click();
+            showSection('delivery-order', { updateHistory: false, loadDetail: false });
+            if (options.updateHistory !== false) {
+              updateAppDetailHistory(`/delivery-order/${Number(eventId)}`, options.replaceHistory === true);
+            }
         } catch (error) {
             console.error('Error fetching event data:', error);
             showNotification('error', 'Failed to load event data');
@@ -26804,6 +28870,73 @@ function setupDoItemDragHandlers(previewContainer, eventId) {
   });
 }
 
+function getDeliveryOrderAssetCatalog() {
+  const grouped = new Map();
+  (assets || []).forEach(asset => {
+    if (!asset || isCustomAssetId(asset.id)) return;
+    const department = departmentCodeToDoName(asset.department || 'UN');
+    const brand = String(asset.brand || '').trim();
+    const model = String(asset.model || asset.name || '').trim();
+    const description = String(asset.description || '').trim();
+    const label = [brand, model].filter(Boolean).join(' ') || description || String(asset.id || 'Asset');
+    const detail = description && description.toLowerCase() !== label.toLowerCase() ? description : '';
+    const key = [department, brand, model, description].map(value => value.toLowerCase()).join('|');
+    if (!grouped.has(key)) grouped.set(key, { department, brand, model, description, label, detail });
+  });
+  return Array.from(grouped.values()).sort((a, b) =>
+    a.department.localeCompare(b.department) || a.label.localeCompare(b.label, undefined, { numeric: true })
+  );
+}
+
+function deliveryOrderDepartmentOptions(selected, names = []) {
+  const options = new Set([...getDefaultDoDepartments(), ...names, selected].filter(Boolean));
+  return Array.from(options).sort((a, b) => a.localeCompare(b)).map(name =>
+    `<option value="${escapeHtmlAttr(name)}"${name === selected ? ' selected' : ''}>${escapeHtml(name)}</option>`
+  ).join('');
+}
+
+function removeDeliveryOrderItem(eventId, { key, kind, customId }) {
+  const state = getDoEdits(eventId);
+  if (kind === 'do-custom') {
+    const stableId = customId || String(key || '').replace(/^DOCUSTOM\|/, '');
+    let removed = false;
+    Object.keys(state.custom || {}).forEach(department => {
+      const before = state.custom[department].length;
+      state.custom[department] = state.custom[department].filter(item => item.id !== stableId);
+      if (state.custom[department].length !== before) removed = true;
+    });
+    if (!removed) return false;
+  } else if (key) {
+    state.deleted[key] = true;
+  } else {
+    return false;
+  }
+  saveDoEdits(eventId, state);
+  return true;
+}
+
+function removeDeliveryOrderRow(button) {
+  const row = button?.closest('.do-item-row');
+  const event = currentDeliveryOrderEvent;
+  if (!row || !event) {
+    showNotification('error', 'Could not identify that delivery order line.');
+    return false;
+  }
+  const eventId = event.id || event.event_id || window.currentEventId || '0';
+  const removed = removeDeliveryOrderItem(eventId, {
+    key: row.getAttribute('data-key'),
+    kind: row.getAttribute('data-kind'),
+    customId: row.getAttribute('data-custom-id')
+  });
+  if (!removed) {
+    showNotification('error', 'Could not find that delivery order line. Please reopen the editor and try again.');
+    return false;
+  }
+  showNotification('success', 'Item removed from the delivery order');
+  populateDeliveryItemsPreview(event);
+  return false;
+}
+
 // Delivery order preview and inline editing
 async function populateDeliveryItemsPreview(event) {
   const previewContainer = document.getElementById('deliveryItemsPreview');
@@ -26828,9 +28961,9 @@ async function populateDeliveryItemsPreview(event) {
           overflow: hidden;
         }
         .do-toolbar {
-          background: #f8f9fa;
-          padding: 15px 20px;
-          border-bottom: 1px solid #e9ecef;
+          background: #fff;
+          padding: 16px;
+          border-bottom: 1px solid #e5ebe9;
           display: flex;
           gap: 12px;
           align-items: center;
@@ -26852,11 +28985,13 @@ async function populateDeliveryItemsPreview(event) {
           border-bottom: none;
         }
         .do-dept-header {
-          background: #f8f9fa;
-          padding: 12px 20px;
-          font-weight: 600;
-          color: #495057;
-          border-bottom: 1px solid #e9ecef;
+          background: #f4f8f7;
+          padding: 10px 16px;
+          font-weight: 700;
+          color: #30433f;
+          border-bottom: 1px solid #e1e9e7;
+          font-size: 11px;
+          text-transform: uppercase;
         }
         .do-items-list {
           padding: 0;
@@ -26864,7 +28999,7 @@ async function populateDeliveryItemsPreview(event) {
         .do-item-row {
           display: flex;
           align-items: center;
-          padding: 12px 20px;
+          padding: 10px 16px;
           border-bottom: 1px solid #f8f9fa;
           transition: background-color 0.2s ease;
         }
@@ -26888,8 +29023,8 @@ async function populateDeliveryItemsPreview(event) {
         }
         .do-item-description input:focus {
           outline: none;
-          border-color: #667eea;
-          box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
+          border-color: var(--theme-primary, #0f766e);
+          box-shadow: 0 0 0 2px rgba(15, 118, 110, .14);
         }
         .do-item-quantity {
           width: 80px;
@@ -26911,7 +29046,7 @@ async function populateDeliveryItemsPreview(event) {
         }
         .do-quantity-badge {
           display: inline-block;
-          background: #6f42c1;
+          background: var(--theme-primary, #0f766e);
           color: white;
           padding: 4px 12px;
           border-radius: 12px;
@@ -26924,6 +29059,17 @@ async function populateDeliveryItemsPreview(event) {
           display: flex;
           gap: 8px;
         }
+        .do-item-department { width: 150px; margin-right: 12px; }
+        .do-item-department select { width: 100%; }
+        .do-catalog-composer { width: 100%; display: grid; grid-template-columns: minmax(260px, 1fr) 170px 88px auto; gap: 8px; align-items: end; }
+        .do-catalog-field { position: relative; }
+        .do-catalog-label { display: block; margin-bottom: 4px; color: #61716f; font-size: 10px; font-weight: 700; text-transform: uppercase; }
+        .do-catalog-results { position: absolute; z-index: 80; top: calc(100% + 4px); left: 0; right: 0; max-height: 280px; overflow: auto; border: 1px solid #d8e2df; border-radius: 6px; background: #fff; box-shadow: 0 12px 28px rgba(25, 43, 39, .16); }
+        .do-catalog-result { width: 100%; padding: 10px 12px; border: 0; border-bottom: 1px solid #edf1f0; background: #fff; text-align: left; cursor: pointer; }
+        .do-catalog-result:hover, .do-catalog-result:focus { background: #eef7f5; outline: none; }
+        .do-catalog-result strong { display: block; color: #263934; font-size: 12px; }
+        .do-catalog-result span { display: block; margin-top: 2px; color: #73817e; font-size: 10px; }
+        .do-empty-dept { padding: 18px 16px; color: #82908d; font-size: 11px; }
         .do-add-section {
           background: #f8f9fa;
           padding: 15px 20px;
@@ -26969,24 +29115,52 @@ async function populateDeliveryItemsPreview(event) {
         .do-drag-handle:active {
           cursor: grabbing;
         }
+        @media (max-width: 760px) {
+          .do-catalog-composer { grid-template-columns: 1fr 1fr; }
+          .do-catalog-field { grid-column: 1 / -1; }
+          .do-item-row { align-items: stretch; flex-wrap: wrap; gap: 8px; }
+          .do-item-description { flex: 1 1 calc(100% - 40px); margin-right: 0; }
+          .do-item-department { width: calc(65% - 4px); margin-right: 0; }
+          .do-item-quantity { width: calc(35% - 4px); margin-right: 0; }
+          .do-item-actions { margin-left: auto; }
+        }
       </style>
 
       <div class="do-items-container">
         <div class="do-toolbar">
           <div>
-            <div style="font-weight:700;color:#495057;">Delivery Order Item Editor</div>
-            <div style="font-size:12px;color:#6c757d;margin-top:2px;">Review departments, edit quantities/descriptions, add DO-only rows, and drag to reorder while edit mode is on.</div>
+            <div style="font-weight:700;color:#263934;">Items to be delivered</div>
+            <div style="font-size:11px;color:#71807d;margin-top:2px;">Search inventory or enter a custom item, then organise it by department.</div>
           </div>
           <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
             <label>
               <input type="checkbox" id="doEditToggle"${editMode ? ' checked' : ''}> 
-              <span>Edit mode</span>
+              <span>Edit items</span>
             </label>
             <button class="btn btn-secondary" id="doResetEdits" title="Reset all edits and return to original items">
-              Reset Edits
+              Reset
             </button>
           </div>
         </div>
+        ${editMode ? `
+          <div class="do-toolbar">
+            <div class="do-catalog-composer">
+              <div class="do-catalog-field">
+                <label class="do-catalog-label" for="doCatalogSearch">Asset or description</label>
+                <input id="doCatalogSearch" class="form-input" autocomplete="off" placeholder="Search brand, model or description">
+                <div id="doCatalogResults" class="do-catalog-results" hidden></div>
+              </div>
+              <div>
+                <label class="do-catalog-label" for="doCatalogDepartment">Department</label>
+                <select id="doCatalogDepartment" class="form-input">${deliveryOrderDepartmentOptions('MISC', getDoDepartmentList(depts, edits))}</select>
+              </div>
+              <div>
+                <label class="do-catalog-label" for="doCatalogQuantity">Quantity</label>
+                <input id="doCatalogQuantity" class="form-input" type="number" min="1" max="999" value="1">
+              </div>
+              <button type="button" id="doCatalogAdd" class="btn btn-primary">Add item</button>
+            </div>
+          </div>` : ''}
     `;
 
     const esc = (s) => escapeHtml(s);
@@ -26996,21 +29170,24 @@ async function populateDeliveryItemsPreview(event) {
     const section = (deptName, items) => {
       const rows = items.map((item, i) => {
         const isDoCustom = item.source?.startsWith('do-custom');
-        const canDelete = editMode && isDoCustom;
+        const canDelete = editMode;
         
         if (editMode) {
           return `
-            <div class="do-item-row" draggable="true" data-key="${escA(item.key)}" data-kind="${escA(item.source || '')}" data-dept="${escA(deptName)}" data-index="${i}">
+            <div class="do-item-row" draggable="true" data-key="${escA(item.key)}" data-custom-id="${escA(item.customId || '')}" data-kind="${escA(item.source || '')}" data-dept="${escA(deptName)}" data-index="${i}">
               <div class="do-drag-handle">⋮⋮</div>
               <div class="do-item-description">
                 <input type="text" class="do-desc form-input" value="${escA(item.description)}" placeholder="Item description">
+              </div>
+              <div class="do-item-department">
+                <select class="do-dept form-input" aria-label="Department">${deliveryOrderDepartmentOptions(deptName, getDoDepartmentList(depts, edits))}</select>
               </div>
               <div class="do-item-quantity">
                 <input type="number" class="do-qty form-input" value="${item.quantity}" min="1" max="999">
               </div>
               <div class="do-item-actions">
                 <button class="btn btn-primary btn-sm do-save">Save</button>
-                ${canDelete ? '<button class="btn btn-danger btn-sm do-del">Delete</button>' : ''}
+                ${canDelete ? '<button type="button" class="btn btn-danger btn-sm do-del" title="Remove line" aria-label="Remove line" onclick="return removeDeliveryOrderRow(this)">&times;</button>' : ''}
               </div>
             </div>
           `;
@@ -27031,30 +29208,12 @@ async function populateDeliveryItemsPreview(event) {
         }
       }).join('');
 
-      // Add section for new items (edit mode only)
-      const addSection = !editMode ? '' : `
-        <div class="do-add-section">
-          <div class="do-add-form">
-            <div class="do-add-description">
-              <input type="text" class="form-input do-add-desc" placeholder="Add custom item to ${deptName} department">
-            </div>
-            <div class="do-add-quantity">
-              <input type="number" class="form-input do-add-qty" value="1" min="1" max="999">
-            </div>
-            <button class="btn btn-primary do-add-btn" data-dept="${escA(deptName)}">
-              Add Item
-            </button>
-          </div>
-        </div>
-      `;
-
       return `
         <div class="do-department-section">
           <div class="do-dept-header">${esc(deptName)} Department</div>
           <div class="do-items-list" data-dept="${escA(deptName)}">
-            ${rows || '<div class="no-items-message">No items in this department</div>'}
+            ${rows || '<div class="do-empty-dept">No items in this department</div>'}
           </div>
-          ${addSection}
         </div>
       `;
     };
@@ -27091,6 +29250,79 @@ async function populateDeliveryItemsPreview(event) {
       toggle.onchange = () => populateDeliveryItemsPreview(event);
     }
 
+    const catalogSearch = document.getElementById('doCatalogSearch');
+    const catalogResults = document.getElementById('doCatalogResults');
+    const catalogDepartment = document.getElementById('doCatalogDepartment');
+    const catalogQuantity = document.getElementById('doCatalogQuantity');
+    const catalog = getDeliveryOrderAssetCatalog();
+    let selectedCatalogItem = null;
+
+    const showCatalogResults = () => {
+      if (!catalogSearch || !catalogResults) return;
+      const query = catalogSearch.value.trim().toLowerCase();
+      if (!query) {
+        catalogResults.hidden = true;
+        catalogResults.innerHTML = '';
+        return;
+      }
+      const matches = catalog.filter(item =>
+        [item.label, item.detail, item.brand, item.model, item.department].join(' ').toLowerCase().includes(query)
+      ).slice(0, 12);
+      catalogResults.innerHTML = matches.map((item, index) => `
+        <button type="button" class="do-catalog-result" data-catalog-index="${index}">
+          <strong>${esc(item.label)}</strong>
+          <span>${esc([item.detail, item.department].filter(Boolean).join(' · '))}</span>
+        </button>
+      `).join('') || '<div class="do-empty-dept">No inventory match. You can add this as a custom item.</div>';
+      catalogResults.hidden = false;
+      catalogResults.querySelectorAll('[data-catalog-index]').forEach(button => {
+        button.onclick = () => {
+          selectedCatalogItem = matches[Number(button.dataset.catalogIndex)];
+          catalogSearch.value = [selectedCatalogItem.label, selectedCatalogItem.detail].filter(Boolean).join(' - ');
+          catalogDepartment.value = selectedCatalogItem.department;
+          catalogResults.hidden = true;
+        };
+      });
+    };
+
+    if (catalogSearch) {
+      catalogSearch.oninput = () => {
+        selectedCatalogItem = null;
+        showCatalogResults();
+      };
+      catalogSearch.onfocus = showCatalogResults;
+      catalogSearch.onblur = () => setTimeout(() => {
+        if (catalogResults) catalogResults.hidden = true;
+      }, 120);
+      catalogSearch.onkeydown = eventKey => {
+        if (eventKey.key === 'Enter') {
+          eventKey.preventDefault();
+          document.getElementById('doCatalogAdd')?.click();
+        }
+      };
+    }
+    document.getElementById('doCatalogAdd')?.addEventListener('click', () => {
+      const description = catalogSearch?.value.trim();
+      if (!description) {
+        showNotification('warning', 'Enter or select an asset first');
+        catalogSearch?.focus();
+        return;
+      }
+      const department = catalogDepartment?.value || selectedCatalogItem?.department || 'MISC';
+      const quantity = Math.max(1, parseInt(catalogQuantity?.value, 10) || 1);
+      const state = getDoEdits(eventId);
+      state.custom[department] ||= [];
+      state.custom[department].push({
+        id: makeDoCustomItemId(),
+        description,
+        quantity,
+        brand: selectedCatalogItem?.brand || '',
+        model: selectedCatalogItem?.model || ''
+      });
+      saveDoEdits(eventId, state);
+      showNotification('success', 'Item added to the delivery order');
+      populateDeliveryItemsPreview(event);
+    });
     // Save / delete / add handlers
     previewContainer.querySelectorAll('.do-save').forEach(btn => {
       btn.onclick = (e) => {
@@ -27098,7 +29330,8 @@ async function populateDeliveryItemsPreview(event) {
         const key = row.getAttribute('data-key');
         const kind = row.getAttribute('data-kind');
         const dept = row.getAttribute('data-dept');
-        const idxStr = row.getAttribute('data-index');
+        const customId = row.getAttribute('data-custom-id');
+        const targetDept = row.querySelector('.do-dept')?.value || dept;
         const desc = row.querySelector('.do-desc').value.trim();
         const qty = Math.max(1, parseInt(row.querySelector('.do-qty').value, 10) || 1);
 
@@ -27109,13 +29342,20 @@ async function populateDeliveryItemsPreview(event) {
 
         const state = getDoEdits(eventId);
         if (kind === 'do-custom') {
-          const i = parseInt(idxStr, 10);
-          state.custom[dept] ||= [];
-          if (Number.isInteger(i) && state.custom[dept][i]) {
-            state.custom[dept][i] = { description: desc, quantity: qty };
+          let savedItem = null;
+          Object.keys(state.custom).some(sourceDept => {
+            const index = state.custom[sourceDept].findIndex(item => item.id === customId);
+            if (index < 0) return false;
+            savedItem = { ...state.custom[sourceDept][index], description: desc, quantity: qty };
+            state.custom[sourceDept].splice(index, 1);
+            return true;
+          });
+          if (savedItem) {
+            state.custom[targetDept] ||= [];
+            state.custom[targetDept].push(savedItem);
           }
         } else {
-          state.overrides[key] = { description: desc, quantity: qty };
+          state.overrides[key] = { description: desc, quantity: qty, department: targetDept };
         }
         
         saveDoEdits(eventId, state);
@@ -27123,33 +29363,6 @@ async function populateDeliveryItemsPreview(event) {
           showNotification('success', 'Item updated successfully');
         }
         populateDeliveryItemsPreview(event);
-      };
-    });
-
-    previewContainer.querySelectorAll('.do-del').forEach(btn => {
-      btn.onclick = async (e) => {
-        const confirmed = await showCustomConfirm(
-          'Delete Item', 
-          'Are you sure you want to delete this item from the delivery order?'
-        );
-        
-        if (!confirmed) return;
-
-        const row = e.target.closest('.do-item-row');
-        const dept = row.getAttribute('data-dept');
-        const idxStr = row.getAttribute('data-index');
-        const i = parseInt(idxStr, 10);
-        const state = getDoEdits(eventId);
-        
-        state.custom[dept] ||= [];
-        if (Number.isInteger(i) && state.custom[dept]) {
-          state.custom[dept].splice(i, 1);
-          saveDoEdits(eventId, state);
-          if (typeof showNotification === 'function') {
-            showNotification('success', 'Item deleted successfully');
-          }
-          populateDeliveryItemsPreview(event);
-        }
       };
     });
 
@@ -27280,22 +29493,30 @@ function groupItemsByDepartment(event) {
   const eventId = event.id || event.event_id || event.eventId || window.currentEventId || '0';
   const edits = getDoEdits(eventId, Object.keys(departments));
 
+  const regrouped = {};
   Object.keys(departments).forEach(d => {
-    departments[d].forEach((item) => {
+    departments[d].forEach(item => {
+      if (edits.deleted[item.key]) return;
       const ov = edits.overrides[item.key];
-      if (ov) {
-        item.description = ov.description || item.description;
-        item.quantity = String(ov.quantity || item.quantity);
-      }
+      const targetDepartment = ov?.department || d;
+      regrouped[targetDepartment] ||= [];
+      regrouped[targetDepartment].push({
+        ...item,
+        description: ov?.description || item.description,
+        quantity: String(ov?.quantity || item.quantity)
+      });
     });
   });
+  Object.keys(departments).forEach(department => { departments[department] = []; });
+  Object.entries(regrouped).forEach(([department, items]) => { departments[department] = items; });
 
   if (edits && edits.custom) {
     Object.keys(edits.custom).forEach(d => {
       if (!departments[d]) departments[d] = [];
-      (edits.custom[d] || []).forEach((ci, i) => {
+      (edits.custom[d] || []).forEach(ci => {
         departments[d].push({
-          key: `DOCUSTOM|${d}|${i}`,
+          key: `DOCUSTOM|${ci.id}`,
+          customId: ci.id,
           description: ci.description,
           quantity: String(ci.quantity || 1),
           source: 'do-custom'
@@ -27344,20 +29565,25 @@ function exportLogs() {
     return;
   }
 
-  const csvContent =
-    "data:text/csv;charset=utf-8," +
-    "Timestamp,User,Action\n" +
-    logs
-      .map((log) => `"${log.timestamp}","${log.user}","${log.action}"`)
-      .join("\n");
-
-  const encodedUri = encodeURI(csvContent);
+  const csvCell = value => `"${String(value || '').replace(/"/g, '""')}"`;
+  const includeCompany = isOwnerUser();
+  const header = includeCompany
+    ? ['Timestamp', 'Company Code', 'Company Name', 'User', 'Action']
+    : ['Timestamp', 'User', 'Action'];
+  const rows = logs.map(log => includeCompany
+    ? [log.timestamp, log.companyCode, log.companyName, log.user, log.action]
+    : [log.timestamp, log.user, log.action]);
+  const csvContent = [header, ...rows]
+    .map(row => row.map(csvCell).join(','))
+    .join('\n');
+  const blobUrl = URL.createObjectURL(new Blob([csvContent], { type: 'text/csv;charset=utf-8' }));
   const link = document.createElement("a");
-  link.setAttribute("href", encodedUri);
+  link.setAttribute("href", blobUrl);
   link.setAttribute("download", "system_logs.csv");
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
+  URL.revokeObjectURL(blobUrl);
 
   showNotification("success", "Logs exported successfully!");
 }
@@ -27580,13 +29806,22 @@ async function refreshViewedEventModal(eventId) {
     return;
   }
 
-  const modalScroller = document.querySelector('#eventDetailsModal .modal-content');
+  const notesField = document.getElementById(`eventOverviewNotes-${eventId}`);
+  const unsavedNotes = notesField?.dataset.dirty === 'true' ? notesField.value : null;
+  const modalScroller = document.querySelector('#eventDetailsModal .event-overview-body');
   const scrollTop = modalScroller?.scrollTop || 0;
   const scrollLeft = modalScroller?.scrollLeft || 0;
-  await viewEvent(eventId);
+  await viewEvent(eventId, { updateHistory: false });
   if (modalScroller) {
     modalScroller.scrollTop = scrollTop;
     modalScroller.scrollLeft = scrollLeft;
+  }
+  if (unsavedNotes !== null) {
+    const refreshedNotesField = document.getElementById(`eventOverviewNotes-${eventId}`);
+    if (refreshedNotesField) {
+      refreshedNotesField.value = unsavedNotes;
+      eventOverviewNotesChanged(refreshedNotesField);
+    }
   }
 }
 
@@ -27893,6 +30128,19 @@ function connectRealtimeUpdates() {
         return;
       }
       const eventIds = eventIdsFromRealtimePayload(payload);
+      const topics = realtimeTopicsFromPayload(payload);
+      if (
+        eventIds.length &&
+        topics.length &&
+        topics.every(topic => topic === 'event-notes' || topic === 'event-files')
+      ) {
+        eventIds.forEach(eventId => {
+          refreshEventOverviewNotesAndFiles(eventId, topics).catch(error => {
+            console.warn('Event notes/files live update failed:', error);
+          });
+        });
+        return;
+      }
       if (eventIds.length) {
         const activeSection = getActiveSectionId();
         const activeWorkforceEventId = typeof workforcePageState !== 'undefined'
@@ -28055,6 +30303,11 @@ async function initializeApp() {
       updateAppSectionHistory(initialSection, true);
     }
     setTimeout(async () => {
+      const detailRoute = appDetailRouteFromPath();
+      if (detailRoute?.kind === 'packing-list') {
+        await generatePackingList(detailRoute.eventId, { targetWindow: window });
+        return;
+      }
       showSection(initialSection, { updateHistory: false });
     }, 200);
 
@@ -28074,7 +30327,8 @@ document.addEventListener('keydown', function(e) {
   const activeModals = Array.from(document.querySelectorAll('.modal.active'));
   const topModal = activeModals[activeModals.length - 1];
   if (topModal && topModal.id && topModal.id !== 'maintenanceLogModal') {
-    closeModal(topModal.id);
+    if (topModal.id === 'eventDetailsModal') closeEventOverview();
+    else closeModal(topModal.id);
   }
 });
 
@@ -28824,9 +31078,18 @@ function updateEventStateFilterCounts(list) {
     counts[state] = (counts[state] || 0) + 1;
   });
   document.querySelectorAll('#eventsStateFilters [data-event-state]').forEach(button => {
+    const state = button.dataset.eventState;
+    const count = counts[state] || 0;
     const span = button.querySelector('span');
-    if (span) span.textContent = String(counts[button.dataset.eventState] || 0);
+    if (span) span.textContent = String(count);
+    button.hidden = state !== 'All' && count === 0;
   });
+  if (allEventsStateFilter !== 'All' && (counts[allEventsStateFilter] || 0) === 0) {
+    allEventsStateFilter = 'All';
+    document.querySelectorAll('#eventsStateFilters [data-event-state]').forEach(button => {
+      button.classList.toggle('active', button.dataset.eventState === 'All');
+    });
+  }
 }
 
 function filterEventsBySearch(list) {
@@ -29125,6 +31388,10 @@ function eventMenuIconHtml(icon) {
       <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"></path>
       <circle cx="12" cy="12" r="3"></circle>
     `,
+    logs: `
+      <path d="M5 4h14v16H5z"></path>
+      <path d="M8 8h8M8 12h8M8 16h5"></path>
+    `,
     plan: `
       <rect x="5" y="4" width="14" height="17" rx="2"></rect>
       <path d="M9 4V2h6v2"></path>
@@ -29167,19 +31434,23 @@ function eventCardMenuHtml(event, context = 'card') {
     : (context !== 'card' && !isAdminUser()
       ? `<button type="button" onclick="viewEvent(${event.id})">${eventMenuIconHtml('view')}<span>View</span></button>`
       : '');
+  const logsAction = context !== 'card' && canCurrentUserManageRoles()
+    ? `<button type="button" onclick="openEventLogs(${event.id}, '${escapeJs(event.name || '')}')">${eventMenuIconHtml('logs')}<span>View logs</span></button>`
+    : '';
   const adminActions = isAdminUser() ? `
     <button type="button" onclick="openDeliveryOrderTab(${event.id})">${eventMenuIconHtml('delivery')}<span>Generate DO</span></button>
-    <button type="button" onclick="generatePackingList(${event.id})">${eventMenuIconHtml('packing')}<span>Packing List</span></button>
+    <button type="button" onclick="openPackingListPage(${event.id})">${eventMenuIconHtml('packing')}<span>Packing List</span></button>
     <button type="button" onclick="openEventPlanning(${event.id})">${eventMenuIconHtml('plan')}<span>Plan</span></button>
     <button type="button" onclick="openEventWorkforce(${event.id})">${eventMenuIconHtml('workforce')}<span>Manpower &amp; Transport</span></button>
     <button type="button" onclick="showForceStateModal(${event.id}, '${escapeHtmlAttr(event.state || '')}')">${eventMenuIconHtml('force')}<span>Force</span></button>
     <button type="button" class="danger" onclick="deleteEvent(${event.id})">${eventMenuIconHtml('delete')}<span>Delete</span></button>
   ` : '';
-  if (!detailsAction && !adminActions) return '';
+  if (!detailsAction && !logsAction && !adminActions) return '';
 
   return `
     <div class="event-card-menu" id="event-card-menu-${context}-${event.id}">
       ${detailsAction}
+      ${logsAction}
       ${adminActions}
     </div>
   `;
@@ -29249,6 +31520,7 @@ function createEventsOverviewCard(event) {
         <div class="event-card-top-actions">
           <span class="event-workflow-state">${escapeHtml(eventStateDisplayLabel(displayState))}</span>
           <button type="button" class="event-top-icon-button" title="View event" aria-label="View ${escapeHtmlAttr(event.name || `event ${event.id}`)}" onclick="viewEvent(${event.id})">${eventMenuIconHtml('view')}</button>
+          ${canCurrentUserManageRoles() ? `<button type="button" class="event-top-icon-button" title="View event logs" aria-label="View logs for ${escapeHtmlAttr(event.name || `event ${event.id}`)}" onclick="openEventLogs(${event.id}, '${escapeJs(event.name || '')}')">${eventMenuIconHtml('logs')}</button>` : ''}
           ${isAdminUser() ? `<button type="button" class="event-top-icon-button" title="Edit event" aria-label="Edit ${escapeHtmlAttr(event.name || `event ${event.id}`)}" onclick="editEvent(${event.id})">${eventMenuIconHtml('edit')}</button>` : ''}
         </div>
       </div>
@@ -29863,7 +32135,17 @@ function getFilteredInventoryData() {
     const searchableText = `${asset.id || ''} ${asset.internalId || ''} ${asset.bulkId || ''} ${asset.brand || ''} ${asset.model || ''} ${asset.serial || ''} ${asset.serial2 || ''} ${asset.description || ''} ${asset.dateOfPurchase || asset.purchaseDate || ''} ${asset.dateAdded || ''} ${asset.dateModified || ''} ${asset.department || ''} ${deptMeta.name || ''}`.toLowerCase();
     const matchesSearch = !filters.searchTerm || searchableText.includes(filters.searchTerm);
     const matchesDept = filters.departmentFilterTotal === 0 || filters.deptFilters.includes(asset.department);
-    const matchesStatus = filters.statusFilterTotal === 0 || filters.statusFilters.includes(asset.status);
+    const condition = getAssetConditionStatus(asset);
+    const matchesStatus = filters.statusFilterTotal === 0 || filters.statusFilters.some(status => {
+      if (status === 'available') return condition === 'available' && asset.status !== 'deployed';
+      if (status === 'deployed') return asset.status === 'deployed';
+      if (status === condition) return true;
+      if (!asset.isBulk) return false;
+      if (status === 'ooc') return Number(asset.bulkOOCQuantity || 0) > 0;
+      if (status === 'missing') return Number(asset.bulkMissingQuantity || 0) > 0;
+      if (status === 'degraded') return Number(asset.bulkDegradedQuantity || 0) > 0;
+      return false;
+    });
     return matchesSearch && matchesDept && matchesStatus;
   });
 
@@ -29887,8 +32169,12 @@ function getFilteredInventoryData() {
 
 function displayFilteredInventory() {
   const { filteredAssets, totalAssets } = getFilteredInventoryData();
+  renderInventorySummary();
   const countElement = document.getElementById('asset-count');
-  if (countElement) countElement.textContent = `${filteredAssets.length} of ${totalAssets} assets`;
+  if (countElement) {
+    const groups = groupInventoryByModel(filteredAssets).length;
+    countElement.textContent = `${groups} model${groups === 1 ? '' : 's'} · ${filteredAssets.length} of ${totalAssets} records`;
+  }
   displayInventoryTable(filteredAssets);
 }
 
@@ -30549,18 +32835,6 @@ function transferProgressHtml(done, total) {
 }
 
 
-
-function renderTransferInitialMessage(sourceEvents, targetEvents) {
-  if (!sourceEvents.length || !targetEvents.length) {
-    return `
-      <div class="transfer-empty">
-        <strong>No valid transfer pair yet</strong>
-        <div>${!sourceEvents.length ? 'No source events with unreturned assets are currently eligible. ' : ''}${!targetEvents.length ? 'No Planning/Preparing destination events are currently eligible.' : ''}</div>
-      </div>
-    `;
-  }
-  return '<div class="transfer-empty"><strong>Choose both events</strong><span>Select a source and destination above to compare assets and choose exact Asset IDs.</span></div>';
-}
 
 function renderTransferWorkspace() {
   const container = document.getElementById('transfer-history');

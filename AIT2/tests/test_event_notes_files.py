@@ -21,6 +21,10 @@ class EventNotesFilesTests(unittest.TestCase):
         self.data_manager.users = {
             'normal': User('normal', hash_password('pw', 'salt'), 'salt', False, True),
             'admin': User('admin', hash_password('pw', 'salt'), 'salt', True, True),
+            'manager': User(
+                'manager', hash_password('pw', 'managersalt'), 'managersalt',
+                True, True, role='manager',
+            ),
         }
         self.data_manager.save_users()
         self.data_manager.logs = []
@@ -77,7 +81,12 @@ class EventNotesFilesTests(unittest.TestCase):
 
         response = self.client.get('/api/events/1')
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.get_json()['data']['eventLogs'][0]['action'], event_logs[0]['action'])
+        self.assertEqual(response.get_json()['data']['eventLogs'], [])
+
+        self.login_as('admin', is_admin=True)
+        log_response = self.client.get('/api/events/1/logs')
+        self.assertEqual(log_response.status_code, 200)
+        self.assertEqual(log_response.get_json()['data']['logs'][0]['action'], event_logs[0]['action'])
 
     def test_existing_event_logs_migrate_out_of_system_log(self):
         self.data_manager.logs = [
@@ -93,6 +102,19 @@ class EventNotesFilesTests(unittest.TestCase):
         event_logs = self.data_manager.events[1].event_logs
         self.assertEqual(len(event_logs), 1)
         self.assertEqual(event_logs[0]['action'], 'Prepared asset A#01 for event 1')
+
+    def test_system_log_persistence_keeps_latest_3000_entries(self):
+        self.data_manager.logs = [
+            LogEntry(f'2026/07/16 10:{index // 60:02d}:{index % 60:02d}', 'admin', f'Action {index}')
+            for index in range(3005)
+        ]
+
+        self.data_manager.save_logs()
+        self.data_manager.load_logs()
+
+        self.assertEqual(len(self.data_manager.logs), 3000)
+        self.assertEqual(self.data_manager.logs[0].action, 'Action 5')
+        self.assertEqual(self.data_manager.logs[-1].action, 'Action 3004')
 
     def test_event_activity_is_categorized_and_manpower_is_admin_only(self):
         event = self.data_manager.events[1]
@@ -122,10 +144,7 @@ class EventNotesFilesTests(unittest.TestCase):
 
         self.login_as('normal')
         normal_logs = self.client.get('/api/events/1').get_json()['data']['eventLogs']
-        self.assertEqual(
-            [row['category'] for row in normal_logs],
-            ['details', 'prepare', 'return'],
-        )
+        self.assertEqual(normal_logs, [])
 
         self.login_as('admin', is_admin=True)
         admin_logs = self.client.get('/api/events/1').get_json()['data']['eventLogs']
@@ -133,6 +152,22 @@ class EventNotesFilesTests(unittest.TestCase):
             [row['category'] for row in admin_logs],
             ['details', 'prepare', 'return', 'manpower'],
         )
+
+        secured_logs = self.client.get('/api/events/1/logs')
+        self.assertEqual(secured_logs.status_code, 200)
+        self.assertEqual(len(secured_logs.get_json()['data']['logs']), 4)
+
+    def test_managers_and_users_cannot_view_system_or_event_logs(self):
+        for username in ('normal', 'manager'):
+            self.login_as(username, is_admin=username == 'manager')
+            system_response = self.client.get('/api/logs')
+            event_response = self.client.get('/api/events/1/logs')
+            page_response = self.client.get('/logs')
+
+            self.assertEqual(system_response.status_code, 403)
+            self.assertEqual(event_response.status_code, 403)
+            self.assertEqual(page_response.status_code, 302)
+            self.assertTrue(page_response.headers['Location'].endswith('/events'))
 
     def test_event_detail_update_log_lists_changed_fields(self):
         self.login_as('admin', is_admin=True)

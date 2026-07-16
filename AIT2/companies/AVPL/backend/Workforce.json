@@ -2208,6 +2208,13 @@
                 "from": "Approved",
                 "to": "Paid",
                 "amount": 1200.0
+              },
+              {
+                "at": "2026-07-14T15:53:26+08:00",
+                "by": "bnjm",
+                "from": "Paid",
+                "to": "Paid",
+                "amount": 1200.0
               }
             ],
             "allocations": [
@@ -2222,10 +2229,13 @@
             "ocrDateMatchedText": "",
             "ocrUsed": false,
             "processedAt": "2026-07-06T19:42:35+08:00",
-            "reviewedAt": "2026-07-06T19:42:40+08:00",
-            "reviewedBy": "bnjm2000",
+            "reviewedAt": "2026-07-14T15:53:26+08:00",
+            "reviewedBy": "bnjm",
             "verifiedAt": "2026-07-06T19:42:39+08:00",
-            "verifiedBy": "bnjm2000"
+            "verifiedBy": "bnjm2000",
+            "paymentConfirmedAt": "2026-07-14T15:53:26+08:00",
+            "paymentConfirmedByAdmin": "bnjm",
+            "paymentConfirmedByWorker": false
           }
         ],
         "claims": []
@@ -4629,5 +4639,5 @@
       }
     }
   },
-  "updatedAt": "2026-07-13T23:50:14+08:00"
+  "updatedAt": "2026-07-16T14:21:19+08:00"
 }

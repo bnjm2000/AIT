@@ -4,7 +4,7 @@ import unittest
 
 import app as app_module
 from data_manager import DataManager
-from models import User, hash_password
+from models import Event, User, hash_password
 
 
 class PageRoutingTests(unittest.TestCase):
@@ -35,6 +35,9 @@ class PageRoutingTests(unittest.TestCase):
             'manager': self.make_user('manager', 'manager', False),
             'sales': self.make_user('sales', 'user', True),
             'user': self.make_user('user', 'user', False),
+        }
+        self.manager.events = {
+            41: Event(41, 'Deep Link Event', '20260715', '20260716', [])
         }
         self.manager.save_users()
         app_module.app.config['TESTING'] = True
@@ -106,6 +109,26 @@ class PageRoutingTests(unittest.TestCase):
         self.assertEqual(root.status_code, 302)
         self.assertTrue(root.headers['Location'].endswith('/events'))
 
+    def test_record_deep_links_restore_authorised_workspaces(self):
+        self.login('owner')
+        quotation = self.client.get('/quotations/quote-123')
+        event_overview = self.client.get('/events/41')
+        delivery_order = self.client.get('/delivery-order/41')
+        packing_list = self.client.get('/packing-list/41')
+
+        self.assertEqual(quotation.status_code, 200)
+        self.assertIn('window.__INITIAL_APP_SECTION__ = "quotations"', quotation.get_data(as_text=True))
+        self.assertEqual(event_overview.status_code, 200)
+        self.assertIn('window.__INITIAL_APP_SECTION__ = "events"', event_overview.get_data(as_text=True))
+        self.assertEqual(delivery_order.status_code, 200)
+        self.assertIn('window.__INITIAL_APP_SECTION__ = "delivery-order"', delivery_order.get_data(as_text=True))
+        self.assertEqual(packing_list.status_code, 200)
+
+        self.login('user')
+        self.assertEqual(self.client.get('/quotations/quote-123').status_code, 302)
+        self.assertEqual(self.client.get('/delivery-order/999').status_code, 302)
+        self.assertEqual(self.client.get('/packing-list/999').status_code, 302)
+
     def test_client_router_supports_history_navigation(self):
         source_path = os.path.join(os.path.dirname(app_module.__file__), 'static', 'js', 'app.js')
         with open(source_path, encoding='utf-8') as source_file:
@@ -114,6 +137,20 @@ class PageRoutingTests(unittest.TestCase):
         self.assertIn("plan: '/plan'", source)
         self.assertIn("window.addEventListener('popstate'", source)
         self.assertIn("window.history[method]", source)
+        self.assertIn("kind: 'quotation'", source)
+        self.assertIn("kind: 'event-overview'", source)
+        self.assertIn("kind: 'delivery-order'", source)
+        self.assertIn("kind: 'packing-list'", source)
+        self.assertIn('openPackingListPage(eventId)', source)
+        self.assertIn("apiCall(`/api/events/${eventId}/overview`)", source)
+        self.assertIn('function eventOverviewAssets(event)', source)
+        self.assertIn('function closeEventOverview(options = {})', source)
+
+        template_path = os.path.join(os.path.dirname(app_module.__file__), 'templates', 'index.html')
+        with open(template_path, encoding='utf-8') as template_file:
+            template = template_file.read()
+        self.assertIn('class="modal-content event-overview-shell"', template)
+        self.assertNotIn('Generate Delivery Order\n          </button>', template)
 
 
 if __name__ == '__main__':

@@ -1,9 +1,10 @@
-const FINANCE_STATUSES = ['draft', 'sent', 'accepted', 'declined', 'expired', 'cancelled', 'invoiced', 'paid'];
+const FINANCE_STATUSES = ['draft', 'sent', 'accepted', 'cancelled', 'invoiced', 'overdue', 'paid'];
 const FINANCE_UOMS = [
   { value: 'units', label: 'unit(s)' },
   { value: 'pax', label: 'pax' },
   { value: 'lot', label: 'lot' }
 ];
+const FINANCE_SALUTATIONS = ['', 'Mr.', 'Ms.', 'Mrs.', 'Mdm.'];
 const FINANCE_VALIDITY_UNITS = [
   { value: 'days', label: 'day(s)', multiplier: 1 },
   { value: 'weeks', label: 'week(s)', multiplier: 7 },
@@ -15,6 +16,7 @@ const financeState = {
   current: null,
   clients: [],
   events: [],
+  salespeople: [],
   catalog: [],
   departments: ['Manpower', 'Transportation'],
   saveTimer: null,
@@ -26,6 +28,7 @@ const financeState = {
   listTimer: null,
   changeVersion: 0,
   statusTargetId: '',
+  eventPairTargetId: '',
   addDepartment: '',
   collapsedDepartments: {},
   dragLineIndex: null,
@@ -35,6 +38,7 @@ const financeState = {
   rateCard: [],
   rateCardSearch: '',
   rateCardUom: 'units',
+  newClientSalutation: '',
   editorDataLoadedAt: 0
 };
 
@@ -142,6 +146,42 @@ function financeChooseLocation(encodedLocation) {
   if (input) input.value = location;
   document.getElementById('financeLocationResults')?.classList.remove('open');
   financeFieldChange('eventLocation', location);
+}
+
+function financeShowSalespersonSuggestions(value = '') {
+  const results = document.getElementById('financeSalespersonResults');
+  if (!results) return;
+  const query = String(value || '').trim().toLowerCase();
+  const options = (financeState.salespeople || []).filter(user => !query || [
+    user.name, user.username, user.phone
+  ].some(field => String(field || '').toLowerCase().includes(query))).slice(0, 8);
+  results.innerHTML = options.map(user => `
+    <button type="button" onmousedown="event.preventDefault();financeChooseSalesperson('${financeEscapeAttr(encodeURIComponent(user.username))}')">
+      <strong>${financeEscape(user.name || user.username)}</strong>
+      <small>${financeEscape([user.username, user.phone].filter(Boolean).join(' · '))}</small>
+    </button>
+  `).join('');
+  results.classList.toggle('open', options.length > 0);
+}
+
+function financeSalespersonInput(value) {
+  if (!financeState.current) return;
+  financeState.current.salesperson = value;
+  financeState.current.salespersonUsername = '';
+  financeQueueSave();
+  financeShowSalespersonSuggestions(value);
+}
+
+function financeChooseSalesperson(encodedUsername) {
+  const username = decodeURIComponent(encodedUsername);
+  const user = (financeState.salespeople || []).find(row => row.username === username);
+  if (!user || !financeState.current) return;
+  financeState.current.salesperson = user.name || user.username;
+  financeState.current.salespersonUsername = user.username;
+  const input = document.getElementById('financeSalespersonInput');
+  if (input) input.value = financeState.current.salesperson;
+  document.getElementById('financeSalespersonResults')?.classList.remove('open');
+  financeQueueSave();
 }
 
 function financeAdditionalScheduleRows(kind, document = financeState.current) {
@@ -269,6 +309,50 @@ function financeUomLabel(value) {
   return FINANCE_UOMS.find(row => row.value === value)?.label || 'unit(s)';
 }
 
+function financeDefaultUom(department, preferred = '') {
+  const departmentName = String(department || '').trim().toLowerCase();
+  const isManpower = departmentName === 'manpower' || departmentName.includes('manpower department');
+  if (isManpower && (!preferred || preferred === 'units')) return 'pax';
+  return preferred || 'units';
+}
+
+function financeClientName(client = {}) {
+  return [client.salutation, client.name].filter(Boolean).join(' ').trim();
+}
+
+function financeSalutationControl(value, menuId, handler) {
+  const selected = FINANCE_SALUTATIONS.includes(value) ? value : '';
+  return `
+    <div class="finance-custom-control finance-salutation-control">
+      <button type="button" class="finance-line-select-button" aria-label="Salutation"
+              onclick="financeToggleMenu('${financeEscapeAttr(menuId)}',event)">${financeEscape(selected || 'None')}<span>&#8964;</span></button>
+      <div class="finance-custom-menu" id="${financeEscapeAttr(menuId)}">
+        ${FINANCE_SALUTATIONS.map(option => `
+          <button type="button" class="${option === selected ? 'selected' : ''}"
+                  onclick="${handler}('${financeEscapeAttr(option)}','${financeEscapeAttr(menuId)}')">${financeEscape(option || 'None')}</button>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function financeSetClientSalutation(value, menuId) {
+  document.getElementById(menuId)?.classList.remove('open');
+  financeClientFieldChange('salutation', FINANCE_SALUTATIONS.includes(value) ? value : '');
+  financeRenderEditor();
+}
+
+function financeSetNewClientSalutation(value, menuId) {
+  financeState.newClientSalutation = FINANCE_SALUTATIONS.includes(value) ? value : '';
+  document.getElementById(menuId)?.classList.remove('open');
+  const control = document.getElementById('financeNewClientSalutationControl');
+  if (control) control.innerHTML = financeSalutationControl(
+    financeState.newClientSalutation,
+    menuId,
+    'financeSetNewClientSalutation'
+  );
+}
+
 function financeSubprojects(document = financeState.current) {
   if (!document) return [];
   if (!Array.isArray(document.subprojects) || !document.subprojects.length) {
@@ -388,6 +472,47 @@ function financeDateOnly(value) {
   return String(value || '').slice(0, 10);
 }
 
+function financeEventDateSummary(document) {
+  const rawDates = [
+    document?.setupDate,
+    document?.rehearsalDate,
+    ...financeAdditionalScheduleRows('rehearsal', document).map(row => row.date),
+    document?.showDate,
+    ...financeAdditionalScheduleRows('show', document).map(row => row.date),
+    document?.teardownDate,
+    ...financeAdditionalScheduleRows('teardown', document).map(row => row.date)
+  ];
+  const dates = [...new Set(rawDates.map(financeDateOnly).filter(value => /^\d{4}-\d{2}-\d{2}$/.test(value)))]
+    .sort()
+    .map(value => new Date(`${value}T00:00:00Z`))
+    .filter(value => !Number.isNaN(value.getTime()));
+  if (!dates.length) return '';
+
+  const groups = [];
+  dates.forEach(value => {
+    const group = groups[groups.length - 1];
+    const previous = group?.[group.length - 1];
+    if (previous && value.getTime() - previous.getTime() === 86400000) group.push(value);
+    else groups.push([value]);
+  });
+
+  const month = value => value.toLocaleDateString('en-SG', { month: 'short', timeZone: 'UTC' });
+  return groups.map(group => {
+    const start = group[0];
+    const end = group[group.length - 1];
+    if (start.getTime() === end.getTime()) {
+      return `${start.getUTCDate()} ${month(start)} ${start.getUTCFullYear()}`;
+    }
+    if (start.getUTCFullYear() === end.getUTCFullYear() && start.getUTCMonth() === end.getUTCMonth()) {
+      return `${start.getUTCDate()}-${end.getUTCDate()} ${month(end)} ${end.getUTCFullYear()}`;
+    }
+    if (start.getUTCFullYear() === end.getUTCFullYear()) {
+      return `${start.getUTCDate()} ${month(start)}-${end.getUTCDate()} ${month(end)} ${end.getUTCFullYear()}`;
+    }
+    return `${start.getUTCDate()} ${month(start)} ${start.getUTCFullYear()}-${end.getUTCDate()} ${month(end)} ${end.getUTCFullYear()}`;
+  }).join(', ');
+}
+
 function financeDaysSince(value) {
   const date = financeDateOnly(value);
   if (!date) return null;
@@ -405,16 +530,70 @@ function financeDaysLeft(validUntil) {
   return Math.ceil((until - today) / 86400000);
 }
 
-function financeValiditySummary(document) {
-  if (!document?.sentAt) return 'Not sent';
-  const sent = financeDateOnly(document.sentAt);
+function financePaymentTermDays(value, fallback = 30) {
+  const text = String(value || '').trim().toLowerCase();
+  if (/(due on receipt|on receipt|immediate|\bcod\b)/.test(text)) return 0;
+  const match = text.match(/\b(\d{1,4})\b/);
+  if (!match) return Math.max(0, financeNumber(fallback, 30));
+  const amount = Math.max(0, Math.min(3650, financeNumber(match[1], fallback)));
+  if (text.includes('week')) return Math.min(3650, amount * 7);
+  if (text.includes('month')) return Math.min(3650, amount * 30);
+  return amount;
+}
+
+function financePaymentTermSummary(value, days) {
+  const text = String(value || '').trim().toLowerCase();
+  if (/(due on receipt|on receipt|immediate|\bcod\b)/.test(text)) return 'Due on receipt';
+  const match = text.match(/\b(\d{1,4})\b/);
+  if (!match) return `${days} day${days === 1 ? '' : 's'}`;
+  const amount = Math.max(0, financeNumber(match[1], 0));
+  const unit = text.includes('month') ? 'month' : text.includes('week') ? 'week' : 'day';
+  const term = `${amount} ${unit}${amount === 1 ? '' : 's'}`;
+  return unit === 'day' ? term : `${term} (${days} days)`;
+}
+
+function financePaymentDueDisplay(sentDate, days) {
+  const match = String(sentDate || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return '';
+  const due = new Date(Date.UTC(
+    Number(match[1]),
+    Number(match[2]) - 1,
+    Number(match[3]) + days
+  ));
+  if (Number.isNaN(due.getTime())) return '';
+  return new Intl.DateTimeFormat('en-SG', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC'
+  }).format(due);
+}
+
+function financePaymentCountdownText(document) {
+  const status = String(document?.status || '').toLowerCase();
+  if (!['invoiced', 'overdue'].includes(status)) return '';
+  const days = financeDaysLeft(document.paymentDueDate);
+  if (days === null) return '';
+  if (status === 'overdue' || days < 0) {
+    const overdueDays = Math.max(1, Math.abs(days));
+    return `Overdue by: ${overdueDays} day${overdueDays === 1 ? '' : 's'}`;
+  }
+  return `Pay by: ${days} day${days === 1 ? '' : 's'}`;
+}
+
+function financeValidityCountdown(document) {
   const days = financeDaysLeft(document.validUntil);
-  const left = days === null
+  return days === null
     ? `${financeNumber(document.validityDays, 30)} day validity`
     : days < 0
       ? 'Expired'
       : `${days} day${days === 1 ? '' : 's'} left`;
-  return `Sent ${sent || '—'} · ${left}`;
+}
+
+function financeValiditySummary(document) {
+  if (!document?.sentAt) return 'Not sent';
+  const sent = financeDateOnly(document.sentAt);
+  return `Sent ${sent || '—'} · ${financeValidityCountdown(document)}`;
 }
 
 function financeAgeText(days) {
@@ -433,15 +612,10 @@ function financeListDateSummary(document) {
     };
   }
   if (status === 'sent') {
-    const days = financeDaysLeft(document.validUntil);
     return {
-      label: 'Sent / validity',
+      label: 'Sent on',
       date: financeDateOnly(document.sentAt || document.statusChangedAt),
-      detail: days === null
-        ? `${financeNumber(document.validityDays, 30)} day validity`
-        : days < 0
-          ? 'Expired'
-          : `${days} day${days === 1 ? '' : 's'} left`
+      detail: financeValidityCountdown(document)
     };
   }
   if (status === 'accepted') {
@@ -452,11 +626,18 @@ function financeListDateSummary(document) {
     };
   }
   if (status === 'invoiced') {
-    const date = document.invoicedAt || document.statusChangedAt;
+    const date = document.invoiceSentDate || document.invoicedAt || document.statusChangedAt;
     return {
       label: 'Invoiced',
       date: financeDateOnly(date),
-      detail: financeAgeText(financeDaysSince(date))
+      detail: financePaymentCountdownText(document) || financeAgeText(financeDaysSince(date))
+    };
+  }
+  if (status === 'overdue') {
+    return {
+      label: 'Payment due',
+      date: financeDateOnly(document.paymentDueDate),
+      detail: financePaymentCountdownText(document)
     };
   }
   if (status === 'paid') {
@@ -548,24 +729,24 @@ function financeStatusControl(document, context = 'list') {
 
 function financeSnapshotControl(document) {
   const revisions = (document.revisions || []).filter(row => row && row.snapshot);
-  if (!revisions.length) return '<span class="finance-muted-inline">No sent revisions</span>';
+  if (!revisions.length) return '<span class="finance-muted-inline">No sent versions</span>';
   const menuId = `finance-snapshots-${document.id}`;
   return `
     <div class="finance-custom-control finance-snapshot-control" onclick="event.stopPropagation()">
       <button type="button" class="finance-snapshot-button" onclick="financeToggleMenu('${financeEscapeAttr(menuId)}',event)">
-        ${revisions.length} revision${revisions.length === 1 ? '' : 's'}<span aria-hidden="true">⌄</span>
+        ${revisions.length} version${revisions.length === 1 ? '' : 's'}<span aria-hidden="true">⌄</span>
       </button>
       <div class="finance-custom-menu finance-snapshot-menu" id="${financeEscapeAttr(menuId)}">
         ${revisions.map(row => `
           <div class="finance-snapshot-row">
             <button type="button" class="finance-snapshot-preview" title="Open PDF" onclick="financeOpenRevisionPdf('${financeEscapeAttr(document.id)}',${Number(row.revision) || 1})">
-              <strong>${financeEscape(row.number || `Revision ${row.revision}`)}</strong>
+              <strong>${financeEscape(row.number || `Version ${row.revision}`)}</strong>
               <span>${financeEscape(financeSnapshotValidity(row))}</span>
             </button>
-            <button type="button" class="finance-snapshot-edit" title="Edit this sent revision" aria-label="Edit ${financeEscapeAttr(row.number || `revision ${row.revision}`)}" onclick="financeEditRevision('${financeEscapeAttr(document.id)}',${Number(row.revision) || 1})">
+            <button type="button" class="finance-snapshot-edit" title="Edit this sent version" aria-label="Edit ${financeEscapeAttr(row.number || `version ${row.revision}`)}" onclick="financeEditRevision('${financeEscapeAttr(document.id)}',${Number(row.revision) || 1})">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path><path d="m15 5 4 4"></path></svg>
             </button>
-            <button type="button" class="finance-snapshot-delete" title="Delete this revision" aria-label="Delete ${financeEscapeAttr(row.number || `revision ${row.revision}`)}" onclick="financeDeleteRevision('${financeEscapeAttr(document.id)}',${Number(row.revision) || 1})">
+            <button type="button" class="finance-snapshot-delete" title="Delete this version" aria-label="Delete ${financeEscapeAttr(row.number || `version ${row.revision}`)}" onclick="financeDeleteRevision('${financeEscapeAttr(document.id)}',${Number(row.revision) || 1})">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"></path><path d="M8 6V4h8v2"></path><path d="M19 6l-1 15H6L5 6"></path><path d="M10 11v5M14 11v5"></path></svg>
             </button>
           </div>
@@ -576,7 +757,7 @@ function financeSnapshotControl(document) {
 }
 
 function financeCanExportInvoice(document = financeState.current) {
-  return ['accepted', 'cancelled', 'invoiced', 'paid'].includes(String(document?.status || '').toLowerCase());
+  return ['accepted', 'cancelled', 'invoiced', 'overdue', 'paid'].includes(String(document?.status || '').toLowerCase());
 }
 
 function financeExportInvoiceButton(document = financeState.current) {
@@ -663,6 +844,7 @@ function compareRoot() {
 
 async function loadQuotations() {
   financeState.current = null;
+  financeState.eventPairTargetId = '';
   return financeLoadList();
 }
 
@@ -680,33 +862,81 @@ async function financeLoadList(query = '') {
   }
 }
 
+function financeListOwnerView() {
+  return typeof isOwnerUser === 'function'
+    ? isOwnerUser()
+    : !!(window.currentUser?.isOwner || window.currentUser?.isSuperAdmin);
+}
+
+function financePairedEventStatus(document) {
+  const eventId = Number(document?.eventId || 0);
+  const pairTargetId = financeEscapeAttr(document?.id || '');
+  if (!eventId) {
+    return `<button type="button" class="finance-event-cell-action is-unpaired" onclick="financeHandleQuotationEventClick(event,'${pairTargetId}',0)">Pair event</button>`;
+  }
+  if (document.eventMissing) {
+    return `<button type="button" class="finance-event-cell-action is-missing" onclick="financeHandleQuotationEventClick(event,'${pairTargetId}',0)">Event #${eventId} unavailable</button>`;
+  }
+  const state = String(document.eventState || '').trim();
+  if (!state) {
+    return `<button type="button" class="finance-event-cell-action" onclick="financeHandleQuotationEventClick(event,'${pairTargetId}',${eventId})">Event #${eventId}</button>`;
+  }
+  const badge = typeof planEventStateBadgeHtml === 'function'
+    ? planEventStateBadgeHtml({ state })
+    : `<span class="finance-event-state">${financeEscape(state)}</span>`;
+  return `<button type="button" class="finance-event-cell-action" title="View Event #${eventId}" onclick="financeHandleQuotationEventClick(event,'${pairTargetId}',${eventId})"><span class="finance-event-status"><small>#${eventId}</small>${badge}</span></button>`;
+}
+
+function financeHandleQuotationEventClick(domEvent, documentId, eventId) {
+  domEvent?.stopPropagation();
+  const id = Number(eventId || 0);
+  if (!id) {
+    financeOpenEventPicker(documentId);
+    return;
+  }
+  if (typeof viewEvent === 'function') viewEvent(id, { updateHistory: false });
+}
+
+function financeRenderListRow(document, ownerView = financeListOwnerView()) {
+  const client = document.client || {};
+  const total = document.totals?.total ?? financeTotals(document).total;
+  const dateSummary = financeListDateSummary(document);
+  const eventDates = financeEventDateSummary(document);
+  return `
+    <tr class="finance-list-row ${document.status === 'cancelled' ? 'is-cancelled' : ''}" data-document-id="${financeEscapeAttr(document.id)}" onclick="financeOpenDocument('${financeEscapeAttr(document.id)}')">
+      <td><span class="finance-doc-number">${financeEscape(document.number)}</span><br><small>Ver ${String(document.revision || 1).padStart(2, '0')}</small>${document.invoiceNumber ? `<br><small class="finance-linked-invoice">Invoice ${financeEscape(document.invoiceNumber)}</small>` : ''}</td>
+      <td><strong>${financeEscape(financeClientName(client) || client.contactPerson || 'No client')}</strong><br><small>${financeEscape(client.company || client.email || '')}</small></td>
+      <td class="finance-project-cell"><strong>${financeEscape(document.projectName || 'Project name required')}</strong>${eventDates ? `<small class="finance-project-dates">${financeEscape(eventDates)}</small>` : ''}</td>
+      ${ownerView ? `<td><strong>${financeEscape(document.salesperson || document.createdByName || document.createdBy || 'Unassigned')}</strong>${document.salespersonUsername || document.createdBy ? `<br><small>${financeEscape(document.salespersonUsername || document.createdBy)}</small>` : ''}</td>` : ''}
+      <td>${financePairedEventStatus(document)}</td>
+      <td><span>${financeEscape(dateSummary.label)}${dateSummary.date ? ` ${financeEscape(dateSummary.date)}` : ''}</span>${dateSummary.detail ? `<br><small>${financeEscape(dateSummary.detail)}</small>` : ''}</td>
+      <td>${financeSnapshotControl(document)}</td>
+      <td class="finance-list-status-cell"><div class="finance-list-status-actions">${financeStatusControl(document, 'list')}</div></td>
+      <td class="finance-list-export-cell"><div class="finance-list-export-action">${financeExportQuotationButton(document)}${financeExportInvoiceButton(document)}</div></td>
+      <td style="text-align:right;font-weight:750;">${financeEscape(financeMoney(total))}</td>
+    </tr>
+  `;
+}
+
+function financeUpdateListRow(updated) {
+  const index = financeState.documents.findIndex(row => row.id === updated.id);
+  const merged = index >= 0
+    ? { ...financeState.documents[index], ...updated }
+    : updated;
+  if (index >= 0) financeState.documents[index] = merged;
+  const currentRow = Array.from(financeRoot()?.querySelectorAll('.finance-list-row') || [])
+    .find(row => row.dataset.documentId === String(updated.id));
+  if (currentRow) currentRow.outerHTML = financeRenderListRow(merged);
+}
+
 function financeRenderList(query = '') {
   const root = financeRoot();
   if (!root) return;
-  const ownerView = typeof isOwnerUser === 'function'
-    ? isOwnerUser()
-    : !!(window.currentUser?.isOwner || window.currentUser?.isSuperAdmin);
-  const rows = financeState.documents.map(document => {
-    const client = document.client || {};
-    const total = document.totals?.total ?? financeTotals(document).total;
-    const dateSummary = financeListDateSummary(document);
-    return `
-      <tr class="finance-list-row ${document.status === 'cancelled' ? 'is-cancelled' : ''}" onclick="financeOpenDocument('${financeEscapeAttr(document.id)}')">
-        <td><span class="finance-doc-number">${financeEscape(document.number)}</span><br><small>Rev ${String(document.revision || 1).padStart(2, '0')}</small>${document.invoiceNumber ? `<br><small class="finance-linked-invoice">Invoice ${financeEscape(document.invoiceNumber)}</small>` : ''}</td>
-        <td><strong>${financeEscape(client.name || client.contactPerson || 'No client')}</strong><br><small>${financeEscape(client.company || client.email || '')}</small></td>
-        <td>${financeEscape(document.projectName || 'Project name required')}</td>
-        ${ownerView ? `<td><strong>${financeEscape(document.salesperson || document.createdBy || 'Unassigned')}</strong>${document.createdBy ? `<br><small>${financeEscape(document.createdBy)}</small>` : ''}</td>` : ''}
-        <td><span>${financeEscape(dateSummary.label)}${dateSummary.date ? ` ${financeEscape(dateSummary.date)}` : ''}</span>${dateSummary.detail ? `<br><small>${financeEscape(dateSummary.detail)}</small>` : ''}</td>
-        <td>${financeSnapshotControl(document)}</td>
-        <td class="finance-list-status-cell"><div class="finance-list-status-actions">${financeStatusControl(document, 'list')}</div></td>
-        <td class="finance-list-export-cell"><div class="finance-list-export-action">${financeExportQuotationButton(document)}${financeExportInvoiceButton(document)}</div></td>
-        <td style="text-align:right;font-weight:750;">${financeEscape(financeMoney(total))}</td>
-      </tr>
-    `;
-  }).join('');
+  const ownerView = financeListOwnerView();
+  const rows = financeState.documents.map(document => financeRenderListRow(document, ownerView)).join('');
   root.innerHTML = `
     <div class="finance-toolbar">
-      <div><h2>Quotations</h2><p class="finance-subtitle">Your quotations, revisions and client approvals.</p></div>
+      <div><h2>Quotations</h2><p class="finance-subtitle">Your quotations, versions and client approvals.</p></div>
       <div class="finance-toolbar-actions">
         <input class="finance-search" type="search" value="${financeEscapeAttr(query)}" placeholder="Search quotations..." oninput="financeQueueListSearch(this.value)">
         <button type="button" class="btn btn-primary" onclick="financeCreateDocument()">+ New Quotation</button>
@@ -715,7 +945,7 @@ function financeRenderList(query = '') {
     <div class="finance-card">
       ${rows ? `
         <table class="finance-list-table">
-          <thead><tr><th>Number</th><th>Bill to</th><th>Project Name</th>${ownerView ? '<th>Salesperson</th>' : ''}<th>Date</th><th>Revisions</th><th class="finance-list-status-heading">Status</th><th class="finance-list-export-heading">Export</th><th style="text-align:right;">Total</th></tr></thead>
+          <thead><tr><th>Number</th><th>Bill to</th><th>Project Name</th>${ownerView ? '<th>Salesperson</th>' : ''}<th>Event status</th><th>Date</th><th>Versions</th><th class="finance-list-status-heading">Status</th><th class="finance-list-export-heading">Export</th><th style="text-align:right;">Total</th></tr></thead>
           <tbody>${rows}</tbody>
         </table>
       ` : '<div class="finance-empty">No quotations yet.<br><button type="button" class="btn btn-primary" style="margin-top:14px;" onclick="financeCreateDocument()">Create the first quotation</button></div>'}
@@ -730,14 +960,16 @@ function financeQueueListSearch(query) {
 
 async function financeLoadEditorData(force = false) {
   if (!force && financeState.editorDataLoadedAt && Date.now() - financeState.editorDataLoadedAt < 30000) return;
-  const [clientsResponse, departmentsResponse, eventsResponse] = await Promise.all([
+  const [clientsResponse, departmentsResponse, eventsResponse, salespeopleResponse] = await Promise.all([
     apiCall('/api/clients').catch(() => ({ data: [] })),
     apiCall('/api/finance/departments').catch(() => ({ data: ['Manpower', 'Transportation'] })),
-    apiCall('/api/events?view=summary&limit=500').catch(() => ({ data: [] }))
+    apiCall('/api/events?view=summary&limit=500').catch(() => ({ data: [] })),
+    apiCall('/api/finance/salespeople').catch(() => ({ data: [] }))
   ]);
   financeState.clients = clientsResponse.data || [];
   financeState.departments = departmentsResponse.data || ['Manpower', 'Transportation'];
   financeState.events = eventsResponse.data || [];
+  financeState.salespeople = salespeopleResponse.data || [];
   financeState.editorDataLoadedAt = Date.now();
 }
 
@@ -745,11 +977,15 @@ async function financeCreateDocument() {
   try {
     const response = await apiCall('/api/quotations', 'POST', {});
     financeState.current = response.data;
+    financeState.eventPairTargetId = financeState.current.id;
     financeState.current._createdBlank = true;
     financeState.current._initialQuotationDate = financeState.current.quotationDate || '';
     financeState.activeSubprojectId = financeSubprojects(financeState.current)[0]?.id || 'main';
     financeState.snapshotMode = false;
     financeState.addDepartment = '';
+    if (typeof updateAppDetailHistory === 'function') {
+      updateAppDetailHistory(`/quotations/${encodeURIComponent(financeState.current.id)}`);
+    }
     await financeLoadEditorData();
     financeRenderEditor();
   } catch (error) {
@@ -757,7 +993,7 @@ async function financeCreateDocument() {
   }
 }
 
-async function financeOpenDocument(documentId) {
+async function financeOpenDocument(documentId, options = {}) {
   const root = financeRoot();
   const listQuery = root?.querySelector('.finance-search')?.value || '';
   if (root) {
@@ -768,10 +1004,14 @@ async function financeOpenDocument(documentId) {
       </div>
     `;
   }
+  if (options.updateHistory !== false && typeof updateAppDetailHistory === 'function') {
+    updateAppDetailHistory(`/quotations/${encodeURIComponent(documentId)}`, options.replaceHistory === true);
+  }
   try {
     const editorDataPromise = financeLoadEditorData();
     const response = await apiCall(`/api/quotations/${encodeURIComponent(documentId)}`);
     financeState.current = response.data;
+    financeState.eventPairTargetId = financeState.current.id;
     financeState.activeSubprojectId = financeSubprojects(financeState.current)[0]?.id || 'main';
     financeState.snapshotMode = false;
     financeState.addDepartment = '';
@@ -782,6 +1022,9 @@ async function financeOpenDocument(documentId) {
       if (financeState.current?.id === documentId) financeRenderEditor();
     });
   } catch (error) {
+    if (options.updateHistory !== false && typeof updateAppDetailHistory === 'function') {
+      updateAppDetailHistory('/quotations', true);
+    }
     financeRenderList(listQuery);
     showNotification('error', error.message || 'Failed to open quotation');
   }
@@ -810,9 +1053,9 @@ async function financeEditRevision(documentId, revision) {
   const snapshotRow = (documentRow?.revisions || []).find(row => Number(row.revision) === Number(revision));
   if (!documentRow || !snapshotRow?.snapshot) return;
   const confirmed = await showAppConfirm({
-    title: 'Edit sent revision?',
-    message: `${snapshotRow.number || `Revision ${revision}`} has already been sent to the client. Changes will update this sent revision and its archived PDF directly without creating a new revision.`,
-    confirmText: 'Edit Revision',
+    title: 'Edit sent version?',
+    message: `${snapshotRow.number || `Version ${revision}`} has already been sent to the client. Changes will update this sent version and its archived PDF directly without creating a new version.`,
+    confirmText: 'Edit Version',
     cancelText: 'Cancel'
   });
   if (!confirmed) return;
@@ -846,9 +1089,9 @@ async function financeDeleteRevision(documentId, revision) {
   const revisionRow = (documentRow?.revisions || []).find(row => Number(row.revision) === Number(revision));
   if (!documentRow || !revisionRow) return;
   const confirmed = await showAppConfirm({
-    title: 'Delete sent revision?',
-    message: `${revisionRow.number || `Revision ${revision}`} has been sent to the client. Deleting it removes its archived PDF and cannot be undone.`,
-    confirmText: 'Delete Revision',
+    title: 'Delete sent version?',
+    message: `${revisionRow.number || `Version ${revision}`} has been sent to the client. Deleting it removes its archived PDF and cannot be undone.`,
+    confirmText: 'Delete Version',
     cancelText: 'Cancel',
     destructive: true
   });
@@ -868,9 +1111,9 @@ async function financeDeleteRevision(documentId, revision) {
       if (index >= 0) financeState.documents[index] = response.data;
       financeRenderList(document.querySelector('.finance-search')?.value || '');
     }
-    showNotification('success', 'Quotation revision deleted');
+    showNotification('success', 'Quotation version deleted');
   } catch (error) {
-    showNotification('error', error.message || 'Failed to delete quotation revision');
+    showNotification('error', error.message || 'Failed to delete quotation version');
   }
 }
 
@@ -887,7 +1130,7 @@ async function financeDiscardChanges() {
   clearTimeout(financeState.saveTimer);
   const confirmed = await showAppConfirm({
     title: 'Discard draft changes?',
-    message: `Discard revision ${String(current.revision || 1).padStart(2, '0')} and restore the previous sent revision? All changes in this draft will be lost.`,
+    message: `Discard version ${String(current.revision || 1).padStart(2, '0')} and restore the previous sent version? All changes in this draft will be lost.`,
     confirmText: 'Discard Changes',
     cancelText: 'Keep Editing',
     danger: true
@@ -905,7 +1148,7 @@ async function financeDiscardChanges() {
 }
 
 function financeClientDisplay(client) {
-  return client?.name || client?.contactPerson || client?.company || '';
+  return financeClientName(client) || client?.contactPerson || client?.company || '';
 }
 
 function financeFilterClients(query) {
@@ -950,7 +1193,7 @@ function financeRenderClientPickerResults(query = '') {
   const rows = financeClientRows(query);
   results.innerHTML = rows.map(({ client, index }) => `
     <button type="button" class="finance-picker-option" onclick="financeApplySavedClientByIndex(${index})">
-      <strong>${financeEscape(client.name || client.contactPerson || client.company || 'Unnamed client')}</strong>
+      <strong>${financeEscape(financeClientName(client) || client.contactPerson || client.company || 'Unnamed client')}</strong>
       <span>${financeEscape([client.company, client.email, client.phone].filter(Boolean).join(' · '))}</span>
     </button>
   `).join('') || '<div class="finance-suggestion-empty">No matching clients</div>';
@@ -971,7 +1214,7 @@ function financeShowClientSuggestions(query = '') {
   const rows = financeFilterClients(query);
   results.innerHTML = rows.map(client => `
     <button type="button" class="finance-client-option" onclick="financeApplySavedClient('${financeEscapeAttr(encodeURIComponent(client.name))}')">
-      <strong>${financeEscape(client.name || client.contactPerson || client.company)}</strong>
+      <strong>${financeEscape(financeClientName(client) || client.contactPerson || client.company)}</strong>
       <span>${financeEscape(client.company || client.email || client.phone || '')}</span>
     </button>
   `).join('') || '<div class="finance-suggestion-empty">No matching clients</div>';
@@ -1054,7 +1297,14 @@ function financeRenderEventPickerResults(query = '') {
   `).join('') || '<div class="finance-suggestion-empty">No matching events</div>';
 }
 
-function financeOpenEventPicker() {
+async function financeOpenEventPicker(documentId = financeState.current?.id) {
+  financeState.eventPairTargetId = String(documentId || '');
+  try {
+    await financeLoadEditorData();
+  } catch (error) {
+    showNotification('error', error.message || 'Unable to load events');
+    return;
+  }
   financeEnsureEventPickerModal();
   const search = document.getElementById('financeEventPickerSearch');
   if (search) search.value = '';
@@ -1076,13 +1326,37 @@ function financeShowEventSuggestions(query = '') {
   results.classList.add('open');
 }
 
-function financePairEvent(eventId) {
+async function financePairEvent(eventId) {
   const id = Number(eventId || 0);
-  if (!financeState.current || !id) return;
-  financeState.current.eventId = id;
-  closeModal('financeEventPickerModal');
-  financeQueueSave();
-  financeRenderEditor();
+  const targetId = String(financeState.eventPairTargetId || financeState.current?.id || '');
+  if (!targetId || !id) return;
+  if (financeState.current?.id === targetId) {
+    financeState.current.eventId = id;
+    closeModal('financeEventPickerModal');
+    financeQueueSave();
+    financeRenderEditor();
+    return;
+  }
+
+  const selectedEvent = financeFindEvent(id);
+  try {
+    const response = await apiCall(
+      `/api/quotations/${encodeURIComponent(targetId)}`,
+      'PUT',
+      { eventId: id }
+    );
+    closeModal('financeEventPickerModal');
+    financeUpdateListRow({
+      ...response.data,
+      eventState: selectedEvent?.state || '',
+      eventName: selectedEvent?.name || '',
+      eventMissing: false
+    });
+    financeState.eventPairTargetId = '';
+    showNotification('success', `Quotation paired to Event #${id}`);
+  } catch (error) {
+    showNotification('error', error.message || 'Failed to pair event');
+  }
 }
 
 function financeUnpairEvent() {
@@ -1443,7 +1717,10 @@ async function financeCreateRateCardItem(event) {
       description: document.getElementById('financeRateCardDescription')?.value || '',
       department: document.getElementById('financeRateCardDepartment')?.value || '',
       unitPrice: document.getElementById('financeRateCardPrice')?.value || 0,
-      uom: financeState.rateCardUom || 'units',
+      uom: financeDefaultUom(
+        document.getElementById('financeRateCardDepartment')?.value || '',
+        financeState.rateCardUom || 'units'
+      ),
       isCustom: true
     });
     event.currentTarget.reset();
@@ -1695,10 +1972,11 @@ function financeRenderEditor() {
             <span>Quotation number</span>
             <input id="financeDocumentNumber" class="finance-number-input" value="${financeEscapeAttr(document.number || '')}" onchange="financeSetQuotationNumber(this.value)">
           </label>
-          ${snapshotMode ? '<span class="finance-readonly-pill" title="Snapshot view">Revision view</span>' : `
+          ${snapshotMode ? '<span class="finance-readonly-pill" title="Snapshot view">Version view</span>' : `
             <div class="finance-editor-revision-chip">${financeSnapshotControl(document)}</div>
-            ${editingSentRevision ? `<span class="finance-readonly-pill">Editing sent revision ${String(editingSentRevision).padStart(2, '0')}</span>` : `
+            ${editingSentRevision ? `<span class="finance-readonly-pill">Editing sent version ${String(editingSentRevision).padStart(2, '0')}</span>` : `
               ${financeStatusControl(document, 'editor')}
+              ${financePaymentCountdownText(document) ? `<span class="finance-payment-countdown">${financeEscape(financePaymentCountdownText(document))}</span>` : ''}
               ${financeExportQuotationButton(document)}
               ${financeExportInvoiceButton(document)}
             `}
@@ -1729,12 +2007,12 @@ function financeRenderEditor() {
             </div>
           </div>
           <div class="finance-form-grid finance-quote-details-grid">
-            <label class="finance-field"><span>Name</span><input class="finance-input" value="${financeEscapeAttr(client.name || '')}" onchange="financeClientFieldChange('name',this.value)"></label>
+            <label class="finance-field"><span>Name</span><div class="finance-client-name-control">${financeSalutationControl(client.salutation || '', 'finance-client-salutation-menu', 'financeSetClientSalutation')}<input class="finance-input" value="${financeEscapeAttr(client.name || '')}" onchange="financeClientFieldChange('name',this.value)"></div></label>
             <label class="finance-field"><span>Company</span><input class="finance-input" value="${financeEscapeAttr(client.company || '')}" onchange="financeClientFieldChange('company',this.value)"></label>
             <label class="finance-field"><span>Phone</span><input class="finance-input" value="${financeEscapeAttr(client.phone || '')}" onchange="financeClientFieldChange('phone',this.value)"></label>
             <label class="finance-field"><span>Email</span><input class="finance-input" type="email" value="${financeEscapeAttr(client.email || '')}" onchange="financeClientFieldChange('email',this.value)"></label>
             <label class="finance-field finance-span-3"><span>Billing address</span><input class="finance-input" value="${financeEscapeAttr([client.address1, client.address2, client.address3, client.postalCode].filter(Boolean).join(', '))}" onchange="financeSetClientAddress(this.value)"></label>
-            <label class="finance-field"><span>Salesperson</span><input class="finance-input" value="${financeEscapeAttr(document.salesperson || '')}" onchange="financeFieldChange('salesperson',this.value)"></label>
+            <label class="finance-field"><span>Salesperson</span><span class="finance-salesperson-combobox"><input id="financeSalespersonInput" class="finance-input" value="${financeEscapeAttr(document.salesperson || '')}" autocomplete="off" onfocus="financeShowSalespersonSuggestions(this.value)" oninput="financeSalespersonInput(this.value)" onblur="setTimeout(() => document.getElementById('financeSalespersonResults')?.classList.remove('open'),120)"><span class="finance-salesperson-results" id="financeSalespersonResults"></span></span></label>
             <label class="finance-field finance-span-2"><span>Project Name *</span><input class="finance-input" required value="${financeEscapeAttr(document.projectName || '')}" onchange="financeFieldChange('projectName',this.value)"></label>
             <label class="finance-field finance-span-2"><span>Location</span><span class="finance-location-combobox"><input id="financeLocationInput" class="finance-input" value="${financeEscapeAttr(document.eventLocation || '')}" autocomplete="off" onfocus="financeShowLocationSuggestions(this.value)" oninput="financeFieldChange('eventLocation',this.value);financeShowLocationSuggestions(this.value)" onchange="financeFieldChange('eventLocation',this.value)" onblur="setTimeout(() => document.getElementById('financeLocationResults')?.classList.remove('open'),120)"><span class="finance-location-results" id="financeLocationResults"></span></span></label>
             <label class="finance-field"><span>Quotation date</span><input class="finance-input" type="date" value="${financeEscapeAttr(document.quotationDate || '')}" onchange="financeFieldChange('quotationDate',this.value)"></label>
@@ -1827,11 +2105,12 @@ function financeRenderEditor() {
           <div class="finance-summary-row finance-summary-total"><span>Total</span><strong>${financeEscape(financeMoney(totals.total))}</strong></div>
         </section>
         <section class="finance-card finance-section">
-          <h3>PDF visibility</h3>
+          <h3>PDF options</h3>
           ${financeSwitch('Show unit prices', !!document.showUnitPrices, "financeToggleDocumentFlag('showUnitPrices')")}
           ${financeSwitch('Show department discounts', !!document.showDepartmentDiscounts, "financeToggleDocumentFlag('showDepartmentDiscounts')")}
           ${financeSwitch('Show department subtotals', document.showDepartmentSubtotals !== false, "financeToggleDocumentFlag('showDepartmentSubtotals')")}
           ${financeSwitch('Show line item numbers', document.showLineNumbers !== false, "financeToggleDocumentFlag('showLineNumbers')")}
+          ${financeSwitch('Show sign-off', !!document.showSignOff, "financeToggleDocumentFlag('showSignOff')")}
           <button type="button" class="btn btn-primary finance-export-inline" onclick="financeExportPdf()">Export PDF</button>
         </section>
         <section class="finance-card finance-section">
@@ -1849,9 +2128,9 @@ function financeRenderEditor() {
           ${document.eventId ? `<button type="button" class="btn btn-secondary finance-unpair-event" onclick="financeUnpairEvent()">Unpair event</button>` : ''}
         </section>
         <section class="finance-card finance-section">
-          <h3>Revision</h3>
-          <div class="finance-summary-row"><span>Current revision</span><strong>${String(document.revision || 1).padStart(2, '0')}</strong></div>
-          <div class="finance-summary-row"><span>Sent revisions</span><strong>${(document.revisions || []).length}</strong></div>
+          <h3>Version</h3>
+          <div class="finance-summary-row"><span>Current version</span><strong>${String(document.revision || 1).padStart(2, '0')}</strong></div>
+          <div class="finance-summary-row"><span>Sent versions</span><strong>${(document.revisions || []).length}</strong></div>
           ${document.eventId ? `<div class="finance-summary-row"><span>Linked event</span><strong>#${document.eventId}</strong></div>` : ''}
         </section>
       </aside>
@@ -1862,7 +2141,12 @@ function financeRenderEditor() {
 
 function financeBackToList() {
   clearTimeout(financeState.saveTimer);
-  const leave = () => { financeState.current = null; financeState.snapshotMode = false; financeLoadList(); };
+  const leave = () => {
+    financeState.current = null;
+    financeState.snapshotMode = false;
+    if (typeof updateAppDetailHistory === 'function') updateAppDetailHistory('/quotations');
+    financeLoadList();
+  };
   if (financeState.snapshotMode) return leave();
   if (financeQuotationIsBlank(financeState.current)) {
     return apiCall(`/api/quotations/${encodeURIComponent(financeState.current.id)}`, 'DELETE')
@@ -1878,6 +2162,7 @@ async function financeSaveAndExit() {
       await apiCall(`/api/quotations/${encodeURIComponent(financeState.current.id)}`, 'DELETE');
       financeState.current = null;
       financeState.snapshotMode = false;
+      if (typeof updateAppDetailHistory === 'function') updateAppDetailHistory('/quotations');
       financeLoadList();
       return;
     }
@@ -1885,6 +2170,7 @@ async function financeSaveAndExit() {
     showNotification('success', 'Quotation saved');
     financeState.current = null;
     financeState.snapshotMode = false;
+    if (typeof updateAppDetailHistory === 'function') updateAppDetailHistory('/quotations');
     financeLoadList();
   } catch (error) {
     showNotification('error', error.message || 'Failed to save quotation');
@@ -1982,7 +2268,10 @@ function financeLineChange(index, field, value) {
   if (!line) return;
   line[field] = ['days', 'quantity', 'unitPrice', 'discountPercent'].includes(field) ? financeNumber(value) : value;
   if (field === 'discountPercent') line.discountPercent = financePercent(value);
-  if (field === 'department') line.departmentCode = '';
+  if (field === 'department') {
+    line.departmentCode = '';
+    line.uom = financeDefaultUom(value, line.uom);
+  }
   line.total = financeLineTotal(line);
   financeSyncDocumentDepartments();
   financeQueueSave();
@@ -2212,7 +2501,7 @@ async function financeSaveCurrent(notify = false) {
       financeState.saveTimer = setTimeout(() => financeSaveCurrent(false), 300);
     }
     const nextState = document.getElementById('financeSaveState');
-    if (nextState) nextState.textContent = editingSentRevision ? 'Revision changes saved' : 'All changes saved';
+    if (nextState) nextState.textContent = editingSentRevision ? 'Version changes saved' : 'All changes saved';
     if (notify) showNotification('success', 'Quotation saved');
     return response.data;
   } catch (error) {
@@ -2371,7 +2660,7 @@ function financeAddLineFromCatalog(selected, departmentOverride = '', quantityOv
     departmentCode: selected.departmentCode || '',
     days,
     quantity,
-    uom: selected.uom || 'units',
+    uom: financeDefaultUom(department, selected.uom),
     unitPrice: financeNumber(selected.unitPrice),
     discountPercent: 0,
     total: financeNumber(selected.unitPrice) * days * quantity,
@@ -2422,7 +2711,7 @@ async function financeAddCustomItem() {
     departmentCode: exactLoaded.departmentCode || '',
     days: financeEventDays(),
     quantity: 1,
-    uom: exactLoaded.uom || 'units',
+    uom: financeDefaultUom(department, exactLoaded.uom),
     unitPrice: financeNumber(exactLoaded.unitPrice),
     discountPercent: 0,
     total: financeNumber(exactLoaded.unitPrice) * financeEventDays(),
@@ -2465,12 +2754,45 @@ function financeEnsureSentModal() {
   modal.innerHTML = `
     <div class="modal-content" style="max-width:480px;">
       <div class="modal-header"><h3 class="modal-title">Mark quotation as Sent</h3><button type="button" class="close-btn" onclick="closeModal('financeSentModal')">×</button></div>
-      <p style="color:#64748b;margin-bottom:16px;">A revision of this quotation will be saved. Later edits will create the next revision.</p>
+      <p style="color:#64748b;margin-bottom:16px;">A version of this quotation will be saved. Later edits will create the next version.</p>
       <label class="finance-field"><span>Valid for</span><span class="finance-validity-control"><input id="financeSentValidityAmount" class="finance-input" type="number" min="1" max="365" value="30"><input id="financeSentValidityUnitValue" type="hidden" value="days"><span id="financeSentValidityUnitHolder">${financeValidityUnitControl('days', 'finance-sent-validity-unit-menu', 'financeSetSentValidityUnit')}</span></span></label>
       <div class="modal-actions" style="display:flex;justify-content:flex-end;gap:8px;margin-top:20px;"><button type="button" class="btn btn-secondary" onclick="closeModal('financeSentModal')">Cancel</button><button type="button" class="btn btn-primary" onclick="financeConfirmSent()">Mark as Sent</button></div>
     </div>
   `;
   document.body.appendChild(modal);
+}
+
+function financeEnsureInvoicedModal() {
+  if (document.getElementById('financeInvoicedModal')) return;
+  const modal = document.createElement('div');
+  modal.id = 'financeInvoicedModal';
+  modal.className = 'modal';
+  modal.innerHTML = `
+    <div class="modal-content" style="max-width:480px;">
+      <div class="modal-header"><h3 class="modal-title">Mark quotation as Invoiced</h3><button type="button" class="close-btn" onclick="closeModal('financeInvoicedModal')">×</button></div>
+      <p style="color:#64748b;margin-bottom:16px;">Confirm when the invoice was sent and the agreed payment terms.</p>
+      <div class="finance-invoiced-fields">
+        <label class="finance-field"><span>Invoice sent date</span><input id="financeInvoiceSentDate" class="finance-input" type="date" value="${financeTodayIso()}" oninput="financeUpdateInvoiceDuePreview()"></label>
+        <label class="finance-field"><span>Payment terms</span><input id="financeInvoicePaymentTerms" class="finance-input" value="30 Days" placeholder="For example, 30 Days" oninput="financeUpdateInvoiceDuePreview()"></label>
+      </div>
+      <div class="finance-payment-preview" id="financeInvoiceDuePreview">Pay by: 30 days</div>
+      <div class="modal-actions" style="display:flex;justify-content:flex-end;gap:8px;margin-top:20px;"><button type="button" class="btn btn-secondary" onclick="closeModal('financeInvoicedModal')">Cancel</button><button type="button" class="btn btn-primary" onclick="financeConfirmInvoiced()">Mark as Invoiced</button></div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+}
+
+function financeUpdateInvoiceDuePreview() {
+  const terms = document.getElementById('financeInvoicePaymentTerms')?.value || '';
+  const sentDate = document.getElementById('financeInvoiceSentDate')?.value || '';
+  const days = financePaymentTermDays(terms, 30);
+  const dueDate = financePaymentDueDisplay(sentDate, days);
+  const preview = document.getElementById('financeInvoiceDuePreview');
+  if (preview) {
+    preview.textContent = dueDate
+      ? `Pay by: ${dueDate} · ${financePaymentTermSummary(terms, days)}`
+      : 'Choose a valid invoice sent date';
+  }
 }
 
 async function financeRequestStatus(documentId, status, context) {
@@ -2483,6 +2805,16 @@ async function financeRequestStatus(documentId, status, context) {
     document.getElementById('financeSentValidityAmount').value = financeValidityAmount(documentRow);
     financeSetSentValidityUnit(financeValidityUnit(documentRow));
     openModal('financeSentModal');
+    return;
+  }
+  if (status === 'invoiced') {
+    financeEnsureInvoicedModal();
+    const sentDate = document.getElementById('financeInvoiceSentDate');
+    const paymentTerms = document.getElementById('financeInvoicePaymentTerms');
+    if (sentDate) sentDate.value = financeDateOnly(documentRow.invoiceSentDate) || financeTodayIso();
+    if (paymentTerms) paymentTerms.value = documentRow.paymentTerms || '30 Days';
+    financeUpdateInvoiceDuePreview();
+    openModal('financeInvoicedModal');
     return;
   }
   if (status === 'accepted') {
@@ -2512,7 +2844,21 @@ async function financeConfirmSent() {
   });
 }
 
+async function financeConfirmInvoiced() {
+  const invoiceSentDate = document.getElementById('financeInvoiceSentDate')?.value || financeTodayIso();
+  const paymentTerms = document.getElementById('financeInvoicePaymentTerms')?.value.trim() || '30 Days';
+  closeModal('financeInvoicedModal');
+  await financeCommitStatus(financeState.statusTargetId, 'invoiced', {
+    invoiceSentDate,
+    paymentTerms
+  });
+}
+
 async function financeCommitStatus(documentId, status, extras) {
+  const listRow = Array.from(financeRoot()?.querySelectorAll('.finance-list-row') || [])
+    .find(row => row.dataset.documentId === String(documentId));
+  listRow?.classList.add('is-updating');
+  listRow?.setAttribute('aria-busy', 'true');
   try {
     const beforeChange = financeState.current?.id === documentId ? financeState.current : financeState.documents.find(row => row.id === documentId);
     const existingEventId = Number(beforeChange?.eventId || 0);
@@ -2522,13 +2868,15 @@ async function financeCommitStatus(documentId, status, extras) {
       financeState.current = response.data;
       financeRenderEditor();
     } else {
-      await financeLoadList();
+      financeUpdateListRow(response.data);
     }
     const eventNote = status === 'accepted' && response.data.eventId
       ? (existingEventId ? ` Linked to Event #${response.data.eventId}.` : ` Event #${response.data.eventId} was created.`)
       : '';
     showNotification('success', `Quotation marked ${financeStatusLabel(response.data.status)}.${eventNote}`);
   } catch (error) {
+    listRow?.classList.remove('is-updating');
+    listRow?.removeAttribute('aria-busy');
     showNotification('error', error.message || 'Failed to change quotation status');
   }
 }
@@ -2604,6 +2952,7 @@ async function financeDeleteCurrent() {
     await apiCall(`/api/quotations/${encodeURIComponent(current.id)}`, 'DELETE');
     showNotification('success', 'Quotation deleted');
     financeState.current = null;
+    if (typeof updateAppDetailHistory === 'function') updateAppDetailHistory('/quotations', true);
     await financeLoadList();
   } catch (error) {
     showNotification('error', error.message || 'Failed to delete quotation');
@@ -2620,7 +2969,7 @@ function financeEnsureClientModal() {
       <div class="modal-header"><h3 class="modal-title">New Client</h3><button type="button" class="close-btn" onclick="closeModal('financeClientModal')">×</button></div>
       <form id="financeClientForm" onsubmit="financeSaveNewClient(event)">
         <div class="finance-new-client-grid">
-          <label class="finance-field"><span>Name *</span><input id="financeClientName" class="finance-input" required></label>
+          <label class="finance-field"><span>Name *</span><div class="finance-client-name-control"><div id="financeNewClientSalutationControl">${financeSalutationControl('', 'finance-new-client-salutation-menu', 'financeSetNewClientSalutation')}</div><input id="financeClientName" class="finance-input" required></div></label>
           <label class="finance-field"><span>Company</span><input id="financeClientCompany" class="finance-input"></label>
           <label class="finance-field"><span>Contact person</span><input id="financeClientContact" class="finance-input"></label>
           <label class="finance-field"><span>Email</span><input id="financeClientEmail" class="finance-input" type="email"></label>
@@ -2639,6 +2988,9 @@ function financeEnsureClientModal() {
 function financeOpenClientModal() {
   financeEnsureClientModal();
   document.getElementById('financeClientForm')?.reset();
+  financeState.newClientSalutation = '';
+  const control = document.getElementById('financeNewClientSalutationControl');
+  if (control) control.innerHTML = financeSalutationControl('', 'finance-new-client-salutation-menu', 'financeSetNewClientSalutation');
   openModal('financeClientModal');
 }
 
@@ -2647,6 +2999,7 @@ async function financeSaveNewClient(event) {
   const value = id => document.getElementById(id)?.value.trim() || '';
   try {
     const response = await apiCall('/api/clients', 'POST', {
+      salutation: financeState.newClientSalutation || '',
       name: value('financeClientName'),
       company: value('financeClientCompany'),
       contactPerson: value('financeClientContact'),
@@ -3453,6 +3806,21 @@ async function compareBulkAction(action) {
     if (action === 'resolve-mismatch') return row.status === 'qty_mismatch';
     return false;
   });
+  if (action === 'add-quote' && targets.length) {
+    try {
+      const response = await apiCall(`/api/finance/compare/${compareState.eventId}/add-to-quotation`, 'POST', {
+        quotationId: compareState.quotationId,
+        keys: targets.map(row => row.key)
+      });
+      compareState.data = response.data;
+      compareState.quotationId = response.data?.quotation?.id || compareState.quotationId;
+      renderComparePage();
+      showNotification('success', `${targets.length} item${targets.length === 1 ? '' : 's'} added to quotation`);
+    } catch (error) {
+      showNotification('error', error.message || 'Compare action failed');
+    }
+    return;
+  }
   for (const row of targets) {
     const quoteQty = financeNumber(row.quotationItem?.quantity);
     const eventQty = financeNumber(row.eventItem?.quantity);

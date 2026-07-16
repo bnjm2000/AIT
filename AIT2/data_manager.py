@@ -7,6 +7,7 @@ import logging
 import os
 import re
 import shutil
+from datetime import datetime
 
 from maintenance_logs import dump_maintenance_logs, load_maintenance_logs, normalize_maintenance_log
 from models import (
@@ -24,7 +25,8 @@ from utils import clean_csv_cell, open_csv_robust, sanitize_filename
 
 
 # File and CSV schema definitions
-MAX_LOG_LINES = 1000
+MAX_LOG_LINES = 3000
+EVENT_LOG_GROUP_WINDOW_SECONDS = 180
 REQUIRED_DATA_FILES = ('Inventory.csv', 'Logs.csv', 'Users.csv', 'Containers.csv', 'Clients.csv')
 UTF8_ENCODINGS = ('utf-8', 'utf-8-sig')
 INVENTORY_FIELDNAMES = [
@@ -39,7 +41,7 @@ EVENT_FIELDNAMES = [
     'Tag', 'ForceStateOverride', 'EventLogs', 'Notes', 'AssignedUsers', 'Subprojects'
 ]
 CLIENT_FIELDNAMES = [
-    'Name', 'Company', 'ContactPerson', 'Email', 'Phone', 'TaxNumber',
+    'Name', 'Salutation', 'Company', 'ContactPerson', 'Email', 'Phone', 'TaxNumber',
     'Address1', 'Address2', 'Address3', 'PostalCode',
 ]
 
@@ -306,26 +308,147 @@ class DataManager:
             user = ''
             action = str(log or '')
 
-        return {
+        record = {
             'timestamp': str(timestamp or ''),
             'user': str(user or ''),
             'action': str(action or '')
         }
+        if isinstance(log, dict):
+            group_key = str(log.get('groupKey') or '').strip()
+            action_label = str(log.get('actionLabel') or '').strip()
+            preposition = str(log.get('preposition') or '').strip()
+            event_id = log.get('eventId')
+            items = []
+            for item in log.get('items') or []:
+                if not isinstance(item, dict):
+                    continue
+                label = str(item.get('label') or '').strip()
+                asset_id = str(item.get('assetId') or '').strip()
+                item_type = str(item.get('itemType') or '').strip().lower()
+                try:
+                    quantity = max(1, int(item.get('quantity') or 1))
+                except (TypeError, ValueError):
+                    quantity = 1
+                if label or asset_id:
+                    items.append({
+                        'label': label or asset_id,
+                        'assetId': asset_id,
+                        'quantity': quantity,
+                        'itemType': item_type,
+                    })
+            if group_key:
+                record['groupKey'] = group_key
+            if action_label:
+                record['actionLabel'] = action_label
+            if preposition:
+                record['preposition'] = preposition
+            if event_id not in (None, ''):
+                try:
+                    record['eventId'] = int(event_id)
+                except (TypeError, ValueError):
+                    pass
+            if items:
+                record['items'] = items
+            if log.get('firstTimestamp'):
+                record['firstTimestamp'] = str(log.get('firstTimestamp'))
+            if log.get('groupCount'):
+                try:
+                    record['groupCount'] = max(1, int(log.get('groupCount') or 1))
+                except (TypeError, ValueError):
+                    record['groupCount'] = 1
+        return record
+
+    def format_event_asset_log_action(self, record):
+        label = str(record.get('actionLabel') or 'Updated').strip()
+        preposition = str(record.get('preposition') or 'for').strip()
+        event_id = record.get('eventId')
+        item_text = []
+        quantity_action = label.lower() in {'prepared', 'unprepared'}
+        for item in record.get('items') or []:
+            quantity = max(1, int(item.get('quantity') or 1))
+            asset_id = str(item.get('assetId') or '').strip()
+            item_type = str(item.get('itemType') or '').strip().lower()
+            name = str(
+                asset_id if asset_id
+                else item.get('label') or asset_id or 'item'
+            ).strip()
+            # A visible asset ID identifies exactly one physical asset. Keep
+            # quantities only for quantity preparation or true bulk items.
+            # Legacy structured entries predate itemType, so preserve their
+            # quantity rather than silently discarding ambiguous history.
+            show_quantity = (
+                not asset_id
+                and (quantity_action or item_type == 'bulk' or not item_type)
+            )
+            item_text.append(f"{quantity}x {name}" if show_quantity else name)
+        event_text = f" event {event_id}" if event_id not in (None, '') else ' event'
+        details = '; '.join(item_text) if item_text else 'item details unavailable'
+        return f"{label} {preposition}{event_text}: {details}"
+
+    def _event_logs_are_groupable(self, previous, current):
+        if not current.get('groupKey') or previous.get('groupKey') != current.get('groupKey'):
+            return False
+        if previous.get('user') != current.get('user'):
+            return False
+        try:
+            previous_time = datetime.strptime(previous.get('timestamp', ''), '%Y/%m/%d %H:%M:%S')
+            current_time = datetime.strptime(current.get('timestamp', ''), '%Y/%m/%d %H:%M:%S')
+        except (TypeError, ValueError):
+            return False
+        elapsed = (current_time - previous_time).total_seconds()
+        return 0 <= elapsed <= EVENT_LOG_GROUP_WINDOW_SECONDS
+
+    def _merge_grouped_event_logs(self, previous, current):
+        merged = dict(previous)
+        merged['firstTimestamp'] = previous.get('firstTimestamp') or previous.get('timestamp') or ''
+        merged['timestamp'] = current.get('timestamp') or previous.get('timestamp') or ''
+        merged['groupCount'] = max(1, int(previous.get('groupCount') or 1)) + 1
+        items = [dict(item) for item in previous.get('items') or []]
+        indexes = {
+            (str(item.get('assetId') or '').lower(), str(item.get('label') or '').lower()): index
+            for index, item in enumerate(items)
+        }
+        for item in current.get('items') or []:
+            key = (str(item.get('assetId') or '').lower(), str(item.get('label') or '').lower())
+            if key in indexes:
+                existing = items[indexes[key]]
+                if not str(existing.get('assetId') or '').strip():
+                    existing['quantity'] = max(1, int(existing.get('quantity') or 1)) + max(1, int(item.get('quantity') or 1))
+            else:
+                indexes[key] = len(items)
+                items.append(dict(item))
+        merged['items'] = items
+        merged['action'] = self.format_event_asset_log_action(merged)
+        return merged
 
     def normalize_event_logs(self, logs):
         normalized = []
         for log in logs or []:
             record = self.event_log_to_dict(log)
+            if (
+                record.get('items')
+                and record.get('actionLabel')
+                and record.get('preposition')
+                and record.get('eventId') not in (None, '')
+            ):
+                record['action'] = self.format_event_asset_log_action(record)
             if record['timestamp'] or record['user'] or record['action']:
                 normalized.append(record)
         return normalized
 
     def append_event_log(self, event, log):
         record = self.event_log_to_dict(log)
-        logs = self.normalize_event_logs(getattr(event, 'event_logs', []))
+        logs = self.normalize_event_logs(getattr(event, 'event_logs', []))[-MAX_LOG_LINES:]
+        if logs and self._event_logs_are_groupable(logs[-1], record):
+            record = self._merge_grouped_event_logs(logs[-1], record)
+            logs[-1] = record
+            event.event_logs = logs
+            return record
         key = (record['timestamp'], record['user'], record['action'])
         if key not in {(item['timestamp'], item['user'], item['action']) for item in logs}:
             logs.append(record)
+        if len(logs) > MAX_LOG_LINES:
+            logs = logs[-MAX_LOG_LINES:]
         event.event_logs = logs
         return record
 
@@ -396,8 +519,10 @@ class DataManager:
                 # Previous format:
                 # username,password_hash,salt,is_admin,is_active,last_online,role,has_sales_access
                 #
-                # Current format:
+                # Previous format:
                 # username,password_hash,salt,is_admin,is_active,last_online,role,has_sales_access,name
+                #
+                # Current format adds phone as the tenth column.
                 if len(row) < 4:
                     continue
 
@@ -438,6 +563,12 @@ class DataManager:
                     name = ''
                     needs_save = True
 
+                if len(row) >= 10:
+                    phone = row[9].strip()
+                else:
+                    phone = ''
+                    needs_save = True
+
                 self.users[username] = User(
                     username,
                     password_hash,
@@ -448,6 +579,7 @@ class DataManager:
                     role,
                     has_sales_access,
                     name,
+                    phone,
                 )
 
         if needs_save:
@@ -471,6 +603,7 @@ class DataManager:
                     ),
                     bool(getattr(user, 'has_sales_access', False)),
                     getattr(user, 'name', ''),
+                    getattr(user, 'phone', ''),
                 ])
 
     def update_username_references(self, old_username, new_username):
@@ -612,11 +745,23 @@ class DataManager:
             self.save_containers()
 
         finance_path = self._data_path('Finance.json')
-        if os.path.isfile(finance_path):
+        finance_data = None
+        finance_in_database = hasattr(self, 'load_company_document')
+        if finance_in_database:
+            finance_data = self.load_company_document('finance', None)
+        elif os.path.isfile(finance_path):
             try:
                 with open(finance_path, 'r', encoding='utf-8') as finance_file:
                     finance_data = json.load(finance_file)
+            except (OSError, ValueError, TypeError) as exc:
+                logging.getLogger(__name__).warning(
+                    'Unable to load quotation salesperson references in %s: %s',
+                    finance_path,
+                    exc,
+                )
 
+        if isinstance(finance_data, dict):
+            try:
                 def rename_finance_identity(value):
                     changed = False
                     if isinstance(value, list):
@@ -625,7 +770,7 @@ class DataManager:
                                 changed = True
                     elif isinstance(value, dict):
                         for key, item in list(value.items()):
-                            if key in {'createdBy', 'updatedBy', 'salesperson'} and item == old_username:
+                            if key in {'createdBy', 'updatedBy', 'salesperson', 'salespersonUsername'} and item == old_username:
                                 value[key] = new_username
                                 changed = True
                             elif isinstance(item, (dict, list)) and rename_finance_identity(item):
@@ -637,10 +782,13 @@ class DataManager:
                         counts['financeDocuments'] += 1
 
                 if counts['financeDocuments']:
-                    temp_path = f'{finance_path}.rename.tmp'
-                    with open(temp_path, 'w', encoding='utf-8') as finance_file:
-                        json.dump(finance_data, finance_file, ensure_ascii=False, indent=2)
-                    os.replace(temp_path, finance_path)
+                    if finance_in_database:
+                        self.save_company_document('finance', finance_data)
+                    else:
+                        temp_path = f'{finance_path}.rename.tmp'
+                        with open(temp_path, 'w', encoding='utf-8') as finance_file:
+                            json.dump(finance_data, finance_file, ensure_ascii=False, indent=2)
+                        os.replace(temp_path, finance_path)
             except (OSError, ValueError, TypeError) as exc:
                 logging.getLogger(__name__).warning(
                     'Unable to rename quotation salesperson references in %s: %s',
@@ -1111,6 +1259,7 @@ class DataManager:
                     continue
                 c = Client(
                     name=row.get('Name', '').strip(),
+                    salutation=row.get('Salutation', '').strip(),
                     company=row.get('Company', '').strip(),
                     contact_person=row.get('ContactPerson', '').strip(),
                     email=row.get('Email', '').strip(),
@@ -1132,6 +1281,7 @@ class DataManager:
             for c in sorted(self.clients.values(), key=lambda x: x.name.lower()):
                 writer.writerow({
                     'Name': c.name,
+                    'Salutation': getattr(c, 'salutation', ''),
                     'Company': c.company,
                     'ContactPerson': getattr(c, 'contact_person', ''),
                     'Email': getattr(c, 'email', ''),

@@ -117,6 +117,56 @@ class WorkforcePortalTests(unittest.TestCase):
         result = _amount_from_text("TotaI (SGD) INCL.GST 11.85")
         self.assertEqual(result["amount"], 11.85)
 
+    def test_event_overview_exposes_operations_without_financial_data(self):
+        event = self.manager.events[143]
+        event.assigned_users = ['normal']
+        with mutate_workforce(self.manager.data_folder) as workforce:
+            workforce['freelancers'] = [{
+                'id': 'worker-1', 'name': 'Alex Crew', 'phone': '+65 9000 0000'
+            }]
+            workforce['assignments'] = {'143': [{
+                'id': 'assignment-1',
+                'freelancerId': 'worker-1',
+                'subjectType': 'worker',
+                'department': 'AU',
+                'roleName': 'Audio Technician',
+                'days': 2,
+                'workDates': ['2026-07-10', '2026-07-11'],
+                'dailyRate': 450,
+            }]}
+            workforce['transportBookings'] = {'143': [{
+                'id': 'transport-1',
+                'company': 'Move Co',
+                'driver': 'Sam',
+                'contactNumber': '+65 8111 2222',
+                'vehicleType': 'Lorry',
+                'vehicleNumber': 'GBX1234A',
+                'locationFrom': 'Warehouse',
+                'locationTo': 'Test Venue',
+                'departDate': '2026-07-10',
+                'departTime': '08:00',
+                'cost': 900,
+                'status': 'Paid',
+                'invoice': {'amount': 900},
+            }]}
+            workforce['submissions'] = {'143': {'worker-1': {
+                'claims': [{'amount': 25}], 'invoices': [{'amount': 900}]
+            }}}
+
+        self.login('normal', False)
+        response = self.client.get('/api/events/143/overview')
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()['data']
+        self.assertEqual(payload['crew'][0]['name'], 'Alex Crew')
+        self.assertEqual(payload['transport'][0]['vehicleNumber'], 'GBX1234A')
+        serialized = json.dumps(payload).lower()
+        for restricted in (
+            'dailyrate', 'rateperpax', 'servicecost', 'cost', 'claim',
+            'invoice', 'submission', 'payment', 'amount',
+        ):
+            self.assertNotIn(restricted, serialized)
+
     def test_claim_date_detection_prefers_receipt_date(self):
         result = _date_from_text(
             """

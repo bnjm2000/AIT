@@ -1,5 +1,6 @@
 import hashlib
 import datetime
+import re
 
 
 USER_ROLES = ('owner', 'admin', 'manager', 'user')
@@ -17,6 +18,38 @@ def normalize_user_role(role, is_admin=False):
 
 def user_role_is_adminish(role):
     return normalize_user_role(role) in ADMIN_USER_ROLES
+
+
+def format_user_phone(value):
+    raw = str(value or '').strip()
+    if not raw:
+        return ''
+    digits = re.sub(r'\D', '', raw)
+    if digits.startswith('00'):
+        digits = digits[2:]
+    if len(digits) == 8:
+        digits = f'65{digits}'
+    if len(digits) < 9 or len(digits) > 15:
+        return ''
+
+    if digits.startswith('65') and len(digits) == 10:
+        country, local = '65', digits[2:]
+    elif digits.startswith('1') and len(digits) == 11:
+        country, local = '1', digits[1:]
+    else:
+        explicit = re.match(r'^\+\s*(\d{1,3})[\s-]+', raw)
+        country = explicit.group(1) if explicit else digits[:2]
+        local = digits[len(country):]
+    if len(local) < 7:
+        return ''
+
+    groups = []
+    while len(local) > 4:
+        groups.insert(0, local[-4:])
+        local = local[:-4]
+    if local:
+        groups.insert(0, local)
+    return f"+{country} {' '.join(groups)}"
 
 
 # Date formats used by form input/display and CSV storage.
@@ -64,9 +97,11 @@ class User:
         role=None,
         has_sales_access=False,
         name='',
+        phone='',
     ):
         self.username = username
         self.name = str(name or '').strip()
+        self.phone = format_user_phone(phone)
         self.password_hash = password_hash
         self.salt = salt
         self.role = normalize_user_role(role, is_admin)
@@ -89,6 +124,7 @@ class Client:
         contact_person='',
         email='',
         tax_number='',
+        salutation='',
     ):
         self.name = name
         self.company = company
@@ -100,6 +136,7 @@ class Client:
         self.contact_person = contact_person
         self.email = email
         self.tax_number = tax_number
+        self.salutation = salutation
 
 
 class InventoryItem:

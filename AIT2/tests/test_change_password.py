@@ -12,6 +12,7 @@ class ChangePasswordTests(unittest.TestCase):
         self.original_data_manager = app_module.get_default_data_manager()
         self.original_signature = app_module._data_snapshot_signature
         self.original_testing = app_module.app.config.get('TESTING')
+        self.original_company_registry_cache = app_module._company_registry_cache
         self.tempdir = tempfile.TemporaryDirectory()
 
         self.data_manager = DataManager(self.tempdir.name)
@@ -34,12 +35,24 @@ class ChangePasswordTests(unittest.TestCase):
 
         app_module.app.config['TESTING'] = True
         app_module.set_data_manager_for_testing(self.data_manager)
+        registry = app_module._load_company_registry()
+        default_company = registry['defaultCompany']
+        app_module._company_registry_cache = {
+            **registry,
+            'userCompanies': {
+                **registry.get('userCompanies', {}),
+                'normal': default_company,
+                'admin': default_company,
+                'manager': default_company,
+            },
+        }
         self.client = app_module.app.test_client()
 
     def tearDown(self):
         app_module.clear_test_data_manager(self.original_data_manager)
         app_module._data_snapshot_signature = self.original_signature
         app_module.app.config['TESTING'] = self.original_testing
+        app_module._company_registry_cache = self.original_company_registry_cache
         self.tempdir.cleanup()
 
     def login(self):
@@ -114,10 +127,11 @@ class ChangePasswordTests(unittest.TestCase):
         users = {user['username']: user for user in response.get_json()['data']}
         self.assertEqual(users['normal']['lastOnline'], '-')
         self.assertEqual(users['normal']['name'], '')
+        self.assertEqual(users['normal']['phone'], '')
         self.assertEqual(users['admin']['role'], 'admin')
         self.assertEqual(users['manager']['role'], 'manager')
 
-    def test_admin_can_update_user_name(self):
+    def test_admin_can_update_user_name_and_phone(self):
         with self.client.session_transaction() as session:
             session['user'] = 'admin'
             session['is_admin'] = True
@@ -126,20 +140,28 @@ class ChangePasswordTests(unittest.TestCase):
         response = self.client.put('/api/users/normal', json={
             'username': 'normal',
             'name': 'Normal User',
+            'phone': '9123 4567',
             'isActive': True,
         })
 
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
         self.assertEqual(self.data_manager.users['normal'].name, 'Normal User')
+        self.assertEqual(self.data_manager.users['normal'].phone, '+65 9123 4567')
 
         reloaded_manager = DataManager(self.tempdir.name)
         reloaded_manager.load_users()
         self.assertEqual(reloaded_manager.users['normal'].name, 'Normal User')
+        self.assertEqual(reloaded_manager.users['normal'].phone, '+65 9123 4567')
 
         response = self.client.get('/api/users')
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
         users = {user['username']: user for user in response.get_json()['data']}
         self.assertEqual(users['normal']['name'], 'Normal User')
+        self.assertEqual(users['normal']['phone'], '+65 9123 4567')
+
+        invalid = self.client.put('/api/users/normal', json={'phone': '+65 123'})
+        self.assertEqual(invalid.status_code, 400, invalid.get_data(as_text=True))
+        self.assertEqual(self.data_manager.users['normal'].phone, '+65 9123 4567')
 
     def test_admin_can_change_roles_but_manager_cannot(self):
         with self.client.session_transaction() as session:

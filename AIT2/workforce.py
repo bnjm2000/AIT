@@ -27,6 +27,7 @@ TRANSPORT_EXTENSIONS = {".pdf"}
 
 _STORE_LOCKS: dict[str, threading.RLock] = {}
 _STORE_LOCKS_GUARD = threading.RLock()
+_DOCUMENT_STORES = {}
 _OCR_ENGINE = None
 _OCR_ENGINE_LOCK = threading.RLock()
 
@@ -85,6 +86,15 @@ def _store_path(data_folder: str) -> str:
     return os.path.join(os.path.abspath(data_folder), WORKFORCE_FILENAME)
 
 
+def register_company_document_store(data_folder, loader, saver) -> None:
+    """Route structured workforce data for a folder to its SQL manager."""
+    _DOCUMENT_STORES[os.path.abspath(data_folder)] = (loader, saver)
+
+
+def _document_store(data_folder):
+    return _DOCUMENT_STORES.get(os.path.abspath(data_folder))
+
+
 def _lock_for(data_folder: str) -> threading.RLock:
     path = _store_path(data_folder)
     with _STORE_LOCKS_GUARD:
@@ -135,6 +145,9 @@ def normalize_workforce(data) -> dict:
 
 
 def load_workforce(data_folder: str) -> dict:
+    store = _document_store(data_folder)
+    if store:
+        return normalize_workforce(store[0]('workforce', None))
     path = _store_path(data_folder)
     with _lock_for(data_folder):
         if not os.path.exists(path):
@@ -147,9 +160,13 @@ def load_workforce(data_folder: str) -> dict:
 
 
 def save_workforce(data_folder: str, data: dict) -> dict:
-    path = _store_path(data_folder)
     normalized = normalize_workforce(data)
     normalized["updatedAt"] = now_iso()
+    store = _document_store(data_folder)
+    if store:
+        store[1]('workforce', normalized)
+        return normalized
+    path = _store_path(data_folder)
     folder = os.path.dirname(path)
     os.makedirs(folder, exist_ok=True)
     temporary = f"{path}.{secrets.token_hex(6)}.tmp"

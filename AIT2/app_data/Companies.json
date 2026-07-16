@@ -60,11 +60,11 @@
     "emily": "TSC",
     "ct": "TSC",
     "ac-inventory": "ARP",
-    "bnjm": "AVPL",
-    "bnjm2000": "AVPL"
+    "bnjm2000": "AVPL",
+    "nbenjamin": "AVPL"
   },
   "superAdmins": [
-    "bnjm"
+    "bnjm2000"
   ],
-  "updatedAt": "2026-07-13T23:01:49"
+  "updatedAt": "2026-07-16T16:10:59"
 }

@@ -1,6 +1,7 @@
 import os
 import tempfile
 import unittest
+from unittest import mock
 
 import app as app_module
 from data_manager import DataManager
@@ -14,6 +15,7 @@ class CompanyManagementTests(unittest.TestCase):
         self.original_company_registry_file = app_module.COMPANY_REGISTRY_FILE
         self.original_global_users_file = app_module.GLOBAL_USERS_FILE
         self.original_company_registry_cache = app_module._company_registry_cache
+        self.original_company_storage_cache = dict(app_module._company_storage_cache)
         self.original_company_data_managers = dict(app_module._company_data_managers)
         self.original_active_company_code = app_module._active_company_code
         self.original_data_manager = app_module.get_default_data_manager()
@@ -26,6 +28,7 @@ class CompanyManagementTests(unittest.TestCase):
         app_module.COMPANY_REGISTRY_FILE = os.path.join(app_module.APP_CONFIG_FOLDER, 'Companies.json')
         app_module.GLOBAL_USERS_FILE = os.path.join(app_module.APP_CONFIG_FOLDER, 'Users.csv')
         app_module._company_registry_cache = None
+        app_module._company_storage_cache.clear()
         app_module._company_data_managers.clear()
         os.makedirs(app_module.APP_CONFIG_FOLDER, exist_ok=True)
 
@@ -79,6 +82,8 @@ class CompanyManagementTests(unittest.TestCase):
         app_module.COMPANY_REGISTRY_FILE = self.original_company_registry_file
         app_module.GLOBAL_USERS_FILE = self.original_global_users_file
         app_module._company_registry_cache = self.original_company_registry_cache
+        app_module._company_storage_cache.clear()
+        app_module._company_storage_cache.update(self.original_company_storage_cache)
         app_module._company_data_managers.clear()
         app_module._company_data_managers.update(self.original_company_data_managers)
         app_module._active_company_code = self.original_active_company_code
@@ -92,6 +97,191 @@ class CompanyManagementTests(unittest.TestCase):
             session['is_admin'] = True
             session['is_super_admin'] = True
             session['company_code'] = 'AVPL'
+
+    def test_login_request_selects_username_assigned_company(self):
+        with app_module.app.test_request_context(
+            '/login',
+            method='POST',
+            json={'username': 'tech', 'password': 'pw'},
+        ):
+            self.assertEqual(
+                app_module._user_management_company_for_request('AVPL'),
+                'TSC',
+            )
+
+    def test_login_request_routes_unknown_username_to_system_logs(self):
+        with app_module.app.test_request_context(
+            '/login',
+            method='POST',
+            json={'username': 'unknown-user', 'password': 'wrong'},
+        ):
+            self.assertEqual(
+                app_module._user_management_company_for_request('AVPL'),
+                app_module.SYSTEM_LOG_COMPANY_CODE,
+            )
+
+    def test_failed_login_logs_follow_username_company_or_system_scope(self):
+        unknown_response = self.client.post(
+            '/login',
+            json={'username': 'unknown-user', 'password': 'wrong'},
+        )
+        known_response = self.client.post(
+            '/login',
+            json={'username': 'tech', 'password': 'wrong'},
+        )
+
+        self.assertEqual(unknown_response.status_code, 401)
+        self.assertEqual(known_response.status_code, 401)
+
+        system_manager = app_module._get_company_data_manager(
+            app_module.SYSTEM_LOG_COMPANY_CODE
+        )
+        system_manager.load_logs()
+        tsc_manager = app_module._get_company_data_manager('TSC')
+        tsc_manager.load_logs()
+        self.data_manager.load_logs()
+
+        self.assertEqual(
+            [log.action for log in system_manager.logs],
+            ['Failed login attempt for username: unknown-user'],
+        )
+        self.assertEqual(
+            [log.action for log in tsc_manager.logs],
+            ['Failed login attempt for username: tech'],
+        )
+        self.assertNotIn(
+            'Failed login attempt for username: unknown-user',
+            {log.action for log in self.data_manager.logs},
+        )
+
+    def test_unmapped_account_cannot_fall_back_to_default_company(self):
+        registry = app_module._load_company_registry()
+        registry['userCompanies'].pop('tech')
+        app_module._save_company_registry(registry)
+
+        response = self.client.post(
+            '/login',
+            json={'username': 'tech', 'password': 'pw'},
+        )
+
+        self.assertEqual(response.status_code, 401)
+        system_manager = app_module._get_company_data_manager(
+            app_module.SYSTEM_LOG_COMPANY_CODE
+        )
+        system_manager.load_logs()
+        self.assertEqual(
+            [log.action for log in system_manager.logs],
+            ['Failed login attempt for username: tech'],
+        )
+        with self.client.session_transaction() as session:
+            self.assertNotIn('user', session)
+
+    def test_system_login_logs_are_visible_only_to_owner(self):
+        response = self.client.post(
+            '/login',
+            json={'username': 'unknown-user', 'password': 'wrong'},
+        )
+        self.assertEqual(response.status_code, 401)
+
+        self.login_super_admin()
+        owner_response = self.client.get('/api/logs')
+        self.assertEqual(owner_response.status_code, 200)
+        owner_logs = owner_response.get_json()['data']
+        system_rows = [
+            row for row in owner_logs
+            if row['companyCode'] == app_module.SYSTEM_LOG_COMPANY_CODE
+        ]
+        self.assertEqual(len(system_rows), 1)
+        self.assertEqual(system_rows[0]['companyName'], 'System')
+        self.assertIn('unknown-user', system_rows[0]['action'])
+
+        admin = User(
+            'admin-avpl', hash_password('pw', 'admin-log-salt'), 'admin-log-salt',
+            True, True, role='admin',
+        )
+        self.data_manager.users['admin-avpl'] = admin
+        self.data_manager.save_users()
+        registry = app_module._load_company_registry()
+        registry['userCompanies']['admin-avpl'] = 'AVPL'
+        app_module._save_company_registry(registry)
+        with self.client.session_transaction() as session:
+            session.clear()
+            session['user'] = 'admin-avpl'
+            session['is_admin'] = True
+            session['is_super_admin'] = False
+            session['company_code'] = 'AVPL'
+
+        admin_response = self.client.get('/api/logs')
+        self.assertEqual(admin_response.status_code, 200)
+        self.assertNotIn(
+            app_module.SYSTEM_LOG_COMPANY_CODE,
+            {row['companyCode'] for row in admin_response.get_json()['data']},
+        )
+
+    def test_owner_company_change_moves_company_scoped_user_before_retagging(self):
+        self.login_super_admin()
+        movable = User(
+            'movable', hash_password('pw', 'move-salt'), 'move-salt', False, True,
+        )
+        self.data_manager.users['movable'] = movable
+        self.data_manager.save_users()
+        registry = app_module._load_company_registry()
+        registry['userCompanies']['movable'] = 'AVPL'
+        app_module._save_company_registry(registry)
+        mover = mock.Mock(return_value=True)
+        self.data_manager.move_user_to_company = mover
+        try:
+            response = self.client.put(
+                '/api/users/movable',
+                json={'companyCode': 'TSC'},
+            )
+        finally:
+            del self.data_manager.move_user_to_company
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        mover.assert_called_once_with('movable', 'TSC', movable)
+        self.assertEqual(
+            app_module._load_company_registry()['userCompanies']['movable'],
+            'TSC',
+        )
+
+    def test_company_list_reads_members_from_each_scoped_manager(self):
+        self.login_super_admin()
+        tsc_manager = DataManager(
+            app_module._company_record_backend_folder(
+                app_module._load_company_registry()['companies']['TSC']
+            ),
+            users_file=app_module.GLOBAL_USERS_FILE,
+        )
+        tsc_manager.users = {
+            'chief': self.data_manager.users['chief'],
+            'tech': self.data_manager.users['tech'],
+        }
+        original_users = self.data_manager.users
+        self.data_manager.users = {'bnjm2000': original_users['bnjm2000']}
+        test_manager = app_module.app.config.pop('TEST_DATA_MANAGER', None)
+        try:
+            with mock.patch.object(
+                app_module,
+                '_get_company_data_manager',
+                side_effect=lambda code: (
+                    self.data_manager if code == 'AVPL' else tsc_manager
+                ),
+            ), mock.patch.object(
+                app_module,
+                '_company_storage_usage',
+                return_value={'totalBytes': 0, 'fileCount': 0, 'recordCount': 0},
+            ):
+                response = self.client.get('/api/companies')
+        finally:
+            if test_manager is not None:
+                app_module.app.config['TEST_DATA_MANAGER'] = test_manager
+            self.data_manager.users = original_users
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        companies = {row['code']: row for row in response.get_json()['data']}
+        self.assertEqual(companies['AVPL']['userCount'], 0)
+        self.assertEqual(companies['TSC']['userCount'], 1)
 
     def test_super_admin_can_delete_company_folder_and_assigned_users(self):
         self.login_super_admin()
@@ -109,6 +299,94 @@ class CompanyManagementTests(unittest.TestCase):
         self.assertNotIn('TSC', registry['companies'])
         self.assertEqual(registry['userCompanies']['chief'], 'AVPL')
         self.assertNotIn('tech', registry['userCompanies'])
+
+    def test_company_list_includes_role_counts_and_storage_summary(self):
+        self.login_super_admin()
+        self.data_manager.users.update({
+            'manager-tsc': User(
+                'manager-tsc', hash_password('pw', 'managersalt'), 'managersalt',
+                False, True, role='manager',
+            ),
+            'admin-tsc': User(
+                'admin-tsc', hash_password('pw', 'adminsalt'), 'adminsalt',
+                True, True, role='admin',
+            ),
+            'sales-tsc': User(
+                'sales-tsc', hash_password('pw', 'salessalt'), 'salessalt',
+                False, True, role='user', has_sales_access=True,
+            ),
+        })
+        self.data_manager.save_users()
+        registry = app_module._load_company_registry()
+        registry['userCompanies'].update({
+            'manager-tsc': 'TSC',
+            'admin-tsc': 'TSC',
+            'sales-tsc': 'TSC',
+        })
+        app_module._save_company_registry(registry)
+
+        record = registry['companies']['TSC']
+        backend_folder = app_module._company_record_backend_folder(record)
+        frontend_folder = app_module._company_record_frontend_folder(record)
+        uploads_folder = os.path.join(backend_folder, 'workforce_uploads', 'event-12')
+        os.makedirs(uploads_folder, exist_ok=True)
+        with open(os.path.join(uploads_folder, 'private-invoice.pdf'), 'wb') as upload_file:
+            upload_file.write(b'x' * 37)
+        with open(os.path.join(frontend_folder, 'logo.png'), 'wb') as logo_file:
+            logo_file.write(b'y' * 19)
+        maintenance_folder = os.path.join(backend_folder, 'maintenance_media', 'asset-1')
+        os.makedirs(maintenance_folder, exist_ok=True)
+        with open(os.path.join(maintenance_folder, 'inspection.jpg'), 'wb') as media_file:
+            media_file.write(b'z' * 23)
+
+        expected_bytes = 0
+        expected_files = 0
+        for folder in (backend_folder, frontend_folder):
+            for current_root, _, filenames in os.walk(folder):
+                for filename in filenames:
+                    expected_files += 1
+                    expected_bytes += os.path.getsize(os.path.join(current_root, filename))
+
+        response = self.client.get('/api/companies')
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        companies = {company['code']: company for company in response.get_json()['data']}
+        company = companies['TSC']
+        self.assertEqual(company['userCount'], 4)
+        self.assertEqual(company['activeUserCount'], 4)
+        self.assertEqual(company['roleCounts'], {
+            'admin': 1,
+            'manager': 1,
+            'user': 2,
+        })
+        self.assertEqual(company['salesPersonnelCount'], 1)
+        self.assertEqual(company['storageBytes'], expected_bytes)
+        self.assertEqual(company['storageFileCount'], expected_files)
+
+        storage_response = self.client.get('/api/companies/TSC/storage?refresh=1')
+        self.assertEqual(storage_response.status_code, 200, storage_response.get_data(as_text=True))
+        storage = storage_response.get_json()['data']
+        self.assertEqual(storage['totalBytes'], expected_bytes)
+        self.assertEqual(storage['fileCount'], expected_files)
+        self.assertEqual(sum(item['bytes'] for item in storage['breakdown']), expected_bytes)
+        uploads = next(item for item in storage['breakdown'] if item['key'] == 'uploads')
+        branding = next(item for item in storage['breakdown'] if item['key'] == 'branding')
+        maintenance = next(item for item in storage['breakdown'] if item['key'] == 'maintenance')
+        self.assertEqual(uploads['bytes'], 37)
+        self.assertGreaterEqual(branding['bytes'], 19)
+        self.assertEqual(maintenance['bytes'], 23)
+        self.assertNotIn('private-invoice.pdf', storage_response.get_data(as_text=True))
+
+    def test_company_storage_breakdown_is_owner_only(self):
+        with self.client.session_transaction() as session:
+            session['user'] = 'tech'
+            session['is_admin'] = False
+            session['is_super_admin'] = False
+            session['company_code'] = 'TSC'
+
+        response = self.client.get('/api/companies/TSC/storage')
+
+        self.assertEqual(response.status_code, 403, response.get_data(as_text=True))
 
     def test_super_admin_cannot_delete_active_company(self):
         self.login_super_admin()
@@ -206,6 +484,47 @@ class CompanyManagementTests(unittest.TestCase):
 
         self.assertEqual(self.data_manager.logs, [])
 
+    def test_owner_sees_all_company_logs_while_admin_sees_own_company(self):
+        self.data_manager.logs = [
+            LogEntry('2026/07/16 09:00:00', 'avpl-user', 'Updated AVPL inventory'),
+        ]
+        self.data_manager.save_logs()
+        tsc_manager = app_module._get_company_data_manager('TSC')
+        tsc_manager.logs = [
+            LogEntry('2026/07/16 10:00:00', 'tsc-user', 'Updated TSC inventory'),
+        ]
+        tsc_manager.save_logs()
+
+        self.login_super_admin()
+        owner_response = self.client.get('/api/logs')
+
+        self.assertEqual(owner_response.status_code, 200, owner_response.get_data(as_text=True))
+        owner_logs = owner_response.get_json()['data']
+        self.assertEqual([row['companyCode'] for row in owner_logs], ['TSC', 'AVPL'])
+        self.assertEqual(owner_logs[0]['companyName'], 'The Show Company')
+
+        admin = User(
+            'admin-avpl', hash_password('pw', 'admin-log-salt'), 'admin-log-salt',
+            True, True, role='admin',
+        )
+        self.data_manager.users['admin-avpl'] = admin
+        self.data_manager.save_users()
+        registry = app_module._load_company_registry()
+        registry['userCompanies']['admin-avpl'] = 'AVPL'
+        app_module._save_company_registry(registry)
+        with self.client.session_transaction() as session:
+            session['user'] = 'admin-avpl'
+            session['is_admin'] = True
+            session['is_super_admin'] = False
+            session['company_code'] = 'AVPL'
+
+        admin_response = self.client.get('/api/logs')
+
+        self.assertEqual(admin_response.status_code, 200, admin_response.get_data(as_text=True))
+        admin_logs = admin_response.get_json()['data']
+        self.assertEqual({row['companyCode'] for row in admin_logs}, {'AVPL'})
+        self.assertNotIn('Updated TSC inventory', {row['action'] for row in admin_logs})
+
     def test_owner_renaming_user_updates_the_users_assigned_company_history(self):
         self.login_super_admin()
         tsc_manager = app_module._get_company_data_manager('TSC')
@@ -256,6 +575,69 @@ class CompanyManagementTests(unittest.TestCase):
         owner_usernames = {row['username'] for row in owner_response.get_json()['data']}
         self.assertIn('bnjm2000', owner_usernames)
         self.assertIn('chief', owner_usernames)
+
+    def test_owner_user_management_aggregates_company_scoped_users(self):
+        tsc_record = app_module._load_company_registry()['companies']['TSC']
+        tsc_backend = app_module._company_record_backend_folder(tsc_record)
+        tsc_manager = DataManager(
+            tsc_backend,
+            users_file=os.path.join(tsc_backend, 'Users.csv'),
+        )
+        tsc_manager.setup_data_folder()
+        tsc_manager.users = {
+            'bnjm2000': User(
+                'bnjm2000', hash_password('pw', 'salt'), 'salt', True, True,
+            ),
+            'tsc-only': User(
+                'tsc-only', hash_password('pw', 'tscsalt'), 'tscsalt', False, True,
+            ),
+        }
+        tsc_manager.save_users()
+        app_module._company_data_managers['TSC'] = tsc_manager
+
+        registry = app_module._load_company_registry()
+        registry['userCompanies']['tsc-only'] = 'TSC'
+        app_module._save_company_registry(registry)
+
+        self.login_super_admin()
+        response = self.client.get('/api/users')
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        rows = response.get_json()['data']
+        usernames = [row['username'] for row in rows]
+        self.assertIn('tsc-only', usernames)
+        self.assertEqual(usernames.count('bnjm2000'), 1)
+        tsc_user = next(row for row in rows if row['username'] == 'tsc-only')
+        self.assertEqual(tsc_user['companyCode'], 'TSC')
+        self.assertEqual(tsc_user['companyName'], 'The Show Company')
+
+        update_response = self.client.put(
+            '/api/users/tsc-only',
+            json={'name': 'TSC Updated User'},
+        )
+        self.assertEqual(
+            update_response.status_code,
+            200,
+            update_response.get_data(as_text=True),
+        )
+        tsc_manager.load_users()
+        self.assertEqual(tsc_manager.users['tsc-only'].name, 'TSC Updated User')
+
+        reset_response = self.client.put(
+            '/api/users/tsc-only/password',
+            json={'password': 'new-password'},
+        )
+        self.assertEqual(
+            reset_response.status_code,
+            200,
+            reset_response.get_data(as_text=True),
+        )
+        tsc_manager.load_users()
+        updated_user = tsc_manager.users['tsc-only']
+        self.assertEqual(
+            updated_user.password_hash,
+            hash_password('new-password', updated_user.salt),
+        )
 
     def test_company_name_cannot_be_blank(self):
         self.login_super_admin()

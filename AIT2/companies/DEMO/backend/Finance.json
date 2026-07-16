@@ -1,8 +1,9 @@
 {
-  "version": 5,
+  "version": 7,
   "documents": [],
   "priceBook": {},
   "profitLoss": {
-    "expenses": {}
+    "expenses": {},
+    "commissions": {}
   }
 }

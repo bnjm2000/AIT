@@ -181,6 +181,14 @@ class PlanningTemplateTests(unittest.TestCase):
 
         self.assertIn("/models/replace`, 'POST'", script)
         self.assertIn('function planOpenReplacement(', script)
+        self.assertIn("planUseReplacementQuantity('short')", script)
+        self.assertIn("planUseReplacementQuantity('all')", script)
+        self.assertIn('function planAdjustReplacementQuantity(delta)', script)
+        self.assertIn('sourceQuantity: maxQuantity', script)
+        self.assertIn("class=\"plan-requirement-row ${shortage ? 'has-shortage' : ''}\"", script)
+        self.assertIn('class="plan-shortage-info"', script)
+        self.assertIn('capacityForThisEvent', script)
+        self.assertIn('Math.max(0, availability.available)', script)
         self.assertIn("onclick=\"assignAllEventAssignees('${context}')\"", script)
         self.assertIn('user?.isActive !== false', script)
         self.assertNotIn('await showCompanyBrandingPromptIfNeeded();', script)
@@ -286,6 +294,36 @@ class PlanningTemplateTests(unittest.TestCase):
         self.assertNotIn('id="returnAssetModal"', page)
         self.assertNotIn('id="returnAssetsModal"', page)
         self.assertNotIn("switchEditTab('assets')", script)
+
+    def test_delivery_order_editor_uses_catalog_departments_and_stable_deletes(self):
+        self.login('admin')
+        response = self.client.get('/delivery-order')
+        page = response.get_data(as_text=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('class="form-container do-details-panel"', page)
+        self.assertIn('id="deliveryItemsPreview"', page)
+        self.assertIn('Review delivery details and organise the asset list', page)
+
+        script_path = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)),
+            'static',
+            'js',
+            'app.js',
+        )
+        with open(script_path, encoding='utf-8') as script_file:
+            script = script_file.read()
+
+        self.assertIn('function getDeliveryOrderAssetCatalog()', script)
+        self.assertIn('id="doCatalogSearch"', script)
+        self.assertIn('class="do-dept form-input"', script)
+        self.assertIn('data-custom-id=', script)
+        self.assertIn('function removeDeliveryOrderItem(eventId, { key, kind, customId })', script)
+        self.assertIn('function removeDeliveryOrderRow(button)', script)
+        self.assertIn('onclick="return removeDeliveryOrderRow(this)"', script)
+        self.assertIn('state.deleted[key] = true;', script)
+        self.assertIn('item.id || `legacy-${dept}-${index}`', script)
+        self.assertNotIn('do-item-price', script)
 
     def test_template_crud_is_company_local(self):
         self.login('admin')

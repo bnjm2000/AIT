@@ -36,9 +36,16 @@ def _load_registry(path):
         return json.load(registry_file)
 
 
-def _load_csv_manager(data_folder, users_file):
+def _load_csv_manager(data_folder, users_file, usernames=None):
     manager = DataManager(data_folder, users_file=users_file)
     manager.load_users()
+    if usernames is not None:
+        allowed = {str(username) for username in usernames}
+        manager.users = {
+            username: user
+            for username, user in manager.users.items()
+            if username in allowed
+        }
     manager.load_inventory()
     manager.load_containers()
     manager.load_events()
@@ -82,6 +89,10 @@ def _source_fingerprint(data_folder, users_file):
                 'Logs.csv',
                 'Clients.csv',
                 'Departments.csv',
+                'Finance.json',
+                'Workforce.json',
+                'PdfSettings.json',
+                'RealtimeState.json',
             )
         ],
     ]
@@ -104,7 +115,30 @@ def _source_fingerprint(data_folder, users_file):
     return digest.hexdigest()
 
 
-def _expected_counts(manager, departments):
+def _load_company_documents(data_folder):
+    filenames = {
+        'finance': 'Finance.json',
+        'workforce': 'Workforce.json',
+        'pdf_settings': 'PdfSettings.json',
+        'realtime_state': 'RealtimeState.json',
+    }
+    documents = {}
+    for key, filename in filenames.items():
+        path = os.path.join(data_folder, filename)
+        if not os.path.exists(path) or os.path.getsize(path) == 0:
+            continue
+        try:
+            with open(path, 'r', encoding='utf-8') as document_file:
+                value = json.load(document_file)
+        except (OSError, ValueError) as exc:
+            raise ValueError(f'Cannot migrate {path}: {exc}') from exc
+        if not isinstance(value, dict):
+            raise ValueError(f'Cannot migrate {path}: root value is not an object')
+        documents[key] = value
+    return documents
+
+
+def _expected_counts(manager, departments, documents):
     return {
         'inventory': len(manager.inventory),
         'containers': len(manager.containers),
@@ -113,14 +147,24 @@ def _expected_counts(manager, departments):
         'clients': len(manager.clients),
         'departments': len(departments),
         'users': len(manager.users),
+        'documents': len(documents),
     }
 
 
-def migrate_company(dsn, code, record, users_file, apply_changes):
+def migrate_company(
+    dsn,
+    code,
+    record,
+    users_file,
+    apply_changes,
+    assigned_usernames=None,
+    supplemental_only=False,
+):
     data_folder = _absolute_config_path(record.get('backendFolder') or '')
-    csv_manager = _load_csv_manager(data_folder, users_file)
+    csv_manager = _load_csv_manager(data_folder, users_file, assigned_usernames)
     departments = _load_departments(data_folder)
-    expected = _expected_counts(csv_manager, departments)
+    documents = _load_company_documents(data_folder)
+    expected = _expected_counts(csv_manager, departments, documents)
     fingerprint = _source_fingerprint(data_folder, users_file)
 
     result = {
@@ -143,9 +187,20 @@ def migrate_company(dsn, code, record, users_file, apply_changes):
     )
     postgres_manager.setup_data_folder()
     postgres_manager.check_and_initialize_files()
-    postgres_manager.replace_from_csv(csv_manager, departments)
+    if supplemental_only:
+        postgres_manager.merge_company_users(csv_manager.users)
+        postgres_manager.merge_company_documents(documents)
+    else:
+        postgres_manager.replace_from_csv(csv_manager, departments)
+        postgres_manager.replace_company_documents(documents)
     actual = postgres_manager.database_counts()
-    verified = actual == expected
+    if supplemental_only:
+        verified = (
+            actual['users'] == expected['users']
+            and actual['documents'] == expected['documents']
+        )
+    else:
+        verified = actual == expected
     postgres_manager.record_migration(
         data_folder,
         fingerprint,
@@ -182,6 +237,14 @@ def main():
         action='store_true',
         help='Write to PostgreSQL. Without this flag the command is read-only.',
     )
+    parser.add_argument(
+        '--supplemental-only',
+        action='store_true',
+        help=(
+            'Migrate company documents and assigned users without replacing '
+            'inventory, events, logs, clients, containers, or departments.'
+        ),
+    )
     args = parser.parse_args()
 
     if not args.database_url:
@@ -197,7 +260,18 @@ def main():
         parser.error(f"Unknown company code(s): {', '.join(sorted(unknown))}")
 
     results = []
+    assignments = registry.get('userCompanies', {})
+    super_admins = {
+        str(username).strip()
+        for username in registry.get('superAdmins', [])
+        if str(username).strip()
+    }
     for code in sorted(requested):
+        assigned_usernames = super_admins | {
+            str(username).strip()
+            for username, assigned_code in assignments.items()
+            if str(assigned_code).strip().upper() == code and str(username).strip()
+        }
         results.append(
             migrate_company(
                 args.database_url,
@@ -205,6 +279,8 @@ def main():
                 registry['companies'][code],
                 os.path.abspath(args.users_file),
                 args.apply,
+                assigned_usernames,
+                args.supplemental_only,
             )
         )
 

@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+import os
 from urllib.parse import quote
 
 import app as app_module
@@ -130,6 +131,43 @@ class PrepareQuickAddAndAdminDeleteTests(unittest.TestCase):
         self.assertNotIn('A#02', event.extra_assets)
         self.assertIn('[MODEL]AX|TestBrand|TestModel|2|Matching item', event.prepared_items)
 
+    def test_consecutive_assignments_are_grouped_with_item_details(self):
+        event = self.make_event(
+            event_id=115,
+            prepared=['[MODEL]AX|TestBrand|TestModel|2|Matching item'],
+            actual=[],
+            extra=[],
+        )
+
+        first = self.post_assign(event.event_id, asset_id='A#01')
+        second = self.post_assign(event.event_id, asset_id='A#02')
+
+        self.assertEqual(first.status_code, 200, first.get_data(as_text=True))
+        self.assertEqual(second.status_code, 200, second.get_data(as_text=True))
+        self.assertEqual(len(event.event_logs), 1)
+        grouped = event.event_logs[0]
+        self.assertEqual(grouped['groupCount'], 2)
+        self.assertEqual(grouped['groupKey'], 'event-asset:115:assign')
+        self.assertEqual(
+            {item['assetId'] for item in grouped['items']},
+            {'A#01', 'A#02'},
+        )
+        self.assertIn('A#01', grouped['action'])
+        self.assertIn('A#02', grouped['action'])
+        self.assertNotIn('1x A#01', grouped['action'])
+        self.assertNotIn('1x A#02', grouped['action'])
+        self.assertNotIn('TestBrand', grouped['action'])
+        self.assertNotIn('[A#01]', grouped['action'])
+        self.assertNotIn('[A#02]', grouped['action'])
+
+        self.data_manager.load_events()
+        persisted = self.data_manager.events[115].event_logs[0]
+        self.assertEqual(persisted['groupCount'], 2)
+        self.assertEqual(
+            {item['assetId'] for item in persisted['items']},
+            {'A#01', 'A#02'},
+        )
+
     def test_quick_add_promotes_existing_extra_asset(self):
         event = self.make_event(
             event_id=102,
@@ -168,6 +206,8 @@ class PrepareQuickAddAndAdminDeleteTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
         asset = next(item for item in response.get_json()['data'] if item['internalId'] == 'A#01')
         self.assertEqual(asset['status'], 'deployed')
+        self.assertEqual(asset['availableQuantity'], 0)
+        self.assertEqual(asset['deployedQuantity'], 1)
 
         response = self.client.get(f'/api/events/{event.event_id}')
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
@@ -188,7 +228,7 @@ class PrepareQuickAddAndAdminDeleteTests(unittest.TestCase):
         detail_asset = next(asset for asset in department_assets if asset['id'] == 'A#01')
         self.assertFalse(detail_asset.get('isExtra'))
 
-    def test_specific_asset_requires_prepared_quantity_before_assignment(self):
+    def test_specific_asset_assignment_prepares_without_prepared_quantity(self):
         event = self.make_event(
             event_id=120,
             prepared=['[MODEL]AX|TestBrand|TestModel|1|Matching item'],
@@ -198,9 +238,50 @@ class PrepareQuickAddAndAdminDeleteTests(unittest.TestCase):
 
         response = self.post_assign(event.event_id, asset_id='A#01')
 
-        self.assertEqual(response.status_code, 400)
-        self.assertIn('Prepare quantity', response.get_json()['error'])
-        self.assertNotIn('A#01', event.actually_prepared)
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertFalse(response.get_json()['data']['isExtra'])
+        self.assertIn('A#01', event.actually_prepared)
+        self.assertNotIn('A#01', event.extra_assets)
+        details = self.client.get(f'/api/events/{event.event_id}').get_json()['data']
+        group = next(iter(details['modelGroups'].values()))
+        self.assertEqual(group['preparedQuantity'], 1)
+        self.assertEqual(group['countablePreparedQuantity'], 1)
+
+    def test_scanned_or_container_specific_asset_prepares_without_quantity_slot(self):
+        event = self.make_event(
+            event_id=123,
+            prepared=['[MODEL]AX|TestBrand|TestModel|1|Matching item'],
+            actual=[],
+            extra=[],
+        )
+
+        scanned = self.post_assign(event.event_id, asset_id='SN-A#01')
+        self.assertEqual(scanned.status_code, 200, scanned.get_data(as_text=True))
+        self.assertIn('A#01', event.actually_prepared)
+
+        event.actually_prepared = []
+        self.data_manager.inventory['A#01'].current_location = 'Store'
+        container = self.post_assign(
+            event.event_id,
+            asset_id='B#01',
+            fromContainer=True,
+            source='container',
+            quickAdd=False,
+        )
+        self.assertEqual(container.status_code, 200, container.get_data(as_text=True))
+        self.assertTrue(container.get_json()['data']['isExtra'])
+        self.assertIn('B#01', event.actually_prepared)
+        self.assertIn('B#01', event.extra_assets)
+
+    def test_prepare_ui_exposes_specific_assets_before_quantity_is_prepared(self):
+        script_path = os.path.join(
+            os.path.dirname(app_module.__file__), 'static', 'js', 'app.js'
+        )
+        with open(script_path, encoding='utf-8') as script_file:
+            source = script_file.read()
+        self.assertIn('const canAssignExactAssets = !isBulk;', source)
+        self.assertIn('const showExactAssetPanel = !isBulk;', source)
+        self.assertIn('available.map(asset => prepareNewAssetCard(asset, { canAssign: true }))', source)
 
     def test_unprepare_quantity_cannot_remove_assigned_specific_asset(self):
         event = self.make_event(
@@ -253,9 +334,118 @@ class PrepareQuickAddAndAdminDeleteTests(unittest.TestCase):
         self.assertNotIn('A#01', event.actually_prepared)
         self.assertEqual(self.data_manager.inventory['A#01'].current_location, 'Store')
         self.assertTrue(any(
-            'Unassigned and unprepared specific asset A#01' in record.get('action', '')
+            'Unassigned and unprepared from event 122' in record.get('action', '')
+            and record.get('action', '').endswith('A#01')
+            and '1x A#01' not in record.get('action', '')
+            and 'TestBrand' not in record.get('action', '')
             for record in event.event_logs
         ))
+
+    def test_bulk_unprepare_log_uses_name_without_internal_asset_id(self):
+        bulk_id = 'BULK-INTERNAL-001'
+        self.data_manager.inventory[bulk_id] = self.make_asset(
+            bulk_id,
+            is_bulk=True,
+            quantity=5,
+        )
+        marker = app_module._bulk_marker(bulk_id, 3)
+        event = self.make_event(
+            event_id=123,
+            prepared=['[MODEL]AX|TestBrand|TestModel|3|Matching item'],
+            actual=[marker],
+            extra=[],
+        )
+        self.login_as('normal')
+
+        response = self.client.post(
+            f'/api/events/{event.event_id}/unprepare',
+            json={'assetId': marker},
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        action = event.event_logs[-1]['action']
+        self.assertIn('Unprepared from event 123: 3x TestBrand - TestModel - Matching item', action)
+        self.assertNotIn(bulk_id, action)
+        self.assertEqual(event.event_logs[-1]['items'][0]['assetId'], '')
+
+    def test_specific_prepare_log_uses_only_visible_asset_id(self):
+        event = self.make_event(
+            event_id=124,
+            prepared=['A#01'],
+            actual=[],
+            extra=[],
+        )
+        self.login_as('normal')
+
+        response = self.client.post(
+            f'/api/events/{event.event_id}/prepare',
+            json={'assetId': 'A#01'},
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        action = event.event_logs[-1]['action']
+        self.assertEqual(action, 'Prepared for event 124: A#01')
+        self.assertNotIn('TestBrand', action)
+
+    def test_specific_return_log_omits_single_item_quantity(self):
+        event = self.make_event(
+            event_id=125,
+            prepared=['[MODEL]AX|TestBrand|TestModel|1|Matching item'],
+            actual=['A#01'],
+            extra=[],
+        )
+        self.login_as('normal')
+
+        response = self.client.post(
+            f'/api/events/{event.event_id}/return',
+            json={'assetId': 'A#01'},
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(event.event_logs[-1]['action'], 'Returned from event 125: A#01')
+
+    def test_bulk_return_log_retains_quantity(self):
+        bulk_id = 'BULK-INTERNAL-RETURN'
+        self.data_manager.inventory[bulk_id] = self.make_asset(
+            bulk_id,
+            is_bulk=True,
+            quantity=5,
+        )
+        marker = app_module._bulk_marker(bulk_id, 3)
+        event = self.make_event(
+            event_id=126,
+            prepared=[marker],
+            actual=[marker],
+            extra=[],
+        )
+        self.login_as('normal')
+
+        response = self.client.post(
+            f'/api/events/{event.event_id}/return',
+            json={'assetId': marker},
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(
+            event.event_logs[-1]['action'],
+            'Returned from event 126: 3x TestBrand - TestModel - Matching item',
+        )
+        self.assertNotIn(bulk_id, event.event_logs[-1]['action'])
+
+    def test_non_bulk_assignment_does_not_show_quantity(self):
+        action = self.data_manager.format_event_asset_log_action({
+            'actionLabel': 'Assigned',
+            'preposition': 'to',
+            'eventId': 127,
+            'items': [{
+                'assetId': '',
+                'label': 'Custom cable loom',
+                'quantity': 4,
+                'itemType': 'custom',
+            }],
+        })
+
+        self.assertEqual(action, 'Assigned to event 127: Custom cable loom')
 
     def test_event_progress_totals_include_misc_quantity_with_model_requirements(self):
         misc_marker = app_module._make_custom_marker(

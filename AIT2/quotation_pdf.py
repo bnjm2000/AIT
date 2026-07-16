@@ -62,7 +62,7 @@ def _schedule_date_summary(rows):
         try:
             parsed.append((datetime.strptime(raw, '%Y-%m-%d').date(), str(row.get('time') or '').strip()))
         except ValueError:
-            unparsed.append(_date(raw))
+            unparsed.append((_date(raw), str(row.get('time') or '').strip()))
 
     parsed.sort(key=lambda item: item[0])
     groups = []
@@ -71,6 +71,15 @@ def _schedule_date_summary(rows):
             groups[-1].append((value, time_value))
         else:
             groups.append([(value, time_value)])
+
+    def format_time(value):
+        value = str(value or '').strip()
+        if not value:
+            return ''
+        return value if value.lower().endswith('hrs') else f"{value}hrs"
+
+    def format_date(value):
+        return f"{value.day} {value.strftime('%B %Y')}"
 
     def format_group(group):
         start, end = group[0][0], group[-1][0]
@@ -82,12 +91,22 @@ def _schedule_date_summary(rows):
             label = f"{start.day} {start.strftime('%B')}-{end.day} {end.strftime('%B %Y')}"
         else:
             label = f"{start.day} {start.strftime('%B %Y')}-{end.day} {end.strftime('%B %Y')}"
-        times = {time_value for _value, time_value in group if time_value}
-        if len(times) == 1 and len(group) == 1:
-            label = f"{label} {next(iter(times))}"
+        time_values = [str(time_value or '').strip() for _value, time_value in group]
+        unique_times = set(time_values)
+        if len(unique_times) == 1 and next(iter(unique_times), ''):
+            label = f"{label}, {format_time(time_values[0])}"
+        elif any(time_values):
+            return '; '.join(
+                f"{format_date(value)}{f', {format_time(time_value)}' if time_value else ''}"
+                for value, time_value in group
+            )
         return label
 
-    return ', '.join([*(format_group(group) for group in groups), *unparsed])
+    unparsed_labels = [
+        f"{date_label}{f', {format_time(time_value)}' if time_value else ''}"
+        for date_label, time_value in unparsed
+    ]
+    return ', '.join([*(format_group(group) for group in groups), *unparsed_labels])
 
 
 def _validity_label(document):
@@ -137,9 +156,9 @@ def build_finance_pdf(document, company, logo_path=''):
     from reportlab.lib.utils import ImageReader
     from reportlab.pdfgen.canvas import Canvas
     from reportlab.platypus import (
+        CondPageBreak,
         HRFlowable,
         KeepTogether,
-        PageBreak,
         Paragraph,
         SimpleDocTemplate,
         Spacer,
@@ -367,8 +386,15 @@ def build_finance_pdf(document, company, logo_path=''):
         Spacer(1, 5 * mm),
     ]
 
+    client_name = ' '.join(
+        value for value in (
+            str(client.get('salutation') or '').strip(),
+            str(client.get('name') or '').strip(),
+        )
+        if value
+    )
     bill_lines = [
-        client.get('name') or client.get('contactPerson'),
+        client_name or client.get('contactPerson'),
         client.get('company'),
         client.get('contactPerson') if client.get('contactPerson') != client.get('name') else '',
         client.get('address1'),
@@ -544,7 +570,7 @@ def build_finance_pdf(document, company, logo_path=''):
     pdf_line_number = 1
     current_subproject_id = None
     show_subproject_headers = len(subprojects) > 1
-    for subproject, department in export_groups:
+    for group_index, (subproject, department) in enumerate(export_groups):
         subproject_id = str(subproject.get('id') or 'main')
         if subproject_id != current_subproject_id:
             current_subproject_id = subproject_id
@@ -675,10 +701,12 @@ def build_finance_pdf(document, company, logo_path=''):
             if len(department_lines) <= 15
             else items_table
         )
-        story.extend([table_flowable, Spacer(1, 3 * mm)])
+        story.append(table_flowable)
+        if group_index < len(export_groups) - 1:
+            story.append(Spacer(1, 3 * mm))
 
     if export_groups:
-        story.append(PageBreak())
+        story.append(CondPageBreak(doc.height))
 
     tax_label = _text(company.get('taxLabel') or 'Tax')
     tax_rate = float(document.get('taxRate') or 0)
@@ -786,7 +814,7 @@ def build_finance_pdf(document, company, logo_path=''):
             _paragraph('NOTES', section_title),
             _paragraph(notes, body),
         ]))
-    if payment_lines:
+    if document_type == 'invoice' and payment_lines:
         story.append(KeepTogether([
             _paragraph('PAYMENT DETAILS', section_title),
             Paragraph('<br/>'.join(payment_lines), body),
@@ -796,6 +824,66 @@ def build_finance_pdf(document, company, logo_path=''):
             _paragraph('TERMS AND CONDITIONS', section_title),
             _paragraph(terms, small),
         ]))
+
+    if document.get('showSignOff'):
+        signoff_heading = ParagraphStyle(
+            'FinanceSignOffHeading',
+            parent=body,
+            fontName='Helvetica-Bold',
+            fontSize=9.5,
+            leading=12,
+        )
+        signoff_name = ParagraphStyle(
+            'FinanceSignOffName',
+            parent=body,
+            fontName='Helvetica-Bold',
+            fontSize=9,
+            leading=11,
+        )
+        signoff_caption = ParagraphStyle(
+            'FinanceSignOffCaption',
+            parent=small,
+            fontName='Helvetica-Bold',
+            fontSize=7.5,
+            leading=9,
+            alignment=TA_CENTER,
+            textColor=ink,
+        )
+        quotation_reference = (
+            document.get('sourceQuotationNumber')
+            if document_type == 'invoice'
+            else document.get('number')
+        ) or document.get('number')
+        quoted_by = [
+            _paragraph('Quoted by:', signoff_heading),
+            Spacer(1, 18 * mm),
+            _paragraph(document.get('salesperson') or company.get('companyName') or '', signoff_name),
+        ]
+        if document.get('salespersonPhone'):
+            quoted_by.append(_paragraph(f"Mobile: {document.get('salespersonPhone')}", body))
+        quoted_by.append(_paragraph(f"Quote Ref: {quotation_reference}", body))
+        accepted_by = [
+            _paragraph('Confirmed & accepted by:', signoff_heading),
+            Spacer(1, 25 * mm),
+            HRFlowable(width='100%', thickness=0.8, color=ink),
+            Spacer(1, 1.5 * mm),
+            _paragraph('(Authorised Signature / Date / Co. Stamp)', signoff_caption),
+        ]
+        signoff = Table(
+            [[quoted_by, accepted_by]],
+            colWidths=[doc.width * 0.46, doc.width * 0.46],
+            hAlign='CENTER',
+            style=TableStyle([
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('LEFTPADDING', (0, 0), (0, 0), 0),
+                ('RIGHTPADDING', (0, 0), (0, 0), 10 * mm),
+                ('LEFTPADDING', (1, 0), (1, 0), 10 * mm),
+                ('RIGHTPADDING', (1, 0), (1, 0), 0),
+                ('TOPPADDING', (0, 0), (-1, -1), 0),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+            ]),
+        )
+        story.append(KeepTogether([Spacer(1, 8 * mm), signoff]))
 
     doc.build(
         story,

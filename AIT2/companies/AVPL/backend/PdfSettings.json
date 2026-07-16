@@ -1,5 +1,5 @@
 {
-  "footerText": "AVEC VISION PRIVATE LIMITED\n601 SIMS DRIVE PAN-I COMPLEX #04-10 SINGAPORE 387382 TEL 65.9743.3660 CO REG 202122775G",
+  "footerText": "AVEC VISION PRIVATE LIMITED\n601 SIMS DRIVE #04-10 PAN-I COMPLEX SINGAPORE 387382 | TEL (65) 97433660 | CO. REG 202122775G",
   "logoFilename": "logo.jpg",
   "logoOriginalName": "Logo.jpeg",
   "logoMimeType": "image/jpeg",
@@ -19,9 +19,9 @@
   "quotationPrefix": "QT",
   "invoicePrefix": "INV",
   "defaultPaymentTerms": "30 Days",
-  "defaultValidityDays": 30,
-  "defaultTerms": "1.  Validity: 14 days\n2.  Work shall only commence upon receiving the certified copy of our quotation.  \n3.  Upon confirmation, a 50% non-refundable down payment is required, and the remaining balance must be paid upon\n      completion of the setup.\n4.  All items are rented for indoor usage only (unless otherwise stated).\n5.  Confirmation of rental is on a first-come, first-served basis.\n6.  T/T to: OCBC Bank Limited, 65 Chulia Street, #01 - 00, OCBC Centre, Singapore 049513.\n     Account Number (S$): 601 - 546195 - 001, Swift Code: OCBCSGSG, Account Name: Avec Vision Pte Ltd.\n7.  The hirer is responsible for according to due diligence and cares for equipment.  In agreement, they will undertake liability for\n\"     the loss or damage of the equipment rented.\t\"\n8.  Cancellation charge:  100% of the total amount if cancellation occurs after the completion of the setup.\n9.  Any additional services or equipment not mentioned in this quotation will be charged accordingly.\n\nWe hope the above quotation is acceptable to you and will be looking forward to your early confirmation.   Please feel free to\ncontact the undersigned should you require any further information.",
+  "defaultValidityDays": 14,
+  "defaultTerms": "1.  Validity: 14 days\n2.  Work will only begin after we receive a certified copy of our quotation. \n3.  A non-refundable 50% deposit is required upon confirmation, with the remaining balance due within 14 days from the date of \n     the invoice.\n4.  All items are available for indoor use only, unless stated otherwise.\n5.  Rental confirmations are provided on a first-come, first-served basis.\n6.  T/T to: OCBC Bank Limited, 65 Chulia Street, #01 - 00, OCBC Centre, Singapore 049513.\n     Account Number (S$): 601 - 546195 - 001, SWIFT Code: OCBCSGSG, Account Name: Avec Vision Pte Ltd.\n7.  The hirer is responsible for exercising due diligence and care for the equipment. By agreement, they will assume liability for any \n     loss or damage to the rented equipment.\n8.  Cancellation charge: 100% of the total amount applies if cancellation occurs after setup completion.\n9.  Any extra services or equipment that are not included in this quotation will incur additional charges.\n\nWe hope the quotation provided is acceptable and we look forward to your prompt confirmation. Please contact us if you need any further information.",
   "themeColor": "#1d90d7",
   "letterheadText": "Avec Vision Private Limited\n601 Sims Drive, PAN-I Complex #04-10\nSingapore 387382",
-  "updatedAt": "2026-07-13T20:37:51"
+  "updatedAt": "2026-07-15T15:07:51"
 }

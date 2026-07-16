@@ -21,6 +21,7 @@ from psycopg_pool import ConnectionPool
 from data_manager import (
     ConcurrentDataChangeError,
     DataManager,
+    MAX_LOG_LINES,
     normalize_asset_change_history,
 )
 from maintenance_logs import normalize_maintenance_log
@@ -81,6 +82,67 @@ def _fingerprint(value):
     return hashlib.sha256(encoded).hexdigest()
 
 
+def company_storage_breakdown(dsn, company_code):
+    """Estimate company-scoped PostgreSQL row storage, grouped for the owner UI."""
+    company_code = str(company_code or '').strip().upper()
+    category_tables = {
+        'company_data': ('aim_companies', 'aim_company_revisions', 'aim_users'),
+        'inventory': ('aim_inventory', 'aim_containers', 'aim_clients', 'aim_departments'),
+        'events': ('aim_events',),
+        'event_backups': ('aim_event_history',),
+        'logs': ('aim_system_logs',),
+    }
+    breakdown = {}
+
+    with _pool_for(dsn).connection() as connection:
+        with connection.cursor() as cursor:
+            for category, table_names in category_tables.items():
+                category_bytes = 0
+                record_count = 0
+                for table_name in table_names:
+                    cursor.execute(
+                        f"""
+                        SELECT COALESCE(SUM(pg_column_size(company_row)), 0), COUNT(*)
+                        FROM {table_name} AS company_row
+                        WHERE company_code = %s
+                        """,
+                        (company_code,),
+                    )
+                    row = cursor.fetchone() or (0, 0)
+                    category_bytes += int(row[0] or 0)
+                    record_count += int(row[1] or 0)
+                breakdown[category] = {
+                    'bytes': category_bytes,
+                    'recordCount': record_count,
+                }
+
+            cursor.execute(
+                """
+                SELECT document_key, pg_column_size(company_document)
+                FROM aim_company_documents AS company_document
+                WHERE company_code = %s
+                """,
+                (company_code,),
+            )
+            for document_key, row_size in cursor.fetchall():
+                normalized_key = str(document_key or '').strip().lower()
+                if 'finance' in normalized_key:
+                    category = 'finance'
+                elif 'workforce' in normalized_key:
+                    category = 'workforce'
+                elif 'pdf' in normalized_key or 'brand' in normalized_key:
+                    category = 'branding'
+                elif 'log' in normalized_key or 'realtime' in normalized_key:
+                    category = 'logs'
+                else:
+                    category = 'company_data'
+                usage = breakdown.setdefault(category, {'bytes': 0, 'recordCount': 0})
+                usage['bytes'] += int(row_size or 0)
+                usage['recordCount'] += 1
+
+    return breakdown
+
+
 class PostgresDataManager(DataManager):
     """DataManager-compatible PostgreSQL adapter for one company."""
 
@@ -108,6 +170,14 @@ class PostgresDataManager(DataManager):
         self._department_snapshots = {}
         self._department_versions = {}
         self._log_snapshot = []
+        # Workforce keeps binary uploads on disk but routes its structured JSON
+        # through this company manager when PostgreSQL is active.
+        from workforce import register_company_document_store
+        register_company_document_store(
+            self.data_folder,
+            self.load_company_document,
+            self.save_company_document,
+        )
 
     def acquire_write_request(self):
         """Serialize mutations sharing this in-process company manager."""
@@ -259,6 +329,7 @@ class PostgresDataManager(DataManager):
         return {
             'username': user.username,
             'name': str(getattr(user, 'name', '') or ''),
+            'phone': str(getattr(user, 'phone', '') or ''),
             'passwordHash': user.password_hash,
             'salt': user.salt,
             'isAdmin': bool(user.is_admin),
@@ -376,7 +447,13 @@ class PostgresDataManager(DataManager):
         with self._connection() as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
-                    "SELECT username, data, version FROM aim_users ORDER BY username"
+                    """
+                    SELECT username, data, version
+                    FROM aim_users
+                    WHERE company_code = %s
+                    ORDER BY username
+                    """,
+                    (self.company_code,),
                 )
                 for username, data, version in cursor.fetchall():
                     user = User(
@@ -389,6 +466,7 @@ class PostgresDataManager(DataManager):
                         role=data.get('role'),
                         has_sales_access=bool(data.get('hasSalesAccess', False)),
                         name=data.get('name', ''),
+                        phone=data.get('phone', ''),
                     )
                     users[username] = user
                     snapshots[username] = _fingerprint(self._user_data(user))
@@ -540,13 +618,14 @@ class PostgresDataManager(DataManager):
                     SELECT timestamp_text, username, action
                     FROM aim_system_logs
                     WHERE company_code = %s
-                    ORDER BY log_id
+                    ORDER BY log_id DESC
+                    LIMIT 3000
                     """,
                     (self.company_code,),
                 )
                 logs = [
                     LogEntry(timestamp, username, action)
-                    for timestamp, username, action in cursor.fetchall()
+                    for timestamp, username, action in reversed(cursor.fetchall())
                 ]
         self.logs = logs
         self._log_snapshot = [
@@ -769,9 +848,10 @@ class PostgresDataManager(DataManager):
                         cursor.execute(
                             """
                             DELETE FROM aim_users
-                            WHERE username = %s AND version = %s
+                            WHERE company_code = %s
+                              AND username = %s AND version = %s
                             """,
-                            (username, expected_version),
+                            (self.company_code, username, expected_version),
                         )
                         if cursor.rowcount != 1:
                             raise ConcurrentDataChangeError(
@@ -785,10 +865,15 @@ class PostgresDataManager(DataManager):
                             try:
                                 cursor.execute(
                                     """
-                                    INSERT INTO aim_users (username, data, version)
-                                    VALUES (%s, %s, 1)
+                                    INSERT INTO aim_users
+                                        (company_code, username, data, version)
+                                    VALUES (%s, %s, %s, 1)
                                     """,
-                                    (username, Jsonb(payloads[username])),
+                                    (
+                                        self.company_code,
+                                        username,
+                                        Jsonb(payloads[username]),
+                                    ),
                                 )
                             except UniqueViolation as exc:
                                 raise ConcurrentDataChangeError(
@@ -802,11 +887,13 @@ class PostgresDataManager(DataManager):
                                 SET data = %s,
                                     version = version + 1,
                                     updated_at = CURRENT_TIMESTAMP
-                                WHERE username = %s AND version = %s
+                                WHERE company_code = %s
+                                  AND username = %s AND version = %s
                                 RETURNING version
                                 """,
                                 (
                                     Jsonb(payloads[username]),
+                                    self.company_code,
                                     username,
                                     expected_version,
                                 ),
@@ -825,6 +912,74 @@ class PostgresDataManager(DataManager):
         self._loaded_users_revision = next_revision
         self._user_snapshots = fingerprints
         self._user_versions = next_versions
+
+    def move_user_to_company(self, username, destination_company_code, user=None):
+        """Atomically move one account between company-scoped user tables."""
+        username = str(username or '').strip()
+        destination_company_code = str(destination_company_code or '').strip().upper()
+        if not username or not destination_company_code:
+            raise ValueError('Username and destination company are required')
+        if destination_company_code == self.company_code:
+            return False
+
+        user = user or self.users.get(username)
+        if user is None:
+            raise KeyError(username)
+        expected_version = self._user_versions.get(username)
+        if expected_version is None:
+            raise ConcurrentDataChangeError(
+                f'User {username!r} is not current in company {self.company_code}'
+            )
+
+        try:
+            with self._connection() as connection:
+                with connection.cursor() as cursor:
+                    revision = self._lock_users_revision(cursor)
+                    cursor.execute(
+                        """
+                        SELECT 1 FROM aim_users
+                        WHERE company_code = %s AND username = %s
+                        """,
+                        (destination_company_code, username),
+                    )
+                    if cursor.fetchone():
+                        raise ValueError(
+                            f'User {username!r} already exists in company '
+                            f'{destination_company_code}'
+                        )
+
+                    cursor.execute(
+                        """
+                        DELETE FROM aim_users
+                        WHERE company_code = %s
+                          AND username = %s AND version = %s
+                        """,
+                        (self.company_code, username, expected_version),
+                    )
+                    if cursor.rowcount != 1:
+                        raise ConcurrentDataChangeError(
+                            f'User {username!r} changed before company transfer'
+                        )
+
+                    cursor.execute(
+                        """
+                        INSERT INTO aim_users
+                            (company_code, username, data, version)
+                        VALUES (%s, %s, %s, 1)
+                        """,
+                        (
+                            destination_company_code,
+                            username,
+                            Jsonb(self._user_data(user)),
+                        ),
+                    )
+                    self._bump_users_revision(cursor, revision)
+        except ConcurrentDataChangeError:
+            self.load_users()
+            raise
+
+        self.load_users()
+        return True
 
     # ---------------- Events and logs ----------------
 
@@ -1000,7 +1155,7 @@ class PostgresDataManager(DataManager):
     def save_logs(self):
         current = [
             (log.timestamp, log.user, log.action)
-            for log in self.logs[-1000:]
+            for log in self.logs[-MAX_LOG_LINES:]
         ]
         if current == self._log_snapshot:
             return
@@ -1035,7 +1190,7 @@ class PostgresDataManager(DataManager):
                                 FROM aim_system_logs
                                 WHERE company_code = %s
                                 ORDER BY log_id DESC
-                                OFFSET 1000
+                                OFFSET 3000
                             )
                             """,
                             (self.company_code,),
@@ -1064,6 +1219,135 @@ class PostgresDataManager(DataManager):
 
         self._loaded_revision = next_revision
         self._log_snapshot = current
+
+    # ---------------- Departments ----------------
+
+    # ---------------- Company JSON documents ----------------
+
+    def load_company_document(self, document_key, default=None):
+        """Load one company-scoped JSON document from PostgreSQL."""
+        self.ensure_company()
+        with self._connection() as connection:
+            row = connection.execute(
+                """
+                SELECT data
+                FROM aim_company_documents
+                WHERE company_code = %s AND document_key = %s
+                """,
+                (self.company_code, str(document_key)),
+            ).fetchone()
+        if not row:
+            return default
+        return row[0]
+
+    def save_company_document(self, document_key, data):
+        """Upsert one company-scoped JSON document and advance its version."""
+        if not isinstance(data, dict):
+            raise ValueError('Company document data must be a JSON object')
+        self.ensure_company()
+        with self._connection() as connection:
+            connection.execute(
+                """
+                INSERT INTO aim_company_documents
+                    (company_code, document_key, data, version)
+                VALUES (%s, %s, %s, 1)
+                ON CONFLICT (company_code, document_key) DO UPDATE
+                SET data = EXCLUDED.data,
+                    version = aim_company_documents.version + 1,
+                    updated_at = CURRENT_TIMESTAMP
+                """,
+                (self.company_code, str(document_key), Jsonb(data)),
+            )
+        return data
+
+    def company_document_count(self):
+        with self._connection() as connection:
+            row = connection.execute(
+                """
+                SELECT COUNT(*) FROM aim_company_documents
+                WHERE company_code = %s
+                """,
+                (self.company_code,),
+            ).fetchone()
+        return int(row[0])
+
+    def replace_company_documents(self, documents):
+        """Atomically replace all structured JSON documents for this company."""
+        normalized = {
+            str(key): value
+            for key, value in (documents or {}).items()
+            if isinstance(value, dict)
+        }
+        with self._connection() as connection:
+            with connection.transaction():
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        "DELETE FROM aim_company_documents WHERE company_code = %s",
+                        (self.company_code,),
+                    )
+                    cursor.executemany(
+                        """
+                        INSERT INTO aim_company_documents
+                            (company_code, document_key, data)
+                        VALUES (%s, %s, %s)
+                        """,
+                        [
+                            (self.company_code, key, Jsonb(value))
+                            for key, value in normalized.items()
+                        ],
+                    )
+        return normalized
+
+    def merge_company_documents(self, documents):
+        """Import missing legacy documents without overwriting newer SQL data."""
+        normalized = {
+            str(key): value
+            for key, value in (documents or {}).items()
+            if isinstance(value, dict)
+        }
+        with self._connection() as connection:
+            with connection.cursor() as cursor:
+                cursor.executemany(
+                    """
+                    INSERT INTO aim_company_documents
+                        (company_code, document_key, data)
+                    VALUES (%s, %s, %s)
+                    ON CONFLICT (company_code, document_key) DO NOTHING
+                    """,
+                    [
+                        (self.company_code, key, Jsonb(value))
+                        for key, value in normalized.items()
+                    ],
+                )
+        return normalized
+
+    def merge_company_users(self, users):
+        """Merge legacy accounts without deleting SQL-only company users."""
+        rows = [
+            (self.company_code, username, Jsonb(self._user_data(user)))
+            for username, user in (users or {}).items()
+        ]
+        with self._connection() as connection:
+            with connection.transaction():
+                with connection.cursor() as cursor:
+                    cursor.executemany(
+                        """
+                        INSERT INTO aim_users (company_code, username, data)
+                        VALUES (%s, %s, %s)
+                        ON CONFLICT (company_code, username) DO NOTHING
+                        """,
+                        rows,
+                    )
+                    cursor.execute(
+                        """
+                        UPDATE aim_global_state
+                        SET revision = revision + 1,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE state_key = 'users'
+                        """
+                    )
+        self.load_users()
+        return len(rows)
 
     # ---------------- Departments ----------------
 
@@ -1131,7 +1415,7 @@ class PostgresDataManager(DataManager):
             ))
         log_rows = [
             (self.company_code, log.timestamp, log.user, log.action)
-            for log in csv_manager.logs[-1000:]
+            for log in csv_manager.logs[-MAX_LOG_LINES:]
         ]
         client_rows = [
             (self.company_code, name, Jsonb(self._client_data(client)))
@@ -1142,7 +1426,7 @@ class PostgresDataManager(DataManager):
             for code, value in departments.items()
         ]
         user_rows = [
-            (username, Jsonb(self._user_data(user)))
+            (self.company_code, username, Jsonb(self._user_data(user)))
             for username, user in csv_manager.users.items()
         ]
 
@@ -1224,11 +1508,14 @@ class PostgresDataManager(DataManager):
                     department_rows,
                 )
 
-                cursor.execute("DELETE FROM aim_users")
+                cursor.execute(
+                    "DELETE FROM aim_users WHERE company_code = %s",
+                    (self.company_code,),
+                )
                 cursor.executemany(
                     """
-                    INSERT INTO aim_users (username, data)
-                    VALUES (%s, %s)
+                    INSERT INTO aim_users (company_code, username, data)
+                    VALUES (%s, %s, %s)
                     """,
                     user_rows,
                 )
@@ -1263,8 +1550,19 @@ class PostgresDataManager(DataManager):
                         (self.company_code,),
                     )
                     counts[label] = int(cursor.fetchone()[0])
-                cursor.execute("SELECT COUNT(*) FROM aim_users")
+                cursor.execute(
+                    "SELECT COUNT(*) FROM aim_users WHERE company_code = %s",
+                    (self.company_code,),
+                )
                 counts['users'] = int(cursor.fetchone()[0])
+                cursor.execute(
+                    """
+                    SELECT COUNT(*) FROM aim_company_documents
+                    WHERE company_code = %s
+                    """,
+                    (self.company_code,),
+                )
+                counts['documents'] = int(cursor.fetchone()[0])
         return counts
 
     def record_migration(self, source_folder, source_fingerprint, counts, verified):
@@ -1321,6 +1619,8 @@ class PostgresDataManager(DataManager):
             'aim_system_logs',
             'aim_clients',
             'aim_departments',
+            'aim_users',
+            'aim_company_documents',
             'aim_migration_runs',
         ]
         with self._connection() as connection:

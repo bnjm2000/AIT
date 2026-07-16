@@ -72,6 +72,7 @@ class PostgresDataManagerTests(unittest.TestCase):
                 True,
                 True,
                 last_online='2026-06-30T18:00:00+08:00',
+                phone='+65 9123 4567',
             ),
         }
         self.manager.save_users()
@@ -133,6 +134,7 @@ class PostgresDataManagerTests(unittest.TestCase):
             reloaded.users['admin'].last_online,
             '2026-06-30T18:00:00+08:00',
         )
+        self.assertEqual(reloaded.users['admin'].phone, '+65 9123 4567')
         self.assertEqual(reloaded.inventory['A#01'].serial_number, 'SN-1')
         self.assertEqual(reloaded.containers['CASE-1'].serial_number, 'CASE-SN')
         self.assertEqual(reloaded.events[1].prepared_items, ['A#01'])
@@ -177,6 +179,169 @@ class PostgresDataManagerTests(unittest.TestCase):
         with self.assertRaises(ConcurrentDataChangeError):
             second.save_inventory()
         self.assertEqual(second.inventory['A#01'].notes, 'first writer')
+
+    def test_company_documents_and_users_are_isolated(self):
+        from postgres_data_manager import PostgresDataManager
+
+        other_code = f"T{uuid.uuid4().hex[:10].upper()}"
+        other = PostgresDataManager(
+            self.dsn,
+            other_code,
+            self.tempdir.name,
+            'Other Integration Test Company',
+        )
+        other.check_and_initialize_files()
+        other.load_all_data()
+        try:
+            self.manager.users = {
+                'shared-name': User('shared-name', 'first', 'salt', True),
+            }
+            self.manager.save_users()
+            other.users = {
+                'shared-name': User('shared-name', 'second', 'salt', False),
+            }
+            other.save_users()
+
+            self.manager.save_company_document('finance', {'company': 'first'})
+            other.save_company_document('finance', {'company': 'second'})
+
+            self.manager.load_users()
+            other.load_users()
+            self.assertEqual(
+                self.manager.users['shared-name'].password_hash,
+                'first',
+            )
+            self.assertEqual(other.users['shared-name'].password_hash, 'second')
+            self.assertEqual(
+                self.manager.load_company_document('finance'),
+                {'company': 'first'},
+            )
+            self.assertEqual(
+                other.load_company_document('finance'),
+                {'company': 'second'},
+            )
+        finally:
+            other.delete_company_data()
+
+    def test_legacy_user_merge_preserves_sql_only_accounts(self):
+        self.manager.users = {
+            'sql-owner': User('sql-owner', 'owner-hash', 'salt', True),
+        }
+        self.manager.save_users()
+
+        self.manager.merge_company_users({
+            'legacy-admin': User(
+                'legacy-admin',
+                'admin-hash',
+                'salt',
+                True,
+            ),
+        })
+
+        self.assertEqual(
+            self.manager.users['sql-owner'].password_hash,
+            'owner-hash',
+        )
+        self.assertEqual(
+            self.manager.users['legacy-admin'].password_hash,
+            'admin-hash',
+        )
+
+    def test_move_user_to_company_preserves_credentials_and_profile(self):
+        from postgres_data_manager import PostgresDataManager
+
+        other_code = f"T{uuid.uuid4().hex[:10].upper()}"
+        other = PostgresDataManager(
+            self.dsn,
+            other_code,
+            self.tempdir.name,
+            'Destination Company',
+        )
+        other.check_and_initialize_files()
+        other.load_all_data()
+        try:
+            account = User(
+                'moving-user',
+                'preserved-hash',
+                'preserved-salt',
+                True,
+                True,
+                role='admin',
+                name='Moving User',
+                phone='+65 9123 4567',
+            )
+            self.manager.users[account.username] = account
+            self.manager.save_users()
+
+            self.assertTrue(
+                self.manager.move_user_to_company(
+                    account.username,
+                    other_code,
+                    account,
+                )
+            )
+            other.load_users()
+
+            self.assertNotIn(account.username, self.manager.users)
+            moved = other.users[account.username]
+            self.assertEqual(moved.password_hash, 'preserved-hash')
+            self.assertEqual(moved.salt, 'preserved-salt')
+            self.assertEqual(moved.role, 'admin')
+            self.assertEqual(moved.name, 'Moving User')
+            self.assertEqual(moved.phone, '+65 9123 4567')
+        finally:
+            other.delete_company_data()
+
+    def test_legacy_document_merge_preserves_newer_sql_data(self):
+        self.manager.save_company_document('finance', {'source': 'sql'})
+
+        self.manager.merge_company_documents({
+            'finance': {'source': 'disk'},
+            'workforce': {'source': 'disk'},
+        })
+
+        self.assertEqual(
+            self.manager.load_company_document('finance'),
+            {'source': 'sql'},
+        )
+        self.assertEqual(
+            self.manager.load_company_document('workforce'),
+            {'source': 'disk'},
+        )
+
+    def test_username_rename_updates_sql_finance_and_maintenance(self):
+        self.manager.save_company_document('finance', {
+            'documents': [{
+                'createdBy': 'old-name',
+                'salespersonUsername': 'old-name',
+                'revisions': [{'updatedBy': 'old-name'}],
+            }],
+        })
+        self.manager.inventory = {
+            'A#01': InventoryItem(
+                'A#01', 'Brand', 'Model', 'SN', 'Description', False,
+                [{'date': '2026/07/16', 'user': 'old-name', 'description': 'Checked'}],
+                'AX',
+            ),
+        }
+        self.manager.save_inventory()
+
+        counts = self.manager.update_username_references(
+            'old-name',
+            'new-name',
+        )
+
+        finance = self.manager.load_company_document('finance')
+        self.assertEqual(counts['financeDocuments'], 1)
+        self.assertEqual(finance['documents'][0]['createdBy'], 'new-name')
+        self.assertEqual(
+            finance['documents'][0]['revisions'][0]['updatedBy'],
+            'new-name',
+        )
+        self.assertEqual(
+            self.manager.inventory['A#01'].maintenance_logs[0]['user'],
+            'new-name',
+        )
 
     def test_legacy_event_location_migration_is_persisted_once(self):
         from postgres_data_manager import PostgresDataManager

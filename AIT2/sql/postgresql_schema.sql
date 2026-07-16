@@ -28,12 +28,69 @@ VALUES ('users', 0)
 ON CONFLICT (state_key) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS aim_users (
-    username TEXT PRIMARY KEY,
+    company_code TEXT NOT NULL REFERENCES aim_companies(company_code) ON DELETE CASCADE,
+    username TEXT NOT NULL,
     data JSONB NOT NULL,
     version BIGINT NOT NULL DEFAULT 1,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (company_code, username),
     CONSTRAINT aim_users_data_object CHECK (jsonb_typeof(data) = 'object')
 );
+
+-- Upgrade databases created by schema version 1. Existing unscoped users are
+-- retained under one company; the data migration subsequently replaces each
+-- company's users with its assigned accounts.
+ALTER TABLE aim_users ADD COLUMN IF NOT EXISTS company_code TEXT;
+DO $$
+DECLARE
+    fallback_company TEXT;
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'aim_users'
+          AND column_name = 'company_code'
+          AND is_nullable = 'YES'
+    ) THEN
+        SELECT company_code INTO fallback_company
+        FROM aim_companies ORDER BY company_code LIMIT 1;
+        IF fallback_company IS NOT NULL THEN
+            UPDATE aim_users SET company_code = fallback_company
+            WHERE company_code IS NULL;
+            ALTER TABLE aim_users ALTER COLUMN company_code SET NOT NULL;
+        END IF;
+    END IF;
+END $$;
+DO $$
+DECLARE
+    constraint_columns TEXT[];
+BEGIN
+    SELECT array_agg(att.attname ORDER BY ord.ordinality)
+    INTO constraint_columns
+    FROM pg_constraint con
+    JOIN unnest(con.conkey) WITH ORDINALITY ord(attnum, ordinality) ON TRUE
+    JOIN pg_attribute att ON att.attrelid = con.conrelid AND att.attnum = ord.attnum
+    WHERE con.conrelid = 'aim_users'::regclass AND con.contype = 'p';
+    IF constraint_columns = ARRAY['username']::TEXT[] THEN
+        ALTER TABLE aim_users DROP CONSTRAINT aim_users_pkey;
+        ALTER TABLE aim_users ADD PRIMARY KEY (company_code, username);
+    END IF;
+END $$;
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conrelid = 'aim_users'::regclass
+          AND conname = 'aim_users_company_code_fkey'
+    ) THEN
+        ALTER TABLE aim_users
+        ADD CONSTRAINT aim_users_company_code_fkey
+        FOREIGN KEY (company_code) REFERENCES aim_companies(company_code)
+        ON DELETE CASCADE;
+    END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS aim_users_company_idx
+    ON aim_users (company_code);
 
 CREATE TABLE IF NOT EXISTS aim_inventory (
     company_code TEXT NOT NULL REFERENCES aim_companies(company_code) ON DELETE CASCADE,
@@ -126,6 +183,16 @@ CREATE TABLE IF NOT EXISTS aim_departments (
     CONSTRAINT aim_departments_data_object CHECK (jsonb_typeof(data) = 'object')
 );
 
+CREATE TABLE IF NOT EXISTS aim_company_documents (
+    company_code TEXT NOT NULL REFERENCES aim_companies(company_code) ON DELETE CASCADE,
+    document_key TEXT NOT NULL,
+    data JSONB NOT NULL,
+    version BIGINT NOT NULL DEFAULT 1,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (company_code, document_key),
+    CONSTRAINT aim_company_documents_data_object CHECK (jsonb_typeof(data) = 'object')
+);
+
 CREATE TABLE IF NOT EXISTS aim_migration_runs (
     migration_id BIGSERIAL PRIMARY KEY,
     company_code TEXT NOT NULL,
@@ -138,4 +205,8 @@ CREATE TABLE IF NOT EXISTS aim_migration_runs (
 
 INSERT INTO aim_schema_migrations (version)
 VALUES (1)
+ON CONFLICT (version) DO NOTHING;
+
+INSERT INTO aim_schema_migrations (version)
+VALUES (2)
 ON CONFLICT (version) DO NOTHING;
