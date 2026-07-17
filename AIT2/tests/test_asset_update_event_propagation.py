@@ -229,6 +229,58 @@ class AssetUpdateEventPropagationTests(unittest.TestCase):
         self.assertEqual(line['catalogKey'], new_key)
         self.assertIn(f'admin::{new_key}', app_module._load_finance_data()['priceBook'])
 
+    def test_asset_model_group_merge_requires_explicit_confirmation(self):
+        self.data_manager.inventory['DEST#01'] = self.make_asset(
+            'DEST#01',
+            model='DestinationModel',
+            description='Destination description',
+        )
+
+        response = self.put_asset(
+            'A#01',
+            model='DestinationModel',
+            description='Destination description',
+            applyTo='allSimilar',
+        )
+
+        self.assertEqual(response.status_code, 409, response.get_data(as_text=True))
+        body = response.get_json()
+        self.assertTrue(body['requiresModelGroupMergeConfirmation'])
+        self.assertEqual(body['mergeDetails']['sourceCount'], 2)
+        self.assertEqual(body['mergeDetails']['existingCount'], 1)
+        self.assertEqual(self.data_manager.inventory['A#01'].model_number, 'OldModel')
+        self.assertEqual(self.data_manager.inventory['A#02'].model_number, 'OldModel')
+
+    def test_asset_model_group_merge_proceeds_after_confirmation(self):
+        self.data_manager.inventory['DEST#01'] = self.make_asset(
+            'DEST#01',
+            model='DestinationModel',
+            description='Destination description',
+        )
+
+        response = self.put_asset(
+            'A#01',
+            model='DestinationModel',
+            description='Destination description',
+            applyTo='allSimilar',
+            confirmModelGroupMerge=True,
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(self.data_manager.inventory['A#01'].model_number, 'DestinationModel')
+        self.assertEqual(self.data_manager.inventory['A#02'].model_number, 'DestinationModel')
+        self.assertEqual(self.data_manager.inventory['DEST#01'].model_number, 'DestinationModel')
+
+    def test_description_only_change_does_not_require_group_merge_confirmation(self):
+        response = self.put_asset(
+            'A#01',
+            description='Updated description',
+            applyTo='single',
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(self.data_manager.inventory['A#01'].description, 'Updated description')
+
     def test_regular_asset_id_change_uses_edited_id_and_updates_event_references(self):
         event = self.make_event(300, prepared=['A#01'], actual=['A#01'], extra=['A#01'])
 
@@ -353,6 +405,46 @@ class AssetUpdateEventPropagationTests(unittest.TestCase):
         self.assertEqual(assets_response.status_code, 200, assets_response.get_data(as_text=True))
         asset_payload = next(item for item in assets_response.get_json()['data'] if item['internalId'] == 'A#01')
         self.assertEqual(asset_payload['notes'], notes)
+
+    def test_asset_update_saves_and_audits_tags(self):
+        response = self.put_asset('A#01', tags=['RF', 'spare', 'rf'])
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        asset = self.data_manager.inventory['A#01']
+        self.assertEqual(asset.tags, ['RF', 'spare'])
+
+        reloaded = DataManager(self.tempdir.name)
+        reloaded.load_inventory()
+        self.assertEqual(reloaded.inventory['A#01'].tags, ['RF', 'spare'])
+
+        changes = {change['field']: change for change in asset.change_history[0]['changes']}
+        self.assertIn('tags', changes)
+        self.assertEqual(changes['tags']['old'], '[]')
+        self.assertEqual(changes['tags']['new'], "['RF', 'spare']")
+
+        assets_response = self.client.get('/api/assets')
+        asset_payload = next(item for item in assets_response.get_json()['data'] if item['internalId'] == 'A#01')
+        self.assertEqual(asset_payload['tags'], ['RF', 'spare'])
+
+    def test_asset_update_can_add_new_tags_to_all_matching_models(self):
+        self.data_manager.inventory['A#01'].tags = ['selected-only']
+        self.data_manager.inventory['A#02'].tags = ['keep-me']
+        self.data_manager.save_inventory()
+
+        response = self.put_asset(
+            'A#01',
+            tags=['selected-only', 'Wireless'],
+            tagsToApplyToSimilar=['Wireless'],
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(response.get_json()['data']['taggedAssets'], 2)
+        self.assertEqual(self.data_manager.inventory['A#01'].tags, ['selected-only', 'Wireless'])
+        self.assertEqual(self.data_manager.inventory['A#02'].tags, ['keep-me', 'Wireless'])
+        self.assertTrue(any(
+            change.get('field') == 'tags'
+            for change in self.data_manager.inventory['A#02'].change_history[-1]['changes']
+        ))
 
     def test_asset_update_records_manual_change_history(self):
         response = self.put_asset(

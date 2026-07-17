@@ -1642,7 +1642,7 @@ function financeRenderRateCard() {
   if (!root) return;
   const query = String(financeState.rateCardSearch || '').trim().toLowerCase();
   const filtered = (financeState.rateCard || []).filter(row => !query || [
-    row.department, row.brand, row.model, row.description
+    row.department, row.brand, row.model, row.description, ...(row.searchTags || [])
   ].join(' ').toLowerCase().includes(query));
   const departments = new Map();
   filtered.forEach(row => {

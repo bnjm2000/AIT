@@ -4,6 +4,7 @@ import tempfile
 import unittest
 from datetime import datetime
 from urllib.parse import quote
+from unittest.mock import patch
 
 import app as app_module
 from data_manager import DataManager
@@ -170,6 +171,46 @@ class MaintenanceMediaTests(unittest.TestCase):
             reloaded.inventory[self.asset_id].maintenance_logs[0]
         )
         self.assertEqual(persisted_log['media'], [])
+
+    def test_add_and_edit_publish_asset_scoped_inventory_updates(self):
+        self.login_as('normal')
+        encoded_asset_id = quote(self.asset_id, safe='')
+        maintenance_date = datetime.now().strftime('%Y-%m-%d')
+
+        with patch.object(app_module, '_publish_realtime_update_now') as publish:
+            response = self.client.post(
+                f'/api/assets/{encoded_asset_id}/maintain',
+                json={
+                    'logEntry': 'Initial inspection',
+                    'maintenanceDate': maintenance_date,
+                    'logType': 'General',
+                    'assetStatus': 'nochange',
+                },
+            )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        add_changes = publish.call_args.args[1]['changes']
+        add_inventory = next(change for change in add_changes if change['topic'] == 'inventory-data')
+        self.assertEqual(add_inventory['details']['assetIds'], [self.asset_id])
+        self.assertEqual(add_inventory['details']['action'], 'maintenance-added')
+
+        with patch.object(app_module, '_publish_realtime_update_now') as publish:
+            response = self.client.put(
+                f'/api/assets/{encoded_asset_id}/maintenance-log-enhanced/0',
+                json={
+                    'date': maintenance_date,
+                    'user': 'normal',
+                    'description': 'Inspection found a fault',
+                    'logType': 'General',
+                    'assetStatus': 'ooc',
+                },
+            )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        edit_changes = publish.call_args.args[1]['changes']
+        edit_inventory = next(change for change in edit_changes if change['topic'] == 'inventory-data')
+        self.assertEqual(edit_inventory['details']['assetIds'], [self.asset_id])
+        self.assertEqual(edit_inventory['details']['action'], 'maintenance-log-updated')
 
 
 if __name__ == '__main__':

@@ -96,6 +96,61 @@ class AssetCreationTests(unittest.TestCase):
         self.assertEqual(self.data_manager.inventory['P1#03'].serial_number, 'SN-003')
         self.assertEqual(self.data_manager.inventory['P1#04'].serial_number, 'SN-004')
 
+    def test_create_asset_warns_when_serial_count_is_lower_than_quantity(self):
+        response = self.post_asset({
+            'quantity': 3,
+            'serials': ['SN-001', 'SN-002'],
+        })
+
+        self.assertEqual(response.status_code, 409, response.get_data(as_text=True))
+        body = response.get_json()
+        self.assertTrue(body['requiresSerialMismatchConfirmation'])
+        self.assertEqual(body['data']['mismatches'], [{
+            'type': 'primary',
+            'count': 2,
+            'quantity': 3,
+        }])
+        self.assertEqual(self.data_manager.inventory, {})
+
+        confirmed = self.post_asset({
+            'quantity': 3,
+            'serials': ['SN-001', 'SN-002'],
+            'confirmSerialMismatch': True,
+        })
+
+        self.assertEqual(confirmed.status_code, 200, confirmed.get_data(as_text=True))
+        created_ids = confirmed.get_json()['assetIds']
+        self.assertEqual(len(created_ids), 3)
+        self.assertEqual(self.data_manager.inventory[created_ids[2]].serial_number, '')
+
+    def test_create_asset_warns_when_primary_serial_list_is_empty(self):
+        response = self.post_asset({
+            'quantity': 2,
+            'serials': [],
+            'secondarySerials': [],
+        })
+
+        self.assertEqual(response.status_code, 409, response.get_data(as_text=True))
+        mismatch = response.get_json()['data']['mismatches']
+        self.assertEqual(mismatch, [{
+            'type': 'primary',
+            'count': 0,
+            'quantity': 2,
+        }])
+
+    def test_create_asset_warns_when_serial_count_exceeds_quantity(self):
+        response = self.post_asset({
+            'quantity': 2,
+            'serials': ['SN-001', 'SN-002', 'SN-003'],
+        })
+
+        self.assertEqual(response.status_code, 409, response.get_data(as_text=True))
+        body = response.get_json()
+        self.assertTrue(body['requiresSerialMismatchConfirmation'])
+        self.assertEqual(body['data']['mismatches'][0]['count'], 3)
+        self.assertEqual(body['data']['mismatches'][0]['quantity'], 2)
+        self.assertEqual(self.data_manager.inventory, {})
+
     def test_new_brand_with_same_model_gets_separate_prefix(self):
         self.add_existing_asset('P1#01', 'Behringher', 'P1', 'Wired IEM beltpack')
 
@@ -187,6 +242,48 @@ class AssetCreationTests(unittest.TestCase):
         payload = assets_response.get_json()['data']
         created_asset = next(item for item in payload if item['internalId'] == asset_id)
         self.assertEqual(created_asset['notes'], notes)
+
+    def test_create_asset_saves_normalized_tags_and_supports_tag_search(self):
+        response = self.post_asset({
+            'tags': ['Wireless', 'backup', 'wireless', 'quick setup'],
+        })
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        asset_id = response.get_json()['assetIds'][0]
+        self.assertEqual(
+            self.data_manager.inventory[asset_id].tags,
+            ['Wireless', 'backup', 'quick', 'setup'],
+        )
+
+        reloaded = DataManager(self.tempdir.name)
+        reloaded.load_inventory()
+        self.assertEqual(reloaded.inventory[asset_id].tags, ['Wireless', 'backup', 'quick', 'setup'])
+
+        assets_response = self.client.get('/api/assets?query=backup')
+        self.assertEqual(assets_response.status_code, 200, assets_response.get_data(as_text=True))
+        matching_ids = [item['internalId'] for item in assets_response.get_json()['data']]
+        self.assertEqual(matching_ids, [asset_id])
+        self.assertEqual(assets_response.get_json()['data'][0]['tags'], ['Wireless', 'backup', 'quick', 'setup'])
+
+    def test_create_asset_can_add_tags_to_existing_matching_models(self):
+        self.add_existing_asset('P1#01', 'Behringher', 'P1', 'Wired IEM beltpack')
+        self.data_manager.inventory['P1#01'].tags = ['legacy']
+        self.data_manager.save_inventory()
+
+        response = self.post_asset({
+            'tags': ['Wireless'],
+            'tagsToApplyToSimilar': ['Wireless'],
+        })
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(response.get_json()['matchingAssetsTagged'], 1)
+        self.assertEqual(self.data_manager.inventory['P1#01'].tags, ['legacy', 'Wireless'])
+        created_id = response.get_json()['assetIds'][0]
+        self.assertEqual(self.data_manager.inventory[created_id].tags, ['Wireless'])
+        self.assertTrue(any(
+            change.get('field') == 'tags'
+            for change in self.data_manager.inventory['P1#01'].change_history[-1]['changes']
+        ))
 
     def test_create_asset_saves_second_serial_and_resolves_it(self):
         response = self.post_asset({

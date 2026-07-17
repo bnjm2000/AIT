@@ -1,5 +1,6 @@
 import hashlib
 import datetime
+import json
 import re
 
 
@@ -139,6 +140,39 @@ class Client:
         self.salutation = salutation
 
 
+def normalize_asset_tags(value):
+    """Return distinct, single-word asset tags while preserving display case."""
+    if value is None:
+        return []
+
+    if isinstance(value, str):
+        raw_value = value.strip()
+        if raw_value.startswith('['):
+            try:
+                parsed = json.loads(raw_value)
+                value = parsed if isinstance(parsed, list) else raw_value
+            except (TypeError, ValueError):
+                value = raw_value
+        if isinstance(value, str):
+            value = re.split(r'[\s,]+', value)
+    elif not isinstance(value, (list, tuple, set)):
+        value = [value]
+
+    tags = []
+    seen = set()
+    for item in value:
+        for tag in re.split(r'[\s,]+', str(item or '').strip()):
+            clean_tag = tag.strip().lstrip('#')[:50]
+            key = clean_tag.casefold()
+            if not clean_tag or key in seen:
+                continue
+            seen.add(key)
+            tags.append(clean_tag)
+            if len(tags) >= 50:
+                return tags
+    return tags
+
+
 class InventoryItem:
     def __init__(
         self,
@@ -163,6 +197,7 @@ class InventoryItem:
         change_history=None,
         notes='',
         secondary_serial_number='',
+        tags=None,
     ):
         self.asset_id = asset_id
         self.brand = brand
@@ -196,6 +231,7 @@ class InventoryItem:
         self.date_modified = date_modified or ''
         self.change_history = change_history if change_history is not None else []
         self.notes = notes or ''
+        self.tags = normalize_asset_tags(tags)
         self.is_bulk = is_bulk
         try:
             self.quantity = max(1, int(quantity)) if is_bulk else 1

@@ -14,6 +14,7 @@ let addEventAssignedUsers = new Set();
 let editEventAssignedUsers = new Set();
 let departmentsLoaded = false;
 let selectedInventoryAssetIds = new Set();
+let lastInventorySelectionAnchorId = '';
 let expandedInventoryBulkDeploymentIds = new Set();
 let expandedInventoryModelKeys = new Set();
 let maintenanceFlaggedAssets = [];
@@ -3717,6 +3718,35 @@ function ensureAppDialogStyles() {
       outline: none;
     }
 
+    .app-dialog-checkbox {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      margin-top: 16px;
+      padding: 12px 14px;
+      border: 1px solid #f1d18a;
+      border-radius: 8px;
+      background: #fff9e8;
+      color: #5f4b1b;
+      font-weight: 600;
+      line-height: 1.4;
+      white-space: normal;
+      cursor: pointer;
+    }
+
+    .app-dialog-checkbox input {
+      width: 18px;
+      height: 18px;
+      flex: 0 0 18px;
+      margin: 1px 0 0;
+      accent-color: var(--brand-main, #0f766e);
+    }
+
+    .app-dialog-actions .btn:disabled {
+      cursor: not-allowed;
+      opacity: .5;
+    }
+
     .app-dialog-actions {
       display: flex;
       justify-content: flex-end;
@@ -3805,6 +3835,7 @@ function showAppDialog(options = {}) {
     messageText.textContent = options.message || '';
     messageEl.appendChild(messageText);
     let promptInput = null;
+    let confirmationCheckbox = null;
     if (isPrompt) {
       const field = document.createElement('label');
       field.className = 'app-dialog-field';
@@ -3817,12 +3848,27 @@ function showAppDialog(options = {}) {
       field.appendChild(promptInput);
       messageEl.appendChild(field);
     }
+    if (options.checkboxLabel) {
+      const checkboxLabel = document.createElement('label');
+      checkboxLabel.className = 'app-dialog-checkbox';
+      confirmationCheckbox = document.createElement('input');
+      confirmationCheckbox.type = 'checkbox';
+      const checkboxText = document.createElement('span');
+      checkboxText.textContent = options.checkboxLabel;
+      checkboxLabel.append(confirmationCheckbox, checkboxText);
+      messageEl.appendChild(checkboxLabel);
+    }
     iconEl.textContent = variant === 'info' ? 'i' : '!';
     confirmButton.textContent = options.confirmText || (isAlert ? 'OK' : 'Confirm');
     confirmButton.className = `btn ${variant === 'danger' ? 'btn-danger' : variant === 'warning' ? 'btn-warning' : 'btn-primary'}`;
     cancelButton.textContent = options.cancelText || 'Cancel';
     cancelButton.style.display = isAlert ? 'none' : '';
     closeButton.style.display = options.hideClose ? 'none' : '';
+    const requiresCheckbox = Boolean(options.requireCheckbox && confirmationCheckbox);
+    const updateConfirmAvailability = () => {
+      confirmButton.disabled = requiresCheckbox && !confirmationCheckbox.checked;
+    };
+    updateConfirmAvailability();
 
     let settled = false;
     const previousFocus = document.activeElement;
@@ -3834,7 +3880,9 @@ function showAppDialog(options = {}) {
       confirmButton.removeEventListener('click', handleConfirm);
       cancelButton.removeEventListener('click', handleCancel);
       closeButton.removeEventListener('click', handleClose);
+      confirmationCheckbox?.removeEventListener('change', updateConfirmAvailability);
       document.removeEventListener('keydown', handleKeydown, true);
+      confirmButton.disabled = false;
 
       if (previousFocus && typeof previousFocus.focus === 'function') {
         setTimeout(() => {
@@ -3851,6 +3899,10 @@ function showAppDialog(options = {}) {
     };
 
     const handleConfirm = () => {
+      if (requiresCheckbox && !confirmationCheckbox.checked) {
+        confirmationCheckbox.focus();
+        return;
+      }
       if (isPrompt) {
         const value = promptInput?.value || '';
         if (options.required && !value.trim()) {
@@ -3883,6 +3935,7 @@ function showAppDialog(options = {}) {
     confirmButton.addEventListener('click', handleConfirm);
     cancelButton.addEventListener('click', handleCancel);
     closeButton.addEventListener('click', handleClose);
+    confirmationCheckbox?.addEventListener('change', updateConfirmAvailability);
     document.addEventListener('keydown', handleKeydown, true);
 
     modal.classList.add('active');
@@ -3979,7 +4032,9 @@ async function apiCall(endpoint, method = "GET", data = null) {
     return result;
   } catch (error) {
     console.error("API Error:", error);
-    showNotification("error", error.message);
+    if (!error.payload?.requiresModelGroupMergeConfirmation) {
+      showNotification("error", error.message);
+    }
     throw error;
   }
 }
@@ -7680,6 +7735,69 @@ async function loadInventory() {
   }
 }
 
+function inventoryAssetMatchesIdentifier(asset, assetId) {
+  const target = String(assetId || '').trim().toLowerCase();
+  if (!target || !asset) return false;
+  return [asset.id, asset.internalId, asset.bulkId, asset.displayId]
+    .some(value => String(value || '').trim().toLowerCase() === target);
+}
+
+async function refreshInventoryAssetsInPlace(assetIds = []) {
+  const requestedIds = Array.from(new Set(
+    (Array.isArray(assetIds) ? assetIds : [assetIds])
+      .map(value => String(value || '').trim())
+      .filter(Boolean)
+  ));
+  let refreshedAssets = [];
+
+  if (requestedIds.length > 0 && requestedIds.length <= 8) {
+    const responses = await Promise.all(
+      requestedIds.map(assetId => apiCall(
+        `/api/assets?query=${encodeURIComponent(assetId)}&limit=100`
+      ))
+    );
+    refreshedAssets = responses.flatMap((response, index) => {
+      const requestedId = requestedIds[index];
+      const exactAsset = (response.data || []).find(asset => (
+        inventoryAssetMatchesIdentifier(asset, requestedId)
+      ));
+      return exactAsset ? [exactAsset] : [];
+    });
+
+    if (refreshedAssets.length !== requestedIds.length) {
+      const response = await apiCall('/api/assets');
+      assets = response.data || [];
+      refreshedAssets = requestedIds
+        .map(assetId => assets.find(asset => inventoryAssetMatchesIdentifier(asset, assetId)))
+        .filter(Boolean);
+    } else {
+      const nextAssets = Array.isArray(assets) ? [...assets] : [];
+      refreshedAssets.forEach(updatedAsset => {
+        const identifier = getAssetIdentifierForApi(updatedAsset);
+        const existingIndex = nextAssets.findIndex(asset => (
+          inventoryAssetMatchesIdentifier(asset, identifier)
+        ));
+        if (existingIndex >= 0) nextAssets[existingIndex] = updatedAsset;
+        else nextAssets.push(updatedAsset);
+      });
+      assets = nextAssets;
+    }
+  } else {
+    const response = await apiCall('/api/assets');
+    assets = response.data || [];
+    refreshedAssets = requestedIds.length
+      ? requestedIds
+          .map(assetId => assets.find(asset => inventoryAssetMatchesIdentifier(asset, assetId)))
+          .filter(Boolean)
+      : assets;
+  }
+
+  if (document.getElementById('inventory-section')?.classList.contains('active')) {
+    displayFilteredInventory();
+  }
+  return refreshedAssets;
+}
+
 function ensureInventoryExportControls() {
   const controls = document.querySelector('#inventory-section .inventory-controls');
   if (!controls) return;
@@ -8159,11 +8277,152 @@ function inventoryAssetIdentifier(asset) {
   return getAssetIdentifierForApi(asset);
 }
 
+function normalizeAssetTags(value) {
+  const source = Array.isArray(value) ? value : String(value || '').split(/[\s,]+/);
+  const tags = [];
+  const seen = new Set();
+  source.forEach(item => {
+    String(item || '').split(/[\s,]+/).forEach(part => {
+      const tag = part.trim().replace(/^#+/, '').slice(0, 50);
+      const key = tag.toLocaleLowerCase();
+      if (!tag || seen.has(key) || tags.length >= 50) return;
+      seen.add(key);
+      tags.push(tag);
+    });
+  });
+  return tags;
+}
+
+function assetTagSearchText(asset) {
+  return normalizeAssetTags(asset?.tags).join(' ').toLocaleLowerCase();
+}
+
+function assetTagEditorTags(editorId) {
+  const editor = document.getElementById(editorId);
+  if (!editor) return [];
+  try {
+    return normalizeAssetTags(JSON.parse(editor.dataset.tags || '[]'));
+  } catch (error) {
+    return [];
+  }
+}
+
+function assetTagEditorRender(editorId) {
+  const editor = document.getElementById(editorId);
+  const input = editor?.querySelector('.asset-tag-editor-input');
+  if (!editor || !input) return;
+
+  editor.querySelectorAll('.inventory-tag').forEach(tag => tag.remove());
+  assetTagEditorTags(editorId).forEach(tag => {
+    const chip = document.createElement('span');
+    chip.className = 'inventory-tag';
+    const label = document.createElement('span');
+    label.textContent = tag;
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'inventory-tag-remove';
+    remove.textContent = '\u00d7';
+    remove.setAttribute('aria-label', `Remove tag ${tag}`);
+    remove.addEventListener('click', () => assetTagEditorRemove(editorId, tag));
+    chip.append(label, remove);
+    editor.insertBefore(chip, input);
+  });
+}
+
+function assetTagEditorSetTags(editorId, tags) {
+  const editor = document.getElementById(editorId);
+  if (!editor) return;
+  editor.dataset.tags = JSON.stringify(normalizeAssetTags(tags));
+  const input = editor.querySelector('.asset-tag-editor-input');
+  if (input) input.value = '';
+  assetTagEditorRender(editorId);
+}
+
+function assetTagEditorCommit(editorId) {
+  const editor = document.getElementById(editorId);
+  const input = editor?.querySelector('.asset-tag-editor-input');
+  if (!input || !input.value.trim()) return;
+  assetTagEditorSetTags(editorId, [...assetTagEditorTags(editorId), ...normalizeAssetTags(input.value)]);
+}
+
+function assetTagEditorRemove(editorId, tag) {
+  const target = String(tag || '').toLocaleLowerCase();
+  assetTagEditorSetTags(
+    editorId,
+    assetTagEditorTags(editorId).filter(item => item.toLocaleLowerCase() !== target)
+  );
+}
+
+function assetTagEditorKeydown(event, editorId) {
+  if (event.key === 'Enter' || event.key === ',' || event.key === ' ') {
+    event.preventDefault();
+    assetTagEditorCommit(editorId);
+    return;
+  }
+  if (event.key === 'Backspace' && !event.currentTarget.value) {
+    const tags = assetTagEditorTags(editorId);
+    if (tags.length) assetTagEditorRemove(editorId, tags[tags.length - 1]);
+  }
+}
+
+function assetTagEditorInput(event, editorId) {
+  if (/[\s,]/.test(event.currentTarget.value)) assetTagEditorCommit(editorId);
+}
+
+function assetTagEditorHtml(editorId, tags = []) {
+  return `
+    <div id="${escapeHtmlAttr(editorId)}" class="asset-tag-editor" data-tags="${escapeHtmlAttr(JSON.stringify(normalizeAssetTags(tags)))}">
+      <input class="asset-tag-editor-input" type="text" placeholder="Type a tag and press Space" autocomplete="off"
+             onkeydown="assetTagEditorKeydown(event, '${escapeHtmlAttr(editorId)}')"
+             oninput="assetTagEditorInput(event, '${escapeHtmlAttr(editorId)}')"
+             onblur="assetTagEditorCommit('${escapeHtmlAttr(editorId)}')">
+    </div>
+  `;
+}
+
+function inventoryAssetTagsHtml(asset, removable = false) {
+  const tags = normalizeAssetTags(asset?.tags);
+  if (!tags.length) return '';
+  const assetId = inventoryAssetIdentifier(asset);
+  return `<div class="inventory-tag-list">${tags.map(tag => `
+    <span class="inventory-tag">
+      <span>${escapeHtml(tag)}</span>
+      ${removable ? `<button type="button" class="inventory-tag-remove" aria-label="Remove tag ${escapeHtmlAttr(tag)}" title="Remove tag" onclick="removeInventoryAssetTag('${escapeHtmlAttr(encodeURIComponent(assetId))}','${escapeHtmlAttr(encodeURIComponent(tag))}',event)">&times;</button>` : ''}
+    </span>
+  `).join('')}</div>`;
+}
+
+async function removeInventoryAssetTag(encodedAssetId, encodedTag, clickEvent = null) {
+  clickEvent?.preventDefault();
+  clickEvent?.stopPropagation();
+  const assetId = decodeURIComponent(encodedAssetId);
+  const tag = decodeURIComponent(encodedTag);
+  const asset = assets.find(item => inventoryAssetIdentifier(item) === assetId);
+  if (!asset || !currentUser?.isAdmin) return;
+  const nextTags = normalizeAssetTags(asset.tags).filter(item => item.toLocaleLowerCase() !== tag.toLocaleLowerCase());
+
+  try {
+    await apiCall(`/api/assets/${encodeURIComponent(assetId)}`, 'PUT', {
+      applyTo: 'single',
+      tags: nextTags,
+    });
+    const detailsWasOpen = document.getElementById('assetDetailsModal')?.classList.contains('active');
+    await refreshInventoryAssetsInPlace([assetId]);
+    if (detailsWasOpen) openAssetDetailsModal(encodeURIComponent(assetId));
+    showNotification('success', `Removed tag ${tag}`);
+  } catch (error) {
+    showNotification('error', `Failed to remove tag: ${error.message}`);
+  }
+}
+
 function pruneInventorySelection() {
   const validIds = new Set((assets || []).map(inventoryAssetIdentifier).filter(Boolean));
   Array.from(selectedInventoryAssetIds).forEach(assetId => {
     if (!validIds.has(assetId)) selectedInventoryAssetIds.delete(assetId);
   });
+  if (lastInventorySelectionAnchorId && !validIds.has(lastInventorySelectionAnchorId)) {
+    lastInventorySelectionAnchorId = '';
+  }
 }
 
 function getSelectedInventoryAssets() {
@@ -8201,12 +8460,37 @@ function updateInventorySelectionUi(currentVisibleAssets = null) {
   }
 }
 
-function toggleInventoryAssetSelection(assetId, checked) {
+function inventoryVisibleSelectableAssetIds() {
+  return Array.from(document.querySelectorAll('.inventory-row-select'))
+    .map(input => String(input.dataset.assetId || '').trim())
+    .filter(Boolean);
+}
+
+function toggleInventoryAssetSelection(assetId, checked, selectionEvent = null) {
   const normalized = String(assetId || '').trim();
   if (!normalized) return;
 
-  if (checked) selectedInventoryAssetIds.add(normalized);
-  else selectedInventoryAssetIds.delete(normalized);
+  const visibleIds = inventoryVisibleSelectableAssetIds();
+  const anchorIndex = visibleIds.indexOf(lastInventorySelectionAnchorId);
+  const currentIndex = visibleIds.indexOf(normalized);
+  const shouldSelectRange = Boolean(
+    selectionEvent?.shiftKey && anchorIndex >= 0 && currentIndex >= 0
+  );
+
+  if (shouldSelectRange) {
+    const rangeStart = Math.min(anchorIndex, currentIndex);
+    const rangeEnd = Math.max(anchorIndex, currentIndex);
+    visibleIds.slice(rangeStart, rangeEnd + 1).forEach(id => {
+      if (checked) selectedInventoryAssetIds.add(id);
+      else selectedInventoryAssetIds.delete(id);
+    });
+  } else if (checked) {
+    selectedInventoryAssetIds.add(normalized);
+  } else {
+    selectedInventoryAssetIds.delete(normalized);
+  }
+
+  lastInventorySelectionAnchorId = normalized;
 
   updateInventorySelectionUi();
 }
@@ -8220,12 +8504,14 @@ function toggleInventorySelectAll(checked) {
     else selectedInventoryAssetIds.delete(assetId);
   });
 
+  lastInventorySelectionAnchorId = '';
   updateInventorySelectionUi(filteredAssets);
   displayInventoryTable(filteredAssets);
 }
 
 function clearInventorySelection() {
   selectedInventoryAssetIds.clear();
+  lastInventorySelectionAnchorId = '';
   updateInventorySelectionUi();
   displayFilteredInventory();
 }
@@ -8280,7 +8566,7 @@ function openAssetDetailsModal(encodedAssetId) {
         <div class="asset-details-identity-label"><span>${asset.isBulk ? 'Bulk stock record' : 'Asset ID'}</span></div>
         <div class="asset-details-identity-record">
           <div><strong>${escapeHtml(displayId)}</strong>${asset.isBulk ? `<small>Internal ID: ${escapeHtml(apiId)}</small>` : ''}</div>
-          <div class="asset-details-product"><div class="asset-details-product-heading"><strong>${escapeHtml([asset.brand, asset.model].filter(Boolean).join(' ') || 'Brand and model not recorded')}</strong>${departmentBadgeHtml(asset.department)}</div><span>${escapeHtml(asset.description || 'No description recorded')}</span></div>
+          <div class="asset-details-product"><div class="asset-details-product-heading"><strong>${escapeHtml([asset.brand, asset.model].filter(Boolean).join(' ') || 'Brand and model not recorded')}</strong>${departmentBadgeHtml(asset.department)}</div><span>${escapeHtml(asset.description || 'No description recorded')}</span>${inventoryAssetTagsHtml(asset, isAdminUser())}</div>
         </div>
       </div>
 
@@ -8349,7 +8635,7 @@ function inventoryVirtualRowHtml(asset, isAdmin) {
            class="inventory-row-select"
            data-asset-id="${escapeHtmlAttr(assetIdentifier)}"
            ${selectedInventoryAssetIds.has(assetIdentifier) ? 'checked' : ''}
-           onchange="toggleInventoryAssetSelection(this.dataset.assetId, this.checked)"
+           onclick="toggleInventoryAssetSelection(this.dataset.assetId, this.checked, event)"
            aria-label="Select ${escapeHtmlAttr(assetIdentifier || 'asset')}"
          >
        </td>`
@@ -8650,8 +8936,9 @@ function inventoryIndividualRowHtml(asset, isAdmin) {
   const maintenance = inventoryLatestMaintenance([asset]);
   return `
     <div class="inventory-individual-row">
-      ${isAdmin ? `<input type="checkbox" class="inventory-row-select" data-asset-id="${escapeHtmlAttr(assetId)}" ${selectedInventoryAssetIds.has(assetId) ? 'checked' : ''} onchange="toggleInventoryAssetSelection(this.dataset.assetId,this.checked)" aria-label="Select ${escapeHtmlAttr(assetId)}">` : '<span></span>'}
+      ${isAdmin ? `<input type="checkbox" class="inventory-row-select" data-asset-id="${escapeHtmlAttr(assetId)}" ${selectedInventoryAssetIds.has(assetId) ? 'checked' : ''} onclick="toggleInventoryAssetSelection(this.dataset.assetId,this.checked,event)" aria-label="Select ${escapeHtmlAttr(assetId)}">` : '<span></span>'}
       <div><span class="inventory-individual-id">${escapeHtml(asset.isBulk ? 'Bulk stock' : assetId)}</span><span class="inventory-individual-meta" style="display:block">${escapeHtml(asset.isBulk ? `${total} units` : (asset.serial || 'No serial'))}</span></div>
+      <div class="inventory-individual-tags">${inventoryAssetTagsHtml(asset, isAdmin) || '<span class="inventory-individual-meta">None</span>'}</div>
       <div>${availabilityHtml}</div>
       <div class="inventory-individual-meta">${escapeHtml(asset.currentLocation || asset.location || 'Store')}</div>
       <div class="inventory-individual-meta">${escapeHtml(inventoryMaintenanceDateText(maintenance))}</div>
@@ -8740,7 +9027,10 @@ function displayInventoryTable(assetsToShow) {
             ${expanded ? `
               <div class="inventory-model-detail">
                 <div class="inventory-group-condition"><h4>Availability overview</h4>${inventoryAvailabilityChartHtml(availability, true)}</div>
-                <div class="inventory-individual-list">${group.assets.map(asset => inventoryIndividualRowHtml(asset, isAdmin)).join('')}</div>
+                <div class="inventory-individual-list">
+                  <div class="inventory-individual-head"><span></span><span>Asset ID</span><span>Tags</span><span>Availability</span><span>Location</span><span>Last maintenance</span><span></span></div>
+                  ${group.assets.map(asset => inventoryIndividualRowHtml(asset, isAdmin)).join('')}
+                </div>
               </div>
             ` : ''}
           </section>
@@ -8847,6 +9137,11 @@ function ensureAssetEditModal() {
           <textarea id="editAssetNotes" class="form-input" rows="4"></textarea>
         </div>
 
+        <div class="form-group">
+          <label class="form-label">Tags</label>
+          ${assetTagEditorHtml('editAssetTagsEditor')}
+        </div>
+
         <div class="form-group" style="margin-top:8px;">
           <label class="form-label" for="editAssetStatus">Asset Status</label>
           <select id="editAssetStatus" class="form-input">
@@ -8901,7 +9196,8 @@ function openEditAssetModal(encodedAssetId) {
     model: asset.model || '',
     description: asset.description || '',
     dateOfPurchase: asset.dateOfPurchase || asset.purchaseDate || '',
-    department: asset.department || ''
+    department: asset.department || '',
+    tags: normalizeAssetTags(asset.tags)
   });
 
   document.getElementById('editAssetId').value = getAssetIdentifierForApi(asset) || '';
@@ -8918,6 +9214,7 @@ function openEditAssetModal(encodedAssetId) {
   document.getElementById('editAssetDateOfPurchase').value = normalizeAssetPurchaseDateValue(asset.dateOfPurchase || asset.purchaseDate || '');
   document.getElementById('editAssetDescription').value = asset.description || '';
   document.getElementById('editAssetNotes').value = asset.notes || '';
+  assetTagEditorSetTags('editAssetTagsEditor', asset.tags || []);
   document.getElementById('editAssetDepartment').value = asset.department || 'UN';
   document.getElementById('editAssetDefaultLocation').value = asset.defaultLocation || 'Store';
   document.getElementById('editAssetCurrentLocation').value = asset.currentLocation || '';
@@ -8949,6 +9246,7 @@ async function saveAssetEditModal() {
     dateOfPurchase: document.getElementById('editAssetDateOfPurchase').value.trim(),
     description: document.getElementById('editAssetDescription').value.trim(),
     notes: document.getElementById('editAssetNotes').value.trim(),
+    tags: assetTagEditorTags('editAssetTagsEditor'),
     department: document.getElementById('editAssetDepartment').value.trim().toUpperCase(),
     defaultLocation: document.getElementById('editAssetDefaultLocation').value.trim(),
     currentLocation: document.getElementById('editAssetCurrentLocation').value.trim(),
@@ -8988,6 +9286,11 @@ async function saveAssetEditModal() {
     normalizeAssetGroupValue(payload.model) !== normalizeAssetGroupValue(original.model) ||
     normalizeAssetGroupValue(payload.description) !== normalizeAssetGroupValue(original.description);
 
+  const modelGroupChanged =
+    normalizeAssetGroupValue(payload.department, true) !== normalizeAssetGroupValue(original.department, true) ||
+    normalizeAssetGroupValue(payload.brand) !== normalizeAssetGroupValue(original.brand) ||
+    normalizeAssetGroupValue(payload.model) !== normalizeAssetGroupValue(original.model);
+
   const sameOriginalGroupAssets = assets.filter(asset => sameAssetGroup(asset, original));
 
   if (modelOrDescriptionChanged && sameOriginalGroupAssets.length > 1) {
@@ -9004,12 +9307,93 @@ async function saveAssetEditModal() {
     payload.applyTo = changeAll ? 'allSimilar' : 'single';
   }
 
+  const confirmModelGroupMerge = async ({ existingCount, sourceCount, group } = {}) => {
+    const destination = group || payload;
+    const destinationName = [destination.brand, destination.model].filter(Boolean).join(' ') || 'the existing model group';
+    const movingCount = Number(sourceCount) || (payload.applyTo === 'allSimilar' ? sameOriginalGroupAssets.length : 1);
+    const matchedCount = Number(existingCount) || 0;
+    const confirmed = await showAppConfirm({
+      title: 'Asset groups will be merged',
+      message:
+        `${movingCount} asset${movingCount === 1 ? '' : 's'} will be renamed to ${destinationName}. ` +
+        `That model group already contains ${matchedCount} asset${matchedCount === 1 ? '' : 's'}.
+
+After saving, they will appear together as one inventory model group.`,
+      checkboxLabel: 'I understand that these assets will be merged into the existing model group.',
+      requireCheckbox: true,
+      confirmText: 'Merge and Save',
+      cancelText: 'Keep Editing',
+      variant: 'warning',
+    });
+    if (confirmed) payload.confirmModelGroupMerge = true;
+    return confirmed;
+  };
+
+  if (modelGroupChanged) {
+    const sourceAssets = payload.applyTo === 'allSimilar'
+      ? sameOriginalGroupAssets
+      : assets.filter(asset => getAssetIdentifierForApi(asset) === original.id);
+    const sourceIds = new Set(sourceAssets.map(getAssetIdentifierForApi));
+    const destinationAssets = assets.filter(asset => (
+      !sourceIds.has(getAssetIdentifierForApi(asset)) && sameAssetGroup(asset, payload)
+    ));
+
+    if (destinationAssets.length && !(await confirmModelGroupMerge({
+      existingCount: destinationAssets.length,
+      sourceCount: sourceAssets.length,
+      group: payload,
+    }))) {
+      return;
+    }
+  }
+
+  const originalTags = normalizeAssetTags(original.tags);
+  const originalTagKeys = new Set(originalTags.map(tag => tag.toLocaleLowerCase()));
+  const addedTags = normalizeAssetTags(payload.tags).filter(tag => !originalTagKeys.has(tag.toLocaleLowerCase()));
+  if (addedTags.length) {
+    const finalGroupAssets = modelGroupChanged
+      ? assets.filter(candidate => (
+          getAssetIdentifierForApi(candidate) === original.id ||
+          sameAssetGroup(candidate, payload) ||
+          (payload.applyTo === 'allSimilar' && sameAssetGroup(candidate, original))
+        ))
+      : sameOriginalGroupAssets;
+
+    if (finalGroupAssets.length > 1) {
+      const applyToAll = await showAppConfirm({
+        title: 'Apply tags to matching assets?',
+        message:
+          `Apply ${addedTags.map(tag => `"${tag}"`).join(', ')} to all ${finalGroupAssets.length} assets of this model?\n\n` +
+          'Existing tags on the other assets will be kept.',
+        confirmText: 'Apply to All',
+        cancelText: 'Only This Asset',
+        variant: 'info',
+      });
+      if (applyToAll) payload.tagsToApplyToSimilar = addedTags;
+    }
+  }
+
   try {
-    const res = await apiCall(
-      `/api/assets/${encodeURIComponent(original.id)}`,
-      'PUT',
-      payload
-    );
+    let res;
+    while (!res) {
+      try {
+        res = await apiCall(
+          `/api/assets/${encodeURIComponent(original.id)}`,
+          'PUT',
+          payload
+        );
+      } catch (error) {
+        const mergeDetails = error.payload?.mergeDetails;
+        if (
+          error.payload?.requiresModelGroupMergeConfirmation &&
+          !payload.confirmModelGroupMerge &&
+          await confirmModelGroupMerge(mergeDetails)
+        ) {
+          continue;
+        }
+        throw error;
+      }
+    }
 
     const data = res.data || {};
 
@@ -9019,6 +9403,10 @@ async function saveAssetEditModal() {
 
     if (data.updatedAssets && data.updatedAssets > 1) {
       message += ` (${data.updatedAssets} matching assets updated)`;
+    }
+
+    if (data.taggedAssets && data.taggedAssets > 1) {
+      message += `; tags applied to ${data.taggedAssets} matching assets`;
     }
 
     if (data.eventsUpdated) {
@@ -9470,6 +9858,7 @@ async function saveBulkAssetEditModal() {
   }
 
   selectedInventoryAssetIds.clear();
+  lastInventorySelectionAnchorId = '';
   await loadInventory();
 
   if (document.getElementById('events-section')?.classList.contains('active')) {
@@ -9680,6 +10069,7 @@ async function confirmBulkAssetDelete() {
     showNotification(missingCount ? 'warning' : 'success', message);
 
     selectedInventoryAssetIds.clear();
+    lastInventorySelectionAnchorId = '';
     await loadInventory();
     if (document.getElementById('events-section')?.classList.contains('active')) {
       await loadAllEvents();
@@ -10318,7 +10708,8 @@ function containerMatchesSearch(container, term) {
         asset.serial,
         asset.serial2,
         asset.description,
-        asset.department
+        asset.department,
+        assetTagSearchText(asset)
       );
     }
   });
@@ -11136,7 +11527,7 @@ function searchContainerAssets() {
 
   const filtered = assets.filter(asset => {
     const searchableText =
-      `${asset.id} ${asset.brand} ${asset.model} ${asset.serial || ''} ${asset.serial2 || ''} ${asset.description || ''} ${asset.department || ''}`
+      `${asset.id} ${asset.brand} ${asset.model} ${asset.serial || ''} ${asset.serial2 || ''} ${asset.description || ''} ${asset.department || ''} ${assetTagSearchText(asset)}`
         .toLowerCase();
 
     return searchableText.includes(term) && !selectedContainerAssets.has(asset.id);
@@ -14658,6 +15049,7 @@ function returnPageFilteredAssets() {
       asset.serial,
       asset.location,
       asset.department,
+      assetTagSearchText(asset),
       returnPageAssetTitle(asset),
       returnPageAssetSubtitle(asset),
     ].some(value => String(value || '').toLowerCase().includes(query));
@@ -17084,6 +17476,7 @@ function getMaintenanceChangeValue(log, kind) {
 function maintenanceAssetSearchText(asset) {
   return [
     getAssetIdentifierForApi(asset), asset.id, asset.brand, asset.model, asset.description,
+    assetTagSearchText(asset),
     asset.serial, asset.serialNumber, asset.serial2, asset.secondarySerial, asset.secondarySerialNumber,
     asset.status, asset.location,
     ...getMaintenanceLogRecords(asset).map(log => `${log.type || ''} ${log.description || ''} ${maintenanceLogUserLabel(log)} ${log.date || ''}`)
@@ -19262,7 +19655,13 @@ function buildContainerAvailableModelSummary(container, assetLookup) {
 
 function editContainerSearchText(container, summary) {
   const groupText = (summary.groups || [])
-    .flatMap(group => [group.department, group.brand, group.model, group.description])
+    .flatMap(group => [
+      group.department,
+      group.brand,
+      group.model,
+      group.description,
+      ...(group.assets || []).map(assetTagSearchText),
+    ])
     .join(' ');
 
   return [
@@ -19598,7 +19997,7 @@ function filterAvailableModels(searchTerm) {
   // Filter models by search
   const searchLower = searchTerm.toLowerCase();
   const filteredModels = Object.values(modelGroups).filter(model => {
-    const searchableText = `${model.brand} ${model.model} ${model.description}`.toLowerCase();
+    const searchableText = `${model.brand} ${model.model} ${model.description} ${(model.assets || []).map(assetTagSearchText).join(' ')}`.toLowerCase();
     return searchableText.includes(searchLower);
   });
 
@@ -20310,12 +20709,14 @@ function planAvailableModelSearchText(group) {
   const assetDescriptions = (group?.assets || []).map(asset =>
     String(asset?.description || '').trim()
   );
+  const assetTags = (group?.assets || []).map(assetTagSearchText);
   return [
     group?.department,
     group?.brand,
     group?.model,
     group?.description,
-    ...assetDescriptions
+    ...assetDescriptions,
+    ...assetTags
   ]
     .map(value => String(value || '').trim())
     .filter(Boolean)
@@ -22886,6 +23287,7 @@ function collectAddAssetPayload() {
     model: addAssetValue('assetModel'),
     description: addAssetValue('assetDescription'),
     notes: addAssetValue('assetNotes'),
+    tags: assetTagEditorTags('assetTagsEditor'),
     dateOfPurchase: addAssetValue('assetDateOfPurchase'),
     department: addAssetValue('assetDepartment'),
     isBulk,
@@ -22899,6 +23301,63 @@ function collectAddAssetPayload() {
   }
 
   return payload;
+}
+
+function addAssetSerialMismatchMessage(assetData) {
+  if (!assetData || assetData.isBulk) return '';
+
+  const quantity = Number(assetData.quantity || 0);
+  const serialGroups = [
+    { label: 'primary', values: assetData.serials || [], optional: false },
+    { label: 'secondary', values: assetData.secondarySerials || [], optional: true }
+  ];
+  const messages = serialGroups.flatMap(group => {
+    const count = group.values.filter(value => String(value || '').trim()).length;
+    if (count === quantity || (group.optional && count === 0)) return [];
+    if (count < quantity) {
+      const missing = quantity - count;
+      return [`${count} ${group.label} serial number${count === 1 ? '' : 's'} for ${quantity} assets. ${missing} asset${missing === 1 ? '' : 's'} will have no ${group.label} serial number.`];
+    }
+    const extra = count - quantity;
+    return [`${count} ${group.label} serial numbers for ${quantity} assets. ${extra} extra serial number${extra === 1 ? '' : 's'} will not be saved.`];
+  });
+
+  return messages.join('\n\n');
+}
+
+function addAssetPrimarySerialPreviewState(assetData) {
+  const quantity = Math.max(0, Number(assetData?.quantity || 0));
+  const serialCount = (assetData?.serials || [])
+    .filter(value => String(value || '').trim())
+    .length;
+
+  if (serialCount === 0) {
+    return {
+      className: 'warning',
+      html: `
+        <div class="add-asset-preview-status"><strong>Primary serial numbers</strong><span>0 of ${escapeHtml(String(quantity))}</span></div>
+        <div>No primary serial numbers entered.</div>
+      `,
+    };
+  }
+
+  if (serialCount === quantity) {
+    return {
+      className: 'success',
+      html: `
+        <div class="add-asset-preview-status"><strong>Primary serial numbers</strong><span>${escapeHtml(String(serialCount))} of ${escapeHtml(String(quantity))}</span></div>
+        <div>Serial number count matches the asset quantity.</div>
+      `,
+    };
+  }
+
+  return {
+    className: 'error',
+    html: `
+      <div class="add-asset-preview-status"><strong>Primary serial numbers</strong><span>${escapeHtml(String(serialCount))} of ${escapeHtml(String(quantity))}</span></div>
+      <div>Serial number count does not match the asset quantity.</div>
+    `,
+  };
 }
 
 function uniqueSorted(values) {
@@ -23033,6 +23492,8 @@ async function updateAddAssetPreview() {
   const payload = collectAddAssetPayload();
   const prefixInput = addAssetField('assetIdPrefix');
   const submitButton = addAssetField('addAssetSubmitButton');
+  const serialState = addAssetPrimarySerialPreviewState(payload);
+  const sequence = ++__addAssetPreviewSequence;
 
   if (submitButton) {
     submitButton.textContent = payload.isBulk ? 'Add Bulk Asset' : (payload.quantity > 1 ? `Add ${payload.quantity} Assets` : 'Add Asset');
@@ -23046,11 +23507,12 @@ async function updateAddAssetPreview() {
 
   if (!payload.brand || !payload.model) {
     if (prefixInput) prefixInput.placeholder = 'Auto';
-    renderAddAssetPreview('', 'Enter brand and model to preview Asset IDs.');
+    renderAddAssetPreview(serialState.className, `
+      ${serialState.html}
+      <div class="add-asset-preview-detail">Enter brand and model to preview Asset IDs.</div>
+    `);
     return;
   }
-
-  const sequence = ++__addAssetPreviewSequence;
 
   try {
     const response = await fetch('/api/assets/serial-preview', {
@@ -23078,16 +23540,16 @@ async function updateAddAssetPreview() {
       prefixInput.placeholder = data.prefix ? `Auto: ${data.prefix}` : 'Auto';
     }
 
-    const serialCount = addAssetSerialList().filter(Boolean).length;
     const secondarySerialCount = addAssetSerialList('assetSecondarySerials').filter(Boolean).length;
-    const serialText = serialCount || secondarySerialCount
-      ? `<div>${serialCount} primary and ${secondarySerialCount} second serial number(s) entered.</div>`
+    const secondarySerialText = secondarySerialCount
+      ? `<div class="add-asset-preview-detail">${secondarySerialCount} secondary serial number${secondarySerialCount === 1 ? '' : 's'} entered.</div>`
       : '';
 
-    renderAddAssetPreview('success', `
-      <div>${existingText}</div>
+    renderAddAssetPreview(serialState.className, `
+      ${serialState.html}
+      <div class="add-asset-preview-detail">${existingText}</div>
       <div>${escapeHtml(String(data.count || payload.quantity))} asset(s): ${previewAssetIdList(data.ids || [])}</div>
-      ${serialText}
+      ${secondarySerialText}
     `);
   } catch (error) {
     if (sequence !== __addAssetPreviewSequence) return;
@@ -23125,6 +23587,7 @@ async function prepareAddAssetModal() {
 function resetAddAssetForm() {
   const form = addAssetField('addAssetForm');
   if (form) form.reset();
+  assetTagEditorSetTags('assetTagsEditor', []);
   if (addAssetField('assetQuantity')) addAssetField('assetQuantity').value = 1;
   if (addAssetField('assetUseCustomPrefix')) addAssetField('assetUseCustomPrefix').checked = false;
   if (addAssetField('assetIdPrefix')) {
@@ -23469,6 +23932,37 @@ document.addEventListener("DOMContentLoaded", function () {
         return;
       }
 
+      const serialMismatchMessage = addAssetSerialMismatchMessage(assetData);
+      if (serialMismatchMessage) {
+        const confirmed = await showAppConfirm({
+          title: 'Serial number count does not match',
+          message: `${serialMismatchMessage}\n\nContinue adding these assets?`,
+          confirmText: 'Add Anyway',
+          cancelText: 'Review Serial Numbers',
+          variant: 'warning',
+        });
+        if (!confirmed) {
+          addAssetField('assetSerials')?.focus();
+          return;
+        }
+        assetData.confirmSerialMismatch = true;
+      }
+
+      const matchingAssets = assets.filter(asset => sameAssetGroup(asset, assetData));
+      if (assetData.tags.length && matchingAssets.length) {
+        const applyToAll = await showAppConfirm({
+          title: 'Apply tags to matching assets?',
+          message:
+            `This model already has ${matchingAssets.length} asset${matchingAssets.length === 1 ? '' : 's'}. ` +
+            `Apply ${assetData.tags.map(tag => `"${tag}"`).join(', ')} to them as well?\n\n` +
+            'Their existing tags will be kept.',
+          confirmText: 'Apply to All',
+          cancelText: 'New Assets Only',
+          variant: 'info',
+        });
+        if (applyToAll) assetData.tagsToApplyToSimilar = assetData.tags;
+      }
+
       try {
         const response = await apiCall("/api/assets", "POST", assetData);
         closeModal("addAssetModal");
@@ -23476,7 +23970,10 @@ document.addEventListener("DOMContentLoaded", function () {
         const createdMessage = createdIds.length > 1
           ? `Added ${createdIds.length} assets: ${createdIds[0]} to ${createdIds[createdIds.length - 1]}`
           : `Added ${createdIds[0] || 'asset'}`;
-        showNotification("success", createdMessage);
+        const taggedMessage = response.matchingAssetsTagged
+          ? `; tags also applied to ${response.matchingAssetsTagged} matching asset${response.matchingAssetsTagged === 1 ? '' : 's'}`
+          : '';
+        showNotification("success", createdMessage + taggedMessage);
 
         // Refresh inventory if we're on that page
         if (
@@ -23898,27 +24395,18 @@ document.addEventListener("DOMContentLoaded", function () {
         if (successCount > 0) {
           updateProgress("Maintenance saved. Refreshing asset data...", 85);
 
-          // Update assets data without refreshing search results.
+          // Merge fresh records into the current inventory view without reloading the page.
           try {
-            const assetsResponse = await apiCall("/api/assets");
-            if (assetsResponse.success) {
-              assets = assetsResponse.data;
-            }
+            await refreshInventoryAssetsInPlace(Array.from(succeededIds));
           } catch (error) {
             console.error("Failed to refresh assets data:", error);
           }
 
           const maintenanceSearchInput = document.getElementById("maintenance-search");
-          const assetSearchInput = document.getElementById("asset-search");
           const isMaintenanceSearchActive = maintenanceSearchInput && maintenanceSearchInput.value.trim().length > 0;
-          const isAssetSearchActive = assetSearchInput && assetSearchInput.value.trim().length > 0;
 
           if (document.getElementById("maintenance-section").classList.contains("active") && !isMaintenanceSearchActive) {
             loadMaintenanceAssets();
-          }
-
-          if (document.getElementById("inventory-section").classList.contains("active") && !isAssetSearchActive) {
-            loadInventory();
           }
 
           succeededIds.forEach(assetId => selectedMaintenanceAssets.delete(assetId));
@@ -24182,7 +24670,7 @@ function searchMaintenanceAssets() {
   // Filter assets based on search term
   const filteredAssets = assets.filter(asset => {
     const assetId = getAssetIdentifierForApi(asset);
-    const searchableText = `${asset.id || ''} ${assetId} ${asset.bulkId || ''} ${asset.internalId || ''} ${asset.brand || ''} ${asset.model || ''} ${asset.serial || ''} ${asset.serial2 || ''} ${escapeJs(asset.description || '')}`.toLowerCase();
+    const searchableText = `${asset.id || ''} ${assetId} ${asset.bulkId || ''} ${asset.internalId || ''} ${asset.brand || ''} ${asset.model || ''} ${asset.serial || ''} ${asset.serial2 || ''} ${escapeJs(asset.description || '')} ${assetTagSearchText(asset)}`.toLowerCase();
     return searchableText.includes(searchTerm) && !selectedMaintenanceAssets.has(assetId);
   });
   
@@ -24536,13 +25024,8 @@ function bulkMaintenanceFaultCapacity(asset) {
 }
 
 async function refreshBulkMaintenanceScreens(assetId, showLogbook = true) {
-  const assetsResponse = await apiCall('/api/assets');
-  if (assetsResponse.success) {
-    assets = assetsResponse.data || [];
-    const updatedAsset = getAssetByApiIdentifier(assetId);
-    if (showLogbook && updatedAsset) showBulkMaintenanceLogModal(updatedAsset);
-  }
-  if (document.getElementById('inventory-section')?.classList.contains('active')) loadInventory();
+  const [updatedAsset] = await refreshInventoryAssetsInPlace([assetId]);
+  if (showLogbook && updatedAsset) showBulkMaintenanceLogModal(updatedAsset);
   if (document.getElementById('maintenance-section')?.classList.contains('active')) loadMaintenanceAssets();
 }
 
@@ -25032,13 +25515,8 @@ async function submitBulkMaintenanceResolution(assetId, faultKey) {
     closeBulkMaintenanceResolutionModal();
     showNotification('success', 'Bulk maintenance log resolved');
 
-    const assetsResponse = await apiCall('/api/assets');
-    if (assetsResponse.success) {
-      assets = assetsResponse.data || [];
-      const updatedAsset = getAssetByApiIdentifier(assetId);
-      if (updatedAsset) showBulkMaintenanceLogModal(updatedAsset);
-    }
-    if (document.getElementById('inventory-section')?.classList.contains('active')) loadInventory();
+    const [updatedAsset] = await refreshInventoryAssetsInPlace([assetId]);
+    if (updatedAsset) showBulkMaintenanceLogModal(updatedAsset);
     if (document.getElementById('maintenance-section')?.classList.contains('active')) loadMaintenanceAssets();
   } catch (error) {
     showNotification('error', `Failed to resolve bulk maintenance log: ${error.message}`);
@@ -25797,31 +26275,16 @@ async function deleteMaintenanceLog(assetId, logIndex, logId) {
     if (response && response.success) {
       showNotification('success', 'Maintenance log deleted and asset status updated');
       
-      // Force reload from server to get fresh data including updated status
       try {
-        const assetsResponse = await apiCall('/api/assets');
-        if (assetsResponse.success) {
-          // Update the global assets array
-          assets = assetsResponse.data;
-          const updatedAsset = assets.find(a => a.id === assetId);
-          if (updatedAsset) {
-            // Close any existing edit modals first
-            const editModal = document.getElementById('editMaintenanceLogModal');
-            if (editModal) {
-              editModal.remove();
-            }
-            
-            // Show refreshed maintenance log modal
-            showMaintenanceLogModal(updatedAsset);
-          }
-        } else {
-          closeMaintenanceLogModal();
-          showNotification('info', 'Please refresh the page to see updated logs');
+        const [updatedAsset] = await refreshInventoryAssetsInPlace([assetId]);
+        if (updatedAsset) {
+          document.getElementById('editMaintenanceLogModal')?.remove();
+          showMaintenanceLogModal(updatedAsset);
         }
       } catch (reloadError) {
         console.warn('Could not reload asset data:', reloadError);
         closeMaintenanceLogModal();
-        showNotification('info', 'Log deleted. Please refresh the page to see updated logs and asset status');
+        showNotification('info', 'The log was deleted, but the updated asset could not be displayed');
       }
     } else {
       console.error('API returned error or no response:', response);
@@ -26449,28 +26912,15 @@ async function saveEnhancedMaintenanceLog(assetId, logIndex, logId) {
       showNotification('success', 'Maintenance log updated successfully');
       cancelEditMaintenanceLogModal();
       
-      // Refresh the maintenance log modal
-      const asset = assets.find(a => a.id === assetId);
-      if (asset) {
-        // Force reload from server to get fresh data
-        const assetsResponse = await apiCall('/api/assets');
-        if (assetsResponse.success) {
-          assets = assetsResponse.data;
-          const updatedAsset = assets.find(a => a.id === assetId);
-          if (updatedAsset) {
-            const fn =
-              (typeof window.showMaintenanceLogModal === 'function') ? window.showMaintenanceLogModal :
-              (typeof showMaintenanceLogModal === 'function') ? showMaintenanceLogModal :
-              null;
+      const [updatedAsset] = await refreshInventoryAssetsInPlace([assetId]);
+      if (updatedAsset) {
+        const fn =
+          (typeof window.showMaintenanceLogModal === 'function') ? window.showMaintenanceLogModal :
+          (typeof showMaintenanceLogModal === 'function') ? showMaintenanceLogModal :
+          null;
 
-            if (fn) {
-              fn(updatedAsset);
-            } else {
-              // avoid throwing a ReferenceError after a successful save
-              console.warn('showMaintenanceLogModal is not available; skipping modal refresh');
-            }
-          }
-        }
+        if (fn) fn(updatedAsset);
+        else console.warn('showMaintenanceLogModal is not available; skipping modal refresh');
       }
     }
   } catch (error) {
@@ -28874,7 +29324,11 @@ function getDeliveryOrderAssetCatalog() {
     const label = [brand, model].filter(Boolean).join(' ') || description || String(asset.id || 'Asset');
     const detail = description && description.toLowerCase() !== label.toLowerCase() ? description : '';
     const key = [department, brand, model, description].map(value => value.toLowerCase()).join('|');
-    if (!grouped.has(key)) grouped.set(key, { department, brand, model, description, label, detail });
+    if (!grouped.has(key)) grouped.set(key, { department, brand, model, description, label, detail, tags: [] });
+    grouped.get(key).tags = normalizeAssetTags([
+      ...grouped.get(key).tags,
+      ...normalizeAssetTags(asset.tags),
+    ]);
   });
   return Array.from(grouped.values()).sort((a, b) =>
     a.department.localeCompare(b.department) || a.label.localeCompare(b.label, undefined, { numeric: true })
@@ -29259,7 +29713,7 @@ async function populateDeliveryItemsPreview(event) {
         return;
       }
       const matches = catalog.filter(item =>
-        [item.label, item.detail, item.brand, item.model, item.department].join(' ').toLowerCase().includes(query)
+        [item.label, item.detail, item.brand, item.model, item.department, ...(item.tags || [])].join(' ').toLowerCase().includes(query)
       ).slice(0, 12);
       catalogResults.innerHTML = matches.map((item, index) => `
         <button type="button" class="do-catalog-result" data-catalog-index="${index}">
@@ -29717,6 +30171,23 @@ function eventIdsFromRealtimePayload(payload) {
   return Array.from(ids);
 }
 
+function inventoryAssetIdsFromRealtimePayload(payload) {
+  const ids = new Set();
+  const addDetails = details => {
+    if (!details || typeof details !== 'object') return;
+    const values = [details.assetId];
+    if (Array.isArray(details.assetIds)) values.push(...details.assetIds);
+    else if (details.assetIds) values.push(details.assetIds);
+    values.forEach(value => {
+      const assetId = String(value || '').trim();
+      if (assetId) ids.add(assetId);
+    });
+  };
+  addDetails(payload?.details);
+  (payload?.details?.changes || []).forEach(change => addDetails(change?.details));
+  return Array.from(ids);
+}
+
 function realtimePayloadHasAction(payload, actionName) {
   const target = String(actionName || '').trim().toLowerCase();
   if (!target) return false;
@@ -30014,7 +30485,7 @@ async function refreshVisibleDataFromRealtime() {
         await loadReturnEvents();
         break;
       case "inventory":
-        await loadInventory();
+        await refreshInventoryAssetsInPlace();
         break;
       case "containers":
         await loadContainers();
@@ -30122,6 +30593,12 @@ function connectRealtimeUpdates() {
       }
       const eventIds = eventIdsFromRealtimePayload(payload);
       const topics = realtimeTopicsFromPayload(payload);
+      if (getActiveSectionId() === 'inventory' && topics.includes('inventory-data')) {
+        refreshInventoryAssetsInPlace(inventoryAssetIdsFromRealtimePayload(payload)).catch(error => {
+          console.warn('Inventory live update failed:', error);
+        });
+        return;
+      }
       if (
         eventIds.length &&
         topics.length &&
@@ -32125,7 +32602,7 @@ function getFilteredInventoryData() {
 
   let filteredAssets = sourceAssets.filter((asset) => {
     const deptMeta = getDepartmentMeta(asset.department);
-    const searchableText = `${asset.id || ''} ${asset.internalId || ''} ${asset.bulkId || ''} ${asset.brand || ''} ${asset.model || ''} ${asset.serial || ''} ${asset.serial2 || ''} ${asset.description || ''} ${asset.dateOfPurchase || asset.purchaseDate || ''} ${asset.dateAdded || ''} ${asset.dateModified || ''} ${asset.department || ''} ${deptMeta.name || ''}`.toLowerCase();
+    const searchableText = `${asset.id || ''} ${asset.internalId || ''} ${asset.bulkId || ''} ${asset.brand || ''} ${asset.model || ''} ${asset.serial || ''} ${asset.serial2 || ''} ${asset.description || ''} ${assetTagSearchText(asset)} ${asset.dateOfPurchase || asset.purchaseDate || ''} ${asset.dateAdded || ''} ${asset.dateModified || ''} ${asset.department || ''} ${deptMeta.name || ''}`.toLowerCase();
     const matchesSearch = !filters.searchTerm || searchableText.includes(filters.searchTerm);
     const matchesDept = filters.departmentFilterTotal === 0 || filters.deptFilters.includes(asset.department);
     const condition = getAssetConditionStatus(asset);

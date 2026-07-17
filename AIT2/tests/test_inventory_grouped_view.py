@@ -34,6 +34,23 @@ def test_inventory_script_groups_models_and_weights_availability_quantities():
     assert "conditionCounts.ooc, 'Out of commission'" in script
 
 
+def test_add_asset_warns_before_submitting_mismatched_serial_counts():
+    template = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
+    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+
+    assert "function addAssetSerialMismatchMessage(assetData)" in script
+    assert "function addAssetPrimarySerialPreviewState(assetData)" in script
+    assert "serialCount === 0" in script
+    assert "serialCount === quantity" in script
+    assert "renderAddAssetPreview(serialState.className" in script
+    assert "Serial number count does not match" in script
+    assert "Add Anyway" in script
+    assert "Review Serial Numbers" in script
+    assert "assetData.confirmSerialMismatch = true" in script
+    assert ".add-asset-preview.warning" in template
+    assert ".add-asset-preview-status" in template
+
+
 def test_asset_history_uses_timeline_and_event_cards():
     template = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
     script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
@@ -77,6 +94,29 @@ def test_maintenance_log_controls_use_custom_coloured_selectors_and_drop_upload(
     assert "enhanceMaintenanceCustomSelect(selectEl, 'type')" in script
     assert "function setupMaintenanceMediaDropzone(inputId, listId, dropzoneId)" in script
     assert "input.files = transfer.files" in script
+
+
+def test_maintenance_status_changes_update_inventory_in_place():
+    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+
+    assert "async function refreshInventoryAssetsInPlace(assetIds = [])" in script
+    assert "displayFilteredInventory();" in script
+    assert "inventoryAssetIdsFromRealtimePayload(payload)" in script
+    assert "topics.includes('inventory-data')" in script
+
+    submit_source = script[
+        script.index('const maintenanceForm = document.getElementById("maintenanceForm")'):
+        script.index('const maintenanceMediaFiles = document.getElementById("maintenanceMediaFiles")')
+    ]
+    assert "await refreshInventoryAssetsInPlace(Array.from(succeededIds));" in submit_source
+    assert "loadInventory();" not in submit_source
+
+    edit_source = script[
+        script.index("async function saveEnhancedMaintenanceLog"):
+        script.index("async function saveMaintenanceLogSilent")
+    ]
+    assert "refreshInventoryAssetsInPlace([assetId])" in edit_source
+    assert "loadInventory();" not in edit_source
 
 
 def test_asset_history_status_changes_use_status_specific_badges():
@@ -284,3 +324,48 @@ def test_prepare_extras_stay_in_matching_requirement_rows():
     assert "options.extra ? 'extra' : 'assigned'" in script
     assert ".prepare-new-asset-card.assigned.extra" in template
     assert ".prepare-new-status-extra" in template
+
+
+def test_asset_group_merge_warning_requires_checkbox_confirmation():
+    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+
+    assert "title: 'Asset groups will be merged'" in script
+    assert "checkboxLabel: 'I understand that these assets will be merged into the existing model group.'" in script
+    assert "requireCheckbox: true" in script
+    assert "confirmButton.disabled = requiresCheckbox && !confirmationCheckbox.checked" in script
+    assert "payload.confirmModelGroupMerge = true" in script
+
+
+def test_inventory_shift_click_selects_the_visible_asset_range():
+    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+
+    assert "let lastInventorySelectionAnchorId = '';" in script
+    assert "function inventoryVisibleSelectableAssetIds()" in script
+    assert "selectionEvent?.shiftKey && anchorIndex >= 0 && currentIndex >= 0" in script
+    assert "visibleIds.slice(rangeStart, rangeEnd + 1).forEach" in script
+    assert 'onclick="toggleInventoryAssetSelection(this.dataset.assetId,this.checked,event)"' in script
+
+
+def test_asset_tags_use_removable_inventory_chips_and_hidden_search_metadata():
+    template = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
+    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+
+    assert 'id="assetTagsEditor"' in template
+    assert '.asset-tag-editor' in template
+    assert '.inventory-tag-remove' in template
+    assert 'background: #fff3df' in template
+    assert 'color: #9a4d08 !important' in template
+    assert '<span>Tags</span><span>Availability</span>' in script
+    assert 'class="inventory-individual-tags"' in script
+    assert "function normalizeAssetTags(value)" in script
+    assert "function assetTagEditorKeydown(event, editorId)" in script
+    assert "function removeInventoryAssetTag(" in script
+    assert "tags: assetTagEditorTags('assetTagsEditor')" in script
+    assert "tags: assetTagEditorTags('editAssetTagsEditor')" in script
+    assert "title: 'Apply tags to matching assets?'" in script
+    assert 'payload.tagsToApplyToSimilar = addedTags' in script
+    assert 'assetData.tagsToApplyToSimilar = assetData.tags' in script
+    assert script.count("inventoryAssetTagsHtml(") == 3
+    assert "assetTagSearchText(asset)" in script
+    assert "const assetTags = (group?.assets || []).map(assetTagSearchText);" in script
+    assert "...(item.tags || [])" in script

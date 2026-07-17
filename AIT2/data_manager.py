@@ -18,6 +18,7 @@ from models import (
     LogEntry,
     User,
     hash_password,
+    normalize_asset_tags,
     normalize_user_role,
     normalize_event_state,
 )
@@ -31,7 +32,7 @@ REQUIRED_DATA_FILES = ('Inventory.csv', 'Logs.csv', 'Users.csv', 'Containers.csv
 UTF8_ENCODINGS = ('utf-8', 'utf-8-sig')
 INVENTORY_FIELDNAMES = [
     'AssetID', 'Brand', 'ModelNumber', 'SerialNumber', 'SecondarySerialNumber', 'Description', 'DateOfPurchase',
-    'DateAdded', 'DateModified', 'ChangeHistory', 'Notes',
+    'DateAdded', 'DateModified', 'ChangeHistory', 'Notes', 'Tags',
     'IsMissing', 'IsOOC', 'IsDegraded', 'IsDisposed', 'IsBulk', 'Quantity',
     'MaintenanceLogs', 'DepartmentCode', 'DefaultLocation', 'CurrentLocation'
 ]
@@ -848,7 +849,8 @@ class DataManager:
                     date_added=row.get('DateAdded', ''),
                     date_modified=row.get('DateModified', ''),
                     change_history=load_asset_change_history(row.get('ChangeHistory', '')),
-                    notes=row.get('Notes', '')
+                    notes=row.get('Notes', ''),
+                    tags=normalize_asset_tags(row.get('Tags', '')),
                 )
 
                 if item.asset_id:
@@ -894,6 +896,7 @@ class DataManager:
                     'DateModified': getattr(item, 'date_modified', ''),
                     'ChangeHistory': dump_asset_change_history(getattr(item, 'change_history', [])),
                     'Notes': getattr(item, 'notes', ''),
+                    'Tags': json.dumps(normalize_asset_tags(getattr(item, 'tags', [])), ensure_ascii=False),
                     'IsMissing': item.is_missing,
                     'IsOOC': item.is_ooc,
                     'IsDegraded': getattr(item, 'is_degraded', False),

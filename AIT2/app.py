@@ -72,6 +72,7 @@ from models import (
     format_user_phone,
     normalize_user_role,
     normalize_event_state,
+    normalize_asset_tags,
     user_role_is_adminish,
 )
 from utils import sanitize_filename
@@ -1878,14 +1879,14 @@ def _ranges_overlap(a_start, a_end, b_start, b_end):
         return False
     return ad1 <= bd2 and bd1 <= ad2
 
-def invalidate_cache():
+def invalidate_cache(realtime_details=None):
     """Invalidate the asset cache when data changes"""
     reset_cache()
     # The current process made this change, so its in-memory manager is already
     # authoritative. Recording the new file signature prevents the next request
     # from mistaking our own write for an external update and reloading all CSVs.
     mark_data_snapshot_current()
-    mark_realtime_change('inventory-data')
+    mark_realtime_change('inventory-data', realtime_details)
 
 
 def reset_cache():
@@ -2714,6 +2715,29 @@ def _asset_id_plan_for_request(data):
 
 
 
+def _asset_serial_count_mismatches(data, quantity, is_bulk=False):
+    """Describe entered serial lists that do not match the requested quantity."""
+    if is_bulk:
+        return []
+
+    data = data or {}
+    groups = (
+        ('primary', data.get('serials'), False),
+        ('secondary', data.get('secondarySerials'), True),
+    )
+    mismatches = []
+    for label, values, optional in groups:
+        if not isinstance(values, list):
+            continue
+        count = sum(1 for value in values if str(value or '').strip())
+        if count != quantity and not (optional and count == 0):
+            mismatches.append({
+                'type': label,
+                'count': count,
+                'quantity': quantity,
+            })
+    return mismatches
+
 
 def _is_bulk_asset(asset):
     return bool(getattr(asset, 'is_bulk', False))
@@ -2761,6 +2785,7 @@ ASSET_AUDIT_FIELD_LABELS = {
     'status': 'Asset Status',
     'quantity': 'Quantity',
     'notes': 'Notes',
+    'tags': 'Tags',
 }
 
 
@@ -2787,6 +2812,7 @@ def _asset_audit_snapshot(asset):
         'status': _asset_condition_status(asset),
         'quantity': max(1, _safe_int(getattr(asset, 'quantity', 1), 1)) if _is_bulk_asset(asset) else 1,
         'notes': getattr(asset, 'notes', ''),
+        'tags': normalize_asset_tags(getattr(asset, 'tags', [])),
     }
 
 
@@ -4802,6 +4828,7 @@ def _append_bulk_assignments_to_model_groups(model_groups, event):
             'serial': '',
             'status': 'returned' if value in returned_values else 'prepared',
             'location': bulk_asset.current_location or bulk_asset.default_location or '',
+            'tags': normalize_asset_tags(getattr(bulk_asset, 'tags', [])),
             'quantity': marker['quantity'],
             'isBulk': True,
             'displayId': '',
@@ -4902,6 +4929,7 @@ def _append_orphan_extra_assignments_to_model_groups(model_groups, event):
             'id': asset_id,
             'serial': asset.serial_number,
             'serial2': getattr(asset, 'secondary_serial_number', ''),
+            'tags': normalize_asset_tags(getattr(asset, 'tags', [])),
             'status': 'returned' if asset_id in returned_values else 'prepared',
             'location': asset.current_location,
             'quantity': 1,
@@ -4996,6 +5024,7 @@ def _bulk_asset_to_available_dict(asset, target_event=None):
         'brand': asset.brand,
         'model': asset.model_number,
         'description': asset.description or '',
+        'tags': normalize_asset_tags(getattr(asset, 'tags', [])),
         'serial': '',
         'dateOfPurchase': getattr(asset, 'date_of_purchase', ''),
         'purchaseDate': getattr(asset, 'date_of_purchase', ''),
@@ -5064,6 +5093,7 @@ def _asset_to_available_dict(asset):
         'brand': asset.brand,
         'model': asset.model_number,
         'description': asset.description or '',
+        'tags': normalize_asset_tags(getattr(asset, 'tags', [])),
         'serial': asset.serial_number,
         'serial2': getattr(asset, 'secondary_serial_number', ''),
         'dateOfPurchase': getattr(asset, 'date_of_purchase', ''),
@@ -5176,6 +5206,7 @@ def get_available_assets_for_event(event_id):
                 'brand': asset.brand,
                 'model': asset.model_number,
                 'description': getattr(asset, 'description', '') or '',
+                'tags': normalize_asset_tags(getattr(asset, 'tags', [])),
                 'department': asset.department_code,
                 'serial': (getattr(asset, 'serial_number', None) or getattr(asset, 'serial', None) or ''),
                 'serial2': getattr(asset, 'secondary_serial_number', ''),
@@ -12425,6 +12456,7 @@ def get_events():
                                         'id': specific_asset_id,
                                         'serial': specific_asset.serial_number,
                                         'serial2': getattr(specific_asset, 'secondary_serial_number', ''),
+                                        'tags': normalize_asset_tags(getattr(specific_asset, 'tags', [])),
                                         'status': asset_status,
                                         'location': specific_asset.current_location,
                                         'quantity': 1,
@@ -12649,6 +12681,7 @@ def get_event(event_id):
                         'brand': asset.brand,
                         'model': asset.model_number,
                         'description': asset.description,
+                        'tags': normalize_asset_tags(getattr(asset, 'tags', [])),
                         'serial': asset.serial_number,
                         'serial2': getattr(asset, 'secondary_serial_number', ''),
                         'status': status,
@@ -12705,6 +12738,7 @@ def get_event(event_id):
                         'brand': asset.brand,
                         'model': asset.model_number,
                         'description': asset.description,
+                        'tags': normalize_asset_tags(getattr(asset, 'tags', [])),
                         'serial': asset.serial_number,
                         'serial2': getattr(asset, 'secondary_serial_number', ''),
                         'status': status,
@@ -12792,6 +12826,7 @@ def get_event(event_id):
                                         'id': specific_asset_id,
                                         'serial': specific_asset.serial_number,
                                         'serial2': getattr(specific_asset, 'secondary_serial_number', ''),
+                                        'tags': normalize_asset_tags(getattr(specific_asset, 'tags', [])),
                                         'status': asset_status,
                                         'location': specific_asset.current_location,
                                         'quantity': 1,
@@ -12841,6 +12876,7 @@ def get_event(event_id):
                 'brand': bulk_asset.brand,
                 'model': bulk_asset.model_number,
                 'description': bulk_asset.description,
+                'tags': normalize_asset_tags(getattr(bulk_asset, 'tags', [])),
                 'serial': '',
                 'status': status,
                 'location': bulk_asset.current_location or bulk_asset.default_location,
@@ -13460,6 +13496,10 @@ def delete_maintenance_log(asset_id, log_index):
         
         # Save changes
         data_manager.save_inventory()
+        invalidate_cache({
+            'assetIds': [asset_id],
+            'action': 'maintenance-log-deleted',
+        })
         
         # Log the action
         media_text = f" and {deleted_media_count} media file(s)" if deleted_media_count else ""
@@ -15946,6 +15986,7 @@ def _transfer_office_candidate_payload(asset):
         'brand': asset.brand,
         'model': asset.model_number,
         'description': asset.description or '',
+        'tags': normalize_asset_tags(getattr(asset, 'tags', [])),
         'serial': asset.serial_number,
         'serial2': getattr(asset, 'secondary_serial_number', ''),
         'status': _asset_status_value(asset),
@@ -16000,6 +16041,7 @@ def _transfer_asset_payload(asset, state='', from_event=None, to_event=None, rea
         'brand': asset.brand,
         'model': asset.model_number,
         'description': asset.description,
+        'tags': normalize_asset_tags(getattr(asset, 'tags', [])),
         'serial': asset.serial_number,
         'serial2': getattr(asset, 'secondary_serial_number', ''),
         'status': _asset_status_value(asset),
@@ -16873,6 +16915,7 @@ def get_assets():
                 'serial': asset.serial_number,
                 'serial2': getattr(asset, 'secondary_serial_number', ''),
                 'description': asset.description,
+                'tags': normalize_asset_tags(getattr(asset, 'tags', [])),
                 'dateOfPurchase': getattr(asset, 'date_of_purchase', ''),
                 'purchaseDate': getattr(asset, 'date_of_purchase', ''),
                 'dateAdded': getattr(asset, 'date_added', ''),
@@ -16927,7 +16970,7 @@ def get_assets():
                 asset for asset in assets_data
                 if any(
                     query in str(asset.get(field) or '').lower()
-                    for field in ('id', 'internalId', 'brand', 'model', 'serial', 'serial2', 'description')
+                    for field in ('id', 'internalId', 'brand', 'model', 'serial', 'serial2', 'description', 'tags')
                 )
             ]
         if department_filter:
@@ -17059,6 +17102,7 @@ def _asset_check_asset_to_dict(asset, group_key):
         'brand': asset.brand,
         'model': asset.model_number,
         'description': asset.description or '',
+        'tags': normalize_asset_tags(getattr(asset, 'tags', [])),
         'serial': asset.serial_number or '',
         'serial2': getattr(asset, 'secondary_serial_number', '') or '',
         'department': asset.department_code,
@@ -17456,6 +17500,7 @@ def get_event_assets(event_id):
                 'brand': asset.brand,
                 'model': asset.model_number,
                 'description': asset.description,
+                'tags': normalize_asset_tags(getattr(asset, 'tags', [])),
                 'serial': asset.serial_number,
                 'serial2': getattr(asset, 'secondary_serial_number', ''),
                 'department': asset.department_code,
@@ -17480,9 +17525,45 @@ def create_asset():
             data.get('dateOfPurchase', data.get('purchaseDate', ''))
         )
         notes = str(data.get('notes', '') or '').strip()
+        tags = normalize_asset_tags(data.get('tags', []))
+        tags_to_apply_to_similar = normalize_asset_tags(data.get('tagsToApplyToSimilar', []))
 
         with _inventory_action_lock:
             plan = _asset_id_plan_for_request(data)
+            similar_tag_targets = []
+            similar_tag_audit_before = []
+            if tags_to_apply_to_similar:
+                requested_group = {
+                    'department': plan['department'],
+                    'brand': plan['brand'],
+                    'model': plan['model'],
+                }
+                similar_tag_targets = [
+                    item for item in data_manager.inventory.values()
+                    if _asset_matches_group(item, requested_group)
+                ]
+                similar_tag_audit_before = [
+                    (target, _asset_audit_snapshot(target))
+                    for target in similar_tag_targets
+                ]
+            serial_mismatches = _asset_serial_count_mismatches(
+                data,
+                plan['quantity'],
+                plan['isBulk'],
+            )
+            if serial_mismatches and not _request_bool(data.get('confirmSerialMismatch')):
+                mismatch_summary = ', '.join(
+                    f"{item['type']} {item['count']}/{item['quantity']}"
+                    for item in serial_mismatches
+                )
+                return jsonify({
+                    'error': f'Serial number count does not match asset quantity ({mismatch_summary})',
+                    'requiresSerialMismatchConfirmation': True,
+                    'data': {
+                        'quantity': plan['quantity'],
+                        'mismatches': serial_mismatches,
+                    },
+                }), 409
             audit_timestamp = _asset_audit_timestamp()
             audit_user = _asset_audit_user()
 
@@ -17510,7 +17591,8 @@ def create_asset():
                     is_bulk=True,
                     quantity=plan['quantity'],
                     date_of_purchase=purchase_date,
-                    notes=notes
+                    notes=notes,
+                    tags=tags,
                 )
                 _mark_asset_created(asset, timestamp=audit_timestamp, user=audit_user)
                 data_manager.inventory[created_asset_ids[0]] = asset
@@ -17535,11 +17617,31 @@ def create_asset():
                         is_bulk=False,
                         quantity=1,
                         date_of_purchase=purchase_date,
-                        notes=notes
+                        notes=notes,
+                        tags=tags,
                     )
                     _mark_asset_created(asset, timestamp=audit_timestamp, user=audit_user)
                     data_manager.inventory[asset_id] = asset
                     created_asset_ids.append(asset_id)
+
+            matching_assets_tagged = 0
+            for target, before_snapshot in similar_tag_audit_before:
+                target.tags = normalize_asset_tags(
+                    normalize_asset_tags(getattr(target, 'tags', [])) + tags_to_apply_to_similar
+                )
+                changes = _asset_audit_changes(
+                    before_snapshot,
+                    _asset_audit_snapshot(target),
+                    fields=('tags',),
+                )
+                if _append_asset_change_history(
+                    target,
+                    changes,
+                    timestamp=audit_timestamp,
+                    user=audit_user,
+                    action='updated',
+                ):
+                    matching_assets_tagged += 1
 
             data_manager.save_inventory()
 
@@ -17566,7 +17668,8 @@ def create_asset():
             'assetId': created_asset_ids[0],
             'assetIds': created_asset_ids,
             'prefix': plan.get('prefix', ''),
-            'count': len(created_asset_ids)
+            'count': len(created_asset_ids),
+            'matchingAssetsTagged': matching_assets_tagged,
         })
     except ValueError as e:
         return jsonify({'error': str(e)}), 400
@@ -17988,6 +18091,7 @@ def update_asset(asset_id):
 
         data = request.get_json() or {}
         apply_to = (data.get('applyTo') or 'single').strip()
+        tags_to_apply_to_similar = normalize_asset_tags(data.get('tagsToApplyToSimilar', []))
 
         if apply_to not in ('single', 'allSimilar'):
             return jsonify({'error': 'Invalid applyTo value'}), 400
@@ -18034,6 +18138,39 @@ def update_asset(asset_id):
             ]
         else:
             target_assets = [asset]
+
+        model_group_changed = not _asset_matches_group(asset, new_group)
+        target_asset_object_ids = {id(item) for item in target_assets}
+        merge_destination_assets = [
+            item for item in data_manager.inventory.values()
+            if id(item) not in target_asset_object_ids and _asset_matches_group(item, new_group)
+        ] if model_group_changed else []
+
+        tag_target_assets = []
+        if tags_to_apply_to_similar:
+            if model_group_changed:
+                tag_target_assets = [*target_assets, *merge_destination_assets]
+            else:
+                tag_target_assets = [
+                    item for item in data_manager.inventory.values()
+                    if _asset_matches_group(item, old_group)
+                ]
+
+        if merge_destination_assets and not _request_bool(data.get('confirmModelGroupMerge')):
+            return jsonify({
+                'error': 'Confirm that you want to merge these asset model groups',
+                'requiresModelGroupMergeConfirmation': True,
+                'mergeDetails': {
+                    'sourceCount': len(target_assets),
+                    'existingCount': len(merge_destination_assets),
+                    'group': {
+                        'department': new_group['department'],
+                        'brand': new_group['brand'],
+                        'model': new_group['model'],
+                    },
+                },
+            }), 409
+
         target_asset_ids_before = [
             str(getattr(item, 'asset_id', '') or '').strip()
             for item in target_assets
@@ -18042,9 +18179,16 @@ def update_asset(asset_id):
 
         audit_timestamp = _asset_audit_timestamp()
         audit_user = _asset_audit_user()
+        audit_targets = []
+        audited_object_ids = set()
+        for target in [*target_assets, *tag_target_assets]:
+            if id(target) in audited_object_ids:
+                continue
+            audited_object_ids.add(id(target))
+            audit_targets.append(target)
         audit_before = [
             (target, _asset_audit_snapshot(target))
-            for target in target_assets
+            for target in audit_targets
         ]
 
         # For single-asset model-type edits, remember event references
@@ -18101,6 +18245,14 @@ def update_asset(asset_id):
 
         if 'notes' in data:
             asset.notes = str(data.get('notes', '') or '').strip()
+
+        if 'tags' in data:
+            asset.tags = normalize_asset_tags(data.get('tags'))
+
+        for target in tag_target_assets:
+            target.tags = normalize_asset_tags(
+                normalize_asset_tags(getattr(target, 'tags', [])) + tags_to_apply_to_similar
+            )
 
         if 'isMissing' in data:
             asset.is_missing = bool(data.get('isMissing'))
@@ -18238,6 +18390,7 @@ def update_asset(asset_id):
                 events_updated += 1
 
         audit_updates = 0
+        tag_audit_updates = 0
         for target, before_snapshot in audit_before:
             changes = _asset_audit_changes(before_snapshot, _asset_audit_snapshot(target))
             if _append_asset_change_history(
@@ -18248,6 +18401,8 @@ def update_asset(asset_id):
                 action='updated'
             ):
                 audit_updates += 1
+                if any(change.get('field') == 'tags' for change in changes):
+                    tag_audit_updates += 1
 
         data_manager.save_inventory(drop_asset_ids=[old_asset_id] if new_asset_id != old_asset_id else None)
 
@@ -18287,7 +18442,8 @@ def update_asset(asset_id):
                 'idReferencesChanged': id_references_changed,
                 'modelReferencesChanged': model_references_changed,
                 'financeDocumentsUpdated': bool(finance_documents_updated),
-                'auditUpdates': audit_updates
+                'auditUpdates': audit_updates,
+                'taggedAssets': tag_audit_updates,
             }
         })
 
@@ -18411,7 +18567,10 @@ def _maintain_bulk_asset(asset_id, asset, data):
         apply_maintenance_log_changes(asset, entry)
 
         data_manager.save_inventory()
-        invalidate_cache()
+        invalidate_cache({
+            'assetIds': [asset_id],
+            'action': 'maintenance-added',
+        })
         log_action(f"Cleared bulk asset status for asset {asset_id}: {log_entry_text}")
 
         return jsonify({'success': True, 'message': 'Bulk asset status cleared successfully'})
@@ -18472,7 +18631,10 @@ def _maintain_bulk_asset(asset_id, asset, data):
     asset.maintenance_logs.extend(created_entries)
 
     data_manager.save_inventory()
-    invalidate_cache()
+    invalidate_cache({
+        'assetIds': [asset_id],
+        'action': 'maintenance-added',
+    })
 
     log_action(
         f"Logged {affected_quantity} bulk maintenance {target_status.upper()} "
@@ -18628,7 +18790,10 @@ def maintain_assets_batch():
 
         if changed_count:
             data_manager.save_inventory()
-            invalidate_cache()
+            invalidate_cache({
+                'assetIds': [item['assetId'] for item in successes if not item['duplicate']],
+                'action': 'maintenance-added',
+            })
             log_action(
                 f"Maintenance logged for {changed_count} asset"
                 f"{'s' if changed_count != 1 else ''}: {str(data.get('logEntry') or '').strip()}"
@@ -18686,7 +18851,10 @@ def maintain_asset(asset_id):
             return jsonify(result), status_code
 
         data_manager.save_inventory()
-        invalidate_cache()
+        invalidate_cache({
+            'assetIds': [asset_id],
+            'action': 'maintenance-added',
+        })
         target_status, _, _ = _status_changes_for_request(
             data,
             current_status=None
@@ -18797,7 +18965,10 @@ def update_bulk_maintenance_fault_log(asset_id, fault_log_id):
         asset.maintenance_logs[log_index] = updated_log
 
         data_manager.save_inventory()
-        invalidate_cache()
+        invalidate_cache({
+            'assetIds': [asset_id],
+            'action': 'maintenance-log-updated',
+        })
         log_action(
             f"Updated bulk maintenance log #{fault_entry.get('logNumber')} "
             f"for asset {asset_id}: {log_entry_text}"
@@ -18889,7 +19060,10 @@ def resolve_bulk_maintenance_log(asset_id, fault_log_id):
         apply_maintenance_log_changes(asset, entry)
 
         data_manager.save_inventory()
-        invalidate_cache()
+        invalidate_cache({
+            'assetIds': [asset_id],
+            'action': 'maintenance-resolved',
+        })
         log_action(
             f"Resolved bulk maintenance log #{fault_entry.get('logNumber')} for asset {asset_id}: {log_entry_text}"
         )
@@ -19125,6 +19299,10 @@ def update_maintenance_log_enhanced(asset_id, log_index):
 
         # Save changes
         data_manager.save_inventory()
+        invalidate_cache({
+            'assetIds': [asset_id],
+            'action': 'maintenance-log-updated',
+        })
 
         # Log the action
         changes_text = f" (also: {', '.join(change_labels)})" if change_labels else ""
@@ -21656,8 +21834,12 @@ def _finance_rate_card_rows(finance_data):
             'department': department,
             'departmentCode': department_code,
             'sourceAssetIds': [],
+            'searchTags': [],
         })
         canonical['sourceAssetIds'].append(str(asset_id))
+        canonical['searchTags'] = normalize_asset_tags(
+            canonical['searchTags'] + normalize_asset_tags(getattr(asset, 'tags', []))
+        )
 
     inventory_signatures = {
         (
@@ -21709,6 +21891,7 @@ def _finance_rate_card_rows(finance_data):
             'unitPrice': line.get('unitPrice') or 0,
             'uom': line.get('uom') or 'units',
             'isCustom': bool(line.get('isCustom') or not catalog_key),
+            'searchTags': line.get('searchTags') or [],
         }
 
     for document in finance_data.get('documents') or []:
@@ -23021,7 +23204,8 @@ def finance_catalog():
         model = str(getattr(asset, 'model_number', '') or '').strip()
         description = str(getattr(asset, 'description', '') or '').strip()
         display = ' '.join(value for value in (brand, model, description) if value)
-        haystack = f"{display} {department} {department_code}".lower()
+        tag_text = ' '.join(normalize_asset_tags(getattr(asset, 'tags', [])))
+        haystack = f"{display} {department} {department_code} {tag_text}".lower()
         if query and query not in haystack:
             continue
         key = _finance_catalog_key(department_code, brand, model, description)
@@ -23059,6 +23243,7 @@ def finance_catalog():
             model = str(getattr(asset, 'model_number', '') or '').strip()
             description = str(getattr(asset, 'description', '') or '').strip()
             display = _finance_display_description(brand, model, description) or model or description or asset_id
+            haystack_parts.extend(normalize_asset_tags(getattr(asset, 'tags', [])))
             key = _finance_catalog_key(department_code, brand, model, description)
             if key not in container_items:
                 container_items[key] = {
@@ -23187,6 +23372,7 @@ def finance_rate_card():
                         str(row.get('brand') or ''),
                         str(row.get('model') or ''),
                         str(row.get('description') or ''),
+                        ' '.join(normalize_asset_tags(row.get('searchTags') or [])),
                     )).casefold()
                 ]
             return jsonify({'success': True, 'data': rows[:500]})

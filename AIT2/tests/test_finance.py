@@ -793,6 +793,36 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertEqual(audio_child['unitPrice'], 444)
         self.assertEqual(audio_child['containerQuantity'], 1)
 
+    def test_catalog_and_rate_card_search_inventory_tags_without_displaying_them(self):
+        self.data_manager.inventory['AX#01'].tags = ['low-end', 'wireless']
+        self.data_manager.save_inventory()
+
+        catalog_rows = self.client.get(
+            '/api/finance/catalog', query_string={'query': 'wireless'},
+        ).get_json()['data']
+        inventory_row = next(row for row in catalog_rows if not row.get('isContainer'))
+        self.assertEqual(inventory_row['model'], 'SB18 III')
+        self.assertTrue(any(row.get('isContainer') for row in catalog_rows))
+        self.assertNotIn('tags', inventory_row)
+
+        quotation = self.create_quote('Tagged Rate Card')
+        quotation['lineItems'] = [{
+            **inventory_row,
+            'id': 'tagged-rate', 'days': 1, 'quantity': 1,
+            'unitPrice': 444, 'discountPercent': 0,
+        }]
+        saved = self.client.put(
+            f"/api/quotations/{quotation['id']}", json=quotation,
+        )
+        self.assertEqual(saved.status_code, 200, saved.get_data(as_text=True))
+
+        rate_rows = self.client.get(
+            '/api/finance/rate-card', query_string={'query': 'wireless'},
+        ).get_json()['data']
+        self.assertEqual(len(rate_rows), 1)
+        self.assertEqual(rate_rows[0]['model'], 'SB18 III')
+        self.assertEqual(rate_rows[0]['searchTags'], ['low-end', 'wireless'])
+
     def test_rate_card_lists_remembered_inventory_and_custom_items_by_user(self):
         quotation = self.create_quote('Rate Card Memory')
         inventory_line = self.client.get('/api/finance/catalog?query=SB18').get_json()['data'][0]

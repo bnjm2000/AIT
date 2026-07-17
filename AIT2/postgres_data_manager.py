@@ -34,6 +34,7 @@ from models import (
     User,
     normalize_user_role,
     normalize_event_state,
+    normalize_asset_tags,
 )
 
 
@@ -357,6 +358,7 @@ class PostgresDataManager(DataManager):
                 getattr(item, 'change_history', [])
             ),
             'notes': getattr(item, 'notes', ''),
+            'tags': normalize_asset_tags(getattr(item, 'tags', [])),
             'isMissing': bool(item.is_missing),
             'isOOC': bool(item.is_ooc),
             'isDegraded': bool(getattr(item, 'is_degraded', False)),
@@ -504,6 +506,7 @@ class PostgresDataManager(DataManager):
                         date_modified=data.get('dateModified', ''),
                         change_history=data.get('changeHistory') or [],
                         notes=data.get('notes', ''),
+                        tags=data.get('tags') or [],
                         is_missing=bool(data.get('isMissing', False)),
                         is_ooc=bool(data.get('isOOC', False)),
                         is_degraded=bool(data.get('isDegraded', False)),
