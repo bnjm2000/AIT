@@ -9687,6 +9687,27 @@ def _event_model_requirement_remaining_for_asset(event, asset):
     return max(required - non_extra_prepared_or_returned, 0)
 
 
+def _promote_matching_extra_assets(event):
+    """Use matching extras to fill model slots opened by an asset removal."""
+    if not event or not getattr(event, 'extra_assets', None):
+        return []
+
+    assigned_refs = set(getattr(event, 'actually_prepared', []) or [])
+    assigned_refs.update(getattr(event, 'returned_items', []) or [])
+    promoted = []
+    for asset_id in list(event.extra_assets):
+        if asset_id not in assigned_refs or not _is_real_asset_ref(asset_id):
+            continue
+        asset = data_manager.inventory.get(asset_id) if data_manager else None
+        if not asset or _event_model_requirement_remaining_for_asset(event, asset) <= 0:
+            continue
+        event.extra_assets.remove(asset_id)
+        _remove_direct_asset_ref_from_prepared_items(event, asset_id)
+        promoted.append(asset_id)
+
+    return promoted
+
+
 def _ensure_event_model_requirement_covers_asset(event, asset, additional_quantity=1):
     """Top up the event's model requirement so prepared container contents do not show as extra.
 
@@ -14883,6 +14904,15 @@ def unprepare_event_asset(event_id):
         if hasattr(event, 'extra_assets') and asset_id in event.extra_assets:
             event.extra_assets.remove(asset_id)
 
+        promoted_extra_assets = _promote_matching_extra_assets(event)
+        if promoted_extra_assets:
+            logger.info(
+                "Promoted extra asset(s) after removing %s from event %s: %s",
+                asset_id,
+                event_id,
+                promoted_extra_assets,
+            )
+
         # For regular assets, reset location to default
         if not _is_custom_ref(asset_id):
             asset = data_manager.inventory.get(asset_id)
@@ -15708,6 +15738,15 @@ def unassign_specific_asset_from_model(event_id):
             event.extra_assets.remove(asset_id)
         if asset_id in getattr(event, 'returned_items', []) or []:
             event.returned_items.remove(asset_id)
+
+        promoted_extra_assets = _promote_matching_extra_assets(event)
+        if promoted_extra_assets:
+            logger.info(
+                "Promoted extra asset(s) after unassigning %s from event %s: %s",
+                asset_id,
+                event_id,
+                promoted_extra_assets,
+            )
 
         # For regular assets, reset location
         if not _is_custom_ref(asset_id):

@@ -341,6 +341,30 @@ class PrepareQuickAddAndAdminDeleteTests(unittest.TestCase):
             for record in event.event_logs
         ))
 
+    def test_unassign_specific_asset_promotes_matching_extra(self):
+        event = self.make_event(
+            event_id=123,
+            prepared=['[MODEL]AX|TestBrand|TestModel|1|Matching item', 'A#02'],
+            actual=['A#01', 'A#02'],
+            extra=['A#02'],
+        )
+
+        self.login_as('normal')
+        response = self.client.post(
+            f'/api/events/{event.event_id}/unassign-specific',
+            json={'assetId': 'A#01'},
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertNotIn('A#01', event.actually_prepared)
+        self.assertIn('A#02', event.actually_prepared)
+        self.assertNotIn('A#02', event.extra_assets)
+        self.assertNotIn('A#02', event.prepared_items)
+        self.assertEqual(
+            event.prepared_items,
+            ['[MODEL]AX|TestBrand|TestModel|1|Matching item'],
+        )
+
     def test_bulk_unprepare_log_uses_name_without_internal_asset_id(self):
         bulk_id = 'BULK-INTERNAL-001'
         self.data_manager.inventory[bulk_id] = self.make_asset(
