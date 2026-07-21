@@ -31,6 +31,10 @@ let __realtimeReconnectTimer = null;
 let __realtimeLastEventId = "";
 let __eventAssetRefreshTimer = null;
 const __eventAssetRefreshIds = new Set();
+const EVENT_OVERVIEW_PAGE_SIZE = 30;
+const EVENT_OPTIONS_PAGE_SIZE = 100;
+let __allEventsLoadVersion = 0;
+let __allEventsProgressiveLoading = false;
 let assetLookupSource = null;
 let assetLookupById = new Map();
 
@@ -4045,6 +4049,59 @@ async function apiCall(endpoint, method = "GET", data = null) {
   }
 }
 
+function eventOptionsEndpoint(offset = 0, eventId = null) {
+  const params = new URLSearchParams({
+    view: 'options',
+    sort: 'id',
+    direction: 'desc',
+    limit: String(EVENT_OPTIONS_PAGE_SIZE),
+    offset: String(Math.max(0, Number(offset) || 0)),
+  });
+  if (eventId) params.set('eventId', String(eventId));
+  return `/api/events?${params.toString()}`;
+}
+
+function mergeEventsById(current, incoming) {
+  const byId = new Map((current || []).map(event => [Number(event.id), event]));
+  (incoming || []).forEach(event => byId.set(Number(event.id), event));
+  return Array.from(byId.values());
+}
+
+async function startProgressiveEventOptions(preferredEventId = null, onProgress = null) {
+  const firstResponse = await apiCall(eventOptionsEndpoint());
+  let loaded = firstResponse.data || [];
+
+  if (
+    preferredEventId &&
+    !loaded.some(event => Number(event.id) === Number(preferredEventId))
+  ) {
+    const preferredResponse = await apiCall(eventOptionsEndpoint(0, preferredEventId));
+    loaded = mergeEventsById(loaded, preferredResponse.data || []);
+  }
+
+  const completion = (async () => {
+    let meta = firstResponse.meta || {};
+    while (meta.hasMore) {
+      const response = await apiCall(eventOptionsEndpoint(meta.nextOffset));
+      loaded = mergeEventsById(loaded, response.data || []);
+      meta = response.meta || {};
+      if (onProgress) onProgress(loaded.slice(), meta);
+      if (!response.data?.length) break;
+      await new Promise(resolve => requestAnimationFrame(resolve));
+    }
+    return loaded;
+  })();
+
+  return { first: loaded.slice(), completion };
+}
+
+async function fetchEventSummary(eventId) {
+  const response = await apiCall(
+    `/api/events?view=summary&eventId=${encodeURIComponent(eventId)}&limit=1`
+  );
+  return response.data?.[0] || null;
+}
+
 function formatEventFileSize(bytes) {
   const size = Number(bytes || 0);
   if (size < 1024) return `${size} B`;
@@ -6416,8 +6473,10 @@ function usersAdminRowMarkup(user, index) {
       </td>
       <td class="users-admin-actions">
         <span class="user-admin-save-status is-saved" data-user-admin-save-status role="status" aria-live="polite"><span class="user-admin-save-mark" aria-hidden="true"></span><span data-user-admin-save-label>Saved</span></span>
-        <button type="button" class="btn btn-warning btn-sm" onclick="openResetPasswordModal(encodeURIComponent(this.closest('[data-user-admin-row]').dataset.originalUsername))" ${canEditUser ? '' : 'disabled'}>Reset Password</button>
-        <button type="button" class="btn btn-danger btn-sm" onclick="deleteUserAdmin(encodeURIComponent(this.closest('[data-user-admin-row]').dataset.originalUsername))" ${(isSelf || !canEditUser) ? 'disabled title="This account cannot be deleted here"' : ''}>Delete</button>
+        <span class="users-admin-action-buttons">
+          <button type="button" class="btn btn-warning btn-sm" onclick="openResetPasswordModal(encodeURIComponent(this.closest('[data-user-admin-row]').dataset.originalUsername))" ${canEditUser ? '' : 'disabled'}>Reset Password</button>
+          <button type="button" class="btn btn-danger btn-sm" onclick="deleteUserAdmin(encodeURIComponent(this.closest('[data-user-admin-row]').dataset.originalUsername))" ${(isSelf || !canEditUser) ? 'disabled title="This account cannot be deleted here"' : ''}>Delete</button>
+        </span>
       </td>
     </tr>
   `;
@@ -7204,8 +7263,18 @@ function ensureUserAdminStyles() {
       display: flex;
       align-items: center;
       gap: 8px;
-      flex-wrap: wrap;
       white-space: nowrap;
+    }
+
+    .users-admin-action-buttons {
+      display: inline-flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 6px;
+    }
+
+    .users-admin-action-buttons .btn {
+      width: 100%;
     }
 
     .user-admin-save-status {
@@ -15791,9 +15860,20 @@ async function loadReturnWorkspace(options = {}) {
   }
 
   try {
-    const eventsResponse = await apiCall('/api/events');
+    const eventOptionsLoad = await startProgressiveEventOptions(
+      returnPageState.eventId,
+      loaded => {
+        returnPageState.events = loaded;
+        if (activeModal('returnEventChooserModal')) renderReturnEventChooser();
+      }
+    );
     if (version !== returnPageState.requestVersion) return;
-    returnPageState.events = eventsResponse.data || [];
+    returnPageState.events = eventOptionsLoad.first;
+    eventOptionsLoad.completion.then(loaded => {
+      if (version !== returnPageState.requestVersion) return;
+      returnPageState.events = loaded;
+      if (activeModal('returnEventChooserModal')) renderReturnEventChooser();
+    }).catch(error => console.warn('Unable to load more event options:', error));
     events = returnPageState.events;
     updateOverdueCounter(countOverdueEvents(returnPageState.events));
 
@@ -16273,9 +16353,7 @@ async function returnSpecificAssetNew(eventId, assetId, buttonElement = null) {
         }
         
         // Update overdue counter
-        const response = await apiCall('/api/events');
-        const overdueCount = countOverdueEvents(response.data);
-        updateOverdueCounter(overdueCount);
+        await loadStatsCards();
         
     } catch (error) {
         showNotification('error', `Failed to return asset: ${error.message}`);
@@ -16374,9 +16452,7 @@ async function returnManualAssetNew() {
         loadEventAssetsForReturn();
         
         // Update overdue counter
-        const response = await apiCall('/api/events');
-        const overdueCount = countOverdueEvents(response.data);
-        updateOverdueCounter(overdueCount);
+        await loadStatsCards();
         
     } catch (error) {
         showNotification('error', `Failed to return asset: ${error.message}`);
@@ -16397,32 +16473,62 @@ async function loadTransferHistory() {
   container.innerHTML = '<div class="loading">Loading transfer options...</div>';
 
   try {
-    // Keep event states fresh so Ready events become Ongoing and ended events become Overdue.
-    try { await apiCall('/api/events/update-states', 'POST'); } catch (e) { console.warn('State refresh skipped:', e); }
+    let offset = 0;
+    let loadedCandidates = false;
+    let rendered = false;
+    transferOptionsCache = { events: [], sourceEvents: [], targetEvents: [] };
 
-    const response = await apiCall('/api/transfers/options');
-    transferOptionsCache = response.data || { events: [], sourceEvents: [], targetEvents: [] };
+    while (true) {
+      const response = await apiCall(
+        `/api/transfers/options?limit=${EVENT_OPTIONS_PAGE_SIZE}&offset=${offset}`
+      );
+      const page = response.data || {};
+      ['events', 'sourceEvents', 'targetEvents'].forEach(key => {
+        transferOptionsCache[key] = mergeEventsById(
+          transferOptionsCache[key],
+          page[key] || []
+        );
+      });
 
-    const selectableEvents = transferSelectableEvents();
-    const availableIds = new Set(selectableEvents.map(event => String(event.id || '')));
+      const selectableEvents = transferSelectableEvents();
+      updateOverdueCounter(selectableEvents.filter(event => event.state === 'Overdue').length);
+      if (!rendered) {
+        renderTransferWorkspace();
+        rendered = true;
+      }
+      populateTransferDropdowns(transferOptionsCache);
+
+      const sourceSelect = document.getElementById('transferSourceSelect');
+      const targetSelect = document.getElementById('transferTargetSelect');
+      if (
+        !loadedCandidates &&
+        sourceSelect?.value &&
+        targetSelect?.value
+      ) {
+        loadedCandidates = true;
+        await loadTransferCandidates();
+      }
+
+      if (!response.meta?.hasMore || !page.events?.length) break;
+      offset = Number(response.meta.nextOffset || 0);
+      await new Promise(resolve => requestAnimationFrame(resolve));
+    }
+
+    const availableIds = new Set(
+      transferSelectableEvents().map(event => String(event.id || ''))
+    );
+    let selectionChanged = false;
     if (transferPageState.sourceEventId && !availableIds.has(String(transferPageState.sourceEventId))) {
       transferPageState.sourceEventId = null;
+      selectionChanged = true;
     }
     if (transferPageState.targetEventId && !availableIds.has(String(transferPageState.targetEventId))) {
       transferPageState.targetEventId = null;
+      selectionChanged = true;
     }
-
-    const overdueCount = selectableEvents.filter(e => e.state === 'Overdue').length;
-    updateOverdueCounter(overdueCount);
-
-    renderTransferWorkspace();
-    populateTransferDropdowns(transferOptionsCache);
-
-    const sourceSelect = document.getElementById('transferSourceSelect');
-    const targetSelect = document.getElementById('transferTargetSelect');
-
-    if (sourceSelect && targetSelect && sourceSelect.value && targetSelect.value) {
-      await loadTransferCandidates();
+    if (selectionChanged) {
+      renderTransferWorkspace();
+      populateTransferDropdowns(transferOptionsCache);
     }
   } catch (error) {
     container.innerHTML = `
@@ -17795,9 +17901,11 @@ function renderMaintenanceFilterButtons() {
         const meta = maintenanceLogTypeMeta(type);
         return [type, meta.label, meta.color, meta.background];
       }),
-      ['No history', 'No history', '#64748b', '#edf0f2']
     ];
-    if (maintenanceLogTypeFilter !== 'all' && !(typeCounts[maintenanceLogTypeFilter] || 0)) maintenanceLogTypeFilter = 'all';
+    if (
+      maintenanceLogTypeFilter === 'No history' ||
+      (maintenanceLogTypeFilter !== 'all' && !(typeCounts[maintenanceLogTypeFilter] || 0))
+    ) maintenanceLogTypeFilter = 'all';
     typeRoot.innerHTML = typeOptions.filter(([value]) => value === 'all' || (typeCounts[value] || 0) > 0).map(([value, label, color, background]) => {
       const count = value === 'all' ? assets.length : (typeCounts[value] || 0);
       return `<button type="button" class="maintenance-filter-button${maintenanceLogTypeFilter === value ? ' active' : ''}" style="--filter-color:${color};--filter-bg:${background}" onclick="setMaintenanceLogTypeFilter('${escapeJs(value)}')">${escapeHtml(label)} ${count}</button>`;
@@ -21895,13 +22003,20 @@ async function loadPlanPage() {
   root.innerHTML = '<div class="loading">Loading planning workspace...</div>';
 
   try {
-    const [eventsResponse, assetsResponse, templatesResponse, containerCache] = await Promise.all([
-      apiCall('/api/events'),
+    const [eventOptionsLoad, assetsResponse, templatesResponse, containerCache] = await Promise.all([
+      startProgressiveEventOptions(planPageState.eventId, loaded => {
+        planPageState.events = [...loaded].sort(planCompareEventsByStartDate);
+        if (activeModal('planEventChooserModal')) renderPlanEventChooser();
+      }),
       apiCall('/api/assets/available'),
       apiCall('/api/planning-templates'),
       refreshContainersCache(true)
     ]);
-    planPageState.events = [...(eventsResponse.data || [])].sort(planCompareEventsByStartDate);
+    planPageState.events = [...eventOptionsLoad.first].sort(planCompareEventsByStartDate);
+    eventOptionsLoad.completion.then(loaded => {
+      planPageState.events = [...loaded].sort(planCompareEventsByStartDate);
+      if (activeModal('planEventChooserModal')) renderPlanEventChooser();
+    }).catch(error => console.warn('Unable to load more event options:', error));
     planPageState.assets = assetsResponse.data || [];
     planPageState.templates = templatesResponse.data || [];
     planPageState.containers = Object.values(containerCache || {});
@@ -23317,8 +23432,18 @@ async function loadPrepareNewPage() {
   prepareNewPageState.loading = true;
   root.innerHTML = '<div class="loading">Loading preparation workspace...</div>';
   try {
-    const eventsResponse = await apiCall('/api/events');
-    prepareNewPageState.events = [...(eventsResponse.data || [])].sort(planCompareEventsByStartDate);
+    const eventOptionsLoad = await startProgressiveEventOptions(
+      prepareNewPageState.eventId,
+      loaded => {
+        prepareNewPageState.events = [...loaded].sort(planCompareEventsByStartDate);
+        if (activeModal('planEventChooserModal')) renderPlanEventChooser();
+      }
+    );
+    prepareNewPageState.events = [...eventOptionsLoad.first].sort(planCompareEventsByStartDate);
+    eventOptionsLoad.completion.then(loaded => {
+      prepareNewPageState.events = [...loaded].sort(planCompareEventsByStartDate);
+      if (activeModal('planEventChooserModal')) renderPlanEventChooser();
+    }).catch(error => console.warn('Unable to load more event options:', error));
     const selected = prepareNewPageState.events.find(event =>
       Number(event.id) === Number(prepareNewPageState.eventId)
     ) || prepareNewPageState.events.find(event =>
@@ -30689,14 +30814,18 @@ async function updateEventAssetOverview(event) {
   }
 
   if (document.getElementById('prepare-section')?.classList.contains('active')) {
+    const preparableEvents = events.filter(item =>
+      !['Pending Closure', 'Closed', 'Overdue'].includes(item.state)
+      && Number(item.assetCount ?? 0) >= 0
+    );
     if (getEventPageView('prepare') === 'card') {
       const existingCard = document.querySelector(
         `#prepare-events .event-card[data-event-id="${event.id}"]`
       );
       if (existingCard) existingCard.replaceWith(createPrepareEventCard(event));
-      else await loadPrepareEvents();
+      else renderPrepareEventsCards(preparableEvents);
     } else {
-      await loadPrepareEvents();
+      renderPrepareEventsTable(preparableEvents);
     }
   }
 
@@ -30713,7 +30842,32 @@ async function refreshEventAssetsOnly(eventIds) {
 
   const uniqueIds = Array.from(new Set(eventIds.map(Number).filter(Number.isFinite)));
   const responses = await Promise.allSettled(
-    uniqueIds.map(eventId => apiCall(`/api/events/${eventId}`))
+    uniqueIds.map(async eventId => {
+      const needsDetail = (
+        (
+          activeModal('prepareEventModal') &&
+          Number(window.currentPrepareEventId) === eventId
+        ) ||
+        (
+          activeModal('eventDetailsModal') &&
+          Number(window.currentViewedEventId) === eventId
+        ) ||
+        (
+          getActiveSectionId() === 'plan' &&
+          Number(planPageState.eventId) === eventId
+        ) ||
+        (
+          getActiveSectionId() === 'prepare-new' &&
+          Number(prepareNewPageState.eventId) === eventId
+        ) ||
+        (
+          getActiveSectionId() === 'return' &&
+          Number(returnPageState.eventId) === eventId
+        )
+      );
+      if (needsDetail) return apiCall(`/api/events/${eventId}`);
+      return { success: true, data: await fetchEventSummary(eventId) };
+    })
   );
 
   for (let index = 0; index < responses.length; index += 1) {
@@ -30754,11 +30908,34 @@ async function refreshEventAssetsOnly(eventIds) {
       await refreshProfitLossForRealtime(event.id);
     }
   }
+
+  if (
+    getActiveSectionId() === 'transfer' &&
+    uniqueIds.some(eventId => (
+      Number(eventId) === Number(transferPageState.sourceEventId) ||
+      Number(eventId) === Number(transferPageState.targetEventId)
+    ))
+  ) {
+    await loadTransferCandidates({ quiet: true });
+  }
 }
 
 function hasVisibleEventAssetView(eventIds) {
   const activeSection = getActiveSectionId();
-  if (['dashboard', 'events', 'plan', 'profit-loss', 'compare', 'prepare-new', 'prepare', 'return'].includes(activeSection)) return true;
+  const includes = eventId => eventIds.some(id => Number(id) === Number(eventId));
+  if (['dashboard', 'events', 'prepare'].includes(activeSection)) return true;
+  if (activeSection === 'plan') return includes(planPageState.eventId);
+  if (activeSection === 'prepare-new') return includes(prepareNewPageState.eventId);
+  if (activeSection === 'return') return includes(returnPageState.eventId);
+  if (activeSection === 'transfer') {
+    return includes(transferPageState.sourceEventId) || includes(transferPageState.targetEventId);
+  }
+  if (activeSection === 'profit-loss' && typeof profitLossState !== 'undefined') {
+    return includes(profitLossState.eventId);
+  }
+  if (activeSection === 'compare' && typeof compareState !== 'undefined') {
+    return includes(compareState.eventId);
+  }
 
   if (
     activeModal('prepareEventModal') &&
@@ -30772,6 +30949,58 @@ function hasVisibleEventAssetView(eventIds) {
     window.currentEventDetailsMode === 'view' &&
     eventIds.some(eventId => Number(eventId) === Number(window.currentViewedEventId))
   );
+}
+
+function handleRealtimeDeletedEvents(eventIds) {
+  const deleted = new Set(eventIds.map(Number));
+  events = events.filter(event => !deleted.has(Number(event.id)));
+  planPageState.events = (planPageState.events || []).filter(event => !deleted.has(Number(event.id)));
+  prepareNewPageState.events = (prepareNewPageState.events || []).filter(event => !deleted.has(Number(event.id)));
+  returnPageState.events = (returnPageState.events || []).filter(event => !deleted.has(Number(event.id)));
+
+  if (typeof workforcePageState !== 'undefined') {
+    workforcePageState.eventOptions = (workforcePageState.eventOptions || [])
+      .filter(event => !deleted.has(Number(event.id)));
+  }
+  if (transferOptionsCache) {
+    ['events', 'sourceEvents', 'targetEvents'].forEach(key => {
+      transferOptionsCache[key] = (transferOptionsCache[key] || [])
+        .filter(event => !deleted.has(Number(event.id)));
+    });
+  }
+
+  const activeSection = getActiveSectionId();
+  if (activeSection === 'events') {
+    renderAllEventsList(events);
+    loadStatsCards();
+    return;
+  }
+  if (activeSection === 'dashboard') {
+    eventIds.forEach(eventId => {
+      document.querySelectorAll(`.event-card[data-event-id="${eventId}"]`).forEach(card => card.remove());
+    });
+    loadStatsCards();
+    return;
+  }
+
+  const selectedEventDeleted = (
+    (activeSection === 'plan' && deleted.has(Number(planPageState.eventId))) ||
+    (activeSection === 'prepare-new' && deleted.has(Number(prepareNewPageState.eventId))) ||
+    (activeSection === 'return' && deleted.has(Number(returnPageState.eventId))) ||
+    (
+      activeSection === 'workforce' &&
+      typeof workforcePageState !== 'undefined' &&
+      deleted.has(Number(workforcePageState.eventId))
+    ) ||
+    (
+      activeSection === 'transfer' &&
+      (
+        deleted.has(Number(transferPageState.sourceEventId)) ||
+        deleted.has(Number(transferPageState.targetEventId))
+      )
+    )
+  );
+  if (selectedEventDeleted) queueRealtimeRefresh();
 }
 
 function queueEventAssetRefresh(eventIds) {
@@ -30994,10 +31223,7 @@ function connectRealtimeUpdates() {
           return;
         }
         if (realtimePayloadHasAction(payload, 'deleted')) {
-          if (activeSection === 'workforce') return;
-          if (hasVisibleEventAssetView(eventIds)) {
-            queueRealtimeRefresh();
-          }
+          handleRealtimeDeletedEvents(eventIds);
           return;
         }
         if (
@@ -31008,16 +31234,15 @@ function connectRealtimeUpdates() {
         }
         if (hasVisibleEventAssetView(eventIds)) {
           queueEventAssetRefresh(eventIds);
-          return;
         }
+        // Event-scoped changes never fall through to a whole-page refresh.
+        return;
       }
       const eventAssetChanges = eventAssetChangesFromRealtimePayload(payload);
       if (eventAssetChanges.length) {
         const eventIds = eventAssetChanges.map(change => change.eventId);
         if (hasVisibleEventAssetView(eventIds)) {
           queueEventAssetRefresh(eventIds);
-        } else {
-          queueRealtimeRefresh();
         }
         return;
       }
@@ -31132,8 +31357,8 @@ async function initializeApp() {
         initialSection = 'pdf-settings';
       } else {
         try {
-          const inventoryResponse = await apiCall('/api/assets');
-          if (!(inventoryResponse.data || []).length) initialSection = 'inventory';
+          const inventoryResponse = await apiCall('/api/assets/exists');
+          if (!inventoryResponse.data?.hasAssets) initialSection = 'inventory';
         } catch (inventoryError) {
           console.warn('Unable to check company inventory onboarding:', inventoryError);
         }
@@ -31937,7 +32162,11 @@ function updateEventStateFilterCounts(list) {
     if (span) span.textContent = String(count);
     button.hidden = state !== 'All' && count === 0;
   });
-  if (allEventsStateFilter !== 'All' && (counts[allEventsStateFilter] || 0) === 0) {
+  if (
+    !__allEventsProgressiveLoading &&
+    allEventsStateFilter !== 'All' &&
+    (counts[allEventsStateFilter] || 0) === 0
+  ) {
     allEventsStateFilter = 'All';
     document.querySelectorAll('#eventsStateFilters [data-event-state]').forEach(button => {
       button.classList.toggle('active', button.dataset.eventState === 'All');
@@ -32492,15 +32721,58 @@ function renderAllEventsList(eventsToRender = null) {
   }
 }
 
+function showAllEventsProgress(loaded, total) {
+  if (!Number.isFinite(total) || loaded >= total) return;
+  const active = getActiveAllEventsTab();
+  const target = active === 'event-list'
+    ? document.getElementById('all-events-table-container')
+    : active === 'calendar'
+      ? document.getElementById('calendar-container')
+      : document.getElementById('all-events');
+  if (!target) return;
+
+  const indicator = document.createElement('div');
+  indicator.className = 'loading events-progressive-loading';
+  indicator.style.gridColumn = '1 / -1';
+  indicator.textContent = `Loading more events (${loaded} of ${total})...`;
+  target.appendChild(indicator);
+}
+
 async function loadAllEvents() {
+  const loadVersion = ++__allEventsLoadVersion;
+  __allEventsProgressiveLoading = true;
+  let statsPromise = null;
+
   try {
     ensureAllEventsViewTabs();
-    await loadStatsCards();
-    const response = await apiCall('/api/events?view=summary');
-    events = response.data || [];
-    updateOverdueCounter(countOverdueEvents(events));
-    renderAllEventsList(events);
+    events = [];
+    let offset = 0;
+    let total = Number.POSITIVE_INFINITY;
+
+    while (offset < total) {
+      const response = await apiCall(
+        `/api/events?view=summary&limit=${EVENT_OVERVIEW_PAGE_SIZE}&offset=${offset}`
+      );
+      if (loadVersion !== __allEventsLoadVersion) return;
+
+      const page = response.data || [];
+      const byId = new Map(events.map(event => [Number(event.id), event]));
+      page.forEach(event => byId.set(Number(event.id), event));
+      events = Array.from(byId.values());
+      total = Math.max(0, Number(response.meta?.total ?? events.length));
+      offset = Number(response.meta?.nextOffset ?? total);
+
+      updateOverdueCounter(countOverdueEvents(events));
+      renderAllEventsList(events);
+      showAllEventsProgress(events.length, total);
+      if (!statsPromise) statsPromise = loadStatsCards();
+
+      if (!page.length || !response.meta?.hasMore) break;
+      await new Promise(resolve => requestAnimationFrame(resolve));
+      if (getActiveSectionId() !== 'events') break;
+    }
   } catch (error) {
+    if (loadVersion !== __allEventsLoadVersion) return;
     console.error('Error loading events overview:', error);
     const active = getActiveAllEventsTab();
     const target = active === 'event-list'
@@ -32509,6 +32781,12 @@ async function loadAllEvents() {
         ? document.getElementById('calendar-container')
         : document.getElementById('all-events');
     if (target) target.innerHTML = '<p style="color:red;text-align:center;padding:30px;">Error loading events</p>';
+  } finally {
+    await (statsPromise || loadStatsCards());
+    if (loadVersion === __allEventsLoadVersion) {
+      __allEventsProgressiveLoading = false;
+      if (getActiveSectionId() === 'events') renderAllEventsList(events);
+    }
   }
 }
 
@@ -32606,8 +32884,9 @@ async function loadPrepareEvents() {
     ensureEventPageToolbar('prepare');
     updateEventPageToolbarState('prepare');
     const response = await apiCall('/api/events?view=summary');
-    updateOverdueCounter(countOverdueEvents(response.data || []));
-    const preparableEvents = (response.data || []).filter(event =>
+    events = response.data || [];
+    updateOverdueCounter(countOverdueEvents(events));
+    const preparableEvents = events.filter(event =>
       !['Pending Closure', 'Closed', 'Overdue'].includes(event.state)
       && event.assetCount >= 0
     );

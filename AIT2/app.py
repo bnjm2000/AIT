@@ -1908,11 +1908,13 @@ def _current_manager_cache():
             'assigned_assets': None,
             'available_assets': None,
             'cache_timestamp': None,
+            'event_state_refreshes': {},
         }
     return _manager_caches.setdefault(id(manager), {
         'assigned_assets': None,
         'available_assets': None,
         'cache_timestamp': None,
+        'event_state_refreshes': {},
     })
 
 
@@ -10194,14 +10196,22 @@ def refresh_event_states_for_read(events_to_check=None):
     if _current_data_manager_object() is None:
         return []
 
+    now = time.monotonic()
+    refresh_window_seconds = 15
+    cache = _current_manager_cache()
+    refreshed_at = cache.setdefault('event_state_refreshes', {})
     updated_events = []
     source_events = events_to_check if events_to_check is not None else data_manager.events.values()
+    source_events = [
+        event for event in list(source_events)
+        if event and now - refreshed_at.get(event.event_id, 0) >= refresh_window_seconds
+    ]
+    if not source_events:
+        return []
+
     closure_workforce = load_workforce(_workforce_folder())
 
-    for event in list(source_events):
-        if not event:
-            continue
-
+    for event in source_events:
         old_state = normalize_event_state(getattr(event, 'state', 'New'))
         event.state = old_state
         update_event_state(event, workforce=closure_workforce)
@@ -10222,6 +10232,9 @@ def refresh_event_states_for_read(events_to_check=None):
         reset_cache()
         mark_data_snapshot_current()
         mark_realtime_change('event-state', {'updatedEvents': updated_events[-20:]})
+
+    refreshed_at = _current_manager_cache().setdefault('event_state_refreshes', {})
+    refreshed_at.update({event.event_id: now for event in source_events})
 
     return updated_events
 
@@ -12448,15 +12461,88 @@ def get_events():
             if _current_user_can_access_event(event)
         ]
         refresh_event_states_for_read(visible_events)
-        summary_view = request.args.get('view', '').strip().lower() == 'summary'
+
+        view_mode = request.args.get('view', '').strip().lower()
+        summary_view = view_mode in {'summary', 'options'}
+        options_view = view_mode == 'options'
+        query = request.args.get('query', '').strip().lower()
+        state_filter = request.args.get('state', '').strip().lower()
+        tag_filter = request.args.get('tag', '').strip().lower()
+        event_id_filter = request.args.get('eventId', type=int)
+
+        state_counts = {}
+        for event in visible_events:
+            state = str(getattr(event, 'state', '') or 'New')
+            state_counts[state] = state_counts.get(state, 0) + 1
+
+        filtered_events = []
+        for event in visible_events:
+            if event_id_filter is not None and event.event_id != event_id_filter:
+                continue
+            if query and not (
+                query in str(getattr(event, 'name', '') or '').lower()
+                or query in str(getattr(event, 'location', '') or '').lower()
+                or query in str(event.event_id).lower()
+            ):
+                continue
+            if state_filter and str(getattr(event, 'state', '') or '').lower() != state_filter:
+                continue
+            if tag_filter and str(getattr(event, 'tag', '') or '').lower() != tag_filter:
+                continue
+            filtered_events.append(event)
+
+        sort_by = request.args.get('sort', '').strip().lower()
+        sort_direction = request.args.get('direction', '').strip().lower()
+        reverse = sort_direction != 'asc'
+        if sort_by in {'startdate', 'start-date'}:
+            filtered_events.sort(
+                key=lambda event: (str(getattr(event, 'start_date', '') or ''), event.event_id),
+                reverse=reverse,
+            )
+        elif sort_by in {'enddate', 'end-date'}:
+            filtered_events.sort(
+                key=lambda event: (str(getattr(event, 'end_date', '') or ''), event.event_id),
+                reverse=reverse,
+            )
+        elif sort_by == 'name':
+            filtered_events.sort(
+                key=lambda event: (str(getattr(event, 'name', '') or '').casefold(), event.event_id),
+                reverse=reverse,
+            )
+        else:
+            filtered_events.sort(key=lambda event: event.event_id, reverse=reverse)
+
+        total = len(filtered_events)
+        offset = max(0, request.args.get('offset', type=int) or 0)
+        requested_limit = request.args.get('limit', type=int)
+        limit = min(max(1, requested_limit), 500) if requested_limit else None
+        page_events = filtered_events[
+            offset:offset + limit if limit is not None else None
+        ] if (offset or limit is not None) else filtered_events
 
         events_data = []
-        for event in visible_events:
+        for event in page_events:
             # Initialize actually_prepared if missing
             if not hasattr(event, 'actually_prepared'):
                 event.actually_prepared = []
             if not hasattr(event, 'extra_assets'):
                 event.extra_assets = []
+
+            if options_view:
+                returnable_counts = _event_returnable_counts(event)
+                events_data.append({
+                    'id': event.event_id,
+                    'name': event.name,
+                    'location': getattr(event, 'location', '') or '',
+                    'startDate': format_date_output(event.start_date),
+                    'endDate': format_date_output(event.end_date),
+                    'state': event.state,
+                    'tag': getattr(event, 'tag', 'events'),
+                    'returnableCount': returnable_counts['returnable'],
+                    'returnableTotalCount': returnable_counts['total'],
+                })
+                continue
+
             extra_asset_ids = set(getattr(event, 'extra_assets', []) or [])
 
             # Build model groups for this event
@@ -12605,37 +12691,6 @@ def get_events():
                 })
             events_data.append(event_payload)
 
-        # Sort by event ID descending
-        events_data.sort(key=lambda x: x['id'], reverse=True)
-
-        query = request.args.get('query', '').strip().lower()
-        state_filter = request.args.get('state', '').strip().lower()
-        tag_filter = request.args.get('tag', '').strip().lower()
-        if query:
-            events_data = [
-                event for event in events_data
-                if query in str(event.get('name') or '').lower()
-                or query in str(event.get('location') or '').lower()
-                or query in str(event.get('id') or '').lower()
-            ]
-        if state_filter:
-            events_data = [
-                event for event in events_data
-                if str(event.get('state') or '').lower() == state_filter
-            ]
-        if tag_filter:
-            events_data = [
-                event for event in events_data
-                if str(event.get('tag') or '').lower() == tag_filter
-            ]
-
-        total = len(events_data)
-        offset = max(0, request.args.get('offset', type=int) or 0)
-        requested_limit = request.args.get('limit', type=int)
-        limit = min(max(1, requested_limit), 500) if requested_limit else None
-        if offset or limit is not None:
-            events_data = events_data[offset:offset + limit if limit else None]
-
         return jsonify({
             'success': True,
             'data': events_data,
@@ -12643,7 +12698,10 @@ def get_events():
                 'total': total,
                 'offset': offset,
                 'limit': limit,
-                'view': 'summary' if summary_view else 'full',
+                'hasMore': offset + len(events_data) < total,
+                'nextOffset': offset + len(events_data) if offset + len(events_data) < total else None,
+                'stateCounts': state_counts,
+                'view': view_mode if summary_view else 'full',
             },
         })
     except Exception as e:
@@ -13405,6 +13463,7 @@ def create_event():
 
         # Invalidate cache
         invalidate_cache()
+        mark_realtime_change('events', {'eventId': event_id, 'action': 'created'})
 
         log_action(
             f"Created event {event_id}: {data['name']} via web interface")
@@ -13476,6 +13535,7 @@ def update_event(event_id):
 
         # Invalidate cache
         invalidate_cache()
+        mark_realtime_change('events', {'eventId': event_id, 'action': 'updated'})
 
         new_details = {
             'name': event.name,
@@ -16439,25 +16499,23 @@ def _transfer_one_asset(from_event, to_event, asset_id):
 def get_transfer_options():
     """Return valid source and destination events for the Transfer Assets page."""
     try:
-        # Make sure source event states are current before filtering. Returning
-        # events remain eligible while they still have assets physically out.
-        for event in data_manager.events.values():
-            if not _current_user_can_access_event(event):
-                continue
-            old_state = event.state
-            update_event_state(event)
-            if event.state != old_state:
-                data_manager.save_event(event)
+        visible_events = [
+            event for event in data_manager.events.values()
+            if _current_user_can_access_event(event)
+        ]
+        refresh_event_states_for_read(visible_events)
+        visible_events.sort(
+            key=lambda event: (str(getattr(event, 'start_date', '') or ''), event.event_id)
+        )
 
-        event_summaries = []
-
-        for event in data_manager.events.values():
-            if not _current_user_can_access_event(event):
-                continue
-            summary = _event_summary_for_transfer(event)
-            event_summaries.append(summary)
-
-        event_summaries.sort(key=lambda x: (x['startDate'], x['id']))
+        total = len(visible_events)
+        offset = max(0, request.args.get('offset', type=int) or 0)
+        requested_limit = request.args.get('limit', type=int)
+        limit = min(max(1, requested_limit), 500) if requested_limit else None
+        page_events = visible_events[
+            offset:offset + limit if limit is not None else None
+        ] if (offset or limit is not None) else visible_events
+        event_summaries = [_event_summary_for_transfer(event) for event in page_events]
 
         return jsonify({
             'success': True,
@@ -16465,7 +16523,18 @@ def get_transfer_options():
                 'events': event_summaries,
                 'sourceEvents': event_summaries,
                 'targetEvents': event_summaries,
-            }
+            },
+            'meta': {
+                'total': total,
+                'offset': offset,
+                'limit': limit,
+                'hasMore': offset + len(event_summaries) < total,
+                'nextOffset': (
+                    offset + len(event_summaries)
+                    if offset + len(event_summaries) < total
+                    else None
+                ),
+            },
         })
     except Exception as e:
         logger.error(f"Error getting transfer options: {e}")
@@ -16917,6 +16986,16 @@ def transfer_asset_between_events(event_id):
         import traceback
         logger.error(f"Transfer traceback: {traceback.format_exc()}")
         return jsonify({'error': 'Failed to transfer asset'}), 500
+
+
+@app.route('/api/assets/exists', methods=['GET'])
+@require_auth
+def assets_exist():
+    """Return the onboarding inventory flag without serializing the inventory."""
+    return jsonify({
+        'success': True,
+        'data': {'hasAssets': bool(getattr(data_manager, 'inventory', {}))},
+    })
 
 
 @app.route('/api/assets', methods=['GET'])

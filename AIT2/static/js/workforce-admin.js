@@ -135,10 +135,24 @@ async function loadWorkforcePage() {
   if (!workforcePageState.data) root.innerHTML = '<div class="loading">Loading manpower and transport...</div>';
   try {
     if (!workforcePageState.eventOptions.length) {
-      const response = await apiCall('/api/events');
-      workforcePageState.eventOptions = (response.data || [])
+      const eventOptionsLoad = await startProgressiveEventOptions(
+        workforcePageState.eventId,
+        loaded => {
+          workforcePageState.eventOptions = loaded.slice().sort(planCompareEventsByStartDate);
+          if (document.getElementById('workforceEventChooserModal')?.classList.contains('active')) {
+            renderWorkforceEventChooser();
+          }
+        }
+      );
+      workforcePageState.eventOptions = eventOptionsLoad.first
         .slice()
         .sort(planCompareEventsByStartDate);
+      eventOptionsLoad.completion.then(loaded => {
+        workforcePageState.eventOptions = loaded.slice().sort(planCompareEventsByStartDate);
+        if (document.getElementById('workforceEventChooserModal')?.classList.contains('active')) {
+          renderWorkforceEventChooser();
+        }
+      }).catch(error => console.warn('Unable to load more event options:', error));
     }
     if (!workforcePageState.eventId) {
       workforcePageState.eventId = Number(workforcePageState.eventOptions[0]?.id || 0);

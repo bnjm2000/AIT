@@ -2,6 +2,7 @@ import csv
 import os
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import app as app_module
 from data_manager import DataManager, EVENT_FIELDNAMES
@@ -274,6 +275,61 @@ class EventAssignmentAccessTests(unittest.TestCase):
         response = self.client.get('/api/events?view=summary')
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
         self.assertEqual({event['id'] for event in response.get_json()['data']}, {1, 2})
+
+    def test_event_summary_pagination_enriches_only_the_requested_page(self):
+        self.login('admin')
+
+        with patch.object(app_module, '_event_files_for_response', return_value=[]) as files:
+            first = self.client.get('/api/events?view=summary&limit=1&offset=0')
+
+        self.assertEqual(first.status_code, 200, first.get_data(as_text=True))
+        payload = first.get_json()
+        self.assertEqual([event['id'] for event in payload['data']], [2])
+        self.assertEqual(payload['meta']['total'], 2)
+        self.assertTrue(payload['meta']['hasMore'])
+        self.assertEqual(payload['meta']['nextOffset'], 1)
+        self.assertEqual(files.call_count, 1)
+
+        second = self.client.get('/api/events?view=summary&limit=1&offset=1')
+        self.assertEqual([event['id'] for event in second.get_json()['data']], [1])
+        self.assertFalse(second.get_json()['meta']['hasMore'])
+        self.assertIsNone(second.get_json()['meta']['nextOffset'])
+
+    def test_event_options_are_lightweight_and_sortable(self):
+        self.login('admin')
+        response = self.client.get(
+            '/api/events?view=options&sort=startDate&direction=asc'
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        payload = response.get_json()
+        self.assertEqual(payload['meta']['view'], 'options')
+        self.assertEqual(len(payload['data']), 2)
+        option = payload['data'][0]
+        self.assertIn('returnableCount', option)
+        self.assertNotIn('departmentProgress', option)
+        self.assertNotIn('assignedUsers', option)
+        self.assertNotIn('modelGroups', option)
+
+    def test_inventory_onboarding_check_does_not_serialize_assets(self):
+        self.login('admin')
+        response = self.client.get('/api/assets/exists')
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(response.get_json()['data'], {'hasAssets': True})
+
+    def test_transfer_options_support_progressive_pages(self):
+        self.login('admin')
+        first = self.client.get('/api/transfers/options?limit=1&offset=0')
+        second = self.client.get('/api/transfers/options?limit=1&offset=1')
+
+        self.assertEqual(first.status_code, 200, first.get_data(as_text=True))
+        self.assertEqual(second.status_code, 200, second.get_data(as_text=True))
+        self.assertEqual(len(first.get_json()['data']['events']), 1)
+        self.assertTrue(first.get_json()['meta']['hasMore'])
+        self.assertEqual(first.get_json()['meta']['nextOffset'], 1)
+        self.assertEqual(len(second.get_json()['data']['events']), 1)
+        self.assertFalse(second.get_json()['meta']['hasMore'])
 
     def test_summary_includes_department_progress_without_full_model_groups(self):
         event = self.data_manager.events[1]
