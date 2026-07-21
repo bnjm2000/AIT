@@ -5,7 +5,7 @@ from datetime import datetime
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 
-STATUS_CHANGE_KINDS = ('ooc', 'missing', 'degraded', 'decommissioned')
+STATUS_CHANGE_KINDS = ('ooc', 'missing', 'untagged', 'degraded', 'decommissioned')
 DEFAULT_MAINTENANCE_LOG_TYPE = 'General'
 ASSET_CHECK_LOG_TYPE = 'Asset check'
 USER_MAINTENANCE_LOG_TYPES = (
@@ -16,6 +16,7 @@ USER_MAINTENANCE_LOG_TYPES = (
     'Repair',
 )
 MAINTENANCE_LOG_TYPES = USER_MAINTENANCE_LOG_TYPES + (ASSET_CHECK_LOG_TYPE,)
+_CREATED_AT_UNSET = object()
 
 
 OOC_MARKED = {
@@ -59,6 +60,19 @@ DEGRADED_CLEARED = {
     'removed degraded',
     'unmarked degraded',
     'unmark degraded',
+}
+
+UNTAGGED_MARKED = {
+    'marked untagged',
+    'mark untagged',
+}
+
+UNTAGGED_CLEARED = {
+    'cleared untagged',
+    'clear untagged',
+    'removed untagged',
+    'unmarked untagged',
+    'unmark untagged',
 }
 
 DECOMMISSIONED_MARKED = {
@@ -265,6 +279,10 @@ def _legacy_change_from_part(part):
         return make_change('degraded', action='marked')
     if part_lower in DEGRADED_CLEARED:
         return make_change('degraded', action='cleared')
+    if part_lower in UNTAGGED_MARKED:
+        return make_change('untagged', action='marked')
+    if part_lower in UNTAGGED_CLEARED:
+        return make_change('untagged', action='cleared')
     if part_lower in DECOMMISSIONED_MARKED:
         return make_change('decommissioned', action='marked')
     if part_lower in DECOMMISSIONED_CLEARED:
@@ -303,6 +321,7 @@ def normalize_maintenance_log(log):
         return {
             'id': _text(log.get('id') or log.get('logId')).strip(),
             'date': _text(log.get('date')).strip(),
+            'createdAt': _text(log.get('createdAt') or log.get('created_at')).strip(),
             'user': _text(log.get('user')).strip(),
             'description': _text(log.get('description')),
             'type': (
@@ -340,6 +359,7 @@ def normalize_maintenance_log(log):
     return {
         'id': '',
         'date': date,
+        'createdAt': '',
         'user': user,
         'description': description,
         'type': DEFAULT_MAINTENANCE_LOG_TYPE,
@@ -350,10 +370,26 @@ def normalize_maintenance_log(log):
     }
 
 
-def make_maintenance_log(date, user, description, changes=None, cost='', log_type=DEFAULT_MAINTENANCE_LOG_TYPE, source=None, log_id=None, media=None):
+def make_maintenance_log(
+    date,
+    user,
+    description,
+    changes=None,
+    cost='',
+    log_type=DEFAULT_MAINTENANCE_LOG_TYPE,
+    source=None,
+    log_id=None,
+    media=None,
+    created_at=_CREATED_AT_UNSET,
+):
     return normalize_maintenance_log({
         'id': log_id or make_maintenance_log_id(),
         'date': date,
+        'createdAt': (
+            datetime.now().isoformat(timespec='microseconds')
+            if created_at is _CREATED_AT_UNSET
+            else created_at
+        ),
         'user': user,
         'description': description,
         'type': log_type,
@@ -441,6 +477,7 @@ def status_change_labels(log_or_changes):
                     'ooc': 'Marked OOC',
                     'missing': 'Marked Missing',
                     'degraded': 'Marked Degraded',
+                    'untagged': 'Marked Untagged',
                     'decommissioned': 'Marked Decommissioned',
                 }.get(kind, f"Marked {kind.title()}"))
             else:
@@ -448,6 +485,7 @@ def status_change_labels(log_or_changes):
                     'ooc': 'Cleared OOC',
                     'missing': 'Cleared Missing',
                     'degraded': 'Cleared Degraded',
+                    'untagged': 'Cleared Untagged',
                     'decommissioned': 'Cleared Decommissioned',
                 }.get(kind, f"Cleared {kind.title()}"))
 
@@ -471,13 +509,15 @@ def maintenance_log_to_display_string(log, include_changes=False):
 
 def _set_exclusive_asset_status(asset, status):
     """Apply one mutually-exclusive asset condition status."""
-    for attr in ('is_ooc', 'is_missing', 'is_degraded', 'is_disposed'):
+    for attr in ('is_ooc', 'is_missing', 'is_untagged', 'is_degraded', 'is_disposed'):
         setattr(asset, attr, False)
 
     if status == 'ooc':
         asset.is_ooc = True
     elif status == 'missing':
         asset.is_missing = True
+    elif status == 'untagged':
+        asset.is_untagged = True
     elif status == 'degraded':
         asset.is_degraded = True
     elif status in ('disposed', 'decommissioned'):
@@ -500,6 +540,7 @@ def apply_maintenance_log_changes(asset, log):
                 setattr(asset, {
                     'ooc': 'is_ooc',
                     'missing': 'is_missing',
+                    'untagged': 'is_untagged',
                     'degraded': 'is_degraded',
                     'decommissioned': 'is_disposed',
                 }[kind], False)

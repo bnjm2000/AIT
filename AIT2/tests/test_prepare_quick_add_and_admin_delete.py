@@ -283,6 +283,56 @@ class PrepareQuickAddAndAdminDeleteTests(unittest.TestCase):
         self.assertIn('const showExactAssetPanel = !isBulk;', source)
         self.assertIn('available.map(asset => prepareNewAssetCard(asset, { canAssign: true }))', source)
 
+    def test_prepare_ui_preserves_container_results_and_open_asset_chooser(self):
+        project_root = os.path.dirname(app_module.__file__)
+        script_path = os.path.join(
+            project_root, 'static', 'js', 'app.js'
+        )
+        with open(script_path, encoding='utf-8') as script_file:
+            source = script_file.read()
+        with open(
+            os.path.join(project_root, 'templates', 'index.html'),
+            encoding='utf-8',
+        ) as template_file:
+            template = template_file.read()
+
+        self.assertIn(
+            "scanFeedbackHtml: document.getElementById('universal-asset-feedback')?.innerHTML || ''",
+            source,
+        )
+        self.assertIn('scanRevision: prepareNewPageState.scanRevision,', source)
+        self.assertIn(
+            'state.scanRevision === prepareNewPageState.scanRevision',
+            source,
+        )
+        self.assertIn("feedback.innerHTML = state.scanFeedbackHtml || '';", source)
+        self.assertIn(
+            "ontoggle=\"prepareNewSetModelExpanded('${encodedKey}', this.open, this)\"",
+            source,
+        )
+        self.assertIn('data-prepare-render-version=', source)
+        self.assertIn('prepareNewPageState.renderVersion += 1;', source)
+        self.assertIn(
+            "prepareNewUnassignAsset(${eventId}, '${encodedId}', "
+            "'${escapeHtmlAttr(options.modelKey || '')}')",
+            source,
+        )
+        self.assertIn('if (modelKey) prepareNewPageState.expandedModels.add(modelKey);', source)
+        self.assertIn("const panelKey = 'standalone-extra-assets';", source)
+        self.assertIn('modelKey: encodedPanelKey', source)
+        self.assertIn(
+            'No extra assets remain assigned to this event.',
+            source,
+        )
+        self.assertIn('class="prepare-new-container-detail-scroll"', source)
+        self.assertIn("<details class=\"prepare-new-container-details\" ${failed ? 'open' : ''}>", source)
+        self.assertIn("scanTop: root?.querySelector('.prepare-new-left')?.scrollTop || 0", source)
+        self.assertIn("feedbackDiv.scrollIntoView({", source)
+        self.assertIn('.prepare-new-container-detail-scroll {', template)
+        self.assertIn('.prepare-new-left {', template)
+        self.assertIn('overflow-y: auto;', template)
+        self.assertIn('overflow-wrap: anywhere;', template)
+
     def test_unprepare_quantity_cannot_remove_assigned_specific_asset(self):
         event = self.make_event(
             event_id=121,

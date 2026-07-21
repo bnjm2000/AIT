@@ -33,7 +33,7 @@ UTF8_ENCODINGS = ('utf-8', 'utf-8-sig')
 INVENTORY_FIELDNAMES = [
     'AssetID', 'Brand', 'ModelNumber', 'SerialNumber', 'SecondarySerialNumber', 'Description', 'DateOfPurchase',
     'DateAdded', 'DateModified', 'ChangeHistory', 'Notes', 'Tags',
-    'IsMissing', 'IsOOC', 'IsDegraded', 'IsDisposed', 'IsBulk', 'Quantity',
+    'IsMissing', 'IsOOC', 'IsDegraded', 'IsUntagged', 'IsDisposed', 'IsBulk', 'Quantity',
     'MaintenanceLogs', 'DepartmentCode', 'DefaultLocation', 'CurrentLocation'
 ]
 EVENT_FIELDNAMES = [
@@ -821,6 +821,7 @@ class DataManager:
                 department_code = row.get('DepartmentCode', 'UN')
                 is_ooc = _is_csv_true(row.get('IsOOC'))
                 is_degraded = _is_csv_true(row.get('IsDegraded'))
+                is_untagged = _is_csv_true(row.get('IsUntagged'))
                 is_disposed = _is_csv_true(row.get('IsDisposed'))
                 is_bulk = _is_csv_true(row.get('IsBulk'))
                 try:
@@ -839,6 +840,7 @@ class DataManager:
                     is_missing=_is_csv_true(row.get('IsMissing')),
                     is_ooc=is_ooc,
                     is_degraded=is_degraded,
+                    is_untagged=is_untagged,
                     is_disposed=is_disposed,
                     maintenance_logs=maintenance_logs,
                     department_code=department_code,
@@ -900,6 +902,7 @@ class DataManager:
                     'IsMissing': item.is_missing,
                     'IsOOC': item.is_ooc,
                     'IsDegraded': getattr(item, 'is_degraded', False),
+                    'IsUntagged': getattr(item, 'is_untagged', False),
                     'IsDisposed': getattr(item, 'is_disposed', False),
                     'IsBulk': getattr(item, 'is_bulk', False),
                     'Quantity': getattr(item, 'quantity', 1),

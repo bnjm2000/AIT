@@ -303,7 +303,13 @@ class PlanningTemplateTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn('class="form-container do-details-panel"', page)
         self.assertIn('id="deliveryItemsPreview"', page)
-        self.assertIn('Review delivery details and organise the asset list', page)
+        self.assertIn('class="do-document-grid"', page)
+        self.assertIn('class="do-recipient-grid"', page)
+        self.assertIn('id="doEventContext"', page)
+        self.assertIn('id="btnKnownClients"', page)
+        self.assertIn('id="generatePdfBtn">Export PDF</button>', page)
+        self.assertNotIn('generateExcelBtn', page)
+        self.assertNotIn("generateDeliveryOrder('excel')", page)
 
         script_path = os.path.join(
             os.path.dirname(os.path.dirname(__file__)),
@@ -323,6 +329,11 @@ class PlanningTemplateTests(unittest.TestCase):
         self.assertIn('onclick="return removeDeliveryOrderRow(this)"', script)
         self.assertIn('state.deleted[key] = true;', script)
         self.assertIn('item.id || `legacy-${dept}-${index}`', script)
+        self.assertIn('class="do-edit-toggle"', script)
+        self.assertIn('class="do-dept-count"', script)
+        self.assertIn('function generateDeliveryOrder()', script)
+        self.assertNotIn('function generateExcelDO(', script)
+        self.assertNotIn('xlsx.full.min.js', script)
         self.assertNotIn('do-item-price', script)
 
     def test_template_crud_is_company_local(self):

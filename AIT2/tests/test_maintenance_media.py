@@ -98,6 +98,8 @@ class MaintenanceMediaTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
         log = normalize_maintenance_log(self.data_manager.inventory[self.asset_id].maintenance_logs[0])
         self.assertEqual(len(log['media']), 1)
+        self.assertTrue(log['createdAt'])
+        created_at = log['createdAt']
         media = log['media'][0]
         media_path = os.path.join(self.tempdir.name, media['path'])
         self.assertTrue(os.path.exists(media_path))
@@ -126,6 +128,7 @@ class MaintenanceMediaTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
         edited_log = normalize_maintenance_log(self.data_manager.inventory[self.asset_id].maintenance_logs[0])
+        self.assertEqual(edited_log['createdAt'], created_at)
         self.assertEqual(edited_log['media'][0]['id'], media['id'])
         self.assertTrue(os.path.exists(media_path))
 

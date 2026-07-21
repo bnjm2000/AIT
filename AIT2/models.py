@@ -198,6 +198,7 @@ class InventoryItem:
         notes='',
         secondary_serial_number='',
         tags=None,
+        is_untagged=False,
     ):
         self.asset_id = asset_id
         self.brand = brand
@@ -209,6 +210,7 @@ class InventoryItem:
         self.is_ooc = is_ooc
         self.is_degraded = bool(is_degraded)
         self.is_disposed = bool(is_disposed)
+        self.is_untagged = bool(is_untagged)
 
         # Imported CSV rows may contain multiple legacy status flags. The app
         # treats condition states as exclusive, with decommissioned as strongest.
@@ -216,10 +218,15 @@ class InventoryItem:
             self.is_missing = False
             self.is_ooc = False
             self.is_degraded = False
+            self.is_untagged = False
         elif self.is_missing:
             self.is_ooc = False
             self.is_degraded = False
+            self.is_untagged = False
         elif self.is_ooc:
+            self.is_degraded = False
+            self.is_untagged = False
+        elif self.is_untagged:
             self.is_degraded = False
 
         self.maintenance_logs = maintenance_logs

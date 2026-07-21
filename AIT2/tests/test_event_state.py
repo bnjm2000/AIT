@@ -60,6 +60,30 @@ class EventStateTests(unittest.TestCase):
 
         self.assertEqual(event.state, 'New')
 
+    def test_prepared_extra_starts_preparing_without_fulfilling_requirement(self):
+        event = self.make_event(
+            ['[MODEL]AX|Brand|Model|2|Description', 'EXTRA-1'],
+            ['EXTRA-1'],
+            [],
+            extra_assets=['EXTRA-1'],
+        )
+
+        app_module.update_event_state(event)
+
+        self.assertEqual(event.state, 'Preparing')
+
+    def test_prepared_extra_starts_preparing_without_requirements(self):
+        event = self.make_event(
+            ['EXTRA-1'],
+            ['EXTRA-1'],
+            [],
+            extra_assets=['EXTRA-1'],
+        )
+
+        app_module.update_event_state(event)
+
+        self.assertEqual(event.state, 'Preparing')
+
     def test_ready_event_on_end_date_is_last_day(self):
         event = self.make_event(['A', 'B'], ['A', 'B'], [])
 

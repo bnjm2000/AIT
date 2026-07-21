@@ -11,6 +11,7 @@ class EventAssetRealtimeTests(unittest.TestCase):
         cases = (
             ('/api/events/42/prepare', 'prepare'),
             ('/api/events/42/unprepare', 'unprepare'),
+            ('/api/events/42/prepare-model-quantity', 'prepare'),
             ('/api/events/42/assign-specific', 'prepare'),
             ('/api/events/42/return', 'return'),
             ('/api/events/42/unreturn', 'unreturn'),
@@ -28,6 +29,17 @@ class EventAssetRealtimeTests(unittest.TestCase):
 
                 self.assertEqual(details['eventId'], 42)
                 self.assertEqual(details['action'], expected_action)
+
+    def test_model_quantity_unprepare_has_unprepare_realtime_action(self):
+        with app_module.app.test_request_context(
+            '/api/events/42/prepare-model-quantity',
+            method='POST',
+            json={'action': 'unprepare', 'quantity': 1},
+        ):
+            details = app_module._event_asset_realtime_change_for_request()
+
+        self.assertEqual(details['eventId'], 42)
+        self.assertEqual(details['action'], 'unprepare')
 
     def test_successful_prepare_publishes_event_assets_change(self):
         with app_module.app.test_request_context(

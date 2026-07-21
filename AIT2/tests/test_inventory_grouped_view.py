@@ -34,6 +34,18 @@ def test_inventory_script_groups_models_and_weights_availability_quantities():
     assert "conditionCounts.ooc, 'Out of commission'" in script
 
 
+def test_deployed_colour_is_shared_by_chart_and_badges_across_the_app():
+    template = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
+    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+
+    assert "--status-deployed-color: #1769aa;" in template
+    assert "background: var(--status-deployed-color, #1769aa);" in template
+    assert "color: var(--status-deployed-text, #ffffff);" in template
+    assert "deployed: { label: 'Deployed', color: ASSET_DEPLOYED_COLOR }" in script
+    assert "deployed: { background: ASSET_DEPLOYED_COLOR, color: '#ffffff' }" in script
+    assert ".asset-check-badge.deployed { background: var(--status-deployed-color, #1769aa);" in script
+
+
 def test_add_asset_warns_before_submitting_mismatched_serial_counts():
     template = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
     script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
@@ -57,6 +69,10 @@ def test_asset_history_uses_timeline_and_event_cards():
 
     assert ".maintenance-history-shell" in template
     assert ".maintenance-timeline-item" in template
+    assert ".maintenance-log-content{width:100%!important;height:calc(100dvh - 16px)!important" in template
+    assert ".maintenance-history-shell{display:block;overflow-y:auto" in template
+    assert "#maintenanceLogModal .maintenance-history-aside .asset-event-history-wrap{max-height:none!important;overflow:visible!important}" in template
+    assert ".maintenance-timeline-actions .inventory-icon-button{width:36px;height:36px}" in template
     assert "Asset past logs" in script
     assert "function loadAssetEventHistoryCards(assetId, containerId)" in script
     assert "No event use recorded." in script
@@ -137,6 +153,9 @@ def test_maintenance_dashboard_is_informative_responsive_and_keeps_actions():
     assert ".maintenance-activity-row" in template
     assert ".maintenance-flagged-grid" in template
     assert "@media(max-width:720px)" in template.replace(" ", "")
+    assert "grid-template-areas:\"asset asset arrow\" \"log log arrow\" \"condition date arrow\"" in template
+    assert ".maintenance-tabs{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))" in template
+    assert ".maintenance-page-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))" in template
     assert "Maintenance report" in template
     assert "Log maintenance" in template
     assert "function renderMaintenanceDashboardSummary(assetList)" in script
@@ -254,6 +273,21 @@ def test_maintenance_page_uses_filter_buttons_with_shared_tab_search():
     assert "maintenanceAssetMatchesCondition(asset, maintenanceConditionFilter)" in script
     assert "asset.serial, asset.serialNumber, asset.serial2, asset.secondarySerial, asset.secondarySerialNumber" in script
     assert "Search asset, serial, model, log or user" in template
+
+
+def test_maintenance_records_use_same_day_sequence_and_bound_media_delete_controls():
+    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+
+    assert "function compareMaintenanceLogsNewestFirst(logA, logB)" in script
+    assert "maintenanceLogCreatedSortValue(logA?.createdAt)" in script
+    assert "Number(logB?.originalIndex ?? -1) - Number(logA?.originalIndex ?? -1)" in script
+    assert "data-maintenance-media-delete" in script
+    assert "bindMaintenanceMediaDeleteButtons(modal);" in script
+    assert "window.deleteMaintenanceMedia = deleteMaintenanceMedia;" in script
+    assert "window.deleteMaintenanceLog = deleteMaintenanceLog;" in script
+    assert "window.deleteMaintenanceLogFromModal = deleteMaintenanceLogFromModal;" in script
+    assert "removeMaintenanceMediaFromLocalAssets(mediaId);" in script
+    assert "removeMaintenanceMediaElements(mediaId);" in script
 
 
 def test_maintenance_report_is_responsive_informative_and_keeps_export_controls():

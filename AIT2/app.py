@@ -1792,6 +1792,11 @@ def _event_asset_realtime_change_for_request():
         'close_return_event': 'close-return',
     }
     action = action_by_endpoint.get(request.endpoint)
+    if request.endpoint == 'prepare_event_model_quantity':
+        requested_action = str(
+            (request.get_json(silent=True) or {}).get('action') or 'prepare'
+        ).strip().lower()
+        action = 'unprepare' if requested_action in {'unprepare', 'unprepared'} else 'prepare'
     event_id = (request.view_args or {}).get('event_id')
     if not action or event_id is None:
         return None
@@ -2889,6 +2894,10 @@ def _is_degraded(asset):
     return bool(getattr(asset, 'is_degraded', False))
 
 
+def _is_untagged(asset):
+    return bool(getattr(asset, 'is_untagged', False))
+
+
 def _is_disposed(asset):
     return bool(getattr(asset, 'is_disposed', False))
 
@@ -2915,12 +2924,14 @@ def _asset_status_value(asset, assigned_assets=None):
         return 'ooc'
     if assigned_assets is not None and not _is_bulk_asset(asset) and asset.asset_id in assigned_assets:
         return 'deployed'
+    if _is_untagged(asset):
+        return 'untagged'
     if _is_degraded(asset):
         return 'degraded'
     return 'available'
 
 
-ASSET_CONDITION_STATUSES = ('ooc', 'missing', 'degraded', 'decommissioned')
+ASSET_CONDITION_STATUSES = ('ooc', 'missing', 'untagged', 'degraded', 'decommissioned')
 BULK_MAINTENANCE_FAULT_SOURCE = 'bulk_maintenance_fault'
 BULK_MAINTENANCE_RESOLUTION_SOURCE = 'bulk_maintenance_resolution'
 CONTAINER_MAINTENANCE_SOURCE = 'container'
@@ -2938,6 +2949,8 @@ def _asset_condition_status(asset):
         return 'missing'
     if getattr(asset, 'is_ooc', False):
         return 'ooc'
+    if _is_untagged(asset):
+        return 'untagged'
     if _is_degraded(asset):
         return 'degraded'
     return 'ok'
@@ -3148,13 +3161,15 @@ def _degraded_asset_warning(asset, asset_id):
 
 def _apply_exclusive_asset_status(asset, target_status):
     """Set one condition status on an asset. target_status='ok' clears all."""
-    for attr in ('is_ooc', 'is_missing', 'is_degraded', 'is_disposed'):
+    for attr in ('is_ooc', 'is_missing', 'is_untagged', 'is_degraded', 'is_disposed'):
         setattr(asset, attr, False)
 
     if target_status == 'ooc':
         asset.is_ooc = True
     elif target_status == 'missing':
         asset.is_missing = True
+    elif target_status == 'untagged':
+        asset.is_untagged = True
     elif target_status == 'degraded':
         asset.is_degraded = True
     elif target_status in ('disposed', 'decommissioned'):
@@ -3169,7 +3184,8 @@ def _normalise_asset_status_flags(asset):
 def _status_changes_for_request(data, current_status=None):
     """Return (target_status, changes, error).
 
-    target_status is one of: None, 'ok', 'ooc', 'missing', 'degraded', 'decommissioned'.
+    target_status is one of: None, 'ok', 'ooc', 'missing', 'untagged', 'degraded',
+    'decommissioned'.
     None means no status change requested.
     """
     data = data or {}
@@ -3207,6 +3223,7 @@ def _status_changes_for_request(data, current_status=None):
             'out-of-commission': 'ooc',
             'out_of_commission': 'ooc',
             'missing': 'missing',
+            'untagged': 'untagged',
             'degraded': 'degraded',
             'decommissioned': 'decommissioned',
             'disposed': 'decommissioned',
@@ -3224,6 +3241,7 @@ def _status_changes_for_request(data, current_status=None):
     mark_flags = {
         'ooc': bool(data.get('markOOC', False)),
         'missing': bool(data.get('markMissing', False)),
+        'untagged': bool(data.get('markUntagged', False)),
         'degraded': bool(data.get('markDegraded', False)),
         'decommissioned': bool(data.get('markDecommissioned', False) or data.get('markDisposed', False)),
     }
@@ -3237,6 +3255,7 @@ def _status_changes_for_request(data, current_status=None):
     clear_flags = {
         'ooc': bool(data.get('unmarkOOC', False)),
         'missing': bool(data.get('unmarkMissing', False)),
+        'untagged': bool(data.get('unmarkUntagged', False)),
         'degraded': bool(data.get('unmarkDegraded', False)),
         'decommissioned': bool(data.get('unmarkDecommissioned', False) or data.get('unmarkDisposed', False)),
     }
@@ -3298,6 +3317,7 @@ def _condition_status_before_log(asset, exclude_index, selected_date=None):
         asset_id=getattr(asset, 'asset_id', ''),
         is_ooc=False,
         is_missing=False,
+        is_untagged=False,
         is_degraded=False,
         is_disposed=False,
         serial_number=getattr(asset, 'serial_number', ''),
@@ -3341,6 +3361,7 @@ def _status_action_label(target_status):
         'ok': 'OK',
         'ooc': 'OOC',
         'missing': 'Missing',
+        'untagged': 'Untagged',
         'degraded': 'Degraded',
         'decommissioned': 'Decommissioned',
     }.get(target_status or '', '')
@@ -5036,6 +5057,7 @@ def _bulk_asset_to_available_dict(asset, target_event=None):
         'status': status,
         'isMissing': getattr(asset, 'is_missing', False),
         'isOOC': getattr(asset, 'is_ooc', False),
+        'isUntagged': _is_untagged(asset),
         'isDegraded': _is_degraded(asset),
         'isDisposed': _is_disposed(asset),
         'isBulk': True,
@@ -5106,6 +5128,7 @@ def _asset_to_available_dict(asset):
         'status': status,
         'isMissing': getattr(asset, 'is_missing', False),
         'isOOC': getattr(asset, 'is_ooc', False),
+        'isUntagged': _is_untagged(asset),
         'isDegraded': _is_degraded(asset),
         'isDisposed': _is_disposed(asset),
         'isBulk': False,
@@ -5219,6 +5242,7 @@ def get_available_assets_for_event(event_id):
                 'status': _asset_status_value(asset),
                 'isMissing': getattr(asset, 'is_missing', False),
                 'isOOC': getattr(asset, 'is_ooc', False),
+                'isUntagged': _is_untagged(asset),
                 'isDegraded': _is_degraded(asset),
                 'isDisposed': _is_disposed(asset),
                 'isBulk': False,
@@ -10091,6 +10115,12 @@ def update_event_state(event, workforce=None):
         returned_total += custom_counts['returned']
         started_total += custom_counts['started']
 
+        returned_refs = set(getattr(event, 'returned_items', []) or [])
+        has_active_prepared_item = any(
+            isinstance(ref, str) and ref and ref not in returned_refs
+            for ref in (getattr(event, 'actually_prepared', []) or [])
+        )
+
         logger.debug(
             f"Event {event.event_id} state calculation - "
             f"required={required_total}, activePrepared={prepared_active_total}, "
@@ -10130,12 +10160,13 @@ def update_event_state(event, workforce=None):
         elif prepared_ever_total > returned_total and current_date > event.end_date:
             event.state = 'Overdue'
 
-        # 5. No requirements at all.
+        # 5. No requirements at all. A prepared extra still starts preparation,
+        # without counting towards completion of any requirement.
         elif required_total == 0:
-            event.state = 'New'
+            event.state = 'Preparing' if has_active_prepared_item else 'New'
 
         # 6. Requirements exist, but nothing has been collected/prepared yet.
-        elif started_total == 0:
+        elif started_total == 0 and not has_active_prepared_item:
             event.state = 'Planning'
 
         # 7. Some collection/preparation happened, but requirements are not fully prepared.
@@ -10398,6 +10429,7 @@ def _render_app_page(section):
         'index.html',
         initial_section=section,
         app_js_version=_static_asset_version('js/app.js'),
+        split_screen_css_version=_static_asset_version('css/split-screen.css'),
         workforce_js_version=_static_asset_version('js/workforce-admin.js'),
         workforce_css_version=_static_asset_version('css/workforce-admin.css'),
     )
@@ -12709,6 +12741,7 @@ def get_event(event_id):
                         'location': asset.current_location,
                         'isMissing': asset.is_missing,
                         'isOOC': asset.is_ooc,
+                        'isUntagged': _is_untagged(asset),
                         'isLoanOrMisc': False,
                         'isExtra': is_extra
                     }
@@ -12766,6 +12799,7 @@ def get_event(event_id):
                         'location': asset.current_location,
                         'isMissing': asset.is_missing,
                         'isOOC': asset.is_ooc,
+                        'isUntagged': _is_untagged(asset),
                         'isLoanOrMisc': False,
                         'isExtra': is_extra
                     }
@@ -12903,6 +12937,7 @@ def get_event(event_id):
                 'location': bulk_asset.current_location or bulk_asset.default_location,
                 'isMissing': bulk_asset.is_missing,
                 'isOOC': bulk_asset.is_ooc,
+                'isUntagged': _is_untagged(bulk_asset),
                 'isLoanOrMisc': False,
                 'isExtra': False,
                 'isBulk': True,
@@ -13536,10 +13571,11 @@ def delete_maintenance_log(asset_id, log_index):
         return jsonify({'error': f'Failed to delete maintenance log: {str(e)}'}), 500
 
 def recalculate_asset_status_from_logs(asset):
-    """Recalculate asset OOC, Missing status, serial, and location based on maintenance logs."""
+    """Recalculate asset condition, serial, and location from maintenance logs."""
     try:
         asset.is_ooc = False
         asset.is_missing = False
+        asset.is_untagged = False
         asset.is_degraded = False
         asset.is_disposed = False
         asset.current_location = ''
@@ -13563,7 +13599,9 @@ def recalculate_asset_status_from_logs(asset):
 
         logger.info(
             f"Final status for {asset.asset_id}: "
-            f"OOC={asset.is_ooc}, Missing={asset.is_missing}, Degraded={_is_degraded(asset)}, Decommissioned={_is_disposed(asset)}, Location='{asset.current_location}'"
+            f"OOC={asset.is_ooc}, Missing={asset.is_missing}, Untagged={_is_untagged(asset)}, "
+            f"Degraded={_is_degraded(asset)}, Decommissioned={_is_disposed(asset)}, "
+            f"Location='{asset.current_location}'"
         )
 
     except Exception as e:
@@ -16030,6 +16068,7 @@ def _transfer_office_candidate_payload(asset):
         'serial2': getattr(asset, 'secondary_serial_number', ''),
         'status': _asset_status_value(asset),
         'currentLocation': asset.current_location or asset.default_location or 'Office',
+        'isUntagged': _is_untagged(asset),
         'isDegraded': _is_degraded(asset),
         'isDisposed': _is_disposed(asset),
     }
@@ -16084,6 +16123,7 @@ def _transfer_asset_payload(asset, state='', from_event=None, to_event=None, rea
         'serial': asset.serial_number,
         'serial2': getattr(asset, 'secondary_serial_number', ''),
         'status': _asset_status_value(asset),
+        'isUntagged': _is_untagged(asset),
         'isDegraded': _is_degraded(asset),
         'isDisposed': _is_disposed(asset),
         'currentLocation': asset.current_location or (getattr(from_event, 'name', '') if from_event else ''),
@@ -16967,6 +17007,7 @@ def get_assets():
                 'location': asset.current_location or asset.default_location,
                 'isMissing': asset.is_missing,
                 'isOOC': asset.is_ooc,
+                'isUntagged': _is_untagged(asset),
                 'isDegraded': _is_degraded(asset),
                 'isDisposed': _is_disposed(asset),
                 'defaultLocation': asset.default_location,
@@ -17132,6 +17173,8 @@ def _asset_check_asset_to_dict(asset, group_key):
     elif getattr(asset, 'is_ooc', False):
         # OOC items that are still in Store can still be physically checked.
         status = 'ooc'
+    elif _is_untagged(asset):
+        status = 'untagged'
     elif _is_degraded(asset):
         status = 'degraded'
 
@@ -17150,6 +17193,7 @@ def _asset_check_asset_to_dict(asset, group_key):
         'currentLocation': getattr(asset, 'current_location', '') or '',
         'isMissing': bool(getattr(asset, 'is_missing', False)),
         'isOOC': bool(getattr(asset, 'is_ooc', False)),
+        'isUntagged': _is_untagged(asset),
         'isDegraded': _is_degraded(asset),
         'isDisposed': _is_disposed(asset),
         'isBulk': bool(_is_bulk_asset(asset)),
@@ -17186,6 +17230,7 @@ def _asset_check_build_group(seed_asset):
         'checkable': len([a for a in assets_payload if a['checkEligible']]),
         'excluded': len([a for a in assets_payload if a['excluded'] and not a['isMissing'] and not a.get('isDisposed')]),
         'missing': len([a for a in assets_payload if a['isMissing']]),
+        'untagged': len([a for a in assets_payload if a.get('isUntagged')]),
         'decommissioned': len([a for a in assets_payload if a.get('isDisposed')]),
         'disposed': len([a for a in assets_payload if a.get('isDisposed')]),
     }
@@ -17365,6 +17410,102 @@ def asset_check_sighting():
     except Exception as e:
         logger.error(f"Error updating Asset Check sighting: {e}", exc_info=True)
         return jsonify({'error': 'Failed to update Asset Check sighting'}), 500
+
+
+@app.route('/api/asset-check/mark-untagged', methods=['POST'])
+@require_auth
+def asset_check_mark_untagged():
+    """Mark one serial-identified asset Untagged and record it as sighted."""
+    try:
+        data = request.get_json() or {}
+        asset_identifier = str(data.get('assetId') or data.get('identifier') or '').strip()
+        group_key = str(data.get('groupKey') or '').strip()
+        check_id = str(data.get('checkId') or '').strip()[:160]
+
+        if not asset_identifier:
+            return jsonify({'error': 'Asset ID or Serial Number is required'}), 400
+
+        asset = _asset_check_find_asset(asset_identifier)
+        if not asset:
+            return jsonify({'error': 'Asset not found'}), 404
+        if _is_bulk_asset(asset):
+            return jsonify({'error': 'Bulk quantity assets cannot be marked Untagged'}), 400
+
+        actual_group_key = '|'.join(_asset_group_key(asset))
+        if group_key and group_key != actual_group_key:
+            return jsonify({'error': 'Asset no longer matches this Asset Check group'}), 400
+
+        asset_payload = _asset_check_asset_to_dict(asset, _asset_group_key(asset))
+        if not asset_payload.get('checkEligible'):
+            return jsonify({
+                'error': asset_payload.get('exclusionReason') or 'Asset is not eligible for this Asset Check'
+            }), 400
+
+        username = session.get('user', 'system')
+        today = datetime.now().strftime("%Y/%m/%d")
+        created_at = datetime.now().isoformat(timespec='seconds')
+        already_untagged = _is_untagged(asset)
+
+        if not check_id:
+            check_id = f"asset-check-{int(time.time() * 1000)}-{secrets.token_hex(6)}"
+
+        sighting_exists = any(
+            _asset_check_log_matches_source(log_entry, check_id)
+            for log_entry in (getattr(asset, 'maintenance_logs', []) or [])
+        )
+        if not sighting_exists:
+            asset.maintenance_logs.append(make_maintenance_log(
+                today,
+                username,
+                _asset_check_sighting_description(username),
+                [],
+                log_type=ASSET_CHECK_LOG_TYPE,
+                source={
+                    'kind': 'asset_check_sighting',
+                    'checkId': check_id,
+                    'groupKey': group_key or actual_group_key,
+                    'createdAt': created_at,
+                },
+            ))
+
+        if not already_untagged:
+            previous_status = _asset_condition_status(asset)
+            status_changes = []
+            if previous_status in ASSET_CONDITION_STATUSES:
+                status_changes.append(make_change(previous_status, action='cleared'))
+            status_changes.append(make_change('untagged', action='marked'))
+            _apply_exclusive_asset_status(asset, 'untagged')
+            asset.maintenance_logs.append(make_maintenance_log(
+                today,
+                username,
+                "Asset identified by serial number and marked Untagged during Asset Check",
+                status_changes,
+                log_type=ASSET_CHECK_LOG_TYPE,
+                source={
+                    'kind': 'asset_check_untagged',
+                    'checkId': check_id,
+                    'groupKey': group_key or actual_group_key,
+                    'createdAt': created_at,
+                },
+            ))
+
+        data_manager.save_inventory()
+        invalidate_cache()
+        if not already_untagged:
+            log_action(f"Asset Check marked asset {asset.asset_id} as Untagged")
+
+        return jsonify({
+            'success': True,
+            'message': 'Asset marked Untagged and sighted',
+            'data': {
+                'assetId': asset.asset_id,
+                'checkId': check_id,
+                'alreadyUntagged': already_untagged,
+            },
+        })
+    except Exception as e:
+        logger.error(f"Error marking Asset Check asset Untagged: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to mark asset as Untagged'}), 500
 
 
 @app.route('/api/asset-check/mark-missing', methods=['POST'])
@@ -17547,6 +17688,7 @@ def get_event_assets(event_id):
                 'location': asset.current_location,
                 'isMissing': asset.is_missing,
                 'isOOC': asset.is_ooc,
+                'isUntagged': _is_untagged(asset),
                 'isDegraded': _is_degraded(asset),
                 'isDisposed': _is_disposed(asset)
             })
@@ -17621,6 +17763,7 @@ def create_asset():
                     description=plan['description'],
                     is_missing=False,
                     is_ooc=False,
+                    is_untagged=bool(data.get('isUntagged', False)),
                     is_degraded=bool(data.get('isDegraded', False)),
                     is_disposed=bool(data.get('isDisposed', False) or data.get('isDecommissioned', False)),
                     maintenance_logs=[],
@@ -17647,6 +17790,7 @@ def create_asset():
                         description=plan['description'],
                         is_missing=False,
                         is_ooc=False,
+                        is_untagged=bool(data.get('isUntagged', False)),
                         is_degraded=bool(data.get('isDegraded', False)),
                         is_disposed=bool(data.get('isDisposed', False) or data.get('isDecommissioned', False)),
                         maintenance_logs=[],
@@ -18298,6 +18442,9 @@ def update_asset(asset_id):
 
         if 'isOOC' in data:
             asset.is_ooc = bool(data.get('isOOC'))
+
+        if 'isUntagged' in data:
+            asset.is_untagged = bool(data.get('isUntagged'))
 
         if 'isDegraded' in data:
             asset.is_degraded = bool(data.get('isDegraded'))
@@ -18991,7 +19138,8 @@ def update_bulk_maintenance_fault_log(asset_id, fault_log_id):
             log_type=original_log.get('type') or 'Fault',
             source=source,
             log_id=original_log.get('id') or None,
-            media=original_log.get('media') or []
+            media=original_log.get('media') or [],
+            created_at=original_log.get('createdAt'),
         )
 
         try:
@@ -19320,7 +19468,8 @@ def update_maintenance_log_enhanced(asset_id, log_index):
             log_type=log_type,
             source=original_log.get('source') or {},
             log_id=original_log.get('id') or None,
-            media=original_log.get('media') or []
+            media=original_log.get('media') or [],
+            created_at=original_log.get('createdAt'),
         )
 
         try:
@@ -19390,6 +19539,7 @@ def search_assets():
                     'location': asset.current_location or asset.default_location,
                     'isMissing': asset.is_missing,
                     'isOOC': asset.is_ooc,
+                    'isUntagged': _is_untagged(asset),
                     'isDegraded': _is_degraded(asset),
                     'isDisposed': _is_disposed(asset)
                 })

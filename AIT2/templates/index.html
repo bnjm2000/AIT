@@ -529,7 +529,7 @@
         font-weight: 500;
         cursor: pointer;
         white-space: nowrap;
-        overflow: visible;
+        overflow: hidden;
         text-overflow: clip;
         line-height: 1.2;
         height: 16px;
@@ -539,6 +539,20 @@
         top: 0;
         box-sizing: border-box;
         z-index: 5;
+      }
+
+      .calendar-event-label {
+        display: block;
+        width: 100%;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        pointer-events: none;
+      }
+
+      .calendar-event.span-start .calendar-event-label {
+        max-width: none;
       }
 
       /* Ensure middle and end segments don't interfere with text */
@@ -564,7 +578,6 @@
         border-top-right-radius: 0;
         border-bottom-right-radius: 0;
         z-index: 10 !important;
-        overflow: visible !important;
       }
 
       .calendar-event.span-middle {
@@ -1202,8 +1215,8 @@
         color: #155724;
       }
       .status-deployed {
-        background: #fff3cd;
-        color: #856404;
+        background: var(--status-deployed-color, #1769aa);
+        color: var(--status-deployed-text, #ffffff);
       }
       .status-missing {
         background: #f8d7da;
@@ -1217,6 +1230,10 @@
       .status-degraded {
         background: #fff3cd;
         color: #856404;
+      }
+      .status-untagged {
+        background: #e7f7fa;
+        color: #0e7490;
       }
       .status-disposed,
       .status-decommissioned {
@@ -2100,6 +2117,10 @@
         background: #fff3cd;
         color: #856404;
       }
+      .status-untagged {
+        background: #e7f7fa;
+        color: #0e7490;
+      }
 
       .status-disposed,
       .status-decommissioned {
@@ -2747,6 +2768,9 @@
         --border-soft: #d8e7e5;
         --text-main: #12243a;
         --text-muted: #64748b;
+        --status-deployed-color: #1769aa;
+        --status-deployed-soft: #eaf3fb;
+        --status-deployed-text: #ffffff;
         --brand-main: #0f766e;
         --brand-dark: #0f4f5d;
         --brand-soft: #e6fffb;
@@ -3066,10 +3090,18 @@
         color: #14532d;
       }
 
-      .status-deployed,
+      .status-deployed {
+        background: var(--status-deployed-color, #1769aa);
+        color: var(--status-deployed-text, #ffffff);
+      }
+
       .status-degraded {
         background: #fef3c7;
         color: #78350f;
+      }
+      .status-untagged {
+        background: #e7f7fa;
+        color: #0e7490;
       }
 
       .status-missing,
@@ -3532,7 +3564,7 @@
       .summary-total .events-summary-icon { background: #f1edff; color: #5b21b6; }
       .summary-active .events-summary-icon { background: #fff1df; color: #ea580c; }
       .summary-overdue .events-summary-icon { background: #ffe6e8; color: #dc2626; }
-      .summary-deployed .events-summary-icon { background: #e4f7f8; color: #078b99; }
+      .summary-deployed .events-summary-icon { background: var(--status-deployed-soft, #eaf3fb); color: var(--status-deployed-color, #1769aa); }
 
       .events-summary-number {
         font-size: 1.8rem;
@@ -3783,8 +3815,8 @@
         display: flex;
         flex-direction: column;
         min-width: 0;
-        min-height: 292px;
-        overflow: visible;
+        min-height: 260px;
+        overflow: hidden;
         border: 1.5px solid color-mix(in srgb, var(--event-state) 68%, white);
         border-radius: 13px;
         background: #fff;
@@ -3807,7 +3839,7 @@
         display: flex;
         flex: 1;
         flex-direction: column;
-        padding: 15px 15px 10px;
+        padding: 12px 12px 8px;
       }
 
       .event-workflow-heading,
@@ -3860,7 +3892,7 @@
       }
 
       .event-workflow-title {
-        margin: 8px 0 5px;
+        margin: 6px 0 4px;
         color: #111827;
         font-size: 1.08rem;
         font-weight: 760;
@@ -3891,8 +3923,8 @@
 
       .event-top-icon-button {
         display: inline-grid;
-        width: 30px;
-        height: 30px;
+        width: 27px;
+        height: 27px;
         place-items: center;
         border: 1px solid #dbe5ef;
         border-radius: 7px;
@@ -3929,15 +3961,15 @@
       .event-workflow-progress {
         min-width: 0;
         gap: 8px;
-        margin-top: 15px;
+        margin-top: 10px;
       }
 
       .event-progress-ring {
         position: relative;
         display: grid;
         place-items: center;
-        flex: 0 0 70px;
-        height: 70px;
+        flex: 0 0 56px;
+        height: 56px;
         border-radius: 50%;
         color: #111827;
         font-size: 14px;
@@ -3978,9 +4010,9 @@
         display: grid;
         place-items: center;
         box-sizing: border-box;
-        flex: 0 0 70px;
-        width: 70px;
-        height: 70px;
+        flex: 0 0 56px;
+        width: 56px;
+        height: 56px;
         border: 2px solid color-mix(in srgb, var(--event-state) 70%, white);
         border-radius: 50%;
         background: var(--event-soft);
@@ -3997,8 +4029,8 @@
       }
 
       .event-progress-add-button svg {
-        width: 38px;
-        height: 38px;
+        width: 30px;
+        height: 30px;
         fill: none;
         stroke: currentColor;
         stroke-linecap: round;
@@ -4086,9 +4118,9 @@
         display: flex;
         align-items: center;
         gap: 8px;
-        min-height: 28px;
+        min-height: 24px;
         margin-top: auto;
-        padding: 6px 9px;
+        padding: 4px 8px;
         border-radius: 6px;
         background: var(--event-soft);
         color: var(--event-state);
@@ -4099,8 +4131,8 @@
       .event-workflow-footer {
         justify-content: space-between;
         gap: 10px;
-        min-height: 56px;
-        padding: 9px 14px;
+        min-height: 48px;
+        padding: 7px 12px;
         border-top: 1px solid #e9edf2;
       }
 
@@ -4128,21 +4160,21 @@
       }
 
       .event-primary-action {
-        min-height: 36px;
+        min-height: 32px;
         border: 0;
         border-radius: 7px;
         background: var(--event-state);
         color: #fff;
         cursor: pointer;
-        padding: 8px 13px;
+        padding: 6px 11px;
         font-size: 11px;
         font-weight: 750;
         white-space: nowrap;
       }
 
       .event-overflow-button {
-        width: 36px;
-        min-height: 36px;
+        width: 32px;
+        min-height: 32px;
         border: 1px solid #dce2ea;
         border-radius: 7px;
         background: #fff;
@@ -6491,6 +6523,12 @@
         min-height: 0;
       }
 
+      .prepare-new-left {
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        scrollbar-gutter: stable;
+      }
+
       .prepare-new-card {
         overflow: hidden;
         border: 1px solid var(--plan-border);
@@ -6594,9 +6632,114 @@
       }
 
       .prepare-new-feedback {
+        width: 100%;
+        max-width: 100%;
         min-height: 0;
         margin-top: 7px;
         font-size: 11px;
+      }
+
+      .prepare-new-feedback > div,
+      .prepare-new-feedback > div > span {
+        width: 100%;
+        min-width: 0;
+        max-width: 100%;
+      }
+
+      .prepare-new-feedback > div > span {
+        display: block;
+      }
+
+      .prepare-new-container-result {
+        min-width: 0;
+        overflow-wrap: anywhere;
+      }
+
+      .prepare-new-container-title {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 7px;
+      }
+
+      .prepare-new-container-title span {
+        flex: none;
+        font-size: 10px;
+        font-weight: 800;
+      }
+
+      .prepare-new-container-stats {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 3px 8px;
+        margin: 0;
+      }
+
+      .prepare-new-container-stats div {
+        display: contents;
+      }
+
+      .prepare-new-container-stats dt,
+      .prepare-new-container-stats dd {
+        margin: 0;
+      }
+
+      .prepare-new-container-stats dd {
+        font-weight: 800;
+        text-align: right;
+      }
+
+      .prepare-new-container-stats .has-failures dt,
+      .prepare-new-container-stats .has-failures dd {
+        color: #9f1d29;
+      }
+
+      .prepare-new-container-details {
+        margin-top: 9px;
+        border-top: 1px solid currentColor;
+      }
+
+      .prepare-new-container-details > summary {
+        padding: 7px 0 3px;
+        font-weight: 800;
+        cursor: pointer;
+      }
+
+      .prepare-new-container-detail-scroll {
+        max-height: 190px;
+        margin-top: 5px;
+        padding: 7px 8px;
+        overflow: auto;
+        overscroll-behavior: contain;
+        border: 1px solid rgba(15, 23, 42, 0.14);
+        border-radius: 6px;
+        background: rgba(255, 255, 255, 0.64);
+        scrollbar-gutter: stable;
+      }
+
+      .prepare-new-container-list + .prepare-new-container-list {
+        margin-top: 9px;
+      }
+
+      .prepare-new-container-list h5 {
+        margin: 0 0 4px;
+        font-size: 10px;
+      }
+
+      .prepare-new-container-list ul {
+        margin: 0;
+        padding-left: 17px;
+      }
+
+      .prepare-new-container-list li,
+      .prepare-new-container-failure {
+        overflow-wrap: anywhere;
+        word-break: break-word;
+      }
+
+      .prepare-new-container-failure {
+        color: #9f1d29;
       }
 
       .prepare-new-toggle {
@@ -6956,6 +7099,10 @@
         gap: 6px;
       }
 
+      .prepare-new-asset-grid > .prepare-new-empty {
+        grid-column: 1 / -1;
+      }
+
       .prepare-new-asset-card {
         display: grid;
         grid-template-columns: minmax(0, 1fr) auto;
@@ -7164,6 +7311,11 @@
       }
 
       @media (max-width: 840px) {
+        body:has(#prepare-new-section.active) {
+          width: auto;
+          overflow-x: hidden;
+        }
+
         .prepare-new-page {
           padding: 14px;
         }
@@ -8989,6 +9141,10 @@
       }
 
     </style>
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='css/split-screen.css', v=split_screen_css_version) }}"
+    />
   </head>
   <body>
     <a class="skip-link" href="#mainContent">Skip to main content</a>
@@ -9538,8 +9694,8 @@
               .maintenance-timeline-meta { display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:8px; }
               .maintenance-timeline-actions { display:flex;gap:3px;flex:none; }
               @media(max-width:1100px) { #inventory-section .inventory-summary-layout{grid-template-columns:1fr}#inventory-section .inventory-overview{grid-template-columns:82px minmax(0,1fr)}.inventory-donut{width:80px}#inventory-section .inventory-stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.inventory-model-head,.inventory-model-summary{grid-template-columns:minmax(170px,1.1fr) minmax(160px,1fr) 100px 105px 28px}.inventory-model-head>*:nth-child(5),.inventory-model-summary>*:nth-child(5){display:none}}
-              @media(max-width:780px) { #inventory-section .inventory-page-header{align-items:stretch}#inventory-section .inventory-page-header .btn{align-self:flex-start}#inventory-section .inventory-filter-grid{grid-template-columns:1fr 1fr}.inventory-model-head{display:none}.inventory-model-summary{grid-template-columns:minmax(0,1fr) auto 28px;gap:8px;padding:11px}.inventory-model-summary>*:nth-child(2),.inventory-model-summary>*:nth-child(3),.inventory-model-summary>*:nth-child(5){display:none}.inventory-model-summary .inventory-model-quantity{display:block}.inventory-model-detail{grid-template-columns:1fr;padding:10px}.inventory-group-condition{border-right:0;border-bottom:1px solid #e2ebe8;padding-bottom:13px}.inventory-individual-head,.inventory-individual-row{grid-template-columns:25px minmax(95px,1fr) minmax(90px,1fr) auto}.inventory-individual-head>*:nth-child(4),.inventory-individual-head>*:nth-child(5),.inventory-individual-head>*:nth-child(6),.inventory-individual-row>*:nth-child(4),.inventory-individual-row>*:nth-child(5),.inventory-individual-row>*:nth-child(6){display:none}.maintenance-history-shell{grid-template-columns:1fr}.maintenance-history-aside{padding:0 0 12px;border:0;border-bottom:1px solid #e1eae7;overflow:visible}.maintenance-history-toolbar{position:static;grid-template-columns:1fr auto}.maintenance-history-toolbar h4{grid-column:1}.maintenance-history-search{grid-column:1/-1;grid-row:2}.asset-details-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.asset-details-stock-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.asset-details-operational-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.asset-details-identity-record{grid-template-columns:1fr;gap:8px}}
-              @media(max-width:520px) { #inventory-section .inventory-page-header{flex-direction:column}#inventory-section .inventory-page-header h2{font-size:22px}#inventory-section .inventory-stat-grid{grid-template-columns:1fr 1fr;gap:7px}#inventory-section .inventory-stat{min-height:82px;padding:10px;gap:8px}#inventory-section .inventory-stat-mark{width:32px;height:32px}#inventory-section .inventory-stat-value{font-size:19px}#inventory-section .inventory-filter-grid{grid-template-columns:1fr}#inventory-section #asset-count{width:100%;margin-left:0}.inventory-individual-head,.inventory-individual-row{grid-template-columns:23px minmax(82px,1fr) minmax(70px,.8fr) auto}.inventory-condition-legend{width:100%}}
+              @media(max-width:780px) { #inventory-section .inventory-page-header{align-items:stretch}#inventory-section .inventory-page-header .btn{align-self:flex-start}#inventory-section .inventory-filter-grid{grid-template-columns:1fr 1fr}.inventory-model-head{display:none}.inventory-model-summary{grid-template-columns:minmax(0,1fr) auto 28px;gap:8px;padding:11px}.inventory-model-summary>*:nth-child(2),.inventory-model-summary>*:nth-child(3),.inventory-model-summary>*:nth-child(5){display:none}.inventory-model-summary .inventory-model-quantity{display:block}.inventory-model-detail{grid-template-columns:1fr;padding:10px}.inventory-group-condition{border-right:0;border-bottom:1px solid #e2ebe8;padding-bottom:13px}.inventory-individual-head,.inventory-individual-row{grid-template-columns:25px minmax(95px,1fr) minmax(90px,1fr) auto}.inventory-individual-head>*:nth-child(4),.inventory-individual-head>*:nth-child(5),.inventory-individual-head>*:nth-child(6),.inventory-individual-row>*:nth-child(4),.inventory-individual-row>*:nth-child(5),.inventory-individual-row>*:nth-child(6){display:none}.maintenance-log-modal{align-items:stretch!important;padding:8px}.maintenance-log-content{width:100%!important;height:calc(100dvh - 16px)!important;max-height:none!important;padding:12px!important}.maintenance-log-content>.modal-header{margin-bottom:10px!important;padding-bottom:10px!important}.maintenance-log-content>.modal-header .close-btn{width:38px;height:38px;flex:none}.maintenance-history-shell{display:block;overflow-y:auto;overscroll-behavior:contain;padding-right:2px}.maintenance-history-aside{padding:0 0 14px;border:0;border-bottom:1px solid #e1eae7;overflow:visible}#maintenanceLogModal .maintenance-history-aside .asset-event-history-wrap{max-height:none!important;overflow:visible!important}.maintenance-history-main{overflow:visible;margin-top:14px;padding-right:0}.maintenance-history-toolbar{position:sticky;top:0;grid-template-columns:minmax(0,1fr) auto;padding:8px 0 10px}.maintenance-history-toolbar h4{grid-column:1}.maintenance-history-toolbar .btn{min-height:38px}.maintenance-history-search{grid-column:1/-1;grid-row:2}.maintenance-timeline-top{display:grid;grid-template-columns:minmax(0,1fr) auto}.maintenance-timeline-actions .inventory-icon-button{width:36px;height:36px}.maintenance-log-content>.modal-actions{margin-top:10px!important;padding-top:10px!important}.maintenance-log-content>.modal-actions .btn{width:100%;min-height:40px}.asset-details-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.asset-details-stock-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.asset-details-operational-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.asset-details-identity-record{grid-template-columns:1fr;gap:8px}}
+              @media(max-width:520px) { #inventory-section .inventory-page-header{flex-direction:column}#inventory-section .inventory-page-header h2{font-size:22px}#inventory-section .inventory-stat-grid{grid-template-columns:1fr 1fr;gap:7px}#inventory-section .inventory-stat{min-height:82px;padding:10px;gap:8px}#inventory-section .inventory-stat-mark{width:32px;height:32px}#inventory-section .inventory-stat-value{font-size:19px}#inventory-section .inventory-filter-grid{grid-template-columns:1fr}#inventory-section #asset-count{width:100%;margin-left:0}.inventory-individual-head,.inventory-individual-row{grid-template-columns:23px minmax(82px,1fr) minmax(70px,.8fr) auto}.inventory-condition-legend{width:100%}.maintenance-history-overview{grid-template-columns:repeat(2,minmax(0,1fr))}.maintenance-history-stat:nth-child(2){border-right:0}.maintenance-history-stat:last-child{grid-column:1/-1;border-top:1px solid #dfe8e5}.maintenance-history-toolbar h4{font-size:14px}.maintenance-timeline-item{padding:11px 10px 11px 15px}.maintenance-event-logs-button{min-height:34px;padding:6px 9px}}
             </style>
             <div class="inventory-page-header">
               <div>
@@ -9601,6 +9757,7 @@
                         <label><input type="checkbox" value="deployed" checked /> Deployed</label>
                         <label><input type="checkbox" value="missing" checked /> Missing</label>
                         <label><input type="checkbox" value="ooc" checked /> Out of Commission</label>
+                        <label><input type="checkbox" value="untagged" checked /> Untagged</label>
                         <label><input type="checkbox" value="degraded" checked /> Degraded</label>
                         <label><input type="checkbox" value="decommissioned" checked /> Decommissioned</label>
                       </div>
@@ -9810,51 +9967,129 @@
           <!-- Delivery Order Tab -->
           <div id="delivery-order-section" class="content-section">
               <style>
-                #delivery-order-section { --do-accent: var(--theme-primary, #0f766e); color: #17222a; }
-                #delivery-order-section .do-page-header { align-items: flex-end; }
-                #delivery-order-section .do-page-subtitle { margin: 4px 0 0; color: #687780; font-size: 12px; }
-                #delivery-order-section .section-actions { display: flex; gap: 8px; margin-left: auto; }
+                #delivery-order-section { --do-accent:var(--theme-primary,#0f766e);--do-accent-soft:#eaf6f2;--do-ink:#172b26;--do-muted:#667a73;--do-line:#dce7e3;--do-blue:#1769aa;color:var(--do-ink); }
+                #delivery-order-section .do-page-header { display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--do-line); }
+                #delivery-order-section .do-title-wrap { display:flex;align-items:center;gap:11px;min-width:0; }
+                #delivery-order-section .do-title-mark { width:38px;height:38px;display:grid;place-items:center;border:1px solid #bcd8cf;border-radius:7px;background:var(--do-accent-soft);color:var(--do-accent); }
+                #delivery-order-section .do-title-mark svg { width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round; }
+                #delivery-order-section .do-page-header h2 { margin:0;color:var(--do-ink);font-size:23px;line-height:1.1; }
+                #delivery-order-section .do-event-context { min-height:15px;margin-top:4px;color:var(--do-muted);font-size:11px;font-weight:700; }
+                #delivery-order-section .section-actions { display:flex;align-items:center;gap:8px;flex:0 0 auto; }
+                #delivery-order-section .do-export-button { min-height:38px;padding:8px 14px;border-color:var(--do-accent);background:var(--do-accent);color:#fff;font-weight:800;box-shadow:0 4px 12px rgba(15,118,110,.18); }
+                #delivery-order-section .do-export-button:hover { filter:brightness(.94);transform:translateY(-1px); }
                 #delivery-order-section .do-details-panel,
-                #delivery-order-section .do-items-panel { border: 1px solid #dfe6e4; border-radius: 8px; background: #fff; box-shadow: 0 6px 18px rgba(20, 39, 36, .05); }
-                #delivery-order-section .do-panel-heading { display: flex; align-items: center; justify-content: space-between; margin: -2px 0 16px; padding-bottom: 11px; border-bottom: 1px solid #edf1f0; }
-                #delivery-order-section .do-panel-heading h3 { margin: 0; font-size: 14px; }
-                #delivery-order-section .do-panel-heading span { display: block; margin-top: 3px; color: #7b898f; font-size: 11px; }
-                #delivery-order-section .do-details-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 2px; }
-                #delivery-order-section .do-job-grid { grid-template-columns: 1fr 1fr; }
-                #delivery-order-section .do-checkbox-row { display: flex; align-items: center; gap: 8px; }
-                #delivery-order-section .do-field-help { color: #718087; font-size: 11px; }
-                #delivery-order-section .do-items-panel { padding: 0 !important; overflow: visible; }
+                #delivery-order-section .do-items-panel { border:1px solid var(--do-line);border-radius:7px;background:#fff;box-shadow:0 5px 16px rgba(20,39,36,.045); }
+                #delivery-order-section .do-details-panel { margin-bottom:12px;padding:0;overflow:hidden; }
+                #delivery-order-section .do-panel-heading { display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0;padding:12px 14px;border-bottom:1px solid var(--do-line);background:#f5f9f7; }
+                #delivery-order-section .do-panel-heading h3 { margin:0;color:var(--do-ink);font-size:13px; }
+                #delivery-order-section .do-panel-heading span { color:var(--do-muted);font-size:9px;font-weight:800;text-transform:uppercase; }
+                #delivery-order-section .do-form-section { padding:13px 14px; }
+                #delivery-order-section .do-form-section + .do-form-section { border-top:1px solid #e7eeec; }
+                #delivery-order-section .do-section-label { display:flex;align-items:center;gap:7px;margin:0 0 10px;color:#40564f;font-size:10px;font-weight:800;text-transform:uppercase; }
+                #delivery-order-section .do-section-label::before { width:4px;height:14px;border-radius:2px;background:var(--do-accent);content:""; }
+                #delivery-order-section .do-document-grid { display:grid;grid-template-columns:minmax(150px,.7fr) minmax(140px,.55fr) minmax(220px,1.25fr) minmax(200px,1fr);gap:10px; }
+                #delivery-order-section .do-recipient-grid { display:grid;grid-template-columns:minmax(220px,1.2fr) minmax(180px,1fr) minmax(150px,.7fr);gap:10px; }
+                #delivery-order-section .do-address-grid { display:grid;grid-template-columns:1.4fr 1fr minmax(130px,.5fr);gap:10px;margin-top:10px; }
+                #delivery-order-section .do-final-grid { display:grid;grid-template-columns:minmax(0,1fr) 230px;gap:14px;align-items:start; }
+                #delivery-order-section .form-group { min-width:0;margin:0; }
+                #delivery-order-section .form-label { margin-bottom:5px;color:#536861;font-size:9px;font-weight:800;text-transform:uppercase; }
+                #delivery-order-section .form-input { min-height:37px;padding:7px 9px;border-color:#cbdad5;border-radius:6px;background:#fff;color:var(--do-ink);font-size:11px; }
+                #delivery-order-section .form-input:focus { border-color:var(--do-accent);box-shadow:0 0 0 3px rgba(15,118,110,.1); }
+                #delivery-order-section .do-client-input-row { display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px; }
+                #delivery-order-section .do-client-directory { min-height:37px;padding:7px 10px;border-color:#b9d4e7;background:#eaf3fb;color:#155b8f;font-size:10px;font-weight:800;white-space:nowrap; }
+                #delivery-order-section .do-comments textarea { min-height:68px;resize:vertical; }
+                #delivery-order-section .do-pdf-options { min-height:68px;padding:10px 12px;border-left:3px solid var(--do-accent);background:#f4f9f7; }
+                #delivery-order-section .do-pdf-options strong { display:block;margin-bottom:8px;color:var(--do-ink);font-size:10px;text-transform:uppercase; }
+                #delivery-order-section .do-checkbox-row { display:flex;align-items:center;gap:8px;color:#40564f;font-size:11px;font-weight:700;cursor:pointer; }
+                #delivery-order-section .do-checkbox-row input { width:16px;height:16px;margin:0;accent-color:var(--do-accent); }
+                #delivery-order-section .do-items-panel { padding:0!important;overflow:visible; }
                 #delivery-order-section #deliveryItemsPreview { min-height: 220px; }
+                #delivery-order-section .do-items-container { overflow:visible;border-radius:7px;background:#fff; }
+                #delivery-order-section .do-toolbar { display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 14px;border-bottom:1px solid var(--do-line);background:#fff; }
+                #delivery-order-section .do-items-title { display:flex;align-items:baseline;gap:9px;min-width:0; }
+                #delivery-order-section .do-items-title h3 { margin:0;color:var(--do-ink);font-size:13px; }
+                #delivery-order-section .do-items-title span { color:var(--do-muted);font-size:10px;font-weight:700; }
+                #delivery-order-section .do-items-actions { display:flex;align-items:center;gap:8px; }
+                #delivery-order-section .do-edit-toggle { display:flex;align-items:center;gap:7px;color:#40564f;font-size:10px;font-weight:800;cursor:pointer; }
+                #delivery-order-section .do-edit-toggle input { position:absolute;opacity:0;pointer-events:none; }
+                #delivery-order-section .do-toggle-control { width:30px;height:17px;padding:2px;border:1px solid #b9ccc6;border-radius:9px;background:#dfe9e6;transition:background .16s,border-color .16s; }
+                #delivery-order-section .do-toggle-control::after { display:block;width:11px;height:11px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(23,43,38,.24);content:"";transition:transform .16s; }
+                #delivery-order-section .do-edit-toggle input:checked + .do-toggle-control { border-color:var(--do-accent);background:var(--do-accent); }
+                #delivery-order-section .do-edit-toggle input:checked + .do-toggle-control::after { transform:translateX(13px); }
+                #delivery-order-section .do-reset-button { min-height:30px;padding:5px 9px;border-color:#d3dfdb;background:#fff;color:#536861;font-size:9px;font-weight:800; }
+                #delivery-order-section .do-composer-toolbar { padding:12px 14px;background:#f5f9f7; }
+                #delivery-order-section .do-catalog-composer { width:100%;display:grid;grid-template-columns:minmax(260px,1fr) minmax(150px,.55fr) 82px auto;gap:8px;align-items:end; }
+                #delivery-order-section .do-catalog-field { position:relative; }
+                #delivery-order-section .do-catalog-label { display:block;margin-bottom:4px;color:#61716f;font-size:9px;font-weight:800;text-transform:uppercase; }
+                #delivery-order-section .do-catalog-results { position:absolute;z-index:80;top:calc(100% + 4px);left:0;right:0;max-height:280px;overflow:auto;border:1px solid #cadbd5;border-radius:6px;background:#fff;box-shadow:0 12px 28px rgba(25,43,39,.16); }
+                #delivery-order-section .do-catalog-result { width:100%;padding:9px 11px;border:0;border-bottom:1px solid #edf1f0;background:#fff;text-align:left;cursor:pointer; }
+                #delivery-order-section .do-catalog-result:hover,#delivery-order-section .do-catalog-result:focus { background:#eef7f5;outline:none; }
+                #delivery-order-section .do-catalog-result strong { display:block;color:var(--do-ink);font-size:11px; }
+                #delivery-order-section .do-catalog-result span { display:block;margin-top:2px;color:var(--do-muted);font-size:9px; }
+                #delivery-order-section .do-catalog-add { min-height:37px;padding:7px 11px;background:var(--do-accent);font-size:10px;font-weight:800; }
+                #delivery-order-section .do-department-section + .do-department-section { border-top:1px solid var(--do-line); }
+                #delivery-order-section .do-dept-header { display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 14px;border-bottom:1px solid #e3ebe8;background:#f0f6f4;color:#314a43;font-size:10px;font-weight:800;text-transform:uppercase; }
+                #delivery-order-section .do-dept-count { min-width:23px;padding:2px 6px;border-radius:9px;background:#dcebe6;color:#315c50;text-align:center;font-size:9px; }
+                #delivery-order-section .do-item-row { display:grid;grid-template-columns:minmax(0,1fr) 76px;gap:10px;align-items:center;min-height:39px;padding:6px 14px;border-bottom:1px solid #edf2f0;background:#fff;transition:background .14s; }
+                #delivery-order-section .do-item-row:last-child { border-bottom:0; }
+                #delivery-order-section .do-item-row:hover { background:#fafcfb; }
+                #delivery-order-section .do-item-row.do-edit-row { grid-template-columns:20px minmax(220px,1fr) minmax(130px,.5fr) 72px auto;gap:7px; }
+                #delivery-order-section .do-item-description { min-width:0;margin:0; }
+                #delivery-order-section .do-item-name { display:block;color:#2d433d;font-size:11px;font-weight:700;overflow-wrap:anywhere; }
+                #delivery-order-section .do-item-quantity { width:auto;margin:0;text-align:right; }
+                #delivery-order-section .do-item-quantity input { width:100%;min-height:32px;padding:5px 7px;border-color:#cbdad5;border-radius:5px;font-size:10px; }
+                #delivery-order-section .do-quantity-badge { display:inline-grid;min-width:30px;height:23px;place-items:center;padding:2px 8px;border-radius:5px;background:var(--do-accent-soft);color:#176652;font-size:10px;font-weight:800; }
+                #delivery-order-section .do-item-department { width:auto;margin:0; }
+                #delivery-order-section .do-item-actions { display:flex;align-items:center;justify-content:flex-end;gap:5px; }
+                #delivery-order-section .do-item-actions .btn { min-height:30px;padding:5px 8px;border-radius:5px;font-size:9px;font-weight:800; }
+                #delivery-order-section .do-item-actions .do-save { border-color:#a8d2c5;background:#e8f5f1;color:#176652; }
+                #delivery-order-section .do-item-actions .do-del { width:30px;padding:0;border-color:#efc4c4;background:#fff2f2;color:#a62d35;font-size:17px; }
+                #delivery-order-section .do-drag-handle { width:18px;height:25px;display:grid;grid-template-columns:repeat(2,3px);grid-template-rows:repeat(3,3px);place-content:center;gap:3px;margin:0;padding:0;color:#82928d;cursor:grab; }
+                #delivery-order-section .do-drag-handle i { width:3px;height:3px;border-radius:50%;background:currentColor; }
+                #delivery-order-section .do-item-row.dragging { opacity:.45; }
+                #delivery-order-section .do-item-row.drag-over { box-shadow:inset 0 2px 0 var(--do-accent); }
+                #delivery-order-section .do-empty-dept,#delivery-order-section .no-items-message { padding:24px 14px;color:#7c8c87;font-size:10px;text-align:center; }
                 @media (max-width: 1100px) {
-                  #delivery-order-section .do-details-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+                  #delivery-order-section .do-document-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+                  #delivery-order-section .do-recipient-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+                  #delivery-order-section .do-recipient-grid .do-client-name { grid-column:span 2; }
                 }
-                @media (max-width: 680px) {
-                  #delivery-order-section .do-page-header { align-items: stretch; }
-                  #delivery-order-section .section-actions { margin-left: 0; }
-                  #delivery-order-section .section-actions .btn { flex: 1; }
-                  #delivery-order-section .do-details-grid { grid-template-columns: 1fr; }
+                @media (max-width: 760px) {
+                  body:has(#delivery-order-section.active) { width:auto;overflow-x:hidden; }
+                  #delivery-order-section .do-page-header { align-items:stretch;flex-direction:column; }
+                  #delivery-order-section .section-actions { width:100%; }
+                  #delivery-order-section .section-actions .btn { width:100%; }
+                  #delivery-order-section .do-document-grid,#delivery-order-section .do-recipient-grid,#delivery-order-section .do-address-grid,#delivery-order-section .do-final-grid { grid-template-columns:1fr; }
+                  #delivery-order-section .do-recipient-grid .do-client-name { grid-column:auto; }
+                  #delivery-order-section .do-form-section { padding:12px; }
+                  #delivery-order-section .do-pdf-options { border-top:1px solid var(--do-line);border-left:0; }
+                  #delivery-order-section .do-catalog-composer { grid-template-columns:1fr 1fr; }
+                  #delivery-order-section .do-catalog-field { grid-column:1/-1; }
+                  #delivery-order-section .do-item-row.do-edit-row { grid-template-columns:18px minmax(0,1fr) 74px auto; }
+                  #delivery-order-section .do-item-row.do-edit-row .do-item-department { grid-column:2/4;grid-row:2; }
+                  #delivery-order-section .do-item-row.do-edit-row .do-item-actions { grid-column:4;grid-row:1/3; }
                 }
               </style>
               <div class="content-header do-page-header">
-                  <div>
+                  <div class="do-title-wrap">
+                    <span class="do-title-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 3h9l3 3v15H6z"/><path d="M15 3v4h4M9 11h6M9 15h6"/></svg></span>
+                    <div>
                       <h2 class="content-title">Delivery Order</h2>
-                      <p class="do-page-subtitle">Review delivery details and organise the asset list before export.</p>
+                      <div id="doEventContext" class="do-event-context"></div>
+                    </div>
                   </div>
                   <div class="section-actions">
-                      <button onclick="generateDeliveryOrder('pdf')" class="btn btn-primary" id="generatePdfBtn">
-                          Generate PDF
-                      </button>
-                      <button onclick="generateDeliveryOrder('excel')" class="btn btn-success" id="generateExcelBtn">
-                          Generate Excel
-                      </button>
+                      <button onclick="generateDeliveryOrder()" class="btn do-export-button" id="generatePdfBtn">Export PDF</button>
                   </div>
               </div>
 
               <div class="form-container do-details-panel">
                   <div class="do-panel-heading">
-                      <div><h3>Delivery details</h3><span>Information shown on the exported document</span></div>
+                      <h3>Document details</h3><span>Draft</span>
                   </div>
-                  <div class="form-grid do-details-grid">
+                  <section class="do-form-section">
+                    <h4 class="do-section-label">Delivery</h4>
+                    <div class="do-document-grid">
                       <div class="form-group">
                           <label for="doNumber" class="form-label">DO number</label>
                           <input type="text" id="doNumber" class="form-input">
@@ -9866,38 +10101,6 @@
                       </div>
                       
                       <div class="form-group">
-                          <label for="clientName" class="form-label">Client name</label>
-                          <input type="text" id="clientName" class="form-input">
-                      </div>
-                      
-                      <div class="form-group">
-                          <label for="clientCompany" class="form-label">Client company</label>
-                          <input type="text" id="clientCompany" class="form-input">
-                      </div>
-                      
-                      <div class="form-group">
-                          <label for="deliveryAddress1" class="form-label">Delivery address</label>
-                          <input type="text" id="deliveryAddress1" class="form-input">
-                      </div>
-                      
-                      <div class="form-group">
-                          <label for="deliveryAddress2" class="form-label">Address line 2</label>
-                          <input type="text" id="deliveryAddress2" class="form-input">
-                      </div>
-                      
-                      <div class="form-group">
-                          <label for="deliveryAddress3" class="form-label">Postal code</label>
-                          <input type="text" id="deliveryAddress3" class="form-input">
-                      </div>
-                      
-                      <div class="form-group">
-                          <label for="clientPhone" class="form-label">Phone number</label>
-                          <input type="text" id="clientPhone" class="form-input">
-                      </div>
-                  </div>
-                  
-                  <div class="do-details-grid do-job-grid">
-                      <div class="form-group">
                           <label for="jobTitle" class="form-label">Project</label>
                           <input type="text" id="jobTitle" class="form-input">
                       </div>
@@ -9905,20 +10108,30 @@
                           <label for="jobLocation" class="form-label">Job location</label>
                           <input type="text" id="jobLocation" class="form-input">
                       </div>
-                  </div>
-                  
-                  <div class="form-group">
-                      <label for="additionalComments" class="form-label">Additional comments</label>
-                      <textarea id="additionalComments" class="form-input" rows="3"></textarea>
-                  </div>
+                    </div>
+                  </section>
 
-                  <div class="form-group">
-                      <label for="showAssetIds" class="form-label do-checkbox-row">
-                          <input type="checkbox" id="showAssetIds" style="margin: 0;">
-                          List Asset IDs in PDF
-                      </label>
-                      <small class="do-field-help">Show individual asset IDs under each item in the PDF.</small>
-                  </div>
+                  <section class="do-form-section">
+                    <h4 class="do-section-label">Recipient</h4>
+                    <div class="do-recipient-grid">
+                      <div class="form-group do-client-name">
+                        <label for="clientName" class="form-label">Client name</label>
+                        <div class="do-client-input-row"><input type="text" id="clientName" class="form-input"><button id="btnKnownClients" type="button" class="btn do-client-directory" onclick="openClientsManager()">Clients</button></div>
+                      </div>
+                      <div class="form-group"><label for="clientCompany" class="form-label">Company</label><input type="text" id="clientCompany" class="form-input"></div>
+                      <div class="form-group"><label for="clientPhone" class="form-label">Phone number</label><input type="text" id="clientPhone" class="form-input"></div>
+                    </div>
+                    <div class="do-address-grid">
+                      <div class="form-group"><label for="deliveryAddress1" class="form-label">Delivery address</label><input type="text" id="deliveryAddress1" class="form-input"></div>
+                      <div class="form-group"><label for="deliveryAddress2" class="form-label">Address line 2</label><input type="text" id="deliveryAddress2" class="form-input"></div>
+                      <div class="form-group"><label for="deliveryAddress3" class="form-label">Postal code</label><input type="text" id="deliveryAddress3" class="form-input"></div>
+                    </div>
+                  </section>
+
+                  <section class="do-form-section do-final-grid">
+                    <div class="form-group do-comments"><label for="additionalComments" class="form-label">Additional comments</label><textarea id="additionalComments" class="form-input" rows="3"></textarea></div>
+                    <div class="do-pdf-options"><strong>PDF options</strong><label for="showAssetIds" class="do-checkbox-row"><input type="checkbox" id="showAssetIds"><span>List individual Asset IDs</span></label></div>
+                  </section>
               </div>
 
               <div class="items-preview do-items-panel">
@@ -10001,8 +10214,8 @@
               #maintenance-section .maintenance-flagged-footer { display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:8px;color:var(--maint-muted);font-size:9px; }
               #maintenance-section .maintenance-add-log { min-height:28px;padding:4px 8px;border:1px solid #b8d3cb;border-radius:5px;background:#eaf6f2;color:#0d665f;font:inherit;font-size:9px;font-weight:800;cursor:pointer; }
               @media(max-width:1050px) { #maintenance-section .maintenance-summary{grid-template-columns:repeat(3,minmax(0,1fr))}#maintenance-section .maintenance-summary-item:nth-child(3){border-right:0}#maintenance-section .maintenance-summary-item:nth-child(n+4){border-top:1px solid var(--maint-line)}#maintenance-section .maintenance-list-header,#maintenance-section .maintenance-activity-row{grid-template-columns:minmax(145px,.9fr) minmax(220px,1.6fr) minmax(105px,.7fr) 28px}#maintenance-section .maintenance-list-header>*:nth-child(4),#maintenance-section .maintenance-activity-row>*:nth-child(4){display:none} }
-              @media(max-width:720px) { #maintenance-section .maintenance-page-header{flex-direction:column}#maintenance-section .maintenance-page-actions{width:100%;justify-content:flex-start}#maintenance-section .maintenance-summary{grid-template-columns:repeat(2,minmax(0,1fr))}#maintenance-section .maintenance-summary-item{border-right:1px solid var(--maint-line)!important;border-top:1px solid var(--maint-line)}#maintenance-section .maintenance-summary-item:nth-child(-n+2){border-top:0}#maintenance-section .maintenance-summary-item:nth-child(even){border-right:0!important}#maintenance-section .maintenance-summary-item:last-child{grid-column:1/-1;border-right:0!important}#maintenance-section .maintenance-tabs{flex-wrap:wrap}.maintenance-tab{white-space:nowrap}#maintenance-section .maintenance-tabs-search{order:3;width:100%;margin-left:0}#maintenance-section .maintenance-list-header{display:none}#maintenance-section .maintenance-activity-list{border-top:1px solid var(--maint-line);border-radius:6px}#maintenance-section .maintenance-activity-row{grid-template-columns:minmax(0,1fr) 25px;gap:7px;padding:10px}#maintenance-section .maintenance-activity-row>*:nth-child(2),#maintenance-section .maintenance-activity-row>*:nth-child(3){grid-column:1}#maintenance-section .maintenance-activity-row>*:nth-child(4){display:block;grid-column:1}#maintenance-section .maintenance-activity-row>*:nth-child(5){grid-column:2;grid-row:1/5}#maintenance-section .maintenance-log-description{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}#maintenance-section .maintenance-flagged-grid{grid-template-columns:1fr} }
-              @media(max-width:430px) { #maintenance-section .maintenance-page-actions .btn{flex:1 1 140px;justify-content:center}#maintenance-section .maintenance-summary-item{min-height:64px;padding:9px}#maintenance-section .maintenance-summary-value{font-size:17px}#maintenance-section .maintenance-tab-content{padding:7px} }
+              @media(max-width:720px) { #maintenance-section{min-width:0;overflow-x:hidden}#maintenance-section .maintenance-page-header{flex-direction:column}#maintenance-section .maintenance-page-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));width:100%;justify-content:stretch}#maintenance-section .maintenance-page-actions .btn{justify-content:center;white-space:normal}#maintenance-section .maintenance-summary{grid-template-columns:repeat(2,minmax(0,1fr))}#maintenance-section .maintenance-summary-item{min-width:0;border-right:1px solid var(--maint-line)!important;border-top:1px solid var(--maint-line)}#maintenance-section .maintenance-summary-item:nth-child(-n+2){border-top:0}#maintenance-section .maintenance-summary-item:nth-child(even){border-right:0!important}#maintenance-section .maintenance-summary-item:last-child{grid-column:1/-1;border-right:0!important}#maintenance-section .maintenance-tabs{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));align-items:stretch}#maintenance-section .maintenance-tab{width:100%;min-width:0!important;white-space:normal}#maintenance-section .maintenance-tabs-search{grid-column:1/-1;order:initial;width:100%;margin-left:0}#maintenance-section .maintenance-filter-bar{padding-bottom:2px;scrollbar-width:none;overscroll-behavior-inline:contain}#maintenance-section .maintenance-filter-bar::-webkit-scrollbar{display:none}#maintenance-section .maintenance-list-header{display:none}#maintenance-section .maintenance-activity-list{border-top:1px solid var(--maint-line);border-radius:6px}#maintenance-section .maintenance-activity-row{grid-template-columns:minmax(0,1fr) auto 30px;grid-template-areas:"asset asset arrow" "log log arrow" "condition date arrow";gap:7px 10px;padding:10px;align-items:start}#maintenance-section .maintenance-activity-row>*:nth-child(1){grid-area:asset}#maintenance-section .maintenance-activity-row>*:nth-child(2){grid-area:log}#maintenance-section .maintenance-activity-row>*:nth-child(3){grid-area:condition}#maintenance-section .maintenance-activity-row>*:nth-child(4){display:block;grid-area:date;text-align:right}#maintenance-section .maintenance-activity-row>*:nth-child(5){grid-area:arrow;align-self:center;justify-self:end}#maintenance-section .maintenance-row-chevron{width:30px;height:36px}#maintenance-section .maintenance-log-description{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}#maintenance-section .maintenance-flagged-grid{grid-template-columns:1fr}#maintenance-section .maintenance-flagged-footer{flex-wrap:wrap}#maintenance-section .maintenance-add-log{min-height:34px} }
+              @media(max-width:430px) { #maintenance-section .maintenance-page-header h2{font-size:23px}#maintenance-section .maintenance-page-actions .btn{min-height:40px;padding:7px 8px}#maintenance-section .maintenance-summary-item{min-height:64px;padding:9px}#maintenance-section .maintenance-summary-value{font-size:17px}#maintenance-section .maintenance-tab-content{padding:7px} }
             </style>
             <header class="maintenance-page-header">
               <div><h2>Maintenance</h2><p>Recent asset work, open conditions and complete maintenance history.</p></div>
@@ -10136,8 +10349,11 @@
           </div>
           <div class="event-assignee-picker" data-event-assignee-context="add">
             <div class="event-assignee-heading">
-              <label class="form-label" for="addEventAssigneeSearch">Assigned Users</label>
-              <small>Users only see events assigned to them.</small>
+              <div>
+                <label class="form-label" for="addEventAssigneeSearch">Assigned Users</label>
+                <small>Only active users from this company are shown.</small>
+              </div>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="assignAllEventAssignees('add')">Assign All</button>
             </div>
             <div id="addEventAssigneeSelected" class="event-assignee-selected">
               <span class="event-assignee-empty">No users assigned</span>
@@ -10560,6 +10776,7 @@
                 <option value="ok" style="color:#28a745;font-weight:600;">OK / Clear Status</option>
                 <option value="ooc" style="color:#dc3545;font-weight:600;">OOC</option>
                 <option value="missing" style="color:#fd7e14;font-weight:600;">Missing</option>
+                <option value="untagged" style="color:#0e7490;font-weight:600;">Untagged</option>
                 <option value="degraded" style="color:#856404;font-weight:600;">Degraded</option>
                 <option value="decommissioned" style="color:#6c757d;font-weight:600;">Decommissioned</option>
               </select>

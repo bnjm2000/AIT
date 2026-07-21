@@ -9,6 +9,7 @@ let departments = {};
 let companyOptions = [];
 let usersAdminUsers = [];
 let usersAdminSort = { key: 'name', direction: 'asc' };
+const USERS_ADMIN_AUTOSAVE_DELAY = 700;
 let eventAssigneeUsers = [];
 let addEventAssignedUsers = new Set();
 let editEventAssignedUsers = new Set();
@@ -1207,6 +1208,7 @@ function getAssetConditionStatus(asset) {
   if (asset.isDisposed || asset.isDecommissioned || asset.status === 'disposed' || asset.status === 'decommissioned') return 'decommissioned';
   if (asset.isMissing || asset.status === 'missing') return 'missing';
   if (asset.isOOC || asset.status === 'ooc') return 'ooc';
+  if (asset.isUntagged || asset.status === 'untagged') return 'untagged';
   if (asset.isDegraded || asset.status === 'degraded') return 'degraded';
   return 'available';
 }
@@ -1270,6 +1272,7 @@ function maintenanceStatusMeta(value) {
     ok: { label: 'OK / Clear Status', color: '#28a745' },
     ooc: { label: 'OOC', color: '#dc3545' },
     missing: { label: 'Missing', color: '#fd7e14' },
+    untagged: { label: 'Untagged', color: '#0e7490' },
     degraded: { label: 'Degraded', color: '#856404' },
     decommissioned: { label: 'Decommissioned', color: '#6c757d' },
     disposed: { label: 'Decommissioned', color: '#6c757d' }
@@ -1366,7 +1369,7 @@ function maintenanceCustomSelectMeta(kind, value) {
   }
   const meta = maintenanceStatusMeta(value);
   const backgrounds = {
-    nochange: '#f1f3f5', ok: '#e7f6ee', ooc: '#fdebed', missing: '#fff0e2',
+    nochange: '#f1f3f5', ok: '#e7f6ee', ooc: '#fdebed', missing: '#fff0e2', untagged: '#e7f7fa',
     degraded: '#fff3df', decommissioned: '#edf0f2', disposed: '#edf0f2'
   };
   return { ...meta, background: backgrounds[String(value || '').toLowerCase()] || '#f1f3f5' };
@@ -1465,6 +1468,7 @@ function maintenanceStatusSelectHtml(id, name, selected = 'nochange') {
       ${option('ok')}
       ${option('ooc')}
       ${option('missing')}
+      ${option('untagged')}
       ${option('degraded')}
       ${option('decommissioned')}
     </select>
@@ -3036,8 +3040,10 @@ function getTagDisplay(tag) {
 }
 
 // Navigation functions
+const COMPACT_NAVIGATION_MEDIA = "(max-width: 1300px)";
+
 function isMobileNavigationViewport() {
-  return window.matchMedia && window.matchMedia("(max-width: 768px)").matches;
+  return window.matchMedia && window.matchMedia(COMPACT_NAVIGATION_MEDIA).matches;
 }
 
 function setMobileNavigation(open) {
@@ -3076,7 +3082,7 @@ function setupMobileNavigation() {
   sync();
 
   if (window.matchMedia) {
-    const media = window.matchMedia("(max-width: 768px)");
+    const media = window.matchMedia(COMPACT_NAVIGATION_MEDIA);
     if (media.addEventListener) {
       media.addEventListener("change", sync);
     } else if (media.addListener) {
@@ -6331,7 +6337,6 @@ function formatUserLastOnline(value) {
 
 function usersAdminRowMarkup(user, index) {
   const rowId = `userrow-${index}`;
-  const encodedOriginalUsername = encodeURIComponent(user.username);
   const isSelf = currentUser && currentUser.username === user.username;
   const role = String(user.role || (user.isOwner || user.isSuperAdmin ? 'owner' : user.isAdmin ? 'admin' : 'user')).toLowerCase();
   const protectedOwner = role === 'owner' && !isOwnerUser();
@@ -6342,12 +6347,13 @@ function usersAdminRowMarkup(user, index) {
   const displayName = String(user.name || '').trim();
 
   return `
-    <tr>
+    <tr data-user-admin-row data-original-username="${escapeHtmlAttr(user.username)}">
       <td>
         <input
           type="text"
           id="name-${rowId}"
           class="form-input user-admin-name-input"
+          data-user-admin-autosave="name"
           value="${escapeHtmlAttr(displayName)}"
           placeholder="Name"
           ${canEditUser ? '' : 'disabled'}
@@ -6358,6 +6364,7 @@ function usersAdminRowMarkup(user, index) {
           type="text"
           id="username-${rowId}"
           class="form-input user-admin-username-input"
+          data-user-admin-autosave="username"
           value="${escapeHtmlAttr(user.username)}"
           ${canEditUser ? '' : 'disabled'}
         >
@@ -6369,6 +6376,7 @@ function usersAdminRowMarkup(user, index) {
           type="tel"
           id="phone-${rowId}"
           class="form-input user-admin-phone-input"
+          data-user-admin-autosave="phone"
           value="${escapeHtmlAttr(user.phone || '')}"
           placeholder="+65 9123 4567"
           autocomplete="tel"
@@ -6377,28 +6385,28 @@ function usersAdminRowMarkup(user, index) {
       </td>
       <td>
         ${canEditRole ? `
-          <select id="role-${rowId}" class="form-input user-admin-role-select">
+          <select id="role-${rowId}" class="form-input user-admin-role-select" data-user-admin-autosave="role">
             ${userRoleOptionsMarkup(role)}
           </select>
         ` : roleBadgeMarkup(role)}
       </td>
       <td>
         <label class="user-admin-switch user-admin-switch-compact">
-          <input type="checkbox" id="sales-${rowId}" ${user.hasSalesAccess || user.isSales ? 'checked' : ''} ${canEditRole ? '' : 'disabled'}>
+          <input type="checkbox" id="sales-${rowId}" data-user-admin-autosave="sales" ${user.hasSalesAccess || user.isSales ? 'checked' : ''} ${canEditRole ? '' : 'disabled'}>
           <span class="user-admin-switch-slider"></span>
           <span class="user-admin-switch-text">Sales</span>
         </label>
       </td>
       ${isSuperAdminUser() ? `
         <td>
-          <select id="company-${rowId}" class="form-input" ${canEditUser ? '' : 'disabled'}>
+          <select id="company-${rowId}" class="form-input" data-user-admin-autosave="company" ${canEditUser ? '' : 'disabled'}>
             ${companyOptionsMarkup(user.companyCode || currentUser?.company?.code || '')}
           </select>
         </td>
       ` : ''}
       <td>
         <label class="user-admin-switch user-admin-switch-compact">
-          <input type="checkbox" id="active-${rowId}" ${user.isActive ? 'checked' : ''} ${canEditUser ? '' : 'disabled'}>
+          <input type="checkbox" id="active-${rowId}" data-user-admin-autosave="active" ${user.isActive ? 'checked' : ''} ${canEditUser ? '' : 'disabled'}>
           <span class="user-admin-switch-slider"></span>
           <span class="user-admin-switch-text">Active</span>
         </label>
@@ -6407,9 +6415,9 @@ function usersAdminRowMarkup(user, index) {
         ${lastOnlineDisplay}
       </td>
       <td class="users-admin-actions">
-        <button class="btn btn-primary btn-sm" onclick="saveUserAdmin('${encodedOriginalUsername}', '${rowId}')" ${canEditUser ? '' : 'disabled'}>Save</button>
-        <button class="btn btn-warning btn-sm" onclick="openResetPasswordModal('${encodedOriginalUsername}')" ${canEditUser ? '' : 'disabled'}>Reset Password</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteUserAdmin('${encodedOriginalUsername}')" ${(isSelf || !canEditUser) ? 'disabled title="This account cannot be deleted here"' : ''}>Delete</button>
+        <span class="user-admin-save-status is-saved" data-user-admin-save-status role="status" aria-live="polite"><span class="user-admin-save-mark" aria-hidden="true"></span><span data-user-admin-save-label>Saved</span></span>
+        <button type="button" class="btn btn-warning btn-sm" onclick="openResetPasswordModal(encodeURIComponent(this.closest('[data-user-admin-row]').dataset.originalUsername))" ${canEditUser ? '' : 'disabled'}>Reset Password</button>
+        <button type="button" class="btn btn-danger btn-sm" onclick="deleteUserAdmin(encodeURIComponent(this.closest('[data-user-admin-row]').dataset.originalUsername))" ${(isSelf || !canEditUser) ? 'disabled title="This account cannot be deleted here"' : ''}>Delete</button>
       </td>
     </tr>
   `;
@@ -6448,12 +6456,7 @@ function renderUsersAdminTables() {
   const inactiveLabel = search && inactiveUsers.length !== inactiveTotal
     ? `Inactive Users (${inactiveUsers.length} of ${inactiveTotal})`
     : `Inactive Users (${inactiveTotal})`;
-  const summary = document.getElementById('usersAdminSummary');
-  if (summary) {
-    const activeTotal = usersAdminUsers.filter(user => user.isActive).length;
-    const salesTotal = usersAdminUsers.filter(user => user.hasSalesAccess || user.isSales).length;
-    summary.textContent = `${activeTotal} active / ${inactiveTotal} inactive / ${salesTotal} sales`;
-  }
+  updateUsersAdminSummary();
 
   const activeMarkup = activeUsers.length
     ? `<div class="users-admin-table-scroll"><table class="table">${usersAdminTableHeader()}<tbody>${activeUsers.map(usersAdminRowMarkup).join('')}</tbody></table></div>`
@@ -6469,6 +6472,180 @@ function renderUsersAdminTables() {
       <div class="inactive-users-content">${inactiveMarkup}</div>
     </details>
   `;
+  bindUsersAdminAutosave(container);
+}
+
+function updateUsersAdminSummary() {
+  const summary = document.getElementById('usersAdminSummary');
+  if (!summary) return;
+  const activeTotal = usersAdminUsers.filter(user => user.isActive).length;
+  const inactiveTotal = usersAdminUsers.length - activeTotal;
+  const salesTotal = usersAdminUsers.filter(user => user.hasSalesAccess || user.isSales).length;
+  summary.textContent = `${activeTotal} active / ${inactiveTotal} inactive / ${salesTotal} sales`;
+}
+
+function collectUserAdminRowPayload(row) {
+  const field = name => row.querySelector(`[data-user-admin-autosave="${name}"]`);
+  const payload = {
+    name: field('name')?.value.trim() || '',
+    phone: field('phone')?.value.trim() || '',
+    username: field('username')?.value.trim() || '',
+    isActive: Boolean(field('active')?.checked),
+  };
+  const role = field('role')?.value || '';
+  if (canCurrentUserManageRoles() && role) {
+    payload.role = role;
+    payload.hasSalesAccess = Boolean(field('sales')?.checked);
+  }
+  const companyCode = field('company')?.value || '';
+  if (isSuperAdminUser() && companyCode) payload.companyCode = companyCode;
+  return payload;
+}
+
+function userAdminPayloadFingerprint(payload) {
+  return JSON.stringify(payload);
+}
+
+function setUserAdminSaveStatus(row, status, label, detail = '') {
+  const indicator = row.querySelector('[data-user-admin-save-status]');
+  if (!indicator) return;
+  indicator.className = `user-admin-save-status is-${status}`;
+  indicator.title = detail;
+  const text = indicator.querySelector('[data-user-admin-save-label]');
+  if (text) text.textContent = label;
+}
+
+function scheduleUserAdminAutosave(row, delay = USERS_ADMIN_AUTOSAVE_DELAY) {
+  const state = row.__userAdminAutosaveState;
+  if (!state || !row.isConnected) return;
+  clearTimeout(state.timer);
+  setUserAdminSaveStatus(row, state.inFlight ? 'saving' : 'pending', state.inFlight ? 'Saving' : 'Unsaved');
+  state.timer = setTimeout(() => flushUserAdminAutosave(row), Math.max(0, delay));
+}
+
+function applyUserAdminSavedData(row, endpointUsername, submittedPayload, responseData) {
+  const saved = responseData || {};
+  const savedUsername = String(saved.username || submittedPayload.username || endpointUsername);
+  const userIndex = usersAdminUsers.findIndex(user => user.username === endpointUsername || user.username === savedUsername);
+  const companyCode = saved.companyCode || submittedPayload.companyCode || usersAdminUsers[userIndex]?.companyCode || '';
+  const company = companyOptions.find(item => String(item.code || '').toUpperCase() === String(companyCode).toUpperCase());
+  const merged = {
+    ...(userIndex >= 0 ? usersAdminUsers[userIndex] : {}),
+    ...submittedPayload,
+    ...saved,
+    username: savedUsername,
+    companyCode,
+    companyName: company?.name || usersAdminUsers[userIndex]?.companyName || companyCode,
+  };
+  if (userIndex >= 0) usersAdminUsers[userIndex] = merged;
+  row.dataset.originalUsername = savedUsername;
+  const activeMeta = row.querySelector('.users-admin-inline-meta');
+  if (activeMeta) activeMeta.innerHTML = userActiveBadgeMarkup(merged);
+  updateUsersAdminSummary();
+
+  if (currentUser?.username === endpointUsername) {
+    currentUser = { ...currentUser, ...saved, username: savedUsername };
+    refreshSidebarUserMenu();
+  }
+}
+
+function applyUserAdminResponseToUnchangedRow(row, responseData) {
+  if (!responseData) return;
+  const field = name => row.querySelector(`[data-user-admin-autosave="${name}"]`);
+  if (field('name')) field('name').value = responseData.name || '';
+  if (field('username')) field('username').value = responseData.username || '';
+  if (field('phone')) field('phone').value = responseData.phone || '';
+  if (field('role') && responseData.role) field('role').value = responseData.role;
+  if (field('sales')) field('sales').checked = Boolean(responseData.hasSalesAccess || responseData.isSales);
+  if (field('company') && responseData.companyCode) field('company').value = responseData.companyCode;
+  if (field('active')) field('active').checked = Boolean(responseData.isActive);
+}
+
+async function flushUserAdminAutosave(row) {
+  const state = row.__userAdminAutosaveState;
+  if (!state || !row.isConnected) return;
+  clearTimeout(state.timer);
+  state.timer = null;
+
+  const payload = collectUserAdminRowPayload(row);
+  const requestFingerprint = userAdminPayloadFingerprint(payload);
+  if (!payload.username) {
+    setUserAdminSaveStatus(row, 'error', 'Not saved', 'Username cannot be empty');
+    return;
+  }
+  if (requestFingerprint === state.lastSavedFingerprint) {
+    setUserAdminSaveStatus(row, 'saved', 'Saved');
+    return;
+  }
+  if (state.inFlight) {
+    state.queued = true;
+    return;
+  }
+
+  state.inFlight = true;
+  state.queued = false;
+  const endpointUsername = state.originalUsername;
+  let saveSucceeded = false;
+  setUserAdminSaveStatus(row, 'saving', 'Saving');
+
+  try {
+    const updateResult = await apiCall(`/api/users/${encodeURIComponent(endpointUsername)}`, 'PUT', payload);
+    const unchangedSinceRequest = userAdminPayloadFingerprint(collectUserAdminRowPayload(row)) === requestFingerprint;
+    state.originalUsername = String(updateResult?.data?.username || payload.username || endpointUsername);
+    state.lastSavedFingerprint = requestFingerprint;
+    applyUserAdminSavedData(row, endpointUsername, payload, updateResult?.data);
+    if (unchangedSinceRequest) {
+      applyUserAdminResponseToUnchangedRow(row, updateResult?.data);
+      state.lastSavedFingerprint = userAdminPayloadFingerprint(collectUserAdminRowPayload(row));
+    }
+    saveSucceeded = true;
+    setUserAdminSaveStatus(
+      row,
+      'saved',
+      updateResult?.data?.selfChangesPending ? 'Saved; re-login required' : 'Saved'
+    );
+  } catch (error) {
+    setUserAdminSaveStatus(row, 'error', 'Not saved', error.message || 'Unable to save this user');
+  } finally {
+    state.inFlight = false;
+    if (!row.isConnected) return;
+    const currentFingerprint = userAdminPayloadFingerprint(collectUserAdminRowPayload(row));
+    if (state.queued || (saveSucceeded && currentFingerprint !== state.lastSavedFingerprint)) {
+      state.queued = false;
+      scheduleUserAdminAutosave(row, 0);
+    }
+  }
+}
+
+function bindUsersAdminAutosave(root) {
+  root.querySelectorAll('[data-user-admin-row]').forEach(row => {
+    const initialPayload = collectUserAdminRowPayload(row);
+    row.__userAdminAutosaveState = {
+      timer: null,
+      inFlight: false,
+      queued: false,
+      originalUsername: row.dataset.originalUsername || initialPayload.username,
+      lastSavedFingerprint: userAdminPayloadFingerprint(initialPayload),
+    };
+
+    row.querySelectorAll('[data-user-admin-autosave]:not([disabled])').forEach(control => {
+      const field = control.dataset.userAdminAutosave;
+      if (field === 'name') {
+        control.addEventListener('input', () => scheduleUserAdminAutosave(row));
+      } else if (field === 'username' || field === 'phone') {
+        control.addEventListener('input', () => setUserAdminSaveStatus(row, 'pending', 'Unsaved'));
+      }
+      control.addEventListener('change', () => scheduleUserAdminAutosave(row, 0));
+      if (control.matches('input[type="text"], input[type="tel"]')) {
+        control.addEventListener('blur', () => scheduleUserAdminAutosave(row, 0));
+        control.addEventListener('keydown', event => {
+          if (event.key !== 'Enter') return;
+          event.preventDefault();
+          control.blur();
+        });
+      }
+    });
+  });
 }
 
 async function loadUsersAdmin() {
@@ -6639,63 +6816,6 @@ async function deleteCompanyFromUsersAdmin() {
 
   const company = (companyOptions || []).find(item => String(item.code || '').toUpperCase() === String(code).toUpperCase());
   await deleteCompanyAdmin(code, Boolean(company?.isActive), companyOptions.length);
-}
-
-async function saveUserAdmin(encodedOriginalUsername, rowId) {
-  const originalUsername = decodeURIComponent(encodedOriginalUsername);
-
-  const name = document.getElementById(`name-${rowId}`)?.value.trim() || '';
-  const newUsername = document.getElementById(`username-${rowId}`)?.value.trim();
-  const phone = document.getElementById(`phone-${rowId}`)?.value.trim() || '';
-  const role = document.getElementById(`role-${rowId}`)?.value || '';
-  const hasSalesAccess = document.getElementById(`sales-${rowId}`)?.checked || false;
-  const isActive = document.getElementById(`active-${rowId}`)?.checked || false;
-  const companyCode = document.getElementById(`company-${rowId}`)?.value || '';
-
-  if (!newUsername) {
-    showNotification('warning', 'Username cannot be empty');
-    return;
-  }
-
-  try {
-    const payload = {
-      name,
-      phone,
-      username: newUsername,
-      isActive
-    };
-    if (canCurrentUserManageRoles() && role) {
-      payload.role = role;
-      payload.hasSalesAccess = hasSalesAccess;
-    }
-    if (isSuperAdminUser() && companyCode) {
-      payload.companyCode = companyCode;
-    }
-
-    const updateResult = await apiCall(`/api/users/${encodeURIComponent(originalUsername)}`, 'PUT', payload);
-
-    // Refresh current-user data in case the logged-in admin renamed themselves
-    try {
-      const currentUserRes = await apiCall('/api/current-user');
-      currentUser = currentUserRes.data;
-      refreshSidebarUserMenu();
-    } catch (e) {
-      console.warn('Could not refresh current user:', e);
-    }
-
-    const selfChangesPending = !!(updateResult?.data?.selfChangesPending);
-    showNotification(
-      'success',
-      selfChangesPending
-        ? `Updated ${newUsername}. Your own permission changes apply after you log out and back in.`
-        : `Updated ${newUsername}`
-    );
-    await loadUsersAdmin();
-
-  } catch (error) {
-    showNotification('error', `Failed to update user: ${error.message}`);
-    await loadUsersAdmin();
-  }
 }
 
 async function resetUserPasswordAdmin(encodedOriginalUsername, newPassword) {
@@ -7081,7 +7201,65 @@ function ensureUserAdminStyles() {
     }
 
     .users-admin-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
       white-space: nowrap;
+    }
+
+    .user-admin-save-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 72px;
+      color: #667085;
+      font-size: 12px;
+      font-weight: 650;
+    }
+
+    .user-admin-save-mark {
+      width: 8px;
+      height: 8px;
+      flex: 0 0 8px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .user-admin-save-status.is-saved {
+      color: #16845b;
+    }
+
+    .user-admin-save-status.is-pending {
+      color: #b56b0b;
+    }
+
+    .user-admin-save-status.is-error {
+      color: #c43d4b;
+    }
+
+    .user-admin-save-status.is-saving {
+      color: #475467;
+    }
+
+    .user-admin-save-status.is-saving .user-admin-save-mark {
+      width: 11px;
+      height: 11px;
+      flex-basis: 11px;
+      border: 2px solid #d0d5dd;
+      border-top-color: #16845b;
+      background: transparent;
+      animation: user-admin-saving-spin 600ms linear infinite;
+    }
+
+    @keyframes user-admin-saving-spin {
+      to { transform: rotate(360deg); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .user-admin-save-status.is-saving .user-admin-save-mark {
+        animation: none;
+      }
     }
 
     .user-admin-last-online {
@@ -8680,16 +8858,26 @@ function inventoryVirtualRowHtml(asset, isAdmin) {
 
 const INVENTORY_CONDITION_META = {
   available: { label: 'OK', color: '#159f6a' },
+  untagged: { label: 'Untagged', color: '#0e7490' },
   degraded: { label: 'Degraded', color: '#d99a18' },
   ooc: { label: 'OOC', color: '#d84b52' },
   missing: { label: 'Missing', color: '#64748b' },
   decommissioned: { label: 'Decommissioned', color: '#283b36' }
 };
 
+function appCssHexColour(variableName, fallback) {
+  const value = getComputedStyle(document.documentElement).getPropertyValue(variableName).trim();
+  return /^#[0-9a-f]{6}$/i.test(value) ? value : fallback;
+}
+
+const ASSET_DEPLOYED_COLOR = appCssHexColour('--status-deployed-color', '#1769aa');
+const ASSET_DEPLOYED_SOFT_COLOR = appCssHexColour('--status-deployed-soft', '#eaf3fb');
+
 const INVENTORY_AVAILABILITY_META = {
   available: { label: 'Available', color: '#159f6a' },
+  untagged: { label: 'Untagged', color: '#0e7490' },
   degraded: { label: 'Degraded', color: '#d99a18' },
-  deployed: { label: 'Deployed', color: '#1769aa' },
+  deployed: { label: 'Deployed', color: ASSET_DEPLOYED_COLOR },
   ooc: { label: 'OOC', color: '#d84b52' },
   missing: { label: 'Missing', color: '#64748b' },
   decommissioned: { label: 'Decommissioned', color: '#283b36' }
@@ -8714,7 +8902,7 @@ function inventoryAssetQuantity(asset) {
 }
 
 function inventoryConditionCounts(assetList) {
-  const counts = { available: 0, degraded: 0, ooc: 0, missing: 0, decommissioned: 0 };
+  const counts = { available: 0, untagged: 0, degraded: 0, ooc: 0, missing: 0, decommissioned: 0 };
   (assetList || []).forEach(asset => {
     const total = inventoryAssetQuantity(asset);
     if (!asset?.isBulk) {
@@ -8749,6 +8937,7 @@ function inventoryConditionCounts(assetList) {
 function inventoryAvailabilityCounts(assetList) {
   const counts = {
     available: 0,
+    untaggedAvailable: 0,
     degradedAvailable: 0,
     deployed: 0,
     ooc: 0,
@@ -8769,6 +8958,7 @@ function inventoryAvailabilityCounts(assetList) {
       else if (asset.status === 'deployed' || Number(asset.deployedQuantity || 0) > 0) counts.deployed += 1;
       else {
         counts.available += 1;
+        if (condition === 'untagged') counts.untaggedAvailable += 1;
         if (condition === 'degraded') counts.degradedAvailable += 1;
       }
       return;
@@ -8811,7 +9001,8 @@ function inventoryAvailabilityCounts(assetList) {
 
 function inventoryAvailabilityChartHtml(counts, compact = false) {
   const segmentsByStatus = {
-    available: Math.max(0, counts.available - counts.degradedAvailable),
+    available: Math.max(0, counts.available - counts.untaggedAvailable - counts.degradedAvailable),
+    untagged: counts.untaggedAvailable,
     degraded: counts.degradedAvailable,
     deployed: counts.deployed,
     ooc: counts.ooc,
@@ -8884,9 +9075,16 @@ function groupInventoryByModel(assetList) {
 function inventoryLatestMaintenance(assetList) {
   let latest = null;
   (assetList || []).forEach(asset => {
-    getMaintenanceLogRecords(asset).forEach(record => {
-      const timestamp = maintenanceLogDateSortValue(record.date);
-      if (!latest || timestamp > latest.timestamp) latest = { ...record, timestamp };
+    getMaintenanceLogRecords(asset).forEach((record, originalIndex) => {
+      const candidate = {
+        ...record,
+        originalIndex,
+        timestamp: maintenanceLogDateSortValue(record.date),
+        createdTimestamp: maintenanceLogCreatedSortValue(record.createdAt)
+      };
+      if (!latest || compareMaintenanceLogsNewestFirst(candidate, latest) < 0) {
+        latest = candidate;
+      }
     });
   });
   return latest;
@@ -8917,8 +9115,13 @@ function inventoryAvailabilityBadgesHtml(asset) {
   if (counts.missing > 0) badges.push(statusBadgeHtml('missing', withQuantity(counts.missing, 'Missing')));
   if (counts.decommissioned > 0) badges.push(statusBadgeHtml('decommissioned', withQuantity(counts.decommissioned, 'Decommissioned')));
 
-  const clearAvailable = Math.max(0, counts.available - counts.degradedAvailable);
+  const clearAvailable = Math.max(0, counts.available - counts.untaggedAvailable - counts.degradedAvailable);
   if (clearAvailable > 0) badges.push(statusBadgeHtml('available', withQuantity(clearAvailable, 'OK')));
+  if (counts.untaggedAvailable > 0) {
+    badges.push(statusBadgeHtml('untagged', withQuantity(counts.untaggedAvailable, 'Untagged')));
+  } else if (counts.deployed > 0 && getAssetConditionStatus(asset) === 'untagged') {
+    badges.push(statusBadgeHtml('untagged', 'Untagged'));
+  }
   if (counts.degradedAvailable > 0) {
     badges.push(statusBadgeHtml('degraded', withQuantity(counts.degradedAvailable, 'Degraded')));
   } else if (counts.deployed > 0 && getAssetConditionStatus(asset) === 'degraded') {
@@ -8963,13 +9166,13 @@ function renderInventorySummary() {
   const conditionCounts = inventoryConditionCounts(sourceAssets);
   const availability = inventoryAvailabilityCounts(sourceAssets);
   const total = availability.total;
-  const attention = conditionCounts.degraded + conditionCounts.ooc + conditionCounts.missing;
+  const attention = conditionCounts.untagged + conditionCounts.degraded + conditionCounts.ooc + conditionCounts.missing;
   const modelCount = groupInventoryByModel(sourceAssets).length;
   const availableMarker = availability.degradedAvailable > 0 ? '*' : '';
   const cards = [
-    ['box', availability.deployed, 'Assets deployed', total ? `${Math.round(availability.deployed / total * 100)}% of total stock` : `${modelCount} brand/model groups`, '#1769aa', '#eaf3fb'],
+    ['box', availability.deployed, 'Assets deployed', total ? `${Math.round(availability.deployed / total * 100)}% of total stock` : `${modelCount} brand/model groups`, ASSET_DEPLOYED_COLOR, ASSET_DEPLOYED_SOFT_COLOR],
     ['check', `${availability.available}${availableMarker}`, 'Available for use', availability.degradedAvailable > 0 ? `* Includes ${availability.degradedAvailable} degraded` : (total ? `${Math.round(availability.available / total * 100)}% of stock` : 'No stock'), '#138a5b', '#e7f6ee'],
-    ['alert', attention, 'Needs attention', `${conditionCounts.degraded} degraded`, '#bc7a0a', '#fff3df'],
+    ['alert', attention, 'Needs attention', `${conditionCounts.untagged} untagged, ${conditionCounts.degraded} degraded`, '#bc7a0a', '#fff3df'],
     ['wrench', conditionCounts.ooc, 'Out of commission', total ? `${Math.round(conditionCounts.ooc / total * 100)}% of stock` : 'No stock', '#b43741', '#fdebed']
   ];
   const grid = document.getElementById('inventory-summary-grid');
@@ -9148,6 +9351,7 @@ function ensureAssetEditModal() {
             <option value="ok">OK</option>
             <option value="ooc">OOC</option>
             <option value="missing">Missing</option>
+            <option value="untagged">Untagged</option>
             <option value="degraded">Degraded</option>
             <option value="decommissioned">Decommissioned</option>
           </select>
@@ -9252,6 +9456,7 @@ async function saveAssetEditModal() {
     currentLocation: document.getElementById('editAssetCurrentLocation').value.trim(),
     isMissing: document.getElementById('editAssetStatus')?.value === 'missing',
     isOOC: document.getElementById('editAssetStatus')?.value === 'ooc',
+    isUntagged: document.getElementById('editAssetStatus')?.value === 'untagged',
     isDegraded: document.getElementById('editAssetStatus')?.value === 'degraded',
     isDecommissioned: document.getElementById('editAssetStatus')?.value === 'decommissioned',
     quantity: parseInt(document.getElementById('editAssetQuantity')?.value || '1', 10) || 1,
@@ -9697,6 +9902,7 @@ function bulkAssetStatusPayload(statusValue) {
   return {
     isMissing: status === 'missing',
     isOOC: status === 'ooc',
+    isUntagged: status === 'untagged',
     isDegraded: status === 'degraded',
     isDecommissioned: status === 'decommissioned'
   };
@@ -10662,7 +10868,7 @@ function getContainerDepartments(container) {
 }
 
 function getContainerConditionCounts(container) {
-  const counts = { available: 0, degraded: 0, ooc: 0, missing: 0, decommissioned: 0 };
+  const counts = { available: 0, untagged: 0, degraded: 0, ooc: 0, missing: 0, decommissioned: 0 };
   (container.assetIds || []).forEach(assetId => {
     const asset = getAssetFromCache(assetId);
     if (!asset) {
@@ -10686,8 +10892,8 @@ function renderContainerConditionSummary(container) {
 
 function getContainerLatestMaintenance(container) {
   return getMaintenanceLogRecords(container)
-    .slice()
-    .sort((a, b) => maintenanceLogDateSortValue(b.date) - maintenanceLogDateSortValue(a.date))[0] || null;
+    .map((record, originalIndex) => ({ ...record, originalIndex }))
+    .sort(compareMaintenanceLogsNewestFirst)[0] || null;
 }
 
 function containerMatchesSearch(container, term) {
@@ -10891,7 +11097,7 @@ function renderContainerAssetsTable(assetIds) {
 function renderContainerMaintenanceHistory(container) {
   const records = getMaintenanceLogRecords(container)
     .map((log, index) => ({ ...log, originalIndex: index }))
-    .sort((a, b) => maintenanceLogDateSortValue(b.date) - maintenanceLogDateSortValue(a.date));
+    .sort(compareMaintenanceLogsNewestFirst);
 
   if (!records.length) {
     return `
@@ -13308,6 +13514,33 @@ async function loadCalendarView() {
   }
 }
 
+function calendarEventLabelSegments(name, spanDays) {
+  const text = String(name || '').trim();
+  const count = Math.max(1, Number(spanDays) || 1);
+  if (count === 1 || !text) return [text];
+
+  const segments = [];
+  const targetLength = window.innerWidth <= 768 ? 8 : 20;
+  let cursor = 0;
+  for (let index = 0; index < count; index++) {
+    while (text[cursor] === ' ') cursor += 1;
+    if (cursor >= text.length) {
+      segments.push('');
+      continue;
+    }
+
+    let end = index === count - 1 ? text.length : Math.min(text.length, cursor + targetLength);
+    if (end < text.length && text[end] !== ' ') {
+      const previousSpace = text.lastIndexOf(' ', end);
+      const nextSpace = text.indexOf(' ', end);
+      end = previousSpace > cursor ? previousSpace : (nextSpace === -1 ? text.length : nextSpace);
+    }
+    segments.push(text.slice(cursor, end).trim());
+    cursor = end + (text[end] === ' ' ? 1 : 0);
+  }
+  return segments;
+}
+
 function renderCalendar(events) {
   const container = document.getElementById('calendar-container');
   const currentMonth = currentCalendarDate.getMonth();
@@ -13404,15 +13637,16 @@ function renderCalendar(events) {
       if (placement) {
         const eventClass = `calendar-event ${getEventStateClass(placement.event.state)}${placement.event.tag === 'dry hire' ? ' dry-hire' : ''} ${placement.spanClass}`;
         
-        // Only show text on the first day of the event span or if it's a single day event
-        let eventText = '';
-        if (placement.spanClass === 'span-single' || placement.spanClass === 'span-start') {
-          eventText = placement.event.name;
-        }
+        const spanDays = Math.max(1, placement.spanDays || 1);
+        const spanIndex = Math.max(0, placement.spanIndex || 0);
+        const labelSegment = calendarEventLabelSegments(placement.event.name || '', spanDays)[spanIndex] || '';
+        const eventText = labelSegment
+          ? `<span class="calendar-event-label" aria-hidden="true">${escapeHtml(labelSegment)}</span>`
+          : '';
 
         eventLayersHTML.push(`
           <div class="calendar-event-layer" style="top: ${20 + (row * 18)}px; z-index: ${placement.spanClass === 'span-start' ? 10 : 5};">
-            <div class="${eventClass}" onclick="openEventFromCalendar(${placement.event.id})" title="${placement.event.name}" style="z-index: ${placement.spanClass === 'span-start' ? 10 : 5}; position: relative;">
+            <div class="${eventClass}" onclick="openEventFromCalendar(${placement.event.id})" title="${escapeHtmlAttr(placement.event.name || '')}" style="z-index: ${placement.spanClass === 'span-start' ? 10 : 5}; position: relative;">
               ${eventText}
             </div>
           </div>
@@ -13578,7 +13812,9 @@ function processEventsForCalendar(events, calendarDays) {
             event,
             dayIndex: day.dayIndex,
             row: assignedRow,
-            spanClass
+            spanClass,
+            spanDays: group.length,
+            spanIndex: dayIndexInGroup
           });
         });
       });
@@ -14049,6 +14285,9 @@ async function processUniversalAsset(eventId) {
         return;
     }
 
+    // A completed container result remains visible until this next valid scan.
+    prepareNewPageState.scanRevision += 1;
+    if (feedbackDiv) feedbackDiv.innerHTML = '';
     input.value = assetId;
 
     if (!window.__processingContainerBatch) {
@@ -14505,7 +14744,8 @@ function showFeedback(feedbackDiv, type, message) {
 function clearUniversalInput() {
     const input = document.getElementById('universalAssetInput');
     const feedbackDiv = document.getElementById('universal-asset-feedback');
-    
+
+    prepareNewPageState.scanRevision += 1;
     input.value = '';
     feedbackDiv.innerHTML = '';
     input.focus();
@@ -16973,7 +17213,7 @@ function normalizeMaintenanceChange(change) {
 
   const normalizedKind = kind === 'disposed' ? 'decommissioned' : kind;
 
-  if (normalizedKind === 'ooc' || normalizedKind === 'missing' || normalizedKind === 'degraded' || normalizedKind === 'decommissioned') {
+  if (normalizedKind === 'ooc' || normalizedKind === 'missing' || normalizedKind === 'untagged' || normalizedKind === 'degraded' || normalizedKind === 'decommissioned') {
     const rawAction = String(change.action || '').trim().toLowerCase();
     if (['mark', 'marked'].includes(rawAction)) return { kind: normalizedKind, action: 'marked' };
     if (['clear', 'cleared', 'remove', 'removed', 'unmark', 'unmarked'].includes(rawAction)) {
@@ -17005,6 +17245,12 @@ function maintenanceChangeFromLegacyPart(part) {
   }
   if (['cleared missing', 'clear missing', 'removed missing', 'unmarked missing', 'unmark missing'].includes(lower)) {
     return { kind: 'missing', action: 'cleared' };
+  }
+  if (['marked untagged', 'mark untagged'].includes(lower)) {
+    return { kind: 'untagged', action: 'marked' };
+  }
+  if (['cleared untagged', 'clear untagged', 'removed untagged', 'unmarked untagged', 'unmark untagged'].includes(lower)) {
+    return { kind: 'untagged', action: 'cleared' };
   }
   if (['marked degraded', 'mark degraded'].includes(lower)) {
     return { kind: 'degraded', action: 'marked' };
@@ -17206,7 +17452,7 @@ function maintenanceMediaLinksHtml(media, emptyHtml = '<span style="color:#999;"
           : `Photo ${++imageCount}`;
         const title = item.name || label;
         return `
-          <span style="display:inline-flex;align-items:center;gap:3px;">
+          <span data-maintenance-media-item data-maintenance-media-id="${escapeHtmlAttr(item.id)}" style="display:inline-flex;align-items:center;gap:3px;">
             <a
               class="maintenance-media-link"
             href="${escapeHtmlAttr(item.url)}"
@@ -17221,7 +17467,10 @@ function maintenanceMediaLinksHtml(media, emptyHtml = '<span style="color:#999;"
                 class="maintenance-media-delete-btn"
                 title="Permanently remove ${escapeHtmlAttr(title)}"
                 aria-label="Permanently remove ${escapeHtmlAttr(title)}"
-                onclick="event.preventDefault(); event.stopPropagation(); deleteMaintenanceMedia('${escapeJs(item.id)}', '${escapeJs(assetId)}', ${logIndex})"
+                data-maintenance-media-delete
+                data-media-id="${escapeHtmlAttr(item.id)}"
+                data-asset-id="${escapeHtmlAttr(assetId)}"
+                data-log-index="${logIndex}"
                 style="border:0;background:transparent;color:#dc3545;cursor:pointer;font-size:16px;line-height:1;padding:2px 4px;"
               >&times;</button>
             ` : ''}
@@ -17230,6 +17479,22 @@ function maintenanceMediaLinksHtml(media, emptyHtml = '<span style="color:#999;"
       }).join('')}
     </div>
   `;
+}
+
+function bindMaintenanceMediaDeleteButtons(root = document) {
+  root.querySelectorAll('[data-maintenance-media-delete]:not([data-delete-bound="true"])').forEach(button => {
+    button.dataset.deleteBound = 'true';
+    button.addEventListener('click', event => {
+      event.preventDefault();
+      event.stopPropagation();
+      deleteMaintenanceMedia(
+        button.dataset.mediaId || '',
+        button.dataset.assetId || '',
+        Number(button.dataset.logIndex ?? -1),
+        button
+      );
+    });
+  });
 }
 
 function updateMaintenanceMediaSelection(inputId, listId) {
@@ -17302,6 +17567,7 @@ function normalizeMaintenanceLogRecord(log) {
     return {
       id: String(log.id || log.logId || ''),
       date: String(log.date || ''),
+      createdAt: String(log.createdAt || log.created_at || ''),
       user: String(log.user || ''),
       userDisplayName: String(log.userDisplayName || log.user || ''),
       description: String(log.description || ''),
@@ -17320,7 +17586,7 @@ function normalizeMaintenanceLogRecord(log) {
     ? { date: parts[0] || '', user: parts[1] || '', description: parts.slice(2).join('\t') || '' }
     : { date: '', user: '', description: String(log || '') };
   const legacy = splitLegacyMaintenanceStatus(parsed.description);
-  return { ...parsed, id: '', description: legacy.description, type: DEFAULT_MAINTENANCE_LOG_TYPE, cost: '', changes: legacy.changes, source: {}, media: [] };
+  return { ...parsed, id: '', createdAt: '', description: legacy.description, type: DEFAULT_MAINTENANCE_LOG_TYPE, cost: '', changes: legacy.changes, source: {}, media: [] };
 }
 
 function getMaintenanceLogRecords(asset) {
@@ -17371,14 +17637,40 @@ function maintenanceLogDateSortValue(dateValue) {
   return timestamp;
 }
 
+function maintenanceLogCreatedSortValue(createdAt) {
+  const timestamp = Date.parse(String(createdAt || '').trim());
+  return Number.isFinite(timestamp) ? timestamp : Number.NEGATIVE_INFINITY;
+}
+
+function compareMaintenanceLogsNewestFirst(logA, logB) {
+  const dateA = Number.isFinite(logA?.timestamp)
+    ? logA.timestamp
+    : maintenanceLogDateSortValue(logA?.date);
+  const dateB = Number.isFinite(logB?.timestamp)
+    ? logB.timestamp
+    : maintenanceLogDateSortValue(logB?.date);
+  if (dateA !== dateB) return dateB - dateA;
+
+  const createdA = Number.isFinite(logA?.createdTimestamp)
+    ? logA.createdTimestamp
+    : maintenanceLogCreatedSortValue(logA?.createdAt);
+  const createdB = Number.isFinite(logB?.createdTimestamp)
+    ? logB.createdTimestamp
+    : maintenanceLogCreatedSortValue(logB?.createdAt);
+  if (createdA !== createdB) return createdB - createdA;
+
+  return Number(logB?.originalIndex ?? -1) - Number(logA?.originalIndex ?? -1);
+}
+
 function getLastAddedMaintenanceLog(asset) {
-  const records = getMaintenanceLogRecords(asset);
-  return records.length ? records[records.length - 1] : null;
+  return getMaintenanceLogRecords(asset)
+    .map((record, originalIndex) => ({ ...record, originalIndex }))
+    .sort(compareMaintenanceLogsNewestFirst)[0] || null;
 }
 
 function maintenanceMarkedStatus(log) {
   const record = normalizeMaintenanceLogRecord(log);
-  const flaggedStatuses = new Set(['ooc', 'missing', 'degraded']);
+  const flaggedStatuses = new Set(['ooc', 'missing', 'untagged', 'degraded']);
 
   for (let index = record.changes.length - 1; index >= 0; index--) {
     const change = record.changes[index];
@@ -17407,13 +17699,13 @@ function getLastFlaggedMaintenanceLog(asset) {
 
 function sortAssetsByLastAddedMaintenanceLog(assetsToSort) {
   return [...(assetsToSort || [])].sort((assetA, assetB) => {
-    const dateA = maintenanceLogDateSortValue(getLastAddedMaintenanceLog(assetA)?.date);
-    const dateB = maintenanceLogDateSortValue(getLastAddedMaintenanceLog(assetB)?.date);
-    if (dateA !== dateB) {
-      if (!Number.isFinite(dateA)) return 1;
-      if (!Number.isFinite(dateB)) return -1;
-      return dateB - dateA;
-    }
+    const latestA = getLastAddedMaintenanceLog(assetA);
+    const latestB = getLastAddedMaintenanceLog(assetB);
+    if (latestA && latestB) {
+      const comparison = compareMaintenanceLogsNewestFirst(latestA, latestB);
+      if (comparison) return comparison;
+    } else if (latestA) return -1;
+    else if (latestB) return 1;
 
     return assetMaintenanceDisplayId(assetA).localeCompare(
       assetMaintenanceDisplayId(assetB),
@@ -17433,6 +17725,7 @@ function getMaintenanceChangeLabels(logOrChanges) {
     if (change.kind === 'serial') return `Serial: ${change.value}`;
     if (change.kind === 'ooc') return change.action === 'marked' ? 'Marked OOC' : 'Cleared OOC';
     if (change.kind === 'missing') return change.action === 'marked' ? 'Marked Missing' : 'Cleared Missing';
+    if (change.kind === 'untagged') return change.action === 'marked' ? 'Marked Untagged' : 'Cleared Untagged';
     if (change.kind === 'degraded') return change.action === 'marked' ? 'Marked Degraded' : 'Cleared Degraded';
     if (change.kind === 'decommissioned' || change.kind === 'disposed') return change.action === 'marked' ? 'Marked Decommissioned' : 'Cleared Decommissioned';
     return '';
@@ -17443,10 +17736,12 @@ function maintenanceChangeColour(label) {
   const changeLower = String(label || '').toLowerCase();
   if (changeLower.includes('cleared ooc') || changeLower.includes('clear ooc') || changeLower.includes('removed ooc') || changeLower.includes('unmark ooc')) return '#28a745';
   if (changeLower.includes('cleared missing') || changeLower.includes('clear missing') || changeLower.includes('removed missing') || changeLower.includes('unmark missing')) return '#28a745';
+  if (changeLower.includes('cleared untagged') || changeLower.includes('clear untagged') || changeLower.includes('removed untagged') || changeLower.includes('unmark untagged')) return '#28a745';
   if (changeLower.includes('cleared degraded')) return '#28a745';
   if (changeLower.includes('cleared decommissioned') || changeLower.includes('cleared disposed')) return '#28a745';
   if (changeLower.includes('marked ooc') || changeLower.includes('mark ooc')) return '#dc3545';
   if (changeLower.includes('marked missing') || changeLower.includes('mark missing')) return '#fd7e14';
+  if (changeLower.includes('marked untagged') || changeLower.includes('mark untagged')) return '#0e7490';
   if (changeLower.includes('marked degraded')) return '#856404';
   if (changeLower.includes('marked decommissioned') || changeLower.includes('marked disposed')) return '#6c757d';
   if (changeLower.includes('location:')) return '#17a2b8';
@@ -17479,6 +17774,7 @@ function maintenanceAssetMatchesCondition(asset, condition) {
   if (!condition || condition === 'all') return true;
   if (condition === 'ooc') return Boolean(asset.isOOC || Number(asset.bulkOOCQuantity || 0) > 0);
   if (condition === 'missing') return Boolean(asset.isMissing || Number(asset.bulkMissingQuantity || 0) > 0);
+  if (condition === 'untagged') return Boolean(asset.isUntagged);
   if (condition === 'degraded') return Boolean(asset.isDegraded || Number(asset.bulkDegradedQuantity || 0) > 0);
   if (condition === 'decommissioned') return Boolean(asset.isDisposed || asset.isDecommissioned);
   return true;
@@ -17514,6 +17810,7 @@ function renderMaintenanceFilterButtons() {
       ['all', 'All', '#0f766e', '#e9f6f2'],
       ['ooc', 'OOC', '#a61b29', '#fdebed'],
       ['missing', 'Missing', '#596b78', '#edf0f2'],
+      ['untagged', 'Untagged', '#0e7490', '#e7f7fa'],
       ['degraded', 'Degraded', '#8a5b08', '#fff3df'],
       ['decommissioned', 'Decommissioned', '#3f4d48', '#edf0f2']
     ];
@@ -17570,7 +17867,7 @@ async function loadMaintenanceAssets() {
 
 function getMaintenanceFlaggedAssets(assetList) {
   return (assetList || []).filter(asset =>
-    asset.isOOC || asset.isMissing || asset.isDegraded || asset.isDisposed || asset.isDecommissioned ||
+    asset.isOOC || asset.isMissing || asset.isUntagged || asset.isDegraded || asset.isDisposed || asset.isDecommissioned ||
     (asset.isBulk && (
       Number(asset.bulkOOCQuantity || 0) > 0 ||
       Number(asset.bulkMissingQuantity || 0) > 0 ||
@@ -17589,6 +17886,7 @@ function renderMaintenanceDashboardSummary(assetList) {
     ['alert', flagged.length, 'Assets needing attention', '#b4760b', '#fff3df'],
     ['alert', counts.ooc, 'Out of commission', '#c53d49', '#fdebed'],
     ['box', counts.missing, 'Missing', '#596b78', '#edf0f2'],
+    ['box', counts.untagged, 'Untagged', '#0e7490', '#e7f7fa'],
     ['wrench', counts.degraded, 'Degraded', '#b4760b', '#fff3df']
   ];
   const summary = document.getElementById('maintenance-dashboard-summary');
@@ -17645,9 +17943,11 @@ function displayMaintenanceAssets(assetsToShow) {
 
   destroyVirtualTable('maintenance-all');
   const sortedAssets = assetsToShow.map(asset => ({ asset, latest: inventoryLatestMaintenance([asset]) })).sort((recordA, recordB) => {
-    const dateA = recordA.latest?.timestamp ?? Number.NEGATIVE_INFINITY;
-    const dateB = recordB.latest?.timestamp ?? Number.NEGATIVE_INFINITY;
-    if (dateA !== dateB) return dateB - dateA;
+    if (recordA.latest && recordB.latest) {
+      const comparison = compareMaintenanceLogsNewestFirst(recordA.latest, recordB.latest);
+      if (comparison) return comparison;
+    } else if (recordA.latest) return -1;
+    else if (recordB.latest) return 1;
     return assetMaintenanceDisplayId(recordA.asset).localeCompare(assetMaintenanceDisplayId(recordB.asset), undefined, { numeric: true, sensitivity: 'base' });
   });
   const visibleAssets = sortedAssets.slice(0, 250);
@@ -17758,6 +18058,8 @@ function ensureAssetCheckStyles() {
       color: #856404;
     }
 
+    .asset-check-row-untagged { background:#f0fafb; }
+
     .asset-check-row-flash {
       outline: 3px solid #667eea;
       outline-offset: -3px;
@@ -17778,7 +18080,8 @@ function ensureAssetCheckStyles() {
     .asset-check-badge.ooc { background: #fff3cd; color: #856404; }
     .asset-check-badge.excluded { background: #e9ecef; color: #495057; }
     .asset-check-badge.missing { background: #f8d7da; color: #721c24; }
-    .asset-check-badge.deployed { background: #cce5ff; color: #004085; }
+    .asset-check-badge.untagged { background: #e7f7fa; color: #0e7490; }
+    .asset-check-badge.deployed { background: var(--status-deployed-color, #1769aa); color: var(--status-deployed-text, #fff); }
     .asset-check-badge.away { background: #d1ecf1; color: #0c5460; }
 
     .asset-check-help {
@@ -17793,6 +18096,8 @@ function ensureAssetCheckStyles() {
       gap: 8px;
       flex-wrap: wrap;
     }
+
+    .asset-check-row-actions { display:flex;gap:6px;align-items:center;flex-wrap:wrap; }
 
     @media (max-width: 850px) {
       .asset-check-scan-row {
@@ -17856,7 +18161,8 @@ function ensureAssetCheckStyles() {
     .asset-check-badge.ooc { background:#fdebed;color:#a61b29; }
     .asset-check-badge.excluded { background:#edf0f2;color:#4f5d58; }
     .asset-check-badge.missing { background:#fdebed;color:#a61b29; }
-    .asset-check-badge.deployed { background:#eaf3fb;color:#155b8f; }
+    .asset-check-badge.untagged { background:#e7f7fa;color:#0e7490; }
+    .asset-check-badge.deployed { background:var(--status-deployed-color, #1769aa);color:var(--status-deployed-text, #fff); }
     .asset-check-badge.away { background:#fff3df;color:#8a5b08; }
     .asset-check-actions .btn,.asset-check-table .btn { min-height:31px;padding:5px 8px;font-size:9px; }
     @media(max-width:800px) {
@@ -17886,6 +18192,7 @@ function ensureAssetCheckStyles() {
       .asset-check-table td::before { color:var(--check-muted);font-size:8px;font-weight:800;text-transform:uppercase;content:attr(data-label); }
       .asset-check-table td:last-child { margin-top:5px;padding-top:7px;border-top:1px solid #e3ebe8; }
       .asset-check-table td:last-child .btn { width:100%; }
+      .asset-check-row-actions { display:grid;grid-template-columns:1fr; }
     }
   `;
 
@@ -17918,8 +18225,8 @@ function loadAssetCheck() {
         </div>
         <div class="asset-check-steps" aria-label="Asset check workflow">
           <div class="asset-check-step"><strong>1. Scan</strong>Start with any asset in the model group.</div>
-          <div class="asset-check-step"><strong>2. Count</strong>Scan or check each item physically in Store.</div>
-          <div class="asset-check-step"><strong>3. Resolve</strong>Review unchecked items before marking missing.</div>
+          <div class="asset-check-step"><strong>2. Count</strong>Scan or sight each item physically in Store.</div>
+          <div class="asset-check-step"><strong>3. Resolve</strong>Review items not sighted before marking missing.</div>
         </div>
       </div>
 
@@ -18045,7 +18352,7 @@ async function startAssetCheck() {
     renderAssetCheckSession();
 
     if (scannedAsset && scannedAsset.checkEligible) {
-      showNotification('success', `${scannedAsset.id} checked. Loaded ${assetCheckState.assets.length} matching assets.`);
+      showNotification('success', `${scannedAsset.id} sighted. Loaded ${assetCheckState.assets.length} matching assets.`);
     } else if (scannedAsset) {
       showNotification('warning', `${scannedAsset.id || identifier} loaded, but it is excluded from the check: ${scannedAsset.exclusionReason || 'Not checkable'}`);
     }
@@ -18074,11 +18381,11 @@ function renderAssetCheckSession() {
       <div class="asset-check-session-head">
         <div class="asset-check-session-title">
           <h3>${escapeHtml(group.displayName || 'Asset Check')}</h3>
-          <p>Scan or check each item physically present in Store. Deployed and away items remain visible but are excluded from the missing count.</p>
+          <p>Scan or sight each item physically present in Store. Use Mark untagged when the ID label is missing but the serial number confirms the asset.</p>
         </div>
         <div class="asset-check-actions">
           <button class="btn btn-danger" onclick="markUncheckedAssetCheckMissing()" ${uncheckedCount === 0 ? 'disabled' : ''}>
-            Mark unchecked as missing
+            Mark not sighted as missing
           </button>
           <button class="btn btn-secondary" onclick="loadAssetCheck()">New check</button>
         </div>
@@ -18092,11 +18399,11 @@ function renderAssetCheckSession() {
       <div class="asset-check-summary-grid">
         <div class="asset-check-summary-card">
           <div class="asset-check-summary-value">${checkedCount}</div>
-          <div class="asset-check-summary-label">Checked in Store</div>
+          <div class="asset-check-summary-label">Sighted in Store</div>
         </div>
         <div class="asset-check-summary-card">
           <div class="asset-check-summary-value">${uncheckedCount}</div>
-          <div class="asset-check-summary-label">Unchecked in Store</div>
+          <div class="asset-check-summary-label">Not sighted in Store</div>
         </div>
         <div class="asset-check-summary-card">
           <div class="asset-check-summary-value">${excludedCount}</div>
@@ -18119,7 +18426,7 @@ function renderAssetCheckSession() {
             autocomplete="off"
           >
         </div>
-        <button class="btn btn-success" onclick="checkAsset()">Check asset</button>
+        <button class="btn btn-success" onclick="checkAsset()">Sighted</button>
         ${scannerButtonHtml("scanForAssetCheck('assetCheckScanInput', 'continue')")}
         <button class="btn btn-secondary" onclick="renderAssetCheckSession()">Refresh</button>
       </div>
@@ -18134,7 +18441,7 @@ function renderAssetCheckSession() {
             <th>Status</th>
             <th>Location</th>
             <th>Notes</th>
-            <th style="width:120px;">Action</th>
+            <th style="width:230px;">Action</th>
           </tr>
         </thead>
         <tbody>
@@ -18161,6 +18468,7 @@ function renderAssetCheckRow(asset) {
   let rowClass = '';
   if (asset.isMissing) rowClass = 'asset-check-row-missing';
   else if (asset.excluded) rowClass = 'asset-check-row-excluded';
+  else if (asset.isUntagged) rowClass = 'asset-check-row-untagged';
   else if (isChecked) rowClass = 'asset-check-row-checked';
 
   return `
@@ -18172,9 +18480,14 @@ function renderAssetCheckRow(asset) {
       <td data-label="Notes">${escapeHtml(asset.exclusionReason || (asset.isOOC ? 'OOC, but still checkable because it is in Store' : ''))}</td>
       <td data-label="Action">
         ${asset.checkEligible ? `
-          <button class="btn ${isChecked ? 'btn-secondary' : 'btn-success'} btn-sm" onclick="toggleAssetCheck('${escapeHtmlAttr(encodedAssetId)}')">
-            ${isChecked ? 'Undo' : 'Check'}
-          </button>
+          <div class="asset-check-row-actions">
+            <button type="button" class="btn ${isChecked ? 'btn-secondary' : 'btn-success'} btn-sm" onclick="toggleAssetCheck('${escapeHtmlAttr(encodedAssetId)}')">
+              ${isChecked ? 'Undo sighting' : 'Sighted'}
+            </button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="markAssetCheckUntagged('${escapeHtmlAttr(encodedAssetId)}')" ${asset.isUntagged ? 'disabled' : ''}>
+              ${asset.isUntagged ? 'Untagged' : 'Mark untagged'}
+            </button>
+          </div>
         ` : '<span style="font-size:12px;color:#777;">Excluded</span>'}
       </td>
     </tr>
@@ -18182,14 +18495,15 @@ function renderAssetCheckRow(asset) {
 }
 
 function getAssetCheckStatusBadge(asset, isChecked) {
-  if (isChecked) return '<span class="asset-check-badge checked">Checked</span>';
   if (asset.isMissing) return '<span class="asset-check-badge missing">Missing</span>';
   if (asset.status === 'deployed') return '<span class="asset-check-badge deployed">Out on Show</span>';
   if (asset.status === 'away') return '<span class="asset-check-badge away">Away</span>';
   if (asset.status === 'bulk') return '<span class="asset-check-badge excluded">Bulk</span>';
   if (asset.status === 'ooc') return '<span class="asset-check-badge ooc">OOC / Checkable</span>';
+  if (asset.isUntagged || asset.status === 'untagged') return `<span class="asset-check-badge untagged">Untagged${isChecked ? ' / Sighted' : ''}</span>`;
+  if (isChecked) return '<span class="asset-check-badge checked">Sighted</span>';
   if (asset.excluded) return '<span class="asset-check-badge excluded">Excluded</span>';
-  return '<span class="asset-check-badge pending">Unchecked</span>';
+  return '<span class="asset-check-badge pending">Not sighted</span>';
 }
 
 async function toggleAssetCheck(encodedAssetId) {
@@ -18212,12 +18526,52 @@ async function toggleAssetCheck(encodedAssetId) {
   try {
     await setAssetCheckChecked(assetId, shouldCheck);
   } catch (error) {
-    showNotification('error', `Failed to ${shouldCheck ? 'check' : 'undo'} ${assetId}: ${error.message}`);
+    showNotification('error', `Failed to ${shouldCheck ? 'sight' : 'undo sighting for'} ${assetId}: ${error.message}`);
     return;
   }
 
   renderAssetCheckSession();
   flashAssetCheckRow(assetId);
+}
+
+async function markAssetCheckUntagged(encodedAssetId) {
+  const assetId = decodeURIComponent(encodedAssetId || '');
+  const asset = assetCheckState.assets.find(item => item.id === assetId);
+
+  if (!asset || !asset.checkEligible) {
+    showNotification('warning', asset?.exclusionReason || 'This asset cannot be marked Untagged');
+    return;
+  }
+  if (asset.isUntagged) {
+    showNotification('info', `${assetId} is already marked Untagged`);
+    return;
+  }
+
+  const serial = String(asset.serial || asset.serial2 || '').trim();
+  const confirmed = await showAppConfirm({
+    title: 'Mark asset untagged',
+    message: `${assetId}${serial ? ` (serial ${serial})` : ''} will be marked Untagged and recorded as sighted. Use this when the physical ID label is missing but the asset has been verified by serial number.`,
+    confirmText: 'Mark untagged',
+    cancelText: 'Cancel'
+  });
+  if (!confirmed) return;
+
+  const checkId = assetCheckState.checkIds[assetId] || createAssetCheckLogId(assetId);
+  try {
+    const response = await apiCall('/api/asset-check/mark-untagged', 'POST', {
+      assetId,
+      groupKey: assetCheckState.group?.key || '',
+      checkId
+    });
+    assetCheckState.checked.add(assetId);
+    assetCheckState.checkIds[assetId] = response.data?.checkId || checkId;
+    await refreshAssetCheckGroup(true);
+    renderAssetCheckSession();
+    flashAssetCheckRow(assetId);
+    showNotification('success', `${assetId} marked Untagged and sighted`);
+  } catch (error) {
+    showNotification('error', `Failed to mark ${assetId} Untagged: ${error.message}`);
+  }
 }
 
 async function checkAsset() {
@@ -18259,7 +18613,7 @@ async function checkAsset() {
   }
 
   if (assetCheckState.checked.has(asset.id)) {
-    showNotification('info', `${asset.id} is already checked`);
+    showNotification('info', `${asset.id} is already sighted`);
     input.value = '';
     renderAssetCheckSession();
     flashAssetCheckRow(asset.id);
@@ -18269,12 +18623,12 @@ async function checkAsset() {
   try {
     await setAssetCheckChecked(asset.id, true);
   } catch (error) {
-    showNotification('error', `Failed to check ${asset.id}: ${error.message}`);
+    showNotification('error', `Failed to sight ${asset.id}: ${error.message}`);
     input.focus();
     return;
   }
 
-  showNotification('success', `${asset.id} checked`);
+  showNotification('success', `${asset.id} sighted`);
   input.value = '';
   renderAssetCheckSession();
   flashAssetCheckRow(asset.id);
@@ -18317,7 +18671,7 @@ async function markUncheckedAssetCheckMissing() {
   );
 
   if (uncheckedAssets.length === 0) {
-    showNotification('success', 'There are no unchecked in-store assets to mark as missing');
+    showNotification('success', 'There are no in-store assets left unsighted to mark as missing');
     return;
   }
 
@@ -18326,7 +18680,7 @@ async function markUncheckedAssetCheckMissing() {
   const confirmed = await showAppConfirm({
     title: 'Mark Missing',
     message:
-      `Mark ${uncheckedAssets.length} unchecked in-store asset(s) as Missing?\n\n` +
+      `Mark ${uncheckedAssets.length} in-store asset(s) that were not sighted as Missing?\n\n` +
       `${preview}${extra}\n\n` +
       `Assets that are out on show or away from Store are excluded and will not be marked missing.`,
     confirmText: 'Mark Missing',
@@ -18353,10 +18707,10 @@ async function markUncheckedAssetCheckMissing() {
       showNotification('warning', `Marked ${marked.length} as Missing. Skipped ${skipped.length} item(s) that were no longer eligible.`);
       console.warn('Asset Check skipped items:', skipped);
     } else {
-      showNotification('success', `Marked ${marked.length} unchecked asset(s) as Missing`);
+      showNotification('success', `Marked ${marked.length} unsighted asset(s) as Missing`);
     }
   } catch (error) {
-    showNotification('error', `Failed to mark unchecked assets as missing: ${error.message}`);
+    showNotification('error', `Failed to mark unsighted assets as missing: ${error.message}`);
   }
 }
 
@@ -19359,8 +19713,10 @@ async function unassignSpecificAsset(eventId, assetId, brand, model) {
     showNotification("success", `Unassigned ${assetId} from event`);
     updateAllButtonsForAsset(assetId, false);
     schedulePrepareUiSync(eventId);
+    return true;
   } catch (error) {
     showNotification("error", `Failed to unassign asset: ${error.message}`);
+    return false;
   }
 }
 
@@ -22072,6 +22428,8 @@ var prepareNewPageState = {
   refreshing: false,
   refreshQueued: false,
   requestSequence: 0,
+  scanRevision: 0,
+  renderVersion: 0,
   expandedDepartments: new Set(),
   expandedModels: new Set(),
   showSubprojects: false
@@ -22148,13 +22506,25 @@ function prepareNewInitialExpansion() {
   // tracked through ontoggle and restored during realtime refreshes.
 }
 
-function prepareNewSetDepartmentExpanded(encodedDepartment, open) {
+function prepareNewSetDepartmentExpanded(encodedDepartment, open, detailsElement = null) {
+  if (
+    detailsElement && (
+      !detailsElement.isConnected ||
+      Number(detailsElement.dataset.prepareRenderVersion || 0) !== prepareNewPageState.renderVersion
+    )
+  ) return;
   const department = planDecode(encodedDepartment);
   if (open) prepareNewPageState.expandedDepartments.add(department);
   else prepareNewPageState.expandedDepartments.delete(department);
 }
 
-function prepareNewSetModelExpanded(encodedKey, open) {
+function prepareNewSetModelExpanded(encodedKey, open, detailsElement = null) {
+  if (
+    detailsElement && (
+      !detailsElement.isConnected ||
+      Number(detailsElement.dataset.prepareRenderVersion || 0) !== prepareNewPageState.renderVersion
+    )
+  ) return;
   const key = planDecode(encodedKey);
   if (open) prepareNewPageState.expandedModels.add(key);
   else prepareNewPageState.expandedModels.delete(key);
@@ -22324,7 +22694,7 @@ function prepareNewAssetCard(asset, options = {}) {
     ? ''
     : (assigned
       ? `<button type="button" class="plan-button plan-button-small prepare-new-asset-action"
-                 onclick="event.stopPropagation();prepareNewUnassignAsset(${eventId}, '${encodedId}')">Unassign</button>`
+                 onclick="event.stopPropagation();prepareNewUnassignAsset(${eventId}, '${encodedId}', '${escapeHtmlAttr(options.modelKey || '')}')">Unassign</button>`
       : missing
         ? `<button type="button" class="plan-button plan-button-small prepare-new-asset-action"
                    ${canAssign ? '' : 'disabled'}
@@ -22363,16 +22733,17 @@ function prepareNewModelSection(group) {
   const isOpen = !isBulk && prepareNewPageState.expandedModels.has(key);
   const modelName = [group.brand, group.model].filter(Boolean).join(' ') || 'Unspecified model';
   const canAssignExactAssets = !isBulk;
+  const encodedKey = planEncode(key);
   const allCards = [
     ...assigned.map(asset => prepareNewAssetCard(asset, {
       assigned: true,
-      extra: !!asset?.isExtra
+      extra: !!asset?.isExtra,
+      modelKey: encodedKey
     })),
     ...(canAssignExactAssets
       ? available.map(asset => prepareNewAssetCard(asset, { canAssign: true }))
       : [])
   ];
-  const encodedKey = planEncode(key);
   const primaryAction = isBulk
     ? (complete
       ? `<span class="prepare-new-prepared-label">${prepareNewStatusBadge('complete', 'Prepared')}</span>`
@@ -22399,7 +22770,8 @@ function prepareNewModelSection(group) {
   const showExactAssetPanel = !isBulk;
   return `
     <details class="prepare-new-model" ${isOpen ? 'open' : ''}
-             ontoggle="prepareNewSetModelExpanded('${encodedKey}', this.open)">
+             data-prepare-render-version="${prepareNewPageState.renderVersion}"
+             ontoggle="prepareNewSetModelExpanded('${encodedKey}', this.open, this)">
       <summary>
         <span class="prepare-new-model-title">
           <strong>${escapeHtml(modelName)}</strong>
@@ -22422,7 +22794,7 @@ function prepareNewModelSection(group) {
   `;
 }
 
-function prepareNewDirectAssetCard(asset) {
+function prepareNewDirectAssetCard(asset, encodedPanelKey = '') {
   const eventId = Number(prepareNewPageState.eventId);
   const id = String(asset?.id || '');
   const encodedId = planEncode(id);
@@ -22438,7 +22810,7 @@ function prepareNewDirectAssetCard(asset) {
     badge = prepareNewStatusBadge('complete', 'Prepared');
     action = `
       <button type="button" class="plan-button plan-button-small prepare-new-asset-action"
-              onclick="prepareNewUnprepareAsset(${eventId}, '${encodedId}')">Undo</button>
+              onclick="prepareNewUnprepareAsset(${eventId}, '${encodedId}', '${escapeHtmlAttr(encodedPanelKey)}')">Undo</button>
     `;
   } else if (status === 'returned') {
     badge = prepareNewStatusBadge('returned', 'Returned');
@@ -22465,8 +22837,13 @@ function renderPrepareNewDirectRequirements(rows) {
   return physicalRows.map((row, index) => {
     const assets = (row.assets || []).filter(asset => !parseCustomAsset(asset.id, asset));
     const complete = Number(row.packed || 0) >= Number(row.required || 0);
+    const panelKey = `direct|${normalizeDepartmentCode(row.department || 'UN')}|${row.description || ''}|${index}`;
+    const encodedPanelKey = planEncode(panelKey);
+    const isOpen = prepareNewPageState.expandedModels.has(panelKey);
     return `
-      <details class="prepare-new-model">
+      <details class="prepare-new-model" ${isOpen ? 'open' : ''}
+               data-prepare-render-version="${prepareNewPageState.renderVersion}"
+               ontoggle="prepareNewSetModelExpanded('${encodedPanelKey}', this.open, this)">
         <summary>
           <span class="prepare-new-model-title">
             <strong>${escapeHtml(row.description || 'Assigned assets')}</strong>
@@ -22478,7 +22855,7 @@ function renderPrepareNewDirectRequirements(rows) {
         </summary>
         <div class="prepare-new-model-assets">
           <div class="prepare-new-asset-grid">
-            ${assets.map(prepareNewDirectAssetCard).join('')}
+            ${assets.map(asset => prepareNewDirectAssetCard(asset, encodedPanelKey)).join('')}
           </div>
         </div>
       </details>
@@ -22500,9 +22877,14 @@ function prepareNewStandaloneExtras() {
 
 function prepareNewExtrasSection() {
   const extras = prepareNewStandaloneExtras();
-  if (!extras.length) return '';
+  const panelKey = 'standalone-extra-assets';
+  const encodedPanelKey = planEncode(panelKey);
+  const isOpen = prepareNewPageState.expandedModels.has(panelKey);
+  if (!extras.length && !isOpen) return '';
   return `
-    <details class="prepare-new-department">
+    <details class="prepare-new-department" ${isOpen ? 'open' : ''}
+             data-prepare-render-version="${prepareNewPageState.renderVersion}"
+             ontoggle="prepareNewSetModelExpanded('${encodedPanelKey}', this.open, this)">
       <summary>
         <span class="prepare-new-department-name">
           <span class="plan-department-dot" style="--department-color:#7c3aed"></span>
@@ -22513,7 +22895,13 @@ function prepareNewExtrasSection() {
       </summary>
       <div class="prepare-new-model-assets">
         <div class="prepare-new-asset-grid">
-          ${extras.map(asset => prepareNewAssetCard(asset, { assigned: true, extra: true })).join('')}
+          ${extras.length
+            ? extras.map(asset => prepareNewAssetCard(asset, {
+                assigned: true,
+                extra: true,
+                modelKey: encodedPanelKey
+              })).join('')
+            : '<div class="prepare-new-empty">No extra assets remain assigned to this event.</div>'}
         </div>
       </div>
     </details>
@@ -22551,7 +22939,8 @@ function renderPrepareNewAssignment() {
     return `
       <details class="prepare-new-department"
                ${prepareNewPageState.expandedDepartments.has(department) ? 'open' : ''}
-               ontoggle="prepareNewSetDepartmentExpanded('${planEncode(department)}', this.open)">
+               data-prepare-render-version="${prepareNewPageState.renderVersion}"
+               ontoggle="prepareNewSetDepartmentExpanded('${planEncode(department)}', this.open, this)">
         <summary>
           <span class="prepare-new-department-name">
             <span class="plan-department-dot" style="--department-color:${escapeHtmlAttr(info.color || '#667085')}"></span>
@@ -22749,6 +23138,9 @@ function renderPrepareNewExitButton(mobile = false) {
 function renderPrepareNewPage() {
   const root = document.getElementById('prepare-new-page-root');
   if (!root) return;
+  // Invalidate toggle events dispatched by <details> elements removed during
+  // this render before they can overwrite the remembered open state.
+  prepareNewPageState.renderVersion += 1;
   const event = prepareNewPageState.event;
   if (!event) {
     root.innerHTML = '<div class="plan-empty">There are no events available to prepare.</div>';
@@ -22864,12 +23256,15 @@ function prepareNewCaptureViewState() {
   return {
     pageX: window.scrollX,
     pageY: window.scrollY,
+    scanTop: root?.querySelector('.prepare-new-left')?.scrollTop || 0,
     assignmentTop: root?.querySelector('.prepare-new-assignment-scroll')?.scrollTop || 0,
     customTop: root?.querySelector('.prepare-new-custom-list')?.scrollTop || 0,
     activeId: active && root?.contains(active) ? active.id : '',
     selectionStart: typeof active?.selectionStart === 'number' ? active.selectionStart : null,
     selectionEnd: typeof active?.selectionEnd === 'number' ? active.selectionEnd : null,
     scanValue: document.getElementById('universalAssetInput')?.value || '',
+    scanRevision: prepareNewPageState.scanRevision,
+    scanFeedbackHtml: document.getElementById('universal-asset-feedback')?.innerHTML || '',
     notesValue: document.getElementById('prepareNewNotes')?.value || '',
     customName: document.getElementById('prepareNewCustomName')?.value || '',
     customQuantity: document.getElementById('prepareNewCustomQuantity')?.value || '1',
@@ -22886,6 +23281,10 @@ function prepareNewRestoreViewState(state) {
     if (element && typeof value === 'string') element.value = value;
   };
   setValue('universalAssetInput', state.scanValue);
+  const feedback = document.getElementById('universal-asset-feedback');
+  if (feedback && state.scanRevision === prepareNewPageState.scanRevision) {
+    feedback.innerHTML = state.scanFeedbackHtml || '';
+  }
   setValue('prepareNewNotes', state.notesValue);
   setValue('prepareNewCustomName', state.customName);
   setValue('prepareNewCustomQuantity', state.customQuantity);
@@ -22893,8 +23292,10 @@ function prepareNewRestoreViewState(state) {
   setValue('prepareNewCustomDepartment', state.customDepartment);
   prepareNewSetCustomType(state.customType || 'MISC');
   const root = document.getElementById('prepare-new-page-root');
+  const scan = root?.querySelector('.prepare-new-left');
   const assignment = root?.querySelector('.prepare-new-assignment-scroll');
   const custom = root?.querySelector('.prepare-new-custom-list');
+  if (scan) scan.scrollTop = state.scanTop;
   if (assignment) assignment.scrollTop = state.assignmentTop;
   if (custom) custom.scrollTop = state.customTop;
   window.scrollTo(state.pageX, state.pageY);
@@ -23048,14 +23449,32 @@ async function prepareNewPrepareAsset(eventId, encodedAssetId) {
   await refreshPrepareNewSelectedEvent({ preserve: true });
 }
 
-async function prepareNewUnprepareAsset(eventId, encodedAssetId) {
-  await unprepareSpecificAsset(eventId, planDecode(encodedAssetId));
+async function prepareNewUnprepareAsset(eventId, encodedAssetId, encodedPanelKey = '') {
+  const panelKey = encodedPanelKey ? planDecode(encodedPanelKey) : '';
+  if (panelKey) prepareNewPageState.expandedModels.add(panelKey);
+  const changed = await unprepareSpecificAsset(eventId, planDecode(encodedAssetId));
+  if (!changed) return;
+  if (panelKey) prepareNewPageState.expandedModels.add(panelKey);
   await refreshPrepareNewSelectedEvent({ preserve: true });
 }
 
-async function prepareNewUnassignAsset(eventId, encodedAssetId) {
+async function prepareNewUnassignAsset(eventId, encodedAssetId, encodedModelKey = '') {
   const assetId = planDecode(encodedAssetId);
-  await unassignSpecificAsset(eventId, assetId);
+  const modelKey = encodedModelKey ? planDecode(encodedModelKey) : '';
+  const group = modelKey
+    ? prepareNewModelGroups().find(item => prepareNewModelKey(item) === modelKey)
+    : null;
+  const department = group ? normalizeDepartmentCode(group.department || 'UN') : '';
+  if (modelKey) prepareNewPageState.expandedModels.add(modelKey);
+  if (department) prepareNewPageState.expandedDepartments.add(department);
+
+  const changed = await unassignSpecificAsset(eventId, assetId);
+  if (!changed) return;
+
+  // Keep the exact-asset chooser open while the refreshed card changes back
+  // to Available, proving that it is no longer assigned or prepared.
+  if (modelKey) prepareNewPageState.expandedModels.add(modelKey);
+  if (department) prepareNewPageState.expandedDepartments.add(department);
   await refreshPrepareNewSelectedEvent({ preserve: true });
 }
 
@@ -24308,6 +24727,8 @@ document.addEventListener("DOMContentLoaded", function () {
           unmarkOOC: statusValue === "ok",
           markMissing: statusValue === "missing",
           unmarkMissing: statusValue === "ok",
+          markUntagged: statusValue === "untagged",
+          unmarkUntagged: statusValue === "ok",
           markDegraded: statusValue === "degraded",
           unmarkDegraded: statusValue === "ok",
           markDecommissioned: statusValue === "decommissioned",
@@ -24895,6 +25316,7 @@ function flaggedMaintenanceVirtualRowHtml(asset) {
 function maintenanceFlagColour(asset) {
   if (asset.isOOC || asset.status === 'ooc' || Number(asset.bulkOOCQuantity || 0) > 0) return '#d84b52';
   if (asset.isMissing || asset.status === 'missing' || Number(asset.bulkMissingQuantity || 0) > 0) return '#64748b';
+  if (asset.isUntagged || asset.status === 'untagged') return '#0e7490';
   if (asset.isDegraded || asset.status === 'degraded' || Number(asset.bulkDegradedQuantity || 0) > 0) return '#d99a18';
   return '#334b44';
 }
@@ -24924,7 +25346,7 @@ function displayOOCAssets(oocAssets) {
     const hasSearch = !!document.getElementById('ooc-search')?.value.trim();
     container.innerHTML = hasSearch
       ? '<div class="maintenance-empty">No assets needing attention match this search.</div>'
-      : '<div class="maintenance-empty">No assets are currently OOC, missing, degraded or decommissioned.</div>';
+      : '<div class="maintenance-empty">No assets are currently OOC, missing, untagged, degraded or decommissioned.</div>';
     return;
   }
 
@@ -25211,6 +25633,7 @@ function openBulkMaintenanceFaultEditModal(assetId, faultKey, logNumber) {
   });
 
   const modal = document.getElementById('bulkMaintenanceFaultEditModal');
+  bindMaintenanceMediaDeleteButtons(modal);
   initialiseMaintenanceStatusSelects(modal);
   enhanceModalAccessibility(modal);
   focusModalStart(modal);
@@ -25284,7 +25707,8 @@ function showBulkMaintenanceLogModal(asset) {
   const rows = bulkMaintenanceLogbookRows(asset);
   const containerRecords = getMaintenanceLogRecords(asset)
     .filter(isContainerMaintenanceLog)
-    .sort((a, b) => maintenanceLogDateSortValue(b.date) - maintenanceLogDateSortValue(a.date));
+    .map((record, originalIndex) => ({ ...record, originalIndex }))
+    .sort(compareMaintenanceLogsNewestFirst);
   const totalQty = Math.max(1, Number(asset.quantity || 1) || 1);
   const availableQty = Math.max(0, Number(asset.availableQuantity ?? totalQty) || 0);
   const preparableQty = Math.max(0, Number(asset.preparableQuantity ?? availableQty) || 0);
@@ -25407,6 +25831,7 @@ function showBulkMaintenanceLogModal(asset) {
   if (existingModal) existingModal.remove();
   document.body.insertAdjacentHTML('beforeend', modalContent);
   const modal = document.getElementById('maintenanceLogModal');
+  bindMaintenanceMediaDeleteButtons(modal);
   modal.setAttribute('role', 'dialog');
   modal.setAttribute('aria-modal', 'true');
   modal.setAttribute('aria-hidden', 'false');
@@ -25696,7 +26121,7 @@ function showMaintenanceLogModal(asset) {
   }
 
   const records = getMaintenanceLogRecords(asset).map((log, originalIndex) => ({ ...log, originalIndex }));
-  records.sort((a, b) => maintenanceLogDateSortValue(b.date) - maintenanceLogDateSortValue(a.date));
+  records.sort(compareMaintenanceLogsNewestFirst);
   const safeAssetId = getAssetIdentifierForApi(asset);
   const eventHistoryContainerId = `assetEventHistory_${String(safeAssetId).replace(/[^a-zA-Z0-9]/g, '_')}`;
   const condition = getAssetConditionStatus(asset);
@@ -26123,8 +26548,8 @@ async function loadAssetEventHistory(assetId, containerId) {
           : (ev.startDate || ev.endDate || '');
 
       const statusBadge = ev.returned
-        ? '<span style="background:#e6ffed;color:#1e7e34;padding:2px 8px;border-radius:12px;font-size:12px;font-weight:600;">Returned</span>'
-        : '<span style="background:#fff3cd;color:#856404;padding:2px 8px;border-radius:12px;font-size:12px;font-weight:600;">Out</span>';
+        ? statusBadgeHtml('available', 'Returned')
+        : statusBadgeHtml('deployed', 'Out');
 
       return `
         <tr style="border-bottom: 1px solid #f1f1f1;">
@@ -26289,7 +26714,37 @@ async function deleteMaintenanceLog(assetId, logIndex, logId) {
   }
 }
 
-async function deleteMaintenanceMedia(mediaId, assetId = '', logIndex = -1) {
+function removeMaintenanceMediaFromLocalAssets(mediaId) {
+  const normalizedId = String(mediaId || '');
+  (assets || []).forEach(asset => {
+    const records = getMaintenanceLogRecords(asset);
+    let changed = false;
+    records.forEach(record => {
+      const retained = normalizeMaintenanceMedia(record.media).filter(item => item.id !== normalizedId);
+      if (retained.length !== record.media.length) {
+        record.media = retained;
+        changed = true;
+      }
+    });
+    if (changed) asset.maintenanceLogRecords = records;
+  });
+}
+
+function removeMaintenanceMediaElements(mediaId) {
+  document.querySelectorAll('[data-maintenance-media-item]').forEach(item => {
+    if (item.dataset.maintenanceMediaId !== String(mediaId || '')) return;
+    const group = item.parentElement;
+    item.remove();
+    if (group && !group.querySelector('[data-maintenance-media-item]')) {
+      group.insertAdjacentHTML(
+        'beforeend',
+        '<span data-maintenance-media-empty style="color:#6c757d;font-size:13px;">No media attached</span>'
+      );
+    }
+  });
+}
+
+async function deleteMaintenanceMedia(mediaId, assetId = '', logIndex = -1, triggerButton = null) {
   if (!isAdminUser()) {
     showNotification('error', 'Admin privileges required to remove maintenance media');
     return;
@@ -26301,30 +26756,26 @@ async function deleteMaintenanceMedia(mediaId, assetId = '', logIndex = -1) {
   );
   if (!shouldDelete) return;
 
+  const originalButtonText = triggerButton?.textContent || '';
+  if (triggerButton) {
+    triggerButton.disabled = true;
+    triggerButton.setAttribute('aria-busy', 'true');
+    triggerButton.textContent = '...';
+  }
+
   try {
     await apiCall(`/api/maintenance-media/${encodeURIComponent(mediaId)}`, 'DELETE');
+    removeMaintenanceMediaFromLocalAssets(mediaId);
+    removeMaintenanceMediaElements(mediaId);
     showNotification('success', 'Maintenance media permanently deleted');
-
-    const assetsResponse = await apiCall('/api/assets');
-    if (assetsResponse?.success) {
-      assets = assetsResponse.data;
-    }
-
-    const updatedAsset = assetId ? getAssetByApiIdentifier(assetId) : null;
-    const editModalWasOpen = Boolean(document.getElementById('editMaintenanceLogModal'));
-    if (updatedAsset?.isBulk) {
-      closeBulkMaintenanceFaultEditModal();
-      closeBulkMaintenanceResolutionModal();
-      if (document.getElementById('maintenanceLogModal')) {
-        showMaintenanceLogModal(updatedAsset);
-      }
-    } else if (updatedAsset && editModalWasOpen && logIndex >= 0) {
-      editMaintenanceLog(getAssetIdentifierForApi(updatedAsset), logIndex, '');
-    } else if (updatedAsset && document.getElementById('maintenanceLogModal')) {
-      showMaintenanceLogModal(updatedAsset);
-    }
   } catch (error) {
     showNotification('error', `Failed to remove maintenance media: ${error.message}`);
+  } finally {
+    if (triggerButton?.isConnected) {
+      triggerButton.disabled = false;
+      triggerButton.removeAttribute('aria-busy');
+      triggerButton.textContent = originalButtonText;
+    }
   }
 }
 
@@ -26353,6 +26804,13 @@ function deleteMaintenanceLogFromModal(assetId, logIndex, logId) {
   // Then call the delete function
   deleteMaintenanceLog(assetId, logIndex, logId);
 }
+
+// These handlers are defined inside the startup scope but are also invoked by
+// controls rendered later by the maintenance log and edit modals.
+window.deleteMaintenanceLog = deleteMaintenanceLog;
+window.deleteMaintenanceMedia = deleteMaintenanceMedia;
+window.deleteMaintenanceLogFromModal = deleteMaintenanceLogFromModal;
+window.showCustomConfirm = showCustomConfirm;
 
 });
 
@@ -26503,7 +26961,7 @@ function editMaintenanceLog(assetId, logIndex, logId) {
   });
   
   // Get the asset data
-  const asset = assets.find(a => a.id === assetId);
+  const asset = getAssetByApiIdentifier(assetId);
   const maintenanceRecords = getMaintenanceLogRecords(asset || {});
   if (!asset || !maintenanceRecords[logIndex]) {
     showNotification('error', 'Maintenance log not found');
@@ -26535,7 +26993,7 @@ function editMaintenanceLog(assetId, logIndex, logId) {
   // Older logs may only contain one clear action (e.g. Clear OOC). In this
   // cleaned-up UI, any clear action means the dropdown should show OK / Clear Status.
   let defaultStatusValue = 'nochange';
-  const statusKinds = ['ooc', 'missing', 'degraded', 'decommissioned', 'disposed'];
+  const statusKinds = ['ooc', 'missing', 'untagged', 'degraded', 'decommissioned', 'disposed'];
   let hasAnyClearStatusChange = false;
   for (const change of logEntry.changes || []) {
     const kind = String(change.kind || '').toLowerCase() === 'disposed' ? 'decommissioned' : String(change.kind || '').toLowerCase();
@@ -26742,6 +27200,7 @@ function editMaintenanceLog(assetId, logIndex, logId) {
 
   // Show modal
   const modal = document.getElementById('editMaintenanceLogModal');
+  bindMaintenanceMediaDeleteButtons(modal);
   modal.style.display = 'flex';
   modal.setAttribute('role', 'dialog');
   modal.setAttribute('aria-modal', 'true');
@@ -26821,7 +27280,7 @@ function cancelEditMaintenanceLogModal() {
 async function saveEnhancedMaintenanceLog(assetId, logIndex, logId) {
   try {
     // Get the asset data to compare against current values
-    const asset = assets.find(a => a.id === assetId);
+    const asset = getAssetByApiIdentifier(assetId);
     if (!asset) {
       showNotification('error', 'Asset not found');
       return;
@@ -26890,6 +27349,8 @@ async function saveEnhancedMaintenanceLog(assetId, logIndex, logId) {
       unmarkOOC: statusValue === 'ok',
       markMissing: statusValue === 'missing',
       unmarkMissing: statusValue === 'ok',
+      markUntagged: statusValue === 'untagged',
+      unmarkUntagged: statusValue === 'ok',
       markDegraded: statusValue === 'degraded',
       unmarkDegraded: statusValue === 'ok',
       markDecommissioned: statusValue === 'decommissioned',
@@ -28072,6 +28533,12 @@ async function populateDeliveryOrderForm(event) {
     const jobTitleEl = document.getElementById('jobTitle');
     const jobLocationEl = document.getElementById('jobLocation');
     const additionalCommentsEl = document.getElementById('additionalComments');
+    const eventContextEl = document.getElementById('doEventContext');
+
+    if (eventContextEl) {
+      const eventId = event && (event.event_id ?? event.id);
+      eventContextEl.textContent = [eventId ? `Event #${eventId}` : '', event?.name || ''].filter(Boolean).join(' / ');
+    }
 
     if (doNumberEl) {
       const year = new Date().getFullYear();
@@ -28098,7 +28565,7 @@ async function populateDeliveryOrderForm(event) {
     ensureKnownClientsButton();
 }
 
-async function generateDeliveryOrder(format) {
+async function generateDeliveryOrder() {
     if (!currentDeliveryOrderEvent) {
         showNotification('error', 'No event selected');
         return;
@@ -28129,11 +28596,7 @@ async function generateDeliveryOrder(format) {
 
     await loadPdfSettings(true);
     
-    if (format === 'excel') {
-        generateExcelDO(deliveryOrderData);
-    } else {
-        generatePdfDO(deliveryOrderData);
-    }
+    generatePdfDO(deliveryOrderData);
 }
 
 function generatePdfDO(data) {
@@ -29058,92 +29521,6 @@ function generatePagesContent(data, formattedDate) {
     return pagesHtml;
 }
 
-function generateExcelDO(data) {
-    // Import SheetJS if not already loaded
-    if (typeof XLSX === 'undefined') {
-        const script = document.createElement('script');
-        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
-        script.onload = () => generateExcelDO(data);
-        document.head.appendChild(script);
-        return;
-    }
-    
-    // Format the date for display
-    const formattedDate = new Date(data.doDate).toLocaleDateString('en-GB', { 
-        day: '2-digit', 
-        month: 'short', 
-        year: 'numeric' 
-    });
-    
-    // Prepare data for Excel
-    const excelData = [];
-    
-    // Header information
-    excelData.push(['DELIVERY ORDER']);
-    excelData.push([]);
-    excelData.push(['DELIVER TO:', '', '', 'No.:  ', data.doNumber]);
-    excelData.push([data.clientName, '', '', 'Date: ', formattedDate]);
-    if (data.clientCompany) excelData.push([data.clientCompany]);
-    if (data.deliveryAddress1) excelData.push([data.deliveryAddress1]);
-    if (data.deliveryAddress2) excelData.push([data.deliveryAddress2]);
-    if (data.deliveryAddress3) excelData.push([data.deliveryAddress3]);
-    if (data.clientPhone) excelData.push([`Tel. ${data.clientPhone}`]);
-    excelData.push([]);
-    
-    // Table headers
-    excelData.push(['DESCRIPTION', 'QUANTITY']);
-    
-    // Job title row
-    excelData.push([`Job Title :  ${data.jobTitle}`, '']);
-    if (data.jobLocation) excelData.push([data.jobLocation, '']);
-    
-    // Group items by department
-    const departments = groupItemsByDepartment(data.event);
-    
-    // Add items by department
-    Object.keys(departments).forEach(dept => {
-        if (departments[dept].length > 0) {
-            excelData.push([`${dept}:`]);
-            departments[dept].forEach(item => {
-                excelData.push([item.description, item.quantity]);
-            });
-        }
-    });
-    
-    excelData.push([]);
-    excelData.push([`Other Comments: ${data.additionalComments || ''}`, 'Received in good order & condition']);
-    excelData.push([]);
-    excelData.push(["Company's Stamp & Signature"]);
-    const companyFooterLines = [
-        pdfSettings.companyName,
-        pdfSettings.billingAddress,
-        [pdfSettings.phone, pdfSettings.email, pdfSettings.website].filter(Boolean).join(' | ')
-    ].filter(Boolean);
-    if (companyFooterLines.length) {
-        excelData.push([]);
-        companyFooterLines.forEach(line => excelData.push([line]));
-    }
-    
-    // Create workbook
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.aoa_to_sheet(excelData);
-    
-    // Set column widths
-    ws['!cols'] = [
-        { width: 60 }, // Description column
-        { width: 12 }  // Quantity column
-    ];
-    
-    // Add worksheet to workbook
-    XLSX.utils.book_append_sheet(wb, ws, 'Delivery Order');
-    
-    // Generate and download file
-    const fileName = `DO_${data.doNumber}_${data.jobTitle.replace(/[^a-zA-Z0-9]/g, '_')}.xlsx`;
-    XLSX.writeFile(wb, fileName);
-    
-    showNotification('success', 'Excel delivery order generated successfully');
-}
-
 // Delivery order generation helpers
 async function ensureAssetsLoaded() {
     if (!assets || assets.length === 0) {
@@ -29391,6 +29768,11 @@ async function populateDeliveryItemsPreview(event) {
   const render = () => {
     const depts = groupItemsByDepartment(event);
     const editMode = !!document.querySelector('#doEditToggle')?.checked;
+    const populatedDepartments = Object.values(depts).filter(items => items.length > 0);
+    const lineCount = populatedDepartments.reduce((total, items) => total + items.length, 0);
+    const unitCount = populatedDepartments.reduce((total, items) => (
+      total + items.reduce((subtotal, item) => subtotal + (Number(item.quantity) || 0), 0)
+    ), 0);
 
     let html = `
       <style>
@@ -29567,22 +29949,21 @@ async function populateDeliveryItemsPreview(event) {
 
       <div class="do-items-container">
         <div class="do-toolbar">
-          <div>
-            <div style="font-weight:700;color:#263934;">Items to be delivered</div>
-            <div style="font-size:11px;color:#71807d;margin-top:2px;">Search inventory or enter a custom item, then organise it by department.</div>
+          <div class="do-items-title">
+            <h3>Items</h3>
+            <span>${lineCount} line${lineCount === 1 ? '' : 's'} / ${unitCount} unit${unitCount === 1 ? '' : 's'}</span>
           </div>
-          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-            <label>
-              <input type="checkbox" id="doEditToggle"${editMode ? ' checked' : ''}> 
-              <span>Edit items</span>
+          <div class="do-items-actions">
+            <label class="do-edit-toggle">
+              <input type="checkbox" id="doEditToggle"${editMode ? ' checked' : ''}>
+              <span class="do-toggle-control" aria-hidden="true"></span>
+              <span>Edit</span>
             </label>
-            <button class="btn btn-secondary" id="doResetEdits" title="Reset all edits and return to original items">
-              Reset
-            </button>
+            <button class="btn do-reset-button" id="doResetEdits" title="Reset item changes">Reset</button>
           </div>
         </div>
         ${editMode ? `
-          <div class="do-toolbar">
+          <div class="do-toolbar do-composer-toolbar">
             <div class="do-catalog-composer">
               <div class="do-catalog-field">
                 <label class="do-catalog-label" for="doCatalogSearch">Asset or description</label>
@@ -29597,7 +29978,7 @@ async function populateDeliveryItemsPreview(event) {
                 <label class="do-catalog-label" for="doCatalogQuantity">Quantity</label>
                 <input id="doCatalogQuantity" class="form-input" type="number" min="1" max="999" value="1">
               </div>
-              <button type="button" id="doCatalogAdd" class="btn btn-primary">Add item</button>
+              <button type="button" id="doCatalogAdd" class="btn btn-primary do-catalog-add">Add item</button>
             </div>
           </div>` : ''}
     `;
@@ -29613,8 +29994,8 @@ async function populateDeliveryItemsPreview(event) {
         
         if (editMode) {
           return `
-            <div class="do-item-row" draggable="true" data-key="${escA(item.key)}" data-custom-id="${escA(item.customId || '')}" data-kind="${escA(item.source || '')}" data-dept="${escA(deptName)}" data-index="${i}">
-              <div class="do-drag-handle">⋮⋮</div>
+            <div class="do-item-row do-edit-row" draggable="true" data-key="${escA(item.key)}" data-custom-id="${escA(item.customId || '')}" data-kind="${escA(item.source || '')}" data-dept="${escA(deptName)}" data-index="${i}">
+              <div class="do-drag-handle" title="Drag to reorder" aria-label="Drag to reorder"><i></i><i></i><i></i><i></i><i></i><i></i></div>
               <div class="do-item-description">
                 <input type="text" class="do-desc form-input" value="${escA(item.description)}" placeholder="Item description">
               </div>
@@ -29625,7 +30006,7 @@ async function populateDeliveryItemsPreview(event) {
                 <input type="number" class="do-qty form-input" value="${item.quantity}" min="1" max="999">
               </div>
               <div class="do-item-actions">
-                <button class="btn btn-primary btn-sm do-save">Save</button>
+                <button class="btn btn-sm do-save">Save</button>
                 ${canDelete ? '<button type="button" class="btn btn-danger btn-sm do-del" title="Remove line" aria-label="Remove line" onclick="return removeDeliveryOrderRow(this)">&times;</button>' : ''}
               </div>
             </div>
@@ -29634,13 +30015,10 @@ async function populateDeliveryItemsPreview(event) {
           return `
             <div class="do-item-row">
               <div class="do-item-description">
-                <span style="color: #495057; font-weight: 500;">${esc(item.description)}</span>
+                <span class="do-item-name">${esc(item.description)}</span>
               </div>
               <div class="do-item-quantity">
                 <span class="do-quantity-badge">${item.quantity}</span>
-              </div>
-              <div class="do-item-actions">
-                <!-- Read-only mode -->
               </div>
             </div>
           `;
@@ -29649,7 +30027,7 @@ async function populateDeliveryItemsPreview(event) {
 
       return `
         <div class="do-department-section">
-          <div class="do-dept-header">${esc(deptName)} Department</div>
+          <div class="do-dept-header"><span>${esc(deptName)} Department</span><span class="do-dept-count">${items.length}</span></div>
           <div class="do-items-list" data-dept="${escA(deptName)}">
             ${rows || '<div class="do-empty-dept">No items in this department</div>'}
           </div>
@@ -31228,14 +31606,27 @@ function ensureEventListViewStyles() {
     }
     .event-view-toggle { display: flex; gap: 6px; flex-wrap: wrap; }
     .event-view-toggle .btn.active { background: #764ba2; color: white; }
-    .event-list-table-wrap { overflow: auto; border: 1px solid #edf0f5; border-radius: 12px; background: white; }
-    .event-list-table { width: 100%; border-collapse: collapse; margin: 0; }
-    .event-list-table th { background: #f8f9fa; color: #495057; font-weight: 700; padding: 10px 12px; border-bottom: 1px solid #e9ecef; text-align: left; white-space: nowrap; }
-    .event-list-table td { padding: 10px 12px; border-bottom: 1px solid #f1f1f1; vertical-align: top; }
-    .event-list-table tr:hover { background: #f8f9fa; }
-    .event-list-title { font-weight: 700; color: #333; min-width: 220px; }
-    .event-progress-track { background: #e9ecef; border-radius: 999px; height: 6px; width: 120px; overflow: hidden; margin-top: 4px; }
+    .event-list-table-wrap { overflow: auto; border: 1px solid #dfe8e4; border-radius: 8px; background: white; box-shadow:0 3px 12px rgba(15,23,42,.045); }
+    .event-list-table { width: 100%; min-width: 820px; border-collapse: separate; border-spacing: 0; margin: 0; color:#263b35; font-size:10px; }
+    .event-list-table th { position:sticky;top:0;z-index:3;background:#f2f7f5;color:#60736d;font-size:9px;font-weight:800;letter-spacing:.02em;text-transform:uppercase;padding:7px 9px;border-bottom:1px solid #dfe8e4;text-align:left;white-space:nowrap; }
+    .event-list-table td { padding:6px 9px;border-bottom:1px solid #e8efec;vertical-align:middle;line-height:1.25; }
+    .event-list-table tbody tr { --event-state:#64748b;--event-soft:#f8fafc;background:#fff;transition:background .14s ease; }
+    .event-list-table tbody tr:hover { background:color-mix(in srgb,var(--event-soft) 68%,white); }
+    .event-list-table tbody tr:last-child td { border-bottom:0; }
+    .event-list-table tbody tr td:first-child { border-left:3px solid var(--event-state); }
+    .event-list-id { color:var(--event-state);white-space:nowrap; }
+    .event-list-title { min-width:180px;max-width:310px;color:#1f352f;font-weight:750; }
+    .event-list-location { margin-top:1px!important;color:#71817c!important;font-size:9px!important;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+    .event-list-table .event-assignee-summary { margin-top:2px;gap:4px;font-size:9px;line-height:1.15; }
+    .event-list-table .event-assignee-summary span { font-size:8px; }
+    .event-list-table :is(.event-type-badge,.event-state) { padding:3px 6px;border-radius:4px;font-size:8px; }
+    .event-progress-track { background:#e4ece9;border-radius:999px;height:4px;width:88px;overflow:hidden;margin-top:3px; }
     .event-progress-bar { background: var(--event-state, #16a34a); height: 100%; transition: width .2s ease; }
+    .event-list-actions-cell { width:1%;white-space:nowrap; }
+    .event-list-table .event-card-controls { gap:4px; }
+    .event-list-table .event-primary-action { min-height:29px;padding:5px 9px;border-radius:5px;font-size:9px; }
+    .event-list-table .event-overflow-button { width:29px;min-height:29px;border-radius:5px;font-size:14px; }
+    .event-list-table .event-card-menu { max-height:min(430px,calc(100vh - 20px));overflow-y:auto;z-index:2000; }
     :is(#prepare-section, #return-section) :is(.event-card, .event-state, .event-list-table tr):is(.state-new, .state-added) {
       --event-state: #ec407a;
       --event-soft: #fff0f5;
@@ -31438,7 +31829,7 @@ function ensureAllEventsViewTabs() {
 
   document.addEventListener('click', event => {
     if (!event.target.closest('.event-card-controls')) {
-      document.querySelectorAll('.event-card-menu.open').forEach(menu => menu.classList.remove('open'));
+      closeEventCardMenus();
     }
     if (!event.target.closest('.event-type-filter')) {
       document.getElementById('eventTypeFilterMenu')?.classList.remove('open');
@@ -31750,9 +32141,7 @@ function getEventPrimaryAction(event) {
       : { label: 'Start Preparing', onclick: `openPrepareWorkspaceForEvent(${event.id})` };
   }
   if (event.state === 'Planning') {
-    return isAdminUser()
-      ? { label: 'Plan', onclick: `openEventPlanning(${event.id})` }
-      : { label: 'Start Preparing', onclick: `openPrepareWorkspaceForEvent(${event.id})` };
+    return { label: 'Prepare', onclick: `openPrepareWorkspaceForEvent(${event.id})` };
   }
   if (event.state === 'Preparing') return { label: 'Continue Preparing', onclick: `openPrepareWorkspaceForEvent(${event.id})` };
   if (event.state === 'Ready') return { label: 'Generate DO', onclick: `openDeliveryOrderTab(${event.id})` };
@@ -31765,7 +32154,7 @@ function getEventPrimaryAction(event) {
 function eventNextActionText(event) {
   switch (event.state) {
     case 'New': return isAdminUser() ? 'Add requirements and manage assets.' : 'Prepare or quick-add event assets.';
-    case 'Planning': return isAdminUser() ? 'Plan resources and requirements.' : 'Prepare or quick-add event assets.';
+    case 'Planning': return 'Prepare the planned requirements.';
     case 'Preparing': return 'Continue packing remaining items.';
     case 'Ready': return 'Generate delivery order and dispatch.';
     case 'Ongoing':
@@ -31814,27 +32203,44 @@ function openReturnWorkspaceForEvent(eventId) {
   showSection('return');
 }
 
+function closeEventCardMenus() {
+  document.querySelectorAll('.event-card-menu.open').forEach(menu => menu.classList.remove('open'));
+  document.querySelectorAll('.event-card-menu[data-event-menu-portal="true"]').forEach(menu => menu.remove());
+}
+
 function toggleEventCardMenu(event, eventId, context = 'card') {
   event?.stopPropagation();
   const target = document.getElementById(`event-card-menu-${context}-${eventId}`);
   const shouldOpen = target && !target.classList.contains('open');
-  document.querySelectorAll('.event-card-menu.open').forEach(menu => menu.classList.remove('open'));
+  closeEventCardMenus();
+  if (!shouldOpen || !target?.isConnected) return;
   if (target) {
     target.style.position = '';
     target.style.top = '';
     target.style.left = '';
     target.style.right = '';
     target.style.bottom = '';
+    target.style.zIndex = '';
   }
-  target?.classList.toggle('open', !!shouldOpen);
+  target.classList.add('open');
   if (target && shouldOpen && context === 'list') {
-    const rect = event?.currentTarget?.getBoundingClientRect();
-    if (rect) {
+    const buttonRect = event?.currentTarget?.getBoundingClientRect();
+    if (buttonRect) {
+      document.body.appendChild(target);
+      target.dataset.eventMenuPortal = 'true';
+      const menuRect = target.getBoundingClientRect();
+      const margin = 10;
+      const gap = 6;
+      const roomBelow = window.innerHeight - buttonRect.bottom;
+      const preferredTop = roomBelow >= menuRect.height + gap + margin
+        ? buttonRect.bottom + gap
+        : buttonRect.top - menuRect.height - gap;
       target.style.position = 'fixed';
-      target.style.top = `${Math.min(rect.bottom + 6, window.innerHeight - 12)}px`;
-      target.style.left = `${Math.max(12, Math.min(rect.right - target.offsetWidth, window.innerWidth - target.offsetWidth - 12))}px`;
+      target.style.top = `${Math.max(margin, Math.min(preferredTop, window.innerHeight - menuRect.height - margin))}px`;
+      target.style.left = `${Math.max(margin, Math.min(buttonRect.right - menuRect.width, window.innerWidth - menuRect.width - margin))}px`;
       target.style.right = 'auto';
       target.style.bottom = 'auto';
+      target.style.zIndex = '2000';
     }
   }
 }
@@ -32032,6 +32438,7 @@ function renderAllEventsCards(list) {
 function renderAllEventsTable(list) {
   const container = document.getElementById('all-events-table-container');
   if (!container) return;
+  closeEventCardMenus();
   const sorted = getFilteredEventsForOverview(list || events);
   if (!sorted.length) {
     container.innerHTML = '<p style="text-align:center;color:#666;padding:40px;">No matching events found.</p>';
@@ -32043,18 +32450,19 @@ function renderAllEventsTable(list) {
     const location = event.location ? `<div class="event-list-location">${escapeHtml(event.location)}</div>` : '';
     const assigneeSummary = eventAssigneeSummaryHtml(event);
     const displayState = overviewDisplayState(event);
+    const palette = getEventWorkflowPalette(displayState);
     return `
-      <tr>
-        <td><strong>${escapeHtml(String(event.id))}</strong></td>
+      <tr class="${getEventStateClass(displayState)}" style="--event-state:${palette.main};--event-soft:${palette.soft}">
+        <td class="event-list-id"><strong>#${escapeHtml(String(event.id))}</strong></td>
         <td>${eventTagBadgeHtml(event)}</td>
         <td class="event-list-title">${escapeHtml(event.name || '')}${location}${assigneeSummary}</td>
         <td>${escapeHtml(eventDateRangeText(event))}</td>
         <td>${eventStateBadgeHtml(event, displayState)}</td>
         <td>${renderProgressCell(progress.done, progress.total)}</td>
-        <td>
+        <td class="event-list-actions-cell">
           <div class="event-card-controls">
-            <button type="button" class="event-primary-action" style="--event-state:#2563eb" onclick="${action.onclick}">${escapeHtml(action.label)}</button>
-            <button type="button" class="event-overflow-button" onclick="toggleEventCardMenu(event, ${event.id}, 'list')">&#8230;</button>
+            <button type="button" class="event-primary-action" onclick="${action.onclick}">${escapeHtml(action.label)}</button>
+            <button type="button" class="event-overflow-button" aria-label="More actions for ${escapeHtmlAttr(event.name || '')}" onclick="toggleEventCardMenu(event, ${event.id}, 'list')">&#8230;</button>
             ${eventCardMenuHtml(event, 'list')}
           </div>
         </td>
@@ -32428,16 +32836,18 @@ async function prepareSpecificAsset(eventId, assetId) {
 }
 
 async function unprepareSpecificAsset(eventId, assetId) {
-  if (!beginPrepareAssetAction(assetId, 'Unpreparing...')) return;
+  if (!beginPrepareAssetAction(assetId, 'Unpreparing...')) return false;
   try {
     await apiCall(`/api/events/${eventId}/unprepare`, 'POST', { assetId });
     showNotification('success', `${customAssetLabelFromId(assetId)} unprepared`);
     updateAllButtonsForAsset(assetId, false);
     schedulePrepareUiSync(eventId);
+    return true;
   } catch (error) {
     console.error('Error in unprepareSpecificAsset:', error);
     showNotification('error', `Failed to unprepare asset: ${error.message}`);
     updateAllButtonsForAsset(assetId, true);
+    return false;
   } finally {
     endPrepareAssetAction(assetId);
   }
@@ -32517,30 +32927,57 @@ async function processUniversalContainer(eventId, containerId) {
 
   const total = assetIds.length;
   const failed = results.failed.length;
-  const listToHtml = (title, arr) => arr && arr.length ? `<div style="margin-top:10px;"><div style="font-weight:700;">${escapeHtml(title)}</div><ul style="margin:6px 0 0 18px;">${arr.slice(0, 50).map(x => `<li>${escapeHtml(String(x))}</li>`).join('')}</ul>${arr.length > 50 ? `<div style="color:#666;font-size:12px;">…and ${arr.length - 50} more</div>` : ''}</div>` : '';
-  const failuresToHtml = (arr) => arr && arr.length ? `<div style="margin-top:10px;"><div style="font-weight:700;color:#a00;">Failures</div>${arr.slice(0, 30).map(f => `<div style="font-size:12px;color:#a00;">${escapeHtml(f.id)} — ${escapeHtml(f.error)}</div>`).join('')}${arr.length > 30 ? `<div style="color:#666;font-size:12px;">…and ${arr.length - 30} more failures</div>` : ''}</div>` : '';
+  const listToHtml = (title, items) => items && items.length ? `
+    <section class="prepare-new-container-list">
+      <h5>${escapeHtml(title)}</h5>
+      <ul>${items.slice(0, 50).map(item => `<li>${escapeHtml(String(item))}</li>`).join('')}</ul>
+      ${items.length > 50 ? `<small>...and ${items.length - 50} more</small>` : ''}
+    </section>
+  ` : '';
+  const failuresToHtml = (items) => items && items.length ? `
+    <section class="prepare-new-container-list">
+      <h5 class="prepare-new-container-failure">Failures</h5>
+      ${items.slice(0, 30).map(item => `
+        <div class="prepare-new-container-failure">${escapeHtml(item.id)} - ${escapeHtml(item.error)}</div>
+      `).join('')}
+      ${items.length > 30 ? `<small>...and ${items.length - 30} more failures</small>` : ''}
+    </section>
+  ` : '';
 
   const detailsHtml = `
-    <div style="margin-top:6px;">
-      <div><strong>Summary</strong> (Container ${escapeHtml(containerLabel)}):</div>
-      <div>✅ Prepared / added to event: <strong>${results.prepared.length}</strong> / ${total}</div>
-      <div>➕ Added into event requirements: <strong>${results.addedToEvent.length}</strong></div>
-      <div>Extra assets: <strong>${results.extra.length}</strong></div>
-      <div>ℹ️ Already prepared: <strong>${results.skippedPrepared.length}</strong></div>
-      <div>↩️ Returned in this event: <strong>${results.skippedReturned.length}</strong></div>
-      <div style="${failed ? 'color:#a00;' : ''}">⚠️ Failed: <strong>${failed}</strong></div>
+    <div class="prepare-new-container-result">
+      <div class="prepare-new-container-title">
+        <strong>Container ${escapeHtml(containerLabel)}</strong>
+        <span>${results.prepared.length} / ${total} prepared</span>
+      </div>
+      <dl class="prepare-new-container-stats">
+        <div><dt>Added into event requirements</dt><dd>${results.addedToEvent.length}</dd></div>
+        <div><dt>Extra assets</dt><dd>${results.extra.length}</dd></div>
+        <div><dt>Already prepared</dt><dd>${results.skippedPrepared.length}</dd></div>
+        <div><dt>Returned in this event</dt><dd>${results.skippedReturned.length}</dd></div>
+        <div class="${failed ? 'has-failures' : ''}"><dt>Failed</dt><dd>${failed}</dd></div>
+      </dl>
+      <details class="prepare-new-container-details" ${failed ? 'open' : ''}>
+        <summary>Asset details</summary>
+        <div class="prepare-new-container-detail-scroll">
+          ${failuresToHtml(results.failed)}
+          ${listToHtml('Prepared / added', results.prepared)}
+          ${listToHtml('Added into event requirements', results.addedToEvent)}
+          ${listToHtml('Extra assets', results.extra)}
+          ${listToHtml('Skipped (already prepared)', results.skippedPrepared)}
+          ${listToHtml('Skipped (returned)', results.skippedReturned)}
+        </div>
+      </details>
     </div>
-    <details style="margin-top:10px;"><summary style="cursor:pointer;">Show details</summary>
-      ${listToHtml('Prepared / added', results.prepared)}
-      ${listToHtml('Added into event requirements', results.addedToEvent)}
-      ${listToHtml('Extra assets', results.extra)}
-      ${listToHtml('Skipped (already prepared)', results.skippedPrepared)}
-      ${listToHtml('Skipped (returned)', results.skippedReturned)}
-      ${failuresToHtml(results.failed)}
-    </details>
   `;
 
-  if (feedbackDiv) showFeedback(feedbackDiv, failed ? 'warning' : 'success', detailsHtml);
+  if (feedbackDiv) {
+    showFeedback(feedbackDiv, failed ? 'warning' : 'success', detailsHtml);
+    requestAnimationFrame(() => feedbackDiv.scrollIntoView({
+      behavior: 'smooth',
+      block: 'nearest'
+    }));
+  }
   schedulePrepareUiSync(eventId, 350);
 }
 
@@ -32658,7 +33095,7 @@ function inventoryStatusPdfMeta(status) {
   const cleanStatus = inventoryPlainText(status, 'available').toLowerCase();
   const palette = {
     available: { background: '#dcfce7', color: '#14532d' },
-    deployed: { background: '#fef3c7', color: '#78350f' },
+    deployed: { background: ASSET_DEPLOYED_COLOR, color: '#ffffff' },
     degraded: { background: '#fef3c7', color: '#78350f' },
     missing: { background: '#fee2e2', color: '#7f1d1d' },
     ooc: { background: '#fee2e2', color: '#7f1d1d' },
@@ -32707,6 +33144,7 @@ function inventoryAssetFlagsText(asset) {
   const flags = [];
   if (asset?.isMissing) flags.push('Missing');
   if (asset?.isOOC) flags.push('OOC');
+  if (asset?.isUntagged) flags.push('Untagged');
   if (asset?.isDegraded) flags.push('Degraded');
   if (asset?.isBulk) {
     const oocQty = Math.max(0, Number(asset.bulkOOCQuantity || 0) || 0);
