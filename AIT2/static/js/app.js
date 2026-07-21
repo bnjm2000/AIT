@@ -28731,6 +28731,7 @@ function generatePdfDO(data) {
         month: 'short', 
         year: 'numeric' 
     });
+    const themeColor = deliveryOrderPdfThemeColor();
     
     // Create a new window for the delivery order
     const doWindow = window.open('', '_blank', 'width=800,height=1000');
@@ -28743,7 +28744,7 @@ function generatePdfDO(data) {
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Delivery Order - ${data.jobTitle}</title>
+    <title>Delivery Order - ${escapeHtml(data.jobTitle)}</title>
     <style>
         @page {
             size: A4;
@@ -29011,11 +29012,12 @@ function generatePdfDO(data) {
             html, body { margin: 0 !important; padding: 7mm !important; }
         }
         
-                /* Delivery Order measured pagination */
+        /* Delivery Order measured pagination and client-facing theme */
         body {
             margin: 0;
             padding: 0;
             background: white;
+            color: #172033;
         }
 
         .page {
@@ -29023,7 +29025,7 @@ function generatePdfDO(data) {
             height: 297mm;
             min-height: 297mm;
             position: relative;
-            padding: 7mm 7mm 14mm 7mm;
+            padding: 10mm 13mm 18mm;
             overflow: hidden;
             page-break-after: always;
             break-after: page;
@@ -29040,52 +29042,298 @@ function generatePdfDO(data) {
         }
 
         .page-break + .page {
-            padding-top: 7mm;
+            padding-top: 10mm;
+        }
+
+        .do-letterhead {
+            min-height: 15mm;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12mm;
+            margin-bottom: 8mm;
+        }
+
+        .do-letterhead-brand {
+            flex: 0 0 auto;
+            min-width: 40mm;
+        }
+
+        .do-letterhead-brand img {
+            display: block;
+            width: auto;
+            max-width: 42mm;
+            height: auto;
+            max-height: 14mm;
+            object-fit: contain;
+        }
+
+        .do-wordmark {
+            max-width: 75mm;
+            color: #172033;
+            font-size: 15pt;
+            line-height: 1.05;
+            font-weight: 700;
+        }
+
+        .do-letterhead-details {
+            max-width: 88mm;
+            color: #64748b;
+            font-size: 6.5pt;
+            line-height: 1.35;
+            text-align: right;
+        }
+
+        .do-letterhead-details strong {
+            display: block;
+            margin-bottom: 1mm;
+            color: #172033;
+            font-size: 8.5pt;
+            line-height: 1.2;
+        }
+
+        .do-title-row {
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-between;
+            gap: 10mm;
+            padding-bottom: 3mm;
+            border-bottom: 0.6pt solid #cbd5e1;
+        }
+
+        .delivery-order-title {
+            margin: 0;
+            color: #172033;
+            font-size: 20pt;
+            line-height: 1;
+            text-align: left;
+        }
+
+        .do-number {
+            margin: 0;
+            color: ${themeColor};
+            font-size: 12pt;
+            line-height: 1.1;
+            text-align: right;
+        }
+
+        .do-recipient-panel {
+            display: grid;
+            grid-template-columns: minmax(0, 1.4fr) minmax(52mm, .75fr);
+            margin-top: 5mm;
+            border: 0.5pt solid #cbd5e1;
+        }
+
+        .do-recipient,
+        .do-document-meta {
+            min-height: 0;
+            padding: 3.5mm 5mm;
+        }
+
+        .do-document-meta {
+            border-left: 0.5pt solid #cbd5e1;
+        }
+
+        .do-label {
+            display: block;
+            margin-bottom: 1.2mm;
+            color: #64748b;
+            font-size: 7pt;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .do-recipient strong {
+            display: block;
+            margin-bottom: 0.5mm;
+            color: #172033;
+            font-size: 9pt;
+        }
+
+        .do-recipient-copy {
+            color: #334155;
+            font-size: 8pt;
+            line-height: 1.4;
+        }
+
+        .do-meta-row {
+            display: grid;
+            grid-template-columns: 30mm minmax(0, 1fr);
+            gap: 3mm;
+            margin-bottom: 1mm;
+            font-size: 8pt;
+        }
+
+        .do-meta-row:last-child {
+            margin-bottom: 0;
+        }
+
+        .do-meta-row span {
+            color: #64748b;
+            font-weight: 700;
+        }
+
+        .do-meta-row strong {
+            color: #172033;
+            font-weight: 400;
+        }
+
+        .do-job-band {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+            gap: 8mm;
+            margin: 4mm 0 5mm;
+            padding: 3.5mm 5mm;
+            border: 0.5pt solid #cbd5e1;
+            background: #f1f5f9;
+            color: #334155;
+            font-size: 8pt;
+        }
+
+        .do-job-band strong {
+            color: #172033;
         }
 
         .items-table {
-            margin-bottom: 0;
+            table-layout: fixed;
+            margin: 0;
+            border: 0.5pt solid #cbd5e1;
+        }
+
+        .items-table th {
+            padding: 2mm 2.7mm;
+            border: 0;
+            background: ${themeColor};
+            color: white;
+            font-size: 7pt;
+            letter-spacing: 0;
+        }
+
+        .items-table th:last-child {
+            border-left: 0.5pt solid rgba(255, 255, 255, 0.45);
+            text-align: right;
+        }
+
+        .items-table td {
+            padding: 1.35mm 2.7mm;
+            border: 0;
+            border-bottom: 0.35pt solid #e2e8f0;
+            color: #172033;
+            font-size: 8pt;
+            line-height: 1.2;
+        }
+
+        .items-table td:first-child,
+        .items-table td:last-child {
+            border-right: 0;
+            border-left: 0;
+        }
+
+        .items-table tr:last-child td {
+            border-bottom: 0;
+        }
+
+        .department-header {
+            padding: 1.5mm 2.7mm !important;
+            border-top: 0.5pt solid #cbd5e1 !important;
+            border-bottom: 0.5pt solid #cbd5e1 !important;
+            background: #f1f5f9;
+            color: #172033;
+            font-size: 7.2pt !important;
+            text-transform: uppercase;
+        }
+
+        .quantity-col {
+            width: 22mm;
+            border-left: 0.5pt solid #cbd5e1 !important;
+            text-align: right;
+        }
+
+        .quantity-column {
+            width: 22mm;
+        }
+
+        .asset-id-line {
+            display: block;
+            margin-top: 0.5mm;
+            color: #64748b;
+            font-size: 6.5pt;
+            font-style: normal;
         }
 
         .comments-section {
             position: absolute;
-            left: 7mm;
-            right: 7mm;
-            bottom: 39mm;
-            display: flex;
+            left: 13mm;
+            right: 13mm;
+            bottom: 43mm;
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
             justify-content: space-between;
-            align-items: flex-end;
+            align-items: start;
+            gap: 10mm;
+            padding-top: 3mm;
+            border-top: 0.5pt solid #cbd5e1;
             margin: 0;
+        }
+
+        .other-comments,
+        .received-text {
+            color: #475569;
+            font-size: 7.5pt;
+            line-height: 1.35;
+        }
+
+        .other-comments {
+            font-weight: 400;
+        }
+
+        .received-text {
+            font-weight: 700;
         }
 
         .signature-holder {
             position: absolute;
-            right: 7mm;
-            bottom: 18mm;
+            right: 13mm;
+            bottom: 21mm;
+        }
+
+        .signature-line {
+            width: 62mm;
+            height: 16mm;
+            margin: 0;
+            color: #475569;
+            font-size: 7.5pt;
+        }
+
+        .signature-line::before {
+            border-bottom: 0.7pt solid #172033;
         }
 
         .footer {
             position: absolute;
-            bottom: 7mm;
-            left: 7mm;
-            right: 7mm;
-            text-align: center;
-            font-family: 'Calibri', sans-serif;
-            font-size: 7pt;
-            color: black;
-            line-height: 1.2;
+            bottom: 8mm;
+            left: 13mm;
+            right: 13mm;
+            padding-top: 2mm;
+            border-top: 0.5pt solid #cbd5e1;
+            color: #64748b;
+            font-family: 'Century Gothic', Arial, sans-serif;
+            font-size: 6.2pt;
+            line-height: 1.25;
+            text-align: left;
             z-index: 100;
             overflow-wrap: anywhere;
         }
 
         .page-number {
             position: absolute;
-            bottom: 3mm;
-            right: 7mm;
+            bottom: 8mm;
+            right: 13mm;
             margin-right: 0;
             font-family: 'Century Gothic', sans-serif;
-            font-size: 7pt;
-            color: black;
+            font-size: 6.2pt;
+            color: #64748b;
+            z-index: 101;
         }
 
         @media print {
@@ -29106,7 +29354,7 @@ function generatePdfDO(data) {
                 width: 210mm;
                 height: 297mm;
                 min-height: 297mm;
-                padding: 7mm 7mm 14mm 7mm;
+                padding: 10mm 13mm 18mm;
                 page-break-after: always;
                 break-after: page;
                 page-break-inside: avoid;
@@ -29161,17 +29409,99 @@ function generatePdfDO(data) {
     showNotification('success', 'PDF delivery order generated successfully');
 }
 
+function deliveryOrderPdfThemeColor() {
+    const value = String(pdfSettings?.themeColor || '').trim();
+    return /^#[0-9a-f]{6}$/i.test(value) ? value : '#0f766e';
+}
+
+function renderDeliveryOrderLetterheadHtml() {
+    const safe = value => escapeHtml(String(value ?? ''));
+    const logoUrl = getPdfLogoUrl();
+    const companyName = String(pdfSettings?.companyName || '').trim();
+    const customLines = String(pdfSettings?.letterheadText || '')
+        .split(/\r?\n/)
+        .map(line => line.trim())
+        .filter(Boolean);
+    const fallbackLines = [
+        pdfSettings?.registrationNumber ? `UEN / Reg No: ${pdfSettings.registrationNumber}` : '',
+        pdfSettings?.billingAddress || '',
+        [pdfSettings?.phone, pdfSettings?.email, pdfSettings?.website].filter(Boolean).join(' | ')
+    ].filter(Boolean);
+    const detailLines = (customLines.length ? customLines : fallbackLines)
+        .filter(line => !companyName || line.toLocaleLowerCase() !== companyName.toLocaleLowerCase())
+        .slice(0, 4);
+    const brandHtml = logoUrl
+        ? `<img src="${escapeHtmlAttr(logoUrl)}" alt="Company logo">`
+        : `<div class="do-wordmark">${safe(companyName || 'Delivery Order')}</div>`;
+
+    return `
+        <div class="do-letterhead">
+            <div class="do-letterhead-brand">${brandHtml}</div>
+            <div class="do-letterhead-details">
+                ${logoUrl && companyName ? `<strong>${safe(companyName)}</strong>` : ''}
+                ${detailLines.map(line => `<div>${safe(line)}</div>`).join('')}
+            </div>
+        </div>
+    `;
+}
+
+function renderDeliveryOrderDocumentHeaderHtml(data, formattedDate) {
+    const safe = value => escapeHtml(String(value ?? ''));
+    const addressLines = [
+        data.clientCompany,
+        data.deliveryAddress1,
+        data.deliveryAddress2,
+        data.deliveryAddress3
+    ].filter(value => String(value || '').trim());
+
+    return `
+        ${renderDeliveryOrderLetterheadHtml()}
+        <div class="do-title-row">
+            <div class="delivery-order-title">DELIVERY ORDER</div>
+            <div class="do-number">${safe(data.doNumber)}</div>
+        </div>
+        <div class="do-recipient-panel">
+            <div class="do-recipient">
+                <span class="do-label">Deliver to</span>
+                <strong>${safe(data.clientName)}</strong>
+                <div class="do-recipient-copy">${addressLines.map(line => safe(line)).join('<br>') || '-'}</div>
+            </div>
+            <div class="do-document-meta">
+                <div class="do-meta-row"><span>Date of delivery/collection</span><strong>${safe(formattedDate)}</strong></div>
+                <div class="do-meta-row"><span>Phone no.</span><strong>${safe(data.clientPhone || 'N/A')}</strong></div>
+            </div>
+        </div>
+        <div class="do-job-band">
+            <div><strong>Job:</strong> ${safe(data.jobTitle || '-')}</div>
+            <div><strong>Location:</strong> ${safe(data.jobLocation || '-')}</div>
+        </div>
+    `;
+}
+
+function deliveryOrderDepartmentHeaderLabel(department) {
+    const value = String(department || '').trim();
+    const standardNames = {
+        audio: 'Audio Department',
+        lighting: 'Lighting Department',
+        video: 'Video Department',
+        misc: 'Miscellaneous'
+    };
+    return standardNames[value.toLocaleLowerCase()] || value || 'Miscellaneous';
+}
+
 function generatePagesContent(data, formattedDate) {
     const departments = groupItemsByDepartment(data.event);
-    const logoRowHtml = renderPdfLogoRowHtml('do-logo-row');
+    const documentHeaderHtml = renderDeliveryOrderDocumentHeaderHtml(data, formattedDate);
     const footerHtml = renderPdfFooterHtml();
+    const themeColor = deliveryOrderPdfThemeColor();
+    const tableColumnsHtml = '<colgroup><col><col class="quantity-column"></colgroup>';
 
     // A4 is 210mm x 297mm.
-    // Page padding is 7mm top/left/right and 14mm bottom.
+    // Page padding is 10mm top, 13mm left/right and 18mm bottom.
     // Normal pages reserve the measured footer height.
     // Last page reserves comments + signature + footer space.
-    const PAGE_BODY_HEIGHT_MM = 276;
-    const LAST_RESERVED_MM = 52;
+    const PAGE_BODY_HEIGHT_MM = 269;
+    const LAST_RESERVED_MM = 55;
 
     const FOOTER_HTML = `
         <div class="footer">
@@ -29186,7 +29516,7 @@ function generatePagesContent(data, formattedDate) {
 
         return `
             <br>
-            <span style="font-size:8px;color:#666;font-style:italic;">
+            <span class="asset-id-line">
                 Asset IDs: ${assetIds.map(id => safe(id)).join(', ')}
             </span>
         `;
@@ -29207,7 +29537,8 @@ function generatePagesContent(data, formattedDate) {
     const renderDeptRow = (dept) => {
         return `
             <tr>
-                <td class="department-header" colspan="2">${safe(dept)}:</td>
+                <td class="department-header">${safe(deliveryOrderDepartmentHeaderLabel(dept))}</td>
+                <td class="department-header quantity-col" aria-hidden="true"></td>
             </tr>
         `;
     };
@@ -29221,7 +29552,7 @@ function generatePagesContent(data, formattedDate) {
         left:-10000px;
         top:0;
         visibility:hidden;
-        width:196mm;
+        width:184mm;
         font-family:'Century Gothic', sans-serif;
         font-size:9pt;
         line-height:1.2;
@@ -29355,60 +29686,62 @@ function generatePagesContent(data, formattedDate) {
                 line-height: 1.2;
                 overflow-wrap: anywhere;
             }
+
+            #__doMeasureBox .do-letterhead { min-height:15mm;display:flex;justify-content:space-between;align-items:flex-start;gap:12mm;margin-bottom:8mm; }
+            #__doMeasureBox .do-letterhead-brand { flex:0 0 auto;min-width:40mm; }
+            #__doMeasureBox .do-letterhead-brand img { display:block;width:auto;max-width:42mm;height:auto;max-height:14mm;object-fit:contain; }
+            #__doMeasureBox .do-wordmark { max-width:75mm;color:#172033;font-size:15pt;line-height:1.05;font-weight:700; }
+            #__doMeasureBox .do-letterhead-details { max-width:88mm;color:#64748b;font-size:6.5pt;line-height:1.35;text-align:right; }
+            #__doMeasureBox .do-letterhead-details strong { display:block;margin-bottom:1mm;color:#172033;font-size:8.5pt;line-height:1.2; }
+            #__doMeasureBox .do-title-row { display:flex;align-items:flex-end;justify-content:space-between;gap:10mm;padding-bottom:3mm;border-bottom:.6pt solid #cbd5e1; }
+            #__doMeasureBox .delivery-order-title { margin:0;color:#172033;font-size:20pt;line-height:1;text-align:left; }
+            #__doMeasureBox .do-number { margin:0;color:${themeColor};font-size:12pt;line-height:1.1;text-align:right; }
+            #__doMeasureBox .do-recipient-panel { display:grid;grid-template-columns:minmax(0,1.4fr) minmax(52mm,.75fr);margin-top:5mm;border:.5pt solid #cbd5e1; }
+            #__doMeasureBox .do-recipient,#__doMeasureBox .do-document-meta { min-height:0;padding:3.5mm 5mm; }
+            #__doMeasureBox .do-document-meta { border-left:.5pt solid #cbd5e1; }
+            #__doMeasureBox .do-label { display:block;margin-bottom:1.2mm;color:#64748b;font-size:7pt;font-weight:700;text-transform:uppercase; }
+            #__doMeasureBox .do-recipient strong { display:block;margin-bottom:.5mm;color:#172033;font-size:9pt; }
+            #__doMeasureBox .do-recipient-copy { color:#334155;font-size:8pt;line-height:1.4; }
+            #__doMeasureBox .do-meta-row { display:grid;grid-template-columns:30mm minmax(0,1fr);gap:3mm;margin-bottom:1mm;font-size:8pt; }
+            #__doMeasureBox .do-meta-row:last-child { margin-bottom:0; }
+            #__doMeasureBox .do-meta-row span { color:#64748b;font-weight:700; }
+            #__doMeasureBox .do-meta-row strong { color:#172033;font-weight:400; }
+            #__doMeasureBox .do-job-band { display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8mm;margin:4mm 0 5mm;padding:3.5mm 5mm;border:.5pt solid #cbd5e1;background:#f1f5f9;color:#334155;font-size:8pt; }
+            #__doMeasureBox .do-job-band strong { color:#172033; }
+            #__doMeasureBox .items-table,#__doMeasureBox .do-measure-table { width:100%;table-layout:fixed;border-collapse:collapse;border:.5pt solid #cbd5e1;margin:0; }
+            #__doMeasureBox .items-table th { padding:2mm 2.7mm;border:0;background:${themeColor};color:#fff;font-size:7pt; }
+            #__doMeasureBox .items-table th:last-child { border-left:.5pt solid rgba(255,255,255,.45);text-align:right; }
+            #__doMeasureBox .items-table td,#__doMeasureBox .do-measure-table td { padding:1.35mm 2.7mm;border:0;border-bottom:.35pt solid #e2e8f0;color:#172033;font-size:8pt;line-height:1.2;vertical-align:top;word-break:break-word;overflow-wrap:anywhere; }
+            #__doMeasureBox .department-header { padding:1.5mm 2.7mm!important;border-top:.5pt solid #cbd5e1!important;border-bottom:.5pt solid #cbd5e1!important;background:#f1f5f9;color:#172033;font-size:7.2pt!important;text-transform:uppercase; }
+            #__doMeasureBox .quantity-col { width:22mm;border-left:.5pt solid #cbd5e1!important;text-align:right; }
+            #__doMeasureBox .quantity-column { width:22mm; }
+            #__doMeasureBox .asset-id-line { display:block;margin-top:.5mm;color:#64748b;font-size:6.5pt;font-style:normal; }
+            #__doMeasureBox .footer-measure { width:100%;color:#64748b;font-size:6.2pt;line-height:1.25;text-align:left;overflow-wrap:anywhere; }
         </style>
 
         <div id="__doBaseMeasure">
-            ${logoRowHtml}
-
-            <div class="header">
-                <div class="header-left">
-                    <div class="deliver-to">DELIVER TO:</div>
-                    <div class="client-info">
-                        ${safe(data.clientName)}<br>
-                        ${data.clientCompany ? safe(data.clientCompany) + '<br>' : ''}
-                        ${data.deliveryAddress1 ? safe(data.deliveryAddress1) + '<br>' : ''}
-                        ${data.deliveryAddress2 ? safe(data.deliveryAddress2) + '<br>' : ''}
-                        ${data.deliveryAddress3 ? safe(data.deliveryAddress3) + '<br>' : ''}
-                    </div>
-                    ${data.clientPhone ? `<div class="client-phone">Tel : ${safe(data.clientPhone)}</div>` : '<div class="client-phone">Tel : N/A</div>'}
-                </div>
-
-                <div class="header-right">
-                    <div class="delivery-order-title">DELIVERY ORDER</div>
-                    <div class="do-number">
-                        No. : ${safe(data.doNumber)}<br>
-                        Date : ${safe(formattedDate)}
-                    </div>
-                </div>
-            </div>
-
+            ${documentHeaderHtml}
             <table class="items-table">
+                ${tableColumnsHtml}
                 <thead>
                     <tr>
                         <th class="description-header">DESCRIPTION</th>
                         <th class="quantity-header">QUANTITY</th>
                     </tr>
                 </thead>
-                <tbody>
-                    <tr>
-                        <td class="job-title">
-                            Job Title : ${safe(data.jobTitle)}
-                            ${data.jobLocation ? '<br>' + safe(data.jobLocation) : ''}
-                        </td>
-                        <td class="quantity-col"></td>
-                    </tr>
-                </tbody>
+                <tbody></tbody>
             </table>
         </div>
 
         <table class="do-measure-table">
+            ${tableColumnsHtml}
             <tbody id="__doMeasureBody"></tbody>
         </table>
 
         <div id="__doFooterMeasure" class="footer-measure">${footerHtml}</div>
     `;
 
-    const normaliseMeasuredHeight = mountPdfMeasureBox(measureBox, 196);
+    const normaliseMeasuredHeight = mountPdfMeasureBox(measureBox, 184);
 
     const measureBody = measureBox.querySelector('#__doMeasureBody');
     const baseHeight = normaliseMeasuredHeight(
@@ -29418,7 +29751,9 @@ function generatePagesContent(data, formattedDate) {
         measureBox.querySelector('#__doFooterMeasure')?.getBoundingClientRect().height || 0
     );
     const normalReservedMm = pdfFooterReserveMm({
-        pageFlowHeightMm: PAGE_BODY_HEIGHT_MM
+        pageFlowHeightMm: PAGE_BODY_HEIGHT_MM,
+        topPaddingMm: 10,
+        footerBottomMm: 8
     }, footerHeight);
 
     const normalPageRowBudget = Math.max(
@@ -29564,31 +29899,9 @@ function generatePagesContent(data, formattedDate) {
 
         pagesHtml += `
             <div class="page">
-                ${logoRowHtml}
-
-                <div class="header">
-                    <div class="header-left">
-                        <div class="deliver-to">DELIVER TO:</div>
-                        <div class="client-info">
-                            ${safe(data.clientName)}<br>
-                            ${data.clientCompany ? safe(data.clientCompany) + '<br>' : ''}
-                            ${data.deliveryAddress1 ? safe(data.deliveryAddress1) + '<br>' : ''}
-                            ${data.deliveryAddress2 ? safe(data.deliveryAddress2) + '<br>' : ''}
-                            ${data.deliveryAddress3 ? safe(data.deliveryAddress3) + '<br>' : ''}
-                        </div>
-                        ${data.clientPhone ? `<div class="client-phone">Tel : ${safe(data.clientPhone)}</div>` : '<div class="client-phone">Tel : N/A</div>'}
-                    </div>
-
-                    <div class="header-right">
-                        <div class="delivery-order-title">DELIVERY ORDER</div>
-                        <div class="do-number">
-                            No. : ${safe(data.doNumber)}<br>
-                            Date : ${safe(formattedDate)}
-                        </div>
-                    </div>
-                </div>
-
+                ${documentHeaderHtml}
                 <table class="items-table">
+                    ${tableColumnsHtml}
                     <thead>
                         <tr>
                             <th class="description-header">DESCRIPTION</th>
@@ -29596,13 +29909,6 @@ function generatePagesContent(data, formattedDate) {
                         </tr>
                     </thead>
                     <tbody>
-                        <tr>
-                            <td class="job-title">
-                                Job Title : ${safe(data.jobTitle)}
-                                ${data.jobLocation ? '<br>' + safe(data.jobLocation) : ''}
-                            </td>
-                            <td class="quantity-col"></td>
-                        </tr>
         `;
 
         let currentDept = null;
@@ -29624,7 +29930,7 @@ function generatePagesContent(data, formattedDate) {
         if (isLastPage) {
             pagesHtml += `
                 <div class="comments-section">
-                    <div class="other-comments">Other Comments: ${safe(data.additionalComments || '')}</div>
+                    <div class="other-comments"><strong>Other comments:</strong> ${safe(data.additionalComments || '-')}</div>
                     <div class="received-text">Received in good order & condition</div>
                 </div>
 
@@ -32433,8 +32739,30 @@ function openReturnWorkspaceForEvent(eventId) {
 }
 
 function closeEventCardMenus() {
-  document.querySelectorAll('.event-card-menu.open').forEach(menu => menu.classList.remove('open'));
-  document.querySelectorAll('.event-card-menu[data-event-menu-portal="true"]').forEach(menu => menu.remove());
+  document.querySelectorAll('.event-card-menu.open, .event-card-menu[data-event-menu-portal="true"]').forEach(menu => {
+    menu.classList.remove('open');
+    menu.style.position = '';
+    menu.style.top = '';
+    menu.style.left = '';
+    menu.style.right = '';
+    menu.style.bottom = '';
+    menu.style.zIndex = '';
+    menu.style.maxHeight = '';
+    menu.style.overflowY = '';
+
+    if (menu.dataset.eventMenuPortal === 'true') {
+      const origin = menu.__eventMenuOriginParent;
+      const nextSibling = menu.__eventMenuOriginNextSibling;
+      if (origin?.isConnected) {
+        origin.insertBefore(menu, nextSibling?.parentNode === origin ? nextSibling : null);
+      } else {
+        menu.remove();
+      }
+      delete menu.dataset.eventMenuPortal;
+      delete menu.__eventMenuOriginParent;
+      delete menu.__eventMenuOriginNextSibling;
+    }
+  });
 }
 
 function toggleEventCardMenu(event, eventId, context = 'card') {
@@ -32452,9 +32780,11 @@ function toggleEventCardMenu(event, eventId, context = 'card') {
     target.style.zIndex = '';
   }
   target.classList.add('open');
-  if (target && shouldOpen && context === 'list') {
+  if (target && shouldOpen) {
     const buttonRect = event?.currentTarget?.getBoundingClientRect();
     if (buttonRect) {
+      target.__eventMenuOriginParent = target.parentElement;
+      target.__eventMenuOriginNextSibling = target.nextSibling;
       document.body.appendChild(target);
       target.dataset.eventMenuPortal = 'true';
       const menuRect = target.getBoundingClientRect();
@@ -32470,6 +32800,8 @@ function toggleEventCardMenu(event, eventId, context = 'card') {
       target.style.right = 'auto';
       target.style.bottom = 'auto';
       target.style.zIndex = '2000';
+      target.style.maxHeight = `calc(100vh - ${margin * 2}px)`;
+      target.style.overflowY = 'auto';
     }
   }
 }

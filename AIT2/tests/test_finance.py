@@ -1275,6 +1275,8 @@ class FinanceFeatureTests(unittest.TestCase):
         reader = PdfReader(io.BytesIO(build_finance_pdf(saved, company)))
         quotation_text = '\n'.join(page.extract_text() or '' for page in reader.pages)
         self.assertNotIn('PAYMENT DETAILS', quotation_text)
+        self.assertNotIn('UOM', quotation_text)
+        self.assertIn('2 pax', quotation_text)
         invoice_reader = PdfReader(io.BytesIO(build_finance_pdf({
             **saved,
             'type': 'invoice',
@@ -1285,6 +1287,8 @@ class FinanceFeatureTests(unittest.TestCase):
         invoice_text = '\n'.join(page.extract_text() or '' for page in invoice_reader.pages)
         self.assertIn('PAYMENT DETAILS', invoice_text)
         self.assertIn('601 - 546195 - 001', invoice_text)
+        self.assertNotIn('UOM', invoice_text)
+        self.assertIn('2 pax', invoice_text)
         self.assertEqual(len(reader.pages), 2)
         self.assertIn('LINE ITEMS', reader.pages[0].extract_text() or '')
         self.assertIn('DEPARTMENT SUMMARY', reader.pages[1].extract_text() or '')
@@ -1514,6 +1518,32 @@ class FinanceFeatureTests(unittest.TestCase):
         reloaded = DataManager(self.tempdir.name)
         reloaded.load_clients()
         self.assertEqual(reloaded.clients['Jane Tan'].salutation, 'Mrs.')
+
+    def test_saved_client_address_lines_can_be_cleared(self):
+        created = self.client.post('/api/clients', json={
+            'name': 'Clear Address Client',
+            'company': 'Example Pte Ltd',
+            'address1': '10 Example Street',
+            'address2': 'Level 2',
+            'address3': 'Unit 03-04',
+            'postalCode': '123456',
+            'phone': '+65 9123 4567',
+        })
+        self.assertEqual(created.status_code, 200, created.get_data(as_text=True))
+
+        updated = self.client.put('/api/clients/Clear%20Address%20Client', json={
+            'address2': '',
+        })
+        self.assertEqual(updated.status_code, 200, updated.get_data(as_text=True))
+        client = updated.get_json()['data']
+        self.assertEqual(client['address1'], '10 Example Street')
+        self.assertEqual(client['address2'], '')
+        self.assertEqual(client['address3'], 'Unit 03-04')
+
+        reloaded = DataManager(self.tempdir.name)
+        reloaded.load_clients()
+        self.assertEqual(reloaded.clients['Clear Address Client'].address2, '')
+        self.assertEqual(reloaded.clients['Clear Address Client'].address1, '10 Example Street')
 
     def test_editor_pairs_setup_teardown_then_rehearsal_show(self):
         project_root = os.path.dirname(os.path.dirname(__file__))

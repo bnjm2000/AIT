@@ -24638,15 +24638,20 @@ def client_item(name):
         c.salutation = _normalise_finance_salutation(
             data.get('salutation') if 'salutation' in data else getattr(c, 'salutation', '')
         )
-        c.company = (data.get('company') or c.company).strip()
-        c.contact_person = (data.get('contactPerson') or getattr(c, 'contact_person', '')).strip()
-        c.email = (data.get('email') or getattr(c, 'email', '')).strip()
-        c.tax_number = (data.get('taxNumber') or getattr(c, 'tax_number', '')).strip()
-        c.address1 = (data.get('address1') or c.address1).strip()
-        c.address2 = (data.get('address2') or c.address2).strip()
-        c.address3 = (data.get('address3') or c.address3).strip()
-        c.postal_code = (data.get('postalCode') or c.postal_code).strip()
-        c.phone = (data.get('phone') or c.phone).strip()
+        editable_fields = {
+            'company': 'company',
+            'contactPerson': 'contact_person',
+            'email': 'email',
+            'taxNumber': 'tax_number',
+            'address1': 'address1',
+            'address2': 'address2',
+            'address3': 'address3',
+            'postalCode': 'postal_code',
+            'phone': 'phone',
+        }
+        for payload_key, attribute in editable_fields.items():
+            if payload_key in data:
+                setattr(c, attribute, str(data.get(payload_key) or '').strip())
         data_manager.save_clients()
         log_action(f"Updated client {key}")
         return jsonify({'success': True, 'data': _client_to_dict(c)})

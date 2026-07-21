@@ -33,16 +33,24 @@ def test_add_event_assignee_picker_has_assign_all_for_active_company_users():
     assert 'Only active users from this company are shown.' in TEMPLATE
 
 
-def test_list_menu_is_clamped_using_its_rendered_height():
+def test_event_menus_are_portaled_clamped_and_restored():
     toggle_menu = function_source('toggleEventCardMenu', 'eventMenuIconHtml')
+    close_menu = function_source('closeEventCardMenus', 'toggleEventCardMenu')
 
     assert 'document.body.appendChild(target)' in toggle_menu
     assert "target.dataset.eventMenuPortal = 'true'" in toggle_menu
+    assert "context === 'list'" not in toggle_menu
     assert '.event-card-menu[data-event-menu-portal="true"]' in SCRIPT
     assert 'const menuRect = target.getBoundingClientRect()' in toggle_menu
     assert 'buttonRect.top - menuRect.height - gap' in toggle_menu
     assert 'window.innerHeight - menuRect.height - margin' in toggle_menu
     assert "target.style.zIndex = '2000'" in toggle_menu
+    assert 'origin.insertBefore(menu' in close_menu
+    assert "delete menu.dataset.eventMenuPortal" in close_menu
+
+
+def test_all_events_title_uses_the_company_theme():
+    assert 'color: var(--theme-primary, var(--brand-main, #0f766e));' in TEMPLATE
 
 
 def test_calendar_label_uses_the_visible_multi_day_span():

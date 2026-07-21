@@ -278,8 +278,9 @@ def build_finance_pdf(document, company, logo_path=''):
         for line in str(company.get('letterheadText') or '').splitlines()
         if _text(line).strip()
     ]
+    company_name = _text(company.get('companyName')).strip()
     company_lines = letterhead_lines or [
-        _text(company.get('companyName')),
+        company_name,
         f"UEN / Reg No: {_text(company.get('registrationNumber'))}" if company.get('registrationNumber') else '',
         _text(company.get('billingAddress')),
         ' | '.join(
@@ -291,6 +292,10 @@ def build_finance_pdf(document, company, logo_path=''):
         ),
     ]
     company_lines = [line for line in company_lines if line]
+    company_detail_lines = [
+        line for line in company_lines
+        if not company_name or line.casefold() != company_name.casefold()
+    ]
 
     def draw_page(canvas, pdf_doc):
         canvas.saveState()
@@ -318,14 +323,19 @@ def build_finance_pdf(document, company, logo_path=''):
         if not logo_drawn:
             canvas.setFont('Helvetica-Bold', 15)
             canvas.setFillColor(ink)
-            canvas.drawString(margin, page_height - 14 * mm, _text(company.get('companyName'))[:34])
+            canvas.drawString(margin, page_height - 14 * mm, company_name[:34])
+
+        if logo_drawn and company_name:
+            canvas.setFillColor(ink)
+            canvas.setFont('Helvetica-Bold', 8.8)
+            canvas.drawRightString(page_width - margin, page_height - 9.5 * mm, company_name[:72])
 
         canvas.setFillColor(muted)
-        canvas.setFont('Helvetica', 6.6)
-        y = page_height - 10 * mm
-        for line in company_lines[:4]:
+        canvas.setFont('Helvetica', 6.4)
+        y = page_height - 12.8 * mm if logo_drawn and company_name else page_height - 10 * mm
+        for line in company_detail_lines[:4]:
             canvas.drawRightString(page_width - margin, y, line[:100])
-            y -= 3.2 * mm
+            y -= 3 * mm
 
         canvas.setStrokeColor(rule)
         canvas.setLineWidth(0.5)
@@ -516,13 +526,12 @@ def build_finance_pdf(document, company, logo_path=''):
     show_line_numbers = document.get('showLineNumbers', True) is not False
     column_widths = [
         8 * mm,
-        67 * mm,
+        72 * mm,
         13 * mm,
-        12 * mm,
-        14 * mm,
+        20 * mm,
         23 * mm,
         14 * mm,
-        29 * mm,
+        30 * mm,
     ]
 
     if show_unit_prices or show_department_subtotals:
@@ -614,14 +623,13 @@ def build_finance_pdf(document, company, logo_path=''):
                         textColor=ink,
                     ),
                 ),
-                '', '', '', '', '', '', '',
+                '', '', '', '', '', '',
             ],
             [
                 _paragraph('#' if show_line_numbers else '', table_header_center),
                 _paragraph('DESCRIPTION', table_header_label),
                 _paragraph('DAY(S)', table_header_right),
                 _paragraph('QTY', table_header_right),
-                _paragraph('UOM', table_header_right),
                 _paragraph('UNIT PRICE', table_header_right),
                 _paragraph('DISC %', table_header_right),
                 _paragraph('TOTAL', table_header_right),
@@ -643,12 +651,13 @@ def build_finance_pdf(document, company, logo_path=''):
 
         for line in department_lines:
             description = _text(line.get('description'))
+            quantity = f"{float(line.get('quantity') or 0):g}"
+            uom = _text('unit(s)' if line.get('uom') == 'units' else line.get('uom')).strip()
             table_rows.append([
                 _paragraph(str(pdf_line_number) if show_line_numbers else '', center),
                 _paragraph(description, body),
                 _paragraph(f"{float(line.get('days') or 0):g}", right),
-                _paragraph(f"{float(line.get('quantity') or 0):g}", right),
-                _paragraph('unit(s)' if line.get('uom') == 'units' else line.get('uom'), right),
+                _paragraph(f"{quantity} {uom}".strip(), right),
                 _paragraph(_money(line.get('unitPrice'), currency) if show_unit_prices else '', right),
                 _paragraph(
                     f"{float(line.get('discountPercent') or 0):g}%"
@@ -666,11 +675,11 @@ def build_finance_pdf(document, company, logo_path=''):
                 table_rows.append([
                     '',
                     _paragraph(adjustment.get('label') or 'Department discount', body),
-                    '', '', '', '', '',
+                    '', '', '', '',
                     _paragraph(_money(adjustment.get('amount'), currency), right),
                 ])
                 row_styles.extend([
-                    ('SPAN', (1, adjustment_index), (6, adjustment_index)),
+                    ('SPAN', (1, adjustment_index), (5, adjustment_index)),
                     ('TEXTCOLOR', (1, adjustment_index), (-1, adjustment_index), success),
                     ('BACKGROUND', (0, adjustment_index), (-1, adjustment_index), colors.HexColor('#ECFDF5')),
                 ])
@@ -680,11 +689,11 @@ def build_finance_pdf(document, company, logo_path=''):
             table_rows.append([
                 '',
                 _paragraph(f"{department} subtotal", right_bold),
-                '', '', '', '', '',
+                '', '', '', '',
                 _paragraph(_money(department_total, currency), right_bold),
             ])
             row_styles.extend([
-                ('SPAN', (1, subtotal_index), (6, subtotal_index)),
+                ('SPAN', (1, subtotal_index), (5, subtotal_index)),
                 ('BACKGROUND', (0, subtotal_index), (-1, subtotal_index), panel),
                 ('LINEABOVE', (0, subtotal_index), (-1, subtotal_index), 0.8, ink),
             ])
