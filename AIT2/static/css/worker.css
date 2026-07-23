@@ -447,6 +447,27 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .summary-cell > em { width: fit-content; }
 .summary-cell.totals { border-left: 1px solid var(--line); padding-left: 14px; }
 
+.department-badge-list {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.department-badge {
+  display: inline-flex;
+  width: fit-content;
+  border: 1px solid color-mix(in srgb, var(--department-text) 18%, transparent);
+  border-radius: 999px;
+  background: var(--department-bg);
+  color: var(--department-text);
+  padding: 2px 7px;
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 850;
+  line-height: 1.35;
+}
+
 .event-chevron {
   color: var(--brand-strong);
   font-weight: 900;

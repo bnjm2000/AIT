@@ -441,3 +441,60 @@ def test_asset_tags_use_removable_inventory_chips_and_hidden_search_metadata():
     assert "assetTagSearchText(asset)" in script
     assert "const assetTags = (group?.assets || []).map(assetTagSearchText);" in script
     assert "...(item.tags || [])" in script
+
+
+def test_maintenance_forms_support_company_user_attribution():
+    template = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
+    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+
+    assert 'id="maintenanceUser"' in template
+    assert "apiCall('/api/maintenance/users')" in script
+    assert "function populateMaintenanceUserSelect(" in script
+    assert "maintenanceUser," in script
+    assert 'id="containerMaintenanceUser"' in script
+    assert 'id="bulkFaultUser"' in script
+
+
+def test_maintenance_entries_support_inline_event_references():
+    template = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
+    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+
+    assert "function maintenanceEventReferenceContext(" in script
+    assert "function maintenanceEventReferenceToken(" in script
+    assert "function maintenanceDescriptionHtml(" in script
+    assert "function viewMaintenanceReferencedEvent(" in script
+    assert "viewEvent(numericEventId, { updateHistory: false })" in script
+    assert 'onclick="viewMaintenanceReferencedEvent(event,${Number(match[1])})"' in script
+    assert "clickEvent?.stopPropagation()" in script
+    assert "maintenanceDescriptionHtml(row.log.description, { interactive: false })" in script
+    activity_row = script.split('function maintenanceActivityRowHtml', 1)[1]
+    activity_row = activity_row.split('function displayMaintenanceAssets', 1)[0]
+    assert '<div class="maintenance-activity-row" role="button" tabindex="0"' in activity_row
+    assert '<button type="button" class="maintenance-activity-row"' not in activity_row
+    assert "view: 'options'" in script
+    assert "query: context.query" in script
+    assert "limit: '8'" in script
+    assert "return '`' + eventId + ': **' + eventName + '**`';" in script
+    for field_id in (
+        'maintenanceLogEntry',
+        'containerMaintenanceEntry',
+        'bulkFaultDescription',
+        'bulkFaultEditDescription',
+        'bulkResolutionDescription',
+        'editMaintenanceDescription',
+    ):
+        assert f"setupMaintenanceEventReferenceInput('{field_id}')" in script
+    assert script.count('maintenanceDescriptionHtml(') >= 10
+    assert '.maintenance-event-suggestions {' in template
+    assert '.maintenance-event-reference {' in template
+    assert '#eventDetailsModal.maintenance-reference-overlay {' in template
+
+
+def test_inventory_bulk_edit_supports_notes():
+    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+
+    assert 'id="bulkEditUseNotes"' in script
+    assert 'id="bulkEditNotes"' in script
+    assert "['bulkEditUseNotes', 'bulkEditNotes']" in script
+    assert "asset => asset.notes || ''" in script
+    assert "payload.notes = readValue('bulkEditNotes')" in script

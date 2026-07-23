@@ -62,6 +62,19 @@ function statusClass(rowOrStatus) {
   return `status-${String(displayStatus(rowOrStatus)).toLowerCase().replace(/\s+/g, '-')}`;
 }
 
+function departmentColour(value, fallback) {
+  const colour = String(value || '').trim();
+  return /^#[0-9a-f]{6}$/i.test(colour) ? colour : fallback;
+}
+
+function departmentBadge(assignment = {}) {
+  const code = assignment.department || 'Unassigned';
+  const background = departmentColour(assignment.departmentColor, '#e2e3e5');
+  const foreground = departmentColour(assignment.departmentTextColor, '#383d41');
+  return `<em class="department-badge" style="--department-bg:${background};--department-text:${foreground}"
+    title="${escapeHtml(assignment.departmentName || code)}">${escapeHtml(code)}</em>`;
+}
+
 function submissionStatusBadge(row) {
   const status = displayStatus(row);
   if (status === 'Uploading') {
@@ -241,7 +254,9 @@ function renderEvent(company, event, open = false) {
   const invoices = event.submissions.invoices || [];
   const claims = event.submissions.claims || [];
   const roles = [...new Set(event.assignments.map(row => row.role))].join(', ');
-  const departments = [...new Set(event.assignments.map(row => row.department))].join(', ');
+  const departmentRows = event.assignments.filter((row, index, rows) =>
+    rows.findIndex(candidate => candidate.department === row.department) === index
+  );
   const invoiceSummary = eventSubmissionStatusSummary(invoices);
   const claimSummary = eventSubmissionStatusSummary(claims);
   const eventKey = `${company.code}:${event.id}:${event.subjectId || 'worker'}`;
@@ -254,7 +269,8 @@ function renderEvent(company, event, open = false) {
         ${requiresAction ? '<em class="action-required-badge">Action required!</em>' : ''}
         ${vendorEvent ? `<small class="event-subject-label">For ${escapeHtml(event.subjectName)}</small>` : ''}
         <span>Location: ${escapeHtml(event.location || 'TBC')}</span></div>
-      <div class="summary-cell"><span>Role / Dept</span><strong>${escapeHtml(roles || 'Worker')}</strong><small>${escapeHtml(departments)}</small></div>
+      <div class="summary-cell"><span>Role / Dept</span><strong>${escapeHtml(roles || 'Worker')}</strong>
+        <small class="department-badge-list">${departmentRows.map(departmentBadge).join('')}</small></div>
       <div class="summary-cell"><span>Invoices</span><strong>${invoices.length} / ${event.invoiceLimit}</strong><em class="status-badge ${statusClass(invoiceSummary)}">${invoiceSummary}</em></div>
       <div class="summary-cell"><span>Claims</span><strong>${claims.length} / ${event.claimLimit}</strong><em class="status-badge ${statusClass(claimSummary)}">${claimSummary}</em></div>
       <div class="summary-cell totals"><span>Totals (Submitted)</span><strong>Invoice: &nbsp; ${money(event.invoiceTotal)}</strong><strong>Claims: &nbsp; ${money(event.claimTotal)}</strong></div>

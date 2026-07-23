@@ -694,6 +694,10 @@ class DataManager:
                     changed = True
 
                 source = record.get('source') or {}
+                if source.get('recordedBy') == old_username:
+                    source['recordedBy'] = new_username
+                    record['source'] = source
+                    changed = True
                 if source.get('kind') == 'asset_check_sighting':
                     description = record.get('description', '')
                     updated_description = _replace_generated_username_references(
@@ -733,8 +737,16 @@ class DataManager:
             updated_logs = []
             for log in getattr(container, 'maintenance_logs', []) or []:
                 record = normalize_maintenance_log(log)
+                changed = False
                 if record.get('user', '') == old_username:
                     record['user'] = new_username
+                    changed = True
+                source = record.get('source') or {}
+                if source.get('recordedBy') == old_username:
+                    source['recordedBy'] = new_username
+                    record['source'] = source
+                    changed = True
+                if changed:
                     container_changed = True
                     counts['containerMaintenanceLogs'] += 1
                 updated_logs.append(record)

@@ -1657,6 +1657,120 @@ class FinanceFeatureTests(unittest.TestCase):
         self.assertEqual([row['recipient'] for row in payload['commissions']], ['Alice', 'Partner'])
         self.assertEqual(app_module._finance_profit_loss_category_label('Parking', 'worker-claim'), 'Parking')
 
+    def test_profit_loss_can_pair_quotation_or_save_event_manual_revenue(self):
+        manual_event = Event(
+            event_id=134, name='Manual Revenue Event', location='Studio',
+            start_date='20260815', end_date='20260815', asset_models=[],
+            prepared_items=[], returned_items=[], actually_prepared=[],
+            extra_assets=[], assigned_users=['alice'],
+        )
+        quote_event = Event(
+            event_id=135, name='Quotation Revenue Event', location='Ballroom',
+            start_date='20260816', end_date='20260816', asset_models=[],
+            prepared_items=[], returned_items=[], actually_prepared=[],
+            extra_assets=[], assigned_users=['alice'],
+        )
+        self.data_manager.events.update({134: manual_event, 135: quote_event})
+
+        quotation = self.create_quote('Quotation Revenue Event')
+        quotation['lineItems'] = [{
+            'id': 'package', 'catalogKey': '', 'description': 'Production package',
+            'department': 'Audio Department', 'departmentCode': 'AX',
+            'days': 1, 'quantity': 1, 'uom': 'lot', 'unitPrice': 2400,
+            'discountPercent': 0, 'isCustom': True,
+        }]
+        quotation = self.client.put(
+            f"/api/quotations/{quotation['id']}", json=quotation,
+        ).get_json()['data']
+
+        empty_payload = self.client.get(
+            '/api/finance/profit-loss/134'
+        ).get_json()['data']
+        self.assertEqual(empty_payload['revenueSource'], 'none')
+        self.assertIsNone(empty_payload['manualRevenue'])
+        self.assertIn(
+            quotation['id'],
+            {row['id'] for row in empty_payload['availableQuotations']},
+        )
+
+        manual_response = self.client.put(
+            '/api/finance/profit-loss/134/revenue',
+            json={'manualAmount': '1,275.50'},
+        )
+        self.assertEqual(
+            manual_response.status_code,
+            200,
+            manual_response.get_data(as_text=True),
+        )
+        manual_payload = manual_response.get_json()['data']
+        self.assertEqual(manual_payload['revenueSource'], 'manual')
+        self.assertEqual(manual_payload['manualRevenue']['amount'], 1275.50)
+        self.assertEqual(manual_payload['summary']['revenue'], 1275.50)
+        persisted = app_module._load_finance_data()['profitLoss']['manualRevenue']['134']
+        self.assertEqual(persisted['amount'], 1275.50)
+
+        replace_manual_response = self.client.put(
+            '/api/finance/profit-loss/134/revenue',
+            json={'quotationId': quotation['id']},
+        )
+        self.assertEqual(
+            replace_manual_response.status_code,
+            200,
+            replace_manual_response.get_data(as_text=True),
+        )
+        replaced_payload = replace_manual_response.get_json()['data']
+        self.assertEqual(replaced_payload['revenueSource'], 'quotation')
+        self.assertIsNone(replaced_payload['manualRevenue'])
+        self.assertNotIn(
+            '134',
+            app_module._load_finance_data()['profitLoss']['manualRevenue'],
+        )
+
+        second_quotation = self.create_quote('Second Quotation Revenue Event')
+        second_quotation['lineItems'] = [{
+            'id': 'second-package', 'catalogKey': '', 'description': 'Second package',
+            'department': 'Audio Department', 'departmentCode': 'AX',
+            'days': 1, 'quantity': 1, 'uom': 'lot', 'unitPrice': 2400,
+            'discountPercent': 0, 'isCustom': True,
+        }]
+        second_quotation = self.client.put(
+            f"/api/quotations/{second_quotation['id']}", json=second_quotation,
+        ).get_json()['data']
+
+        pair_response = self.client.put(
+            '/api/finance/profit-loss/135/revenue',
+            json={'quotationId': second_quotation['id']},
+        )
+        self.assertEqual(
+            pair_response.status_code,
+            200,
+            pair_response.get_data(as_text=True),
+        )
+        paired_payload = pair_response.get_json()['data']
+        self.assertEqual(paired_payload['revenueSource'], 'quotation')
+        self.assertEqual(paired_payload['quotation']['id'], second_quotation['id'])
+        self.assertEqual(paired_payload['summary']['revenue'], 2400)
+        self.assertNotIn(
+            second_quotation['id'],
+            {row['id'] for row in paired_payload['availableQuotations']},
+        )
+        self.assertEqual(
+            self.client.put(
+                '/api/finance/profit-loss/135/revenue',
+                json={'manualAmount': 800},
+            ).status_code,
+            409,
+        )
+
+        self.login('bob')
+        self.assertEqual(
+            self.client.put(
+                '/api/finance/profit-loss/134/revenue',
+                json={'manualAmount': 100},
+            ).status_code,
+            403,
+        )
+
     def test_inventory_rename_cascades_to_events_and_quotations(self):
         quotation = self.create_quote('Inventory Rename')
         catalog = self.client.get('/api/finance/catalog?query=SB18').get_json()['data'][0]

@@ -264,7 +264,9 @@
 }
 
 .wf-department {
+  background: color-mix(in srgb, var(--wf-dept-color, #e2e3e5) 5%, #fff);
   border-bottom: 1px solid var(--wf-border);
+  border-left: 3px solid color-mix(in srgb, var(--wf-dept-color, #e2e3e5) 72%, #fff);
 }
 
 .wf-department:last-child {
@@ -279,7 +281,7 @@
   cursor: pointer;
   list-style: none;
   padding: 14px 18px;
-  background: #fbfcff;
+  background: color-mix(in srgb, var(--wf-dept-color, #e2e3e5) 18%, #fff);
 }
 
 .wf-department > summary::-webkit-details-marker {
@@ -300,6 +302,14 @@
   align-items: center;
   gap: 7px;
   white-space: nowrap;
+}
+
+.wf-department-label > small {
+  color: color-mix(in srgb, var(--wf-dept-text, #383d41) 72%, #64748b);
+}
+
+.wf-department[open] > summary {
+  background: color-mix(in srgb, var(--wf-dept-color, #e2e3e5) 24%, #fff);
 }
 
 .wf-department-title::before {
@@ -660,27 +670,32 @@
 }
 
 .wf-worker-summary {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 4px;
   margin-top: 7px;
 }
 
-.wf-worker-summary small {
-  width: 100%;
+.wf-directory-row .wf-worker-summary .wf-summary-badge {
+  width: max-content;
+  max-width: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  overflow: visible;
   margin: 0;
   border-radius: 999px;
-  background: #f1f5f9;
-  color: #475569;
-  padding: 3px 6px;
-  font-size: 8px;
+  padding: 4px 7px;
+  font-size: 9px;
   white-space: nowrap;
+  text-overflow: clip;
   text-align: center;
 }
 
-.wf-worker-summary small:nth-child(2) { background: #fff7ed; color: #c2410c; }
-.wf-worker-summary small:nth-child(3) { background: #ecfdf3; color: #15803d; }
-.wf-worker-summary small:nth-child(4) { background: #eff6ff; color: #1d4ed8; }
+.wf-directory-row .wf-summary-badge.is-invoice { background: #eff6ff; color: #1d4ed8; }
+.wf-directory-row .wf-summary-badge.is-review { background: #f5f3ff; color: #6d28d9; }
+.wf-directory-row .wf-summary-badge.is-payment { background: #fff7ed; color: #c2410c; }
+.wf-directory-row .wf-summary-badge.is-confirmation { background: #f1f5f9; color: #475569; }
 
 .wf-avatar.vendor {
   background: #ede9fe;
@@ -844,12 +859,6 @@ button.wf-calendar-day.selected {
   opacity: .5;
 }
 
-@media (max-width: 1180px) {
-  .wf-worker-summary {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
 .wf-history-header {
   display: flex;
   justify-content: space-between;
@@ -911,13 +920,20 @@ button.wf-calendar-day.selected {
   display: inline-flex;
   overflow: visible !important;
   width: fit-content;
-  border: 1px solid hsl(var(--wf-dept-hue) 62% 76%);
+  border: 1px solid color-mix(in srgb, var(--wf-dept-text, #383d41) 18%, transparent);
   border-radius: 999px;
-  background: hsl(var(--wf-dept-hue) 78% 94%);
-  color: hsl(var(--wf-dept-hue) 55% 32%) !important;
+  background: var(--wf-dept-color, #e2e3e5);
+  color: var(--wf-dept-text, #383d41) !important;
   padding: 2px 6px;
   font-size: 8px !important;
   font-weight: 850;
+}
+
+.wf-department-select {
+  border-color: color-mix(in srgb, var(--wf-dept-color, #e2e3e5) 65%, var(--wf-border)) !important;
+  background-color: color-mix(in srgb, var(--wf-dept-color, #e2e3e5) 16%, #fff) !important;
+  color: var(--wf-dept-text, #383d41);
+  transition: background-color .16s ease, border-color .16s ease;
 }
 
 .wf-worker-role-row button,

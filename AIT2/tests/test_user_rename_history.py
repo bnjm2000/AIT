@@ -68,7 +68,12 @@ class UserRenameHistoryTests(unittest.TestCase):
             description='Rename history asset',
             is_missing=False,
             maintenance_logs=[
-                make_maintenance_log('2026/05/01', 'tech-old', 'Tightened clamp'),
+                make_maintenance_log(
+                    '2026/05/01',
+                    'tech-old',
+                    'Tightened clamp',
+                    source={'recordedBy': 'tech-old'},
+                ),
                 make_maintenance_log(
                     '2026/05/01',
                     'tech-old',
@@ -88,7 +93,12 @@ class UserRenameHistoryTests(unittest.TestCase):
             'CASE-1',
             [self.asset_id],
             maintenance_logs=[
-                make_maintenance_log('2026/05/01', 'tech-old', 'Checked case wheels'),
+                make_maintenance_log(
+                    '2026/05/01',
+                    'tech-old',
+                    'Checked case wheels',
+                    source={'recordedBy': 'tech-old'},
+                ),
             ],
         )
         self.data_manager.save_containers()
@@ -159,6 +169,7 @@ class UserRenameHistoryTests(unittest.TestCase):
         ]
         self.assertEqual(maintenance_logs[0]['user'], 'tech-new')
         self.assertEqual(maintenance_logs[0]['description'], 'Tightened clamp')
+        self.assertEqual(maintenance_logs[0]['source']['recordedBy'], 'tech-new')
         self.assertEqual(maintenance_logs[1]['user'], 'tech-new')
         self.assertEqual(
             maintenance_logs[1]['description'],
@@ -172,6 +183,7 @@ class UserRenameHistoryTests(unittest.TestCase):
         )
         self.assertEqual(container_log['user'], 'tech-new')
         self.assertEqual(container_log['description'], 'Checked case wheels')
+        self.assertEqual(container_log['source']['recordedBy'], 'tech-new')
 
         with open(os.path.join(self.tempdir.name, 'Finance.json'), encoding='utf-8') as finance_file:
             quotation = json.load(finance_file)['documents'][0]

@@ -22,6 +22,7 @@ let maintenanceFlaggedAssets = [];
 let maintenanceSearchTimer = null;
 let maintenanceLogTypeFilter = 'all';
 let maintenanceConditionFilter = 'all';
+let maintenanceUserOptionsCache = [];
 let __autoRefreshInFlight = false;
 let __realtimeRefreshQueued = false;
 let __realtimeRefreshTimer = null;
@@ -9822,6 +9823,14 @@ function ensureBulkAssetEditModal() {
           </label>
           <textarea id="bulkEditDescription" class="form-input" rows="3" disabled></textarea>
         </div>
+
+        <div class="form-group">
+          <label class="form-label">
+            <input type="checkbox" id="bulkEditUseNotes" style="margin-right:8px;">
+            Notes
+          </label>
+          <textarea id="bulkEditNotes" class="form-input" rows="3" placeholder="Internal asset notes" disabled></textarea>
+        </div>
       </div>
 
       <div class="modal-footer modal-actions" style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
@@ -9846,7 +9855,8 @@ function ensureBulkAssetEditModal() {
     'DefaultLocation',
     'CurrentLocation',
     'Status',
-    'Description'
+    'Description',
+    'Notes'
   ].forEach(name => {
     document.getElementById(`bulkEditUse${name}`)?.addEventListener('change', syncBulkAssetEditFields);
   });
@@ -9864,7 +9874,8 @@ function syncBulkAssetEditFields() {
     ['bulkEditUseDefaultLocation', 'bulkEditDefaultLocation'],
     ['bulkEditUseCurrentLocation', 'bulkEditCurrentLocation'],
     ['bulkEditUseStatus', 'bulkEditStatus'],
-    ['bulkEditUseDescription', 'bulkEditDescription']
+    ['bulkEditUseDescription', 'bulkEditDescription'],
+    ['bulkEditUseNotes', 'bulkEditNotes']
   ].forEach(([checkboxId, inputId]) => {
     const checkbox = document.getElementById(checkboxId);
     const input = document.getElementById(inputId);
@@ -9883,7 +9894,8 @@ function resetBulkAssetEditChecks() {
     'bulkEditUseDefaultLocation',
     'bulkEditUseCurrentLocation',
     'bulkEditUseStatus',
-    'bulkEditUseDescription'
+    'bulkEditUseDescription',
+    'bulkEditUseNotes'
   ].forEach(id => {
     const checkbox = document.getElementById(id);
     if (checkbox) checkbox.checked = false;
@@ -9958,6 +9970,7 @@ function openBulkAssetEditModal() {
   document.getElementById('bulkEditDefaultLocation').value = commonInventoryAssetValue(selectedAssets, asset => asset.defaultLocation || 'Store') || '';
   document.getElementById('bulkEditCurrentLocation').value = commonInventoryAssetValue(selectedAssets, asset => asset.currentLocation || '') || '';
   document.getElementById('bulkEditDescription').value = commonInventoryAssetValue(selectedAssets, asset => asset.description || '') || '';
+  document.getElementById('bulkEditNotes').value = commonInventoryAssetValue(selectedAssets, asset => asset.notes || '') || '';
 
   const commonStatus = commonInventoryAssetValue(selectedAssets, getAssetConditionStatus);
   document.getElementById('bulkEditStatus').value = commonStatus === 'available' ? 'ok' : (commonStatus || 'ok');
@@ -10010,6 +10023,11 @@ function collectBulkAssetEditPayload(asset) {
 
   if (useField('bulkEditUseDescription')) {
     payload.description = readValue('bulkEditDescription');
+    selectedFieldCount += 1;
+  }
+
+  if (useField('bulkEditUseNotes')) {
+    payload.notes = readValue('bulkEditNotes');
     selectedFieldCount += 1;
   }
 
@@ -11182,7 +11200,7 @@ function renderContainerMaintenanceHistory(container) {
       <td>${escapeHtml(log.date || '')}</td>
       <td>${escapeHtml(maintenanceLogUserLabel(log))}</td>
       <td>${maintenanceLogTypeBadgeHtml(log.type)}</td>
-      <td style="min-width:240px;">${escapeHtml(log.description || '')}</td>
+      <td style="min-width:240px;">${maintenanceDescriptionHtml(log.description || '')}</td>
       <td>${maintenanceMediaLinksHtml(log.media)}</td>
       <td>${maintenanceCostDisplayHtml(log.cost, '<span style="color:#999;">—</span>')}</td>
     </tr>
@@ -11245,6 +11263,13 @@ async function openContainerMaintenanceModal(containerId) {
             </div>
 
             <div class="form-group">
+              <label class="form-label" for="containerMaintenanceUser">User</label>
+              <select class="form-input" id="containerMaintenanceUser" required>
+                <option value="">Loading users...</option>
+              </select>
+            </div>
+
+            <div class="form-group">
               <label class="form-label" for="containerMaintenanceType">Maintenance Log Type</label>
               ${maintenanceLogTypeSelectHtml('containerMaintenanceType', DEFAULT_MAINTENANCE_LOG_TYPE)}
             </div>
@@ -11291,6 +11316,8 @@ async function openContainerMaintenanceModal(containerId) {
     });
     enhanceModalAccessibility(modal);
     initialiseMaintenanceLogTypeSelects(modal);
+    void populateMaintenanceUserSelect('containerMaintenanceUser', currentUser?.username || '', true);
+    setupMaintenanceEventReferenceInput('containerMaintenanceEntry');
     focusModalStart(modal);
 
     form?.addEventListener('submit', async event => {
@@ -11299,6 +11326,7 @@ async function openContainerMaintenanceModal(containerId) {
       const payload = {
         logEntry: document.getElementById('containerMaintenanceEntry')?.value.trim() || '',
         logType: document.getElementById('containerMaintenanceType')?.value || DEFAULT_MAINTENANCE_LOG_TYPE,
+        maintenanceUser: document.getElementById('containerMaintenanceUser')?.value || currentUser?.username || '',
         maintenanceDate: document.getElementById('containerMaintenanceDate')?.value || '',
         cost: document.getElementById('containerMaintenanceCost')?.value.trim() || '',
         requestId: (globalThis.crypto?.randomUUID?.() || `container-maintenance-${Date.now()}-${Math.random()}`),
@@ -12730,7 +12758,7 @@ function renderMaintenanceReportPreview() {
             <td data-label="Location">${escapeHtml(row.location)}</td>
             <td data-label="Type">${maintenanceLogTypeBadgeHtml(row.type)}</td>
             <td data-label="User">${escapeHtml(maintenanceLogUserLabel(row.log))}</td>
-            <td data-label="Description">${escapeHtml(row.log.description)}</td>
+            <td data-label="Description">${maintenanceDescriptionHtml(row.log.description)}</td>
             <td data-label="Cost">${maintenanceCostDisplayHtml(row.log.cost)}</td>
           </tr>
         `).join('')}
@@ -12861,7 +12889,7 @@ function maintenanceReportRowHtml(row, rowNumber) {
       <td class="maintenance-location-pdf">${safe(row.location || '-')}</td>
       <td class="maintenance-type-pdf">${maintenanceLogTypePdfBadgeHtml(row.type)}</td>
       <td>${safe(maintenanceLogUserLabel(row.log))}</td>
-      <td>${safe(row.log.description)}</td>
+      <td>${maintenanceDescriptionHtml(row.log.description, { interactive: false })}</td>
       <td class="maintenance-cost-pdf">${maintenanceCostDisplayHtml(row.log.cost)}</td>
       <td>${changesText}</td>
     </tr>
@@ -13583,31 +13611,13 @@ async function loadCalendarView() {
   }
 }
 
-function calendarEventLabelSegments(name, spanDays) {
-  const text = String(name || '').trim();
-  const count = Math.max(1, Number(spanDays) || 1);
-  if (count === 1 || !text) return [text];
-
-  const segments = [];
-  const targetLength = window.innerWidth <= 768 ? 8 : 20;
-  let cursor = 0;
-  for (let index = 0; index < count; index++) {
-    while (text[cursor] === ' ') cursor += 1;
-    if (cursor >= text.length) {
-      segments.push('');
-      continue;
+function setCalendarEventHover(eventId, active) {
+  const key = String(eventId ?? '');
+  document.querySelectorAll('.calendar-event[data-calendar-event-id]').forEach(bar => {
+    if (bar.dataset.calendarEventId === key) {
+      bar.classList.toggle('is-group-hovered', !!active);
     }
-
-    let end = index === count - 1 ? text.length : Math.min(text.length, cursor + targetLength);
-    if (end < text.length && text[end] !== ' ') {
-      const previousSpace = text.lastIndexOf(' ', end);
-      const nextSpace = text.indexOf(' ', end);
-      end = previousSpace > cursor ? previousSpace : (nextSpace === -1 ? text.length : nextSpace);
-    }
-    segments.push(text.slice(cursor, end).trim());
-    cursor = end + (text[end] === ' ' ? 1 : 0);
-  }
-  return segments;
+  });
 }
 
 function renderCalendar(events) {
@@ -13707,15 +13717,17 @@ function renderCalendar(events) {
         const eventClass = `calendar-event ${getEventStateClass(placement.event.state)}${placement.event.tag === 'dry hire' ? ' dry-hire' : ''} ${placement.spanClass}`;
         
         const spanDays = Math.max(1, placement.spanDays || 1);
-        const spanIndex = Math.max(0, placement.spanIndex || 0);
-        const labelSegment = calendarEventLabelSegments(placement.event.name || '', spanDays)[spanIndex] || '';
-        const eventText = labelSegment
-          ? `<span class="calendar-event-label" aria-hidden="true">${escapeHtml(labelSegment)}</span>`
+        const eventName = String(placement.event.name || '');
+        const eventText = eventName
+          ? `<span class="calendar-event-label">${escapeHtml(eventName)}</span>`
+          : '';
+        const spanWidth = spanDays > 1
+          ? `width:calc(${spanDays * 100}% + ${spanDays - 1}px - 8px);`
           : '';
 
         eventLayersHTML.push(`
-          <div class="calendar-event-layer" style="top: ${20 + (row * 18)}px; z-index: ${placement.spanClass === 'span-start' ? 10 : 5};">
-            <div class="${eventClass}" onclick="openEventFromCalendar(${placement.event.id})" title="${escapeHtmlAttr(placement.event.name || '')}" style="z-index: ${placement.spanClass === 'span-start' ? 10 : 5}; position: relative;">
+          <div class="calendar-event-layer" style="top:${20 + (row * 18)}px;z-index:10;">
+            <div class="${eventClass}" data-calendar-event-id="${escapeHtmlAttr(String(placement.event.id))}" onclick="openEventFromCalendar(${placement.event.id})" onmouseenter="setCalendarEventHover('${escapeJs(String(placement.event.id))}',true)" onmouseleave="setCalendarEventHover('${escapeJs(String(placement.event.id))}',false)" title="${escapeHtmlAttr(eventName)}" style="${spanWidth}z-index:10;position:relative;">
               ${eventText}
             </div>
           </div>
@@ -13862,29 +13874,14 @@ function processEventsForCalendar(events, calendarDays) {
       }
       consecutiveGroups.push(currentGroup);
       
-      // Create placements for each consecutive group
+      // Each consecutive weekly group is one continuous visual bar.
       consecutiveGroups.forEach(group => {
-        group.forEach((day, dayIndexInGroup) => {
-          let spanClass = 'span-single';
-          
-          if (group.length > 1) {
-            if (dayIndexInGroup === 0) {
-              spanClass = 'span-start';
-            } else if (dayIndexInGroup === group.length - 1) {
-              spanClass = 'span-end';
-            } else {
-              spanClass = 'span-middle';
-            }
-          }
-          
-          eventPlacements.push({
-            event,
-            dayIndex: day.dayIndex,
-            row: assignedRow,
-            spanClass,
-            spanDays: group.length,
-            spanIndex: dayIndexInGroup
-          });
+        eventPlacements.push({
+          event,
+          dayIndex: group[0].dayIndex,
+          row: assignedRow,
+          spanClass: group.length > 1 ? 'span-range' : 'span-single',
+          spanDays: group.length
         });
       });
     });
@@ -16882,6 +16879,7 @@ function eventOverviewNavigate(kind, eventId) {
 function closeEventOverview(options = {}) {
   eventOverviewFlushNotesSave();
   closeModal('eventDetailsModal');
+  document.getElementById('eventDetailsModal')?.classList.remove('maintenance-reference-overlay');
   if (options.updateHistory !== false && /^\/events\/\d+$/.test(window.location.pathname)) {
     updateAppDetailHistory('/events', options.replaceHistory === true);
   }
@@ -17702,6 +17700,253 @@ function getMaintenanceLogRecords(asset) {
   return source.map(normalizeMaintenanceLogRecord);
 }
 
+async function loadMaintenanceUserOptions(force = false) {
+  if (!force && maintenanceUserOptionsCache.length) {
+    return maintenanceUserOptionsCache;
+  }
+  try {
+    const response = await apiCall('/api/maintenance/users');
+    maintenanceUserOptionsCache = Array.isArray(response?.data)
+      ? response.data.filter(option => option?.username)
+      : [];
+  } catch (error) {
+    console.error('Failed to load maintenance users:', error);
+    const username = String(currentUser?.username || '').trim();
+    maintenanceUserOptionsCache = username
+      ? [{ username, name: String(currentUser?.name || username).trim() || username }]
+      : [];
+  }
+  return maintenanceUserOptionsCache;
+}
+
+function maintenanceUserOptionsHtml(options) {
+  return options.map(option => {
+    const username = String(option.username || '').trim();
+    const name = String(option.name || username).trim() || username;
+    const label = name.toLowerCase() === username.toLowerCase()
+      ? name
+      : `${name} (${username})`;
+    return `<option value="${escapeHtmlAttr(username)}">${escapeHtml(label)}</option>`;
+  }).join('');
+}
+
+async function populateMaintenanceUserSelect(selectId, selectedUsername = '', force = false) {
+  const select = document.getElementById(selectId);
+  if (!select) return;
+  select.disabled = true;
+  select.innerHTML = '<option value="">Loading users...</option>';
+
+  const options = await loadMaintenanceUserOptions(force);
+  if (!document.getElementById(selectId)) return;
+  select.innerHTML = maintenanceUserOptionsHtml(options)
+    || '<option value="">No active users available</option>';
+  const preferred = String(selectedUsername || currentUser?.username || '').trim();
+  const selected = options.some(option => option.username === preferred)
+    ? preferred
+    : String(options[0]?.username || '');
+  select.value = selected;
+  select.disabled = !options.length;
+}
+
+function maintenanceEventReferenceContext(textarea) {
+  const caret = Number(textarea?.selectionStart ?? -1);
+  if (!textarea || caret < 0) return null;
+  const beforeCaret = textarea.value.slice(0, caret);
+  const markerStart = beforeCaret.lastIndexOf('`');
+  if (markerStart < 0) return null;
+  const precedingMarkers = (beforeCaret.slice(0, markerStart).match(/`/g) || []).length;
+  if (precedingMarkers % 2 !== 0) return null;
+
+  const query = beforeCaret.slice(markerStart + 1);
+  if (query.includes('\n') || query.length > 100) return null;
+  return { markerStart, caret, query: query.trim() };
+}
+
+function maintenanceEventReferenceToken(event) {
+  const eventId = String(event?.id || '').trim();
+  const eventName = String(event?.name || `Event ${eventId}`)
+    .replace(/`/g, "'")
+    .replace(/\*\*/g, '')
+    .trim();
+  return '`' + eventId + ': **' + eventName + '**`';
+}
+
+function maintenanceDescriptionHtml(description, options = {}) {
+  const source = String(description || '');
+  const interactive = options.interactive !== false;
+  const pattern = /`(\d+)\s*:\s*\*\*([^`\n]+?)\*\*`/g;
+  let output = '';
+  let cursor = 0;
+  let match;
+  while ((match = pattern.exec(source)) !== null) {
+    output += escapeHtml(source.slice(cursor, match.index));
+    const referenceContent = `<span>${escapeHtml(match[1])}:</span> <strong>${escapeHtml(match[2].trim())}</strong>`;
+    output += interactive
+      ? `<button type="button" class="maintenance-event-reference" title="View event ${escapeHtmlAttr(match[1])}" aria-label="View event ${escapeHtmlAttr(match[1])}: ${escapeHtmlAttr(match[2].trim())}" onclick="viewMaintenanceReferencedEvent(event,${Number(match[1])})" onkeydown="event.stopPropagation()">${referenceContent}</button>`
+      : `<span class="maintenance-event-reference is-static">${referenceContent}</span>`;
+    cursor = pattern.lastIndex;
+  }
+  output += escapeHtml(source.slice(cursor));
+  return output;
+}
+
+function viewMaintenanceReferencedEvent(clickEvent, eventId) {
+  clickEvent?.preventDefault();
+  clickEvent?.stopPropagation();
+  const numericEventId = Number(eventId);
+  if (!numericEventId) return;
+  document.getElementById('eventDetailsModal')?.classList.add('maintenance-reference-overlay');
+  void viewEvent(numericEventId, { updateHistory: false });
+}
+
+function hideMaintenanceEventSuggestions(state) {
+  if (!state?.popup) return;
+  state.popup.hidden = true;
+  state.popup.innerHTML = '';
+  state.events = [];
+  state.activeIndex = -1;
+}
+
+function renderMaintenanceEventSuggestions(state, matchingEvents) {
+  state.events = matchingEvents;
+  state.activeIndex = matchingEvents.length ? 0 : -1;
+  if (!matchingEvents.length) {
+    state.popup.innerHTML = '<div class="maintenance-event-suggestion-empty">No matching events</div>';
+    state.popup.hidden = false;
+    return;
+  }
+
+  state.popup.innerHTML = matchingEvents.map((event, index) => {
+    const meta = [event.startDate, event.location, event.state].filter(Boolean).join(' · ');
+    return `
+      <button type="button" class="maintenance-event-suggestion${index === 0 ? ' active' : ''}" data-event-index="${index}" role="option" aria-selected="${index === 0 ? 'true' : 'false'}">
+        <span><b>${escapeHtml(String(event.id || ''))}:</b> <strong>${escapeHtml(event.name || `Event ${event.id || ''}`)}</strong></span>
+        ${meta ? `<small>${escapeHtml(meta)}</small>` : ''}
+      </button>
+    `;
+  }).join('');
+  state.popup.hidden = false;
+  state.popup.querySelectorAll('[data-event-index]').forEach(button => {
+    button.addEventListener('mousedown', event => event.preventDefault());
+    button.addEventListener('click', () => {
+      selectMaintenanceEventReference(state, Number(button.dataset.eventIndex));
+    });
+  });
+}
+
+function setMaintenanceEventSuggestionActive(state, nextIndex) {
+  if (!state.events.length) return;
+  state.activeIndex = (nextIndex + state.events.length) % state.events.length;
+  state.popup.querySelectorAll('[data-event-index]').forEach((button, index) => {
+    const active = index === state.activeIndex;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-selected', String(active));
+    if (active) button.scrollIntoView({ block: 'nearest' });
+  });
+}
+
+function selectMaintenanceEventReference(state, eventIndex) {
+  const selectedEvent = state.events[eventIndex];
+  const context = state.context;
+  if (!selectedEvent || !context) return;
+  const textarea = state.textarea;
+  const token = maintenanceEventReferenceToken(selectedEvent);
+  textarea.value = textarea.value.slice(0, context.markerStart)
+    + token
+    + textarea.value.slice(context.caret);
+  const nextCaret = context.markerStart + token.length;
+  textarea.focus();
+  textarea.setSelectionRange(nextCaret, nextCaret);
+  hideMaintenanceEventSuggestions(state);
+  textarea.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+async function loadMaintenanceEventSuggestions(state, context) {
+  const requestId = ++state.requestId;
+  const query = new URLSearchParams({
+    view: 'options',
+    query: context.query,
+    limit: '8',
+    sort: 'startDate',
+    direction: 'desc'
+  });
+  try {
+    const response = await apiCall(`/api/events?${query.toString()}`);
+    if (requestId !== state.requestId || !state.textarea.isConnected) return;
+    renderMaintenanceEventSuggestions(
+      state,
+      Array.isArray(response?.data) ? response.data : []
+    );
+  } catch (error) {
+    if (requestId === state.requestId) hideMaintenanceEventSuggestions(state);
+  }
+}
+
+function setupMaintenanceEventReferenceInput(textareaOrId) {
+  const textarea = typeof textareaOrId === 'string'
+    ? document.getElementById(textareaOrId)
+    : textareaOrId;
+  if (!textarea || textarea.dataset.eventReferencesReady === 'true') return;
+  textarea.dataset.eventReferencesReady = 'true';
+
+  const field = textarea.closest('.form-group') || textarea.parentElement;
+  field?.classList.add('maintenance-event-reference-field');
+  const popup = document.createElement('div');
+  popup.className = 'maintenance-event-suggestions';
+  popup.hidden = true;
+  popup.setAttribute('role', 'listbox');
+  popup.setAttribute('aria-label', 'Event suggestions');
+  textarea.insertAdjacentElement('afterend', popup);
+
+  const state = {
+    textarea,
+    popup,
+    context: null,
+    events: [],
+    activeIndex: -1,
+    requestId: 0,
+    timer: null
+  };
+  const update = () => {
+    const context = maintenanceEventReferenceContext(textarea);
+    state.context = context;
+    clearTimeout(state.timer);
+    if (!context) {
+      state.requestId += 1;
+      hideMaintenanceEventSuggestions(state);
+      return;
+    }
+    popup.innerHTML = '<div class="maintenance-event-suggestion-empty">Searching events...</div>';
+    popup.hidden = false;
+    state.timer = setTimeout(() => loadMaintenanceEventSuggestions(state, context), 140);
+  };
+
+  textarea.addEventListener('input', update);
+  textarea.addEventListener('click', update);
+  textarea.addEventListener('keyup', event => {
+    if (!['ArrowDown', 'ArrowUp', 'Enter', 'Escape'].includes(event.key)) update();
+  });
+  textarea.addEventListener('keydown', event => {
+    if (popup.hidden) return;
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      setMaintenanceEventSuggestionActive(state, state.activeIndex + 1);
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      setMaintenanceEventSuggestionActive(state, state.activeIndex - 1);
+    } else if (event.key === 'Enter' && state.activeIndex >= 0) {
+      event.preventDefault();
+      selectMaintenanceEventReference(state, state.activeIndex);
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      hideMaintenanceEventSuggestions(state);
+    }
+  });
+  textarea.addEventListener('blur', () => {
+    setTimeout(() => hideMaintenanceEventSuggestions(state), 120);
+  });
+}
+
 function maintenanceLogUserLabel(log) {
   return String(log?.userDisplayName || log?.user || '').trim();
 }
@@ -18029,13 +18274,13 @@ function maintenanceActivityRowHtml(asset, latestRecord = null) {
   const location = asset.currentLocation || asset.location || 'Store';
 
   return `
-    <button type="button" class="maintenance-activity-row" onclick="viewMaintenanceLog('${escapeJs(assetId)}')" aria-label="View maintenance history for ${escapeHtmlAttr(displayId)}">
+    <div class="maintenance-activity-row" role="button" tabindex="0" onclick="viewMaintenanceLog('${escapeJs(assetId)}')" onkeydown="if(event.target===this&&(event.key==='Enter'||event.key===' ')){event.preventDefault();viewMaintenanceLog('${escapeJs(assetId)}')}" aria-label="View maintenance history for ${escapeHtmlAttr(displayId)}">
       <span><span class="maintenance-asset-id">${escapeHtml(displayId)}${asset.isBulk ? ' <span class="asset-badge status-available">Bulk</span>' : ''}</span><span class="maintenance-asset-model">${escapeHtml(model)}${asset.description ? ` · ${escapeHtml(asset.description)}` : ''}</span></span>
-      <span class="maintenance-log-summary"><span class="maintenance-log-summary-top">${latest ? maintenanceLogTypeBadgeHtml(latest.type) : '<span class="asset-badge status-decommissioned">No history</span>'}<span class="maintenance-log-author">${latest?.user ? `by ${escapeHtml(maintenanceLogUserLabel(latest))}` : ''}</span></span><span class="maintenance-log-description">${escapeHtml(description)}</span></span>
+      <span class="maintenance-log-summary"><span class="maintenance-log-summary-top">${latest ? maintenanceLogTypeBadgeHtml(latest.type) : '<span class="asset-badge status-decommissioned">No history</span>'}<span class="maintenance-log-author">${latest?.user ? `by ${escapeHtml(maintenanceLogUserLabel(latest))}` : ''}</span></span><span class="maintenance-log-description">${maintenanceDescriptionHtml(description)}</span></span>
       <span>${assetFlagBadgesHtml(asset)}</span>
       <span class="maintenance-row-date">${escapeHtml(inventoryMaintenanceDateText(latest))}<span>${escapeHtml(location)}</span></span>
       <span class="maintenance-row-chevron"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></span>
-    </button>
+    </div>
   `;
 }
 
@@ -24782,6 +25027,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
       const logEntry = document.getElementById("maintenanceLogEntry").value.trim();
       const maintenanceDate = document.getElementById("maintenanceDate").value;
+      const maintenanceUser = document.getElementById("maintenanceUser")?.value || currentUser?.username || '';
       const newLocation = document.getElementById("maintenanceNewLocation").value.trim();
       const logType = normalizeMaintenanceLogType(document.getElementById("maintenanceLogType")?.value, false);
 
@@ -24844,6 +25090,7 @@ document.addEventListener("DOMContentLoaded", function () {
           logEntry,
           logType,
           maintenanceDate,
+          maintenanceUser,
           newLocation: newLocation || null,
           newSerial: newSerial || null,
           cost: maintenanceCost || null,
@@ -25150,6 +25397,8 @@ function openMaintenanceModal() {
   const maintenanceMediaEl = document.getElementById('maintenanceMediaFiles');
   if (maintenanceMediaEl) maintenanceMediaEl.value = '';
   updateMaintenanceMediaSelection('maintenanceMediaFiles', 'maintenanceMediaFileList');
+  void populateMaintenanceUserSelect('maintenanceUser', currentUser?.username || '', true);
+  setupMaintenanceEventReferenceInput('maintenanceLogEntry');
   
   // Set current date as default
   const today = new Date().toISOString().split('T')[0];
@@ -25601,6 +25850,12 @@ function openBulkMaintenanceFaultModal(assetId) {
             <input type="number" class="form-input" id="bulkFaultQuantity" min="1" max="${escapeHtmlAttr(String(capacity))}" value="1" required>
           </div>
           <div class="form-group">
+            <label class="form-label" for="bulkFaultUser">User</label>
+            <select class="form-input" id="bulkFaultUser" required>
+              <option value="">Loading users...</option>
+            </select>
+          </div>
+          <div class="form-group">
             <label class="form-label" for="bulkFaultDescription">Maintenance Log Entry</label>
             <textarea class="form-input" id="bulkFaultDescription" rows="4" placeholder="Describe the fault or limitation" required></textarea>
           </div>
@@ -25639,6 +25894,8 @@ function openBulkMaintenanceFaultModal(assetId) {
 
   const modal = document.getElementById('bulkMaintenanceFaultModal');
   initialiseMaintenanceStatusSelects(modal);
+  void populateMaintenanceUserSelect('bulkFaultUser', currentUser?.username || '', true);
+  setupMaintenanceEventReferenceInput('bulkFaultDescription');
   enhanceModalAccessibility(modal);
   focusModalStart(modal);
   modal.addEventListener('click', e => {
@@ -25673,6 +25930,7 @@ async function submitBulkMaintenanceFault(assetId, capacity) {
     const payload = {
       affectedQuantity: quantity,
       logEntry: description,
+      maintenanceUser: document.getElementById('bulkFaultUser')?.value || currentUser?.username || '',
       maintenanceDate,
       assetStatus,
       logType: 'Fault'
@@ -25760,6 +26018,7 @@ function openBulkMaintenanceFaultEditModal(assetId, faultKey, logNumber) {
   const modal = document.getElementById('bulkMaintenanceFaultEditModal');
   bindMaintenanceMediaDeleteButtons(modal);
   initialiseMaintenanceStatusSelects(modal);
+  setupMaintenanceEventReferenceInput('bulkFaultEditDescription');
   enhanceModalAccessibility(modal);
   focusModalStart(modal);
   modal.addEventListener('click', e => {
@@ -25814,7 +26073,7 @@ function bulkMaintenanceReportHtml(report, emptyText = 'Not resolved', options =
         <span style="color:#666;">${escapeHtml(report.user || '')}</span>
         ${maintenanceLogTypeBadgeHtml(report.type)}
       </div>
-      <div style="white-space:pre-wrap;line-height:1.4;">${escapeHtml(report.description || '')}</div>
+      <div style="white-space:pre-wrap;line-height:1.4;">${maintenanceDescriptionHtml(report.description || '')}</div>
       <div>${maintenanceMediaLinksHtml(report.media, '<span style="color:#999;">—</span>', options)}</div>
       ${report.cost ? `<div style="font-size:13px;color:#666;">Cost: ${maintenanceCostDisplayHtml(report.cost)}</div>` : ''}
     </div>
@@ -25898,7 +26157,7 @@ function showBulkMaintenanceLogModal(asset) {
             <tr>
               <td style="padding:9px;border-bottom:1px solid #e5edf8;white-space:nowrap;">${escapeHtml(log.date)}</td>
               <td style="padding:9px;border-bottom:1px solid #e5edf8;">${maintenanceLogOriginBadgeHtml(log)}</td>
-              <td style="padding:9px;border-bottom:1px solid #e5edf8;">${escapeHtml(log.description)}</td>
+              <td style="padding:9px;border-bottom:1px solid #e5edf8;">${maintenanceDescriptionHtml(log.description)}</td>
               <td style="padding:9px;border-bottom:1px solid #e5edf8;">${maintenanceMediaLinksHtml(
                 log.media,
                 '<span style="color:#999;">—</span>'
@@ -26019,6 +26278,7 @@ function openBulkMaintenanceResolutionModal(assetId, faultKey, logNumber) {
   });
 
   const modal = document.getElementById('bulkMaintenanceResolutionModal');
+  setupMaintenanceEventReferenceInput('bulkResolutionDescription');
   enhanceModalAccessibility(modal);
   focusModalStart(modal);
   modal.addEventListener('click', e => {
@@ -26158,7 +26418,7 @@ function viewMaintenanceLogDetail(assetId, logIndex) {
 
           <div style="margin-bottom:20px;">
             <h4 style="margin:0 0 8px;color:#495057;">Maintenance Log Entry</h4>
-            <div style="white-space:pre-wrap;overflow-wrap:anywhere;padding:16px;border:1px solid #e1e5ec;border-radius:10px;background:#fff;line-height:1.55;">${escapeHtml(log.description || '')}</div>
+            <div style="white-space:pre-wrap;overflow-wrap:anywhere;padding:16px;border:1px solid #e1e5ec;border-radius:10px;background:#fff;line-height:1.55;">${maintenanceDescriptionHtml(log.description || '')}</div>
           </div>
 
           <div>
@@ -26310,7 +26570,7 @@ function showMaintenanceLogModal(asset) {
                       </div>
                     </div>
                     <div class="maintenance-timeline-meta">${maintenanceLogTypeBadgeHtml(log.type)} ${maintenanceLogOriginBadgeHtml(log)} ${changes.map(maintenanceChangeBadgeHtml).join('')}</div>
-                    <div class="maintenance-timeline-description">${escapeHtml(log.description || 'No description')}</div>
+                    <div class="maintenance-timeline-description">${maintenanceDescriptionHtml(log.description || 'No description')}</div>
                     ${(mediaCount || Number(log.cost || 0)) ? `<div class="maintenance-timeline-meta" style="color:#64748b;font-size:10px">${mediaCount ? `<span>${mediaCount} attachment${mediaCount === 1 ? '' : 's'}</span>` : ''}${Number(log.cost || 0) ? `<span>${maintenanceCostDisplayHtml(log.cost, '')}</span>` : ''}</div>` : ''}
                   </article>
                 `;
@@ -26542,7 +26802,7 @@ function showMaintenanceLogModalLegacy(asset) {
           </td>
           <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; vertical-align: top;">
             <div id="${logId}_display" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;white-space:normal;">
-              ${escapeHtml(log.description)}
+              ${maintenanceDescriptionHtml(log.description)}
             </div>
           </td>
           <td style="padding: 12px; border-bottom: 1px solid #f1f1f1; vertical-align: top; font-size: 13px;">
@@ -27334,6 +27594,7 @@ function editMaintenanceLog(assetId, logIndex, logId) {
   focusModalStart(modal);
   initialiseMaintenanceStatusSelects(modal);
   initialiseMaintenanceLogTypeSelects(modal);
+  setupMaintenanceEventReferenceInput('editMaintenanceDescription');
   const editMediaInput = document.getElementById('editMaintenanceMediaFiles');
   if (editMediaInput) {
     editMediaInput.addEventListener('change', () => {
@@ -34332,7 +34593,7 @@ function transferProgressHtml(done, total) {
 
 
 
-function renderTransferWorkspace() {
+function renderLegacyTransferWorkspace() {
   const container = document.getElementById('transfer-history');
   if (!container) return;
 
@@ -34488,23 +34749,21 @@ function transferUiIconSvg(kind) {
   return `<svg class="transfer-ui-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${paths[kind] || paths.arrow}</svg>`;
 }
 
-function renderTransferEventPickerCard(role, event, selectableCount) {
+function renderTransferEventPickerCard(role, event) {
   const isSource = role === 'source';
   const pickerContext = isSource ? 'transfer-source' : 'transfer-target';
   const kicker = isSource ? 'From event' : 'To event';
   const placeholder = isSource ? 'Choose source event' : 'Choose destination event';
-  const metricValue = event
-    ? (isSource ? Number(event.unreturnedCount || 0) : Number(event.requiredCount || event.assetCount || 0))
-    : selectableCount;
-  const metricLabel = event
-    ? (isSource ? 'assets currently out' : 'assets required')
-    : 'events available';
+  const metricValue = isSource
+    ? Number(event?.unreturnedCount || 0)
+    : Number(event?.requiredCount || event?.assetCount || 0);
+  const metricLabel = isSource ? 'assets currently out' : 'assets required';
   const dateLabel = event ? transferEventDateLabel(event) : '';
   const location = event?.location || event?.venue || '';
 
   return `
     <button type="button"
-            class="transfer-event-card transfer-event-picker ${event ? '' : 'is-empty'}"
+            class="transfer-event-card transfer-event-picker ${event ? 'has-metric' : 'is-empty'}"
             aria-haspopup="dialog"
             onclick="planOpenEventChooser('${pickerContext}')">
       <div class="transfer-event-icon ${isSource ? 'from' : 'to'}" aria-hidden="true">${transferEventIconSvg(isSource ? 'from' : 'to')}</div>
@@ -34528,10 +34787,10 @@ function renderTransferEventPickerCard(role, event, selectableCount) {
           </div>
         `}
       </div>
-      <div class="transfer-event-count">
+      ${event ? `<div class="transfer-event-count">
         <strong>${metricValue}</strong>
         <span>${escapeHtml(metricLabel)}</span>
-      </div>
+      </div>` : ''}
       <span class="transfer-event-chevron" aria-hidden="true">⌄</span>
     </button>
   `;
@@ -34565,7 +34824,6 @@ function renderTransferWorkspace() {
   const container = document.getElementById('transfer-history');
   if (!container) return;
 
-  const events = transferSelectableEvents();
   const selectedSource = transferEventById(transferPageState.sourceEventId);
   const selectedTarget = transferEventById(transferPageState.targetEventId);
 
@@ -34576,20 +34834,19 @@ function renderTransferWorkspace() {
       <div class="transfer-page-header">
         <div>
           <h2>Transfer Assets</h2>
-          <p>Move selected physical assets from one event directly into another event workflow.</p>
         </div>
         <div class="transfer-page-tools">
           <button type="button" class="transfer-tool-button" onclick="loadTransferCandidates()">${transferUiIconSvg('refresh')}<span>Refresh</span></button>
-          <button type="button" class="transfer-tool-button" onclick="generateTransferPdf()">${transferUiIconSvg('export')}<span>Export PDF</span></button>
+          <button type="button" class="transfer-tool-button transfer-tool-button-primary" onclick="openTransferPdfExportDialog()">${transferUiIconSvg('export')}<span>Export PDF</span></button>
         </div>
       </div>
 
       <div class="transfer-event-bar">
-        ${renderTransferEventPickerCard('source', selectedSource, events.length)}
+        ${renderTransferEventPickerCard('source', selectedSource)}
         <div class="transfer-direction" aria-label="Transfer direction">
           <span>${transferUiIconSvg('arrow')}</span>
         </div>
-        ${renderTransferEventPickerCard('target', selectedTarget, events.length)}
+        ${renderTransferEventPickerCard('target', selectedTarget)}
       </div>
 
       <div id="transfer-candidates-panel">
@@ -35132,9 +35389,12 @@ async function loadTransferCandidates(options = {}) {
   const fromEventId = sourceSelect.value;
   const toEventId = targetSelect.value;
   const pairKey = `${fromEventId || ''}|${toEventId || ''}`;
-  const openDropdowns = options.openDropdowns || getOpenTransferDropdownIds();
+  const pairChanged = window.__lastTransferPairKey !== pairKey;
+  const openDropdowns = pairChanged
+    ? []
+    : (options.openDropdowns || getOpenTransferDropdownIds());
 
-  if (window.__lastTransferPairKey !== pairKey) {
+  if (pairChanged) {
     resetTransferActionState();
     window.__lastTransferPairKey = pairKey;
   }
@@ -35398,7 +35658,6 @@ function renderTransferDecisionGroup(group, kind, index) {
   const selectedCount = selectedTransferCountForGroup(group, kind);
   const remainingAction = transferGroupSelectionLimit(group);
   const detailsId = transferGroupDetailsId(group);
-  const open = 'open';
   const targetNeed = kind === 'officePrepare'
     ? Number(group.actionQty || 0)
     : group.mode === 'return-office'
@@ -35409,7 +35668,7 @@ function renderTransferDecisionGroup(group, kind, index) {
     : Number(group.items?.length || 0);
   const subtitle = kind === 'officePrepare' ? 'choose office Asset IDs' : 'choose exact IDs';
   return `
-    <details class="transfer-decision-group" id="${detailsId}" ${open}>
+    <details class="transfer-decision-group" id="${detailsId}">
       <summary class="transfer-decision-summary">
         <span class="transfer-decision-model">
           <strong>${escapeHtml(transferAssetTypeName(group))}</strong>
@@ -35597,7 +35856,6 @@ function renderTransferCandidates(data) {
       <section class="transfer-panel">
         <div class="transfer-panel-heading">
           <h3>Transfer Decision</h3>
-          <p>All model rows stay open so you can tick the exact physical Asset IDs to move.</p>
         </div>
         ${renderTransferDecisionSection('Common / Transferable', '', commonGroups, 'transfer', 'No matching transferable assets.')}
         ${renderTransferDecisionSection('Return To Office', 'return', returnGroups, 'returnOffice', 'No unused source assets need to return.')}
@@ -35621,9 +35879,103 @@ function renderTransferCandidates(data) {
       <button type="button" class="transfer-office-action" onclick="executeSelectedOfficePrepares()" ${officePrepareSelected ? '' : 'disabled'}>
         ${transferUiIconSvg('prepare')}<span>Prepare Selected (${officePrepareSelected})</span>
       </button>
-      <button type="button" class="transfer-export-action" onclick="generateTransferPdf()">${transferUiIconSvg('export')}<span>Export PDF</span></button>
+      <button type="button" class="transfer-export-action" onclick="openTransferPdfExportDialog()">${transferUiIconSvg('export')}<span>Export PDF</span></button>
     </div>
   `;
+}
+
+var transferPdfExportModes = new Set(['common']);
+
+function transferPdfExportOptions(data = window.__lastTransferData || {}) {
+  return [
+    { mode: 'common', label: 'Common / Transferable', tone: 'common' },
+    { mode: 'return-office', label: 'Uncommon / Return to Office', tone: 'return' },
+    { mode: 'office-needed', label: 'Needed From Office', tone: 'office' }
+  ].map(option => {
+    const groups = buildTransferGroups(
+      getTransferListForMode(option.mode, data),
+      option.mode
+    );
+    return {
+      ...option,
+      groups,
+      typeCount: groups.length,
+      quantity: groups.reduce(
+        (sum, group) => sum + Number(group.actionQty || 0),
+        0
+      )
+    };
+  });
+}
+
+function ensureTransferPdfExportDialog() {
+  if (document.getElementById('transferPdfExportModal')) return;
+  document.body.insertAdjacentHTML('beforeend', `
+    <div id="transferPdfExportModal" class="modal">
+      <div class="modal-content transfer-export-dialog" role="dialog" aria-modal="true" aria-labelledby="transferPdfExportTitle">
+        <div class="modal-header">
+          <div>
+            <h3 id="transferPdfExportTitle">Export Transfer PDF</h3>
+            <span>PDF contents</span>
+          </div>
+          <button type="button" class="close-btn" aria-label="Close" onclick="closeModal('transferPdfExportModal')">&times;</button>
+        </div>
+        <div id="transferPdfExportOptions" class="transfer-export-options"></div>
+        <div id="transferPdfExportError" class="transfer-export-error" role="alert"></div>
+        <div class="modal-actions transfer-export-dialog-actions">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('transferPdfExportModal')">Cancel</button>
+          <button type="button" class="btn btn-primary" onclick="exportSelectedTransferPdf()">Create PDF</button>
+        </div>
+      </div>
+    </div>
+  `);
+}
+
+function renderTransferPdfExportOptions() {
+  const container = document.getElementById('transferPdfExportOptions');
+  if (!container) return;
+  container.innerHTML = transferPdfExportOptions().map(option => `
+    <label class="transfer-export-option is-${option.tone}">
+      <input type="checkbox" value="${option.mode}"
+        ${transferPdfExportModes.has(option.mode) ? 'checked' : ''}
+        onchange="toggleTransferPdfExportMode(this)">
+      <span class="transfer-export-option-mark" aria-hidden="true"></span>
+      <span class="transfer-export-option-copy">
+        <strong>${escapeHtml(option.label)}</strong>
+        <small>${option.typeCount} asset type${option.typeCount === 1 ? '' : 's'} &middot; ${option.quantity} asset${option.quantity === 1 ? '' : 's'}</small>
+      </span>
+    </label>
+  `).join('');
+}
+
+function openTransferPdfExportDialog() {
+  const fromEventId = document.getElementById('transferSourceSelect')?.value;
+  const toEventId = document.getElementById('transferTargetSelect')?.value;
+  if (!fromEventId || !toEventId) {
+    showNotification('warning', 'Select both source and destination events first');
+    return;
+  }
+  ensureTransferPdfExportDialog();
+  if (!transferPdfExportModes.size) transferPdfExportModes.add('common');
+  document.getElementById('transferPdfExportError').textContent = '';
+  renderTransferPdfExportOptions();
+  openModal('transferPdfExportModal');
+}
+
+function toggleTransferPdfExportMode(input) {
+  if (input.checked) transferPdfExportModes.add(input.value);
+  else transferPdfExportModes.delete(input.value);
+  document.getElementById('transferPdfExportError').textContent = '';
+}
+
+async function exportSelectedTransferPdf() {
+  if (!transferPdfExportModes.size) {
+    document.getElementById('transferPdfExportError').textContent = 'Select at least one section.';
+    return;
+  }
+  const modes = Array.from(transferPdfExportModes);
+  closeModal('transferPdfExportModal');
+  await generateTransferPdf(modes);
 }
 
 function groupedTransferPdfRows(groups) {
@@ -35669,7 +36021,7 @@ function transferPdfRowHtml(group, rowNumber) {
   `;
 }
 
-function buildTransferPdfPages(groups, context) {
+function buildLegacyTransferPdfPages(groups, context) {
   const safe = (value) => escapeHtml(String(value ?? ''));
   const logoRowHtml = renderPdfLogoRowHtml();
   const footerHtml = renderPdfFooterHtml();
@@ -35838,66 +36190,290 @@ function buildTransferPdfPages(groups, context) {
   `).join('');
 }
 
-async function generateTransferPdf() {
+function transferPdfTextColor(background) {
+  const match = String(background || '').match(/^#([0-9a-f]{6})$/i);
+  if (!match) return '#ffffff';
+  const value = match[1];
+  const red = parseInt(value.slice(0, 2), 16);
+  const green = parseInt(value.slice(2, 4), 16);
+  const blue = parseInt(value.slice(4, 6), 16);
+  return ((red * 299 + green * 587 + blue * 114) / 1000) > 158
+    ? '#172033'
+    : '#ffffff';
+}
+
+function transferPdfSectionHeadingHtml(section) {
+  return `<tr class="transfer-section-row"><td colspan="5">${escapeHtml(section.label)}</td></tr>`;
+}
+
+function transferPdfReportRows(sections) {
+  let rowNumber = 0;
+  return sections.flatMap(section => {
+    const rows = [{
+      kind: 'heading',
+      html: transferPdfSectionHeadingHtml(section),
+      height: 0
+    }];
+    if (!section.groups.length) {
+      rows.push({
+        kind: 'empty',
+        html: '<tr><td colspan="5" class="transfer-empty-row">No assets in this section.</td></tr>',
+        height: 0
+      });
+      return rows;
+    }
+    section.groups.forEach(group => {
+      rowNumber += 1;
+      rows.push({
+        kind: 'item',
+        html: transferPdfRowHtml(group, rowNumber),
+        height: 0
+      });
+    });
+    return rows;
+  });
+}
+
+function buildTransferPdfPagesV2(sections, context) {
+  const safe = value => escapeHtml(String(value ?? ''));
+  const logoHtml = renderPdfLogoRowHtml('transfer-report-logo');
+  const footerHtml = renderPdfFooterHtml();
+  const themeColor = /^#[0-9a-f]{6}$/i.test(context.themeColor || '')
+    ? context.themeColor
+    : '#0f766e';
+  const themeText = transferPdfTextColor(themeColor);
+  const eventMeta = event => [
+    transferEventDateLabel(event),
+    event.location || event.venue || '',
+    eventStateDisplayLabel(event.state || '')
+  ].filter(Boolean).map(safe).join(' &middot; ');
+
+  const letterheadHtml = `
+    <div class="transfer-report-letterhead">
+      <div>
+        <strong>${safe(context.companyName || 'Showbase')}</strong>
+        <span>Asset Operations</span>
+      </div>
+      ${logoHtml}
+    </div>
+  `;
+  const reportHeaderHtml = `
+    ${letterheadHtml}
+    <div class="transfer-report-header">
+      <div>
+        <span class="transfer-report-kicker">OPERATIONS REPORT</span>
+        <div class="transfer-report-title">ASSET TRANSFER REPORT</div>
+      </div>
+      <div class="transfer-report-generated">
+        <span>Generated by</span><strong>${safe(context.generatedBy || '-')}</strong>
+        <span>Generated on</span><strong>${safe(context.generatedAt)}</strong>
+      </div>
+    </div>
+    <div class="transfer-report-route">
+      <div class="transfer-report-event from">
+        <span>FROM EVENT</span>
+        <strong>#${safe(context.fromEvent.id || context.fromEventId)} ${safe(context.fromEvent.name || '')}</strong>
+        <small>${eventMeta(context.fromEvent)}</small>
+      </div>
+      <div class="transfer-report-arrow" aria-hidden="true">&rarr;</div>
+      <div class="transfer-report-event to">
+        <span>TO EVENT</span>
+        <strong>#${safe(context.toEvent.id || context.toEventId)} ${safe(context.toEvent.name || '')}</strong>
+        <small>${eventMeta(context.toEvent)}</small>
+      </div>
+    </div>
+  `;
+  const summaryHtml = `
+    <div class="transfer-report-summary">
+      <div><span>Included</span><strong>${sections.map(section => safe(section.label)).join(', ')}</strong></div>
+      <div><span>Asset types</span><strong>${safe(context.totalTypes)}</strong></div>
+      <div><span>Total quantity</span><strong>${safe(context.totalQty)}</strong></div>
+    </div>
+  `;
+
+  const rowRecords = transferPdfReportRows(sections);
+  const measureBox = document.createElement('div');
+  measureBox.id = '__transferReportMeasureBox';
+  measureBox.style.cssText = `position:absolute;left:-10000px;top:0;visibility:hidden;width:196mm;
+    font-family:'Century Gothic',Arial,sans-serif;font-size:8pt;line-height:1.3;background:#fff;z-index:-1;`;
+  measureBox.innerHTML = `
+    <style>
+      #__transferReportMeasureBox *{box-sizing:border-box}
+      #__transferReportMeasureBox .transfer-report-letterhead{display:flex;align-items:center;justify-content:space-between;min-height:34px;margin-bottom:6px;border-bottom:1px solid #dbe5e3;padding-bottom:6px}
+      #__transferReportMeasureBox .transfer-report-letterhead strong{display:block;color:${themeColor};font-size:13pt}
+      #__transferReportMeasureBox .transfer-report-letterhead span{display:block;margin-top:1px;color:#65736f;font-size:7pt;text-transform:uppercase}
+      #__transferReportMeasureBox .transfer-report-logo{height:32px}.transfer-report-logo img{max-height:32px;max-width:62mm;object-fit:contain}
+      #__transferReportMeasureBox .transfer-report-header{display:flex;justify-content:space-between;gap:16px;align-items:flex-end;margin:8px 0 10px}
+      #__transferReportMeasureBox .transfer-report-kicker{color:#667085;font-size:7pt;font-weight:700}
+      #__transferReportMeasureBox .transfer-report-title{margin-top:2px;color:#172033;font-size:15pt;font-weight:800}
+      #__transferReportMeasureBox .transfer-report-generated{display:grid;grid-template-columns:auto auto;gap:2px 8px;text-align:right;font-size:7.5pt}
+      #__transferReportMeasureBox .transfer-report-generated span{color:#667085}.transfer-report-generated strong{color:#172033}
+      #__transferReportMeasureBox .transfer-report-route{display:grid;grid-template-columns:minmax(0,1fr) 12mm minmax(0,1fr);gap:5px;align-items:stretch;margin-bottom:10px}
+      #__transferReportMeasureBox .transfer-report-event{border:1px solid #dce6e4;border-radius:5px;background:#f8fbfa;padding:7px 9px}
+      #__transferReportMeasureBox .transfer-report-event.to{border-color:${themeColor};background:${themeColor}12}
+      #__transferReportMeasureBox .transfer-report-event span{display:block;color:#667085;font-size:6.8pt;font-weight:800}
+      #__transferReportMeasureBox .transfer-report-event strong{display:block;margin-top:3px;color:#172033;font-size:9pt}
+      #__transferReportMeasureBox .transfer-report-event small{display:block;margin-top:3px;color:#667085;font-size:7pt}
+      #__transferReportMeasureBox .transfer-report-arrow{display:grid;place-items:center;color:${themeColor};font-size:18pt;font-weight:800}
+      #__transferReportMeasureBox .transfer-report-summary{display:grid;grid-template-columns:minmax(0,1fr) 25mm 27mm;margin-bottom:10px;border:1px solid #dce6e4;border-radius:5px;overflow:hidden}
+      #__transferReportMeasureBox .transfer-report-summary>div{padding:6px 8px;border-right:1px solid #dce6e4}.transfer-report-summary>div:last-child{border-right:0}
+      #__transferReportMeasureBox .transfer-report-summary span{display:block;color:#667085;font-size:6.8pt}.transfer-report-summary strong{display:block;margin-top:2px;color:#172033;font-size:8pt}
+      #__transferReportMeasureBox .items-table{width:100%;border-collapse:collapse;table-layout:fixed}
+      #__transferReportMeasureBox .items-table th{border:0;background:${themeColor};color:${themeText};padding:6px 7px;font-size:7.4pt;text-align:left}
+      #__transferReportMeasureBox .items-table td{border-bottom:1px solid #dfe7e5;padding:5px 7px;color:#24312e;font-size:7.5pt;vertical-align:top;overflow-wrap:anywhere}
+      #__transferReportMeasureBox .items-table th:first-child,#__transferReportMeasureBox .items-table td:first-child{text-align:center}
+      #__transferReportMeasureBox .items-table th:nth-child(2),#__transferReportMeasureBox .items-table td:nth-child(2){text-align:right}
+      #__transferReportMeasureBox .transfer-section-row td{background:${themeColor}14;color:${themeColor};font-weight:800;text-transform:uppercase;padding:6px 7px;border-top:2px solid #fff}
+      #__transferReportMeasureBox .transfer-empty-row{text-align:center;color:#667085!important;padding:12px!important}
+      #__transferReportMeasureBox .footer-measure{width:100%;font-size:7pt;line-height:1.2;text-align:center}
+    </style>
+    <div id="__transferReportFirstBase">${reportHeaderHtml}${summaryHtml}<table class="items-table">${transferPdfTableHead()}</table></div>
+    <div id="__transferReportNextBase">${reportHeaderHtml}<table class="items-table">${transferPdfTableHead()}</table></div>
+    <table class="items-table">${TRANSFER_PDF_COLGROUP}<tbody id="__transferReportMeasureBody"></tbody></table>
+    <div id="__transferReportFooterMeasure" class="footer-measure">${footerHtml}</div>
+  `;
+
+  const normalise = mountPdfMeasureBox(measureBox, 196);
+  const measureBody = measureBox.querySelector('#__transferReportMeasureBody');
+  const firstBaseHeight = normalise(measureBox.querySelector('#__transferReportFirstBase').getBoundingClientRect().height);
+  const nextBaseHeight = normalise(measureBox.querySelector('#__transferReportNextBase').getBoundingClientRect().height);
+  const footerHeight = normalise(measureBox.querySelector('#__transferReportFooterMeasure')?.getBoundingClientRect().height || 0);
+  rowRecords.forEach(record => {
+    measureBody.innerHTML = record.html;
+    record.height = normalise(measureBody.querySelector('tr')?.getBoundingClientRect().height || 0);
+  });
+  measureBox.remove();
+
+  const pageFlowHeightMm = 276;
+  const footerReserveMm = pdfFooterReserveMm({ pageFlowHeightMm }, footerHeight);
+  const pages = [];
+  let recordIndex = 0;
+  while (recordIndex < rowRecords.length) {
+    const firstPage = pages.length === 0;
+    const baseHeight = firstPage ? firstBaseHeight : nextBaseHeight;
+    const budget = Math.max(40, pdfMmToPx(pageFlowHeightMm - footerReserveMm) - baseHeight);
+    const pageRows = [];
+    let pageHeight = 0;
+    while (recordIndex < rowRecords.length) {
+      const record = rowRecords[recordIndex];
+      const nextRecord = rowRecords[recordIndex + 1];
+      const headingBundleHeight = record.kind === 'heading' && nextRecord
+        ? record.height + nextRecord.height
+        : record.height;
+      if (pageRows.length && pageHeight + headingBundleHeight > budget) break;
+      if (pageRows.length && pageHeight + record.height > budget) break;
+      pageRows.push(record);
+      pageHeight += record.height;
+      recordIndex += 1;
+      if (pageRows.length === 1 && record.height > budget) break;
+    }
+    pages.push({ includeSummary: firstPage, rows: pageRows });
+  }
+
+  const totalPages = pages.length;
+  return pages.map((page, pageIndex) => `
+    <div class="page">
+      ${reportHeaderHtml}
+      ${page.includeSummary ? summaryHtml : ''}
+      <table class="items-table">
+        ${transferPdfTableHead()}
+        <tbody>${page.rows.map(record => record.html).join('')}</tbody>
+      </table>
+      <div class="footer">${footerHtml}</div>
+      <div class="page-number">Page ${pageIndex + 1} of ${totalPages}</div>
+    </div>
+  `).join('');
+}
+
+async function generateTransferPdf(selectedModes = ['common']) {
   const fromEventId = document.getElementById('transferSourceSelect')?.value;
   const toEventId = document.getElementById('transferTargetSelect')?.value;
   const fromEvent = transferEventById(fromEventId) || {};
   const toEvent = transferEventById(toEventId) || {};
-  const meta = transferModeMeta(transferPanelMode);
 
   if (!fromEventId || !toEventId) {
     showNotification('warning', 'Select both source and destination events first');
     return;
   }
 
-  const groups = buildTransferGroups(getTransferListForMode(meta.mode, window.__lastTransferData || {}), meta.mode);
-  const safe = (value) => escapeHtml(String(value ?? ''));
-  const dateRange = (event) => !event || !event.startDate ? '' : (event.startDate === event.endDate ? formatDate(event.startDate) : `${formatDate(event.startDate)} - ${formatDate(event.endDate)}`);
-
-  const now = new Date();
-  const formattedDate = now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-  const transferNumber = `${meta.numberPrefix}-${now.getFullYear()}${String(fromEventId).padStart(4, '0')}-${String(toEventId).padStart(4, '0')}`;
-  const totalQty = groups.reduce((sum, group) => sum + Number(group.actionQty || 0), 0);
-
-  await loadPdfSettings(true);
-
-  const pagesHtml = buildTransferPdfPages(groups, {
-    fromEvent,
-    toEvent,
-    fromEventId,
-    toEventId,
-    fromDateRange: dateRange(fromEvent),
-    toDateRange: dateRange(toEvent),
-    title: meta.title,
-    transferNumber,
-    formattedDate,
-    totalQty
-  });
-
   const win = window.open('', '_blank', 'width=900,height=1000');
   if (!win) {
     showNotification('error', 'Pop-up blocked. Please allow pop-ups to export the transfer PDF.');
     return;
   }
+  win.document.write('<!doctype html><title>Preparing transfer report...</title><p style="font:14px Arial;padding:24px">Preparing transfer report...</p>');
 
-  const html = `<!DOCTYPE html><html><head><title>${safe(meta.title)} - ${safe(fromEvent.name || '')} to ${safe(toEvent.name || '')}</title><style>
-    @page { size: A4; margin: 0; }
-    * { box-sizing: border-box; }
-    body { margin: 0; font-family: 'Century Gothic', Arial, sans-serif; color: #000; background: #f0f0f0; }
-    .page { width: 210mm; height: 297mm; min-height: 297mm; margin: 0 auto 12px auto; padding: 7mm 7mm 14mm 7mm; background: white; position: relative; overflow: hidden; page-break-after: always; break-after: page; }
-    .page:last-child { page-break-after: auto; break-after: auto; }
-    .logo-row { display:flex; justify-content:flex-end; margin-bottom:7px; height:39px; } .logo-row img { height:39px; width:auto; object-fit:contain; }
-    .header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:20px; } .header-left { flex:1; font-size:9pt; font-weight:bold; line-height:1.35; } .header-right { text-align:right; font-size:9pt; font-weight:bold; }
-    .transfer-title { font-size:14pt; font-weight:bold; margin-bottom:5px; } .summary-table, .items-table { width:100%; border-collapse:collapse; border:2px solid black; table-layout:fixed; }
-    .summary-table { margin-bottom:16px; } .items-table { margin-bottom:0; }
-    .summary-table td { border:1px solid #333; padding:7px; font-size:9pt; vertical-align:top; } .items-table th { background:#333; color:white; padding:8px; text-align:left; font-size:8.5pt; border:1px solid #333; }
-    .items-table td { border:1px solid #333; padding:6px; font-size:8.5pt; vertical-align:top; line-height:1.25; word-break:break-word; overflow-wrap:anywhere; }
-    .footer { position:absolute; bottom:7mm; left:7mm; right:7mm; text-align:center; font-size:7pt; font-weight:bold; line-height:1.2; overflow-wrap:anywhere; }
-    .page-number { position:absolute; bottom:3mm; right:7mm; font-size:7pt; }
-    .print-btn { position:fixed; top:20px; right:20px; background:#667eea; color:white; border:none; padding:10px 18px; border-radius:6px; cursor:pointer; z-index:999; }
-    @media print { body { background:white; } .page { margin:0; page-break-after:always; break-after:page; } .page:last-child { page-break-after:auto; break-after:auto; } .print-btn { display:none; } }
-  </style></head><body><button class="print-btn" onclick="window.print()">Print / Save as PDF</button>${pagesHtml}</body></html>`;
-  win.document.write(html);
-  win.document.close();
-  win.focus();
+  try {
+    const optionMap = new Map(
+      transferPdfExportOptions().map(option => [option.mode, option])
+    );
+    const sections = selectedModes
+      .map(mode => optionMap.get(transferModeMeta(mode).mode))
+      .filter(Boolean);
+    if (!sections.length) throw new Error('Select at least one PDF section');
+
+    await loadPdfSettings(true);
+    const totalQty = sections.reduce(
+      (sum, section) => sum + Number(section.quantity || 0),
+      0
+    );
+    const totalTypes = sections.reduce(
+      (sum, section) => sum + Number(section.typeCount || 0),
+      0
+    );
+    const generatedBy = (
+      typeof eventAssigneeDisplayName === 'function'
+        ? eventAssigneeDisplayName(currentUser)
+        : ''
+    ) || currentUser?.username || '';
+    const themeColor = /^#[0-9a-f]{6}$/i.test(pdfSettings?.themeColor || '')
+      ? pdfSettings.themeColor
+      : '#0f766e';
+    const themeText = transferPdfTextColor(themeColor);
+    const pagesHtml = buildTransferPdfPagesV2(sections, {
+      fromEvent,
+      toEvent,
+      fromEventId,
+      toEventId,
+      companyName: pdfSettings?.companyName || currentUser?.company?.name || '',
+      generatedBy,
+      generatedAt: reportGeneratedAt(),
+      totalQty,
+      totalTypes,
+      themeColor
+    });
+    const safe = value => escapeHtml(String(value ?? ''));
+    const html = `<!DOCTYPE html><html><head><title>Asset Transfer Report - ${safe(fromEvent.name || '')} to ${safe(toEvent.name || '')}</title><style>
+      @page{size:A4;margin:0}
+      *{box-sizing:border-box}
+      body{margin:0;background:#eef2f1;color:#172033;font-family:'Century Gothic',Arial,sans-serif}
+      .page{position:relative;width:210mm;height:297mm;min-height:297mm;margin:0 auto 12px;padding:7mm 7mm 14mm;background:#fff;overflow:hidden;page-break-after:always;break-after:page}
+      .page:last-child{page-break-after:auto;break-after:auto}
+      .transfer-report-letterhead{display:flex;align-items:center;justify-content:space-between;min-height:34px;margin-bottom:6px;border-bottom:1px solid #dbe5e3;padding-bottom:6px}
+      .transfer-report-letterhead strong{display:block;color:${themeColor};font-size:13pt}.transfer-report-letterhead span{display:block;margin-top:1px;color:#65736f;font-size:7pt;text-transform:uppercase}
+      .transfer-report-logo{height:32px}.transfer-report-logo img{max-width:62mm;max-height:32px;object-fit:contain}
+      .transfer-report-header{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin:8px 0 10px}
+      .transfer-report-kicker{color:#667085;font-size:7pt;font-weight:700}.transfer-report-title{margin-top:2px;color:#172033;font-size:15pt;font-weight:800}
+      .transfer-report-generated{display:grid;grid-template-columns:auto auto;gap:2px 8px;text-align:right;font-size:7.5pt}.transfer-report-generated span{color:#667085}.transfer-report-generated strong{color:#172033}
+      .transfer-report-route{display:grid;grid-template-columns:minmax(0,1fr) 12mm minmax(0,1fr);gap:5px;align-items:stretch;margin-bottom:10px}
+      .transfer-report-event{border:1px solid #dce6e4;border-radius:5px;background:#f8fbfa;padding:7px 9px}.transfer-report-event.to{border-color:${themeColor};background:${themeColor}12}
+      .transfer-report-event span{display:block;color:#667085;font-size:6.8pt;font-weight:800}.transfer-report-event strong{display:block;margin-top:3px;color:#172033;font-size:9pt}.transfer-report-event small{display:block;margin-top:3px;color:#667085;font-size:7pt}
+      .transfer-report-arrow{display:grid;place-items:center;color:${themeColor};font-size:18pt;font-weight:800}
+      .transfer-report-summary{display:grid;grid-template-columns:minmax(0,1fr) 25mm 27mm;margin-bottom:10px;border:1px solid #dce6e4;border-radius:5px;overflow:hidden}
+      .transfer-report-summary>div{padding:6px 8px;border-right:1px solid #dce6e4}.transfer-report-summary>div:last-child{border-right:0}.transfer-report-summary span{display:block;color:#667085;font-size:6.8pt}.transfer-report-summary strong{display:block;margin-top:2px;color:#172033;font-size:8pt}
+      .items-table{width:100%;border-collapse:collapse;table-layout:fixed}.items-table th{border:0;background:${themeColor};color:${themeText};padding:6px 7px;font-size:7.4pt;text-align:left}.items-table td{border-bottom:1px solid #dfe7e5;padding:5px 7px;color:#24312e;font-size:7.5pt;vertical-align:top;line-height:1.3;overflow-wrap:anywhere}
+      .items-table th:first-child,.items-table td:first-child{text-align:center}.items-table th:nth-child(2),.items-table td:nth-child(2){text-align:right}.transfer-section-row td{border-top:2px solid #fff;background:${themeColor}14;color:${themeColor};font-weight:800;text-transform:uppercase;padding:6px 7px}.transfer-empty-row{text-align:center!important;color:#667085!important;padding:12px!important}
+      .footer{position:absolute;right:7mm;bottom:7mm;left:7mm;text-align:center;font-size:7pt;font-weight:700;line-height:1.2}.page-number{position:absolute;right:7mm;bottom:3mm;color:#667085;font-size:7pt}
+      .print-btn{position:fixed;z-index:999;top:20px;right:20px;min-height:40px;border:0;border-radius:6px;background:${themeColor};color:${themeText};padding:0 17px;cursor:pointer;font-weight:800}
+      @media print{body,body *{-webkit-print-color-adjust:exact;print-color-adjust:exact}body{background:#fff}.page{margin:0;page-break-after:always;break-after:page}.page:last-child{page-break-after:auto;break-after:auto}.print-btn{display:none}}
+    </style></head><body><button class="print-btn" onclick="window.print()">Print / Save as PDF</button>${pagesHtml}</body></html>`;
+    win.document.open();
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    showNotification('success', 'Transfer PDF generated');
+  } catch (error) {
+    win.close();
+    showNotification('error', `Failed to generate transfer PDF: ${error.message || error}`);
+  }
 }

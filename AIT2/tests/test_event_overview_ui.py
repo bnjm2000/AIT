@@ -59,11 +59,25 @@ def test_calendar_label_uses_the_visible_multi_day_span():
 
     assert 'class="calendar-event-label"' in render_calendar
     assert 'placement.spanDays || 1' in render_calendar
-    assert 'calendarEventLabelSegments' in render_calendar
+    assert 'width:calc(${spanDays * 100}%' in render_calendar
+    assert 'data-calendar-event-id=' in render_calendar
+    assert 'setCalendarEventHover' in render_calendar
     assert 'spanDays: group.length' in placement
-    assert 'spanIndex: dayIndexInGroup' in placement
-    assert '.calendar-event.span-start .calendar-event-label' in TEMPLATE
-    assert 'function calendarEventLabelSegments' in SCRIPT
+    assert "spanClass: group.length > 1 ? 'span-range' : 'span-single'" in placement
+    assert 'spanIndex: dayIndexInGroup' not in placement
+    assert '.calendar-event.span-range' in TEMPLATE
+    assert '.calendar-event.is-group-hovered' in TEMPLATE
+    assert 'function setCalendarEventHover(eventId, active)' in SCRIPT
+    assert 'has-event-span-origin' not in TEMPLATE
+    assert 'has-event-span-origin' not in render_calendar
+
+
+def test_calendar_days_do_not_hide_bars_arriving_from_an_earlier_day():
+    calendar_day_css = TEMPLATE.split('      .calendar-day {', 1)[1].split('}', 1)[0]
+    calendar_events_css = TEMPLATE.split('      .calendar-events-container {', 1)[1].split('}', 1)[0]
+
+    assert 'z-index:' not in calendar_day_css
+    assert 'z-index:' not in calendar_events_css
 
 
 def test_event_cards_and_list_rows_use_compact_dimensions():

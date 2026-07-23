@@ -5646,6 +5646,10 @@ def _worker_upload_limits(workforce, event_id, freelancer_id):
 def _worker_company_payload(company_code, manager, freelancer, workforce):
     freelancer_id = str(freelancer.get('id') or '')
     token = _make_worker_token(company_code, freelancer)
+    department_rows = _department_codes_for_manager(manager)
+    departments_by_code = {
+        row['code']: row for row in department_rows
+    }
     assignments_by_event = defaultdict(list)
     for event_id, rows in (workforce.get('assignments') or {}).items():
         for assignment in rows if isinstance(rows, list) else []:
@@ -5668,11 +5672,18 @@ def _worker_company_payload(company_code, manager, freelancer, workforce):
         assignment_payload = []
         for assignment in assignments:
             department = str(assignment.get('department') or 'Unassigned')
+            department_details = (
+                departments_by_code.get(_normalise_department_code(department))
+                or _department_record(department)
+            )
             if department not in departments:
                 departments.append(department)
             assignment_payload.append({
                 'id': str(assignment.get('id') or ''),
                 'department': department,
+                'departmentName': department_details['name'],
+                'departmentColor': department_details['color'],
+                'departmentTextColor': department_details['textColor'],
                 'role': str(assignment.get('roleName') or 'Worker'),
                 'days': int(assignment.get('days') or 0),
                 'providerType': str(
@@ -5852,15 +5863,40 @@ def _find_worker_context(token, event_id=None):
 
 def _department_codes_for_manager(manager):
     departments = getattr(manager, 'departments', {}) or {}
-    if not departments and manager is _current_data_manager_object():
-        departments = _load_departments()
+    if not departments and hasattr(manager, 'load_departments'):
+        departments = manager.load_departments()
+    if not departments:
+        filepath = os.path.join(
+            getattr(manager, 'data_folder', '') or '', 'Departments.csv'
+        )
+        if os.path.exists(filepath) and os.path.getsize(filepath) > 0:
+            with open(filepath, 'r', newline='', encoding='utf-8-sig') as handle:
+                for row in csv.DictReader(handle):
+                    code = _normalise_department_code(row.get('Code'))
+                    if code:
+                        departments[code] = _department_record(
+                            code,
+                            row.get('Name'),
+                            row.get('Color'),
+                            row.get('TextColor'),
+                        )
+    if not departments:
+        departments = {
+            code: dict(row) for code, row in DEFAULT_DEPARTMENTS.items()
+        }
     payload = []
     for code, record in departments.items():
         if isinstance(record, dict):
             name = record.get('name') or record.get('Name') or code
+            colour = record.get('color') or record.get('Color')
+            text_colour = record.get('textColor') or record.get('TextColor')
         else:
             name = getattr(record, 'name', '') or code
-        payload.append({'code': str(code), 'name': str(name)})
+            colour = getattr(record, 'color', '')
+            text_colour = getattr(record, 'text_color', '')
+        payload.append(_department_record(
+            code, name, colour, text_colour
+        ))
     return sorted(payload, key=lambda row: row['name'].lower())
 
 
@@ -5941,6 +5977,8 @@ def _event_workforce_departments(event_id, event, manager, workforce):
         manual_by_code[code] = {
             'code': code,
             'name': str(row.get('name') or code).strip() or code,
+            'color': (configured.get(code) or {}).get('color'),
+            'textColor': (configured.get(code) or {}).get('textColor'),
             'source': 'manual',
         }
         active_codes.add(code)
@@ -5971,6 +6009,12 @@ def _event_workforce_departments(event_id, event, manager, workforce):
         active_rows.append({
             'code': code,
             'name': base.get('name') or code,
+            'color': _normalise_hex_colour(base.get('color')),
+            'textColor': _normalise_hex_colour(
+                base.get('textColor')
+                or _best_text_colour(base.get('color')),
+                _best_text_colour(base.get('color')),
+            ),
             'source': (
                 'manual'
                 if code in manual_by_code
@@ -6067,10 +6111,31 @@ def _admin_vendor_payload(vendor, workforce):
         for row in workforce.get('freelancers', [])
         if isinstance(row, dict) and str(row.get('id') or '') in member_ids
     ]
+    login_members = [row for row in members if row.get('workerLastLoginAt')]
+
+    def login_timestamp(member):
+        try:
+            value = str(member.get('workerLastLoginAt') or '').replace(
+                'Z', '+00:00'
+            )
+            return datetime.fromisoformat(value).timestamp()
+        except (TypeError, ValueError, OverflowError):
+            return float('-inf')
+
+    latest_login = max(login_members, key=login_timestamp, default=None)
     return {
         **(vendor or {}),
         'memberIds': sorted(member_ids),
         'members': members,
+        'workerLastLoginAt': (
+            latest_login.get('workerLastLoginAt') if latest_login else None
+        ),
+        'workerLastLoginBy': (
+            latest_login.get('name') if latest_login else None
+        ),
+        'workerLastLoginById': (
+            latest_login.get('id') if latest_login else None
+        ),
         'submissionSummary': _freelancer_admin_submission_summary(
             workforce, (vendor or {}).get('id')
         ),
@@ -7511,7 +7576,8 @@ def delete_workforce_vendor(vendor_id):
 )
 @require_admin
 def workforce_freelancer_history(freelancer_id):
-    workforce = load_workforce(_workforce_folder())
+    manager = _current_data_manager_object()
+    workforce = load_workforce(_workforce_folder(manager))
     freelancer, subject_type = _workforce_subject(workforce, freelancer_id)
     if not freelancer:
         return jsonify({'error': 'Worker or vendor not found'}), 404
@@ -7638,6 +7704,7 @@ def workforce_freelancer_history(freelancer_id):
                 ],
                 key=lambda row: str(row.get('name') or '').casefold(),
             ),
+            'departments': _department_codes_for_manager(manager),
             'events': events,
         },
     })
@@ -9058,8 +9125,9 @@ def _parse_maintenance_log_date(log_entry):
 def _maintenance_log_permission(asset, log_index, allow_admin=True):
     """Return (allowed, message) for editing/deleting a maintenance log.
 
-    Normal users may only edit logs they wrote, and only within 7 days of the
-    log date. Admins may edit/delete any maintenance log.
+    Normal users may only edit logs they recorded, and only within 7 days of
+    the log date. Admins may edit/delete any maintenance log. For older logs,
+    the attributed user is also the recorder.
     """
     username = session.get('user')
     if not username:
@@ -9076,7 +9144,8 @@ def _maintenance_log_permission(asset, log_index, allow_admin=True):
     if allow_admin and _current_user_is_admin():
         return True, ''
 
-    original_user = original_log.get('user', '').strip()
+    source = original_log.get('source') or {}
+    original_user = str(source.get('recordedBy') or original_log.get('user') or '').strip()
 
     if original_user != username:
         return False, 'You can only modify maintenance logs that you wrote'
@@ -11497,6 +11566,38 @@ def delete_department(department_code):
     except Exception as e:
         logger.error(f"Error deleting department {department_code}: {e}", exc_info=True)
         return jsonify({'error': 'Failed to delete department'}), 500
+
+
+@app.route('/api/maintenance/users', methods=['GET'])
+@require_auth
+def get_maintenance_user_options():
+    """List active company users available for maintenance attribution."""
+    current_company = _normalise_company_code(
+        _current_company_code(),
+        DEFAULT_COMPANY_CODE,
+    )
+    can_see_owner = _current_user_is_owner()
+    rows = []
+    for user in data_manager.users.values():
+        username = str(getattr(user, 'username', '') or '').strip()
+        if not username or not getattr(user, 'is_active', True):
+            continue
+        if _is_owner_username(username) and not can_see_owner:
+            continue
+        assigned_company = _normalise_company_code(
+            _user_assigned_company_code(username),
+            DEFAULT_COMPANY_CODE,
+        )
+        if assigned_company != current_company:
+            continue
+        display_name = str(getattr(user, 'name', '') or '').strip() or username
+        rows.append({
+            'username': username,
+            'name': display_name,
+        })
+
+    rows.sort(key=lambda row: (row['name'].lower(), row['username'].lower()))
+    return jsonify({'success': True, 'data': rows})
 
 
 @app.route('/api/users', methods=['GET'])
@@ -18729,6 +18830,48 @@ def _maintenance_date_from_request(data, *keys):
     return datetime.now().strftime("%Y/%m/%d")
 
 
+def _maintenance_log_user_from_request(data):
+    """Return the validated company user to whom a new log is attributed."""
+    current_username = str(session.get('user') or '').strip()
+    explicit_username = (data or {}).get('maintenanceUser') or (data or {}).get('logUser')
+    if not explicit_username:
+        return current_username, ''
+    requested_username = str(explicit_username).strip()
+    user = data_manager.users.get(requested_username)
+    if not user or not getattr(user, 'is_active', True):
+        return None, 'Select an active user from your company'
+
+    current_company = _normalise_company_code(
+        _current_company_code(),
+        DEFAULT_COMPANY_CODE,
+    )
+    user_company = _normalise_company_code(
+        _user_assigned_company_code(requested_username),
+        DEFAULT_COMPANY_CODE,
+    )
+    if user_company != current_company:
+        return None, 'Select an active user from your company'
+    if _is_owner_username(requested_username) and not _current_user_is_owner():
+        return None, 'Select an active user from your company'
+    return requested_username, ''
+
+
+def _maintenance_log_source_for_request(data, source=None):
+    """Attach request de-duplication and recorder attribution to log metadata."""
+    metadata = dict(source or {})
+    request_id = _maintenance_client_request_id(data)
+    if request_id:
+        metadata['clientRequestId'] = request_id
+
+    attributed_user, error = _maintenance_log_user_from_request(data)
+    if error:
+        return None, None, error
+    recorder = str(session.get('user') or '').strip()
+    if attributed_user != recorder:
+        metadata['recordedBy'] = recorder
+    return attributed_user, metadata, ''
+
+
 def _bulk_maintenance_quantity_from_request(data):
     for key in ('affectedQuantity', 'bulkAffectedQuantity', 'quantity', 'bulkQuantity', 'affectedQty'):
         if key in (data or {}):
@@ -18776,6 +18919,9 @@ def _maintain_bulk_asset(asset_id, asset, data):
             'duplicate': True,
             'message': 'This maintenance submission was already saved'
         })
+    maintenance_user, base_source, attribution_error = _maintenance_log_source_for_request(data)
+    if attribution_error:
+        return jsonify({'error': attribution_error}), 400
 
     target_status, requested_status_changes, status_error = _status_changes_for_request(
         data,
@@ -18813,12 +18959,12 @@ def _maintain_bulk_asset(asset_id, asset, data):
 
         entry = make_maintenance_log(
             formatted_date,
-            session['user'],
+            maintenance_user,
             log_entry_text,
             [change for change in changes if change],
             cost=repair_cost,
             log_type=log_type,
-            source={'clientRequestId': request_id} if request_id else None
+            source=base_source
         )
 
         try:
@@ -18873,11 +19019,10 @@ def _maintain_bulk_asset(asset_id, asset, data):
                 'bulkStatus': target_status,
                 'bulkQuantity': '1',
             }
-            if request_id:
-                source['clientRequestId'] = request_id
+            source.update(base_source)
             entry = make_maintenance_log(
                 formatted_date,
-                session['user'],
+                maintenance_user,
                 log_entry_text,
                 [],
                 cost='',
@@ -18930,6 +19075,9 @@ def _apply_standard_maintenance_request(asset_id, asset, data, uploaded_files=No
     log_entry_text = str(data.get('logEntry') or '').strip()
     if not log_entry_text:
         return {'error': 'Log entry is required'}, 400, False
+    maintenance_user, source, attribution_error = _maintenance_log_source_for_request(data)
+    if attribution_error:
+        return {'error': attribution_error}, 400, False
 
     new_location = str(data.get('newLocation') or '').strip() or None
     new_serial = str(data.get('newSerial') or '').strip() or None
@@ -18958,12 +19106,12 @@ def _apply_standard_maintenance_request(asset_id, asset, data, uploaded_files=No
 
     entry = make_maintenance_log(
         _maintenance_date_from_request(data, 'maintenanceDate'),
-        session['user'],
+        maintenance_user,
         log_entry_text,
         [change for change in status_changes if change],
         cost=repair_cost,
         log_type=log_type,
-        source={'clientRequestId': request_id} if request_id else None
+        source=source
     )
 
     try:
@@ -19447,7 +19595,7 @@ def update_maintenance_log_enhanced(asset_id, log_index):
             return jsonify({'error': permission_error}), 403
 
         if not _current_user_is_admin():
-            # Do not let normal users reassign authorship.
+            # The original attribution is restored below after the log is loaded.
             new_user = session.get('user', '').strip()
 
         # Convert date format from YYYY-MM-DD to YYYY/MM/DD
@@ -19467,6 +19615,9 @@ def update_maintenance_log_enhanced(asset_id, log_index):
         original_log = normalize_maintenance_log(asset.maintenance_logs[log_index])
         original_description = original_log.get('description', '')
         original_log_type = original_log.get('type') or DEFAULT_MAINTENANCE_LOG_TYPE
+        if not _current_user_is_admin():
+            # A recorder editing an on-behalf-of entry must not take authorship.
+            new_user = str(original_log.get('user') or '').strip()
 
         if original_log_type == ASSET_CHECK_LOG_TYPE:
             # Keep automatic Asset Check records in their system-only category.
@@ -19833,6 +19984,12 @@ def maintain_container(container_id):
                         'message': 'This container maintenance submission was already saved',
                     })
 
+        maintenance_user, attribution_source, attribution_error = (
+            _maintenance_log_source_for_request(data)
+        )
+        if attribution_error:
+            return jsonify({'error': attribution_error}), 400
+
         log_id = make_maintenance_log_id()
         source = {
             'kind': CONTAINER_MAINTENANCE_SOURCE,
@@ -19840,12 +19997,11 @@ def maintain_container(container_id):
             'containerLogId': log_id,
             'assetCount': len(current_assets),
         }
-        if request_id:
-            source['clientRequestId'] = request_id
+        source.update(attribution_source)
 
         entry = make_maintenance_log(
             _maintenance_date_from_request(data, 'maintenanceDate', 'date'),
-            session['user'],
+            maintenance_user,
             description,
             [],
             cost=str(data.get('cost') or data.get('maintenanceCost') or '').strip(),
@@ -20500,7 +20656,7 @@ def check_and_update_ongoing_events():
 # ---------------- Quotations and invoices ----------------
 
 FINANCE_FILENAME = 'Finance.json'
-FINANCE_VERSION = 8
+FINANCE_VERSION = 9
 FINANCE_QUOTATION_STATUSES = (
     'draft', 'sent', 'accepted', 'expired', 'cancelled',
     'invoiced', 'overdue', 'paid',
@@ -20521,6 +20677,7 @@ def _finance_defaults():
         'profitLoss': {
             'expenses': {},
             'commissions': {},
+            'manualRevenue': {},
         },
     }
 
@@ -20687,13 +20844,16 @@ def _migrate_finance_data(data):
 
     profit_loss = data.get('profitLoss')
     if not isinstance(profit_loss, dict):
-        data['profitLoss'] = {'expenses': {}, 'commissions': {}}
+        data['profitLoss'] = {'expenses': {}, 'commissions': {}, 'manualRevenue': {}}
         changed = True
     elif not isinstance(profit_loss.get('expenses'), dict):
         profit_loss['expenses'] = {}
         changed = True
     if isinstance(data.get('profitLoss'), dict) and not isinstance(data['profitLoss'].get('commissions'), dict):
         data['profitLoss']['commissions'] = {}
+        changed = True
+    if isinstance(data.get('profitLoss'), dict) and not isinstance(data['profitLoss'].get('manualRevenue'), dict):
+        data['profitLoss']['manualRevenue'] = {}
         changed = True
 
     for index, document in enumerate(documents, start=1):
@@ -20883,7 +21043,11 @@ def _save_finance_data(data):
         'version': FINANCE_VERSION,
         'documents': data.get('documents') or [],
         'priceBook': data.get('priceBook') or {},
-        'profitLoss': data.get('profitLoss') if isinstance(data.get('profitLoss'), dict) else {'expenses': {}, 'commissions': {}},
+        'profitLoss': data.get('profitLoss') if isinstance(data.get('profitLoss'), dict) else {
+            'expenses': {},
+            'commissions': {},
+            'manualRevenue': {},
+        },
     }
     manager = _current_data_manager_object()
     if manager is not None and hasattr(manager, 'save_company_document'):
@@ -21936,11 +22100,12 @@ def _finance_remove_deleted_event_references(event_id):
         store = _finance_profit_loss_store(finance_data)
         removed_expenses = store.get('expenses', {}).pop(event_key, []) or []
         removed_commissions = store.get('commissions', {}).pop(event_key, []) or []
+        removed_manual_revenue = store.get('manualRevenue', {}).pop(event_key, None)
         profit_loss_rows = (
             len(removed_expenses) if isinstance(removed_expenses, list) else 0
         ) + (
             len(removed_commissions) if isinstance(removed_commissions, list) else 0
-        )
+        ) + (1 if removed_manual_revenue is not None else 0)
         if document_links or profit_loss_rows:
             _save_finance_data(finance_data)
 
@@ -22255,12 +22420,14 @@ def _finance_find_document(data, document_id, document_type):
 def _finance_profit_loss_store(data):
     store = data.get('profitLoss')
     if not isinstance(store, dict):
-        store = {'expenses': {}, 'commissions': {}}
+        store = {'expenses': {}, 'commissions': {}, 'manualRevenue': {}}
         data['profitLoss'] = store
     if not isinstance(store.get('expenses'), dict):
         store['expenses'] = {}
     if not isinstance(store.get('commissions'), dict):
         store['commissions'] = {}
+    if not isinstance(store.get('manualRevenue'), dict):
+        store['manualRevenue'] = {}
     return store
 
 
@@ -22270,6 +22437,22 @@ def _finance_profit_loss_event_expenses(data, event_id, create=False):
     if create:
         return expenses.setdefault(key, [])
     return expenses.get(key, []) if isinstance(expenses.get(key), list) else []
+
+
+def _finance_profit_loss_manual_revenue(data, event_id):
+    values = _finance_profit_loss_store(data).setdefault('manualRevenue', {})
+    stored = values.get(str(int(event_id)))
+    if stored is None:
+        return None
+    record = stored if isinstance(stored, dict) else {'amount': stored}
+    amount = money(record.get('amount'), None)
+    if amount is None:
+        return None
+    return {
+        'amount': amount,
+        'updatedAt': str(record.get('updatedAt') or ''),
+        'updatedBy': str(record.get('updatedBy') or ''),
+    }
 
 
 def _normalise_profit_loss_commission(value, revenue=0):
@@ -22522,7 +22705,39 @@ def _finance_profit_loss_payload(event, finance_data):
     event_id = int(event.event_id)
     quotations = _finance_quotations_for_event(finance_data, event_id, accessible_only=True)
     quotation = quotations[0] if quotations else None
-    revenue = round(_safe_float((quotation or {}).get('totals', {}).get('netSubtotal'), 0), 2)
+    manual_revenue = _finance_profit_loss_manual_revenue(finance_data, event_id)
+    revenue = round(
+        _safe_float(
+            (quotation or {}).get('totals', {}).get('netSubtotal')
+            if quotation
+            else (manual_revenue or {}).get('amount'),
+            0,
+        ),
+        2,
+    )
+    available_quotations = []
+    for document in finance_data.get('documents') or []:
+        if (
+            not isinstance(document, dict)
+            or document.get('type') != 'quotation'
+            or _safe_int(document.get('eventId'), 0)
+            or not _finance_user_can_access(document)
+        ):
+            continue
+        row = _normalise_finance_document(document, 'quotation', document)
+        available_quotations.append({
+            'id': row.get('id'),
+            'number': row.get('number'),
+            'projectName': row.get('projectName'),
+            'status': row.get('status'),
+            'client': row.get('client') or {},
+            'amount': round(_safe_float((row.get('totals') or {}).get('netSubtotal'), 0), 2),
+            'updatedAt': row.get('updatedAt'),
+        })
+    available_quotations.sort(
+        key=lambda row: (str(row.get('updatedAt') or ''), str(row.get('number') or '')),
+        reverse=True,
+    )
     expenses = [
         _normalise_profit_loss_expense(row, event_id)
         for row in _finance_profit_loss_event_expenses(finance_data, event_id)
@@ -22614,6 +22829,9 @@ def _finance_profit_loss_payload(event, finance_data):
             }
             for row in quotations
         ],
+        'availableQuotations': available_quotations,
+        'manualRevenue': manual_revenue,
+        'revenueSource': 'quotation' if quotation else 'manual' if manual_revenue else 'none',
         'summary': {
             'revenue': revenue,
             'directCosts': direct_costs,
@@ -23792,6 +24010,82 @@ def finance_profit_loss_event(event_id):
         finance_data = _load_finance_data()
         payload = _finance_profit_loss_payload(event, finance_data)
     return jsonify({'success': True, 'data': payload})
+
+
+@app.route('/api/finance/profit-loss/<int:event_id>/revenue', methods=['PUT'])
+@require_sales
+def finance_profit_loss_update_revenue(event_id):
+    event = data_manager.events.get(event_id)
+    if not event:
+        return jsonify({'error': 'Event not found'}), 404
+    if not _current_user_can_access_event(event):
+        return _event_access_denied_response()
+
+    request_data = request.get_json(silent=True) or {}
+    quotation_id = str(request_data.get('quotationId') or '').strip()
+    has_manual_amount = 'manualAmount' in request_data
+    if bool(quotation_id) == bool(has_manual_amount):
+        return jsonify({'error': 'Choose a quotation or enter a manual amount'}), 400
+
+    with _finance_lock:
+        finance_data = _load_finance_data()
+        linked_quotations = _finance_quotations_for_event(
+            finance_data,
+            event_id,
+            accessible_only=False,
+        )
+        store = _finance_profit_loss_store(finance_data)
+        manual_values = store.setdefault('manualRevenue', {})
+        event_key = str(event_id)
+
+        if quotation_id:
+            quotation = _finance_find_document(finance_data, quotation_id, 'quotation')
+            if not quotation or not _finance_user_can_access(quotation):
+                return jsonify({'error': 'Quotation not found'}), 404
+            linked_event_id = _safe_int(quotation.get('eventId'), 0)
+            if linked_event_id and linked_event_id != event_id:
+                return jsonify({'error': f'Quotation is already paired to Event #{linked_event_id}'}), 409
+            if any(str(row.get('id')) != quotation_id for row in linked_quotations):
+                return jsonify({'error': 'This event already has a paired quotation'}), 409
+
+            updated = _normalise_finance_document(
+                {'eventId': event_id},
+                'quotation',
+                quotation,
+            )
+            for index, document in enumerate(finance_data.get('documents') or []):
+                if str(document.get('id')) == quotation_id:
+                    finance_data['documents'][index] = updated
+                    break
+            manual_values.pop(event_key, None)
+            action = f"Paired quotation {updated.get('number') or quotation_id} to event {event_id} for Profit and Loss"
+            realtime_action = 'profit-loss-quotation-paired'
+            realtime_quotation_id = quotation_id
+        else:
+            if linked_quotations:
+                return jsonify({'error': 'This event already has a paired quotation'}), 409
+            amount = money(request_data.get('manualAmount'), None)
+            if amount is None:
+                return jsonify({'error': 'Enter a valid revenue amount'}), 400
+            manual_values[event_key] = {
+                'amount': amount,
+                'updatedAt': now_iso(),
+                'updatedBy': _finance_current_username(),
+            }
+            action = f"Set manual revenue to ${amount:,.2f} for event {event_id}"
+            realtime_action = 'profit-loss-manual-revenue-updated'
+            realtime_quotation_id = ''
+
+        _save_finance_data(finance_data)
+        response_payload = _finance_profit_loss_payload(event, finance_data)
+
+    log_action(action)
+    mark_realtime_change('finance', {
+        'eventId': event_id,
+        'quotationId': realtime_quotation_id,
+        'action': realtime_action,
+    })
+    return jsonify({'success': True, 'data': response_payload})
 
 
 @app.route('/api/finance/profit-loss/<int:event_id>/commissions', methods=['PUT'])

@@ -3110,6 +3110,128 @@ function profitLossOpenQuotation(quotationId) {
   setTimeout(() => financeOpenDocument(quotationId), 0);
 }
 
+function financeEnsureProfitLossRevenueModal() {
+  if (document.getElementById('profitLossRevenueModal')) return;
+  const modal = document.createElement('div');
+  modal.id = 'profitLossRevenueModal';
+  modal.className = 'modal';
+  modal.innerHTML = `
+    <div class="modal-content finance-picker-modal pnl-revenue-modal">
+      <div class="modal-header">
+        <div><h3 class="modal-title">Set event revenue</h3><p>Pair one of your quotations or enter the agreed revenue manually.</p></div>
+        <button type="button" class="close-btn" onclick="closeModal('profitLossRevenueModal')">&times;</button>
+      </div>
+      <section class="pnl-revenue-option">
+        <div class="pnl-revenue-option-heading">
+          <div><strong>Select quotation</strong><span>The quotation total will become the event revenue.</span></div>
+          <input id="profitLossRevenueSearch" class="finance-input" type="search" placeholder="Search quotations..." autocomplete="off" oninput="profitLossRenderRevenueQuotations(this.value)">
+        </div>
+        <div id="profitLossRevenueQuotationResults" class="finance-picker-results pnl-revenue-results"></div>
+      </section>
+      <div class="pnl-revenue-divider"><span>or</span></div>
+      <form class="pnl-revenue-option" onsubmit="profitLossSaveManualRevenue(event)">
+        <div class="pnl-revenue-option-heading">
+          <div><strong>Enter revenue manually</strong><span>This amount is saved specifically to the selected event.</span></div>
+        </div>
+        <label class="finance-field pnl-manual-revenue-field">
+          <span>Revenue amount</span>
+          <span class="finance-money-input"><span>$</span><input id="profitLossManualRevenue" class="finance-input" inputmode="decimal" placeholder="0.00" required></span>
+        </label>
+        <div id="profitLossRevenueError" class="wf-error"></div>
+        <div class="modal-actions finance-picker-actions">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('profitLossRevenueModal')">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save amount</button>
+        </div>
+      </form>
+    </div>
+  `;
+  document.body.appendChild(modal);
+}
+
+function profitLossRevenueQuotationRows(query = '') {
+  const clean = String(query || '').trim().toLowerCase();
+  return (profitLossState.data?.availableQuotations || []).filter(row => {
+    if (!clean) return true;
+    const client = row.client || {};
+    return [row.number, row.projectName, row.status, client.name, client.company]
+      .some(value => String(value || '').toLowerCase().includes(clean));
+  });
+}
+
+function profitLossRenderRevenueQuotations(query = '') {
+  const results = document.getElementById('profitLossRevenueQuotationResults');
+  if (!results) return;
+  const rows = profitLossRevenueQuotationRows(query);
+  results.innerHTML = rows.map(row => {
+    const client = row.client || {};
+    const details = [row.projectName, client.company || client.name, row.status]
+      .filter(Boolean)
+      .join(' | ');
+    return `
+      <button type="button" class="finance-picker-option pnl-revenue-quotation" onclick="profitLossPairRevenueQuotation('${financeEscapeAttr(row.id)}')">
+        <span><strong>${financeEscape(row.number || 'Untitled quotation')}</strong>${details ? `<small>${financeEscape(details)}</small>` : ''}</span>
+        <b>${financeEscape(financeSgd(row.amount))}</b>
+      </button>
+    `;
+  }).join('') || '<div class="finance-suggestion-empty">No available quotations match this search.</div>';
+}
+
+function profitLossOpenRevenueModal() {
+  financeEnsureProfitLossRevenueModal();
+  const search = document.getElementById('profitLossRevenueSearch');
+  const amount = document.getElementById('profitLossManualRevenue');
+  const error = document.getElementById('profitLossRevenueError');
+  if (search) search.value = '';
+  if (amount) {
+    const currentAmount = profitLossState.data?.manualRevenue?.amount;
+    amount.value = currentAmount == null ? '' : String(financeNumber(currentAmount));
+  }
+  if (error) error.textContent = '';
+  profitLossRenderRevenueQuotations('');
+  openModal('profitLossRevenueModal');
+  setTimeout(() => (profitLossRevenueQuotationRows().length ? search : amount)?.focus(), 50);
+}
+
+async function profitLossPairRevenueQuotation(quotationId) {
+  if (!profitLossState.eventId || !quotationId) return;
+  const error = document.getElementById('profitLossRevenueError');
+  if (error) error.textContent = '';
+  try {
+    const response = await apiCall(
+      `/api/finance/profit-loss/${profitLossState.eventId}/revenue`,
+      'PUT',
+      { quotationId }
+    );
+    profitLossState.data = response.data;
+    closeModal('profitLossRevenueModal');
+    renderProfitLossPage();
+    showNotification('success', 'Quotation paired to event');
+  } catch (requestError) {
+    if (error) error.textContent = requestError.message || 'Unable to pair quotation';
+  }
+}
+
+async function profitLossSaveManualRevenue(event) {
+  event.preventDefault();
+  if (!profitLossState.eventId) return;
+  const error = document.getElementById('profitLossRevenueError');
+  const amount = document.getElementById('profitLossManualRevenue')?.value || '';
+  if (error) error.textContent = '';
+  try {
+    const response = await apiCall(
+      `/api/finance/profit-loss/${profitLossState.eventId}/revenue`,
+      'PUT',
+      { manualAmount: amount }
+    );
+    profitLossState.data = response.data;
+    closeModal('profitLossRevenueModal');
+    renderProfitLossPage();
+    showNotification('success', 'Manual event revenue saved');
+  } catch (requestError) {
+    if (error) error.textContent = requestError.message || 'Unable to save revenue';
+  }
+}
+
 function profitLossOpenManpower(eventId, focus = '') {
   if (typeof openEventWorkforce === 'function') {
     openEventWorkforce(eventId, focus);
@@ -3184,6 +3306,16 @@ function renderProfitLossPage() {
     financeNumber(summary.workerOtherClaimsCost) > 0 ? `Worker claims ${financeSgd(summary.workerOtherClaimsCost)}` : '',
     financeNumber(summary.manualOtherExpenses) > 0 ? `Added here ${financeSgd(summary.manualOtherExpenses)}` : ''
   ].filter(Boolean);
+  const revenueSource = data.revenueSource || (quote ? 'quotation' : 'none');
+  const revenueTitle = revenueSource === 'manual' ? 'Event Revenue' : 'Revenue from Quotation';
+  const revenueNote = quote
+    ? `Quotation: ${quote.number}`
+    : revenueSource === 'manual'
+      ? 'Manual amount - Click to edit'
+      : 'Select quotation or enter amount';
+  const revenueAction = quote
+    ? `profitLossOpenQuotation('${financeEscapeAttr(quote.id)}')`
+    : 'profitLossOpenRevenueModal()';
   const activityRows = activity.map(row => {
     const category = typeof eventActivityCategory === 'function'
       ? eventActivityCategory(row)
@@ -3244,7 +3376,7 @@ function renderProfitLossPage() {
     </div>
 
     <div class="pnl-kpis">
-      ${profitLossKpi('Revenue from Quotation', financeSgd(summary.revenue), quote ? `Quotation: ${quote.number}` : 'No quotation paired', 'pnl-link-kpi', quote ? `profitLossOpenQuotation('${financeEscapeAttr(quote.id)}')` : '')}
+      ${profitLossKpi(revenueTitle, financeSgd(summary.revenue), revenueNote, 'pnl-link-kpi', revenueAction)}
       ${profitLossKpi('Manpower Cost', financeSgd(summary.manpowerCost), summary.manpowerInvoiceCost > 0 ? 'From manpower invoices' : 'From manpower assignments', 'pnl-link-kpi', `profitLossOpenManpower(${Number(event.id) || 0})`)}
       ${profitLossKpi('Transport Cost', financeSgd(summary.transportCost), transportNoteParts.join(' | ') || 'No transport costs', 'pnl-link-kpi', `profitLossOpenManpower(${Number(event.id) || 0}, 'transport')`)}
       ${profitLossKpi('Other Expenses', financeSgd(summary.otherExpenses), otherNoteParts.join(' | ') || 'No other expenses')}
@@ -3256,7 +3388,7 @@ function renderProfitLossPage() {
     <div class="pnl-main-grid">
       <section class="finance-card pnl-calculation">
         <h3>Profit Calculation</h3>
-        <div class="pnl-calc-row"><span>Revenue from Quotation</span><strong>${financeSgd(summary.revenue)}</strong></div>
+        <div class="pnl-calc-row"><span>${financeEscape(revenueTitle)}</span><strong>${financeSgd(summary.revenue)}</strong></div>
         <h4>Less: Direct Costs</h4>
         <div class="pnl-calc-row"><span>Manpower Cost</span><strong>- ${financeSgd(summary.manpowerCost)}</strong></div>
         <div class="pnl-calc-row"><span>Transport Cost</span><strong>- ${financeSgd(summary.transportCost)}</strong></div>

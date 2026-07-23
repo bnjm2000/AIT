@@ -90,12 +90,33 @@ function wfStatusOptions(current) {
     .map(status => `<option ${status === current ? 'selected' : ''}>${status}</option>`).join('');
 }
 
+function wfDirectorySubjects() {
+  if (document.getElementById('freelancer-workspace-section')?.classList.contains('active')) {
+    return workforcePageState.freelancerWorkspaceData?.subjects || [];
+  }
+  return [];
+}
+
+function wfDirectoryFreelancers() {
+  const subjects = wfDirectorySubjects();
+  return subjects.length
+    ? subjects.filter(row => row.subjectType !== 'vendor')
+    : workforcePageState.data?.freelancers || [];
+}
+
+function wfDirectoryVendors() {
+  const subjects = wfDirectorySubjects();
+  return subjects.length
+    ? subjects.filter(row => row.subjectType === 'vendor')
+    : workforcePageState.data?.vendors || [];
+}
+
 function wfFindFreelancer(id) {
-  return workforcePageState.data?.freelancers?.find(row => String(row.id) === String(id));
+  return wfDirectoryFreelancers().find(row => String(row.id) === String(id));
 }
 
 function wfFindVendor(id) {
-  return workforcePageState.data?.vendors?.find(row => String(row.id) === String(id));
+  return wfDirectoryVendors().find(row => String(row.id) === String(id));
 }
 
 function wfFindSubmission(id) {
@@ -115,6 +136,45 @@ function wfAssignmentsForFreelancer(id) {
 
 function wfDepartmentsForFreelancer(id) {
   return [...new Set(wfAssignmentsForFreelancer(id).map(row => row.department).filter(Boolean))];
+}
+
+function wfDepartmentMeta(code) {
+  const departmentCode = String(code || 'UN').toUpperCase();
+  const sources = [
+    ...(workforcePageState.data?.departments || []),
+    ...(workforcePageState.data?.allDepartments || []),
+    ...(workforcePageState.freelancerWorkspaceData?.departments || [])
+  ];
+  const row = sources.find(item => String(item.code || '').toUpperCase() === departmentCode) || {};
+  const validColour = (value, fallback) => /^#[0-9a-f]{6}$/i.test(String(value || ''))
+    ? String(value)
+    : fallback;
+  return {
+    code: departmentCode,
+    name: row.name || code || 'Unknown',
+    color: validColour(row.color, '#e2e3e5'),
+    textColor: validColour(row.textColor, '#383d41')
+  };
+}
+
+function wfDepartmentStyle(code) {
+  const department = wfDepartmentMeta(code);
+  return `--wf-dept-color:${department.color};--wf-dept-text:${department.textColor}`;
+}
+
+function wfDepartmentOptions(selectedCode = '') {
+  return (workforcePageState.data?.departments || []).map(row => {
+    const department = wfDepartmentMeta(row.code);
+    return `<option value="${wfAttr(row.code)}" style="background-color:${department.color};color:${department.textColor}"
+      ${row.code === selectedCode ? 'selected' : ''}>${wfEscape(row.name)} (${wfEscape(row.code)})</option>`;
+  }).join('');
+}
+
+function wfTintDepartmentSelect(select) {
+  if (!select) return;
+  select.classList.add('wf-department-select');
+  select.setAttribute('style', wfDepartmentStyle(select.value));
+  select.onchange = () => select.setAttribute('style', wfDepartmentStyle(select.value));
 }
 
 function openEventWorkforce(eventId, focus = '') {
@@ -286,6 +346,9 @@ function wfWorkerHtml(freelancerId, assignments) {
 
 function wfVendorHtml(vendorId, assignments) {
   const vendor = wfFindVendor(vendorId) || { id: vendorId, name: 'Unknown vendor' };
+  const lastLogin = vendor.workerLastLoginAt
+    ? `Last login: ${wfEscape(wfDateTime(vendor.workerLastLoginAt))} by ${wfEscape(vendor.workerLastLoginBy || 'Unknown member')}`
+    : 'Last login: Never';
   const submissions = workforcePageState.data.submissions?.[vendorId] || { invoices: [], claims: [] };
   const limits = workforcePageState.data.uploadAllowances?.[vendorId] || {
     invoiceLimit: 1, activeInvoices: 0, invoiceSlotsRemaining: 1, extraInvoices: 0,
@@ -308,7 +371,8 @@ function wfVendorHtml(vendorId, assignments) {
       onclick="openFreelancerHistory('${wfAttr(vendor.id)}')"><div class="wf-worker-profile">
       <span class="wf-avatar vendor">${wfEscape(wfInitials(vendor.name))}</span>
       <div><strong>${wfEscape(vendor.name)}</strong>
-        <small>${Number(vendor.members?.length || 0)} portal member${Number(vendor.members?.length || 0) === 1 ? '' : 's'}</small></div>
+        <small>${Number(vendor.members?.length || 0)} portal member${Number(vendor.members?.length || 0) === 1 ? '' : 's'}</small>
+        <small>${lastLogin}</small></div>
     </div><small>View all events &rsaquo;</small></button>
     <div class="wf-worker-roles">
       <div class="wf-column-heading"><strong>Event assignment(s)</strong>
@@ -356,7 +420,7 @@ function wfDepartmentHtml(department, assignments) {
     .map(status =>
     `<span class="${wfStatusClass(status)}">${status}: <strong>${Number(stateCounts[status] || 0)}</strong></span>`
   ).join('');
-  return `<details class="wf-department" data-department="${wfAttr(department)}">
+  return `<details class="wf-department" data-department="${wfAttr(department)}" style="${wfDepartmentStyle(department)}">
     <summary><span class="wf-department-title"><span class="wf-department-label">${wfEscape(department)} <small>${count} crew</small></span>
         <span class="wf-dept-status-summary">${statusBadges}</span></span>
       <span class="wf-dept-total"><span>Invoices</span><strong>${wfMoney(totals.invoice)}</strong></span>
@@ -684,12 +748,6 @@ function ensureWorkforceModals() {
       <div class="wf-directory-list wf-directory-grid" id="wfVendorDirectoryList"></div>
     </div>`, '', true) +
     wfModal('wfFreelancerHistoryModal', 'Worker Overview', `<div class="wf-modal-body" id="wfFreelancerHistoryContent"></div>`, '', true) +
-    wfModal('wfWorkerSelectorModal', 'Select Worker', `<div class="wf-modal-body">
-      <input class="wf-search" id="wfWorkerSelectorSearch" type="search"
-        placeholder="Search workers by name, phone or email"
-        oninput="renderFreelancerWorkspaceSelector(this.value)">
-      <div class="wf-directory-list wf-directory-grid wf-worker-selector-list" id="wfWorkerSelectorList"></div>
-    </div>`, '', true) +
     wfModal('wfFreelancerProfileModal', 'Enroll New Worker', `<form id="wfFreelancerProfileForm">
       <div class="wf-modal-body"><div class="wf-form-grid">
         <label class="wf-field full"><span>Full name *</span><input id="wfFreelancerName" required maxlength="120"></label>
@@ -1115,13 +1173,15 @@ async function workforceChooseEvent(eventId) {
 
 function wfDirectorySummaryBadges(summary = {}) {
   return [
-    ['needsInvoice', 'awaiting invoice'],
-    ['needsReview', 'to review'],
-    ['needsPayment', 'to pay'],
-    ['needsReceipt', 'awaiting receipt'],
-  ].map(([key, label]) => {
+    ['needsInvoice', 'awaiting invoice', 'invoice', 'No active invoice has been uploaded'],
+    ['needsReview', 'to review', 'review', 'A submission is ready for review'],
+    ['needsPayment', 'to pay', 'payment', 'An approved submission is awaiting payment'],
+    ['needsReceipt', 'awaiting confirmation', 'confirmation', 'Payment is awaiting recipient confirmation'],
+  ].map(([key, label, tone, help]) => {
     const count = Number(summary[key] || 0);
-    return count > 0 ? `<small><b>${count}</b> ${label}</small>` : '';
+    return count > 0
+      ? `<small class="wf-summary-badge is-${tone}" title="${wfAttr(help)}"><b>${count}</b> ${label}</small>`
+      : '';
   }).join('');
 }
 
@@ -1138,11 +1198,11 @@ function openFreelancerDirectory(mode = 'manage', department = '') {
 
 function renderFreelancerDirectory(search) {
   const query = String(search || '').toLowerCase();
-  const workers = (workforcePageState.data?.freelancers || []).filter(row =>
+  const workers = wfDirectoryFreelancers().filter(row =>
     !row.personnelOnly &&
     `${row.name} ${row.phone || ''} ${row.email || ''} ${row.company || ''}`.toLowerCase().includes(query));
   const vendors = workforcePageState.directoryMode === 'manage'
-    ? (workforcePageState.data?.vendors || []).filter(row =>
+    ? wfDirectoryVendors().filter(row =>
       `${row.name} ${(row.members || []).map(member => `${member.name} ${member.phone || ''}`).join(' ')}`
         .toLowerCase().includes(query)
     )
@@ -1165,8 +1225,11 @@ function renderFreelancerDirectory(search) {
   const cards = entries.map(({ type, row }) => {
     const summary = row.submissionSummary || {};
     if (type === 'vendor') {
+      const lastLogin = row.workerLastLoginAt
+        ? `Last login: ${wfEscape(wfDateTime(row.workerLastLoginAt))} by ${wfEscape(row.workerLastLoginBy || 'Unknown member')}`
+        : 'Last login: Never';
       return `<article class="wf-directory-row wf-directory-card wf-vendor-directory-card"
-        onclick="openVendorProfile('${wfAttr(row.id)}')">
+        onclick="openFreelancerHistory('${wfAttr(row.id)}')">
         <span class="wf-avatar vendor">${wfEscape(wfInitials(row.name))}</span>
         <span><strong>${wfEscape(row.name)}</strong>
           <small>${Number(row.members?.length || 0)} member${Number(row.members?.length || 0) === 1 ? '' : 's'} with portal access</small>
@@ -1174,8 +1237,9 @@ function renderFreelancerDirectory(search) {
             ${wfDirectorySummaryBadges(summary)}
           </span>
         </span>
-        <button class="wf-mini-button" type="button">Edit</button>
-        <small class="wf-last-login">Vendor &middot; one invoice per event</small>
+        <button class="wf-mini-button" type="button"
+          onclick="event.stopPropagation();openVendorProfile('${wfAttr(row.id)}')">Edit</button>
+        <small class="wf-last-login">${lastLogin}</small>
       </article>`;
     }
     const loginBadge = workforcePageState.directoryMode === 'manage'
@@ -1259,7 +1323,7 @@ function updateVendorMemberSelection(input) {
 
 function renderVendorMemberPicker(search = '') {
   const query = String(search || '').trim().toLowerCase();
-  const rows = (workforcePageState.data?.freelancers || []).filter(row =>
+  const rows = wfDirectoryFreelancers().filter(row =>
     `${row.name} ${row.phone || ''} ${row.email || ''}`.toLowerCase().includes(query)
   );
   document.getElementById('wfVendorMemberPicker').innerHTML = rows.map(row =>
@@ -1441,17 +1505,10 @@ function wfHistorySubmissionRows(event, freelancerId, rows, kind) {
   }).join('');
 }
 
-function wfDepartmentHue(code) {
-  return [...String(code || 'General')].reduce(
-    (value, character) => (value * 31 + character.charCodeAt(0)) % 360,
-    215
-  );
-}
-
 function wfHistoryRoleRows(event, freelancerId, subjectType = 'worker') {
   const rows = event.roles || [];
   const roleRows = rows.map(row => `<span class="wf-worker-role-row">
-    <span class="wf-department-role" style="--wf-dept-hue:${wfDepartmentHue(row.department)}">
+    <span class="wf-department-role" style="${wfDepartmentStyle(row.department)}">
       ${wfEscape(row.department || 'General')}
     </span>
     <span>${wfEscape(row.role || 'Worker')} · ${Number(row.days || 0)} day${Number(row.days || 0) === 1 ? '' : 's'}</span>
@@ -1554,7 +1611,7 @@ function renderFreelancerWorkspace() {
       <button class="wf-button" type="button" onclick="${isVendor ? 'openVendorProfile' : 'openFreelancerProfile'}('${wfAttr(freelancer.id)}')">Edit ${isVendor ? 'Vendor' : 'Worker'}</button>
     </div>
     <div class="plan-event-bar wf-worker-selector-bar">
-      <button type="button" class="plan-event-select-wrap" onclick="openFreelancerWorkspaceSelector()">
+      <button type="button" class="plan-event-select-wrap" onclick="openFreelancerDirectory('manage')">
         <span class="wf-avatar ${isVendor ? 'vendor' : ''}">${wfEscape(wfInitials(freelancer.name))}</span>
         <span class="wf-worker-selector-copy"><strong>${wfEscape(freelancer.name)}</strong>
           <small>${isVendor
@@ -1602,42 +1659,6 @@ function renderFreelancerWorkspaceEvents(search = '') {
       data.subjectType || 'worker'
     )
   ).join('') || '<div class="wf-empty">No matching events for this worker or vendor.</div>';
-}
-
-function openFreelancerWorkspaceSelector() {
-  ensureWorkforceModals();
-  const search = document.getElementById('wfWorkerSelectorSearch');
-  search.value = '';
-  renderFreelancerWorkspaceSelector('');
-  openWorkforceModal('wfWorkerSelectorModal');
-}
-
-function renderFreelancerWorkspaceSelector(search = '') {
-  const node = document.getElementById('wfWorkerSelectorList');
-  const rows = workforcePageState.freelancerWorkspaceData?.subjects || [
-    ...(workforcePageState.data?.freelancers || []).map(row => ({ ...row, subjectType: 'worker' })),
-    ...(workforcePageState.data?.vendors || []).map(row => ({ ...row, subjectType: 'vendor' }))
-  ];
-  const query = String(search || '').trim().toLowerCase();
-  if (!node) return;
-  node.innerHTML = rows.filter(row =>
-    !row.personnelOnly &&
-    `${row.name} ${row.phone || ''} ${row.email || ''} ${row.company || ''}`.toLowerCase().includes(query)
-  ).map(row => `<button class="wf-directory-row wf-directory-card" type="button"
-    onclick="selectFreelancerWorkspace('${wfAttr(row.id)}')">
-    <span class="wf-avatar ${row.subjectType === 'vendor' ? 'vendor' : ''}">${wfEscape(wfInitials(row.name))}</span>
-    <span><strong>${wfEscape(row.name)}</strong><small>${row.subjectType === 'vendor'
-      ? 'Vendor'
-      : wfEscape(wfFormatPhone(row.phone) || 'No phone')}</small></span>
-    <span class="wf-directory-action">Select &rsaquo;</span>
-  </button>`).join('') || '<div class="wf-empty">No matching freelancers.</div>';
-}
-
-function selectFreelancerWorkspace(id) {
-  closeWorkforceModal('wfWorkerSelectorModal');
-  workforcePageState.historyFreelancerId = id;
-  workforcePageState.freelancerWorkspaceData = null;
-  loadFreelancerWorkspace();
 }
 
 async function openFreelancerWorkspaceAssignment(eventId, freelancerId, assignmentId = '', subjectType = 'worker') {
@@ -1931,8 +1952,9 @@ function openFreelancerAssignment(freelancerId, department = '', assignmentId = 
   workforcePageState.editingAssignmentId = assignment?.id || null;
   document.getElementById('wfAssignmentForm').reset();
   document.getElementById('wfAssignmentFreelancerName').textContent = freelancer.name;
-  document.getElementById('wfAssignmentDepartment').innerHTML = (workforcePageState.data.departments || [])
-    .map(row => `<option value="${wfAttr(row.code)}" ${row.code === (assignment?.department || department) ? 'selected' : ''}>${wfEscape(row.name)} (${wfEscape(row.code)})</option>`).join('');
+  const departmentSelect = document.getElementById('wfAssignmentDepartment');
+  departmentSelect.innerHTML = wfDepartmentOptions(assignment?.department || department);
+  wfTintDepartmentSelect(departmentSelect);
   document.getElementById('wfAssignmentRole').value = assignment?.roleName || '';
   document.getElementById('wfAssignmentRate').value = assignment?.dailyRate ?? '';
   const allDates = wfEventDateOptions();
@@ -1992,12 +2014,9 @@ function openVendorAssignment(vendorId, department = '', assignmentId = '') {
   workforcePageState.editingVendorAssignmentId = assignment?.id || null;
   document.getElementById('wfVendorAssignmentForm').reset();
   document.getElementById('wfVendorAssignmentName').textContent = vendor.name;
-  document.getElementById('wfVendorAssignmentDepartment').innerHTML =
-    (workforcePageState.data.departments || []).map(row =>
-      `<option value="${wfAttr(row.code)}" ${row.code === (assignment?.department || department) ? 'selected' : ''}>
-        ${wfEscape(row.name)} (${wfEscape(row.code)})
-      </option>`
-    ).join('');
+  const departmentSelect = document.getElementById('wfVendorAssignmentDepartment');
+  departmentSelect.innerHTML = wfDepartmentOptions(assignment?.department || department);
+  wfTintDepartmentSelect(departmentSelect);
   const providerType = assignment?.providerType || 'manpower';
   document.querySelectorAll('[name="wfProviderType"]').forEach(input => {
     input.checked = input.value === providerType;

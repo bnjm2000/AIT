@@ -22,6 +22,14 @@ class ContainerMaintenanceTests(unittest.TestCase):
         self.data_manager.users = {
             'normal': User('normal', hash_password('pw', 'salt'), 'salt', False, True),
             'admin': User('admin', hash_password('pw', 'salt2'), 'salt2', True, True),
+            'technician': User(
+                'technician',
+                hash_password('pw', 'salt3'),
+                'salt3',
+                False,
+                True,
+                name='Technician Lee',
+            ),
         }
         self.data_manager.save_users()
         self.data_manager.logs = []
@@ -100,6 +108,25 @@ class ContainerMaintenanceTests(unittest.TestCase):
             container_response['maintenanceLogRecords'][0]['source']['kind'],
             'container',
         )
+
+    def test_container_log_can_be_recorded_on_behalf_of_another_user(self):
+        payload = self.payload('container-on-behalf-request')
+        payload['maintenanceUser'] = 'technician'
+
+        response = self.client.post('/api/containers/CASE-1/maintain', json=payload)
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        container_log = normalize_maintenance_log(
+            self.data_manager.containers['CASE-1'].maintenance_logs[0]
+        )
+        self.assertEqual(container_log['user'], 'technician')
+        self.assertEqual(container_log['source']['recordedBy'], 'normal')
+        for asset_id in ('A#01', 'A#02'):
+            asset_log = normalize_maintenance_log(
+                self.data_manager.inventory[asset_id].maintenance_logs[0]
+            )
+            self.assertEqual(asset_log['user'], 'technician')
+            self.assertEqual(asset_log['source']['recordedBy'], 'normal')
 
     def test_asset_keeps_log_after_it_is_removed_from_container(self):
         create_response = self.client.post(

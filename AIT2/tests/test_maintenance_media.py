@@ -24,6 +24,15 @@ class MaintenanceMediaTests(unittest.TestCase):
         self.data_manager.users = {
             'normal': User('normal', hash_password('pw', 'salt'), 'salt', False, True),
             'admin': User('admin', hash_password('pw', 'salt'), 'salt', True, True),
+            'technician': User(
+                'technician',
+                hash_password('pw', 'salt'),
+                'salt',
+                False,
+                True,
+                name='Technician Lee',
+            ),
+            'inactive': User('inactive', hash_password('pw', 'salt'), 'salt', False, False),
         }
         self.data_manager.save_users()
         self.data_manager.logs = []
@@ -214,6 +223,116 @@ class MaintenanceMediaTests(unittest.TestCase):
         edit_inventory = next(change for change in edit_changes if change['topic'] == 'inventory-data')
         self.assertEqual(edit_inventory['details']['assetIds'], [self.asset_id])
         self.assertEqual(edit_inventory['details']['action'], 'maintenance-log-updated')
+
+    def test_user_can_record_maintenance_on_behalf_of_active_company_user(self):
+        self.login_as('normal')
+        options_response = self.client.get('/api/maintenance/users')
+
+        self.assertEqual(options_response.status_code, 200)
+        options = options_response.get_json()['data']
+        usernames = {option['username'] for option in options}
+        self.assertTrue({'normal', 'technician'}.issubset(usernames))
+        self.assertNotIn('inactive', usernames)
+
+        encoded_asset_id = quote(self.asset_id, safe='')
+        maintenance_date = datetime.now().strftime('%Y-%m-%d')
+        response = self.client.post(
+            f'/api/assets/{encoded_asset_id}/maintain',
+            json={
+                'logEntry': 'Inspected on behalf of technician',
+                'maintenanceDate': maintenance_date,
+                'logType': 'General',
+                'assetStatus': 'nochange',
+                'maintenanceUser': 'technician',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        payload = response.get_json()['maintenanceLog']
+        self.assertEqual(payload['user'], 'technician')
+        self.assertEqual(payload['userDisplayName'], 'Technician Lee')
+        log = normalize_maintenance_log(
+            self.data_manager.inventory[self.asset_id].maintenance_logs[0]
+        )
+        self.assertEqual(log['source']['recordedBy'], 'normal')
+
+        edit_response = self.client.put(
+            f'/api/assets/{encoded_asset_id}/maintenance-log-enhanced/0',
+            json={
+                'date': maintenance_date,
+                'user': 'normal',
+                'description': 'Inspection completed on behalf of technician',
+                'logType': 'General',
+                'assetStatus': 'nochange',
+            },
+        )
+        self.assertEqual(edit_response.status_code, 200, edit_response.get_data(as_text=True))
+        edited_log = normalize_maintenance_log(
+            self.data_manager.inventory[self.asset_id].maintenance_logs[0]
+        )
+        self.assertEqual(edited_log['user'], 'technician')
+        self.assertEqual(edited_log['source']['recordedBy'], 'normal')
+
+    def test_maintenance_rejects_unknown_or_inactive_attribution(self):
+        self.login_as('normal')
+        encoded_asset_id = quote(self.asset_id, safe='')
+        maintenance_date = datetime.now().strftime('%Y-%m-%d')
+
+        for username in ('unknown', 'inactive'):
+            response = self.client.post(
+                f'/api/assets/{encoded_asset_id}/maintain',
+                json={
+                    'logEntry': 'Invalid attribution attempt',
+                    'maintenanceDate': maintenance_date,
+                    'logType': 'General',
+                    'assetStatus': 'nochange',
+                    'maintenanceUser': username,
+                },
+            )
+            self.assertEqual(response.status_code, 400, response.get_data(as_text=True))
+            self.assertIn('active user from your company', response.get_json()['error'])
+
+        self.assertEqual(self.data_manager.inventory[self.asset_id].maintenance_logs, [])
+
+    def test_bulk_maintenance_can_be_recorded_on_behalf_of_another_user(self):
+        bulk_id = 'BULK-01'
+        self.data_manager.inventory[bulk_id] = InventoryItem(
+            asset_id=bulk_id,
+            brand='Test',
+            model_number='Bulk Model',
+            serial_number='',
+            description='Bulk maintenance item',
+            is_missing=False,
+            maintenance_logs=[],
+            department_code='AX',
+            default_location='Store',
+            current_location='Store',
+            is_bulk=True,
+            quantity=3,
+        )
+        self.data_manager.save_inventory()
+        self.login_as('normal')
+
+        response = self.client.post(
+            f'/api/assets/{bulk_id}/maintain',
+            json={
+                'logEntry': 'Two units require repair',
+                'maintenanceDate': datetime.now().strftime('%Y-%m-%d'),
+                'logType': 'Fault',
+                'assetStatus': 'ooc',
+                'affectedQuantity': 2,
+                'maintenanceUser': 'technician',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        logs = [
+            normalize_maintenance_log(log)
+            for log in self.data_manager.inventory[bulk_id].maintenance_logs
+        ]
+        self.assertEqual(len(logs), 2)
+        self.assertTrue(all(log['user'] == 'technician' for log in logs))
+        self.assertTrue(all(log['source']['recordedBy'] == 'normal' for log in logs))
 
 
 if __name__ == '__main__':

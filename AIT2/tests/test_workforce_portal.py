@@ -44,8 +44,16 @@ class WorkforcePortalTests(unittest.TestCase):
         self.manager.logs = []
         self.manager.save_logs()
         self.manager.departments = {
-            "AU": {"name": "Audio"},
-            "LI": {"name": "Lighting"},
+            "AU": {
+                "name": "Audio",
+                "color": "#CDEBFF",
+                "textColor": "#174A67",
+            },
+            "LI": {
+                "name": "Lighting",
+                "color": "#DDF5DF",
+                "textColor": "#275B2D",
+            },
         }
         event = Event(
             143,
@@ -365,6 +373,9 @@ class WorkforcePortalTests(unittest.TestCase):
 
         portal = self.worker_access()
         self.assertEqual(portal["companies"][0]["freelancer"]["name"], "Jordan Dela Cruz")
+        assignment = portal["companies"][0]["events"][0]["assignments"][0]
+        self.assertEqual(assignment["departmentColor"], "#CDEBFF")
+        self.assertEqual(assignment["departmentTextColor"], "#174A67")
         self.assertIn(
             "/api/company-branding/AVPL/logo",
             portal["companies"][0]["logoUrl"],
@@ -539,6 +550,8 @@ class WorkforcePortalTests(unittest.TestCase):
             ["AU"],
         )
         self.assertEqual(payload["departments"][0]["source"], "event-assets")
+        self.assertEqual(payload["departments"][0]["color"], "#CDEBFF")
+        self.assertEqual(payload["departments"][0]["textColor"], "#174A67")
 
         response = self.client.post(
             "/api/events/143/workforce/departments",
@@ -552,6 +565,7 @@ class WorkforcePortalTests(unittest.TestCase):
         )
         lighting = next(row for row in departments if row["code"] == "LI")
         self.assertEqual(lighting["source"], "manual")
+        self.assertEqual(lighting["color"], "#DDF5DF")
 
     def test_admin_can_upload_and_allow_additional_slots(self):
         freelancer_id = self.create_worker_assignment()
@@ -1463,6 +1477,10 @@ class WorkforcePortalTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         history = response.get_json()["data"]
         self.assertEqual(history["company"]["code"], "AVPL")
+        audio_department = next(
+            row for row in history["departments"] if row["code"] == "AU"
+        )
+        self.assertEqual(audio_department["color"], "#CDEBFF")
         self.assertEqual(history["freelancer"]["id"], freelancer_id)
         self.assertEqual(
             [event["id"] for event in history["events"]], [144, 143]
@@ -1828,6 +1846,139 @@ class WorkforcePortalTests(unittest.TestCase):
         self.assertIn("new DataTransfer()", admin_source)
         self.assertIn("event-dropzone", worker_source)
         self.assertIn("dataTransfer.files", worker_source)
+
+    def test_manage_vendor_card_opens_history_and_keeps_edit_separate(self):
+        source_path = os.path.join(
+            os.path.dirname(app_module.__file__),
+            "static",
+            "js",
+            "workforce-admin.js",
+        )
+        with open(source_path, encoding="utf-8") as source_file:
+            source = source_file.read()
+        vendor_branch = source.split("if (type === 'vendor')", 1)[1].split(
+            "const loginBadge",
+            1,
+        )[0]
+
+        self.assertIn(
+            'onclick="openFreelancerHistory(\'${wfAttr(row.id)}\')"',
+            vendor_branch,
+        )
+        self.assertIn(
+            'onclick="event.stopPropagation();openVendorProfile(\'${wfAttr(row.id)}\')"',
+            vendor_branch,
+        )
+        self.assertIn('row.workerLastLoginAt', vendor_branch)
+        self.assertIn('row.workerLastLoginBy', vendor_branch)
+        self.assertIn('Last login:', vendor_branch)
+
+    def test_vendor_payload_reports_latest_member_login(self):
+        payload = app_module._admin_vendor_payload(
+            {
+                "id": "vendor_latest_login",
+                "name": "Latest Login Vendor",
+                "memberIds": ["member_earlier", "member_latest"],
+            },
+            {
+                "freelancers": [
+                    {
+                        "id": "member_earlier",
+                        "name": "Earlier Member",
+                        "workerLastLoginAt": "2026-07-20T09:00:00+08:00",
+                    },
+                    {
+                        "id": "member_latest",
+                        "name": "Latest Member",
+                        "workerLastLoginAt": "2026-07-21T15:30:00+08:00",
+                    },
+                ],
+                "assignments": {},
+                "submissions": {},
+            },
+        )
+
+        self.assertEqual(
+            payload["workerLastLoginAt"],
+            "2026-07-21T15:30:00+08:00",
+        )
+        self.assertEqual(payload["workerLastLoginBy"], "Latest Member")
+        self.assertEqual(payload["workerLastLoginById"], "member_latest")
+
+    def test_manage_directory_badges_have_stable_status_colours_and_full_labels(self):
+        static_root = os.path.join(os.path.dirname(app_module.__file__), "static")
+        with open(
+            os.path.join(static_root, "js", "workforce-admin.js"),
+            encoding="utf-8",
+        ) as source_file:
+            source = source_file.read()
+        with open(
+            os.path.join(static_root, "css", "workforce-admin.css"),
+            encoding="utf-8",
+        ) as source_file:
+            styles = source_file.read()
+        badge_source = source.split("function wfDirectorySummaryBadges", 1)[1].split(
+            "function openFreelancerDirectory",
+            1,
+        )[0]
+
+        self.assertIn("awaiting invoice', 'invoice'", badge_source)
+        self.assertIn("awaiting confirmation', 'confirmation'", badge_source)
+        self.assertIn('class="wf-summary-badge is-${tone}"', badge_source)
+        self.assertNotIn("wf-worker-summary small:nth-child", styles)
+        self.assertIn(".wf-summary-badge.is-invoice", styles)
+        self.assertIn(".wf-summary-badge.is-confirmation", styles)
+        self.assertIn("flex-wrap: wrap;", styles)
+
+    def test_worker_submissions_uses_the_manage_worker_vendor_directory(self):
+        source_path = os.path.join(
+            os.path.dirname(app_module.__file__),
+            "static",
+            "js",
+            "workforce-admin.js",
+        )
+        with open(source_path, encoding="utf-8") as source_file:
+            source = source_file.read()
+        workspace = source.split("function renderFreelancerWorkspace()", 1)[1].split(
+            "function renderFreelancerWorkspaceEvents",
+            1,
+        )[0]
+        directory = source.split("function renderFreelancerDirectory", 1)[1].split(
+            "function openVendorDirectory",
+            1,
+        )[0]
+
+        self.assertIn("onclick=\"openFreelancerDirectory('manage')\"", workspace)
+        self.assertIn("wfDirectoryFreelancers()", directory)
+        self.assertIn("wfDirectoryVendors()", directory)
+        self.assertIn("freelancerWorkspaceData?.subjects", source)
+        self.assertNotIn("wfWorkerSelectorModal", source)
+        self.assertNotIn("openFreelancerWorkspaceSelector", source)
+
+    def test_workforce_views_use_configured_department_colours(self):
+        static_root = os.path.join(os.path.dirname(app_module.__file__), "static")
+        with open(
+            os.path.join(static_root, "js", "workforce-admin.js"),
+            encoding="utf-8",
+        ) as source_file:
+            admin_source = source_file.read()
+        with open(
+            os.path.join(static_root, "js", "worker.js"),
+            encoding="utf-8",
+        ) as source_file:
+            worker_source = source_file.read()
+        with open(
+            os.path.join(static_root, "css", "workforce-admin.css"),
+            encoding="utf-8",
+        ) as source_file:
+            admin_styles = source_file.read()
+
+        self.assertIn("function wfDepartmentMeta", admin_source)
+        self.assertIn("wfDepartmentStyle(row.department)", admin_source)
+        self.assertNotIn("function wfDepartmentHue", admin_source)
+        self.assertIn("function departmentBadge", worker_source)
+        self.assertIn("assignment.departmentColor", worker_source)
+        self.assertIn("color-mix(in srgb, var(--wf-dept-color", admin_styles)
 
 
 if __name__ == "__main__":
