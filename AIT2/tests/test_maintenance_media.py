@@ -148,6 +148,42 @@ class MaintenanceMediaTests(unittest.TestCase):
         self.assertFalse(os.path.exists(media_path))
         self.assertEqual(self.data_manager.inventory[self.asset_id].maintenance_logs, [])
 
+    def test_editing_update_log_detects_and_applies_confirmed_version(self):
+        self.login_as('normal')
+        encoded_asset_id = quote(self.asset_id, safe='')
+        maintenance_date = datetime.now().strftime('%Y-%m-%d')
+        self.data_manager.inventory[self.asset_id].version = 'v1.0'
+        self.data_manager.save_inventory()
+
+        created = self.client.post(
+            f'/api/assets/{encoded_asset_id}/maintain',
+            json={
+                'logEntry': 'Initial inspection',
+                'maintenanceDate': maintenance_date,
+                'logType': 'General',
+                'assetStatus': 'nochange',
+            },
+        )
+        self.assertEqual(created.status_code, 200, created.get_data(as_text=True))
+
+        response = self.client.put(
+            f'/api/assets/{encoded_asset_id}/maintenance-log-enhanced/0',
+            json={
+                'date': maintenance_date,
+                'user': 'normal',
+                'description': 'Updated from v1.0 to v1.2',
+                'logType': 'Update',
+                'confirmVersionUpdate': True,
+                'assetStatus': 'nochange',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        asset = self.data_manager.inventory[self.asset_id]
+        self.assertEqual(asset.version, 'v1.2')
+        edited_log = normalize_maintenance_log(asset.maintenance_logs[0])
+        self.assertIn({'kind': 'version', 'value': 'v1.2'}, edited_log['changes'])
+
     def test_only_admin_can_permanently_remove_individual_media(self):
         self.login_as('normal')
         media = self.upload_media()

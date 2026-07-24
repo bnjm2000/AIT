@@ -88,6 +88,7 @@ class PostgresDataManagerTests(unittest.TestCase):
                 'AX',
                 'Store',
                 '',
+                version='v2.4.1',
             ),
         }
         self.manager.save_inventory()
@@ -136,6 +137,7 @@ class PostgresDataManagerTests(unittest.TestCase):
         )
         self.assertEqual(reloaded.users['admin'].phone, '+65 9123 4567')
         self.assertEqual(reloaded.inventory['A#01'].serial_number, 'SN-1')
+        self.assertEqual(reloaded.inventory['A#01'].version, 'v2.4.1')
         self.assertEqual(reloaded.containers['CASE-1'].serial_number, 'CASE-SN')
         self.assertEqual(reloaded.events[1].prepared_items, ['A#01'])
         self.assertEqual(reloaded.clients['Client'].company, 'Company')

@@ -167,6 +167,20 @@ class EventAvailabilityOverlapTests(unittest.TestCase):
         self.assertEqual(regular['available'], 5)
         self.assertEqual(regular['unavailable'], 1)
 
+    def test_degraded_assets_reduce_healthy_capacity_without_causing_shortage(self):
+        self.make_event(100)
+        self.data_manager.inventory['A#01'].is_degraded = True
+        self.data_manager.inventory['A#02'].is_degraded = True
+
+        regular = self.availability_entry(100, 'RegularModel', 'Regular item')
+
+        self.assertEqual(regular['physical'], 6)
+        self.assertEqual(regular['capacityForThisEvent'], 6)
+        self.assertEqual(regular['healthyCapacityForThisEvent'], 4)
+        self.assertEqual(regular['assetDegraded'], 2)
+        self.assertEqual(regular['degraded'], 2)
+        self.assertEqual(regular['available'], 6)
+
     def test_plan_can_request_physical_total_despite_missing_ooc_and_overlap(self):
         event = self.make_event(100)
         self.make_event(101, prepared=['[MODEL]AX|TestBrand|RegularModel|4|Regular item'])

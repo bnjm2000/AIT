@@ -243,6 +243,29 @@ class AssetCreationTests(unittest.TestCase):
         created_asset = next(item for item in payload if item['internalId'] == asset_id)
         self.assertEqual(created_asset['notes'], notes)
 
+    def test_create_asset_saves_and_returns_version(self):
+        response = self.post_asset({
+            'version': 'Firmware 2.4.1',
+        })
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        asset_id = response.get_json()['assetIds'][0]
+        self.assertEqual(self.data_manager.inventory[asset_id].version, 'Firmware 2.4.1')
+
+        reloaded = DataManager(self.tempdir.name)
+        reloaded.load_inventory()
+        self.assertEqual(reloaded.inventory[asset_id].version, 'Firmware 2.4.1')
+
+        assets_response = self.client.get('/api/assets?query=2.4.1')
+        self.assertEqual(
+            assets_response.status_code,
+            200,
+            assets_response.get_data(as_text=True),
+        )
+        matching_assets = assets_response.get_json()['data']
+        self.assertEqual([asset['internalId'] for asset in matching_assets], [asset_id])
+        self.assertEqual(matching_assets[0]['version'], 'Firmware 2.4.1')
+
     def test_create_asset_saves_normalized_tags_and_supports_tag_search(self):
         response = self.post_asset({
             'tags': ['Wireless', 'backup', 'wireless', 'quick setup'],

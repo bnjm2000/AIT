@@ -87,6 +87,7 @@ class PageRoutingTests(unittest.TestCase):
 
         self.login('manager')
         self.assertEqual(self.client.get('/plan').status_code, 200)
+        self.assertEqual(self.client.get('/invoice-claims').status_code, 200)
         self.assertEqual(self.client.get('/company-details').status_code, 200)
         self.assertEqual(self.client.get('/quotations').status_code, 302)
 

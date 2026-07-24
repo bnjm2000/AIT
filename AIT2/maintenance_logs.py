@@ -18,6 +18,57 @@ USER_MAINTENANCE_LOG_TYPES = (
 MAINTENANCE_LOG_TYPES = USER_MAINTENANCE_LOG_TYPES + (ASSET_CHECK_LOG_TYPE,)
 _CREATED_AT_UNSET = object()
 
+MAINTENANCE_VERSION_TOKEN = (
+    r'(?:[vV]\d+(?:\.\d+)*|\d+\.\d+(?:\.\d+)*)'
+    r'(?:[-+][0-9A-Za-z][0-9A-Za-z.-]*)?'
+)
+MAINTENANCE_VERSION_PATTERNS = tuple(
+    re.compile(pattern, re.IGNORECASE)
+    for pattern in (
+        rf'\b(?:to|into)\s+(?P<version>{MAINTENANCE_VERSION_TOKEN})(?!\w)',
+        rf'\b(?:version|firmware|software)\s*(?:was\s*)?'
+        rf'(?:to\s*)?[:=#-]?\s*(?P<version>{MAINTENANCE_VERSION_TOKEN})(?!\w)',
+        rf'\b(?:updated?|upgraded?)\s+(?P<version>{MAINTENANCE_VERSION_TOKEN})(?!\w)',
+    )
+)
+
+
+def detect_maintenance_version(description):
+    """Return a contextually identified target version from a log description."""
+    text = str(description or '').strip()
+    if not text:
+        return ''
+    for pattern in MAINTENANCE_VERSION_PATTERNS:
+        matches = list(pattern.finditer(text))
+        if matches:
+            return matches[-1].group('version').strip()
+    return ''
+
+
+def latest_detected_maintenance_version(logs):
+    """Return the latest confidently detected version and its source log."""
+    latest = None
+    for index, raw_log in enumerate(logs or []):
+        log = normalize_maintenance_log(raw_log)
+        version = detect_maintenance_version(log.get('description'))
+        if not version:
+            continue
+        sort_key = (
+            parse_maintenance_log_date(log) or datetime.min.date(),
+            str(log.get('createdAt') or ''),
+            index,
+        )
+        if latest is None or sort_key > latest['sortKey']:
+            latest = {
+                'version': version,
+                'log': log,
+                'logIndex': index,
+                'sortKey': sort_key,
+            }
+    if latest:
+        latest.pop('sortKey', None)
+    return latest
+
 
 OOC_MARKED = {
     'marked ooc',
@@ -211,7 +262,7 @@ def normalize_change(change):
     if kind == 'disposed':
         kind = 'decommissioned'
 
-    if kind in ('location', 'serial'):
+    if kind in ('location', 'serial', 'version'):
         value = _text(change.get('value')).strip()
         return {'kind': kind, 'value': value} if value else None
 
@@ -240,7 +291,7 @@ def normalize_changes(changes):
 
     if isinstance(changes, dict):
         normalized = []
-        for kind in ('location', 'serial'):
+        for kind in ('location', 'serial', 'version'):
             if changes.get(kind):
                 normalized.append(make_change(kind, value=changes.get(kind)))
         for kind in STATUS_CHANGE_KINDS:
@@ -267,6 +318,8 @@ def _legacy_change_from_part(part):
         return make_change('location', value=part.split(':', 1)[1].strip())
     if part_lower.startswith('serial:'):
         return make_change('serial', value=part.split(':', 1)[1].strip())
+    if part_lower.startswith('version:'):
+        return make_change('version', value=part.split(':', 1)[1].strip())
     if part_lower in OOC_MARKED:
         return make_change('ooc', action='marked')
     if part_lower in OOC_CLEARED:
@@ -469,6 +522,8 @@ def status_change_labels(log_or_changes):
             labels.append(f"Location: {change.get('value', '')}")
         elif kind == 'serial':
             labels.append(f"Serial: {change.get('value', '')}")
+        elif kind == 'version':
+            labels.append(f"Version: {change.get('value', '')}")
         elif kind in STATUS_CHANGE_KINDS:
             if all_statuses_cleared and change.get('action') == 'cleared':
                 continue
@@ -531,6 +586,8 @@ def apply_maintenance_log_changes(asset, log):
             asset.current_location = change.get('value', '').strip()
         elif kind == 'serial':
             asset.serial_number = change.get('value', '').strip()
+        elif kind == 'version':
+            asset.version = change.get('value', '').strip()
         elif kind in STATUS_CHANGE_KINDS:
             if change.get('action') == 'marked':
                 # Statuses are mutually exclusive. Marking any one of these

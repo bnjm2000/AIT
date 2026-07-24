@@ -1069,7 +1069,7 @@ function normalizeAssetPurchaseDateValue(value) {
 function formatAssetPurchaseDate(value) {
   const normalized = normalizeAssetPurchaseDateValue(value);
   const match = normalized.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!match) return normalized || '—';
+  if (!match) return normalized || '-';
   return `${match[1]}/${match[2]}/${match[3]}`;
 }
 
@@ -2954,24 +2954,10 @@ async function addIdentifierToMaintenanceSelection(identifier) {
     let already = 0;
     let skipped = 0;
 
-    for (const assetId of (container.assetIds || [])) {
-      const containerAsset = findAssetByIdentifier(assetId, assets);
-      const resolvedAssetId = containerAsset ? getAssetIdentifierForApi(containerAsset) : assetId;
-
-      if (!containerAsset || containerAsset.isBulk) {
-        skipped++;
-        continue;
-      }
-
-      if (selectedMaintenanceAssets.has(resolvedAssetId)) {
-        already++;
-      } else {
-        selectedMaintenanceAssets.add(resolvedAssetId);
-        added++;
-      }
-    }
-
-    updateSelectedAssetsDisplay();
+    const selectionResult = addAssetsToMaintenanceSelection(container.assetIds || []);
+    added = selectionResult.added;
+    already = selectionResult.already;
+    skipped = selectionResult.skipped;
     searchMaintenanceAssets();
     showNotification('success', `Added container ${container.id}: ${added} added (${already} already selected${skipped ? `, ${skipped} skipped` : ''})`);
     return;
@@ -3325,6 +3311,7 @@ const APP_SECTION_PATHS = Object.freeze({
   events: '/events',
   plan: '/plan',
   workforce: '/manpower',
+  'invoice-claims': '/invoice-claims',
   'freelancer-workspace': '/manpower',
   'prepare-new': '/prepare',
   return: '/return',
@@ -3382,7 +3369,7 @@ function updateAppSectionHistory(sectionName, replace = false) {
 }
 
 function showSection(sectionName, options = {}) {
-  const adminOnlySections = new Set(["plan", "compare", "workforce", "freelancer-workspace", "logs", "maintenance-report", "users", "pdf-settings"]);
+  const adminOnlySections = new Set(["plan", "compare", "workforce", "invoice-claims", "freelancer-workspace", "logs", "maintenance-report", "users", "pdf-settings"]);
   const ownerOnlySections = new Set(["companies"]);
   const salesOnlySections = new Set(["quotations", "profit-loss"]);
   if (sectionName === 'logs' && !canCurrentUserManageRoles()) {
@@ -3472,6 +3459,9 @@ function showSection(sectionName, options = {}) {
       break;
     case "workforce":
       if (typeof loadWorkforcePage === "function") loadWorkforcePage();
+      break;
+    case "invoice-claims":
+      if (typeof loadWorkforceDocumentsPage === "function") loadWorkforceDocumentsPage();
       break;
     case "freelancer-workspace":
       if (typeof loadFreelancerWorkspace === "function") loadFreelancerWorkspace();
@@ -3761,6 +3751,7 @@ function ensureAppDialogStyles() {
     .app-dialog-actions {
       display: flex;
       justify-content: flex-end;
+      flex-wrap: wrap;
       gap: 10px;
       margin: 0 !important;
       padding: 16px 24px 24px !important;
@@ -3816,6 +3807,7 @@ function ensureAppDialogModal() {
       <div class="modal-body app-dialog-body" id="appDialogMessage"></div>
       <div class="modal-footer app-dialog-actions">
         <button type="button" class="btn btn-secondary" data-dialog-cancel>Cancel</button>
+        <button type="button" class="btn btn-secondary" data-dialog-alternate hidden></button>
         <button type="button" class="btn btn-primary" data-dialog-confirm>OK</button>
       </div>
     </div>
@@ -3833,6 +3825,7 @@ function showAppDialog(options = {}) {
     const iconEl = modal.querySelector('[data-dialog-icon]');
     const confirmButton = modal.querySelector('[data-dialog-confirm]');
     const cancelButton = modal.querySelector('[data-dialog-cancel]');
+    const alternateButton = modal.querySelector('[data-dialog-alternate]');
     const closeButton = modal.querySelector('[data-dialog-close]');
     const variant = options.variant || 'info';
     const isAlert = options.kind === 'alert';
@@ -3874,6 +3867,11 @@ function showAppDialog(options = {}) {
     confirmButton.className = `btn ${variant === 'danger' ? 'btn-danger' : variant === 'warning' ? 'btn-warning' : 'btn-primary'}`;
     cancelButton.textContent = options.cancelText || 'Cancel';
     cancelButton.style.display = isAlert ? 'none' : '';
+    const hasAlternateAction = Boolean(options.alternateText);
+    alternateButton.textContent = options.alternateText || '';
+    alternateButton.hidden = !hasAlternateAction;
+    alternateButton.style.display = hasAlternateAction ? '' : 'none';
+    alternateButton.className = `btn ${options.alternateClass || 'btn-secondary'}`;
     closeButton.style.display = options.hideClose ? 'none' : '';
     const requiresCheckbox = Boolean(options.requireCheckbox && confirmationCheckbox);
     const updateConfirmAvailability = () => {
@@ -3890,6 +3888,7 @@ function showAppDialog(options = {}) {
       modal.removeEventListener('click', handleBackdropClick);
       confirmButton.removeEventListener('click', handleConfirm);
       cancelButton.removeEventListener('click', handleCancel);
+      alternateButton.removeEventListener('click', handleAlternate);
       closeButton.removeEventListener('click', handleClose);
       confirmationCheckbox?.removeEventListener('change', updateConfirmAvailability);
       document.removeEventListener('keydown', handleKeydown, true);
@@ -3923,9 +3922,14 @@ function showAppDialog(options = {}) {
         finish(value);
         return;
       }
-      finish(true);
+      finish(Object.prototype.hasOwnProperty.call(options, 'confirmValue') ? options.confirmValue : true);
     };
     const handleCancel = () => finish(false);
+    const handleAlternate = () => finish(
+      Object.prototype.hasOwnProperty.call(options, 'alternateValue')
+        ? options.alternateValue
+        : 'alternate'
+    );
     const handleClose = () => finish(cancelResult);
     const handleBackdropClick = (event) => {
       if (event.target === modal) {
@@ -3945,6 +3949,7 @@ function showAppDialog(options = {}) {
     modal.addEventListener('click', handleBackdropClick);
     confirmButton.addEventListener('click', handleConfirm);
     cancelButton.addEventListener('click', handleCancel);
+    alternateButton.addEventListener('click', handleAlternate);
     closeButton.addEventListener('click', handleClose);
     confirmationCheckbox?.addEventListener('change', updateConfirmAvailability);
     document.addEventListener('keydown', handleKeydown, true);
@@ -8143,6 +8148,7 @@ function ensureInventoryBulkEditControls() {
     ].join(';');
     group.innerHTML = `
       <span id="inventory-selected-count" style="color:#495057;font-size:14px;font-weight:700;">0 selected</span>
+      <button type="button" id="inventory-bulk-maintenance-button" class="btn btn-primary" style="padding:8px 16px;font-size:14px;" disabled>Log Maintenance</button>
       <button type="button" id="inventory-bulk-edit-button" class="btn btn-warning" style="padding:8px 16px;font-size:14px;" disabled>Edit Selected</button>
       <button type="button" id="inventory-bulk-delete-button" class="btn btn-danger" style="padding:8px 16px;font-size:14px;" disabled>Delete Selected</button>
       <button type="button" id="inventory-clear-selection-button" class="btn btn-secondary" style="padding:8px 16px;font-size:14px;" disabled>Clear Selection</button>
@@ -8155,6 +8161,7 @@ function ensureInventoryBulkEditControls() {
       controls.appendChild(group);
     }
 
+    document.getElementById('inventory-bulk-maintenance-button')?.addEventListener('click', openMaintenanceForSelectedInventoryAssets);
     document.getElementById('inventory-bulk-edit-button')?.addEventListener('click', openBulkAssetEditModal);
     document.getElementById('inventory-bulk-delete-button')?.addEventListener('click', openBulkAssetDeleteModal);
     document.getElementById('inventory-clear-selection-button')?.addEventListener('click', clearInventorySelection);
@@ -8678,16 +8685,41 @@ function getSelectedInventoryAssets() {
   return (assets || []).filter(asset => selectedInventoryAssetIds.has(inventoryAssetIdentifier(asset)));
 }
 
+function openMaintenanceForSelectedInventoryAssets() {
+  const selectedAssets = getSelectedInventoryAssets();
+  if (!selectedAssets.length) {
+    showNotification('warning', 'Select at least one asset to log maintenance');
+    return;
+  }
+
+  const bulkAssets = selectedAssets.filter(asset => asset.isBulk);
+  if (bulkAssets.length) {
+    if (selectedAssets.length === 1) {
+      openBulkMaintenanceFaultModal(inventoryAssetIdentifier(bulkAssets[0]));
+      return;
+    }
+    showNotification(
+      'warning',
+      'Bulk stock needs a quantity-specific maintenance log. Select each bulk item separately.'
+    );
+    return;
+  }
+
+  openMaintenanceModal(selectedAssets.map(inventoryAssetIdentifier));
+}
+
 function updateInventorySelectionUi(currentVisibleAssets = null) {
   pruneInventorySelection();
 
   const selectedCount = selectedInventoryAssetIds.size;
   const countEl = document.getElementById('inventory-selected-count');
+  const maintenanceButton = document.getElementById('inventory-bulk-maintenance-button');
   const editButton = document.getElementById('inventory-bulk-edit-button');
   const deleteButton = document.getElementById('inventory-bulk-delete-button');
   const clearButton = document.getElementById('inventory-clear-selection-button');
 
   if (countEl) countEl.textContent = `${selectedCount} selected`;
+  if (maintenanceButton) maintenanceButton.disabled = selectedCount === 0;
   if (editButton) editButton.disabled = selectedCount === 0;
   if (deleteButton) deleteButton.disabled = selectedCount === 0;
   if (clearButton) clearButton.disabled = selectedCount === 0;
@@ -8814,7 +8846,7 @@ function openAssetDetailsModal(encodedAssetId) {
         <div class="asset-details-identity-label"><span>${asset.isBulk ? 'Bulk stock record' : 'Asset ID'}</span></div>
         <div class="asset-details-identity-record">
           <div><strong>${escapeHtml(displayId)}</strong>${asset.isBulk ? `<small>Internal ID: ${escapeHtml(apiId)}</small>` : ''}</div>
-          <div class="asset-details-product"><div class="asset-details-product-heading"><strong>${escapeHtml([asset.brand, asset.model].filter(Boolean).join(' ') || 'Brand and model not recorded')}</strong>${departmentBadgeHtml(asset.department)}</div><span>${escapeHtml(asset.description || 'No description recorded')}</span>${inventoryAssetTagsHtml(asset, isAdminUser())}</div>
+          <div class="asset-details-product"><div class="asset-details-product-heading"><strong>${escapeHtml([asset.brand, asset.model].filter(Boolean).join(' ') || '-')}</strong>${departmentBadgeHtml(asset.department)}</div><span>${escapeHtml(asset.description || '-')}</span>${inventoryAssetTagsHtml(asset, isAdminUser())}</div>
         </div>
       </div>
 
@@ -8822,12 +8854,13 @@ function openAssetDetailsModal(encodedAssetId) {
         <div class="asset-details-section-heading"><h4>Asset information</h4><span>Serial numbers and dates</span></div>
         <div class="asset-details-grid">
           ${asset.isBulk ? '' : `
-            <div class="asset-details-field"><span>Primary serial number</span><strong>${escapeHtml(asset.serial || 'NIL')}</strong></div>
-            <div class="asset-details-field"><span>Secondary serial number</span><strong>${escapeHtml(asset.serial2 || 'NIL')}</strong></div>
+            <div class="asset-details-field"><span>Primary serial number</span><strong>${escapeHtml(asset.serial || '-')}</strong></div>
+            <div class="asset-details-field"><span>Secondary serial number</span><strong>${escapeHtml(asset.serial2 || '-')}</strong></div>
           `}
-          <div class="asset-details-field"><span>Date purchased</span><strong>${escapeHtml(formatAssetPurchaseDate(asset.dateOfPurchase || asset.purchaseDate || '') || 'Not recorded')}</strong></div>
-          <div class="asset-details-field"><span>Date added</span><strong>${escapeHtml(formatAssetAuditDateTime(asset.dateAdded || '') || 'Not recorded')}</strong></div>
-          <div class="asset-details-field"><span>Last modified</span><strong>${escapeHtml(formatAssetAuditDateTime(asset.dateModified || '') || 'Not recorded')}</strong></div>
+          <div class="asset-details-field"><span>Version</span><strong>${escapeHtml(asset.version || '-')}</strong></div>
+          <div class="asset-details-field"><span>Date purchased</span><strong>${escapeHtml(formatAssetPurchaseDate(asset.dateOfPurchase || asset.purchaseDate || '') || '-')}</strong></div>
+          <div class="asset-details-field"><span>Date added</span><strong>${escapeHtml(formatAssetAuditDateTime(asset.dateAdded || '') || '-')}</strong></div>
+          <div class="asset-details-field"><span>Last modified</span><strong>${escapeHtml(formatAssetAuditDateTime(asset.dateModified || '') || '-')}</strong></div>
         </div>
       </section>
 
@@ -8836,8 +8869,8 @@ function openAssetDetailsModal(encodedAssetId) {
         <div class="asset-details-grid asset-details-operational-grid">
           <div class="asset-details-field"><span>Availability</span><strong>${inventoryAvailabilityBadgesHtml(asset)}</strong></div>
           <div class="asset-details-field"><span>Condition</span><strong>${assetFlagBadgesHtml(asset)}</strong></div>
-          <div class="asset-details-field"><span>Default location</span><strong>${escapeHtml(asset.defaultLocation || 'Store')}</strong></div>
-          <div class="asset-details-field"><span>Current location</span><strong>${escapeHtml(asset.currentLocation || asset.location || asset.defaultLocation || 'Store')}</strong></div>
+          <div class="asset-details-field"><span>Default location</span><strong>${escapeHtml(asset.defaultLocation || '-')}</strong></div>
+          <div class="asset-details-field"><span>Current location</span><strong>${escapeHtml(asset.currentLocation || '-')}</strong></div>
         </div>
         ${uniqueDegradedReasons.length ? `<div class="asset-details-reasons"><strong>Degraded reason${uniqueDegradedReasons.length === 1 ? '' : 's'}</strong><ul>${uniqueDegradedReasons.map(reason => `<li>${escapeHtml(reason)}</li>`).join('')}</ul></div>` : ''}
       </section>
@@ -8846,7 +8879,7 @@ function openAssetDetailsModal(encodedAssetId) {
 
       <section class="asset-details-section">
         <div class="asset-details-section-heading"><h4>Notes</h4><span>Asset-specific information</span></div>
-        <div class="asset-details-notes ${notes ? '' : 'is-empty'}">${notes ? escapeHtml(notes) : 'No notes for this asset.'}</div>
+        <div class="asset-details-notes ${notes ? '' : 'is-empty'}">${notes ? escapeHtml(notes) : '-'}</div>
       </section>
 
       <section class="asset-details-section asset-details-history">
@@ -8897,14 +8930,14 @@ function inventoryVirtualRowHtml(asset, isAdmin) {
           ${asset.isBulk ? '<span class="asset-badge status-available">Bulk Item</span>' : escapeHtml(asset.id)}
         </button>
       </td>
-      <td>${escapeHtml(asset.brand || "")}</td>
-      <td>${escapeHtml(asset.model || "")}</td>
+      <td>${escapeHtml(asset.brand || "-")}</td>
+      <td>${escapeHtml(asset.model || "-")}</td>
       <td class="asset-description-cell">
         ${description
           ? `<span class="asset-description-text">${escapeHtml(description)}</span>`
-          : `<span class="asset-description-empty">—</span>`}
+          : `<span class="asset-description-empty">-</span>`}
       </td>
-      <td>${asset.isBulk ? '—' : ([asset.serial, asset.serial2].filter(Boolean).map(escapeHtml).join('<br>') || "N/A")}</td>
+      <td>${asset.isBulk ? '-' : ([asset.serial, asset.serial2].filter(Boolean).map(escapeHtml).join('<br>') || '-')}</td>
       <td class="${asset.isBulk ? 'bulk-quantity-cell' : ''}">${quantityHtml}</td>
       <td class="asset-purchase-date-cell">${escapeHtml(formatAssetPurchaseDate(asset.dateOfPurchase || asset.purchaseDate || ''))}</td>
       <td class="asset-audit-date-cell">${escapeHtml(formatAssetAuditDateTime(asset.dateAdded || ''))}</td>
@@ -9136,7 +9169,7 @@ function groupInventoryByModel(assetList) {
   const groups = new Map();
   (assetList || []).forEach(asset => {
     const key = inventoryModelGroupKey(asset);
-    if (!groups.has(key)) groups.set(key, { key, assets: [], brand: asset.brand || 'Unbranded', model: asset.model || 'Unspecified model', department: asset.department || 'UN' });
+    if (!groups.has(key)) groups.set(key, { key, assets: [], brand: asset.brand || '-', model: asset.model || '-', department: asset.department || 'UN' });
     groups.get(key).assets.push(asset);
   });
   return Array.from(groups.values());
@@ -9161,7 +9194,7 @@ function inventoryLatestMaintenance(assetList) {
 }
 
 function inventoryMaintenanceDateText(record) {
-  if (!record?.date) return 'No maintenance';
+  if (!record?.date) return '-';
   const raw = String(record.date);
   const match = raw.match(/^(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})/);
   if (!match) return raw;
@@ -9171,7 +9204,7 @@ function inventoryMaintenanceDateText(record) {
 
 function inventoryGroupDescription(group) {
   const descriptions = [...new Set(group.assets.map(asset => String(asset.description || '').trim()).filter(Boolean))];
-  if (!descriptions.length) return 'No description';
+  if (!descriptions.length) return '-';
   return descriptions.length === 1 ? descriptions[0] : `${descriptions[0]} +${descriptions.length - 1} more`;
 }
 
@@ -9210,10 +9243,10 @@ function inventoryIndividualRowHtml(asset, isAdmin) {
   return `
     <div class="inventory-individual-row">
       ${isAdmin ? `<input type="checkbox" class="inventory-row-select" data-asset-id="${escapeHtmlAttr(assetId)}" ${selectedInventoryAssetIds.has(assetId) ? 'checked' : ''} onclick="toggleInventoryAssetSelection(this.dataset.assetId,this.checked,event)" aria-label="Select ${escapeHtmlAttr(assetId)}">` : '<span></span>'}
-      <div><span class="inventory-individual-id">${escapeHtml(asset.isBulk ? 'Bulk stock' : assetId)}</span><span class="inventory-individual-meta" style="display:block">${escapeHtml(asset.isBulk ? `${total} units` : (asset.serial || 'No serial'))}</span></div>
-      <div class="inventory-individual-tags">${inventoryAssetTagsHtml(asset, isAdmin) || '<span class="inventory-individual-meta">None</span>'}</div>
+      <div><span class="inventory-individual-id">${escapeHtml(asset.isBulk ? 'Bulk stock' : assetId)}</span><span class="inventory-individual-meta" style="display:block">${escapeHtml(asset.isBulk ? `${total} units` : (asset.serial || '-'))}</span></div>
+      <div class="inventory-individual-meta inventory-individual-version">${escapeHtml(asset.version || '-')}</div>
       <div>${availabilityHtml}</div>
-      <div class="inventory-individual-meta">${escapeHtml(asset.currentLocation || asset.location || 'Store')}</div>
+      <div class="inventory-individual-meta">${escapeHtml(asset.currentLocation || asset.location || '-')}</div>
       <div class="inventory-individual-meta">${escapeHtml(inventoryMaintenanceDateText(maintenance))}</div>
       <div class="inventory-individual-actions">
         <button type="button" class="inventory-icon-button" onclick="openAssetDetailsModal('${escapeHtmlAttr(encodedId)}')" title="View asset" aria-label="View asset">${inventoryIcon('eye')}</button>
@@ -9301,7 +9334,7 @@ function displayInventoryTable(assetsToShow) {
               <div class="inventory-model-detail">
                 <div class="inventory-group-condition"><h4>Availability overview</h4>${inventoryAvailabilityChartHtml(availability, true)}</div>
                 <div class="inventory-individual-list">
-                  <div class="inventory-individual-head"><span></span><span>Asset ID</span><span>Tags</span><span>Availability</span><span>Location</span><span>Last maintenance</span><span></span></div>
+                  <div class="inventory-individual-head"><span></span><span>Asset ID</span><span>Version</span><span>Availability</span><span>Location</span><span>Last maintenance</span><span></span></div>
                   ${group.assets.map(asset => inventoryIndividualRowHtml(asset, isAdmin)).join('')}
                 </div>
               </div>
@@ -9362,6 +9395,11 @@ function ensureAssetEditModal() {
           <div class="form-group">
             <label class="form-label">Model</label>
             <input id="editAssetModel" class="form-input">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Version</label>
+            <input id="editAssetVersion" class="form-input" placeholder="Optional">
           </div>
 
           <div class="form-group" id="editAssetSerialGroup">
@@ -9468,6 +9506,7 @@ function openEditAssetModal(encodedAssetId) {
     isBulk: !!asset.isBulk,
     brand: asset.brand || '',
     model: asset.model || '',
+    version: asset.version || '',
     description: asset.description || '',
     dateOfPurchase: asset.dateOfPurchase || asset.purchaseDate || '',
     department: asset.department || '',
@@ -9483,6 +9522,7 @@ function openEditAssetModal(encodedAssetId) {
   document.getElementById('editAssetQuantity').value = asset.quantity || 1;
   document.getElementById('editAssetBrand').value = asset.brand || '';
   document.getElementById('editAssetModel').value = asset.model || '';
+  document.getElementById('editAssetVersion').value = asset.version || '';
   document.getElementById('editAssetSerial').value = asset.serial || '';
   document.getElementById('editAssetSerial2').value = asset.serial2 || '';
   document.getElementById('editAssetDateOfPurchase').value = normalizeAssetPurchaseDateValue(asset.dateOfPurchase || asset.purchaseDate || '');
@@ -9515,6 +9555,7 @@ async function saveAssetEditModal() {
     internalId: original.id,
     brand: document.getElementById('editAssetBrand').value.trim(),
     model: document.getElementById('editAssetModel').value.trim(),
+    version: document.getElementById('editAssetVersion').value.trim(),
     serial: document.getElementById('editAssetSerial').value.trim(),
     serial2: document.getElementById('editAssetSerial2').value.trim(),
     dateOfPurchase: document.getElementById('editAssetDateOfPurchase').value.trim(),
@@ -9787,6 +9828,14 @@ function ensureBulkAssetEditModal() {
 
           <div class="form-group">
             <label class="form-label">
+              <input type="checkbox" id="bulkEditUseVersion" style="margin-right:8px;">
+              Version
+            </label>
+            <input id="bulkEditVersion" class="form-input" placeholder="Leave blank to clear" disabled>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">
               <input type="checkbox" id="bulkEditUseDefaultLocation" style="margin-right:8px;">
               Default Location
             </label>
@@ -9852,6 +9901,7 @@ function ensureBulkAssetEditModal() {
     'Department',
     'Brand',
     'Model',
+    'Version',
     'DefaultLocation',
     'CurrentLocation',
     'Status',
@@ -9871,6 +9921,7 @@ function syncBulkAssetEditFields() {
     ['bulkEditUseDepartment', 'bulkEditDepartment'],
     ['bulkEditUseBrand', 'bulkEditBrand'],
     ['bulkEditUseModel', 'bulkEditModel'],
+    ['bulkEditUseVersion', 'bulkEditVersion'],
     ['bulkEditUseDefaultLocation', 'bulkEditDefaultLocation'],
     ['bulkEditUseCurrentLocation', 'bulkEditCurrentLocation'],
     ['bulkEditUseStatus', 'bulkEditStatus'],
@@ -9891,6 +9942,7 @@ function resetBulkAssetEditChecks() {
     'bulkEditUseDepartment',
     'bulkEditUseBrand',
     'bulkEditUseModel',
+    'bulkEditUseVersion',
     'bulkEditUseDefaultLocation',
     'bulkEditUseCurrentLocation',
     'bulkEditUseStatus',
@@ -9967,6 +10019,7 @@ function openBulkAssetEditModal() {
   document.getElementById('bulkEditDepartment').value = commonInventoryAssetValue(selectedAssets, asset => asset.department || 'UN') || '';
   document.getElementById('bulkEditBrand').value = commonInventoryAssetValue(selectedAssets, asset => asset.brand || '') || '';
   document.getElementById('bulkEditModel').value = commonInventoryAssetValue(selectedAssets, asset => asset.model || '') || '';
+  document.getElementById('bulkEditVersion').value = commonInventoryAssetValue(selectedAssets, asset => asset.version || '') || '';
   document.getElementById('bulkEditDefaultLocation').value = commonInventoryAssetValue(selectedAssets, asset => asset.defaultLocation || 'Store') || '';
   document.getElementById('bulkEditCurrentLocation').value = commonInventoryAssetValue(selectedAssets, asset => asset.currentLocation || '') || '';
   document.getElementById('bulkEditDescription').value = commonInventoryAssetValue(selectedAssets, asset => asset.description || '') || '';
@@ -10023,6 +10076,11 @@ function collectBulkAssetEditPayload(asset) {
 
   if (useField('bulkEditUseDescription')) {
     payload.description = readValue('bulkEditDescription');
+    selectedFieldCount += 1;
+  }
+
+  if (useField('bulkEditUseVersion')) {
+    payload.version = readValue('bulkEditVersion');
     selectedFieldCount += 1;
   }
 
@@ -17310,7 +17368,7 @@ function normalizeMaintenanceChange(change) {
   if (!change || typeof change !== 'object') return null;
 
   const kind = String(change.kind || change.type || '').trim().toLowerCase();
-  if (kind === 'location' || kind === 'serial') {
+  if (kind === 'location' || kind === 'serial' || kind === 'version') {
     const value = String(change.value || '').trim();
     return value ? { kind, value } : null;
   }
@@ -17337,6 +17395,9 @@ function maintenanceChangeFromLegacyPart(part) {
   }
   if (lower.startsWith('serial:')) {
     return normalizeMaintenanceChange({ kind: 'serial', value: text.split(':').slice(1).join(':').trim() });
+  }
+  if (lower.startsWith('version:')) {
+    return normalizeMaintenanceChange({ kind: 'version', value: text.split(':').slice(1).join(':').trim() });
   }
   if (['marked ooc', 'mark ooc', 'marked out of commission', 'mark out of commission'].includes(lower)) {
     return { kind: 'ooc', action: 'marked' };
@@ -17452,9 +17513,78 @@ function initialiseMaintenanceLogTypeSelects(root = document) {
     applyMaintenanceLogTypeSelectStyle(selectEl);
     enhanceMaintenanceCustomSelect(selectEl, 'type');
     if (selectEl.dataset.logTypeColourBound === 'true') return;
-    selectEl.addEventListener('change', () => applyMaintenanceLogTypeSelectStyle(selectEl));
+    selectEl.addEventListener('change', () => {
+      applyMaintenanceLogTypeSelectStyle(selectEl);
+    });
     selectEl.dataset.logTypeColourBound = 'true';
   });
+}
+
+const MAINTENANCE_VERSION_TOKEN_SOURCE = String.raw`(?:[vV]\d+(?:\.\d+)*|\d+\.\d+(?:\.\d+)*)(?:[-+][0-9A-Za-z][0-9A-Za-z.-]*)?`;
+
+function detectMaintenanceVersionFromDescription(description) {
+  const text = String(description || '').trim();
+  if (!text) return { targetVersion: '', sourceVersion: '' };
+
+  const targetPatterns = [
+    new RegExp(String.raw`\b(?:to|into)\s+(${MAINTENANCE_VERSION_TOKEN_SOURCE})(?!\w)`, 'gi'),
+    new RegExp(String.raw`\b(?:version|firmware|software)\s*(?:was\s*)?(?:to\s*)?[:=#-]?\s*(${MAINTENANCE_VERSION_TOKEN_SOURCE})(?!\w)`, 'gi'),
+    new RegExp(String.raw`\b(?:updated?|upgraded?)\s+(${MAINTENANCE_VERSION_TOKEN_SOURCE})(?!\w)`, 'gi')
+  ];
+  let targetVersion = '';
+  for (const pattern of targetPatterns) {
+    const matches = Array.from(text.matchAll(pattern));
+    if (matches.length) {
+      targetVersion = matches[matches.length - 1][1] || '';
+      break;
+    }
+  }
+
+  const sourceMatch = text.match(new RegExp(
+    String.raw`\bfrom\s+(?:version\s+)?(${MAINTENANCE_VERSION_TOKEN_SOURCE})(?!\w)`,
+    'i'
+  ));
+  return {
+    targetVersion: targetVersion.trim(),
+    sourceVersion: String(sourceMatch?.[1] || '').trim()
+  };
+}
+
+async function confirmMaintenanceVersionFromDescription(logType, description, assetCount = 1) {
+  if (normalizeMaintenanceLogType(logType) !== 'Update') {
+    return { confirmed: true, detectedVersion: '' };
+  }
+
+  const { targetVersion, sourceVersion } = detectMaintenanceVersionFromDescription(description);
+  if (!targetVersion) {
+    const confirmed = await showAppConfirm({
+      title: 'No version detected',
+      message: 'No target version was found in this Update log. Include wording such as "updated to v1.4.1" to update the asset version. Save this log without changing the version?',
+      confirmText: 'Save Without Version',
+      cancelText: 'Review Description',
+      variant: 'warning'
+    });
+    return { confirmed, detectedVersion: '' };
+  }
+
+  const assetLabel = assetCount === 1 ? 'this asset' : `the ${assetCount} selected assets`;
+  const transition = sourceVersion
+    ? ` from ${sourceVersion} to ${targetVersion}`
+    : ` to ${targetVersion}`;
+  const decision = await showAppConfirm({
+    title: 'Confirm version update',
+    message: `The log description indicates a version update${transition}. Update the Version attribute for ${assetLabel}?`,
+    confirmText: `Update to ${targetVersion}`,
+    confirmValue: 'update-version',
+    alternateText: 'Log Without Updating Version',
+    alternateValue: 'log-only',
+    cancelText: 'Review Description',
+    variant: 'info'
+  });
+  return {
+    confirmed: decision === 'update-version' || decision === 'log-only',
+    detectedVersion: decision === 'update-version' ? targetVersion : ''
+  };
 }
 
 function maintenanceLogTypeBadgeHtml(type) {
@@ -18074,6 +18204,7 @@ function getMaintenanceChangeLabels(logOrChanges) {
   return changes.map(change => {
     if (change.kind === 'location') return `Location: ${change.value}`;
     if (change.kind === 'serial') return `Serial: ${change.value}`;
+    if (change.kind === 'version') return `Version: ${change.value}`;
     if (change.kind === 'ooc') return change.action === 'marked' ? 'Marked OOC' : 'Cleared OOC';
     if (change.kind === 'missing') return change.action === 'marked' ? 'Marked Missing' : 'Cleared Missing';
     if (change.kind === 'untagged') return change.action === 'marked' ? 'Marked Untagged' : 'Cleared Untagged';
@@ -18097,6 +18228,7 @@ function maintenanceChangeColour(label) {
   if (changeLower.includes('marked decommissioned') || changeLower.includes('marked disposed')) return '#6c757d';
   if (changeLower.includes('location:')) return '#17a2b8';
   if (changeLower.includes('serial:')) return '#6f42c1';
+  if (changeLower.includes('version:')) return '#6f42c1';
   return '#667eea';
 }
 
@@ -18116,6 +18248,7 @@ function maintenanceAssetSearchText(asset) {
     getAssetIdentifierForApi(asset), asset.id, asset.brand, asset.model, asset.description,
     assetTagSearchText(asset),
     asset.serial, asset.serialNumber, asset.serial2, asset.secondarySerial, asset.secondarySerialNumber,
+    asset.version,
     asset.status, asset.location,
     ...getMaintenanceLogRecords(asset).map(log => `${log.type || ''} ${log.description || ''} ${maintenanceLogUserLabel(log)} ${log.date || ''}`)
   ].filter(Boolean).join(' ').toLowerCase();
@@ -21440,13 +21573,22 @@ function planAvailabilityFor(group) {
     + Number(entry?.assetMissing || 0)
     + Number(entry?.bulkMaintenanceOOC || 0)
     + Number(entry?.bulkMaintenanceMissing || 0);
+  const degraded = Number(entry?.degraded ?? (
+    Number(entry?.assetDegraded || 0) + Number(entry?.bulkMaintenanceDegraded || 0)
+  ));
+  const capacity = entry
+    ? Number(entry?.capacityForThisEvent ?? Math.max(physical - overlap - unavailableForCondition, 0))
+    : 0;
   return {
     hasEntry: !!entry,
     available: Number(entry?.available ?? group.count ?? 0),
     physical,
-    capacity: entry
-      ? Number(entry?.capacityForThisEvent ?? Math.max(physical - overlap - unavailableForCondition, 0))
+    capacity,
+    healthyCapacity: entry
+      ? Number(entry?.healthyCapacityForThisEvent ?? Math.max(capacity - degraded, 0))
       : 0,
+    healthy: Number(entry?.healthy ?? Math.max(capacity - degraded, 0)),
+    degraded,
     overlap,
     overlapEvents: entry?.overlappingEvents || [],
     usedHere: Number(entry?.usedInThisEvent || 0),
@@ -21679,12 +21821,11 @@ function planCustomQuantityControl(custom) {
   `;
 }
 
-function planRequirementShortage(group) {
+function planRequirementWarning(group) {
   const required = Math.max(1, Number(group?.requiredQuantity || 1));
   const availability = planAvailabilityFor(group);
   const fulfillableForThisEvent = Math.max(0, Number(availability.capacity || 0));
   const shortage = Math.max(required - fulfillableForThisEvent, 0);
-  if (shortage <= 0) return null;
   const availabilityDetail = availability.hasEntry
     ? modelAvailabilityReasonTooltip(
         availability.available,
@@ -21692,23 +21833,37 @@ function planRequirementShortage(group) {
         availability
       )
     : 'This asset model is not present in the current inventory.';
+  if (shortage > 0) {
+    return {
+      type: 'shortage',
+      quantity: shortage,
+      availability,
+      reason: `${shortage} of ${required} required unit${required === 1 ? '' : 's'} cannot be fulfilled. ` +
+        `Usable capacity for this event is ${fulfillableForThisEvent}.\n\n${availabilityDetail}`
+    };
+  }
+
+  const healthyCapacity = Math.max(0, Number(availability.healthyCapacity || 0));
+  const degradedRequired = Math.max(required - healthyCapacity, 0);
+  if (degradedRequired <= 0) return null;
   return {
-    shortage,
+    type: 'degraded',
+    quantity: degradedRequired,
     availability,
-    reason: `${shortage} of ${required} required unit${required === 1 ? '' : 's'} cannot be fulfilled. ` +
-      `Usable capacity for this event is ${fulfillableForThisEvent}.\n\n${availabilityDetail}`
+    reason: `${degradedRequired} of ${required} required unit${required === 1 ? '' : 's'} ` +
+      `can only be fulfilled by using degraded assets. Fully working capacity for this event is ${healthyCapacity}.\n\n${availabilityDetail}`
   };
 }
 
-function planShowShortageReason(encodedReason) {
+function planShowRequirementWarning(encodedReason, warningType = 'shortage') {
   showAppAlert({
-    title: 'Shortage Detected',
-    message: planDecode(encodedReason) || 'This requirement has a shortage.',
+    title: warningType === 'degraded' ? 'Degraded Assets Required' : 'Shortage Detected',
+    message: planDecode(encodedReason) || 'This requirement has an availability warning.',
     variant: 'warning',
   });
 }
 
-var planReplacementState = { source: null, shortage: 1, sourceQuantity: 1, preset: '', search: '' };
+var planReplacementState = { source: null, shortage: 1, sourceQuantity: 1, warningType: 'shortage', preset: '', search: '' };
 
 function ensurePlanReplacementModal() {
   let modal = document.getElementById('planReplacementModal');
@@ -21719,7 +21874,7 @@ function ensurePlanReplacementModal() {
   modal.innerHTML = `
     <div class="modal-content plan-replacement-modal-content">
       <div class="modal-header">
-        <div><h3>Replace Shortage</h3><small id="planReplacementSourceLabel"></small></div>
+        <div><h3 id="planReplacementTitle">Replace Shortage</h3><small id="planReplacementSourceLabel"></small></div>
         <button type="button" class="close-btn" aria-label="Close" onclick="closeModal('planReplacementModal')">&times;</button>
       </div>
       <div class="plan-replacement-toolbar">
@@ -21748,7 +21903,7 @@ function ensurePlanReplacementModal() {
   return modal;
 }
 
-function planOpenReplacement(encodedDepartment, encodedBrand, encodedModel, encodedDescription, shortage) {
+function planOpenReplacement(encodedDepartment, encodedBrand, encodedModel, encodedDescription, shortage, warningType = 'shortage') {
   const source = {
     department: planDecode(encodedDepartment),
     brand: planDecode(encodedBrand),
@@ -21763,12 +21918,19 @@ function planOpenReplacement(encodedDepartment, encodedBrand, encodedModel, enco
     source,
     shortage: Math.min(Math.max(1, Number(shortage || 1)), maxQuantity),
     sourceQuantity: maxQuantity,
+    warningType,
     preset: 'short',
     search: ''
   };
   ensurePlanReplacementModal();
+  document.getElementById('planReplacementTitle').textContent = warningType === 'degraded'
+    ? 'Replace Degraded Requirement'
+    : 'Replace Shortage';
   document.getElementById('planReplacementSourceLabel').textContent =
     `${source.brand} ${source.model} needs a replacement`;
+  document.getElementById('planReplacementShort').title = warningType === 'degraded'
+    ? 'Replace only the quantity that would require degraded assets'
+    : 'Replace only the quantity currently short for this event period';
   planUseReplacementQuantity('short');
   document.getElementById('planReplacementSearch').value = '';
   renderPlanReplacementOptions();
@@ -21810,17 +21972,25 @@ function renderPlanReplacementOptions() {
     if (modelGroupMatchesEditGroup(group, source.department, source.brand, source.model)) return false;
     if (query && !planAvailableModelSearchText(group).includes(query)) return false;
     const availability = planAvailabilityFor(group);
-    return Math.max(0, availability.available) > 0;
+    const usable = planReplacementState.warningType === 'degraded'
+      ? availability.healthy
+      : availability.available;
+    return Math.max(0, usable) > 0;
   }).slice(0, 60);
 
   container.innerHTML = options.map(group => {
     const availability = planAvailabilityFor(group);
-    const maximum = Math.max(0, availability.available);
+    const maximum = Math.max(0, planReplacementState.warningType === 'degraded'
+      ? availability.healthy
+      : availability.available);
+    const availabilityLabel = planReplacementState.warningType === 'degraded'
+      ? 'fully working available to plan'
+      : 'available to plan';
     return `
       <div class="plan-replacement-option">
         <div>
           <strong>${escapeHtml([group.brand, group.model].filter(Boolean).join(' '))}</strong>
-          <small>${escapeHtml(group.description || 'No description')} &middot; ${maximum} available to plan</small>
+          <small>${escapeHtml(group.description || 'No description')} &middot; ${maximum} ${availabilityLabel}</small>
         </div>
         ${planDepartmentCodeBadgeHtml(group.department)}
         <button type="button" class="plan-button plan-button-small"
@@ -21885,27 +22055,29 @@ function renderPlanRequirementsCard() {
       const rowHtml = rows.map(row => {
         if (row.type === 'model') {
           const group = row.group;
-          const shortage = planRequirementShortage(group);
-          const shortageReason = shortage?.reason || '';
+          const warning = planRequirementWarning(group);
+          const warningReason = warning?.reason || '';
           return `
-            <div class="plan-requirement-row ${shortage ? 'has-shortage' : ''}">
+            <div class="plan-requirement-row ${warning ? (warning.type === 'degraded' ? 'requires-degraded' : 'has-shortage') : ''}">
               <div class="plan-item-title-line">
                 <div class="plan-item-name">${escapeHtml([group.brand, group.model].filter(Boolean).join(' '))}</div>
-                ${shortage ? `
-                  <button type="button" class="plan-shortage-info"
-                          title="${escapeHtmlAttr(shortageReason)}"
-                          aria-label="Show shortage reason"
-                          onclick="planShowShortageReason('${planEncode(shortageReason)}')">!</button>
+                ${warning ? `
+                  <button type="button" class="plan-shortage-info ${warning.type === 'degraded' ? 'degraded-warning' : ''}"
+                          title="${escapeHtmlAttr(warningReason)}"
+                          aria-label="Show availability warning"
+                          onclick="planShowRequirementWarning('${planEncode(warningReason)}','${warning.type}')">!</button>
                 ` : ''}
                 ${planDepartmentCodeBadgeHtml(group.department)}
               </div>
               <div class="plan-item-description">${escapeHtml(group.description || 'No description')}</div>
+              <div class="plan-replace-slot">
+                ${warning ? `
+                  <button type="button" class="plan-button plan-button-small plan-swap-button ${warning.type === 'degraded' ? 'degraded-warning' : ''}"
+                          onclick="planOpenReplacement('${planEncode(group.department)}','${planEncode(group.brand)}','${planEncode(group.model)}','${planEncode(group.description || '')}',${warning.quantity},'${warning.type}')">Replace</button>
+                ` : ''}
+              </div>
               ${planRequirementQuantityControl(group)}
               <div class="plan-row-actions">
-                ${shortage ? `
-                  <button type="button" class="plan-button plan-button-small plan-swap-button"
-                          onclick="planOpenReplacement('${planEncode(group.department)}','${planEncode(group.brand)}','${planEncode(group.model)}','${planEncode(group.description || '')}',${shortage.shortage})">Replace</button>
-                ` : ''}
                 <button type="button" class="plan-button plan-button-danger plan-button-small"
                         title="Remove requirement"
                         onclick="planRemoveModel('${planEncode(group.department)}','${planEncode(group.brand)}','${planEncode(group.model)}','${planEncode(group.description || '')}')">
@@ -21930,6 +22102,7 @@ function renderPlanRequirementsCard() {
               <div class="plan-item-meta">${escapeHtml(custom.type === 'LOAN' ? 'Loan / Rental' : 'Misc')}</div>
             </div>
             <div class="plan-item-description">${escapeHtml(description)}</div>
+            <div class="plan-replace-slot"></div>
             ${planCustomQuantityControl(custom)}
             <div class="plan-row-actions">
               <button type="button" class="plan-button plan-button-danger plan-button-small"
@@ -21957,6 +22130,7 @@ function renderPlanRequirementsCard() {
           <div class="plan-requirement-head">
             <span>Brand / Model</span>
             <span>Description</span>
+            <span></span>
             <span>Required Qty</span>
             <span></span>
           </div>
@@ -24066,6 +24240,7 @@ function collectAddAssetPayload() {
   const payload = {
     brand: addAssetValue('assetBrand'),
     model: addAssetValue('assetModel'),
+    version: addAssetValue('assetVersion'),
     description: addAssetValue('assetDescription'),
     notes: addAssetValue('assetNotes'),
     tags: assetTagEditorTags('assetTagsEditor'),
@@ -24383,6 +24558,24 @@ function resetAddAssetForm() {
 }
 
 
+function setAddEventTag(tag = "events") {
+  const normalizedTag = tag === "dry hire" ? "dry hire" : "events";
+  const tagInput = document.getElementById("eventTag");
+  const options = document.querySelector(".add-event-tag-options");
+
+  if (tagInput) tagInput.value = normalizedTag;
+  if (options) {
+    options.dataset.selected = normalizedTag === "dry hire" ? "dry-hire" : "events";
+  }
+  document.querySelectorAll("[data-add-event-tag]").forEach(option => {
+    option.setAttribute(
+      "aria-checked",
+      option.dataset.addEventTag === normalizedTag ? "true" : "false",
+    );
+  });
+  syncAddEventLocationRequirement();
+}
+
 function syncAddEventLocationRequirement() {
   const tag = document.getElementById("eventTag")?.value || "events";
   const locationInput = document.getElementById("eventLocation");
@@ -24551,7 +24744,7 @@ function assignAllEventAssignees(context) {
 
 async function openAddEventModal() {
   addEventAssignedUsers = new Set();
-  syncAddEventLocationRequirement();
+  setAddEventTag(document.getElementById("eventTag")?.value || "events");
   openModal('addEventModal');
   renderEventAssigneePicker('add');
   try {
@@ -24614,7 +24807,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
         // Reset form
         document.getElementById("addEventForm").reset();
-        syncAddEventLocationRequirement();
+        setAddEventTag("events");
         resetAddEventAssignees();
       } catch (error) {
         showNotification("error", "Failed to add event");
@@ -24630,6 +24823,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const addAssetInputs = [
     'assetBrand',
     'assetModel',
+    'assetVersion',
     'assetDescription',
     'assetDateOfPurchase',
     'assetDepartment',
@@ -25048,6 +25242,13 @@ document.addEventListener("DOMContentLoaded", function () {
         return;
       }
 
+      const versionDecision = await confirmMaintenanceVersionFromDescription(
+        logType,
+        logEntry,
+        selectedMaintenanceAssets.size
+      );
+      if (!versionDecision.confirmed) return;
+
       const submitButton = document.getElementById("maintenanceSubmitButton");
       const cancelButton = document.getElementById("maintenanceCancelButton");
       const closeButton = document.getElementById("maintenanceCloseButton");
@@ -25093,6 +25294,7 @@ document.addEventListener("DOMContentLoaded", function () {
           maintenanceUser,
           newLocation: newLocation || null,
           newSerial: newSerial || null,
+          confirmVersionUpdate: Boolean(versionDecision.detectedVersion),
           cost: maintenanceCost || null,
           assetStatus: statusValue,
           markOOC: statusValue === "ooc",
@@ -25353,7 +25555,7 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   });
 
-function openMaintenanceModal() {
+function openMaintenanceModal(initialAssetIds = []) {
   // Check if elements exist before trying to use them
   const formEl = document.getElementById('maintenanceForm');
   const logEntryEl = document.getElementById('maintenanceLogEntry');
@@ -25380,9 +25582,9 @@ function openMaintenanceModal() {
   if (submitProgressEl) submitProgressEl.style.display = 'none';
   if (submitProgressBarEl) submitProgressBarEl.style.width = '8%';
   
-  // Clear previous selections
-  selectedMaintenanceAssets.clear();
-  updateSelectedAssetsDisplay();
+  // Reset and populate in one pass so callers cannot lose their preselection
+  // to a later modal initialisation step.
+  replaceMaintenanceAssetSelection(initialAssetIds);
   
   // Clear form
   logEntryEl.value = '';
@@ -25421,17 +25623,7 @@ function openMaintenanceModal() {
 }
 
 function openMaintenanceModalForAsset(assetId) {
-  // Ensure the modal is opened first
-  openMaintenanceModal();
-  
-  // Pre-select the asset after a short delay to ensure DOM is ready
-  setTimeout(() => {
-    if (assets && assets.length > 0) {
-      selectAssetForMaintenance(assetId);
-    } else {
-      console.warn('Assets not loaded yet, cannot pre-select asset');
-    }
-  }, 200);
+  openMaintenanceModal([assetId]);
 }
 function searchMaintenanceAssets() {
   const searchEl = document.getElementById('maintenanceAssetSearch');
@@ -25528,13 +25720,14 @@ function selectAssetForMaintenance(assetId) {
     return;
   }
 
-  selectedMaintenanceAssets.add(apiId);
-  updateSelectedAssetsDisplay();
+  const selectionResult = addAssetsToMaintenanceSelection([apiId]);
   
   // Remove from search results
   searchMaintenanceAssets();
   
-  showNotification('success', `Selected ${assetMaintenanceDisplayName(asset)} for maintenance`);
+  if (selectionResult.added) {
+    showNotification('success', `Selected ${assetMaintenanceDisplayName(asset)} for maintenance`);
+  }
 }
 
 function removeAssetFromMaintenance(assetId) {
@@ -25545,6 +25738,38 @@ function removeAssetFromMaintenance(assetId) {
   searchMaintenanceAssets();
   
   showNotification('info', `Removed ${assetId} from selection`);
+}
+
+function addAssetsToMaintenanceSelection(assetIds, { replace = false } = {}) {
+  if (replace) selectedMaintenanceAssets.clear();
+
+  const result = { added: 0, already: 0, skipped: 0 };
+  const identifiers = Array.isArray(assetIds) ? assetIds : [];
+  identifiers.forEach(identifier => {
+    const asset = getAssetByApiIdentifier(identifier)
+      || findAssetByIdentifier(String(identifier || ''), assets);
+    if (!asset || asset.isBulk) {
+      result.skipped += 1;
+      return;
+    }
+
+    const assetId = getAssetIdentifierForApi(asset);
+    if (!assetId) {
+      result.skipped += 1;
+    } else if (selectedMaintenanceAssets.has(assetId)) {
+      result.already += 1;
+    } else {
+      selectedMaintenanceAssets.add(assetId);
+      result.added += 1;
+    }
+  });
+
+  updateSelectedAssetsDisplay();
+  return result;
+}
+
+function replaceMaintenanceAssetSelection(assetIds = []) {
+  return addAssetsToMaintenanceSelection(assetIds, { replace: true });
 }
 
 function updateSelectedAssetsDisplay() {
@@ -26522,7 +26747,7 @@ function showMaintenanceLogModal(asset) {
         <div class="modal-header" style="flex:none;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid #dfe8e5">
           <div>
             <h3 class="modal-title" id="maintenanceLogTitle" style="margin:0">Asset past logs</h3>
-            <div style="margin-top:3px;color:#64748b;font-size:11px">${escapeHtml(asset.brand || 'Unbranded')} ${escapeHtml(asset.model || 'Unspecified model')} · ${escapeHtml(safeAssetId)}</div>
+            <div style="margin-top:3px;color:#64748b;font-size:11px">${escapeHtml(asset.brand || '-')} ${escapeHtml(asset.model || '-')} · ${escapeHtml(safeAssetId)}</div>
           </div>
           <button class="close-btn" onclick="closeMaintenanceLogModal()" aria-label="Close">&times;</button>
         </div>
@@ -26530,11 +26755,11 @@ function showMaintenanceLogModal(asset) {
           <aside class="maintenance-history-aside">
             <div class="maintenance-asset-heading">
               <strong>${escapeHtml(safeAssetId)}</strong>
-              <span>${escapeHtml(asset.description || 'No description')}</span>
+              <span>${escapeHtml(asset.description || '-')}</span>
               <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">${departmentBadgeHtml(asset.department)} ${statusBadgeHtml(condition, conditionLabel)}</div>
             </div>
             <dl style="display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px 12px;margin:13px 2px 17px;font-size:11px">
-              <dt style="color:#64748b">Serial</dt><dd style="margin:0;color:#263d36;font-weight:700;overflow-wrap:anywhere">${escapeHtml(asset.serial || 'Not recorded')}</dd>
+              <dt style="color:#64748b">Serial</dt><dd style="margin:0;color:#263d36;font-weight:700;overflow-wrap:anywhere">${escapeHtml(asset.serial || '-')}</dd>
               <dt style="color:#64748b">Location</dt><dd style="margin:0;color:#263d36;font-weight:700">${escapeHtml(asset.currentLocation || asset.location || 'Store')}</dd>
               <dt style="color:#64748b">Last maintenance</dt><dd style="margin:0;color:#263d36;font-weight:700">${escapeHtml(inventoryMaintenanceDateText(lastMaintenance))}</dd>
               <dt style="color:#64748b">Entries</dt><dd style="margin:0;color:#263d36;font-weight:700">${records.length}</dd>
@@ -27022,7 +27247,7 @@ if (typeof window !== 'undefined') {
 window.viewMaintenanceLog = viewMaintenanceLog;
 window.openMaintenanceModal = openMaintenanceModal;
 window.switchMaintenanceTab = switchMaintenanceTab;
-window.openMaintenanceModalForAsset = openMaintenanceModal;
+window.openMaintenanceModalForAsset = openMaintenanceModalForAsset;
 window.addNewLogEntryFromModal = addNewLogEntryFromModal;
 window.selectAssetForMaintenance = selectAssetForMaintenance;
 window.removeAssetFromMaintenance = removeAssetFromMaintenance;
@@ -27420,7 +27645,10 @@ function editMaintenanceLog(assetId, logIndex, logId) {
                 <strong>Location:</strong> <span style="font-weight: 500;">${escapeHtml(asset.location || 'Store')}</span>
               </div>
               <div>
-                <strong>Serial:</strong> <span style="font-weight: 500;">${escapeHtml(asset.serial || 'N/A')}</span>
+                <strong>Serial:</strong> <span style="font-weight: 500;">${escapeHtml(asset.serial || '-')}</span>
+              </div>
+              <div>
+                <strong>Version:</strong> <span style="font-weight: 500;">${escapeHtml(asset.version || '-')}</span>
               </div>
             </div>
             ${existingStatusChanges ? `<div style="margin-top: 10px;"><strong>Previous Changes:</strong> <span style="color: #666; font-style: italic;">${escapeHtml(existingStatusChanges)}</span></div>` : ''}
@@ -27496,6 +27724,7 @@ function editMaintenanceLog(assetId, logIndex, logId) {
                 required
                 placeholder="Describe maintenance work performed..."
               >${escapeHtml(currentDescription)}</textarea>
+              <small class="maintenance-event-reference-hint">Type &#96; to search for and link an event.</small>
             </div>
 
             <div class="form-group">
@@ -27543,6 +27772,7 @@ function editMaintenanceLog(assetId, logIndex, logId) {
                   value=""
                 />
               </div>
+
             </div>
 
             <!-- Form Buttons -->
@@ -27688,6 +27918,13 @@ async function saveEnhancedMaintenanceLog(assetId, logIndex, logId) {
       showNotification('warning', 'Date, user, and description are required');
       return;
     }
+
+    const versionDecision = await confirmMaintenanceVersionFromDescription(
+      logType,
+      description,
+      1
+    );
+    if (!versionDecision.confirmed) return;
     
     // Extract the original location from this specific log for comparison
     let originalLogLocation = null;
@@ -27729,6 +27966,7 @@ async function saveEnhancedMaintenanceLog(assetId, logIndex, logId) {
       logType: logType,
       newLocation: locationToUpdate,
       newSerial: serialToUpdate,
+      confirmVersionUpdate: Boolean(versionDecision.detectedVersion),
       cost: repairCost || null,
       assetStatus: statusValue,
       markOOC: statusValue === 'ooc',
@@ -31641,6 +31879,9 @@ async function refreshVisibleDataFromRealtime() {
       case "workforce":
         if (typeof loadWorkforcePage === "function") await loadWorkforcePage();
         break;
+      case "invoice-claims":
+        if (typeof loadWorkforceDocumentsPage === "function") await loadWorkforceDocumentsPage({ quiet: true });
+        break;
       case "freelancer-workspace":
         if (typeof loadFreelancerWorkspace === "function") await loadFreelancerWorkspace();
         break;
@@ -31759,6 +32000,20 @@ function connectRealtimeUpdates() {
       }
       const eventIds = eventIdsFromRealtimePayload(payload);
       const topics = realtimeTopicsFromPayload(payload);
+      if (
+        getActiveSectionId() === 'invoice-claims' &&
+        topics.includes('workforce')
+      ) {
+        if (
+          typeof workforceDocumentsRealtimeRelevant !== 'function' ||
+          workforceDocumentsRealtimeRelevant(payload)
+        ) {
+          if (typeof queueWorkforceDocumentsRealtimeRefresh === 'function') {
+            queueWorkforceDocumentsRealtimeRefresh();
+          }
+        }
+        return;
+      }
       if (getActiveSectionId() === 'inventory' && topics.includes('inventory-data')) {
         refreshInventoryAssetsInPlace(inventoryAssetIdsFromRealtimePayload(payload)).catch(error => {
           console.warn('Inventory live update failed:', error);
@@ -31884,7 +32139,7 @@ async function initializeApp() {
 
     if (startDateEl) startDateEl.value = today;
     if (endDateEl) endDateEl.value = today;
-    syncAddEventLocationRequirement();
+    setAddEventTag(document.getElementById("eventTag")?.value || "events");
 
     // Also set defaults for edit form if it exists
     const editStartDateEl = document.getElementById("editEventStartDate");
@@ -33880,14 +34135,27 @@ function getInventorySortValue(asset, sortBy) {
   return asset[sortBy] || '';
 }
 
+function inventorySearchTerms(searchTerm) {
+  return String(searchTerm || '')
+    .toLowerCase()
+    .split('+')
+    .map(term => term.trim())
+    .filter(Boolean);
+}
+
+function inventorySearchTextMatches(searchableText, searchTerms) {
+  return !searchTerms.length || searchTerms.some(term => searchableText.includes(term));
+}
+
 function getInventoryFilterState() {
-  const searchTerm = document.getElementById('asset-search')?.value.toLowerCase() || '';
+  const searchTerm = document.getElementById('asset-search')?.value || '';
   const departmentSelection = getInventoryCheckboxFilterValues('department-filter');
   const statusSelection = getInventoryCheckboxFilterValues('status-filter');
 
   return {
-    searchTerm,
-    searchLabel: document.getElementById('asset-search')?.value.trim() || '',
+    searchTerm: searchTerm.toLowerCase(),
+    searchTerms: inventorySearchTerms(searchTerm),
+    searchLabel: searchTerm.trim(),
     deptFilters: departmentSelection.values,
     departmentFilterTotal: departmentSelection.total,
     statusFilters: statusSelection.values,
@@ -33903,8 +34171,8 @@ function getFilteredInventoryData() {
 
   let filteredAssets = sourceAssets.filter((asset) => {
     const deptMeta = getDepartmentMeta(asset.department);
-    const searchableText = `${asset.id || ''} ${asset.internalId || ''} ${asset.bulkId || ''} ${asset.brand || ''} ${asset.model || ''} ${asset.serial || ''} ${asset.serial2 || ''} ${asset.description || ''} ${assetTagSearchText(asset)} ${asset.dateOfPurchase || asset.purchaseDate || ''} ${asset.dateAdded || ''} ${asset.dateModified || ''} ${asset.department || ''} ${deptMeta.name || ''}`.toLowerCase();
-    const matchesSearch = !filters.searchTerm || searchableText.includes(filters.searchTerm);
+    const searchableText = `${asset.id || ''} ${asset.internalId || ''} ${asset.bulkId || ''} ${asset.brand || ''} ${asset.model || ''} ${asset.version || ''} ${asset.serial || ''} ${asset.serial2 || ''} ${asset.description || ''} ${assetTagSearchText(asset)} ${asset.dateOfPurchase || asset.purchaseDate || ''} ${asset.dateAdded || ''} ${asset.dateModified || ''} ${asset.department || ''} ${deptMeta.name || ''}`.toLowerCase();
+    const matchesSearch = inventorySearchTextMatches(searchableText, filters.searchTerms);
     const matchesDept = filters.departmentFilterTotal === 0 || filters.deptFilters.includes(asset.department);
     const condition = getAssetConditionStatus(asset);
     const matchesStatus = filters.statusFilterTotal === 0 || filters.statusFilters.some(status => {
@@ -34078,8 +34346,8 @@ function groupInventoryAssetsForExport(filteredAssets, filters) {
 
   filteredAssets.forEach(asset => {
     const department = normalizeDepartmentCode(asset.department || 'UN');
-    const brand = inventoryPlainText(asset.brand, 'Unbranded');
-    const model = inventoryPlainText(asset.model, 'Unspecified model');
+    const brand = inventoryPlainText(asset.brand);
+    const model = inventoryPlainText(asset.model);
     const key = JSON.stringify([department, brand, model]);
     const statusFilter = filters.statusFilters.length === 1 ? filters.statusFilters[0] : '';
     const quantity = inventoryExportQuantity(asset, statusFilter);
@@ -34172,7 +34440,7 @@ function inventoryIndividualRowRecords(filteredAssets) {
         <td>${escapeHtml(inventoryPlainText(asset.brand))}</td>
         <td>${escapeHtml(inventoryPlainText(asset.model))}</td>
         <td>${escapeHtml(inventoryPlainText(asset.description))}</td>
-        <td>${escapeHtml(asset.isBulk ? '-' : inventoryPlainText(asset.serial, 'N/A'))}</td>
+        <td>${escapeHtml(asset.isBulk ? '-' : inventoryPlainText(asset.serial))}</td>
         <td class="number-cell">${escapeHtml(inventoryAssetQuantityText(asset))}</td>
         <td>${inventoryDepartmentPdfBadgeHtml(asset.department)}</td>
         <td>${inventoryStatusPdfBadgeHtml(asset.status || 'available')}</td>

@@ -112,6 +112,27 @@ def test_maintenance_log_controls_use_custom_coloured_selectors_and_drop_upload(
     assert "input.files = transfer.files" in script
 
 
+def test_update_maintenance_versions_are_detected_from_the_description():
+    template = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
+    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+
+    assert 'id="maintenanceNewVersion"' not in template
+    assert 'id="editMaintenanceNewVersion"' not in script
+    assert "function detectMaintenanceVersionFromDescription(description)" in script
+    assert "async function confirmMaintenanceVersionFromDescription" in script
+    assert "confirmVersionUpdate: Boolean(versionDecision.detectedVersion)" in script
+
+
+def test_detected_version_prompt_can_log_without_updating_asset_version():
+    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+
+    assert "data-dialog-alternate" in script
+    assert "alternateText: 'Log Without Updating Version'" in script
+    assert "alternateValue: 'log-only'" in script
+    assert "decision === 'update-version' || decision === 'log-only'" in script
+    assert "decision === 'update-version' ? targetVersion : ''" in script
+
+
 def test_maintenance_status_changes_update_inventory_in_place():
     script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
 
@@ -240,8 +261,10 @@ def test_inventory_asset_details_include_audit_data_and_bulk_only_quantity():
     assert 'id="addEventModal" class="modal">\n      <div class="modal-content asset-details-shell">' not in template
     assert "<span>Date added</span>" in script
     assert "<span>Last modified</span>" in script
-    assert "asset.serial || 'NIL'" in script
-    assert "asset.serial2 || 'NIL'" in script
+    assert "asset.serial || '-'" in script
+    assert "asset.serial2 || '-'" in script
+    assert '<span>Version</span>' in script
+    assert "asset.version || '-'" in script
     assert "assetChangeHistoryHtml(asset)" in script
     assert 'class="asset-details-section asset-details-history"' in script
     details_source = script[
@@ -418,7 +441,7 @@ def test_inventory_shift_click_selects_the_visible_asset_range():
     assert 'onclick="toggleInventoryAssetSelection(this.dataset.assetId,this.checked,event)"' in script
 
 
-def test_asset_tags_use_removable_inventory_chips_and_hidden_search_metadata():
+def test_asset_tags_use_removable_chips_and_stay_out_of_inventory_rows():
     template = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
     script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
 
@@ -427,8 +450,13 @@ def test_asset_tags_use_removable_inventory_chips_and_hidden_search_metadata():
     assert '.inventory-tag-remove' in template
     assert 'background: #fff3df' in template
     assert 'color: #9a4d08 !important' in template
-    assert '<span>Tags</span><span>Availability</span>' in script
-    assert 'class="inventory-individual-tags"' in script
+    individual_row_source = script[
+        script.index("function inventoryIndividualRowHtml"):
+        script.index("function toggleInventoryModelGroup")
+    ]
+    assert "inventoryAssetTagsHtml" not in individual_row_source
+    assert '<span>Tags</span><span>Availability</span>' not in script
+    assert 'class="inventory-individual-tags"' not in script
     assert "function normalizeAssetTags(value)" in script
     assert "function assetTagEditorKeydown(event, editorId)" in script
     assert "function removeInventoryAssetTag(" in script
@@ -437,8 +465,23 @@ def test_asset_tags_use_removable_inventory_chips_and_hidden_search_metadata():
     assert "title: 'Apply tags to matching assets?'" in script
     assert 'payload.tagsToApplyToSimilar = addedTags' in script
     assert 'assetData.tagsToApplyToSimilar = assetData.tags' in script
-    assert script.count("inventoryAssetTagsHtml(") == 3
+    assert script.count("inventoryAssetTagsHtml(") == 2
     assert "assetTagSearchText(asset)" in script
+
+
+def test_expanded_inventory_rows_show_an_aligned_version_column():
+    template = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
+    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+
+    assert ".inventory-individual-head,.inventory-individual-row { display:grid;grid-template-columns:" in template
+    assert "minmax(100px,.7fr) 90px" in template
+    assert '<span>Asset ID</span><span>Version</span><span>Availability</span>' in script
+    row_source = script[
+        script.index("function inventoryIndividualRowHtml"):
+        script.index("function toggleInventoryModelGroup")
+    ]
+    assert "inventory-individual-version" in row_source
+    assert "asset.version || '-'" in row_source
     assert "const assetTags = (group?.assets || []).map(assetTagSearchText);" in script
     assert "...(item.tags || [])" in script
 
@@ -488,6 +531,19 @@ def test_maintenance_entries_support_inline_event_references():
     assert '.maintenance-event-suggestions {' in template
     assert '.maintenance-event-reference {' in template
     assert '#eventDetailsModal.maintenance-reference-overlay {' in template
+    assert 'Type ` to search for and link an event.' in template
+    assert 'Type &#96; to search for and link an event.' in script
+
+
+def test_inventory_bulk_maintenance_button_has_no_decorative_icon():
+    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    button = script.split('id="inventory-bulk-maintenance-button"', 1)[1].split(
+        '</button>', 1
+    )[0]
+
+    assert 'Log Maintenance' in button
+    assert 'inventoryIcon' not in button
+    assert '<svg' not in button
 
 
 def test_inventory_bulk_edit_supports_notes():
@@ -498,3 +554,42 @@ def test_inventory_bulk_edit_supports_notes():
     assert "['bulkEditUseNotes', 'bulkEditNotes']" in script
     assert "asset => asset.notes || ''" in script
     assert "payload.notes = readValue('bulkEditNotes')" in script
+
+
+def test_inventory_selection_can_open_bulk_maintenance_workflow():
+    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+
+    assert 'id="inventory-bulk-maintenance-button"' in script
+    assert "function openMaintenanceForSelectedInventoryAssets()" in script
+    assert "const selectedAssets = getSelectedInventoryAssets();" in script
+    assert "openBulkMaintenanceFaultModal(inventoryAssetIdentifier(bulkAssets[0]))" in script
+    assert "openMaintenanceModal(selectedAssets.map(inventoryAssetIdentifier))" in script
+    assert "function addAssetsToMaintenanceSelection(assetIds, { replace = false } = {})" in script
+    assert "function replaceMaintenanceAssetSelection(assetIds = [])" in script
+
+
+def test_maintenance_preselection_is_part_of_modal_initialisation():
+    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+
+    assert "function openMaintenanceModal(initialAssetIds = [])" in script
+    assert "replaceMaintenanceAssetSelection(initialAssetIds);" in script
+    assert "function openMaintenanceModalForAsset(assetId)" in script
+    assert "openMaintenanceModal([assetId]);" in script
+    assert "window.openMaintenanceModalForAsset = openMaintenanceModalForAsset;" in script
+    assert "const selectionResult = addAssetsToMaintenanceSelection(container.assetIds || []);" in script
+    assert "setTimeout(() => {\n    if (assets && assets.length > 0)" not in script
+
+
+def test_inventory_search_supports_plus_separated_or_terms():
+    template = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
+    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    search_parser = script.split("function inventorySearchTerms", 1)[1].split(
+        "function inventorySearchTextMatches", 1
+    )[0]
+
+    assert "Use + to search multiple items" in template
+    assert "function inventorySearchTerms(searchTerm)" in script
+    assert ".split('+')" in search_parser
+    assert ".split(',')" not in search_parser
+    assert "searchTerms.some(term => searchableText.includes(term))" in script
+    assert "inventorySearchTextMatches(searchableText, filters.searchTerms)" in script

@@ -51,6 +51,7 @@ from maintenance_logs import (
     DEFAULT_MAINTENANCE_LOG_TYPE,
     USER_MAINTENANCE_LOG_TYPES,
     apply_maintenance_log_changes,
+    detect_maintenance_version,
     make_change,
     make_maintenance_log,
     make_maintenance_log_id,
@@ -2783,6 +2784,7 @@ ASSET_AUDIT_FIELD_LABELS = {
     'department': 'Department',
     'brand': 'Brand',
     'model': 'Model',
+    'version': 'Version',
     'description': 'Description',
     'serial': 'Serial Number',
     'secondary_serial': 'Second Serial Number',
@@ -2810,6 +2812,7 @@ def _asset_audit_snapshot(asset):
         'department': getattr(asset, 'department_code', ''),
         'brand': getattr(asset, 'brand', ''),
         'model': getattr(asset, 'model_number', ''),
+        'version': getattr(asset, 'version', ''),
         'description': getattr(asset, 'description', ''),
         'serial': getattr(asset, 'serial_number', ''),
         'secondary_serial': getattr(asset, 'secondary_serial_number', ''),
@@ -5046,6 +5049,7 @@ def _bulk_asset_to_available_dict(asset, target_event=None):
         'displayId': '',
         'brand': asset.brand,
         'model': asset.model_number,
+        'version': getattr(asset, 'version', ''),
         'description': asset.description or '',
         'tags': normalize_asset_tags(getattr(asset, 'tags', [])),
         'serial': '',
@@ -5116,6 +5120,7 @@ def _asset_to_available_dict(asset):
         'id': asset.asset_id,
         'brand': asset.brand,
         'model': asset.model_number,
+        'version': getattr(asset, 'version', ''),
         'description': asset.description or '',
         'tags': normalize_asset_tags(getattr(asset, 'tags', [])),
         'serial': asset.serial_number,
@@ -6024,7 +6029,74 @@ def _event_workforce_departments(event_id, event, manager, workforce):
     return active_rows, configured_rows
 
 
-def _admin_file_payload(record, event_id, freelancer_id, kind):
+def _workforce_submission_expectation(workforce, event_id, subject_id):
+    breakdown = []
+    for assignment in event_assignments(workforce, event_id):
+        if not isinstance(assignment, dict):
+            continue
+        assigned_subject_id = str(
+            assignment.get('freelancerId')
+            or assignment.get('vendorId')
+            or ''
+        )
+        if assigned_subject_id != str(subject_id):
+            continue
+        try:
+            days = max(1, int(assignment.get('days') or 1))
+        except (TypeError, ValueError):
+            days = 1
+        provider_type = str(
+            assignment.get('providerType') or ''
+        ).strip().lower()
+        role_name = str(
+            assignment.get('serviceName')
+            or assignment.get('roleName')
+            or 'Assigned role'
+        ).strip()
+        if provider_type == 'service':
+            rate = money(assignment.get('serviceCost'), 0.0) or 0.0
+            pax = None
+            amount = round(rate, 2)
+            calculation = f'${rate:,.2f} service total'
+        elif provider_type == 'manpower':
+            try:
+                pax = max(1, int(assignment.get('pax') or 1))
+            except (TypeError, ValueError):
+                pax = 1
+            rate = money(
+                assignment.get('ratePerPax'),
+                money(assignment.get('dailyRate'), 0.0),
+            ) or 0.0
+            amount = round(pax * rate * days, 2)
+            calculation = f'{pax} pax x {days} day(s) x ${rate:,.2f}'
+        else:
+            pax = None
+            rate = money(assignment.get('dailyRate'), 0.0) or 0.0
+            amount = round(rate * days, 2)
+            calculation = f'{days} day(s) x ${rate:,.2f}'
+        breakdown.append({
+            'assignmentId': str(assignment.get('id') or ''),
+            'role': role_name,
+            'department': str(assignment.get('department') or ''),
+            'providerType': provider_type or 'worker',
+            'days': days,
+            'pax': pax,
+            'rate': round(rate, 2),
+            'amount': amount,
+            'calculation': calculation,
+        })
+    return {
+        'expectedAmount': (
+            round(sum(row['amount'] for row in breakdown), 2)
+            if breakdown else None
+        ),
+        'expectedAmountBreakdown': breakdown,
+    }
+
+
+def _admin_file_payload(
+    record, event_id, freelancer_id, kind, expectation=None
+):
     payload = dict(record)
     submission_id = quote(str(record.get('id') or ''))
     payload['previewUrl'] = f'/api/workforce/submissions/{submission_id}/file'
@@ -6032,7 +6104,225 @@ def _admin_file_payload(record, event_id, freelancer_id, kind):
     payload['kind'] = kind
     payload['eventId'] = int(event_id)
     payload['freelancerId'] = str(freelancer_id)
+    if isinstance(expectation, dict):
+        payload.update(expectation)
     return payload
+
+
+def _admin_submission_display_status(record):
+    """Return the operational status shown in admin submission queues."""
+    processing_state = str(record.get('processingState') or '').strip()
+    submission_stage = str(record.get('submissionStage') or '').strip()
+    if processing_state == 'Queued' or submission_stage == 'Queued':
+        return 'queued', 'Queued'
+    if processing_state == 'Processing' or submission_stage == 'Processing':
+        return 'processing', 'Processing'
+    if submission_stage == 'Details Required':
+        return 'details-required', 'Details required'
+    if record.get('paymentConfirmedAt'):
+        return 'payment-confirmed', 'Payment Confirmed'
+
+    status = str(record.get('status') or 'Pending Review')
+    return {
+        'Pending Review': ('to-review', 'Pending Review'),
+        'Approved': ('to-pay', 'Approved'),
+        'Paid': ('awaiting-confirmation', 'Paid'),
+        'Denied': ('denied', 'Denied'),
+    }.get(status, ('to-review', 'Pending Review'))
+
+
+def _query_values(name):
+    values = []
+    for raw_value in request.args.getlist(name):
+        values.extend(str(raw_value or '').split(','))
+    return {
+        value.strip().lower()
+        for value in values
+        if value.strip()
+    }
+
+
+def _admin_submission_rows(manager=None, workforce=None):
+    manager = manager or _current_data_manager_object()
+    workforce = workforce or load_workforce(_workforce_folder(manager))
+    department_by_code = {
+        str(row.get('code') or '').upper(): row
+        for row in _department_codes_for_manager(manager)
+        if isinstance(row, dict) and row.get('code')
+    }
+    subjects = {}
+    for subject_type, collection in (
+        ('worker', workforce.get('freelancers', [])),
+        ('vendor', workforce.get('vendors', [])),
+    ):
+        for subject in collection:
+            if not isinstance(subject, dict) or not subject.get('id'):
+                continue
+            subjects[str(subject['id'])] = (subject, subject_type)
+
+    context_cache = {}
+
+    def submission_context(event_id, event, subject_id):
+        cache_key = (int(event_id), str(subject_id))
+        if cache_key in context_cache:
+            return context_cache[cache_key]
+        subject, subject_type = subjects.get(
+            str(subject_id),
+            ({'name': 'Former worker or vendor'}, 'unknown'),
+        )
+        assignment_departments = sorted({
+            str(assignment.get('department') or '').strip()
+            for assignment in event_assignments(workforce, event_id)
+            if (
+                isinstance(assignment, dict)
+                and str(
+                    assignment.get('freelancerId')
+                    or assignment.get('vendorId')
+                    or ''
+                ) == str(subject_id)
+                and str(assignment.get('department') or '').strip()
+            )
+        })
+        department_details = [
+            {
+                'code': code,
+                'name': str(
+                    (department_by_code.get(code.upper()) or {}).get('name')
+                    or code
+                ),
+                'color': _normalise_hex_colour(
+                    (department_by_code.get(code.upper()) or {}).get('color')
+                ),
+                'textColor': _normalise_hex_colour(
+                    (department_by_code.get(code.upper()) or {}).get('textColor')
+                    or _best_text_colour(
+                        (department_by_code.get(code.upper()) or {}).get('color')
+                    ),
+                    _best_text_colour(
+                        (department_by_code.get(code.upper()) or {}).get('color')
+                    ),
+                ),
+            }
+            for code in assignment_departments
+        ]
+        context = {
+            'subject': {
+                'id': str(subject_id),
+                'name': str(subject.get('name') or 'Unknown'),
+                'type': subject_type,
+                'company': str(subject.get('company') or ''),
+            },
+            'departments': assignment_departments,
+            'departmentDetails': department_details,
+            'event': {
+                'id': event_id,
+                'name': str(event.name or f'Event {event_id}'),
+                'location': str(getattr(event, 'location', '') or ''),
+                'startDate': _event_date_for_worker(event.start_date),
+                'endDate': _event_date_for_worker(event.end_date),
+                'startDateValue': _event_date_for_input(event.start_date),
+                'endDateValue': _event_date_for_input(event.end_date),
+                'state': str(event.state or 'New'),
+                'tag': str(getattr(event, 'tag', 'events') or 'events'),
+            },
+            **_workforce_submission_expectation(
+                workforce, event_id, subject_id
+            ),
+        }
+        context_cache[cache_key] = context
+        return context
+
+    rows = []
+    for raw_event_id, event_subjects in (workforce.get('submissions') or {}).items():
+        try:
+            event_id = int(raw_event_id)
+        except (TypeError, ValueError):
+            continue
+        event = manager.events.get(event_id)
+        if not event or not isinstance(event_subjects, dict):
+            continue
+        for subject_id, submissions in event_subjects.items():
+            if not isinstance(submissions, dict):
+                continue
+            context = submission_context(event_id, event, subject_id)
+            for collection_name, kind in (
+                ('invoices', 'invoice'),
+                ('claims', 'claim'),
+            ):
+                for record in submissions.get(collection_name, []):
+                    if not isinstance(record, dict) or not record.get('id'):
+                        continue
+                    status_key, status_label = _admin_submission_display_status(record)
+                    payload = _admin_file_payload(
+                        record, event_id, subject_id, kind
+                    )
+                    payload.update({
+                        'statusKey': status_key,
+                        'statusLabel': status_label,
+                        **context,
+                    })
+                    rows.append(payload)
+
+    for raw_event_id, assignments in (workforce.get('assignments') or {}).items():
+        try:
+            event_id = int(raw_event_id)
+        except (TypeError, ValueError):
+            continue
+        event = manager.events.get(event_id)
+        if not event or not isinstance(assignments, list):
+            continue
+        assigned_subject_ids = {
+            str(
+                assignment.get('freelancerId')
+                or assignment.get('vendorId')
+                or ''
+            )
+            for assignment in assignments
+            if isinstance(assignment, dict)
+        }
+        for subject_id in sorted(assigned_subject_ids):
+            if not subject_id or subject_id not in subjects:
+                continue
+            submissions = worker_submissions(workforce, event_id, subject_id)
+            active_invoices = [
+                record
+                for record in submissions.get('invoices', [])
+                if (
+                    isinstance(record, dict)
+                    and str(record.get('status') or '') != 'Denied'
+                )
+            ]
+            if active_invoices:
+                continue
+            rows.append({
+                'id': f'awaiting-upload:{event_id}:{subject_id}',
+                'kind': 'invoice',
+                'eventId': event_id,
+                'freelancerId': subject_id,
+                'status': 'Awaiting Upload',
+                'statusKey': 'awaiting-upload',
+                'statusLabel': 'Awaiting upload',
+                'isAwaitingUpload': True,
+                'originalName': '',
+                'submittedAt': '',
+                'amount': None,
+                **submission_context(event_id, event, subject_id),
+            })
+
+    def sort_key(row):
+        date_digits = re.sub(
+            r'\D', '', str(row['event'].get('startDateValue') or '')
+        )
+        date_value = int(date_digits or 0)
+        return (
+            -date_value,
+            str(row['subject'].get('name') or '').casefold(),
+            str(row['event'].get('name') or '').casefold(),
+            str(row.get('originalName') or '').casefold(),
+        )
+
+    rows.sort(key=sort_key)
+    return rows
 
 
 def _admin_freelancer_payload(freelancer):
@@ -6167,14 +6457,21 @@ def _admin_workforce_payload(event_id, manager=None):
     )
     for freelancer_id, rows in event_submission_rows.items():
         rows = rows if isinstance(rows, dict) else {}
+        expectation = _workforce_submission_expectation(
+            workforce, event_id, freelancer_id
+        )
         submissions[str(freelancer_id)] = {
             'invoices': [
-                _admin_file_payload(row, event_id, freelancer_id, 'invoice')
+                _admin_file_payload(
+                    row, event_id, freelancer_id, 'invoice', expectation
+                )
                 for row in rows.get('invoices', [])
                 if isinstance(row, dict)
             ],
             'claims': [
-                _admin_file_payload(row, event_id, freelancer_id, 'claim')
+                _admin_file_payload(
+                    row, event_id, freelancer_id, 'claim', expectation
+                )
                 for row in rows.get('claims', [])
                 if isinstance(row, dict)
             ],
@@ -7602,13 +7899,20 @@ def workforce_freelancer_history(freelancer_id):
         if not event:
             continue
         rows = worker_submissions(workforce, event_id, freelancer_id)
+        expectation = _workforce_submission_expectation(
+            workforce, event_id, freelancer_id
+        )
         invoices = [
-            _admin_file_payload(row, event_id, freelancer_id, 'invoice')
+            _admin_file_payload(
+                row, event_id, freelancer_id, 'invoice', expectation
+            )
             for row in rows.get('invoices', [])
             if isinstance(row, dict)
         ]
         claims = [
-            _admin_file_payload(row, event_id, freelancer_id, 'claim')
+            _admin_file_payload(
+                row, event_id, freelancer_id, 'claim', expectation
+            )
             for row in rows.get('claims', [])
             if isinstance(row, dict)
         ]
@@ -8855,6 +9159,94 @@ def _find_submission_record(workforce, submission_id):
     return None
 
 
+@app.route('/api/workforce/submissions', methods=['GET'])
+@require_admin
+def list_workforce_submissions():
+    """List this company's worker and vendor invoices and claims."""
+    rows = _admin_submission_rows()
+    status_counts = {
+        key: 0 for key in (
+            'awaiting-upload', 'to-review', 'to-pay', 'awaiting-confirmation',
+            'payment-confirmed', 'denied', 'queued', 'processing',
+            'details-required',
+        )
+    }
+    kind_counts = {'invoice': 0, 'claim': 0}
+    for row in rows:
+        status_key = row.get('statusKey')
+        if status_key:
+            status_counts[status_key] = status_counts.get(status_key, 0) + 1
+        kind = row.get('kind')
+        if kind in kind_counts and not row.get('isAwaitingUpload'):
+            kind_counts[kind] += 1
+
+    total_uploads = sum(
+        1 for row in rows if not row.get('isAwaitingUpload')
+    )
+
+    requested_statuses = _query_values('status')
+    if not requested_statuses:
+        requested_statuses = {'to-review', 'to-pay'}
+    show_all_statuses = 'all' in requested_statuses
+    requested_kinds = _query_values('kind')
+    if not requested_kinds or 'all' in requested_kinds:
+        requested_kinds = {'invoice', 'claim'}
+    search = str(request.args.get('search') or '').strip().casefold()
+    event_id = request.args.get('eventId', type=int)
+
+    filtered = []
+    for row in rows:
+        if event_id and int(row['event']['id']) != event_id:
+            continue
+        if not show_all_statuses and row.get('statusKey') not in requested_statuses:
+            continue
+        if row.get('kind') not in requested_kinds:
+            continue
+        if search:
+            search_text = ' '.join((
+                str(row.get('originalName') or ''),
+                str(row.get('category') or ''),
+                str(row.get('description') or row.get('notes') or ''),
+                str(row['subject'].get('name') or ''),
+                str(row['subject'].get('company') or ''),
+                str(row['event'].get('id') or ''),
+                str(row['event'].get('name') or ''),
+                str(row['event'].get('location') or ''),
+                ' '.join(row.get('departments') or []),
+            )).casefold()
+            if search not in search_text:
+                continue
+        filtered.append(row)
+
+    page = max(1, request.args.get('page', default=1, type=int) or 1)
+    page_size = min(
+        100,
+        max(10, request.args.get('pageSize', default=50, type=int) or 50),
+    )
+    total = len(filtered)
+    page_count = max(1, (total + page_size - 1) // page_size)
+    page = min(page, page_count)
+    start = (page - 1) * page_size
+    return jsonify({
+        'success': True,
+        'data': {
+            'rows': filtered[start:start + page_size],
+            'total': total,
+            'page': page,
+            'pageSize': page_size,
+            'pageCount': page_count,
+            'statusCounts': status_counts,
+            'kindCounts': kind_counts,
+            'totalItems': len(rows),
+            'totalUploads': total_uploads,
+            'attentionTotal': (
+                status_counts.get('to-review', 0)
+                + status_counts.get('to-pay', 0)
+            ),
+        },
+    })
+
+
 @app.route(
     '/api/workforce/submissions/<submission_id>/extract',
     methods=['POST'],
@@ -8918,19 +9310,20 @@ def review_workforce_submission(submission_id):
             return jsonify({
                 'error': 'Review and confirm the submission amount first'
             }), 409
+        can_edit_details = confirming_review or not already_verified
         amount = (
-            money(record.get('amount'))
-            if already_verified
-            else money(payload.get('amount', record.get('amount')))
+            money(payload.get('amount', record.get('amount')))
+            if can_edit_details
+            else money(record.get('amount'))
         )
         if amount is None and status != 'Denied':
             return jsonify({'error': 'Enter a valid amount'}), 400
         if amount is None:
             amount = record.get('amount')
         allocations = (
-            record.get('allocations', [])
-            if already_verified
-            else payload.get('allocations', record.get('allocations', []))
+            payload.get('allocations', record.get('allocations', []))
+            if can_edit_details
+            else record.get('allocations', [])
         )
         if found['kind'] == 'invoice':
             if not isinstance(allocations, list):
@@ -8988,11 +9381,11 @@ def review_workforce_submission(submission_id):
             record['allocations'] = clean_allocations
         if (
             found['kind'] == 'claim'
-            and not already_verified
+            and can_edit_details
             and payload.get('department') is not None
         ):
             record['department'] = str(payload.get('department') or '').strip()
-        if found['kind'] == 'claim' and not already_verified:
+        if found['kind'] == 'claim' and can_edit_details:
             claim_date = str(
                 payload.get('claimDate', record.get('claimDate') or '')
                 or ''
@@ -9022,7 +9415,7 @@ def review_workforce_submission(submission_id):
             'reviewedAt': now_iso(),
             'reviewedBy': session.get('user', ''),
         })
-        if confirming_review and not record.get('verifiedAt'):
+        if confirming_review:
             record['verifiedAt'] = now_iso()
             record['verifiedBy'] = session.get('user', '')
         if admin_confirming_payment:
@@ -10480,6 +10873,7 @@ APP_PAGE_SECTIONS = {
     '/events': 'events',
     '/plan': 'plan',
     '/manpower': 'workforce',
+    '/invoice-claims': 'invoice-claims',
     '/prepare': 'prepare-new',
     '/return': 'return',
     '/transfer': 'transfer',
@@ -10499,7 +10893,7 @@ APP_PAGE_SECTIONS = {
     '/delivery-order': 'delivery-order',
 }
 APP_ADMIN_PAGE_SECTIONS = {
-    'plan', 'compare', 'workforce', 'logs', 'maintenance-report',
+    'plan', 'compare', 'workforce', 'invoice-claims', 'logs', 'maintenance-report',
     'users', 'pdf-settings',
 }
 APP_OWNER_PAGE_SECTIONS = {'companies'}
@@ -10528,6 +10922,7 @@ def index():
 @app.route('/events')
 @app.route('/plan')
 @app.route('/manpower')
+@app.route('/invoice-claims')
 @app.route('/prepare')
 @app.route('/return')
 @app.route('/transfer')
@@ -13382,6 +13777,7 @@ def get_event_model_availability(event_id):
         physical_by_key = defaultdict(int)
         asset_ooc_by_key = defaultdict(int)
         asset_missing_by_key = defaultdict(int)
+        asset_degraded_by_key = defaultdict(int)
         maintenance_ooc_by_key = defaultdict(int)
         maintenance_missing_by_key = defaultdict(int)
         maintenance_degraded_by_key = defaultdict(int)
@@ -13423,6 +13819,8 @@ def get_event_model_availability(event_id):
                         max(_asset_inventory_quantity(asset) - counts['ooc'] - counts['missing'], 0)
                     )
                 maintenance_degraded_by_key[key] += degraded_quantity
+            elif _is_degraded(asset):
+                asset_degraded_by_key[key] += inventory_quantity
 
         # Quantity already reserved/requested in this same event.  This includes
         # normal model rows plus any specific prepared bulk/individual assets.
@@ -13469,6 +13867,7 @@ def get_event_model_availability(event_id):
             overlap = overlap_by_key.get(key, 0)
             asset_ooc = asset_ooc_by_key.get(key, 0)
             asset_missing = asset_missing_by_key.get(key, 0)
+            asset_degraded = asset_degraded_by_key.get(key, 0)
             maintenance_ooc = maintenance_ooc_by_key.get(key, 0)
             maintenance_missing = maintenance_missing_by_key.get(key, 0)
             maintenance_degraded = maintenance_degraded_by_key.get(key, 0)
@@ -13477,8 +13876,16 @@ def get_event_model_availability(event_id):
                 maintenance_ooc - maintenance_missing,
                 0
             )
+            degraded_capacity = min(
+                asset_degraded + maintenance_degraded,
+                capacity_for_this_event
+            )
+            healthy_capacity_for_this_event = max(
+                capacity_for_this_event - degraded_capacity,
+                0
+            )
             available = max(capacity_for_this_event - used_here, 0)
-            healthy = max(available - maintenance_degraded, 0)
+            healthy = max(healthy_capacity_for_this_event - used_here, 0)
             preparable = available
 
             result.append({
@@ -13490,6 +13897,7 @@ def get_event_model_availability(event_id):
                 'physicalGlobal': physical,
                 'usedInThisEvent': used_here,
                 'capacityForThisEvent': capacity_for_this_event,
+                'healthyCapacityForThisEvent': healthy_capacity_for_this_event,
                 'overlappingDemand': overlap,
                 'overlappingEvents': overlap_events_by_key.get(key, []),
                 'unavailable': (
@@ -13501,9 +13909,11 @@ def get_event_model_availability(event_id):
                 'preparable': preparable,
                 'assetOOC': asset_ooc,
                 'assetMissing': asset_missing,
+                'assetDegraded': asset_degraded,
                 'bulkMaintenanceOOC': maintenance_ooc,
                 'bulkMaintenanceMissing': maintenance_missing,
                 'bulkMaintenanceDegraded': maintenance_degraded,
+                'degraded': degraded_capacity,
                 'adjustedGlobal': available
             })
 
@@ -16223,6 +16633,7 @@ def _transfer_office_candidate_payload(asset):
         'department': asset.department_code,
         'brand': asset.brand,
         'model': asset.model_number,
+        'version': getattr(asset, 'version', ''),
         'description': asset.description or '',
         'tags': normalize_asset_tags(getattr(asset, 'tags', [])),
         'serial': asset.serial_number,
@@ -17171,6 +17582,7 @@ def get_assets():
                 'displayId': '' if is_bulk else asset.asset_id,
                 'brand': asset.brand,
                 'model': asset.model_number,
+                'version': getattr(asset, 'version', ''),
                 'serial': asset.serial_number,
                 'serial2': getattr(asset, 'secondary_serial_number', ''),
                 'description': asset.description,
@@ -17230,7 +17642,7 @@ def get_assets():
                 asset for asset in assets_data
                 if any(
                     query in str(asset.get(field) or '').lower()
-                    for field in ('id', 'internalId', 'brand', 'model', 'serial', 'serial2', 'description', 'tags')
+                    for field in ('id', 'internalId', 'brand', 'model', 'version', 'serial', 'serial2', 'description', 'tags')
                 )
             ]
         if department_filter:
@@ -17885,6 +18297,7 @@ def create_asset():
         purchase_date = _normalise_asset_purchase_date(
             data.get('dateOfPurchase', data.get('purchaseDate', ''))
         )
+        version = str(data.get('version') or '').strip()
         notes = str(data.get('notes', '') or '').strip()
         tags = normalize_asset_tags(data.get('tags', []))
         tags_to_apply_to_similar = normalize_asset_tags(data.get('tagsToApplyToSimilar', []))
@@ -17938,6 +18351,7 @@ def create_asset():
                     asset_id=created_asset_ids[0],
                     brand=plan['brand'],
                     model_number=plan['model'],
+                    version=version,
                     serial_number='',
                     secondary_serial_number='',
                     description=plan['description'],
@@ -17965,6 +18379,7 @@ def create_asset():
                         asset_id=asset_id,
                         brand=plan['brand'],
                         model_number=plan['model'],
+                        version=version,
                         serial_number=plan['serials'][index],
                         secondary_serial_number=plan['secondarySerials'][index],
                         description=plan['description'],
@@ -18606,6 +19021,9 @@ def update_asset(asset_id):
                 data.get('dateOfPurchase', data.get('purchaseDate', ''))
             )
 
+        if 'version' in data:
+            asset.version = str(data.get('version') or '').strip()
+
         if 'notes' in data:
             asset.notes = str(data.get('notes', '') or '').strip()
 
@@ -18830,6 +19248,14 @@ def _maintenance_date_from_request(data, *keys):
     return datetime.now().strftime("%Y/%m/%d")
 
 
+def _maintenance_version_from_request(data, log_type, description):
+    if log_type != 'Update' or not _request_bool(
+        (data or {}).get('confirmVersionUpdate')
+    ):
+        return ''
+    return detect_maintenance_version(description)
+
+
 def _maintenance_log_user_from_request(data):
     """Return the validated company user to whom a new log is attributed."""
     current_username = str(session.get('user') or '').strip()
@@ -18930,6 +19356,19 @@ def _maintain_bulk_asset(asset_id, asset, data):
     if status_error:
         return jsonify({'error': status_error}), 400
 
+    default_log_type = (
+        'Fault' if target_status in BULK_MAINTENANCE_STATUSES
+        else DEFAULT_MAINTENANCE_LOG_TYPE
+    )
+    log_type, log_type_error = _maintenance_log_type_for_request(
+        data, default_type=default_log_type
+    )
+    if log_type_error:
+        return jsonify({'error': log_type_error}), 400
+    new_version = _maintenance_version_from_request(
+        data, log_type, log_entry_text
+    )
+
     if target_status == 'decommissioned':
         return jsonify({
             'error': 'Bulk maintenance logs cannot decommission a whole bulk item. Edit the asset status to decommission it.'
@@ -18947,14 +19386,12 @@ def _maintain_bulk_asset(asset_id, asset, data):
 
         new_location = (data.get('newLocation') or '').strip()
         repair_cost = str(data.get('cost') or data.get('maintenanceCost') or '').strip()
-        log_type, log_type_error = _maintenance_log_type_for_request(data)
-        if log_type_error:
-            return jsonify({'error': log_type_error}), 400
-
         formatted_date = _maintenance_date_from_request(data, 'maintenanceDate')
         changes = []
         if new_location:
             changes.append(make_change('location', value=new_location))
+        if new_version:
+            changes.append(make_change('version', value=new_version))
         changes.extend(requested_status_changes)
 
         entry = make_maintenance_log(
@@ -18986,6 +19423,47 @@ def _maintain_bulk_asset(asset_id, asset, data):
 
         return jsonify({'success': True, 'message': 'Bulk asset status cleared successfully'})
 
+    if not target_status and log_type == 'Update':
+        if (data.get('newSerial') or '').strip():
+            return jsonify({'error': 'Bulk quantity assets do not have individual serial numbers'}), 400
+        new_location = (data.get('newLocation') or '').strip()
+        changes = []
+        if new_location:
+            changes.append(make_change('location', value=new_location))
+        if new_version:
+            changes.append(make_change('version', value=new_version))
+        entry = make_maintenance_log(
+            _maintenance_date_from_request(data, 'maintenanceDate'),
+            maintenance_user,
+            log_entry_text,
+            changes,
+            cost=str(data.get('cost') or data.get('maintenanceCost') or '').strip(),
+            log_type=log_type,
+            source=base_source,
+        )
+        try:
+            media_records = _save_maintenance_media_files(
+                entry, _uploaded_maintenance_media_files()
+            )
+        except ValueError as e:
+            return jsonify({'error': str(e)}), 400
+        if media_records:
+            entry['media'] = media_records
+        asset.maintenance_logs.append(entry)
+        apply_maintenance_log_changes(asset, entry)
+        data_manager.save_inventory()
+        invalidate_cache({
+            'assetIds': [asset_id],
+            'action': 'maintenance-added',
+        })
+        if new_version:
+            log_action(f"Updated bulk asset {asset_id} to version {new_version}")
+            message = 'Asset version updated successfully'
+        else:
+            log_action(f"Maintenance logged for bulk asset {asset_id}: {log_entry_text}")
+            message = 'Maintenance logged successfully'
+        return jsonify({'success': True, 'message': message})
+
     if not target_status:
         return jsonify({'error': 'Asset status is required for bulk maintenance logs'}), 400
 
@@ -19002,10 +19480,6 @@ def _maintain_bulk_asset(asset_id, asset, data):
         return jsonify({
             'error': f'Only {capacity_remaining} unit{" is" if capacity_remaining == 1 else "s are"} available for new bulk maintenance logs'
         }), 400
-
-    log_type, log_type_error = _maintenance_log_type_for_request(data, default_type='Fault')
-    if log_type_error:
-        return jsonify({'error': log_type_error}), 400
 
     formatted_date = _maintenance_date_from_request(data, 'maintenanceDate')
     uploaded_files = _uploaded_maintenance_media_files()
@@ -19024,7 +19498,7 @@ def _maintain_bulk_asset(asset_id, asset, data):
                 formatted_date,
                 maintenance_user,
                 log_entry_text,
-                [],
+                [make_change('version', value=new_version)] if offset == 0 and new_version else [],
                 cost='',
                 log_type=log_type,
                 source=source
@@ -19039,6 +19513,8 @@ def _maintain_bulk_asset(asset_id, asset, data):
         return jsonify({'error': str(e)}), 400
 
     asset.maintenance_logs.extend(created_entries)
+    if created_entries:
+        apply_maintenance_log_changes(asset, created_entries[0])
 
     data_manager.save_inventory()
     invalidate_cache({
@@ -19096,12 +19572,17 @@ def _apply_standard_maintenance_request(asset_id, asset, data, uploaded_files=No
     log_type, log_type_error = _maintenance_log_type_for_request(data)
     if log_type_error:
         return {'error': log_type_error}, 400, False
+    new_version = _maintenance_version_from_request(
+        data, log_type, log_entry_text
+    )
 
     status_changes = []
     if new_location:
         status_changes.append(make_change('location', value=new_location))
     if new_serial:
         status_changes.append(make_change('serial', value=new_serial))
+    if new_version:
+        status_changes.append(make_change('version', value=new_version))
     status_changes.extend(requested_status_changes)
 
     entry = make_maintenance_log(
@@ -19636,11 +20117,14 @@ def update_maintenance_log_enhanced(asset_id, log_index):
         # First, check what location change was originally in this specific log
         original_log_location_change = None
         original_log_serial_change = None
+        original_log_version_change = None
         for change in original_log.get('changes', []):
             if change.get('kind') == 'location':
                 original_log_location_change = change.get('value', '').strip()
             elif change.get('kind') == 'serial':
                 original_log_serial_change = change.get('value', '').strip()
+            elif change.get('kind') == 'version':
+                original_log_version_change = change.get('value', '').strip()
 
         if new_location is not None and new_location.strip():
             # Only update location if the user actually typed one
@@ -19665,6 +20149,14 @@ def update_maintenance_log_enhanced(asset_id, log_index):
         elif original_log_serial_change is not None:
             changes_made.append(make_change('serial', value=original_log_serial_change))
             logger.info(f"Preserved original serial change: '{original_log_serial_change}'")
+
+        new_version = _maintenance_version_from_request(
+            data, log_type, new_description
+        )
+        if log_type == 'Update':
+            version_value = new_version or original_log_version_change
+            if version_value:
+                changes_made.append(make_change('version', value=version_value))
         
         # Handle status changes. These now use one clean target status,
         # while still accepting the old boolean flags for backward compatibility.
@@ -19751,7 +20243,8 @@ def search_assets():
         for asset in data_manager.inventory.values():
             searchable_text = (
                 f"{asset.brand} {asset.model_number} {asset.description} "
-                f"{asset.serial_number} {getattr(asset, 'secondary_serial_number', '')}"
+                f"{getattr(asset, 'version', '')} {asset.serial_number} "
+                f"{getattr(asset, 'secondary_serial_number', '')}"
             ).lower()
             if any(keyword in searchable_text for keyword in keywords):
                 # Determine current status
@@ -19761,6 +20254,7 @@ def search_assets():
                     'id': asset.asset_id,
                     'brand': asset.brand,
                     'model': asset.model_number,
+                    'version': getattr(asset, 'version', ''),
                     'serial': asset.serial_number,
                     'serial2': getattr(asset, 'secondary_serial_number', ''),
                     'description': asset.description,

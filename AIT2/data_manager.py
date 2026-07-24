@@ -31,7 +31,7 @@ EVENT_LOG_GROUP_WINDOW_SECONDS = 180
 REQUIRED_DATA_FILES = ('Inventory.csv', 'Logs.csv', 'Users.csv', 'Containers.csv', 'Clients.csv')
 UTF8_ENCODINGS = ('utf-8', 'utf-8-sig')
 INVENTORY_FIELDNAMES = [
-    'AssetID', 'Brand', 'ModelNumber', 'SerialNumber', 'SecondarySerialNumber', 'Description', 'DateOfPurchase',
+    'AssetID', 'Brand', 'ModelNumber', 'Version', 'SerialNumber', 'SecondarySerialNumber', 'Description', 'DateOfPurchase',
     'DateAdded', 'DateModified', 'ChangeHistory', 'Notes', 'Tags',
     'IsMissing', 'IsOOC', 'IsDegraded', 'IsUntagged', 'IsDisposed', 'IsBulk', 'Quantity',
     'MaintenanceLogs', 'DepartmentCode', 'DefaultLocation', 'CurrentLocation'
@@ -845,6 +845,7 @@ class DataManager:
                     asset_id=row.get('AssetID', ''),
                     brand=row.get('Brand', ''),
                     model_number=row.get('ModelNumber', ''),
+                    version=row.get('Version', ''),
                     serial_number=row.get('SerialNumber', ''),
                     secondary_serial_number=row.get('SecondarySerialNumber', ''),
                     description=row.get('Description', ''),
@@ -902,6 +903,7 @@ class DataManager:
                     'AssetID': item.asset_id,
                     'Brand': item.brand,
                     'ModelNumber': item.model_number,
+                    'Version': getattr(item, 'version', ''),
                     'SerialNumber': item.serial_number,
                     'SecondarySerialNumber': getattr(item, 'secondary_serial_number', ''),
                     'Description': item.description,

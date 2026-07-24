@@ -185,15 +185,30 @@ class PlanningTemplateTests(unittest.TestCase):
         self.assertIn("planUseReplacementQuantity('all')", script)
         self.assertIn('function planAdjustReplacementQuantity(delta)', script)
         self.assertIn('sourceQuantity: maxQuantity', script)
-        self.assertIn("class=\"plan-requirement-row ${shortage ? 'has-shortage' : ''}\"", script)
-        self.assertIn('class="plan-shortage-info"', script)
+        self.assertIn('function planRequirementWarning(group)', script)
+        self.assertIn("warning.type === 'degraded' ? 'requires-degraded' : 'has-shortage'", script)
+        self.assertIn('class="plan-shortage-info ${', script)
+        self.assertIn('class="plan-replace-slot"', script)
+        self.assertIn("planShowRequirementWarning(", script)
+        self.assertIn("healthyCapacityForThisEvent", script)
         self.assertIn('capacityForThisEvent', script)
-        self.assertIn('Math.max(0, availability.available)', script)
+        self.assertIn('Math.max(0, usable)', script)
         self.assertIn("onclick=\"assignAllEventAssignees('${context}')\"", script)
         self.assertIn('user?.isActive !== false', script)
         self.assertNotIn('await showCompanyBrandingPromptIfNeeded();', script)
         self.assertIn("initialSection = 'pdf-settings'", script)
         self.assertIn('class="inventory-onboarding-empty"', script)
+
+        with open(
+            os.path.join(project_root, 'templates', 'index.html'),
+            encoding='utf-8',
+        ) as template_file:
+            template = template_file.read()
+
+        self.assertIn('.plan-requirement-row.requires-degraded', template)
+        self.assertIn('grid-template-columns: minmax(150px, 1.05fr) minmax(130px, 1fr) 66px auto auto;', template)
+        self.assertIn('.plan-qty-control input[type="number"]::-webkit-inner-spin-button', template)
+        self.assertIn('-webkit-appearance: none;', template)
 
     def test_event_detail_actions_are_shared_by_all_workspaces(self):
         project_root = os.path.dirname(os.path.dirname(__file__))

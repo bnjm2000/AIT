@@ -33,6 +33,24 @@ def test_add_event_assignee_picker_has_assign_all_for_active_company_users():
     assert 'Only active users from this company are shown.' in TEMPLATE
 
 
+def test_add_event_tag_is_a_top_of_form_segmented_selector():
+    form = TEMPLATE.split('<form id="addEventForm">', 1)[1].split('</form>', 1)[0]
+
+    assert form.index('class="add-event-tag-selector"') < form.index('id="eventName"')
+    assert 'role="radiogroup"' in form
+    assert 'data-add-event-tag="events"' in form
+    assert 'data-add-event-tag="dry hire"' in form
+    assert "onclick=\"setAddEventTag('events')\"" in form
+    assert "onclick=\"setAddEventTag('dry hire')\"" in form
+    assert 'class="form-input" id="eventTag"' not in form
+
+    selector = function_source('setAddEventTag', 'syncAddEventLocationRequirement')
+    assert 'tagInput.value = normalizedTag' in selector
+    assert 'options.dataset.selected' in selector
+    assert 'option.setAttribute(' in selector
+    assert 'syncAddEventLocationRequirement();' in selector
+
+
 def test_event_menus_are_portaled_clamped_and_restored():
     toggle_menu = function_source('toggleEventCardMenu', 'eventMenuIconHtml')
     close_menu = function_source('closeEventCardMenus', 'toggleEventCardMenu')

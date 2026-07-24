@@ -115,6 +115,83 @@ class MaintenanceBatchTests(unittest.TestCase):
             log['changes'],
         )
 
+    def test_update_maintenance_changes_and_persists_asset_version(self):
+        payload = self.payload()
+        payload.update({
+            'assetIds': ['TEST#01'],
+            'logEntry': 'Updated firmware from v3.6.0 to v3.7.2',
+            'logType': 'Update',
+            'confirmVersionUpdate': True,
+            'requestId': 'version-update-maintenance',
+        })
+
+        response = self.client.post('/api/assets/maintenance/batch', json=payload)
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        asset = self.data_manager.inventory['TEST#01']
+        self.assertEqual(asset.version, 'v3.7.2')
+        log = normalize_maintenance_log(asset.maintenance_logs[-1])
+        self.assertIn({'kind': 'version', 'value': 'v3.7.2'}, log['changes'])
+
+        reloaded = DataManager(self.tempdir.name)
+        reloaded.load_inventory()
+        self.assertEqual(reloaded.inventory['TEST#01'].version, 'v3.7.2')
+
+    def test_non_update_maintenance_does_not_change_asset_version(self):
+        asset = self.data_manager.inventory['TEST#01']
+        asset.version = 'v1'
+        self.data_manager.save_inventory()
+        payload = self.payload()
+        payload.update({
+            'assetIds': ['TEST#01'],
+            'logEntry': 'Updated to v2',
+            'confirmVersionUpdate': True,
+            'requestId': 'non-update-version-value',
+        })
+
+        response = self.client.post('/api/assets/maintenance/batch', json=payload)
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(self.data_manager.inventory['TEST#01'].version, 'v1')
+        log = normalize_maintenance_log(
+            self.data_manager.inventory['TEST#01'].maintenance_logs[-1]
+        )
+        self.assertNotIn('version', {change['kind'] for change in log['changes']})
+
+    def test_update_maintenance_requires_version_confirmation(self):
+        asset = self.data_manager.inventory['TEST#01']
+        asset.version = 'v1.0'
+        self.data_manager.save_inventory()
+        payload = self.payload()
+        payload.update({
+            'assetIds': ['TEST#01'],
+            'logEntry': 'Updated to v1.4.1',
+            'logType': 'Update',
+            'requestId': 'unconfirmed-version-update',
+        })
+
+        response = self.client.post('/api/assets/maintenance/batch', json=payload)
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(self.data_manager.inventory['TEST#01'].version, 'v1.0')
+
+    def test_version_detection_prefers_target_and_requires_context(self):
+        examples = {
+            'Updated to v1.4.1': 'v1.4.1',
+            'Updated from v1.0 to v1.2': 'v1.2',
+            'Firmware version 3.8.0 installed': '3.8.0',
+            'Upgraded v2': 'v2',
+            'Inspected on 24.07.2026': '',
+            'Replaced board number 1.4.1': '',
+        }
+
+        for description, expected in examples.items():
+            with self.subTest(description=description):
+                self.assertEqual(
+                    app_module.detect_maintenance_version(description),
+                    expected,
+                )
+
 
 if __name__ == '__main__':
     unittest.main()

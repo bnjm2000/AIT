@@ -125,6 +125,134 @@ class WorkforcePortalTests(unittest.TestCase):
         result = _amount_from_text("TotaI (SGD) INCL.GST 11.85")
         self.assertEqual(result["amount"], 11.85)
 
+    def test_admin_submission_queue_defaults_to_attention_and_sorts_by_event_then_name(self):
+        later_event = Event(
+            144,
+            "Later Production",
+            "20260720",
+            "20260720",
+            [],
+            location="Later Venue",
+        )
+        self.manager.events[later_event.event_id] = later_event
+        self.manager.save_event(later_event)
+        with mutate_workforce(self.manager.data_folder) as workforce:
+            workforce["freelancers"] = [
+                {"id": "worker-z", "name": "Zoe Crew", "company": "Zed Co"},
+                {"id": "worker-a", "name": "Amy Crew", "company": "Alpha Co"},
+                {"id": "worker-b", "name": "Ben Crew", "company": "Beta Co"},
+            ]
+            workforce["assignments"] = {
+                "143": [{
+                    "id": "assignment-b",
+                    "freelancerId": "worker-b",
+                    "department": "AU",
+                    "roleName": "Audio Assistant",
+                    "dailyRate": 180,
+                    "days": 1,
+                }],
+                "144": [{
+                    "id": "assignment-a",
+                    "freelancerId": "worker-a",
+                    "department": "AU",
+                    "roleName": "Audio Technician",
+                }],
+            }
+            workforce["submissions"] = {
+                "143": {
+                    "worker-z": {
+                        "invoices": [{
+                            "id": "invoice-z",
+                            "originalName": "zoe-invoice.pdf",
+                            "submittedAt": "2026-07-10T10:00:00+08:00",
+                            "status": "Pending Review",
+                            "amount": 120,
+                        }],
+                        "claims": [{
+                            "id": "claim-paid",
+                            "originalName": "paid-claim.pdf",
+                            "submittedAt": "2026-07-10T11:00:00+08:00",
+                            "status": "Paid",
+                            "amount": 20,
+                        }],
+                    },
+                    "worker-a": {
+                        "invoices": [],
+                        "claims": [{
+                            "id": "claim-a",
+                            "originalName": "amy-claim.pdf",
+                            "submittedAt": "2026-07-10T09:00:00+08:00",
+                            "status": "Approved",
+                            "amount": 30,
+                        }],
+                    },
+                },
+                "144": {
+                    "worker-a": {
+                        "invoices": [{
+                            "id": "invoice-later",
+                            "originalName": "later-invoice.pdf",
+                            "submittedAt": "2026-07-20T09:00:00+08:00",
+                            "status": "Pending Review",
+                            "amount": 200,
+                        }],
+                        "claims": [],
+                    },
+                },
+            }
+
+        self.login("admin", True)
+        response = self.client.get("/api/workforce/submissions")
+
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()["data"]
+        self.assertEqual(
+            [row["id"] for row in data["rows"]],
+            ["invoice-later", "claim-a", "invoice-z"],
+        )
+        self.assertEqual(
+            [row["statusKey"] for row in data["rows"]],
+            ["to-review", "to-pay", "to-review"],
+        )
+        self.assertEqual(
+            [row["statusLabel"] for row in data["rows"]],
+            ["Pending Review", "Approved", "Pending Review"],
+        )
+        self.assertEqual(data["totalUploads"], 4)
+        self.assertEqual(data["totalItems"], 5)
+        self.assertEqual(data["attentionTotal"], 3)
+        self.assertEqual(data["statusCounts"]["awaiting-upload"], 1)
+        self.assertEqual(data["statusCounts"]["awaiting-confirmation"], 1)
+        self.assertEqual(data["rows"][0]["event"]["startDateValue"], "2026-07-20")
+        self.assertEqual(data["rows"][0]["event"]["state"], "New")
+        self.assertEqual(data["rows"][0]["departmentDetails"][0]["code"], "AU")
+        self.assertEqual(data["rows"][0]["departmentDetails"][0]["color"], "#CDEBFF")
+        self.assertTrue(data["rows"][0]["downloadUrl"].endswith("?download=1"))
+
+        claims = self.client.get(
+            "/api/workforce/submissions?status=all&kind=claim"
+        ).get_json()["data"]
+        self.assertEqual(
+            [row["id"] for row in claims["rows"]],
+            ["claim-a", "claim-paid"],
+        )
+
+        awaiting = self.client.get(
+            "/api/workforce/submissions?status=awaiting-upload"
+        ).get_json()["data"]
+        self.assertEqual(len(awaiting["rows"]), 1)
+        self.assertEqual(awaiting["rows"][0]["eventId"], 143)
+        self.assertEqual(awaiting["rows"][0]["freelancerId"], "worker-b")
+        self.assertEqual(awaiting["rows"][0]["statusKey"], "awaiting-upload")
+        self.assertTrue(awaiting["rows"][0]["isAwaitingUpload"])
+        self.assertNotIn("downloadUrl", awaiting["rows"][0])
+
+        self.login("normal", False)
+        self.assertEqual(
+            self.client.get("/api/workforce/submissions").status_code,
+            403,
+        )
+
     def test_event_overview_exposes_operations_without_financial_data(self):
         event = self.manager.events[143]
         event.assigned_users = ['normal']
@@ -1153,7 +1281,7 @@ class WorkforcePortalTests(unittest.TestCase):
             "Payment Confirmed",
         )
 
-    def test_first_approval_records_verification_once(self):
+    def test_reviewed_submission_can_be_corrected_during_later_review(self):
         freelancer_id = self.create_worker_assignment()
         response = self.client.post(
             f"/api/events/143/workforce/submissions/{freelancer_id}",
@@ -1199,6 +1327,30 @@ class WorkforcePortalTests(unittest.TestCase):
         self.assertEqual(pending["amount"], 42)
         self.assertEqual(pending["department"], "AU")
 
+        response = self.client.put(
+            f"/api/workforce/submissions/{claim['id']}",
+            json={
+                "amount": 99,
+                "status": "Pending Review",
+                "department": "LI",
+                "claimDate": "2026-07-12",
+                "category": "Meal",
+                "confirmReview": True,
+            },
+        )
+        corrected = response.get_json()["data"]["submissions"][freelancer_id][
+            "claims"
+        ][0]
+        self.assertEqual(corrected["amount"], 99)
+        self.assertEqual(corrected["department"], "LI")
+        self.assertEqual(corrected["claimDate"], "2026-07-12")
+        self.assertEqual(corrected["category"], "Meal")
+        self.assertEqual(corrected["expectedAmount"], 560)
+        self.assertEqual(
+            corrected["expectedAmountBreakdown"][0]["calculation"],
+            "2 day(s) x $280.00",
+        )
+
     def test_save_and_close_verifies_invoice_without_approving(self):
         freelancer_id = self.create_worker_assignment()
         response = self.client.post(
@@ -1213,6 +1365,8 @@ class WorkforcePortalTests(unittest.TestCase):
         invoice = response.get_json()["data"]["submissions"][freelancer_id][
             "invoices"
         ][0]
+        self.assertEqual(invoice["expectedAmount"], 560)
+        self.assertEqual(invoice["expectedAmountBreakdown"][0]["role"], "Audio Engineer")
 
         response = self.client.put(
             f"/api/workforce/submissions/{invoice['id']}",

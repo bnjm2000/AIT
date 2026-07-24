@@ -199,6 +199,7 @@ class InventoryItem:
         secondary_serial_number='',
         tags=None,
         is_untagged=False,
+        version='',
     ):
         self.asset_id = asset_id
         self.brand = brand
@@ -239,6 +240,7 @@ class InventoryItem:
         self.change_history = change_history if change_history is not None else []
         self.notes = notes or ''
         self.tags = normalize_asset_tags(tags)
+        self.version = str(version or '').strip()
         self.is_bulk = is_bulk
         try:
             self.quantity = max(1, int(quantity)) if is_bulk else 1

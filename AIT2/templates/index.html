@@ -3600,6 +3600,70 @@
       .events-state-filters [data-event-state="Pending Closure"]:not(.active) { color: #334155; }
       .events-state-filters [data-event-state="Overdue"]:not(.active) { color: #dc2626; }
 
+      .add-event-tag-selector {
+        margin-bottom: 18px;
+        padding: 12px;
+        border: 1px solid #dfe5ec;
+        border-radius: 8px;
+        background: #f8fafc;
+      }
+
+      .add-event-tag-selector .form-label {
+        margin-bottom: 8px;
+      }
+
+      .add-event-tag-options {
+        position: relative;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        padding: 3px;
+        border: 1px solid #d8e0e8;
+        border-radius: 8px;
+        background: #fff;
+        isolation: isolate;
+      }
+
+      .add-event-tag-indicator {
+        position: absolute;
+        z-index: -1;
+        top: 3px;
+        bottom: 3px;
+        left: 3px;
+        width: calc(50% - 3px);
+        border-radius: 6px;
+        background: var(--theme-primary, var(--brand-main, #0f766e));
+        box-shadow: 0 2px 7px rgba(15, 118, 110, 0.2);
+        transition: transform 160ms ease, background-color 160ms ease, box-shadow 160ms ease;
+      }
+
+      .add-event-tag-options[data-selected="dry-hire"] .add-event-tag-indicator {
+        transform: translateX(100%);
+        background: #c65d16;
+        box-shadow: 0 2px 7px rgba(198, 93, 22, 0.2);
+      }
+
+      .add-event-tag-option {
+        min-height: 38px;
+        padding: 7px 12px;
+        border: 0;
+        border-radius: 6px;
+        background: transparent;
+        color: #475569;
+        cursor: pointer;
+        font: inherit;
+        font-weight: 700;
+        transition: color 140ms ease;
+      }
+
+      .add-event-tag-option[aria-checked="true"] {
+        color: #fff;
+      }
+
+      .add-event-tag-option:focus-visible {
+        outline: 2px solid var(--theme-primary, var(--brand-main, #0f766e));
+        outline-offset: 3px;
+      }
+
       .event-assignee-picker {
         margin-top: 16px;
         padding: 14px;
@@ -3784,6 +3848,14 @@
 
       .maintenance-event-reference-field {
         position: relative;
+      }
+
+      .maintenance-event-reference-hint {
+        display: block;
+        margin-top: 5px;
+        color: #64748b;
+        font-size: 11px;
+        line-height: 1.4;
       }
 
       .maintenance-event-suggestions {
@@ -5591,6 +5663,17 @@
         border-left: 1px solid #e8ebf2;
       }
 
+      .plan-qty-control input[type="number"] {
+        appearance: textfield;
+        -moz-appearance: textfield;
+      }
+
+      .plan-qty-control input[type="number"]::-webkit-inner-spin-button,
+      .plan-qty-control input[type="number"]::-webkit-outer-spin-button {
+        margin: 0;
+        -webkit-appearance: none;
+      }
+
       .plan-department-section + .plan-department-section {
         border-top: 1px solid #e0e5ef;
       }
@@ -5634,7 +5717,7 @@
 
       .plan-requirement-head,
       .plan-requirement-row {
-        grid-template-columns: minmax(150px, 1.05fr) minmax(130px, 1fr) auto auto;
+        grid-template-columns: minmax(150px, 1.05fr) minmax(130px, 1fr) 66px auto auto;
       }
 
       .plan-requirement-head {
@@ -5657,6 +5740,11 @@
         background: #fff1f2;
       }
 
+      .plan-requirement-row.requires-degraded {
+        border-left: 3px solid #ea8a19;
+        background: #fff7ed;
+      }
+
       .plan-shortage-info {
         display: inline-grid;
         place-items: center;
@@ -5670,6 +5758,17 @@
         font-size: 11px;
         font-weight: 900;
         line-height: 1;
+      }
+
+      .plan-shortage-info.degraded-warning {
+        border-color: #ea8a19;
+        color: #b45309;
+      }
+
+      .plan-replace-slot {
+        display: inline-flex;
+        justify-content: flex-end;
+        min-width: 66px;
       }
 
       .plan-row-actions {
@@ -5688,6 +5787,17 @@
       .plan-swap-button:hover {
         border-color: #dc2626;
         background: #fee2e2;
+      }
+
+      .plan-swap-button.degraded-warning {
+        border-color: #fdba74;
+        color: #9a4d08;
+        background: #fff;
+      }
+
+      .plan-swap-button.degraded-warning:hover {
+        border-color: #ea8a19;
+        background: #ffedd5;
       }
 
       .plan-replacement-modal-content { max-width: 720px; }
@@ -6500,10 +6610,20 @@
         }
 
         .plan-requirement-row .plan-qty-control {
+          grid-column: 2;
+          grid-row: 1;
           justify-self: start;
         }
 
+        .plan-replace-slot {
+          grid-column: 1;
+          grid-row: 3;
+          justify-content: flex-start;
+        }
+
         .plan-row-actions {
+          grid-column: 2;
+          grid-row: 3;
           justify-content: flex-end;
         }
       }
@@ -9657,6 +9777,12 @@
       </div>
     </div>
 
+    <div id="invoice-claims-section" class="content-section">
+      <div id="workforce-documents-root" class="workforce-page wf-documents-page">
+        <div class="loading">Loading invoices and claims...</div>
+      </div>
+    </div>
+
     <div id="freelancer-workspace-section" class="content-section">
       <div id="freelancer-workspace-root" class="workforce-page">
         <div class="loading">Loading freelancer workspace...</div>
@@ -9818,11 +9944,12 @@
               .inventory-group-condition { padding:10px 8px;display:grid;place-items:center;align-content:start;gap:9px;border-right:1px solid #e2ebe8; }
               .inventory-group-condition h4 { margin:0;color:var(--inventory-ink);font-size:12px; }
               .inventory-individual-list { min-width:0;display:grid;gap:4px;align-content:start; }
-              .inventory-individual-head,.inventory-individual-row { display:grid;grid-template-columns:26px minmax(105px,.8fr) minmax(110px,.75fr) minmax(120px,1fr) minmax(90px,.7fr) minmax(100px,.7fr) auto;gap:7px;align-items:center; }
+              .inventory-individual-head,.inventory-individual-row { display:grid;grid-template-columns:26px minmax(105px,.85fr) minmax(80px,.55fr) minmax(120px,1fr) minmax(90px,.7fr) minmax(100px,.7fr) 90px;gap:7px;align-items:center; }
               .inventory-individual-head { min-height:25px;padding:2px 7px;color:#71817c;font-size:9px;font-weight:800;text-transform:uppercase; }
               .inventory-individual-row { min-height:36px;padding:3px 7px;border:1px solid #e0e9e6;border-radius:5px;background:#fff;font-size:10px; }
               .inventory-individual-row input { width:15px;height:15px; }
               .inventory-individual-id { color:var(--inventory-ink);font-weight:800;overflow-wrap:anywhere; }
+              .inventory-individual-version { overflow-wrap:anywhere; }
               .inventory-individual-meta { color:var(--inventory-muted);overflow-wrap:anywhere; }
               .inventory-individual-tags { min-width:0; }
               .inventory-individual-tags .inventory-tag-list { margin-top:0; }
@@ -9893,8 +10020,8 @@
               .maintenance-timeline-meta { display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:8px; }
               .maintenance-timeline-actions { display:flex;gap:3px;flex:none; }
               @media(max-width:1100px) { #inventory-section .inventory-summary-layout{grid-template-columns:1fr}#inventory-section .inventory-overview{grid-template-columns:82px minmax(0,1fr)}.inventory-donut{width:80px}#inventory-section .inventory-stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.inventory-model-head,.inventory-model-summary{grid-template-columns:minmax(170px,1.1fr) minmax(160px,1fr) 100px 105px 28px}.inventory-model-head>*:nth-child(5),.inventory-model-summary>*:nth-child(5){display:none}}
-              @media(max-width:780px) { #inventory-section .inventory-page-header{align-items:stretch}#inventory-section .inventory-page-header .btn{align-self:flex-start}#inventory-section .inventory-filter-grid{grid-template-columns:1fr 1fr}.inventory-model-head{display:none}.inventory-model-summary{grid-template-columns:minmax(0,1fr) auto 28px;gap:8px;padding:11px}.inventory-model-summary>*:nth-child(2),.inventory-model-summary>*:nth-child(3),.inventory-model-summary>*:nth-child(5){display:none}.inventory-model-summary .inventory-model-quantity{display:block}.inventory-model-detail{grid-template-columns:1fr;padding:10px}.inventory-group-condition{border-right:0;border-bottom:1px solid #e2ebe8;padding-bottom:13px}.inventory-individual-head,.inventory-individual-row{grid-template-columns:25px minmax(95px,1fr) minmax(90px,1fr) auto}.inventory-individual-head>*:nth-child(4),.inventory-individual-head>*:nth-child(5),.inventory-individual-head>*:nth-child(6),.inventory-individual-row>*:nth-child(4),.inventory-individual-row>*:nth-child(5),.inventory-individual-row>*:nth-child(6){display:none}.maintenance-log-modal{align-items:stretch!important;padding:8px}.maintenance-log-content{width:100%!important;height:calc(100dvh - 16px)!important;max-height:none!important;padding:12px!important}.maintenance-log-content>.modal-header{margin-bottom:10px!important;padding-bottom:10px!important}.maintenance-log-content>.modal-header .close-btn{width:38px;height:38px;flex:none}.maintenance-history-shell{display:block;overflow-y:auto;overscroll-behavior:contain;padding-right:2px}.maintenance-history-aside{padding:0 0 14px;border:0;border-bottom:1px solid #e1eae7;overflow:visible}#maintenanceLogModal .maintenance-history-aside .asset-event-history-wrap{max-height:none!important;overflow:visible!important}.maintenance-history-main{overflow:visible;margin-top:14px;padding-right:0}.maintenance-history-toolbar{position:sticky;top:0;grid-template-columns:minmax(0,1fr) auto;padding:8px 0 10px}.maintenance-history-toolbar h4{grid-column:1}.maintenance-history-toolbar .btn{min-height:38px}.maintenance-history-search{grid-column:1/-1;grid-row:2}.maintenance-timeline-top{display:grid;grid-template-columns:minmax(0,1fr) auto}.maintenance-timeline-actions .inventory-icon-button{width:36px;height:36px}.maintenance-log-content>.modal-actions{margin-top:10px!important;padding-top:10px!important}.maintenance-log-content>.modal-actions .btn{width:100%;min-height:40px}.asset-details-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.asset-details-stock-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.asset-details-operational-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.asset-details-identity-record{grid-template-columns:1fr;gap:8px}}
-              @media(max-width:520px) { #inventory-section .inventory-page-header{flex-direction:column}#inventory-section .inventory-page-header h2{font-size:22px}#inventory-section .inventory-stat-grid{grid-template-columns:1fr 1fr;gap:7px}#inventory-section .inventory-stat{min-height:82px;padding:10px;gap:8px}#inventory-section .inventory-stat-mark{width:32px;height:32px}#inventory-section .inventory-stat-value{font-size:19px}#inventory-section .inventory-filter-grid{grid-template-columns:1fr}#inventory-section #asset-count{width:100%;margin-left:0}.inventory-individual-head,.inventory-individual-row{grid-template-columns:23px minmax(82px,1fr) minmax(70px,.8fr) auto}.inventory-condition-legend{width:100%}.maintenance-history-overview{grid-template-columns:repeat(2,minmax(0,1fr))}.maintenance-history-stat:nth-child(2){border-right:0}.maintenance-history-stat:last-child{grid-column:1/-1;border-top:1px solid #dfe8e5}.maintenance-history-toolbar h4{font-size:14px}.maintenance-timeline-item{padding:11px 10px 11px 15px}.maintenance-event-logs-button{min-height:34px;padding:6px 9px}}
+              @media(max-width:780px) { #inventory-section .inventory-page-header{align-items:stretch}#inventory-section .inventory-page-header .btn{align-self:flex-start}#inventory-section .inventory-filter-grid{grid-template-columns:1fr 1fr}.inventory-model-head{display:none}.inventory-model-summary{grid-template-columns:minmax(0,1fr) auto 28px;gap:8px;padding:11px}.inventory-model-summary>*:nth-child(2),.inventory-model-summary>*:nth-child(3),.inventory-model-summary>*:nth-child(5){display:none}.inventory-model-summary .inventory-model-quantity{display:block}.inventory-model-detail{grid-template-columns:1fr;padding:10px}.inventory-group-condition{border-right:0;border-bottom:1px solid #e2ebe8;padding-bottom:13px}.inventory-individual-head,.inventory-individual-row{grid-template-columns:25px minmax(95px,1fr) minmax(90px,1fr) 90px}.inventory-individual-head>*:nth-child(4),.inventory-individual-head>*:nth-child(5),.inventory-individual-head>*:nth-child(6),.inventory-individual-row>*:nth-child(4),.inventory-individual-row>*:nth-child(5),.inventory-individual-row>*:nth-child(6){display:none}.maintenance-log-modal{align-items:stretch!important;padding:8px}.maintenance-log-content{width:100%!important;height:calc(100dvh - 16px)!important;max-height:none!important;padding:12px!important}.maintenance-log-content>.modal-header{margin-bottom:10px!important;padding-bottom:10px!important}.maintenance-log-content>.modal-header .close-btn{width:38px;height:38px;flex:none}.maintenance-history-shell{display:block;overflow-y:auto;overscroll-behavior:contain;padding-right:2px}.maintenance-history-aside{padding:0 0 14px;border:0;border-bottom:1px solid #e1eae7;overflow:visible}#maintenanceLogModal .maintenance-history-aside .asset-event-history-wrap{max-height:none!important;overflow:visible!important}.maintenance-history-main{overflow:visible;margin-top:14px;padding-right:0}.maintenance-history-toolbar{position:sticky;top:0;grid-template-columns:minmax(0,1fr) auto;padding:8px 0 10px}.maintenance-history-toolbar h4{grid-column:1}.maintenance-history-toolbar .btn{min-height:38px}.maintenance-history-search{grid-column:1/-1;grid-row:2}.maintenance-timeline-top{display:grid;grid-template-columns:minmax(0,1fr) auto}.maintenance-timeline-actions .inventory-icon-button{width:36px;height:36px}.maintenance-log-content>.modal-actions{margin-top:10px!important;padding-top:10px!important}.maintenance-log-content>.modal-actions .btn{width:100%;min-height:40px}.asset-details-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.asset-details-stock-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.asset-details-operational-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.asset-details-identity-record{grid-template-columns:1fr;gap:8px}}
+              @media(max-width:520px) { #inventory-section .inventory-page-header{flex-direction:column}#inventory-section .inventory-page-header h2{font-size:22px}#inventory-section .inventory-stat-grid{grid-template-columns:1fr 1fr;gap:7px}#inventory-section .inventory-stat{min-height:82px;padding:10px;gap:8px}#inventory-section .inventory-stat-mark{width:32px;height:32px}#inventory-section .inventory-stat-value{font-size:19px}#inventory-section .inventory-filter-grid{grid-template-columns:1fr}#inventory-section #asset-count{width:100%;margin-left:0}.inventory-individual-head,.inventory-individual-row{grid-template-columns:23px minmax(82px,1fr) minmax(70px,.8fr) 90px}.inventory-condition-legend{width:100%}.maintenance-history-overview{grid-template-columns:repeat(2,minmax(0,1fr))}.maintenance-history-stat:nth-child(2){border-right:0}.maintenance-history-stat:last-child{grid-column:1/-1;border-top:1px solid #dfe8e5}.maintenance-history-toolbar h4{font-size:14px}.maintenance-timeline-item{padding:11px 10px 11px 15px}.maintenance-event-logs-button{min-height:34px;padding:6px 9px}}
             </style>
             <div class="inventory-page-header">
               <div>
@@ -9919,7 +10046,7 @@
                   <input
                     type="text"
                     class="form-input"
-                    placeholder="Search by ID, brand, model, serial..."
+                    placeholder="Search by ID, brand, model, serial... Use + to search multiple items"
                     id="asset-search"
                   />
                 </div>
@@ -10507,6 +10634,41 @@
           </button>
         </div>
         <form id="addEventForm">
+          <div class="add-event-tag-selector">
+            <label class="form-label" id="addEventTagLabel">Event Tag</label>
+            <div
+              class="add-event-tag-options"
+              data-selected="events"
+              role="radiogroup"
+              aria-labelledby="addEventTagLabel"
+            >
+              <span class="add-event-tag-indicator" aria-hidden="true"></span>
+              <button
+                type="button"
+                class="add-event-tag-option"
+                data-add-event-tag="events"
+                role="radio"
+                aria-checked="true"
+                onclick="setAddEventTag('events')"
+              >
+                Events
+              </button>
+              <button
+                type="button"
+                class="add-event-tag-option"
+                data-add-event-tag="dry hire"
+                role="radio"
+                aria-checked="false"
+                onclick="setAddEventTag('dry hire')"
+              >
+                Dry Hire
+              </button>
+            </div>
+            <select class="sr-only" id="eventTag" required aria-hidden="true" tabindex="-1">
+              <option value="events">Events</option>
+              <option value="dry hire">Dry Hire</option>
+            </select>
+          </div>
           <div class="form-group">
             <label class="form-label">Event Name</label>
             <input type="text" class="form-input" id="eventName" required />
@@ -10539,13 +10701,6 @@
           <div class="form-group">
             <label class="form-label">End Date</label>
             <input type="date" class="form-input" id="eventEndDate" required />
-          </div>
-          <div class="form-group">
-            <label class="form-label">Event Tag</label>
-            <select class="form-input" id="eventTag" required onchange="syncAddEventLocationRequirement()">
-              <option value="events">Events</option>
-              <option value="dry hire">Dry Hire</option>
-            </select>
           </div>
           <div class="event-assignee-picker" data-event-assignee-context="add">
             <div class="event-assignee-heading">
@@ -10602,6 +10757,10 @@
               <label class="form-label">Model Number</label>
               <input type="text" class="form-input" id="assetModel" list="assetModelOptions" required />
               <datalist id="assetModelOptions"></datalist>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Version</label>
+              <input type="text" class="form-input" id="assetVersion" placeholder="Optional" />
             </div>
             <div class="form-group">
               <label class="form-label">Department Code</label>
@@ -11029,6 +11188,7 @@
               placeholder="Describe the maintenance performed..."
               required
             ></textarea>
+            <small class="maintenance-event-reference-hint">Type ` to search for and link an event.</small>
           </div>
 
           <!-- Maintenance Media -->

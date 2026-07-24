@@ -35,6 +35,26 @@ const workforceEventChooserState = {
   pageSize: 8
 };
 
+const workforceDocumentsState = {
+  rows: [],
+  statusCounts: {},
+  kindCounts: {},
+  statuses: new Set(['to-review', 'to-pay']),
+  kind: 'all',
+  search: '',
+  page: 1,
+  pageSize: 50,
+  pageCount: 1,
+  total: 0,
+  totalItems: 0,
+  totalUploads: 0,
+  attentionTotal: 0,
+  loading: false,
+  requestId: 0,
+  searchTimer: null,
+  realtimeTimer: null
+};
+
 function wfEscape(value) {
   if (typeof escapeHtml === 'function') return escapeHtml(String(value ?? ''));
   const node = document.createElement('div');
@@ -244,6 +264,398 @@ async function changeWorkforceEvent(eventId) {
   workforcePageState.eventId = id;
   workforcePageState.data = null;
   await loadWorkforcePage();
+}
+
+const WF_DOCUMENT_STATUS_FILTERS = [
+  ['awaiting-upload', 'Awaiting upload'],
+  ['to-review', 'To review'],
+  ['to-pay', 'To pay'],
+  ['awaiting-confirmation', 'Awaiting confirmation'],
+  ['payment-confirmed', 'Payment confirmed'],
+  ['denied', 'Denied'],
+  ['queued', 'Queued'],
+  ['processing', 'Processing'],
+  ['details-required', 'Details required']
+];
+
+function wfDocumentStatusClass(statusKey) {
+  return {
+    'awaiting-upload': 'status-awaiting-upload',
+    'to-review': 'status-to-review',
+    'to-pay': 'status-to-pay',
+    'awaiting-confirmation': 'status-awaiting-confirmation',
+    'payment-confirmed': 'status-payment-confirmed',
+    denied: 'status-denied',
+    queued: 'status-queued',
+    processing: 'status-processing',
+    'details-required': 'status-details-required'
+  }[statusKey] || 'status-unselected';
+}
+
+function wfDocumentStatusKeyFromRecord(record) {
+  if (record.isAwaitingUpload) return 'awaiting-upload';
+  if (record.processingState === 'Queued' || record.submissionStage === 'Queued') return 'queued';
+  if (record.processingState === 'Processing' || record.submissionStage === 'Processing') return 'processing';
+  if (record.submissionStage === 'Details Required') return 'details-required';
+  if (record.paymentConfirmedAt) return 'payment-confirmed';
+  return {
+    'Pending Review': 'to-review',
+    Approved: 'to-pay',
+    Paid: 'awaiting-confirmation',
+    Denied: 'denied'
+  }[record.status || 'Pending Review'] || 'to-review';
+}
+
+function wfDocumentStatusMenu(record) {
+  const statusKey = record.statusKey || wfDocumentStatusKeyFromRecord(record);
+  if (statusKey === 'awaiting-upload') {
+    return '<span class="wf-status-button status-awaiting-upload">Awaiting upload</span>';
+  }
+  const displayStatus = record.paymentConfirmedAt
+    ? 'Payment Confirmed'
+    : (record.status || 'Pending Review');
+  if (['queued', 'processing', 'details-required'].includes(statusKey)) {
+    const label = WF_DOCUMENT_STATUS_FILTERS.find(row => row[0] === statusKey)?.[1] || record.statusLabel;
+    return `<span class="wf-status-button ${wfStatusClass(label)}">${wfEscape(label)}</span>`;
+  }
+  if (displayStatus === 'Pending Review') {
+    return `<button class="wf-status-button ${wfStatusClass(displayStatus)}" type="button"
+      onclick="event.stopPropagation();openWorkforceDocumentSubmission('${wfAttr(record.id)}')">
+      Pending Review
+    </button>`;
+  }
+  return `<div class="wf-status-control wf-document-status-control">
+    <button class="wf-status-button ${wfStatusClass(displayStatus)}" type="button"
+      aria-haspopup="menu" aria-expanded="false"
+      onclick="toggleWorkforceDocumentStatusMenu(event,'${wfAttr(record.id)}')">
+      ${wfEscape(displayStatus)} <span aria-hidden="true">&#9662;</span>
+    </button>
+    <div class="wf-status-menu wf-document-status-menu" id="wfDocumentStatusMenu-${wfAttr(record.id)}" role="menu">
+      ${['Pending Review', 'Approved', 'Denied', 'Paid', 'Payment Confirmed'].map(status => `
+        <button class="${wfStatusClass(status)}" type="button" role="menuitem"
+          onclick="chooseWorkforceDocumentStatus(event,'${wfAttr(record.id)}','${status}')">${status}</button>
+      `).join('')}
+    </div>
+  </div>`;
+}
+
+function ensureWorkforceDocumentsLayout() {
+  const root = document.getElementById('workforce-documents-root');
+  if (!root || root.querySelector('.wf-documents-shell')) return root;
+  root.innerHTML = `<div class="wf-documents-shell">
+    <div class="plan-page-heading wf-documents-heading">
+      <div>
+        <button class="wf-back" type="button" onclick="showSection('workforce')">&larr; Back to Manpower &amp; Transport</button>
+        <h2>Invoices &amp; Claims</h2>
+        <p>Review every worker and vendor upload across your company.</p>
+      </div>
+      <div class="wf-documents-sort-note">Newest event dates first, then uploader name</div>
+    </div>
+    <div class="wf-document-metrics" id="wfDocumentMetrics"></div>
+    <section class="wf-panel wf-documents-panel">
+      <header class="wf-documents-toolbar">
+        <div class="wf-document-kind-tabs" id="wfDocumentKindTabs" aria-label="Document type filters"></div>
+        <label class="wf-document-search">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m16 16 4 4"></path></svg>
+          <input type="search" placeholder="Search event, uploader, file or department"
+            value="${wfAttr(workforceDocumentsState.search)}"
+            oninput="wfDocumentsSearchChanged(this.value)">
+        </label>
+      </header>
+      <div class="wf-document-status-filters" id="wfDocumentStatusFilters"></div>
+      <div class="wf-documents-list" id="wfDocumentsList" aria-live="polite"></div>
+      <footer class="wf-documents-pagination" id="wfDocumentsPagination"></footer>
+    </section>
+  </div>`;
+  return root;
+}
+
+async function loadWorkforceDocumentsPage(options = {}) {
+  const root = ensureWorkforceDocumentsLayout();
+  if (!root) return;
+  const requestId = ++workforceDocumentsState.requestId;
+  workforceDocumentsState.loading = true;
+  const list = document.getElementById('wfDocumentsList');
+  if (!options.quiet && list) {
+    list.innerHTML = '<div class="wf-documents-loading"><span class="wf-loading-spinner"></span>Loading invoices and claims...</div>';
+  }
+  const params = new URLSearchParams({
+    page: String(workforceDocumentsState.page),
+    pageSize: String(workforceDocumentsState.pageSize),
+    kind: workforceDocumentsState.kind
+  });
+  if (workforceDocumentsState.statuses.size) {
+    [...workforceDocumentsState.statuses].forEach(status => params.append('status', status));
+  } else {
+    params.set('status', 'all');
+  }
+  if (workforceDocumentsState.search) params.set('search', workforceDocumentsState.search);
+  try {
+    const response = await apiCall(`/api/workforce/submissions?${params.toString()}`);
+    if (requestId !== workforceDocumentsState.requestId) return;
+    Object.assign(workforceDocumentsState, response.data, { loading: false });
+    const selectedStatusesWithItems = [...workforceDocumentsState.statuses].filter(
+      status => Number(workforceDocumentsState.statusCounts?.[status] || 0) > 0
+    );
+    if (selectedStatusesWithItems.length) {
+      [...workforceDocumentsState.statuses].forEach(status => {
+        if (Number(workforceDocumentsState.statusCounts?.[status] || 0) === 0) {
+          workforceDocumentsState.statuses.delete(status);
+        }
+      });
+    }
+    renderWorkforceDocumentsPage();
+  } catch (error) {
+    if (requestId !== workforceDocumentsState.requestId) return;
+    workforceDocumentsState.loading = false;
+    if (list) list.innerHTML = `<div class="wf-empty">Unable to load invoices and claims: ${wfEscape(error.message)}</div>`;
+  }
+}
+
+function renderWorkforceDocumentsPage() {
+  ensureWorkforceDocumentsLayout();
+  const counts = workforceDocumentsState.statusCounts || {};
+  const kindCounts = workforceDocumentsState.kindCounts || {};
+  const metrics = document.getElementById('wfDocumentMetrics');
+  const kindTabs = document.getElementById('wfDocumentKindTabs');
+  const statusFilters = document.getElementById('wfDocumentStatusFilters');
+  const list = document.getElementById('wfDocumentsList');
+  const pagination = document.getElementById('wfDocumentsPagination');
+  if (!metrics || !kindTabs || !statusFilters || !list || !pagination) return;
+
+  metrics.innerHTML = `
+    <div><span class="wf-document-metric-icon is-attention">!</span><span><strong>${Number(workforceDocumentsState.attentionTotal || 0)}</strong><small>Needs attention</small></span></div>
+    <div><span class="wf-document-metric-icon">${wfMetricIconSvg('invoice')}</span><span><strong>${Number(kindCounts.invoice || 0)}</strong><small>Invoices</small></span></div>
+    <div><span class="wf-document-metric-icon is-claim">${wfMetricIconSvg('claims')}</span><span><strong>${Number(kindCounts.claim || 0)}</strong><small>Claims</small></span></div>
+    <div><span class="wf-document-metric-icon is-total">${wfMetricIconSvg('combined')}</span><span><strong>${Number(workforceDocumentsState.totalUploads || 0)}</strong><small>Total uploads</small></span></div>`;
+
+  kindTabs.innerHTML = [
+    ['all', 'All files', workforceDocumentsState.totalUploads],
+    ['invoice', 'Invoices', kindCounts.invoice],
+    ['claim', 'Claims', kindCounts.claim]
+  ].map(([key, label, count]) => `<button type="button" class="${workforceDocumentsState.kind === key ? 'active' : ''}"
+    onclick="wfDocumentsSetKind('${key}')">${label}<span>${Number(count || 0)}</span></button>`).join('');
+
+  const allActive = workforceDocumentsState.statuses.size === 0;
+  statusFilters.innerHTML = `<button type="button" class="wf-document-filter ${allActive ? 'active' : ''}"
+      onclick="wfDocumentsToggleStatus('all')">All statuses <span>${Number(workforceDocumentsState.totalItems || 0)}</span></button>` +
+    WF_DOCUMENT_STATUS_FILTERS.filter(([key]) => Number(counts[key] || 0) > 0).map(([key, label]) => `
+      <button type="button" class="wf-document-filter ${wfDocumentStatusClass(key)} ${workforceDocumentsState.statuses.has(key) ? 'active' : ''}"
+        aria-pressed="${workforceDocumentsState.statuses.has(key)}" onclick="wfDocumentsToggleStatus('${key}')">
+        ${label} <span>${Number(counts[key] || 0)}</span>
+      </button>`).join('');
+
+  list.innerHTML = `<div class="wf-documents-list-head">
+      <span>Event</span><span>Uploader</span><span>File</span><span>Submitted</span><span>Amount</span><span>Status</span><span>Download</span>
+    </div>` + (workforceDocumentsState.rows.length
+      ? workforceDocumentsState.rows.map(wfDocumentRow).join('')
+      : `<div class="wf-documents-empty"><strong>No matching uploads</strong><span>Try another status, type, or search term.</span></div>`);
+  renderWorkforceDocumentsPagination(pagination);
+}
+
+function wfDocumentRow(record) {
+  const event = record.event || {};
+  const subject = record.subject || {};
+  const eventDates = event.startDate === event.endDate || !event.endDate
+    ? event.startDate
+    : `${event.startDate} - ${event.endDate}`;
+  const detail = record.kind === 'claim'
+    ? [record.category, record.description || record.notes].filter(Boolean).join(' - ')
+    : 'Invoice';
+  const canOpenSubject = ['worker', 'vendor'].includes(subject.type) && subject.id;
+  const departments = (record.departmentDetails || []).map(department => `
+    <span class="wf-document-department" style="--wf-document-dept-bg:${wfAttr(department.color || '#e2e3e5')};--wf-document-dept-text:${wfAttr(department.textColor || '#383d41')}"
+      title="${wfAttr(department.name || department.code)}">${wfEscape(department.code || department.name)}</span>
+  `).join('');
+  const awaitingUpload = Boolean(record.isAwaitingUpload);
+  const fileCell = awaitingUpload
+    ? `<div class="wf-document-file is-awaiting" data-label="File">
+        <span class="wf-document-type is-awaiting">INV</span>
+        <span><strong>No invoice uploaded</strong><small>Awaiting worker or vendor upload</small></span>
+      </div>`
+    : `<button class="wf-document-file" data-label="File" type="button" onclick="openWorkforceDocumentSubmission('${wfAttr(record.id)}')">
+        <span class="wf-document-type is-${wfAttr(record.kind)}">${record.kind === 'invoice' ? 'INV' : 'CLM'}</span>
+        <span><strong title="${wfAttr(record.originalName)}">${wfEscape(record.originalName || `${record.kind} upload`)}</strong><small>${wfEscape(detail || (record.kind === 'invoice' ? 'Invoice' : 'Claim'))}</small></span>
+      </button>`;
+  const downloadCell = awaitingUpload
+    ? '<span class="wf-document-download-empty" aria-label="No file available">-</span>'
+    : `<a class="wf-icon-button" href="${wfAttr(record.downloadUrl)}" download title="Download ${wfAttr(record.originalName || record.kind)}" aria-label="Download ${wfAttr(record.originalName || record.kind)}">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 5-5m-5 5-5-5"></path><path d="M5 20h14"></path></svg>
+      </a>`;
+  return `<article class="wf-document-row ${awaitingUpload ? 'is-awaiting-upload' : ''}" data-submission-id="${wfAttr(record.id)}" data-event-id="${Number(event.id || 0)}">
+    <button class="wf-document-event wf-document-navigation" data-label="Event" type="button"
+      onclick="viewEvent(${Number(event.id || 0)},{updateHistory:false})" title="View event">
+      <span class="wf-document-event-title"><strong>#${wfEscape(event.id)} ${wfEscape(event.name)}</strong>${planEventStateBadgeHtml(event)}</span>
+      <small>${wfEscape(eventDates || 'No event date')}${event.location ? ` &middot; ${wfEscape(event.location)}` : ''}</small>
+    </button>
+    <button class="wf-document-uploader wf-document-navigation" data-label="Uploader" type="button"
+      ${canOpenSubject ? `onclick="openFreelancerHistory('${wfAttr(subject.id)}')" title="View all events for ${wfAttr(subject.name)}"` : 'disabled'}>
+      <span class="wf-avatar ${subject.type === 'vendor' ? 'vendor' : ''}">${wfEscape(wfInitials(subject.name))}</span>
+      <span><strong>${wfEscape(subject.name || 'Unknown')}</strong><small>${wfEscape(subject.type === 'vendor' ? 'Vendor' : (subject.company || 'Worker'))}</small>
+        ${departments ? `<span class="wf-document-departments">${departments}</span>` : ''}</span>
+    </button>
+    ${fileCell}
+    <div class="wf-document-submitted" data-label="Submitted"><strong>${awaitingUpload ? 'Not uploaded' : wfEscape(wfDateTime(record.submittedAt) || 'Unknown')}</strong></div>
+    <div class="wf-document-amount" data-label="Amount"><strong>${awaitingUpload ? '-' : (record.amount == null ? 'To verify' : wfMoney(record.amount))}</strong></div>
+    <div class="wf-document-status" data-label="Status">${wfDocumentStatusMenu(record)}</div>
+    <div class="wf-document-download" data-label="Download">${downloadCell}</div>
+  </article>`;
+}
+
+function renderWorkforceDocumentsPagination(node) {
+  const page = Number(workforceDocumentsState.page || 1);
+  const pageCount = Number(workforceDocumentsState.pageCount || 1);
+  const total = Number(workforceDocumentsState.total || 0);
+  const first = total ? (page - 1) * workforceDocumentsState.pageSize + 1 : 0;
+  const last = Math.min(page * workforceDocumentsState.pageSize, total);
+  node.innerHTML = `<span>Showing ${first}-${last} of ${total}</span><div>
+    <button class="wf-icon-button" type="button" aria-label="Previous page" ${page <= 1 ? 'disabled' : ''}
+      onclick="wfDocumentsSetPage(${page - 1})">&lsaquo;</button>
+    <strong>Page ${page} of ${pageCount}</strong>
+    <button class="wf-icon-button" type="button" aria-label="Next page" ${page >= pageCount ? 'disabled' : ''}
+      onclick="wfDocumentsSetPage(${page + 1})">&rsaquo;</button>
+  </div>`;
+}
+
+function wfDocumentsSetKind(kind) {
+  workforceDocumentsState.kind = ['invoice', 'claim'].includes(kind) ? kind : 'all';
+  workforceDocumentsState.page = 1;
+  loadWorkforceDocumentsPage();
+}
+
+function wfDocumentsToggleStatus(status) {
+  if (status === 'all') {
+    workforceDocumentsState.statuses.clear();
+  } else if (workforceDocumentsState.statuses.has(status)) {
+    workforceDocumentsState.statuses.delete(status);
+  } else {
+    workforceDocumentsState.statuses.add(status);
+  }
+  workforceDocumentsState.page = 1;
+  loadWorkforceDocumentsPage();
+}
+
+function wfDocumentsSearchChanged(value) {
+  clearTimeout(workforceDocumentsState.searchTimer);
+  workforceDocumentsState.searchTimer = setTimeout(() => {
+    workforceDocumentsState.search = String(value || '').trim();
+    workforceDocumentsState.page = 1;
+    loadWorkforceDocumentsPage({ quiet: true });
+  }, 250);
+}
+
+function wfDocumentsSetPage(page) {
+  workforceDocumentsState.page = Math.max(1, Number(page || 1));
+  loadWorkforceDocumentsPage();
+}
+
+function wfFindDocumentSubmission(id) {
+  return workforceDocumentsState.rows.find(row => String(row.id) === String(id));
+}
+
+async function wfLoadDocumentEvent(record) {
+  if (!record?.event?.id) return false;
+  if (
+    Number(workforcePageState.data?.event?.id) !== Number(record.event.id) ||
+    !wfFindSubmission(record.id)
+  ) {
+    const response = await apiCall(`/api/events/${Number(record.event.id)}/workforce`);
+    workforcePageState.eventId = Number(record.event.id);
+    workforcePageState.data = response.data;
+  }
+  return Boolean(wfFindSubmission(record.id));
+}
+
+async function openWorkforceDocumentSubmission(id) {
+  const record = wfFindDocumentSubmission(id);
+  if (!record || record.isAwaitingUpload) return;
+  const statusKey = record.statusKey || wfDocumentStatusKeyFromRecord(record);
+  if (['queued', 'processing', 'details-required'].includes(statusKey)) {
+    window.open(record.previewUrl, '_blank', 'noopener');
+    return;
+  }
+  try {
+    if (await wfLoadDocumentEvent(record)) await openWorkforceReview(id);
+  } catch (error) {
+    showNotification('error', error.message);
+  }
+}
+
+function toggleWorkforceDocumentStatusMenu(event, id) {
+  event.stopPropagation();
+  const menu = document.getElementById(`wfDocumentStatusMenu-${id}`);
+  if (!menu) return;
+  const willOpen = !menu.classList.contains('open');
+  closeWorkforceStatusMenus(menu);
+  menu.classList.toggle('open', willOpen);
+  menu.classList.remove('open-upward');
+  const control = menu.closest('.wf-status-control');
+  control?.classList.toggle('menu-open', willOpen);
+  control?.querySelector(':scope > button')?.setAttribute('aria-expanded', String(willOpen));
+  if (willOpen) {
+    const buttonRect = event.currentTarget.getBoundingClientRect();
+    if (window.innerHeight - buttonRect.bottom < 190 && buttonRect.top > 190) {
+      menu.classList.add('open-upward');
+    }
+  }
+}
+
+async function chooseWorkforceDocumentStatus(event, id, status) {
+  event.stopPropagation();
+  closeWorkforceStatusMenus();
+  const record = wfFindDocumentSubmission(id);
+  if (!record) return;
+  try {
+    if (!await wfLoadDocumentEvent(record)) return;
+    const found = wfFindSubmission(id);
+    if (!found) return;
+    if (
+      found.record.status === status &&
+      !found.record.paymentConfirmedAt &&
+      status !== 'Denied'
+    ) return;
+    if (!found.record.verifiedAt && status !== 'Pending Review') {
+      await openWorkforceReview(id, status);
+      return;
+    }
+    if (status === 'Denied') {
+      openWorkforceDenialReason(id);
+      return;
+    }
+    await applyWorkforceStatus(id, status);
+  } catch (error) {
+    showNotification('error', error.message);
+  }
+}
+
+async function refreshAfterWorkforceSubmissionMutation(data) {
+  workforcePageState.data = data;
+  if (document.getElementById('invoice-claims-section')?.classList.contains('active')) {
+    await loadWorkforceDocumentsPage({ quiet: true });
+    return;
+  }
+  renderWorkforcePage();
+}
+
+function workforceDocumentsRealtimeRelevant(payload) {
+  const actions = [payload?.details?.action]
+    .concat((payload?.details?.changes || []).map(change => change?.details?.action))
+    .map(action => String(action || '').toLowerCase());
+  return actions.some(action => (
+    action.includes('invoice') || action.includes('claim') ||
+    action.includes('submission') || action.includes('payment') ||
+    action.includes('profile') || action.includes('assignment') ||
+    action.includes('deleted')
+  ));
+}
+
+function queueWorkforceDocumentsRealtimeRefresh() {
+  clearTimeout(workforceDocumentsState.realtimeTimer);
+  workforceDocumentsState.realtimeTimer = setTimeout(() => {
+    if (document.getElementById('invoice-claims-section')?.classList.contains('active')) {
+      loadWorkforceDocumentsPage({ quiet: true });
+    }
+  }, 250);
 }
 
 function wfStatusMenu(record) {
@@ -630,9 +1042,12 @@ function renderWorkforcePage() {
     : [data.event.startDate, data.event.endDate].filter(Boolean).join(' – ');
 
   root.innerHTML = `
-    <div class="plan-page-heading">
-      <h2>Manpower &amp; Transport</h2>
-      <p>Assign crew, review submissions and arrange transport.</p>
+    <div class="plan-page-heading wf-manpower-page-heading">
+      <div><div class="wf-manpower-title-row"><h2>Manpower &amp; Transport</h2>
+        <button class="wf-button primary" type="button" onclick="showSection('invoice-claims')">
+          View all invoice &amp; claims
+        </button></div>
+      <p>Assign crew, review submissions and arrange transport.</p></div>
     </div>
 
     <div class="wf-plan-layout">
@@ -2527,8 +2942,7 @@ async function applyWorkforceStatus(id, status, denialReason = '') {
       adminConfirmPayment: adminConfirmingPayment,
       clearPaymentConfirmation: Boolean(found.record.paymentConfirmedAt) && !adminConfirmingPayment
     });
-    workforcePageState.data = response.data;
-    renderWorkforcePage();
+    await refreshAfterWorkforceSubmissionMutation(response.data);
     return true;
   } catch (error) {
     showNotification('error', error.message);
@@ -2691,6 +3105,58 @@ function syncWorkforceReviewClaimCategory() {
   input.required = other && !input.disabled;
 }
 
+function wfReviewExpectedAmountHtml(record) {
+  const expected = record.expectedAmount;
+  const hasExpected = expected !== null && expected !== undefined && Number.isFinite(Number(expected));
+  const breakdown = (record.expectedAmountBreakdown || []).map(row => `
+    <span><strong>${wfEscape(row.role || 'Assigned role')}</strong>
+      ${row.department ? ` <b>${wfEscape(row.department)}</b>` : ''}
+      <small>${wfEscape(row.calculation || '')} = ${wfMoney(row.amount)}</small></span>
+  `).join('');
+  return `<section class="wf-amount-check ${hasExpected ? '' : 'is-unavailable'}" id="wfReviewAmountCheck"
+      data-expected="${hasExpected ? Number(expected) : ''}">
+    <div class="wf-amount-check-values">
+      <div><span>Expected from role</span><strong>${hasExpected ? wfMoney(expected) : 'Not available'}</strong></div>
+      <div><span>Detected / entered</span><strong id="wfReviewDetectedAmount">${record.amount == null ? 'Not detected' : wfMoney(record.amount)}</strong></div>
+      <span class="wf-amount-match" id="wfReviewAmountMatch">${hasExpected ? 'Checking' : 'No role estimate'}</span>
+    </div>
+    ${breakdown ? `<div class="wf-amount-breakdown">${breakdown}</div>` : '<small class="wf-amount-no-role">No rated role is assigned to this worker or vendor for the event.</small>'}
+  </section>`;
+}
+
+function updateWorkforceExpectedComparison() {
+  const card = document.getElementById('wfReviewAmountCheck');
+  const detectedNode = document.getElementById('wfReviewDetectedAmount');
+  const resultNode = document.getElementById('wfReviewAmountMatch');
+  const input = document.getElementById('wfReviewAmount');
+  if (!card || !detectedNode || !resultNode || !input) return;
+  const expected = Number(card.dataset.expected);
+  const enteredText = String(input.value || '').trim();
+  const entered = Number(enteredText);
+  detectedNode.textContent = enteredText && Number.isFinite(entered)
+    ? wfMoney(entered)
+    : 'Not detected';
+  resultNode.className = 'wf-amount-match';
+  if (!card.dataset.expected) {
+    resultNode.textContent = 'No role estimate';
+    resultNode.classList.add('is-neutral');
+    return;
+  }
+  if (!enteredText || !Number.isFinite(entered)) {
+    resultNode.textContent = 'Amount required';
+    resultNode.classList.add('is-warning');
+    return;
+  }
+  const difference = Math.round((entered - expected) * 100) / 100;
+  if (Math.abs(difference) <= 0.01) {
+    resultNode.textContent = 'Match';
+    resultNode.classList.add('is-match');
+  } else {
+    resultNode.textContent = `${difference > 0 ? '+' : '-'}${wfMoney(Math.abs(difference))} difference`;
+    resultNode.classList.add('is-difference');
+  }
+}
+
 async function openWorkforceReview(id, requestedStatus = '', skipOcrRetry = false) {
   ensureWorkforceModals();
   let found = wfFindSubmission(id);
@@ -2730,28 +3196,29 @@ async function openWorkforceReview(id, requestedStatus = '', skipOcrRetry = fals
   const pendingDecision = record.status === 'Pending Review';
   const savedAllocations = record.allocations || [];
   workforcePageState.autoAllocation =
-    kind === 'invoice' && !savedAllocations.length && !verified;
+    kind === 'invoice' && !savedAllocations.length;
   const allocations = savedAllocations.length
     ? Object.fromEntries(savedAllocations.map(row => [row.department, row.amount]))
     : wfEvenAllocationMap(departments, record.amount);
   const pdf = record.contentType === 'application/pdf';
   document.getElementById('wfReviewModalTitle').textContent =
-    `${pendingDecision || !verified ? 'Review' : 'View'} ${kind === 'invoice' ? 'Invoice' : 'Claim'}`;
+    `Review ${kind === 'invoice' ? 'Invoice' : 'Claim'}`;
   document.getElementById('wfReviewContent').innerHTML = `<div class="wf-review-layout">
     <div class="wf-preview">${pdf ? `<iframe src="${wfAttr(record.previewUrl)}#toolbar=1" title="Uploaded PDF"></iframe>`
       : `<img src="${wfAttr(record.previewUrl)}" alt="Uploaded claim">`}</div>
     <form class="wf-review-form" id="wfReviewForm"><p class="wf-form-intro">${wfEscape(freelancer.name || '')} &middot; ${wfEscape(record.originalName || '')}</p>
-      ${kind === 'invoice' ? `<div class="wf-ocr-card"><strong>Detected total: ${record.amount == null ? 'Needs verification' : wfMoney(record.amount)}</strong><br>
+      ${wfReviewExpectedAmountHtml(record)}
+      ${kind === 'invoice' ? `<div class="wf-ocr-card"><strong>Document scan</strong><br>
         Confidence: ${wfEscape(record.ocrConfidence || 'Low')} &middot; ${wfEscape(record.ocrSource || 'No extractor result')}</div>`
         : `<div class="wf-ocr-card">${wfEscape(record.category || 'Claim')} &middot; ${wfEscape(record.claimDate || '')}<br>${wfEscape(record.description || '')}</div>`}
-      ${verified ? `<div class="wf-verified-note">Amount and submission details were verified on ${wfEscape(wfDateTime(record.verifiedAt))}.</div>` : ''}
+      ${verified ? `<div class="wf-verified-note">Last reviewed on ${wfEscape(wfDateTime(record.verifiedAt))}. The details remain editable.</div>` : ''}
       <div class="wf-form-grid">
-        <label class="wf-field"><span>Verified amount ($) *</span><input id="wfReviewAmount" type="number" min="0" step=".01" value="${record.amount ?? ''}" required ${verified ? 'disabled' : ''}></label>
-        ${kind === 'claim' ? wfReviewClaimCategoryFields(record, verified) : ''}
+        <label class="wf-field"><span>Verified amount ($) *</span><input id="wfReviewAmount" type="number" min="0" step=".01" value="${record.amount ?? ''}" required></label>
+        ${kind === 'claim' ? wfReviewClaimCategoryFields(record, false) : ''}
       </div>
       ${kind === 'invoice' ? `<div class="wf-section-card"><h4>Department allocation</h4>
         ${departments.map(code => `<label class="wf-allocation-row"><span>${wfEscape(code)}</span>
-          <input class="wf-allocation-input" data-department="${wfAttr(code)}" type="number" min="0" step=".01" value="${allocations[code] ?? ''}" ${verified ? 'disabled' : ''}></label>`).join('')}
+          <input class="wf-allocation-input" data-department="${wfAttr(code)}" type="number" min="0" step=".01" value="${allocations[code] ?? ''}"></label>`).join('')}
         <div class="wf-allocation-progress" id="wfAllocationProgress"></div></div>` : ''}
       ${verified && record.status === 'Denied' ? `<div class="wf-denial-summary"><strong>Denial reason</strong><span>${wfEscape(record.denialReason || 'No reason was provided.')}</span></div>` : ''}
       <div class="wf-error" id="wfReviewError"></div>
@@ -2760,7 +3227,8 @@ async function openWorkforceReview(id, requestedStatus = '', skipOcrRetry = fals
       ? `<button class="wf-button" type="button" onclick="submitWorkforceReview('Pending Review')">Save &amp; Close</button>
          <button class="wf-button danger" type="button" onclick="denyWorkforceReview()">Deny</button>
          <button class="wf-button approve" type="button" onclick="submitWorkforceReview('Approved')">Approve</button>`
-      : `<button class="wf-button" type="button" onclick="closeWorkforceModal('wfReviewModal')">Close</button>`}</footer>`;
+      : `<button class="wf-button" type="button" onclick="closeWorkforceModal('wfReviewModal')">Close</button>
+         <button class="wf-button primary" type="button" onclick="submitWorkforceReview('${wfAttr(record.status || 'Pending Review')}')">Save Changes</button>`}</footer>`;
   document.querySelectorAll('.wf-allocation-input').forEach(input => input.addEventListener('input', () => {
     workforcePageState.autoAllocation = false;
     updateAllocationProgress();
@@ -2768,9 +3236,11 @@ async function openWorkforceReview(id, requestedStatus = '', skipOcrRetry = fals
   document.getElementById('wfReviewAmount')?.addEventListener('input', () => {
     applyDefaultReviewAllocations();
     updateAllocationProgress();
+    updateWorkforceExpectedComparison();
   });
   syncWorkforceReviewClaimCategory();
   updateAllocationProgress();
+  updateWorkforceExpectedComparison();
   openWorkforceModal('wfReviewModal');
 }
 
@@ -2790,6 +3260,23 @@ function denyWorkforceReview() {
   openWorkforceDenialReason(found.record.id, true);
 }
 
+function wfReviewDetailsChanged(record, amount, allocations, claimDate, category) {
+  const originalAmount = record.amount === null || record.amount === undefined
+    ? null
+    : Number(record.amount);
+  const nextAmount = amount === '' || amount === null || amount === undefined
+    ? null
+    : Number(amount);
+  if (originalAmount !== nextAmount) return true;
+  const normalizeAllocations = rows => (rows || [])
+    .map(row => `${String(row.department || '')}:${Number(row.amount || 0).toFixed(2)}`)
+    .sort()
+    .join('|');
+  if (normalizeAllocations(record.allocations) !== normalizeAllocations(allocations)) return true;
+  if (String(record.claimDate || '') !== String(claimDate || '')) return true;
+  return String(record.category || '') !== String(category || '');
+}
+
 async function submitWorkforceReview(status, denialReason = '') {
   const found = wfFindSubmission(workforcePageState.reviewSubmissionId);
   if (!found) return false;
@@ -2801,19 +3288,24 @@ async function submitWorkforceReview(status, denialReason = '') {
     if (category === 'Other') {
       category = document.getElementById('wfReviewOtherCategory')?.value.trim() || '';
     }
+    const amount = document.getElementById('wfReviewAmount').value;
+    const claimDate = document.getElementById('wfReviewClaimDate')?.value || '';
+    const detailsChanged = wfReviewDetailsChanged(
+      found.record, amount, allocations, claimDate, category
+    );
     const response = await apiCall(`/api/workforce/submissions/${encodeURIComponent(found.record.id)}`, 'PUT', {
-      amount: document.getElementById('wfReviewAmount').value,
+      amount,
       status,
-      denialReason,
+      denialReason: denialReason || (status === 'Denied' ? found.record.denialReason || '' : ''),
       allocations,
-      claimDate: document.getElementById('wfReviewClaimDate')?.value || '',
+      claimDate,
       category,
       confirmReview: true,
-      clearPaymentConfirmation: Boolean(found.record.paymentConfirmedAt)
+      clearPaymentConfirmation: Boolean(found.record.paymentConfirmedAt) && detailsChanged
     });
     workforcePageState.data = response.data;
     closeWorkforceModal('wfReviewModal');
-    renderWorkforcePage();
+    await refreshAfterWorkforceSubmissionMutation(response.data);
     return true;
   } catch (error) {
     wfError('wfReviewError', error.message);
@@ -2823,9 +3315,8 @@ async function submitWorkforceReview(status, denialReason = '') {
 
 async function deleteWorkforceSubmission(id, fromReview = false) {
   const response = await apiCall(`/api/workforce/submissions/${encodeURIComponent(id)}`, 'DELETE');
-  workforcePageState.data = response.data;
   if (fromReview) closeWorkforceModal('wfReviewModal');
-  renderWorkforcePage();
+  await refreshAfterWorkforceSubmissionMutation(response.data);
 }
 
 document.addEventListener('click', () => {

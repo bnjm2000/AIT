@@ -1,1 +1,0 @@
-{"id": "1782552681170-22-479d4d79", "topic": "data-changed", "details": {"topics": ["activity-log"], "changes": [{"topic": "activity-log", "details": {"action": "Updated PDF footer settings"}}], "path": "/api/pdf-settings", "method": "PUT"}, "actor": "ac-inventory", "originClientId": "7a787305-856a-4cc8-b0f1-4cd42c2d8e4c", "timestamp": "2026-06-27T17:31:21"}
