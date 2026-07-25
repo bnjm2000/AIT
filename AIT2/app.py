@@ -7038,6 +7038,40 @@ def _workforce_subject(workforce, subject_id):
     return None, ''
 
 
+def _transport_profiles_for_response(workforce):
+    profiles = [
+        dict(row)
+        for row in workforce.get('transportVendors', [])
+        if isinstance(row, dict)
+    ]
+    latest_by_vendor = {}
+    for rows in (workforce.get('transportBookings') or {}).values():
+        for booking in rows if isinstance(rows, list) else []:
+            if (
+                not isinstance(booking, dict)
+                or str(booking.get('sourceType') or 'external') != 'external'
+                or not booking.get('vendorId')
+            ):
+                continue
+            timestamp = str(
+                booking.get('updatedAt')
+                or booking.get('createdAt')
+                or ''
+            )
+            vendor_id = str(booking.get('vendorId'))
+            previous = latest_by_vendor.get(vendor_id)
+            if previous is None or timestamp >= previous['timestamp']:
+                latest_by_vendor[vendor_id] = {
+                    'timestamp': timestamp,
+                    'cost': money(booking.get('cost'), 0.0) or 0.0,
+                }
+    for profile in profiles:
+        latest = latest_by_vendor.get(str(profile.get('id') or ''))
+        profile['lastCost'] = latest['cost'] if latest else None
+        profile['lastUsedAt'] = latest['timestamp'] if latest else ''
+    return profiles
+
+
 def _admin_workforce_payload(event_id, manager=None):
     manager = manager or _current_data_manager_object()
     event = manager.events.get(int(event_id))
@@ -7127,8 +7161,9 @@ def _admin_workforce_payload(event_id, manager=None):
         ],
         'roles': workforce.get('roles', []),
         'assignments': event_assignments(workforce, event_id),
-        'transportVendors': workforce.get('transportVendors', []),
+        'transportVendors': _transport_profiles_for_response(workforce),
         'transportLocations': workforce.get('transportLocations', []),
+        'vehicles': workforce.get('vehicles', []),
         'transportBookings': bookings,
         'submissions': submissions,
         'uploadAllowances': upload_allowances,
@@ -8075,15 +8110,24 @@ def get_event_operational_overview(event_id):
             continue
         transport.append({
             'id': str(booking.get('id') or ''),
+            'sourceType': str(booking.get('sourceType') or 'external'),
+            'tripType': str(booking.get('tripType') or 'depart'),
+            'vehicleId': str(booking.get('vehicleId') or ''),
             'company': str(booking.get('company') or ''),
             'driver': str(booking.get('driver') or ''),
-            'contactNumber': str(booking.get('contactNumber') or ''),
+            'contactNumber': str(
+                booking.get('driverContact')
+                or booking.get('contactNumber')
+                or ''
+            ),
             'vehicleType': str(booking.get('vehicleType') or ''),
             'vehicleNumber': str(booking.get('vehicleNumber') or ''),
             'locationFrom': str(booking.get('locationFrom') or ''),
             'locationTo': str(booking.get('locationTo') or ''),
             'departDate': str(booking.get('departDate') or ''),
             'departTime': str(booking.get('departTime') or ''),
+            'useEndDate': str(booking.get('useEndDate') or ''),
+            'useEndTime': str(booking.get('useEndTime') or ''),
             'twoWay': bool(booking.get('twoWay')),
             'returnDate': str(booking.get('returnDate') or ''),
             'returnTime': str(booking.get('returnTime') or ''),
@@ -9366,13 +9410,26 @@ def _transport_vendor_payload(raw):
 
 def _transport_payload(raw):
     payload = raw if isinstance(raw, dict) else {}
+    source_type = str(payload.get('sourceType') or 'external').strip().lower()
+    if source_type not in {'fleet', 'external'}:
+        source_type = 'external'
+    trip_type = str(payload.get('tripType') or 'depart').strip().lower()
+    if trip_type not in {'depart', 'return'}:
+        trip_type = 'depart'
     return {
         'vendorId': str(payload.get('vendorId') or '').strip(),
+        'vehicleId': str(payload.get('vehicleId') or '').strip(),
+        'sourceType': source_type,
+        'tripType': trip_type,
+        'driver': str(payload.get('driver') or '').strip(),
+        'driverContact': normalize_phone(payload.get('driverContact')),
         'locationFrom': str(payload.get('locationFrom') or '').strip(),
         'locationTo': str(payload.get('locationTo') or '').strip(),
         'twoWay': bool(payload.get('twoWay')),
         'departDate': str(payload.get('departDate') or '').strip(),
         'departTime': str(payload.get('departTime') or '').strip(),
+        'useEndDate': str(payload.get('useEndDate') or '').strip(),
+        'useEndTime': str(payload.get('useEndTime') or '').strip(),
         'returnDate': str(payload.get('returnDate') or '').strip(),
         'returnTime': str(payload.get('returnTime') or '').strip(),
         'cost': money(payload.get('cost'), 0.0) or 0.0,
@@ -9382,6 +9439,536 @@ def _transport_payload(raw):
             else 'Pending Review'
         ),
     }
+
+
+def _vehicle_payload(raw, existing=None):
+    payload = raw if isinstance(raw, dict) else {}
+    current = existing if isinstance(existing, dict) else {}
+    registration = str(
+        payload.get('registrationNumber', current.get('registrationNumber', ''))
+        or ''
+    ).strip().upper()
+    vehicle_type = str(
+        payload.get('vehicleType', current.get('vehicleType', '')) or ''
+    ).strip()
+    display_name = str(
+        payload.get('name', current.get('name', '')) or ''
+    ).strip()
+    return {
+        'name': display_name or vehicle_type or registration,
+        'registrationNumber': registration,
+        'vehicleType': vehicle_type,
+        'notes': str(
+            payload.get('notes', current.get('notes', '')) or ''
+        ).strip(),
+        'active': _request_bool(
+            payload.get('active'),
+            bool(current.get('active', True)),
+        ),
+    }
+
+
+def _vehicle_window(date_value, start_time, end_date_value, end_time):
+    date_text = str(date_value or '').strip()
+    start_text = str(start_time or '').strip()
+    end_date_text = str(end_date_value or date_text).strip()
+    end_text = str(end_time or '').strip()
+    try:
+        start = datetime.strptime(
+            f'{date_text} {start_text}', '%Y-%m-%d %H:%M'
+        )
+        end = datetime.strptime(
+            f'{end_date_text} {end_text}', '%Y-%m-%d %H:%M'
+        )
+    except ValueError as exc:
+        raise ValueError('Enter a valid booking date and time') from exc
+    if end <= start:
+        raise ValueError('Vehicle return time must be after its departure time')
+    return start, end
+
+
+def _vehicle_window_for_row(row):
+    if not isinstance(row, dict):
+        return None
+    try:
+        if str(row.get('sourceType') or '').lower() == 'fleet':
+            return _vehicle_window(
+                row.get('departDate'),
+                row.get('departTime'),
+                row.get('useEndDate') or row.get('departDate'),
+                row.get('useEndTime'),
+            )
+        return _vehicle_window(
+            row.get('date'),
+            row.get('startTime'),
+            row.get('endDate') or row.get('date'),
+            row.get('endTime'),
+        )
+    except ValueError:
+        return None
+
+
+def _vehicle_booking_entries(workforce):
+    entries = []
+    for row in workforce.get('vehicleBookings', []):
+        if not isinstance(row, dict):
+            continue
+        window = _vehicle_window_for_row(row)
+        if window and row.get('vehicleId'):
+            entries.append({
+                'row': row,
+                'eventId': None,
+                'kind': 'standalone',
+                'start': window[0],
+                'end': window[1],
+            })
+    for event_key, rows in (workforce.get('transportBookings') or {}).items():
+        for row in rows if isinstance(rows, list) else []:
+            if (
+                not isinstance(row, dict)
+                or str(row.get('sourceType') or '').lower() != 'fleet'
+                or not row.get('vehicleId')
+            ):
+                continue
+            window = _vehicle_window_for_row(row)
+            if not window:
+                continue
+            entries.append({
+                'row': row,
+                'eventId': _safe_int(event_key, 0) or None,
+                'kind': 'event',
+                'start': window[0],
+                'end': window[1],
+            })
+    return entries
+
+
+def _vehicle_conflicts(
+    workforce,
+    vehicle_id,
+    start,
+    end,
+    exclude_booking_id='',
+):
+    conflicts = []
+    for entry in _vehicle_booking_entries(workforce):
+        row = entry['row']
+        if (
+            str(row.get('vehicleId') or '') != str(vehicle_id)
+            or str(row.get('id') or '') == str(exclude_booking_id or '')
+            or entry['start'] >= end
+            or entry['end'] <= start
+        ):
+            continue
+        conflicts.append(entry)
+    return conflicts
+
+
+def _vehicle_booking_conflict_message(conflicts):
+    if not conflicts:
+        return ''
+    entry = conflicts[0]
+    row = entry['row']
+    label = str(row.get('purpose') or '').strip()
+    if entry.get('eventId'):
+        event = data_manager.events.get(int(entry['eventId']))
+        label = f"event #{entry['eventId']} {getattr(event, 'name', '')}".strip()
+    return (
+        f"Vehicle is already booked for {label or 'another purpose'} from "
+        f"{entry['start'].strftime('%d %b %Y, %H:%M')} to "
+        f"{entry['end'].strftime('%d %b %Y, %H:%M')}"
+    )
+
+
+def _vehicle_day_payload(workforce, selected_date):
+    try:
+        day_start = datetime.strptime(selected_date, '%Y-%m-%d')
+    except ValueError:
+        selected_date = datetime.now().strftime('%Y-%m-%d')
+        day_start = datetime.strptime(selected_date, '%Y-%m-%d')
+    day_end = day_start + timedelta(days=1)
+    vehicles = [
+        dict(row)
+        for row in workforce.get('vehicles', [])
+        if isinstance(row, dict)
+    ]
+    vehicle_by_id = {
+        str(row.get('id') or ''): row
+        for row in vehicles
+        if row.get('id')
+    }
+    bookings = []
+    for entry in _vehicle_booking_entries(workforce):
+        if entry['start'] >= day_end or entry['end'] <= day_start:
+            continue
+        row = entry['row']
+        event_id = entry.get('eventId')
+        event = data_manager.events.get(int(event_id)) if event_id else None
+        bookings.append({
+            'id': str(row.get('id') or ''),
+            'vehicleId': str(row.get('vehicleId') or ''),
+            'vehicle': vehicle_by_id.get(str(row.get('vehicleId') or ''), {}),
+            'kind': entry['kind'],
+            'eventId': event_id,
+            'eventName': getattr(event, 'name', '') if event else '',
+            'purpose': (
+                f"{str(row.get('tripType') or 'depart').title()} trip"
+                if event_id else str(row.get('purpose') or '')
+            ),
+            'direction': str(row.get('tripType') or ''),
+            'driver': str(row.get('driver') or ''),
+            'locationFrom': str(row.get('locationFrom') or ''),
+            'locationTo': str(row.get('locationTo') or ''),
+            'start': entry['start'].isoformat(timespec='minutes'),
+            'end': entry['end'].isoformat(timespec='minutes'),
+            'notes': str(row.get('notes') or ''),
+            'canDelete': entry['kind'] == 'standalone',
+        })
+    bookings.sort(key=lambda row: (row['start'], row['vehicleId'], row['id']))
+    vehicles.sort(key=lambda row: (
+        not bool(row.get('active', True)),
+        str(row.get('registrationNumber') or '').casefold(),
+    ))
+    return {
+        'date': selected_date,
+        'vehicles': vehicles,
+        'bookings': bookings,
+        'updatedAt': str(workforce.get('updatedAt') or ''),
+    }
+
+
+@app.route('/api/vehicles', methods=['GET', 'POST'])
+@require_admin
+def company_vehicles():
+    if request.method == 'GET':
+        workforce = load_workforce(_workforce_folder())
+        selected_date = str(
+            request.args.get('date') or datetime.now().strftime('%Y-%m-%d')
+        ).strip()
+        return jsonify({
+            'success': True,
+            'data': _vehicle_day_payload(workforce, selected_date),
+        })
+
+    payload = _vehicle_payload(request.get_json(silent=True) or {})
+    if not payload['registrationNumber'] or not payload['vehicleType']:
+        return jsonify({
+            'error': 'Registration number and vehicle type are required'
+        }), 400
+    with mutate_workforce(_workforce_folder()) as workforce:
+        duplicate = next((
+            row for row in workforce.get('vehicles', [])
+            if isinstance(row, dict)
+            and str(row.get('registrationNumber') or '').casefold()
+            == payload['registrationNumber'].casefold()
+        ), None)
+        if duplicate:
+            return jsonify({'error': 'A vehicle with this registration already exists'}), 409
+        vehicle = {
+            'id': new_id('vehicle'),
+            **payload,
+            'createdAt': now_iso(),
+            'updatedAt': now_iso(),
+        }
+        workforce.setdefault('vehicles', []).append(vehicle)
+    log_action(f"Added fleet vehicle {vehicle['registrationNumber']}")
+    mark_realtime_change('vehicles', {'action': 'vehicle-created', 'vehicleId': vehicle['id']})
+    return jsonify({'success': True, 'data': vehicle}), 201
+
+
+@app.route('/api/vehicles/availability', methods=['GET'])
+@require_admin
+def vehicle_availability():
+    workforce = load_workforce(_workforce_folder())
+    vehicles = [
+        dict(row)
+        for row in workforce.get('vehicles', [])
+        if isinstance(row, dict) and row.get('active', True)
+    ]
+    required = (
+        request.args.get('date'),
+        request.args.get('startTime'),
+        request.args.get('endDate'),
+        request.args.get('endTime'),
+    )
+    if not all(required):
+        return jsonify({
+            'success': True,
+            'data': {
+                'complete': False,
+                'vehicles': [],
+            },
+        })
+    try:
+        start, end = _vehicle_window(*required)
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+    exclude_booking_id = str(
+        request.args.get('excludeBookingId') or ''
+    ).strip()
+    result = []
+    for vehicle in vehicles:
+        conflicts = _vehicle_conflicts(
+            workforce,
+            vehicle.get('id'),
+            start,
+            end,
+            exclude_booking_id=exclude_booking_id,
+        )
+        result.append({
+            **vehicle,
+            'available': not conflicts,
+            'conflict': (
+                _vehicle_booking_conflict_message(conflicts)
+                if conflicts else ''
+            ),
+        })
+    result.sort(key=lambda row: (
+        not row['available'],
+        str(row.get('registrationNumber') or '').casefold(),
+    ))
+    return jsonify({
+        'success': True,
+        'data': {
+            'complete': True,
+            'start': start.isoformat(timespec='minutes'),
+            'end': end.isoformat(timespec='minutes'),
+            'vehicles': result,
+        },
+    })
+
+
+@app.route('/api/vehicles/<vehicle_id>', methods=['PUT', 'DELETE'])
+@require_admin
+def company_vehicle(vehicle_id):
+    with mutate_workforce(_workforce_folder()) as workforce:
+        vehicles = workforce.setdefault('vehicles', [])
+        vehicle = find_by_id(vehicles, vehicle_id)
+        if not vehicle:
+            return jsonify({'error': 'Vehicle not found'}), 404
+        if request.method == 'DELETE':
+            is_referenced = any(
+                str(entry['row'].get('vehicleId') or '') == str(vehicle_id)
+                for entry in _vehicle_booking_entries(workforce)
+            )
+            if is_referenced:
+                return jsonify({
+                    'error': 'This vehicle has bookings. Mark it inactive instead.'
+                }), 409
+            vehicles.remove(vehicle)
+            action = 'vehicle-deleted'
+            registration = str(vehicle.get('registrationNumber') or '')
+        else:
+            payload = _vehicle_payload(
+                request.get_json(silent=True) or {},
+                vehicle,
+            )
+            if not payload['registrationNumber'] or not payload['vehicleType']:
+                return jsonify({
+                    'error': 'Registration number and vehicle type are required'
+                }), 400
+            duplicate = next((
+                row for row in vehicles
+                if (
+                    isinstance(row, dict)
+                    and str(row.get('id')) != str(vehicle_id)
+                    and str(row.get('registrationNumber') or '').casefold()
+                    == payload['registrationNumber'].casefold()
+                )
+            ), None)
+            if duplicate:
+                return jsonify({'error': 'A vehicle with this registration already exists'}), 409
+            vehicle.update({**payload, 'updatedAt': now_iso()})
+            action = 'vehicle-updated'
+            registration = vehicle['registrationNumber']
+    log_action(f"{'Deleted' if request.method == 'DELETE' else 'Updated'} fleet vehicle {registration}")
+    mark_realtime_change('vehicles', {'action': action, 'vehicleId': str(vehicle_id)})
+    return jsonify({'success': True, 'data': vehicle if request.method == 'PUT' else None})
+
+
+@app.route('/api/vehicles/bookings', methods=['POST'])
+@require_admin
+def create_vehicle_booking():
+    payload = request.get_json(silent=True) or {}
+    vehicle_id = str(payload.get('vehicleId') or '').strip()
+    purpose = str(payload.get('purpose') or '').strip()
+    try:
+        start, end = _vehicle_window(
+            payload.get('date'),
+            payload.get('startTime'),
+            payload.get('endDate') or payload.get('date'),
+            payload.get('endTime'),
+        )
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+    if not vehicle_id or not purpose:
+        return jsonify({'error': 'Vehicle and purpose are required'}), 400
+    with mutate_workforce(_workforce_folder()) as workforce:
+        vehicle = find_by_id(workforce.get('vehicles'), vehicle_id)
+        if not vehicle or not vehicle.get('active', True):
+            return jsonify({'error': 'Choose an active fleet vehicle'}), 404
+        conflicts = _vehicle_conflicts(workforce, vehicle_id, start, end)
+        if conflicts:
+            return jsonify({
+                'error': _vehicle_booking_conflict_message(conflicts)
+            }), 409
+        booking = {
+            'id': new_id('vehicle_booking'),
+            'vehicleId': vehicle_id,
+            'purpose': purpose,
+            'date': start.strftime('%Y-%m-%d'),
+            'startTime': start.strftime('%H:%M'),
+            'endDate': end.strftime('%Y-%m-%d'),
+            'endTime': end.strftime('%H:%M'),
+            'notes': str(payload.get('notes') or '').strip(),
+            'createdAt': now_iso(),
+            'updatedAt': now_iso(),
+        }
+        workforce.setdefault('vehicleBookings', []).append(booking)
+    log_action(f"Booked fleet vehicle {vehicle.get('registrationNumber')} for {purpose}")
+    mark_realtime_change('vehicles', {'action': 'booking-created', 'vehicleId': vehicle_id})
+    return jsonify({'success': True, 'data': booking}), 201
+
+
+@app.route('/api/vehicles/bookings/<booking_id>', methods=['PUT', 'DELETE'])
+@require_admin
+def update_vehicle_booking(booking_id):
+    payload = request.get_json(silent=True) or {}
+    selected_date = str(payload.get('selectedDate') or payload.get('date') or '').strip()
+    changed_event_id = None
+    changed_vehicle_id = ''
+    changed_registration = ''
+    changed_purpose = ''
+    with mutate_workforce(_workforce_folder()) as workforce:
+        standalone = find_by_id(workforce.get('vehicleBookings'), booking_id)
+        event_booking = None
+        event_id = None
+        if not standalone:
+            for event_key, rows in (workforce.get('transportBookings') or {}).items():
+                event_booking = find_by_id(rows, booking_id)
+                if event_booking:
+                    event_id = _safe_int(event_key, 0) or None
+                    break
+        booking = standalone or event_booking
+        if not booking:
+            return jsonify({'error': 'Vehicle booking not found'}), 404
+        if request.method == 'DELETE':
+            if event_booking:
+                return jsonify({
+                    'error': 'Event vehicle trips must be removed from Manpower & Transport'
+                }), 400
+            workforce.setdefault('vehicleBookings', []).remove(standalone)
+            changed_vehicle_id = str(standalone.get('vehicleId') or '')
+            deleted_vehicle = find_by_id(
+                workforce.get('vehicles'), changed_vehicle_id
+            )
+            changed_registration = str(
+                (deleted_vehicle or {}).get('registrationNumber') or ''
+            )
+            changed_purpose = str(standalone.get('purpose') or '')
+        else:
+            vehicle_id = str(
+                payload.get('vehicleId') or booking.get('vehicleId') or ''
+            ).strip()
+            vehicle = find_by_id(workforce.get('vehicles'), vehicle_id)
+            if not vehicle or not vehicle.get('active', True):
+                return jsonify({'error': 'Choose an active fleet vehicle'}), 404
+            date_value = payload.get('date') or (
+                booking.get('departDate') if event_booking else booking.get('date')
+            )
+            start_time = payload.get('startTime') or (
+                booking.get('departTime') if event_booking else booking.get('startTime')
+            )
+            end_date = payload.get('endDate') or (
+                booking.get('useEndDate') if event_booking else booking.get('endDate')
+            ) or date_value
+            end_time = payload.get('endTime') or (
+                booking.get('useEndTime') if event_booking else booking.get('endTime')
+            )
+            try:
+                start, end = _vehicle_window(
+                    date_value, start_time, end_date, end_time
+                )
+            except ValueError as exc:
+                return jsonify({'error': str(exc)}), 400
+            conflicts = _vehicle_conflicts(
+                workforce,
+                vehicle_id,
+                start,
+                end,
+                exclude_booking_id=booking_id,
+            )
+            if conflicts:
+                return jsonify({
+                    'error': _vehicle_booking_conflict_message(conflicts)
+                }), 409
+            if event_booking:
+                event_booking.update({
+                    'vehicleId': vehicle_id,
+                    'vehicleType': str(vehicle.get('vehicleType') or ''),
+                    'vehicleNumber': str(vehicle.get('registrationNumber') or ''),
+                    'departDate': start.strftime('%Y-%m-%d'),
+                    'departTime': start.strftime('%H:%M'),
+                    'useEndDate': end.strftime('%Y-%m-%d'),
+                    'useEndTime': end.strftime('%H:%M'),
+                    'updatedAt': now_iso(),
+                })
+                changed_event_id = event_id
+            else:
+                purpose = str(
+                    payload.get('purpose', standalone.get('purpose', ''))
+                    or ''
+                ).strip()
+                if not purpose:
+                    return jsonify({'error': 'Booking purpose is required'}), 400
+                standalone.update({
+                    'vehicleId': vehicle_id,
+                    'purpose': purpose,
+                    'date': start.strftime('%Y-%m-%d'),
+                    'startTime': start.strftime('%H:%M'),
+                    'endDate': end.strftime('%Y-%m-%d'),
+                    'endTime': end.strftime('%H:%M'),
+                    'notes': str(
+                        payload.get('notes', standalone.get('notes', ''))
+                        or ''
+                    ).strip(),
+                    'updatedAt': now_iso(),
+                })
+            changed_vehicle_id = vehicle_id
+            changed_registration = str(
+                vehicle.get('registrationNumber') or ''
+            )
+            changed_purpose = str(
+                booking.get('purpose')
+                or booking.get('tripType')
+                or 'booking'
+            )
+        response_payload = _vehicle_day_payload(
+            workforce,
+            selected_date or datetime.now().strftime('%Y-%m-%d'),
+        )
+    if changed_event_id:
+        log_action(
+            f"Rescheduled fleet vehicle {changed_registration} "
+            f"for {changed_purpose} on event {changed_event_id}"
+        )
+        _workforce_changed(changed_event_id, 'fleet-booking-updated')
+    else:
+        log_action(
+            f"{'Deleted' if request.method == 'DELETE' else 'Updated'} "
+            f"fleet vehicle booking {changed_registration} "
+            f"for {changed_purpose}"
+        )
+    mark_realtime_change('vehicles', {
+        'action': (
+            'booking-deleted'
+            if request.method == 'DELETE'
+            else 'booking-updated'
+        ),
+        'vehicleId': changed_vehicle_id,
+        **({'eventId': changed_event_id} if changed_event_id else {}),
+    })
+    return jsonify({'success': True, 'data': response_payload})
 
 
 def _transport_location_parts(name, address=''):
@@ -9527,40 +10114,95 @@ def create_transport_booking(event_id):
         'contactNumber': payload.get('contactNumber'),
         'vehicleNumber': payload.get('vehicleNumber'),
     })
-    has_legacy_profile = all(legacy_profile.values())
+    has_legacy_profile = bool(
+        legacy_profile['vehicleType']
+        and legacy_profile['company']
+        and legacy_profile['vehicleNumber']
+    )
     required = (
         booking_data['locationFrom'],
         booking_data['locationTo'],
         booking_data['departDate'],
         booking_data['departTime'],
     )
-    if not all(required) or (
-        not booking_data['vendorId'] and not has_legacy_profile
-    ):
+    if not all(required):
         return jsonify({'error': 'Complete all required transport fields'}), 400
-    if booking_data['twoWay'] and (
+    if (
+        booking_data['sourceType'] == 'external'
+        and not booking_data['vendorId']
+        and not has_legacy_profile
+    ):
+        return jsonify({'error': 'Choose an external transport profile'}), 400
+    if (
+        booking_data['sourceType'] == 'fleet'
+        and not booking_data['vehicleId']
+    ):
+        return jsonify({'error': 'Choose a fleet vehicle'}), 400
+    if (
+        booking_data['sourceType'] == 'fleet'
+        and (
+            not booking_data['useEndDate']
+            or not booking_data['useEndTime']
+        )
+    ):
+        return jsonify({
+            'error': 'Fleet vehicle return date and time are required'
+        }), 400
+    if (
+        booking_data['sourceType'] == 'external'
+        and booking_data['twoWay']
+        and (
         not booking_data['returnDate'] or not booking_data['returnTime']
+        )
     ):
         return jsonify({'error': 'Return date and time are required'}), 400
     if booking_data['status'] == 'Paid':
         return jsonify({'error': 'Create the booking before marking it as paid'}), 400
 
     with mutate_workforce(_workforce_folder()) as workforce:
-        vendor = find_by_id(
-            workforce.get('transportVendors'), booking_data.get('vendorId')
-        )
-        if not vendor and has_legacy_profile:
-            vendor = {
-                'id': new_id('vendor'),
-                **legacy_profile,
-                'name': legacy_profile['driver'],
-                'createdAt': now_iso(),
-                'updatedAt': now_iso(),
-            }
-            workforce.setdefault('transportVendors', []).append(vendor)
-            booking_data['vendorId'] = vendor['id']
-        if not vendor:
-            return jsonify({'error': 'Choose a saved transport profile'}), 404
+        vendor = None
+        vehicle = None
+        if booking_data['sourceType'] == 'fleet':
+            vehicle = find_by_id(
+                workforce.get('vehicles'), booking_data.get('vehicleId')
+            )
+            if not vehicle or not vehicle.get('active', True):
+                return jsonify({'error': 'Choose an active fleet vehicle'}), 404
+            try:
+                usage_start, usage_end = _vehicle_window(
+                    booking_data['departDate'],
+                    booking_data['departTime'],
+                    booking_data['useEndDate'],
+                    booking_data['useEndTime'],
+                )
+            except ValueError as exc:
+                return jsonify({'error': str(exc)}), 400
+            conflicts = _vehicle_conflicts(
+                workforce,
+                booking_data['vehicleId'],
+                usage_start,
+                usage_end,
+            )
+            if conflicts:
+                return jsonify({
+                    'error': _vehicle_booking_conflict_message(conflicts)
+                }), 409
+        else:
+            vendor = find_by_id(
+                workforce.get('transportVendors'), booking_data.get('vendorId')
+            )
+            if not vendor and has_legacy_profile:
+                vendor = {
+                    'id': new_id('vendor'),
+                    **legacy_profile,
+                    'name': legacy_profile['driver'],
+                    'createdAt': now_iso(),
+                    'updatedAt': now_iso(),
+                }
+                workforce.setdefault('transportVendors', []).append(vendor)
+                booking_data['vendorId'] = vendor['id']
+            if not vendor:
+                return jsonify({'error': 'Choose a saved transport profile'}), 404
         if bool(payload.get('saveLocations')):
             _remember_transport_location(
                 workforce, booking_data['locationFrom']
@@ -9568,18 +10210,41 @@ def create_transport_booking(event_id):
             _remember_transport_location(
                 workforce, booking_data['locationTo']
             )
+        trip_driver = booking_data['driver']
+        if 'sourceType' not in payload and not trip_driver:
+            trip_driver = str(
+                (vendor or {}).get('driver')
+                or (vendor or {}).get('name')
+                or ''
+            )
+        driver_contact = booking_data['driverContact']
+        if 'sourceType' not in payload and not driver_contact:
+            driver_contact = str((vendor or {}).get('contactNumber') or '')
+        company_name = (
+            _company_payload(_current_company_code()).get('name', '')
+            if vehicle else str((vendor or {}).get('company') or '')
+        )
         booking = {
             'id': new_id('transport'),
             **booking_data,
-            'vehicleType': str(vendor.get('vehicleType') or ''),
-            'company': str(vendor.get('company') or ''),
-            'driver': str(vendor.get('driver') or vendor.get('name') or ''),
+            'vehicleType': str(
+                (vehicle or {}).get('vehicleType')
+                or (vendor or {}).get('vehicleType')
+                or ''
+            ),
+            'company': company_name,
+            'driver': trip_driver,
+            'driverContact': driver_contact,
             'companyDriver': ' / '.join(filter(None, (
-                str(vendor.get('company') or ''),
-                str(vendor.get('driver') or vendor.get('name') or ''),
+                company_name,
+                trip_driver,
             ))),
-            'contactNumber': str(vendor.get('contactNumber') or ''),
-            'vehicleNumber': str(vendor.get('vehicleNumber') or ''),
+            'contactNumber': driver_contact,
+            'vehicleNumber': str(
+                (vehicle or {}).get('registrationNumber')
+                or (vendor or {}).get('vehicleNumber')
+                or ''
+            ),
             'purpose': 'Event transport',
             'loadType': '',
             'notes': '',
@@ -9591,8 +10256,19 @@ def create_transport_booking(event_id):
         workforce.setdefault('transportBookings', {}).setdefault(
             str(event_id), []
         ).append(booking)
-    log_action(f"Added transport booking to event {event_id}")
+    log_action(
+        f"Added {booking_data['tripType']} "
+        f"{'fleet' if booking_data['sourceType'] == 'fleet' else 'external'} "
+        f"transport {booking.get('vehicleNumber') or booking.get('vehicleType')} "
+        f"to event {event_id}"
+    )
     _workforce_changed(event_id, 'transport-created')
+    if booking_data['sourceType'] == 'fleet':
+        mark_realtime_change('vehicles', {
+            'eventId': int(event_id),
+            'vehicleId': booking_data['vehicleId'],
+            'action': 'fleet-booking-created',
+        })
     return jsonify({'success': True, 'data': _admin_workforce_payload(event_id)})
 
 
@@ -9608,11 +10284,53 @@ def update_transport_booking(event_id, booking_id):
         booking = find_by_id(event_bookings(workforce, event_id), booking_id)
         if not booking:
             return jsonify({'error': 'Transport booking not found'}), 404
-        vendor = find_by_id(
-            workforce.get('transportVendors'), booking_data.get('vendorId')
-        )
-        if not vendor:
-            return jsonify({'error': 'Choose a saved transport profile'}), 404
+        previous_source_type = str(booking.get('sourceType') or '').lower()
+        previous_vehicle_id = str(booking.get('vehicleId') or '')
+        if not all((
+            booking_data['locationFrom'],
+            booking_data['locationTo'],
+            booking_data['departDate'],
+            booking_data['departTime'],
+        )):
+            return jsonify({'error': 'Complete all required transport fields'}), 400
+        vendor = None
+        vehicle = None
+        if booking_data['sourceType'] == 'fleet':
+            vehicle = find_by_id(
+                workforce.get('vehicles'), booking_data.get('vehicleId')
+            )
+            if not vehicle or not vehicle.get('active', True):
+                return jsonify({'error': 'Choose an active fleet vehicle'}), 404
+            if not booking_data['useEndDate'] or not booking_data['useEndTime']:
+                return jsonify({
+                    'error': 'Fleet vehicle return date and time are required'
+                }), 400
+            try:
+                usage_start, usage_end = _vehicle_window(
+                    booking_data['departDate'],
+                    booking_data['departTime'],
+                    booking_data['useEndDate'],
+                    booking_data['useEndTime'],
+                )
+            except ValueError as exc:
+                return jsonify({'error': str(exc)}), 400
+            conflicts = _vehicle_conflicts(
+                workforce,
+                booking_data['vehicleId'],
+                usage_start,
+                usage_end,
+                exclude_booking_id=booking_id,
+            )
+            if conflicts:
+                return jsonify({
+                    'error': _vehicle_booking_conflict_message(conflicts)
+                }), 409
+        else:
+            vendor = find_by_id(
+                workforce.get('transportVendors'), booking_data.get('vendorId')
+            )
+            if not vendor:
+                return jsonify({'error': 'Choose a saved transport profile'}), 404
         if bool(payload.get('saveLocations')):
             _remember_transport_location(
                 workforce, booking_data['locationFrom']
@@ -9627,23 +10345,60 @@ def update_transport_booking(event_id, booking_id):
             return jsonify({'error': 'Approve the transport cost before marking it as paid'}), 400
         invoice = booking.get('invoice')
         history = booking.get('reviewHistory', [])
+        trip_driver = booking_data['driver']
+        if 'sourceType' not in payload and not trip_driver:
+            trip_driver = str(
+                (vendor or {}).get('driver')
+                or (vendor or {}).get('name')
+                or ''
+            )
+        driver_contact = booking_data['driverContact']
+        if 'sourceType' not in payload and not driver_contact:
+            driver_contact = str((vendor or {}).get('contactNumber') or '')
+        company_name = (
+            _company_payload(_current_company_code()).get('name', '')
+            if vehicle else str((vendor or {}).get('company') or '')
+        )
         booking.update({
             **booking_data,
-            'vehicleType': str(vendor.get('vehicleType') or ''),
-            'company': str(vendor.get('company') or ''),
-            'driver': str(vendor.get('driver') or vendor.get('name') or ''),
+            'vehicleType': str(
+                (vehicle or {}).get('vehicleType')
+                or (vendor or {}).get('vehicleType')
+                or ''
+            ),
+            'company': company_name,
+            'driver': trip_driver,
+            'driverContact': driver_contact,
             'companyDriver': ' / '.join(filter(None, (
-                str(vendor.get('company') or ''),
-                str(vendor.get('driver') or vendor.get('name') or ''),
+                company_name,
+                trip_driver,
             ))),
-            'contactNumber': str(vendor.get('contactNumber') or ''),
-            'vehicleNumber': str(vendor.get('vehicleNumber') or ''),
+            'contactNumber': driver_contact,
+            'vehicleNumber': str(
+                (vehicle or {}).get('registrationNumber')
+                or (vendor or {}).get('vehicleNumber')
+                or ''
+            ),
         })
         booking['invoice'] = invoice
         booking['reviewHistory'] = history
         booking['updatedAt'] = now_iso()
-    log_action(f"Updated transport booking for event {event_id}")
+    log_action(
+        f"Updated {booking_data['tripType']} "
+        f"{'fleet' if booking_data['sourceType'] == 'fleet' else 'external'} "
+        f"transport {booking.get('vehicleNumber') or booking.get('vehicleType')} "
+        f"for event {event_id}"
+    )
     _workforce_changed(event_id, 'transport-updated')
+    if (
+        booking_data['sourceType'] == 'fleet'
+        or previous_source_type == 'fleet'
+    ):
+        mark_realtime_change('vehicles', {
+            'eventId': int(event_id),
+            'vehicleId': booking_data.get('vehicleId') or previous_vehicle_id,
+            'action': 'fleet-booking-updated',
+        })
     return jsonify({'success': True, 'data': _admin_workforce_payload(event_id)})
 
 
@@ -9660,9 +10415,28 @@ def delete_transport_booking(event_id, booking_id):
             return jsonify({'error': 'Transport booking not found'}), 404
         if isinstance(booking.get('invoice'), dict):
             delete_upload(_workforce_folder(), booking['invoice'])
+        fleet_vehicle_id = (
+            str(booking.get('vehicleId') or '')
+            if str(booking.get('sourceType') or '').lower() == 'fleet'
+            else ''
+        )
+        trip_type = str(booking.get('tripType') or 'transport')
+        vehicle_label = str(
+            booking.get('vehicleNumber')
+            or booking.get('vehicleType')
+            or 'vehicle'
+        )
         rows.remove(booking)
-    log_action(f"Deleted transport booking from event {event_id}")
+    log_action(
+        f"Deleted {trip_type} transport {vehicle_label} from event {event_id}"
+    )
     _workforce_changed(event_id, 'transport-deleted')
+    if fleet_vehicle_id:
+        mark_realtime_change('vehicles', {
+            'eventId': int(event_id),
+            'vehicleId': fleet_vehicle_id,
+            'action': 'fleet-booking-deleted',
+        })
     return jsonify({'success': True, 'data': _admin_workforce_payload(event_id)})
 
 
@@ -11482,6 +12256,7 @@ APP_PAGE_SECTIONS = {
     '/return': 'return',
     '/transfer': 'transfer',
     '/inventory': 'inventory',
+    '/vehicles': 'vehicles',
     '/containers': 'containers',
     '/maintenance': 'maintenance',
     '/asset-check': 'asset-check',
@@ -11497,7 +12272,7 @@ APP_PAGE_SECTIONS = {
     '/delivery-order': 'delivery-order',
 }
 APP_ADMIN_PAGE_SECTIONS = {
-    'plan', 'compare', 'workforce', 'invoice-claims', 'logs', 'maintenance-report',
+    'plan', 'compare', 'workforce', 'invoice-claims', 'vehicles', 'logs', 'maintenance-report',
     'users', 'pdf-settings',
 }
 APP_OWNER_PAGE_SECTIONS = {'companies'}
@@ -11512,6 +12287,8 @@ def _render_app_page(section):
         split_screen_css_version=_static_asset_version('css/split-screen.css'),
         workforce_js_version=_static_asset_version('js/workforce-admin.js'),
         workforce_css_version=_static_asset_version('css/workforce-admin.css'),
+        vehicles_js_version=_static_asset_version('js/vehicles.js'),
+        vehicles_css_version=_static_asset_version('css/vehicles.css'),
     )
 
 
@@ -11531,6 +12308,7 @@ def index():
 @app.route('/return')
 @app.route('/transfer')
 @app.route('/inventory')
+@app.route('/vehicles')
 @app.route('/containers')
 @app.route('/maintenance')
 @app.route('/asset-check')
@@ -14828,6 +15606,7 @@ def delete_event(event_id):
         workforce_folder = _workforce_folder()
         workforce_files_removed = 0
         workforce_rows_removed = 0
+        fleet_vehicle_ids_removed = []
         workforce_snapshot = load_workforce(workforce_folder)
         event_workforce_rows = (
             len(event_assignments(workforce_snapshot, event_id)) +
@@ -14909,6 +15688,14 @@ def delete_event(event_id):
             )
             workforce_rows_removed += len(transport_bookings)
             for booking in transport_bookings:
+                if (
+                    isinstance(booking, dict)
+                    and str(booking.get('sourceType') or '').lower() == 'fleet'
+                    and booking.get('vehicleId')
+                ):
+                    fleet_vehicle_ids_removed.append(
+                        str(booking.get('vehicleId'))
+                    )
                 invoice = booking.get('invoice') if isinstance(booking, dict) else None
                 if isinstance(invoice, dict):
                     delete_upload(workforce_folder, invoice)
@@ -14950,6 +15737,12 @@ def delete_event(event_id):
 
         mark_realtime_change('events', {'eventId': event_id, 'action': 'deleted'})
         mark_realtime_change('workforce', {'eventId': event_id, 'action': 'event-deleted'})
+        if fleet_vehicle_ids_removed:
+            mark_realtime_change('vehicles', {
+                'eventId': event_id,
+                'vehicleIds': sorted(set(fleet_vehicle_ids_removed)),
+                'action': 'event-deleted',
+            })
         if finance_cleanup['documentLinks'] or finance_cleanup['profitLossRows']:
             mark_realtime_change('finance', {'eventId': event_id, 'action': 'event-deleted'})
 

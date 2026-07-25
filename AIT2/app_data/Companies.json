@@ -37,6 +37,15 @@
       "createdBy": "bnjm2000",
       "brandingSetupRequired": true,
       "updatedAt": "2026-07-13T20:35:21"
+    },
+    "SP": {
+      "code": "SP",
+      "name": "Show Productions Pte Ltd",
+      "backendFolder": "companies/SP/backend",
+      "frontendFolder": "companies/SP/frontend",
+      "createdAt": "2026-07-25T22:20:59",
+      "createdBy": "bnjm2000",
+      "brandingSetupRequired": true
     }
   },
   "userCompanies": {
@@ -51,10 +60,11 @@
     "emily": "TSC",
     "ct": "TSC",
     "bnjm2000": "AVPL",
-    "nbenjamin": "AVPL"
+    "nbenjamin": "AVPL",
+    "ericjunhao": "SP"
   },
   "superAdmins": [
     "bnjm2000"
   ],
-  "updatedAt": "2026-07-24T19:29:54"
+  "updatedAt": "2026-07-25T22:20:59"
 }

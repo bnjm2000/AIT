@@ -80,7 +80,7 @@ class PageRoutingTests(unittest.TestCase):
     def test_direct_routes_enforce_role_permissions(self):
         self.login('user')
         self.assertEqual(self.client.get('/prepare').status_code, 200)
-        for path in ('/plan', '/quotations', '/companies'):
+        for path in ('/plan', '/vehicles', '/quotations', '/companies'):
             response = self.client.get(path)
             self.assertEqual(response.status_code, 302, path)
             self.assertTrue(response.headers['Location'].endswith('/events'), path)
@@ -88,6 +88,7 @@ class PageRoutingTests(unittest.TestCase):
         self.login('manager')
         self.assertEqual(self.client.get('/plan').status_code, 200)
         self.assertEqual(self.client.get('/invoice-claims').status_code, 200)
+        self.assertEqual(self.client.get('/vehicles').status_code, 200)
         self.assertEqual(self.client.get('/company-details').status_code, 200)
         self.assertEqual(self.client.get('/quotations').status_code, 302)
 
@@ -140,6 +141,7 @@ class PageRoutingTests(unittest.TestCase):
             source = source_file.read()
         self.assertIn("'prepare-new': '/prepare'", source)
         self.assertIn("plan: '/plan'", source)
+        self.assertIn("vehicles: '/vehicles'", source)
         self.assertIn("window.addEventListener('popstate'", source)
         self.assertIn("window.history[method]", source)
         self.assertIn("kind: 'quotation'", source)
@@ -156,6 +158,8 @@ class PageRoutingTests(unittest.TestCase):
         with open(template_path, encoding='utf-8') as template_file:
             template = template_file.read()
         self.assertIn('class="modal-content event-overview-shell"', template)
+        self.assertIn('id="vehicles-section"', template)
+        self.assertIn('<span>Vehicles</span>', template)
         self.assertNotIn('Generate Delivery Order\n          </button>', template)
 
 

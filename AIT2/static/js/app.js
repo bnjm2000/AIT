@@ -3105,6 +3105,7 @@ function sectionFromSidebarLabel(item) {
     'manpower and transport': 'workforce',
     'manpower': 'workforce',
     'inventory': 'inventory',
+    'vehicles': 'vehicles',
     'containers': 'containers',
     'activity log': 'logs',
     'logs': 'logs',
@@ -3151,6 +3152,7 @@ function sectionFromSidebarLabel(item) {
     ['return', 'return'],
     ['transfer', 'transfer'],
     ['planning', 'plan'],
+    ['vehicles', 'vehicles'],
     ['inventory', 'inventory'],
     ['containers', 'containers'],
     ['companies', 'companies'],
@@ -3193,6 +3195,7 @@ function navWireIconSvg(section) {
     return: '<path d="M9 7 4 12l5 5"></path><path d="M4 12h10a6 6 0 0 1 6 6"></path>',
     transfer: '<path d="M7 7h13l-4-4M17 17H4l4 4"></path>',
     inventory: '<path d="m3 7 9-4 9 4-9 4z"></path><path d="M3 7v10l9 4 9-4V7M12 11v10"></path>',
+    vehicles: '<path d="M3 7h11v9H3zM14 10h4l3 3v3h-7z"></path><circle cx="7" cy="18" r="2"></circle><circle cx="18" cy="18" r="2"></circle><path d="M9 18h7M3 16h2"></path>',
     containers: '<rect x="4" y="5" width="16" height="5" rx="1"></rect><rect x="4" y="14" width="16" height="5" rx="1"></rect><path d="M8 10v4M16 10v4"></path>',
     maintenance: '<path d="m14.7 6.3 3-3a4 4 0 0 1-5 5l-7 7a2 2 0 1 0 2.8 2.8l7-7a4 4 0 0 1 5-5l-3 3"></path>',
     'asset-check': '<circle cx="12" cy="12" r="8"></circle><path d="m8.5 12 2.3 2.3 4.7-5"></path>',
@@ -3218,6 +3221,7 @@ function navLabelForSection(section, fallback = '') {
     return: 'Return Assets',
     transfer: 'Transfer Assets',
     inventory: 'View Inventory',
+    vehicles: 'Vehicles',
     containers: 'Containers',
     maintenance: 'Maintenance',
     'asset-check': 'Asset Check',
@@ -3316,6 +3320,7 @@ const APP_SECTION_PATHS = Object.freeze({
   return: '/return',
   transfer: '/transfer',
   inventory: '/inventory',
+  vehicles: '/vehicles',
   containers: '/containers',
   maintenance: '/maintenance',
   'asset-check': '/asset-check',
@@ -3368,7 +3373,7 @@ function updateAppSectionHistory(sectionName, replace = false) {
 }
 
 function showSection(sectionName, options = {}) {
-  const adminOnlySections = new Set(["plan", "compare", "workforce", "invoice-claims", "freelancer-workspace", "logs", "maintenance-report", "users", "pdf-settings"]);
+  const adminOnlySections = new Set(["plan", "compare", "workforce", "invoice-claims", "freelancer-workspace", "vehicles", "logs", "maintenance-report", "users", "pdf-settings"]);
   const ownerOnlySections = new Set(["companies"]);
   const salesOnlySections = new Set(["quotations", "profit-loss"]);
   if (sectionName === 'logs' && !canCurrentUserManageRoles()) {
@@ -3467,6 +3472,9 @@ function showSection(sectionName, options = {}) {
       break;
     case "inventory":
       loadInventory();
+      break;
+    case "vehicles":
+      if (typeof loadVehiclesPage === "function") loadVehiclesPage();
       break;
     case "containers":
       loadContainers();
@@ -32451,6 +32459,9 @@ function shouldRefreshVisibleDataForRealtimePayload(payload) {
   if (topics.length && topics.every(topic => topic === 'user-presence')) {
     return getActiveSectionId() === 'logs';
   }
+  if (topics.length && topics.every(topic => topic === 'vehicles')) {
+    return getActiveSectionId() === 'vehicles';
+  }
 
   return true;
 }
@@ -32843,6 +32854,11 @@ async function refreshVisibleDataFromRealtime() {
       case "inventory":
         await refreshInventoryAssetsInPlace();
         break;
+      case "vehicles":
+        if (typeof loadVehiclesPage === "function") {
+          await loadVehiclesPage({ quiet: true });
+        }
+        break;
       case "containers":
         await loadContainers();
         break;
@@ -32949,6 +32965,17 @@ function connectRealtimeUpdates() {
       }
       const eventIds = eventIdsFromRealtimePayload(payload);
       const topics = realtimeTopicsFromPayload(payload);
+      if (
+        getActiveSectionId() === 'vehicles' &&
+        topics.includes('vehicles')
+      ) {
+        if (typeof loadVehiclesPage === 'function') {
+          loadVehiclesPage({ quiet: true }).catch(error => {
+            console.warn('Vehicle timeline live update failed:', error);
+          });
+        }
+        return;
+      }
       if (
         getActiveSectionId() === 'invoice-claims' &&
         topics.includes('workforce')

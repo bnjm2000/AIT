@@ -11,6 +11,10 @@
     />
     <link
       rel="stylesheet"
+      href="{{ url_for('static', filename='css/vehicles.css', v=vehicles_css_version) }}"
+    />
+    <link
+      rel="stylesheet"
       href="{{ url_for('static', filename='css/finance.css', v=app_js_version) }}"
     />
     <style>
@@ -9814,6 +9818,9 @@
           <button type="button" class="nav-item{{ ' active' if initial_section == 'inventory' else '' }}" onclick="showSection('inventory')">
             <span class="nav-wire-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m3 7 9-4 9 4-9 4zM3 7v10l9 4 9-4V7M12 11v10"></path></svg></span><span>View Inventory</span>
           </button>
+          <button type="button" class="nav-item admin-only{{ ' active' if initial_section == 'vehicles' else '' }}" data-admin-only="true" data-admin-display="flex" onclick="showSection('vehicles')">
+            <span class="nav-wire-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 7h11v9H3zM14 10h4l3 3v3h-7z"></path><circle cx="7" cy="18" r="2"></circle><circle cx="18" cy="18" r="2"></circle><path d="M9 18h7M3 16h2"></path></svg></span><span>Vehicles</span>
+          </button>
           <button type="button" class="nav-item{{ ' active' if initial_section == 'containers' else '' }}" onclick="showSection('containers')">
             <span class="nav-wire-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="5" rx="1"></rect><rect x="4" y="14" width="16" height="5" rx="1"></rect><path d="M8 10v4M16 10v4"></path></svg></span><span>Containers</span>
           </button>
@@ -10174,6 +10181,12 @@
             </div>
           </div>
         </div>
+      </div>
+    </div>
+
+    <div id="vehicles-section" class="content-section{{ ' active' if initial_section == 'vehicles' else '' }}">
+      <div id="vehicles-page-root" class="vehicles-page" aria-live="polite">
+        <div class="vehicles-loading">Loading fleet...</div>
       </div>
     </div>
 
@@ -11611,5 +11624,6 @@
     <script src="{{ url_for('static', filename='js/app.js', v=app_js_version) }}"></script>
     <script src="{{ url_for('static', filename='js/finance.js', v=app_js_version) }}"></script>
     <script src="{{ url_for('static', filename='js/workforce-admin.js', v=workforce_js_version) }}"></script>
+    <script src="{{ url_for('static', filename='js/vehicles.js', v=vehicles_js_version) }}"></script>
   </body>
 </html>

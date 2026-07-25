@@ -77,6 +77,8 @@ def empty_workforce() -> dict:
         "transportVendors": [],
         "transportLocations": [],
         "transportBookings": {},
+        "vehicles": [],
+        "vehicleBookings": [],
         "submissions": {},
         "updatedAt": "",
     }
@@ -125,6 +127,8 @@ def normalize_workforce(data) -> dict:
             "transportVendors": _list(source.get("transportVendors")),
             "transportLocations": _list(source.get("transportLocations")),
             "transportBookings": _dict(source.get("transportBookings")),
+            "vehicles": _list(source.get("vehicles")),
+            "vehicleBookings": _list(source.get("vehicleBookings")),
             "submissions": _dict(source.get("submissions")),
             "updatedAt": str(source.get("updatedAt") or ""),
         }
@@ -141,6 +145,9 @@ def normalize_workforce(data) -> dict:
                 if str(value or "").strip()
             ]
             vendor.setdefault("active", True)
+    for vehicle in normalized["vehicles"]:
+        if isinstance(vehicle, dict):
+            vehicle.pop("capacity", None)
     return normalized
 
 

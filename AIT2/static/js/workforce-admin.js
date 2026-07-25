@@ -24,7 +24,11 @@ const workforcePageState = {
   freelancerWorkspaceReturnId: null,
   editingTransportProfileId: null,
   selectedTransportProfileId: null,
+  selectedFleetVehicleId: null,
   editingTransportId: null,
+  returnToTransportBooking: false,
+  transportAvailabilityTimer: null,
+  transportAvailabilityRequest: 0,
   focusTarget: ''
 };
 
@@ -875,19 +879,21 @@ function wfTransportCardLegacy(booking) {
 
 function wfTransportTripCard(booking, direction) {
   const isReturn = direction === 'return';
+  const isLegacyReturn = isReturn && Boolean(booking.twoWay);
+  const isFleet = booking.sourceType === 'fleet';
   const invoice = booking.invoice;
-  const routeFrom = isReturn ? booking.locationTo : booking.locationFrom;
-  const routeTo = isReturn ? booking.locationFrom : booking.locationTo;
-  const tripDate = isReturn ? booking.returnDate : booking.departDate;
-  const tripTime = isReturn ? booking.returnTime : booking.departTime;
+  const routeFrom = isLegacyReturn ? booking.locationTo : booking.locationFrom;
+  const routeTo = isLegacyReturn ? booking.locationFrom : booking.locationTo;
+  const tripDate = isLegacyReturn ? booking.returnDate : booking.departDate;
+  const tripTime = isLegacyReturn ? booking.returnTime : booking.departTime;
   const directionLabel = isReturn ? 'Return' : 'Depart';
-  const contact = wfFormatPhone(booking.contactNumber);
-  return `<article class="wf-transport-card wf-trip-card ${isReturn ? 'return-trip' : 'depart-trip'}">
+  const contact = wfFormatPhone(booking.driverContact || booking.contactNumber);
+  return `<article class="wf-transport-card wf-trip-card ${isReturn ? 'return-trip' : 'depart-trip'} ${isFleet ? 'fleet-trip' : 'external-trip'}">
     <div class="wf-transport-heading">
       <div class="wf-vehicle-heading">
         <span class="wf-trip-direction">${directionLabel}</span>
         <h4>${wfEscape(booking.vehicleType || 'Transport')}${booking.vehicleNumber ? ` &middot; ${wfEscape(booking.vehicleNumber)}` : ''}</h4>
-        <small>${wfEscape(booking.company || '')}</small>
+        <small>${isFleet ? '<span class="wf-fleet-badge">Own fleet</span>' : wfEscape(booking.company || '')}</small>
       </div>
       <div class="wf-driver-heading">
         <strong>${wfEscape(booking.driver || booking.companyDriver || 'Driver TBC')}</strong>
@@ -897,18 +903,24 @@ function wfTransportTripCard(booking, direction) {
     <div class="wf-transport-meta">
       <div class="wf-route"><span>Route</span><strong>${wfLocationBadge(routeFrom, 'From')}<b>&rarr;</b>${wfLocationBadge(routeTo, 'To')}</strong></div>
       <div class="wf-trip-datetime"><span>Date &amp; Time</span><strong>${wfEscape([tripDate, tripTime].filter(Boolean).join(' · ') || '—')}</strong></div>
+      ${isFleet ? `<div><span>Vehicle use</span><strong>${wfEscape([
+        [booking.departDate, booking.departTime].filter(Boolean).join(' '),
+        [booking.useEndDate, booking.useEndTime].filter(Boolean).join(' ')
+      ].filter(Boolean).join(' to '))}</strong></div>` : ''}
       <div><span>Cost per trip</span><strong>${wfMoney(booking.cost)}</strong></div>
-      ${!isReturn ? `<div><span>Invoice</span><strong>${invoice
+      ${!isLegacyReturn && !isFleet ? `<div><span>Invoice</span><strong>${invoice
         ? `<button class="wf-link-button" type="button" onclick="window.open('${wfAttr(invoice.previewUrl)}','_blank')">${wfEscape(invoice.originalName)}</button>`
         : 'Not uploaded'}</strong></div>` : ''}
     </div>
     <div class="wf-transport-footer">
-      ${!isReturn ? `<label class="wf-link-button">${invoice ? 'Replace invoice' : 'Upload invoice'}
+      ${!isLegacyReturn && !isFleet ? `<label class="wf-link-button">${invoice ? 'Replace invoice' : 'Upload invoice'}
         <input type="file" accept=".pdf,application/pdf" hidden onchange="uploadTransportInvoice('${wfAttr(booking.id)}',this)"></label>`
-        : '<span class="wf-return-booking-note">Return leg of the same booking</span>'}
+        : (isLegacyReturn
+          ? '<span class="wf-return-booking-note">Return leg of the same booking</span>'
+          : '<span></span>')}
       <div>
-        <button class="wf-button" type="button" onclick="openTransportBooking('${wfAttr(booking.vendorId)}','${wfAttr(booking.id)}')">Edit</button>
-        ${!isReturn ? `<button class="wf-button danger" type="button" onclick="deleteTransportBooking('${wfAttr(booking.id)}')">Remove</button>` : ''}
+        <button class="wf-button" type="button" onclick="openTransportBooking('${wfAttr(booking.vendorId || '')}','${wfAttr(booking.id)}','${wfAttr(booking.sourceType || 'external')}')">Edit</button>
+        ${!isLegacyReturn ? `<button class="wf-button danger" type="button" onclick="deleteTransportBooking('${wfAttr(booking.id)}')">Remove</button>` : ''}
       </div>
     </div>
   </article>`;
@@ -933,6 +945,12 @@ function wfLocationBadge(value, label) {
 }
 
 function wfTransportCard(booking) {
+  if (!booking.twoWay && (booking.sourceType || booking.tripType)) {
+    return wfTransportTripCard(
+      booking,
+      booking.tripType === 'return' ? 'return' : 'depart'
+    );
+  }
   const cards = [wfTransportTripCard(booking, 'depart')];
   if (booking.twoWay) cards.push(wfTransportTripCard(booking, 'return'));
   return cards.join('');
@@ -1007,7 +1025,8 @@ function renderWorkforcePageLegacy() {
       <div class="wf-summary-cell"><span>Status</span><strong>${wfEscape(data.event.state)}</strong></div></section>
     <section class="wf-panel wf-transport-panel"><header class="wf-panel-header"><div><h3>Transport Details</h3>
       <p>Vehicles booked for this event.</p></div>
-      <button class="wf-button primary" type="button" onclick="openTransportDirectory()">Manage Transport</button></header>
+      <div class="wf-toolbar"><button class="wf-button" type="button" onclick="openTransportDirectory()">Manage transport</button>
+        <button class="wf-button primary" type="button" onclick="openTransportBooking()">Book transport</button></div></header>
       <div class="wf-transport-list">${data.transportBookings.length ? data.transportBookings.map(wfTransportCard).join('') : '<div class="wf-empty">No transport booked for this event.</div>'}</div></section>
     <section class="wf-panel"><header class="wf-panel-header"><div><h3>Manpower / Workers &amp; Vendors</h3>
       <p>Departments are created automatically from this event’s outgoing assets.</p></div>
@@ -1114,7 +1133,8 @@ function renderWorkforcePage() {
         <section class="plan-card wf-transport-panel">
           <header class="wf-panel-header">
             <div><h3>Transport Details</h3><p>Vehicles booked for this event.</p></div>
-            <button class="wf-button primary" type="button" onclick="openTransportDirectory()">Manage Transport</button>
+            <div class="wf-toolbar"><button class="wf-button" type="button" onclick="openTransportDirectory()">Manage transport</button>
+              <button class="wf-button primary" type="button" onclick="openTransportBooking()">Book transport</button></div>
           </header>
           <div class="wf-transport-list">
             ${data.transportBookings.length
@@ -1242,14 +1262,14 @@ function ensureWorkforceModals() {
       <footer class="wf-modal-actions"><button class="wf-button" type="button" onclick="closeWorkforceModal('wfDepartmentModal')">Cancel</button>
       <button class="wf-button primary" type="submit">Add Department</button></footer></form>`) +
     wfModal('wfTransportDirectoryModal', 'Manage Transport', `<div class="wf-modal-body">
-      <div class="wf-directory-toolbar"><input class="wf-search" id="wfTransportSearch" type="search" placeholder="Search vehicle, company or driver" oninput="renderTransportDirectory(this.value)">
+      <div class="wf-directory-toolbar"><input class="wf-search" id="wfTransportSearch" type="search" placeholder="Search vehicle or company" oninput="renderTransportDirectory(this.value)">
         <div><button class="wf-button" type="button" onclick="openLocationsManager()">Manage Locations</button>
+          <button class="wf-button fleet" type="button" onclick="manageOwnVehicles()">Manage own vehicles</button>
           <button class="wf-button primary" type="button" onclick="openTransportProfile()">Add new transport</button></div></div>
       <div class="wf-directory-list wf-directory-grid" id="wfTransportDirectoryList"></div></div>`, '', true) +
     wfModal('wfTransportProfileModal', 'Add New Transport', `<form id="wfTransportProfileForm"><div class="wf-modal-body">
       <div class="wf-form-grid"><label class="wf-field"><span>Vehicle type *</span><input id="wfProfileVehicleType" required></label>
         <label class="wf-field"><span>Company</span><input id="wfProfileCompany"></label>
-        <label class="wf-field"><span>Driver</span><input id="wfProfileDriver"></label>
         <label class="wf-field"><span>Contact number</span><input id="wfProfileContact" type="tel"></label>
         <label class="wf-field full"><span>Vehicle / Lorry number</span><input id="wfProfileVehicleNumber"></label>
       </div><div class="wf-error" id="wfTransportProfileError"></div></div>
@@ -1261,20 +1281,42 @@ function ensureWorkforceModals() {
         <button class="wf-button primary" type="submit">Add Location</button></form>
       <div class="wf-directory-list" id="wfLocationsList"></div><div class="wf-error" id="wfLocationError"></div></div>`) +
     wfModal('wfTransportBookingModal', 'Add Transport to Event', `<form id="wfTransportBookingForm"><div class="wf-modal-body">
-      <p class="wf-form-intro" id="wfBookingVehicle"></p><div class="wf-form-grid">
+      <div class="wf-transport-choice-row single">
+        <div><span>Trip</span><div class="wf-segmented">
+          <button type="button" id="wfTripDepart" class="active" onclick="setTransportTripType('depart')">Depart</button>
+          <button type="button" id="wfTripReturn" onclick="setTransportTripType('return')">Return</button>
+        </div></div>
+      </div>
+      <input id="wfTransportTripType" type="hidden" value="depart">
+      <input id="wfTransportSourceType" type="hidden" value="">
+      <div class="wf-form-grid">
+        <label class="wf-field"><span>Driver</span><input id="wfTransportDriver" placeholder="Driver name"></label>
+        <label class="wf-field"><span>Driver phone</span><input id="wfTransportDriverContact" type="tel" placeholder="+65 9123 4567"></label>
+        <label class="wf-field"><span>Trip Date *</span><input id="wfDepartDate" type="date" required oninput="syncTransportUsageDate()"></label>
+        <label class="wf-field"><span>Depart Time *</span><input id="wfDepartTime" type="time" required oninput="scheduleTransportAvailability()"></label>
+        <div class="wf-return-fields wf-fleet-window full" id="wfFleetUsageFields">
+          <label class="wf-field"><span>Vehicle Return Date</span><input id="wfVehicleUseEndDate" type="date" oninput="scheduleTransportAvailability()"></label>
+          <label class="wf-field"><span>Vehicle Return Time</span><input id="wfVehicleUseEndTime" type="time" oninput="scheduleTransportAvailability()"></label>
+          <small>Return time is required for company vehicles. The return date defaults to the trip date.</small>
+        </div>
         <label class="wf-field"><span>Location From *</span><input id="wfLocationFrom" list="wfSavedLocations" required></label>
         <label class="wf-field"><span>Location To *</span><input id="wfLocationTo" list="wfSavedLocations" required></label>
         <datalist id="wfSavedLocations"></datalist>
         <label class="wf-check full"><input id="wfSaveBookingLocations" type="checkbox" checked> Save these locations for future bookings</label>
-        <label class="wf-field"><span>Depart Date *</span><input id="wfDepartDate" type="date" required></label>
-        <label class="wf-field"><span>Depart Time *</span><input id="wfDepartTime" type="time" required></label>
         <label class="wf-field full"><span>Cost (per trip, $)</span><input id="wfTransportCost" type="number" min="0" step=".01" value="0"></label>
-        <label class="wf-check full"><input id="wfTransportTwoWay" type="checkbox" onchange="syncReturnFields()"> Enable return trip</label>
-        <div class="wf-return-fields full" id="wfReturnFields" hidden>
-          <label class="wf-field"><span>Return Date *</span><input id="wfReturnDate" type="date"></label>
-          <label class="wf-field"><span>Return Time *</span><input id="wfReturnTime" type="time"></label>
-        </div>
-      </div><div class="wf-error" id="wfTransportBookingError"></div></div>
+      </div>
+      <section class="wf-booking-vehicle-section">
+        <div class="wf-booking-vehicle-heading"><div><h4>Choose vehicle</h4><p>Availability is based on the trip and vehicle return times above.</p></div>
+          <button class="wf-button" type="button" onclick="openTransportProfileForBooking()">+ Add transport</button></div>
+        <input id="wfBookingVendor" type="hidden">
+        <input id="wfBookingFleetVehicle" type="hidden">
+        <div class="wf-booking-source-group"><div class="wf-booking-source-title"><strong>Own fleet</strong>
+          <button class="wf-link-button" type="button" onclick="manageOwnVehicles()">Manage own vehicles</button></div>
+          <div id="wfFleetVehicleChoices" class="wf-booking-vehicle-grid"></div></div>
+        <div class="wf-booking-source-group"><div class="wf-booking-source-title"><strong>Known external vehicles</strong></div>
+          <div id="wfExternalVehicleChoices" class="wf-booking-vehicle-grid"></div></div>
+      </section>
+      <div class="wf-error" id="wfTransportBookingError"></div></div>
       <footer class="wf-modal-actions"><button class="wf-button" type="button" onclick="closeWorkforceModal('wfTransportBookingModal')">Cancel</button>
         <button class="wf-button primary" type="submit">Add to Event</button></footer></form>`) +
     wfModal('wfAdminUploadModal', 'Upload for Crew', `<form id="wfAdminUploadForm">
@@ -2712,24 +2754,24 @@ function openTransportDirectory() {
 function renderTransportDirectory(search) {
   const query = String(search || '').toLowerCase();
   const rows = (workforcePageState.data?.transportVendors || []).filter(row =>
-    `${row.vehicleType || ''} ${row.company || ''} ${row.driver || row.name || ''} ${row.vehicleNumber || ''}`.toLowerCase().includes(query));
+    `${row.vehicleType || ''} ${row.company || ''} ${row.vehicleNumber || ''}`.toLowerCase().includes(query));
   document.getElementById('wfTransportDirectoryList').innerHTML = rows.map(row =>
     `<div class="wf-directory-row"><button class="wf-directory-main" type="button" onclick="openTransportBooking('${wfAttr(row.id)}')">
-      <span class="wf-avatar">🚚</span><span><strong>${wfEscape(row.vehicleType || 'Vehicle')} &middot; ${wfEscape(row.vehicleNumber || '')}</strong>
-      <small>${wfEscape(row.company || '')} &middot; ${wfEscape(row.driver || row.name || '')} &middot; ${wfEscape(row.contactNumber || '')}</small></span></button>
+      <span class="wf-avatar">${wfMetricIconSvg('transport')}</span><span><strong>${wfEscape(row.vehicleType || 'Vehicle')} &middot; ${wfEscape(row.vehicleNumber || '')}</strong>
+      <small>${wfEscape(row.company || '')}${row.contactNumber ? ` &middot; ${wfEscape(row.contactNumber)}` : ''}</small></span></button>
       <button class="wf-button" type="button" onclick="openTransportProfile('${wfAttr(row.id)}')">Edit</button></div>`).join('') ||
       '<div class="wf-empty">No saved transport profiles. Add one to begin.</div>';
 }
 
-function openTransportProfile(id = '') {
+function openTransportProfile(id = '', returnToBooking = false) {
   ensureWorkforceModals();
   const row = workforcePageState.data.transportVendors.find(item => String(item.id) === String(id));
+  workforcePageState.returnToTransportBooking = Boolean(returnToBooking);
   workforcePageState.editingTransportProfileId = row?.id || null;
   document.getElementById('wfTransportProfileForm').reset();
   document.getElementById('wfTransportProfileModalTitle').textContent = row ? 'Edit Transport' : 'Add New Transport';
   document.getElementById('wfProfileVehicleType').value = row?.vehicleType || '';
   document.getElementById('wfProfileCompany').value = row?.company || '';
-  document.getElementById('wfProfileDriver').value = row?.driver || row?.name || '';
   document.getElementById('wfProfileContact').value = row?.contactNumber || '';
   document.getElementById('wfProfileVehicleNumber').value = row?.vehicleNumber || '';
   wfError('wfTransportProfileError');
@@ -2740,16 +2782,22 @@ async function saveTransportProfile(event) {
   event.preventDefault();
   const id = workforcePageState.editingTransportProfileId;
   try {
-    await apiCall(id ? `/api/workforce/transport-profiles/${encodeURIComponent(id)}` : '/api/workforce/transport-profiles', id ? 'PUT' : 'POST', {
+    const response = await apiCall(id ? `/api/workforce/transport-profiles/${encodeURIComponent(id)}` : '/api/workforce/transport-profiles', id ? 'PUT' : 'POST', {
       vehicleType: document.getElementById('wfProfileVehicleType').value,
       company: document.getElementById('wfProfileCompany').value,
-      driver: document.getElementById('wfProfileDriver').value,
       contactNumber: document.getElementById('wfProfileContact').value,
       vehicleNumber: document.getElementById('wfProfileVehicleNumber').value
     });
+    const returnToBooking = workforcePageState.returnToTransportBooking;
+    workforcePageState.returnToTransportBooking = false;
     await refreshWorkforcePage();
     closeWorkforceModal('wfTransportProfileModal');
-    renderTransportDirectory('');
+    if (returnToBooking) {
+      renderExternalTransportChoices(response.data?.id || '');
+      selectTransportVehicle('external', response.data?.id || '');
+    } else {
+      renderTransportDirectory('');
+    }
     showNotification('success', 'Transport profile saved');
   } catch (error) {
     wfError('wfTransportProfileError', error.message);
@@ -2792,40 +2840,238 @@ async function deleteTransportLocation(id) {
   renderTransportLocations();
 }
 
-function openTransportBooking(profileId, bookingId = '') {
+function setTransportTripType(type) {
+  const value = type === 'return' ? 'return' : 'depart';
+  document.getElementById('wfTransportTripType').value = value;
+  document.getElementById('wfTripDepart').classList.toggle('active', value === 'depart');
+  document.getElementById('wfTripReturn').classList.toggle('active', value === 'return');
+}
+
+function setTransportBookingSource(source) {
+  const value = ['fleet', 'external'].includes(source) ? source : '';
+  const isFleet = value === 'fleet';
+  document.getElementById('wfTransportSourceType').value = value;
+  document.getElementById('wfVehicleUseEndDate').required = isFleet;
+  document.getElementById('wfVehicleUseEndTime').required = isFleet;
+  document.querySelectorAll('.wf-booking-vehicle-option').forEach(option => {
+    const selectedId = value === 'fleet'
+      ? document.getElementById('wfBookingFleetVehicle').value
+      : document.getElementById('wfBookingVendor').value;
+    option.classList.toggle(
+      'selected',
+      option.dataset.source === value &&
+      String(option.dataset.id) === String(selectedId)
+    );
+  });
+}
+
+function openTransportBooking(profileId = '', bookingId = '', preferredSource = '') {
   ensureWorkforceModals();
-  const profile = workforcePageState.data.transportVendors.find(row => String(row.id) === String(profileId));
-  const booking = workforcePageState.data.transportBookings.find(row => String(row.id) === String(bookingId));
-  if (!profile) return;
-  workforcePageState.selectedTransportProfileId = profile.id;
+  const profiles = workforcePageState.data.transportVendors || [];
+  const vehicles = workforcePageState.data.vehicles || [];
+  const booking = (workforcePageState.data.transportBookings || [])
+    .find(row => String(row.id) === String(bookingId));
+  const source = booking?.sourceType || preferredSource || (profileId ? 'external' : '');
+  const profile = profiles.find(row =>
+    String(row.id) === String(booking?.vendorId || profileId));
+  const vehicle = vehicles.find(row =>
+    String(row.id) === String(booking?.vehicleId));
+  workforcePageState.selectedTransportProfileId = profile?.id || null;
+  workforcePageState.selectedFleetVehicleId = vehicle?.id || null;
   workforcePageState.editingTransportId = booking?.id || null;
   document.getElementById('wfTransportBookingForm').reset();
-  document.getElementById('wfTransportBookingModalTitle').textContent = booking ? 'Edit Event Transport' : 'Add Transport to Event';
-  document.getElementById('wfBookingVehicle').textContent =
-    `${profile.vehicleType} · ${profile.vehicleNumber} · ${profile.company} / ${profile.driver || profile.name}`;
-  document.getElementById('wfSavedLocations').innerHTML = (workforcePageState.data.transportLocations || [])
-    .map(row => `<option value="${wfAttr(row.address ? `${row.name} (${row.address})` : row.name)}"></option>`).join('');
+  document.getElementById('wfTransportBookingModalTitle').textContent =
+    booking ? 'Edit Event Transport' : 'Add Transport to Event';
+  document.getElementById('wfBookingVendor').value = profile?.id || '';
+  document.getElementById('wfBookingFleetVehicle').value = vehicle?.id || '';
+  document.getElementById('wfSavedLocations').innerHTML =
+    (workforcePageState.data.transportLocations || [])
+      .map(row => `<option value="${wfAttr(row.address ? `${row.name} (${row.address})` : row.name)}"></option>`)
+      .join('');
+  document.getElementById('wfTransportDriver').value = booking?.driver || '';
+  document.getElementById('wfTransportDriverContact').value =
+    booking?.driverContact || booking?.contactNumber || '';
   document.getElementById('wfLocationFrom').value = booking?.locationFrom || '';
   document.getElementById('wfLocationTo').value = booking?.locationTo || '';
-  document.getElementById('wfDepartDate').value =
-    booking?.departDate || workforcePageState.data.event.startDateValue || '';
+  const tripType = booking?.tripType || 'depart';
+  const tripDateInput = document.getElementById('wfDepartDate');
+  tripDateInput.value =
+    booking?.departDate ||
+    (tripType === 'return'
+      ? workforcePageState.data.event.endDateValue
+      : workforcePageState.data.event.startDateValue) || '';
+  tripDateInput.dataset.previousValue = tripDateInput.value;
   document.getElementById('wfDepartTime').value = booking?.departTime || '';
+  document.getElementById('wfVehicleUseEndDate').value =
+    booking?.useEndDate || tripDateInput.value;
+  document.getElementById('wfVehicleUseEndTime').value = booking?.useEndTime || '';
   document.getElementById('wfTransportCost').value = booking?.cost ?? 0;
-  document.getElementById('wfTransportTwoWay').checked = Boolean(booking?.twoWay);
-  document.getElementById('wfReturnDate').value =
-    booking?.returnDate || workforcePageState.data.event.endDateValue || '';
-  document.getElementById('wfReturnTime').value = booking?.returnTime || '';
-  syncReturnFields();
+  document.getElementById('wfSaveBookingLocations').checked = true;
+  setTransportTripType(tripType);
+  renderExternalTransportChoices(profile?.id || '');
+  renderFleetTransportChoices(
+    vehicles.filter(row => row.active !== false),
+    false,
+    vehicle?.id || ''
+  );
+  setTransportBookingSource(source);
   wfError('wfTransportBookingError');
   closeWorkforceModal('wfTransportDirectoryModal');
   openWorkforceModal('wfTransportBookingModal');
+  scheduleTransportAvailability(true);
 }
 
-function syncReturnFields() {
-  const enabled = document.getElementById('wfTransportTwoWay').checked;
-  document.getElementById('wfReturnFields').hidden = !enabled;
-  document.getElementById('wfReturnDate').required = enabled;
-  document.getElementById('wfReturnTime').required = enabled;
+function manageOwnVehicles() {
+  closeWorkforceModal('wfTransportDirectoryModal');
+  closeWorkforceModal('wfTransportBookingModal');
+  showSection('vehicles');
+}
+
+function openTransportProfileForBooking() {
+  openTransportProfile('', true);
+}
+
+function selectTransportVehicle(source, id) {
+  if (!id) return;
+  if (source === 'fleet') {
+    document.getElementById('wfBookingFleetVehicle').value = id;
+    document.getElementById('wfBookingVendor').value = '';
+  } else {
+    document.getElementById('wfBookingVendor').value = id;
+    document.getElementById('wfBookingFleetVehicle').value = '';
+    const profile = (workforcePageState.data?.transportVendors || [])
+      .find(row => String(row.id) === String(id));
+    if (profile?.lastCost !== null && profile?.lastCost !== undefined) {
+      document.getElementById('wfTransportCost').value =
+        Number(profile.lastCost || 0).toFixed(2);
+    }
+  }
+  setTransportBookingSource(source);
+}
+
+function renderExternalTransportChoices(selectedId = '') {
+  const root = document.getElementById('wfExternalVehicleChoices');
+  if (!root) return;
+  const profiles = workforcePageState.data?.transportVendors || [];
+  root.innerHTML = profiles.length ? profiles.map(profile => {
+    const label = [
+      profile.vehicleType,
+      profile.vehicleNumber
+    ].filter(Boolean).join(' - ');
+    const lastCost = profile.lastCost === null || profile.lastCost === undefined
+      ? 'No previous cost'
+      : `Last cost ${wfMoney(profile.lastCost)}`;
+    return `<button class="wf-booking-vehicle-option" type="button"
+        data-source="external" data-id="${wfAttr(profile.id)}"
+        onclick="selectTransportVehicle('external','${wfAttr(profile.id)}')">
+      <span><strong>${wfEscape(label || 'External transport')}</strong>
+        <small>${wfEscape(profile.company || 'Company not recorded')}</small></span>
+      <em>${wfEscape(lastCost)}</em>
+    </button>`;
+  }).join('') : `<div class="wf-vehicle-choice-empty">No known external vehicles yet.
+    <button class="wf-link-button" type="button" onclick="openTransportProfileForBooking()">Add transport</button></div>`;
+  if (selectedId) {
+    document.getElementById('wfBookingVendor').value = selectedId;
+  }
+}
+
+function renderFleetTransportChoices(vehicles, complete, selectedId = '') {
+  const root = document.getElementById('wfFleetVehicleChoices');
+  if (!root) return;
+  root.innerHTML = vehicles.length ? vehicles.map(vehicle => {
+    const available = complete ? Boolean(vehicle.available) : null;
+    const stateLabel = available === null
+      ? 'Enter full usage time'
+      : (available ? 'Available' : 'Unavailable');
+    return `<button class="wf-booking-vehicle-option ${available === false ? 'unavailable' : ''}" type="button"
+        data-source="fleet" data-id="${wfAttr(vehicle.id)}"
+        ${available === false || available === null ? 'disabled' : ''}
+        title="${wfAttr(vehicle.conflict || stateLabel)}"
+        onclick="selectTransportVehicle('fleet','${wfAttr(vehicle.id)}')">
+      <span><strong>${wfEscape(vehicle.registrationNumber || 'Vehicle')}</strong>
+        <small>${wfEscape(vehicle.name || vehicle.vehicleType || 'Company vehicle')}</small></span>
+      <em class="${available === false ? 'unavailable' : (available ? 'available' : 'pending')}">${wfEscape(stateLabel)}</em>
+      ${vehicle.conflict ? `<small class="wf-vehicle-conflict">${wfEscape(vehicle.conflict)}</small>` : ''}
+    </button>`;
+  }).join('') : `<div class="wf-vehicle-choice-empty">No active company vehicles.
+    <button class="wf-link-button" type="button" onclick="manageOwnVehicles()">Manage own vehicles</button></div>`;
+  if (selectedId) {
+    document.getElementById('wfBookingFleetVehicle').value = selectedId;
+  }
+  setTransportBookingSource(
+    document.getElementById('wfTransportSourceType')?.value || ''
+  );
+}
+
+function scheduleTransportAvailability(immediate = false) {
+  clearTimeout(workforcePageState.transportAvailabilityTimer);
+  workforcePageState.transportAvailabilityTimer = setTimeout(
+    loadTransportFleetAvailability,
+    immediate ? 0 : 180
+  );
+}
+
+function syncTransportUsageDate() {
+  const tripDate = document.getElementById('wfDepartDate');
+  const returnDate = document.getElementById('wfVehicleUseEndDate');
+  if (!tripDate || !returnDate) return;
+  const previousTripDate = tripDate.dataset.previousValue || '';
+  if (!returnDate.value || returnDate.value === previousTripDate) {
+    returnDate.value = tripDate.value;
+  }
+  tripDate.dataset.previousValue = tripDate.value;
+  scheduleTransportAvailability();
+}
+
+async function loadTransportFleetAvailability() {
+  const date = document.getElementById('wfDepartDate')?.value || '';
+  const startTime = document.getElementById('wfDepartTime')?.value || '';
+  const endDateInput = document.getElementById('wfVehicleUseEndDate');
+  const endDate = endDateInput?.value || date;
+  const endTime = document.getElementById('wfVehicleUseEndTime')?.value || '';
+  const allVehicles = (workforcePageState.data?.vehicles || [])
+    .filter(row => row.active !== false);
+  const selectedId = document.getElementById('wfBookingFleetVehicle')?.value || '';
+  if (!date || !startTime || !endTime) {
+    renderFleetTransportChoices(allVehicles, false, selectedId);
+    return;
+  }
+  if (endDateInput && !endDateInput.value) {
+    endDateInput.value = endDate;
+  }
+  if (
+    new Date(`${endDate}T${endTime}:00`).getTime() <=
+    new Date(`${date}T${startTime}:00`).getTime()
+  ) {
+    renderFleetTransportChoices(allVehicles, false, selectedId);
+    return;
+  }
+  const requestId = ++workforcePageState.transportAvailabilityRequest;
+  const params = new URLSearchParams({
+    date,
+    startTime,
+    endDate,
+    endTime
+  });
+  if (workforcePageState.editingTransportId) {
+    params.set('excludeBookingId', workforcePageState.editingTransportId);
+  }
+  try {
+    const response = await apiCall(`/api/vehicles/availability?${params}`);
+    if (requestId !== workforcePageState.transportAvailabilityRequest) return;
+    const vehicles = response.data?.vehicles || [];
+    const selected = vehicles.find(row => String(row.id) === String(selectedId));
+    if (selected && selected.available === false) {
+      document.getElementById('wfBookingFleetVehicle').value = '';
+      if (document.getElementById('wfTransportSourceType').value === 'fleet') {
+        setTransportBookingSource('');
+      }
+    }
+    renderFleetTransportChoices(vehicles, true, selected?.available ? selectedId : '');
+  } catch (error) {
+    if (requestId !== workforcePageState.transportAvailabilityRequest) return;
+    renderFleetTransportChoices(allVehicles, false, selectedId);
+  }
 }
 
 async function saveTransportBooking(event) {
@@ -2833,26 +3079,51 @@ async function saveTransportBooking(event) {
   const id = workforcePageState.editingTransportId;
   const currentBooking = workforcePageState.data.transportBookings
     .find(row => String(row.id) === String(id));
+  const sourceType = document.getElementById('wfTransportSourceType').value;
+  const tripType = document.getElementById('wfTransportTripType').value;
+  if (!sourceType) {
+    wfError('wfTransportBookingError', 'Choose an own-fleet or known external vehicle.');
+    return;
+  }
   try {
     const response = await apiCall(id
       ? `/api/events/${workforcePageState.eventId}/workforce/transport/${encodeURIComponent(id)}`
       : `/api/events/${workforcePageState.eventId}/workforce/transport`, id ? 'PUT' : 'POST', {
-      vendorId: workforcePageState.selectedTransportProfileId,
+      sourceType,
+      tripType,
+      vendorId: sourceType === 'external'
+        ? document.getElementById('wfBookingVendor').value
+        : '',
+      vehicleId: sourceType === 'fleet'
+        ? document.getElementById('wfBookingFleetVehicle').value
+        : '',
+      driver: document.getElementById('wfTransportDriver').value,
+      driverContact: document.getElementById('wfTransportDriverContact').value,
       locationFrom: document.getElementById('wfLocationFrom').value,
       locationTo: document.getElementById('wfLocationTo').value,
       saveLocations: document.getElementById('wfSaveBookingLocations').checked,
       departDate: document.getElementById('wfDepartDate').value,
       departTime: document.getElementById('wfDepartTime').value,
+      useEndDate: sourceType === 'fleet'
+        ? document.getElementById('wfVehicleUseEndDate').value
+        : '',
+      useEndTime: sourceType === 'fleet'
+        ? document.getElementById('wfVehicleUseEndTime').value
+        : '',
       cost: document.getElementById('wfTransportCost').value,
-      twoWay: document.getElementById('wfTransportTwoWay').checked,
-      returnDate: document.getElementById('wfReturnDate').value,
-      returnTime: document.getElementById('wfReturnTime').value,
+      twoWay: Boolean(currentBooking?.twoWay),
+      returnDate: currentBooking?.twoWay
+        ? currentBooking.returnDate
+        : '',
+      returnTime: currentBooking?.twoWay
+        ? currentBooking.returnTime
+        : '',
       status: currentBooking?.status || 'Pending Review'
     });
     workforcePageState.data = response.data;
     closeWorkforceModal('wfTransportBookingModal');
     renderWorkforcePage();
-    showNotification('success', 'Transport added to event');
+    showNotification('success', `${tripType === 'return' ? 'Return' : 'Depart'} transport saved`);
   } catch (error) {
     wfError('wfTransportBookingError', error.message);
   }

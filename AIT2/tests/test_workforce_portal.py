@@ -942,10 +942,157 @@ class WorkforcePortalTests(unittest.TestCase):
         self.assertEqual(booking_response.status_code, 200)
         payload = booking_response.get_json()["data"]
         self.assertEqual(payload["transportBookings"][0]["company"], "Swift Logistics")
+        saved_profile = next(
+            row for row in payload["transportVendors"]
+            if row["id"] == profile_id
+        )
+        self.assertEqual(saved_profile["lastCost"], 450)
         self.assertEqual(
             {row["name"] for row in payload["transportLocations"]},
             {"Main Warehouse", "Test Venue"},
         )
+
+    def test_fleet_vehicles_support_timeline_bookings_and_event_trips(self):
+        self.login("admin", True)
+        vehicle_response = self.client.post(
+            "/api/vehicles",
+            json={
+                "registrationNumber": "GBD 7788K",
+                "vehicleType": "14ft Lorry",
+                "name": "Lorry 1",
+            },
+        )
+        self.assertEqual(vehicle_response.status_code, 201)
+        vehicle = vehicle_response.get_json()["data"]
+        vehicle_id = vehicle["id"]
+        self.assertNotIn("capacity", vehicle)
+
+        standalone = self.client.post(
+            "/api/vehicles/bookings",
+            json={
+                "vehicleId": vehicle_id,
+                "purpose": "Warehouse collection",
+                "date": "2026-07-10",
+                "startTime": "09:00",
+                "endDate": "2026-07-10",
+                "endTime": "11:00",
+            },
+        )
+        self.assertEqual(standalone.status_code, 201)
+
+        availability = self.client.get(
+            "/api/vehicles/availability",
+            query_string={
+                "date": "2026-07-10",
+                "startTime": "10:00",
+                "endDate": "2026-07-10",
+                "endTime": "12:00",
+            },
+        )
+        self.assertEqual(availability.status_code, 200)
+        availability_row = availability.get_json()["data"]["vehicles"][0]
+        self.assertFalse(availability_row["available"])
+        self.assertIn("Warehouse collection", availability_row["conflict"])
+
+        conflict = self.client.post(
+            "/api/events/143/workforce/transport",
+            json={
+                "sourceType": "fleet",
+                "tripType": "depart",
+                "vehicleId": vehicle_id,
+                "driver": "Alicia",
+                "driverContact": "+65 9123 4567",
+                "locationFrom": "Warehouse",
+                "locationTo": "Test Venue",
+                "departDate": "2026-07-10",
+                "departTime": "10:00",
+                "useEndDate": "2026-07-10",
+                "useEndTime": "12:00",
+            },
+        )
+        self.assertEqual(conflict.status_code, 409)
+        self.assertIn("already booked", conflict.get_json()["error"])
+
+        depart = self.client.post(
+            "/api/events/143/workforce/transport",
+            json={
+                "sourceType": "fleet",
+                "tripType": "depart",
+                "vehicleId": vehicle_id,
+                "driver": "Alicia",
+                "driverContact": "+65 9123 4567",
+                "locationFrom": "Warehouse",
+                "locationTo": "Test Venue",
+                "departDate": "2026-07-10",
+                "departTime": "12:00",
+                "useEndDate": "2026-07-10",
+                "useEndTime": "14:00",
+            },
+        )
+        self.assertEqual(depart.status_code, 200)
+        trip = depart.get_json()["data"]["transportBookings"][0]
+        self.assertEqual(trip["sourceType"], "fleet")
+        self.assertEqual(trip["tripType"], "depart")
+        self.assertEqual(trip["driver"], "Alicia")
+        self.assertEqual(trip["vehicleNumber"], "GBD 7788K")
+
+        returned = self.client.post(
+            "/api/events/143/workforce/transport",
+            json={
+                "sourceType": "fleet",
+                "tripType": "return",
+                "vehicleId": vehicle_id,
+                "driver": "Bryan",
+                "locationFrom": "Test Venue",
+                "locationTo": "Warehouse",
+                "departDate": "2026-07-10",
+                "departTime": "14:00",
+                "useEndDate": "2026-07-10",
+                "useEndTime": "16:00",
+            },
+        )
+        self.assertEqual(returned.status_code, 200)
+        trips = returned.get_json()["data"]["transportBookings"]
+        self.assertEqual([row["driver"] for row in trips], ["Alicia", "Bryan"])
+
+        timeline = self.client.get("/api/vehicles?date=2026-07-10")
+        self.assertEqual(timeline.status_code, 200)
+        timeline_data = timeline.get_json()["data"]
+        self.assertEqual(len(timeline_data["vehicles"]), 1)
+        self.assertEqual(len(timeline_data["bookings"]), 3)
+        self.assertEqual(
+            {row["kind"] for row in timeline_data["bookings"]},
+            {"standalone", "event"},
+        )
+
+    def test_external_trip_does_not_require_a_vehicle_return_time(self):
+        self.login("admin", True)
+        profile = self.client.post(
+            "/api/workforce/transport-profiles",
+            json={
+                "vehicleType": "10ft Lorry",
+                "company": "External Logistics",
+                "vehicleNumber": "GBB 1234X",
+            },
+        ).get_json()["data"]
+        response = self.client.post(
+            "/api/events/143/workforce/transport",
+            json={
+                "sourceType": "external",
+                "tripType": "return",
+                "vendorId": profile["id"],
+                "driver": "Different Driver",
+                "locationFrom": "Test Venue",
+                "locationTo": "Warehouse",
+                "departDate": "2026-07-12",
+                "departTime": "22:00",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        booking = response.get_json()["data"]["transportBookings"][0]
+        self.assertEqual(booking["driver"], "Different Driver")
+        self.assertEqual(booking["tripType"], "return")
+        self.assertFalse(booking["useEndTime"])
 
     def test_worker_upload_review_denial_and_replacement(self):
         freelancer_id = self.create_worker_assignment()
