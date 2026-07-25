@@ -51,6 +51,27 @@ def test_add_event_tag_is_a_top_of_form_segmented_selector():
     assert 'syncAddEventLocationRequirement();' in selector
 
 
+def test_add_event_fields_are_paired_in_responsive_rows():
+    form = TEMPLATE.split('<form id="addEventForm">', 1)[1].split('</form>', 1)[0]
+    identity_row = form.split('data-add-event-row="identity"', 1)[1].split(
+        'data-add-event-row="dates"', 1
+    )[0]
+    dates_row = form.split('data-add-event-row="dates"', 1)[1].split(
+        'data-event-assignee-context="add"', 1
+    )[0]
+
+    assert 'id="eventName"' in identity_row
+    assert 'id="eventLocation"' in identity_row
+    assert identity_row.count('add-event-required-mark') == 2
+    assert 'eventLocationHelp' not in identity_row
+    assert 'Required for Events.' not in identity_row
+    assert 'Optional for Dry Hire.' not in identity_row
+    assert 'id="eventStartDate"' in dates_row
+    assert 'id="eventEndDate"' in dates_row
+    assert 'grid-template-columns: repeat(2, minmax(0, 1fr));' in TEMPLATE
+    assert '@media (max-width: 620px)' in TEMPLATE
+
+
 def test_event_menus_are_portaled_clamped_and_restored():
     toggle_menu = function_source('toggleEventCardMenu', 'eventMenuIconHtml')
     close_menu = function_source('closeEventCardMenus', 'toggleEventCardMenu')

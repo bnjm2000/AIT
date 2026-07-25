@@ -104,7 +104,11 @@ class PageRoutingTests(unittest.TestCase):
         self.login('owner')
         response = self.client.get('/prepare')
         self.assertEqual(response.status_code, 200)
-        self.assertIn('window.__INITIAL_APP_SECTION__ = "prepare-new"', response.get_data(as_text=True))
+        page = response.get_data(as_text=True)
+        self.assertIn('window.__INITIAL_APP_SECTION__ = "prepare-new"', page)
+        self.assertIn('id="prepare-new-section" class="content-section active"', page)
+        self.assertIn('id="events-section" class="content-section"', page)
+        self.assertNotIn('id="events-section" class="content-section active"', page)
 
         root = self.client.get('/')
         self.assertEqual(root.status_code, 302)
@@ -146,6 +150,7 @@ class PageRoutingTests(unittest.TestCase):
         self.assertIn("apiCall(`/api/events/${eventId}/overview`)", source)
         self.assertIn('function eventOverviewAssets(event)', source)
         self.assertIn('function closeEventOverview(options = {})', source)
+        self.assertNotIn('setTimeout(async () => {\n      const detailRoute = appDetailRouteFromPath();', source)
 
         template_path = os.path.join(os.path.dirname(app_module.__file__), 'templates', 'index.html')
         with open(template_path, encoding='utf-8') as template_file:

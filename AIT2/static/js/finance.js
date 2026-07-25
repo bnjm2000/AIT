@@ -47,7 +47,8 @@ const profitLossState = {
   eventId: null,
   data: null,
   loading: false,
-  commissionDraft: []
+  commissionDraft: [],
+  editingExpenseId: ''
 };
 
 const compareState = {
@@ -3429,7 +3430,13 @@ function renderProfitLossPage() {
                   <td>${financeEscape(row.expenseDate || '-')}</td>
                   <td><strong>${financeSgd(row.amount)}</strong></td>
                   <td>${row.attachment ? `<a href="${financeEscapeAttr(row.attachment.previewUrl)}" target="_blank" rel="noopener">${financeEscape(row.attachment.originalName || 'Receipt')}</a>` : '-'}</td>
-                  <td>${row.readOnly ? '<span class="pnl-source-pill">Claim</span>' : `<button type="button" class="finance-delete-line" onclick="profitLossDeleteExpense('${financeEscapeAttr(row.id)}')" aria-label="Delete expense">&times;</button>`}</td>
+                  <td>${row.readOnly ? '<span class="pnl-source-pill">Claim</span>' : `
+                    <span class="pnl-expense-actions">
+                      <button type="button" class="pnl-expense-edit" onclick="profitLossOpenExpenseModal('${financeEscapeAttr(row.id)}')" aria-label="Edit expense" title="Edit expense">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4z"></path></svg>
+                      </button>
+                      <button type="button" class="finance-delete-line" onclick="profitLossDeleteExpense('${financeEscapeAttr(row.id)}')" aria-label="Delete expense">&times;</button>
+                    </span>`}</td>
                 </tr>
               `).join('') || '<tr><td colspan="7" class="pnl-empty-row">No claims or expenses have been added.</td></tr>'}
             </tbody>
@@ -3600,34 +3607,65 @@ async function profitLossSaveCommissions(event) {
   }
 }
 
-function profitLossOpenExpenseModal() {
+function profitLossOpenExpenseModal(expenseId = '') {
   financeEnsureProfitLossExpenseModal();
   document.getElementById('profitLossExpenseForm')?.reset();
+  profitLossState.editingExpenseId = String(expenseId || '');
+  const expense = profitLossState.editingExpenseId
+    ? (profitLossState.data?.expenses || []).find(row => String(row.id) === profitLossState.editingExpenseId && !row.readOnly)
+    : null;
+  if (expense) {
+    const setValue = (id, value) => {
+      const input = document.getElementById(id);
+      if (input) input.value = value == null ? '' : String(value);
+    };
+    setValue('profitLossExpenseDescription', expense.description);
+    setValue('profitLossExpenseCategory', expense.category);
+    setValue('profitLossExpenseVendor', expense.vendor);
+    setValue('profitLossExpenseAmount', expense.amount);
+    setValue('profitLossExpenseDate', expense.expenseDate);
+  } else {
+    profitLossState.editingExpenseId = '';
+  }
   const title = document.getElementById('profitLossExpenseTitle');
   const fileField = document.getElementById('profitLossExpenseFileField');
-  if (title) title.textContent = 'Add Expense';
-  if (fileField) fileField.style.display = 'grid';
+  if (title) title.textContent = expense ? 'Edit Expense' : 'Add Expense';
+  if (fileField) fileField.style.display = expense ? 'none' : 'grid';
   openModal('profitLossExpenseModal');
 }
 
 async function profitLossSubmitExpense(event) {
   event.preventDefault();
   if (!profitLossState.eventId) return;
-  const form = new FormData();
   const value = id => document.getElementById(id)?.value.trim() || '';
-  form.append('description', value('profitLossExpenseDescription'));
-  form.append('category', value('profitLossExpenseCategory') || 'Miscellaneous');
-  form.append('vendor', value('profitLossExpenseVendor'));
-  form.append('amount', value('profitLossExpenseAmount'));
-  form.append('expenseDate', value('profitLossExpenseDate'));
+  const expense = {
+    description: value('profitLossExpenseDescription'),
+    category: value('profitLossExpenseCategory') || 'Miscellaneous',
+    vendor: value('profitLossExpenseVendor'),
+    amount: value('profitLossExpenseAmount'),
+    expenseDate: value('profitLossExpenseDate')
+  };
+  const editingExpenseId = profitLossState.editingExpenseId;
   const file = document.getElementById('profitLossExpenseFile')?.files?.[0];
-  if (file) form.append('file', file);
   try {
-    const response = await apiCall(`/api/finance/profit-loss/${profitLossState.eventId}/expenses`, 'POST', form);
+    let response;
+    if (editingExpenseId) {
+      response = await apiCall(
+        `/api/finance/profit-loss/${profitLossState.eventId}/expenses/${encodeURIComponent(editingExpenseId)}`,
+        'PUT',
+        expense
+      );
+    } else {
+      const form = new FormData();
+      Object.entries(expense).forEach(([key, fieldValue]) => form.append(key, fieldValue));
+      if (file) form.append('file', file);
+      response = await apiCall(`/api/finance/profit-loss/${profitLossState.eventId}/expenses`, 'POST', form);
+    }
     profitLossState.data = response.data;
+    profitLossState.editingExpenseId = '';
     closeModal('profitLossExpenseModal');
     renderProfitLossPage();
-    showNotification('success', file ? 'Receipt uploaded' : 'Expense added');
+    showNotification('success', editingExpenseId ? 'Expense updated' : (file ? 'Receipt uploaded' : 'Expense added'));
   } catch (error) {
     showNotification('error', error.message || 'Failed to save expense');
   }

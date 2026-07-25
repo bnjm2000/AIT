@@ -250,6 +250,59 @@ class EventAvailabilityOverlapTests(unittest.TestCase):
         self.assertIn('[MODEL]AX|OtherBrand|ReplacementModel|2|Replacement item', event.prepared_items)
         self.assertIn('Replaced 2x TestBrand RegularModel', event.event_logs[-1]['action'])
 
+    def test_resolve_model_requirement_as_loan_is_atomic_and_keeps_source_details(self):
+        event = self.make_event(
+            100,
+            prepared=['[MODEL]AX|TestBrand|RegularModel|4|Regular item'],
+        )
+        self.login_as('admin', True)
+
+        response = self.client.post('/api/events/100/models/loan', json={
+            'source': {
+                'department': 'AX', 'brand': 'TestBrand',
+                'model': 'RegularModel', 'description': 'Regular item',
+            },
+            'quantity': 2,
+            'company': 'Rental Source Pte Ltd',
+        })
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertIn('[MODEL]AX|TestBrand|RegularModel|2|Regular item', event.prepared_items)
+        loan_items = [
+            app_module._parse_custom_marker(item)
+            for item in event.prepared_items
+            if app_module._parse_custom_marker(item)
+        ]
+        self.assertEqual(len(loan_items), 1)
+        self.assertEqual(loan_items[0]['type'], 'LOAN')
+        self.assertEqual(loan_items[0]['name'], 'TestBrand RegularModel')
+        self.assertEqual(loan_items[0]['quantity'], 2)
+        self.assertEqual(loan_items[0]['department'], 'AX')
+        self.assertEqual(loan_items[0]['company'], 'Rental Source Pte Ltd')
+        self.assertIn(
+            'Converted 2x TestBrand RegularModel to loan from Rental Source Pte Ltd',
+            event.event_logs[-1]['action'],
+        )
+
+    def test_resolve_model_requirement_as_loan_requires_company(self):
+        event = self.make_event(
+            100,
+            prepared=['[MODEL]AX|TestBrand|RegularModel|4|Regular item'],
+        )
+        original_items = list(event.prepared_items)
+        self.login_as('admin', True)
+
+        response = self.client.post('/api/events/100/models/loan', json={
+            'source': {
+                'department': 'AX', 'brand': 'TestBrand', 'model': 'RegularModel',
+            },
+            'quantity': 2,
+            'company': '   ',
+        })
+
+        self.assertEqual(response.status_code, 400, response.get_data(as_text=True))
+        self.assertEqual(event.prepared_items, original_items)
+
     def test_prepare_dropdown_hides_assets_assigned_to_any_other_event(self):
         self.make_event(100)
         self.make_event(101, prepared=['A#01'])

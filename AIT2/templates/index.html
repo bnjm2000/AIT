@@ -3664,6 +3664,25 @@
         outline-offset: 3px;
       }
 
+      .add-event-form-row {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        align-items: start;
+        gap: 14px;
+      }
+
+      .add-event-required-mark {
+        margin-left: 2px;
+        color: #b42318;
+      }
+
+      @media (max-width: 620px) {
+        .add-event-form-row {
+          grid-template-columns: minmax(0, 1fr);
+          gap: 0;
+        }
+      }
+
       .event-assignee-picker {
         margin-top: 16px;
         padding: 14px;
@@ -5017,74 +5036,290 @@
         gap: 16px;
       }
 
-      .event-subproject-toggle {
-        display: inline-flex;
+      .event-subproject-tabs {
+        display: flex;
         align-items: center;
-        gap: 8px;
+        gap: 4px;
+        min-width: 0;
+        margin: 0 0 12px;
+        padding: 0 4px;
+        overflow-x: auto;
+        border-bottom: 1px solid #d7dee7;
+        scrollbar-width: thin;
+      }
+
+      .event-subproject-tab-wrap {
+        position: relative;
+        display: inline-flex;
         flex: 0 0 auto;
-        color: #475569;
-        font-size: 12px;
+        align-items: stretch;
+        border-radius: 6px 6px 0 0;
+        transition: background-color 140ms ease, box-shadow 140ms ease;
+      }
+
+      .event-subproject-tab-wrap.is-drop-target {
+        background: color-mix(in srgb, var(--brand-main) 12%, #fff);
+        box-shadow: inset 0 0 0 2px var(--brand-main);
+      }
+
+      .event-subproject-tab-wrap .event-subproject-tab {
+        padding-right: 9px;
+      }
+
+      .event-subproject-tab {
+        min-height: 40px;
+        padding: 7px 13px;
+        flex: 0 0 auto;
+        border: 0;
+        border-bottom: 3px solid transparent;
+        color: #667085;
+        background: transparent;
+        font: inherit;
+        font-size: 13px;
+        font-weight: 750;
+        cursor: pointer;
+        transition: color 140ms ease, border-color 140ms ease, background-color 140ms ease;
+      }
+
+      .event-subproject-tab:hover {
+        color: #1f2937;
+        background: color-mix(in srgb, var(--brand-main) 7%, transparent);
+      }
+
+      .event-subproject-tab.active {
+        color: var(--brand-main);
+        border-bottom-color: var(--brand-main);
+      }
+
+      .event-subproject-consolidated {
+        color: #344054;
         font-weight: 800;
       }
 
-      .event-subproject-toggle input {
-        width: 16px;
-        height: 16px;
-        accent-color: var(--brand-main);
+      .event-subproject-rename,
+      .event-subproject-delete {
+        align-self: center;
+        width: 24px;
+        height: 24px;
+        padding: 0;
+        border: 0;
+        border-radius: 5px;
+        background: transparent;
+        color: #98a2b3;
+        font: inherit;
+        font-size: 17px;
+        line-height: 1;
+        cursor: pointer;
       }
 
-      .event-subproject-breakdown {
-        grid-column: 1 / -1;
-        margin-bottom: 12px;
+      .event-subproject-rename {
+        display: inline-grid;
+        place-items: center;
+        margin-left: -4px;
+        color: #7a8985;
       }
 
-      .event-subproject-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-        gap: 10px;
-        padding: 0 14px 14px;
+      .event-subproject-rename svg {
+        width: 13px;
+        height: 13px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.8;
+        stroke-linecap: round;
+        stroke-linejoin: round;
       }
 
-      .event-subproject-room {
-        min-width: 0;
-        border: 1px solid #dbe3ea;
+      .event-subproject-delete {
+        margin-right: 4px;
+      }
+
+      .event-subproject-rename:hover {
+        background: color-mix(in srgb, var(--brand-main) 10%, #fff);
+        color: var(--brand-main);
+      }
+
+      .event-subproject-delete:hover {
+        background: #fee2e2;
+        color: #b42318;
+      }
+
+      .event-subproject-add {
+        display: inline-flex;
+        flex: 0 0 auto;
+        align-items: center;
+        gap: 5px;
+        min-height: 30px;
+        margin-left: 5px;
+        padding: 5px 10px;
+        border: 1px solid color-mix(in srgb, var(--brand-main) 34%, #d7dee7);
         border-radius: 6px;
-        background: #fff;
+        background: color-mix(in srgb, var(--brand-main) 7%, #fff);
+        color: var(--brand-main);
+        font: inherit;
+        font-size: 11px;
+        font-weight: 800;
+        white-space: nowrap;
+        cursor: pointer;
+        transition: background-color 140ms ease, border-color 140ms ease;
       }
 
-      .event-subproject-room h4 {
-        margin: 0;
-        padding: 9px 10px;
-        border-bottom: 1px solid #e2e8f0;
-        font-size: 13px;
+      .event-subproject-add:hover {
+        border-color: var(--brand-main);
+        background: color-mix(in srgb, var(--brand-main) 12%, #fff);
       }
 
-      .event-subproject-item {
+      .event-consolidated-notice {
         display: flex;
         align-items: center;
-        justify-content: space-between;
-        gap: 10px;
-        padding: 8px 10px;
-        border-bottom: 1px solid #f1f5f9;
-        font-size: 12px;
+        gap: 9px;
+        margin: -3px 0 10px;
+        padding: 7px 10px;
+        border: 1px solid #dbe7e3;
+        border-radius: 6px;
+        background: #f4f8f7;
+        color: #536761;
+        font-size: 10px;
       }
 
-      .event-subproject-item:last-child {
-        border-bottom: 0;
+      .event-consolidated-notice strong {
+        color: #243b35;
+        font-size: 11px;
       }
 
-      .event-subproject-item span {
-        min-width: 0;
+      .is-room-draggable {
+        cursor: grab;
       }
 
-      .event-subproject-item strong,
-      .event-subproject-item small {
+      .is-room-draggable:active,
+      .is-room-draggable.is-dragging {
+        cursor: grabbing;
+      }
+
+      .is-room-draggable.is-dragging {
+        opacity: .48;
+      }
+
+      #plan-page-root.event-consolidated-mode .plan-inline-actions,
+      #plan-page-root.event-consolidated-mode .plan-replace-slot,
+      #plan-page-root.event-consolidated-mode .plan-qty-control,
+      #plan-page-root.event-consolidated-mode .plan-row-actions,
+      #plan-page-root.event-consolidated-mode .plan-custom-card,
+      #plan-page-root.event-consolidated-mode .plan-template-row button,
+      #plan-page-root.event-consolidated-mode #planAvailableResults .plan-button,
+      #prepare-new-page-root.event-consolidated-mode .prepare-new-scan-card,
+      #prepare-new-page-root.event-consolidated-mode .prepare-new-custom-card,
+      #prepare-new-page-root.event-consolidated-mode .prepare-new-primary-action,
+      #prepare-new-page-root.event-consolidated-mode .prepare-new-action-wrap,
+      #prepare-new-page-root.event-consolidated-mode .prepare-new-asset-card button,
+      #prepare-new-page-root.event-consolidated-mode .prepare-new-asset-controls button,
+      #prepare-new-page-root.event-consolidated-mode .prepare-new-custom-row button {
+        display: none !important;
+      }
+
+      .event-subproject-delete-modal {
+        width: min(560px, calc(100vw - 24px));
+      }
+
+      .event-subproject-delete-options {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 9px;
+        margin: 14px 0;
+      }
+
+      .event-subproject-delete-options > button {
+        min-height: 86px;
+        padding: 12px;
+        border: 1px solid #d9e2df;
+        border-radius: 7px;
+        background: #fff;
+        color: #344054;
+        font: inherit;
+        text-align: left;
+        cursor: pointer;
+      }
+
+      .event-subproject-delete-options > button.active {
+        border-color: var(--brand-main);
+        background: color-mix(in srgb, var(--brand-main) 7%, #fff);
+        box-shadow: 0 0 0 1px var(--brand-main);
+      }
+
+      .event-subproject-delete-options strong,
+      .event-subproject-delete-options span {
         display: block;
       }
 
-      .event-subproject-item small {
-        margin-top: 2px;
-        color: #64748b;
+      .event-subproject-delete-options strong {
+        margin-bottom: 5px;
+        color: #1d2939;
+        font-size: 12px;
+      }
+
+      .event-subproject-delete-options span {
+        color: #667085;
+        font-size: 10px;
+        line-height: 1.45;
+      }
+
+      .event-subproject-delete-targets {
+        margin-bottom: 14px;
+        padding: 11px;
+        border: 1px solid #e1e8e5;
+        border-radius: 7px;
+        background: #f8faf9;
+      }
+
+      .event-subproject-delete-targets > span {
+        display: block;
+        margin-bottom: 7px;
+        color: #667085;
+        font-size: 9px;
+        font-weight: 800;
+        text-transform: uppercase;
+      }
+
+      .event-subproject-delete-targets > div {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 7px;
+      }
+
+      .event-subproject-delete-targets button {
+        min-height: 32px;
+        padding: 6px 10px;
+        border: 1px solid #cfdad6;
+        border-radius: 6px;
+        background: #fff;
+        color: #344054;
+        font: inherit;
+        font-size: 11px;
+        font-weight: 750;
+        cursor: pointer;
+      }
+
+      .event-subproject-delete-targets button.active {
+        border-color: var(--brand-main);
+        background: var(--brand-main);
+        color: #fff;
+      }
+
+      .event-subproject-remove-warning {
+        color: #9f1d29;
+        font-size: 11px;
+        line-height: 1.5;
+      }
+
+      @media (max-width: 620px) {
+        .event-subproject-delete-options {
+          grid-template-columns: 1fr;
+        }
+
+        .event-consolidated-notice {
+          align-items: flex-start;
+          flex-direction: column;
+          gap: 2px;
+        }
       }
 
       .prepare-new-heading-actions {
@@ -5571,7 +5806,7 @@
         display: grid;
         align-items: center;
         gap: 8px;
-        border-bottom: 1px solid #edf0f5;
+        border-bottom: 2px solid #dce2ea;
       }
 
       .plan-result-row {
@@ -5640,6 +5875,20 @@
         border: 1px solid #d6dce8;
         border-radius: 7px;
         background: #fff;
+      }
+
+      .plan-qty-total {
+        display: grid;
+        width: 78px;
+        min-height: 28px;
+        place-items: center;
+        justify-self: center;
+        border: 1px solid #d9e2df;
+        border-radius: 6px;
+        background: #f7faf9;
+        color: #263b35;
+        font-size: 13px;
+        font-weight: 800;
       }
 
       .plan-qty-control button,
@@ -5801,7 +6050,15 @@
       }
 
       .plan-replacement-modal-content { max-width: 720px; }
+      .plan-resolution-mode { position:relative; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); margin:0 18px 14px; padding:3px; border:1px solid #d8e0e8; border-radius:8px; background:#f7f9fc; overflow:hidden; }
+      .plan-resolution-mode-indicator { position:absolute; z-index:0; top:3px; bottom:3px; left:3px; width:calc(50% - 3px); border-radius:6px; background:var(--theme-primary,var(--brand-main,#0f766e)); box-shadow:0 2px 7px rgba(15,118,110,.18); transition:transform 160ms ease,background-color 160ms ease; }
+      .plan-resolution-mode[data-selected="loan"] .plan-resolution-mode-indicator { transform:translateX(100%); background:#b45309; }
+      .plan-resolution-mode button { position:relative; z-index:1; min-height:38px; padding:7px 12px; border:0; border-radius:6px; background:transparent; color:#526079; font:inherit; font-size:12px; font-weight:800; cursor:pointer; transition:color 140ms ease; }
+      .plan-resolution-mode button[aria-checked="false"] { color:#334155; }
+      .plan-resolution-mode button[aria-checked="true"] { color:#fff; }
+      .plan-resolution-mode button:focus-visible { outline:2px solid var(--theme-primary,var(--brand-main,#0f766e)); outline-offset:-1px; }
       .plan-replacement-toolbar { display:grid; grid-template-columns:auto minmax(180px,1fr); align-items:end; gap:14px; padding:14px 18px; border-bottom:1px solid #e5e7eb; }
+      .plan-replacement-toolbar.loan-mode { grid-template-columns:1fr; }
       .plan-replacement-toolbar input { min-width:0; }
       .plan-replacement-quantity-panel { display:grid; gap:5px; color:#667085; font-size:11px; font-weight:700; }
       .plan-replacement-quantity-row { display:flex; align-items:center; gap:8px; }
@@ -5812,16 +6069,25 @@
       .plan-replacement-presets button { min-width:48px; height:34px; padding:0 10px; border:0; background:#fff; color:#526079; cursor:pointer; font-size:11px; font-weight:750; }
       .plan-replacement-presets button + button { border-left:1px solid #e8ebf2; }
       .plan-replacement-presets button:hover { background:#f6f8fc; color:#1f2937; }
-      .plan-replacement-presets button.active { background:var(--plan-primary); color:#fff; }
+      .plan-replacement-presets button.active { background:var(--theme-primary,var(--brand-main,#0f766e)); color:#fff; }
       .plan-replacement-options { max-height:min(55vh,520px); overflow:auto; }
       .plan-replacement-option { display:grid; grid-template-columns:minmax(0,1fr) auto auto; align-items:center; gap:12px; padding:11px 18px; border-bottom:1px solid #eef0f4; }
       .plan-replacement-option > div { min-width:0; }
       .plan-replacement-option strong, .plan-replacement-option small { display:block; }
       .plan-replacement-option small { margin-top:3px; color:#667085; }
+      .plan-loan-resolution-panel { padding:18px; }
+      .plan-loan-resolution-card { display:grid; gap:14px; padding:16px; border:1px solid #e5e7eb; border-left:4px solid #b45309; border-radius:8px; background:#fffaf3; }
+      .plan-loan-resolution-card p { margin:0; color:#667085; font-size:12px; line-height:1.5; }
+      .plan-loan-resolution-actions { display:flex; justify-content:flex-end; }
+      .plan-loan-resolution-submit { border-color:#b45309; background:#b45309; color:#fff; }
+      .plan-loan-resolution-submit:hover { border-color:#92400e; background:#92400e; }
 
       @media (max-width: 620px) {
+        .plan-resolution-mode { margin-right:12px; margin-left:12px; }
         .plan-replacement-toolbar { grid-template-columns:1fr; align-items:stretch; }
         .plan-replacement-quantity-row { justify-content:space-between; }
+        .plan-loan-resolution-panel { padding:12px; }
+        .plan-loan-resolution-actions .plan-button { width:100%; }
       }
 
       .inventory-onboarding-empty {
@@ -7014,7 +7280,7 @@
         gap: 8px;
         align-items: center;
         padding: 8px 10px;
-        border-bottom: 1px solid #edf0f5;
+        border-bottom: 2px solid #dce2ea;
       }
 
       .prepare-new-custom-row:last-child {
@@ -7025,6 +7291,18 @@
         display: block;
         font-size: 11px;
         overflow-wrap: anywhere;
+      }
+
+      .prepare-new-custom-title,
+      .plan-custom-form-actions {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        flex-wrap: wrap;
+      }
+
+      .prepare-new-custom-title .department-badge {
+        flex: 0 0 auto;
       }
 
       .prepare-new-custom-row small {
@@ -7087,7 +7365,7 @@
       }
 
       .prepare-new-department {
-        border-bottom: 1px solid #e8ebf2;
+        border-bottom: 2px solid #e8ebf2;
       }
 
       .prepare-new-department:last-child {
@@ -7144,7 +7422,7 @@
       }
 
       .prepare-new-model {
-        border-top: 1px solid #edf0f5;
+        border-top: 2px solid #dce2ea;
       }
 
       .prepare-new-model > summary {
@@ -7279,7 +7557,7 @@
 
       .prepare-new-model-assets {
         padding: 8px 10px 10px;
-        border-top: 1px solid #edf0f5;
+        border-top: 1px solid #dce2ea;
         background: #fbfcfe;
       }
 
@@ -7963,7 +8241,7 @@
       .return-assets-table-head,
       .return-asset-row {
         display: grid;
-        grid-template-columns: minmax(220px, 1.3fr) minmax(135px, 0.8fr) 78px 74px;
+        grid-template-columns: minmax(220px, 1.3fr) minmax(135px, 0.8fr) 78px minmax(150px, auto);
         align-items: center;
         gap: 9px;
       }
@@ -7987,7 +8265,7 @@
       }
 
       .return-department-section + .return-department-section {
-        border-top: 1px solid #e0e5ef;
+        border-top: 2px solid #e0e5ef;
       }
 
       .return-department-summary {
@@ -8024,7 +8302,7 @@
       .return-asset-row {
         min-height: 47px;
         padding: 6px 10px;
-        border-top: 1px solid #edf0f5;
+        border-top: 2px solid #dce2ea;
         background: #fff;
         font-size: 10px;
       }
@@ -8104,6 +8382,17 @@
         color: #15803d;
       }
 
+      .return-button-fault {
+        border-color: #fecaca;
+        background: #fff7f7;
+        color: #b42318;
+      }
+
+      .return-button-fault:hover {
+        border-color: #fca5a5;
+        background: #fff1f2;
+      }
+
       .return-button:disabled {
         cursor: wait;
         opacity: 0.6;
@@ -8111,6 +8400,14 @@
 
       .return-row-action {
         justify-self: end;
+      }
+
+      .return-row-actions {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 5px;
+        min-width: 0;
       }
 
       .return-empty {
@@ -8729,7 +9026,7 @@
       .transfer-source-row,
       .transfer-target-row {
         padding: 11px 13px;
-        border-bottom: 1px solid #edf1f6;
+        border-bottom: 2px solid #edf1f6;
       }
 
       .transfer-source-row:last-child,
@@ -8927,7 +9224,7 @@
         gap: 8px;
         align-items: center;
         padding: 8px 10px;
-        border-top: 1px solid #e8edf5;
+        border-top: 2px solid #e8edf5;
         background: #fff;
       }
 
@@ -9490,72 +9787,62 @@
       </div>
 
       <nav class="sidebar" id="appSidebar" aria-label="Main navigation">
-          <div class="nav-section">
-            <h3>Events</h3>
-
-            <button type="button" class="nav-item active" data-mark="EV" data-label="All Events" onclick="showSection('events')">
-              📅 All Events
-            </button>
-
-            <button type="button" class="nav-item admin-only" data-admin-only="true" data-admin-display="flex" data-mark="PL" data-label="Plan" onclick="showSection('plan')">
-              &#128203; Plan
-            </button>
-
-            <button type="button" class="nav-item admin-only" data-admin-only="true" data-admin-display="flex" data-mark="MT" data-label="Manpower &amp; Transport" onclick="showSection('workforce')">
-              &#128101; Manpower &amp; Transport
-            </button>
-
-            <button type="button" class="nav-item" data-mark="PR" data-label="Prepare" onclick="showSection('prepare-new')">
-              &#9889; Prepare
-            </button>
-
-            <button type="button" class="nav-item" data-mark="LG" data-label="Prepare (Legacy)" onclick="showSection('prepare')">
-              &#128295; Prepare (Legacy)
-            </button>
-
-            <button type="button" class="nav-item" data-mark="RT" data-label="Return Assets" onclick="showSection('return')" title="Return Assets - Click to view overdue items">
-              ↩️ Return Assets <span id="overdue-counter" style="background: #dc3545; color: white; border-radius: 50%; padding: 2px 8px; font-size: 12px; margin-left: 8px; display: none;" title="Overdue events requiring asset returns">0</span>
-            </button>
-
-            <button type="button" class="nav-item" data-mark="TR" data-label="Transfer Assets" onclick="showSection('transfer')">
-              &#8644; Transfer Assets
-            </button>
-          </div>
-
-          <div class="nav-section">
-            <h3>Inventory</h3>
-            <button type="button" class="nav-item" data-mark="IN" data-label="View Inventory" onclick="showSection('inventory')">
-              📦 View Inventory
-            </button>
-            <button type="button" class="nav-item" data-mark="CT" data-label="Containers" onclick="showSection('containers')">
-              📋 Containers
-            </button>
-            <button type="button" class="nav-item" data-mark="MN" data-label="Maintenance" onclick="showSection('maintenance')">
-              🔧 Maintenance
-            </button>
-            <button type="button" class="nav-item" data-mark="AC" data-label="Asset Check" onclick="showSection('asset-check')">
-              ✅ Asset Check
-            </button>
-          </div>
-
-          <div class="nav-section admin-only" data-admin-only="true" data-admin-display="block">
-            <h3>Reports</h3>
-            <button type="button" class="nav-item" data-mark="MR" data-label="Maintenance Report" onclick="showSection('maintenance-report')">
-              📄 Maintenance Report
-            </button>
-            <button type="button" class="nav-item log-access-only" data-log-access-only="true" data-log-access-display="flex" data-mark="SL" data-label="System Logs" onclick="showSection('logs')">
-              📝 System Logs
-            </button>
-          </div>
-
-          <div class="nav-section">
-            <h3>Settings</h3>
-            <button type="button" class="nav-item" data-mark="LO" data-label="Logout" onclick="logout()">Logout</button>
-          </div>
-        </nav>
+        <div class="nav-section">
+          <h3>Events</h3>
+          <button type="button" class="nav-item{{ ' active' if initial_section == 'events' else '' }}" onclick="showSection('events')">
+            <span class="nav-wire-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"></rect><path d="M8 3v4M16 3v4M4 10h16"></path></svg></span><span>All Events</span>
+          </button>
+          <button type="button" class="nav-item admin-only{{ ' active' if initial_section == 'plan' else '' }}" data-admin-only="true" data-admin-display="flex" onclick="showSection('plan')">
+            <span class="nav-wire-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="6" y="4" width="12" height="16" rx="2"></rect><path d="M9 4.5h6M9 10h6M9 14h4"></path></svg></span><span>Plan</span>
+          </button>
+          <button type="button" class="nav-item admin-only{{ ' active' if initial_section == 'workforce' else '' }}" data-admin-only="true" data-admin-display="flex" onclick="showSection('workforce')">
+            <span class="nav-wire-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="3"></circle><path d="M3.5 19a4.5 4.5 0 0 1 9 0M16 8h3l2 3v5h-5zM15 16h7"></path><circle cx="17" cy="18" r="1.5"></circle><circle cx="21" cy="18" r="1.5"></circle></svg></span><span>Manpower &amp; Transport</span>
+          </button>
+          <button type="button" class="nav-item{{ ' active' if initial_section == 'prepare-new' else '' }}" onclick="showSection('prepare-new')">
+            <span class="nav-wire-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 7.5 12 3l8 4.5v9L12 21l-8-4.5zM12 12v9M4.5 8 12 12l7.5-4m-4.5 6 1.6 1.6L20 12"></path></svg></span><span>Prepare</span>
+          </button>
+          <button type="button" class="nav-item" onclick="showSection('prepare')" hidden><span>Prepare (Legacy)</span></button>
+          <button type="button" class="nav-item{{ ' active' if initial_section == 'return' else '' }}" onclick="showSection('return')" title="Return Assets - Click to view overdue items">
+            <span class="nav-wire-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 7 4 12l5 5M4 12h10a6 6 0 0 1 6 6"></path></svg></span><span>Return Assets</span><span id="overdue-counter" style="background:#dc3545;color:white;border-radius:50%;padding:2px 8px;font-size:12px;margin-left:8px;display:none" title="Overdue events requiring asset returns">0</span>
+          </button>
+          <button type="button" class="nav-item{{ ' active' if initial_section == 'transfer' else '' }}" onclick="showSection('transfer')">
+            <span class="nav-wire-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 7h13l-4-4M17 17H4l4 4"></path></svg></span><span>Transfer Assets</span>
+          </button>
+        </div>
+        <div class="nav-section">
+          <h3>Inventory</h3>
+          <button type="button" class="nav-item{{ ' active' if initial_section == 'inventory' else '' }}" onclick="showSection('inventory')">
+            <span class="nav-wire-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m3 7 9-4 9 4-9 4zM3 7v10l9 4 9-4V7M12 11v10"></path></svg></span><span>View Inventory</span>
+          </button>
+          <button type="button" class="nav-item{{ ' active' if initial_section == 'containers' else '' }}" onclick="showSection('containers')">
+            <span class="nav-wire-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="5" rx="1"></rect><rect x="4" y="14" width="16" height="5" rx="1"></rect><path d="M8 10v4M16 10v4"></path></svg></span><span>Containers</span>
+          </button>
+          <button type="button" class="nav-item{{ ' active' if initial_section == 'maintenance' else '' }}" onclick="showSection('maintenance')">
+            <span class="nav-wire-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m14.7 6.3 3-3a4 4 0 0 1-5 5l-7 7a2 2 0 1 0 2.8 2.8l7-7a4 4 0 0 1 5-5l-3 3"></path></svg></span><span>Maintenance</span>
+          </button>
+          <button type="button" class="nav-item{{ ' active' if initial_section == 'asset-check' else '' }}" onclick="showSection('asset-check')">
+            <span class="nav-wire-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"></circle><path d="m8.5 12 2.3 2.3 4.7-5"></path></svg></span><span>Asset Check</span>
+          </button>
+        </div>
+        <div class="nav-section admin-only" data-admin-only="true" data-admin-display="block">
+          <h3>Reports</h3>
+          <button type="button" class="nav-item{{ ' active' if initial_section == 'maintenance-report' else '' }}" onclick="showSection('maintenance-report')">
+            <span class="nav-wire-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 3h7l4 4v14H7zM14 3v5h4M9 13h6M9 17h4"></path></svg></span><span>Maintenance Report</span>
+          </button>
+          <button type="button" class="nav-item log-access-only{{ ' active' if initial_section == 'logs' else '' }}" data-log-access-only="true" data-log-access-display="flex" onclick="showSection('logs')">
+            <span class="nav-wire-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 5h14M5 12h14M5 19h10M4 5h.01M4 12h.01M4 19h.01"></path></svg></span><span>System Logs</span>
+          </button>
+        </div>
+        <div class="nav-section">
+          <h3>Settings</h3>
+          <button type="button" class="nav-item" onclick="logout()">
+            <span class="nav-wire-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M10 4H5v16h5M14 8l4 4-4 4M18 12H9"></path></svg></span><span>Logout</span>
+          </button>
+        </div>
+      </nav>
       <main class="main-content" id="mainContent" tabindex="-1">
         <div class="content-area">
-        <div id="dashboard-section" class="content-section">
+        <div id="dashboard-section" class="content-section{{ ' active' if initial_section == 'dashboard' else '' }}">
           <div class="content-header">
             <h2 class="content-title">Dashboard</h2>
             <button
@@ -9629,7 +9916,7 @@
             </div>
           </div>
 
-    <div id="events-section" class="content-section active">
+    <div id="events-section" class="content-section{{ ' active' if initial_section == 'events' else '' }}">
       <div class="events-overview">
         <div class="events-overview-header">
           <h2 class="content-title">All Events</h2>
@@ -9698,7 +9985,6 @@
             <div>
               <div class="events-summary-number" id="active-events">0</div>
               <div class="events-summary-label">Active / Upcoming</div>
-              <div class="events-summary-note">Excludes pending closure and closed</div>
             </div>
           </div>
           <button type="button" class="events-summary-card summary-overdue" onclick="setEventStateFilter('Overdue')">
@@ -9759,31 +10045,31 @@
       </div>
     </div>
 
-    <div id="plan-section" class="content-section">
+    <div id="plan-section" class="content-section{{ ' active' if initial_section == 'plan' else '' }}">
       <div id="plan-page-root" class="plan-page">
         <div class="loading">Loading planning workspace...</div>
       </div>
     </div>
 
-    <div id="prepare-new-section" class="content-section">
+    <div id="prepare-new-section" class="content-section{{ ' active' if initial_section == 'prepare-new' else '' }}">
       <div id="prepare-new-page-root" class="prepare-new-page">
         <div class="loading">Loading preparation workspace...</div>
       </div>
     </div>
 
-    <div id="workforce-section" class="content-section">
+    <div id="workforce-section" class="content-section{{ ' active' if initial_section == 'workforce' else '' }}">
       <div id="workforce-page-root" class="workforce-page">
         <div class="loading">Loading manpower and transport...</div>
       </div>
     </div>
 
-    <div id="invoice-claims-section" class="content-section">
+    <div id="invoice-claims-section" class="content-section{{ ' active' if initial_section == 'invoice-claims' else '' }}">
       <div id="workforce-documents-root" class="workforce-page wf-documents-page">
         <div class="loading">Loading invoices and claims...</div>
       </div>
     </div>
 
-    <div id="freelancer-workspace-section" class="content-section">
+    <div id="freelancer-workspace-section" class="content-section{{ ' active' if initial_section == 'freelancer-workspace' else '' }}">
       <div id="freelancer-workspace-root" class="workforce-page">
         <div class="loading">Loading freelancer workspace...</div>
       </div>
@@ -9891,7 +10177,7 @@
       </div>
     </div>
 
-          <div id="inventory-section" class="content-section">
+    <div id="inventory-section" class="content-section{{ ' active' if initial_section == 'inventory' else '' }}">
             <style>
               #inventory-section { --inventory-green:#0f766e;--inventory-green-soft:#e8f5f2;--inventory-ink:#172b26;--inventory-muted:#64748b;--inventory-line:#dce7e3; }
               #inventory-section .inventory-page-header { display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:18px;padding-bottom:16px;border-bottom:1px solid var(--inventory-line); }
@@ -9927,7 +10213,7 @@
               .inventory-catalogue { border:1px solid var(--inventory-line);border-radius:7px;background:#fff;overflow:visible; }
               .inventory-model-head,.inventory-model-summary { display:grid;grid-template-columns:minmax(190px,1.15fr) minmax(180px,1.25fr) minmax(105px,.55fr) minmax(110px,.55fr) minmax(120px,.6fr) 28px;gap:12px;align-items:center; }
               .inventory-model-head { padding:7px 12px;background:#f2f7f5;border-bottom:1px solid var(--inventory-line);color:#62756f;font-size:10px;font-weight:800;text-transform:uppercase; }
-              .inventory-model-group + .inventory-model-group { border-top:1px solid #e7eeec; }
+              .inventory-model-group + .inventory-model-group { border-top:2px solid #e7eeec; }
               .inventory-model-summary { width:100%;min-height:50px;padding:6px 12px;border:0;background:#fff;color:inherit;text-align:left;font:inherit;cursor:pointer;transition:background .15s ease; }
               .inventory-model-summary:hover,.inventory-model-summary[aria-expanded="true"] { background:#f4faf8; }
               .inventory-model-name { min-width:0; }
@@ -10160,7 +10446,7 @@
             </div>
           </div>
 
-          <div id="containers-section" class="content-section">
+    <div id="containers-section" class="content-section{{ ' active' if initial_section == 'containers' else '' }}">
             <div class="content-header showbase-page-header">
               <div>
                 <h2 class="content-title">Containers</h2>
@@ -10179,7 +10465,7 @@
             </div>
           </div>
 
-          <div id="asset-check-section" class="content-section">
+    <div id="asset-check-section" class="content-section{{ ' active' if initial_section == 'asset-check' else '' }}">
             <div class="content-header showbase-page-header">
               <div>
                 <h2 class="content-title">Asset Check</h2>
@@ -10192,7 +10478,7 @@
             </div>
           </div>
 
-          <div id="logs-section" class="content-section">
+    <div id="logs-section" class="content-section{{ ' active' if initial_section == 'logs' else '' }}">
             <div class="content-header showbase-page-header">
               <div>
                 <h2 class="content-title">System Logs</h2>
@@ -10208,7 +10494,7 @@
             </div>
           </div>
 
-          <div id="maintenance-report-section" class="content-section">
+    <div id="maintenance-report-section" class="content-section{{ ' active' if initial_section == 'maintenance-report' else '' }}">
             <style>
               #maintenance-report-section { --mr-accent:var(--theme-primary,#0f766e);--mr-ink:#172b26;--mr-muted:#64748b;--mr-line:#dce7e3; }
               #maintenance-report-section .mr-header { display:flex;justify-content:space-between;align-items:flex-start;gap:14px;margin-bottom:13px;padding-bottom:13px;border-bottom:1px solid var(--mr-line); }
@@ -10243,7 +10529,7 @@
               #maintenance-report-section #maintenance-report-preview { margin:0;overflow:auto; }
               #maintenance-report-section .maintenance-report-table { width:100%;border-collapse:collapse;font-size:9px; }
               #maintenance-report-section .maintenance-report-table th { padding:7px 9px;background:#f8fbfa;color:#62756f;font-size:8px;text-align:left;text-transform:uppercase; }
-              #maintenance-report-section .maintenance-report-table td { padding:7px 9px;border-top:1px solid #e7eeec;color:#344b44;vertical-align:top; }
+              #maintenance-report-section .maintenance-report-table td { padding:7px 9px;border-top:2px solid #e7eeec;color:#344b44;vertical-align:top; }
               @media(max-width:1100px){ #maintenance-report-section .mr-filter-grid{grid-template-columns:repeat(3,minmax(0,1fr))} }
               @media(max-width:720px){ #maintenance-report-section .mr-header{flex-direction:column}#maintenance-report-section .mr-summary{grid-template-columns:repeat(2,minmax(0,1fr))}#maintenance-report-section .mr-summary-item{border-top:1px solid var(--mr-line)}#maintenance-report-section .mr-summary-item:nth-child(-n+2){border-top:0}#maintenance-report-section .mr-summary-item:nth-child(even){border-right:0}#maintenance-report-section .mr-filter-grid{grid-template-columns:1fr 1fr}#maintenance-report-section .mr-filter-wide{grid-column:1/-1}#maintenance-report-section .maintenance-report-table thead{display:none}#maintenance-report-section .maintenance-report-table,#maintenance-report-section .maintenance-report-table tbody,#maintenance-report-section .maintenance-report-table tr,#maintenance-report-section .maintenance-report-table td{display:block;width:100%}#maintenance-report-section .maintenance-report-table tbody{display:grid;gap:7px;padding:7px;background:#f7faf9}#maintenance-report-section .maintenance-report-table tr{padding:8px;border:1px solid var(--mr-line);border-radius:6px;background:#fff}#maintenance-report-section .maintenance-report-table td{display:grid;grid-template-columns:82px minmax(0,1fr);gap:7px;padding:3px 0;border:0}#maintenance-report-section .maintenance-report-table td::before{color:var(--mr-muted);font-size:8px;font-weight:800;text-transform:uppercase;content:attr(data-label)} }
               @media(max-width:450px){ #maintenance-report-section .mr-filter-grid{grid-template-columns:1fr}#maintenance-report-section .mr-filter-wide{grid-column:1}#maintenance-report-section .mr-export{width:100%} }
@@ -10280,7 +10566,7 @@
           </div>
 
           <!-- Prepare Events Section -->
-          <div id="prepare-section" class="content-section">
+    <div id="prepare-section" class="content-section{{ ' active' if initial_section == 'prepare' else '' }}">
             <div class="content-header">
               <h2 class="content-title">Prepare (Legacy)</h2>
             </div>
@@ -10291,7 +10577,7 @@
           </div>
 
           <!-- Delivery Order Tab -->
-          <div id="delivery-order-section" class="content-section">
+    <div id="delivery-order-section" class="content-section{{ ' active' if initial_section == 'delivery-order' else '' }}">
               <style>
                 #delivery-order-section { --do-accent:var(--theme-primary,#0f766e);--do-accent-soft:#eaf6f2;--do-ink:#172b26;--do-muted:#667a73;--do-line:#dce7e3;--do-blue:#1769aa;color:var(--do-ink); }
                 #delivery-order-section .do-page-header { display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--do-line); }
@@ -10356,7 +10642,7 @@
                 #delivery-order-section .do-department-section + .do-department-section { border-top:1px solid var(--do-line); }
                 #delivery-order-section .do-dept-header { display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 14px;border-bottom:1px solid #e3ebe8;background:#f0f6f4;color:#314a43;font-size:10px;font-weight:800;text-transform:uppercase; }
                 #delivery-order-section .do-dept-count { min-width:23px;padding:2px 6px;border-radius:9px;background:#dcebe6;color:#315c50;text-align:center;font-size:9px; }
-                #delivery-order-section .do-item-row { display:grid;grid-template-columns:minmax(0,1fr) 76px;gap:10px;align-items:center;min-height:39px;padding:6px 14px;border-bottom:1px solid #edf2f0;background:#fff;transition:background .14s; }
+                #delivery-order-section .do-item-row { display:grid;grid-template-columns:minmax(0,1fr) 76px;gap:10px;align-items:center;min-height:39px;padding:6px 14px;border-bottom:2px solid #edf2f0;background:#fff;transition:background .14s; }
                 #delivery-order-section .do-item-row:last-child { border-bottom:0; }
                 #delivery-order-section .do-item-row:hover { background:#fafcfb; }
                 #delivery-order-section .do-item-row.do-edit-row { grid-template-columns:20px minmax(220px,1fr) minmax(130px,.5fr) 72px auto;gap:7px; }
@@ -10468,21 +10754,21 @@
           </div>
 
           <!-- Return Assets Section -->
-          <div id="return-section" class="content-section">
+    <div id="return-section" class="content-section{{ ' active' if initial_section == 'return' else '' }}">
             <div id="return-page-root" class="return-page">
               <div class="loading">Loading return workspace...</div>
             </div>
           </div>
 
           <!-- Transfer Assets Section -->
-          <div id="transfer-section" class="content-section">
+    <div id="transfer-section" class="content-section{{ ' active' if initial_section == 'transfer' else '' }}">
             <div id="transfer-history">
               <div class="loading">Loading transfer history...</div>
             </div>
           </div>
 
           <!-- Maintenance Section -->
-          <div id="maintenance-section" class="content-section">
+    <div id="maintenance-section" class="content-section{{ ' active' if initial_section == 'maintenance' else '' }}">
             <style>
               #maintenance-section { --maint-accent:var(--theme-primary,#0f766e);--maint-ink:#172b26;--maint-muted:#64748b;--maint-line:#dce7e3; }
               #maintenance-section .maintenance-page-header { display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--maint-line); }
@@ -10517,7 +10803,7 @@
               #maintenance-section .maintenance-list-header,#maintenance-section .maintenance-activity-row { display:grid;grid-template-columns:minmax(155px,.9fr) minmax(260px,1.8fr) minmax(115px,.7fr) minmax(110px,.65fr) 28px;gap:10px;align-items:center; }
               #maintenance-section .maintenance-list-header { padding:7px 10px;background:#f2f7f5;border:1px solid var(--maint-line);border-radius:6px 6px 0 0;color:#62756f;font-size:9px;font-weight:800;text-transform:uppercase; }
               #maintenance-section .maintenance-activity-list { border:1px solid var(--maint-line);border-top:0;border-radius:0 0 6px 6px;overflow:hidden; }
-              #maintenance-section .maintenance-activity-row { width:100%;min-height:55px;padding:7px 10px;border:0;border-bottom:1px solid #e8efed;background:#fff;color:inherit;text-align:left;font:inherit;cursor:pointer;transition:background .14s; }
+              #maintenance-section .maintenance-activity-row { width:100%;min-height:55px;padding:7px 10px;border:0;border-bottom:2px solid #e8efed;background:#fff;color:inherit;text-align:left;font:inherit;cursor:pointer;transition:background .14s; }
               #maintenance-section .maintenance-activity-row:last-child { border-bottom:0; }
               #maintenance-section .maintenance-activity-row:hover { background:#f7fbfa; }
               #maintenance-section .maintenance-activity-row:focus-visible { outline:2px solid rgba(15,118,110,.28);outline-offset:-2px;background:#f7fbfa; }
@@ -10669,38 +10955,41 @@
               <option value="dry hire">Dry Hire</option>
             </select>
           </div>
-          <div class="form-group">
-            <label class="form-label">Event Name</label>
-            <input type="text" class="form-input" id="eventName" required />
+          <div class="add-event-form-row" data-add-event-row="identity">
+            <div class="form-group">
+              <label class="form-label" for="eventName">
+                Event Name <span class="add-event-required-mark" aria-hidden="true">*</span>
+              </label>
+              <input type="text" class="form-input" id="eventName" required />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="eventLocation">
+                Location <span class="add-event-required-mark" id="eventLocationRequiredMark" aria-hidden="true">*</span>
+              </label>
+              <input
+                type="text"
+                class="form-input"
+                id="eventLocation"
+                maxlength="200"
+                autocomplete="street-address"
+                required
+              />
+            </div>
           </div>
-          <div class="form-group">
-            <label class="form-label" for="eventLocation">
-              Location <span id="eventLocationRequiredMark" aria-hidden="true">*</span>
-            </label>
-            <input
-              type="text"
-              class="form-input"
-              id="eventLocation"
-              maxlength="200"
-              autocomplete="street-address"
-              required
-            />
-            <small id="eventLocationHelp" style="color: #666;">
-              Required for Events; optional for Dry Hire.
-            </small>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Start Date</label>
-            <input
-              type="date"
-              class="form-input"
-              id="eventStartDate"
-              required
-            />
-          </div>
-          <div class="form-group">
-            <label class="form-label">End Date</label>
-            <input type="date" class="form-input" id="eventEndDate" required />
+          <div class="add-event-form-row" data-add-event-row="dates">
+            <div class="form-group">
+              <label class="form-label" for="eventStartDate">Start Date</label>
+              <input
+                type="date"
+                class="form-input"
+                id="eventStartDate"
+                required
+              />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="eventEndDate">End Date</label>
+              <input type="date" class="form-input" id="eventEndDate" required />
+            </div>
           </div>
           <div class="event-assignee-picker" data-event-assignee-context="add">
             <div class="event-assignee-heading">
@@ -10956,7 +11245,7 @@
       .event-overview-section-head h3 { margin:0;color:var(--eo-ink);font-size:13px; }.event-overview-section-head small { color:var(--eo-muted);font-size:10px; }.event-overview-section-body { padding:12px 14px; }
       .event-overview-department+.event-overview-department { margin-top:12px;padding-top:12px;border-top:1px solid #edf1ef; }.event-overview-dept-head { display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:7px; }
       .event-overview-dept-head strong { color:#314740;font-size:10px;text-transform:uppercase; }.event-overview-dept-head span { color:var(--eo-muted);font-size:10px; }
-      .event-overview-asset-row { display:grid;grid-template-columns:minmax(0,1fr) 70px 70px 70px;align-items:center;gap:8px;min-height:46px;padding:7px 8px;border-top:1px solid #f0f3f2; }.event-overview-asset-row:first-of-type { border-top:0; }
+      .event-overview-asset-row { display:grid;grid-template-columns:minmax(0,1fr) 70px 70px 70px;align-items:center;gap:8px;min-height:46px;padding:7px 8px;border-top:2px solid #f0f3f2; }.event-overview-asset-row:first-of-type { border-top:0; }
       .event-overview-asset-name { min-width:0; }.event-overview-asset-name strong,.event-overview-asset-name small { display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }.event-overview-asset-name strong { color:#263b35;font-size:12px; }.event-overview-asset-name small { margin-top:2px;color:var(--eo-muted);font-size:10px; }
       .event-overview-count { text-align:right; }.event-overview-count strong,.event-overview-count span { display:block; }.event-overview-count strong { color:#2c413b;font-size:12px; }.event-overview-count span { color:#81908b;font-size:8px;text-transform:uppercase; }
       .event-overview-pills,.event-overview-internal-users { display:flex;flex-wrap:wrap;gap:5px; }.event-overview-pill { display:inline-flex;align-items:center;min-height:21px;padding:3px 7px;border:1px solid #dce6e2;border-radius:999px;background:#f8faf9;color:#465b55;font-size:9px; }

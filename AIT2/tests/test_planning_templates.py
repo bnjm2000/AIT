@@ -171,7 +171,299 @@ class PlanningTemplateTests(unittest.TestCase):
             script,
         )
 
-    def test_plan_replacement_assignees_and_company_onboarding_controls_exist(self):
+    def test_event_workspaces_offer_consolidated_room_drag_and_delete_controls(self):
+        script_path = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)),
+            'static',
+            'js',
+            'app.js',
+        )
+        with open(script_path, encoding='utf-8') as script_file:
+            script = script_file.read()
+
+        self.assertIn("EVENT_CONSOLIDATED_SUBPROJECT_ID = '__all__'", script)
+        self.assertIn('All requirements', script)
+        self.assertIn('function eventSubprojectDragStart(', script)
+        self.assertIn('function eventSubprojectDrop(', script)
+        self.assertIn("/subprojects/move`,", script)
+        self.assertIn('function planOpenDeleteSubproject(', script)
+        self.assertIn("mode: state.mode", script)
+        self.assertIn(
+            "{ allowAdd: true, allowDelete: true, allowRename: true }",
+            script,
+        )
+        self.assertIn('function planRenameSubproject(', script)
+        self.assertIn("'PATCH',\n      { name: cleanName }", script)
+        self.assertIn('function planSubprojectHasAssignedAssets(', script)
+        self.assertIn('if (!planSubprojectHasAssignedAssets(room))', script)
+        self.assertIn('class="plan-qty-total"', script)
+        self.assertIn('eventConsolidatedNotice({ interactive: true })', script)
+        self.assertIn(
+            'Return assets and log faults directly from this view.',
+            script,
+        )
+        self.assertIn("kind: 'requirement'", script)
+        self.assertIn("kind: 'asset', assetRef: id", script)
+        self.assertIn("`Event #${event.id || ''}: ${event.name || 'Unnamed event'}`", script)
+        self.assertIn("room ? `Room: ${room.name || 'Unnamed room'}`", script)
+
+    def test_event_asset_rows_use_visible_neutral_dividers(self):
+        project_root = os.path.dirname(os.path.dirname(__file__))
+        with open(
+            os.path.join(project_root, 'templates', 'index.html'),
+            encoding='utf-8',
+        ) as template_file:
+            template = template_file.read()
+
+        plan_rows = template.split('.plan-result-row,', 1)[1].split('}', 1)[0]
+        prepare_custom = template.split('.prepare-new-custom-row {', 1)[1].split('}', 1)[0]
+        prepare_models = template.split('.prepare-new-model {', 1)[1].split('}', 1)[0]
+        return_rows = template.split('.return-asset-row {', 2)[2].split('}', 1)[0]
+
+        for row_style in (plan_rows, prepare_custom, prepare_models, return_rows):
+            self.assertIn('2px solid #dce2ea', row_style)
+
+    def test_plan_can_add_first_subproject_without_losing_existing_items(self):
+        self.login('admin')
+        custom = app_module._make_custom_marker(
+            'MISC',
+            'Lectern',
+            1,
+            'AX',
+        )
+        self.event.prepared_items = [
+            '[MODEL]AX|TestBrand|ModelA|3|ModelA description',
+            custom,
+            'A#01',
+        ]
+        self.event.actually_prepared = [
+            '[PREPARED]AX|TestBrand|ModelA|1|ModelA description',
+            'A#01',
+        ]
+        self.event.subprojects = []
+        self.data_manager.save_event(self.event)
+
+        response = self.client.post(
+            f'/api/events/{self.event.event_id}/subprojects',
+            json={'name': 'Breakout Room'},
+        )
+
+        self.assertEqual(response.status_code, 201, response.get_data(as_text=True))
+        rooms = response.get_json()['data']['subprojects']
+        self.assertEqual([room['name'] for room in rooms], ['Main Room', 'Breakout Room'])
+        self.assertEqual(rooms[0]['items'][0]['quantity'], 3)
+        self.assertEqual(rooms[0]['items'][0]['brand'], 'TestBrand')
+        self.assertEqual(rooms[0]['items'][0]['preparedQuantity'], 1)
+        self.assertIn('A#01', rooms[0]['items'][0]['assetRefs'])
+        self.assertTrue(any(item.get('isCustom') for item in rooms[0]['items']))
+        self.assertEqual(rooms[1]['items'], [])
+        self.assertEqual(self.event.prepared_items[0], '[MODEL]AX|TestBrand|ModelA|3|ModelA description')
+
+    def test_plan_subproject_names_are_required_and_unique(self):
+        self.login('admin')
+        created = self.client.post(
+            f'/api/events/{self.event.event_id}/subprojects',
+            json={'name': 'Breakout Room'},
+        )
+        self.assertEqual(created.status_code, 201, created.get_data(as_text=True))
+
+        duplicate = self.client.post(
+            f'/api/events/{self.event.event_id}/subprojects',
+            json={'name': ' breakout room '},
+        )
+        missing = self.client.post(
+            f'/api/events/{self.event.event_id}/subprojects',
+            json={'name': '   '},
+        )
+        self.assertEqual(duplicate.status_code, 409)
+        self.assertEqual(missing.status_code, 400)
+
+    def test_plan_subproject_can_be_renamed_but_not_duplicated(self):
+        self.login('admin')
+        self.event.subprojects = [
+            {'id': 'main', 'name': 'Main Room', 'items': []},
+            {'id': 'breakout', 'name': 'Breakout', 'items': []},
+        ]
+
+        renamed = self.client.patch(
+            f'/api/events/{self.event.event_id}/subprojects/breakout',
+            json={'name': 'Ballroom'},
+        )
+        duplicate = self.client.patch(
+            f'/api/events/{self.event.event_id}/subprojects/breakout',
+            json={'name': ' main room '},
+        )
+
+        self.assertEqual(renamed.status_code, 200, renamed.get_data(as_text=True))
+        self.assertEqual(self.event.subprojects[1]['name'], 'Ballroom')
+        self.assertEqual(duplicate.status_code, 409)
+        self.assertEqual(self.event.subprojects[1]['name'], 'Ballroom')
+
+    def test_subproject_delete_can_merge_requirements_and_assignments(self):
+        self.login('admin')
+        self.event.subprojects = [
+            {
+                'id': 'main',
+                'name': 'Main Room',
+                'items': [{
+                    'departmentCode': 'AX',
+                    'brand': 'TestBrand',
+                    'model': 'ModelA',
+                    'description': 'ModelA description',
+                    'quantity': 2,
+                    'preparedQuantity': 0,
+                    'assetRefs': [],
+                }],
+            },
+            {
+                'id': 'breakout',
+                'name': 'Breakout',
+                'items': [{
+                    'departmentCode': 'AX',
+                    'brand': 'TestBrand',
+                    'model': 'ModelA',
+                    'description': 'ModelA description',
+                    'quantity': 1,
+                    'preparedQuantity': 1,
+                    'assetRefs': ['A#01'],
+                }],
+            },
+        ]
+        self.event.prepared_items = [
+            '[MODEL]AX|TestBrand|ModelA|3|ModelA description'
+        ]
+        self.event.actually_prepared = ['A#01']
+
+        response = self.client.delete(
+            f'/api/events/{self.event.event_id}/subprojects/breakout',
+            json={'mode': 'merge', 'targetSubprojectId': 'main'},
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(len(self.event.subprojects), 1)
+        main_item = self.event.subprojects[0]['items'][0]
+        self.assertEqual(main_item['quantity'], 3)
+        self.assertEqual(main_item['preparedQuantity'], 1)
+        self.assertEqual(main_item['assetRefs'], ['A#01'])
+        self.assertIn('A#01', self.event.actually_prepared)
+
+    def test_subproject_delete_can_remove_its_assets_from_event(self):
+        self.login('admin')
+        self.event.subprojects = [
+            {
+                'id': 'main',
+                'name': 'Main Room',
+                'items': [{
+                    'departmentCode': 'AX',
+                    'brand': 'TestBrand',
+                    'model': 'ModelA',
+                    'description': 'ModelA description',
+                    'quantity': 2,
+                }],
+            },
+            {
+                'id': 'breakout',
+                'name': 'Breakout',
+                'items': [{
+                    'departmentCode': 'AX',
+                    'brand': 'TestBrand',
+                    'model': 'ModelA',
+                    'description': 'ModelA description',
+                    'quantity': 1,
+                    'assetRefs': ['A#01'],
+                }],
+            },
+        ]
+        self.event.prepared_items = [
+            '[MODEL]AX|TestBrand|ModelA|3|ModelA description'
+        ]
+        self.event.actually_prepared = ['A#01']
+        self.data_manager.inventory['A#01'].current_location = self.event.name
+
+        response = self.client.delete(
+            f'/api/events/{self.event.event_id}/subprojects/breakout',
+            json={'mode': 'remove'},
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertNotIn('A#01', self.event.actually_prepared)
+        self.assertEqual(
+            self.data_manager.inventory['A#01'].current_location,
+            'Store',
+        )
+        self.assertIn(
+            '[MODEL]AX|TestBrand|ModelA|2|ModelA description',
+            self.event.prepared_items,
+        )
+
+    def test_subproject_content_can_move_to_the_viewed_room(self):
+        self.login('admin')
+        self.event.subprojects = [
+            {
+                'id': 'main',
+                'name': 'Main Room',
+                'items': [{
+                    'departmentCode': 'AX',
+                    'brand': 'TestBrand',
+                    'model': 'ModelA',
+                    'description': 'ModelA description',
+                    'quantity': 1,
+                    'assetRefs': ['A#01'],
+                }],
+            },
+            {
+                'id': 'breakout',
+                'name': 'Breakout',
+                'items': [{
+                    'departmentCode': 'AX',
+                    'brand': 'TestBrand',
+                    'model': 'ModelA',
+                    'description': 'ModelA description',
+                    'quantity': 2,
+                    'assetRefs': [],
+                }],
+            },
+        ]
+        self.event.prepared_items = [
+            '[MODEL]AX|TestBrand|ModelA|3|ModelA description'
+        ]
+        self.event.actually_prepared = ['A#01']
+
+        moved = self.client.post(
+            f'/api/events/{self.event.event_id}/subprojects/move',
+            json={
+                'sourceSubprojectId': 'main',
+                'targetSubprojectId': 'breakout',
+                'kind': 'asset',
+                'assetRef': 'A#01',
+            },
+        )
+        self.assertEqual(moved.status_code, 200, moved.get_data(as_text=True))
+        self.assertEqual(self.event.subprojects[0]['items'][0]['assetRefs'], [])
+        self.assertEqual(
+            self.event.subprojects[1]['items'][0]['assetRefs'],
+            ['A#01'],
+        )
+
+        requirement = self.client.post(
+            f'/api/events/{self.event.event_id}/subprojects/move',
+            json={
+                'sourceSubprojectId': 'main',
+                'targetSubprojectId': 'breakout',
+                'kind': 'requirement',
+                'group': {
+                    'department': 'AX',
+                    'brand': 'TestBrand',
+                    'model': 'ModelA',
+                    'description': 'ModelA description',
+                },
+            },
+        )
+        self.assertEqual(requirement.status_code, 200, requirement.get_data(as_text=True))
+        self.assertEqual(self.event.subprojects[0]['items'], [])
+        self.assertEqual(self.event.subprojects[1]['items'][0]['quantity'], 3)
+
+    def test_plan_resolution_assignees_and_company_onboarding_controls_exist(self):
         project_root = os.path.dirname(os.path.dirname(__file__))
         with open(
             os.path.join(project_root, 'static', 'js', 'app.js'),
@@ -180,7 +472,12 @@ class PlanningTemplateTests(unittest.TestCase):
             script = script_file.read()
 
         self.assertIn("/models/replace`, 'POST'", script)
-        self.assertIn('function planOpenReplacement(', script)
+        self.assertIn("/models/loan`, 'POST'", script)
+        self.assertIn('function planOpenResolution(', script)
+        self.assertIn("planSetResolutionMode('replace')", script)
+        self.assertIn("planSetResolutionMode('loan')", script)
+        self.assertIn('id="planLoanCompany"', script)
+        self.assertIn('function planConvertRequirementToLoan(event)', script)
         self.assertIn("planUseReplacementQuantity('short')", script)
         self.assertIn("planUseReplacementQuantity('all')", script)
         self.assertIn('function planAdjustReplacementQuantity(delta)', script)
@@ -189,6 +486,7 @@ class PlanningTemplateTests(unittest.TestCase):
         self.assertIn("warning.type === 'degraded' ? 'requires-degraded' : 'has-shortage'", script)
         self.assertIn('class="plan-shortage-info ${', script)
         self.assertIn('class="plan-replace-slot"', script)
+        self.assertIn('>Resolve</button>', script)
         self.assertIn("planShowRequirementWarning(", script)
         self.assertIn("healthyCapacityForThisEvent", script)
         self.assertIn('capacityForThisEvent', script)
@@ -206,6 +504,9 @@ class PlanningTemplateTests(unittest.TestCase):
             template = template_file.read()
 
         self.assertIn('.plan-requirement-row.requires-degraded', template)
+        self.assertIn('background:var(--theme-primary,var(--brand-main,#0f766e));', template)
+        self.assertIn('.plan-resolution-mode button[aria-checked="false"] { color:#334155; }', template)
+        self.assertNotIn('var(--plan-primary)', template)
         self.assertIn('grid-template-columns: minmax(150px, 1.05fr) minmax(130px, 1fr) 66px auto auto;', template)
         self.assertIn('.plan-qty-control input[type="number"]::-webkit-inner-spin-button', template)
         self.assertIn('-webkit-appearance: none;', template)
@@ -250,16 +551,11 @@ class PlanningTemplateTests(unittest.TestCase):
             app_source = app_file.read()
 
         self.assertEqual(
-            template.count(
-                '<button type="button" class="nav-item" data-mark="LO" '
-                'data-label="Logout" onclick="logout()">'
-            ),
+            template.count('<button type="button" class="nav-item" onclick="logout()">'),
             1,
         )
-        self.assertNotIn(
-            '<button type="button" class="nav-item" onclick="logout()">',
-            template,
-        )
+        self.assertNotIn('data-mark="LO"', template)
+        self.assertNotIn('data-label="Logout"', template)
         self.assertIn('data-section="quotations">Quotations', finance_source)
         self.assertIn('data-section="profit-loss">Profit &amp; Loss', finance_source)
         self.assertNotIn('>▤ Quotations', finance_source)
@@ -309,6 +605,29 @@ class PlanningTemplateTests(unittest.TestCase):
         self.assertNotIn('id="returnAssetModal"', page)
         self.assertNotIn('id="returnAssetsModal"', page)
         self.assertNotIn("switchEditTab('assets')", script)
+
+    def test_return_inventory_rows_offer_fault_logging_but_custom_rows_do_not(self):
+        project_root = os.path.dirname(os.path.dirname(__file__))
+        with open(os.path.join(project_root, 'static', 'js', 'app.js'), encoding='utf-8') as script_file:
+            script = script_file.read()
+
+        can_log_fault = script.split('function returnPageCanLogFault', 1)[1].split(
+            'async function returnPageLogFault', 1
+        )[0]
+        log_fault = script.split('async function returnPageLogFault', 1)[1].split(
+            'function returnPageAssetRowHtml', 1
+        )[0]
+        return_row = script.split('function returnPageAssetRowHtml', 1)[1].split(
+            'function returnPageRenderFilteredAssets', 1
+        )[0]
+
+        self.assertIn('!custom && !asset?.isLoanOrMisc', can_log_fault)
+        self.assertIn('openBulkMaintenanceFaultModal(inventoryId)', log_fault)
+        self.assertIn('openMaintenanceModalForAsset(inventoryId)', log_fault)
+        self.assertIn("logType.value = 'Fault'", log_fault)
+        self.assertIn('returnPageCanLogFault(asset)', return_row)
+        self.assertIn('returnPageLogFault(', return_row)
+        self.assertIn('Log fault', return_row)
 
     def test_delivery_order_editor_uses_catalog_departments_and_stable_deletes(self):
         self.login('admin')
@@ -416,6 +735,47 @@ class PlanningTemplateTests(unittest.TestCase):
         self.assertEqual(custom[0]['name'], 'Rental Receiver')
         self.assertEqual(custom[0]['company'], 'Rental Co')
 
+    def test_custom_item_description_round_trips_and_can_be_edited(self):
+        self.login('admin')
+        created = self.client.post(
+            f'/api/events/{self.event.event_id}/custom-assets',
+            json={
+                'name': 'Printed backdrop',
+                'quantity': 2,
+                'type': 'MISC',
+                'department': 'LX',
+                'description': 'Black fabric with client artwork',
+            },
+        )
+        self.assertEqual(created.status_code, 200, created.get_data(as_text=True))
+        old_marker = created.get_json()['data']['assetId']
+        parsed = app_module._parse_custom_marker(old_marker)
+        self.assertEqual(parsed['description'], 'Black fabric with client artwork')
+        self.assertEqual(parsed['version'], 3)
+
+        updated = self.client.put(
+            f'/api/events/{self.event.event_id}/custom-assets/update-quantity',
+            json={
+                'assetId': old_marker,
+                'newQuantity': 3,
+                'name': 'Printed stage backdrop',
+                'type': 'LOAN',
+                'department': 'AX',
+                'company': 'Backdrop Rental Co',
+                'description': '',
+            },
+        )
+        self.assertEqual(updated.status_code, 200, updated.get_data(as_text=True))
+        new_marker = updated.get_json()['newAssetId']
+        parsed = app_module._parse_custom_marker(new_marker)
+        self.assertEqual(parsed['name'], 'Printed stage backdrop')
+        self.assertEqual(parsed['quantity'], 3)
+        self.assertEqual(parsed['type'], 'LOAN')
+        self.assertEqual(parsed['department'], 'AX')
+        self.assertEqual(parsed['company'], 'Backdrop Rental Co')
+        self.assertNotIn(old_marker, self.event.prepared_items)
+        self.assertIn(new_marker, self.event.prepared_items)
+
     def test_merge_adds_quantities_and_replace_preserves_physical_assets(self):
         self.login('admin')
         existing_custom = app_module._make_custom_marker(
@@ -480,6 +840,184 @@ class PlanningTemplateTests(unittest.TestCase):
         self.assertNotIn('A#01', self.event.prepared_items)
         self.assertNotIn('A#02', self.event.prepared_items)
         self.assertNotIn('B#01', self.event.prepared_items)
+
+    def test_subproject_planning_updates_only_the_selected_room_and_aggregate(self):
+        self.login('admin')
+        self.event.subprojects = [
+            {
+                'id': 'main',
+                'name': 'Main Room',
+                'items': [{
+                    'lineId': 'main-a',
+                    'departmentCode': 'AX',
+                    'department': 'Audio Department',
+                    'brand': 'TestBrand',
+                    'model': 'ModelA',
+                    'description': 'ModelA description',
+                    'quantity': 2,
+                    'isCustom': False,
+                }],
+            },
+            {
+                'id': 'breakout',
+                'name': 'Breakout',
+                'items': [{
+                    'lineId': 'breakout-a',
+                    'departmentCode': 'AX',
+                    'department': 'Audio Department',
+                    'brand': 'TestBrand',
+                    'model': 'ModelA',
+                    'description': 'ModelA description',
+                    'quantity': 1,
+                    'isCustom': False,
+                }],
+            },
+        ]
+        self.event.prepared_items = [
+            '[MODEL]AX|TestBrand|ModelA|3|ModelA description'
+        ]
+
+        response = self.client.put(
+            f'/api/events/{self.event.event_id}/models',
+            json={
+                'department': 'AX',
+                'brand': 'TestBrand',
+                'model': 'ModelA',
+                'description': 'ModelA description',
+                'quantity': 3,
+                'subprojectId': 'breakout',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(self.event.subprojects[0]['items'][0]['quantity'], 2)
+        self.assertEqual(self.event.subprojects[1]['items'][0]['quantity'], 3)
+        self.assertIn(
+            '[MODEL]AX|TestBrand|ModelA|5|ModelA description',
+            self.event.prepared_items,
+        )
+
+    def test_subproject_prepare_quantity_tracks_the_selected_room(self):
+        self.login('admin')
+        self.event.subprojects = [
+            {
+                'id': 'main',
+                'name': 'Main Room',
+                'items': [{
+                    'lineId': 'main-a',
+                    'departmentCode': 'AX',
+                    'brand': 'TestBrand',
+                    'model': 'ModelA',
+                    'description': 'ModelA description',
+                    'quantity': 2,
+                    'isCustom': False,
+                }],
+            },
+            {
+                'id': 'breakout',
+                'name': 'Breakout',
+                'items': [{
+                    'lineId': 'breakout-a',
+                    'departmentCode': 'AX',
+                    'brand': 'TestBrand',
+                    'model': 'ModelA',
+                    'description': 'ModelA description',
+                    'quantity': 2,
+                    'isCustom': False,
+                }],
+            },
+        ]
+        self.event.prepared_items = [
+            '[MODEL]AX|TestBrand|ModelA|4|ModelA description'
+        ]
+
+        response = self.client.post(
+            f'/api/events/{self.event.event_id}/prepare-model-quantity',
+            json={
+                'department': 'AX',
+                'brand': 'TestBrand',
+                'model': 'ModelA',
+                'description': 'ModelA description',
+                'action': 'prepare',
+                'all': True,
+                'subprojectId': 'breakout',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertNotIn('preparedQuantity', self.event.subprojects[0]['items'][0])
+        self.assertEqual(
+            self.event.subprojects[1]['items'][0]['preparedQuantity'],
+            2,
+        )
+        prepared_marker = next(
+            app_module._parse_prepared_model_marker(ref)
+            for ref in self.event.actually_prepared
+            if app_module._parse_prepared_model_marker(ref)
+        )
+        self.assertEqual(prepared_marker['quantity'], 2)
+
+    def test_subproject_exact_assignment_replaces_only_its_prepared_slot(self):
+        self.login('admin')
+        self.event.subprojects = [
+            {
+                'id': 'main',
+                'name': 'Main Room',
+                'items': [{
+                    'lineId': 'main-a',
+                    'departmentCode': 'AX',
+                    'brand': 'TestBrand',
+                    'model': 'ModelA',
+                    'description': 'ModelA description',
+                    'quantity': 1,
+                    'isCustom': False,
+                }],
+            },
+            {
+                'id': 'breakout',
+                'name': 'Breakout',
+                'items': [{
+                    'lineId': 'breakout-a',
+                    'departmentCode': 'AX',
+                    'brand': 'TestBrand',
+                    'model': 'ModelA',
+                    'description': 'ModelA description',
+                    'quantity': 1,
+                    'isCustom': False,
+                }],
+            },
+        ]
+        self.event.prepared_items = [
+            '[MODEL]AX|TestBrand|ModelA|2|ModelA description'
+        ]
+
+        prepared = self.client.post(
+            f'/api/events/{self.event.event_id}/prepare-model-quantity',
+            json={
+                'department': 'AX',
+                'brand': 'TestBrand',
+                'model': 'ModelA',
+                'description': 'ModelA description',
+                'action': 'prepare',
+                'all': True,
+                'subprojectId': 'breakout',
+            },
+        )
+        self.assertEqual(prepared.status_code, 200, prepared.get_data(as_text=True))
+
+        assigned = self.client.post(
+            f'/api/events/{self.event.event_id}/assign-specific',
+            json={'assetId': 'A#01', 'subprojectId': 'breakout'},
+        )
+        self.assertEqual(assigned.status_code, 200, assigned.get_data(as_text=True))
+        breakout_item = self.event.subprojects[1]['items'][0]
+        self.assertEqual(breakout_item['preparedQuantity'], 0)
+        self.assertEqual(breakout_item['assetRefs'], ['A#01'])
+        self.assertIn('A#01', self.event.actually_prepared)
+        self.assertFalse(any(
+            app_module._parse_prepared_model_marker(ref)
+            for ref in self.event.actually_prepared
+        ))
 
 
 if __name__ == '__main__':

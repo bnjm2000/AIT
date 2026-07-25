@@ -1,5 +1,6 @@
 """Flask application for Showbase."""
 
+import copy
 import csv
 import hashlib
 import json
@@ -2441,7 +2442,8 @@ def _replace_department_in_custom_marker(value, old_code, new_code):
         custom.get('quantity'),
         new_code,
         custom.get('company'),
-        uid=custom.get('uid') or None
+        uid=custom.get('uid') or None,
+        description=custom.get('description') or ''
     ), True
 
 def _clean_group_value(value, uppercase=False):
@@ -3458,8 +3460,10 @@ def _find_inventory_asset_by_identifier(identifier):
     return None
 
 
-def _bulk_marker(bulk_id, quantity):
-    return f"[BULK]{bulk_id}|{max(1, _safe_int(quantity, 1))}"
+def _bulk_marker(bulk_id, quantity, subproject_id=''):
+    marker = f"[BULK]{bulk_id}|{max(1, _safe_int(quantity, 1))}"
+    clean_subproject_id = str(subproject_id or '').strip()
+    return f"{marker}|{clean_subproject_id}" if clean_subproject_id else marker
 
 
 def _parse_bulk_marker(value):
@@ -3467,10 +3471,10 @@ def _parse_bulk_marker(value):
         return None
 
     raw = value[6:]
-    if '|' in raw:
-        bulk_id, quantity = raw.split('|', 1)
-    else:
-        bulk_id, quantity = raw, '1'
+    parts = raw.split('|')
+    bulk_id = parts[0]
+    quantity = parts[1] if len(parts) > 1 else '1'
+    subproject_id = parts[2].strip() if len(parts) > 2 else ''
 
     bulk_id = bulk_id.strip()
     quantity = max(1, _safe_int(quantity, 1))
@@ -3478,7 +3482,11 @@ def _parse_bulk_marker(value):
     if not bulk_id:
         return None
 
-    return {'bulkId': bulk_id, 'quantity': quantity}
+    return {
+        'bulkId': bulk_id,
+        'quantity': quantity,
+        'subprojectId': subproject_id,
+    }
 
 
 PREPARED_MODEL_PREFIX = '[PREPARED]'
@@ -3545,7 +3553,7 @@ def _normalise_custom_type(asset_type):
     return 'LOAN' if value in ('LOAN', 'RENTAL', 'LOAN/RENTAL', 'RENT') else 'MISC'
 
 
-def _make_custom_marker(asset_type, name, quantity=1, department='UN', company='', uid=None):
+def _make_custom_marker(asset_type, name, quantity=1, department='UN', company='', uid=None, description=''):
     payload = {
         'uid': str(uid or secrets.token_hex(8)),
         'type': _normalise_custom_type(asset_type),
@@ -3553,7 +3561,8 @@ def _make_custom_marker(asset_type, name, quantity=1, department='UN', company='
         'quantity': max(1, _safe_int(quantity, 1)),
         'department': _normalise_department_code(department) or 'UN',
         'company': str(company or '').strip(),
-        'version': 2
+        'description': str(description or '').strip(),
+        'version': 3
     }
     return CUSTOM_ASSET_PREFIX + json.dumps(payload, separators=(',', ':'), sort_keys=True)
 
@@ -3599,6 +3608,7 @@ def _parse_legacy_custom_marker(value):
         'quantity': max(1, quantity),
         'department': 'UN',
         'company': '',
+        'description': '',
         'version': 1,
         'legacy': True
     }
@@ -3619,6 +3629,7 @@ def _parse_custom_marker(value):
         quantity = max(1, _safe_int(payload.get('quantity'), 1))
         department = _normalise_department_code(payload.get('department')) or 'UN'
         company = str(payload.get('company') or '').strip()
+        description = str(payload.get('description') or '').strip()
 
         return {
             'id': value,
@@ -3628,6 +3639,7 @@ def _parse_custom_marker(value):
             'quantity': quantity,
             'department': department,
             'company': company,
+            'description': description,
             'version': _safe_int(payload.get('version'), 2),
             'legacy': False
         }
@@ -3739,6 +3751,7 @@ def _normalise_planning_template_custom(value):
         'quantity': max(1, _safe_int(value.get('quantity'), 1)),
         'department': _normalise_department_code(value.get('department')) or 'UN',
         'company': str(value.get('company') or '').strip(),
+        'description': str(value.get('description') or '').strip(),
     }
 
 
@@ -3970,6 +3983,7 @@ def _apply_planning_template_to_event(event, template, mode):
             row['quantity'],
             row['department'],
             row['company'],
+            description=row.get('description') or '',
         )
         prepared_items.append(marker)
         added_custom_markers.append(marker)
@@ -4285,6 +4299,543 @@ def _event_model_required_quantity(event, group):
     return total
 
 
+def _event_subproject(event, subproject_id):
+    """Return a mutable event subproject row when the supplied ID is valid."""
+    clean_id = str(subproject_id or '').strip()
+    if not clean_id:
+        return None
+    for row in getattr(event, 'subprojects', []) or []:
+        if isinstance(row, dict) and str(row.get('id') or '').strip() == clean_id:
+            row.setdefault('items', [])
+            return row
+    return None
+
+
+def _event_initial_subproject_items(event):
+    """Build a Main Room payload without changing existing event requirements."""
+    items = []
+    seen_model_keys = set()
+
+    for ref in getattr(event, 'prepared_items', []) or []:
+        marker = _parse_model_marker(ref)
+        if marker:
+            group = {
+                'department': marker['department'],
+                'brand': marker['brand'],
+                'model': marker['model'],
+                'description': marker.get('description') or '',
+            }
+            group_key = _event_model_group_key(group)
+            if group_key in seen_model_keys:
+                continue
+            seen_model_keys.add(group_key)
+            items.append({
+                'department': group['department'],
+                'departmentCode': group['department'],
+                'brand': group['brand'],
+                'model': group['model'],
+                'description': group['description'],
+                'quantity': max(0, _safe_int(marker.get('quantity'), 0)),
+                'isCustom': False,
+            })
+            continue
+
+        custom = _parse_custom_marker(ref)
+        if custom:
+            items.append({
+                'department': custom.get('department') or 'UN',
+                'departmentCode': custom.get('department') or 'UN',
+                'brand': '',
+                'model': '',
+                'description': custom.get('name') or '',
+                'quantity': max(1, _safe_int(custom.get('quantity'), 1)),
+                'isCustom': True,
+                'assetRefs': [ref],
+            })
+
+    # Very old events can retain model requirements only in asset_models.
+    # Match those rows against inventory so adding rooms does not discard them.
+    inventory_groups = {}
+    for asset in data_manager.inventory.values():
+        if not asset or _is_disposed(asset):
+            continue
+        group = _asset_group_from_item(asset)
+        inventory_groups.setdefault(_display_model_description(group), group)
+
+    for row in getattr(event, 'asset_models', []) or []:
+        if not isinstance(row, dict):
+            continue
+        group = inventory_groups.get(str(
+            row.get('model_description')
+            or row.get('modelDescription')
+            or ''
+        ).strip())
+        if not group:
+            continue
+        group_key = _event_model_group_key(group)
+        if group_key in seen_model_keys:
+            continue
+        seen_model_keys.add(group_key)
+        items.append({
+            'department': group['department'],
+            'departmentCode': group['department'],
+            'brand': group['brand'],
+            'model': group['model'],
+            'description': group['description'],
+            'quantity': max(0, _safe_int(row.get('quantity'), 0)),
+            'isCustom': False,
+        })
+
+    return [item for item in items if item.get('quantity', 0) > 0]
+
+
+def _event_allocate_existing_refs_to_initial_subproject(event, subproject):
+    """Attach legacy aggregate preparation state to the initial Main Room."""
+    if not subproject:
+        return
+
+    items_by_group = {}
+    for item in subproject.get('items') or []:
+        group = _event_subproject_item_group(item)
+        if group:
+            items_by_group[_event_model_group_key(group)] = item
+
+    for ref in getattr(event, 'actually_prepared', []) or []:
+        marker = _parse_prepared_model_marker(ref)
+        if not marker:
+            continue
+        item = items_by_group.get(_event_model_group_key(marker))
+        if item:
+            item['preparedQuantity'] = (
+                max(0, _safe_int(item.get('preparedQuantity'), 0))
+                + max(1, _safe_int(marker.get('quantity'), 1))
+            )
+
+    extra_refs = subproject.setdefault('extraRefs', [])
+    reference_lists = [
+        values for values in _event_reference_lists(event)
+        if isinstance(values, list)
+    ]
+    all_refs = []
+    for values in reference_lists:
+        for ref in values:
+            if ref not in all_refs:
+                all_refs.append(ref)
+
+    for ref in all_refs:
+        if _parse_model_marker(ref) or _parse_prepared_model_marker(ref):
+            continue
+        if _parse_custom_marker(ref):
+            continue
+
+        allocated_ref = ref
+        bulk = _parse_bulk_marker(ref)
+        if bulk:
+            allocated_ref = _bulk_marker(
+                bulk.get('bulkId'),
+                bulk.get('quantity', 1),
+                subproject.get('id') or 'main',
+            )
+            if allocated_ref != ref:
+                for values in reference_lists:
+                    values[:] = [
+                        allocated_ref if value == ref else value
+                        for value in values
+                    ]
+            asset = data_manager.inventory.get(bulk.get('bulkId'))
+        else:
+            asset = data_manager.inventory.get(ref)
+
+        item = (
+            items_by_group.get(_asset_group_key(asset))
+            if asset
+            else None
+        )
+        target_refs = item.setdefault('assetRefs', []) if item else extra_refs
+        if allocated_ref not in target_refs:
+            target_refs.append(allocated_ref)
+
+
+def _event_subproject_refs(subproject):
+    refs = list(subproject.get('extraRefs') or []) if subproject else []
+    for item in subproject.get('items') or [] if subproject else []:
+        if isinstance(item, dict):
+            refs.extend(item.get('assetRefs') or [])
+    return list(dict.fromkeys(str(ref) for ref in refs if ref))
+
+
+def _event_merge_subproject(event, source, target):
+    """Merge room requirements and allocations without changing event totals."""
+    for source_item in source.get('items') or []:
+        if not isinstance(source_item, dict):
+            continue
+        moving_item = copy.deepcopy(source_item)
+        moving_refs = []
+        for ref in moving_item.get('assetRefs') or []:
+            moved_ref = ref
+            bulk = _parse_bulk_marker(ref)
+            if bulk:
+                moved_ref = _bulk_marker(
+                    bulk.get('bulkId'),
+                    bulk.get('quantity', 1),
+                    target.get('id') or '',
+                )
+                _event_replace_reference(event, ref, moved_ref)
+            if moved_ref not in moving_refs:
+                moving_refs.append(moved_ref)
+        if moving_refs or 'assetRefs' in moving_item:
+            moving_item['assetRefs'] = moving_refs
+
+        source_group = _event_subproject_item_group(source_item)
+        if not source_group:
+            target.setdefault('items', []).append(moving_item)
+            continue
+
+        matches = _event_subproject_group_items(target, source_group)
+        if not matches:
+            target.setdefault('items', []).append(moving_item)
+            continue
+
+        target_item = matches[0]
+        target_item['quantity'] = (
+            max(0, _safe_int(round(_safe_float(target_item.get('quantity'), 0)), 0))
+            + max(0, _safe_int(round(_safe_float(moving_item.get('quantity'), 0)), 0))
+        )
+        target_item['preparedQuantity'] = (
+            max(0, _safe_int(target_item.get('preparedQuantity'), 0))
+            + max(0, _safe_int(moving_item.get('preparedQuantity'), 0))
+        )
+        target_refs = target_item.setdefault('assetRefs', [])
+        for moved_ref in moving_item.get('assetRefs') or []:
+            if moved_ref not in target_refs:
+                target_refs.append(moved_ref)
+
+    target_extra_refs = target.setdefault('extraRefs', [])
+    for ref in source.get('extraRefs') or []:
+        moved_ref = ref
+        bulk = _parse_bulk_marker(ref)
+        if bulk:
+            moved_ref = _bulk_marker(
+                bulk.get('bulkId'),
+                bulk.get('quantity', 1),
+                target.get('id') or '',
+            )
+            _event_replace_reference(event, ref, moved_ref)
+        if moved_ref not in target_extra_refs:
+            target_extra_refs.append(moved_ref)
+
+
+def _event_replace_reference(event, old_ref, new_ref):
+    if old_ref == new_ref:
+        return
+    for values in [
+        *_event_reference_lists(event),
+        getattr(event, 'custom_collected', []) or [],
+    ]:
+        if not isinstance(values, list):
+            continue
+        values[:] = [new_ref if ref == old_ref else ref for ref in values]
+
+
+def _event_remove_subproject_contents(event, subproject):
+    """Remove one room's requirements and allocated event assets."""
+    refs_to_remove = set(_event_subproject_refs(subproject))
+    room_id = str(subproject.get('id') or '')
+    inventory_changed = False
+
+    for item in subproject.get('items') or []:
+        group = _event_subproject_item_group(item)
+        if group:
+            _decrement_prepared_model_slot(
+                event,
+                group,
+                max(0, _safe_int(item.get('preparedQuantity'), 0)),
+            )
+
+    for values in _event_reference_lists(event):
+        if not isinstance(values, list):
+            continue
+        for ref in values:
+            marker = _parse_bulk_marker(ref)
+            if marker and marker.get('subprojectId') == room_id:
+                refs_to_remove.add(ref)
+
+    for values in [
+        *_event_reference_lists(event),
+        getattr(event, 'custom_collected', []) or [],
+    ]:
+        if isinstance(values, list):
+            values[:] = [ref for ref in values if ref not in refs_to_remove]
+
+    for ref in refs_to_remove:
+        marker = _parse_bulk_marker(ref)
+        asset_id = marker.get('bulkId') if marker else ref
+        if _parse_custom_marker(ref) or _parse_prepared_model_marker(ref):
+            continue
+        asset = data_manager.inventory.get(asset_id)
+        if asset and not _is_bulk_asset(asset):
+            default_location = asset.default_location or ''
+            if asset.current_location != default_location:
+                asset.current_location = default_location
+                inventory_changed = True
+
+    if inventory_changed:
+        data_manager.save_inventory()
+    return len(refs_to_remove)
+
+
+def _event_move_subproject_requirement(event, source, target, group):
+    source_items = _event_subproject_group_items(source, group)
+    if not source_items:
+        raise ValueError('Requirement was not found in the source room')
+    moving = {
+        'items': source_items,
+        'extraRefs': [],
+    }
+    _event_merge_subproject(event, moving, target)
+    source_ids = {id(item) for item in source_items}
+    source['items'] = [
+        item for item in source.get('items') or []
+        if id(item) not in source_ids
+    ]
+
+
+def _event_move_subproject_asset(event, source, target, asset_ref):
+    source_refs = _event_subproject_refs(source)
+    if asset_ref not in source_refs:
+        raise ValueError('Asset was not found in the source room')
+
+    source['extraRefs'] = [
+        ref for ref in source.get('extraRefs') or [] if ref != asset_ref
+    ]
+    source_item = None
+    for item in source.get('items') or []:
+        if asset_ref in (item.get('assetRefs') or []):
+            source_item = item
+            item['assetRefs'] = [
+                ref for ref in item.get('assetRefs') or [] if ref != asset_ref
+            ]
+            break
+
+    custom = _parse_custom_marker(asset_ref)
+    if custom and source_item and source_item.get('isCustom'):
+        source['items'] = [
+            item for item in source.get('items') or [] if item is not source_item
+        ]
+        target.setdefault('items', []).append(source_item)
+        return asset_ref
+
+    bulk = _parse_bulk_marker(asset_ref)
+    asset = data_manager.inventory.get(
+        bulk.get('bulkId') if bulk else asset_ref
+    )
+    group = _asset_group_from_item(asset) if asset else None
+    target_item = (
+        (_event_subproject_group_items(target, group) or [None])[0]
+        if group
+        else None
+    )
+    if not target_item:
+        if source_item:
+            raise ValueError(
+                'The destination room does not require this asset model'
+            )
+        target_refs = target.setdefault('extraRefs', [])
+    else:
+        target_refs = target_item.setdefault('assetRefs', [])
+
+    moved_ref = asset_ref
+    if bulk:
+        moved_ref = _bulk_marker(
+            bulk.get('bulkId'),
+            bulk.get('quantity', 1),
+            target.get('id') or '',
+        )
+        _event_replace_reference(event, asset_ref, moved_ref)
+    if moved_ref not in target_refs:
+        target_refs.append(moved_ref)
+    return moved_ref
+
+
+def _event_subproject_item_group(item):
+    if not isinstance(item, dict) or item.get('isCustom'):
+        return None
+    department = _normalise_department_code(
+        item.get('departmentCode') or item.get('department')
+    ) or ''
+    brand = str(item.get('brand') or '').strip()
+    model = str(item.get('model') or '').strip()
+    if not department or not brand or not model:
+        return None
+    return {
+        'department': department,
+        'brand': brand,
+        'model': model,
+        'description': str(item.get('description') or '').strip(),
+    }
+
+
+def _event_subproject_group_items(subproject, group):
+    if not subproject:
+        return []
+    group_key = _event_model_group_key(group)
+    matches = []
+    for item in subproject.get('items') or []:
+        item_group = _event_subproject_item_group(item)
+        if item_group and _event_model_group_key(item_group) == group_key:
+            matches.append(item)
+    return matches
+
+
+def _event_subproject_required_quantity(subproject, group):
+    return sum(
+        max(0, _safe_int(round(_safe_float(item.get('quantity'), 0)), 0))
+        for item in _event_subproject_group_items(subproject, group)
+    )
+
+
+def _event_subproject_set_group_quantity(subproject, group, quantity):
+    """Set one room's model quantity while retaining quotation line metadata."""
+    quantity = max(0, _safe_int(quantity, 0))
+    matches = _event_subproject_group_items(subproject, group)
+    if not matches and quantity <= 0:
+        return
+    if not matches:
+        subproject.setdefault('items', []).append({
+            'lineId': f"plan_{secrets.token_hex(8)}",
+            'department': group['department'],
+            'departmentCode': group['department'],
+            'brand': group['brand'],
+            'model': group['model'],
+            'description': group.get('description') or '',
+            'quantity': quantity,
+            'isCustom': False,
+            'preparedQuantity': 0,
+            'assetRefs': [],
+        })
+        return
+
+    primary = matches[0]
+    primary['quantity'] = quantity
+    if group.get('description') and not primary.get('description'):
+        primary['description'] = group['description']
+    duplicate_ids = {id(item) for item in matches[1:]}
+    subproject['items'] = [
+        item for item in subproject.get('items') or []
+        if id(item) not in duplicate_ids and (item is not primary or quantity > 0)
+    ]
+
+
+def _sync_event_model_markers_from_subprojects(event):
+    """Rebuild aggregate model markers from room requirements."""
+    totals = {}
+    for subproject in getattr(event, 'subprojects', []) or []:
+        if not isinstance(subproject, dict):
+            continue
+        for item in subproject.get('items') or []:
+            group = _event_subproject_item_group(item)
+            if not group:
+                continue
+            key = _event_model_group_key(group)
+            row = totals.setdefault(key, {**group, 'quantity': 0})
+            row['quantity'] += max(
+                0,
+                _safe_int(round(_safe_float(item.get('quantity'), 0)), 0),
+            )
+            if not row.get('description') and group.get('description'):
+                row['description'] = group['description']
+
+    preserved = [
+        ref for ref in getattr(event, 'prepared_items', []) or []
+        if not _parse_model_marker(ref)
+    ]
+    for row in totals.values():
+        if row['quantity'] > 0:
+            preserved.append(_make_model_marker(row, row['quantity']))
+    event.prepared_items = preserved
+
+
+def _event_subproject_adjust_prepared(subproject, group, delta):
+    matches = _event_subproject_group_items(subproject, group)
+    if not matches:
+        return 0
+    item = matches[0]
+    current = max(0, _safe_int(item.get('preparedQuantity'), 0))
+    updated = max(0, current + _safe_int(delta, 0))
+    item['preparedQuantity'] = updated
+    return updated
+
+
+def _event_subproject_anonymous_prepared_quantity(subproject, group):
+    return sum(
+        max(0, _safe_int(item.get('preparedQuantity'), 0))
+        for item in _event_subproject_group_items(subproject, group)
+    )
+
+
+def _event_subproject_prepared_quantity(event, subproject, group):
+    total = _event_subproject_anonymous_prepared_quantity(subproject, group)
+    returned = set(getattr(event, 'returned_items', []) or [])
+    active = set(getattr(event, 'actually_prepared', []) or [])
+    seen = set()
+    for item in _event_subproject_group_items(subproject, group):
+        for ref in item.get('assetRefs') or []:
+            if ref in seen or ref in returned or ref not in active:
+                continue
+            seen.add(ref)
+            bulk = _parse_bulk_marker(ref)
+            total += bulk['quantity'] if bulk else 1
+    return total
+
+
+def _event_subproject_assign_ref(subproject, group, asset_ref, consume_slot=False):
+    matches = _event_subproject_group_items(subproject, group)
+    if not matches:
+        return False
+    item = matches[0]
+    refs = item.setdefault('assetRefs', [])
+    if asset_ref not in refs:
+        refs.append(asset_ref)
+    if consume_slot:
+        _event_subproject_adjust_prepared(subproject, group, -1)
+    return True
+
+
+def _event_subproject_assign_custom_ref(subproject, custom, asset_ref):
+    if not subproject or not custom:
+        return False
+    department = _normalise_department_code(custom.get('department')) or 'UN'
+    name = str(custom.get('name') or '').strip().casefold()
+    for item in subproject.get('items') or []:
+        if not isinstance(item, dict) or not item.get('isCustom'):
+            continue
+        item_department = _normalise_department_code(
+            item.get('departmentCode') or item.get('department')
+        ) or 'UN'
+        item_name = str(item.get('description') or '').strip().casefold()
+        if item_department != department or item_name != name:
+            continue
+        refs = item.setdefault('assetRefs', [])
+        if asset_ref not in refs:
+            refs.append(asset_ref)
+        return True
+    return False
+
+
+def _event_subproject_remove_ref(event, asset_ref):
+    for subproject in getattr(event, 'subprojects', []) or []:
+        if not isinstance(subproject, dict):
+            continue
+        subproject['extraRefs'] = [
+            ref for ref in subproject.get('extraRefs') or [] if ref != asset_ref
+        ]
+        for item in subproject.get('items') or []:
+            if isinstance(item, dict):
+                item['assetRefs'] = [
+                    ref for ref in item.get('assetRefs') or [] if ref != asset_ref
+                ]
+
+
 def _event_prepared_slot_quantity(event, group):
     group_key = _event_model_group_key(group)
     total = 0
@@ -4320,11 +4871,22 @@ def _event_specific_asset_quantity(event, group, include_returned=False, include
     return total
 
 
-def _event_bulk_quantity_for_group(event, group, include_returned=False):
+def _event_bulk_quantity_for_group(
+    event,
+    group,
+    include_returned=False,
+    subproject_id=None,
+):
     group_key = _event_model_group_key(group)
     values = list(getattr(event, 'actually_prepared', []) or [])
     if include_returned:
         values.extend(getattr(event, 'returned_items', []) or [])
+    if subproject_id is not None:
+        values = [
+            value for value in values
+            if (_parse_bulk_marker(value) or {}).get('subprojectId', '') ==
+                str(subproject_id or '')
+        ]
     return _bulk_quantity_in_values_for_key(values, group_key)
 
 
@@ -4435,47 +4997,72 @@ def _event_prepare_capacity_for_group(event, group):
     return _specific_prepare_capacity_for_event(event, group)
 
 
-def _active_bulk_quantity_for_asset(event, bulk_id):
+def _active_bulk_quantity_for_asset(event, bulk_id, subproject_id=None):
     returned = set(getattr(event, 'returned_items', []) or [])
     total = 0
     for ref in getattr(event, 'actually_prepared', []) or []:
         if ref in returned:
             continue
         marker = _parse_bulk_marker(ref)
-        if marker and marker['bulkId'] == bulk_id:
+        if (
+            marker
+            and marker['bulkId'] == bulk_id
+            and (
+                subproject_id is None
+                or marker.get('subprojectId', '') == str(subproject_id or '')
+            )
+        ):
             total += marker['quantity']
     return total
 
 
-def _set_bulk_quantity_for_asset(event, bulk_id, quantity):
+def _set_bulk_quantity_for_asset(event, bulk_id, quantity, subproject_id=None):
     quantity = max(0, _safe_int(quantity, 0))
     returned = set(getattr(event, 'returned_items', []) or [])
     rebuilt = []
     inserted = False
     for ref in getattr(event, 'actually_prepared', []) or []:
         marker = _parse_bulk_marker(ref)
-        if not marker or marker['bulkId'] != bulk_id or ref in returned:
+        marker_matches_scope = (
+            marker
+            and marker['bulkId'] == bulk_id
+            and (
+                subproject_id is None
+                or marker.get('subprojectId', '') == str(subproject_id or '')
+            )
+        )
+        if not marker_matches_scope or ref in returned:
             rebuilt.append(ref)
             continue
         if not inserted and quantity > 0:
-            rebuilt.append(_bulk_marker(bulk_id, quantity))
+            rebuilt.append(_bulk_marker(bulk_id, quantity, subproject_id or ''))
             inserted = True
     if not inserted and quantity > 0:
-        rebuilt.append(_bulk_marker(bulk_id, quantity))
+        rebuilt.append(_bulk_marker(bulk_id, quantity, subproject_id or ''))
     event.actually_prepared = rebuilt
 
 
-def _add_bulk_prepared_quantity(event, group, quantity):
+def _add_bulk_prepared_quantity(event, group, quantity, subproject_id=None):
     remaining = max(1, _safe_int(quantity, 1))
     added = 0
     for asset in sorted(_matching_bulk_assets_for_group(group), key=lambda item: item.asset_id):
         capacity = _bulk_available_quantity_for_event(asset, event)
-        current = _active_bulk_quantity_for_asset(event, asset.asset_id)
-        room = max(0, capacity - current)
+        current = _active_bulk_quantity_for_asset(
+            event,
+            asset.asset_id,
+            subproject_id,
+        )
+        current_total = _active_bulk_quantity_for_asset(event, asset.asset_id)
+        room = max(0, capacity - current_total)
         if room <= 0:
             continue
         take = min(room, remaining)
-        _set_bulk_quantity_for_asset(event, asset.asset_id, current + take)
+        _set_bulk_quantity_for_asset(
+            event,
+            asset.asset_id,
+            current + take,
+            subproject_id,
+        )
         added += take
         remaining -= take
         if remaining <= 0:
@@ -4483,15 +5070,24 @@ def _add_bulk_prepared_quantity(event, group, quantity):
     return added
 
 
-def _remove_bulk_prepared_quantity(event, group, quantity):
+def _remove_bulk_prepared_quantity(event, group, quantity, subproject_id=None):
     remaining = max(1, _safe_int(quantity, 1))
     removed = 0
     for asset in sorted(_matching_bulk_assets_for_group(group), key=lambda item: item.asset_id, reverse=True):
-        current = _active_bulk_quantity_for_asset(event, asset.asset_id)
+        current = _active_bulk_quantity_for_asset(
+            event,
+            asset.asset_id,
+            subproject_id,
+        )
         if current <= 0:
             continue
         take = min(current, remaining)
-        _set_bulk_quantity_for_asset(event, asset.asset_id, current - take)
+        _set_bulk_quantity_for_asset(
+            event,
+            asset.asset_id,
+            current - take,
+            subproject_id,
+        )
         removed += take
         remaining -= take
         if remaining <= 0:
@@ -9833,7 +10429,11 @@ def _replace_bulk_asset_id_in_list(values, old_asset_id, new_asset_id):
         marker = _parse_bulk_marker(value)
 
         if marker and marker.get('bulkId') == old_asset_id:
-            values[index] = _bulk_marker(new_asset_id, marker.get('quantity', 1))
+            values[index] = _bulk_marker(
+                new_asset_id,
+                marker.get('quantity', 1),
+                marker.get('subprojectId', ''),
+            )
             changed += 1
 
     return changed
@@ -9859,7 +10459,11 @@ def _replace_asset_ids_in_list(values, asset_id_mapping):
 
         replacement = asset_id_mapping.get(marker.get('bulkId'))
         if replacement is not None and replacement != marker.get('bulkId'):
-            values[index] = _bulk_marker(replacement, marker.get('quantity', 1))
+            values[index] = _bulk_marker(
+                replacement,
+                marker.get('quantity', 1),
+                marker.get('subprojectId', ''),
+            )
             changed += 1
 
     return changed
@@ -13247,10 +13851,15 @@ def get_event(event_id):
                     'displayName': _custom_display_name(custom),
                     'brand': '',
                     'model': custom.get('name', ''),
-                    'description': custom.get('company', '') if custom.get('type') == 'LOAN' else '',
+                    'description': (
+                        f"From {custom.get('company', '')}"
+                        if custom.get('type') == 'LOAN' and custom.get('company')
+                        else custom.get('description', '')
+                    ),
                     'serial': '',
                     'department': dept,
                     'company': custom.get('company', ''),
+                    'customDescription': custom.get('description', ''),
                     'quantity': custom.get('quantity', 1),
                     'status': status,
                     'customType': custom.get('type'),
@@ -13583,6 +14192,21 @@ def get_event(event_id):
             'assignedUsernames': _event_assigned_usernames(event),
             'assignedUsers': _event_assignee_payloads(event),
         }
+        try:
+            linked_quotations = _finance_quotations_for_event(
+                _load_finance_data(),
+                event_id,
+                accessible_only=False,
+            )
+            if linked_quotations:
+                event_data['quotationId'] = linked_quotations[0].get('id') or ''
+                event_data['quotationNumber'] = linked_quotations[0].get('number') or ''
+        except Exception as finance_error:
+            logger.warning(
+                "Unable to resolve paired quotation for event %s: %s",
+                event_id,
+                finance_error,
+            )
 
         return jsonify({'success': True, 'data': event_data})
 
@@ -14428,6 +15052,278 @@ def add_asset_to_event(event_id):
         return jsonify({'error': 'Failed to add asset to event'}), 500
 
 
+@app.route('/api/events/<int:event_id>/subprojects', methods=['POST'])
+@require_admin
+def add_event_subproject(event_id):
+    """Add a planning room while preserving an older aggregate event plan."""
+    try:
+        event = data_manager.events.get(event_id)
+        if not event:
+            return jsonify({'error': 'Event not found'}), 404
+
+        data = request.get_json() or {}
+        name = str(data.get('name') or '').strip()
+        if not name:
+            return jsonify({'error': 'Sub-project name is required'}), 400
+        if len(name) > 100:
+            return jsonify({'error': 'Sub-project name must be 100 characters or fewer'}), 400
+
+        subprojects = [
+            row for row in (getattr(event, 'subprojects', []) or [])
+            if isinstance(row, dict)
+        ]
+        if any(
+            str(row.get('name') or '').strip().casefold() == name.casefold()
+            for row in subprojects
+        ):
+            return jsonify({'error': 'A sub-project with this name already exists'}), 409
+
+        if not subprojects:
+            initial_subproject = {
+                'id': 'main',
+                'name': 'Main Room',
+                'items': _event_initial_subproject_items(event),
+            }
+            _event_allocate_existing_refs_to_initial_subproject(
+                event,
+                initial_subproject,
+            )
+            subprojects.append(initial_subproject)
+
+        existing_ids = {
+            str(row.get('id') or '').strip()
+            for row in subprojects
+        }
+        while True:
+            subproject_id = f"room_{secrets.token_hex(6)}"
+            if subproject_id not in existing_ids:
+                break
+
+        subprojects.append({
+            'id': subproject_id,
+            'name': name,
+            'items': [],
+        })
+        event.subprojects = subprojects
+        data_manager.save_event(event)
+        invalidate_cache()
+        log_action(
+            f"Added sub-project {name} to event {event_id}",
+            event_meta={
+                'eventId': event_id,
+                'actionLabel': 'Added sub-project',
+                'subprojectId': subproject_id,
+                'subprojectName': name,
+            },
+        )
+        mark_realtime_change('event-assets', {
+            'eventId': event_id,
+            'action': 'subproject-added',
+            'subprojectId': subproject_id,
+        })
+        return jsonify({
+            'success': True,
+            'message': f'Sub-project {name} added',
+            'data': {
+                'subproject': subprojects[-1],
+                'subprojects': subprojects,
+            },
+        }), 201
+    except Exception as e:
+        logger.error("Error adding sub-project to event %s: %s", event_id, e)
+        return jsonify({'error': 'Failed to add sub-project'}), 500
+
+
+@app.route('/api/events/<int:event_id>/subprojects/<subproject_id>', methods=['PATCH', 'DELETE'])
+@require_admin
+@with_prepare_action_lock
+def manage_event_subproject(event_id, subproject_id):
+    try:
+        event = data_manager.events.get(event_id)
+        if not event:
+            return jsonify({'error': 'Event not found'}), 404
+        source = _event_subproject(event, subproject_id)
+        if not source:
+            return jsonify({'error': 'Sub-project not found'}), 404
+
+        subprojects = [
+            row for row in (getattr(event, 'subprojects', []) or [])
+            if isinstance(row, dict)
+        ]
+        if request.method == 'PATCH':
+            data = request.get_json(silent=True) or {}
+            name = str(data.get('name') or '').strip()
+            if not name:
+                return jsonify({'error': 'Sub-project name is required'}), 400
+            if len(name) > 100:
+                return jsonify({'error': 'Sub-project name must be 100 characters or fewer'}), 400
+            if any(
+                row is not source and
+                str(row.get('name') or '').strip().casefold() == name.casefold()
+                for row in subprojects
+            ):
+                return jsonify({'error': 'A sub-project with this name already exists'}), 409
+
+            previous_name = str(source.get('name') or 'Sub-project')
+            source['name'] = name
+            event.subprojects = subprojects
+            data_manager.save_event(event)
+            invalidate_cache()
+            log_action(
+                f"Renamed sub-project {previous_name} to {name} for event {event_id}",
+                event_meta={
+                    'eventId': event_id,
+                    'actionLabel': 'Renamed sub-project',
+                    'subprojectId': subproject_id,
+                    'previousSubprojectName': previous_name,
+                    'subprojectName': name,
+                },
+            )
+            mark_realtime_change('event-assets', {
+                'eventId': event_id,
+                'action': 'subproject-renamed',
+                'subprojectId': subproject_id,
+            })
+            return jsonify({
+                'success': True,
+                'message': f'{previous_name} renamed to {name}',
+                'data': {'subprojects': event.subprojects},
+            })
+
+        if len(subprojects) <= 1:
+            return jsonify({'error': 'The only room cannot be deleted'}), 400
+
+        data = request.get_json(silent=True) or {}
+        mode = str(data.get('mode') or 'remove').strip().lower()
+        if mode not in {'remove', 'merge'}:
+            return jsonify({'error': 'Delete mode must be remove or merge'}), 400
+
+        removed_refs = 0
+        target = None
+        if mode == 'merge':
+            target = _event_subproject(event, data.get('targetSubprojectId'))
+            if not target or target is source:
+                return jsonify({'error': 'Choose another room to merge into'}), 400
+            _event_merge_subproject(event, source, target)
+        else:
+            removed_refs = _event_remove_subproject_contents(event, source)
+
+        event.subprojects = [row for row in subprojects if row is not source]
+        _sync_event_model_markers_from_subprojects(event)
+        update_event_state(event)
+        data_manager.save_event(event)
+        invalidate_cache()
+
+        source_name = str(source.get('name') or 'Sub-project')
+        if target:
+            action = (
+                f"Merged sub-project {source_name} into "
+                f"{target.get('name') or 'another room'} for event {event_id}"
+            )
+        elif removed_refs:
+            action = (
+                f"Deleted sub-project {source_name} and removed its assets "
+                f"from event {event_id}"
+            )
+        else:
+            action = f"Deleted sub-project {source_name} from event {event_id}"
+        log_action(action, event_meta={
+            'eventId': event_id,
+            'actionLabel': 'Merged sub-project' if target else 'Deleted sub-project',
+            'subprojectId': subproject_id,
+            'subprojectName': source_name,
+            'targetSubprojectId': target.get('id') if target else '',
+            'removedReferences': removed_refs,
+        })
+        mark_realtime_change('event-assets', {
+            'eventId': event_id,
+            'action': 'subproject-deleted',
+            'subprojectId': subproject_id,
+        })
+        return jsonify({
+            'success': True,
+            'message': (
+                f'{source_name} merged into {target.get("name")}'
+                if target
+                else f'{source_name} deleted'
+            ),
+            'data': {'subprojects': event.subprojects},
+        })
+    except Exception as e:
+        logger.error("Error managing sub-project %s for event %s: %s", subproject_id, event_id, e)
+        return jsonify({'error': 'Failed to update sub-project'}), 500
+
+
+@app.route('/api/events/<int:event_id>/subprojects/move', methods=['POST'])
+@require_admin
+@with_prepare_action_lock
+def move_event_subproject_content(event_id):
+    try:
+        event = data_manager.events.get(event_id)
+        if not event:
+            return jsonify({'error': 'Event not found'}), 404
+        data = request.get_json(silent=True) or {}
+        source = _event_subproject(event, data.get('sourceSubprojectId'))
+        target = _event_subproject(event, data.get('targetSubprojectId'))
+        if not source or not target:
+            return jsonify({'error': 'Source or destination room was not found'}), 404
+        if source is target:
+            return jsonify({'error': 'Choose a different destination room'}), 400
+
+        kind = str(data.get('kind') or '').strip().lower()
+        if kind == 'requirement':
+            group = _group_from_request(data.get('group') or {})
+            _event_move_subproject_requirement(event, source, target, group)
+            moved_label = f"{group['brand']} {group['model']}".strip()
+        elif kind == 'asset':
+            asset_ref = str(data.get('assetRef') or '').strip()
+            if not asset_ref:
+                return jsonify({'error': 'Asset reference is required'}), 400
+            moved_ref = _event_move_subproject_asset(
+                event,
+                source,
+                target,
+                asset_ref,
+            )
+            moved_label = _event_asset_log_item(moved_ref).get('label') or moved_ref
+        else:
+            return jsonify({'error': 'Move kind must be requirement or asset'}), 400
+
+        _sync_event_model_markers_from_subprojects(event)
+        update_event_state(event)
+        data_manager.save_event(event)
+        invalidate_cache()
+        log_action(
+            f"Moved {moved_label} from {source.get('name')} to "
+            f"{target.get('name')} for event {event_id}",
+            event_meta={
+                'eventId': event_id,
+                'actionLabel': 'Moved room asset',
+                'sourceSubprojectId': source.get('id'),
+                'targetSubprojectId': target.get('id'),
+                'item': moved_label,
+            },
+        )
+        mark_realtime_change('event-assets', {
+            'eventId': event_id,
+            'action': 'subproject-content-moved',
+            'sourceSubprojectId': source.get('id'),
+            'targetSubprojectId': target.get('id'),
+        })
+        return jsonify({
+            'success': True,
+            'message': (
+                f"Moved {moved_label} to {target.get('name') or 'destination room'}"
+            ),
+            'data': {'subprojects': event.subprojects},
+        })
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        logger.error("Error moving sub-project content for event %s: %s", event_id, e)
+        return jsonify({'error': 'Failed to move room content'}), 500
+
+
 @app.route('/api/events/<int:event_id>/models', methods=['POST', 'PUT', 'DELETE'])
 @require_admin
 @with_prepare_action_lock
@@ -14438,7 +15334,91 @@ def manage_event_models(event_id):
         if not event:
             return jsonify({'error': 'Event not found'}), 404
 
-        data = request.get_json()
+        data = request.get_json() or {}
+        subproject = _event_subproject(event, data.get('subprojectId'))
+
+        # Sub-project planning keeps the aggregate model marker in sync for
+        # availability, packing lists, and older integrations, while the room
+        # item remains the editable source for the tabbed workspaces.
+        if subproject:
+            group = _group_from_request(data)
+            current_room_quantity = _event_subproject_required_quantity(
+                subproject,
+                group,
+            )
+            current_total = _event_model_required_quantity(event, group)
+            if request.method == 'POST':
+                next_room_quantity = current_room_quantity + max(
+                    1,
+                    _safe_int(data.get('quantity'), 1),
+                )
+            elif request.method == 'PUT':
+                next_room_quantity = max(1, _safe_int(data.get('quantity'), 1))
+                if current_room_quantity <= 0:
+                    return jsonify({'error': 'Model assignment not found'}), 404
+            else:
+                next_room_quantity = 0
+                if current_room_quantity <= 0:
+                    return jsonify({'error': 'Model assignment not found'}), 404
+
+            projected_total = current_total - current_room_quantity + next_room_quantity
+            if request.method != 'DELETE':
+                inventory_quantity = sum(
+                    _asset_inventory_quantity(asset)
+                    for asset in data_manager.inventory.values()
+                    if asset
+                    and not _is_disposed(asset)
+                    and _asset_group_key(asset) == _event_model_group_key(group)
+                )
+                if projected_total > inventory_quantity:
+                    return jsonify({
+                        'error': (
+                            f"Quantity exceeds inventory for {group['brand']} {group['model']}: "
+                            f"you have {inventory_quantity} unit(s), requested across "
+                            f"sub-projects: {projected_total}."
+                        )
+                    }), 400
+
+            _event_subproject_set_group_quantity(
+                subproject,
+                group,
+                next_room_quantity,
+            )
+            _sync_event_model_markers_from_subprojects(event)
+
+            unprepared = {'preparedUnits': 0, 'referencesRemoved': 0}
+            if request.method == 'DELETE' and projected_total <= 0:
+                unprepared = _unprepare_event_model_group(
+                    event,
+                    _event_model_group_key(group),
+                )
+
+            update_event_state(event)
+            data_manager.save_event(event)
+            invalidate_cache()
+            verb = {
+                'POST': 'Added',
+                'PUT': 'Updated',
+                'DELETE': 'Removed',
+            }[request.method]
+            room_name = str(subproject.get('name') or 'sub-project')
+            log_action(
+                f"{verb} {group['brand']} {group['model']} in {room_name} "
+                f"for event {event_id}: {current_room_quantity} -> {next_room_quantity}"
+            )
+            return jsonify({
+                'success': True,
+                'message': (
+                    f"{verb} {group['brand']} {group['model']} in {room_name}"
+                ),
+                'data': {
+                    'oldQuantity': current_room_quantity,
+                    'newQuantity': next_room_quantity,
+                    'eventQuantity': projected_total,
+                    'unpreparedQuantity': unprepared['preparedUnits'],
+                    'subprojectId': subproject.get('id'),
+                },
+            })
 
         if request.method == 'PUT':
             # Set the planning quantity without touching any prepared, returned,
@@ -14772,6 +15752,57 @@ def replace_event_model_requirement(event_id):
         if source_key == target_key:
             return jsonify({'error': 'Choose a different replacement model'}), 400
 
+        subproject = _event_subproject(event, payload.get('subprojectId'))
+        if subproject:
+            source_group = {
+                'department': source_department,
+                'brand': source_brand,
+                'model': source_model,
+                'description': source_description,
+            }
+            target_group = {
+                'department': target_department,
+                'brand': target_brand,
+                'model': target_model,
+                'description': target_description,
+            }
+            room_source = _event_subproject_required_quantity(subproject, source_group)
+            room_target = _event_subproject_required_quantity(subproject, target_group)
+            if quantity > room_source:
+                return jsonify({'error': 'Replacement quantity exceeds this sub-project requirement'}), 400
+            aggregate_target = _event_model_required_quantity(event, target_group)
+            physical_target = sum(
+                _asset_inventory_quantity(asset)
+                for asset in data_manager.inventory.values()
+                if asset and not _is_disposed(asset) and _asset_group_key(asset) == target_key
+            )
+            if aggregate_target + quantity > physical_target:
+                return jsonify({'error': f'Only {physical_target} total {target_brand} {target_model} unit(s) exist'}), 400
+            _event_subproject_set_group_quantity(subproject, source_group, room_source - quantity)
+            _event_subproject_set_group_quantity(subproject, target_group, room_target + quantity)
+            _sync_event_model_markers_from_subprojects(event)
+            update_event_state(event)
+            data_manager.save_event(event)
+            invalidate_cache()
+            log_action(
+                f'Replaced {quantity}x {source_brand} {source_model} with '
+                f'{target_brand} {target_model} in {subproject.get("name") or "sub-project"} '
+                f'for event {event_id}'
+            )
+            mark_realtime_change('event-assets', {
+                'eventId': event_id,
+                'action': 'replace-model-requirement',
+            })
+            return jsonify({
+                'success': True,
+                'message': f'Replaced {quantity} item(s)',
+                'data': {
+                    'sourceQuantity': room_source - quantity,
+                    'replacementQuantity': room_target + quantity,
+                    'subprojectId': subproject.get('id'),
+                },
+            })
+
         source_quantity = 0
         target_quantity = 0
         source_indexes = []
@@ -14856,6 +15887,146 @@ def replace_event_model_requirement(event_id):
     except Exception as exc:
         logger.error('Failed to replace event model requirement: %s', exc, exc_info=True)
         return jsonify({'error': 'Failed to replace model requirement'}), 500
+
+
+@app.route('/api/events/<int:event_id>/models/loan', methods=['POST'])
+@require_admin
+@with_prepare_action_lock
+def convert_event_model_requirement_to_loan(event_id):
+    """Convert part of a planned model requirement into a sourced loan item."""
+    try:
+        event = data_manager.events.get(event_id)
+        if not event:
+            return jsonify({'error': 'Event not found'}), 404
+
+        payload = request.get_json() or {}
+        source = payload.get('source') or {}
+        quantity = max(1, _safe_int(payload.get('quantity'), 1))
+        company = str(payload.get('company') or '').strip()
+        source_department = str(source.get('department') or '').strip().upper()
+        source_brand = str(source.get('brand') or '').strip()
+        source_model = str(source.get('model') or '').strip()
+        source_description = str(source.get('description') or '').strip()
+
+        if not source_department or not source_brand or not source_model:
+            return jsonify({'error': 'Department, brand, and model are required'}), 400
+        if not company:
+            return jsonify({'error': 'Loan company/source is required'}), 400
+
+        source_key = _model_key_from_parts(source_department, source_brand, source_model)
+        subproject = _event_subproject(event, payload.get('subprojectId'))
+        if subproject:
+            source_group = {
+                'department': source_department,
+                'brand': source_brand,
+                'model': source_model,
+                'description': source_description,
+            }
+            room_source = _event_subproject_required_quantity(subproject, source_group)
+            if quantity > room_source:
+                return jsonify({'error': 'Loan quantity exceeds this sub-project requirement'}), 400
+            loan_name = ' '.join(part for part in (source_brand, source_model) if part).strip()
+            loan_marker = _make_custom_marker(
+                'LOAN', loan_name, quantity, source_department, company
+            )
+            _event_subproject_set_group_quantity(subproject, source_group, room_source - quantity)
+            subproject.setdefault('items', []).append({
+                'lineId': f"plan_{secrets.token_hex(8)}",
+                'department': source_department,
+                'departmentCode': source_department,
+                'brand': '',
+                'model': '',
+                'description': loan_name,
+                'quantity': quantity,
+                'isCustom': True,
+                'assetRefs': [loan_marker],
+            })
+            _sync_event_model_markers_from_subprojects(event)
+            event.prepared_items.append(loan_marker)
+            update_event_state(event)
+            data_manager.save_event(event)
+            invalidate_cache()
+            log_action(
+                f'Converted {quantity}x {loan_name} to loan from {company} in '
+                f'{subproject.get("name") or "sub-project"} for event {event_id}'
+            )
+            mark_realtime_change('event-assets', {
+                'eventId': event_id,
+                'action': 'convert-model-requirement-to-loan',
+            })
+            return jsonify({
+                'success': True,
+                'message': f'Converted {quantity} item(s) to loan',
+                'data': {
+                    'sourceQuantity': room_source - quantity,
+                    'loanAssetId': loan_marker,
+                    'subprojectId': subproject.get('id'),
+                },
+            })
+        source_quantity = 0
+        source_indexes = []
+        for index, item in enumerate(getattr(event, 'prepared_items', []) or []):
+            marker = _parse_model_marker(item)
+            if not marker:
+                continue
+            marker_key = _model_key_from_parts(
+                marker.get('department'), marker.get('brand'), marker.get('model')
+            )
+            if marker_key != source_key:
+                continue
+            source_quantity += max(0, _safe_int(marker.get('quantity'), 0))
+            source_indexes.append(index)
+            source_description = source_description or str(marker.get('description') or '')
+
+        if source_quantity <= 0:
+            return jsonify({'error': 'Original model requirement not found'}), 404
+        if quantity > source_quantity:
+            return jsonify({'error': 'Loan quantity exceeds the original requirement'}), 400
+
+        removed_indexes = set(source_indexes)
+        updated_items = [
+            item for index, item in enumerate(event.prepared_items)
+            if index not in removed_indexes
+        ]
+        remaining_source = source_quantity - quantity
+        if remaining_source > 0:
+            updated_items.append(_make_model_marker({
+                'department': source_department,
+                'brand': source_brand,
+                'model': source_model,
+                'description': source_description,
+            }, remaining_source))
+
+        loan_name = ' '.join(part for part in (source_brand, source_model) if part).strip()
+        loan_marker = _make_custom_marker(
+            'LOAN', loan_name, quantity, source_department, company
+        )
+        updated_items.append(loan_marker)
+
+        event.prepared_items = updated_items
+        update_event_state(event)
+        data_manager.save_event(event)
+        invalidate_cache()
+        log_action(
+            f'Converted {quantity}x {loan_name} to loan from {company} for event {event_id}'
+        )
+        mark_realtime_change('event-assets', {
+            'eventId': event_id,
+            'action': 'convert-model-requirement-to-loan',
+        })
+        return jsonify({
+            'success': True,
+            'message': f'Converted {quantity} item(s) to loan',
+            'data': {
+                'sourceQuantity': remaining_source,
+                'loanAssetId': loan_marker,
+            },
+        })
+    except Exception as exc:
+        logger.error(
+            'Failed to convert event model requirement to loan: %s', exc, exc_info=True
+        )
+        return jsonify({'error': 'Failed to convert model requirement to loan'}), 500
 
 
 @app.route('/api/planning-templates', methods=['GET', 'POST'])
@@ -14988,6 +16159,87 @@ def apply_planning_template(event_id):
         if not template:
             return jsonify({'error': 'Planning template not found'}), 404
 
+        subproject = _event_subproject(event, data.get('subprojectId'))
+        if subproject:
+            if mode == 'replace':
+                removed_custom_refs = [
+                    ref
+                    for item in subproject.get('items') or []
+                    if isinstance(item, dict) and item.get('isCustom')
+                    for ref in item.get('assetRefs') or []
+                ]
+                subproject['items'] = []
+                for list_name in (
+                    'prepared_items',
+                    'actually_prepared',
+                    'returned_items',
+                    'extra_assets',
+                    'custom_collected',
+                ):
+                    values = getattr(event, list_name, []) or []
+                    setattr(event, list_name, [
+                        ref for ref in values if ref not in removed_custom_refs
+                    ])
+
+            for source_row in template.get('models') or []:
+                row = _normalise_planning_template_model(source_row)
+                if not row:
+                    continue
+                current_quantity = _event_subproject_required_quantity(
+                    subproject,
+                    row,
+                )
+                _event_subproject_set_group_quantity(
+                    subproject,
+                    row,
+                    current_quantity + row['quantity'],
+                )
+
+            for source_row in template.get('customAssets') or []:
+                row = _normalise_planning_template_custom(source_row)
+                if not row:
+                    continue
+                marker = _make_custom_marker(
+                    row['type'],
+                    row['name'],
+                    row['quantity'],
+                    row['department'],
+                    row['company'],
+                    description=row.get('description') or '',
+                )
+                event.prepared_items.append(marker)
+                subproject.setdefault('items', []).append({
+                    'lineId': f"plan_{secrets.token_hex(8)}",
+                    'department': row['department'],
+                    'departmentCode': row['department'],
+                    'brand': '',
+                    'model': '',
+                    'description': row['name'],
+                    'customDescription': row.get('description') or '',
+                    'company': row.get('company') or '',
+                    'quantity': row['quantity'],
+                    'isCustom': True,
+                    'assetRefs': [marker],
+                })
+
+            _sync_event_model_markers_from_subprojects(event)
+            update_event_state(event)
+            data_manager.save_event(event)
+            invalidate_cache()
+            log_action(
+                f"{mode.title()}d planning template '{template['name']}' in "
+                f"{subproject.get('name') or 'sub-project'} for event {event_id}"
+            )
+            mark_realtime_change(
+                'event-assets',
+                {'eventId': event_id, 'action': f'template-{mode}'},
+            )
+            return jsonify({
+                'success': True,
+                'data': _event_planning_template_contents(event),
+                'message': f"Template '{template['name']}' applied",
+            })
+
         result = _apply_planning_template_to_event(event, template, mode)
         log_action(
             f"{mode.title()}d planning template '{template['name']}' "
@@ -15083,6 +16335,42 @@ def add_container_models_to_event(event_id):
                     )
                 }), 400
 
+        subproject = _event_subproject(event, data.get('subprojectId'))
+        if subproject:
+            for row in grouped.values():
+                room_quantity = _event_subproject_required_quantity(
+                    subproject,
+                    row,
+                )
+                _event_subproject_set_group_quantity(
+                    subproject,
+                    row,
+                    room_quantity + row['quantity'],
+                )
+            _sync_event_model_markers_from_subprojects(event)
+            update_event_state(event)
+            data_manager.save_event(event)
+            invalidate_cache()
+            log_action(
+                f"Added model contents of container {container.container_id} "
+                f"to {subproject.get('name') or 'sub-project'} for event {event_id}"
+            )
+            mark_realtime_change(
+                'event-assets',
+                {'eventId': event_id, 'action': 'add-container-models'},
+            )
+            return jsonify({
+                'success': True,
+                'message': 'Container model contents added',
+                'data': {
+                    'containerId': container.container_id,
+                    'assetCount': sum(row['quantity'] for row in grouped.values()),
+                    'modelCount': len(grouped),
+                    'skippedAssetIds': skipped,
+                    'subprojectId': subproject.get('id'),
+                },
+            })
+
         for row in grouped.values():
             existing_refs = []
             existing_quantity = 0
@@ -15163,6 +16451,7 @@ def prepare_event_asset(event_id):
 
         data = request.get_json() or {}
         asset_id = data.get('assetId', '').strip()
+        subproject = _event_subproject(event, data.get('subprojectId'))
         scan_options = _prepare_scan_options(data)
         add_scanned_assets_to_event = scan_options['addScannedAssetsToEvent']
 
@@ -15213,6 +16502,12 @@ def prepare_event_asset(event_id):
             if custom['type'] == 'LOAN' and asset_id not in event.custom_collected:
                 return jsonify({'error': 'Loan/Rental item must be collected before it can be prepared'}), 400
             event.actually_prepared.append(asset_id)
+            if subproject:
+                _event_subproject_assign_custom_ref(
+                    subproject,
+                    custom,
+                    asset_id,
+                )
             update_event_state(event)
             data_manager.save_event(event)
             invalidate_cache()
@@ -15242,6 +16537,18 @@ def prepare_event_asset(event_id):
             if add_scanned_assets_to_event:
                 added_requirement_units = _ensure_event_model_requirement_covers_asset(event, asset, 1)
                 fulfills_model_requirement = True
+                if subproject and added_requirement_units:
+                    prepared_group = _asset_group_from_item(asset)
+                    room_quantity = _event_subproject_required_quantity(
+                        subproject,
+                        prepared_group,
+                    )
+                    _event_subproject_set_group_quantity(
+                        subproject,
+                        prepared_group,
+                        room_quantity + added_requirement_units,
+                    )
+                    _sync_event_model_markers_from_subprojects(event)
             else:
                 # A manual/individual prepare only fills an existing open model slot.
                 # If the matching model requirement is already full, or if this asset
@@ -15276,6 +16583,18 @@ def prepare_event_asset(event_id):
 
         # Mark as prepared
         event.actually_prepared.append(asset_id)
+        if subproject:
+            prepared_asset = data_manager.inventory.get(asset_id)
+            if prepared_asset:
+                prepared_group = _asset_group_from_item(prepared_asset)
+                if not _event_subproject_assign_ref(
+                    subproject,
+                    prepared_group,
+                    asset_id,
+                ):
+                    refs = subproject.setdefault('extraRefs', [])
+                    if asset_id not in refs:
+                        refs.append(asset_id)
 
         # Update event state
         update_event_state(event)
@@ -15319,11 +16638,13 @@ def add_custom_asset_to_event(event_id):
             return jsonify({'error': 'Event not found'}), 404
 
         data = request.get_json() or {}
+        subproject = _event_subproject(event, data.get('subprojectId'))
         name = str(data.get('name', '')).strip()
         quantity = max(1, _safe_int(data.get('quantity'), 1))
         asset_type = _normalise_custom_type(data.get('type', 'MISC'))
         department = _normalise_department_code(data.get('department')) or 'UN'
         company = str(data.get('company') or '').strip()
+        description = str(data.get('description') or '').strip()
 
         if not name:
             return jsonify({'error': 'Asset name is required'}), 400
@@ -15332,15 +16653,37 @@ def add_custom_asset_to_event(event_id):
             return jsonify({'error': 'Loan/Rental company is required'}), 400
 
         _ensure_event_custom_lists(event)
-        custom_asset_id = _make_custom_marker(asset_type, name, quantity, department, company)
+        custom_asset_id = _make_custom_marker(
+            asset_type,
+            name,
+            quantity,
+            department,
+            company,
+            description=description
+        )
 
         event.prepared_items.append(custom_asset_id)
+        if subproject:
+            subproject.setdefault('items', []).append({
+                'lineId': f"plan_{secrets.token_hex(8)}",
+                'department': department,
+                'departmentCode': department,
+                'brand': '',
+                'model': '',
+                'description': name,
+                'customDescription': description,
+                'company': company,
+                'quantity': quantity,
+                'isCustom': True,
+                'assetRefs': [custom_asset_id],
+            })
 
         update_event_state(event)
         data_manager.save_event(event)
         invalidate_cache()
 
         log_action(f"Added {asset_type} custom asset '{name}' ({quantity}x, dept {department}) to event {event_id}")
+        mark_realtime_change('event-assets', {'eventId': event_id, 'action': 'custom-asset-added'})
 
         return jsonify({
             'success': True,
@@ -15450,6 +16793,7 @@ def unprepare_event_asset(event_id):
                 event.returned_items.remove(asset_id)
             if hasattr(event, 'extra_assets') and asset_id in event.extra_assets:
                 event.extra_assets.remove(asset_id)
+            _event_subproject_remove_ref(event, asset_id)
             update_event_state(event)
             data_manager.save_event(event)
             invalidate_cache()
@@ -15469,6 +16813,7 @@ def unprepare_event_asset(event_id):
                 event.actually_prepared.remove(asset_id)
             if asset_id in event.returned_items:
                 event.returned_items.remove(asset_id)
+            _event_subproject_remove_ref(event, asset_id)
             update_event_state(event)
             data_manager.save_event(event)
             invalidate_cache()
@@ -15512,6 +16857,7 @@ def unprepare_event_asset(event_id):
         # Remove from extra_assets if it's there
         if hasattr(event, 'extra_assets') and asset_id in event.extra_assets:
             event.extra_assets.remove(asset_id)
+        _event_subproject_remove_ref(event, asset_id)
 
         promoted_extra_assets = _promote_matching_extra_assets(event)
         if promoted_extra_assets:
@@ -15902,6 +17248,7 @@ def assign_specific_asset_to_model(event_id):
 
         data = request.get_json() or {}
         asset_id = data.get('assetId', '').strip()
+        subproject = _event_subproject(event, data.get('subprojectId'))
         scan_options = _prepare_scan_options(data)
         add_scanned_assets_to_event = scan_options['addScannedAssetsToEvent']
 
@@ -15953,7 +17300,11 @@ def assign_specific_asset_to_model(event_id):
                 available_quantity
             )
 
-            marker = _bulk_marker(asset_id, quantity)
+            marker = _bulk_marker(
+                asset_id,
+                quantity,
+                subproject.get('id') if subproject else '',
+            )
             if marker in event.actually_prepared and marker not in event.returned_items:
                 return jsonify({'error': 'Bulk asset is already prepared for this event'}), 400
 
@@ -15962,9 +17313,28 @@ def assign_specific_asset_to_model(event_id):
             if marker not in event.actually_prepared:
                 event.actually_prepared.append(marker)
 
+            if subproject:
+                _event_subproject_assign_ref(
+                    subproject,
+                    _asset_group_from_item(bulk_asset),
+                    marker,
+                )
+
             added_requirement_units = 0
             if add_scanned_assets_to_event:
                 added_requirement_units = _ensure_event_model_requirement_covers_asset(event, bulk_asset, quantity)
+                if subproject and added_requirement_units:
+                    bulk_group = _asset_group_from_item(bulk_asset)
+                    room_quantity = _event_subproject_required_quantity(
+                        subproject,
+                        bulk_group,
+                    )
+                    _event_subproject_set_group_quantity(
+                        subproject,
+                        bulk_group,
+                        room_quantity + added_requirement_units,
+                    )
+                    _sync_event_model_markers_from_subprojects(event)
 
             update_event_state(event)
             data_manager.save_event(event)
@@ -16027,6 +17397,8 @@ def assign_specific_asset_to_model(event_id):
                     })
             return jsonify({'error': 'Asset is already assigned to this event'}), 400
 
+        consumed_prepared_slot = False
+
         # For regular assets, perform checks
         if not _is_custom_ref(asset_id):
             asset = data_manager.inventory.get(asset_id)
@@ -16076,6 +17448,18 @@ def assign_specific_asset_to_model(event_id):
                 added_requirement_units = _ensure_event_model_requirement_covers_asset(event, asset, 1)
                 fills_existing_requirement = True
 
+                if subproject and added_requirement_units:
+                    room_quantity = _event_subproject_required_quantity(
+                        subproject,
+                        _asset_group_from_item(asset),
+                    )
+                    _event_subproject_set_group_quantity(
+                        subproject,
+                        _asset_group_from_item(asset),
+                        room_quantity + added_requirement_units,
+                    )
+                    _sync_event_model_markers_from_subprojects(event)
+
                 if added_requirement_units:
                     logger.info(
                         f"Added {added_requirement_units} model requirement unit(s) for scanned asset {asset_id}: "
@@ -16105,7 +17489,9 @@ def assign_specific_asset_to_model(event_id):
             
             if fills_existing_requirement:
                 if not add_scanned_assets_to_event:
-                    _decrement_prepared_model_slot(event, asset_group, 1)
+                    consumed_prepared_slot = bool(
+                        _decrement_prepared_model_slot(event, asset_group, 1)
+                    )
                 removed_refs = _remove_direct_asset_ref_from_prepared_items(event, asset_id)
                 if removed_refs:
                     logger.info(f"Removed {asset_id} from prepared_items because it fulfills a model requirement")
@@ -16114,7 +17500,9 @@ def assign_specific_asset_to_model(event_id):
                     logger.info(f"Removed {asset_id} from extra_assets. Extra assets: {event.extra_assets}")
             else:
                 if not add_scanned_assets_to_event:
-                    _decrement_prepared_model_slot(event, asset_group, 1)
+                    consumed_prepared_slot = bool(
+                        _decrement_prepared_model_slot(event, asset_group, 1)
+                    )
                 # Loose extras and direct specific-asset events still need an
                 # explicit prepared_items row so they remain part of the packing list.
                 if asset_id not in event.prepared_items:
@@ -16131,6 +17519,21 @@ def assign_specific_asset_to_model(event_id):
         if asset_id not in event.actually_prepared:
             event.actually_prepared.append(asset_id)
             logger.info(f"Added {asset_id} to actually_prepared. List now: {event.actually_prepared}")
+
+        if subproject:
+            assigned_group = None
+            assigned_asset = data_manager.inventory.get(asset_id)
+            if assigned_asset:
+                assigned_group = _asset_group_from_item(assigned_asset)
+            if assigned_group and not _event_subproject_assign_ref(
+                subproject,
+                assigned_group,
+                asset_id,
+                consume_slot=consumed_prepared_slot,
+            ):
+                refs = subproject.setdefault('extraRefs', [])
+                if asset_id not in refs:
+                    refs.append(asset_id)
 
         # Update event state
         update_event_state(event)
@@ -16181,16 +17584,29 @@ def prepare_event_model_quantity(event_id):
         _ensure_event_custom_lists(event)
         data = request.get_json(silent=True) or {}
         group = _group_from_request(data)
+        subproject = _event_subproject(event, data.get('subprojectId'))
         action = str(data.get('action') or 'prepare').strip().lower()
         requested_quantity = _safe_int(data.get('quantity'), 0)
         prepare_all = bool(data.get('all') or data.get('prepareAll'))
 
-        required = _event_model_required_quantity(event, group)
+        required = (
+            _event_subproject_required_quantity(subproject, group)
+            if subproject
+            else _event_model_required_quantity(event, group)
+        )
         if required <= 0:
             return jsonify({'error': 'Model requirement not found for this event'}), 404
 
         is_bulk = _event_group_is_bulk_quantity(group)
-        current_prepared = _event_active_prepared_quantity_for_group(event, group, include_extra=True)
+        current_prepared = (
+            _event_subproject_prepared_quantity(event, subproject, group)
+            if subproject
+            else _event_active_prepared_quantity_for_group(
+                event,
+                group,
+                include_extra=True,
+            )
+        )
 
         if action == 'prepare':
             quantity = max(0, required - current_prepared) if prepare_all else requested_quantity
@@ -16206,20 +17622,53 @@ def prepare_event_model_quantity(event_id):
                 })
 
             capacity = _event_prepare_capacity_for_group(event, group)
-            if current_prepared + quantity > capacity:
+            capacity_used = _event_active_prepared_quantity_for_group(
+                event,
+                group,
+                include_extra=True,
+            )
+            if capacity_used + quantity > capacity:
                 return jsonify({
                     'error': (
-                        f"Only {max(0, capacity - current_prepared)} more unit"
-                        f"{'' if max(0, capacity - current_prepared) == 1 else 's'} can be prepared for this event date range"
+                        f"Only {max(0, capacity - capacity_used)} more unit"
+                        f"{'' if max(0, capacity - capacity_used) == 1 else 's'} can be prepared for this event date range"
                     )
                 }), 400
 
             if is_bulk:
-                prepared_now = _add_bulk_prepared_quantity(event, group, quantity)
+                prepared_now = _add_bulk_prepared_quantity(
+                    event,
+                    group,
+                    quantity,
+                    subproject.get('id') if subproject else None,
+                )
                 if prepared_now != quantity:
                     return jsonify({'error': 'Not enough bulk quantity is available'}), 400
             else:
                 prepared_now = _increment_prepared_model_slot(event, group, quantity)
+
+            if subproject:
+                if is_bulk:
+                    active_refs = set(getattr(event, 'actually_prepared', []) or [])
+                    for item in _event_subproject_group_items(subproject, group):
+                        item['assetRefs'] = [
+                            ref for ref in item.get('assetRefs') or []
+                            if ref in active_refs
+                        ]
+                    for ref in getattr(event, 'actually_prepared', []) or []:
+                        marker = _parse_bulk_marker(ref)
+                        if (
+                            marker
+                            and marker.get('subprojectId') == str(subproject.get('id') or '')
+                            and _event_physical_ref_group_key(ref) == _event_model_group_key(group)
+                        ):
+                            _event_subproject_assign_ref(subproject, group, ref)
+                else:
+                    _event_subproject_adjust_prepared(
+                        subproject,
+                        group,
+                        prepared_now,
+                    )
 
             update_event_state(event)
             data_manager.save_event(event)
@@ -16248,12 +17697,34 @@ def prepare_event_model_quantity(event_id):
                 return jsonify({'error': 'Quantity is required'}), 400
 
             if is_bulk:
-                removable = _event_bulk_quantity_for_group(event, group, include_returned=False)
+                removable = (
+                    _event_bulk_quantity_for_group(
+                        event,
+                        group,
+                        include_returned=False,
+                        subproject_id=subproject.get('id'),
+                    )
+                    if subproject
+                    else _event_bulk_quantity_for_group(
+                        event,
+                        group,
+                        include_returned=False,
+                    )
+                )
                 if quantity > removable:
                     return jsonify({'error': f'Only {removable} prepared unit(s) can be unprepared'}), 400
-                removed_now = _remove_bulk_prepared_quantity(event, group, quantity)
+                removed_now = _remove_bulk_prepared_quantity(
+                    event,
+                    group,
+                    quantity,
+                    subproject.get('id') if subproject else None,
+                )
             else:
-                removable = _event_prepared_slot_quantity(event, group)
+                removable = (
+                    _event_subproject_anonymous_prepared_quantity(subproject, group)
+                    if subproject
+                    else _event_prepared_slot_quantity(event, group)
+                )
                 if quantity > removable:
                     assigned = _event_specific_asset_quantity(event, group, include_returned=False, include_extra=True)
                     if assigned > 0:
@@ -16265,6 +17736,20 @@ def prepare_event_model_quantity(event_id):
                         }), 400
                     return jsonify({'error': f'Only {removable} prepared unit(s) can be unprepared'}), 400
                 removed_now = _decrement_prepared_model_slot(event, group, quantity)
+
+            if subproject and not is_bulk:
+                _event_subproject_adjust_prepared(
+                    subproject,
+                    group,
+                    -removed_now,
+                )
+            elif subproject:
+                active_refs = set(getattr(event, 'actually_prepared', []) or [])
+                for item in _event_subproject_group_items(subproject, group):
+                    item['assetRefs'] = [
+                        ref for ref in item.get('assetRefs') or []
+                        if ref in active_refs
+                    ]
 
             update_event_state(event)
             data_manager.save_event(event)
@@ -16347,6 +17832,7 @@ def unassign_specific_asset_from_model(event_id):
             event.extra_assets.remove(asset_id)
         if asset_id in getattr(event, 'returned_items', []) or []:
             event.returned_items.remove(asset_id)
+        _event_subproject_remove_ref(event, asset_id)
 
         promoted_extra_assets = _promote_matching_extra_assets(event)
         if promoted_extra_assets:
@@ -16437,6 +17923,7 @@ def remove_asset_from_event(event_id):
         if asset_id in event.extra_assets:
             event.extra_assets.remove(asset_id)
             logger.info(f"Removed '{asset_id}' from extra_assets")
+        _event_subproject_remove_ref(event, asset_id)
 
         # For regular assets, update location
         if not _is_custom_ref(asset_id):
@@ -18757,6 +20244,19 @@ def bulk_renumber_assets():
                         getattr(event, attr, []),
                         changed_mapping
                     )
+                for subproject in getattr(event, 'subprojects', []) or []:
+                    if not isinstance(subproject, dict):
+                        continue
+                    event_changed += _replace_asset_ids_in_list(
+                        subproject.get('extraRefs', []),
+                        changed_mapping,
+                    )
+                    for subproject_item in subproject.get('items') or []:
+                        if isinstance(subproject_item, dict):
+                            event_changed += _replace_asset_ids_in_list(
+                                subproject_item.get('assetRefs', []),
+                                changed_mapping,
+                            )
 
                 if event_changed:
                     id_references_changed += event_changed
@@ -19130,6 +20630,32 @@ def update_asset(asset_id):
                     old_asset_id,
                     new_asset_id
                 )
+                for subproject in getattr(event, 'subprojects', []) or []:
+                    if not isinstance(subproject, dict):
+                        continue
+                    event_changed += _replace_asset_id_in_list(
+                        subproject.get('extraRefs', []),
+                        old_asset_id,
+                        new_asset_id,
+                    )
+                    event_changed += _replace_bulk_asset_id_in_list(
+                        subproject.get('extraRefs', []),
+                        old_asset_id,
+                        new_asset_id,
+                    )
+                    for subproject_item in subproject.get('items') or []:
+                        if not isinstance(subproject_item, dict):
+                            continue
+                        event_changed += _replace_asset_id_in_list(
+                            subproject_item.get('assetRefs', []),
+                            old_asset_id,
+                            new_asset_id,
+                        )
+                        event_changed += _replace_bulk_asset_id_in_list(
+                            subproject_item.get('assetRefs', []),
+                            old_asset_id,
+                            new_asset_id,
+                        )
 
             # Rewrite model requirement rows when model-type fields change.
             #
@@ -20743,8 +22269,10 @@ def get_stats():
         logger.info(f"Getting stats - Events: {len(visible_events)}, Inventory: {len(data_manager.inventory)}")
         
         total_events = len(visible_events)
-        active_events = len(
-            [e for e in visible_events if e.state not in ['Closed']])
+        active_events = len([
+            event for event in visible_events
+            if event.state not in ('Pending Closure', 'Closed')
+        ])
         total_assets = sum(_asset_inventory_quantity(a) for a in data_manager.inventory.values())
         
         # Add error handling for get_assigned_assets
@@ -20817,7 +22345,7 @@ def get_stats():
 @app.route('/api/events/<int:event_id>/custom-assets/update-quantity', methods=['PUT'])
 @require_admin
 def update_custom_asset_quantity(event_id):
-    """Update the quantity of a custom asset in an event while preserving department/company metadata."""
+    """Update a custom asset while preserving its stable UID and event references."""
     try:
         data = request.get_json() or {}
         old_asset_id = str(data.get('assetId') or '').strip()
@@ -20834,13 +22362,28 @@ def update_custom_asset_quantity(event_id):
         if old_asset_id not in event.prepared_items:
             return jsonify({'success': False, 'error': 'Custom asset not found in event'}), 404
 
+        new_name = str(data.get('name', custom['name'])).strip()
+        new_type = _normalise_custom_type(data.get('type', custom['type']))
+        new_department = _normalise_department_code(
+            data.get('department', custom.get('department'))
+        ) or 'UN'
+        new_company = str(data.get('company', custom.get('company', '')) or '').strip()
+        new_description = str(
+            data.get('description', custom.get('description', '')) or ''
+        ).strip()
+        if not new_name:
+            return jsonify({'success': False, 'error': 'Asset name is required'}), 400
+        if new_type == 'LOAN' and not new_company:
+            return jsonify({'success': False, 'error': 'Loan/Rental company is required'}), 400
+
         new_asset_id = _make_custom_marker(
-            custom['type'],
-            custom['name'],
+            new_type,
+            new_name,
             new_quantity,
-            custom.get('department') or 'UN',
-            custom.get('company') or '',
-            uid=custom.get('uid') or None
+            new_department,
+            new_company,
+            uid=custom.get('uid') or None,
+            description=new_description
         )
 
         def replace_in_list(values):
@@ -20853,11 +22396,29 @@ def update_custom_asset_quantity(event_id):
         replace_in_list(event.returned_items)
         replace_in_list(event.extra_assets)
         replace_in_list(event.custom_collected)
+        for subproject in getattr(event, 'subprojects', []) or []:
+            if not isinstance(subproject, dict):
+                continue
+            for item in subproject.get('items') or []:
+                if not isinstance(item, dict):
+                    continue
+                refs = item.get('assetRefs') or []
+                if old_asset_id in refs:
+                    item['assetRefs'] = [
+                        new_asset_id if ref == old_asset_id else ref for ref in refs
+                    ]
+                    item['quantity'] = new_quantity
+                    item['department'] = new_department
+                    item['departmentCode'] = new_department
+                    item['description'] = new_name
+                    item['customDescription'] = new_description
+                    item['company'] = new_company
 
         update_event_state(event)
         data_manager.save_event(event)
         invalidate_cache()
-        log_action(f"Updated custom asset quantity: {_custom_display_name(custom)} -> {new_quantity}x for event {event_id}")
+        log_action(f"Updated custom asset '{custom['name']}' to '{new_name}' ({new_quantity}x, dept {new_department}) for event {event_id}")
+        mark_realtime_change('event-assets', {'eventId': event_id, 'action': 'custom-asset-updated'})
 
         return jsonify({
             'success': True,
@@ -20924,6 +22485,16 @@ def remove_custom_asset_from_event(event_id):
         if hasattr(event, 'custom_collected') and asset_id in event.custom_collected:
             event.custom_collected.remove(asset_id)
             logger.info(f"Removed {asset_id} from custom_collected")
+        for subproject in getattr(event, 'subprojects', []) or []:
+            if not isinstance(subproject, dict):
+                continue
+            subproject['items'] = [
+                item for item in subproject.get('items') or []
+                if asset_id not in (item.get('assetRefs') or [])
+            ]
+            subproject['extraRefs'] = [
+                ref for ref in subproject.get('extraRefs') or [] if ref != asset_id
+            ]
 
         # Update event state
         update_event_state(event)
@@ -22531,16 +24102,24 @@ def _finance_event_subprojects(document):
         for line in document.get('lineItems') or []:
             if str(line.get('subprojectId') or 'main') != subproject_id:
                 continue
-            items.append({
+            quantity = max(0, _safe_float(line.get('quantity'), 0))
+            custom_ref = _finance_custom_marker_from_line(
+                line,
+                max(1, _safe_int(round(quantity), 1)),
+            )
+            item = {
                 'lineId': line.get('id'),
                 'department': line.get('department'),
                 'departmentCode': line.get('departmentCode'),
                 'brand': line.get('brand'),
                 'model': line.get('model'),
                 'description': line.get('description'),
-                'quantity': max(0, _safe_float(line.get('quantity'), 0)),
+                'quantity': quantity,
                 'isCustom': bool(line.get('isCustom')),
-            })
+            }
+            if custom_ref:
+                item['assetRefs'] = [custom_ref]
+            items.append(item)
         result.append({
             'id': subproject_id,
             'name': str(subproject.get('name') or 'Room').strip() or 'Room',

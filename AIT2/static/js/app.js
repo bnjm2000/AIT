@@ -556,11 +556,7 @@ function applyPermissionUi() {
 }
 
 function openEventFromCalendar(eventId) {
-  if (isAdminUser()) {
-    editEvent(eventId);
-  } else {
-    viewEvent(eventId);
-  }
+  viewEvent(eventId);
 }
 
 function parseMaintenanceLogDateForPermission(dateStr) {
@@ -611,7 +607,8 @@ function parseCustomAsset(assetId, asset = null) {
       name: asset.model || asset.name || asset.displayName || (type === 'LOAN' ? 'Loan/Rental Item' : 'Misc Item'),
       quantity: Math.max(1, parseInt(asset.quantity || 1, 10) || 1),
       department: normalizeDepartmentCode(asset.department || 'UN'),
-      company: asset.company || asset.description || '',
+      company: asset.company || '',
+      description: asset.customDescription || (type === 'MISC' ? asset.description : '') || '',
       legacy: raw.startsWith('[LOAN]') || raw.startsWith('[MISC]') || raw.toLowerCase().startsWith('loan|') || raw.toLowerCase().startsWith('misc|')
     };
   }
@@ -628,6 +625,7 @@ function parseCustomAsset(assetId, asset = null) {
         quantity: Math.max(1, parseInt(data.quantity || 1, 10) || 1),
         department: normalizeDepartmentCode(data.department || 'UN'),
         company: String(data.company || '').trim(),
+        description: String(data.description || '').trim(),
         legacy: false
       };
     } catch (e) {
@@ -673,6 +671,7 @@ function parseCustomAsset(assetId, asset = null) {
     quantity,
     department: 'UN',
     company: '',
+    description: '',
     legacy: true
   };
 }
@@ -7448,6 +7447,7 @@ async function loadOngoingEvents(preloadedEvents = null) {
         today.setHours(0, 0, 0, 0);
         
         const ongoingEvents = eventList.filter(event => {
+            if (['Pending Closure', 'Closed'].includes(String(event.state || ''))) return false;
             const startDate = new Date(event.startDate);
             const endDate = new Date(event.endDate);
             startDate.setHours(0, 0, 0, 0);
@@ -7496,6 +7496,7 @@ async function loadUpcomingEvents(preloadedEvents = null) {
         
         const upcomingEvents = eventList
             .filter(event => {
+                if (['Pending Closure', 'Closed'].includes(String(event.state || ''))) return false;
                 const startDate = new Date(event.startDate);
                 return startDate > today;
             })
@@ -8685,6 +8686,12 @@ function getSelectedInventoryAssets() {
   return (assets || []).filter(asset => selectedInventoryAssetIds.has(inventoryAssetIdentifier(asset)));
 }
 
+function customAssetDetailText(custom) {
+  if (!custom) return '';
+  if (custom.type === 'LOAN') return custom.company ? `From ${custom.company}` : '';
+  return String(custom.description || '').trim();
+}
+
 function openMaintenanceForSelectedInventoryAssets() {
   const selectedAssets = getSelectedInventoryAssets();
   if (!selectedAssets.length) {
@@ -9271,11 +9278,16 @@ function renderInventorySummary() {
   const total = availability.total;
   const attention = conditionCounts.untagged + conditionCounts.degraded + conditionCounts.ooc + conditionCounts.missing;
   const modelCount = groupInventoryByModel(sourceAssets).length;
-  const availableMarker = availability.degradedAvailable > 0 ? '*' : '';
+  const attentionDetails = [
+    conditionCounts.untagged > 0 ? `${conditionCounts.untagged} untagged` : '',
+    conditionCounts.degraded > 0 ? `${conditionCounts.degraded} degraded total` : '',
+    conditionCounts.ooc > 0 ? `${conditionCounts.ooc} OOC` : '',
+    conditionCounts.missing > 0 ? `${conditionCounts.missing} missing` : ''
+  ].filter(Boolean).join(', ');
   const cards = [
     ['box', availability.deployed, 'Assets deployed', total ? `${Math.round(availability.deployed / total * 100)}% of total stock` : `${modelCount} brand/model groups`, ASSET_DEPLOYED_COLOR, ASSET_DEPLOYED_SOFT_COLOR],
-    ['check', `${availability.available}${availableMarker}`, 'Available for use', availability.degradedAvailable > 0 ? `* Includes ${availability.degradedAvailable} degraded` : (total ? `${Math.round(availability.available / total * 100)}% of stock` : 'No stock'), '#138a5b', '#e7f6ee'],
-    ['alert', attention, 'Needs attention', `${conditionCounts.untagged} untagged, ${conditionCounts.degraded} degraded`, '#bc7a0a', '#fff3df'],
+    ['check', availability.available, 'Available for use', availability.degradedAvailable > 0 ? `${availability.degradedAvailable} degraded available` : (total ? `${Math.round(availability.available / total * 100)}% of stock` : 'No stock'), '#138a5b', '#e7f6ee'],
+    ['alert', attention, 'Needs attention', attentionDetails || 'No flagged assets', '#bc7a0a', '#fff3df'],
     ['wrench', conditionCounts.ooc, 'Out of commission', total ? `${Math.round(conditionCounts.ooc / total * 100)}% of stock` : 'No stock', '#b43741', '#fdebed']
   ];
   const grid = document.getElementById('inventory-summary-grid');
@@ -13151,7 +13163,7 @@ async function generateMaintenanceReportPdf() {
     const rows = getFilteredMaintenanceReportRows();
     await loadPdfSettings(true);
     const pagesHtml = buildMaintenanceReportPdfPages(rows, {
-      generatedBy: currentUser?.username || '',
+      generatedBy: currentUserPdfDisplayName(),
       generatedAt: reportGeneratedAt(),
       filterSummary: maintenanceReportFilterSummary(rows)
     });
@@ -13370,14 +13382,14 @@ async function openPrepareEventModal(eventId) {
                                       style="flex: 1 1 220px; min-width: 170px; padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px;">
                                 <input type="number" id="prepareCustomAssetQuantity" placeholder="Qty" min="1" value="1"
                                       style="flex: 0 0 70px; width: 70px; padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px;">
-                                <select id="prepareCustomAssetType" style="flex: 0 1 140px; min-width: 125px; padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px;">
+                                <select id="prepareCustomAssetType" onchange="syncLegacyPrepareCustomDetailField()" style="flex: 0 1 140px; min-width: 125px; padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px;">
                                     <option value="MISC">Misc Item</option>
                                     <option value="LOAN">Loan/Rental</option>
                                 </select>
                                 <select id="prepareCustomAssetDepartment" style="flex: 0 0 82px; width: 82px; padding: 8px 10px; border: 1px solid #ccc; border-radius: 4px;">
                                     ${customDepartmentOptionsHtml('AX')}
                                 </select>
-                                <input type="text" id="prepareCustomAssetCompany" placeholder="Company (loan/rental only)"
+                                <input type="text" id="prepareCustomAssetCompany" placeholder="Optional description"
                                       style="flex: 1 1 210px; min-width: 160px; padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px;">
                                 <button type="button" class="btn btn-success" onclick="addAndPrepareCustomAsset(${event.id})"
                                         style="flex: 0 0 auto; padding: 8px 16px; white-space: nowrap;">
@@ -13568,7 +13580,7 @@ async function openPrepareEventModal(eventId) {
                             '<span style="background: #fff3cd; color: #856404; padding: 2px 6px; border-radius: 3px; font-size: 10px; margin-left: 10px;">EXTRA</span>' : '';
                         const safeAssetId = encodeURIComponent(asset.id);
                         const displayName = custom ? customAssetDisplayName(custom) : (asset.isBulk ? (asset.name || `${asset.brand || ''} ${asset.model || ''}`.trim() || asset.id) : asset.id);
-                        const detailText = custom ? (custom.type === 'LOAN' ? custom.company : '') : (asset.isBulk ? (asset.description || '') : (asset.name || ''));
+                        const detailText = custom ? customAssetDetailText(custom) : (asset.isBulk ? (asset.description || '') : (asset.name || ''));
                         const typeBadge = custom ? customAssetTypeBadge(custom) : '';
                         let actionButton = '';
                         if (isReturned) {
@@ -14131,8 +14143,9 @@ function createCustomPreparationSection(eventId, customAssets, event) {
                 : `<button class="btn btn-success btn-sm asset-action-btn" data-event-id="${eventId}" data-asset-id="${safeEncodedId}" data-action="prepare" style="padding:4px 8px; font-size:11px;">Prepare</button>`;
         }
 
-        const descriptionLine = custom.type === 'LOAN' && custom.company
-            ? `<div style="color:#666; font-size:12px; margin-top:2px; overflow-wrap:anywhere;">${escapeHtml(custom.company)}</div>`
+        const customDetail = customAssetDetailText(custom);
+        const descriptionLine = customDetail
+            ? `<div style="color:#666; font-size:12px; margin-top:2px; overflow-wrap:anywhere;">${escapeHtml(customDetail)}</div>`
             : '';
 
         return `
@@ -14252,6 +14265,14 @@ function handleCustomAssetClick(event) {
 }
 
 // Add function to handle adding custom assets in prepare modal
+function syncLegacyPrepareCustomDetailField() {
+    const type = normalizeCustomType(document.getElementById("prepareCustomAssetType")?.value);
+    const detailInput = document.getElementById("prepareCustomAssetCompany");
+    if (!detailInput) return;
+    detailInput.required = type === 'LOAN';
+    detailInput.placeholder = type === 'LOAN' ? 'Company Pte Ltd' : 'Optional description';
+}
+
 async function addAndPrepareCustomAsset(eventId) {
     const nameInput = document.getElementById("prepareCustomAssetName");
     const quantityInput = document.getElementById("prepareCustomAssetQuantity");
@@ -14263,7 +14284,9 @@ async function addAndPrepareCustomAsset(eventId) {
     const quantity = Math.max(1, parseInt(quantityInput?.value || '1', 10) || 1);
     const type = normalizeCustomType(typeSelect.value);
     const department = normalizeDepartmentCode(departmentSelect?.value || 'UN');
-    const company = (companyInput?.value || '').trim();
+    const detail = (companyInput?.value || '').trim();
+    const company = type === 'LOAN' ? detail : '';
+    const description = type === 'MISC' ? detail : '';
 
     if (!name) {
         showNotification("error", "Please enter a custom asset name");
@@ -14282,7 +14305,8 @@ async function addAndPrepareCustomAsset(eventId) {
             quantity,
             type,
             department,
-            company
+            company,
+            description
         });
 
         showNotification("success", `Custom asset "${name}" added. Prepare it from the Custom Assets section.`);
@@ -14402,7 +14426,14 @@ async function processUniversalAsset(eventId) {
     const feedbackDiv = document.getElementById('universal-asset-feedback');
     let assetId = normalizeScannedIdentifier(input.value);
     const quickAddEnabled = getPrepareQuickAddEnabled();
-    const scanPayload = prepareQuickAddPayload();
+    const scanPayload = {
+      ...prepareQuickAddPayload(),
+      subprojectId: (
+        Number(prepareNewPageState.eventId) === Number(eventId)
+          ? eventActiveSubproject(prepareNewPageState, prepareNewPageState.event)?.id || ''
+          : ''
+      )
+    };
     
     if (!assetId) {
         showFeedback(feedbackDiv, 'warning', 'Please enter an asset ID');
@@ -14958,7 +14989,7 @@ const returnPageState = {
   pendingActions: new Set(),
   requestVersion: 0,
   loaded: false,
-  showSubprojects: false,
+  activeSubprojectId: '',
 };
 
 const returnEventChooserState = {
@@ -15059,7 +15090,25 @@ function returnPageAssets(event = returnPageState.event) {
     });
   });
 
-  return Array.from(rows.values()).sort((a, b) => (
+  let assets = Array.from(rows.values());
+  const room = eventActiveSubproject(returnPageState, event);
+  if (room && eventSubprojects(event).length > 1) {
+    const allocated = eventSubprojectAssetAllocations(event).get(String(room.id)) || new Set();
+    const customItems = (room.items || []).filter(item => item?.isCustom);
+    assets = assets.filter(asset => (
+      allocated.has(String(asset.id)) ||
+      customItems.some(item => (
+        (item.assetRefs || []).map(String).includes(String(asset.id)) ||
+        (
+          normalizeDepartmentCode(item.departmentCode || item.department || 'UN') === asset.department &&
+          String(item.description || '').trim().toLowerCase() ===
+            String(asset.parsedCustom?.name || '').trim().toLowerCase()
+        )
+      ))
+    ));
+  }
+
+  return assets.sort((a, b) => (
     compareByDisplayName(a.department, b.department) ||
     Number(a.isReturned) - Number(b.isReturned) ||
     compareByDisplayName(returnPageAssetTitle(a), returnPageAssetTitle(b))
@@ -15067,6 +15116,9 @@ function returnPageAssets(event = returnPageState.event) {
 }
 
 function returnPageHasAssignedAssets(event = returnPageState.event) {
+  if (eventSubprojects(event).length > 1) {
+    return returnPageAssets(event).length > 0;
+  }
   return Object.values(event?.assetsByDepartment || {}).some(departmentAssets => (
     (departmentAssets || []).some(asset => (
       asset?.id && !String(asset.id).startsWith('[MODEL]')
@@ -15088,7 +15140,7 @@ function returnPageAssetSubtitle(asset) {
   const custom = asset?.parsedCustom || parseCustomAsset(asset?.id, asset);
   if (custom) {
     return [
-      custom.type === 'LOAN' && custom.company ? `Company: ${custom.company}` : '',
+      customAssetDetailText(custom),
       `Qty: ${Math.max(1, Number(custom.quantity || asset.quantity || 1))}`,
     ].filter(Boolean).join(' · ');
   }
@@ -15106,9 +15158,16 @@ function returnPageAssetSubtitle(asset) {
 
 function returnPageMetrics(event = returnPageState.event) {
   const assetRows = returnPageAssets(event);
-  const remaining = Math.max(0, getEventReturnableCount(event));
-  const total = Math.max(getEventReturnTotalCount(event), remaining);
-  const returned = Math.max(0, total - remaining);
+  const roomScoped = eventSubprojects(event).length > 1;
+  const total = roomScoped
+    ? assetRows.reduce((sum, asset) => sum + Math.max(1, Number(asset.quantity || 1)), 0)
+    : Math.max(getEventReturnTotalCount(event), getEventReturnableCount(event));
+  const returned = roomScoped
+    ? assetRows.reduce((sum, asset) => (
+        sum + (asset.isReturned ? Math.max(1, Number(asset.quantity || 1)) : 0)
+      ), 0)
+    : Math.max(0, total - Math.max(0, getEventReturnableCount(event)));
+  const remaining = Math.max(0, total - returned);
   return {
     total,
     returned,
@@ -15412,13 +15471,60 @@ function returnPageFilteredAssets() {
   });
 }
 
+function returnPageCanLogFault(asset) {
+  const custom = asset?.parsedCustom || parseCustomAsset(asset?.id, asset);
+  return Boolean(asset?.id && !custom && !asset?.isLoanOrMisc);
+}
+
+async function returnPageLogFault(encodedAssetId) {
+  const assetId = returnPageDecode(encodedAssetId);
+  const row = returnPageAssets().find(asset => String(asset.id) === assetId);
+  if (!returnPageCanLogFault(row)) {
+    showNotification('warning', 'Fault logs are only available for inventory assets');
+    return;
+  }
+
+  try {
+    await ensureAssetsLoaded();
+  } catch (error) {
+    showNotification('error', `Unable to load inventory: ${error.message || error}`);
+    return;
+  }
+  const inventoryAsset = getAssetByApiIdentifier(row.bulkId || row.id)
+    || findAssetByIdentifier(row.bulkId || row.id, assets);
+  if (!inventoryAsset) {
+    showNotification('error', 'Inventory asset not found');
+    return;
+  }
+
+  const inventoryId = getAssetIdentifierForApi(inventoryAsset);
+  if (inventoryAsset.isBulk || row.isBulk) {
+    openBulkMaintenanceFaultModal(inventoryId);
+    return;
+  }
+
+  openMaintenanceModalForAsset(inventoryId);
+  const logType = document.getElementById('maintenanceLogType');
+  if (logType) {
+    logType.value = 'Fault';
+    applyMaintenanceLogTypeSelectStyle(logType);
+  }
+  requestAnimationFrame(() => document.getElementById('maintenanceLogEntry')?.focus());
+}
+
 function returnPageAssetRowHtml(asset) {
   const encodedId = returnPageEncode(asset.id);
   const pendingKey = `${asset.isReturned ? 'unreturn' : 'return'}:${asset.id}`;
   const pending = returnPageState.pendingActions.has(pendingKey);
+  const dragPayload = eventSubprojectDragPayload(
+    returnPageState,
+    returnPageState.event,
+    { kind: 'asset', assetRef: asset.id }
+  );
   return `
-    <div class="return-asset-row ${asset.isReturned ? 'is-returned' : ''}"
-         data-return-row-id="${escapeHtmlAttr(encodedId)}">
+    <div class="return-asset-row ${asset.isReturned ? 'is-returned' : ''} ${dragPayload ? 'is-room-draggable' : ''}"
+         data-return-row-id="${escapeHtmlAttr(encodedId)}"
+         ${dragPayload ? `draggable="true" ondragstart="eventSubprojectDragStart(event,'${dragPayload}')" ondragend="eventSubprojectDragEnd(event)"` : ''}>
       <div>
         <div class="return-asset-name">${escapeHtml(returnPageAssetTitle(asset))}</div>
         <div class="return-asset-subtitle">${escapeHtml(returnPageAssetSubtitle(asset))}</div>
@@ -15430,14 +15536,23 @@ function returnPageAssetRowHtml(asset) {
       <div class="return-status ${asset.isReturned ? 'is-returned' : ''}">
         ${asset.isReturned ? 'Returned' : 'Outstanding'}
       </div>
-      <button type="button"
-              class="return-button ${asset.isReturned ? '' : 'return-button-primary'} return-row-action"
-              ${pending ? 'disabled' : ''}
-              onclick="${asset.isReturned
-                ? `returnPageUnreturnAsset('${escapeHtmlAttr(encodedId)}', this)`
-                : `returnPageReturnAsset('${escapeHtmlAttr(encodedId)}', this)`}">
-        ${pending ? (asset.isReturned ? 'Restoring…' : 'Returning…') : (asset.isReturned ? 'Undo' : 'Return')}
-      </button>
+      <div class="return-row-actions return-row-action">
+        ${returnPageCanLogFault(asset) ? `
+          <button type="button"
+                  class="return-button return-button-fault"
+                  onclick="returnPageLogFault('${escapeHtmlAttr(encodedId)}')">
+            Log fault
+          </button>
+        ` : ''}
+        <button type="button"
+                class="return-button ${asset.isReturned ? '' : 'return-button-primary'}"
+                ${pending ? 'disabled' : ''}
+                onclick="${asset.isReturned
+                  ? `returnPageUnreturnAsset('${escapeHtmlAttr(encodedId)}', this)`
+                  : `returnPageReturnAsset('${escapeHtmlAttr(encodedId)}', this)`}">
+          ${pending ? (asset.isReturned ? 'Restoring…' : 'Returning…') : (asset.isReturned ? 'Undo' : 'Return')}
+        </button>
+      </div>
     </div>
   `;
 }
@@ -15806,13 +15921,14 @@ function renderReturnPage(options = {}) {
     return;
   }
 
+  const consolidated = eventIsConsolidated(returnPageState, event);
+  root.classList.toggle('event-consolidated-mode', consolidated);
   const metrics = returnPageMetrics(event);
   const assetRows = returnPageAssets(event);
   const hasAssignedAssets = returnPageHasAssignedAssets(event);
   root.innerHTML = `
     <div class="return-page-heading">
       <div><h2>Return Event Assets</h2><p>Receive, verify, and return deployed assets to inventory.</p></div>
-      ${eventSubprojects(event).length ? renderEventSubprojectToggle('returnPageState', returnPageState.showSubprojects, 'renderReturnPage') : ''}
     </div>
     <div class="return-layout">
       <div class="return-primary">
@@ -15845,7 +15961,8 @@ function renderReturnPage(options = {}) {
             <div class="return-metric"><div class="return-metric-icon">${planMetricIconSvg('departments')}</div><div><strong>${metrics.departments}</strong><span>Departments</span></div></div>
           </div>
         </div>
-        ${returnPageState.showSubprojects ? renderEventSubprojectBreakdown(event, 'Sub-project return overview') : ''}
+        ${renderEventSubprojectTabs('returnPageState', event, 'renderReturnPage', 'Return sub-projects')}
+        ${consolidated ? eventConsolidatedNotice({ interactive: true }) : ''}
         <section class="return-assets-card return-surface">
           <div class="return-card-header">
             <div>
@@ -16095,6 +16212,17 @@ async function returnPageReturnDepartment(encodedDepartment, button) {
     button.textContent = 'Returning…';
   }
   try {
+    if (eventSubprojects(returnPageState.event).length > 1) {
+      const targets = returnPageAssets().filter(asset => (
+        asset.department === department && !asset.isReturned
+      ));
+      for (const asset of targets) {
+        await apiCall(`/api/events/${eventId}/return`, 'POST', { assetId: asset.id });
+      }
+      await returnPageRefreshSelected();
+      showNotification('success', `${targets.length} item(s) returned for ${department}`);
+      return;
+    }
     const response = await apiCall(
       `/api/events/${eventId}/return-department`,
       'POST',
@@ -16136,6 +16264,15 @@ async function returnPageManualReturn() {
     assetId = getAssetIdFromIdentifier(assetId, inventoryAssets);
   } catch (error) {
     console.warn('Could not resolve scanned return identifier locally:', error);
+  }
+
+  if (
+    eventSubprojects(returnPageState.event).length > 1 &&
+    !returnPageAssets().some(asset => String(asset.id) === String(assetId))
+  ) {
+    showNotification('warning', 'This asset belongs to a different sub-project');
+    input?.focus();
+    return;
   }
 
   const key = `return:${assetId}`;
@@ -16309,7 +16446,7 @@ async function loadEventAssetsForReturn() {
                 if (custom) {
                     title = customAssetDisplayName(custom);
                     badge = customAssetTypeBadge(custom);
-                    subtitle = custom.type === 'LOAN' && custom.company ? `Company: ${custom.company}` : '';
+                    subtitle = customAssetDetailText(custom);
                 } else if (isBulk) {
                     title = `${asset.brand || ''} ${asset.model || ''}`.trim() || 'Bulk Item';
                     subtitle = `${asset.description || ''}${asset.description ? ' • ' : ''}Bulk quantity item • Qty: ${asset.quantity || 1}`;
@@ -17249,7 +17386,7 @@ async function viewEventLegacy(eventId) {
                 '<span style="background: #fff3cd; color: #856404; padding: 2px 6px; border-radius: 3px; font-size: 9px; margin-left: 8px; font-weight: 500;">EXTRA</span>' : '';
               const custom = parseCustomAsset(asset.id, asset);
               const displayId = custom ? customAssetDisplayName(custom) : asset.id;
-              const secondaryLine = custom ? (custom.type === 'LOAN' ? custom.company : '') : (asset.name || '');
+              const secondaryLine = custom ? customAssetDetailText(custom) : (asset.name || '');
               const customBadge = custom ? customAssetTypeBadge(custom) : '';
 
               content += `
@@ -19757,7 +19894,7 @@ async function updateModelRequirementsSection(eventId) {
                 <span style="font-weight: 500;">${escapeHtml(displayName)}</span>
                 ${customAssetTypeBadge(custom)}
               </div>
-              ${custom.type === 'LOAN' && custom.company ? `<div style="color:#666;font-size:12px;margin-left:24px;margin-top:2px;">${escapeHtml(custom.company)}</div>` : ''}
+              ${customAssetDetailText(custom) ? `<div style="color:#666;font-size:12px;margin-left:24px;margin-top:2px;">${escapeHtml(customAssetDetailText(custom))}</div>` : ''}
             </div>
             <div style="display: flex; gap: 8px; flex-wrap:wrap; justify-content:flex-end;">
               <button class="btn btn-sm btn-outline-primary edit-custom-qty-btn"
@@ -20168,14 +20305,17 @@ async function addAssetToEventSimple(eventId, assetId) {
   }
 }
 
-async function assignSpecificAsset(eventId, assetId, brand, model) {
+async function assignSpecificAsset(eventId, assetId, brand, model, requestData = {}) {
     let actionStarted = false;
     try {
         await ensureAssetsLoaded();
         if (!(await confirmDegradedAssetUse(assetId))) return;
         actionStarted = beginPrepareAssetAction(assetId, 'Preparing...');
         if (!actionStarted) return;
-        const response = await apiCall(`/api/events/${eventId}/assign-specific`, 'POST', { assetId });
+        const response = await apiCall(`/api/events/${eventId}/assign-specific`, 'POST', {
+          assetId,
+          ...requestData
+        });
         await showApiWarning(response);
         const preparedAssetId = response?.data?.assetId || assetId;
         showNotification('success', `Assigned ${preparedAssetId} to event`);
@@ -20190,11 +20330,12 @@ async function assignSpecificAsset(eventId, assetId, brand, model) {
     }
 }
 
-async function unassignSpecificAsset(eventId, assetId, brand, model) {
+async function unassignSpecificAsset(eventId, assetId, brand, model, requestData = {}) {
   try {
     // Use the new unassign-specific endpoint
     await apiCall(`/api/events/${eventId}/unassign-specific`, "POST", {
       assetId,
+      ...requestData,
     });
     showNotification("success", `Unassigned ${assetId} from event`);
     updateAllButtonsForAsset(assetId, false);
@@ -20964,38 +21105,560 @@ var planPageState = {
   showContainers: true,
   loading: false,
   templateDraft: null,
-  showSubprojects: false
+  activeSubprojectId: '',
+  editingCustomAssetId: ''
 };
+
+var EVENT_CONSOLIDATED_SUBPROJECT_ID = '__all__';
 
 function eventSubprojects(event) {
   return Array.isArray(event?.subprojects) ? event.subprojects.filter(row => row && Array.isArray(row.items)) : [];
 }
 
-function renderEventSubprojectToggle(stateName, checked, renderFunction) {
-  return `<label class="event-subproject-toggle"><input type="checkbox" ${checked ? 'checked' : ''} onchange="${stateName}.showSubprojects=this.checked;${renderFunction}()"><span>Sub-projects</span></label>`;
+function eventActiveSubproject(state, event) {
+  const rooms = eventSubprojects(event);
+  if (!rooms.length) return null;
+  if (String(state?.activeSubprojectId) === EVENT_CONSOLIDATED_SUBPROJECT_ID) return null;
+  const active = rooms.find(room => String(room.id) === String(state.activeSubprojectId));
+  if (active) return active;
+  state.activeSubprojectId = String(rooms[0].id || 'main');
+  return rooms[0];
 }
 
-function renderEventSubprojectBreakdown(event, title = 'Sub-project requirements') {
-  const rooms = eventSubprojects(event);
-  if (!rooms.length) return '';
+function eventIsConsolidated(state, event) {
+  return (
+    eventSubprojects(event).length > 1 &&
+    String(state?.activeSubprojectId) === EVENT_CONSOLIDATED_SUBPROJECT_ID
+  );
+}
+
+function eventConsolidatedNotice(options = {}) {
+  const interactive = options.interactive === true;
   return `
-    <section class="plan-card event-subproject-breakdown">
-      <div class="plan-card-header"><div><h3>${escapeHtml(title)}</h3><p>Quantities are separated by room or work area.</p></div></div>
-      <div class="event-subproject-grid">
-        ${rooms.map(room => `
-          <div class="event-subproject-room">
-            <h4>${escapeHtml(room.name || 'Room')}</h4>
-            ${(room.items || []).map(item => `
-              <div class="event-subproject-item">
-                <span><strong>${escapeHtml([item.brand, item.model].filter(Boolean).join(' ') || item.description || 'Item')}</strong><small>${escapeHtml(item.department || item.departmentCode || '')}</small></span>
-                <strong>${Number(item.quantity || 0)}</strong>
-              </div>
-            `).join('') || '<div class="plan-empty">No items in this sub-project.</div>'}
-          </div>
-        `).join('')}
-      </div>
-    </section>
+    <div class="event-consolidated-notice">
+      <strong>Consolidated view</strong>
+      <span>${interactive
+        ? 'Assets from every room are combined. Return assets and log faults directly from this view.'
+        : 'Requirements from every room are combined. Select a room to make changes.'}</span>
+    </div>
   `;
+}
+
+function eventSubprojectStateByName(stateName) {
+  if (stateName === 'planPageState') return planPageState;
+  if (stateName === 'prepareNewPageState') return prepareNewPageState;
+  if (stateName === 'returnPageState') return returnPageState;
+  return window[stateName];
+}
+
+function eventSelectSubproject(stateName, subprojectId, renderFunction) {
+  const state = eventSubprojectStateByName(stateName);
+  if (!state) return;
+  state.activeSubprojectId = planDecode(subprojectId);
+  state.department = state.department === undefined ? undefined : 'ALL';
+  state.expandedDepartments?.clear?.();
+  state.expandedModels?.clear?.();
+  window[renderFunction]?.();
+}
+
+function renderEventSubprojectTabs(stateName, event, renderFunction, label, options = {}) {
+  const rooms = eventSubprojects(event);
+  const allowAdd = options.allowAdd === true;
+  const allowDelete = options.allowDelete === true && rooms.length > 1;
+  const allowRename = options.allowRename === true;
+  if (rooms.length <= 1 && !allowAdd) return '';
+  const state = eventSubprojectStateByName(stateName);
+  const active = eventActiveSubproject(state, event);
+  const consolidated = eventIsConsolidated(state, event);
+  return `
+    <div class="event-subproject-tabs" role="tablist" aria-label="${escapeHtmlAttr(label || 'Event sub-projects')}">
+      ${rooms.length > 1 ? `
+        <button type="button" role="tab"
+                class="event-subproject-tab event-subproject-consolidated ${consolidated ? 'active' : ''}"
+                aria-selected="${consolidated}"
+                onclick="eventSelectSubproject('${stateName}','${EVENT_CONSOLIDATED_SUBPROJECT_ID}','${renderFunction}')">
+          All requirements
+        </button>
+      ` : ''}
+      ${rooms.map(room => `
+        <span class="event-subproject-tab-wrap ${room === active ? 'active' : ''}"
+              data-subproject-drop-id="${escapeHtmlAttr(String(room.id || ''))}"
+              ondragover="eventSubprojectDragOver(event)"
+              ondragleave="eventSubprojectDragLeave(event)"
+              ondrop="eventSubprojectDrop(event,'${stateName}','${planEncode(room.id)}')">
+          <button type="button" role="tab"
+                  class="event-subproject-tab ${room === active ? 'active' : ''}"
+                  aria-selected="${room === active}"
+                  onclick="eventSelectSubproject('${stateName}','${planEncode(room.id)}','${renderFunction}')">
+            ${escapeHtml(room.name || 'Room')}
+          </button>
+          ${allowRename ? `
+            <button type="button" class="event-subproject-rename"
+                    title="Rename ${escapeHtmlAttr(room.name || 'room')}"
+                    aria-label="Rename ${escapeHtmlAttr(room.name || 'room')}"
+                    onclick="event.stopPropagation();planRenameSubproject('${planEncode(room.id)}')">
+              ${eventDetailsActionIconSvg('edit')}
+            </button>
+          ` : ''}
+          ${allowDelete ? `
+            <button type="button" class="event-subproject-delete"
+                    title="Delete ${escapeHtmlAttr(room.name || 'room')}"
+                    aria-label="Delete ${escapeHtmlAttr(room.name || 'room')}"
+                    onclick="event.stopPropagation();planOpenDeleteSubproject('${planEncode(room.id)}')">&times;</button>
+          ` : ''}
+        </span>
+      `).join('')}
+      ${allowAdd ? `
+        <button type="button" class="event-subproject-add" onclick="planAddSubproject()">
+          <span aria-hidden="true">+</span> Sub-project
+        </button>
+      ` : ''}
+    </div>
+  `;
+}
+
+function eventSubprojectDragStart(event, encodedPayload) {
+  const payload = planDecode(encodedPayload);
+  if (!payload || !event?.dataTransfer) {
+    event?.preventDefault?.();
+    return;
+  }
+  event.dataTransfer.effectAllowed = 'move';
+  event.dataTransfer.setData('application/x-showbase-subproject', payload);
+  event.currentTarget?.classList.add('is-dragging');
+}
+
+function eventSubprojectDragEnd(event) {
+  event.currentTarget?.classList.remove('is-dragging');
+  document.querySelectorAll('.event-subproject-tab-wrap.is-drop-target')
+    .forEach(element => element.classList.remove('is-drop-target'));
+}
+
+function eventSubprojectDragOver(event) {
+  if (!Array.from(event?.dataTransfer?.types || []).includes('application/x-showbase-subproject')) return;
+  event.preventDefault();
+  event.dataTransfer.dropEffect = 'move';
+  event.currentTarget?.classList.add('is-drop-target');
+}
+
+function eventSubprojectDragLeave(event) {
+  if (!event.currentTarget?.contains(event.relatedTarget)) {
+    event.currentTarget?.classList.remove('is-drop-target');
+  }
+}
+
+async function eventSubprojectDrop(event, stateName, encodedTargetId) {
+  event.preventDefault();
+  event.currentTarget?.classList.remove('is-drop-target');
+  let payload;
+  try {
+    payload = JSON.parse(
+      event.dataTransfer?.getData('application/x-showbase-subproject') || ''
+    );
+  } catch (error) {
+    return;
+  }
+  const targetSubprojectId = planDecode(encodedTargetId);
+  if (
+    !payload?.eventId ||
+    !payload?.sourceSubprojectId ||
+    payload.sourceSubprojectId === targetSubprojectId
+  ) return;
+
+  try {
+    const response = await apiCall(
+      `/api/events/${payload.eventId}/subprojects/move`,
+      'POST',
+      { ...payload, targetSubprojectId }
+    );
+    showNotification('success', response.message || 'Moved to room');
+    if (stateName === 'planPageState') {
+      await refreshPlanSelectedEvent();
+    } else if (stateName === 'prepareNewPageState') {
+      await refreshPrepareNewSelectedEvent({ preserve: true });
+    } else if (stateName === 'returnPageState') {
+      await returnPageRefreshSelected();
+    }
+  } catch (error) {}
+}
+
+function eventSubprojectDragPayload(state, event, payload) {
+  const room = eventActiveSubproject(state, event);
+  if (!room || eventIsConsolidated(state, event)) return '';
+  return planEncode(JSON.stringify({
+    eventId: Number(event?.id || 0),
+    sourceSubprojectId: String(room.id || ''),
+    ...payload
+  }));
+}
+
+async function planAddSubproject() {
+  const event = planPageState.event;
+  if (!event?.id) return;
+  const name = await showAppPrompt({
+    title: 'Add sub-project',
+    message: 'Name this room or work area.',
+    inputLabel: 'Sub-project name',
+    defaultValue: `Room ${Math.max(2, eventSubprojects(event).length + 1)}`,
+    confirmText: 'Add'
+  });
+  const cleanName = String(name || '').trim();
+  if (!cleanName) return;
+
+  try {
+    const response = await apiCall(
+      `/api/events/${event.id}/subprojects`,
+      'POST',
+      { name: cleanName }
+    );
+    const data = response.data || {};
+    planPageState.event.subprojects = data.subprojects || [];
+    planPageState.activeSubprojectId = String(data.subproject?.id || '');
+    renderPlanPage();
+    showNotification('success', `${cleanName} added`);
+  } catch (error) {}
+}
+
+async function planRenameSubproject(encodedSubprojectId) {
+  const event = planPageState.event;
+  const subprojectId = planDecode(encodedSubprojectId);
+  const room = eventSubprojects(event).find(
+    item => String(item.id) === String(subprojectId)
+  );
+  if (!event?.id || !room) return;
+
+  const name = await showAppPrompt({
+    title: 'Rename sub-project',
+    message: 'Enter a new name for this room or work area.',
+    inputLabel: 'Sub-project name',
+    defaultValue: room.name || 'Room',
+    confirmText: 'Rename'
+  });
+  const cleanName = String(name || '').trim();
+  if (!cleanName || cleanName === String(room.name || '').trim()) return;
+
+  try {
+    const response = await apiCall(
+      `/api/events/${event.id}/subprojects/${encodeURIComponent(subprojectId)}`,
+      'PATCH',
+      { name: cleanName }
+    );
+    planPageState.event.subprojects = response.data?.subprojects || [];
+    renderPlanPage();
+    showNotification('success', response.message || 'Sub-project renamed');
+  } catch (error) {}
+}
+
+var planDeleteSubprojectState = {
+  subprojectId: '',
+  mode: 'merge',
+  targetSubprojectId: ''
+};
+
+function ensurePlanDeleteSubprojectModal() {
+  let modal = document.getElementById('planDeleteSubprojectModal');
+  if (modal) return modal;
+  modal = document.createElement('div');
+  modal.id = 'planDeleteSubprojectModal';
+  modal.className = 'modal';
+  modal.innerHTML = `
+    <div class="modal-content event-subproject-delete-modal">
+      <div class="modal-header">
+        <div>
+          <h3>Delete sub-project</h3>
+          <small id="planDeleteSubprojectSummary"></small>
+        </div>
+        <button type="button" class="close-btn" aria-label="Close"
+                onclick="closeModal('planDeleteSubprojectModal')">&times;</button>
+      </div>
+      <div class="event-subproject-delete-options">
+        <button type="button" data-delete-mode="merge"
+                onclick="planSetDeleteSubprojectMode('merge')">
+          <strong>Merge into another room</strong>
+          <span>Keep its requirements and assigned assets.</span>
+        </button>
+        <button type="button" data-delete-mode="remove"
+                onclick="planSetDeleteSubprojectMode('remove')">
+          <strong>Remove room and assets</strong>
+          <span>Remove its requirements and unassign its assets from the event.</span>
+        </button>
+      </div>
+      <div id="planDeleteSubprojectTargets" class="event-subproject-delete-targets"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-secondary"
+                onclick="closeModal('planDeleteSubprojectModal')">Cancel</button>
+        <button type="button" class="btn btn-danger"
+                onclick="planConfirmDeleteSubproject()">Delete sub-project</button>
+      </div>
+    </div>
+  `;
+  modal.addEventListener('click', event => {
+    if (event.target === modal) closeModal('planDeleteSubprojectModal');
+  });
+  document.body.appendChild(modal);
+  return modal;
+}
+
+function planSubprojectContentQuantity(room) {
+  const itemQuantity = (room?.items || []).reduce(
+    (total, item) => total + Math.max(0, Number(item?.quantity || 0)),
+    0
+  );
+  return itemQuantity + (room?.extraRefs || []).length;
+}
+
+function planSubprojectHasAssignedAssets(room) {
+  if ((room?.extraRefs || []).length > 0) return true;
+  return (room?.items || []).some(item => (
+    (item?.assetRefs || []).length > 0 ||
+    Math.max(0, Number(item?.preparedQuantity || 0)) > 0
+  ));
+}
+
+async function planOpenDeleteSubproject(encodedSubprojectId) {
+  const subprojectId = planDecode(encodedSubprojectId);
+  const rooms = eventSubprojects(planPageState.event);
+  const room = rooms.find(item => String(item.id) === String(subprojectId));
+  const targets = rooms.filter(item => item !== room);
+  if (!room || !targets.length) return;
+
+  if (!planSubprojectHasAssignedAssets(room)) {
+    await planDeleteSubproject({
+      subprojectId,
+      mode: 'remove',
+      targetSubprojectId: ''
+    });
+    return;
+  }
+
+  planDeleteSubprojectState = {
+    subprojectId,
+    mode: 'merge',
+    targetSubprojectId: String(targets[0].id || '')
+  };
+  ensurePlanDeleteSubprojectModal();
+  const summary = document.getElementById('planDeleteSubprojectSummary');
+  if (summary) {
+    const quantity = planSubprojectContentQuantity(room);
+    summary.textContent = quantity > 0
+      ? `${room.name} contains ${quantity} planned or assigned item(s).`
+      : `${room.name} has no planned or assigned items.`;
+  }
+  planRenderDeleteSubprojectOptions();
+  openModal('planDeleteSubprojectModal');
+}
+
+function planSetDeleteSubprojectMode(mode) {
+  planDeleteSubprojectState.mode = mode === 'remove' ? 'remove' : 'merge';
+  planRenderDeleteSubprojectOptions();
+}
+
+function planSetDeleteSubprojectTarget(encodedSubprojectId) {
+  planDeleteSubprojectState.targetSubprojectId = planDecode(encodedSubprojectId);
+  planRenderDeleteSubprojectOptions();
+}
+
+function planRenderDeleteSubprojectOptions() {
+  const modal = document.getElementById('planDeleteSubprojectModal');
+  if (!modal) return;
+  modal.querySelectorAll('[data-delete-mode]').forEach(button => {
+    button.classList.toggle(
+      'active',
+      button.dataset.deleteMode === planDeleteSubprojectState.mode
+    );
+  });
+  const targets = document.getElementById('planDeleteSubprojectTargets');
+  if (!targets) return;
+  if (planDeleteSubprojectState.mode !== 'merge') {
+    targets.innerHTML = `
+      <div class="event-subproject-remove-warning">
+        Requirements, prepared quantities, and assigned assets in this room will be removed from the event.
+      </div>
+    `;
+    return;
+  }
+  targets.innerHTML = `
+    <span>Merge into</span>
+    <div>
+      ${eventSubprojects(planPageState.event)
+        .filter(room => String(room.id) !== String(planDeleteSubprojectState.subprojectId))
+        .map(room => `
+          <button type="button"
+                  class="${String(room.id) === String(planDeleteSubprojectState.targetSubprojectId) ? 'active' : ''}"
+                  onclick="planSetDeleteSubprojectTarget('${planEncode(room.id)}')">
+            ${escapeHtml(room.name || 'Room')}
+          </button>
+        `).join('')}
+    </div>
+  `;
+}
+
+async function planDeleteSubproject(state) {
+  if (!state.subprojectId) return;
+  if (state.mode === 'merge' && !state.targetSubprojectId) {
+    showNotification('warning', 'Choose a destination room');
+    return;
+  }
+  try {
+    const response = await apiCall(
+      `/api/events/${planPageState.eventId}/subprojects/${encodeURIComponent(state.subprojectId)}`,
+      'DELETE',
+      {
+        mode: state.mode,
+        targetSubprojectId: state.mode === 'merge' ? state.targetSubprojectId : ''
+      }
+    );
+    closeModal('planDeleteSubprojectModal');
+    planPageState.event.subprojects = response.data?.subprojects || [];
+    planPageState.activeSubprojectId = state.mode === 'merge'
+      ? state.targetSubprojectId
+      : String(planPageState.event.subprojects[0]?.id || '');
+    showNotification('success', response.message || 'Sub-project deleted');
+    await refreshPlanSelectedEvent();
+  } catch (error) {}
+}
+
+async function planConfirmDeleteSubproject() {
+  await planDeleteSubproject(planDeleteSubprojectState);
+}
+
+function eventSubprojectGroupKey(value) {
+  return [
+    normalizeDepartmentCode(value?.departmentCode || value?.department || 'UN'),
+    String(value?.brand || '').trim().toLowerCase(),
+    String(value?.model || '').trim().toLowerCase()
+  ].join('|');
+}
+
+function eventSubprojectModelItems(room) {
+  const groups = new Map();
+  (room?.items || []).forEach(item => {
+    if (item?.isCustom || !item?.brand || !item?.model) return;
+    const key = eventSubprojectGroupKey(item);
+    if (!groups.has(key)) {
+      groups.set(key, {
+        ...item,
+        department: normalizeDepartmentCode(item.departmentCode || item.department || 'UN'),
+        requiredQuantity: 0,
+        preparedQuantity: 0,
+        assetRefs: []
+      });
+    }
+    const group = groups.get(key);
+    group.requiredQuantity += Math.max(0, Number(item.quantity || 0));
+    group.preparedQuantity += Math.max(0, Number(item.preparedQuantity || 0));
+    group.assetRefs.push(...(item.assetRefs || []).map(String));
+  });
+  return groups;
+}
+
+function eventSubprojectAssetAllocations(event) {
+  const rooms = eventSubprojects(event);
+  const allocations = new Map(rooms.map(room => [String(room.id), new Set()]));
+  const claimed = new Set();
+
+  rooms.forEach(room => {
+    const refs = [
+      ...(room.extraRefs || []),
+      ...(room.items || []).flatMap(item => item?.assetRefs || [])
+    ].map(String);
+    refs.forEach(ref => {
+      allocations.get(String(room.id))?.add(ref);
+      claimed.add(ref);
+    });
+  });
+
+  const globalGroups = Object.values(event?.modelGroups || {});
+  globalGroups.forEach(group => {
+    const groupKey = eventSubprojectGroupKey(group);
+    const candidates = (group.assignedAssets || []).filter(asset => (
+      asset?.id && !claimed.has(String(asset.id))
+    ));
+    let cursor = 0;
+    rooms.forEach(room => {
+      const required = eventSubprojectModelItems(room).get(groupKey)?.requiredQuantity || 0;
+      const already = (group.assignedAssets || []).reduce((total, asset) => (
+        allocations.get(String(room.id))?.has(String(asset?.id || ''))
+          ? total + Math.max(1, Number(asset?.quantity || 1))
+          : total
+      ), 0);
+      let remaining = Math.max(0, required - already);
+      while (cursor < candidates.length && remaining > 0) {
+        const asset = candidates[cursor++];
+        allocations.get(String(room.id))?.add(String(asset.id));
+        claimed.add(String(asset.id));
+        remaining -= Math.max(1, Number(asset.quantity || 1));
+      }
+    });
+    while (cursor < candidates.length && rooms.length) {
+      const asset = candidates[cursor++];
+      allocations.get(String(rooms[0].id))?.add(String(asset.id));
+    }
+  });
+  return allocations;
+}
+
+function eventSubprojectModelGroups(event, state) {
+  if (eventSubprojects(event).length <= 1) {
+    return Object.values(event?.modelGroups || {});
+  }
+  const room = eventActiveSubproject(state, event);
+  if (!room) return Object.values(event?.modelGroups || {});
+  const roomItems = eventSubprojectModelItems(room);
+  const globalGroups = Object.values(event?.modelGroups || {});
+  const globalByKey = new Map(globalGroups.map(group => [eventSubprojectGroupKey(group), group]));
+  const allocations = eventSubprojectAssetAllocations(event).get(String(room.id)) || new Set();
+  const rooms = eventSubprojects(event);
+
+  return Array.from(roomItems.entries()).map(([key, item]) => {
+    const source = globalByKey.get(key) || item;
+    const assignedAssets = (source.assignedAssets || []).filter(asset => allocations.has(String(asset?.id || '')));
+    const hasTrackedSlots = (room.items || []).some(row => (
+      eventSubprojectGroupKey(row) === key && Object.prototype.hasOwnProperty.call(row, 'preparedQuantity')
+    ));
+    let preparedSlots = Math.max(0, Number(item.preparedQuantity || 0));
+    if (!hasTrackedSlots) {
+      const sourceSlots = Math.max(0, Number(source.preparedSlotQuantity || 0));
+      let priorRequired = 0;
+      for (const otherRoom of rooms) {
+        if (otherRoom === room) break;
+        priorRequired += eventSubprojectModelItems(otherRoom).get(key)?.requiredQuantity || 0;
+      }
+      preparedSlots = Math.min(
+        item.requiredQuantity,
+        Math.max(0, sourceSlots - priorRequired)
+      );
+    }
+    const assignedSpecific = assignedAssets.reduce(
+      (total, asset) => total + Math.max(1, Number(asset?.quantity || 1)),
+      0
+    );
+    const returned = assignedAssets.reduce(
+      (total, asset) => total + (asset?.status === 'returned' ? Math.max(1, Number(asset?.quantity || 1)) : 0),
+      0
+    );
+    const prepared = Math.max(0, assignedSpecific + preparedSlots - returned);
+    const required = Math.max(0, Number(item.requiredQuantity || 0));
+    return {
+      ...source,
+      department: item.department,
+      brand: item.brand,
+      model: item.model,
+      description: item.description || source.description || '',
+      requiredQuantity: required,
+      assignedAssets,
+      assignedSpecificQuantity: assignedSpecific,
+      assignedQuantity: assignedSpecific + preparedSlots,
+      returnedQuantity: returned,
+      preparedSlotQuantity: preparedSlots,
+      openPreparedSlots: preparedSlots,
+      preparedQuantity: prepared,
+      countableAssignedQuantity: Math.min(required, assignedSpecific + preparedSlots),
+      countableReturnedQuantity: Math.min(required, returned),
+      countablePreparedQuantity: Math.min(required, prepared),
+      extraPreparedQuantity: Math.max(0, prepared - required)
+    };
+  });
 }
 
 var planEventChooserState = {
@@ -21041,13 +21704,27 @@ function planCustomAssets(eventData = planPageState.event) {
     });
   });
 
-  return customAssets.sort((a, b) =>
+  const room = eventActiveSubproject(planPageState, eventData);
+  const roomCustomItems = (room?.items || []).filter(item => item?.isCustom);
+  const visibleAssets = room && eventSubprojects(eventData).length > 1
+    ? customAssets.filter(asset => roomCustomItems.some(item => (
+        (item.assetRefs || []).map(String).includes(String(asset.id)) ||
+        (
+          normalizeDepartmentCode(item.departmentCode || item.department || 'UN') ===
+            normalizeDepartmentCode(asset.department || 'UN') &&
+          String(item.description || '').trim().toLowerCase() ===
+            String(asset.name || '').trim().toLowerCase()
+        )
+      )))
+    : customAssets;
+
+  return visibleAssets.sort((a, b) =>
     compareByDisplayName(customAssetSortName(a), customAssetSortName(b))
   );
 }
 
 function planModelGroups(eventData = planPageState.event) {
-  return Object.values(eventData?.modelGroups || {}).sort((a, b) => (
+  return eventSubprojectModelGroups(eventData, planPageState).sort((a, b) => (
     compareByDisplayName(a.department, b.department) ||
     compareByDisplayName(modelGroupSortName(a), modelGroupSortName(b))
   ));
@@ -21067,7 +21744,8 @@ function planEventSnapshot() {
       name: String(custom.name || ''),
       quantity: Math.max(1, Number(custom.quantity || 1)),
       department: normalizeDepartmentCode(custom.department || 'UN'),
-      company: String(custom.company || '')
+      company: String(custom.company || ''),
+      description: String(custom.description || '')
     }))
   };
 }
@@ -21790,6 +22468,13 @@ function planSetDepartmentFilter(encodedDepartment) {
 
 function planRequirementQuantityControl(group) {
   const quantity = Math.max(1, Number(group.requiredQuantity || 1));
+  if (eventIsConsolidated(planPageState, planPageState.event)) {
+    return `
+      <div class="plan-qty-total" aria-label="${quantity} required across all rooms">
+        ${quantity}
+      </div>
+    `;
+  }
   const args = [
     planEncode(group.department),
     planEncode(group.brand),
@@ -21809,6 +22494,13 @@ function planRequirementQuantityControl(group) {
 
 function planCustomQuantityControl(custom) {
   const quantity = Math.max(1, Number(custom.quantity || 1));
+  if (eventIsConsolidated(planPageState, planPageState.event)) {
+    return `
+      <div class="plan-qty-total" aria-label="${quantity} required across all rooms">
+        ${quantity}
+      </div>
+    `;
+  }
   return `
     <div class="plan-qty-control" aria-label="Required quantity">
       <button type="button" ${quantity <= 1 ? 'disabled' : ''}
@@ -21833,12 +22525,21 @@ function planRequirementWarning(group) {
         availability
       )
     : 'This asset model is not present in the current inventory.';
+  const event = planPageState.event || {};
+  const rooms = eventSubprojects(event);
+  const room = eventActiveSubproject(planPageState, event);
+  const context = [
+    `Event #${event.id || ''}: ${event.name || 'Unnamed event'}`,
+    rooms.length > 1
+      ? (room ? `Room: ${room.name || 'Unnamed room'}` : `Consolidated across ${rooms.length} rooms`)
+      : ''
+  ].filter(Boolean).join('\n');
   if (shortage > 0) {
     return {
       type: 'shortage',
       quantity: shortage,
       availability,
-      reason: `${shortage} of ${required} required unit${required === 1 ? '' : 's'} cannot be fulfilled. ` +
+      reason: `${context}\n\n${shortage} of ${required} required unit${required === 1 ? '' : 's'} cannot be fulfilled. ` +
         `Usable capacity for this event is ${fulfillableForThisEvent}.\n\n${availabilityDetail}`
     };
   }
@@ -21850,7 +22551,7 @@ function planRequirementWarning(group) {
     type: 'degraded',
     quantity: degradedRequired,
     availability,
-    reason: `${degradedRequired} of ${required} required unit${required === 1 ? '' : 's'} ` +
+    reason: `${context}\n\n${degradedRequired} of ${required} required unit${required === 1 ? '' : 's'} ` +
       `can only be fulfilled by using degraded assets. Fully working capacity for this event is ${healthyCapacity}.\n\n${availabilityDetail}`
   };
 }
@@ -21863,7 +22564,7 @@ function planShowRequirementWarning(encodedReason, warningType = 'shortage') {
   });
 }
 
-var planReplacementState = { source: null, shortage: 1, sourceQuantity: 1, warningType: 'shortage', preset: '', search: '' };
+var planReplacementState = { source: null, shortage: 1, sourceQuantity: 1, warningType: 'shortage', preset: '', search: '', mode: 'replace' };
 
 function ensurePlanReplacementModal() {
   let modal = document.getElementById('planReplacementModal');
@@ -21874,36 +22575,59 @@ function ensurePlanReplacementModal() {
   modal.innerHTML = `
     <div class="modal-content plan-replacement-modal-content">
       <div class="modal-header">
-        <div><h3 id="planReplacementTitle">Replace Shortage</h3><small id="planReplacementSourceLabel"></small></div>
+        <div><h3 id="planReplacementTitle">Resolve Shortage</h3><small id="planReplacementSourceLabel"></small></div>
         <button type="button" class="close-btn" aria-label="Close" onclick="closeModal('planReplacementModal')">&times;</button>
+      </div>
+      <div class="plan-resolution-mode" data-selected="replace" role="radiogroup" aria-label="Resolution method">
+        <span class="plan-resolution-mode-indicator" aria-hidden="true"></span>
+        <button type="button" role="radio" aria-checked="true" data-plan-resolution-mode="replace" onclick="planSetResolutionMode('replace')">Replace</button>
+        <button type="button" role="radio" aria-checked="false" data-plan-resolution-mode="loan" onclick="planSetResolutionMode('loan')">Loan</button>
       </div>
       <div class="plan-replacement-toolbar">
         <div class="plan-replacement-quantity-panel">
           <span>Quantity</span>
           <div class="plan-replacement-quantity-row">
-            <div class="plan-qty-control" aria-label="Replacement quantity">
-              <button type="button" aria-label="Decrease replacement quantity" onclick="planAdjustReplacementQuantity(-1)">&minus;</button>
+            <div class="plan-qty-control" aria-label="Resolution quantity">
+              <button type="button" aria-label="Decrease resolution quantity" onclick="planAdjustReplacementQuantity(-1)">&minus;</button>
               <input id="planReplacementQuantity" type="number" min="1" value="1"
-                     aria-label="Replacement quantity" onchange="planSetReplacementQuantity(this.value)">
-              <button type="button" aria-label="Increase replacement quantity" onclick="planAdjustReplacementQuantity(1)">+</button>
+                     aria-label="Resolution quantity" onchange="planSetReplacementQuantity(this.value)">
+              <button type="button" aria-label="Increase resolution quantity" onclick="planAdjustReplacementQuantity(1)">+</button>
             </div>
-            <div class="plan-replacement-presets" aria-label="Replacement quantity presets">
-              <button id="planReplacementShort" type="button" title="Replace only the quantity currently short for this event period" onclick="planUseReplacementQuantity('short')">Short</button>
-              <button id="planReplacementAll" type="button" title="Replace the full planned quantity for this item" onclick="planUseReplacementQuantity('all')">All</button>
+            <div class="plan-replacement-presets" aria-label="Resolution quantity presets">
+              <button id="planReplacementShort" type="button" title="Resolve only the quantity currently short for this event period" onclick="planUseReplacementQuantity('short')">Short</button>
+              <button id="planReplacementAll" type="button" title="Resolve the full planned quantity for this item" onclick="planUseReplacementQuantity('all')">All</button>
             </div>
           </div>
         </div>
-        <input id="planReplacementSearch" class="form-input" type="search" placeholder="Search replacement assets..."
-               oninput="planReplacementState.search=this.value;renderPlanReplacementOptions()">
+        <div id="planReplacementSearchField">
+          <input id="planReplacementSearch" class="form-input" type="search" placeholder="Search replacement assets..."
+                 aria-label="Search replacement assets"
+                 oninput="planReplacementState.search=this.value;renderPlanReplacementOptions()">
+        </div>
       </div>
-      <div id="planReplacementOptions" class="plan-replacement-options"></div>
+      <div id="planReplacementPanel">
+        <div id="planReplacementOptions" class="plan-replacement-options"></div>
+      </div>
+      <div id="planLoanResolutionPanel" class="plan-loan-resolution-panel" hidden>
+        <form id="planLoanResolutionForm" class="plan-loan-resolution-card" onsubmit="planConvertRequirementToLoan(event)">
+          <div>
+            <label class="form-label" for="planLoanCompany">Loan company / source</label>
+            <input id="planLoanCompany" class="form-input" type="text" maxlength="200"
+                   autocomplete="organization" placeholder="Enter supplier or lending company" required>
+          </div>
+          <p>The selected quantity will be removed from this inventory requirement and added to the event as a loan item.</p>
+          <div class="plan-loan-resolution-actions">
+            <button id="planLoanResolutionSubmit" type="submit" class="plan-button plan-loan-resolution-submit">Convert to loan</button>
+          </div>
+        </form>
+      </div>
     </div>
   `;
   document.body.appendChild(modal);
   return modal;
 }
 
-function planOpenReplacement(encodedDepartment, encodedBrand, encodedModel, encodedDescription, shortage, warningType = 'shortage') {
+function planOpenResolution(encodedDepartment, encodedBrand, encodedModel, encodedDescription, shortage, warningType = 'shortage') {
   const source = {
     department: planDecode(encodedDepartment),
     brand: planDecode(encodedBrand),
@@ -21920,21 +22644,41 @@ function planOpenReplacement(encodedDepartment, encodedBrand, encodedModel, enco
     sourceQuantity: maxQuantity,
     warningType,
     preset: 'short',
-    search: ''
+    search: '',
+    mode: 'replace'
   };
   ensurePlanReplacementModal();
   document.getElementById('planReplacementTitle').textContent = warningType === 'degraded'
-    ? 'Replace Degraded Requirement'
-    : 'Replace Shortage';
+    ? 'Resolve Degraded Requirement'
+    : 'Resolve Shortage';
   document.getElementById('planReplacementSourceLabel').textContent =
-    `${source.brand} ${source.model} needs a replacement`;
+    `${source.brand} ${source.model} needs attention`;
   document.getElementById('planReplacementShort').title = warningType === 'degraded'
-    ? 'Replace only the quantity that would require degraded assets'
-    : 'Replace only the quantity currently short for this event period';
+    ? 'Resolve only the quantity that would require degraded assets'
+    : 'Resolve only the quantity currently short for this event period';
   planUseReplacementQuantity('short');
   document.getElementById('planReplacementSearch').value = '';
+  document.getElementById('planLoanCompany').value = '';
+  planSetResolutionMode('replace');
   renderPlanReplacementOptions();
   openModal('planReplacementModal');
+}
+
+function planSetResolutionMode(mode) {
+  const normalizedMode = mode === 'loan' ? 'loan' : 'replace';
+  planReplacementState.mode = normalizedMode;
+  const selector = document.querySelector('.plan-resolution-mode');
+  if (selector) selector.dataset.selected = normalizedMode;
+  document.querySelectorAll('[data-plan-resolution-mode]').forEach(button => {
+    button.setAttribute('aria-checked', button.dataset.planResolutionMode === normalizedMode ? 'true' : 'false');
+  });
+  document.getElementById('planReplacementPanel')?.toggleAttribute('hidden', normalizedMode !== 'replace');
+  document.getElementById('planReplacementSearchField')?.toggleAttribute('hidden', normalizedMode !== 'replace');
+  document.getElementById('planLoanResolutionPanel')?.toggleAttribute('hidden', normalizedMode !== 'loan');
+  document.querySelector('.plan-replacement-toolbar')?.classList.toggle('loan-mode', normalizedMode === 'loan');
+  if (normalizedMode === 'loan') {
+    requestAnimationFrame(() => document.getElementById('planLoanCompany')?.focus());
+  }
 }
 
 function planSetReplacementQuantity(value, preset = '') {
@@ -22019,12 +22763,49 @@ async function planReplaceRequirement(encodedDepartment, encodedBrand, encodedMo
         model: planDecode(encodedModel),
         description: planDecode(encodedDescription)
       },
-      quantity
+      quantity,
+      subprojectId: eventActiveSubproject(planPageState, planPageState.event)?.id || ''
     });
     closeModal('planReplacementModal');
     showNotification('success', `Replaced ${quantity} planned item${quantity === 1 ? '' : 's'}`);
     await refreshPlanSelectedEvent();
   } catch (error) {}
+}
+
+async function planConvertRequirementToLoan(event) {
+  event?.preventDefault();
+  const companyInput = document.getElementById('planLoanCompany');
+  const company = String(companyInput?.value || '').trim();
+  const quantity = Math.max(1, Number(document.getElementById('planReplacementQuantity')?.value || 1));
+  if (!company) {
+    showNotification('warning', 'Enter the company or source providing the loan item.');
+    companyInput?.focus();
+    return;
+  }
+
+  const submitButton = document.getElementById('planLoanResolutionSubmit');
+  if (submitButton) {
+    submitButton.disabled = true;
+    submitButton.textContent = 'Converting...';
+  }
+  try {
+    await apiCall(`/api/events/${planPageState.eventId}/models/loan`, 'POST', {
+      source: planReplacementState.source,
+      quantity,
+      company,
+      subprojectId: eventActiveSubproject(planPageState, planPageState.event)?.id || ''
+    });
+    closeModal('planReplacementModal');
+    showNotification('success', `Converted ${quantity} planned item${quantity === 1 ? '' : 's'} to loan`);
+    await refreshPlanSelectedEvent();
+  } catch (error) {
+    // apiCall displays the server validation message.
+  } finally {
+    if (submitButton) {
+      submitButton.disabled = false;
+      submitButton.textContent = 'Convert to loan';
+    }
+  }
 }
 
 function renderPlanRequirementsCard() {
@@ -22057,8 +22838,22 @@ function renderPlanRequirementsCard() {
           const group = row.group;
           const warning = planRequirementWarning(group);
           const warningReason = warning?.reason || '';
+          const dragPayload = eventSubprojectDragPayload(
+            planPageState,
+            planPageState.event,
+            {
+              kind: 'requirement',
+              group: {
+                department: group.department,
+                brand: group.brand,
+                model: group.model,
+                description: group.description || ''
+              }
+            }
+          );
           return `
-            <div class="plan-requirement-row ${warning ? (warning.type === 'degraded' ? 'requires-degraded' : 'has-shortage') : ''}">
+            <div class="plan-requirement-row ${warning ? (warning.type === 'degraded' ? 'requires-degraded' : 'has-shortage') : ''} ${dragPayload ? 'is-room-draggable' : ''}"
+                 ${dragPayload ? `draggable="true" ondragstart="eventSubprojectDragStart(event,'${dragPayload}')" ondragend="eventSubprojectDragEnd(event)"` : ''}>
               <div class="plan-item-title-line">
                 <div class="plan-item-name">${escapeHtml([group.brand, group.model].filter(Boolean).join(' '))}</div>
                 ${warning ? `
@@ -22073,7 +22868,7 @@ function renderPlanRequirementsCard() {
               <div class="plan-replace-slot">
                 ${warning ? `
                   <button type="button" class="plan-button plan-button-small plan-swap-button ${warning.type === 'degraded' ? 'degraded-warning' : ''}"
-                          onclick="planOpenReplacement('${planEncode(group.department)}','${planEncode(group.brand)}','${planEncode(group.model)}','${planEncode(group.description || '')}',${warning.quantity},'${warning.type}')">Replace</button>
+                          onclick="planOpenResolution('${planEncode(group.department)}','${planEncode(group.brand)}','${planEncode(group.model)}','${planEncode(group.description || '')}',${warning.quantity},'${warning.type}')">Resolve</button>
                 ` : ''}
               </div>
               ${planRequirementQuantityControl(group)}
@@ -22089,11 +22884,17 @@ function renderPlanRequirementsCard() {
         }
 
         const custom = row.custom;
+        const dragPayload = eventSubprojectDragPayload(
+          planPageState,
+          planPageState.event,
+          { kind: 'asset', assetRef: custom.id }
+        );
         const description = custom.type === 'LOAN'
-          ? (custom.company || 'Loan / rental item')
-          : 'Custom miscellaneous item';
+          ? (custom.company ? `From ${custom.company}` : 'Loan / rental item')
+          : (custom.description || 'Custom miscellaneous item');
         return `
-          <div class="plan-requirement-row">
+          <div class="plan-requirement-row ${dragPayload ? 'is-room-draggable' : ''}"
+               ${dragPayload ? `draggable="true" ondragstart="eventSubprojectDragStart(event,'${dragPayload}')" ondragend="eventSubprojectDragEnd(event)"` : ''}>
             <div>
               <div class="plan-item-title-line">
                 <div class="plan-item-name">${escapeHtml(custom.name)}</div>
@@ -22102,7 +22903,14 @@ function renderPlanRequirementsCard() {
               <div class="plan-item-meta">${escapeHtml(custom.type === 'LOAN' ? 'Loan / Rental' : 'Misc')}</div>
             </div>
             <div class="plan-item-description">${escapeHtml(description)}</div>
-            <div class="plan-replace-slot"></div>
+            <div class="plan-replace-slot">
+              <button type="button" class="plan-button plan-button-small"
+                      title="Edit custom asset"
+                      aria-label="Edit custom asset"
+                      onclick="planEditCustomAsset('${planEncode(custom.id)}')">
+                &#9998;
+              </button>
+            </div>
             ${planCustomQuantityControl(custom)}
             <div class="plan-row-actions">
               <button type="button" class="plan-button plan-button-danger plan-button-small"
@@ -22271,14 +23079,18 @@ function renderPlanCustomItemCard() {
               </select>
             </div>
             <div class="plan-custom-field" id="planCustomCompanyGroup">
-              <label for="planCustomCompany">Company / Source</label>
+              <label for="planCustomCompany" id="planCustomDetailLabel">Description</label>
               <input id="planCustomCompany" maxlength="160"
-                     placeholder="Optional source">
+                     placeholder="Optional description">
             </div>
           </div>
-          <button type="submit" class="plan-button plan-button-primary plan-custom-submit">
-            Add Custom Item
-          </button>
+          <div class="plan-custom-form-actions">
+            <button type="submit" id="planCustomSubmitButton" class="plan-button plan-button-primary plan-custom-submit">
+              Add Custom Item
+            </button>
+            <button type="button" id="planCustomCancelEdit" class="plan-button plan-button-small"
+                    style="display:none" onclick="planCancelCustomAssetEdit()">Cancel edit</button>
+          </div>
           <div class="plan-custom-help">
             <span aria-hidden="true">&#9432;</span>
             <span>Custom items are not part of core inventory.</span>
@@ -22348,11 +23160,12 @@ function renderPlanPage() {
   }
 
   const event = planPageState.event;
+  const consolidated = eventIsConsolidated(planPageState, event);
+  root.classList.toggle('event-consolidated-mode', consolidated);
   const totals = planTotals();
   root.innerHTML = `
     <div class="plan-page-heading">
       <div><h2>Plan Event Assets</h2><p>Add required asset models and quantities for this event.</p></div>
-      ${eventSubprojects(event).length ? renderEventSubprojectToggle('planPageState', planPageState.showSubprojects, 'renderPlanPage') : ''}
     </div>
 
     <div class="plan-layout">
@@ -22381,16 +23194,25 @@ function renderPlanPage() {
             <div class="plan-metric"><div class="plan-metric-icon">${planMetricIconSvg('lines')}</div><div><strong>${totals.lineCount}</strong><span>Asset Lines</span></div></div>
             <div class="plan-metric"><div class="plan-metric-icon">${planMetricIconSvg('quantity')}</div><div><strong>${totals.totalQuantity}</strong><span>Total Qty Required</span></div></div>
             <div class="plan-metric"><div class="plan-metric-icon">${planMetricIconSvg('departments')}</div><div><strong>${totals.departmentCount}</strong><span>Active Departments</span></div></div>
-            <button type="button" class="plan-metric plan-compare-launch"
-                    onclick="typeof openCompareForEvent === 'function' && openCompareForEvent(${Number(event.id) || 0})">
-              <div class="plan-metric-icon">${planMetricIconSvg('templates')}</div>
-              <div><strong>Compare</strong><span>To Quotation</span></div>
-            </button>
+            ${event.quotationId ? `
+              <button type="button" class="plan-metric plan-compare-launch"
+                      onclick="typeof openCompareForEvent === 'function' && openCompareForEvent(${Number(event.id) || 0}, '${escapeJs(String(event.quotationId))}')">
+                <div class="plan-metric-icon">${planMetricIconSvg('templates')}</div>
+                <div><strong>Compare</strong><span>To Quotation</span></div>
+              </button>
+            ` : ''}
           </div>
         </div>
 
+        ${renderEventSubprojectTabs(
+          'planPageState',
+          event,
+          'renderPlanPage',
+          'Planning sub-projects',
+          { allowAdd: true, allowDelete: true, allowRename: true }
+        )}
+        ${consolidated ? eventConsolidatedNotice() : ''}
         <div class="plan-workspace">
-          ${planPageState.showSubprojects ? renderEventSubprojectBreakdown(event) : ''}
           <div class="plan-available-stack">
             <div id="planAvailableCard">${renderPlanAvailableCard()}</div>
             <div id="planCustomItemCard">${renderPlanCustomItemCard()}</div>
@@ -22506,7 +23328,8 @@ async function planAddModel(encodedDepartment, encodedBrand, encodedModel, encod
       brand: planDecode(encodedBrand),
       model: planDecode(encodedModel),
       description: planDecode(encodedDescription),
-      quantity
+      quantity,
+      subprojectId: eventActiveSubproject(planPageState, planPageState.event)?.id || ''
     });
     showNotification('success', 'Asset requirement added');
     await refreshPlanSelectedEvent();
@@ -22521,7 +23344,8 @@ async function planSetModelQuantity(encodedDepartment, encodedBrand, encodedMode
       brand: planDecode(encodedBrand),
       model: planDecode(encodedModel),
       description: planDecode(encodedDescription),
-      quantity: nextQuantity
+      quantity: nextQuantity,
+      subprojectId: eventActiveSubproject(planPageState, planPageState.event)?.id || ''
     });
     await refreshPlanSelectedEvent();
   } catch (error) {
@@ -22546,7 +23370,8 @@ async function planRemoveModel(encodedDepartment, encodedBrand, encodedModel, en
       department: planDecode(encodedDepartment),
       brand,
       model,
-      description: planDecode(encodedDescription)
+      description: planDecode(encodedDescription),
+      subprojectId: eventActiveSubproject(planPageState, planPageState.event)?.id || ''
     });
     await refreshPlanSelectedEvent();
   } catch (error) {}
@@ -22558,7 +23383,10 @@ async function planAddContainerContents(encodedContainerId) {
     const response = await apiCall(
       `/api/events/${planPageState.eventId}/container-models`,
       'POST',
-      { containerId }
+      {
+        containerId,
+        subprojectId: eventActiveSubproject(planPageState, planPageState.event)?.id || ''
+      }
     );
     const added = response.data || {};
     showNotification(
@@ -22572,10 +23400,12 @@ async function planAddContainerContents(encodedContainerId) {
 function planSyncCustomCompanyField() {
   const isLoan = document.getElementById('planCustomType')?.value === 'LOAN';
   const input = document.getElementById('planCustomCompany');
+  const label = document.getElementById('planCustomDetailLabel');
   if (input) {
     input.required = isLoan;
-    input.placeholder = isLoan ? 'e.g. Borrowed / External' : 'Optional source';
+    input.placeholder = isLoan ? 'Company Pte Ltd' : 'Optional description';
   }
+  if (label) label.textContent = isLoan ? 'Company / Source' : 'Description';
 }
 
 function planSetCustomType(type) {
@@ -22598,23 +23428,70 @@ function planSetCustomType(type) {
 async function planSubmitCustomAsset(event) {
   event.preventDefault();
   const type = normalizeCustomType(document.getElementById('planCustomType')?.value);
-  const company = document.getElementById('planCustomCompany')?.value.trim() || '';
+  const detail = document.getElementById('planCustomCompany')?.value.trim() || '';
+  const company = type === 'LOAN' ? detail : '';
+  const description = type === 'MISC' ? detail : '';
   if (type === 'LOAN' && !company) {
     showNotification('warning', 'Please enter the loan or rental company');
     return;
   }
 
   try {
-    await apiCall(`/api/events/${planPageState.eventId}/custom-assets`, 'POST', {
+    const assetId = planPageState.editingCustomAssetId;
+    const payload = {
       name: document.getElementById('planCustomName')?.value.trim(),
       quantity: Math.max(1, Number(document.getElementById('planCustomQuantity')?.value || 1)),
       type,
       department: normalizeDepartmentCode(document.getElementById('planCustomDepartment')?.value || 'UN'),
-      company
-    });
-    showNotification('success', 'Custom asset added');
+      company,
+      description,
+      subprojectId: eventActiveSubproject(planPageState, planPageState.event)?.id || ''
+    };
+    if (assetId) {
+      await apiCall(
+        `/api/events/${planPageState.eventId}/custom-assets/update-quantity`,
+        'PUT',
+        { ...payload, assetId, newQuantity: payload.quantity }
+      );
+    } else {
+      await apiCall(`/api/events/${planPageState.eventId}/custom-assets`, 'POST', payload);
+    }
+    planPageState.editingCustomAssetId = '';
+    showNotification('success', assetId ? 'Custom asset updated' : 'Custom asset added');
     await refreshPlanSelectedEvent();
   } catch (error) {}
+}
+
+function planEditCustomAsset(encodedAssetId) {
+  const assetId = planDecode(encodedAssetId);
+  const custom = parseCustomAsset(assetId);
+  if (!custom) return;
+  planPageState.editingCustomAssetId = assetId;
+  planSetCustomType(custom.type);
+  const setValue = (id, value) => {
+    const input = document.getElementById(id);
+    if (input) input.value = value == null ? '' : String(value);
+  };
+  setValue('planCustomName', custom.name);
+  setValue('planCustomQuantity', custom.quantity);
+  setValue('planCustomDepartment', custom.department);
+  setValue('planCustomCompany', custom.type === 'LOAN' ? custom.company : custom.description);
+  const submit = document.getElementById('planCustomSubmitButton');
+  const cancel = document.getElementById('planCustomCancelEdit');
+  if (submit) submit.textContent = 'Save Changes';
+  if (cancel) cancel.style.display = 'inline-flex';
+  document.getElementById('planCustomAssetForm')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function planCancelCustomAssetEdit() {
+  planPageState.editingCustomAssetId = '';
+  const form = document.getElementById('planCustomAssetForm');
+  form?.reset();
+  planSetCustomType('MISC');
+  const submit = document.getElementById('planCustomSubmitButton');
+  const cancel = document.getElementById('planCustomCancelEdit');
+  if (submit) submit.textContent = 'Add Custom Item';
+  if (cancel) cancel.style.display = 'none';
 }
 
 async function planSetCustomQuantity(encodedAssetId, quantity) {
@@ -22624,7 +23501,8 @@ async function planSetCustomQuantity(encodedAssetId, quantity) {
       'PUT',
       {
         assetId: planDecode(encodedAssetId),
-        newQuantity: Math.max(1, Number(quantity || 1))
+        newQuantity: Math.max(1, Number(quantity || 1)),
+        subprojectId: eventActiveSubproject(planPageState, planPageState.event)?.id || ''
       }
     );
     await refreshPlanSelectedEvent();
@@ -22649,7 +23527,10 @@ async function planRemoveCustomAsset(encodedAssetId) {
     await apiCall(
       `/api/events/${planPageState.eventId}/custom-assets/remove`,
       'POST',
-      { assetId }
+      {
+        assetId,
+        subprojectId: eventActiveSubproject(planPageState, planPageState.event)?.id || ''
+      }
     );
     await refreshPlanSelectedEvent();
   } catch (error) {}
@@ -22879,7 +23760,11 @@ async function planApplyTemplate(encodedTemplateId) {
     await apiCall(
       `/api/events/${planPageState.eventId}/apply-planning-template`,
       'POST',
-      { templateId, mode }
+      {
+        templateId,
+        mode,
+        subprojectId: eventActiveSubproject(planPageState, planPageState.event)?.id || ''
+      }
     );
     closeModal('planTemplateChooserModal');
     showNotification('success', `Template ${mode === 'merge' ? 'merged' : 'applied'}`);
@@ -22966,7 +23851,7 @@ var prepareNewPageState = {
   renderVersion: 0,
   expandedDepartments: new Set(),
   expandedModels: new Set(),
-  showSubprojects: false
+  activeSubprojectId: ''
 };
 
 var prepareNewNotesTimer = null;
@@ -22988,7 +23873,7 @@ function prepareNewEventDates(event) {
 }
 
 function prepareNewModelGroups(event = prepareNewPageState.event) {
-  return Object.values(event?.modelGroups || {})
+  return eventSubprojectModelGroups(event, prepareNewPageState)
     .filter(group => Number(group?.requiredQuantity || 0) > 0)
     .sort((a, b) => {
       const departmentCompare = normalizeDepartmentCode(a.department || 'UN').localeCompare(
@@ -23009,22 +23894,32 @@ function prepareNewSnapshot(event = prepareNewPageState.event) {
 }
 
 function prepareNewIsComplete(event = prepareNewPageState.event) {
-  const snapshot = prepareNewSnapshot(event);
-  return snapshot.rows.length > 0 && snapshot.rows.every(row =>
-    Number(row.packed || 0) >= Number(row.required || 0)
-  );
+  const totals = prepareNewTotals(event);
+  return totals.lineCount > 0 && totals.prepared >= totals.required;
 }
 
 function prepareNewTotals(event = prepareNewPageState.event) {
-  const snapshot = prepareNewSnapshot(event);
+  const groups = prepareNewModelGroups(event);
+  const customAssets = prepareNewCustomAssets(event);
   const departmentsInUse = new Set(
-    snapshot.rows.map(row => normalizeDepartmentCode(row.department || 'UN'))
+    [
+      ...groups.map(row => normalizeDepartmentCode(row.department || 'UN')),
+      ...customAssets.map(row => normalizeDepartmentCode(row.parsedCustom?.department || 'UN'))
+    ]
   );
+  const required = groups.reduce((sum, row) => sum + Number(row.requiredQuantity || 0), 0) +
+    customAssets.reduce((sum, row) => sum + Number(row.parsedCustom?.quantity || 1), 0);
+  const prepared = groups.reduce((sum, row) => sum + Number(row.countablePreparedQuantity || 0), 0) +
+    customAssets.reduce((sum, row) => (
+      (event?.actuallyPrepared || []).includes(row.id) || (event?.returnedItems || []).includes(row.id)
+        ? sum + Number(row.parsedCustom?.quantity || 1)
+        : sum
+    ), 0);
   return {
-    lineCount: snapshot.rows.length,
-    required: snapshot.totals.required,
-    prepared: snapshot.totals.packed,
-    extra: snapshot.totals.extras,
+    lineCount: groups.length + customAssets.length,
+    required,
+    prepared,
+    extra: groups.reduce((sum, row) => sum + Number(row.extraPreparedQuantity || 0), 0),
     departments: departmentsInUse.size
   };
 }
@@ -23153,7 +24048,8 @@ async function prepareNewChangeModelQuantity(group, action, quantity, options = 
       ...prepareNewGroupPayload(group),
       action,
       quantity,
-      all: !!options.all
+      all: !!options.all,
+      subprojectId: eventActiveSubproject(prepareNewPageState, prepareNewPageState.event)?.id || ''
     });
     showNotification('success', response.message || 'Prepared quantity updated');
     schedulePrepareUiSync(eventId);
@@ -23224,6 +24120,13 @@ function prepareNewAssetCard(asset, options = {}) {
     degraded ? prepareNewStatusBadge('degraded', 'Degraded') : '',
     missing ? prepareNewStatusBadge('missing', 'Missing') : ''
   ].filter(Boolean).join('');
+  const dragPayload = assigned
+    ? eventSubprojectDragPayload(
+        prepareNewPageState,
+        prepareNewPageState.event,
+        { kind: 'asset', assetRef: id }
+      )
+    : '';
   const action = returned
     ? ''
     : (assigned
@@ -23237,7 +24140,8 @@ function prepareNewAssetCard(asset, options = {}) {
                  ${canAssign ? '' : 'disabled'}
                  onclick="event.stopPropagation();prepareNewAssignAsset(${eventId}, '${encodedId}')">Assign</button>`);
   return `
-    <div class="prepare-new-asset-card ${assigned ? 'assigned' : ''} ${options.extra ? 'extra' : ''} ${missing ? 'missing' : ''} ${degraded ? 'degraded' : ''}">
+    <div class="prepare-new-asset-card ${assigned ? 'assigned' : ''} ${options.extra ? 'extra' : ''} ${missing ? 'missing' : ''} ${degraded ? 'degraded' : ''} ${dragPayload ? 'is-room-draggable' : ''}"
+         ${dragPayload ? `draggable="true" ondragstart="eventSubprojectDragStart(event,'${dragPayload}')" ondragend="eventSubprojectDragEnd(event)"` : ''}>
       <div title="${escapeHtmlAttr(label)}">
         <strong>${escapeHtml(label)}</strong>
         <small>${escapeHtml(serial)}</small>
@@ -23350,8 +24254,14 @@ function prepareNewDirectAssetCard(asset, encodedPanelKey = '') {
     badge = prepareNewStatusBadge('returned', 'Returned');
     action = '';
   }
+  const dragPayload = eventSubprojectDragPayload(
+    prepareNewPageState,
+    prepareNewPageState.event,
+    { kind: 'asset', assetRef: id }
+  );
   return `
-    <div class="prepare-new-asset-card ${status === 'packed' ? 'assigned' : ''}">
+    <div class="prepare-new-asset-card ${status === 'packed' ? 'assigned' : ''} ${dragPayload ? 'is-room-draggable' : ''}"
+         ${dragPayload ? `draggable="true" ondragstart="eventSubprojectDragStart(event,'${dragPayload}')" ondragend="eventSubprojectDragEnd(event)"` : ''}>
       <div title="${escapeHtmlAttr(label)}">
         <strong>${escapeHtml(label)}</strong>
         <small>${escapeHtml(detail)}</small>
@@ -23494,8 +24404,8 @@ function renderPrepareNewAssignment() {
   return departments + prepareNewExtrasSection();
 }
 
-function prepareNewCustomAssets() {
-  return getCustomAssetsFromEvent(prepareNewPageState.event || {})
+function prepareNewCustomAssets(event = prepareNewPageState.event) {
+  const assets = getCustomAssetsFromEvent(event || {})
     .map(asset => ({
       ...asset,
       parsedCustom: asset.parsedCustom || parseCustomAsset(asset.id, asset)
@@ -23506,6 +24416,18 @@ function prepareNewCustomAssets() {
       undefined,
       { numeric: true, sensitivity: 'base' }
     ));
+  const room = eventActiveSubproject(prepareNewPageState, event);
+  if (!room || eventSubprojects(event).length <= 1) return assets;
+  const customItems = (room.items || []).filter(item => item?.isCustom);
+  return assets.filter(asset => customItems.some(item => (
+    (item.assetRefs || []).map(String).includes(String(asset.id)) ||
+    (
+      normalizeDepartmentCode(item.departmentCode || item.department || 'UN') ===
+        normalizeDepartmentCode(asset.parsedCustom?.department || 'UN') &&
+      String(item.description || '').trim().toLowerCase() ===
+        String(asset.parsedCustom?.name || '').trim().toLowerCase()
+    )
+  )));
 }
 
 function renderPrepareNewCustomList() {
@@ -23524,6 +24446,11 @@ function renderPrepareNewCustomList() {
     const isPrepared = prepared.has(id);
     const isCollected = collected.has(id);
     const isReturned = returned.has(id);
+    const dragPayload = eventSubprojectDragPayload(
+      prepareNewPageState,
+      prepareNewPageState.event,
+      { kind: 'asset', assetRef: id }
+    );
     let status = prepareNewStatusBadge('pending', 'Pending');
     let action = '';
     if (isReturned) {
@@ -23534,22 +24461,24 @@ function renderPrepareNewCustomList() {
                         onclick="prepareNewUnprepareAsset(${Number(event.id)}, '${encodedId}')">Undo</button>`;
     } else if (custom.type === 'LOAN' && !isCollected) {
       action = `<button type="button" class="plan-button plan-button-small"
-                        onclick="prepareNewCollectCustom(${Number(event.id)}, '${encodedId}')">Mark Collected</button>`;
+                        onclick="prepareNewCollectCustom(${Number(event.id)}, '${encodedId}')">Collection</button>`;
     } else {
       if (isCollected) status = prepareNewStatusBadge('collected', 'Collected');
       action = `<button type="button" class="plan-button plan-button-small"
-                        onclick="prepareNewPrepareAsset(${Number(event.id)}, '${encodedId}')">Mark Prepared</button>`;
+                        onclick="prepareNewPrepareAsset(${Number(event.id)}, '${encodedId}')">Prepared</button>`;
     }
+    const detail = custom.type === 'LOAN'
+      ? (custom.company ? `From ${custom.company}` : '')
+      : (custom.description || '');
     return `
-      <div class="prepare-new-custom-row">
+      <div class="prepare-new-custom-row ${dragPayload ? 'is-room-draggable' : ''}"
+           ${dragPayload ? `draggable="true" ondragstart="eventSubprojectDragStart(event,'${dragPayload}')" ondragend="eventSubprojectDragEnd(event)"` : ''}>
         <div>
-          <strong>${escapeHtml(customAssetDisplayName(custom, false))}</strong>
-          <small>
-            ${escapeHtml(custom.type === 'LOAN' ? 'Loan' : 'Misc')}
-            \u00b7 Qty ${Math.max(1, Number(custom.quantity || 1))}
-            \u00b7 ${escapeHtml(normalizeDepartmentCode(custom.department || 'UN'))}
-            ${custom.company ? ` \u00b7 ${escapeHtml(custom.company)}` : ''}
-          </small>
+          <div class="prepare-new-custom-title">
+            <strong>${Math.max(1, Number(custom.quantity || 1))}x ${escapeHtml(customAssetDisplayName(custom, false))}</strong>
+            ${planDepartmentCodeBadgeHtml(custom.department)}
+          </div>
+          ${detail ? `<small>${escapeHtml(detail)}</small>` : ''}
           <div style="margin-top:4px;">${status}</div>
         </div>
         ${action}
@@ -23621,8 +24550,8 @@ function renderPrepareNewCustomForm() {
               <select id="prepareNewCustomDepartment">${customDepartmentOptionsHtml('AX')}</select>
             </div>
             <div class="plan-custom-field">
-              <label for="prepareNewCustomCompany">Company / Source</label>
-              <input id="prepareNewCustomCompany" type="text" placeholder="Optional source">
+              <label for="prepareNewCustomCompany" id="prepareNewCustomDetailLabel">Description</label>
+              <input id="prepareNewCustomCompany" type="text" placeholder="Optional description">
             </div>
           </div>
           <button type="button" class="plan-button plan-button-primary plan-custom-submit"
@@ -23680,6 +24609,8 @@ function renderPrepareNewPage() {
     root.innerHTML = '<div class="plan-empty">There are no events available to prepare.</div>';
     return;
   }
+  const consolidated = eventIsConsolidated(prepareNewPageState, event);
+  root.classList.toggle('event-consolidated-mode', consolidated);
   prepareNewInitialExpansion();
   const totals = prepareNewTotals(event);
   const quickAddEnabled = getPrepareQuickAddEnabled();
@@ -23690,7 +24621,6 @@ function renderPrepareNewPage() {
         <p>Assign exact assets by scanning, typing, or selecting them manually.</p>
       </div>
       <div class="prepare-new-heading-actions">
-        ${eventSubprojects(event).length ? renderEventSubprojectToggle('prepareNewPageState', prepareNewPageState.showSubprojects, 'renderPrepareNewPage') : ''}
         <button type="button" class="plan-button" onclick="prepareNewReturnToPlan()">\u2190 Return to Planning</button>
       </div>
     </div>
@@ -23721,7 +24651,8 @@ function renderPrepareNewPage() {
         <div class="plan-metric"><div class="plan-metric-icon">${planMetricIconSvg('departments')}</div><div><strong>${totals.departments}</strong><span>Active Departments</span></div></div>
       </div>
     </div>
-    ${prepareNewPageState.showSubprojects ? renderEventSubprojectBreakdown(event, 'Sub-project preparation') : ''}
+    ${renderEventSubprojectTabs('prepareNewPageState', event, 'renderPrepareNewPage', 'Preparation sub-projects')}
+    ${consolidated ? eventConsolidatedNotice() : ''}
     <div class="prepare-new-workspace">
       <div class="prepare-new-column prepare-new-left">
         <section class="prepare-new-card prepare-new-scan-card">
@@ -23968,6 +24899,7 @@ async function prepareNewAssignMissingAsset(eventId, encodedAssetId) {
     const response = await apiCall(`/api/events/${eventId}/assign-specific`, 'POST', {
       assetId,
       markFound: true,
+      subprojectId: eventActiveSubproject(prepareNewPageState, prepareNewPageState.event)?.id || '',
     });
     await showApiWarning(response);
     const preparedAssetId = response?.data?.assetId || assetId;
@@ -23984,19 +24916,25 @@ async function prepareNewAssignMissingAsset(eventId, encodedAssetId) {
 }
 
 async function prepareNewAssignAsset(eventId, encodedAssetId) {
-  await assignSpecificAsset(eventId, planDecode(encodedAssetId));
+  await assignSpecificAsset(eventId, planDecode(encodedAssetId), '', '', {
+    subprojectId: eventActiveSubproject(prepareNewPageState, prepareNewPageState.event)?.id || ''
+  });
   await refreshPrepareNewSelectedEvent({ preserve: true });
 }
 
 async function prepareNewPrepareAsset(eventId, encodedAssetId) {
-  await prepareSpecificAsset(eventId, planDecode(encodedAssetId));
+  await prepareSpecificAsset(eventId, planDecode(encodedAssetId), {
+    subprojectId: eventActiveSubproject(prepareNewPageState, prepareNewPageState.event)?.id || ''
+  });
   await refreshPrepareNewSelectedEvent({ preserve: true });
 }
 
 async function prepareNewUnprepareAsset(eventId, encodedAssetId, encodedPanelKey = '') {
   const panelKey = encodedPanelKey ? planDecode(encodedPanelKey) : '';
   if (panelKey) prepareNewPageState.expandedModels.add(panelKey);
-  const changed = await unprepareSpecificAsset(eventId, planDecode(encodedAssetId));
+  const changed = await unprepareSpecificAsset(eventId, planDecode(encodedAssetId), {
+    subprojectId: eventActiveSubproject(prepareNewPageState, prepareNewPageState.event)?.id || ''
+  });
   if (!changed) return;
   if (panelKey) prepareNewPageState.expandedModels.add(panelKey);
   await refreshPrepareNewSelectedEvent({ preserve: true });
@@ -24012,7 +24950,9 @@ async function prepareNewUnassignAsset(eventId, encodedAssetId, encodedModelKey 
   if (modelKey) prepareNewPageState.expandedModels.add(modelKey);
   if (department) prepareNewPageState.expandedDepartments.add(department);
 
-  const changed = await unassignSpecificAsset(eventId, assetId);
+  const changed = await unassignSpecificAsset(eventId, assetId, '', '', {
+    subprojectId: eventActiveSubproject(prepareNewPageState, prepareNewPageState.event)?.id || ''
+  });
   if (!changed) return;
 
   // Keep the exact-asset chooser open while the refreshed card changes back
@@ -24034,6 +24974,13 @@ function prepareNewSetCustomType(type) {
   if (input) input.value = value;
   document.getElementById('prepareNewCustomMisc')?.classList.toggle('active', value === 'MISC');
   document.getElementById('prepareNewCustomLoan')?.classList.toggle('active', value === 'LOAN');
+  const detail = document.getElementById('prepareNewCustomCompany');
+  const label = document.getElementById('prepareNewCustomDetailLabel');
+  if (detail) {
+    detail.required = value === 'LOAN';
+    detail.placeholder = value === 'LOAN' ? 'Company Pte Ltd' : 'Optional description';
+  }
+  if (label) label.textContent = value === 'LOAN' ? 'Company / Source' : 'Description';
 }
 
 async function prepareNewAddCustomItem() {
@@ -24047,7 +24994,9 @@ async function prepareNewAddCustomItem() {
   const department = normalizeDepartmentCode(
     document.getElementById('prepareNewCustomDepartment')?.value || 'UN'
   );
-  const company = document.getElementById('prepareNewCustomCompany')?.value.trim() || '';
+  const detail = document.getElementById('prepareNewCustomCompany')?.value.trim() || '';
+  const company = type === 'LOAN' ? detail : '';
+  const description = type === 'MISC' ? detail : '';
   if (!name) {
     showNotification('warning', 'Enter a custom item name');
     document.getElementById('prepareNewCustomName')?.focus();
@@ -24064,7 +25013,9 @@ async function prepareNewAddCustomItem() {
       quantity,
       type,
       department,
-      company
+      company,
+      description,
+      subprojectId: eventActiveSubproject(prepareNewPageState, prepareNewPageState.event)?.id || ''
     });
     showNotification('success', `${name} added`);
     await refreshPrepareNewSelectedEvent({ preserve: false });
@@ -24580,7 +25531,6 @@ function syncAddEventLocationRequirement() {
   const tag = document.getElementById("eventTag")?.value || "events";
   const locationInput = document.getElementById("eventLocation");
   const requiredMark = document.getElementById("eventLocationRequiredMark");
-  const help = document.getElementById("eventLocationHelp");
   const required = tag !== "dry hire";
 
   if (locationInput) {
@@ -24590,11 +25540,6 @@ function syncAddEventLocationRequirement() {
       : "Optional for Dry Hire";
   }
   if (requiredMark) requiredMark.style.display = required ? "" : "none";
-  if (help) {
-    help.textContent = required
-      ? "Required for Events."
-      : "Optional for Dry Hire.";
-  }
 }
 
 function eventAssigneeState(context) {
@@ -24607,6 +25552,10 @@ function eventAssigneePrefix(context) {
 
 function eventAssigneeDisplayName(user) {
   return String(user?.name || user?.username || '').trim();
+}
+
+function currentUserPdfDisplayName() {
+  return String(currentUser?.name || currentUser?.username || '').trim();
 }
 
 function eventAssigneeSearchText(user) {
@@ -28377,7 +29326,7 @@ function packingListAssetRecord(asset, event, department = 'UN') {
       ? customAssetDisplayName(custom, false)
       : String(asset?.displayId || asset?.bulkId || asset?.id || asset?.name || 'Asset'),
     serial: custom ? '' : String(asset?.serial || ''),
-    company: custom ? String(custom.company || '') : '',
+    company: custom ? customAssetDetailText(custom) : '',
     quantity,
     status,
     department: normalizeDepartmentCode(custom?.department || department || 'UN'),
@@ -28476,6 +29425,7 @@ function buildPackingListSnapshot(event) {
       quantity: custom.quantity,
       department: custom.department,
       company: custom.company,
+      customDescription: custom.description,
       status: (event?.returnedItems || []).includes(marker)
         ? 'returned'
         : ((event?.actuallyPrepared || []).includes(marker) ? 'prepared' : 'assigned'),
@@ -28492,7 +29442,8 @@ function buildPackingListSnapshot(event) {
       asset.department,
       custom.type,
       custom.name,
-      custom.company
+      custom.company,
+      custom.description
     ]);
     if (!customRows.has(key)) {
       customRows.set(key, {
@@ -28500,7 +29451,7 @@ function buildPackingListSnapshot(event) {
         description: custom.name || (custom.type === 'LOAN' ? 'Loan/Rental Item' : 'Misc Item'),
         detail: [
           custom.type === 'LOAN' ? 'Loan/Rental' : 'Miscellaneous',
-          custom.company
+          customAssetDetailText(custom)
         ].filter(Boolean).join(' - '),
         required: 0,
         packed: 0,
@@ -28797,9 +29748,8 @@ function buildPackingListPdfPages(event, snapshot, context) {
       </div>
       <div class="header-right">
         <div class="report-title">PACKING LIST</div>
-        No. : ${safe(context.reportNumber)}<br>
-        Snapshot : ${safe(context.generatedAt)}<br>
-        Generated by : ${safe(context.generatedBy || '-')}
+        Generated by: ${safe(context.generatedBy || '-')}<br>
+        Generated on: ${safe(context.generatedAt)}
       </div>
     </div>
   `;
@@ -29030,7 +29980,6 @@ async function generatePackingList(eventId, options = {}) {
     const snapshot = buildPackingListSnapshot(event);
     const now = new Date();
     const context = {
-      reportNumber: `PL-${now.getFullYear()}${String(event.id).padStart(4, '0')}`,
       generatedAt: now.toLocaleString('en-GB', {
         day: '2-digit',
         month: 'short',
@@ -29038,7 +29987,7 @@ async function generatePackingList(eventId, options = {}) {
         hour: '2-digit',
         minute: '2-digit'
       }),
-      generatedBy: currentUser?.username || ''
+      generatedBy: currentUserPdfDisplayName()
     };
     const pagesHtml = buildPackingListPdfPages(event, snapshot, context);
     const title = `Packing List - ${escapeHtml(String(event.name || `Event ${event.id}`))}`;
@@ -32189,14 +33138,12 @@ async function initializeApp() {
     if (initialSection !== requestedInitialSection) {
       updateAppSectionHistory(initialSection, true);
     }
-    setTimeout(async () => {
-      const detailRoute = appDetailRouteFromPath();
-      if (detailRoute?.kind === 'packing-list') {
-        await generatePackingList(detailRoute.eventId, { targetWindow: window });
-        return;
-      }
+    const detailRoute = appDetailRouteFromPath();
+    if (detailRoute?.kind === 'packing-list') {
+      await generatePackingList(detailRoute.eventId, { targetWindow: window });
+    } else {
       showSection(initialSection, { updateHistory: false });
-    }, 200);
+    }
 
     connectRealtimeUpdates();
   } catch (error) {
@@ -32656,7 +33603,7 @@ function ensureEventListViewStyles() {
     .event-list-table-wrap { overflow: auto; border: 1px solid #dfe8e4; border-radius: 8px; background: white; box-shadow:0 3px 12px rgba(15,23,42,.045); }
     .event-list-table { width: 100%; min-width: 820px; border-collapse: separate; border-spacing: 0; margin: 0; color:#263b35; font-size:10px; }
     .event-list-table th { position:sticky;top:0;z-index:3;background:#f2f7f5;color:#60736d;font-size:9px;font-weight:800;letter-spacing:.02em;text-transform:uppercase;padding:7px 9px;border-bottom:1px solid #dfe8e4;text-align:left;white-space:nowrap; }
-    .event-list-table td { padding:6px 9px;border-bottom:1px solid #e8efec;vertical-align:middle;line-height:1.25; }
+    .event-list-table td { padding:6px 9px;border-bottom:2px solid #e8efec;vertical-align:middle;line-height:1.25; }
     .event-list-table tbody tr { --event-state:#64748b;--event-soft:#f8fafc;background:#fff;transition:background .14s ease; }
     .event-list-table tbody tr:hover { background:color-mix(in srgb,var(--event-soft) 68%,white); }
     .event-list-table tbody tr:last-child td { border-bottom:0; }
@@ -33937,7 +34884,7 @@ function schedulePrepareUiSync(eventId, delay = 600) {
   }, delay);
 }
 
-async function prepareSpecificAsset(eventId, assetId) {
+async function prepareSpecificAsset(eventId, assetId, requestData = {}) {
   let actionStarted = false;
   try {
     await ensureAssetsLoaded();
@@ -33947,7 +34894,10 @@ async function prepareSpecificAsset(eventId, assetId) {
     }
     actionStarted = beginPrepareAssetAction(assetId, 'Preparing...');
     if (!actionStarted) return;
-    const response = await apiCall(`/api/events/${eventId}/prepare`, 'POST', { assetId });
+    const response = await apiCall(`/api/events/${eventId}/prepare`, 'POST', {
+      assetId,
+      ...requestData
+    });
     await showApiWarning(response);
     const preparedAssetId = response?.data?.assetId || assetId;
     showNotification('success', `${customAssetLabelFromId(preparedAssetId)} marked as prepared`);
@@ -33962,10 +34912,13 @@ async function prepareSpecificAsset(eventId, assetId) {
   }
 }
 
-async function unprepareSpecificAsset(eventId, assetId) {
+async function unprepareSpecificAsset(eventId, assetId, requestData = {}) {
   if (!beginPrepareAssetAction(assetId, 'Unpreparing...')) return false;
   try {
-    await apiCall(`/api/events/${eventId}/unprepare`, 'POST', { assetId });
+    await apiCall(`/api/events/${eventId}/unprepare`, 'POST', {
+      assetId,
+      ...requestData
+    });
     showNotification('success', `${customAssetLabelFromId(assetId)} unprepared`);
     updateAllButtonsForAsset(assetId, false);
     schedulePrepareUiSync(eventId);
@@ -34032,7 +34985,12 @@ async function processUniversalContainer(eventId, containerId) {
           addScannedAssetsToEvent: quickAddEnabled,
           assetId: aid,
           fromContainer: true,
-          source: quickAddEnabled ? 'quick-add-container' : 'container'
+          source: quickAddEnabled ? 'quick-add-container' : 'container',
+          subprojectId: (
+            Number(prepareNewPageState.eventId) === Number(eventId)
+              ? eventActiveSubproject(prepareNewPageState, prepareNewPageState.event)?.id || ''
+              : ''
+          )
         }).then((response) => {
           updateAllButtonsForAsset(response?.data?.assetId || aid, true, { sourceAssetId: aid });
           if (response?.data?.isExtra) {
@@ -34738,7 +35696,7 @@ async function generateInventoryPdf() {
     const pageConfig = inventoryPdfPageConfig(showIndividual);
     const pagesHtml = buildInventoryPdfPages(filteredAssets, filters, {
       showIndividual,
-      generatedBy: currentUser?.username || '',
+      generatedBy: currentUserPdfDisplayName(),
       generatedAt: reportGeneratedAt(),
       filterSummary,
       reportTitle,
